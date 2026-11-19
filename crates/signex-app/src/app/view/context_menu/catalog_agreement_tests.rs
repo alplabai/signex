@@ -105,6 +105,8 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("PCB Library", "tree-addressed"),
     ("Design Notebook", "planned, tree-addressed"),
     ("Output Job", "planned, tree-addressed"),
+    ("Constraint File", "planned, tree-addressed"),
+    ("VHDL File", "planned, tree-addressed"),
     ("Show Differences...", "planned, tree-addressed"),
     ("Collapse", "tree-addressed"),
     ("Expand", "tree-addressed"),

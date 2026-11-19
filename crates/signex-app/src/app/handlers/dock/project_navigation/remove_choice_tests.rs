@@ -1,6 +1,6 @@
 //! The Remove modal's radio cards (#2262): which card is selected, what the
-//! footer button says, that clicking a card removes nothing, and what Enter
-//! does.
+//! footer button says, that clicking a card removes nothing, and that Enter
+//! does nothing there (Close Project's Enter is tested here too).
 
 use std::path::Path;
 
@@ -64,12 +64,49 @@ fn exclude_is_selected_until_another_card_is_picked() {
 }
 
 #[test]
-fn a_lone_card_is_selected_and_a_pick_it_rules_out_falls_back() {
-    assert_eq!(offer(false, true).selected(None), Some(DELETE));
-    assert_eq!(offer(false, true).selected(Some(EXCLUDE)), Some(DELETE));
+fn a_lone_exclude_is_selected_but_delete_is_never_selected_unpicked() {
     assert_eq!(offer(true, false).selected(None), Some(EXCLUDE));
     assert_eq!(offer(true, false).selected(Some(DELETE)), Some(EXCLUDE));
+    assert_eq!(offer(false, true).selected(None), None);
+    assert_eq!(offer(false, true).selected(Some(EXCLUDE)), None);
+    assert_eq!(offer(false, true).selected(Some(DELETE)), Some(DELETE));
     assert_eq!(offer(false, false).selected(Some(DELETE)), None);
+}
+
+/// A dialog that opens with both cards selects Exclude. When Exclude stops
+/// being offered while it is open (the tree is rebuilt and the sheet is no
+/// longer a page), the footer offers no Delete until the user picks it, so
+/// a click aimed at Exclude can never delete the file.
+#[test]
+fn exclude_withdrawn_after_open_leaves_no_footer_action_until_delete_is_picked() {
+    let mut st = dialog(Path::new("p.snxsch"), false);
+    let at_open = offer(true, true);
+    assert_eq!(at_open.selected(st.choice), Some(EXCLUDE));
+    assert_eq!(
+        at_open.selected(st.choice).map(footer_action),
+        Some(footer_action(EXCLUDE))
+    );
+
+    let flipped = offer(false, true);
+    assert_eq!(
+        flipped.selected(st.choice),
+        None,
+        "no Delete without a pick"
+    );
+
+    let mut app = quiet_app();
+    app.ui_state.remove_dialog = Some(st.clone());
+    let _ = app.update(Message::Remove(RemoveMsg::ChoicePicked(DELETE)));
+    st = app
+        .ui_state
+        .remove_dialog
+        .clone()
+        .expect("the dialog stays open");
+    assert_eq!(flipped.selected(st.choice), Some(DELETE));
+    assert_eq!(
+        flipped.selected(st.choice).map(footer_action),
+        Some(footer_action(DELETE))
+    );
 }
 
 #[test]
@@ -198,19 +235,14 @@ fn picking_a_card_selects_it_and_removes_nothing() {
     ));
 }
 
-/// Enter runs Exclude while it is selected; with Delete selected it does
-/// nothing, so Enter never deletes a file.
+/// Enter does nothing in the Remove modal, as before the radio cards: only
+/// the footer button removes or deletes.
 #[test]
-fn enter_excludes_but_never_deletes() {
+fn enter_in_the_remove_dialog_does_nothing() {
     let mut app = quiet_app();
     let main = app.ui_state.main_window_id.expect("main window");
     app.ui_state.remove_dialog = Some(dialog(Path::new("p.snxsch"), false));
-    assert!(matches!(
-        app.route_key_for_test(main, &enter()),
-        Some(Message::Remove(RemoveMsg::Confirm(
-            RemoveChoice::ExcludeFromProject
-        )))
-    ));
+    assert!(app.route_key_for_test(main, &enter()).is_none());
 
     app.ui_state.remove_dialog.as_mut().expect("open").choice = Some(DELETE);
     assert!(app.route_key_for_test(main, &enter()).is_none());
@@ -226,21 +258,16 @@ fn enter_excludes_but_never_deletes() {
     );
 }
 
-/// In the Remove dialog's own window Enter answers that dialog.
+/// In the Remove dialog's own window Enter does nothing either.
 #[test]
-fn enter_in_the_detached_remove_window_excludes() {
+fn enter_in_the_detached_remove_window_does_nothing() {
     let mut app = quiet_app();
     app.ui_state.remove_dialog = Some(dialog(Path::new("p.snxsch"), false));
     let window = iced::window::Id::unique();
     app.ui_state
         .windows
         .insert(window, WindowKind::DetachedModal(ModalId::RemoveDialog));
-    assert!(matches!(
-        app.route_key_for_test(window, &enter()),
-        Some(Message::Remove(RemoveMsg::Confirm(
-            RemoveChoice::ExcludeFromProject
-        )))
-    ));
+    assert!(app.route_key_for_test(window, &enter()).is_none());
 }
 
 /// Enter in the Close Project confirm saves all (#2262).

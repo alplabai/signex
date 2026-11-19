@@ -304,8 +304,6 @@ panels-projects-libraries =
 panels-projects-git = git
 # Placeholder of the project file filter.
 panels-projects-filter = Filter files
-# Shown when the filter matches no file.
-panels-projects-no-match = No files match
 # Tooltip of the gear button on a project card; it opens that project's
 # options in a tab.
 panels-projects-options = Project Options…

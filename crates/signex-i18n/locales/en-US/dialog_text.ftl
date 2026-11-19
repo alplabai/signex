@@ -195,15 +195,15 @@ dialog-rename-placed-by =
 dialog-version-control-project = Project: { $name }
 # $name is the library's name.
 dialog-version-control-library = Library: { $name }
-# $path is the folder that gets the repository. $every is "on" while Commit
-# every save is on.
+# Shown under the folder's path, which is drawn on its own line above. $every
+# is "on" while Commit every save is on.
 dialog-version-control-intro-project =
     { $every ->
-        [on] Creates a Git repository in { $path } and commits the ticked files as the first version. Every save after that is committed, including library edits inside the project's .snxlib folders.
-       *[off] Creates a Git repository in { $path } and commits the ticked files as the first version. Saves are not committed while Commit every save is off.
+        [on] Creates a Git repository in this folder and commits the ticked files as the first version. Every save after that is committed, including library edits inside the project's .snxlib folders.
+       *[off] Creates a Git repository in this folder and commits the ticked files as the first version. Saves are not committed while Commit every save is off.
     }
-# $path is the library folder that gets the repository.
-dialog-version-control-intro-library = Creates a Git repository in { $path } and commits the ticked files as the first version. Later edits to the library are committed too.
+# Shown under the library folder's path, which is drawn on its own line above.
+dialog-version-control-intro-library = Creates a Git repository in this folder and commits the ticked files as the first version. Later edits to the library are committed too.
 # $ticked rows of $total are ticked; the second form leads into "Select all".
 dialog-version-control-ticked = { $ticked } of { $total } ticked
 dialog-version-control-ticked-more = { $ticked } of { $total } ticked ·

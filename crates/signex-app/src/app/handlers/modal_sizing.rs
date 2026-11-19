@@ -135,15 +135,15 @@ fn rename_growth(d: &crate::app::RenameDialogState) -> f32 {
     grow
 }
 
-/// Window height of Enable Version Control (#26): the body padding, a
-/// three-line intro, the commit message field, the LFS option, Commit every
+/// Window height of Enable Version Control (#26): the body padding, the
+/// intro (title, mono path line, three-line sentence), the commit message field, the LFS option, Commit every
 /// save (project scope) and the legacy footer the Graphite extra replaces,
 /// then the file list (capped at [`TRACK_LIST_MAX_HEIGHT`]) or the scanning
 /// line, and the error.
 fn version_control_height(s: &crate::app::EnableVersionControlState) -> f32 {
     let sp = crate::styles::Spacing::DEFAULT;
     let title_line = crate::styles::TypeScale::DEFAULT.title * crate::styles::LINE_HEIGHT;
-    let intro = title_line + sp.xs + 1.0 + 3.0 * body_line();
+    let intro = title_line + sp.xs + 1.0 + caption_line() + sp.xs + 3.0 * body_line();
     let field = body_line() + 4.0 + crate::styles::ChromeMetrics::DEFAULT.field;
     let option = body_line() + sp.xs + caption_line();
     let mut height = sp.l + intro + sp.l + field + sp.l + option;

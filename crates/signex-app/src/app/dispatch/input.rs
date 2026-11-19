@@ -156,7 +156,7 @@ enum InputConsumer {
     UpdatePcb,
     /// Enter creates the board or sheet while New PCB / New Schematic is open.
     DocumentSetup,
-    /// Enter answers the Remove and Close Project confirms (#2262).
+    /// Enter saves all in Close Project and is swallowed in Remove (#2262).
     ConfirmDefault,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
@@ -571,7 +571,8 @@ impl Signex {
     }
 
     /// Enter in the Remove or Close Project confirm, in the window that shows
-    /// its card: the default footer action, or nothing (`confirm_enter_message`).
+    /// its card: Close Project saves all; Remove swallows it, so Enter never
+    /// removes or deletes (`confirm_enter_message`).
     fn claim_confirm_default(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
         use crate::app::state::ModalId;
         let keyboard::Event::KeyPressed {

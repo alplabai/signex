@@ -868,7 +868,6 @@ define_ids! {
     PANELS_PROJECTS_LIBRARIES = "panels-projects-libraries";
     PANELS_PROJECTS_GIT = "panels-projects-git";
     PANELS_PROJECTS_FILTER = "panels-projects-filter";
-    PANELS_PROJECTS_NO_MATCH = "panels-projects-no-match";
     PANELS_NET_CLASSES_ADD = "panels-net-classes-add";
     PANELS_NET_CLASSES_UNDO = "panels-net-classes-undo";
     PANELS_NET_CLASSES_REDO = "panels-net-classes-redo";

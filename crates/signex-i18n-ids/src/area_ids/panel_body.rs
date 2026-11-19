@@ -56,8 +56,6 @@ define_ids! {
     PANELS_PROJECTS_GROUP_OUTPUTS = "panels-projects-group-outputs";
     PANELS_PROJECTS_GROUP_LIBRARIES = "panels-projects-group-libraries";
     PANELS_PROJECTS_GROUP_SETTINGS = "panels-projects-group-settings";
-    PANELS_PROJECTS_FILE_MISSING = "panels-projects-file-missing";
-    PANELS_PROJECTS_FILE_UNREADABLE = "panels-projects-file-unreadable";
     PANELS_NAVIGATOR_SHEETS = "panels-navigator-sheets";
     PANELS_NAVIGATOR_NO_PROJECT = "panels-navigator-no-project";
     PANELS_NAVIGATOR_MISSING = "panels-navigator-missing";

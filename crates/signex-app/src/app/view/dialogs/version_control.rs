@@ -177,34 +177,37 @@ impl Signex {
     }
 }
 
-/// The intro: what gets a repository, then what the first commit takes and
-/// what is committed after it.
+/// The intro: the folder that gets a repository (in the mono face, as in
+/// Rename), then what the first commit takes and what is committed after it.
 fn intro<'a>(
     st: &'a EnableVersionControlState,
     i18n: &signex_i18n::I18n,
     tokens: &signex_types::theme::ThemeTokens,
 ) -> Element<'a, Message> {
-    let path = st.project_dir.display().to_string();
-    let (title_id, secondary) = match st.scope {
+    let (title_id, sentence) = match st.scope {
         VersionControlScope::Project => (
             ids::DIALOG_VERSION_CONTROL_PROJECT,
             t!(
                 i18n,
                 ids::DIALOG_VERSION_CONTROL_INTRO_PROJECT,
-                "path" => path,
                 "every" => if st.commit_every_save { "on" } else { "off" }
             ),
         ),
         VersionControlScope::Library => (
             ids::DIALOG_VERSION_CONTROL_LIBRARY,
-            t!(i18n, ids::DIALOG_VERSION_CONTROL_INTRO_LIBRARY, "path" => path),
+            t!(i18n, ids::DIALOG_VERSION_CONTROL_INTRO_LIBRARY),
         ),
     };
     let ink3 = crate::styles::tokens::resolve(tokens).ink3;
+    let path_line = text(UserText::new(st.project_dir.display().to_string()))
+        .size(TS.caption)
+        .font(super::graphite::mono())
+        .color(ink3);
+    let secondary = column![path_line, text(sentence).size(TS.body).color(ink3)].spacing(SP.xs);
     dialog_intro_with(
         DialogIcon::Git,
         t!(i18n, title_id, "name" => st.project_name.as_str()).into_string(),
-        Some(text(secondary).size(TS.body).color(ink3).boxed()),
+        Some(secondary.boxed()),
         tokens,
     )
 }

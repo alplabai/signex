@@ -98,6 +98,8 @@ define_ids! {
         CTX_ADD_PCB_LIBRARY = "ctx-add-pcb-library";
         CTX_ADD_OUTPUT_JOB = "ctx-add-output-job";
         CTX_ADD_DESIGN_NOTEBOOK = "ctx-add-design-notebook";
+        CTX_ADD_CONSTRAINT_FILE = "ctx-add-constraint-file";
+        CTX_ADD_VHDL_FILE = "ctx-add-vhdl-file";
         CTX_TREE_REFRESH_PRICING = "ctx-tree-refresh-pricing";
         CTX_TREE_NO_PRICING_CLIENT = "ctx-tree-no-pricing-client";
         CTX_TREE_LIBRARY_NOT_FOUND = "ctx-tree-library-not-found";

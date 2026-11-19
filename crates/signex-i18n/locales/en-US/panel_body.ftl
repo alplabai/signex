@@ -86,10 +86,6 @@ panels-projects-group-bom = Bill of Materials
 panels-projects-group-outputs = Output Jobs
 panels-projects-group-libraries = Libraries
 panels-projects-group-settings = Settings
-# A tree row whose file is gone from disk. $name is the file name.
-panels-projects-file-missing = { $name }  (missing)
-# A tree row whose sheet could not be read. $name is the file name.
-panels-projects-file-unreadable = { $name }  (unreadable)
 panels-navigator-sheets = Sheets
 panels-navigator-no-project = No project
 # Navigator rows of a sheet that is not a plain page. $name is the sheet's name.

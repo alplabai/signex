@@ -627,8 +627,8 @@ is not offered and the dialog says why.
 and choose **Remove from Project**. Pick a card, then press the button:
 **Exclude** keeps the file on disk (and in Git, when the project folder is a
 repository) and only takes it off the project's list; **Delete file** also
-deletes it from disk for good. Exclude is selected when the dialog opens, and
-`Enter` runs it; `Enter` never deletes. A choice that does not apply (the file
+deletes it from disk for good. Exclude is selected when the dialog opens;
+`Enter` does nothing here, only the button acts. A choice that does not apply (the file
 is placed by another sheet, it is a shared library, or it is not a page of the
 project) is not shown, and a note says why.
 

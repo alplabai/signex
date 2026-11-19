@@ -44,6 +44,7 @@ impl Signex {
             is_directory_package,
             choice: None,
         });
+        self.preselect_lone_delete();
     }
 
     /// Open the Remove dialog for the library `row` names (#742).
@@ -70,6 +71,7 @@ impl Signex {
             is_directory_package,
             choice: None,
         });
+        self.preselect_lone_delete();
     }
 
     /// Refuse a Remove the sheet hierarchy makes unsafe (#1618): excluding a

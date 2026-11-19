@@ -771,15 +771,14 @@ impl Signex {
         }
     }
 
-    /// What Enter does in `modal`'s card: Remove runs Exclude while that card
-    /// is selected, Close Project saves all. `None`: Enter does nothing there.
+    /// What Enter does in `modal`'s card: Close Project saves all. `None`:
+    /// Enter does nothing there, as in Remove, where only a click confirms.
     pub(crate) fn confirm_enter_message(
         &self,
         modal: crate::app::state::ModalId,
     ) -> Option<Message> {
         use crate::app::state::ModalId;
         match modal {
-            ModalId::RemoveDialog => self.remove_enter_message(),
             ModalId::ProjectCloseConfirm => {
                 self.ui_state.project_close_confirm.is_some().then(|| {
                     Message::Project(ProjectMsg::CloseConfirm(

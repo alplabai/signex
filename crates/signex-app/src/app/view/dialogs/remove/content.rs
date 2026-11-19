@@ -1,13 +1,13 @@
 //! What the Remove from Project modal shows (#2262): the cards it offers,
-//! the one selected, and the notes around them. The view draws it, the
-//! window sizing measures it and Enter reads its footer action, so the three
-//! cannot disagree. A pure read of the Model, like the view.
+//! the one selected, and the notes around them. The view draws it and the
+//! window sizing measures it, so the two cannot disagree. A pure read of the
+//! Model, like the view (`preselect_lone_delete` aside, run by the opener).
 
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 
 use crate::app::handlers::dock::project_navigation::sheet_users::RemoveBlockers;
 use crate::app::path_ops::PlacingSymbol;
-use crate::app::{Message, RemoveChoice, RemoveDialogState, RemoveMsg, Signex};
+use crate::app::{RemoveChoice, RemoveDialogState, Signex};
 use crate::styles::DialogButtonKind;
 
 /// The cards a Remove offers. Exclude is withheld for a sheet that is not a
@@ -36,13 +36,14 @@ impl RemoveOffer {
     }
 
     /// The selected card: `picked` while it is offered, else Exclude (the
-    /// safe choice), else Delete. A lone card is therefore always selected;
-    /// `None` only when no card is offered.
+    /// safe choice). Delete is never selected unless picked: a dialog that
+    /// opens with Delete alone picks it at open (`preselect_lone_delete`),
+    /// and when Exclude stops being offered after open the footer has no
+    /// action until the user picks Delete. `None`: no footer action.
     pub(crate) fn selected(self, picked: Option<RemoveChoice>) -> Option<RemoveChoice> {
         picked
             .filter(|choice| self.offers(*choice))
             .or_else(|| self.exclude.then_some(RemoveChoice::ExcludeFromProject))
-            .or_else(|| self.delete.then_some(RemoveChoice::DeleteFile))
     }
 }
 
@@ -118,6 +119,22 @@ impl Signex {
     /// The cards the Remove modal offers for `state` right now.
     pub(crate) fn remove_offer(&self, state: &RemoveDialogState) -> RemoveOffer {
         RemoveOffer::of(state, &self.remove_blockers(state))
+    }
+
+    /// Just after the Remove modal opens: when Delete is the only card, it
+    /// is shown selected. Only at open, so a Delete that becomes the only
+    /// card later is never selected without a click.
+    pub(crate) fn preselect_lone_delete(&mut self) {
+        let Some(state) = self.ui_state.remove_dialog.as_ref() else {
+            return;
+        };
+        let offer = self.remove_offer(state);
+        if offer.delete
+            && !offer.exclude
+            && let Some(state) = self.ui_state.remove_dialog.as_mut()
+        {
+            state.choice = Some(RemoveChoice::DeleteFile);
+        }
     }
 
     /// What the first stage of the Remove modal shows for `state`.
@@ -214,17 +231,5 @@ impl Signex {
         } else {
             ids::DIALOG_REMOVE_EXCLUDE_INSIDE
         }
-    }
-
-    /// What Enter does in the Remove modal: the footer action while Exclude
-    /// is selected. Never a delete, and nothing on the unsaved-edits stage.
-    pub(crate) fn remove_enter_message(&self) -> Option<Message> {
-        let state = self.ui_state.remove_dialog.as_ref()?;
-        if state.unsaved_prompt {
-            return None;
-        }
-        let exclude = RemoveChoice::ExcludeFromProject;
-        (self.remove_offer(state).selected(state.choice) == Some(exclude))
-            .then_some(Message::Remove(RemoveMsg::Confirm(exclude)))
     }
 }

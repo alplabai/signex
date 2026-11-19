@@ -304,7 +304,7 @@ fn the_library_add_new_flyout_creates_component_symbol_and_footprint() {
 }
 
 /// Add New to Project: the documents, the libraries, then the planned
-/// project files; Constraint File and VHDL File are gone.
+/// project files, with Constraint File and VHDL File kept as planned rows.
 #[test]
 fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
     let rows = add_new_entries(
@@ -322,9 +322,21 @@ fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         expected.push("PCB Library");
     }
-    expected.extend([SEP, "Design Notebook", "Output Job"]);
+    expected.extend([
+        SEP,
+        "Design Notebook",
+        "Output Job",
+        SEP,
+        "Constraint File",
+        "VHDL File",
+    ]);
     assert_eq!(layout(&rows), expected);
-    for planned in ["Design Notebook", "Output Job"] {
+    for planned in [
+        "Design Notebook",
+        "Output Job",
+        "Constraint File",
+        "VHDL File",
+    ] {
         let it = item(&rows, planned);
         assert!(it.disabled && it.on_press.is_none(), "{planned}");
         assert_eq!(badge_of(it), Some("planned"), "{planned}");

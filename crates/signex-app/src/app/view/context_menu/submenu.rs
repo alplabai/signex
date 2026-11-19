@@ -326,7 +326,7 @@ pub(super) fn add_new_entries(
 ) -> Vec<DropdownEntry<Message>> {
     use crate::app::ProjectTreeAction as P;
     let tree = |action: P| Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(action));
-    let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(10);
+    let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(13);
 
     v.push(dd_msg(
         Some(ic::icon_menu_sheet(tid)),
@@ -376,6 +376,17 @@ pub(super) fn add_new_entries(
         i18n,
         Some(ic::icon_menu_export(tid)),
         &text(i18n, menu_ids::CTX_ADD_OUTPUT_JOB),
+    ));
+    v.push(DropdownEntry::Separator);
+    v.push(dd_planned_pill(
+        i18n,
+        Some(ic::icon_menu_file(tid)),
+        &text(i18n, menu_ids::CTX_ADD_CONSTRAINT_FILE),
+    ));
+    v.push(dd_planned_pill(
+        i18n,
+        Some(ic::icon_menu_file(tid)),
+        &text(i18n, menu_ids::CTX_ADD_VHDL_FILE),
     ));
 
     v

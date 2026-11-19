@@ -154,6 +154,8 @@ ctx-add-pcb = PCB
 ctx-add-pcb-library = PCB Library
 ctx-add-output-job = Output Job
 ctx-add-design-notebook = Design Notebook
+ctx-add-constraint-file = Constraint File
+ctx-add-vhdl-file = VHDL File
 # Project tree menu.
 ctx-tree-refresh-pricing = Refresh All Pricing
 ctx-tree-no-pricing-client = No enabled distributor returns prices yet
