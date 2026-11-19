@@ -71,6 +71,8 @@ pub(crate) enum OverlayId {
     LayerTabContextMenu,
     GridPicker,
     PanelList,
+    /// The status bar's Grid & Snap popover (m6).
+    GridSnapPopover,
     DockDragZone,
     ComponentsRowDragLabel,
     FloatingPanels,
@@ -148,7 +150,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -173,6 +175,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::LayerTabContextMenu,
     OverlayId::GridPicker,
     OverlayId::PanelList,
+    OverlayId::GridSnapPopover,
     OverlayId::DockDragZone,
     OverlayId::ComponentsRowDragLabel,
     OverlayId::FloatingPanels,
@@ -302,6 +305,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::LayerTabContextMenu
         | OverlayId::GridPicker
         | OverlayId::PanelList
+        | OverlayId::GridSnapPopover
         | OverlayId::DockDragZone
         | OverlayId::FloatingPanels
         | OverlayId::Preferences
@@ -519,6 +523,7 @@ impl Signex {
             OverlayId::LayerTabContextMenu => layers.extend(self.layer_tab_menu_overlay(window_id)),
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
+            OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
                 layers.extend(self.components_row_drag_label_overlay(window_id))

@@ -142,6 +142,10 @@ pub struct UiState {
     /// menu are placed inside it, not inside the main window (#1910).
     pub undocked_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
     pub panel_list_open: bool,
+    /// The Grid & Snap popover a right-click on a sheet's Grid read-out
+    /// opens (m6), with the window it belongs to; `None` while closed. Boxed
+    /// to keep `UiState` under its size ceiling.
+    pub grid_snap_popover: Option<Box<crate::status_bar::GridSnapPopover>>,
     pub preferences_open: bool,
     /// Help ▸ Keyboard Shortcuts modal — reference table over the
     /// active keyboard-shortcut profile. Toggled from the Help menu

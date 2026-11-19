@@ -277,6 +277,7 @@ impl OpenOverlays {
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::PanelList
+            | OverlayId::GridSnapPopover
             | OverlayId::DockDragZone
             | OverlayId::ComponentsRowDragLabel
             | OverlayId::FloatingPanels => None,
