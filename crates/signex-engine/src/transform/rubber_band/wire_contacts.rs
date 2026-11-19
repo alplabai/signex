@@ -18,7 +18,7 @@ use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind,
 use uuid::Uuid;
 
 use super::env::Env;
-use super::{Follow, Move, Policy, WireJoin};
+use super::{Follow, Move, Policy, WireJoin, WirePoint};
 
 /// A point where something joins a selected wire, read before the move.
 #[derive(Debug, Clone, Copy)]
@@ -97,17 +97,19 @@ pub fn wire_contact_points(document: &SchematicSheet, items: &[SelectedItem]) ->
         .collect()
 }
 
-/// Carry the contacts of the selected wires after the move has been applied
-/// to `document`. See the module docs for the rules. The old points in
-/// `pin_owned` belong to the pin pass (a pin moving by another delta keeps
-/// them) and are left alone.
-pub fn follow_moved_wires(
-    document: &mut SchematicSheet,
+/// The points the selected wires carry, read with the move applied to
+/// `document`: each contact from where it was to where its wire put it. A
+/// point that did not move, or that a selected wire still ends on, stays
+/// joined and is no contact; the old points in `pin_owned` belong to the pin
+/// pass (a pin moving by another delta keeps them).
+#[must_use]
+pub fn carried_points(
+    document: &SchematicSheet,
     contacts: &[WireContact],
     items: &[SelectedItem],
     pin_owned: &HashSet<Key>,
-) -> Follow {
-    let selected: HashSet<Uuid> = items.iter().map(|item| item.uuid).collect();
+) -> Vec<WirePoint> {
+    let selected = selected_of(items);
     let mut starts: HashMap<Uuid, Point> = HashMap::new();
     let mut held: HashSet<Key> = HashSet::new();
     for wire in &document.wires {
@@ -117,7 +119,7 @@ pub fn follow_moved_wires(
         starts.entry(wire.uuid).or_insert(wire.start);
         held.extend([pt_key(&wire.start), pt_key(&wire.end)]);
     }
-    let mut moves = Vec::new();
+    let mut points = Vec::new();
     for contact in contacts {
         let Some(start) = starts.get(&contact.wire) else {
             continue;
@@ -127,19 +129,104 @@ pub fn follow_moved_wires(
             contact.old.y + start.y - contact.wire_start.y,
         );
         let old = pt_key(&contact.old);
-        // Unmoved, or a selected wire still ends there: still joined. A point
-        // a pin pass owns is not the carry's.
         if pt_key(&new) == old || held.contains(&old) || pin_owned.contains(&old) {
             continue;
         }
-        moves.push(Move {
+        points.push(WirePoint {
+            wire: contact.wire,
             old: contact.old,
             new,
-            sheet_pin: false,
-            wire: Some(WireJoin::Carried(contact.wire)),
         });
     }
-    carry(document, &moves, selected)
+    points
+}
+
+/// The selected wires among `points` that cannot be carried whole, read with
+/// the move applied to `document`: a point whose carry would make the
+/// reconcile dot a contact that had no dot (`carried_point_bails`). Such a
+/// wire moves plainly at every point; carrying only its other points could
+/// reroute a wire both share and part a net the plain move keeps.
+#[must_use]
+pub fn bailing_wires(
+    document: &SchematicSheet,
+    points: &[WirePoint],
+    items: &[SelectedItem],
+) -> Vec<Uuid> {
+    if points.is_empty() {
+        return Vec::new();
+    }
+    let moves: Vec<Move> = points.iter().map(WirePoint::as_move).collect();
+    let env = carry_env(document, &moves, selected_of(items), Policy::default());
+    let mut out: Vec<Uuid> = bailing(&env, &moves).into_iter().collect();
+    out.sort_unstable();
+    out
+}
+
+/// Carry `points` (none of a bailing wire) by the rules of the module docs,
+/// with the move applied to `document`, under the guard's `policy`.
+pub fn carry_points(
+    document: &mut SchematicSheet,
+    points: &[WirePoint],
+    items: &[SelectedItem],
+    policy: &Policy,
+) -> Follow {
+    let moves: Vec<Move> = points.iter().map(WirePoint::as_move).collect();
+    carry(document, &moves, selected_of(items), policy)
+}
+
+/// Carry the contacts of the selected wires after the move has been applied
+/// to `document`, wires that cannot be carried whole moving plainly: the
+/// unguarded pass of a grip drag's square wires.
+pub fn follow_moved_wires(
+    document: &mut SchematicSheet,
+    contacts: &[WireContact],
+    items: &[SelectedItem],
+    pin_owned: &HashSet<Key>,
+) -> Follow {
+    let points = carried_points(document, contacts, items, pin_owned);
+    let bailed = bailing_wires(document, &points, items);
+    let live: Vec<WirePoint> = (points.into_iter())
+        .filter(|point| !bailed.contains(&point.wire))
+        .collect();
+    let mut out = carry_points(document, &live, items, &Policy::default());
+    out.bailed = bailed;
+    out
+}
+
+/// What a carried point that ends plain held before the move, named for the
+/// user ("R7 pin 1", "label VCC", "a wire at (10, 20)"); `None` when nothing
+/// joined the dragged wire there. `moving` are the selected items, whose pins
+/// and wires moved too.
+#[must_use]
+pub fn held_at(before: &SchematicSheet, at: Point, moving: &HashSet<Uuid>) -> Option<String> {
+    let k = pt_key(&at);
+    for symbol in before.symbols.iter().filter(|s| !moving.contains(&s.uuid)) {
+        let item = SelectedItem::new(symbol.uuid, SelectedKind::Symbol);
+        let tips = super::moved_pin_tips(before, &[item]);
+        if let Some(tip) = tips.iter().find(|tip| tip.old_key() == k) {
+            return Some(tip.label().to_string());
+        }
+    }
+    let sheet_pin = (before.child_sheets.iter())
+        .filter(|c| !moving.contains(&c.uuid))
+        .flat_map(|c| c.pins.iter().map(move |p| (c, p)))
+        .find(|(_, p)| !moving.contains(&p.uuid) && pt_key(&p.position) == k);
+    if let Some((child, pin)) = sheet_pin {
+        return Some(format!("{} pin {}", child.name, pin.name));
+    }
+    let label = (before.labels.iter())
+        .find(|l| !moving.contains(&l.uuid) && pt_key(&l.position) == k);
+    if let Some(label) = label {
+        return Some(format!("label {}", label.text));
+    }
+    let dotted = before.junctions.iter().any(|j| pt_key(&j.position) == k);
+    let wired = (before.wires.iter())
+        .filter(|w| !moving.contains(&w.uuid))
+        .any(|w| {
+            let (a, b) = (pt_key(&w.start), pt_key(&w.end));
+            a == k || b == k || (dotted && point_on_segment(k, a, b))
+        });
+    wired.then(|| format!("a wire at ({}, {})", at.x, at.y))
 }
 
 /// Whether the span `a`-`b` runs horizontally (`Some(true)`), vertically
@@ -236,16 +323,22 @@ pub fn follow_wire_grip(
         sheet_pin: false,
         wire: Some(WireJoin::Grip(wire)),
     }];
-    let grip = carry(document, &moves, selected);
+    let grip = carry(document, &moves, selected, &Policy::default());
     out.touched.extend(grip.touched);
     out
 }
 
-/// Run the follow pass for `moves`, wires in `selected` left alone.
-fn carry(document: &mut SchematicSheet, moves: &[Move], selected: HashSet<Uuid>) -> Follow {
-    if moves.is_empty() {
-        return Follow::default();
-    }
+fn selected_of(items: &[SelectedItem]) -> HashSet<Uuid> {
+    items.iter().map(|item| item.uuid).collect()
+}
+
+/// The working copy a carry runs on, wires in `selected` left alone.
+fn carry_env(
+    document: &SchematicSheet,
+    moves: &[Move],
+    selected: HashSet<Uuid>,
+    policy: Policy,
+) -> Env {
     let old_tips = moves.iter().map(|mv| pt_key(&mv.old)).collect();
     // The pins of moved parts, child sheets and sheet pins are not what holds
     // a carried point: a group drag can put one where the wire was, and a
@@ -256,22 +349,38 @@ fn carry(document: &mut SchematicSheet, moves: &[Move], selected: HashSet<Uuid>)
             moving.extend(child.pins.iter().map(|pin| pin.uuid));
         }
     }
-    let mut env = Env::new(document, selected, moving, old_tips, Policy::default());
-    let mut out = Follow::default();
-    // A wire one of whose points cannot be carried without making a T dot
-    // (`carried_point_bails`) moves plainly at every point: carrying only its
-    // other points could reroute a wire both share and part a net the plain
-    // move keeps. Decided before any edit, while the attachments are the
-    // sheet's own.
-    let bailing: HashSet<Uuid> = (moves.iter())
+    Env::new(document, selected, moving, old_tips, policy)
+}
+
+/// The wires of `moves` one of whose points cannot be carried without making
+/// a T dot (`carried_point_bails`). Decided before any edit, while the
+/// attachments are the sheet's own.
+fn bailing(env: &Env, moves: &[Move]) -> HashSet<Uuid> {
+    (moves.iter())
         .filter(|mv| env.carried_point_bails(pt_key(&mv.old)))
         .filter_map(|mv| mv.wire.map(WireJoin::wire))
-        .collect();
-    out.bailed = bailing.iter().copied().collect();
+        .collect()
+}
+
+/// Run the follow pass for `moves`, wires in `selected` left alone. A wire
+/// that bails (see [`bailing`]) moves plainly at every point.
+fn carry(
+    document: &mut SchematicSheet,
+    moves: &[Move],
+    selected: HashSet<Uuid>,
+    policy: &Policy,
+) -> Follow {
+    if moves.is_empty() {
+        return Follow::default();
+    }
+    let mut env = carry_env(document, moves, selected, policy.clone());
+    let mut out = Follow::default();
+    let bails = bailing(&env, moves);
+    out.bailed = bails.iter().copied().collect();
     out.bailed.sort_unstable();
     let mut by_tip: BTreeMap<Key, Vec<&Move>> = BTreeMap::new();
     for mv in moves {
-        if mv.wire.is_some_and(|join| bailing.contains(&join.wire())) {
+        if mv.wire.is_some_and(|join| bails.contains(&join.wire())) {
             continue;
         }
         by_tip.entry(pt_key(&mv.old)).or_default().push(mv);

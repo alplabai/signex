@@ -31,7 +31,9 @@
 //!    net of `P` is a base net `F` leaves alone. The kept-power-port join
 //!    renames and merges nets by value across the sheet, which no delta
 //!    bounds, so a move with a power port or a child-sheet pin among its tips
-//!    is not compared locally either.
+//!    is not compared locally either. A point a dragged wire carries joins
+//!    the nets at its old place and where its wire landed; both are queried
+//!    points, so both nets are in `ap` as well.
 //! 2. So `want = C + (rg - rp) + F(ap)` and `got = C + (rp - rg) + ag`, where
 //!    `C = B - rp - rg` are the base nets neither delta touched, and `project`
 //!    leaves `C` alone (it removes only moved pins, and a net of `C` holds
@@ -57,8 +59,12 @@ use signex_net::{NetBase, NetDelta, NetSignature, uf::Key};
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
-use super::guard::{Exclusions, Guard, Placement, Projected, place_moved_pins};
-use super::{PinIdent, PinTip, Policy};
+use super::guard::{
+    Exclusions, Found, Guard, Placement, Projected, holds_any, place_moved_pins, query_keys,
+    warned_idents, wire_answers, wire_joins, wire_nets,
+};
+use super::intent;
+use super::{PinIdent, PinTip, Policy, WirePoint};
 
 /// The plain-moved sheet seen from the moved pins, as a delta.
 pub(super) struct LocalGuard {
@@ -69,6 +75,10 @@ pub(super) struct LocalGuard {
     home: Vec<Option<usize>>,
     /// Per tip: nothing stays at the old tip to carry the connection.
     carried: Vec<bool>,
+    /// The points the dragged wires carry, and per point the net at its old
+    /// place and where its wire landed (positions in `plain.added`).
+    wires: Vec<WirePoint>,
+    wire_at: Vec<(Found, Found)>,
 }
 
 impl LocalGuard {
@@ -79,11 +89,12 @@ impl LocalGuard {
         base: &Arc<NetBase>,
         plain_sheet: &SchematicSheet,
         tips: &[PinTip],
+        wires: &[WirePoint],
     ) -> Option<Self> {
         if !base.delta_ready() || tips.iter().any(|t| t.is_power() || t.is_sheet_pin()) {
             return None;
         }
-        let at: Vec<(Key, bool)> = tips.iter().map(|t| (t.old_key(), false)).collect();
+        let at = query_keys(tips, wires);
         let plain = base.derive_delta(plain_sheet, &at)?;
         #[cfg(test)]
         if super::guard::self_check::enabled() {
@@ -116,7 +127,8 @@ impl LocalGuard {
             }
             home.push(at);
         }
-        let carried = plain.occupied.iter().map(|on| !on).collect();
+        let carried = plain.occupied[..tips.len()].iter().map(|on| !on).collect();
+        let wire_at = wire_answers(&plain.found, tips.len());
         #[cfg(test)]
         super::guard::tally::guard_built_local();
         Some(Self {
@@ -124,7 +136,14 @@ impl LocalGuard {
             plain,
             home,
             carried,
+            wires: wires.to_vec(),
+            wire_at,
         })
+    }
+
+    /// Per tip: nothing stays at the old tip to carry the connection.
+    pub(super) fn carried(&self) -> &[bool] {
+        &self.carried
     }
 
     /// Whether the pre-move nets had this pin on a net.
@@ -153,7 +172,7 @@ impl LocalGuard {
                 "the candidate delta differs"
             );
         }
-        let (want, extra) = self.intent(guard, tips, skip);
+        let (want, extra) = self.intent(guard, tips, skip, policy);
         let base_nets = self.base.nets();
         let mut want: Projected = want.into_iter().collect();
         // Base nets the candidate lost that the plain move still has: a
@@ -176,7 +195,8 @@ impl LocalGuard {
         if want == got {
             return Some((true, None));
         }
-        Some((false, Guard::blame(tips, policy, edited, &want, &got)))
+        let at = wire_nets(&self.wires, &self.wire_at, &self.plain.added);
+        Some((false, Guard::blame(tips, &at, policy, edited, &want, &got)))
     }
 
     /// The nets the user's move asks for among the nets the move reaches
@@ -187,6 +207,7 @@ impl LocalGuard {
         guard: &Guard,
         tips: &[PinTip],
         skip: &Exclusions,
+        policy: &Policy,
     ) -> (Vec<NetSignature>, Exclusions) {
         let mut nets = self.plain.added.clone();
         // Take every moved pin out of every net; the intent puts them back.
@@ -202,18 +223,21 @@ impl LocalGuard {
                 .retain(|(s, p)| !moved.contains(&(*s, p.as_str())));
         }
         debug_assert_eq!(tips.len(), self.home.len());
-        let (extra, lone) = place_moved_pins(
+        let (extra, lone, mut joins) = place_moved_pins(
             tips,
             skip,
             &mut nets,
             &Placement {
                 home: &self.home,
                 carried: &self.carried,
-                at_old: &self.plain.found,
+                at_old: &self.plain.found[..tips.len()],
             },
             |tip| guard.was_connected(tip),
         );
-        let want = (nets.into_iter().chain(lone.into_values()))
+        joins.extend(wire_joins(&self.wires, &self.wire_at, policy));
+        let warned = warned_idents(tips, policy, |tip| guard.was_connected(tip));
+        let joined = intent::join_nets(nets, lone, &joins, |net| holds_any(net, &warned));
+        let want = (joined.into_iter())
             .filter(|n| !(n.terminals.is_empty() && n.labels.is_empty() && n.sheet_pins.is_empty()))
             .collect();
         (want, extra)
