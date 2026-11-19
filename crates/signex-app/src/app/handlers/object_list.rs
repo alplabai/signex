@@ -284,6 +284,8 @@ impl Signex {
         )
             .hash(&mut h);
         active.hash(&mut h);
+        // The filter folds by the language's rules.
+        self.ui_state.i18n.locale().hash(&mut h);
         selected.hash(&mut h);
         let stamp = h.finish();
         if state.source.view_stamp == Some(stamp) {
@@ -294,7 +296,8 @@ impl Signex {
         } else {
             ObjectListStatus::Ready
         };
-        let view = ObjectListView::build(state, status, Some(active), selected);
+        let i18n = &self.ui_state.i18n;
+        let view = ObjectListView::build(state, status, Some(active), selected, i18n);
         self.ui_state.object_list.source.view_stamp = Some(stamp);
         self.document_state.panel_ctx.object_list = view;
     }

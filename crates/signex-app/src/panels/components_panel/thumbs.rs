@@ -203,7 +203,7 @@ pub(crate) fn symbol_thumb<'a, M: 'a>(
     })
     .width(width)
     .height(height);
-    iced::widget::container::<M, Theme>(canvas)
+    iced::widget::container::<_, Theme>(canvas)
         .width(Length::Fixed(width))
         .height(Length::Fixed(height))
         .clip(true)

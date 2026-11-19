@@ -11,6 +11,10 @@ use uuid::Uuid;
 
 use super::model::*;
 
+fn en() -> &'static signex_i18n::I18n {
+    signex_i18n::I18n::en_us_ref()
+}
+
 fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
@@ -180,14 +184,14 @@ fn a_wire_reads_its_net_from_the_index_and_its_length() {
 #[test]
 fn kind_counts_follow_the_filter_but_not_the_chips() {
     let rows = rows_with_nets();
-    let counts = kind_counts(&rows, "");
+    let counts = kind_counts(&rows, "", en());
     assert_eq!(counts.total(), 11);
     assert_eq!(counts.of(ObjectKind::Part), 2);
     assert_eq!(counts.of(ObjectKind::Label), 1);
     assert_eq!(counts.of(ObjectKind::Wire), 1);
     assert_eq!(counts.more(), 7);
 
-    let counts = kind_counts(&rows, "u3");
+    let counts = kind_counts(&rows, "u3", en());
     assert_eq!(counts.of(ObjectKind::Part), 1);
     assert_eq!(counts.total(), 1);
 }
@@ -197,7 +201,7 @@ fn the_filter_matches_name_value_text_and_net_without_case() {
     let rows = rows_with_nets();
     let all = FilterSet::default();
     let names = |filter: &str| -> Vec<Uuid> {
-        filtered(&rows, filter, &all)
+        filtered(&rows, filter, &all, en())
             .iter()
             .map(|r| r.target.item.uuid)
             .collect()
@@ -207,7 +211,7 @@ fn the_filter_matches_name_value_text_and_net_without_case() {
     assert_eq!(names("WITHIN 3"), vec![id(9)], "a text note");
     assert_eq!(names("sw"), vec![id(8)], "a wire's net");
     assert_eq!(names("  vout  "), vec![id(4)], "trimmed");
-    assert_eq!(filtered(&rows, "", &all).len(), 11);
+    assert_eq!(filtered(&rows, "", &all, en()).len(), 11);
 }
 
 #[test]
@@ -215,13 +219,13 @@ fn kind_chips_keep_their_kinds_and_none_on_is_all() {
     let rows = rows_with_nets();
     let parts = FilterSet::new([ObjectKind::Part]);
     assert!(
-        filtered(&rows, "", &parts)
+        filtered(&rows, "", &parts, en())
             .iter()
             .all(|r| r.kind == ObjectKind::Part)
     );
-    assert_eq!(filtered(&rows, "", &parts).len(), 2);
+    assert_eq!(filtered(&rows, "", &parts, en()).len(), 2);
     let two = FilterSet::new([ObjectKind::Part, ObjectKind::Wire]);
-    assert_eq!(filtered(&rows, "", &two).len(), 3);
+    assert_eq!(filtered(&rows, "", &two, en()).len(), 3);
 }
 
 fn state_with(rows: Vec<ObjectRow>) -> ObjectListState {
@@ -242,6 +246,7 @@ fn the_view_marks_the_rows_selected_on_the_sheet_in_view() {
         ObjectListStatus::Ready,
         Some(power_path()),
         &selected,
+        en(),
     );
     assert!(view.is_selected(row(&view.rows, 1)));
     assert!(
@@ -257,6 +262,7 @@ fn the_view_marks_the_rows_selected_on_the_sheet_in_view() {
         ObjectListStatus::Ready,
         Some(Path::new("proj").join("Input.snxsch")),
         &selected,
+        en(),
     );
     assert_eq!(elsewhere.selected_count, 0);
 }
@@ -265,7 +271,13 @@ fn the_view_marks_the_rows_selected_on_the_sheet_in_view() {
 fn the_view_draws_a_page_of_rows_and_counts_before_the_chips() {
     let mut state = state_with(rows_with_nets());
     state.kinds = FilterSet::new([ObjectKind::Wire]);
-    let view = ObjectListView::build(&state, ObjectListStatus::Ready, Some(power_path()), &[]);
+    let view = ObjectListView::build(
+        &state,
+        ObjectListStatus::Ready,
+        Some(power_path()),
+        &[],
+        en(),
+    );
     assert_eq!(view.rows.len(), 1);
     assert_eq!(
         view.counts.total(),

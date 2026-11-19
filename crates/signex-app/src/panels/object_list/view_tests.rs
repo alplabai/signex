@@ -36,6 +36,7 @@ fn listed(selected: &[SelectedItem]) -> PanelContext {
         ObjectListStatus::Ready,
         Some(power_path()),
         selected,
+        signex_i18n::I18n::en_us_ref(),
     ))
 }
 

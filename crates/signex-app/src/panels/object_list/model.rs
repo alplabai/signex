@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use signex_i18n::I18n;
 use signex_types::schematic::{
     LabelType, Point, SchDirective, SchDrawing, SchematicSheet, SelectedItem, SelectedKind,
 };
@@ -140,13 +141,13 @@ pub struct ObjectRow {
 }
 
 impl ObjectRow {
-    /// Whether `needle` (lower case, trimmed) is in the name, the value or
+    /// Whether `needle` (folded by `i18n`, trimmed) is in the name, the value or
     /// the net. An empty needle matches every row.
-    pub fn matches(&self, needle: &str) -> bool {
+    pub fn matches(&self, needle: &str, i18n: &I18n) -> bool {
         if needle.is_empty() {
             return true;
         }
-        let hit = |s: &str| s.to_lowercase().contains(needle);
+        let hit = |s: &str| i18n.fold_for_search(s).contains(needle);
         let name = matches!(&self.name, RowName::Text(s) if hit(s));
         let value = match &self.value {
             RowValue::Text(s) => hit(s),
@@ -345,20 +346,25 @@ fn drawing_at(d: &SchDrawing) -> Point {
 }
 
 /// The rows of `rows` that pass the text filter and the kind chips.
-pub fn filtered(rows: &[ObjectRow], filter: &str, kinds: &FilterSet<ObjectKind>) -> Vec<ObjectRow> {
-    let needle = filter.trim().to_lowercase();
+pub fn filtered(
+    rows: &[ObjectRow],
+    filter: &str,
+    kinds: &FilterSet<ObjectKind>,
+    i18n: &I18n,
+) -> Vec<ObjectRow> {
+    let needle = i18n.fold_for_search(filter.trim());
     rows.iter()
-        .filter(|r| kinds.matches(r.kind) && r.matches(&needle))
+        .filter(|r| kinds.matches(r.kind) && r.matches(&needle, i18n))
         .cloned()
         .collect()
 }
 
 /// How many rows of each kind pass the text filter (the chips' counts; the
 /// kind chips themselves do not narrow them).
-pub fn kind_counts(rows: &[ObjectRow], filter: &str) -> KindCounts {
-    let needle = filter.trim().to_lowercase();
+pub fn kind_counts(rows: &[ObjectRow], filter: &str, i18n: &I18n) -> KindCounts {
+    let needle = i18n.fold_for_search(filter.trim());
     let mut counts = KindCounts::default();
-    for row in rows.iter().filter(|r| r.matches(&needle)) {
+    for row in rows.iter().filter(|r| r.matches(&needle, i18n)) {
         counts.0[row.kind.index()] += 1;
     }
     counts
@@ -472,12 +478,14 @@ pub struct ObjectListView {
 
 impl ObjectListView {
     /// The view of `state`'s rows: filtered, counted and marked against the
-    /// canvas selection `selected` on `active_sheet`.
+    /// canvas selection `selected` on `active_sheet`; the filter folds by
+    /// `i18n`'s rules.
     pub fn build(
         state: &ObjectListState,
         status: ObjectListStatus,
         active_sheet: Option<PathBuf>,
         selected: &[SelectedItem],
+        i18n: &I18n,
     ) -> Self {
         let all = &state.source.rows;
         let mut view = Self {
@@ -486,9 +494,9 @@ impl ObjectListView {
             kinds: state.kinds.clone(),
             more_open: state.more_open,
             status,
-            rows: Arc::new(filtered(all, &state.filter, &state.kinds)),
+            rows: Arc::new(filtered(all, &state.filter, &state.kinds, i18n)),
             row_limit: state.row_limit(),
-            counts: kind_counts(all, &state.filter),
+            counts: kind_counts(all, &state.filter, i18n),
             active_sheet,
             selected: Arc::new(selected.iter().map(|s| s.uuid).collect()),
             selected_count: 0,

@@ -7,7 +7,7 @@ use iced::{Alignment, Border, Element, Length, Padding, Theme, Widget};
 use signex_i18n::{I18n, ids, t};
 use signex_library::ComponentRow;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text};
+use signex_widgets::text;
 
 use super::{HINT_TEXT_SIZE, ROW_TEXT_SIZE, SP, look, thumbs};
 use crate::library::messages::LibraryMessage;
@@ -161,13 +161,15 @@ fn recent_row<'a>(
                 .font(look::mono())
                 .color(ti(tokens.text))
                 .width(Length::Fill)
-                .wrapping(iced::widget::text::Wrapping::None),
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
         )
         .push(
             text(t!(i18n, ids::PANELS_COMPONENTS_RECENT_USES, "count" => i64::from(part.uses)))
                 .size(HINT_TEXT_SIZE)
                 .font(look::mono())
-                .color(r.ink4),
+                .color(r.ink4)
+                .boxed(),
         )
         .push(look::place_button(
             LibraryMessage::ComponentsPanelPlace {

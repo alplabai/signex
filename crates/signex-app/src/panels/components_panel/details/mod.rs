@@ -325,7 +325,8 @@ pub(crate) fn view<'a>(
             half(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT, footprint_preview),
         ]
         .spacing(SP.m)
-        .width(Length::Fill),
+        .width(Length::Fill)
+        .boxed(),
     );
 
     // The footprint the next placement uses, "(default)" marked.

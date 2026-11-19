@@ -36,10 +36,17 @@ impl NavigatorModel {
     /// The rows the panel draws in `i18n`'s language, narrowed by the filter.
     pub fn visible_rows(&self, i18n: &I18n) -> Vec<NavigatorRow> {
         let tree = self.shown_tree(i18n);
-        let needle = self.filter.trim().to_lowercase();
+        let needle = i18n.fold_for_search(self.filter.trim());
         let mut rows = Vec::new();
         for (i, node) in tree.iter().enumerate() {
-            self.push_rows(node, &mut vec![i], &mut Vec::new(), &needle, &mut rows);
+            self.push_rows(
+                node,
+                &mut vec![i],
+                &mut Vec::new(),
+                &needle,
+                i18n,
+                &mut rows,
+            );
         }
         rows
     }
@@ -50,9 +57,10 @@ impl NavigatorModel {
         path: &mut Vec<usize>,
         key: &mut TreeKey,
         needle: &str,
+        i18n: &I18n,
         out: &mut Vec<NavigatorRow>,
     ) {
-        if !needle.is_empty() && !matches_below(node, needle) {
+        if !needle.is_empty() && !matches_below(node, needle, i18n) {
             return;
         }
         key.push(node.key.clone());
@@ -74,7 +82,7 @@ impl NavigatorModel {
         if node.expanded || !needle.is_empty() {
             for (i, child) in node.children.iter().enumerate() {
                 path.push(i);
-                self.push_rows(child, path, key, needle, out);
+                self.push_rows(child, path, key, needle, i18n, out);
                 path.pop();
             }
         }
@@ -82,12 +90,13 @@ impl NavigatorModel {
     }
 }
 
-/// Whether `node` or a row below it holds `needle` in its name or file name.
-fn matches_below(node: &TreeNode, needle: &str) -> bool {
-    let holds = |text: &str| text.to_lowercase().contains(needle);
+/// Whether `node` or a row below it holds `needle` (folded by `i18n`) in its
+/// name or file name.
+fn matches_below(node: &TreeNode, needle: &str, i18n: &I18n) -> bool {
+    let holds = |text: &str| i18n.fold_for_search(text).contains(needle);
     holds(&node.label)
         || node.badge.as_deref().is_some_and(holds)
-        || node.children.iter().any(|c| matches_below(c, needle))
+        || node.children.iter().any(|c| matches_below(c, needle, i18n))
 }
 
 #[cfg(test)]
