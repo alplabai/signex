@@ -40,7 +40,7 @@ pub(super) fn view<'a>(
     let cells = frame.cells();
     let show = cells.show(at);
     if let (Some(edit), true) = (editing, show.is_editable()) {
-        let placeholder = match cells.parent_value(at) {
+        let placeholder: signex_widgets::Label<'a> = match cells.parent_value(at) {
             CellShow::Value { mm: Some(mm), .. } => user(mm_format(frame.i18n).number(mm)).into(),
             _ => user(String::new()).into(),
         };
