@@ -74,7 +74,10 @@ impl Signex {
         // row, so it is refused with the explanation card before any
         // draft state changes.
         let navigates = match &msg {
-            EditorMsg::CloseEditor | EditorMsg::SelectTab(_) | EditorMsg::OpenWhereUsedTab => true,
+            EditorMsg::CloseEditor
+            | EditorMsg::SelectTab(_)
+            | EditorMsg::OpenWhereUsedTab
+            | EditorMsg::UnparsedFieldsPillPressed => true,
             EditorMsg::Datasheet(DatasheetMsg::Open(_)) => true,
             EditorMsg::SimBodyAction(action) => !action.is_edit(),
             _ => false,
@@ -141,6 +144,9 @@ impl Signex {
                 return Task::none();
             }
             EditorMsg::SelectTab(tab) => return self.handle_select_preview_tab(&address, tab),
+            EditorMsg::UnparsedFieldsPillPressed => {
+                return self.show_first_unparsed_field(&address);
+            }
             EditorMsg::OpenWhereUsedTab => {
                 if let Some(state) = self.library.editors.get_mut(&address) {
                     state.active_tab = PreviewTab::Preview;
@@ -195,6 +201,23 @@ impl Signex {
         };
         state.active_tab = tab;
         crate::library::preview_reads::tab_resolve_task(&mut self.library, address, tab)
+    }
+
+    /// The header's parse pill (lib-06): switch to the Parameters tab, where
+    /// every field that can fail to parse lives, and focus the first one.
+    fn show_first_unparsed_field(&mut self, address: &EditorAddress) -> Task<Message> {
+        let Some(name) = self
+            .library
+            .editors
+            .get(address)
+            .and_then(|state| state.first_unparsed_field())
+            .map(|(name, _)| name.to_string())
+        else {
+            return Task::none();
+        };
+        let shown = self.handle_select_preview_tab(address, PreviewTab::Parameters);
+        let field = crate::library::editor::unparsed_field_id(address, &name);
+        Task::batch([shown, iced::widget::operation::focus(field)])
     }
 
     /// The Save button. A row that pins PDFs picked this session first has

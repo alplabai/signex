@@ -52,6 +52,7 @@ fn library_views_trigger_no_adapter_call() {
             &browser,
             &tokens,
             &signex_i18n::I18n::en_us(),
+            super::browser::PreviewLook::for_tests(),
         ));
     }
 

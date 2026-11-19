@@ -78,4 +78,20 @@ define_ids! {
     LIBRARY_PANEL_EMPTY_TITLE = "library-panel-empty-title";
     LIBRARY_PANEL_EMPTY_BODY = "library-panel-empty-body";
     LIBRARY_PANEL_OPEN_LIBRARY_ACTION = "library-panel-open-library-action";
+    LIBRARY_BROWSER_NOT_MOUNTED = "library-browser-not-mounted";
+    LIBRARY_BROWSER_REOPEN_HINT = "library-browser-reopen-hint";
+    LIBRARY_BROWSER_COLUMN_SYM = "library-browser-column-sym";
+    LIBRARY_BROWSER_COLUMN_SYM_TIP = "library-browser-column-sym-tip";
+    LIBRARY_BROWSER_COLUMN_FPT = "library-browser-column-fpt";
+    LIBRARY_BROWSER_COLUMN_FPT_TIP = "library-browser-column-fpt-tip";
+    LIBRARY_BROWSER_SYMBOL_MISSING = "library-browser-symbol-missing";
+    LIBRARY_BROWSER_FOOTPRINT_MISSING = "library-browser-footprint-missing";
+    LIBRARY_BROWSER_EDIT_DETAILS = "library-browser-edit-details";
+    LIBRARY_BROWSER_PICK_SYMBOL = "library-browser-pick-symbol";
+    LIBRARY_BROWSER_PICK_FOOTPRINT = "library-browser-pick-footprint";
+    LIBRARY_BROWSER_MORE_ACTIONS = "library-browser-more-actions";
+    LIBRARY_BROWSER_DELETE_SELECTED = "library-browser-delete-selected";
+    LIBRARY_BROWSER_READ_ONLY_NOTE = "library-browser-read-only-note";
+    LIBRARY_BROWSER_PREVIEW_LOADING = "library-browser-preview-loading";
+    LIBRARY_BROWSER_PREVIEW_UNREADABLE = "library-browser-preview-unreadable";
 }

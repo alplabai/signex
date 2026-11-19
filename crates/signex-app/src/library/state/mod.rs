@@ -211,6 +211,11 @@ pub struct LibraryBrowserState {
     /// Where the grid is scrolled to, as reported by its scrollable. The
     /// grid builds only the rows in this window (#1355).
     pub grid_scroll: super::browser::GridScroll,
+    /// The selected row's symbol and footprint drawings for the preview
+    /// pane, read off-thread with the Components panel's loader (#2260).
+    pub preview: crate::panels::components_panel::details::DetailsState,
+    /// The preview pane's ⋯ menu (Delete Selected) is open.
+    pub more_menu_open: bool,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -242,6 +247,8 @@ impl LibraryBrowserState {
             rename_saving: false,
             view_cache: None,
             grid_scroll: super::browser::GridScroll::default(),
+            preview: Default::default(),
+            more_menu_open: false,
         }
     }
 

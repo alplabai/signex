@@ -224,6 +224,30 @@ number and a prefix, compared in base units, so 4.7 kΩ and 4700 Ω match. Rows
 whose cell is not a measurement in that unit are left out, and the filter says
 how many ("N excluded: not a measurement in Ω."). **✕** removes the filter.
 
+**The Library Browser tab.** The header line shows the library with its
+component and table counts, the search field, the **Show** lifecycle filter
+and **Add Component**. Saved changes that git does not hold yet show in a
+warning banner under it with **Commit now**. The left column lists the open libraries and the
+library's tables (**+ Class** adds a table). The grid's narrow **Sym** and
+**Fpt** columns mark a row with an amber dot when it has no symbol or
+footprint bound (a red dot when the bound one is missing; clicking an amber
+dot opens the picker). Selecting a row opens its preview on the right: the
+symbol and footprint drawings, **Edit Details**, **Pick Symbol…**,
+**Pick Footprint…** and, under **⋯**, **Delete Selected** (which asks first).
+In a narrow window the tab scrolls sideways.
+
+**The component editor.** Opening a row shows its internal PN, version and
+location, with the tabs General, Parameters, Supply, Datasheet, Simulation,
+Pin Map and Alternates. General shows the symbol and the footprint (each with
+**Change…**) beside the pin-to-pad table; clicking a pad cell overrides the
+pad that pin lands on. The footer has **Reload saved version**, **Release…**
+(not available yet), **Save & Close**, **Cancel** and **Save** (`Ctrl+S`).
+While a typed value does not parse, the header says how many fields do not
+parse (click it to jump to the first one), the field is outlined with its
+error under it, and **Save** stays disabled with a tooltip naming the field.
+A stock-library component shows a read-only footer with **Copy to Library…**,
+which copies its symbol.
+
 To place a part, open a schematic sheet, then either:
 
 - choose **Place ▸ Component…** (or **File ▸ Library ▸ Place Component…**,
