@@ -1521,7 +1521,7 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     // (the pin pass, as for symbol-only), a dragged wire that cannot be
     // carried whole (the rule that an edit makes no new T dot), and held pins
     // touching their landing wire (provisional decision (a)).
-    // TODO: lower the fallback rate, follow-up issue to be filed.
+    // TODO: lower the fallback rate, #2521.
     for (kind, share, cap) in [
         ("symbol-only", total.symbols_only, 25),
         ("co-selected", total.co_selected, 34),
