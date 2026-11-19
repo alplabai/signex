@@ -157,7 +157,10 @@ impl LocalGuard {
 
     /// Per tip: the net at its old tip in the plain-moved sheet, when named.
     pub(super) fn old_nets(&self, tips: usize) -> Vec<Option<usize>> {
-        self.plain.found[..tips].iter().map(|found| found.1).collect()
+        self.plain.found[..tips]
+            .iter()
+            .map(|found| found.1)
+            .collect()
     }
 
     /// Whether the pre-move nets had this pin on a net.
@@ -249,7 +252,13 @@ impl LocalGuard {
             |tip| guard.was_connected(tip),
         );
         joins.extend(wire_joins(&self.wires, &self.wire_at, policy));
-        seed_lone(&mut lone, &self.wires, &self.wire_at, &self.wire_pins, policy);
+        seed_lone(
+            &mut lone,
+            &self.wires,
+            &self.wire_at,
+            &self.wire_pins,
+            policy,
+        );
         let warned = warned_idents(tips, policy, |tip| guard.was_connected(tip));
         let joined = intent::join_nets(nets, lone, &joins, |net| holds_any(net, &warned));
         let want = (joined.into_iter())

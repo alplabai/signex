@@ -553,7 +553,13 @@ impl<'a> Guard<'a> {
             |tip| self.was_connected(tip),
         );
         joins.extend(wire_joins(&self.wires, &view.wire_at, policy));
-        seed_lone(&mut lone, &self.wires, &view.wire_at, &self.wire_pins, policy);
+        seed_lone(
+            &mut lone,
+            &self.wires,
+            &view.wire_at,
+            &self.wire_pins,
+            policy,
+        );
         let warned = warned_idents(tips, policy, |tip| self.was_connected(tip));
         let joined = intent::join_nets(nets, lone, &joins, |net| holds_any(net, &warned));
         let mut want: Vec<NetSignature> = joined
