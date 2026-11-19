@@ -143,6 +143,7 @@ fn ctx(
         nets: Vec::new(),
         children: HashMap::new(),
         key: None,
+        harness: Default::default(),
     }
 }
 

@@ -51,6 +51,8 @@ impl RuleKind {
             RuleKind::LabelsOnlyNet => "labels_only_net",
             RuleKind::SheetPinUnconnected => "sheet_pin_unconnected",
             RuleKind::SheetPinDirectionConflict => "sheet_pin_direction_conflict",
+            RuleKind::HarnessEntryMismatch => "harness_entry_mismatch",
+            RuleKind::HarnessTypeConflict => "harness_type_conflict",
         }
     }
 

@@ -20,7 +20,12 @@ use crate::{RuleKind, sel};
 pub(crate) fn sheet_pin_unconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     for sheet in &ctx.child_sheets {
         for pin in &sheet.pins {
-            if pin.connected || on_any_bus_endpoint(&pin.position, ctx) {
+            // A harness-typed entry on a harness wire is joined by the
+            // harness (#1280).
+            if pin.connected
+                || on_any_bus_endpoint(&pin.position, ctx)
+                || ctx.harness.touches(&pin.position)
+            {
                 continue;
             }
             out.push(

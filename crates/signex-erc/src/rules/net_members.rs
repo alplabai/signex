@@ -119,7 +119,9 @@ pub(super) fn net_members(ctx: &ErcContext) -> Vec<NetMembers<'_>> {
         );
         [be.position, far]
     });
-    for at in sheet_pins.chain(entry_ends) {
+    // A wire into a harness entry carries its net along the harness (#1280).
+    let harness_entries = ctx.harness.entry_points();
+    for at in sheet_pins.chain(entry_ends).chain(harness_entries) {
         if let Some(net) = nets.get_mut(&conn.root_of(&at)) {
             net.leaves_sheet = true;
         }

@@ -10,13 +10,15 @@ fn builtin_profile_lists_every_rule_and_hashes_stably() {
 }
 
 /// The shipped profile's hash is recorded in existing projects, so a DRC
-/// section (#2307) must not move it: pinned at the value trunk shipped.
+/// section (#2307) must not move it: pinned at the value trunk shipped. The
+/// two harness rules (#1280, profile 1.2) moved it once, from
+/// `89b152e97b10f513191914dc00133755a6fd3a57271b43193ac062f95aebdd76`.
 #[test]
 fn builtin_profile_hash_and_bytes_are_unchanged_by_the_drc_section() {
     let p = builtin_profile();
     assert_eq!(
         p.content_sha256(),
-        "89b152e97b10f513191914dc00133755a6fd3a57271b43193ac062f95aebdd76"
+        "a90aed9be826dd3db247d3de2dbf418dbe9e648d46d74348262ff070b082d1d2"
     );
     assert!(
         !String::from_utf8(p.to_json_bytes())

@@ -41,6 +41,8 @@ mod pin_type_conflict;
 pub(crate) use pin_type_conflict::pin_type_conflict;
 mod pins_touch_not_connected;
 pub(crate) use pins_touch_not_connected::pins_touch_not_connected;
+mod harness;
+pub(crate) use harness::{harness_entry_mismatch, harness_type_conflict};
 
 use std::collections::{HashMap, HashSet};
 
@@ -279,7 +281,10 @@ pub(crate) fn hier_port_disconnected(ctx: &ErcContext, out: &mut Vec<Diagnostic>
         // may sit mid-span). Buses follow `bus::label_touches_bus`: a bus-name
         // label anywhere along a segment, any other label at an endpoint
         // only (D5.4).
-        let touched = on_any_wire(&label.position, &wires) || bus::label_touches_bus(ctx, label);
+        // A port on a harness wire is the harness's port (#1280).
+        let touched = on_any_wire(&label.position, &wires)
+            || bus::label_touches_bus(ctx, label)
+            || ctx.harness.touches(&label.position);
         if touched {
             continue;
         }
@@ -333,6 +338,10 @@ pub(crate) fn dangling_wire(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
             be.position.x + be.size.0,
             be.position.y + be.size.1,
         )));
+    }
+    // A wire into a harness entry ends there (#1280).
+    for at in ctx.harness.entry_points() {
+        non_wire.insert(pt_key(&at));
     }
     let mut wire_ends: HashMap<Key, Vec<uuid::Uuid>> = HashMap::new();
     for w in &ctx.wires {

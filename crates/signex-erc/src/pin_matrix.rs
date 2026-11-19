@@ -156,6 +156,9 @@ pub fn baseline_cell(row: u8, col: u8) -> Severity {
 #[derive(Debug, Clone, Default)]
 pub struct ErcConfig {
     pub pin_matrix: PinMatrix,
+    /// The project's signal harness definitions (#1280); empty skips the
+    /// check of connector entries against their type's definition.
+    pub harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
 }
 
 impl ErcConfig {
@@ -163,7 +166,18 @@ impl ErcConfig {
     pub fn with_pin_matrix_overrides(overrides: &HashMap<(u8, u8), Severity>) -> Self {
         Self {
             pin_matrix: PinMatrix::with_overrides(overrides),
+            harness_definitions: Vec::new(),
         }
+    }
+
+    /// This config with the project's harness definitions.
+    #[must_use]
+    pub fn with_harness_definitions(
+        mut self,
+        definitions: &[signex_types::schematic::HarnessDefinition],
+    ) -> Self {
+        self.harness_definitions = definitions.to_vec();
+        self
     }
 }
 
