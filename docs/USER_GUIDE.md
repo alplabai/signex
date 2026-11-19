@@ -1036,30 +1036,40 @@ Run DRC until it is clean, save the board, then make the files.
 
 1. Choose **File ▸ Fabrication Outputs…** (or the Active Bar's
    **Fabrication Outputs** button).
-2. Under **Files**, tick what to write. All are ticked at first:
-   - **Gerber RS-274X with X2 attributes: copper, legend, solder mask, paste
-     and board profile**
-   - **Excellon drill: plated and non-plated holes, slots and a drill table**
-   - **Pick and place (CSV)**
-   - **IPC-D-356 test netlist**
-3. Check **File name** (the board's name) and **Output folder** (a
-   `fabrication` folder beside the board; **Browse…** picks another).
-4. Press **Generate**. The dialog lists what was written.
+2. Tick what to write. The kinds come in four groups, each counting its
+   ticks:
+   - **Fabrication**: **Gerber RS-274X**, **Excellon drill** and the
+     **IPC-D-356 test netlist**
+   - **Single-file job**: **IPC-2581 revision C** and the **ODB++ job**
+     (tick **As a folder instead of one archive** under it for the folder
+     form; it is greyed until ODB++ is ticked)
+   - **Assembly**: **Pick and place (CSV)**, **Assembly drawing (PDF)** and
+     **Assembly drawings (SVG)**
+   - **3D**: the **STEP model of the board and its parts**
+
+   The footer counts the kinds ticked. Your ticks are saved with the
+   project.
+3. Under **Destination**, check **File name** (the board's name) and
+   **Output folder** (a `fabrication` folder beside the board; **Browse…**
+   picks another). The line under them shows how the files are named.
+4. Press **Generate**. A green banner says how many files were written and
+   where; **Open folder** shows them. Notes follow: what the files leave
+   out, and in red any older files in the folder that are not part of this
+   set. **Generate again** runs it once more; **Close** closes the dialog.
 
 <!-- screenshot: the Fabrication Outputs dialog after Generate -->
 
-Every run also writes the IPC-2581 file `<name>-ipc2581.xml`, the ODB++
-archive `<name>-odb.tar` and the Gerber job file `<name>-job.gbrjob`. Send
-the board house either the Gerber and drill files or one of the IPC-2581 and
-ODB++ files, whichever it asks for. The pick-and-place file is
-`<name>-centroid.csv`; it goes to the assembler.
+With a fabrication file ticked, Generate also writes the Gerber job file
+`<name>-job.gbrjob`. Send the board house either the Gerber and drill files
+or one of the IPC-2581 and ODB++ files, whichever it asks for. The
+pick-and-place file is `<name>-centroid.csv`; it goes to the assembler.
 
 Generate writes the board as it is in memory, unsaved edits included, and
 replaces files of the same name. It never deletes: older files of the same
 name that this run did not write are listed, so you can remove them before
 you send the folder. Without a board outline nothing is written (Board 2).
-With a panel (**Tools ▸ Panelize Board**) a **Whole panel** box writes the
-whole panel.
+With a panel (**Tools ▸ Panelize Board**) a blue banner at the top holds the
+**Whole panel** box, which writes the whole panel.
 
 **Assembly drawings**
 
@@ -1068,7 +1078,10 @@ whole panel.
 - For a PDF, choose **File ▸ Export ▸ PDF…** on the board. In **Board Print
   / PDF**, tick **Assembly Drawing, Top** and **Assembly Drawing, Bottom**
   under **Layer Sets** and press **Export PDF…**. The same dialog prints the
-  copper and mechanical layers.
+  copper and mechanical layers. The **Page plan** on the right shows a card
+  for each page as you change the options; with no set ticked, Export PDF…
+  is greyed. **Mirror the Bottom Side** is greyed until a bottom set is
+  ticked.
 
 **STEP model**
 
@@ -1080,7 +1093,10 @@ its holes and cutouts; each part is the body the 3D view shows.
 
 **Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
 and **Component Report…** show the board's tables; **Export Report as CSV…**
-saves the one in view.
+saves the one in view. In **Board Reports**, switch tables at the top, type
+in **Filter rows** to narrow the rows, and click a column heading to sort by
+it (click again to turn the order round). The filter and the sort only
+change what you see: **Export CSV…** always saves every row.
 
 More detail: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md) and
 [BOARD_OUTPUT.md](BOARD_OUTPUT.md).
