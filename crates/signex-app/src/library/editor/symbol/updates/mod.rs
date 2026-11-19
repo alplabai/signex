@@ -502,6 +502,7 @@ fn context_submenu_msg_to_state(
     use crate::library::editor::symbol::state::SymbolContextSubmenu;
     match msg {
         SymbolContextSubmenuMsg::Place => SymbolContextSubmenu::Place,
+        SymbolContextSubmenuMsg::Align => SymbolContextSubmenu::Align,
     }
 }
 

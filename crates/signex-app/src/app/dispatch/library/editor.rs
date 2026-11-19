@@ -349,14 +349,21 @@ impl Signex {
 
         // Footprint-only mutations.
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+            let move_by_was_open = editor.state.move_by_modal.is_some();
             apply_footprint_primitive_edit(editor, msg);
+            // The Move Selection By dialog opens with its X field focused.
+            let focus = if !move_by_was_open && editor.state.move_by_modal.is_some() {
+                crate::library::editor::footprint::move_by_modal::focus_x_field()
+            } else {
+                Task::none()
+            };
             // A drag tick owes a solve, and a finished one may owe the
             // follow-up for the ticks that arrived while it ran (#1047).
             let solve = dispatch_pending(editor, &path).map(Message::Library);
             // A solve run in `update` owes the redundancy pass (#1685).
             let redundancy = dispatch_redundancy(editor, &path).map(Message::Library);
             self.refresh_panel_ctx();
-            return Task::batch([solve, redundancy]);
+            return Task::batch([solve, redundancy, focus]);
         }
 
         // A solve that lands after its tab's editor is gone has nothing to

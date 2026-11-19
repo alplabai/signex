@@ -1,13 +1,14 @@
-//! v0.18.14 — Altium-style unified active bar for the footprint
-//! editor. Replaces the per-mode `pads_active_bar::view` /
-//! `sketch_mode::active_bar::view` mounting in `standalone.rs`.
+//! The footprint editor's floating active bar: one bar for every mode.
 //!
-//! v0.13 — Public surface split into `bar_items()` + `dropdown_overlay()`
-//! so the layer-site mounting code at `view_main_for` calls
-//! `signex_widgets::active_bar::view(items, tokens).map(...)` directly,
-//! BYTE-FOR-BYTE matching the schematic active bar's chain. This
-//! prevents `Element::map` ordering drift (Map-wraps-container vs
-//! container-wraps-Map) that introduced a 2 px layout-pass shift.
+//! Three groups split by a divider: selection (Filter, Snap, Move, Select,
+//! Align and the Pads-mode Select tool), placement (the Pads-mode place
+//! tools, 3D Body, Text) and sketch (Shapes, plus the sketch tools in
+//! Sketch mode). A button with a dropdown carries the corner indicator.
+//!
+//! The public surface is `bar_items()` + `dropdown_overlay()`, so the
+//! mounting code calls `signex_widgets::active_bar::view(items, tokens)`
+//! exactly as the schematic active bar does; a different `Element::map`
+//! nesting shifted the bar by 2 px.
 
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
@@ -38,21 +39,36 @@ pub fn bar_items(
         return items;
     }
 
-    // 1) Eight active-bar dropdown trigger buttons at the FRONT.
-    items.extend(dropdown_trigger_items(editor, theme_id));
+    use crate::library::editor::footprint::pads_active_bar;
+    let mut triggers = dropdown_trigger_items(editor, theme_id).into_iter();
+    let mut take = |n: usize| triggers.by_ref().take(n).collect::<Vec<_>>();
+    let (selection, placement, sketch) = (take(5), take(2), take(1));
+    let is_pads = editor.state.mode == EditorMode::Normal;
+
+    // Selection: Filter, Snap, Move, Select, Align, then the Pads-mode
+    // Select tool.
+    items.extend(selection);
+    if is_pads {
+        items.extend(pads_active_bar::selection_items(editor, theme_id));
+    }
     items.push(ActiveBarItem::Separator);
 
-    // 2) Mode-keyed tool buttons (pads / sketch / 3D-view).
-    let mode_items: Vec<ActiveBarItem<LibraryMessage>> = match editor.state.mode {
-        EditorMode::Sketch => crate::library::editor::footprint::sketch_mode::active_bar::items(
-            editor, theme_id, tokens,
-        ),
-        EditorMode::Normal => {
-            crate::library::editor::footprint::pads_active_bar::items(editor, theme_id)
-        }
-        EditorMode::View3d => Vec::new(),
-    };
-    items.extend(mode_items);
+    // Placement: the Pads-mode place tools, then 3D Body and Text.
+    if is_pads {
+        items.extend(pads_active_bar::placement_items(editor, theme_id));
+    }
+    items.extend(placement);
+    items.push(ActiveBarItem::Separator);
+
+    // Sketch: Shapes, then the sketch tools in Sketch mode.
+    items.extend(sketch);
+    if editor.state.mode == EditorMode::Sketch {
+        items.extend(
+            crate::library::editor::footprint::sketch_mode::active_bar::items(
+                editor, theme_id, tokens,
+            ),
+        );
+    }
     items
 }
 

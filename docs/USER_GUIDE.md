@@ -167,6 +167,32 @@ schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
 zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 `F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
 
+### The footprint and symbol editors
+
+The floating bar over a footprint or a symbol is grouped: the selection tools
+(Selection Filter, Snap, Move, Select, Align) first, then the placement tools,
+then, in the footprint editor, the sketch tools. A small corner triangle marks
+a button with a dropdown; right-click it to open the dropdown.
+
+Right-click a pad in the footprint editor for the selection menu: **Move
+Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
+(the **Align…** dialog, which aligns or spaces the selection per axis, the
+single align and distribute operations, and **Align To Grid**), **Rotate
+Selection** (`Space`), **Flip Selection** (`X`), **Rectangular Pattern…**,
+**Edit Sketch**, Properties, Pad Actions, Cut, Copy, Find Similar, and
+**Delete** last. In the symbol editor the menu starts with **Place ▸**, then
+**Rotate Selection** and **Align ▸ Align To Grid**, then Join into Polygon,
+Select All, Deselect All, Fit to Window and **Delete**.
+
+`Ctrl+G` in the footprint editor opens **Grid Properties**. Set the **Step**
+(both axes, in mm), the **Multiplier** (1, 2, 5 or 10; the coarse spacing shows
+beside it), and how the fine and the coarse grid draw (**Lines**, **Dots** or
+**Hidden**). The preview at the top draws the grids as you set them, with a pad
+for scale; click the step or the coarse label on it to type a new value and
+press `Enter`, or `Esc` to leave it. The button in its corner draws it taller.
+**OK** applies; a step that is not a number above zero is refused and the
+dialog stays open.
+
 ## 5. Place a symbol
 
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come

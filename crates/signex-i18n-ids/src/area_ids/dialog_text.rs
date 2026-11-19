@@ -62,8 +62,6 @@ define_ids! {
     DIALOG_RENAME_FILE_PROMPT = "dialog-rename-file-prompt";
     DIALOG_VERSION_CONTROL_PROJECT = "dialog-version-control-project";
     DIALOG_VERSION_CONTROL_LIBRARY = "dialog-version-control-library";
-    DIALOG_GRID_TITLE = "dialog-grid-title";
-    DIALOG_GRID_INTRO = "dialog-grid-intro";
     DIALOG_SELECTION_FILTER_TITLE = "dialog-selection-filter-title";
     DIALOG_SELECTION_FILTER_INTRO = "dialog-selection-filter-intro";
     DIALOG_MOVE_SELECTION_COUNT = "dialog-move-selection-count";

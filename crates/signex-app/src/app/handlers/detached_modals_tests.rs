@@ -71,6 +71,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 fine_display: Default::default(),
                 coarse_display: Default::default(),
                 multiplier: 5,
+                ..GridPropertiesState::default()
             })
         }
         ModalId::SelectionFilterCustom => {
