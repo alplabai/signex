@@ -69,7 +69,7 @@ pub(super) struct Frame<'a> {
     pub sets: BTreeMap<String, NamedRuleSet>,
 }
 
-impl Frame<'_> {
+impl<'a> Frame<'a> {
     /// The rule's results in the last run, by rule id.
     pub fn result(&self, row: &RuleRow) -> Option<RuleResult> {
         match &*self.checked {
@@ -105,7 +105,7 @@ impl Frame<'_> {
         self.entry(row).flatten().unwrap_or(row.severity)
     }
 
-    pub fn grid(&self) -> &RulesGrid {
+    pub fn grid(&self) -> &'a RulesGrid {
         &self.state.grid
     }
 
