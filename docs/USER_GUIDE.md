@@ -215,6 +215,16 @@ zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 - **A panel in its own window:** drag a floating panel out of the main window.
   Its title strip shows the panel and the document in view; **Dock back** (or
   closing the window) puts the panel back in its dock.
+- **Workspace layouts:** **View ▸ Window ▸ Layouts** arranges the panels for
+  a kind of work in one step: **Schematic**, **Layout** (board work),
+  **Review** or **Notebook**, or a layout of your own. Your open documents
+  stay as they are; only the panels move. **Save Layout…** names the
+  arrangement on screen (giving one of your names again replaces that
+  layout), and **Manage Layouts…** renames, duplicates, deletes (with Undo),
+  reorders by dragging a row's grip, imports and exports your layouts.
+  **Update from current** there changes a built-in to your arrangement, and
+  **Reset** in the menu brings it back. Layouts are kept in your preferences,
+  not in the project. Details: [WORKSPACE_LAYOUTS.md](WORKSPACE_LAYOUTS.md).
 
 ## 5. Place a symbol
 

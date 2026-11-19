@@ -89,7 +89,8 @@ PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 
 **View ▸ Window** (the last entry of View, after the panel rows and a
 separator): Tile Horizontally, Tile Vertically, Untile (see
-[below](#window-tile)), a separator, and Close All Documents (see
+[below](#window-tile)), a separator, the Layouts submenu (#166, see
+[below](#window-layouts)), and Close All Documents (see
 [below](#tools-library-editor)). Their built-in keys are unchanged.
 
 **Design** has Update PCB Document (see
@@ -632,6 +633,22 @@ read (the settled geometry reading, shortly after start-up). iced reports the
 monitor's full size, not its work area, so the tiles cover the whole monitor.
 Tile is greyed when it has neither to do. The Messages panel names how many
 documents or windows were arranged.
+
+## View ▸ Window ▸ Layouts {#window-layouts}
+
+Workspace layouts (#166), between the tiling rows' separator and Close All
+Documents: a caption row BUILT-IN (greyed), the four built-ins Schematic,
+Layout, Review and Notebook (`apply_layout_schematic`, `apply_layout_board`,
+`apply_layout_review`, `apply_layout_notebook`; check rows, the active
+layout checked), then, when you have saved any, a caption row YOUR LAYOUTS
+and one row per layout of yours in your order (`MenuMessage::
+WorkspaceLayoutChosen` with the layout's id, checked while active), a
+separator, Save Layout… (`save_workspace_layout`), Manage Layouts…
+(`manage_workspace_layouts`), and Reset "<name>" (`reset_workspace_layout`)
+only while the active built-in carries your edit. Every row is live in every
+context; none has a key by default. The native macOS bar shows the same
+three-level submenu. Rules, dialogs and storage:
+[WORKSPACE_LAYOUTS.md](WORKSPACE_LAYOUTS.md).
 
 ## Sheet right-click menu {#sheet-context-menu}
 
