@@ -168,3 +168,34 @@ dialog-net-color-channel-r = R
 dialog-net-color-channel-g = G
 dialog-net-color-channel-b = B
 dialog-net-color-quick-pick = Quick Pick
+
+## Parameter Manager
+# Window subtitle: the active sheet's file, its parts and parameter columns.
+dialog-parameter-manager-subtitle = { $sheet } · { $parts ->
+    [one] 1 part
+   *[other] { $parts } parts
+} · { $parameters ->
+    [one] 1 parameter
+   *[other] { $parameters } parameters
+}
+# Beside the filter box: the fields the filter searches.
+dialog-parameter-manager-filter-hint = Reference, value or footprint
+# An empty parameter cell.
+dialog-parameter-manager-not-set = Not set
+dialog-parameter-manager-remove-column = Remove column
+dialog-parameter-manager-no-match-title = No part matches the filter
+# $sheet is the sheet's file name, $query the typed filter.
+dialog-parameter-manager-no-match-body = No reference, value or footprint on { $sheet } contains { $query }.
+dialog-parameter-manager-no-schematic-title = No active schematic
+dialog-parameter-manager-no-schematic-body = The Parameter Manager edits the parts of the active sheet. Open a schematic sheet, then open it again from Tools ▸ Parameter Manager.
+dialog-parameter-manager-footer-hint = Edits apply as you type · each cell is one undo step (Ctrl+Z)
+# Cells edited since the dialog opened whose value differs from before.
+dialog-parameter-manager-changed = { $count ->
+    [one] 1 cell changed
+   *[other] { $count } cells changed
+}
+# Tooltip of Revert changes.
+dialog-parameter-manager-revert-tip = { $count ->
+    [one] Undo the cell edit as one step
+   *[other] Undo all { $count } cell edits as one step
+}

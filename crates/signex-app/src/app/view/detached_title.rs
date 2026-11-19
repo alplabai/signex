@@ -51,6 +51,7 @@ impl Signex {
                 |p| p.data.name.clone(),
             )),
             ModalId::BomPreview => Some(i18n.message_plain(ids::DIALOG_SUBTITLE_BOM, &[])),
+            ModalId::ParameterManager => self.parameter_manager_subtitle(),
             _ => None,
         }
     }

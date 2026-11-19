@@ -171,6 +171,11 @@ dialog-parameter-manager-add-column = Add column
 dialog-parameter-manager-column-reference = Reference
 dialog-parameter-manager-column-value = Value
 dialog-parameter-manager-column-footprint = Footprint
+# The Parameter Manager footer and its no-match card.
+dialog-parameter-manager-clear-filter = Clear filter
+# Undoes every cell edit since the dialog opened; $count is how many.
+dialog-parameter-manager-revert = Revert changes ({ $count })
+dialog-parameter-manager-done = Done
 # The file changed or vanished on disk since it was opened.
 dialog-disk-conflict-reload = Reload from disk
 dialog-disk-conflict-recreate = Re-create

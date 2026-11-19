@@ -17,7 +17,7 @@ mod context_menu;
 mod library_tab;
 mod modals;
 mod overlays;
-mod parameter_manager;
+pub(crate) mod parameter_manager;
 mod pcb_active_bar;
 mod pcb_strip;
 mod pdf_preview;

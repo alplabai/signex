@@ -150,6 +150,10 @@ mod parameter_manager_open;
 #[path = "regression/parameter_manager_table.rs"]
 mod parameter_manager_table;
 
+// #1784 - Revert changes undoes the Parameter Manager session as one step.
+#[path = "regression/parameter_manager_revert.rs"]
+mod parameter_manager_revert;
+
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
