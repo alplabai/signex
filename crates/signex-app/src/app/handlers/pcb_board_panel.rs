@@ -138,6 +138,17 @@ impl Signex {
             }
             // The button runs the BOM report's command, as its menu row does.
             PcbBoardMsg::ReportsOpened => task = run_menu_command("board_report_bom"),
+            // #2523: a field row or a callout of the board illustration.
+            PcbBoardMsg::IllustrationHovered(hover) => {
+                view.illustration_hover.update(hover.clone())
+            }
+            // #2523: the size follows the board shape; edit it in Board
+            // sketch, as Design ▸ Board Sketch does.
+            PcbBoardMsg::BoardShapeEditPressed => task = run_menu_command("board_sketch"),
+            // #2523, #176: the board's materials live in the Layer Stack.
+            PcbBoardMsg::LayerStackOpened => {
+                task = run_menu_command(crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND);
+            }
         }
         self.sync_pcb_board_summary();
         task

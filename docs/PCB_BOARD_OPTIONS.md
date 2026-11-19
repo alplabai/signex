@@ -13,6 +13,53 @@ changed only through `BoardCommand::SetBoardOptions`, one undo step per edit.
 | Pour Names | How a polygon pour is named: `NET NAME_LXX_PXXX` (default), `LXX_NET NAME_PXXX`, `Board Layer_NET NAME_PXXX` or `NET NAME_Board Layer_PXXX`. `PolygonNaming::name` builds the name; pours are named by the pour tool (#2373). |
 | Designators | Physical or Logical. Stored for multi-channel designs; boards have one designator per part today, so both show the same text. |
 
+## Panel layout (#2523)
+
+The panel reads top to bottom in the order every PCB Properties panel uses:
+
+1. The header row: 'Board', the file name, and the Selection Filter button
+   (kinds on of all; it opens the Active Bar's Selection Filter dropdown).
+2. The tabs: General, Parameters (disabled: boards hold no parameters yet)
+   and Health Check, whose badge counts the design and electrical rule
+   findings.
+3. Search. A typed search keeps the rows whose label holds it and opens
+   every section that keeps one.
+4. The illustration: line art of the board outline from the board shape
+   (its bounding box when the shape is not a rectangle), the origin, each
+   extra grid's origin in its colour, the snap grid with its step, and the
+   grid lines while Visible Grid is on. Hovering a callout lights its tile
+   or card, and hovering a tile or card lights its callout. Nothing on the
+   drawing edits.
+5. The size row: 'Size W × H' ('Bounding box W × H' for a shape that is not a
+   rectangle), '· from board shape', and Edit board shape…, which runs
+   `board_sketch` as Design ▸ Board Sketch does. The size is read-only here;
+   it follows the board shape.
+6. The sections: Selection Filter, Snap Options, Board Information, Grid
+   Manager, Guide Manager, Panel and Other.
+
+Selection Filter, Snap Options, Guide Manager and Panel start closed, with a
+summary in their header (the kinds on, the Snapping scope, the guide count,
+'none' without a panel). A section closed by default keeps the key
+`<section>.open` in the panel's collapsed-section set while it is open.
+
+Board Information is a grid of stat tiles, three to a row (two in a narrow
+dock): Width and Height (from the board shape), Thickness, Area, Parts Area,
+Density, Components, Top and Bottom (a click selects those components), Nets,
+Unrouted nets and DRC Violations (both tinted as a warning above zero; the
+DRC count opens the results). Layers, Signal, the hidden nets and the
+primitive counts sit in a fold under the tiles, closed by default. Reports
+sits in the section header.
+
+The Grid Manager starts with the Visible Grid switch, then one card per grid.
+Other ends with 'Board materials & finish → Open Layer Stack': solder mask,
+silkscreen, surface finish, copper weights and materials live in the Layer
+Stack, so Board Options holds none of them.
+
+The Health Check tab has one card per check. Design rules: the finding
+count (a link to the results), Run DRC and Show results. Electrical rules: the
+project's schematic check. Each reads 'Not run' until its check has run.
+Signex does not record when a check last ran, so the cards do not say.
+
 ## Origin
 
 The board origin (#2384), `BoardOptions::origin` (`signex_types::pcb_origin::BoardOrigin`), is the point a board shows as (0, 0). Shown coordinates run with X to the right and Y up the screen; the model's y grows down the screen, so `BoardOrigin::to_user` and `from_user` mirror Y about the origin. The status bar, the Component view's X and Y, the track, via and pad X/Y fields, and the Guide Manager, Grid Manager and Sheet coordinates read and type through it; the sheet's X and Y are its bottom-left corner.

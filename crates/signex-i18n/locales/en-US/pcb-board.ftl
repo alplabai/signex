@@ -45,6 +45,8 @@ pcb-board-kind-other = Other
 
 # Snap Options: what a carried footprint snaps to (#2353, #2374).
 pcb-board-section-snap = Snap Options
+# The row of the Grids, Guides and Axes checkboxes.
+pcb-board-snap-to = Snap to
 pcb-board-snap-grids = Grids
 pcb-board-snap-guides = Guides
 pcb-board-snap-axes = Axes
@@ -72,9 +74,23 @@ pcb-board-snap-distance = Distance
 pcb-board-snap-distance-value = { $factor }x Snap Grid
 pcb-board-axis-range = Axis Range
 
-# Board Information: totals read from the board.
+# The board illustration's size row (#2523): the size comes from the board
+# shape, read-only here. $width and $height are numbers from Signex's own
+# formatter, $unit their unit.
+pcb-board-size-readout = Size { $width } × { $height } { $unit }
+# The same for an outline that is not a rectangle: its extent.
+pcb-board-size-bounding = Bounding box { $width } × { $height } { $unit }
+pcb-board-size-source = · from board shape
+pcb-board-edit-shape = Edit board shape…
+pcb-board-edit-shape-tip = Board size follows the board outline. Edit the shape in Board sketch.
+# Callouts on the illustration; $value is a length with its unit.
+pcb-board-callout-width = { $value } · from board shape
+pcb-board-callout-snap = Snap { $value }
+
+# Board Information: totals read from the board, as stat tiles.
 pcb-board-section-info = Board Information
-pcb-board-info-size = Board Size
+# Tooltip of the Width and Height tiles.
+pcb-board-info-from-shape = From the board shape
 pcb-board-info-width = Width
 pcb-board-info-height = Height
 pcb-board-info-thickness = Thickness
@@ -83,18 +99,24 @@ pcb-board-info-area = Area
 pcb-board-info-components-area = Parts Area
 pcb-board-info-density = Density
 pcb-board-info-components = Components
-pcb-board-info-total = Total
 pcb-board-info-top = Top
 pcb-board-info-bottom = Bottom
 pcb-board-info-select-tip = Select these components
 pcb-board-info-layers = Layers
 pcb-board-info-signal = Signal
 pcb-board-info-nets = Nets
-pcb-board-info-unrouted = Unrouted
-pcb-board-info-hidden = Hidden
+pcb-board-info-unrouted-nets = Unrouted nets
+# Tooltip of the Unrouted nets tile above zero.
+pcb-board-info-unrouted-tip = { $count ->
+    [one] 1 net has connections that are not routed yet
+   *[other] { $count } nets have connections that are not routed yet
+}
+# Nets whose ratsnest lines are hidden.
+pcb-board-info-hidden-nets = Hidden nets
 # Shown as the unrouted count before the ratsnest is worked out.
 pcb-board-info-not-counted = Not counted yet
-pcb-board-info-primitives = Primitives & Others
+# The closed fold under the tiles.
+pcb-board-info-more = Layers · Primitives & Others
 pcb-board-info-fills = Fills
 pcb-board-info-regions = Regions
 pcb-board-info-keepouts = Keepouts
@@ -171,6 +193,13 @@ pcb-board-sheet = Sheet Settings
 pcb-board-sheet-width = Width
 pcb-board-sheet-height = Height
 pcb-board-sheet-from-layer = Size From Board
+# The board's materials and finish live in the Layer Stack (#2523).
+pcb-board-materials = Board materials
+pcb-board-materials-link = Board materials & finish → Open Layer Stack
+pcb-board-materials-tip = Solder mask, silkscreen, surface finish, copper weights and materials live in the Layer Stack.
+
+# The Panel section's header with no panel.
+pcb-board-panel-none = none
 
 # Grid and Guide Manager cards (#2386).
 pcb-board-more = ⋯
@@ -182,6 +211,10 @@ pcb-board-grid-parts = Parts
 pcb-board-grid-other = Other
 pcb-board-grid-add = + Add Grid
 pcb-board-grid-fixed-tip = The board's own grid applies to everything no other grid claims.
+# A grid card's second line: its origin, and for the board's own grid what
+# it applies to.
+pcb-board-grid-origin = Origin
+pcb-board-grid-applies-all = applies to all
 pcb-board-guide-add = + Add Guide
 pcb-board-guide-place-on-board = Place on Board
 pcb-board-guide-glyph-vertical = │
@@ -189,10 +222,12 @@ pcb-board-guide-glyph-horizontal = ─
 pcb-board-guide-glyph-plus45 = ╱
 pcb-board-guide-glyph-minus45 = ╲
 
-# Health Check tab.
+# Health Check tab: one card per check.
 pcb-board-health-drc = Design rules
 pcb-board-health-erc = Electrical rules
+pcb-board-health-erc-source = From the project's schematic check
 pcb-board-health-run-drc = Run DRC
+pcb-board-health-show-results = Show results
 pcb-board-health-not-run = Not run
 pcb-board-health-findings = { $count ->
     [0] No findings
