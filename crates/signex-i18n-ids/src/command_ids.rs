@@ -650,5 +650,7 @@ define_ids! {
         CMD_CATEGORY_PCB = "cmd-category-pcb";
         CMD_CATEGORY_UNCATEGORIZED = "cmd-category-uncategorized";
         CMD_UNNAMED = "cmd-unnamed";
+        // c13 sch-harness (#1280)
+        CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
     }
 }

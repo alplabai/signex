@@ -6,6 +6,7 @@ use super::super::*;
 
 mod child_sheet_identity;
 mod floating_layout;
+mod harness_panel;
 mod layout_persist;
 mod library_browser;
 mod multi_edit;
@@ -104,6 +105,9 @@ impl Signex {
             if let crate::panels::PanelMsg::LayerStack(msg) = panel_msg {
                 self.handle_layer_stack(msg);
                 return self.finish_update();
+            }
+            if let Some(task) = self.handle_dock_harness_message(panel_msg) {
+                return Task::batch([task, self.finish_update()]);
             }
             if self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_multi_edit_message(panel_msg)

@@ -167,6 +167,9 @@ pub struct PanelContext {
     pub child_sheet_border_picker_open: bool,
     /// State of the wire colour picker (Tab form or selected wire).
     pub wire_color_picker: super::WireColorPicker,
+    /// What the harness Properties and the harness definitions view show
+    /// (#1280).
+    pub harness: super::HarnessPanel,
     /// Width preset and colour of the single selected wire, if one is.
     pub selected_wire_style: Option<(
         signex_types::schematic::WireWidthPreset,

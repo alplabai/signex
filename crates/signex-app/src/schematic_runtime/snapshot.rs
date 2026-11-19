@@ -164,6 +164,18 @@ pub fn build_renderer_snapshot(
         &mut wires,
         &mut wire_line_styles,
     );
+    harness::push(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
+        harness::HarnessOut {
+            wires: &mut wires,
+            polygons: &mut polygons,
+            texts: &mut labels,
+        },
+    );
 
     // A dot takes the colour most of its wires share, else its own rule.
     let from_wires = signex_types::schematic::junction_wire_colors(snapshot, |wire| {

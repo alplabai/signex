@@ -293,6 +293,11 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return view_pre_placement(pp, ctx, muted, primary, border_c, input_bg, input_bdr);
     }
 
+    // #1280: the harness definitions view, while it is open.
+    if ctx.harness.definitions_open {
+        return super::view_harness_definitions(ctx, muted, primary);
+    }
+
     // ── Context-aware: if something is selected, show element properties (Altium style) ──
     if ctx.selection_count == 1 && !ctx.selection_info.is_empty() {
         return view_selected_element_properties(ctx, muted, primary, border_c);

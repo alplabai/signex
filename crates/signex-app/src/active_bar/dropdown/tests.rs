@@ -536,9 +536,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         false,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -546,9 +546,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         true,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -556,9 +556,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         false,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -566,9 +566,9 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         true,
         &[
-            "ITEM:Signal Harness|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Connector|disabled=true|icon=true|checked=false|shortcut=None",
-            "ITEM:Harness Entry|disabled=true|icon=true|checked=false|shortcut=None",
+            "ITEM:Signal Harness|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Connector|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Harness Entry|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (

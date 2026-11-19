@@ -110,6 +110,22 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         Some(signex_types::schematic::SelectedKind::NoErcDirective) => {
             col = super::no_erc::push_no_erc_sections(col, ctx, uuid, st);
         }
+        // #1280: an entry shows its connector.
+        Some(
+            signex_types::schematic::SelectedKind::HarnessConnector
+            | signex_types::schematic::SelectedKind::HarnessEntry,
+        ) => {
+            col = super::harness_connector::push_harness_connector_sections(col, ctx, st);
+        }
+        Some(signex_types::schematic::SelectedKind::HarnessWire) => {
+            col = super::harness_wire::push_harness_wire_sections(col, ctx, st);
+        }
+    }
+    // #1280: a sheet entry can carry a harness.
+    if let (Some(pin), Some(signex_types::schematic::SelectedKind::SheetPin)) =
+        (uuid, selected_kind)
+    {
+        col = super::harness_wire::push_sheet_entry_harness_type(col, ctx, pin, st);
     }
 
     // ── Wire style ──: width preset and own colour, undoable.

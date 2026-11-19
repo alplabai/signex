@@ -1049,6 +1049,12 @@ pub enum Tool {
     CompileMask,
     /// One click on a `_P` or `_N` net marks the differential pair (#2420).
     DiffPair,
+    /// Click by click draws harness wire segments, like the wire tool (#1280).
+    HarnessWire,
+    /// Two clicks place a harness connector body (#1280).
+    HarnessConnector,
+    /// One click on a connector's flat side adds an entry there (#1280).
+    HarnessEntry,
 }
 
 impl std::fmt::Display for Tool {
@@ -1076,6 +1082,9 @@ impl std::fmt::Display for Tool {
             Tool::Blanket => write!(f, "Place Blanket"),
             Tool::CompileMask => write!(f, "Place Compile Mask"),
             Tool::DiffPair => write!(f, "Place Differential Pair"),
+            Tool::HarnessWire => write!(f, "Draw Signal Harness"),
+            Tool::HarnessConnector => write!(f, "Place Harness Connector"),
+            Tool::HarnessEntry => write!(f, "Place Harness Entry"),
         }
     }
 }

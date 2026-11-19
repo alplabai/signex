@@ -306,6 +306,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_net_classes" | "open_net_classes_panel" => {
             Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
         }
+        // #1280: the harness definitions view, in Properties.
+        "open_harness_definitions" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::Harness(crate::panels::HarnessPanelMsg::DefinitionsOpened),
+        )),
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
         // Reports > Bill of Materials opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),

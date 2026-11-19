@@ -158,7 +158,10 @@ fn far_side_mismatches(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
                 .filter_map(|id| ctx.harness.connector(*id))
             {
                 let found = harness_mismatches(c.uuid, &entries_of(c), far);
-                push_mismatches(c, &symbol.name, found, &symbol.name, out);
+                // The app reads the far side back from the tag
+                // (`far:<sheet symbol>:<expected entry>`).
+                let tag = format!("far:{}", symbol.name);
+                push_mismatches(c, &symbol.name, found, &tag, out);
             }
         }
     }

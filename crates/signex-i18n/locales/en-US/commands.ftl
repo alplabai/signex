@@ -673,3 +673,7 @@ cmd-category-uncategorized = Uncategorized
 
 # The placeholder label of a command row that has none (never shown for a catalog command).
 cmd-unnamed = Unnamed command
+
+## c13 sch-harness
+
+cmd-open-harness-definitions = Open the harness definitions

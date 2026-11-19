@@ -389,6 +389,9 @@ impl Signex {
                     Tool::Blanket => Some("Blanket".to_string()),
                     Tool::CompileMask => Some("Compile Mask".to_string()),
                     Tool::DiffPair => Some("Differential Pair".to_string()),
+                    Tool::HarnessWire => Some("Signal Harness".to_string()),
+                    Tool::HarnessConnector => Some("Harness Connector".to_string()),
+                    Tool::HarnessEntry => Some("Harness Entry".to_string()),
                     _ => None,
                 };
                 // Clear every cursor-following ghost so a leftover from a

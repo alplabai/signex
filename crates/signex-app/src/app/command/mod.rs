@@ -475,7 +475,7 @@ mod tests {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _task) = Signex::new();
 
-        let command = AppCommandId::new("place_signal_harness").unwrap();
+        let command = AppCommandId::new("place_device_sheet_symbol").unwrap();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
         assert_eq!(
@@ -487,7 +487,7 @@ mod tests {
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Signal Harness")),
+                .starts_with("Planned, not available yet: Device Sheet Symbol")),
             "the handler ran and explained"
         );
     }

@@ -584,6 +584,10 @@ mod schematic_field_drag;
 #[path = "regression/schematic_directives.rs"]
 mod schematic_directives;
 
+// #1280 — signal harnesses.
+#[path = "regression/signal_harness.rs"]
+mod signal_harness;
+
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
 #[path = "regression/text_font_family.rs"]

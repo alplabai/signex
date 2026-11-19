@@ -42,7 +42,10 @@ impl SchematicCanvas<'_> {
             | Tool::BreakWire
             | Tool::Blanket
             | Tool::CompileMask
-            | Tool::DiffPair => true,
+            | Tool::DiffPair
+            | Tool::HarnessWire
+            | Tool::HarnessConnector
+            | Tool::HarnessEntry => true,
         }
     }
 

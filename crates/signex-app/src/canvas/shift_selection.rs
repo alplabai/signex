@@ -60,6 +60,17 @@ pub(super) fn shift_snapshot_for_selection(
             d.map_points(shift);
         }
     }
+    // #1280: a connector drags with its entries; a harness wire whole.
+    for c in out.harness.connectors.iter_mut() {
+        if is_selected(c.uuid, SelectedKind::HarnessConnector) {
+            c.translate(dx, dy);
+        }
+    }
+    for w in out.harness.wires.iter_mut() {
+        if is_selected(w.uuid, SelectedKind::HarnessWire) {
+            w.translate(dx, dy);
+        }
+    }
     for l in out.labels.iter_mut() {
         if is_selected(l.uuid, SelectedKind::Label) {
             l.position = shift(l.position);

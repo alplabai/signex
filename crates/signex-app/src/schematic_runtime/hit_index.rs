@@ -95,6 +95,16 @@ impl HitIndex {
                         },
                     }
                 }
+                SelectedKind::HarnessWire => {
+                    match super::harness::wire_segment(snapshot, item.item.uuid) {
+                        Some((a, b, tolerance)) => segment_entry(item.item, a, b, tolerance),
+                        None => Entry {
+                            item: item.item,
+                            extent: item.bbox.expand(0.25),
+                            shape: Shape::Box,
+                        },
+                    }
+                }
                 _ => Entry {
                     item: item.item,
                     extent: item.bbox.expand(0.25),

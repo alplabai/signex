@@ -371,6 +371,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_blanket"
         | "place_compile_mask"
         | "place_diff_pair"
+        // #1280: the harness tools and the definitions view.
+        | "place_signal_harness"
+        | "place_harness_connector"
+        | "place_harness_entry"
+        | "open_harness_definitions"
         | "edit_blanket"
         // #1699: a No-ERC directive's rule list.
         | "edit_no_erc_rules"

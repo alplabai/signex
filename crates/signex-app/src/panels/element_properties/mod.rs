@@ -14,6 +14,9 @@ mod drawing_preview;
 mod font_row;
 mod footprint_card;
 mod footprint_section;
+mod harness_connector;
+mod harness_definitions;
+mod harness_wire;
 mod header;
 mod label;
 mod library_rows;
@@ -40,5 +43,7 @@ pub(super) use font_row::font_family_row;
 pub use footprint_card::{
     FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView, FootprintCards,
 };
+pub use harness_connector::{HarnessField, HarnessMismatchRow, HarnessPanel, HarnessPanelMsg};
+pub(super) use harness_definitions::view_harness_definitions;
 pub use no_erc::NoErcRuleEdit;
 pub(super) use selected::view_selected_element_properties;

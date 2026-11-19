@@ -28,6 +28,7 @@ mod layout_drag;
 mod measure_tool;
 mod move_pick;
 mod place_directive;
+mod place_harness;
 pub(crate) use place_directive::{blanket_directive, compile_mask_directive, diff_pair_directive};
 mod place_drawing;
 mod place_label;

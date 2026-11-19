@@ -737,3 +737,56 @@ panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
 panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.
 panels-messages-list-more = { $names } and { $count } more
+
+## c13 sch-harness
+
+# Caption under the Harness Connector header: the sheet file and how many entries the connector has.
+panels-harness-caption = { $sheet } · { $count ->
+    [one] 1 entry
+   *[other] { $count } entries
+}
+# Warn banner: the child sheet $far expects an entry this harness names differently.
+panels-harness-mismatch = { $far } expects entry { $expects }; this harness has { $has }. One signal would not connect.
+panels-harness-rename = Rename { $from } to { $to }
+panels-harness-go-to = Go to { $sheet }
+panels-harness-section = Harness
+panels-harness-type = Type
+panels-harness-definition = Definition
+# A link that opens the harness definitions view.
+panels-harness-definition-link = { $type } · { $count } entries · edit…
+panels-harness-colour = Colour
+panels-harness-colour-default = harness default
+panels-harness-placement = Placement
+panels-harness-x = X
+panels-harness-y = Y
+panels-harness-width = Width
+panels-harness-pitch = Entry pitch
+panels-harness-entries = Entries
+panels-harness-entry = Entry
+panels-harness-net = Net on this sheet
+panels-harness-expects-pill = { $far } expects { $expects }
+# $example is a compiled net name such as SPI_BUS.SCK.
+panels-harness-compiled = Compiled net names: { $example } … unless a net label names them.
+panels-harness-start = Start
+panels-harness-end = End
+panels-harness-entry-type = Harness type
+# The Harness type choice of a plain signal sheet entry.
+panels-harness-no-type = None (signal)
+panels-harness-defs-title = Harness definitions
+panels-harness-defs-caption = project { $project } · { $count ->
+    [one] 1 type
+   *[other] { $count } types
+}
+# $entries is the entry count, nested types named, such as "2 + UART".
+panels-harness-defs-uses = { $entries } entries · { $uses ->
+    [one] 1 use
+   *[other] { $uses } uses
+}
+panels-harness-defs-name = Name
+panels-harness-defs-description = Description
+panels-harness-defs-kind = Kind
+panels-harness-defs-signal = signal
+panels-harness-defs-nested = harness · { $entries }
+panels-harness-defs-nested-section = { $type } (nested)
+panels-harness-defs-new = New harness type
+panels-harness-defs-back = Back

@@ -131,9 +131,9 @@ Place/Ports & Connectors/Sheet Symbol	item	Sheet Symbol	-	-	PlaceSheetSymbol	01-
 Place/Ports & Connectors/Device Sheet Symbol	stub	Device Sheet Symbol	-	-	-	00-00000	never
 Place/Ports & Connectors/Reuse Block...	stub	Reuse Block...	-	-	-	00-00000	never
 Place/Ports & Connectors/---	separator	-	-	-	-	-	-
-Place/Ports & Connectors/Signal Harness	stub	Signal Harness	-	-	-	00-00000	never
-Place/Ports & Connectors/Harness Connector	stub	Harness Connector	-	-	-	00-00000	never
-Place/Ports & Connectors/Harness Entry	stub	Harness Entry	-	-	-	00-00000	never
+Place/Ports & Connectors/Signal Harness	item	Signal Harness	-	-	PlaceSignalHarness	01-00000	cmd:place_signal_harness
+Place/Ports & Connectors/Harness Connector	item	Harness Connector	-	-	PlaceHarnessConnector	01-00000	cmd:place_harness_connector
+Place/Ports & Connectors/Harness Entry	item	Harness Entry	-	-	PlaceHarnessEntry	01-00000	cmd:place_harness_entry
 Place/Directives	submenu	Directives	-	-	-	-	-
 Place/Directives/Parameter Set	stub	Parameter Set	-	-	-	00-00000	never
 Place/Directives/Generic No ERC	item	Generic No ERC	-	-	PlaceNoErc	01-00000	cmd:place_no_erc

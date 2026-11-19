@@ -110,6 +110,18 @@ impl Signex {
             ActiveBarAction::PlaceDiffPair => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::DiffPair)));
             }
+            // #1280: the harness tools, each its own tool.
+            ActiveBarAction::PlaceSignalHarness => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::HarnessWire)));
+            }
+            ActiveBarAction::PlaceHarnessConnector => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(
+                    Tool::HarnessConnector,
+                )));
+            }
+            ActiveBarAction::PlaceHarnessEntry => {
+                follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::HarnessEntry)));
+            }
             // Sheet symbol has its own tool: a hierarchical sheet, not a
             // plain rectangle.
             ActiveBarAction::PlaceSheetSymbol => {

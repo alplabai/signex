@@ -47,6 +47,11 @@ pub enum ProjectSectionCommand {
     SetVersionControl {
         on: bool,
     },
+    /// Replace the project's signal harness definitions (#1280), as the
+    /// harness definitions view edits them.
+    SetHarnessDefinitions {
+        definitions: Vec<signex_types::schematic::HarnessDefinition>,
+    },
 }
 
 impl ProjectSectionCommand {
@@ -70,6 +75,11 @@ impl ProjectSectionCommand {
                 }
             }
             Self::SetVersionControl { on } => data.enable_git = *on,
+            Self::SetHarnessDefinitions { definitions } => {
+                data.schematic_design
+                    .harness_definitions
+                    .clone_from(definitions);
+            }
         }
         Ok(())
     }
@@ -87,6 +97,8 @@ pub(super) struct SectionsSnapshot {
     enable_git: bool,
     /// The Requirements section (#2339): the whole list; only it writes it.
     requirements: Vec<RequirementEntry>,
+    /// The harness definitions (#1280); only the definitions view writes them.
+    harness_definitions: Vec<signex_types::schematic::HarnessDefinition>,
 }
 
 impl SectionsSnapshot {
@@ -98,6 +110,7 @@ impl SectionsSnapshot {
             active_variant: data.active_variant.clone(),
             enable_git: data.enable_git,
             requirements: data.requirements.clone(),
+            harness_definitions: data.schematic_design.harness_definitions.clone(),
         }
     }
 
@@ -108,5 +121,6 @@ impl SectionsSnapshot {
         data.active_variant = self.active_variant;
         data.enable_git = self.enable_git;
         data.requirements = self.requirements;
+        data.schematic_design.harness_definitions = self.harness_definitions;
     }
 }

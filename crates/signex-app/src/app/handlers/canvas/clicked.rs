@@ -175,6 +175,23 @@ impl Signex {
                     self.continue_wire_drawing(end_pt);
                 }
             }
+            // #1280: a harness wire is drawn like a bus.
+            Tool::HarnessWire => {
+                let pt = signex_types::schematic::Point::new(wx, wy);
+                if !self.interaction_state.wire_drawing {
+                    self.start_wire_drawing(pt);
+                } else if let Some(&start) = self.interaction_state.wire_points.last() {
+                    let (end_pt, _) =
+                        self.place_harness_wire_at(start, pt, self.interaction_state.corner_rule);
+                    self.continue_wire_drawing(end_pt);
+                }
+            }
+            Tool::HarnessConnector => {
+                self.harness_connector_click(signex_types::schematic::Point::new(wx, wy));
+            }
+            Tool::HarnessEntry => {
+                self.harness_entry_click(signex_types::schematic::Point::new(wx, wy));
+            }
             Tool::Component if self.interaction_state.pending_power.is_some() => {
                 if let Some((net_name, lib_id)) = self.interaction_state.pending_power.clone() {
                     self.place_power_at(

@@ -461,6 +461,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_blanket", "PlaceBlanket"),
     ("place_compile_mask", "PlaceCompileMask"),
     ("place_diff_pair", "PlaceDiffPair"),
+    // #1280: the harness tools, fixture names only.
+    ("place_signal_harness", "PlaceSignalHarness"),
+    ("place_harness_connector", "PlaceHarnessConnector"),
+    ("place_harness_entry", "PlaceHarnessEntry"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {
