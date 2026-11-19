@@ -291,7 +291,7 @@ fn loaded_for<'a>(
 ) -> Option<&'a crate::panels::components_panel::details::ComponentDetails> {
     let key = browser.preview.key.as_ref()?;
     (key.row_id == RowId::from_uuid(row.row_id))
-        .then(|| browser.preview.loaded.as_deref())
+        .then_some(browser.preview.loaded.as_deref())
         .flatten()
 }
 
@@ -447,17 +447,17 @@ fn field_list<'a>(
     } else {
         row.version.clone()
     };
-    let symbol = (!row.is_symbol_unbound())
-        .then(|| {
-            primitive_label(
-                Some(&row.symbol_ref),
-                "symbols",
-                "snxsym",
-                names.symbol(&row.symbol_ref),
-                library_state,
-            )
-        })
-        .unwrap_or_default();
+    let symbol = if row.is_symbol_unbound() {
+        Default::default()
+    } else {
+        primitive_label(
+            Some(&row.symbol_ref),
+            "symbols",
+            "snxsym",
+            names.symbol(&row.symbol_ref),
+            library_state,
+        )
+    };
     let footprint = row
         .footprint_ref
         .as_ref()
