@@ -66,6 +66,7 @@ pub(super) fn card<'a>(
                     width: 1.0,
                     color: edge,
                     radius: Radii::GRAPHITE.card.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             })

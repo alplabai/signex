@@ -47,7 +47,7 @@ fn table_row<'a>(
     proposed: Element<'a, Message>,
     sheet: Element<'a, Message>,
     location: Element<'a, Message>,
-) -> Row<'a, Message> {
+) -> Row<Element<'a, Message>> {
     row![
         container(lock).width(Length::Fixed(LOCK_COL_W)),
         container(current).width(Length::Fixed(CURRENT_COL_W)),
@@ -205,12 +205,8 @@ impl Signex {
             .then_some(Message::Annotate(AnnotateMsg::ReprefixPressed));
         row![
             section_heading(i18n, ids::DIALOG_ANNOTATE_CHANGES_HEADING, tokens),
-            container(switch)
-                .width(Length::FillPortion(18))
-                .max_width(SWITCH_MAX_W),
-            container(filter)
-                .width(Length::FillPortion(17))
-                .max_width(FILTER_MAX_W),
+            container(switch).width(Length::FillPortion(18).max(SWITCH_MAX_W)),
+            container(filter).width(Length::FillPortion(17).max(FILTER_MAX_W)),
             dialog_button(
                 t!(i18n, ids::DIALOG_ANNOTATE_REPREFIX),
                 DialogButtonKind::Secondary,

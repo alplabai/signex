@@ -134,6 +134,7 @@ fn row_area<'a>(
                 width: if edge.is_some() { 1.0 } else { 0.0 },
                 color: edge.unwrap_or(r.line_soft),
                 radius: 0.0.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         });

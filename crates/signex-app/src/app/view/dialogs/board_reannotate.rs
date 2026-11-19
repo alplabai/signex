@@ -229,6 +229,7 @@ fn radio_mark<'a>(on: bool, tokens: &ThemeTokens) -> Element<'a, Message> {
                 width: 1.0,
                 color: edge,
                 radius: (RADIO / 2.0).into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })
@@ -457,6 +458,7 @@ fn preview<'a>(
             width: 1.0,
             color: edge,
             radius: Radii::GRAPHITE.card.into(),
+            ..Border::default()
         },
         ..container::Style::default()
     });
@@ -494,6 +496,7 @@ fn info_banner<'a>(words: Localized, i18n: &I18n, tokens: &ThemeTokens) -> Eleme
                 width: 1.0,
                 color: ink,
                 radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })

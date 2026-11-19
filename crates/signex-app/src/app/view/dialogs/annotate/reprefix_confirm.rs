@@ -29,7 +29,7 @@ fn table_row<'a>(
     prefix: Element<'a, Message>,
     new: Element<'a, Message>,
     note: Element<'a, Message>,
-) -> Row<'a, Message> {
+) -> Row<Element<'a, Message>> {
     row![
         container(part).width(Length::Fixed(PART_COL_W)),
         container(prefix).width(Length::Fixed(PREFIX_COL_W)),

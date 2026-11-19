@@ -318,6 +318,7 @@ fn legend<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
                         width: 1.0,
                         color: colour,
                         radius: Radii::GRAPHITE.small.min(SWATCH / 4.0).into(),
+                        ..Border::default()
                     },
                     ..container::Style::default()
                 }

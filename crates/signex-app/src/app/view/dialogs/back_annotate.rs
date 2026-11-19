@@ -252,6 +252,7 @@ fn callout<'a>(
                 width: 1.0,
                 color: edge,
                 radius: crate::styles::Radii::GRAPHITE.card.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         })

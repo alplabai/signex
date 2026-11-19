@@ -138,7 +138,8 @@ impl Signex {
                 text(t!(i18n, ids::DIALOG_ANNOTATE_FIXED_DIGEST))
                     .size(TS.caption)
                     .color(r.ink4)
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
             );
             return block.boxed();
         }
@@ -187,12 +188,13 @@ impl Signex {
         ]
         .spacing(SP.s);
         block
-            .push(container(list).padding([SP.s, SP.xs]))
+            .push(container(list).padding([SP.s, SP.xs]).boxed())
             .push(
                 text(t!(i18n, ids::DIALOG_ANNOTATE_MATCHING_UNAVAILABLE))
                     .size(TS.caption)
                     .color(r.ink4)
-                    .width(Length::Fill),
+                    .width(Length::Fill)
+                    .boxed(),
             )
             .boxed()
     }
