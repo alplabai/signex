@@ -56,6 +56,7 @@ pub mod net_inspector;
 mod numeric_draft;
 mod palette;
 mod paper;
+pub mod paired;
 pub mod pcb_board_properties;
 pub mod pcb_component;
 pub mod pcb_nets;

@@ -83,4 +83,12 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_PAIRED_OPEN_AS_TAB = "panels-paired-open-as-tab";
+    PANELS_PAIRED_LENGTH_MATCHING = "panels-paired-length-matching";
+    PANELS_COMPACT_GROUP_MEMBERS = "panels-compact-group-members";
+    PANELS_COMPACT_GROUP_BAND = "panels-compact-group-band";
+    PANELS_COMPACT_GROUP_OUT_OF_BAND = "panels-compact-group-out-of-band";
+    PANELS_COMPACT_GROUP_ALL_IN_BAND = "panels-compact-group-all-in-band";
+    PANELS_COMPACT_GROUP_PAIR = "panels-compact-group-pair";
+    PANELS_COMPACT_GROUP_XSIGNAL = "panels-compact-group-xsignal";
 }
