@@ -8,7 +8,9 @@
 
 pub(super) mod arc;
 pub(super) mod graphic;
+pub(super) mod pad;
 pub(super) mod track;
+pub(super) mod via;
 
 use iced::Point;
 use signex_i18n::{I18n, UserText, ids, t};

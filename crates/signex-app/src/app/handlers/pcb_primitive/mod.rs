@@ -14,6 +14,7 @@ mod links;
 mod placement;
 mod stack_facts;
 mod tune;
+mod via_type;
 mod zone;
 
 #[cfg(test)]
@@ -58,6 +59,11 @@ pub struct PcbPrimitivePanel {
     pub hover: IllustrationHover,
     /// The "Not stored yet" group is open.
     pub unstored_open: bool,
+    /// The vias Override is on for (#96): their Diameter and Drill take
+    /// typed values.
+    pub via_override: Option<PrimitiveTarget>,
+    /// The copper layer the via illustration's top view shows.
+    pub via_view_layer: Option<CopperLayer>,
 }
 
 impl PcbPrimitivePanel {
@@ -243,6 +249,7 @@ impl Signex {
                 );
             }
             M::ArcModePicked(mode) => self.pick_arc_mode(*mode),
+            M::Via(m) => self.handle_via_msg(m),
         }
         self.sync_pcb_board_summary();
     }

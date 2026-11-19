@@ -50,6 +50,7 @@ pub mod snap;
 mod snap_points;
 mod stack;
 pub mod stack_edit;
+pub mod via_types;
 
 #[cfg(test)]
 mod board_sketch_tests;

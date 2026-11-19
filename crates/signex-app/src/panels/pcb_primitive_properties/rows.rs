@@ -407,25 +407,6 @@ pub(super) fn with_tip<'a>(
     .boxed()
 }
 
-/// Option tiles where `active` is chosen; inert, with `tip`, because the
-/// board stores only one of the options.
-pub(super) fn fixed_tiles<'a>(
-    look: Look<'a>,
-    options: &[MessageId],
-    active: usize,
-    tip: MessageId,
-) -> Element<'a, PanelMsg> {
-    let mut tiles = row![].spacing(SP.xs);
-    for (i, id) in options.iter().enumerate() {
-        tiles = tiles.push(
-            button(text(look.t(*id)).size(TS.body))
-                .padding([SP.xs, SP.s])
-                .style(form_look::option_tile(i == active)),
-        );
-    }
-    with_tip(look, tiles.boxed(), tip)
-}
-
 /// A disabled checkbox with its label and `tip`.
 pub(super) fn fixed_checkbox<'a>(
     look: Look<'a>,
@@ -492,50 +473,6 @@ pub(super) fn fixed_value<'a>(
 /// The lock toggle beside a location, disabled with `tip`.
 pub(super) fn lock<'a>(look: Look<'a>, locked: bool, tip: MessageId) -> Element<'a, PanelMsg> {
     fixed_checkbox(look, signex_i18n::ids::PCB_PRIM_LOCK, locked, tip)
-}
-
-/// The Testpoint section: Fabrication and Assembly, top and bottom, all
-/// disabled until the board stores them.
-pub(super) fn testpoint_section<'a>(
-    look: Look<'a>,
-    common: &PrimitiveCommon,
-) -> Option<Element<'a, PanelMsg>> {
-    use signex_i18n::ids;
-    let tip = ids::PCB_PRIM_TESTPOINT_UNSUPPORTED;
-    let mut s = Section::new(look, ids::PCB_PRIM_TESTPOINT);
-    for kind in [ids::PCB_PRIM_FABRICATION, ids::PCB_PRIM_ASSEMBLY] {
-        let sides = row![
-            fixed_checkbox(look, ids::PCB_PRIM_TOP, false, tip),
-            fixed_checkbox(look, ids::PCB_PRIM_BOTTOM, false, tip),
-        ]
-        .spacing(SP.m);
-        s.push(common, kind, labelled(look, kind, sides.boxed()));
-    }
-    s.finish()
-}
-
-/// The Template and Library rows, disabled until templates exist.
-pub(super) fn template_rows<'a>(look: Look<'a>, common: &PrimitiveCommon, s: &mut Section<'a>) {
-    use signex_i18n::ids;
-    let tip = ids::PCB_PRIM_TEMPLATE_UNSUPPORTED;
-    s.push(
-        common,
-        ids::PCB_PRIM_TEMPLATE,
-        labelled(
-            look,
-            ids::PCB_PRIM_TEMPLATE,
-            fixed_value(look, look.t(ids::PCB_PRIM_NONE), tip),
-        ),
-    );
-    s.push(
-        common,
-        ids::PCB_PRIM_LIBRARY,
-        labelled(
-            look,
-            ids::PCB_PRIM_LIBRARY,
-            fixed_value(look, look.t(ids::PCB_PRIM_LIBRARY_LOCAL), tip),
-        ),
-    );
 }
 
 /// The Net row: its dropdown and pick button.

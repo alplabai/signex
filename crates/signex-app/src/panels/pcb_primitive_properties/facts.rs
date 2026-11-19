@@ -7,10 +7,12 @@ use std::path::PathBuf;
 
 use pcb_geom::ItemRef;
 use signex_engine::pcb::draw::ArcMode;
-use signex_types::pcb::{MaskExpansion, PadShape};
+use signex_engine::pcb::via_types::ViaTypeKey;
+use signex_types::pcb::{MaskExpansion, PadShape, ViaType};
 use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
+use signex_types::pcb_via_protection::ViaProtection;
 
 /// The board and the selected items a panel was built for. Every edit
 /// message carries it, so a selection change in between cannot send the
@@ -329,6 +331,30 @@ pub struct ViaFacts {
     pub top: MaskSideFacts,
     pub bottom: MaskSideFacts,
     pub from_hole_edge: Option<bool>,
+    /// The board's via types (#96), derived from its vias until the Layer
+    /// Stack Manager stores them; through types first.
+    pub types: Vec<ViaTypeChoice>,
+    /// The type the vias share; `None` when they differ or match none.
+    pub via_type: Option<ViaTypeChoice>,
+    /// The diameter and drill of `via_type`.
+    pub type_size: Option<(f64, f64)>,
+    /// Whether the vias' diameter or drill differs from their type's.
+    pub overridden: Option<bool>,
+    /// Override is on for these vias: Diameter and Drill take typed values.
+    pub override_open: bool,
+    /// The protection the vias share (IPC-4761); fill and cap read as none
+    /// until the board stores them.
+    pub protection: Option<ViaProtection>,
+    /// The drill pair, "Through 1–4".
+    pub drill_pair: Option<String>,
+    /// The drill less the plating.
+    pub finished_hole: Option<f64>,
+    /// The board's smallest via drill, when its setup sets one.
+    pub min_drill: Option<f64>,
+    /// Whether the vias reach the Top and the Bottom layer.
+    pub reaches: (bool, bool),
+    /// The copper layer the illustration's top view shows.
+    pub view_layer: Option<CopperLayer>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -350,6 +376,11 @@ pub struct PadFacts {
     /// How the pads size their copper by layer (#2401).
     pub mode: Option<StackMode>,
     pub layer_sizes: Vec<LayerSizeRow>,
+    /// The designator of the pads' footprint, for the header pill.
+    pub component_designator: Option<String>,
+    /// Whether the hole is plated; `None` without a hole or when the pads
+    /// differ.
+    pub plated: Option<bool>,
 }
 
 /// Fills, solid regions, polygon pours or keepouts (#2393).
@@ -483,4 +514,19 @@ impl PcbPrimitiveFacts {
 pub fn shared<T: PartialEq>(mut values: impl Iterator<Item = T>) -> Option<T> {
     let first = values.next()?;
     values.all(|v| v == first).then_some(first)
+}
+
+/// A via type in the Via Type dropdown (#96).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViaTypeChoice {
+    /// What picking it applies; also how the board's vias are matched to it.
+    pub key: ViaTypeKey,
+    /// Its span name, "Thru 1:4".
+    pub name: String,
+    /// Its kind, span, sizes and protection class, "Through 1:4 · 0.6/0.3 ·
+    /// Type I-b".
+    pub spec: String,
+    pub kind: ViaType,
+    /// The dropdown entry: name and spec.
+    pub label: String,
 }

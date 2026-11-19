@@ -47,6 +47,7 @@ use signex_types::pcb_stack::StackMode;
 use signex_widgets::property_illustration::IllustrationMsg;
 use signex_widgets::{button, text, text_input, tooltip};
 
+pub use facts::ViaTypeChoice;
 pub use facts::{
     ArcFacts, AreaLayerChoice, DimensionFacts, Editability, GraphicFacts, LayerChoice,
     LayerSizeRow, MaskSideFacts, NetChoice, NetInfo, PadFacts, PcbPrimitiveFacts, PrimitiveCommon,
@@ -54,6 +55,7 @@ pub use facts::{
     ZoneFacts, ZoneKind, shared,
 };
 pub use linked::{EndChoice, end_choices, ends_tip};
+pub use via::ViaMsg;
 
 use super::{PanelContext, PanelMsg, form_look};
 use crate::styles::{PillTone, Radii, Spacing, TypeScale, pill_colors, tokens::resolve};
@@ -173,6 +175,8 @@ pub enum PcbPrimitiveMsg {
     },
     /// The armed Arc tool's Placement was picked: how the next arc is drawn.
     ArcModePicked(ArcMode),
+    /// The Via panel's via type, Override and layer chips (#96).
+    Via(ViaMsg),
 }
 
 /// The panel for `facts`: header, then the kind's sections.

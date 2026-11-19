@@ -75,10 +75,34 @@ Properties Lock box, the board menu's Lock
 and Unlock rows (`lock_board_items`, `unlock_board_items`) and an agent with
 `ids` set it.
 
-A via's span is edited with the From and To rows of the Via panel or
+A via's span comes from the via type it picks in the Via panel (#96); the
+free From and To rows are gone. An agent still sets a span with
 `set_via_span`: both ends must be different copper layers of the board; Top
 to Bottom is a through via, any other span a blind (or buried) one, and a
 micro via stays micro. DRC reads the span (`pcb_geom::via_layers`).
+
+## Via types {#via-types}
+
+Until the Layer Stack Manager stores via types, the board's via types are
+derived from its vias (`signex_engine::pcb::via_types`): one type per kind,
+span and tenting the vias have, sized by the diameter and drill most of them
+share (on a tie the smaller), plus the through via the Via tool places
+(`PcbSetup::via_diameter`, `via_drill`) when no via is through. Through types
+come first, then by top layer; a type is named with the span name the panel
+shows ("Thru 1:4"). Picking a type in the Via panel sets the vias' kind,
+span, diameter, drill and tenting as one undo step. A via whose diameter or
+drill differs from its type's is an override: the panel shows its sizes
+read-only until Override is on, and turning Override off puts both back to
+the type's in one step. The finished hole is the drill less twice
+`VIA_PLATING_MM` (0.025 mm); a drill below `PcbSetup::via_min_drill` shows a
+warning.
+
+The Protection section names the IPC-4761 type the via's fill, plug side, cap
+and per-side tenting make (`signex_types::pcb_via_protection`). A via stores
+only its tenting, so fill and cap read as none and the Type, Fill, Plug From
+and Cap rows are read-only; Tented Top and Bottom stay editable there until
+via types are stored. Type II is listed greyed: its second cover coat is not
+stored.
 
 Free pads (a pad that belongs to no footprint) do not exist on a board yet,
 so a pad's lock is its footprint's and its layer is not edited here.
