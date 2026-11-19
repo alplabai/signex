@@ -76,4 +76,20 @@ define_ids! {
     DIALOG_NET_COLOR_CHANNEL_G = "dialog-net-color-channel-g";
     DIALOG_NET_COLOR_CHANNEL_B = "dialog-net-color-channel-b";
     DIALOG_NET_COLOR_QUICK_PICK = "dialog-net-color-quick-pick";
+    DIALOG_RULES_CHANGED_ONLY = "dialog-rules-changed-only";
+    DIALOG_RULES_FILTER_PLACEHOLDER = "dialog-rules-filter-placeholder";
+    DIALOG_RULES_NO_MATCH = "dialog-rules-no-match";
+    DIALOG_RULES_GROUP_PINS = "dialog-rules-group-pins";
+    DIALOG_RULES_GROUP_NETS = "dialog-rules-group-nets";
+    DIALOG_RULES_GROUP_LABELS = "dialog-rules-group-labels";
+    DIALOG_RULES_GROUP_BUSES = "dialog-rules-group-buses";
+    DIALOG_RULES_GROUP_HIERARCHY = "dialog-rules-group-hierarchy";
+    DIALOG_RULES_GROUP_PARTS = "dialog-rules-group-parts";
+    DIALOG_RULES_LEGEND_ERROR = "dialog-rules-legend-error";
+    DIALOG_RULES_LEGEND_WARNING = "dialog-rules-legend-warning";
+    DIALOG_RULES_LEGEND_INFO = "dialog-rules-legend-info";
+    DIALOG_RULES_LEGEND_OFF = "dialog-rules-legend-off";
+    DIALOG_RULES_LEGEND_CHANGED = "dialog-rules-legend-changed";
+    DIALOG_RULES_LEGEND_CHANGED_RULE = "dialog-rules-legend-changed-rule";
+    DIALOG_RULES_MATRIX_CAPTION = "dialog-rules-matrix-caption";
 }

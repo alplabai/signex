@@ -34,6 +34,10 @@ pub enum ProfilesMsg {
     SeverityChanged(signex_erc::RuleKind, signex_erc::Severity),
     /// A pin-matrix cell of the editor was clicked.
     PinCellCycled { row: u8, col: u8 },
+    /// The editor's "Changed only" chip was switched; carries the new state.
+    ChangedOnlyToggled(bool),
+    /// The editor's "Filter rules" field changed.
+    RuleFilterChanged(String),
     /// The name field changed.
     NameInputChanged(String),
     /// The default profile for new projects was chosen; `None` is automatic.
@@ -169,9 +173,16 @@ pub(super) fn content_profiles<'a>(
                 tokens,
                 severity: &resolved.severity,
                 pin_matrix: &resolved.pin_matrix,
+                shipped: &signex_erc::project_rules::resolve(
+                    &signex_erc::project_rules::profile::builtin_profile().erc,
+                ),
                 editable,
+                changed_only: manager.rule_list.changed_only,
+                filter: &manager.rule_list.query,
                 on_severity: |rule, severity| pane(ProfilesMsg::SeverityChanged(rule, severity)),
                 on_pin_cell: |row, col| pane(ProfilesMsg::PinCellCycled { row, col }),
+                on_changed_only: |on| pane(ProfilesMsg::ChangedOnlyToggled(on)),
+                on_filter: |query| pane(ProfilesMsg::RuleFilterChanged(query)),
             });
             let mut editing = column![text(caption).size(TS.label).style(text_primary)].spacing(8);
             if editable {
