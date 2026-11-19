@@ -72,6 +72,17 @@ impl InternalPn {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Whether a row asking for `wanted` collides with a row holding
+    /// `stored`: the PN is the library-wide key. Both sides are compared
+    /// trimmed (`"PN-A "` clashes with `"PN-A"`) and case-sensitively,
+    /// because part numbers can be case-significant. A blank PN is a draft
+    /// not filled in yet and never clashes. Every uniqueness check (the
+    /// backends' and the editor's) asks this.
+    pub fn clashes(wanted: &str, stored: &str) -> bool {
+        let wanted = wanted.trim();
+        !wanted.is_empty() && stored.trim() == wanted
+    }
 }
 
 impl std::fmt::Display for InternalPn {
@@ -174,6 +185,16 @@ mod tests {
         assert_eq!(s, "\"R0805_10k\"");
         let back: InternalPn = serde_json::from_str(&s).unwrap();
         assert_eq!(pn, back);
+    }
+
+    #[test]
+    fn a_pn_clashes_trimmed_and_case_sensitively_and_a_blank_one_never() {
+        assert!(InternalPn::clashes("PN-A", "PN-A"));
+        assert!(InternalPn::clashes("PN-A ", " PN-A"));
+        assert!(!InternalPn::clashes("PN-A", "pn-a"));
+        assert!(!InternalPn::clashes("", ""));
+        assert!(!InternalPn::clashes("  ", "  "));
+        assert!(!InternalPn::clashes("PN-A", "PN-B"));
     }
 
     #[test]
