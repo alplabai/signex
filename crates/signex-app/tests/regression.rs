@@ -704,3 +704,6 @@ mod stroke_law_source_guard;
 mod stroke_zoom_law;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+// #1259 - the Object List lists the sheet's objects; a row click selects.
+#[path = "regression/object_list.rs"]
+mod object_list;
