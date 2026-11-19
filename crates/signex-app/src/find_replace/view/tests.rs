@@ -148,10 +148,13 @@ fn results_are_grouped_by_kind_with_the_sheet_beside_each() {
 #[test]
 fn segments_cut_the_text_at_the_matches() {
     assert_eq!(
-        segments("Keep VOUT trace", &[5..9]),
+        segments("Keep VOUT trace", std::slice::from_ref(&(5..9))),
         [("Keep ", false), ("VOUT", true), (" trace", false)]
     );
-    assert_eq!(segments("VOUT", &[0..4]), [("VOUT", true)]);
+    assert_eq!(
+        segments("VOUT", std::slice::from_ref(&(0..4))),
+        [("VOUT", true)]
+    );
     assert_eq!(segments("R1", &[]), [("R1", false)]);
 }
 
