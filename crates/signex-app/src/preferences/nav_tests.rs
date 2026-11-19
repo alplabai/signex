@@ -20,11 +20,34 @@ fn each_group_heading_appears_once_in_the_sidebar() {
     );
 }
 
+/// #143 / #144a: Language sits between Appearance and Keyboard shortcuts.
 #[test]
-fn the_sidebar_lists_keyboard_shortcuts_right_after_appearance() {
+fn the_sidebar_lists_language_between_appearance_and_keyboard_shortcuts() {
     let labels: Vec<&str> = PrefNav::ALL.iter().map(|item| item.label()).collect();
     assert_eq!(
         &labels[..4],
-        ["Appearance", "Keyboard Shortcuts", "Annotation", "Editing"]
+        ["Appearance", "Language", "Keyboard Shortcuts", "Annotation"]
+    );
+}
+
+/// #143: the whole nav, page by page, with its group.
+#[test]
+fn the_sidebar_follows_the_mock_groups() {
+    let rows: Vec<(&str, &str)> = PrefNav::ALL
+        .iter()
+        .map(|item| (item.group(), item.label()))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("System", "Appearance"),
+            ("System", "Language"),
+            ("System", "Keyboard Shortcuts"),
+            ("Schematic", "Annotation"),
+            ("Schematic", "Editing"),
+            ("Validation", "Rule Profiles"),
+            ("Library", "Distributor APIs"),
+            ("Library", "Component Classes"),
+        ]
     );
 }
