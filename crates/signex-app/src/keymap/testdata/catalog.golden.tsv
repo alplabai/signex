@@ -96,11 +96,11 @@ rotate_selection	modify	Rotate selection counter-clockwise	Rotate Selection Coun
 rotate_selection_cw	modify	Rotate selection clockwise	Rotate Selection Clockwise	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_clockwise	modify	Rotate clockwise by 90 degrees	Rotate Clockwise	General	-	-	RequiresSelection	mutates_doc,undoable	-
 rotate_counterclockwise	modify	Rotate counterclockwise by 90 degrees	Rotate	General	-	-	RequiresSelection	mutates_doc,undoable	-
-flip_selected_x	modify	Flip selected x	Flip Selected Sheet Symbols Along X	Schematic	-	-	RequiresSelection	mutates_doc,undoable,no_key_repeat	-
-flip_selected_y	modify	Flip selected y	Flip Selected Sheet Symbols Along Y	Schematic	-	-	RequiresSelection	mutates_doc,undoable,no_key_repeat	-
+flip_selected_x	modify	Flip selected x	Flip Selected Sheet Symbols Along X	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
+flip_selected_y	modify	Flip selected y	Flip Selected Sheet Symbols Along Y	Schematic	-	-	RequiresSelection	mutates_doc,undoable	-
 mirror_x	modify	Mirror along X-axis	Mirror X	General	-	-	RequiresSelection	mutates_doc,undoable	-
 mirror_y	modify	Mirror along Y-axis	Mirror Y	General	-	-	RequiresSelection	mutates_doc,undoable	-
-flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable,no_key_repeat	-
+flip_selection	modify	Flip selection to the other board side	Flip Selection	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	-
 set_object_position	edit	Set the position of a placed object	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,at:point/mm,document:document?
 set_object_rotation	edit	Set the rotation of a placed part or label	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rotation:angle/deg,document:document?
 place_component	place	Place component	Part	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	library:text,part:text,at:point/mm,unit:text?,designator:text?,value:text?,rotation:angle/deg?,mirror:text?,document:document?
@@ -142,8 +142,8 @@ place_signal_harness	place	Place signal harness	Signal Harness	Schematic	-	-	Req
 place_harness_connector	place	Place harness connector	Harness Connector	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_harness_entry	place	Place harness entry	Harness Entry	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_board_route	place	Route on the active copper layer around other nets, keeping the rule clearance	Interactive Routing	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
-cycle_route_mode	pcb	Switch Interactive Routing between walking around and pushing other nets' tracks	-	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
-cycle_arc_mode	pcb	Switch the Arc tool between by centre, by edge and any angle	-	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
+cycle_route_mode	pcb	Switch Interactive Routing between walking around and pushing other nets' tracks	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+cycle_arc_mode	pcb	Switch the Arc tool between by centre, by edge and any angle	-	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 place_board_diff_pair	place	Route a differential pair side by side at its coupled width and gap, around other nets	Differential Pair Routing	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_quick_route	place	Route straight to the clicked point at the rule width, without avoiding other nets	Quick Route	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_multi_route	place	Route the selected nets side by side as a bus, around other nets	Multi-Route	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
@@ -185,9 +185,9 @@ placement_properties	interactive	Edit properties of the object being placed or m
 copy_attributes_or_add_vertex	interactive	Copy attributes from object under cursor or add vertex while drawing	Copy Attributes	General	-	-	Always	gui_only,mutates_doc,undoable	-
 remove_last_vertex	interactive	Remove last placed vertex while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
 undo_last_segment	interactive	Undo last segment while drawing	-	General	-	-	Always	gui_only,mutates_doc,undoable	-
-switch_segment_posture	interactive	Flip the wire/bus corner: horizontal or vertical first	-	General	-	-	Always	gui_only,no_key_repeat	-
-cycle_wiring_mode	interactive	Change wiring mode while dragging connected electrical objects	-	General	-	-	Always	gui_only,no_key_repeat	-
-cycle_wire_bus_graphic_mode	interactive	Cycle the wire/bus corner mode: 90 degrees, 45 degrees start, 45 degrees end, any angle	-	General	-	-	Always	gui_only,no_key_repeat	-
+switch_segment_posture	interactive	Flip the wire/bus corner: horizontal or vertical first	-	General	-	-	Always	gui_only	-
+cycle_wiring_mode	interactive	Change wiring mode while dragging connected electrical objects	-	General	-	-	Always	gui_only	-
+cycle_wire_bus_graphic_mode	interactive	Cycle the wire/bus corner mode: 90 degrees, 45 degrees start, 45 degrees end, any angle	-	General	-	-	Always	gui_only	-
 draw_hierarchical_sheet	place	Draw hierarchical sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 place_sheet_symbol	place	Place sheet symbol	Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,name:text,file:text,allow_merge:bool?,document:document?
 place_sheet_entry	place	Place sheet entry	Sheet Entry	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	sheet:text,at:point/mm,name:text,direction:text?,document:document?
@@ -260,11 +260,11 @@ board_panel	pcb	Describe the board's panel	-	PCB	-	-	Always	-	document:document
 next_layer	view	Make the next layer of the board active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 prev_layer	view	Make the previous layer of the board active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_signal_layer	view	Make the next signal layer active	Next Signal Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-toggle_single_layer_mode	view	Draw only the active layer, or every layer again	Single Layer Mode	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
-toggle_layer_visibility	view	Show or hide the active layer	Toggle Layer Visibility	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
+toggle_single_layer_mode	view	Draw only the active layer, or every layer again	Single Layer Mode	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+toggle_layer_visibility	view	Show or hide the active layer	Toggle Layer Visibility	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_all_layers	view	Show every layer	Show All Layers	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-toggle_layers_panel	view	Show or hide the Layers panel	Layers	PCB	-	-	Always	gui_only,no_key_repeat	-
-toggle_ratsnest	view	Show or hide the ratsnest	Toggle Ratsnest	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
+toggle_layers_panel	view	Show or hide the Layers panel	Layers	PCB	-	-	Always	gui_only	-
+toggle_ratsnest	view	Show or hide the ratsnest	Toggle Ratsnest	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_layer_set	view	Show a layer set on the board view	Show Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text,document:document
 save_layer_set	view	Save the shown layers as a layer set	Save Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text,document:document
 delete_layer_set	view	Delete a saved layer set	Delete Layer Set	PCB	-	-	RequiresDocument(Pcb)	-	name:text
@@ -273,7 +273,7 @@ highlight_layer	view	Highlight one layer and dim the others	Highlight Layer	PCB	
 hide_layer_group	view	Hide every layer of one kind	Hide Layers	PCB	-	-	RequiresDocument(Pcb)	-	group:text,document:document
 show_layer_group	view	Show every layer of one kind	Show Layers	PCB	-	-	RequiresDocument(Pcb)	-	group:text,document:document
 set_layer_tab_names	view	Name the layer tabs short, medium or long	Layer Tab Names	PCB	-	-	RequiresDocument(Pcb)	-	style:text
-toggle_layer_numbers	view	Show or hide the numbers on the layer tabs	Show Layer Numbers	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
+toggle_layer_numbers	view	Show or hide the numbers on the layer tabs	Show Layer Numbers	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 board_layer_stack	design	Open the layer stack manager of the board	Layer Stack Manager...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 set_layer_stack	design	Replace the layer stack of a board	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,stack:text
 set_layer_sizes	modify	Set the per-layer copper sizes of vias or pads	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,sizes:text
@@ -311,13 +311,13 @@ lasso_select	select	Lasso select	Lasso Select	Schematic	-	-	Always	gui_only	-
 select_connection	select	Select connection	Connection	Schematic	-	-	Always	gui_only	-
 select_all	select	Select all	Select All	General	-	-	Always	runs_headless	-
 unselect_all	select	Unselect all	-	General	-	-	Always	runs_headless	-
-toggle_selection	select	Add/remove object from selection	Toggle Selection	General	-	-	Always	gui_only,no_key_repeat	-
-cycle_selection_mode	select	Cycle selection mode	-	General	-	-	Always	gui_only,no_key_repeat	-
+toggle_selection	select	Add/remove object from selection	Toggle Selection	General	-	-	Always	gui_only	-
+cycle_selection_mode	select	Cycle selection mode	-	General	-	-	Always	gui_only	-
 find_similar_objects	select	Find Similar Objects	Find Similar Objects...	General	-	-	RequiresSelection	gui_only	-
 select_expand_connection	select	Select / expand connection	-	Schematic	-	-	Always	gui_only	-
 select_node_or_connection_item	select	Select node / connection item under cursor	-	Schematic	-	-	Always	gui_only	-
 cross_probe	select	Cross probe the selection to the board or schematic	Cross Probe	General	-	-	RequiresSelection	gui_only	-
-toggle_cross_select_mode	select	Toggle Cross Select Mode	Cross Select Mode	General	-	-	Always	gui_only,no_key_repeat	-
+toggle_cross_select_mode	select	Toggle Cross Select Mode	Cross Select Mode	General	-	-	Always	gui_only	-
 set_selection_filters	select	Set the schematic selection filter	-	Schematic	-	-	Always	-	kinds:text
 apply_selection_filter_preset	select	Apply a selection filter preset	-	Schematic	-	-	Always	-	name:text
 open_selection_filter	select	Open the selection filter of the sheet	Selection Filter	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
@@ -327,7 +327,7 @@ find_and_replace	search	Find and replace	Find and Replace	General	-	-	Always	gui
 find_next	search	Find next	-	General	-	-	Always	gui_only	-
 find_previous	search	Find previous	-	General	-	-	Always	gui_only	-
 find_text	search	Find text	-	General	-	-	Always	gui_only	-
-toggle_search_panel	search	Show/hide search panel	-	General	-	-	Always	gui_only,no_key_repeat	-
+toggle_search_panel	search	Show/hide search panel	-	General	-	-	Always	gui_only	-
 find_similar_items	search	Find similar items on a board	-	PCB	-	-	Always	-	document:document,id:text,fields:text?
 zoom_in_at_cursor	view	Zoom in at cursor	Zoom In	General	-	-	Always	gui_only	-
 zoom_out_at_cursor	view	Zoom out at cursor	Zoom Out	General	-	-	Always	gui_only	-
@@ -338,29 +338,29 @@ center_on_cursor	view	Center on cursor	-	General	-	-	Always	gui_only	-
 center_view_at_cursor	view	Center/redraw view around cursor	-	General	-	-	Always	gui_only	-
 refresh_view	view	Refresh/redraw	-	General	-	-	Always	gui_only	-
 show_all_design_objects	view	Show all design objects	-	General	-	-	Always	gui_only	-
-toggle_auto_focus	view	Toggle AutoFocus	AutoFocus (dim unselected)	General	-	-	Always	gui_only,no_key_repeat	-
+toggle_auto_focus	view	Toggle AutoFocus	AutoFocus (dim unselected)	General	-	-	Always	gui_only	-
 view_rotate	view	Rotate the board view clockwise	Rotate View 90° Clockwise	PCB	-	-	RequiresDocument(Pcb)	-	degrees:turn/deg?
 view_rotate_ccw	view	Rotate the board view 90° counter-clockwise	Rotate View 90° Counter-Clockwise	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_180	view	Rotate the board view 180°	Rotate View 180°	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_reset	view	Reset the board view rotation to 0°	Reset View Rotation	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
+toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 measure_distance	view	Measure distance	-	General	-	-	Always	gui_only	-
 measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:text?
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-
-cycle_unit	view	Cycle display unit	-	General	-	-	Always	gui_only,no_key_repeat	-
-view_board_3d	view	Show the board in 3D, or flat again	3D View	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
-flip_board_view	view	View the board from below, or from above again	Flip Board View	PCB	-	-	RequiresDocument(Pcb)	gui_only,no_key_repeat	-
-cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only,no_key_repeat	-
-cycle_snap_grid_backward	view	Cycle backward through snap grids	-	General	-	-	Always	gui_only,no_key_repeat	-
-cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	-	General	-	-	Always	gui_only,no_key_repeat	-
+cycle_unit	view	Cycle display unit	-	General	-	-	Always	gui_only	-
+view_board_3d	view	Show the board in 3D, or flat again	3D View	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+flip_board_view	view	View the board from below, or from above again	Flip Board View	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+cycle_fast_grid	view	Cycle fast grid	-	General	-	-	Always	gui_only	-
+cycle_snap_grid_backward	view	Cycle backward through snap grids	-	General	-	-	Always	gui_only	-
+cycle_snap_grid_forward	view	Open the snap grid picker (footprint editor)	-	General	-	-	Always	gui_only	-
 fast_grid_1	view	Fast grid 1	-	General	-	-	Always	gui_only	-
 fast_grid_2	view	Fast grid 2	-	General	-	-	Always	gui_only	-
-next_grid	view	Next grid	Cycle Grid Size	General	-	-	Always	gui_only,no_key_repeat	-
-previous_grid	view	Previous grid	-	General	-	-	Always	gui_only,no_key_repeat	-
+next_grid	view	Next grid	Cycle Grid Size	General	-	-	Always	gui_only	-
+previous_grid	view	Previous grid	-	General	-	-	Always	gui_only	-
 open_grid_picker	view	Open grid picker	-	General	-	-	Always	gui_only	-
 open_grid_properties	view	Open grid properties	-	General	-	-	Always	gui_only	-
-toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only,no_key_repeat	-
-toggle_visible_grid	view	Toggle visible grid	Toggle Grid	General	-	-	Always	gui_only,no_key_repeat	-
+toggle_electrical_grid	view	Toggle electrical grid	-	General	-	-	Always	gui_only	-
+toggle_visible_grid	view	Toggle visible grid	Toggle Grid	General	-	-	Always	gui_only	-
 open_library_browser	library	Open library browser	Library Editor	General	-	-	Always	gui_only	-
 edit_library_symbol	library	Edit library symbol	-	General	-	-	RequiresSelection	gui_only	-
 edit_selected_symbol_in_symbol_editor	library	Edit selected symbol in Symbol Editor	Edit Symbol	General	-	-	RequiresSelection	gui_only	-
@@ -379,7 +379,7 @@ previous_document_tab	window	Previous open document tab	-	General	-	-	Always	gui
 tile_windows_horizontally	window	Tile windows one above the other	Tile Horizontally	General	-	-	Always	gui_only	-
 tile_windows_vertically	window	Tile windows side by side	Tile Vertically	General	-	-	Always	gui_only	-
 untile_documents	window	Untile documents	Untile	General	-	-	Always	gui_only	-
-toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only,no_key_repeat	-
-toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only,no_key_repeat	-
-toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only,no_key_repeat	-
-toggle_schematic_list_panel	panels	Toggle schematic list panel	-	General	-	-	Always	gui_only,no_key_repeat	-
+toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
+toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
+toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-
+toggle_schematic_list_panel	panels	Toggle schematic list panel	-	General	-	-	Always	gui_only	-

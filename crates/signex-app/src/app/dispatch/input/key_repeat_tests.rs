@@ -1,10 +1,11 @@
-//! A held key runs a run-once command once (`docs/DECISIONS.md`, "Held
-//! keys"): the auto-repeat `KeyPressed` events after the first press are
-//! swallowed for a catalog command marked `KeyRepeat::Ignored`, still run for
-//! the rest, and never abandon a pending chord. Every event goes the app's own
+//! A held key runs some commands once (`docs/DECISIONS.md`, "Held keys"):
+//! the auto-repeat `KeyPressed` events after the first press are swallowed
+//! when `command::key_repeat::runs_on_key_repeat` says so, still run for the
+//! rest, and never abandon a pending chord. Every event goes the app's own
 //! key path, `Message::Input(KeyInput)`.
 
 use super::*;
+use crate::app::handlers::canvas::placement_tests::{app_with_tool, click, grid};
 use crate::app::{EditMsg, TabInfo, TabKind, Tool, ToolMessage};
 use crate::keymap::{
     AppCommandId, CompiledKeymap, Platform, ShortcutBinding, ShortcutBindingAction,
@@ -61,8 +62,8 @@ fn empty_sheet() -> SchematicSheet {
     }
 }
 
-/// A booted app showing `sheet`, bound to `bindings` only.
-fn app_with_sheet(bindings: &[(&str, &str)], sheet: SchematicSheet) -> Signex {
+/// A booted app, with its default keymap, showing `sheet`.
+fn showing(sheet: SchematicSheet) -> Signex {
     let path = std::path::PathBuf::from("key-repeat.snxsch");
     let (mut app, _boot) = Signex::new();
     app.ui_state.first_run_tour_open = false;
@@ -77,6 +78,43 @@ fn app_with_sheet(bindings: &[(&str, &str)], sheet: SchematicSheet) -> Signex {
     });
     app.document_state.active_tab = 0;
     app.document_state.active_path = Some(path);
+    app
+}
+
+/// A sheet with one symbol, R1, selected.
+fn showing_selected_symbol() -> Signex {
+    let uuid = uuid::Uuid::now_v7();
+    let sheet = SchematicSheet {
+        symbols: vec![Symbol {
+            uuid,
+            lib_id: "Device:R".to_string(),
+            reference: "R1".to_string(),
+            position: Point::new(50.8, 50.8),
+            ..Default::default()
+        }],
+        ..empty_sheet()
+    };
+    let mut app = showing(sheet);
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(uuid, SelectedKind::Symbol)];
+    app
+}
+
+fn symbol(app: &Signex) -> Symbol {
+    let engine = app.document_state.active_engine().expect("engine");
+    engine.document().symbols[0].clone()
+}
+
+fn can_undo(app: &Signex) -> bool {
+    app.document_state
+        .active_engine()
+        .expect("engine")
+        .can_undo()
+}
+
+/// A booted app showing `sheet`, bound to `bindings` only.
+fn app_with_sheet(bindings: &[(&str, &str)], sheet: SchematicSheet) -> Signex {
+    let mut app = showing(sheet);
     let profile = ShortcutProfile {
         id: "t".to_string(),
         name: "T".to_string(),
@@ -257,38 +295,112 @@ fn a_repeat_another_consumer_swallows_still_cancels_the_chord() {
     assert!(app.ui_state.keymap_pending_sequence.is_empty());
 }
 
-/// A held flip key flips the selected symbol once: one undo step.
-#[test]
-fn a_held_flip_key_flips_the_selection_once() {
-    let uuid = uuid::Uuid::now_v7();
-    let sheet = SchematicSheet {
-        symbols: vec![Symbol {
-            uuid,
-            lib_id: "Device:R".to_string(),
-            reference: "R1".to_string(),
-            position: Point::new(50.0, 50.0),
-            ..Default::default()
-        }],
-        ..empty_sheet()
-    };
-    let mut app = app_with_sheet(&[("L", "flip_selected_x")], sheet);
-    app.interaction_state.active_canvas_mut().selected =
-        vec![SelectedItem::new(uuid, SelectedKind::Symbol)];
+/// Hold `key` on the selected symbol: the first press mirrors it, no repeat
+/// mirrors it again, and one undo takes the whole hold back.
+fn assert_held_key_mirrors_once(mut app: Signex, key: fn(bool) -> keyboard::Event) {
     let mirror = |app: &Signex| {
-        let engine = app.document_state.active_engine().expect("engine");
-        let symbol = &engine.document().symbols[0];
+        let symbol = symbol(app);
         (symbol.mirror_x, symbol.mirror_y)
     };
     let before = mirror(&app);
-    send(&mut app, letter("l", Code::KeyL, false));
-    let flipped = mirror(&app);
-    assert_ne!(flipped, before, "the first press flips");
+    send(&mut app, key(false));
+    let mirrored = mirror(&app);
+    assert_ne!(mirrored, before, "the first press mirrors");
     for _ in 0..REPEATS {
-        send(&mut app, letter("l", Code::KeyL, true));
-        assert_eq!(mirror(&app), flipped, "a repeat must not flip again");
+        send(&mut app, key(true));
+        assert_eq!(mirror(&app), mirrored, "a repeat must not mirror again");
     }
     let _ = app.update(Message::Edit(EditMsg::Undo));
-    assert_eq!(mirror(&app), before, "one undo takes the flip back");
-    let engine = app.document_state.active_engine().expect("engine");
-    assert!(!engine.can_undo(), "the held key made one undo step");
+    assert_eq!(mirror(&app), before, "one undo takes the mirror back");
+    assert!(!can_undo(&app), "the held key made one undo step");
+}
+
+/// A held flip key flips the selected symbol once: one undo step.
+#[test]
+fn a_held_flip_key_flips_the_selection_once() {
+    let mut app = showing_selected_symbol();
+    let bound = app_with(&[("L", "flip_selected_x")]);
+    app.ui_state.active_keymap = bound.ui_state.active_keymap.clone();
+    assert_held_key_mirrors_once(app, |repeat| letter("l", Code::KeyL, repeat));
+}
+
+/// The default profile's X (`mirror_x`), held, mirrors the selection once.
+#[test]
+fn a_held_mirror_key_mirrors_the_selection_once() {
+    assert_held_key_mirrors_once(showing_selected_symbol(), |repeat| {
+        letter("x", Code::KeyX, repeat)
+    });
+}
+
+/// The default profile's Shift+Space (`rotate_clockwise`), held mid wire run,
+/// steps the corner mode once: the run is what it turns (#2372).
+#[test]
+fn a_held_shift_space_mid_wire_steps_the_corner_mode_once() {
+    let mut app = app_with_tool(Tool::Wire);
+    let start = grid(0.0, 0.0);
+    click(&mut app, (start.x, start.y));
+    assert!(app.has_open_run(), "the run is open");
+    let before = app.interaction_state.corner_rule;
+    send(&mut app, shift_space(false));
+    let stepped = app.interaction_state.corner_rule;
+    assert_ne!(stepped.mode, before.mode, "the first press steps the mode");
+    for _ in 0..REPEATS {
+        send(&mut app, shift_space(true));
+        assert_eq!(app.interaction_state.corner_rule, stepped, "held: once");
+    }
+}
+
+/// With no run open, the same held Shift+Space turns the selected symbol on
+/// every repeat.
+#[test]
+fn a_held_shift_space_on_a_selection_rotates_on_every_repeat() {
+    let mut app = showing_selected_symbol();
+    assert!(!app.has_open_run());
+    let mut rotation = symbol(&app).rotation;
+    for repeat in std::iter::once(false).chain([true; REPEATS]) {
+        send(&mut app, shift_space(repeat));
+        let turned = symbol(&app).rotation;
+        assert_ne!(turned, rotation, "repeat {repeat}: the symbol turned");
+        rotation = turned;
+    }
+}
+
+/// The default profile's Insert (`copy_attributes_or_add_vertex`), held mid
+/// wire run, fixes one vertex at the cursor, not one per repeat.
+#[test]
+fn a_held_insert_mid_wire_adds_one_vertex() {
+    let mut app = app_with_tool(Tool::Wire);
+    let start = grid(0.0, 0.0);
+    click(&mut app, (start.x, start.y));
+    let cursor = grid(10.0, 0.0);
+    app.ui_state.cursor_x = cursor.x;
+    app.ui_state.cursor_y = cursor.y;
+    app.ui_state.cursor_document = app.document_state.active_path.clone();
+    let insert = |repeat| {
+        press(
+            Key::Named(Named::Insert),
+            Code::Insert,
+            Held::empty(),
+            repeat,
+        )
+    };
+    let points = app.interaction_state.wire_points.clone();
+    send(&mut app, insert(false));
+    let added = app.interaction_state.wire_points.clone();
+    let wires = wire_count(&app);
+    assert_ne!(added, points, "the first press fixes a vertex");
+    for _ in 0..REPEATS {
+        send(&mut app, insert(true));
+        assert_eq!(app.interaction_state.wire_points, added, "held: once");
+        assert_eq!(wire_count(&app), wires, "held: one segment");
+    }
+}
+
+fn wire_count(app: &Signex) -> usize {
+    app.document_state
+        .active_engine()
+        .expect("engine")
+        .document()
+        .wires
+        .len()
 }

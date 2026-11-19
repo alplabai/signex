@@ -1,7 +1,7 @@
 //! Workspace commands: the command palette, preferences, shortcut help,
 //! document tabs, window tiling and the panels.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, KeyRepeat};
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
 use signex_i18n_ids::command_ids;
 
 pub(super) const WORKSPACE: &[CommandMetadata] = &[
@@ -113,7 +113,6 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -124,7 +123,6 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -135,7 +133,6 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -146,7 +143,6 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
 ];

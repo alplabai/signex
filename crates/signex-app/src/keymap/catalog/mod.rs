@@ -8,7 +8,7 @@ use signex_commands::catalog::{CommandFlags, all_metadata};
 use signex_i18n::{I18n, t};
 
 pub use signex_commands::catalog::{
-    CommandGroup, CommandMetadata, HeadlessUse, KeyRepeat, Operand, OperandKind, all_command_ids,
+    CommandGroup, CommandMetadata, HeadlessUse, Operand, OperandKind, all_command_ids,
     command_menu_message, fallback_label, metadata_for, metadata_for_str, offered_in,
 };
 

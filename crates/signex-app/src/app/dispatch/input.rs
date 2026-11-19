@@ -67,6 +67,7 @@
 //! this module rather than inventing a parallel one.
 
 use super::*;
+use crate::app::command::key_repeat::{HeldKeyContext, runs_on_key_repeat};
 use crate::keymap::{KeyStroke, ModifiersExt as _};
 use iced::keyboard;
 
@@ -654,7 +655,7 @@ impl Signex {
     ///
     /// A stroke iced cannot express as a `KeyStroke` (a bare modifier
     /// press) is passed: nobody wanted it. The auto-repeat of a stroke that
-    /// runs a `KeyRepeat::Ignored` command is swallowed: the keymap saw the
+    /// runs a held-key-once command is swallowed: the keymap saw the
     /// key, and `handle_key_input` keeps the pending chord for it.
     fn claim_keymap(
         &self,
@@ -678,7 +679,7 @@ impl Signex {
         let stroke = KeyStroke::physical_fallback(key, *physical_key, *modifiers)
             .filter(|_| !self.stroke_matches_anything(window, target, &logical))
             .unwrap_or(logical);
-        // A held key runs a cycle or toggle once: docs/DECISIONS.md, "Held keys".
+        // Some commands run once on a held key: docs/DECISIONS.md, "Held keys".
         if *repeat && self.repeat_is_ignored(window, target, &stroke) {
             return Claim::Swallow;
         }
@@ -710,9 +711,12 @@ impl Signex {
         })
     }
 
-    /// Whether `stroke` would run a command whose catalog row ignores a held
-    /// key's auto-repeat: the command after the pending chord prefix, or, when
-    /// that sequence is no binding and no prefix, the stroke's own command.
+    /// Whether `stroke` would run a command a held key runs only once
+    /// ([`runs_on_key_repeat`]): the command after the pending chord prefix,
+    /// or, when that sequence is no binding and no prefix, the stroke's own
+    /// command.
+    ///
+    /// [`runs_on_key_repeat`]: crate::app::command::key_repeat::runs_on_key_repeat
     fn repeat_is_ignored(
         &self,
         window: iced::window::Id,
@@ -731,9 +735,10 @@ impl Signex {
                     .command
             }
         };
-        command
-            .and_then(|command| crate::keymap::metadata_for(&command))
-            .is_some_and(|meta| meta.key_repeat == crate::keymap::KeyRepeat::Ignored)
+        let ctx = HeldKeyContext {
+            run_open: self.has_open_run(),
+        };
+        command.is_some_and(|command| !runs_on_key_repeat(&command, ctx))
     }
 
     /// The pending chord prefix of `target`, if any, followed by `stroke`.

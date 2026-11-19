@@ -1,7 +1,7 @@
 //! Grid commands: the fast and snap grids, the grid picker and properties,
 //! and the electrical and visible grids.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, KeyRepeat};
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
 use signex_i18n_ids::command_ids;
 
 pub(super) const GRID: &[CommandMetadata] = &[
@@ -13,7 +13,6 @@ pub(super) const GRID: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -24,7 +23,6 @@ pub(super) const GRID: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -36,7 +34,6 @@ pub(super) const GRID: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -67,7 +64,6 @@ pub(super) const GRID: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -78,7 +74,6 @@ pub(super) const GRID: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -109,7 +104,6 @@ pub(super) const GRID: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -120,7 +114,6 @@ pub(super) const GRID: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
 ];

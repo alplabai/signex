@@ -49,6 +49,7 @@ mod hierarchy_operand_tests;
 mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
+pub(crate) mod key_repeat;
 mod layer_strip_operands;
 mod needs;
 mod opened;

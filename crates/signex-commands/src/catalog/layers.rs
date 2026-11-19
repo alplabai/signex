@@ -1,7 +1,7 @@
 //! Board layer commands: step through the layers, single-layer mode, layer
 //! visibility, the Layers panel and the ratsnest.
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, KeyRepeat};
+use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement};
 use signex_i18n_ids::command_ids;
 
 pub(super) const LAYERS: &[CommandMetadata] = &[
@@ -45,7 +45,6 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -56,7 +55,6 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -77,7 +75,6 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -88,7 +85,6 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     // #2394: the layer strip under the board. View state and per-user
@@ -192,7 +188,6 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     // #2401: open the board's layer stack manager (the Layers tab menu's

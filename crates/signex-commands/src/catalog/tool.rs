@@ -1,7 +1,7 @@
 //! Interactive tool commands: the keys that steer an armed tool while it
 //! runs (cancel, accept, vertices, segment posture, wiring mode).
 
-use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement, KeyRepeat};
+use super::{CommandFlags, CommandGroup, CommandMetadata, Enablement};
 use signex_i18n_ids::command_ids;
 
 pub(super) const TOOL: &[CommandMetadata] = &[
@@ -73,7 +73,6 @@ pub(super) const TOOL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -84,7 +83,6 @@ pub(super) const TOOL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {
@@ -95,7 +93,6 @@ pub(super) const TOOL: &[CommandMetadata] = &[
         group: CommandGroup::General,
         enable: Enablement::Always,
         flags: CommandFlags::GUI_ONLY,
-        key_repeat: KeyRepeat::Ignored,
         ..CommandMetadata::DEFAULT
     },
 ];
