@@ -12,7 +12,11 @@ format declares only its own table row below.
   and `.snxsch`: each writes the lowest token the content needs. A symbol
   file without polygons or De Morgan bodies stays `snxsym/v1`; a schematic
   stays `snxsch/1.1`, byte for byte, unless a No-ERC directive names the
-  rules it silences, which writes `snxsch/1.2` (#1699).
+  rules it silences, which writes `snxsch/1.2` (#1699), or it holds any
+  Schematic Refinement content (a harness object, a union, a Bezier,
+  dimension or table drawing, a Net Parameters directive, or a Blanket or
+  Differential Pair using a field added with them), which writes
+  `snxsch/1.3` (`docs/architecture/snxsch-refinement-objects.md`).
 - **Load** reads every token in the format's readable list. `snxsch/1` and
   `snxsch/1.0` are the same version.
 - **A newer token** is refused on load with an error that names the token,
@@ -30,7 +34,7 @@ format declares only its own table row below.
 
 | File | Writes | Reads | Newer minor | No token |
 |---|---|---|---|---|
-| `.snxsch` | `snxsch/1.1`, or `1.2` with a No-ERC rule list | `snxsch/1`, `1.1`, `1.2` | opens read-only | refused |
+| `.snxsch` | `snxsch/1.1`, `1.2` with a No-ERC rule list, `1.3` with Schematic Refinement content | `snxsch/1`, `1.1`, `1.2`, `1.3` | opens read-only | refused |
 | `.snxpcb` | `snxpcb/1.4`, or `1.5` with layer colours | `snxpcb/1` to `snxpcb/1.5` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
@@ -40,6 +44,17 @@ format declares only its own table row below.
 
 `.snxrules` profiles carry a numeric `schema` key instead of a token
 (`docs/architecture/snxrules-format.md`); a newer schema is refused there too.
+
+**`snxsch/1.3` and older builds.** A build that reads up to `snxsch/1.2`
+opens a 1.3 sheet read-only and refuses its saves. A build older than the
+new drawing kinds and directive fields may refuse to parse the sheet instead
+(an unknown drawing or directive `type`); either way nothing is dropped.
+
+**`.snxprj` stays `snxprj/1`.** The Schematic Refinement project settings
+(`schematic_design`: channel naming, harness definitions, differential pair
+classes) are one new top-level key, omitted at the defaults. An older build
+keeps an unknown top-level key and writes it back unchanged, so the key
+needs no new token (`docs/architecture/snxprj-format.md`).
 
 ## Changing a format
 

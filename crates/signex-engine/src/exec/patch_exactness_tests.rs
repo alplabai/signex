@@ -313,6 +313,8 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         drawings,
         no_erc_directives,
         directives,
+        harness: _,
+        unions: _,
         title_block,
         variables,
         lib_symbols,

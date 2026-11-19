@@ -71,6 +71,8 @@ fn every_field_is_accounted_for() {
         drawings: _,
         no_erc_directives: _,
         directives: _,
+        harness: _,
+        unions: _,
         title_block: _,
         variables: _,
         lib_symbols: _,
