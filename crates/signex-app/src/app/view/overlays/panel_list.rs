@@ -82,7 +82,7 @@ impl Signex {
             (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb)
         });
         let rows: usize = groups.iter().map(|(_, kinds)| kinds.len()).sum();
-        let mut list: Column<'_, Message> = Column::new().spacing(0);
+        let mut list: Column<Element<'_, Message>> = Column::new().spacing(0);
         for (group, kinds) in &groups {
             list = list.push(group_caption(&ui.i18n, group.caption(), tokens));
             for &kind in kinds {
@@ -159,7 +159,8 @@ fn panel_row<'a>(
         line = line.push(
             signex_widgets::text(t!(i18n, region.caption()))
                 .size(TS.caption)
-                .color(crate::styles::tokens::resolve(tokens).ink4),
+                .color(crate::styles::tokens::resolve(tokens).ink4)
+                .boxed(),
         );
     }
     signex_widgets::button(line)

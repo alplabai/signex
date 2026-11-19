@@ -126,7 +126,7 @@ impl Signex {
 
     /// Dock drop preview (m8): every dock target outlined and named, the
     /// one a release would dock into filled.
-    pub(super) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
+    pub(in crate::app::view) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
         let zones = self.dock_drag_zones()?;
         let tokens = &self.document_state.panel_ctx.tokens;
         let r = crate::styles::tokens::resolve(tokens);

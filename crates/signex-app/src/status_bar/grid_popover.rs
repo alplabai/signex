@@ -462,7 +462,8 @@ pub(crate) fn view<'a>(
             text(UserText::new(name))
                 .size(TS.caption)
                 .font(super::graphite::mono_font())
-                .color(r.ink4),
+                .color(r.ink4)
+                .boxed(),
         );
     }
     let mut card = column![
@@ -483,9 +484,9 @@ pub(crate) fn view<'a>(
             .on_toggle(move |_| GridPopoverEvent::SettingChanged(toggled.clone()));
         card = card.push(match section.pitch {
             Some(pitch) => header.view(style(), pitch_row(pitch, s.unit, hover, tokens, i18n)),
-            None if hotspot_key.is_empty() => header.view(style(), Space::new()),
+            None if hotspot_key.is_empty() => header.view(style(), Space::new().boxed()),
             None => row![
-                container(header.view(style(), Space::new())).width(Length::Fill),
+                container(header.view(style(), Space::new().boxed())).width(Length::Fill),
                 key_cap(hotspot_key.clone(), tokens),
             ]
             .boxed(),
@@ -502,7 +503,8 @@ pub(crate) fn view<'a>(
             right: SP.l,
             bottom: 0.0,
             left: SP.l,
-        }),
+        })
+        .boxed(),
     );
     container(card)
         .width(CARD_WIDTH)
