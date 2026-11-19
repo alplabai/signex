@@ -147,4 +147,15 @@ pub enum BoardCommandError {
     GraphicsMismatch,
     #[error("a failed command could not be rolled back: {0}")]
     RollbackFailed(String),
+    /// Rooms (#2457).
+    #[error("no room {0} on the board")]
+    RoomNotFound(Uuid),
+    #[error("room {0} is already on the board")]
+    RoomAlreadyPresent(Uuid),
+    #[error("room {0} is locked; unlock it first")]
+    RoomLocked(Uuid),
+    #[error("room {0} holds no parts to fit")]
+    RoomHasNoParts(Uuid),
+    #[error("the room's {field} is not valid")]
+    RoomInvalid { field: &'static str },
 }
