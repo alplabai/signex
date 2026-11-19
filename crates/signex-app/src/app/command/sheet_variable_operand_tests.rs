@@ -61,14 +61,14 @@ fn the_command_sets_and_removes_a_variable_one_undo_step_each() {
         panic!("not answered");
     };
     assert_eq!(answer["value"], "= 2 * 3");
-    assert_eq!(variables(&app), [("GAIN".into(), "= 2 * 3".into())]);
+    assert_eq!(variables(&app), [pair("GAIN", "= 2 * 3")]);
     assert!(matches!(
         run(&mut app, &["name=GAIN", "remove=true"]),
         CommandOutcome::Answered(_)
     ));
     assert!(variables(&app).is_empty());
     undo(&mut app);
-    assert_eq!(variables(&app), [("GAIN".into(), "= 2 * 3".into())]);
+    assert_eq!(variables(&app), [pair("GAIN", "= 2 * 3")]);
     undo(&mut app);
     assert!(variables(&app).is_empty());
 }
@@ -94,7 +94,7 @@ fn the_command_and_the_panel_leave_the_same_sheet() {
         SheetVariableMsg::ValueSubmitted("VDD".into()),
     );
     assert_eq!(variables(&by_command), variables(&by_panel));
-    assert_eq!(variables(&by_command), [("VDD".into(), "3.3".into())]);
+    assert_eq!(variables(&by_command), [pair("VDD", "3.3")]);
 }
 
 #[test]
@@ -110,4 +110,8 @@ fn a_bad_name_an_unknown_removal_and_remove_with_a_value_are_refused() {
         assert!(reason.contains(needle), "{operands:?}: {reason}");
     }
     assert!(variables(&app).is_empty());
+}
+
+fn pair(name: &str, value: &str) -> (String, String) {
+    (name.to_string(), value.to_string())
 }
