@@ -264,21 +264,20 @@ impl Signex {
         window: iced::window::Id,
         event: keyboard::Event,
     ) -> Task<Message> {
-        let message = self.route_key(window, &event);
+        let (message, swallowed_by) = self.route_key_by(window, &event);
         // #1378 - a key press that is not a keymap stroke (Esc, F1, a
         // selection slot, a palette or recorder key) abandons the pending
         // chord instead of leaving it armed behind the user's back.
         //
         // A bare modifier or lock key is the exception: it is never a
         // stroke, but it is how the user reaches `Shift+G` mid-chord, and
-        // on Windows a held one auto-repeats `KeyPressed`. So is an
-        // auto-repeat nobody turned into a message (the keymap swallows the
-        // repeat of a run-once command): the same key is still down, so the
-        // chord wait runs out and fires once.
-        let swallowed_repeat =
-            message.is_none() && matches!(&event, keyboard::Event::KeyPressed { repeat: true, .. });
+        // on Windows a held one auto-repeats `KeyPressed`. So is the
+        // auto-repeat of a run-once command, the only key the keymap
+        // swallows: the same key is still down, so the chord wait runs out
+        // and fires once. A repeat any other consumer drops still cancels.
+        let run_once_repeat = swallowed_by == Some(InputConsumer::Keymap);
         if matches!(&event, keyboard::Event::KeyPressed { key, .. } if !is_modifier_key(key))
-            && !swallowed_repeat
+            && !run_once_repeat
             && !matches!(message, Some(Message::Ui(UiMsg::KeymapStroke { .. })))
         {
             self.cancel_pending_chord();
@@ -306,6 +305,16 @@ impl Signex {
     /// set state, feed an event, assert the message — none of which was
     /// possible while these branches lived in a subscription closure.
     fn route_key(&self, window: iced::window::Id, event: &keyboard::Event) -> Option<Message> {
+        self.route_key_by(window, event).0
+    }
+
+    /// [`Self::route_key`], with the consumer that swallowed the event when
+    /// one did (`None` for a claimed, locked-out or unwanted event).
+    fn route_key_by(
+        &self,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> (Option<Message>, Option<InputConsumer>) {
         let target = self.input_target(Some(window));
         // A confirm dialog in its own window locks the main window and the
         // undocked tabs: no stroke reaches the keymap or a tool there.
@@ -314,16 +323,16 @@ impl Signex {
             && self.locking_confirm_window().is_some()
             && !matches!(event, keyboard::Event::KeyPressed { key, .. } if ESCAPE_KEY.matches(key))
         {
-            return None;
+            return (None, None);
         }
         for consumer in CLAIM_ORDER {
             match self.claim(consumer, target, window, event) {
-                Claim::Consume(message) => return Some(*message),
-                Claim::Swallow => return None,
+                Claim::Consume(message) => return (Some(*message), None),
+                Claim::Swallow => return (None, Some(consumer)),
                 Claim::Pass => continue,
             }
         }
-        None
+        (None, None)
     }
 
     /// What `consumer` makes of this event.

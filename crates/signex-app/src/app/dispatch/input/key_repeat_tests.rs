@@ -217,6 +217,8 @@ fn a_held_chord_prefix_runs_its_command_once_at_the_timeout() {
 /// chord again nor `V`'s own command.
 #[test]
 fn a_chord_fires_once_and_its_held_last_key_runs_nothing() {
+    // `V` alone is bound only as a probe: a held V that ran anything would
+    // step the wiring mode.
     let mut app = app_with(&[("G V", "toggle_visible_grid"), ("V", "cycle_wiring_mode")]);
     let grid = app.ui_state.grid_visible;
     send(&mut app, letter("g", Code::KeyG, false));
@@ -234,6 +236,25 @@ fn a_chord_fires_once_and_its_held_last_key_runs_nothing() {
         DragWiringMode::Auto,
         "a held V does not run V's own command"
     );
+}
+
+/// Only the keymap's own run-once swallow keeps a pending chord: a repeat
+/// that another consumer (here the open command palette) swallows abandons
+/// it, as any other non-keymap key does (#1378).
+#[test]
+fn a_repeat_another_consumer_swallows_still_cancels_the_chord() {
+    let mut app = app_with(&[
+        ("G", "cycle_wiring_mode"),
+        ("G V", "open_net_color_palette"),
+    ]);
+    send(&mut app, letter("g", Code::KeyG, false));
+    assert!(app.ui_state.keymap_chord_wait.is_some(), "G waits on G V");
+    app.ui_state.command_palette.open = true;
+    let event = letter("g", Code::KeyG, true);
+    assert!(routed(&app, &event).is_none(), "the palette swallows it");
+    send(&mut app, event);
+    assert!(app.ui_state.keymap_chord_wait.is_none());
+    assert!(app.ui_state.keymap_pending_sequence.is_empty());
 }
 
 /// A held flip key flips the selected symbol once: one undo step.
