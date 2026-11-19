@@ -396,6 +396,7 @@ fn a_loop_through_two_closed_sheets_is_refused() {
             ..SchematicSheet::default()
         },
     );
+    let _ = crate::diagnostics::init_logging();
     let mark = crate::diagnostics::newest_entry_id();
     send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(b)));
     let engine = rig.app.document_state.active_engine().expect("parent");
