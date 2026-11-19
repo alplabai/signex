@@ -487,3 +487,46 @@ library-primitive-picker-copy-into = Copy into { $library }
 library-primitive-picker-copying = Copying…
 # Shown while the library that holds the symbol is being opened.
 library-primitive-picker-opening = Opening library…
+
+## Document Options dialog of a library (#132)
+# Header note: $name is the library's display name.
+library-document-options-note = Library: { $name }
+# Form label: the colour of the symbol and footprint editor sheets.
+library-document-options-sheet-color = Sheet Color
+# Form label of the grid visibility switch.
+library-document-options-grid = Grid
+# Beside the grid switch: the grid is drawn.
+library-document-options-grid-visible = Visible
+# Form label: the distance between grid points.
+library-document-options-grid-spacing = Grid Spacing
+# One grid spacing in the dropdown: $pitch is the number in millimetres,
+# already formatted (three decimals).
+library-document-options-grid-pitch = { $pitch } mm
+# Caption beside the dropdown: $pitches lists the preset spacings,
+# already formatted and separated.
+library-document-options-grid-presets = { $pitches }
+# Form label: the unit coordinates are shown in.
+library-document-options-unit = Unit
+# Unit segment: millimetres.
+library-document-options-unit-mm = mm
+# Unit segment: thousandths of an inch.
+library-document-options-unit-mil = mil
+# Unit segment: inches.
+library-document-options-unit-inch = inch
+# Unit segment: micrometres.
+library-document-options-unit-um = µm
+
+## New Library dialog (#133)
+# Option card title: put the new library under version control.
+library-create-options-git = Enable version control (Git)
+# Option card help under the version-control title.
+library-create-options-git-help = Initialise a Git repository at the library's parent directory and commit on every save. Off by default; can be enabled later.
+# Option card title, indented under the version-control card.
+library-create-options-lfs = Use Git LFS for binary 3D models
+# Option card help under the Git LFS title; the file patterns and the
+# git lfs command are not translated.
+library-create-options-lfs-help = Tracks *.step, *.stp, *.wrl, *.iges via Git LFS. Requires git lfs installed locally.
+# Refusal banner action: reopen the save-as picker to pick another place.
+library-create-options-relocate = Choose another location…
+# Tooltip of the disabled Create Library button while a refusal shows.
+library-create-options-refused-tip = Choose another location, or turn off version control.

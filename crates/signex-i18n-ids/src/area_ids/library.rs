@@ -162,4 +162,22 @@ define_ids! {
     LIBRARY_PRIMITIVE_PICKER_COPY_INTO = "library-primitive-picker-copy-into";
     LIBRARY_PRIMITIVE_PICKER_COPYING = "library-primitive-picker-copying";
     LIBRARY_PRIMITIVE_PICKER_OPENING = "library-primitive-picker-opening";
+    LIBRARY_DOCUMENT_OPTIONS_NOTE = "library-document-options-note";
+    LIBRARY_DOCUMENT_OPTIONS_SHEET_COLOR = "library-document-options-sheet-color";
+    LIBRARY_DOCUMENT_OPTIONS_GRID = "library-document-options-grid";
+    LIBRARY_DOCUMENT_OPTIONS_GRID_VISIBLE = "library-document-options-grid-visible";
+    LIBRARY_DOCUMENT_OPTIONS_GRID_SPACING = "library-document-options-grid-spacing";
+    LIBRARY_DOCUMENT_OPTIONS_GRID_PITCH = "library-document-options-grid-pitch";
+    LIBRARY_DOCUMENT_OPTIONS_GRID_PRESETS = "library-document-options-grid-presets";
+    LIBRARY_DOCUMENT_OPTIONS_UNIT = "library-document-options-unit";
+    LIBRARY_DOCUMENT_OPTIONS_UNIT_MM = "library-document-options-unit-mm";
+    LIBRARY_DOCUMENT_OPTIONS_UNIT_MIL = "library-document-options-unit-mil";
+    LIBRARY_DOCUMENT_OPTIONS_UNIT_INCH = "library-document-options-unit-inch";
+    LIBRARY_DOCUMENT_OPTIONS_UNIT_UM = "library-document-options-unit-um";
+    LIBRARY_CREATE_OPTIONS_GIT = "library-create-options-git";
+    LIBRARY_CREATE_OPTIONS_GIT_HELP = "library-create-options-git-help";
+    LIBRARY_CREATE_OPTIONS_LFS = "library-create-options-lfs";
+    LIBRARY_CREATE_OPTIONS_LFS_HELP = "library-create-options-lfs-help";
+    LIBRARY_CREATE_OPTIONS_RELOCATE = "library-create-options-relocate";
+    LIBRARY_CREATE_OPTIONS_REFUSED_TIP = "library-create-options-refused-tip";
 }

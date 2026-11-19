@@ -632,11 +632,17 @@ The next successful commit records the pending files too.
 **Where a new library goes.** **New Library…** suggests
 `<project folder>/<project>-lib/<project>-lib.snxlib`: a folder of its own, made
 when the library is created, so that a library with version control gets its own
-repository and never touches the project's. If you tick **Enable version
-control (Git)** and pick the project folder itself while the project is already
-under version control, **Create Library** is refused with the reason, the
-dialog stays open, and nothing is written. Choose a folder of its own, or turn
-version control off for the library. A library with version control off at the
+repository and never touches the project's. After you pick the path, the
+**New Library** dialog shows it and asks whether the library gets version
+control (**Enable version control (Git)**, off by default) and, with Git on,
+**Use Git LFS for binary 3D models** (greyed while Git is off). If you turn on
+version control and pick the project folder itself while the project is already
+under version control, **Create Library** is refused: the dialog stays open with
+the reason in a red banner, **Create Library** is greyed, and nothing is
+written. **Choose another location…** in the banner closes the dialog and opens
+the save-as picker again (the version-control switches start off again there),
+or turn version control off to create the library where it is. A library with
+version control off at the
 new subfolder default is not committed by the project's own repository: its
 edits stay untracked by Signex in the project repo.
 

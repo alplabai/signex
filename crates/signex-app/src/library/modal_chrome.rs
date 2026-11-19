@@ -23,7 +23,7 @@ use crate::styles::{
 /// Fixed widths of the Library modals that size themselves (the others
 /// take the picker / dialog default). One home so a resize is one edit.
 pub(crate) const CLOSE_PROMPT_W: f32 = 500.0;
-pub(crate) const CREATE_OPTIONS_W: f32 = 480.0;
+pub(crate) const CREATE_OPTIONS_W: f32 = 560.0;
 pub(crate) const DOCUMENT_OPTIONS_W: f32 = 460.0;
 pub(crate) const EDIT_ROW_W: f32 = 860.0;
 pub(crate) const EDIT_ROW_H: f32 = 640.0;
