@@ -75,6 +75,8 @@ mod placement_operands;
 mod project_name_tests;
 mod project_names;
 mod repair_reset_operands;
+#[cfg(test)]
+mod repair_reset_operand_tests;
 pub(crate) mod queries;
 #[cfg(test)]
 mod selection_filter_operand_tests;

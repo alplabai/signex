@@ -60,5 +60,14 @@ pub(super) fn reset_board_origin(app: &mut Signex, args: &CommandArgs) -> Ran {
 /// `reset_layer_colors document=..`: every layer the board palette colour
 /// again, as the layer tab's row does.
 pub(super) fn reset_layer_colors(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let read_only = app.named_output_board(args).is_ok_and(|path| {
+        app.document_state
+            .pcb_board(&path)
+            .is_some_and(|board| board.unknown.newer_minor_source.is_some())
+    });
+    if read_only {
+        let reason = "the board opens read-only".to_string();
+        return (CommandOutcome::disabled(reason), Task::none());
+    }
     on_named_board(app, args, Ok(PcbViewMsg::LayerColoursReset))
 }

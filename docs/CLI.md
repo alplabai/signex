@@ -593,6 +593,14 @@ takes no `value`. A name is letters, digits and `_` and does not start with a
 digit. Variables that then do not evaluate (a cycle, an unknown name) are
 reported in Messages. The answer is `{"name", "value", "variables"}`.
 
+`repair_pin_junctions [document=..]` adds a junction dot on every pin end
+of the sheet that lies inside a wire with none, as Tools ▸ Repair Pin
+Junctions does, in one undo step; the answer is `{"added"}`.
+`reset_board_origin document=..` and `reset_layer_colors document=..` are
+the Reset rows of the board menus on the board named: the origin to the
+bottom-left of the outline (answer `{"document", "origin"}`), and every
+layer back to the palette colour. A read-only board is refused.
+
 A locked object is refused with the lock's reason before anything is sent.
 Without operands (the palette, a key) each says which Properties row to use.
 
