@@ -72,7 +72,7 @@ fn labelled<'a>(
     label: Localized,
     body: Element<'a, LibraryMessage>,
     tokens: &ThemeTokens,
-) -> Column<'a, LibraryMessage> {
+) -> Column<Element<'a, LibraryMessage>> {
     column![
         text(label)
             .size(TS.caption)
@@ -148,7 +148,8 @@ pub(super) fn view<'a>(
                 "table" => table
             ))
             .size(TS.caption)
-            .color(error),
+            .color(error)
+            .boxed(),
         );
     }
 

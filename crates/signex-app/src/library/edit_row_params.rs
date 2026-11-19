@@ -58,7 +58,7 @@ pub(super) fn view<'a>(
     ]
     .align_y(Alignment::Center);
 
-    let mut col: Column<'a, LibraryMessage> = column![header].spacing(SP.m);
+    let mut col: Column<Element<'a, LibraryMessage>> = column![header].spacing(SP.m);
     if let Some(offer) = slot_offer(edit, template, tokens, i18n, &send) {
         col = col.push(offer);
     }
@@ -67,7 +67,8 @@ pub(super) fn view<'a>(
         col = col.push(
             text(t!(i18n, ids::LIBRARY_EDIT_ROW_TEMPLATE_CAPTION, "class" => class))
                 .size(TS.caption)
-                .color(r.ink4),
+                .color(r.ink4)
+                .boxed(),
         );
     }
     // A neutral note from the last edit (a unit change) stays a muted
@@ -76,7 +77,8 @@ pub(super) fn view<'a>(
         col = col.push(
             text(UserText::new(note.clone()))
                 .size(TS.caption)
-                .color(r.ink4),
+                .color(r.ink4)
+                .boxed(),
         );
     }
     col.width(Length::Fill).boxed()
@@ -116,7 +118,7 @@ fn table<'a>(
         ..container::Style::default()
     });
 
-    let mut rows: Column<'a, LibraryMessage> = column![header_row];
+    let mut rows: Column<Element<'a, LibraryMessage>> = column![header_row];
     let visible: Vec<(&String, &ParamValue)> = edit
         .draft
         .parameters
@@ -130,7 +132,8 @@ fn table<'a>(
                     .size(TS.body)
                     .color(r.ink4),
             )
-            .padding([SP.m, CELL_PAD_X]),
+            .padding([SP.m, CELL_PAD_X])
+            .boxed(),
         );
     }
     // BTreeMap key order keeps the layout stable.

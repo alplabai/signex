@@ -223,7 +223,7 @@ pub(crate) fn mono() -> iced::Font {
 /// the field frame. Shared by the component and primitive pickers.
 pub(crate) fn search_field<'a, M: Clone + 'a>(
     placeholder: Localized,
-    value: &str,
+    value: &'a str,
     on_input: impl Fn(String) -> M + 'a,
     on_submit: Option<M>,
     tokens: &ThemeTokens,
