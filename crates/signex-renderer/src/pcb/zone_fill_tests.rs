@@ -90,3 +90,28 @@ fn a_pour_without_its_fill_draws_only_its_outline_and_solid_copper_is_unchanged(
         .expect("the solid zone");
     assert!((fill_area(zone) - 100.0).abs() < 1e-3);
 }
+
+/// #2523: a shelved pour draws its outline dashed and fills nothing.
+#[test]
+fn a_shelved_pour_draws_only_its_dashed_outline() {
+    let mut board = board("pour");
+    board.zones[0].shelved = true;
+    let snapshot = PcbSnapshot::from_board(&board).with_zone_fills(&pcb_geom::zone_fills(&board));
+    let scene = scene_of(&snapshot);
+    // The 40 mm outline in dashes of 0.6 mm every 1 mm.
+    assert_eq!(scene.polygons.len(), 40, "one quad per dash");
+    for dash in &scene.polygons {
+        assert_eq!(dash.vertices.len(), 4);
+        assert!(dash.holes.is_empty() && dash.stroke_color.is_none());
+        assert!(dash.fill_color[3] > 0.0, "a dash is inked");
+        assert!(fill_area(dash) < 0.6 * 0.06 + 1e-4, "a dash, not copper");
+    }
+
+    board.zones[0].shelved = false;
+    let snapshot = PcbSnapshot::from_board(&board).with_zone_fills(&pcb_geom::zone_fills(&board));
+    let scene = scene_of(&snapshot);
+    assert!(
+        scene.polygons.iter().any(|p| p.holes.len() == 1),
+        "unshelved, the fill is back"
+    );
+}

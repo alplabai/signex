@@ -568,6 +568,7 @@ fn snxpcb_round_trip_with_data() {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     });
 
@@ -623,6 +624,7 @@ fn zone_without_holes_writes_no_holes_key() {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     });
     let text = SnxPcb::new(board).write_string().expect("serialise");

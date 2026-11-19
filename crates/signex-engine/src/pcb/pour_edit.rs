@@ -3,7 +3,8 @@
 //! rewritten with the shapes `pcb_geom` cuts it into: the largest keeps the
 //! pour's identity, each other piece is a new pour with the same settings,
 //! and a pour the cutout covers whole is removed. The commands run as one
-//! batch, so the edit is one undo step.
+//! batch, so the edit is one undo step. Shelve all and Unshelve all (#2523)
+//! set every pour's `shelved` in one replace.
 
 use pcb_geom::{AreaShape, cut_area, slice_area};
 use signex_types::format::parse_pcb_layer;
@@ -12,6 +13,23 @@ use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::{BoardCommand, BoardItem, BoardItemId};
+
+/// The command that shelves (`shelved`) or unshelves every polygon pour of
+/// `board` as one step; `None` when every pour already is.
+pub fn shelve_all_pours(board: &PcbBoard, shelved: bool) -> Option<BoardCommand> {
+    let items: Vec<BoardItem> = board
+        .zones
+        .iter()
+        .filter(|zone| zone.is_pour() && zone.shelved != shelved)
+        .map(|zone| {
+            BoardItem::Zone(Zone {
+                shelved,
+                ..zone.clone()
+            })
+        })
+        .collect();
+    (!items.is_empty()).then_some(BoardCommand::ReplaceItems { items })
+}
 
 /// The commands that take `cutout` out of every pour on `layer` it
 /// overlaps; empty when it overlaps none. `new_id` names each new piece.

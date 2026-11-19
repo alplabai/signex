@@ -377,6 +377,7 @@ fn opening_a_board_with_an_unusable_zone_hole_warns_once() {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     });
     let warnings = || {
