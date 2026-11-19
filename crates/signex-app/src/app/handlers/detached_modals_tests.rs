@@ -87,6 +87,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 regions: true,
                 fills: true,
                 other: true,
+                preset_name: String::new(),
             })
         }
         ModalId::About => ui.about_open = true,
