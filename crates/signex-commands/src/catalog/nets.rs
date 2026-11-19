@@ -175,6 +175,9 @@ pub(super) const NETS: &[CommandMetadata] = &[
         menu_label: None,
         group: CommandGroup::Schematic,
         enable: Enablement::RequiresDocument(DocumentKind::Schematic),
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
     // #1489: Design ▸ Differential Pair Classes… opens the project's class
     // dialog; OK applies it as one step of the project history. No key.
     CommandMetadata {

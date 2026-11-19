@@ -787,6 +787,7 @@ panels-channel-view-not-compiled = Compile the project to fill the channels with
 panels-channel-read-only = Channel { $channel } is a compiled view; switch to Editor to edit
 # The compile result in Messages.
 panels-compiled-design-failed = Compile project: { $reason }
+
 ## c13 sch-harness
 
 # Caption under the Harness Connector header: the sheet file and how many entries the connector has.
@@ -839,6 +840,7 @@ panels-harness-defs-nested = harness · { $entries }
 panels-harness-defs-nested-section = { $type } (nested)
 panels-harness-defs-new = New harness type
 panels-harness-defs-back = Back
+
 ## c13 sch-net-directives
 ## Properties of a Net Parameters directive (#1281): a flag on one wire that
 ## sets its net's class, diff-pair class and routing rules.
@@ -905,6 +907,7 @@ panels-blanket-hover-hint = Hover a net row to highlight it on the sheet. Power 
 panels-blanket-caught-note = accent = caught by the blanket
 # Messages line: the Net Parameters tool was clicked away from a wire.
 panels-np-off-wire = Net Parameters sit on a wire: click on a wire. Nothing was placed.
+
 ## c13 unions-change-paste
 
 # The Unions dock panel and the Create Union popover (#158).

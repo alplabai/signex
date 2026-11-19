@@ -653,6 +653,7 @@ pub enum Command {
     SetHarnessEntryType {
         sheet_pin_id: Uuid,
         harness_type: Option<String>,
+    },
     /// Group objects of this sheet under a name and tags (#158). Refused
     /// with a [`crate::UnionRefusal`] when the name is blank, a member is not
     /// on the sheet or already in another union, or nothing is left. One

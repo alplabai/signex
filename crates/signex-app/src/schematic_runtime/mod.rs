@@ -231,6 +231,7 @@ fn copy_invalidated(
     }
     if invalidation.intersects(R::HARNESS) {
         dst.harness.clone_from(&src.harness);
+    }
     if invalidation.intersects(R::UNIONS) {
         dst.unions.clone_from(&src.unions);
     }

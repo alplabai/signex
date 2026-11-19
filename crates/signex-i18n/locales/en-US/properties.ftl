@@ -394,6 +394,7 @@ properties-table-toc-no-project = Add Table of Contents Sheet: the sheet belongs
 properties-table-toc-written = Contents sheet written: { $file }
 properties-table-toc-exists = Add Table of Contents Sheet: { $file } is there already and was kept
 properties-table-toc-failed = Add Table of Contents Sheet: { $file } was not written: { $why }
+
 ## c13 multi-channel-compiled
 
 # The sheet symbol's designator row (it was "Name").

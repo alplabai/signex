@@ -466,6 +466,7 @@ fn stitch_named(graph: &ProjectGraph, want: Want, naming: &ChannelNaming) -> Sti
     // Rule 3c (#1279): a `Repeat(<net>)` entry joins channel k to member k of
     // the parent bus it meets.
     channels::join_repeat_entries(&mut l2, &occs, &edges, &analyses);
+
     // Rule 3c (#1280): a harness-typed sheet entry joins the child bundle
     // carrying the same-named harness port, entry by entry by path.
     crate::harness::join_across_sheets(&mut l2, &edges, |occ| &analyses[occ].harness);

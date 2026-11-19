@@ -322,6 +322,7 @@ dialog-dpc-p-net = P net
 dialog-dpc-n-net = N net
 dialog-dpc-no-project = Differential Pair Classes: open a project first.
 dialog-dpc-project-closed = Differential Pair Classes: the project was closed; nothing was applied.
+
 ## c13 unions-change-paste
 
 # The Smart Paste dialog (#155).

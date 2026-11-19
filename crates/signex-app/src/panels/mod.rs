@@ -85,11 +85,11 @@ pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
     FootprintCards, NoErcRuleEdit,
 };
-pub use element_properties::{HarnessField, HarnessMismatchRow, HarnessPanel, HarnessPanelMsg};
 pub use element_properties::{
     BlanketNetRow, DirectivePanel, DirectivePanelMsg, DraftField, NetParametersEdit, NetRule,
     OutlineField,
 };
+pub use element_properties::{HarnessField, HarnessMismatchRow, HarnessPanel, HarnessPanelMsg};
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_harness_definitions,
     view_selected_element_properties,

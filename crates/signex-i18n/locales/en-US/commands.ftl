@@ -684,18 +684,22 @@ cmd-place-aligned-dimension = Place aligned dimension
 cmd-menu-place-aligned-dimension = Aligned
 cmd-add-table-of-contents = Add table of contents sheet
 cmd-menu-add-table-of-contents = Add Table of Contents Sheet
+
 ## c13 multi-channel-compiled
 
 cmd-compile-project = Compile the project
 cmd-menu-compile-project = Compile Project
 cmd-open-compiled-design = Open Compiled Design panel
 cmd-menu-open-compiled-design = Compiled Design
+
 ## c13 sch-harness
 
 cmd-open-harness-definitions = Open the harness definitions
+
 ## c13 sch-net-directives
 cmd-open-diff-pair-classes = Open the project's differential pair classes
 cmd-menu-open-diff-pair-classes = Differential Pair Classes…
+
 ## c13 unions-change-paste
 cmd-create-union = Create a union from the selection
 cmd-menu-create-union = Create Union…

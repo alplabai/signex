@@ -51,6 +51,7 @@ pub enum ProjectSectionCommand {
     /// (#1279).
     SetChannelNaming {
         naming: ChannelNaming,
+    },
     /// Replace the project's signal harness definitions (#1280), as the
     /// harness definitions view edits them.
     SetHarnessDefinitions {
@@ -81,6 +82,7 @@ impl ProjectSectionCommand {
             Self::SetVersionControl { on } => data.enable_git = *on,
             Self::SetChannelNaming { naming } => {
                 data.schematic_design.channel_naming = naming.clone();
+            }
             Self::SetHarnessDefinitions { definitions } => {
                 data.schematic_design
                     .harness_definitions

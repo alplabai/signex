@@ -165,7 +165,6 @@ pub fn build_renderer_snapshot(
         &mut wire_line_styles,
     );
     harness::push(
-    directives::push_flag_texts(
         snapshot,
         transform,
         colors,
@@ -176,6 +175,13 @@ pub fn build_renderer_snapshot(
             polygons: &mut polygons,
             texts: &mut labels,
         },
+    );
+    directives::push_flag_texts(
+        snapshot,
+        transform,
+        colors,
+        bounds,
+        focus_set,
         document_family,
         &mut parameter_texts,
     );
