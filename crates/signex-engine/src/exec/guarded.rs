@@ -260,9 +260,8 @@ impl Engine {
             let mut touched = [items, followed].concat();
             touched.extend(carried.touched);
             touched.extend(pins.touched);
-            let held: Vec<Point> = (guard.held_tips(&contacts.tips, &policy).into_iter())
-                .filter_map(|i| tips_now[i])
-                .collect();
+            let held_tips = guard.held_tips(&contacts.tips, &policy);
+            let held: Vec<Point> = held_tips.iter().filter_map(|&i| tips_now[i]).collect();
             let dots = crate::pin_dots_to_keep(at.plain_dots, &held);
             let mut patch = DocumentPatch::from_selected_items(&touched);
             if self.reconcile_wire_junctions_frozen(&touched, Some(dots.as_slice())) {
@@ -271,7 +270,17 @@ impl Engine {
             patch |= fold(self);
             let mut edited = carried.edited_tips;
             edited.extend(pins.edited_tips);
-            let Some(blamed) = guard.check(&self.document, &contacts.tips, &policy, &edited) else {
+            let mut verdict = guard.check(&self.document, &contacts.tips, &policy, &edited);
+            // Spec gap (a), which the net comparison cannot see when the wire is
+            // a bare run: a held pin still touching the wire it landed in.
+            let touching = self.held_tips_touching(contacts, at, &held_tips, &dots, &tips_now);
+            if !touching.is_empty() {
+                let blamed = verdict.get_or_insert_with(Vec::new);
+                blamed.extend(touching);
+                blamed.sort_unstable();
+                blamed.dedup();
+            }
+            let Some(blamed) = verdict else {
                 self.warn_plain_pins(&guard, &contacts.tips, &policy);
                 self.warn_plain_wire_points(before, contacts, &policy, items);
                 self.warn_unjoined_pins(contacts, at, &held, &dots, &tips_now);
@@ -306,6 +315,52 @@ impl Engine {
             }
         }
         unreachable!("the escalation loop returns from inside")
+    }
+
+    /// Spec gap (a): the old keys of the held pins (`held`, indices into the
+    /// tips) whose plain pin dot the round left out yet which the candidate
+    /// still joins to the wire through their new tip, through a dot the
+    /// path to the pin made there. The net comparison cannot see it when that
+    /// wire is a bare run, so these go down the ladder like a blamed tip.
+    fn held_tips_touching(
+        &self,
+        contacts: &Contacts,
+        at: &Reference<'_>,
+        held: &[usize],
+        kept: &[Point],
+        tips_now: &[Option<Point>],
+    ) -> Vec<signex_net::uf::Key> {
+        use signex_net::{point_on_segment, pt_key};
+        let left_out = |k: signex_net::uf::Key| {
+            at.plain_dots.iter().any(|d| pt_key(d) == k) && !kept.iter().any(|d| pt_key(d) == k)
+        };
+        let mut queries: Vec<(usize, signex_net::uf::Key, signex_net::uf::Key)> = Vec::new();
+        for &i in held {
+            let Some(k) = tips_now.get(i).copied().flatten().map(|p| pt_key(&p)) else {
+                continue;
+            };
+            if !left_out(k) {
+                continue;
+            }
+            let through = self.document.wires.iter().find(|w| {
+                let (a, b) = (pt_key(&w.start), pt_key(&w.end));
+                a != k && b != k && point_on_segment(k, a, b)
+            });
+            if let Some(wire) = through {
+                queries.push((i, k, pt_key(&wire.start)));
+            }
+        }
+        if queries.is_empty() {
+            return Vec::new();
+        }
+        let keys: Vec<(signex_net::uf::Key, bool)> = (queries.iter())
+            .flat_map(|(_, k, wire)| [(*k, false), (*wire, false)])
+            .collect();
+        let (_, found) = signex_net::net_signatures_at(&self.document, &keys);
+        (queries.iter().zip(found.chunks(2)))
+            .filter(|(_, roots)| roots.len() == 2 && roots[0].0 == roots[1].0)
+            .map(|((i, _, _), _)| contacts.tips[*i].old_key())
+            .collect()
     }
 
     /// One notice for the points of a dragged wire that held something
