@@ -211,3 +211,22 @@ fn an_edit_typed_before_an_outside_write_reload_lands_cannot_undo_clean() {
     assert!(preview.step_history(true));
     assert!(preview.dirty, "the library was written behind this editor");
 }
+
+/// #128, lib-06: the header's "N fields do not parse" pill shows the
+/// Parameters tab, where the field that does not parse lives; with no such
+/// field it does nothing.
+#[test]
+fn the_parse_pill_switches_to_the_tab_of_the_bad_field() {
+    use crate::library::state::PreviewTab;
+    let (mut app, address) = app_with_clean_editor();
+    let _ = app.handle_editor_event(address.clone(), EditorMsg::UnparsedFieldsPillPressed);
+    assert_eq!(editor(&mut app, &address).active_tab, PreviewTab::Preview);
+
+    editor(&mut app, &address)
+        .params_error
+        .insert("value".into(), "not a number".into());
+    let _ = app.handle_editor_event(address.clone(), EditorMsg::UnparsedFieldsPillPressed);
+    let preview = editor(&mut app, &address);
+    assert_eq!(preview.active_tab, PreviewTab::Parameters);
+    assert!(!preview.dirty, "showing the field edits nothing");
+}

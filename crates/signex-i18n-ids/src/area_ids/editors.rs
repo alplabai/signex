@@ -75,4 +75,26 @@ define_ids! {
     EDITORS_WIRE_CORNER_DIAGONAL_FIRST = "editors-wire-corner-diagonal-first";
     EDITORS_WIRE_CORNER_DIAGONAL_LAST = "editors-wire-corner-diagonal-last";
     EDITORS_WIRE_CORNER_ANY_ANGLE = "editors-wire-corner-any-angle";
+    EDITORS_COMPONENT_CLOSE = "editors-component-close";
+    EDITORS_COMPONENT_CHANGE = "editors-component-change";
+    EDITORS_COMPONENT_OPEN_PRIMITIVE = "editors-component-open-primitive";
+    EDITORS_COMPONENT_SYMBOL_CAPTION = "editors-component-symbol-caption";
+    EDITORS_COMPONENT_SYMBOL_PART_CAPTION = "editors-component-symbol-part-caption";
+    EDITORS_COMPONENT_FOOTPRINT_CAPTION = "editors-component-footprint-caption";
+    EDITORS_COMPONENT_PIN_TO_PAD_MATCHED = "editors-component-pin-to-pad-matched";
+    EDITORS_COMPONENT_PIN_TO_PAD_HINT = "editors-component-pin-to-pad-hint";
+    EDITORS_COMPONENT_MATCH_OK = "editors-component-match-ok";
+    EDITORS_COMPONENT_MATCH_OVERRIDE = "editors-component-match-override";
+    EDITORS_COMPONENT_MATCH_NO_PAD = "editors-component-match-no-pad";
+    EDITORS_COMPONENT_RELOAD_SAVED = "editors-component-reload-saved";
+    EDITORS_COMPONENT_RELOAD = "editors-component-reload";
+    EDITORS_COMPONENT_KEEP_EDITING = "editors-component-keep-editing";
+    EDITORS_COMPONENT_SAVE_SHORTCUT = "editors-component-save-shortcut";
+    EDITORS_COMPONENT_RELEASE = "editors-component-release";
+    EDITORS_COMPONENT_SAVE_AND_CLOSE = "editors-component-save-and-close";
+    EDITORS_COMPONENT_CANCEL = "editors-component-cancel";
+    EDITORS_COMPONENT_SAVE = "editors-component-save";
+    EDITORS_COMPONENT_SAVE_BLOCKED = "editors-component-save-blocked";
+    EDITORS_COMPONENT_FOOTER_UNPARSED = "editors-component-footer-unparsed";
+    EDITORS_COMPONENT_COPY_TO_LIBRARY = "editors-component-copy-to-library";
 }

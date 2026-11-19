@@ -207,7 +207,8 @@ fn editor_msg_is_view_only(msg: &EditorMsg) -> bool {
         | E::PinMapCancelOverrideEdit
         | E::ParamSetNumberBuf { .. }
         | E::ParamSetMeasurementBuf { .. }
-        | E::ParamNewNameChanged(_) => true,
+        | E::ParamNewNameChanged(_)
+        | E::UnparsedFieldsPillPressed => true,
         E::Datasheet(d) => matches!(
             d,
             DatasheetMsg::Open(_)

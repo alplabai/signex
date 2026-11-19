@@ -316,6 +316,9 @@ pub enum EditorMsg {
     },
     /// Fire-and-forget save of the active SimModel primitive.
     SaveSim(uuid::Uuid, Box<SimModel>),
+    /// The header's "N fields do not parse" pill was pressed: show the tab
+    /// holding the first field that does not parse and focus it (lib-06).
+    UnparsedFieldsPillPressed,
 }
 
 /// Pure-data alias for `ParamKind` so messages don't depend on

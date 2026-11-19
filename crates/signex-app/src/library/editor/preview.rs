@@ -1,19 +1,19 @@
-//! Preview tab — header, read-only Symbol + Footprint panes, Pin Map
-//! table, Alternate symbols and a Where-Used line, all built from the
-//! shared dialog kit ([`super::kit`]).
+//! The General tab's entry point and the Pin Map tab, built from the shared
+//! dialog kit ([`super::kit`]). The General layout itself (Symbol,
+//! Footprint, PIN TO PAD) lives in [`super::general`]; this file keeps the
+//! pin-to-pad lines, the Pin Map tab with its override editor and the
+//! primitive paths both tabs use.
 //!
-//! The Preview surface is purely read-only for primitives;
-//! right-click on either render → context menu fires
-//! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`]
-//! to open the standalone `.snxsym` / `.snxfpt` document tab.
+//! Symbol and footprint are read-only here: Open fires
+//! [`crate::library::messages::LibraryMessage::OpenPrimitiveEditor`] to
+//! open the standalone `.snxsym` / `.snxfpt` document tab.
 
 use iced::widget::{Column, Space, Widget, column, container, row, scrollable};
 use iced::{Element, Length};
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_library::ComponentRow;
 use signex_types::theme::{CanvasColors, ThemeTokens};
+use signex_widgets::text;
 use signex_widgets::theme_ext;
-use signex_widgets::{Label, raw, text};
 
 use crate::panels::components_panel::details::symbol_canvas::SheetGrid;
 
@@ -21,12 +21,7 @@ use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
 use super::kit::{self, SP, TS};
 
-/// Height of the Symbol / Footprint panes: twenty body lines.
-const PREVIEW_PANE_HEIGHT: f32 = TS.body * 20.0;
-
-/// Shown in the header for a manufacturer / MPN the row does not carry.
-const NO_DESCRIPTION: &str = "No description";
-
+/// The General tab (#128): see [`super::general::view`].
 #[expect(
     clippy::too_many_arguments,
     reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
@@ -41,31 +36,16 @@ pub(crate) fn view<'a>(
     address: EditorAddress,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
-    let read_only = library_state.is_read_only(&state.library_path);
-    let panes = render_panes(
+    super::general::view(
         state,
         library_state,
         tokens,
-        i18n,
         canvas_colors,
-        (grid, device_px_per_logical_px),
-        &address,
-        read_only,
-    );
-    // The pin map and the alternates sit on their own tabs.
-    let body = column![
-        header_row(&state.row, tokens, i18n),
-        panes,
-        where_used_footer(state, library_state, tokens, i18n),
-    ]
-    .spacing(SP.l)
-    .width(Length::Fill)
-    .boxed();
-
-    scrollable(body)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed()
+        grid,
+        device_px_per_logical_px,
+        address,
+        i18n,
+    )
 }
 
 /// The Graphite Pin Map tab: the pin-to-pad table on its own.
@@ -114,116 +94,7 @@ pub(crate) fn pin_map_counts(state: &ComponentPreviewState) -> Option<(usize, us
     Some((mapped, lines.len()))
 }
 
-/// Manufacturer and MPN as shown in the header, trimmed; an empty one is
-/// shown as the catalog's "Not set", so a part really named "Not set" keeps
-/// its own text.
-fn mpn_fields(manufacturer: &str, mpn: &str) -> (String, String) {
-    (manufacturer.trim().to_string(), mpn.trim().to_string())
-}
-
-fn description_text(description: &str) -> &str {
-    let d = description.trim();
-    if d.is_empty() { NO_DESCRIPTION } else { d }
-}
-
-/// The texts the Preview header card shows. The part number, class and
-/// state are the shell header's (`editor::view_header`), not repeated here.
-struct HeaderTexts {
-    description: String,
-    manufacturer: String,
-    mpn: String,
-}
-
-fn header_texts(row_data: &ComponentRow) -> HeaderTexts {
-    let (manufacturer, mpn) = mpn_fields(
-        &row_data.primary_mpn.manufacturer,
-        &row_data.primary_mpn.mpn,
-    );
-    HeaderTexts {
-        description: description_text(&row_data.description).to_string(),
-        manufacturer,
-        mpn,
-    }
-}
-
-fn header_row<'a>(
-    row_data: &'a ComponentRow,
-    tokens: &ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
-    let HeaderTexts {
-        description,
-        manufacturer,
-        mpn,
-    } = header_texts(row_data);
-    let description_blank = row_data.description.trim().is_empty();
-    let (description, description_color): (Label<'a>, _) = if description_blank {
-        (t!(i18n, ids::LIBRARY_PREVIEW_NO_DESCRIPTION).into(), muted)
-    } else {
-        (signex_i18n::UserText::new(description).into(), text_c)
-    };
-
-    let identity = column![
-        text(description)
-            .size(TS.body)
-            .color(description_color)
-            .boxed()
-    ]
-    .width(Length::FillPortion(3))
-    .boxed();
-
-    let labelled = |label: Localized, value: String| {
-        let (value, value_color): (Label<'a>, _) = if value.is_empty() {
-            (t!(i18n, ids::LIBRARY_PREVIEW_NOT_SET).into(), muted)
-        } else {
-            (raw(value), text_c)
-        };
-        row![
-            text(label).size(TS.body).color(muted).boxed(),
-            text(value).size(TS.body).color(value_color).boxed(),
-        ]
-        .spacing(SP.m)
-        .boxed()
-    };
-    let supplier = column![
-        labelled(
-            t!(i18n, ids::LIBRARY_PREVIEW_HEADER_MANUFACTURER),
-            manufacturer
-        ),
-        labelled(t!(i18n, ids::LIBRARY_PREVIEW_MPN), mpn),
-    ]
-    .spacing(SP.xs)
-    .width(Length::FillPortion(2))
-    .boxed();
-
-    kit::card(
-        row![identity, supplier]
-            .spacing(SP.l)
-            .align_y(iced::Alignment::Start)
-            .boxed(),
-        tokens,
-    )
-}
-
-/// What a pane shows when it has no drawing.
-fn pane_message(kind: PaneKind, unbound: bool) -> signex_i18n::MessageId {
-    match (kind, unbound) {
-        (PaneKind::Symbol, true) => ids::EDITORS_COMPONENT_NO_SYMBOL_BOUND,
-        (PaneKind::Footprint, true) => ids::EDITORS_COMPONENT_NO_FOOTPRINT_BOUND,
-        (PaneKind::Symbol, false) => ids::EDITORS_COMPONENT_SYMBOL_NOT_LOADED,
-        (PaneKind::Footprint, false) => ids::EDITORS_COMPONENT_FOOTPRINT_NOT_LOADED,
-    }
-}
-
-#[derive(Clone, Copy)]
-enum PaneKind {
-    Symbol,
-    Footprint,
-}
-
-fn editor_event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
+pub(super) fn editor_event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
     LibraryMessage::EditorEvent {
         library_path: address.library_path.clone(),
         table: address.table.clone(),
@@ -232,168 +103,17 @@ fn editor_event(address: &EditorAddress, msg: EditorMsg) -> LibraryMessage {
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the editor views take the language handle beside their existing seven inputs (#2225)"
-)]
-fn render_panes<'a>(
-    state: &'a ComponentPreviewState,
-    library_state: &LibraryState,
-    tokens: &'a ThemeTokens,
-    i18n: &I18n,
-    canvas_colors: &CanvasColors,
-    (grid, device_px_per_logical_px): (SheetGrid, f32),
-    address: &EditorAddress,
-    read_only: bool,
-) -> Element<'a, LibraryMessage> {
-    // Binding a primitive writes the row, so a read-only mount (the
-    // stock library) renders the Pick buttons disabled.
-    // When the symbol_ref is the nil sentinel ("unbound") the user
-    // hasn't picked a symbol yet — surface "Pick Symbol" instead of
-    // "Open Symbol Editor". Same shape for footprint.
-    let symbol_unbound = state.row.is_symbol_unbound();
-    let footprint_unbound = state.row.is_footprint_unbound();
-    let (mut symbol_msg, symbol_btn_label): (Option<LibraryMessage>, &'static str) =
-        if symbol_unbound {
-            (
-                Some(LibraryMessage::OpenPrimitivePicker {
-                    kind: signex_library::PrimitiveKind::Symbol,
-                    target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
-                }),
-                "Pick Symbol",
-            )
-        } else {
-            (
-                symbol_path(state, library_state)
-                    .map(|path| LibraryMessage::OpenPrimitiveEditor { path }),
-                "Open Symbol Editor",
-            )
-        };
-
-    let (mut footprint_msg, footprint_btn_label): (Option<LibraryMessage>, &'static str) =
-        if footprint_unbound {
-            (
-                Some(LibraryMessage::OpenPrimitivePicker {
-                    kind: signex_library::PrimitiveKind::Footprint,
-                    target: super::super::state::PrimitivePickerTarget::PreviewRow(address.clone()),
-                }),
-                "Pick Footprint",
-            )
-        } else {
-            (
-                footprint_path(state, library_state)
-                    .map(|p| LibraryMessage::OpenPrimitiveEditor { path: p }),
-                "Open Footprint Editor",
-            )
-        };
-
-    if read_only {
-        if symbol_unbound {
-            symbol_msg = None;
-        }
-        if state.row.footprint_ref.is_none() {
-            footprint_msg = None;
-        }
-    }
-
-    let symbol_drawing = (!symbol_unbound)
-        .then_some(state.symbol.as_ref())
-        .flatten()
-        .map(|sym| {
-            crate::panels::components_panel::details::symbol_canvas::symbol_preview(
-                sym.to_lib_symbol(sym.name.clone()),
-                *canvas_colors,
-                grid,
-                PREVIEW_PANE_HEIGHT,
-                device_px_per_logical_px,
-            )
-            .map(|()| LibraryMessage::Noop)
-            .boxed()
-        });
-    let symbol_pane = render_pane(
-        t!(i18n, ids::EDITORS_COMPONENT_SYMBOL_HEADING),
-        symbol_drawing,
-        t!(i18n, pane_message(PaneKind::Symbol, symbol_unbound)),
-        symbol_msg,
-        symbol_btn_label,
-        tokens,
-    );
-    // Drawn with the Components panel's footprint canvas, like the symbol.
-    let footprint_drawing = (!footprint_unbound)
-        .then_some(state.footprint_preview())
-        .flatten()
-        .map(|model| {
-            let program =
-                crate::panels::components_panel::details::footprint_canvas::FootprintPreview::new(
-                    model,
-                )
-                .with_theme_tokens(tokens);
-            iced::widget::canvas(program)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .boxed()
-        });
-    let footprint_pane = render_pane(
-        t!(i18n, ids::EDITORS_COMPONENT_FOOTPRINT_HEADING),
-        footprint_drawing,
-        t!(i18n, pane_message(PaneKind::Footprint, footprint_unbound)),
-        footprint_msg,
-        footprint_btn_label,
-        tokens,
-    );
-
-    row![
-        container(symbol_pane).width(Length::FillPortion(1)),
-        container(footprint_pane).width(Length::FillPortion(1)),
-    ]
-    .spacing(SP.m)
-    .align_y(iced::Alignment::Start)
-    .boxed()
-}
-
-fn render_pane<'a>(
-    label: Localized,
-    drawing: Option<Element<'a, LibraryMessage>>,
-    empty_message: Localized,
-    open_msg: Option<LibraryMessage>,
-    button_label: &'a str,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    let content: Element<'a, LibraryMessage> = match drawing {
-        Some(drawing) => drawing,
-        None => kit::empty_state(empty_message, None, tokens),
-    };
-    let header = kit::section_header(
-        label,
-        Some(kit::secondary_button(button_label, open_msg, tokens)),
-        tokens,
-    );
-    column![
-        header,
-        kit::card(
-            container(content)
-                .width(Length::Fill)
-                .height(Length::Fixed(PREVIEW_PANE_HEIGHT))
-                .boxed(),
-            tokens,
-        ),
-    ]
-    .spacing(SP.s)
-    .width(Length::Fill)
-    .boxed()
-}
-
 /// The `.snxsym` a row's symbol ref points at, resolved through the
 /// library named by `PrimitiveRef.library_id` (it may not be the row's own
 /// library). `None` when that library is not open.
-fn symbol_path(
+pub(super) fn symbol_path(
     state: &ComponentPreviewState,
     library_state: &LibraryState,
 ) -> Option<std::path::PathBuf> {
     library_state.primitive_file(&state.row.symbol_ref, "symbols", "snxsym")
 }
 
-fn footprint_path(
+pub(super) fn footprint_path(
     state: &ComponentPreviewState,
     library_state: &LibraryState,
 ) -> Option<std::path::PathBuf> {
@@ -402,15 +122,15 @@ fn footprint_path(
 
 /// One Pin Map table line: the pad a symbol pin lands on.
 #[derive(Debug, PartialEq, Eq)]
-struct PinLine {
-    number: String,
-    name: String,
-    pad: String,
-    is_override: bool,
+pub(super) struct PinLine {
+    pub(super) number: String,
+    pub(super) name: String,
+    pub(super) pad: String,
+    pub(super) is_override: bool,
 }
 
 /// Table lines for `pins`: a pin's pad is its override, else its own number.
-fn pin_lines<'p>(
+pub(super) fn pin_lines<'p>(
     pins: impl Iterator<Item = (&'p str, &'p str)>,
     overrides: &[signex_library::PinPadOverride],
 ) -> Vec<PinLine> {
@@ -601,7 +321,10 @@ fn pin_map_subsection<'a>(
     column![header, kit::card(table.boxed(), tokens)].boxed()
 }
 
-fn override_editor_row<'a>(
+/// The inline override editor under a pin's row: the pad number input,
+/// Save, Cancel and Remove. Shared by the Pin Map tab and the General
+/// tab's pin-to-pad table.
+pub(super) fn override_editor_row<'a>(
     pin_number: &str,
     buf: &'a str,
     tokens: &ThemeTokens,
@@ -675,7 +398,7 @@ fn override_editor_row<'a>(
 }
 
 /// "Used by N sheet(s) in M project(s)."
-fn where_used_label(i18n: &I18n, sheets: usize, projects: usize) -> Localized {
+pub(super) fn where_used_label(i18n: &I18n, sheets: usize, projects: usize) -> Localized {
     t!(
         i18n,
         ids::LIBRARY_PREVIEW_WHERE_USED,
@@ -684,83 +407,9 @@ fn where_used_label(i18n: &I18n, sheets: usize, projects: usize) -> Localized {
     )
 }
 
-fn where_used_footer<'a>(
-    state: &'a ComponentPreviewState,
-    library_state: &'a LibraryState,
-    tokens: &ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, LibraryMessage> {
-    let row_id = signex_library::RowId::from_uuid(state.row.row_id);
-    let uses = library_state.where_used_for(row_id);
-    let projects = uses
-        .iter()
-        .map(|u| &u.project_path)
-        .collect::<std::collections::BTreeSet<_>>()
-        .len();
-    let color = if uses.is_empty() {
-        theme_ext::text_secondary(tokens)
-    } else {
-        theme_ext::text_primary(tokens)
-    };
-    kit::card(
-        text(where_used_label(i18n, uses.len(), projects))
-            .size(TS.body)
-            .color(color)
-            .boxed(),
-        tokens,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_header_card_does_not_repeat_the_shell_identity() {
-        let mut row = crate::library::component_preview::test_row();
-        row.description = "10k resistor".into();
-        let texts = header_texts(&row);
-        let shown = [&texts.description, &texts.manufacturer, &texts.mpn];
-        let pn = row.internal_pn.as_str();
-        assert!(!pn.is_empty());
-        for text in shown {
-            assert!(!text.contains(pn), "{text}");
-            assert!(!text.contains(row.class.as_str()), "{text}");
-        }
-        assert_eq!(texts.description, "10k resistor");
-    }
-
-    #[test]
-    fn blank_manufacturer_and_mpn_read_not_set() {
-        assert_eq!(mpn_fields("", "  "), (String::new(), String::new()));
-        assert_eq!(mpn_fields("TI", ""), ("TI".to_string(), String::new()));
-        assert_eq!(
-            mpn_fields(" TI ", "LM358"),
-            ("TI".to_string(), "LM358".to_string())
-        );
-    }
-
-    #[test]
-    fn blank_description_reads_no_description() {
-        assert_eq!(description_text("  "), NO_DESCRIPTION);
-        assert_eq!(description_text(" 100 nF "), "100 nF");
-    }
-
-    #[test]
-    fn pane_message_is_plain_language() {
-        let english = |kind, unbound| {
-            I18n::en_us()
-                .message(pane_message(kind, unbound), &[])
-                .to_string()
-        };
-        assert_eq!(english(PaneKind::Symbol, true), "No symbol bound");
-        let missing = english(PaneKind::Footprint, false);
-        assert_eq!(
-            missing,
-            "The footprint could not be loaded. It may be missing from the open libraries."
-        );
-        assert!(!missing.contains("uuid"));
-    }
 
     #[test]
     fn pin_lines_one_per_pin_with_overrides_marked() {

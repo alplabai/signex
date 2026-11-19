@@ -387,3 +387,54 @@ editors-wire-corner-vertical-first = Corner: 90°, vertical first
 editors-wire-corner-diagonal-first = Corner: 45°, diagonal first
 editors-wire-corner-diagonal-last = Corner: 45°, diagonal last
 editors-wire-corner-any-angle = Corner: any angle
+
+## Component editor window, Graphite (#128)
+
+# Tooltip of the header's close button.
+editors-component-close = Close
+# Small button beside the Symbol or Footprint caption: bind another one.
+editors-component-change = Change…
+# Small button beside the Symbol or Footprint caption: open it in its editor.
+editors-component-open-primitive = Open
+# Caption under the symbol tile: the file and the symbol in it.
+editors-component-symbol-caption = { $file } · { $symbol }
+# The same for a symbol of several parts. $part and $parts are whole numbers.
+editors-component-symbol-part-caption = { $file } · { $symbol } · Part { $part } of { $parts }
+# Caption under the footprint tile: the file and the footprint in it.
+editors-component-footprint-caption = { $file } · { $footprint }
+# Pill beside PIN TO PAD: pins that land on a pad, of all pins.
+editors-component-pin-to-pad-matched = { $mapped } / { $total } matched
+# Hint under the pin-to-pad table. $pin is the first pin's number.
+editors-component-pin-to-pad-hint = Click a pad cell to override: "Override pin { $pin } → pad number…"
+# Match cell of the pin-to-pad table: the pin has a pad of its number.
+editors-component-match-ok = ok
+# Match cell: the pin is overridden to another pad.
+editors-component-match-override = override
+# Match cell: the footprint has no pad for the pin.
+editors-component-match-no-pad = no pad
+# Footer button: replace the working copy with the stored row.
+editors-component-reload-saved = Reload saved version
+# Confirm button of that reload.
+editors-component-reload = Reload
+# Keep the working copy instead of reloading.
+editors-component-keep-editing = Keep editing
+# Shortcut hint beside Save.
+editors-component-save-shortcut = Ctrl+S
+# Footer button (not available yet): release the component.
+editors-component-release = Release…
+# Footer button: save and close the editor.
+editors-component-save-and-close = Save & Close
+# Footer button: close the editor (asks first when there are unsaved edits).
+editors-component-cancel = Cancel
+# Footer button: save the row.
+editors-component-save = Save
+# Tooltip of the disabled Save. $field is the parameter that does not parse.
+editors-component-save-blocked = { $field } does not parse. Fix it to save.
+# Footer summary of the fields that do not parse. $count is a whole number,
+# $field the first such parameter and $reason why it was refused (English).
+editors-component-footer-unparsed = { $count ->
+    [one] { $field } does not parse: { $reason }
+   *[other] { $count } fields do not parse. { $field }: { $reason }
+}
+# Read-only footer button: copy the row's symbol into a writable library.
+editors-component-copy-to-library = Copy to Library…
