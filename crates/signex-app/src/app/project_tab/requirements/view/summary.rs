@@ -1,0 +1,216 @@
+//! The summaries of the Requirements section: the row under the section
+//! header (outcome counts, when the last run finished, Add requirement…),
+//! the run's notes under it, and a card's one-line value summary.
+
+use iced::widget::{Row, Space, pick_list};
+use iced::{Alignment, Element, Length, Widget as _};
+use serde_json::Value;
+use signex_i18n::{DateLength, I18n, ListKind, Localized, UserText, ids, t};
+use signex_types::check::CheckReport;
+use signex_types::project::{
+    REQUIREMENT_KINDS, Requirement, RequirementEntry, RequirementField, RequirementKind,
+};
+use signex_types::theme::ThemeTokens;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::{PickListPlaceholder as _, text};
+
+use super::super::super::look::pill;
+use super::super::super::table::{SP, TS, note, problem};
+use super::super::words::kind_words;
+use super::super::{RequirementsMsg, RequirementsRun, message};
+use super::{Choice, Verdict, stored_text, verdict};
+use crate::app::Message;
+use crate::app::state::ProjectId;
+use crate::styles::PillTone;
+use crate::styles::tokens as ink;
+
+/// Width of the Add picker, in `body`-size characters (200 px at the
+/// default size, as drawn).
+const PICKER_EMS: f32 = 16.7;
+
+/// How many entries came out each way in a run.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::app::project_tab::requirements) struct OutcomeCounts {
+    pub passed: usize,
+    pub failed: usize,
+    pub not_checked: usize,
+    /// Turned off: counted apart, never as not checked.
+    pub off: usize,
+}
+
+/// Count the entries by how they came out of `report`.
+pub(in crate::app::project_tab::requirements) fn outcome_counts(
+    report: &CheckReport,
+    entries: &[RequirementEntry],
+) -> OutcomeCounts {
+    let mut counts = OutcomeCounts::default();
+    for (index, entry) in entries.iter().enumerate() {
+        match verdict(Some(report), entry, index) {
+            Some(Verdict::Passed) => counts.passed += 1,
+            Some(Verdict::Failed) => counts.failed += 1,
+            Some(Verdict::Off) => counts.off += 1,
+            Some(Verdict::NotChecked) | None => counts.not_checked += 1,
+        }
+    }
+    counts
+}
+
+/// The row under the section header: after a run its counts, then when it
+/// finished, then the Add picker (left out when the list cannot be edited).
+pub(super) fn summary_row<'a>(
+    project_id: ProjectId,
+    entries: &[RequirementEntry],
+    last: Option<&RequirementsRun>,
+    editable: bool,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let mut line: Row<Element<'a, Message>> = Row::new().spacing(SP.m).align_y(Alignment::Center);
+    if let Some(Ok(report)) = last.map(|run| &run.report) {
+        let counts = outcome_counts(report, entries);
+        let passed = t!(i18n, ids::REQUIREMENTS_PASSED_COUNT, "count" => counts.passed);
+        line = line.push(pill(passed, PillTone::Ok, None, tokens));
+        let failed = t!(i18n, ids::REQUIREMENTS_FAILED_COUNT, "count" => counts.failed);
+        line = line.push(pill(failed, PillTone::Err, None, tokens));
+        if counts.not_checked > 0 {
+            let open = t!(i18n, ids::REQUIREMENTS_NOT_CHECKED_COUNT, "count" => counts.not_checked);
+            line = line.push(pill(open, PillTone::Neutral, None, tokens));
+        }
+    }
+    line = line.push(Space::new().width(Length::Fill).boxed());
+    let when = match last {
+        Some(run) => {
+            let time = i18n.date_time(run.finished_at, DateLength::Medium);
+            t!(i18n, ids::REQUIREMENTS_LAST_RUN, "time" => time)
+        }
+        None => t!(i18n, ids::REQUIREMENTS_NEVER_RUN),
+    };
+    line = line.push(note(when, tokens));
+    if editable {
+        line = line.push(add_picker(project_id, i18n));
+    }
+    line.width(Length::Fill).boxed()
+}
+
+/// The Add picker: picking a kind adds a requirement of it.
+fn add_picker<'a>(project_id: ProjectId, i18n: &I18n) -> Element<'a, Message> {
+    let kinds: Vec<Choice<&'static str>> = REQUIREMENT_KINDS
+        .iter()
+        .map(|kind| Choice {
+            value: *kind,
+            label: t!(i18n, kind_words(kind)).to_string(),
+        })
+        .collect();
+    pick_list(None::<Choice<&'static str>>, kinds, Choice::to_string)
+        .graphite()
+        .placeholder_label(t!(i18n, ids::REQUIREMENTS_ADD))
+        .on_select(move |choice: Choice<&'static str>| {
+            message(
+                project_id,
+                RequirementsMsg::AddPicked { kind: choice.value },
+            )
+        })
+        .width(Length::Fixed(TS.body * PICKER_EMS))
+        .boxed()
+}
+
+/// Under the summary row: why the last run did not finish, or its notes.
+pub(super) fn run_notes<'a>(
+    last: Option<&RequirementsRun>,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Vec<Element<'a, Message>> {
+    match last.map(|run| &run.report) {
+        Some(Err(why)) => {
+            let words = t!(i18n, ids::REQUIREMENTS_RUN_FAILED, "reason" => why.as_str());
+            vec![problem(words, tokens)]
+        }
+        Some(Ok(report)) if !report.warnings.is_empty() => {
+            let mut notes = vec![note(t!(i18n, ids::REQUIREMENTS_RUN_NOTES), tokens)];
+            for warning in &report.warnings {
+                notes.push(
+                    text(UserText::new(warning.clone()))
+                        .size(TS.caption)
+                        .color(ink::muted_text(tokens))
+                        .boxed(),
+                );
+            }
+            notes
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// A card's one-line summary of its values, as stored (`raw` keeps the
+/// numbers as written). `None` for a `net_class` that asks nothing.
+pub(in crate::app::project_tab::requirements) fn summary_words(
+    requirement: &Requirement,
+    raw: &Value,
+    i18n: &I18n,
+) -> Option<Localized> {
+    let value = |field: RequirementField| stored_text(field, raw);
+    let words = match &requirement.kind {
+        RequirementKind::ErcClean { allow_warnings }
+        | RequirementKind::DrcClean { allow_warnings } => {
+            if *allow_warnings {
+                t!(i18n, ids::REQUIREMENTS_SUMMARY_CLEAN_WARNINGS_ALLOWED)
+            } else {
+                t!(i18n, ids::REQUIREMENTS_SUMMARY_CLEAN)
+            }
+        }
+        RequirementKind::BoardSize { .. } => t!(
+            i18n,
+            ids::REQUIREMENTS_SUMMARY_BOARD_SIZE,
+            "width" => value(RequirementField::MaxWidthMm),
+            "height" => value(RequirementField::MaxHeightMm),
+        ),
+        RequirementKind::PartsState { states } => t!(
+            i18n,
+            ids::REQUIREMENTS_SUMMARY_PARTS_STATE,
+            "states" => i18n.list(states.as_slice(), ListKind::Or),
+        ),
+        RequirementKind::NetClass {
+            nets,
+            class,
+            min_trace_width_mm,
+            min_clearance_mm,
+        } => {
+            let mut limits: Vec<String> = Vec::new();
+            if let Some(class) = class.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+                limits.push(
+                    t!(i18n, ids::REQUIREMENTS_SUMMARY_CLASS, "class" => class).into_string(),
+                );
+            }
+            if min_trace_width_mm.is_some() {
+                let width = value(RequirementField::MinTraceWidthMm);
+                limits.push(
+                    t!(i18n, ids::REQUIREMENTS_SUMMARY_MIN_TRACE, "width" => width).into_string(),
+                );
+            }
+            if min_clearance_mm.is_some() {
+                let clearance = value(RequirementField::MinClearanceMm);
+                limits.push(
+                    t!(i18n, ids::REQUIREMENTS_SUMMARY_MIN_CLEARANCE, "clearance" => clearance)
+                        .into_string(),
+                );
+            }
+            if limits.is_empty() {
+                return None;
+            }
+            t!(
+                i18n,
+                ids::REQUIREMENTS_SUMMARY_NET_CLASS,
+                "nets" => nets.as_str(),
+                "limits" => i18n.list(limits.as_slice(), ListKind::And),
+            )
+        }
+        RequirementKind::BomCost { .. } => t!(
+            i18n,
+            ids::REQUIREMENTS_SUMMARY_BOM_COST,
+            "cost" => value(RequirementField::MaxUnitCost),
+            "currency" => value(RequirementField::Currency),
+            "quantity" => value(RequirementField::Quantity),
+        ),
+    };
+    Some(words)
+}
