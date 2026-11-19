@@ -85,8 +85,9 @@ const UNIT_EM: f32 = 2.2;
 const PILL_HEIGHT_EM: f32 = 16.0 / 12.0;
 /// Side padding of a count pill (6 px at 12 px).
 const PILL_PAD_EM: f32 = 6.0 / 12.0;
-/// Section header padding, as the form look's: 12 px around, 6 px below.
-const SECTION_PAD_EM: f32 = 12.0 / 12.0;
+/// Section header padding, as the form look's: 12 px around (one body
+/// size at 12 px), 6 px below.
+const SECTION_PAD_EM: f32 = 1.0;
 const SECTION_PAD_BOTTOM_EM: f32 = 6.0 / 12.0;
 
 /// The quarter turns the Rotation control offers, in degrees.

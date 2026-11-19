@@ -176,13 +176,16 @@ fn pair<'a>(
     )
 }
 
+/// One Properties section's rows, top to bottom.
+type SectionRows<'a> = Vec<Element<'a, PanelMsg>>;
+
 /// Location and Properties of one kind, as `(location, properties)` rows.
 fn kind_rows<'a>(
     ctx: &'a PanelContext,
     kind: &str,
     rows: &Rows<'_>,
     muted: Color,
-) -> Option<(Vec<Element<'a, PanelMsg>>, Vec<Element<'a, PanelMsg>>)> {
+) -> Option<(SectionRows<'a>, SectionRows<'a>)> {
     use DrawingFieldId as F;
     let (x, y, w, h, mm, deg) = (
         ids::PROPERTIES_AXIS_X,

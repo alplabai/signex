@@ -50,22 +50,6 @@ pub fn thin_sep<'a, M: 'a>(border_c: Color) -> Element<'a, M> {
         .boxed()
 }
 
-/// Section header: bold label + separator line.
-pub fn section_hdr<'a, M: 'a>(
-    title: signex_i18n::Localized,
-    text_c: Color,
-    border_c: Color,
-) -> Element<'a, M> {
-    column![
-        container(text(title).size(TS.label).color(text_c))
-            .padding([6.0, SP.m])
-            .width(Length::Fill),
-        thin_sep(border_c),
-    ]
-    .spacing(0)
-    .boxed()
-}
-
 /// `field` with its whole `value` in a tooltip, so a value the field cuts
 /// off can still be read (#2468). An empty value gets no tooltip.
 pub fn with_value_tip<'a, M: 'a>(field: Element<'a, M>, value: &str) -> Element<'a, M> {
