@@ -1101,6 +1101,9 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// The placed part's ⋯ menu, its focused pin and its illustration
+    /// hover (#42, #50).
+    Part(super::PartPanelMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

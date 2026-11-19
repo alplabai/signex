@@ -5,9 +5,9 @@
 
 use super::super::*;
 use super::footprint_card::{FootprintCardStatus, FootprintCardView};
-use crate::panels::components_panel::details::footprint_canvas::FootprintPreview;
+use super::illustrations::footprint_thumb::{THUMB_HEIGHT_EM, THUMB_WIDTH_EM};
 use crate::styles::tokens::resolve;
-use crate::styles::{Radii, TypeScale, ti};
+use crate::styles::{TypeScale, ti};
 use iced::Widget;
 use iced::widget::Row;
 
@@ -15,9 +15,6 @@ const TS: TypeScale = TypeScale::DEFAULT;
 
 /// Collapse key of the Footprint section.
 pub(super) const FOOTPRINT_SECTION_KEY: &str = "sel_footprint";
-/// Thumbnail box, px.
-const THUMB_WIDTH: f32 = 116.0;
-const THUMB_HEIGHT: f32 = 88.0;
 /// Inner padding of the card, px.
 const CARD_PAD: f32 = 10.0;
 /// Gap between the thumbnail and the text column, px.
@@ -65,18 +62,15 @@ pub(super) fn push_footprint_section<'a>(
             move || {
                 Column::new()
                     .width(Length::Fill)
-                    .push(footprint_card(card, &ctx.tokens, &ctx.i18n))
+                    .push(footprint_card(card, ctx))
             },
         )
         .boxed(),
     )
 }
 
-fn footprint_card<'a>(
-    card: &'a FootprintCardView,
-    tokens: &ThemeTokens,
-    i18n: &signex_i18n::I18n,
-) -> Element<'a, PanelMsg> {
+fn footprint_card<'a>(card: &'a FootprintCardView, ctx: &PanelContext) -> Element<'a, PanelMsg> {
+    let (tokens, i18n) = (&ctx.tokens, &ctx.i18n);
     let r = resolve(tokens);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
     let mut lines = card_lines(card, i18n).into_iter();
@@ -102,7 +96,7 @@ fn footprint_card<'a>(
     let mut body: Row<Element<'a, PanelMsg>> = Row::new()
         .spacing(CARD_GAP)
         .align_y(iced::Alignment::Center);
-    if let Some(thumb) = thumbnail(card, tokens) {
+    if let Some(thumb) = thumbnail(card, tokens, &ctx.part_panel.hover) {
         body = body.push(thumb);
     }
     body = body.push(text_col.boxed());
@@ -117,41 +111,30 @@ fn footprint_card<'a>(
     .boxed()
 }
 
-/// The footprint drawn on its canvas ground; an empty box while it is read, none
-/// for a part without a library footprint.
+/// The footprint as transparent line art; an empty box while it is read,
+/// none for a part without a library footprint.
 fn thumbnail<'a>(
     card: &'a FootprintCardView,
     tokens: &ThemeTokens,
+    hover: &signex_widgets::property_illustration::IllustrationHover,
 ) -> Option<Element<'a, PanelMsg>> {
-    use crate::library::editor::footprint::graphite_look_for;
-    // The ground the preview paints, so the box has no seam around it.
-    let ground = graphite_look_for(tokens).bg;
+    let (width, height) = (TS.caption * THUMB_WIDTH_EM, TS.caption * THUMB_HEIGHT_EM);
     let inner: Element<'a, PanelMsg> = match &card.status {
-        FootprintCardStatus::Ready(facts) => {
-            iced::widget::canvas(FootprintPreview::new(&facts.preview).with_theme_tokens(tokens))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .boxed()
-        }
-        FootprintCardStatus::Loading | FootprintCardStatus::Failed(_) => Space::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed(),
+        FootprintCardStatus::Ready(facts) => match facts.thumb.illustration() {
+            Some(drawing) => signex_widgets::property_illustration::property_illustration(
+                drawing, hover, tokens, TS.caption,
+            )
+            .map(|m| PanelMsg::Part(super::part_panel::PartPanelMsg::IllustrationHovered(m))),
+            None => Space::new().boxed(),
+        },
+        FootprintCardStatus::Loading | FootprintCardStatus::Failed(_) => Space::new().boxed(),
         FootprintCardStatus::Unlinked => return None,
     };
     Some(
         container(inner)
-            .width(THUMB_WIDTH)
-            .height(THUMB_HEIGHT)
+            .width(width)
+            .height(height)
             .clip(true)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(ground)),
-                border: Border {
-                    radius: Radii::GRAPHITE.button.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            })
             .boxed(),
     )
 }

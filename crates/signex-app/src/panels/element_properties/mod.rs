@@ -15,9 +15,11 @@ mod font_row;
 mod footprint_card;
 mod footprint_section;
 mod header;
+mod illustrations;
 mod label;
 mod library_rows;
 mod no_erc;
+mod part_panel;
 mod pins;
 mod placed_kinds;
 mod placed_rows;
@@ -40,5 +42,7 @@ pub(super) use font_row::font_family_row;
 pub use footprint_card::{
     FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView, FootprintCards,
 };
+pub use illustrations::footprint_thumb::FootprintThumb;
 pub use no_erc::NoErcRuleEdit;
+pub use part_panel::{PartPanelEffect, PartPanelMsg, PartPanelState};
 pub(super) use selected::view_selected_element_properties;
