@@ -6,6 +6,7 @@
 pub mod active_bar;
 pub mod chevron;
 pub mod chips;
+pub mod compact_group;
 pub mod constraint_grid;
 pub mod dimension_label;
 pub mod dropdown_style;
