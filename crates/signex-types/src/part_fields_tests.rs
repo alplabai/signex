@@ -165,3 +165,21 @@ fn evaluated_value_keeps_literals_power_ports_and_failures_as_stored() {
     );
     assert_eq!(evaluated_value(&symbols, &symbols[2], &[], false), "= 1V");
 }
+
+/// Two fields whose names differ only in case: the exact name wins, and a
+/// name in neither spelling reads the first by byte order, whatever order
+/// the map holds them in.
+#[test]
+fn a_case_insensitive_lookup_is_deterministic() {
+    let mut r1 = part("R1", "10k");
+    for key in ["mpn", "MPN", "Mpn"] {
+        r1.fields.insert(key.to_string(), format!("from {key}"));
+    }
+    assert_eq!(part_field_text(&r1, "Mpn"), Some("from Mpn"));
+    assert_eq!(part_field_text(&r1, "mpn"), Some("from mpn"));
+    for _ in 0..16 {
+        let mut shuffled = r1.clone();
+        shuffled.fields = r1.fields.clone().into_iter().collect();
+        assert_eq!(part_field_text(&shuffled, "mPN"), Some("from MPN"));
+    }
+}
