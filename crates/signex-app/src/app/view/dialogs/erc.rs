@@ -172,9 +172,16 @@ impl Signex {
             tokens,
             severity: severity_map,
             pin_matrix: pin_map,
+            shipped: &signex_erc::project_rules::resolve(
+                &signex_erc::project_rules::profile::builtin_profile().erc,
+            ),
             editable: true,
+            changed_only: self.ui_state.erc_rule_list.changed_only,
+            filter: &self.ui_state.erc_rule_list.query,
             on_severity: |rule, severity| Message::Erc(ErcMsg::SeverityChanged(rule, severity)),
             on_pin_cell: |row, col| Message::Erc(ErcMsg::PinMatrixCellCycled { row, col }),
+            on_changed_only: |on| Message::Erc(ErcMsg::RulesChangedOnlyToggled(on)),
+            on_filter: |query| Message::Erc(ErcMsg::RuleFilterChanged(query)),
         });
 
         // Severity chips with the rule counts above the grid.

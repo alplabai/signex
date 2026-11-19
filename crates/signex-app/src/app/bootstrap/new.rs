@@ -505,6 +505,7 @@ impl Signex {
                 reorder_picker: None,
                 move_pick: None,
                 pin_matrix_overrides: std::collections::HashMap::new(),
+                erc_rule_list: Default::default(),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
                 annotate_runs: Default::default(),

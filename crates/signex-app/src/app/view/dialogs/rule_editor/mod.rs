@@ -1,358 +1,274 @@
-//! The ERC rule editor: a severity grid (one row per rule) beside the
-//! pin-connection matrix.
+//! The ERC rule editor: the rule list, grouped and filterable, beside the
+//! pin-connection matrix (#1289).
 //!
 //! One widget for every place that edits a rule set: the ERC dialog (the
 //! project's rules, or the machine's) and Preferences ▸ Rule Profiles (a
 //! library profile). It is generic over the message type, so each caller maps
-//! a click to its own message and none of them forks the layout (#1608).
+//! a click to its own message and none of them forks the layout (#1608). It
+//! holds no state: the list filter lives in the caller's model.
 
-use iced::widget::{Column, Space, column, container, row};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+mod pin_matrix;
+mod severity_list;
+
+use std::collections::HashMap;
+
+use iced::widget::{container, row};
+use iced::{Background, Border, Element, Length, Theme, Widget};
+use signex_erc::project_rules::ResolvedRules;
+use signex_erc::{PinAxis, RuleGroup, RuleKind, Severity};
 use signex_i18n::{I18n, MessageId, ids, t};
-use signex_widgets::{button, raw, text};
+use signex_widgets::{raw, text};
 
-use signex_erc::{PinAxis, RuleKind, Severity};
-
-use crate::styles::{TypeScale, chrome_px};
+use crate::styles::{Radii, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 
-/// Pin-matrix geometry. The cell is wide enough for the longest axis label
-/// ("PowerOut") at caption size, and every length follows the base size.
-const CELL_W: f32 = chrome_px(52.0);
-const CELL_H: f32 = chrome_px(30.0);
-const COL_HEADER_H: f32 = chrome_px(24.0);
-const ROW_HEADER_W: f32 = chrome_px(80.0);
+/// Width of the matrix pane: 410 px at the 12 px body.
+const MATRIX_PANE_W: f32 = TS.body * 410.0 / 12.0;
 
 /// What the editor shows and how a click reaches the caller.
 pub(crate) struct RuleEditor<'a, M> {
     pub i18n: &'a I18n,
     pub tokens: &'a signex_types::theme::ThemeTokens,
     /// Per-rule severity overrides; a rule not listed shows its default.
-    pub severity: &'a std::collections::HashMap<RuleKind, Severity>,
+    pub severity: &'a HashMap<RuleKind, Severity>,
     /// Pin-matrix cells that differ from the factory matrix.
-    pub pin_matrix: &'a std::collections::HashMap<(u8, u8), Severity>,
+    pub pin_matrix: &'a HashMap<(u8, u8), Severity>,
+    /// The shipped profile: the baseline the changed markers compare with.
+    pub shipped: &'a ResolvedRules,
     /// `false` draws the same grid with every cell inert (the shipped
     /// profile).
     pub editable: bool,
+    /// List only the rules that differ from `shipped`.
+    pub changed_only: bool,
+    /// Text of the "Filter rules" field; the list keeps the rules whose name
+    /// holds it.
+    pub filter: &'a str,
     pub on_severity: fn(RuleKind, Severity) -> M,
     pub on_pin_cell: fn(u8, u8) -> M,
+    /// The "Changed only" chip was pressed; carries the new state.
+    pub on_changed_only: fn(bool) -> M,
+    pub on_filter: fn(String) -> M,
 }
 
-/// The two-column editor body.
+/// The two-column editor body: the rule list, then the matrix pane.
 pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Element<'static, M> {
-    let RuleEditor {
-        i18n,
-        tokens,
-        severity,
-        pin_matrix,
-        editable,
-        on_severity,
-        on_pin_cell,
-    } = editor;
-    let text_c = crate::styles::ti(tokens.text);
-    let text_muted = crate::styles::ti(tokens.text_secondary);
-    let border_c = crate::styles::ti(tokens.border);
-
-    // Per-rule severity grid: one row per built-in rule x 4 severities.
-    let mut rule_rows: Column<Element<'static, M>> = column![
-        row![
-            text(t!(i18n, ids::DIALOG_RULES_COL_RULE))
-                .size(TS.caption)
-                .color(text_muted)
-                .width(Length::FillPortion(3)),
-            text(t!(i18n, ids::DIALOG_RULES_COL_SEVERITY))
-                .size(TS.caption)
-                .color(text_muted)
-                .width(Length::FillPortion(2)),
-        ]
-        .padding([4.0, 8.0]),
-    ]
-    .spacing(0);
-    for rule in &RuleKind::ALL {
-        let current = severity
-            .get(rule)
-            .copied()
-            .unwrap_or_else(|| rule.default_severity());
-        // The rule names come from signex-erc (#2062).
-        let label = if rule.is_on_off_only() {
-            t!(i18n, ids::DIALOG_RULES_ON_OFF, "rule" => rule.label()).into_string()
-        } else {
-            rule.label().to_string()
-        };
-        rule_rows = rule_rows.push(
-            row![
-                // raw: see above; the on/off wording is rendered from the catalog.
-                text(raw(label))
-                    .size(TS.body)
-                    .color(text_c)
-                    .width(Length::FillPortion(3)),
-                severity_segmented(
-                    i18n,
-                    *rule,
-                    current,
-                    (
-                        border_c,
-                        text_muted,
-                        crate::styles::tokens::resolve(tokens).field,
-                    ),
-                    editable,
-                    on_severity,
-                ),
-            ]
-            .align_y(iced::Alignment::Center)
-            .padding([2.0, 8.0])
-            .boxed(),
-        );
-    }
-
-    let framed = move |_: &Theme| container::Style {
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: border_c,
-            ..Border::default()
-        },
-        ..container::Style::default()
-    };
-    let rules_pane = column![
-        text(t!(i18n, ids::DIALOG_RULES_SEVERITY_HEADING))
-            .size(TS.body)
-            .color(text_c),
-        text(t!(i18n, ids::DIALOG_RULES_SEVERITY_HINT))
-            .size(TS.caption)
-            .color(text_muted),
-        Space::new().height(8),
-        container(rule_rows)
-            .padding(4.0)
-            .width(Length::Fill)
-            .style(framed),
-    ]
-    .spacing(2)
-    .width(Length::FillPortion(3));
-
-    let matrix_pane = column![
-        text(t!(i18n, ids::DIALOG_RULES_MATRIX_HEADING))
-            .size(TS.body)
-            .color(text_c),
-        text(t!(i18n, ids::DIALOG_RULES_MATRIX_HINT))
-            .size(TS.caption)
-            .color(text_muted),
-        Space::new().height(8),
-        container(pin_matrix_view(
-            i18n,
-            tokens,
-            pin_matrix,
-            editable,
-            on_pin_cell
-        ))
-        .padding(8.0)
-        .width(Length::Fill)
-        .style(framed),
-    ]
-    .spacing(2)
-    .width(Length::FillPortion(2));
-
-    row![rules_pane, Space::new().width(16), matrix_pane]
-        .align_y(iced::Alignment::Start)
-        .boxed()
-}
-
-fn severity_segmented<M: Clone + 'static>(
-    i18n: &I18n,
-    rule: RuleKind,
-    current: Severity,
-    // The border, the unselected text and the unselected fill.
-    (border, text_muted, unselected): (Color, Color, Color),
-    editable: bool,
-    on_severity: fn(RuleKind, Severity) -> M,
-) -> Element<'static, M> {
-    let seg = |label: MessageId, value: Severity, color: Color| -> Element<'static, M> {
-        let selected = if rule.is_on_off_only() && value != Severity::Off {
-            current != Severity::Off
-        } else {
-            value == current
-        };
-        let bg = if selected { color } else { unselected };
-        let fg = if selected { Color::WHITE } else { text_muted };
-        button(container(text(t!(i18n, label)).size(TS.caption).color(fg)).padding([3.0, 8.0]))
-            .on_press_maybe(editable.then(|| on_severity(rule, value)))
-            .style(move |_: &Theme, _| button::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                text_color: fg,
-                ..button::Style::default()
-            })
-            .boxed()
-    };
-    let off = seg(
-        ids::DIALOG_RULES_OFF,
-        Severity::Off,
-        Color::from_rgb(0.35, 0.36, 0.42),
-    );
-    if rule.is_on_off_only() {
-        // Severity comes from the pin matrix per cell; the row only gates it.
-        return row![
-            seg(
-                ids::DIALOG_RULES_ON,
-                rule.default_severity(),
-                Color::from_rgb(0.30, 0.60, 0.95)
-            ),
-            off
-        ]
-        .spacing(2)
-        .boxed();
-    }
+    let tokens = editor.tokens;
+    let chrome = crate::styles::ti(tokens.toolbar_bg);
+    let line = crate::styles::ti(tokens.border);
+    let matrix = container(pin_matrix::view(&editor))
+        .width(MATRIX_PANE_W)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(chrome)),
+            border: Border {
+                width: crate::styles::HAIRLINE,
+                color: line,
+                radius: Radii::GRAPHITE.small.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
     row![
-        seg(
-            ids::DIALOG_RULES_ERROR_SHORT,
-            Severity::Error,
-            Color::from_rgb(0.85, 0.25, 0.25)
-        ),
-        seg(
-            ids::DIALOG_RULES_WARNING_SHORT,
-            Severity::Warning,
-            Color::from_rgb(0.95, 0.70, 0.15)
-        ),
-        seg(
-            ids::DIALOG_RULES_INFO_SHORT,
-            Severity::Info,
-            Color::from_rgb(0.30, 0.60, 0.95)
-        ),
-        off,
+        container(severity_list::view(&editor)).width(Length::Fill),
+        matrix
     ]
-    .spacing(2)
+    .align_y(iced::Alignment::Start)
     .boxed()
 }
 
-/// Pin-connection matrix. Click a cell to cycle Error -> Warning -> Info ->
-/// Off -> baseline. Currently 6x6 primary pin types; the full 12-type grid
-/// lands when the rule engine learns the remaining variants (Open Collector,
-/// Open Emitter, HiZ, ...).
-fn pin_matrix_view<M: Clone + 'static>(
+/// An uppercase section label (SEVERITY PER RULE, PINS): the section size
+/// and the muted section ink, in capitals for the message language.
+fn section_heading<M: 'static>(
     i18n: &I18n,
+    label: MessageId,
     tokens: &signex_types::theme::ThemeTokens,
-    overrides: &std::collections::HashMap<(u8, u8), Severity>,
-    editable: bool,
-    on_pin_cell: fn(u8, u8) -> M,
 ) -> Element<'static, M> {
-    let text_c = crate::styles::ti(tokens.text);
-    let text_muted = crate::styles::ti(tokens.text_secondary);
-    let border = crate::styles::ti(tokens.border);
+    let words = t!(i18n, label).into_string();
+    // raw: catalog text already rendered, then upper-cased for the locale.
+    text(raw(i18n.upper_for_display(&words)))
+        .size(TS.section)
+        .style(crate::styles::section_label(tokens))
+        .boxed()
+}
 
-    // Six axes; `PinAxis::of` documents how the 14 pin electrical types fold
-    // onto them. The baseline grid lives in `signex_erc::pin_matrix`.
-    let cell = |r: u8, c: u8, sev: Severity| -> Element<'static, M> {
-        // An Off cell shows a middle dot, a glyph rather than a word.
-        let (bg, ch) = match sev {
-            Severity::Error => (
-                Color::from_rgba(0.85, 0.25, 0.25, 0.55),
-                t!(i18n, ids::DIALOG_RULES_ERROR_SHORT).into_string(),
-            ),
-            Severity::Warning => (
-                Color::from_rgba(0.95, 0.70, 0.15, 0.55),
-                t!(i18n, ids::DIALOG_RULES_WARNING_SHORT).into_string(),
-            ),
-            Severity::Info => (
-                Color::from_rgba(0.30, 0.55, 0.85, 0.55),
-                t!(i18n, ids::DIALOG_RULES_INFO_SHORT).into_string(),
-            ),
-            Severity::Off => (
-                Color::from_rgba(0.25, 0.70, 0.30, 0.35),
-                "\u{00B7}".to_owned(),
-            ),
-        };
-        button(
-            // raw: the letter is rendered from the catalog above (or a glyph).
-            container(text(raw(ch)).size(TS.label).color(text_c))
-                .width(CELL_W)
-                .height(CELL_H)
-                .align_x(iced::alignment::Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center),
-        )
-        .on_press_maybe(editable.then(|| on_pin_cell(r, c)))
-        .padding(0)
-        .style(move |_: &Theme, _| button::Style {
-            background: Some(Background::Color(bg)),
-            border: Border {
-                width: 1.0,
-                radius: 0.0.into(),
-                color: border,
-                ..Border::default()
-            },
-            text_color: text_c,
-            ..button::Style::default()
+/// The severity a rule runs at under `overrides`: the override, else the
+/// rule's default; an on/off-only rule's "on" is always its default.
+pub(crate) fn effective_severity(
+    overrides: &HashMap<RuleKind, Severity>,
+    rule: RuleKind,
+) -> Severity {
+    overrides.get(&rule).copied().map_or_else(
+        || rule.default_severity(),
+        |chosen| rule.normalize_override(chosen),
+    )
+}
+
+/// The severity of one matrix cell under `overrides`: the override, else the
+/// factory cell.
+pub(crate) fn effective_cell(
+    overrides: &HashMap<(u8, u8), Severity>,
+    row: u8,
+    col: u8,
+) -> Severity {
+    overrides
+        .get(&(row, col))
+        .copied()
+        .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(row, col))
+}
+
+/// One row of the rule list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RuleRow {
+    pub rule: RuleKind,
+    pub severity: Severity,
+    /// Differs from the shipped profile.
+    pub changed: bool,
+}
+
+/// One group of the rule list, with the rows the filter keeps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RuleSection {
+    pub group: RuleGroup,
+    pub rows: Vec<RuleRow>,
+}
+
+/// Whether `rule` runs at another severity than in the shipped profile.
+pub(crate) fn rule_differs(
+    severity: &HashMap<RuleKind, Severity>,
+    shipped: &ResolvedRules,
+    rule: RuleKind,
+) -> bool {
+    effective_severity(severity, rule) != effective_severity(&shipped.severity, rule)
+}
+
+/// How many rules differ from the shipped profile.
+pub(crate) fn changed_rule_count(
+    severity: &HashMap<RuleKind, Severity>,
+    shipped: &ResolvedRules,
+) -> usize {
+    RuleKind::ALL
+        .into_iter()
+        .filter(|&rule| rule_differs(severity, shipped, rule))
+        .count()
+}
+
+/// Whether the name of `rule` holds `filter`, ignoring case; an empty filter
+/// keeps every rule.
+fn name_matches(rule: RuleKind, filter: &str) -> bool {
+    let needle = filter.trim().to_lowercase();
+    needle.is_empty() || rule.label().to_lowercase().contains(&needle)
+}
+
+/// The rule list: every group in order, holding the rules that pass
+/// `changed_only` and `filter`. A group left empty is dropped.
+pub(crate) fn rule_sections(
+    severity: &HashMap<RuleKind, Severity>,
+    shipped: &ResolvedRules,
+    changed_only: bool,
+    filter: &str,
+) -> Vec<RuleSection> {
+    RuleGroup::ALL
+        .into_iter()
+        .filter_map(|group| {
+            let rows: Vec<RuleRow> = group
+                .rules()
+                .map(|rule| RuleRow {
+                    rule,
+                    severity: effective_severity(severity, rule),
+                    changed: rule_differs(severity, shipped, rule),
+                })
+                .filter(|row| !changed_only || row.changed)
+                .filter(|row| name_matches(row.rule, filter))
+                .collect();
+            (!rows.is_empty()).then_some(RuleSection { group, rows })
         })
-        .boxed()
-    };
+        .collect()
+}
 
-    // raw: the pin-axis names come from signex-erc (#2062).
-    let header_label = |label: &str| -> Element<'static, M> {
-        container(
-            text(raw(label.to_string()))
-                .size(TS.caption)
-                .color(text_muted),
-        )
-        .width(ROW_HEADER_W)
-        .height(CELL_H)
-        .align_x(iced::alignment::Horizontal::Right)
-        .align_y(iced::alignment::Vertical::Center)
-        .padding([0.0, 6.0])
-        .boxed()
-    };
-    let col_label = |label: &str| -> Element<'static, M> {
-        container(
-            text(raw(label.to_string()))
-                .size(TS.caption)
-                .color(text_muted),
-        )
-        .width(CELL_W)
-        .height(COL_HEADER_H)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center)
-        .boxed()
-    };
+/// One segment of a rule's severity control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Segment {
+    /// The severity a press sets.
+    pub value: Severity,
+    pub label: MessageId,
+    pub selected: bool,
+}
 
-    let mut header: iced::widget::Row<Element<'static, M>> =
-        row![container(Space::new().width(ROW_HEADER_W)).width(ROW_HEADER_W)].spacing(0);
-    for axis in PinAxis::ALL {
-        header = header.push(col_label(axis.label()));
+/// The segments of `rule`'s control: E / W / I / Off, or On / Off for an
+/// on/off-only rule, whose "on" is its default severity.
+pub(crate) fn severity_segments(rule: RuleKind, current: Severity) -> Vec<Segment> {
+    let off = Segment {
+        value: Severity::Off,
+        label: ids::DIALOG_RULES_OFF,
+        selected: current == Severity::Off,
+    };
+    if rule.is_on_off_only() {
+        return vec![
+            Segment {
+                value: rule.default_severity(),
+                label: ids::DIALOG_RULES_ON,
+                selected: current != Severity::Off,
+            },
+            off,
+        ];
     }
+    let level = |value: Severity, label: MessageId| Segment {
+        value,
+        label,
+        selected: current == value,
+    };
+    vec![
+        level(Severity::Error, ids::DIALOG_RULES_ERROR_SHORT),
+        level(Severity::Warning, ids::DIALOG_RULES_WARNING_SHORT),
+        level(Severity::Info, ids::DIALOG_RULES_INFO_SHORT),
+        off,
+    ]
+}
 
-    let mut body: Column<Element<'static, M>> = column![header].spacing(0);
-    for (r, row_axis) in PinAxis::ALL.iter().enumerate() {
-        let mut rr: iced::widget::Row<Element<'static, M>> =
-            row![header_label(row_axis.label())].spacing(0);
-        for c in 0..PinAxis::ALL.len() {
-            let sev = overrides
-                .get(&(r as u8, c as u8))
-                .copied()
-                .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(r as u8, c as u8));
-            rr = rr.push(cell(r as u8, c as u8, sev));
-        }
-        body = body.push(rr.boxed());
+/// One drawn cell of the pin-connection matrix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MatrixCell {
+    pub row: u8,
+    pub col: u8,
+    pub severity: Severity,
+    /// Differs from the shipped profile.
+    pub changed: bool,
+}
+
+/// The cells to draw: the lower triangle (column <= row), one list per axis
+/// row. The matrix is symmetric, so the upper triangle would repeat it.
+pub(crate) fn lower_triangle(
+    pin_matrix: &HashMap<(u8, u8), Severity>,
+    shipped: &ResolvedRules,
+) -> Vec<Vec<MatrixCell>> {
+    (0..PinAxis::ALL.len() as u8)
+        .map(|row| {
+            (0..=row)
+                .map(|col| {
+                    let severity = effective_cell(pin_matrix, row, col);
+                    MatrixCell {
+                        row,
+                        col,
+                        severity,
+                        changed: severity != effective_cell(&shipped.pin_matrix, row, col),
+                    }
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// The catalog id of a group's subhead.
+fn group_heading(group: RuleGroup) -> MessageId {
+    match group {
+        RuleGroup::Pins => ids::DIALOG_RULES_GROUP_PINS,
+        RuleGroup::Nets => ids::DIALOG_RULES_GROUP_NETS,
+        RuleGroup::Labels => ids::DIALOG_RULES_GROUP_LABELS,
+        RuleGroup::Buses => ids::DIALOG_RULES_GROUP_BUSES,
+        RuleGroup::Hierarchy => ids::DIALOG_RULES_GROUP_HIERARCHY,
+        RuleGroup::Parts => ids::DIALOG_RULES_GROUP_PARTS,
     }
-
-    container(body).boxed()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The matrix is sized in proportion to its text: a cell holds the
-    /// longest axis label ("PowerOut", about 4.8 caption heights) and the
-    /// lengths move with the type scale, not with a fixed pixel count.
-    #[test]
-    fn matrix_lengths_are_proportional_to_the_type_scale() {
-        const { assert!(CELL_W >= 4.8 * TS.caption) };
-        assert!((CELL_W / TS.body - 52.0 / 11.0).abs() < 1e-4);
-        assert!((COL_HEADER_H / TS.body - 24.0 / 11.0).abs() < 1e-4);
-        assert!((ROW_HEADER_W / TS.body - 80.0 / 11.0).abs() < 1e-4);
-    }
-}
+mod tests;

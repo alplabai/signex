@@ -95,6 +95,14 @@ impl Signex {
                 }
                 self.edit_selected_profile(RuleEdit::ResetToShipped)
             }
+            ProfilesMsg::ChangedOnlyToggled(on) => {
+                self.ui_state.profile_manager.rule_list.changed_only = on;
+                Task::none()
+            }
+            ProfilesMsg::RuleFilterChanged(query) => {
+                self.ui_state.profile_manager.rule_list.query = query;
+                Task::none()
+            }
             ProfilesMsg::NameInputChanged(name) => {
                 self.ui_state.profile_manager.name_input = name;
                 Task::none()
