@@ -9,6 +9,7 @@ mod doc_tab_shell;
 mod enable_section;
 mod flow_progress;
 mod graphite_tokens;
+mod history_graph;
 mod icon;
 mod illustration;
 mod locale;

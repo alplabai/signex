@@ -13,6 +13,7 @@ pub mod doc_tab_shell;
 pub mod dropdown_style;
 pub mod enable_section;
 pub mod flow_progress;
+pub mod history_graph;
 pub mod history_pane;
 mod house;
 mod house_extra;
@@ -36,6 +37,7 @@ pub mod tree_view;
 // `signex_widgets::active_bar_dropdown::…` consumers resolve unchanged.
 pub use active_bar::dropdown as active_bar_dropdown;
 
+pub use history_graph::{HistoryGraph, HistoryGraphStyle};
 pub use history_pane::{HistoryEntry, history_pane};
 pub use house::{CheckboxLabel, Content, button, checkbox, text, text_input, tooltip};
 pub use house_extra::{
