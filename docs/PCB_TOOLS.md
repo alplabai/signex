@@ -57,6 +57,28 @@ draws nothing.
 - Track goes where the clicks are, through anything; Interactive Routing
   (below) keeps the clearance.
 
+The Track panel (#2523) opens with the shared primitive header: the kind,
+a count pill ("3 Tracks", "Next to place" while placing), the lock icon
+(filled while the tracks are locked, a dash with "1 of 2 locked" for a
+selection partly locked; a press locks or unlocks them as one step), then
+the search, or while placing the placing callout. A locked track shows a
+warn callout with Unlock under the search. A small line-art illustration
+follows: the track with its Width callout, its net and a "layer · round
+ends" note (an inner copper layer is named by its place, L2 and on);
+hovering a row lights its callout and the other way round. Net Information
+is open: the net (with the layer's colour) and class as links, a Selected /
+Total table of Length and Delay (greyed: the board records no dielectric),
+and Show More, which adds the net's track, via and pad counts on one line.
+Properties holds Net (with the pick button), Layer, Width, Ends (Round;
+Square and Flat greyed until square and flat ends are decided for copper,
+for DRC and Gerber; the board stores no cap), Start and End as one X / Y row
+each, Length (read-only) and Tune Net To (read-only "select one track to
+tune" while several are selected). The paste and solder mask sections
+follow. There is no Location section: X and Y were the selection's corner,
+and Lock is the header icon. While placing, Net Information and the
+geometry rows are left out. A value the selected tracks do not share reads
+"Mixed".
+
 ## Interactive Routing
 
 `place_board_route` (no default key; Place, the PCB Active Bar). A route is
@@ -413,11 +435,18 @@ copper: the ratsnest joins them, and DRC reports one finding per pair of
 items, the worst of their chords'. On any other layer it is a drawing
 with no net. Width follows `PcbSetup::trace_width` unless the form sets it.
 
-The Arc panel shows Net Information and Net (copper only), Layer (any board
-layer; moving off copper drops the net), Width, Centre, Radius, Start and End
-Angle (read from the board origin with Y up, counter-clockwise from start to
-end) and the length; each edit is one undo step
-(`primitive_edit::ArcEdit`, `BoardCommand::ReplaceItems`).
+The Arc panel (#2523) opens with the shared header (its lock greyed: the
+board stores no lock for an arc) and an illustration of the arc with its
+Radius and Width callouts and its Start and End rays, no rotation arrow.
+Net Information (copper only) is closed, its header naming the net and its
+class. Properties holds Net (copper only), Layer (any board layer; moving
+off copper drops the net), Width, Ends (Round; Square and Flat greyed, as
+for tracks), Centre as one X / Y row, Radius, Angles as one Start / End row
+(read from the board origin with Y up, counter-clockwise from start to end)
+and the length; each edit is one undo step (`primitive_edit::ArcEdit`,
+`BoardCommand::ReplaceItems`). While the Arc tool is armed, a Placement row
+picks Centre, Edge or Any angle, the same setting `cycle_arc_mode` steps,
+and the shape rows and Net Information are left out.
 
 ## Dimension
 
@@ -472,6 +501,17 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
   frame) or centre and radius (arc, circle), and a text frame's text, where
   `\n` is a line break, and text height, one undo step per field
   (`signex_engine::pcb::primitive_edit::GraphicEdit`). Delete removes it.
+- **Panel (#2523).** The header names the kind (Line, Arc, Full Circle,
+  Rectangle, Text Frame; "Drawings" for a mix) with a "1 Drawing" pill and a
+  greyed lock (the board stores none). An illustration follows for one
+  kind: a line with its Width and ends, a circle or arc with its Radius and
+  Width, a rectangle or text frame with its Width and Height (and a frame's
+  Text Height); hovering a row lights its callout. Properties holds Layer,
+  Width and, for a line, Ends (Round; Square and Flat greyed: the board
+  stores no cap for a drawing). Location holds Start and End (lines,
+  rectangles, text frames) or Centre and Radius (arcs, circles), each point
+  one X / Y row. A text frame's Text section has the text across the row,
+  the hint and Text Height.
 - **Output.** Saved in `.snxpcb` (`[[extras.board.graphics]]`, each with its
   `uuid`; a text frame's `text` and `font_size`), drawn by the board
   renderer, printed by Board Print (#2402), and drawn into the fabrication

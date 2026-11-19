@@ -35,6 +35,7 @@ use signex_i18n::{MessageId, ids, t};
 use signex_types::pcb::{MaskExpansion, PadShape, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
+use signex_widgets::property_illustration::IllustrationHover;
 
 use crate::app::Signex;
 use crate::app::state::pcb_edit::CheckedStep;
@@ -53,6 +54,10 @@ pub struct PcbPrimitivePanel {
     pub search: String,
     /// The pick button is waiting for a click on this board for these items.
     pub net_pick: Option<PrimitiveTarget>,
+    /// The field or illustration callout under the pointer (#2523).
+    pub hover: IllustrationHover,
+    /// The "Not stored yet" group is open.
+    pub unstored_open: bool,
 }
 
 impl PcbPrimitivePanel {
@@ -224,6 +229,20 @@ impl Signex {
                 };
                 self.apply_primitive_edit(target, PrimitiveEdit::Mode(*mode), what);
             }
+            M::IllustrationHovered(hover) => panel.hover.update(hover.clone()),
+            M::UnstoredToggled => panel.unstored_open = !panel.unstored_open,
+            M::ValuePicked {
+                target,
+                field,
+                value,
+            } => {
+                self.apply_primitive_edit(
+                    target,
+                    PrimitiveEdit::Number(*field, *value),
+                    field_name(*field),
+                );
+            }
+            M::ArcModePicked(mode) => self.pick_arc_mode(*mode),
         }
         self.sync_pcb_board_summary();
     }

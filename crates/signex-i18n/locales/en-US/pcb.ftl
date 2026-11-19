@@ -185,10 +185,11 @@ pcb-tool-no-dimension = Dimension: its two points are the same, so nothing was a
 pcb-arc-mode-centre = click the centre, the start, then where the arc ends (it runs counter-clockwise)
 pcb-arc-mode-edge = click the two ends of a quarter circle
 pcb-arc-mode-any = click the start, the end, then a point the arc bends through
-# The short name of each Arc mode, as Properties shows it while placing.
-pcb-arc-mode-centre-name = By Centre
-pcb-arc-mode-edge-name = By Edge
-pcb-arc-mode-any-name = Any Angle
+# The short name of each Arc mode: a segment of the Placement row
+# Properties shows while placing.
+pcb-arc-mode-centre-name = Centre
+pcb-arc-mode-edge-name = Edge
+pcb-arc-mode-any-name = Any angle
 # Pour Cutout and Slice Pour (#2216): their Place rows, Active Bar tooltips,
 # Messages hints, and the line said when nothing was cut; $tool is the
 # tool's name.

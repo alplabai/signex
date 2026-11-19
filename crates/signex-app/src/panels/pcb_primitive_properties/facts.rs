@@ -6,6 +6,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use pcb_geom::ItemRef;
+use signex_engine::pcb::draw::ArcMode;
 use signex_types::pcb::{MaskExpansion, PadShape};
 use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
@@ -257,6 +258,13 @@ pub struct PrimitiveCommon {
     pub picking_net: bool,
     /// Placing is paused for these values to be edited (Tab, #2393).
     pub placement_paused: bool,
+    /// The field or illustration callout under the pointer (#2523).
+    pub hover: signex_widgets::property_illustration::IllustrationHover,
+    /// The "Not stored yet" group is open.
+    pub unstored_open: bool,
+    /// Locked and total items of a selection only partly locked; `None`
+    /// when all or none are locked, or the kind stores no lock.
+    pub locked_count: Option<(usize, usize)>,
 }
 
 impl PrimitiveCommon {
@@ -387,7 +395,7 @@ pub struct ArcFacts {
     pub width: Option<f64>,
     pub length_mm: Option<f64>,
     /// How the Arc tool draws its next arc; `None` for placed arcs.
-    pub mode: Option<String>,
+    pub mode: Option<ArcMode>,
 }
 
 /// Board strings (#2373).
