@@ -131,6 +131,7 @@ fn confirm_runs_off_the_ui_thread_and_the_result_closes_the_dialog() {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
                 fab_outputs: None,
                 requirements: Default::default(),
                 parameters: Default::default(),

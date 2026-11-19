@@ -892,6 +892,15 @@ pub use text_extents::{
     StoredTextExtent, TextExtents, TextProbe, decide_width_mm, face_is_available, probes, text_hash,
 };
 pub use text_widths::{MeasuredText, TextField, TextWidths};
+mod harness;
+#[cfg(test)]
+mod harness_tests;
+pub use harness::{
+    DEFAULT_HARNESS_ENTRY_PITCH_MM, HARNESS_TIP_MM, HarnessConnector, HarnessDefinition,
+    HarnessDefinitionEntry, HarnessEntry, HarnessWire, SheetHarness,
+};
+mod union;
+pub use union::SchUnion;
 
 #[cfg(test)]
 mod default_tests;

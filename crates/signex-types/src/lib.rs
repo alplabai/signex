@@ -5,6 +5,7 @@ pub mod check;
 pub mod coord;
 pub mod corner;
 pub mod designator;
+pub mod diff_pair_class;
 pub mod document_id;
 pub mod font;
 pub mod format;

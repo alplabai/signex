@@ -472,6 +472,14 @@ pub struct SchematicSheet {
     /// Blankets, Compile Masks and Differential Pair directives (#2420).
     #[serde(default)]
     pub directives: Vec<super::SchDirective>,
+    /// Harness connectors, harness wires and harness-typed sheet entries
+    /// (#1279). Saved in `[extras.sheet]` only when not empty.
+    #[serde(default, skip_serializing_if = "super::SheetHarness::is_empty")]
+    pub harness: super::SheetHarness,
+    /// Unions of sheet objects (#1300). Saved in `[extras.sheet]` only when
+    /// not empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unions: Vec<super::SchUnion>,
     #[serde(default)]
     pub title_block: HashMap<String, String>,
     /// Sheet variables (#1987): name to source text, shadowing the project
@@ -548,6 +556,8 @@ impl Default for SchematicSheet {
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
             directives: Vec::new(),
+            harness: Default::default(),
+            unions: Vec::new(),
             title_block: HashMap::new(),
             variables: BTreeMap::new(),
             lib_symbols: LibSymbolTable::default(),
