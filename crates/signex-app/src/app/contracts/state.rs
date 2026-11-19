@@ -361,6 +361,13 @@ pub enum TabContextAction {
     CloseAll,
     /// Pop the tab at this index into its own OS window.
     Undock(usize),
+    /// Close every tab to the right of the one at this index.
+    CloseToTheRight(usize),
+    /// Put the file path of the tab at this index on the clipboard.
+    CopyPath(usize),
+    /// Show the Projects panel with the file of the tab at this index
+    /// selected in its tree.
+    RevealInProjects(usize),
 }
 
 /// Concrete actions dispatched when the user picks a menu item in the

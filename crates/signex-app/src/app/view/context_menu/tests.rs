@@ -361,20 +361,161 @@ fn sheet_actions_open_child_sheet_needs_a_sheet_symbol() {
     assert!(!has_row(&top, "Open Child Sheet"), "left at the top level");
 }
 
+/// The document tab menu for tab `tab_idx` of `total_tabs`, with the file in
+/// an open project and `Ctrl+W` bound to `close_active_document`.
+fn tab_facts(title: &str, tab_idx: usize, total_tabs: usize) -> super::menus::TabMenuFacts<'_> {
+    super::menus::TabMenuFacts {
+        title,
+        tab_idx,
+        total_tabs,
+        undock_unavailable: false,
+        has_file: true,
+        in_project: true,
+        close_shortcut: "Ctrl+W",
+    }
+}
+
+fn tab_menu(facts: &super::menus::TabMenuFacts<'_>) -> Vec<DropdownEntry<Message>> {
+    tab_menu_entries(signex_i18n::I18n::en_us_ref(), TID, facts)
+}
+
+fn item_of<'a>(entries: &'a [DropdownEntry<Message>], label: &str) -> &'a DropdownItem<Message> {
+    entries
+        .iter()
+        .find_map(|e| match e {
+            DropdownEntry::Item(it) if it.label == label => Some(it),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("missing row {label:?}"))
+}
+
 #[test]
 fn tab_menu_gates_bulk_close_and_undock() {
-    let single = tab_menu_entries(signex_i18n::I18n::en_us_ref(), "sheet1.SchDoc", 0, 1, false);
-    let multi = tab_menu_entries(signex_i18n::I18n::en_us_ref(), "sheet1.SchDoc", 2, 3, false);
+    let single = tab_menu(&tab_facts("sheet1.SchDoc", 0, 1));
+    let multi = tab_menu(&tab_facts("sheet1.SchDoc", 2, 3));
     // Close row carries the live tab title.
     assert!(has_row(&single, "Close sheet1.SchDoc"));
     // Single tab → "Close All Other Documents" is greyed.
     assert!(disabled_of(&single, "Close All Other Documents"));
     assert!(!disabled_of(&multi, "Close All Other Documents"));
     // Undock greys out once the tab has its own window.
-    let undocked = tab_menu_entries(signex_i18n::I18n::en_us_ref(), "s", 0, 3, true);
+    let undocked = tab_menu(&super::menus::TabMenuFacts {
+        undock_unavailable: true,
+        ..tab_facts("s", 0, 3)
+    });
     assert!(!disabled_of(&multi, "Open In New Window"));
     assert!(disabled_of(&undocked, "Open In New Window"));
-    assert_eq!(seps(&single), 1);
+    // m5: the Open In New Window group, then Copy Path / Reveal in Projects.
+    assert_eq!(seps(&single), 2);
+}
+
+/// m5: the rows in order, the Close row's shortcut, and the icon column.
+#[test]
+fn tab_menu_rows_follow_the_mock_with_icons_and_the_close_shortcut() {
+    let rows = tab_menu(&tab_facts("power.snxsch", 1, 3));
+    assert_eq!(
+        labels(&rows),
+        [
+            "Close power.snxsch",
+            "Close All Other Documents",
+            "Close Tabs to the Right",
+            "Close All Documents",
+            "Open In New Window",
+            "Copy Path",
+            "Reveal in Projects",
+        ]
+    );
+    let close = item_of(&rows, "Close power.snxsch");
+    assert_eq!(close.shortcut.as_deref(), Some("Ctrl+W"));
+    for label in [
+        "Close power.snxsch",
+        "Open In New Window",
+        "Copy Path",
+        "Reveal in Projects",
+    ] {
+        assert!(item_of(&rows, label).icon.is_some(), "{label} has an icon");
+    }
+    // An unbound Close shows no hint.
+    let unbound = tab_menu(&super::menus::TabMenuFacts {
+        close_shortcut: "",
+        ..tab_facts("power.snxsch", 1, 3)
+    });
+    assert!(item_of(&unbound, "Close power.snxsch").shortcut.is_none());
+}
+
+/// Close Tabs to the Right greys on the last tab and sends the clicked
+/// tab's index otherwise.
+#[test]
+fn close_tabs_to_the_right_greys_on_the_last_tab() {
+    let last = tab_menu(&tab_facts("c", 2, 3));
+    assert!(disabled_of(&last, "Close Tabs to the Right"));
+    let middle = tab_menu(&tab_facts("b", 1, 3));
+    assert!(!disabled_of(&middle, "Close Tabs to the Right"));
+    assert!(matches!(
+        item_of(&middle, "Close Tabs to the Right").on_press,
+        Some(Message::ContextMenu(ContextMenuMsg::TabAction(
+            crate::app::TabContextAction::CloseToTheRight(1)
+        )))
+    ));
+}
+
+/// Copy Path greys for a tab with no file; Reveal in Projects for a file
+/// that no open project lists.
+#[test]
+fn copy_path_and_reveal_grey_without_a_file_or_a_project() {
+    let no_file = tab_menu(&super::menus::TabMenuFacts {
+        has_file: false,
+        in_project: false,
+        ..tab_facts("Preview", 0, 2)
+    });
+    assert!(disabled_of(&no_file, "Copy Path"));
+    assert!(disabled_of(&no_file, "Reveal in Projects"));
+    let loose = tab_menu(&super::menus::TabMenuFacts {
+        in_project: false,
+        ..tab_facts("loose.snxsch", 0, 2)
+    });
+    assert!(!disabled_of(&loose, "Copy Path"));
+    assert!(disabled_of(&loose, "Reveal in Projects"));
+    let both = tab_menu(&tab_facts("power.snxsch", 0, 2));
+    assert!(matches!(
+        item_of(&both, "Copy Path").on_press,
+        Some(Message::ContextMenu(ContextMenuMsg::TabAction(
+            crate::app::TabContextAction::CopyPath(0)
+        )))
+    ));
+    assert!(matches!(
+        item_of(&both, "Reveal in Projects").on_press,
+        Some(Message::ContextMenu(ContextMenuMsg::TabAction(
+            crate::app::TabContextAction::RevealInProjects(0)
+        )))
+    ));
+}
+
+/// m5: Undock / Float first, the Dock rows without the current region,
+/// Close last after a separator (was: Close, Undock / Float, separator, Dock
+/// rows).
+#[test]
+fn dock_tab_menu_puts_float_first_and_close_last() {
+    use crate::dock::PanelPosition;
+    let rows = super::dock_tab::dock_tab_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        PanelPosition::Right,
+    );
+    assert_eq!(
+        labels(&rows),
+        ["Undock / Float", "Dock Left", "Dock Bottom", "Close"]
+    );
+    assert!(matches!(rows[1], DropdownEntry::Separator));
+    assert!(matches!(rows[rows.len() - 2], DropdownEntry::Separator));
+    assert!(item_of(&rows, "Undock / Float").icon.is_some());
+    assert!(item_of(&rows, "Close").icon.is_some());
+    for from in [PanelPosition::Left, PanelPosition::Bottom] {
+        let rows =
+            super::dock_tab::dock_tab_menu_entries(signex_i18n::I18n::en_us_ref(), TID, from);
+        assert_eq!(labels(&rows).len(), 4, "{from:?}");
+        assert_eq!(labels(&rows).last().map(String::as_str), Some("Close"));
+    }
 }
 
 #[test]

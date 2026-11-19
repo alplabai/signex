@@ -14,6 +14,7 @@ mod board_sketch;
 pub(in crate::app) mod canvas_region;
 mod chrome;
 mod context_menu;
+mod detached_panel;
 mod library_tab;
 mod modals;
 mod overlays;
@@ -62,25 +63,7 @@ impl Signex {
                 // window id they render into.
                 super::state::WindowKind::UndockedTab { .. } => self.view_main_for(window_id),
                 super::state::WindowKind::DetachedPanel(kind) => {
-                    let ctx = &self.document_state.panel_ctx;
-                    let panel = if *kind == crate::panels::PanelKind::Components {
-                        crate::panels::components_panel::view(
-                            &self.library,
-                            ctx,
-                            &ctx.tokens,
-                            self.sheet_grid(),
-                        )
-                        .map(crate::dock::DockMessage::Library)
-                        .boxed()
-                    } else {
-                        crate::panels::view_panel(*kind, ctx)
-                            .map(crate::dock::DockMessage::Panel)
-                            .boxed()
-                    }
-                    .map(Message::Dock);
-                    iced::widget::container(iced::widget::scrollable(panel))
-                        .padding(SP.m)
-                        .boxed()
+                    self.view_detached_panel_window(window_id, *kind)
                 }
                 // Detached Component Preview window — render the same
                 // editor surface as the inline tab. The editor state
@@ -344,15 +327,7 @@ impl Signex {
                     document.active_tab,
                     dragging,
                     &visible_paths,
-                    &tab_bar::TabMarks {
-                        dirty_paths: &dirty_paths,
-                        read_only_paths: &read_only_paths,
-                        tooltips_enabled: interaction.tab_context_menu.is_none(),
-                        project_name: document
-                            .active_document_project()
-                            .map(|p| p.data.name.as_str()),
-                        i18n: &ui.i18n,
-                    },
+                    &self.tab_strip_marks(window_id, &dirty_paths, &read_only_paths),
                     &document.panel_ctx.tokens,
                 )
                 .map(move |msg| Message::Tab { window_id, msg })

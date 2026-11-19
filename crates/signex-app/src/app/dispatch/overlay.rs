@@ -411,6 +411,8 @@ impl Signex {
                 self.interaction_state.submenu_launcher_hovered = None;
                 self.interaction_state.submenu_panel_hovered = false;
                 self.interaction_state.submenu_unhovered_since = None;
+                // The tab strip's "+N" menu shares the tab menu's Esc rung.
+                self.ui_state.tab_overflow_menu_open = false;
                 Task::none()
             }
             ContextMenuMsg::TabAction(action) => self.handle_tab_context_action(action),
@@ -860,5 +862,6 @@ impl Signex {
         interaction.submenu_unhovered_since = None;
         self.document_state.dock.tab_menu = None;
         self.library.components_panel.row_menu = None;
+        self.ui_state.tab_overflow_menu_open = false;
     }
 }

@@ -519,6 +519,18 @@ impl Signex {
                 // `Level::Normal` open-behind issue as the modal/tab.
                 Task::batch([iced::window::gain_focus(id), window_scale_task(id)])
             }
+            // Dock back closes the panel's window; `SecondaryWindowClosed`
+            // then re-docks the panel in its home region, as the close does.
+            WindowMsg::DetachedPanelDockBackPressed(id) => {
+                if matches!(
+                    self.ui_state.windows.get(&id),
+                    Some(super::state::WindowKind::DetachedPanel(_))
+                ) {
+                    iced::window::close(id)
+                } else {
+                    Task::none()
+                }
+            }
             WindowMsg::StartMainWindowDrag => match self.ui_state.main_window_id {
                 Some(id) => crate::chrome::start_window_drag(id),
                 None => Task::none(),

@@ -194,24 +194,122 @@ impl Signex {
             }
         };
         // A tab can be undocked iff it's not already living in its own OS
-        // window. Single-tab workspaces still show the row (Altium does
-        // too) — undocking a sole tab leaves the main window empty.
+        // window. Single-tab workspaces still show the row: undocking a
+        // sole tab leaves the main window empty.
         use super::super::state::WindowKind;
         let already_undocked =
             self.ui_state.windows.values().any(
                 |kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path),
             );
+        let close_shortcut = self.keymap_shortcut_label("close_active_document");
         let entries = tab_menu_entries(
             &self.ui_state.i18n,
-            &tab.title,
-            ctx.tab_idx,
-            self.document_state.tabs.len(),
-            // A Project tab stays docked (#1202): an undocked window would
-            // take the main window's shortcuts.
-            already_undocked || tab.kind.is_project_page(),
+            self.ui_state.effective_theme_id(),
+            &TabMenuFacts {
+                title: &tab.title,
+                tab_idx: ctx.tab_idx,
+                total_tabs: self.document_state.tabs.len(),
+                // A Project tab stays docked (#1202): an undocked window
+                // would take the main window's shortcuts.
+                undock_unavailable: already_undocked || tab.kind.is_project_page(),
+                has_file: crate::tab_bar::tab_file_path(tab).is_some(),
+                in_project: self.project_tree_key_of_file(&tab.path).is_some(),
+                close_shortcut: &close_shortcut,
+            },
         );
         let panel_ctx = &self.document_state.panel_ctx;
         super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name).element
+    }
+
+    /// The marks of the tab strip in `window_id`. The strip and its "+N"
+    /// menu read the same marks, so the menu lists exactly the tabs the
+    /// strip leaves out.
+    pub(in crate::app::view) fn tab_strip_marks<'p>(
+        &'p self,
+        window_id: iced::window::Id,
+        dirty_paths: &'p std::collections::HashSet<std::path::PathBuf>,
+        read_only_paths: &'p std::collections::HashSet<std::path::PathBuf>,
+    ) -> crate::tab_bar::TabMarks<'p> {
+        let ui = &self.ui_state;
+        let document = &self.document_state;
+        let overflow_open = ui.main_window_id == Some(window_id) && ui.tab_overflow_menu_open;
+        crate::tab_bar::TabMarks {
+            dirty_paths,
+            read_only_paths,
+            // A tooltip hangs below the tab and would cover an open menu.
+            tooltips_enabled: self.interaction_state.tab_context_menu.is_none() && !overflow_open,
+            project_name: document
+                .active_document_project()
+                .map(|p| p.data.name.as_str()),
+            i18n: &ui.i18n,
+            ui_font: crate::fonts::iced_font_for_family(&document.panel_ctx.ui_font_name),
+            theme_id: ui.effective_theme_id(),
+            strip_width: ui.size_of_window(window_id).0,
+            overflow_open,
+        }
+    }
+
+    /// The tab strip's "+N" menu (m5): the click-outside layer, then the
+    /// card under the button listing the hidden tabs. Only the main window's
+    /// strip has the button; empty when the menu is closed or nothing hides.
+    pub(in crate::app::view) fn tab_overflow_menu_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
+        let ui = &self.ui_state;
+        let Some(main) = ui.main_window_id.filter(|main| *main == window_id) else {
+            return Vec::new();
+        };
+        if !ui.tab_overflow_menu_open {
+            return Vec::new();
+        }
+        let document = &self.document_state;
+        let tabs = &document.tabs;
+        let undocked: std::collections::HashSet<std::path::PathBuf> = ui
+            .windows
+            .values()
+            .filter_map(|kind| match kind {
+                super::super::state::WindowKind::UndockedTab { path, .. } => Some(path.clone()),
+                _ => None,
+            })
+            .collect();
+        let visible: Vec<usize> = (0..tabs.len())
+            .filter(|&i| !undocked.contains(&tabs[i].path))
+            .collect();
+        let dirty = crate::tab_bar::dirty_tab_paths(self, tabs);
+        let read_only = crate::tab_bar::read_only_tab_paths(tabs, &document.engines);
+        let marks = self.tab_strip_marks(window_id, &dirty, &read_only);
+        let fit =
+            crate::tab_bar::overflow::strip_split(tabs, &visible, document.active_tab, &marks);
+        if fit.hidden.is_empty() {
+            return Vec::new();
+        }
+        let tokens = &document.panel_ctx.tokens;
+        let entries = crate::tab_bar::overflow::hidden_tab_entries(
+            tabs,
+            &fit.hidden,
+            &ui.i18n,
+            tokens,
+            |i| Message::Tab {
+                window_id: main,
+                msg: crate::tab_bar::TabMessage::OverflowTabPicked(i),
+            },
+        );
+        let width =
+            crate::tab_bar::overflow::hidden_menu_width(tabs, &fit.hidden, &ui.i18n, marks.ui_font);
+        let anchor = (
+            crate::tab_bar::overflow::button_left(fit.hidden.len(), &marks),
+            super::super::canvas_region::chrome_top(tokens),
+        );
+        let card = signex_widgets::active_bar_dropdown::view(entries, tokens, Some(width));
+        Self::menu_overlay(
+            Message::Tab {
+                window_id: main,
+                msg: crate::tab_bar::TabMessage::OverflowMenuDismissed,
+            },
+            card,
+            anchor,
+        )
     }
 }
 
@@ -578,62 +676,86 @@ pub(super) fn pcb_canvas_menu_with_blocks(
     v
 }
 
-/// Pure tab-menu data builder. The per-tab "Close [title]" row carries the
-/// live tab title; the bulk-close rows are gated on whether they'd be
-/// no-ops (single tab open → no "others" to close); "Open In New Window"
-/// greys out when the tab cannot be undocked: it already lives in its own
-/// OS window, or it is a Project tab.
+/// What the document-tab menu is built from: the clicked tab and the facts
+/// that grey its rows.
+pub(super) struct TabMenuFacts<'a> {
+    pub(super) title: &'a str,
+    pub(super) tab_idx: usize,
+    pub(super) total_tabs: usize,
+    /// The tab already has its own OS window, or it is a Project tab.
+    pub(super) undock_unavailable: bool,
+    /// The tab names a file (a Component Preview tab does not).
+    pub(super) has_file: bool,
+    /// The file is a row of an open project's tree.
+    pub(super) in_project: bool,
+    /// The active keymap's hint for `close_active_document` (empty: none).
+    pub(super) close_shortcut: &'a str,
+}
+
+/// Pure tab-menu data builder (m5). The per-tab "Close [title]" row carries
+/// the live tab title and the Close shortcut; a bulk-close row greys when it
+/// would close nothing; "Open In New Window" greys when the tab cannot be
+/// undocked; Copy Path greys for a tab with no file, Reveal in Projects for
+/// a file that is not in an open project.
 pub(super) fn tab_menu_entries(
     i18n: &I18n,
-    title: &str,
-    tab_idx: usize,
-    total_tabs: usize,
-    undock_unavailable: bool,
+    tid: ThemeId,
+    facts: &TabMenuFacts<'_>,
 ) -> Vec<DropdownEntry<Message>> {
     use crate::app::TabContextAction as A;
-    let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(5);
-
-    v.push(dd_msg(
-        None,
-        &i18n.message_plain(menu_ids::CTX_TAB_CLOSE, &[("title", title.into())]),
-        "",
-        Message::ContextMenu(ContextMenuMsg::TabAction(A::Close(tab_idx))),
-    ));
-    if total_tabs > 1 {
-        v.push(dd_msg(
+    let idx = facts.tab_idx;
+    let pick = |action| Message::ContextMenu(ContextMenuMsg::TabAction(action));
+    let gated = |icon: Option<Handle>, label: String, live: bool, action| {
+        if live {
+            dd_msg(icon, &label, "", pick(action))
+        } else {
+            dd_disabled(icon, &label, None)
+        }
+    };
+    vec![
+        dd_msg(
+            Some(ic::icon_dd_close(tid)),
+            &i18n.message_plain(menu_ids::CTX_TAB_CLOSE, &[("title", facts.title.into())]),
+            facts.close_shortcut,
+            pick(A::Close(idx)),
+        ),
+        gated(
             None,
-            &text(i18n, menu_ids::CTX_TAB_CLOSE_OTHERS),
-            "",
-            Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAllOthers(tab_idx))),
-        ));
-    } else {
-        v.push(dd_disabled(
+            text(i18n, menu_ids::CTX_TAB_CLOSE_OTHERS),
+            facts.total_tabs > 1,
+            A::CloseAllOthers(idx),
+        ),
+        gated(
             None,
-            &text(i18n, menu_ids::CTX_TAB_CLOSE_OTHERS),
-            None,
-        ));
-    }
-    v.push(dd_msg(
-        None,
-        &command_text(i18n, "close_all_documents"),
-        "",
-        Message::ContextMenu(ContextMenuMsg::TabAction(A::CloseAll)),
-    ));
-    v.push(DropdownEntry::Separator);
-    v.push(if undock_unavailable {
-        dd_disabled(
-            None,
-            &text(i18n, menu_ids::CTX_TAB_OPEN_IN_NEW_WINDOW),
-            None,
-        )
-    } else {
+            text(i18n, menu_ids::CTX_TAB_CLOSE_RIGHT),
+            idx + 1 < facts.total_tabs,
+            A::CloseToTheRight(idx),
+        ),
         dd_msg(
             None,
-            &text(i18n, menu_ids::CTX_TAB_OPEN_IN_NEW_WINDOW),
+            &command_text(i18n, "close_all_documents"),
             "",
-            Message::ContextMenu(ContextMenuMsg::TabAction(A::Undock(tab_idx))),
-        )
-    });
-
-    v
+            pick(A::CloseAll),
+        ),
+        DropdownEntry::Separator,
+        gated(
+            Some(ic::icon_dd_undock(tid)),
+            text(i18n, menu_ids::CTX_TAB_OPEN_IN_NEW_WINDOW),
+            !facts.undock_unavailable,
+            A::Undock(idx),
+        ),
+        DropdownEntry::Separator,
+        gated(
+            Some(ic::icon_dd_copy(tid)),
+            text(i18n, menu_ids::CTX_TAB_COPY_PATH),
+            facts.has_file,
+            A::CopyPath(idx),
+        ),
+        gated(
+            Some(ic::icon_dd_folder(tid)),
+            text(i18n, menu_ids::CTX_TAB_REVEAL_IN_PROJECTS),
+            facts.in_project,
+            A::RevealInProjects(idx),
+        ),
+    ]
 }

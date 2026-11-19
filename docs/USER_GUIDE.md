@@ -201,6 +201,21 @@ schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
 zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 `F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
 
+### Tabs and panels
+
+- **Document tabs:** right-click a tab for Close, Close All Other Documents,
+  Close Tabs to the Right, Close All Documents, Open In New Window, Copy Path
+  (the file's path on the clipboard) and Reveal in Projects (selects the file
+  in the Projects panel). When the tabs no longer fit, the strip ends in a
+  **+N** button; it lists the hidden tabs, and picking one brings it to the
+  front.
+- **Panel tabs:** right-click a panel's tab to float it (**Undock / Float**),
+  move it to another dock, or close it. While you drag a floating panel, the
+  docks it can go into are outlined and the one it would land in is filled.
+- **A panel in its own window:** drag a floating panel out of the main window.
+  Its title strip shows the panel and the document in view; **Dock back** (or
+  closing the window) puts the panel back in its dock.
+
 ## 5. Place a symbol
 
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come

@@ -321,6 +321,13 @@ canonical_icon!(icon_dd_text_string, "dropdown/text_string.svg");
 canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
+// Document and dock tab menus (m5): Close, Undock / Float, Reveal in Projects.
+canonical_icon!(icon_dd_close, "dropdown/close.svg");
+canonical_icon!(icon_dd_undock, "undock.svg");
+canonical_icon!(icon_dd_folder, "dropdown/folder.svg");
+// Tab strip overflow button and the detached panel window's Dock back (m5, m8).
+canonical_icon!(icon_chrome_chevron_down, "chrome/chevron_down.svg");
+canonical_icon!(icon_chrome_dock_back, "chrome/dock_back.svg");
 
 // ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
 //

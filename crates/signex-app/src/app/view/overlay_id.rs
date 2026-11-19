@@ -59,7 +59,10 @@ pub(crate) enum OverlayId {
     SymbolContextMenu,
     TextEdit,
 
-    // Right-click menus, pickers, dock drag zones, floating panels.
+    // Dock drag zones and floating panels, then right-click menus and
+    // pickers: a menu opened from a floating panel paints over it (#2376).
+    DockDragZone,
+    FloatingPanels,
     ActiveBarMenu,
     ContextMenu,
     TabContextMenu,
@@ -73,9 +76,7 @@ pub(crate) enum OverlayId {
     PanelList,
     /// The status bar's Grid & Snap popover (m6).
     GridSnapPopover,
-    DockDragZone,
     ComponentsRowDragLabel,
-    FloatingPanels,
 
     // Dialogs.
     Preferences,
@@ -166,6 +167,10 @@ pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::SymbolEditorActiveBar,
     OverlayId::SymbolContextMenu,
     OverlayId::TextEdit,
+    // Below every menu, so a menu opened from a floating panel is whole and
+    // clickable (#2376).
+    OverlayId::DockDragZone,
+    OverlayId::FloatingPanels,
     OverlayId::ActiveBarMenu,
     OverlayId::ContextMenu,
     OverlayId::TabContextMenu,
@@ -176,9 +181,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::GridPicker,
     OverlayId::PanelList,
     OverlayId::GridSnapPopover,
-    OverlayId::DockDragZone,
     OverlayId::ComponentsRowDragLabel,
-    OverlayId::FloatingPanels,
     OverlayId::Preferences,
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
@@ -596,6 +599,33 @@ mod tests {
             PAINT_ORDER.len(),
             "PAINT_ORDER lists an overlay more than once"
         );
+    }
+
+    /// #2376: a right-click menu opened from a floating panel drew under the
+    /// panel. Every menu and picker now paints after the floating panels and
+    /// the dock drop zones, which stay just under the panels they preview.
+    #[test]
+    fn every_menu_paints_above_the_floating_panels() {
+        let slot = |id| PAINT_ORDER.iter().position(|o| *o == id).expect("listed");
+        let panels = slot(OverlayId::FloatingPanels);
+        assert_eq!(slot(OverlayId::DockDragZone) + 1, panels);
+        for menu in [
+            OverlayId::ActiveBarMenu,
+            OverlayId::ContextMenu,
+            OverlayId::TabContextMenu,
+            OverlayId::ProjectTreeContextMenu,
+            OverlayId::ComponentsRowContextMenu,
+            OverlayId::StartRowContextMenu,
+            OverlayId::LayerTabContextMenu,
+            OverlayId::GridPicker,
+            OverlayId::PanelList,
+            OverlayId::GridSnapPopover,
+        ] {
+            assert!(
+                slot(menu) > panels,
+                "{menu:?} paints under the floating panels"
+            );
+        }
     }
 
     #[test]

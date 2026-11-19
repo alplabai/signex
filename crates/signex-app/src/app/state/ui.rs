@@ -700,6 +700,9 @@ pub struct UiState {
     /// The Start screen's page and its filters, back to Home once the
     /// screen goes away. Boxed: a pointer of the size budget (#2412).
     pub start_screen: Box<crate::start_screen::StartScreenState>,
+    /// The tab strip's "+N" overflow menu is open (m5); it lists the tabs
+    /// the main window's strip has no room for.
+    pub tab_overflow_menu_open: bool,
 }
 
 impl UiState {
