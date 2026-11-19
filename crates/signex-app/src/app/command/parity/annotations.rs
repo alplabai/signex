@@ -62,15 +62,47 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (&["close_active_document"], CloseInWindow, &[InProgressEdit]),
     // A wire drawn on the sheet, or rules text not applied, refuses the step.
     (&["undo", "redo"], Operand, &[InProgressEdit]),
-    // Read: they act on the named document and their operands only. A board
-    // tool repaints the board's canvas when that board is in view; the
-    // repaint is a projection and reads nothing into the result. Machine
-    // settings (`ui_state.machine_drc_rules`, the saved layer sets of
-    // `ui_state.layer_strip`) are configuration, not session state, and are
-    // not implicit inputs.
+    // Save settles owed work first: `begin_document_path_save` ->
+    // `save_primitive_tab_at` -> `prepare_primitive_save` ->
+    // `snapshot_primitive` runs `settle_pending_solve`
+    // (dispatch/library/editor/primitive_save.rs). Owed work and drafts are
+    // core-bound (ADR-0006), so nothing implicit.
+    (&["save_document"], Operand, &[]),
+    // Machine configuration (ADR-0006 `CoreSettings`): the saved layer sets
+    // and tab-name style of `ui_state.layer_strip`, written to the prefs.
     (
         &[
-            "save_document",
+            "show_layer_set",
+            "save_layer_set",
+            "delete_layer_set",
+            "set_layer_tab_names",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    // A project without rules of its own edits from the machine rules
+    // (`rules_text_of` falls back on `ui_state.machine_drc_rules`); a preset
+    // comes from the machine's profile library.
+    (
+        &[
+            "rules_add",
+            "rules_set",
+            "rules_remove",
+            "rules_enable",
+            "rules_matrix_set",
+            "rules_set_create",
+            "rules_set_edit",
+            "rules_set_apply",
+            "rules_preset_apply",
+        ],
+        Operand,
+        &[Settings],
+    ),
+    // Read: they act on the named document and their operands only. A board
+    // tool repaints the board's canvas when that board is in view; the
+    // repaint is a projection and reads nothing into the result.
+    (
+        &[
             "clear_all_net_colors",
             "color_net",
             "export_board_pdf",
@@ -93,14 +125,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "set_via_span",
             "set_layer_sizes",
             "set_pad_shape",
-            "show_layer_set",
-            "save_layer_set",
-            "delete_layer_set",
             "hide_layer",
             "highlight_layer",
             "hide_layer_group",
             "show_layer_group",
-            "set_layer_tab_names",
             "set_layer_visible",
             "set_active_layer",
             "set_layer_color",
@@ -124,20 +152,10 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "swap_gates",
             "save_board_reuse_block",
             "place_board_reuse_block",
-            "apply_edits",
             "autoplace_fields",
             "sync_sheet_pins",
             "set_sheet_symbol_size",
             "set_symbol_parameter",
-            "rules_add",
-            "rules_set",
-            "rules_remove",
-            "rules_enable",
-            "rules_matrix_set",
-            "rules_set_create",
-            "rules_set_edit",
-            "rules_set_apply",
-            "rules_preset_apply",
             "project_move_sheet",
             "project_add_variant",
             "project_rename_variant",
@@ -307,31 +325,26 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // DRC of the board in view, unless one is running for it.
     (&["run_drc"], Bridge, &[ActiveDocument]),
     // Checks read from memory, the active tab's render snapshot not used
-    // (`erc_check_inputs`), confined by the origin; DRC falls back on the
-    // machine rules, configuration and not session state.
+    // (`erc_check_inputs`), confined by the origin. A project without rules
+    // is checked with the machine's ERC overrides (`erc_rule_settings_quiet`)
+    // or DRC rules (`ui_state.machine_drc_rules`): configuration.
     (
         &["check_erc", "check_drc", "check_requirements"],
         Check,
-        &[],
+        &[Settings],
     ),
     // The answer names the view angle of the board's canvas.
     (&["document_info"], Query, &[Window]),
-    // Read: operands only. `rules_explain` and `rules_get` read the board's
-    // last DRC run (`interaction_state.pcb_drc`, `PcbDrc` in
-    // app/state/pcb_drc.rs), which is core-bound session state (check
-    // results, an ADR-0006 core category in scripts/uifree-state.txt), not
-    // an implicit input. A project without rules reads the machine rules
-    // (`ui_state.machine_drc_rules`), configuration and not session state.
+    // `rules_explain` and `rules_get` read the board's last DRC run
+    // (`interaction_state.pcb_drc`, `PcbDrc` in app/state/pcb_drc.rs), which
+    // is core-bound session state (check results, an ADR-0006 core category
+    // in scripts/uifree-state.txt), not an implicit input. A project without
+    // rules reads the machine rules (`ui_state.machine_drc_rules`), a preset
+    // diff the machine's profile library, and the project settings the
+    // machine's annotate undo default: configuration.
     (
         &[
-            "board_panel",
-            "find_items",
-            "find_similar_items",
-            "measure_board",
             "project_settings",
-            "query_board_nets",
-            "query_pins",
-            "read_document",
             "rules_conflicts",
             "rules_effective",
             "rules_explain",
@@ -339,6 +352,20 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "rules_list",
             "rules_matrix_get",
             "rules_preset_diff",
+        ],
+        Query,
+        &[Settings],
+    ),
+    // Read: operands only.
+    (
+        &[
+            "board_panel",
+            "find_items",
+            "find_similar_items",
+            "measure_board",
+            "query_board_nets",
+            "query_pins",
+            "read_document",
         ],
         Query,
         &[],
@@ -365,20 +392,22 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (&["copy", "cut", "duplicate"], Bridge, &[ToolState]),
     (&["new_document", "open_document"], Bridge, &[DialogAnswer]),
     // A new project takes the machine's default rule profile and annotate
-    // undo setting (`ui_state`), configuration and not session state.
+    // undo setting (`start_new_project`): configuration.
     (
-        &["new_document", "open_document", "new_project_with_profile"],
+        &["new_document", "new_project_with_profile"],
         Operand,
-        &[],
+        &[Settings],
     ),
+    (&["open_document"], Operand, &[]),
     (
         &["new_pcb_document", "new_schematic_sheet"],
         HeadlessWithoutOperands,
         &[ActiveDocument],
     ),
-    // The preset is looked up among the person's saved filter presets
-    // (`interaction_state.custom_filter_presets`), tool configuration.
-    (&["apply_selection_filter_preset"], Operand, &[ToolState]),
+    // The preset is looked up among the saved filter presets
+    // (`interaction_state.custom_filter_presets`, prefs-backed through
+    // fonts/presets.rs): configuration.
+    (&["apply_selection_filter_preset"], Operand, &[Settings]),
     (&["set_selection_filters"], Operand, &[]),
     (
         &[

@@ -64,8 +64,9 @@ fn every_row_has_implicit_inputs_from_the_vocabulary() {
         assert!(bases.contains(&cells[5]), "row `{line}` has no basis");
         let inputs = cells[4];
         assert!(!inputs.is_empty(), "row `{line}` has no implicit inputs");
-        // The origin is a port operand, not an implicit input.
-        let implicit = inputs != "none" && inputs != Input::Origin.word();
+        // The origin and the settings are port operands, not implicit inputs.
+        let ports = [Input::Origin.word(), Input::Settings.word()];
+        let implicit = inputs != "none" && inputs.split(',').any(|word| !ports.contains(&word));
         assert!(
             implicit || cells[5] != "gate",
             "row `{line}` names no implicit input from its gate alone"

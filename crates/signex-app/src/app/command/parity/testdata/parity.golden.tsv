@@ -32,10 +32,10 @@ annotate_schematic_quietly	bridge	Annotate(Run(Incremental))	core	active documen
 annotate_schematic_quietly	in_window_rewrite	document_window	gui	window	routing
 annotate_schematic_quietly	refusal_needs	ActiveSheet	core	active document	routing
 annotate_schematic_quietly	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
-apply_edits	operand_handler	run_operands: named document	core	origin	handler
+apply_edits	operand_handler	run_operands: named document	core	active document,tool state,pre-placement form,origin	handler
 apply_edits	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_edits	headless_missing_operand	needs `document`	core	none	routing
-apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unless a document is named	core	tool state	handler
+apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unless a document is named	core	settings	handler
 apply_selection_filter_preset	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_selection_filter_preset	headless_missing_operand	needs `name`	core	none	routing
 arrange_in_box	bridge	Pcb(Tools(ArrangeRequested))	gui	active document,selection	gate
@@ -132,11 +132,11 @@ change_footprint	bridge	Pcb(FootprintSwap(Requested))	gui	active document,select
 change_footprint	in_window_rewrite	document_window	gui	window	routing
 change_footprint	refusal_needs	SwapFootprints	gui	active document,selection	routing
 change_footprint	headless_refusal	headless_refusal	core	none	routing
-check_drc	check	run_query: check_run	core	origin	handler
+check_drc	check	run_query: check_run	core	origin,settings	handler
 check_drc	headless_missing_operand	needs `document`	core	none	routing
-check_erc	check	run_query: check_run	core	origin	handler
+check_erc	check	run_query: check_run	core	origin,settings	handler
 check_erc	headless_missing_operand	needs `document`	core	none	routing
-check_requirements	check	run_query: check_run	core	origin	handler
+check_requirements	check	run_query: check_run	core	origin,settings	handler
 check_requirements	headless_missing_operand	needs `document`	core	none	routing
 clear_all_net_colors	active_bar	ClearAllNetColors	gui	active document	handler
 clear_all_net_colors	operand_handler	run_operands: named document	core	origin	handler
@@ -208,7 +208,7 @@ cycle_wire_bus_graphic_mode	bridge	Tool(CycleDrawMode)	gui	tool state	handler
 cycle_wire_bus_graphic_mode	in_window_rewrite	document_window	gui	window	routing
 cycle_wire_bus_graphic_mode	headless_refusal	headless_refusal	core	none	routing
 cycle_wiring_mode	headless_refusal	headless_refusal	core	none	routing
-delete_layer_set	operand_handler	run_operands: active-tab gate unless a document is named	core	active document	handler
+delete_layer_set	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,settings	handler
 delete_layer_set	refusal_needs	Pcb	core	active document	routing
 delete_layer_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 delete_layer_set	headless_missing_operand	needs `name`	core	none	routing
@@ -514,7 +514,7 @@ navigate_up_hierarchy	refusal_needs	ParentSheet	gui	active document	routing
 navigate_up_hierarchy	disabled_still_runs	explains_when_unavailable	gui	active document	gate
 navigate_up_hierarchy	headless_refusal	headless_refusal	core	none	routing
 new_document	bridge	Menu(NewProject)	core	dialog answer	handler
-new_document	operand_handler	run_operands: active-tab gate unless a document is named	core	none	handler
+new_document	operand_handler	run_operands: active-tab gate unless a document is named	core	settings	handler
 new_document	in_window_rewrite	document_window	gui	window	routing
 new_document	headless_new_document	settle_and_answer_new_document	core	dialog answer	handler
 new_pcb_document	bridge	UpdatePcb(NewPcbRequested(None))	gui	active document	gate
@@ -523,7 +523,7 @@ new_pcb_document	in_window_rewrite	document_window	gui	window	routing
 new_pcb_document	refusal_needs	OpenProject	core	active document	routing
 new_pcb_document	headless_without_operands	run_operands	core	active document	handler
 new_project_with_profile	bridge	Menu(NewProject)	gui	none	handler
-new_project_with_profile	operand_handler	run_operands: active-tab gate unless a document is named	core	none	handler
+new_project_with_profile	operand_handler	run_operands: active-tab gate unless a document is named	core	settings	handler
 new_project_with_profile	in_window_rewrite	document_window	gui	window	routing
 new_project_with_profile	headless_missing_operand	needs `name`	core	none	routing
 new_project_with_profile	headless_new_document	settle_and_answer_new_document	core	dialog answer	handler
@@ -959,7 +959,7 @@ project_set_requirement	headless_missing_operand	needs `document`	core	none	rout
 project_set_version_control	operand_handler	run_operands: named document	core	origin	handler
 project_set_version_control	refusal_needs_operands	needs_operands_reason	gui	none	routing
 project_set_version_control	headless_missing_operand	needs `document`	core	none	routing
-project_settings	query	run_query	core	origin	handler
+project_settings	query	run_query	core	origin,settings	handler
 project_settings	headless_missing_operand	needs `document`	core	none	routing
 query_board_nets	query	run_query	core	origin	handler
 query_board_nets	headless_missing_operand	needs `document`	core	none	routing
@@ -1046,45 +1046,45 @@ rubber_stamp_copy	bridge	Edit(RubberStampCopy)	gui	active document	gate
 rubber_stamp_copy	in_window_rewrite	document_window	gui	window	routing
 rubber_stamp_copy	refusal_needs	Schematic	gui	active document	routing
 rubber_stamp_copy	headless_refusal	headless_refusal	core	none	routing
-rules_add	operand_handler	run_operands: named document	core	origin	handler
+rules_add	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_add	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_add	headless_missing_operand	needs `document`	core	none	routing
-rules_conflicts	query	run_query	core	origin	handler
+rules_conflicts	query	run_query	core	origin,settings	handler
 rules_conflicts	headless_missing_operand	needs `document`	core	none	routing
-rules_effective	query	run_query	core	origin	handler
+rules_effective	query	run_query	core	origin,settings	handler
 rules_effective	headless_missing_operand	needs `document`	core	none	routing
-rules_enable	operand_handler	run_operands: named document	core	origin	handler
+rules_enable	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_enable	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_enable	headless_missing_operand	needs `document`	core	none	routing
-rules_explain	query	run_query	core	origin	handler
+rules_explain	query	run_query	core	origin,settings	handler
 rules_explain	headless_missing_operand	needs `document`	core	none	routing
-rules_get	query	run_query	core	origin	handler
+rules_get	query	run_query	core	origin,settings	handler
 rules_get	headless_missing_operand	needs `document`	core	none	routing
-rules_list	query	run_query	core	origin	handler
+rules_list	query	run_query	core	origin,settings	handler
 rules_list	headless_missing_operand	needs `document`	core	none	routing
-rules_matrix_get	query	run_query	core	origin	handler
+rules_matrix_get	query	run_query	core	origin,settings	handler
 rules_matrix_get	headless_missing_operand	needs `document`	core	none	routing
-rules_matrix_set	operand_handler	run_operands: named document	core	origin	handler
+rules_matrix_set	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_matrix_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_matrix_set	headless_missing_operand	needs `document`	core	none	routing
-rules_preset_apply	operand_handler	run_operands: named document	core	origin	handler
+rules_preset_apply	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_preset_apply	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_preset_apply	headless_missing_operand	needs `document`	core	none	routing
-rules_preset_diff	query	run_query	core	origin	handler
+rules_preset_diff	query	run_query	core	origin,settings	handler
 rules_preset_diff	headless_missing_operand	needs `document`	core	none	routing
-rules_remove	operand_handler	run_operands: named document	core	origin	handler
+rules_remove	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_remove	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_remove	headless_missing_operand	needs `document`	core	none	routing
-rules_set	operand_handler	run_operands: named document	core	origin	handler
+rules_set	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_set	headless_missing_operand	needs `document`	core	none	routing
-rules_set_apply	operand_handler	run_operands: named document	core	origin	handler
+rules_set_apply	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_set_apply	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_set_apply	headless_missing_operand	needs `document`	core	none	routing
-rules_set_create	operand_handler	run_operands: named document	core	origin	handler
+rules_set_create	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_set_create	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_set_create	headless_missing_operand	needs `document`	core	none	routing
-rules_set_edit	operand_handler	run_operands: named document	core	origin	handler
+rules_set_edit	operand_handler	run_operands: named document	core	origin,settings	handler
 rules_set_edit	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rules_set_edit	headless_missing_operand	needs `document`	core	none	routing
 run_drc	bridge	Pcb(DrcRequested)	core	active document	handler
@@ -1111,7 +1111,7 @@ save_document_as	in_window_rewrite	document_window	gui	window	routing
 save_document_as	refusal_needs	SaveAsTarget	core	active document,window	routing
 save_document_as	disabled_still_runs	explains_when_unavailable	gui	active document,window,dialog answer	handler
 save_document_as	headless_missing_operand	needs `document`	core	none	routing
-save_layer_set	operand_handler	run_operands: named document	core	origin	handler
+save_layer_set	operand_handler	run_operands: named document	core	origin,settings	handler
 save_layer_set	refusal_needs	Pcb	core	active document	routing
 save_layer_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 save_layer_set	headless_missing_operand	needs `name`	core	none	routing
@@ -1170,7 +1170,7 @@ set_layer_stack	operand_handler	run_operands: named document	core	origin	handler
 set_layer_stack	refusal_needs	Pcb	core	active document	routing
 set_layer_stack	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_layer_stack	headless_missing_operand	needs `document`	core	none	routing
-set_layer_tab_names	operand_handler	run_operands: active-tab gate unless a document is named	core	active document	handler
+set_layer_tab_names	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,settings	handler
 set_layer_tab_names	refusal_needs	Pcb	core	active document	routing
 set_layer_tab_names	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_layer_tab_names	headless_missing_operand	needs `style`	core	none	routing
@@ -1239,7 +1239,7 @@ show_layer_group	operand_handler	run_operands: named document	core	origin	handle
 show_layer_group	refusal_needs	Pcb	core	active document	routing
 show_layer_group	refusal_needs_operands	needs_operands_reason	gui	none	routing
 show_layer_group	headless_missing_operand	needs `group`	core	none	routing
-show_layer_set	operand_handler	run_operands: named document	core	origin	handler
+show_layer_set	operand_handler	run_operands: named document	core	origin,settings	handler
 show_layer_set	refusal_needs	Pcb	core	active document	routing
 show_layer_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 show_layer_set	headless_missing_operand	needs `name`	core	none	routing

@@ -108,7 +108,37 @@ fn rows() -> Vec<Row> {
         }
     }
     rows.sort_by(|a, b| (a.id, a.form).cmp(&(b.id, b.form)));
+    derive_apply_edits(&mut rows);
     rows
+}
+
+/// `apply_edits` runs each edit's own operand handler
+/// (`(edit.handler)(app, &edit.args)` in `run_edits`,
+/// command/agent_edits/group_run.rs), and an edit may be any command
+/// `runs_as_one_step` accepts. So its row reads what those handlers' rows
+/// read, less what does not apply while an agent's edit list runs:
+/// - render cache: under `agent_edit_running()` the wire snap reads the
+///   edited sheet's engine, not the render snapshot (`snap_wire_point`,
+///   app/actions.rs).
+///
+/// Every other input is kept, the active document included: the active-tab
+/// gate is skipped, but kept here as a superset rather than argued away.
+fn derive_apply_edits(rows: &mut [Row]) {
+    let mut read = BTreeSet::new();
+    for row in rows.iter().filter(|row| row.form == Form::Operand) {
+        let command = AppCommandId::new(row.id).expect("catalog id is valid");
+        if agent_edits::runs_as_one_step(&command) {
+            read.extend(row.inputs.iter().copied());
+        }
+    }
+    read.remove(&Input::RenderCache);
+    if let Some(row) = rows
+        .iter_mut()
+        .find(|row| row.id == "apply_edits" && row.form == Form::Operand)
+    {
+        row.inputs.extend(read);
+        row.basis = Basis::Handler;
+    }
 }
 
 fn row(

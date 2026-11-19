@@ -22,10 +22,14 @@ pub(super) enum Input {
     /// ADR-0006, not an implicit input, so it never meets the kill
     /// criterion. Today the code reads it as GUI state (`agent.serving`).
     Origin,
+    /// Machine configuration (preferences, saved presets, machine rules):
+    /// it reaches the core as `CoreSettings` (ADR-0006), a port operand like
+    /// the origin, so it never meets the kill criterion either.
+    Settings,
 }
 
 impl Input {
-    pub(super) const ALL: [Self; 11] = [
+    pub(super) const ALL: [Self; 12] = [
         Self::ActiveDocument,
         Self::Window,
         Self::Selection,
@@ -37,11 +41,12 @@ impl Input {
         Self::Clipboard,
         Self::DialogAnswer,
         Self::Origin,
+        Self::Settings,
     ];
 
     /// A port operand rather than an implicit input.
     pub(super) fn is_port_operand(self) -> bool {
-        self == Self::Origin
+        matches!(self, Self::Origin | Self::Settings)
     }
 
     pub(super) fn word(self) -> &'static str {
@@ -57,6 +62,7 @@ impl Input {
             Self::Clipboard => "clipboard",
             Self::DialogAnswer => "dialog answer",
             Self::Origin => "origin",
+            Self::Settings => "settings",
         }
     }
 }
