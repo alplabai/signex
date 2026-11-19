@@ -339,10 +339,39 @@ Component Library, then Add New ▸ Component on the library node.
 
 Print Preview used to be a top-level File row that duplicated Export ▸ PDF's
 shortcut, so it was folded into Export ▸ PDF. File ▸ Print... (#1765) and
-Export ▸ PDF open the same print preview / PDF export modal (`print`, Ctrl+P,
+Export ▸ PDF open the same Export PDF dialog (`print`, Ctrl+P,
 goes through the keymap command bridge in `app/command/bridge.rs`; Export ▸ PDF
 runs as `print` in an undocked window, so both preview that window's document). Only
-File ▸ Print... shows Ctrl+P, so one shortcut appears on one row.
+File ▸ Print... shows Ctrl+P, so one shortcut appears on one row. The menu rows
+keep their names; whether to rename them to "Export PDF…" is still open.
+
+The dialog is one screen (#2430): the sheets as thumbnails on the left (an
+unticked sheet's thumbnail is dimmed, not removed), the page in the middle with
+a toolbar for page stepping and zoom and a caption in paper units ("ISO A4
+landscape · 297 × 210 mm · Fit to Page"), and the settings on the right. The
+settings sections, top to bottom: Sheets (Select All · Clear, "N of M"), Pages
+(All / Current / Specific), Page Setup (size, orientation, scale, the margins
+as two rows of two in mm from the page edge), Output (schematic and PCB colour
+mode, quality, title block), Variant (one variant per PDF), Structure (folded,
+"Logical" or "Physical"; the expanded names greyed until Use Physical
+Structure is ticked), Watermark, PDF Layers, Bookmarks, Bookmarks and Nets
+(folded, "N on") and Schematics include (folded, "N of 7"). The footer says
+how many pages print, on which paper and at which quality, or the last
+export's outcome; Cancel closes the dialog (Close once an export finished)
+and Export PDF… asks where to save.
+
+Watermark, PDF Layers and Bookmarks (#1298): "Print a watermark" is off by
+default; on, it prints DRAFT, CONFIDENTIAL or a custom text at the chosen
+opacity, angle (0, 45, 90 or typed) and colour, on every page or the first
+only, optionally with a "Rev · date" line (the revision from the title block,
+the date of the export). The page preview draws it where the PDF prints it;
+switched off, its settings are kept for when it is on again. "Write PDF
+layers" is on by default: each group (wires and buses, parts, net labels and
+ports, power ports, title block and border, watermark) is a layer a PDF reader
+can switch, its box says whether it is visible when the PDF opens; the
+watermark row is greyed while no watermark prints. Bookmarks: one per sheet,
+one per part (grouped by sheet or A–Z) and one per net (the nets information
+the PDF has always carried; it is no longer also under Bookmarks and Nets).
 
 On a board (#2402) both rows are live and open Board Print / PDF instead: the
 layer sets, one page per set or one composite page, the bottom side mirrored,

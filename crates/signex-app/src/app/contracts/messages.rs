@@ -563,11 +563,8 @@ pub enum PrintPreviewMsg {
     Zoom(f32),
     /// User clicked the "Export PDF" button in the preview dialog.
     Export,
-    /// User closed the print preview dialog.
+    /// User closed the print preview dialog (the header X or Cancel).
     Close,
-    /// User clicked the Preview / Settings tab inside the unified
-    /// Export PDF modal.
-    SetTab(crate::app::state::PdfPreviewTab),
     /// User pressed mouse-down on the preview viewport — kicks off
     /// pan-drag. The handler reads the cursor from
     /// `interaction_state.last_mouse_pos` rather than carrying it on
@@ -576,9 +573,9 @@ pub enum PrintPreviewMsg {
     PanStart,
     /// User released the pan drag — clears `panning`.
     PanFinished,
-    /// User toggled a project file in the Settings → Files list.
+    /// User toggled a sheet in the Sheets section.
     ToggleFile(crate::app::state::PageKey),
-    /// Select all project files in the Settings → Files list.
+    /// Select All in the Sheets section.
     SelectAllFiles,
     /// Deselect all project files (effectively "no override —
     /// fall back to all").
@@ -607,6 +604,35 @@ pub enum PrintPreviewMsg {
     SetIncludeComponentParameters(bool),
     SetGlobalBookmarks(bool),
     SetPcbColourMode(signex_output::ColourMode),
+    /// A settings section header was clicked: fold or unfold it.
+    SectionToggled(crate::app::state::PdfSection),
+    /// The page toolbar's Fit button was pressed.
+    ZoomFitPressed,
+    /// "Print a watermark" was ticked or cleared.
+    WatermarkToggled(bool),
+    /// A watermark preset (DRAFT, CONFIDENTIAL, Custom) was picked.
+    WatermarkPresetPicked(crate::app::state::WatermarkPreset),
+    /// The watermark Text field was edited.
+    WatermarkTextChanged(String),
+    /// The watermark opacity field or slider changed (percent, as text).
+    WatermarkOpacityChanged(String),
+    /// The watermark angle field or the 0 / 45 / 90 switch changed
+    /// (degrees, as text).
+    WatermarkAngleChanged(String),
+    /// All pages or the first only was picked for the watermark.
+    WatermarkPagesPicked(signex_output::WatermarkPages),
+    /// "Add date and revision under the text" was ticked or cleared.
+    WatermarkRevisionToggled(bool),
+    /// "Write PDF layers" was ticked or cleared.
+    PdfLayersToggled(bool),
+    /// A PDF layer's "visible when the PDF opens" box was ticked or cleared.
+    PdfLayerVisibilityToggled(signex_output::PdfLayer, bool),
+    /// "One bookmark per sheet" was ticked or cleared.
+    BookmarkSheetsToggled(bool),
+    /// "One bookmark per part" was ticked or cleared.
+    BookmarkPartsToggled(bool),
+    /// The part bookmarks' grouping (by sheet, A–Z) was picked.
+    PartBookmarkOrderPicked(signex_output::PartBookmarkOrder),
 }
 
 impl PrintPreviewMsg {
@@ -624,7 +650,8 @@ impl PrintPreviewMsg {
             | Self::Zoom(..)
             | Self::Export
             | Self::Close
-            | Self::SetTab(..)
+            | Self::SectionToggled(..)
+            | Self::ZoomFitPressed
             | Self::PanStart
             | Self::PanFinished => true,
             Self::SetColourMode(..)
@@ -665,7 +692,19 @@ impl PrintPreviewMsg {
             | Self::SetBookmarkPorts(..)
             | Self::SetIncludeComponentParameters(..)
             | Self::SetGlobalBookmarks(..)
-            | Self::SetPcbColourMode(..) => false,
+            | Self::SetPcbColourMode(..)
+            | Self::WatermarkToggled(..)
+            | Self::WatermarkPresetPicked(..)
+            | Self::WatermarkTextChanged(..)
+            | Self::WatermarkOpacityChanged(..)
+            | Self::WatermarkAngleChanged(..)
+            | Self::WatermarkPagesPicked(..)
+            | Self::WatermarkRevisionToggled(..)
+            | Self::PdfLayersToggled(..)
+            | Self::PdfLayerVisibilityToggled(..)
+            | Self::BookmarkSheetsToggled(..)
+            | Self::BookmarkPartsToggled(..)
+            | Self::PartBookmarkOrderPicked(..) => false,
         }
     }
 }

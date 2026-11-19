@@ -75,7 +75,7 @@ fn modals_keep_their_design_size_in_a_roomy_window() {
 }
 
 fn blank_preview() -> crate::app::state::PreviewState {
-    use crate::app::state::{PageSetupInputs, PdfPreviewTab, PdfQuality, PreviewState};
+    use crate::app::state::{PageSetupInputs, PdfQuality, PreviewState};
     PreviewState {
         source: std::path::PathBuf::new(),
         pages: Vec::new(),
@@ -86,7 +86,7 @@ fn blank_preview() -> crate::app::state::PreviewState {
         specific_page_input: "1".to_string(),
         range_note: None,
         zoom: 1.0,
-        active_tab: PdfPreviewTab::Preview,
+        dialog: Default::default(),
         pan: (0.0, 0.0),
         panning: None,
         sheet_files: Vec::new(),
@@ -107,7 +107,11 @@ fn detached_export_footer_stays_inside_a_small_window() {
     app.document_state.preview = Some(blank_preview());
     assert_labels_inside_window(
         app.view_print_preview_body(),
-        &["Export PDF", "No files selected for export"],
+        &[
+            "Cancel",
+            "Export PDF\u{2026}",
+            "No files selected for export",
+        ],
     );
 }
 

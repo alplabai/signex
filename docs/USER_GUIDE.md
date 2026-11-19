@@ -632,14 +632,21 @@ Both exports are under **File ▸ Export** and need a schematic open.
 **PDF**
 
 1. Choose **File ▸ Export ▸ PDF…** (or press `Ctrl+P`).
-2. A preview window opens with **Preview** and **Settings** tabs. Choose colour
-   or gray, which pages, and the other options.
-3. Press **Export PDF**. A save dialog titled **Export PDF** opens in the
+2. The **Export PDF** window opens on one screen: the sheets as thumbnails on
+   the left, the page in the middle, the settings on the right. Tick the sheets
+   to print under **Sheets** (an unticked sheet's thumbnail is dimmed), choose
+   the pages, the page setup and the colour under **Output**, and the variant.
+   **Watermark** prints DRAFT, CONFIDENTIAL or your own text over the pages
+   (off by default; the preview shows it), **PDF Layers** lets a PDF reader
+   switch groups such as wires or parts on and off, and **Bookmarks** adds one
+   bookmark per sheet, per part or per net. The rarely changed sections start
+   folded and show a summary.
+3. Press **Export PDF…**. A save dialog titled **Export PDF** opens in the
    project's folder with the name `<project or document>.pdf` (`schematic.pdf`
    only when neither is known). Choose where to save. When the file is written,
    the footer of the export window names the written file (a long path is
-   shortened in the middle; the Messages panel has the full path). Changing a setting
-   brings the page count back.
+   shortened in the middle; the Messages panel has the full path) and
+   **Cancel** becomes **Close**. Changing a setting brings the page count back.
 
 **BOM (bill of materials)**
 
@@ -733,7 +740,7 @@ the default Altium profile; the menu path always works.
    writes the sheet to its `.snxsch` file. Close the tab and reopen it with
    **File ▸ Open Recent** to check that the wires and labels came back.
 9. **Export a PDF.** Press `Ctrl+P` or choose **File ▸ Export ▸ PDF…**, check
-   the preview, press **Export PDF** and pick where to save (section 11).
+   the preview, press **Export PDF…** and pick where to save (section 11).
 
 **Place ▸ Sheet Entry** selects the same **Sheet Entry** tool as the Active
 Bar's sheet-symbol menu. **Place ▸ Power Port**, **Text** and **No Connect**
