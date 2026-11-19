@@ -514,7 +514,7 @@ impl DimensionLabels {
             LabelAnchor::End => tag.x + tag.width - width,
         };
         let s = style;
-        let field = text_input(UserText::new(""), draft)
+        let field = text_input(UserText::new(String::new()), draft)
             .id(self.input_id.clone())
             .on_input(DimensionLabelMessage::DraftEdited)
             .on_submit(DimensionLabelMessage::DraftSubmitted)
