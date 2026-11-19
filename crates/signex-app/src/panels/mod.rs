@@ -41,6 +41,7 @@ pub use board_net_classes::{
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
 pub use drc_results::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcWaiveDraft};
 pub(crate) use empty_state::empty_state_card;
+pub(crate) use empty_state::{EmptyStateAction, empty_state_card_with_actions};
 mod erc_waivers;
 mod footprint_context;
 pub(crate) mod form_look;
@@ -127,7 +128,7 @@ pub(super) use library::{
 };
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
-pub use navigator::NavigatorModel;
+pub use navigator::{NavigatorModel, NavigatorMsg, NavigatorRow, SheetNumbers};
 pub use net_class_panel::{
     LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
     net_class_choice, net_class_choices, view_net_classes_section,
@@ -150,9 +151,9 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};
+pub(super) use projects::view_projects;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
-pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
 #[cfg(test)]
 pub(crate) use properties::pre_placement_readout;
@@ -363,7 +364,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         // detached window both route it there); nothing to show here.
         PanelKind::Components => iced::widget::Space::new().boxed(),
         PanelKind::Projects => view_projects(ctx),
-        PanelKind::Navigator => view_navigator(ctx),
+        PanelKind::Navigator => navigator::view(ctx),
         PanelKind::Properties => view_properties(ctx),
         PanelKind::Filter => empty_state_card(
             &ctx.tokens,
