@@ -9,12 +9,20 @@ history, which the ERC dialog and the Rules tab share.
 ## Sections (#1689-#1693)
 
 - **Sheets** — the project's sheets in list order (the Sheet N of M a
-  sheet's title block shows on the canvas, and the project tree order) with
-  Move up / Move down, then what a new sheet starts from (size,
-  orientation, title block), edited with the Project setup fields. An undo
-  puts the order back for the sheets it names; a sheet added or renamed
-  since keeps its page. The PDF export does not follow this list: it
-  numbers pages by the sheet hierarchy (the root sheet, then the other
+  sheet's title block shows on the canvas, and the project tree order):
+  page, name, file. The root sheet carries a `root` pill and a page whose
+  file the last probe found absent (and no open or unsaved document holds)
+  a `missing` pill. Move up / Move down are two icon buttons shown while the
+  pointer is over the row, dimmed at the ends of the list. A project that
+  lists no sheets shows that in a line with **Add New ▸ Schematic**, which
+  opens the project tree's New Schematic setup for the project. Under the
+  list, the New sheets card holds what a new sheet starts from (size,
+  orientation, title block), edited with the Project setup fields, beside a
+  preview of that sheet in the schematic canvas colours: the outline, the
+  zone border and title block of the canvas's own frame, and the size in
+  mm. An undo puts the order back for the sheets it names; a sheet added or
+  renamed since keeps its page. The PDF export does not follow this list:
+  it numbers pages by the sheet hierarchy (the root sheet, then the other
   pages by file key), and changing that would renumber the nets of an
   exported netlist.
 - **Variants** — Base and the variant definitions, the active one picked
@@ -24,10 +32,13 @@ history, which the ERC dialog and the Rules tab share.
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
   shows its reason and changes nothing.
 - **Libraries** — the project's libraries in list order, with the path as
-  stored, the kind (in the project, shared, global) and the mount state read
-  from the app (mounted, mounted read-only, missing at the last probe, not
-  mounted), and Move up / Move down. Adding, removing and renaming stay in
-  the project tree.
+  stored (cut from the start so the file name stays visible), the kind (in
+  the project, shared, global) and the mount state read from the app as a
+  pill (mounted, mounted read-only with a lock, missing at the last probe,
+  not mounted); a missing library shows a warning glyph before its name.
+  Move up / Move down are icon buttons on row hover, as in Sheets. Adding,
+  removing and renaming stay in the project tree; a line under the table
+  says where.
 - **ERC and annotation** — where the ERC rules come from (stored in the
   project, this machine's Preferences, or an unreadable set from a newer
   Signex), how many rules run at each severity, and "Store ERC rules in this
@@ -38,6 +49,9 @@ history, which the ERC dialog and the Rules tab share.
   (from the last probe), Enable Version Control… (the project tree's dialog)
   when it has none, and "Commit every save" (`enable_git`). Turning it on
   needs a repository; turning it off keeps the repository.
+
+Each section shows its title and help line over its content in a column
+that scrolls inside the tab.
 
 ## Requirements (#2339)
 

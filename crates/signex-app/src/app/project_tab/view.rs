@@ -91,7 +91,15 @@ impl Signex {
             ProjectSection::Parameters => {
                 parameters::view(&self.ui_state.i18n, project, new_parameter_name, tokens)
             }
-            ProjectSection::Sheets => sheets::view(project, setup_draft, users, i18n, tokens),
+            ProjectSection::Sheets => sheets::view(
+                project,
+                &self.project_sheet_rows(project),
+                setup_draft,
+                users,
+                &self.document_state.panel_ctx.canvas_colors,
+                i18n,
+                tokens,
+            ),
             ProjectSection::Variants => variants::view(project, tab, i18n, tokens),
             ProjectSection::Libraries => libraries::view(
                 project_id,

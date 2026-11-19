@@ -80,4 +80,13 @@ define_ids! {
     PROJECT_VCS_AUTO_COMMIT_HELP = "project-vcs-auto-commit-help";
     PROJECT_VCS_AUTO_COMMIT_NEEDS_REPO = "project-vcs-auto-commit-needs-repo";
     PROJECT_VCS_PENDING = "project-vcs-pending";
+    // Graphite look (#31, #33).
+    PROJECT_SHEETS_ROOT = "project-sheets-root";
+    PROJECT_SHEETS_MISSING = "project-sheets-missing";
+    PROJECT_SHEETS_ADD_SCHEMATIC = "project-sheets-add-schematic";
+    PROJECT_SHEETS_PREVIEW = "project-sheets-preview";
+    PROJECT_SHEETS_PREVIEW_LANDSCAPE = "project-sheets-preview-landscape";
+    PROJECT_SHEETS_PREVIEW_PORTRAIT = "project-sheets-preview-portrait";
+    PROJECT_SHEETS_PREVIEW_MM = "project-sheets-preview-mm";
+    PROJECT_LIBRARIES_WHERE = "project-libraries-where";
 }
