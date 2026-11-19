@@ -27,11 +27,13 @@ impl Signex {
         iced::Task::batch([recent, pinned])
     }
 
-    /// The `Task` that writes the list to `prefs.json` off the UI thread (#1351).
+    /// The `Task` that writes the list, with its last-opened times, to
+    /// `prefs.json` off the UI thread (#1351).
     fn persist_recent_projects(&self) -> iced::Task<Message> {
         let entries: Vec<_> = self.ui_state.recent_projects.entries().to_vec();
+        let opened = self.ui_state.recent_projects.opened_times().clone();
         crate::fonts::background_pref_write("recent_projects", move || {
-            crate::fonts::write_recent_projects(&entries)
+            crate::fonts::write_recent_projects_and_times(&entries, &opened)
         })
     }
 

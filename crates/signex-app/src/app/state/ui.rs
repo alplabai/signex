@@ -693,6 +693,9 @@ pub struct UiState {
     /// row. The chrome-strip search bar is the always-rendered input;
     /// `open` gates the dropdown overlay only.
     pub command_palette: super::super::command_palette::CommandPaletteState,
+    /// The Start screen's page and its filters, back to Home once the
+    /// screen goes away. Boxed: a pointer of the size budget (#2412).
+    pub start_screen: Box<crate::start_screen::StartScreenState>,
 }
 
 impl UiState {

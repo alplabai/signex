@@ -239,11 +239,16 @@ start-projects = Projects
 start-libraries = Libraries
 # A planned part search; the row has no backend yet.
 start-parts-search = Parts search
+# Pill on a navigation row that opens nothing yet.
+start-soon = soon
 start-open-sample = Open Sample Project
-# F1 is the key that opens the shortcut list.
-start-keyboard-shortcuts = Keyboard Shortcuts (F1)
+# The row shows the key bound to the shortcut list beside this label.
+start-keyboard-shortcuts = Keyboard Shortcuts
 # Count at the right of a navigation row. $count is a whole number.
 start-count = { $count }
+# The key bound to a navigation row's action, at its right. $key is the
+# key's label, such as F1.
+start-row-key = { $key }
 # Loaded libraries card: how many libraries are loaded and how many
 # components they hold. Both are whole numbers.
 start-libraries-summary =
@@ -294,6 +299,56 @@ start-thumbnail-write-failed = Could not save the preview of { $project }: { $re
 # Messages panel warning when the cached project previews could not be read
 # at start-up. $reason is the error text.
 start-thumbnail-read-failed = Could not read the cached project previews: { $reason }
+# Link at the right of RECENT PROJECTS that opens the Projects page.
+# $count is how many projects that page lists, a whole number.
+start-show-all = Show all { $count } ›
+# When a project was last opened, in the right column of its row.
+# $time is the local clock time, hours and minutes.
+start-opened-today = today { $time }
+start-opened-yesterday = yesterday
+# An earlier day. $date is the date in the user's locale.
+start-opened-date = { $date }
+# Shown when the time is not known, or the project is missing on disk.
+start-opened-unknown = —
+# Projects page: the line under the title, the filter field's
+# placeholder, and the switch. $count is a whole number.
+start-projects-body = Every project you have opened, newest first.
+start-projects-filter = Filter by name or folder
+start-scope-all = All { $count }
+start-scope-pinned = Pinned { $count }
+start-scope-missing = Missing { $count }
+# Empty states of a filtered list. $query is the text in the filter field.
+start-projects-no-match = No projects match “{ $query }”
+start-filter-no-match-body = Check the spelling, or clear the filter.
+start-clear-filter = Clear filter
+# Projects page with the Pinned or Missing switch on and nothing to list.
+start-projects-none-pinned = No pinned projects
+start-projects-none-pinned-body = Pin a project from its row on Home or from its right-click menu.
+start-projects-none-missing = No missing projects
+start-projects-none-missing-body = Every pinned project is on disk.
+# Libraries page: the line under the title, the toolbar and the table.
+start-libraries-body = Libraries loaded for every project. A project can add its own in Project Options.
+start-libraries-filter = Filter libraries
+start-add-library = Add library…
+start-open-library-browser = Open Library Browser
+# Column headings of the libraries table, shown in capitals.
+start-libraries-column-library = LIBRARY
+start-libraries-column-scope = SCOPE
+start-libraries-column-components = COMPONENTS
+# Caption under the library that comes with the install.
+start-libraries-stock-caption = ships with Signex · read-only
+start-libraries-no-match = No libraries match “{ $query }”
+start-libraries-none = No libraries loaded
+start-libraries-none-body = Add a library to use its parts in every project.
+# A project is open but no document is shown.
+start-hint-title = No document selected
+start-hint-body = Choose a schematic or PCB from the project tree, or open one here.
+# The open project has no schematic sheet and no board yet.
+start-hint-empty-title = This project has no documents yet
+start-hint-empty-body = Start with a schematic sheet; add the PCB once the schematic has parts.
+start-hint-new-sheet = New sheet
+start-hint-new-pcb = New PCB
+start-hint-project-options = Project Options…
 
 ## Projects panel
 

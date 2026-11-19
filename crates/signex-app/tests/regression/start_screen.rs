@@ -91,6 +91,36 @@ fn a_recent_entry_opens_its_project_through_real_update() {
         app.document_state.projects.iter().any(|p| p.path == prj),
         "the recent entry must open the project"
     );
+    // m1: the open is stamped for the Start screen's time column.
+    let recent = &app.ui_state.recent_projects;
+    let first = recent.entries().first().expect("the project is recorded");
+    assert!(recent.opened_at(first).is_some(), "no last-opened time");
+}
+
+/// m1: the Start screen's page and filters go back to Home, unfiltered,
+/// once a project opens, so the next visit starts on Home.
+#[test]
+fn opening_a_project_sends_the_start_screen_back_home() {
+    use signex_app::start_screen::{StartPage, StartScreenMsg};
+    let (mut app, _t) = Signex::new();
+    for msg in [
+        StartScreenMsg::PageSelected(StartPage::Libraries),
+        StartScreenMsg::LibraryFilterChanged("passives".to_owned()),
+    ] {
+        let _ = app.update(start_screen::message(msg));
+    }
+    assert_eq!(app.ui_state.start_screen.page, StartPage::Libraries);
+    assert!(!app.ui_state.start_screen.is_home());
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let prj = dir.path().join("Home.snxprj");
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::NewProject(Some(prj))));
+    assert!(app.document_state.active_project.is_some());
+    assert!(
+        app.ui_state.start_screen.is_home(),
+        "{:?}",
+        app.ui_state.start_screen
+    );
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! The Home screen navigation collapsed to an icon strip (#2346): what
+//! The Start screen navigation collapsed to an icon strip (#2346): what
 //! `graphite.rs` shows instead of the full navigation when the main column
 //! would be too narrow. Every row keeps its message and shows its label in
 //! a tooltip on hover; the loaded-libraries card is left out.
@@ -7,11 +7,12 @@ use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{Space, column, container, scrollable, svg};
 use iced::{Color, Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
-use signex_types::theme::{ThemeId, ThemeTokens};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, text, tooltip};
 
-use super::Action;
-use super::graphite::{NAV_ROW_H, nav_chrome, nav_divider, nav_row_style, outline_button};
+use super::graphite::{NAV_ROW_H, nav_chrome, nav_divider, nav_row_style, page_action};
+use super::kit::{GLYPH_THEME, icon, outline_button};
+use super::{Action, StartPage, StartScreenData};
 use crate::app::Message;
 use crate::icons;
 use crate::styles::{self, Spacing, TypeScale, ti, tokens::resolve};
@@ -24,9 +25,6 @@ const ICON: f32 = TS.body * 4.0 / 3.0;
 const ROW_PAD: f32 = SP.m;
 /// Width of the strip: one row plus the strip's own padding on both sides.
 pub(super) const STRIP_W: f32 = ICON + 4.0 * ROW_PAD;
-/// Theme the glyphs are fetched for. Every glyph is tinted with an ink
-/// token, which hides the theme's accent swap, so any theme gives the same.
-const GLYPH_THEME: ThemeId = ThemeId::GraphiteDark;
 
 /// One strip row: its icon, its label (the tooltip), what it sends.
 struct StripRow<'a> {
@@ -36,15 +34,8 @@ struct StripRow<'a> {
     active: bool,
 }
 
-fn glyph<'a>(icon: svg::Handle, ink: Color) -> Element<'a, Message> {
-    svg(icon)
-        .width(ICON)
-        .height(ICON)
-        .style(move |_: &iced::Theme, _| svg::Style {
-            color: Some(ink),
-            ..Default::default()
-        })
-        .boxed()
+fn glyph<'a>(handle: svg::Handle, ink: Color) -> Element<'a, Message> {
+    icon(handle, ICON, ink)
 }
 
 /// `content` with `tip` shown at its right on hover.
@@ -85,6 +76,15 @@ fn note<'a>(tokens: &ThemeTokens, line: impl Into<Label<'a>>) -> Element<'a, Mes
         .boxed()
 }
 
+/// A label, with the bound key as its note when there is one.
+fn tip_with_key<'a>(tokens: &ThemeTokens, label: Localized, key: &str) -> Element<'a, Message> {
+    if key.is_empty() {
+        tip_label(tokens, label)
+    } else {
+        tip_with_note(tokens, label, note(tokens, UserText::new(key)))
+    }
+}
+
 fn strip_row<'a>(tokens: &ThemeTokens, row: StripRow<'a>) -> Element<'a, Message> {
     let mut b = button(container(glyph(row.icon, ti(tokens.text))).center(Length::Fill))
         .width(Length::Fill)
@@ -111,97 +111,83 @@ fn top_buttons<'a>(
     let new = square(icons::icon_plus(GLYPH_THEME), resolve(tokens).primary_ink)
         .on_press(Action::NewProject.message())
         .style(styles::primary_button(tokens));
-    let open = square(icons::icon_dd_references(GLYPH_THEME), ti(tokens.text))
+    let open = square(icons::icon_start_folder(GLYPH_THEME), ti(tokens.text))
         .on_press(Action::OpenProject.message())
         .style(outline_button(tokens));
-    let open_tip = if open_shortcut.is_empty() {
-        tip_label(tokens, t!(i18n, ids::START_OPEN))
-    } else {
-        tip_with_note(
-            tokens,
-            t!(i18n, ids::START_OPEN),
-            note(tokens, UserText::new(open_shortcut)),
-        )
-    };
     [
         with_tip(
             tokens,
             new.boxed(),
             tip_label(tokens, t!(i18n, ids::START_NEW_PROJECT)),
         ),
-        with_tip(tokens, open.boxed(), open_tip),
+        with_tip(
+            tokens,
+            open.boxed(),
+            tip_with_key(tokens, t!(i18n, ids::START_OPEN), open_shortcut),
+        ),
     ]
 }
 
-/// The navigation as an icon strip, rows in the full navigation's order.
-/// No row had an icon, so each borrows the closest existing glyph.
+/// The navigation as an icon strip, rows in the full navigation's order and
+/// with the full rows' icons.
 pub(super) fn view<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
-    open_shortcut: &str,
+    data: &StartScreenData<'a>,
 ) -> Element<'a, Message> {
-    let page = |icon: svg::Handle, label: MessageId, active: bool| StripRow {
+    let current = data.state.page;
+    let page = |icon: svg::Handle, label: MessageId, page: StartPage| StripRow {
         icon,
         label: tip_label(tokens, t!(i18n, label)),
-        action: None,
-        active,
+        action: page_action(current, page),
+        active: current == page,
     };
-    let [new, open] = top_buttons(tokens, i18n, open_shortcut);
+    let [new, open] = top_buttons(tokens, i18n, &data.open_shortcut);
     let parts = StripRow {
+        icon: icons::icon_chrome_search(GLYPH_THEME),
         label: tip_with_note(
             tokens,
             t!(i18n, ids::START_PARTS_SEARCH),
             note(tokens, t!(i18n, ids::PANELS_COMING_SOON)),
         ),
-        ..page(
-            icons::icon_chrome_search(GLYPH_THEME),
-            ids::START_PARTS_SEARCH,
-            false,
-        )
-    };
-    let app_row = |icon: svg::Handle, label: MessageId, action: Action| StripRow {
-        action: Some(action.message()),
-        ..page(icon, label, false)
+        action: None,
+        active: false,
     };
     let pages = [
         page(
-            icons::icon_dd_sheet_actions(GLYPH_THEME),
+            icons::icon_start_home(GLYPH_THEME),
             ids::START_HOME,
-            true,
+            StartPage::Home,
         ),
         page(
-            icons::icon_dd_project_options(GLYPH_THEME),
+            icons::icon_start_folder(GLYPH_THEME),
             ids::START_PROJECTS,
-            false,
+            StartPage::Projects,
         ),
         page(
-            icons::icon_component(GLYPH_THEME),
+            icons::icon_start_book(GLYPH_THEME),
             ids::START_LIBRARIES,
-            false,
+            StartPage::Libraries,
         ),
         parts,
     ];
-    // The two app-only rows, under the full navigation's divider.
-    let app_rows = [
-        app_row(
-            icons::icon_dd_open_child_sheet(GLYPH_THEME),
-            ids::START_OPEN_SAMPLE,
-            Action::OpenSampleProject,
+    // Keyboard Shortcuts, under the full navigation's divider.
+    let shortcuts = StripRow {
+        icon: icons::icon_start_key(GLYPH_THEME),
+        label: tip_with_key(
+            tokens,
+            t!(i18n, ids::START_KEYBOARD_SHORTCUTS),
+            &data.shortcuts_shortcut,
         ),
-        app_row(
-            icons::icon_dd_snippets(GLYPH_THEME),
-            ids::START_KEYBOARD_SHORTCUTS,
-            Action::KeyboardShortcuts,
-        ),
-    ];
+        action: Some(Action::KeyboardShortcuts.message()),
+        active: false,
+    };
     let mut items = column![new, open, Space::new().height(SP.m)].spacing(SP.xs);
     for row in pages {
         items = items.push(strip_row(tokens, row));
     }
     items = items.push(container(nav_divider(tokens)).padding([SP.m, 0.0]).boxed());
-    for row in app_rows {
-        items = items.push(strip_row(tokens, row));
-    }
+    items = items.push(strip_row(tokens, shortcuts));
     // Scrolls in a window too short for every row. The thin bar floats in
     // the right-hand padding, clear of the icons.
     let bar = Scrollbar::new().width(SP.xs).scroller_width(SP.xs);
