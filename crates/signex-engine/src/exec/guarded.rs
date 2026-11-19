@@ -62,8 +62,12 @@ thread_local! {
 #[cfg(test)]
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Record {
-    /// Old keys of the contacts that ended plain, bailed points included.
+    /// Old keys of the contacts the rounds left plain (the guard's policy).
     pub(crate) plain: HashSet<signex_net::uf::Key>,
+    /// Old keys of the points of a wire that could not be carried whole: plain
+    /// from the start, apart from the policy, so a pin that rode on such a
+    /// wire and sits on one of these keys is judged on its own.
+    pub(crate) bailed: HashSet<signex_net::uf::Key>,
     /// Every carried point, `(old, new)`, bailed ones included.
     pub(crate) wires: Vec<(Point, Point)>,
     /// The moved pins the pin pass kept (not those riding on a carried wire).
@@ -273,14 +277,20 @@ impl Engine {
                 self.warn_unjoined_pins(contacts, at, &held, &dots, &tips_now);
                 #[cfg(test)]
                 LAST.with(|last| {
-                    let plain: HashSet<_> = (policy.plain.iter().copied())
-                        .chain(contacts.bailed.iter().map(crate::WirePoint::old_key))
+                    let plain = policy.plain.clone();
+                    let bailed = (contacts.bailed.iter())
+                        .map(crate::WirePoint::old_key)
                         .collect();
                     let wires = (contacts.wires.iter().chain(&contacts.bailed))
                         .map(|w| (w.old(), w.new_point()))
                         .collect();
                     let tips = contacts.tips.iter().map(|t| t.ident().clone()).collect();
-                    *last.borrow_mut() = Some(Record { plain, wires, tips });
+                    *last.borrow_mut() = Some(Record {
+                        plain,
+                        bailed,
+                        wires,
+                        tips,
+                    });
                 });
                 return patch;
             };

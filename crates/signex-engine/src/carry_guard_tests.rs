@@ -146,7 +146,8 @@ pub(crate) fn check_allowed(
             .collect();
     let mut parent: Vec<usize> = (0..bags.len()).collect();
     for (j, (old, _)) in record.wires.iter().enumerate() {
-        if record.plain.contains(&pt_key(old)) {
+        let key = pt_key(old);
+        if record.plain.contains(&key) || record.bailed.contains(&key) {
             continue;
         }
         let at = tips.len() + 2 * j;
