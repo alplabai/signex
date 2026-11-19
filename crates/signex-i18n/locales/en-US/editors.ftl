@@ -412,6 +412,8 @@ editors-sketch-role-paste-bottom = Paste · Bottom
 editors-sketch-role-board-outline = Board outline
 editors-sketch-role-mounting-hole = Mounting hole
 editors-sketch-role-v-score = V-score
+# Messages, when a board role is picked for a shape it cannot take.
+editors-sketch-role-does-not-fit = { $role } was not set: a board outline cannot be a point, a mounting hole needs a circle and a V-score a line.
 
 # Active Bar tooltips.
 editors-sketch-select = Select

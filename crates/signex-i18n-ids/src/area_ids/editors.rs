@@ -94,6 +94,7 @@ define_ids! {
     EDITORS_SKETCH_ROLE_BOARD_OUTLINE = "editors-sketch-role-board-outline";
     EDITORS_SKETCH_ROLE_MOUNTING_HOLE = "editors-sketch-role-mounting-hole";
     EDITORS_SKETCH_ROLE_V_SCORE = "editors-sketch-role-v-score";
+    EDITORS_SKETCH_ROLE_DOES_NOT_FIT = "editors-sketch-role-does-not-fit";
     EDITORS_SKETCH_SELECT = "editors-sketch-select";
     EDITORS_SKETCH_CREATE = "editors-sketch-create";
     EDITORS_SKETCH_MODIFY = "editors-sketch-modify";

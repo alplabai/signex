@@ -301,3 +301,58 @@ fn the_toggle_answers_an_open_discard_question_with_keep_editing() {
         .expect("the mode stays on");
     assert!(!session.editor.state.sketch_exit.confirming_discard);
 }
+
+/// #2518: a board role picked for a shape it cannot take (a V-score on a
+/// point) leaves the role as it was and Messages says why.
+#[test]
+fn a_role_on_the_wrong_shape_is_refused_with_a_message() {
+    use crate::library::editor::footprint::apply_footprint_primitive_edit;
+    use crate::library::messages::{FootprintEditorMsg, RoleTag};
+    let (mut app, _tmp) = sketching();
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    apply_footprint_primitive_edit(
+        &mut session.editor,
+        FootprintEditorMsg::SketchPlacePoint {
+            x_mm: 5.0,
+            y_mm: 5.0,
+        },
+    );
+    let point = session
+        .editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .and_then(|s| {
+            s.entities
+                .iter()
+                .rev()
+                .find(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Point { .. }))
+        })
+        .expect("the point")
+        .clone();
+    let mark = crate::diagnostics::newest_entry_id();
+    send(
+        &mut app,
+        Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::FpEditorSetRole {
+                id: point.id,
+                role: RoleTag::VScore,
+            },
+        )),
+    );
+    let session = app.interaction_state.board_sketch.as_ref().expect("on");
+    let after = session
+        .editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .and_then(|s| s.entities.iter().find(|e| e.id == point.id))
+        .expect("the point")
+        .clone();
+    assert_eq!(after, point, "the point keeps its role");
+    let said = crate::diagnostics::entries_since(mark)
+        .entries
+        .iter()
+        .any(|e| e.message.contains("V-score was not set"));
+    assert!(said, "Messages says why");
+}
