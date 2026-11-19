@@ -90,6 +90,8 @@ mod window_document;
 #[cfg(test)]
 mod wire_run_tests;
 mod wire_runs;
+#[cfg(test)]
+mod wire_snap_sheet_tests;
 
 pub use agent_edits::{
     EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_documents,
