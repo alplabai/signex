@@ -209,6 +209,7 @@ impl LocalGuard {
                 .filter(kept)
                 .filter_map(|b| project(&base_nets[*b])),
         );
+        guard.restate_warned(candidate, tips, policy, &mut want, &mut got);
         if want == got {
             return Some((true, None));
         }

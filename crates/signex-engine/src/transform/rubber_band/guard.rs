@@ -713,13 +713,16 @@ impl<'a> Guard<'a> {
         power_stays && self.only_symbols_moved()
     }
 
-    /// The pre-move reference leaves the warned pins out of both sides, yet
-    /// provisional decision (b) puts each on exactly the net the plain move
-    /// gives it. Where a warned pin's net in `candidate` differs from its net
-    /// in the plain move (the moved pins left out of both), the plain one
-    /// goes to `want` and the candidate's to `got`, so the comparison fails
-    /// and blames what joined it.
-    fn restate_warned(
+    /// Provisional decision (b): a warned pin ends on exactly the net the plain
+    /// move gives it. Neither reference holds that alone: the pre-move nets
+    /// leave warned pins out, and the intent puts a kept pin on its old net
+    /// even when that is a warned pin's plain net (a kept power port then
+    /// renames and merges it). Where a warned pin's net in `candidate`
+    /// differs from its net in the plain move (the moved pins left out of
+    /// both), the plain one goes to `want` and the candidate's to `got`, so
+    /// the comparison fails and blames what joined it. The local comparison
+    /// adds the same, so both decide alike.
+    pub(super) fn restate_warned(
         &self,
         candidate: &SchematicSheet,
         tips: &[PinTip],
@@ -858,9 +861,7 @@ impl<'a> Guard<'a> {
             self.nets_of(&Self::strip(candidate, &skip.power_out))
         };
         let mut got = Self::project(&sigs, &extra);
-        if self.before_is_reference(tips, policy) {
-            self.restate_warned(candidate, tips, policy, &mut want, &mut got);
-        }
+        self.restate_warned(candidate, tips, policy, &mut want, &mut got);
         if want == got {
             return (true, None);
         }
