@@ -280,13 +280,19 @@ pub(super) fn unread_toast<'a>(
         )),
         signex_widgets::tooltip::Position::Top,
     );
-    let content = row![icon(Icon::Warn, M.icon, warn), lines, close]
-        .spacing(M.button_gap)
-        .align_y(Alignment::Start);
+    let content = row![
+        icon(Icon::Warn, M.icon, warn),
+        lines.width(Length::Fill),
+        close
+    ]
+    .spacing(M.button_gap)
+    .align_y(Alignment::Start);
     let fill = look.r.warn_soft;
     let toast_shadow = shadow(look, M.bar_shadow);
     let card = container(content)
-        .max_width(M.toast_max)
+        // The message is always long: the toast takes the mockup's widest
+        // width and the text wraps inside it.
+        .width(M.toast_max)
         .padding(Padding::from([M.warn_pad_v, M.warn_pad_h]))
         .style(move |_| container::Style {
             background: Some(Background::Color(fill)),
