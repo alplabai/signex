@@ -217,8 +217,12 @@ pub struct CreateChildSheetConfirmState {
     pub path_text: String,
     /// Why Create refused, shown under the field.
     pub error: Option<signex_i18n::Translatable>,
-    /// The typed path names a file that already exists: offer to open it.
+    /// The typed path names a file that already exists: offer to use it.
     pub exists: bool,
+    /// What using that existing file would make of this symbol, when the
+    /// Model shows the file is already a page of the project or placed by a
+    /// sheet symbol of another open sheet (F10); `None` otherwise.
+    pub reuse_warning: Option<signex_i18n::Translatable>,
 }
 
 /// State for the "Exit Signex — Unsaved Edits" confirmation modal.

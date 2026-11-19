@@ -316,8 +316,8 @@ pub struct NetlistIncompletePrompt {
     /// Where the file dialog said to write the `.net`.
     pub save_path: PathBuf,
     /// One user-facing line per omitted / uncovered page — the same
-    /// `ExportIssues::messages()` shown in the prompt and logged as a
-    /// warning when the user exports anyway.
+    /// `ExportIssues::messages()` logged as a warning when the user exports
+    /// anyway.
     pub messages: Vec<String>,
     /// The export scope snapshotted when the prompt was raised. "Export anyway"
     /// writes from THIS, never a fresh re-derivation — so the bytes on disk and
@@ -325,6 +325,31 @@ pub struct NetlistIncompletePrompt {
     /// describe the same project state, even if the document changes while the
     /// modal is up (#431 review).
     pub ctx: signex_output::ExportContext,
+    /// The prompt's list: one row per page left out of the netlist, from the
+    /// same derivation as `messages` (`ExportIssues::omitted_pages`).
+    pub omitted: Vec<OmittedPage>,
+}
+
+/// One page a netlist export leaves out, as the netlist-incomplete prompt
+/// lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OmittedPage {
+    /// The page's file as the user knows it: its file name, or the reference
+    /// the placing sheet symbol carries.
+    pub file: String,
+    pub reason: OmittedReason,
+}
+
+/// Why a page is not in the netlist.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OmittedReason {
+    /// No file at its path. `placed_by` names the sheet symbol that places
+    /// it, when the stitcher knows it.
+    FileMissing { placed_by: Option<String> },
+    /// The file exists but could not be read: the reader's own English text.
+    Unreadable(String),
+    /// The stitcher's English line: a sheet cycle, or two sheets on one key.
+    Stitch(String),
 }
 
 /// One printed page copy in the export file picker: the sheet file plus the

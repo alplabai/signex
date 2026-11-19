@@ -210,6 +210,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                     path_text: "s.snxsch".into(),
                     error: None,
                     exists: false,
+                    reuse_warning: None,
                 })
         }
         other => panic!("{other:?} is not followed"),

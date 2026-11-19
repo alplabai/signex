@@ -151,8 +151,9 @@ dialog-autosave-recovery-later = Decide later
 dialog-bom-export = Export…
 # Closing a project or quitting with unsaved documents.
 dialog-unsaved-discard-all = Discard All
-# Create Sheet: the file already exists; open it instead.
-dialog-create-child-sheet-open-existing = Open it
+# Create Sheet: the file already exists; point the sheet symbol at it and open
+# it instead of creating one.
+dialog-create-child-sheet-open-existing = Use existing file
 dialog-create-child-sheet-browse = Browse...
 dialog-create-child-sheet-later = Later
 dialog-erc-store-rules = Store ERC rules in this project
@@ -182,7 +183,22 @@ dialog-print-preview-no-files = No files selected for export
 # English keeps "page(s)" for every count.
 dialog-print-preview-page-count = { $count } page(s)
 dialog-netlist-incomplete-title = Netlist is incomplete
-dialog-netlist-incomplete-body = The project netlist does not cover the whole project. Exporting it would produce a file missing components and carrying the wrong net names wherever nets merge through a page that is not in it — and a PCB import cannot tell. You can export it anyway: the file stays a valid netlist, and the omitted pages are reported in the Messages panel.
+# Headline of the netlist-incomplete prompt. $count is how many pages are
+# left out, a whole number.
+dialog-netlist-incomplete-count =
+    { $count ->
+        [one] { $count } page is not in the netlist
+       *[other] { $count } pages are not in the netlist
+    }
+dialog-netlist-incomplete-detail = The file would miss their components, and nets that merge through them would carry the wrong names. A PCB import cannot tell.
+dialog-netlist-incomplete-anyway-note = If you export anyway, the file is still a valid netlist and the omitted pages are reported in the Messages panel.
+# Column headings of the omitted-page list.
+dialog-netlist-omitted-page = Omitted page
+dialog-netlist-omitted-why = Why
+# Why a page is left out: no file at its path.
+dialog-netlist-omitted-file-missing = file missing
+# $symbol is the name of the sheet symbol that places the missing file.
+dialog-netlist-omitted-placed-by = file missing · placed by { $symbol }
 
 ## Shared by dialog footer buttons (#2225): one id per common action, so
 ## every dialog's Cancel, OK, Save … translates the same way.
@@ -213,8 +229,19 @@ dialog-create-child-sheet-relative-to-project = Relative to the project folder
 dialog-create-child-sheet-linked-folder = The sheet must be inside the project folder (a linked folder leaves it)
 # $symbol is the name of the other sheet symbol.
 dialog-create-child-sheet-file-placed = A file with that name already exists, and sheet symbol '{ $symbol }' already points at it. A sheet file is placed by one sheet symbol; pick another name.
-dialog-create-child-sheet-file-exists = A file with that name already exists. Open it, or pick another name.
+dialog-create-child-sheet-file-exists = A file with that name already exists. Use it, or pick another name.
 dialog-create-child-sheet-symbol-gone = The sheet symbol is no longer there
+# Label of the file path field.
+dialog-create-child-sheet-file-label = File
+dialog-create-child-sheet-file-note = The sheet symbol's File field is set to this path when the file is created.
+# Footer hint beside the Later button.
+dialog-create-child-sheet-later-hint = Later keeps the symbol without a file
+# The existing file is already a page of the project. $file is its file name,
+# $page its sheet number (a whole number), $name the sheet symbol's name.
+dialog-create-child-sheet-reuse-page = { $file } is already sheet { $page }; using it makes { $name } a copy of it.
+# The existing file is already placed by a sheet symbol of another sheet.
+# $file is its file name, $name the sheet symbol's name.
+dialog-create-child-sheet-reuse = { $file } is already a sheet of this project; using it makes { $name } a copy of it.
 ## Native title bar of a dialog shown in its own window: the name the OS
 ## window switcher shows.
 dialog-title-annotate = Annotate
