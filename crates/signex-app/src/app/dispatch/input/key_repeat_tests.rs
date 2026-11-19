@@ -365,11 +365,9 @@ fn a_held_shift_space_on_a_selection_rotates_on_every_repeat() {
     }
 }
 
-/// The default profile's Insert (`copy_attributes_or_add_vertex`), held mid
-/// wire run while the mouse moves, fixes one vertex, not one per repeat.
-#[test]
-fn a_held_insert_mid_wire_adds_one_vertex() {
-    let mut app = app_with_tool(Tool::Wire);
+/// Hold `key` mid wire run in `app` while the mouse moves: it fixes one
+/// vertex, not one per repeat.
+fn assert_held_key_adds_one_vertex(mut app: Signex, key: impl Fn(bool) -> keyboard::Event) {
     let start = grid(0.0, 0.0);
     click(&mut app, (start.x, start.y));
     let move_cursor = |app: &mut Signex, i: f64| {
@@ -380,25 +378,45 @@ fn a_held_insert_mid_wire_adds_one_vertex() {
         app.ui_state.cursor_document = app.document_state.active_path.clone();
     };
     move_cursor(&mut app, 0.0);
-    let insert = |repeat| {
+    let points = app.interaction_state.wire_points.clone();
+    send(&mut app, key(false));
+    let added = app.interaction_state.wire_points.clone();
+    let wires = wire_count(&app);
+    assert_ne!(added, points, "the first press fixes a vertex");
+    for i in 1..=REPEATS {
+        move_cursor(&mut app, i as f64);
+        send(&mut app, key(true));
+        assert_eq!(app.interaction_state.wire_points, added, "held: once");
+        assert_eq!(wire_count(&app), wires, "held: one segment");
+    }
+}
+
+/// The default profile's Insert (`copy_attributes_or_add_vertex`), held mid
+/// wire run, adds one vertex.
+#[test]
+fn a_held_insert_mid_wire_adds_one_vertex() {
+    assert_held_key_adds_one_vertex(app_with_tool(Tool::Wire), |repeat| {
         press(
             Key::Named(Named::Insert),
             Code::Insert,
             Held::empty(),
             repeat,
         )
-    };
-    let points = app.interaction_state.wire_points.clone();
-    send(&mut app, insert(false));
-    let added = app.interaction_state.wire_points.clone();
-    let wires = wire_count(&app);
-    assert_ne!(added, points, "the first press fixes a vertex");
-    for i in 1..=REPEATS {
-        move_cursor(&mut app, i as f64);
-        send(&mut app, insert(true));
-        assert_eq!(app.interaction_state.wire_points, added, "held: once");
-        assert_eq!(wire_count(&app), wires, "held: one segment");
-    }
+    });
+}
+
+/// The Altium profile on macOS, which has no Insert key, also binds ⌥I to
+/// add vertex; held, it adds one vertex like Insert.
+#[test]
+fn a_held_option_i_on_macos_adds_one_vertex() {
+    let mut app = app_with_tool(Tool::Wire);
+    let set = crate::keymap::ShortcutProfileSet::built_ins().expect("built-in profiles");
+    let altium = set.profile("altium").expect("the Altium profile");
+    app.ui_state.active_keymap =
+        std::sync::Arc::new(CompiledKeymap::compile_for(altium, Platform::MacOs));
+    assert_held_key_adds_one_vertex(app, |repeat| {
+        press(Key::Character("i".into()), Code::KeyI, Held::ALT, repeat)
+    });
 }
 
 fn wire_count(app: &Signex) -> usize {

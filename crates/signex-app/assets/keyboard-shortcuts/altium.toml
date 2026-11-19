@@ -132,11 +132,13 @@ context = "global"
 # and Close Document get the Mac chords next to Ctrl+H / Ctrl+F4. Redo keeps
 # its plain Ctrl+Shift+Z below (the same chord on every OS) and gains the Mac
 # chord here; this section sits before Ctrl+Y so redo's menu hint stays Ctrl+Y.
+# A Mac keyboard has no Insert key, so add vertex also takes Alt+I (⌥I).
 [[keyboard_shortcuts.sections]]
 platform = "macos"
 context = "global"
 
 [keyboard_shortcuts.sections.bindings]
+"Alt+I" = "copy_attributes_or_add_vertex"
 "Mod+Alt+F" = "find_and_replace"
 "Mod+Shift+Z" = "redo"
 "Mod+W" = "close_active_document"

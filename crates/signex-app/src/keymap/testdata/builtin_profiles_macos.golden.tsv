@@ -56,6 +56,7 @@ altium	bind	Global	⇧⌘G	command:toggle_visible_grid
 altium	bind	Global	⇧⌘P	command:open_command_palette
 altium	bind	Global	⌃⇧TAB	command:previous_document_tab
 altium	bind	Global	⇧⌘X	command:toggle_cross_select_mode
+altium	bind	Global	⌥I	command:copy_attributes_or_add_vertex
 altium	bind	Global	⌥⌘F	command:find_and_replace
 altium	bind	Global	⇧⌘Z	command:redo
 altium	bind	Global	⌘W	command:close_active_document
@@ -293,7 +294,7 @@ altium	hint	-	-	import_dxf_outline
 altium	hint	-	ESC	cancel_current_tool
 altium	hint	-	ENTER	placement_accept
 altium	hint	-	TAB	placement_properties
-altium	hint	-	INS	copy_attributes_or_add_vertex
+altium	hint	-	⌥I	copy_attributes_or_add_vertex
 altium	hint	-	BACKSPACE	remove_last_vertex
 altium	hint	-	-	undo_last_segment
 altium	hint	-	-	switch_segment_posture

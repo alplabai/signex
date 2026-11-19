@@ -133,8 +133,11 @@ twin is a macOS system shortcut stay on the physical Control key (⌃ on macOS):
 profile has exactly one raw owner of that chord, and Windows and Linux are
 unchanged) and gains the Mac chord from a `platform = "macos"` section:
 `Mod+Shift+Z` (⇧⌘Z), so ⌃⇧Z also still redoes on macOS. The Altium profile's
-macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F) and `Mod+W` (Close Document,
-⌘W).
+macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F), `Mod+W` (Close Document,
+⌘W) and `Alt+I` (⌥I, add vertex while drawing, else Copy Attributes): a Mac
+keyboard has no Insert key, so ⌥I is that command's menu hint on macOS. The
+drag wiring mode gets no ⌥ chord: ⌥ held during a drag already flips whether
+the wires follow, so ⌥Space would do both at once; it stays on ⌃Space.
 
 Bindings in one section load in alphabetical order of their trigger text, and a
 command's menu hint is its last binding. Respelling `Ctrl+…` as `Mod+…` would

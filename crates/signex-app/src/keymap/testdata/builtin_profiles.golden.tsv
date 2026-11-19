@@ -56,6 +56,7 @@ altium	bind	Global	Mod+Shift+G	command:toggle_visible_grid
 altium	bind	Global	Mod+Shift+P	command:open_command_palette
 altium	bind	Global	Ctrl+Shift+TAB	command:previous_document_tab
 altium	bind	Global	Mod+Shift+X	command:toggle_cross_select_mode
+altium	bind	Global@macos	Alt+I	command:copy_attributes_or_add_vertex
 altium	bind	Global@macos	Mod+Alt+F	command:find_and_replace
 altium	bind	Global@macos	Mod+Shift+Z	command:redo
 altium	bind	Global@macos	Mod+W	command:close_active_document
