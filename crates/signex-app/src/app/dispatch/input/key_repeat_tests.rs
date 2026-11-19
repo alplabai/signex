@@ -366,16 +366,20 @@ fn a_held_shift_space_on_a_selection_rotates_on_every_repeat() {
 }
 
 /// The default profile's Insert (`copy_attributes_or_add_vertex`), held mid
-/// wire run, fixes one vertex at the cursor, not one per repeat.
+/// wire run while the mouse moves, fixes one vertex, not one per repeat.
 #[test]
 fn a_held_insert_mid_wire_adds_one_vertex() {
     let mut app = app_with_tool(Tool::Wire);
     let start = grid(0.0, 0.0);
     click(&mut app, (start.x, start.y));
-    let cursor = grid(10.0, 0.0);
-    app.ui_state.cursor_x = cursor.x;
-    app.ui_state.cursor_y = cursor.y;
-    app.ui_state.cursor_document = app.document_state.active_path.clone();
+    let move_cursor = |app: &mut Signex, i: f64| {
+        // Each repeat's cursor is a new corner: a repeat that ran would fix it.
+        let cursor = grid(10.0 + i, 3.0 * i);
+        app.ui_state.cursor_x = cursor.x;
+        app.ui_state.cursor_y = cursor.y;
+        app.ui_state.cursor_document = app.document_state.active_path.clone();
+    };
+    move_cursor(&mut app, 0.0);
     let insert = |repeat| {
         press(
             Key::Named(Named::Insert),
@@ -389,7 +393,8 @@ fn a_held_insert_mid_wire_adds_one_vertex() {
     let added = app.interaction_state.wire_points.clone();
     let wires = wire_count(&app);
     assert_ne!(added, points, "the first press fixes a vertex");
-    for _ in 0..REPEATS {
+    for i in 1..=REPEATS {
+        move_cursor(&mut app, i as f64);
         send(&mut app, insert(true));
         assert_eq!(app.interaction_state.wire_points, added, "held: once");
         assert_eq!(wire_count(&app), wires, "held: one segment");
