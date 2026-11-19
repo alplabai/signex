@@ -274,6 +274,8 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+    /// View state of the selection forms: kind chips, rule filter, hover (#1699).
+    pub selection_form: super::SelectionForm,
 }
 
 /// One drawing a placed symbol can show: its row's default or an alternate.

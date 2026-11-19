@@ -1098,6 +1098,9 @@ pub enum PanelMsg {
     Noop,
     /// The multi-selection form of the Properties panel (#1258).
     MultiEdit(super::MultiEditMsg),
+    /// The view state of the selection forms: kind chips, the rule filter,
+    /// the illustration hover and the sheet File browse (#1699).
+    SelectionForm(super::SelectionFormMsg),
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
