@@ -486,7 +486,8 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::SelectionFilterCustom => iced::Size::new(440.0, 323.0),
         ModalId::About => iced::Size::new(400.0, 272.0),
         ModalId::KeyboardShortcuts => iced::Size::new(720.0, 560.0),
-        ModalId::PassiveCalculator => iced::Size::new(640.0, 480.0),
+        // The 680 px card less its header (the OS title bar names it).
+        ModalId::PassiveCalculator => iced::Size::new(680.0, 556.0),
         ModalId::FirstRunTour => iced::Size::new(320.0, 226.0),
         ModalId::CreateChildSheet => iced::Size::new(560.0, 206.0),
         ModalId::ErrorNotice => iced::Size::new(520.0, 260.0),

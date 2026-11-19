@@ -145,6 +145,7 @@ impl Signex {
             ),
             ModalId::KeyboardShortcuts => self.view_keyboard_shortcuts_window(),
             ModalId::PassiveCalculator => crate::passive_calculator_modal::window_view(
+                &self.ui_state.i18n,
                 &self.document_state.panel_ctx.tokens,
                 &self.ui_state.passive_calculator,
             ),

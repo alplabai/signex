@@ -21,6 +21,7 @@ mod notice;
 mod overlay;
 mod panel_body;
 mod panels;
+mod passive_calculator;
 mod pcb;
 mod pcb_board;
 mod pcb_component;
@@ -55,6 +56,7 @@ pub use notice::*;
 pub use overlay::*;
 pub use panel_body::*;
 pub use panels::*;
+pub use passive_calculator::*;
 pub use pcb::*;
 pub use pcb_board::*;
 pub use pcb_component::*;
@@ -93,6 +95,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         overlay::OVERLAY,
         panel_body::PANEL_BODY,
         panels::PANELS,
+        passive_calculator::PASSIVE_CALCULATOR,
         pcb::PCB,
         pcb_board::PCB_BOARD,
         pcb_component::PCB_COMPONENT,

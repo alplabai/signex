@@ -218,6 +218,7 @@ impl Signex {
             return None;
         }
         Some(crate::passive_calculator_modal::view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             &ui.passive_calculator,
         ))
