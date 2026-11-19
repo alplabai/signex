@@ -85,6 +85,7 @@ pub mod start_screen;
 pub mod startup_args;
 pub mod status_bar;
 pub mod styles;
+pub mod symbol_fill_prefs;
 pub mod tab_bar;
 pub mod task_driver;
 #[cfg(test)]

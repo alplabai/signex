@@ -36,9 +36,11 @@ jobs:
       contents: read
       issues: write
     steps:
+      # lfs: the routing corpus boards are stored in Git LFS (#2481).
       - uses: actions/checkout@v5
         with:
           submodules: false
+          lfs: true
 
       - uses: dtolnay/rust-toolchain@1.97.0 # keep in lockstep with rust-toolchain.toml
 

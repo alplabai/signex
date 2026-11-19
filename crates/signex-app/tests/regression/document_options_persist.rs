@@ -151,16 +151,7 @@ fn the_default_font_is_saved() {
 
 #[test]
 fn every_title_block_field_is_saved() {
-    for field in [
-        TitleBlockField::Title,
-        TitleBlockField::DocumentNumber,
-        TitleBlockField::Revision,
-        TitleBlockField::Date,
-        TitleBlockField::Company,
-        TitleBlockField::DrawnBy,
-        TitleBlockField::CheckedBy,
-        TitleBlockField::ApprovedBy,
-    ] {
+    for field in TitleBlockField::ALL {
         let sheet = change_save_reopen(|app| {
             panel(app, PanelMsg::TitleBlockTyping(field, "value 7".into()));
             panel(app, PanelMsg::CommitTitleBlockField(field));

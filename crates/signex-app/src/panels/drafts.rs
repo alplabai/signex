@@ -1,5 +1,5 @@
 //! The one store of half-typed Properties-panel text (#2027): title-block
-//! fields and custom paper edges.
+//! fields, custom paper edges and sheet variables (#1987).
 //!
 //! A draft belongs to a (sheet, field) or (sheet, edge), not to the window it
 //! was typed in, so there is exactly one of each whichever window typed it.
@@ -18,6 +18,16 @@ use super::{PaperEdge, PaperEdgeDraft, TitleBlockDraft, TitleBlockField};
 struct Drafts {
     title_block: Vec<TitleBlockDraft>,
     paper_edge: Vec<PaperEdgeDraft>,
+    sheet_variable: Vec<SheetVariableDraft>,
+}
+
+/// A half-typed sheet-variable value (#1987), or with `name` `None` the
+/// name typed in the Add row, tied to the sheet it was typed on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SheetVariableDraft {
+    pub sheet: PathBuf,
+    pub name: Option<String>,
+    pub text: String,
 }
 
 /// A handle on the single draft store; clones share it.
@@ -33,7 +43,9 @@ impl PanelDrafts {
     /// Whether no draft of either kind is pending.
     pub fn is_empty(&self) -> bool {
         let d = self.lock();
-        d.title_block.is_empty() && d.paper_edge.is_empty()
+        d.title_block.is_empty()
+            && d.paper_edge.is_empty()
+            && d.sheet_variable.iter().all(|d| d.name.is_none())
     }
 
     /// The typed text of a sheet's title-block field, while one is pending.
@@ -130,20 +142,90 @@ impl PanelDrafts {
         self.lock().paper_edge.clone()
     }
 
+    /// The typed text of a sheet variable's value (`Some(name)`) or of the
+    /// Add row's name (`None`), while one is pending.
+    pub fn sheet_variable_text(&self, sheet: &Path, name: Option<&str>) -> Option<String> {
+        let d = self.lock();
+        let found = d
+            .sheet_variable
+            .iter()
+            .find(|d| d.name.as_deref() == name && d.sheet == sheet);
+        found.map(|d| d.text.clone())
+    }
+
+    /// Record the text typed for a sheet variable, replacing its draft.
+    pub fn set_sheet_variable(&self, sheet: &Path, name: Option<&str>, text: &str) {
+        let mut d = self.lock();
+        d.sheet_variable
+            .retain(|d| !(d.name.as_deref() == name && d.sheet == sheet));
+        d.sheet_variable.push(SheetVariableDraft {
+            sheet: sheet.to_path_buf(),
+            name: name.map(str::to_string),
+            text: text.to_string(),
+        });
+    }
+
+    /// Remove and return a sheet variable's draft: the commit of that value,
+    /// or with `None` the name the Add row adds.
+    pub fn take_sheet_variable(
+        &self,
+        sheet: &Path,
+        name: Option<&str>,
+    ) -> Option<SheetVariableDraft> {
+        let mut d = self.lock();
+        let at = d
+            .sheet_variable
+            .iter()
+            .position(|d| d.name.as_deref() == name && d.sheet == sheet)?;
+        Some(d.sheet_variable.remove(at))
+    }
+
+    /// Remove and return the variable-value drafts of the sheets `matches`
+    /// picks; an Add row's name is not a value and stays.
+    pub fn take_sheet_variables_where(
+        &self,
+        matches: impl Fn(&Path) -> bool,
+    ) -> Vec<SheetVariableDraft> {
+        let mut d = self.lock();
+        let all = std::mem::take(&mut d.sheet_variable);
+        let (taken, kept) = all
+            .into_iter()
+            .partition(|d| d.name.is_some() && matches(&d.sheet));
+        d.sheet_variable = kept;
+        taken
+    }
+
+    /// The sheets with a pending variable-value draft, one entry per draft.
+    pub fn sheet_variable_sheets(&self) -> Vec<PathBuf> {
+        let d = self.lock();
+        d.sheet_variable
+            .iter()
+            .filter(|d| d.name.is_some())
+            .map(|d| d.sheet.clone())
+            .collect()
+    }
+
     /// Drop every draft of the sheet at `sheet`: a discard must not write
     /// what it was asked to throw away.
     pub fn drop_sheet(&self, sheet: &Path) {
         let mut d = self.lock();
         d.title_block.retain(|d| d.sheet != sheet);
         d.paper_edge.retain(|d| d.sheet != sheet);
+        d.sheet_variable.retain(|d| d.sheet != sheet);
     }
 
-    /// Whether `sheet` has a pending draft of any kind (title-block field or
-    /// paper edge).
+    /// Whether `sheet` has a pending draft of any kind (title-block field,
+    /// paper edge or sheet variable).
     pub fn has_sheet(&self, sheet: &Path) -> bool {
         let d = self.lock();
+        // An Add row's name is not an edit of the sheet.
+        let variable = d
+            .sheet_variable
+            .iter()
+            .any(|d| d.sheet == sheet && d.name.is_some());
         d.title_block.iter().any(|d| d.sheet == sheet)
             || d.paper_edge.iter().any(|d| d.sheet == sheet)
+            || variable
     }
 
     /// Keep the drafts of the sheets `keep` accepts; a closed sheet's go.
@@ -151,6 +233,7 @@ impl PanelDrafts {
         let mut d = self.lock();
         d.title_block.retain(|d| keep(&d.sheet));
         d.paper_edge.retain(|d| keep(&d.sheet));
+        d.sheet_variable.retain(|d| keep(&d.sheet));
     }
 
     /// A sheet was renamed or moved: its drafts follow it.
@@ -160,6 +243,9 @@ impl PanelDrafts {
             draft.sheet = new.to_path_buf();
         }
         for draft in d.paper_edge.iter_mut().filter(|d| d.sheet == old) {
+            draft.sheet = new.to_path_buf();
+        }
+        for draft in d.sheet_variable.iter_mut().filter(|d| d.sheet == old) {
             draft.sheet = new.to_path_buf();
         }
     }

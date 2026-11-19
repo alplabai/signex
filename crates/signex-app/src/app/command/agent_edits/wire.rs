@@ -210,6 +210,8 @@ const PROJECT_WIDE: &[(&str, &str)] = &[
     ("add_teardrops", BOARD_EDIT),
     ("remove_teardrops", BOARD_EDIT),
     ("gloss_selected_routes", BOARD_EDIT),
+    // Layer colours are saved with the board (2026-11-18): a board step.
+    ("set_layer_color", BOARD_EDIT),
     ("board_shape_from_selection", BOARD_EDIT),
     ("keepout_from_selection", BOARD_EDIT),
     ("arrange_in_box", BOARD_EDIT),
@@ -488,6 +490,7 @@ mod tests {
             "draw_rectangle",
             "draw_wire",
             "edit_blanket",
+            "edit_no_erc_rules",
             "place_blanket",
             "place_bus",
             "place_compile_mask",
@@ -510,6 +513,8 @@ mod tests {
             "set_object_rotation",
             "set_sheet_symbol_size",
             "set_symbol_parameter",
+            // #1276: `to_sheet` is refused inside a list (it edits the child).
+            "sync_sheet_entries",
             "sync_sheet_pins",
         ];
         let mut found = editable_ids();
@@ -535,6 +540,9 @@ mod tests {
             ("toggle_properties_panel", "not runnable headless"),
             ("place_design_block", "takes a file path"),
             ("import_graphics", "takes a file path"),
+            ("create_sheet_symbol_from_sheet", "takes a file path"),
+            ("set_layer_color", "edits a board"),
+            ("repair_pin_junctions", "not runnable headless"),
         ] {
             let reason = edit_refusal(&id(command)).unwrap_or_else(|| panic!("{command}"));
             assert!(reason.contains(needle), "{command}: {reason}");

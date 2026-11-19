@@ -224,6 +224,8 @@ define_ids! {
         CMD_MENU_RUN_ERC = "cmd-menu-run-erc";
         CMD_OPEN_ERC_DIALOG = "cmd-open-erc-dialog";
         CMD_MENU_OPEN_ERC_DIALOG = "cmd-menu-open-erc-dialog";
+        CMD_REPAIR_PIN_JUNCTIONS = "cmd-repair-pin-junctions";
+        CMD_MENU_REPAIR_PIN_JUNCTIONS = "cmd-menu-repair-pin-junctions";
         CMD_OPEN_PARAMETER_MANAGER = "cmd-open-parameter-manager";
         CMD_MENU_OPEN_PARAMETER_MANAGER = "cmd-menu-open-parameter-manager";
         CMD_OPEN_RULES = "cmd-open-rules";
@@ -271,6 +273,10 @@ define_ids! {
         CMD_SHEET_NAVIGATION_FORWARD = "cmd-sheet-navigation-forward";
         CMD_SYNC_SHEET_PINS = "cmd-sync-sheet-pins";
         CMD_MENU_SYNC_SHEET_PINS = "cmd-menu-sync-sheet-pins";
+        CMD_CREATE_SHEET_SYMBOL_FROM_SHEET = "cmd-create-sheet-symbol-from-sheet";
+        CMD_MENU_CREATE_SHEET_SYMBOL_FROM_SHEET = "cmd-menu-create-sheet-symbol-from-sheet";
+        CMD_SYNC_SHEET_ENTRIES = "cmd-sync-sheet-entries";
+        CMD_MENU_SYNC_SHEET_ENTRIES = "cmd-menu-sync-sheet-entries";
         CMD_CHANGE_COMPONENT = "cmd-change-component";
         CMD_MENU_CHANGE_COMPONENT = "cmd-menu-change-component";
         CMD_OPEN_PROJECT_OPTIONS = "cmd-open-project-options";
@@ -360,6 +366,7 @@ define_ids! {
         CMD_PLACE_BLANKET = "cmd-place-blanket";
         CMD_MENU_PLACE_BLANKET = "cmd-menu-place-blanket";
         CMD_EDIT_BLANKET = "cmd-edit-blanket";
+        CMD_EDIT_NO_ERC_RULES = "cmd-edit-no-erc-rules";
         CMD_PLACE_TEXT_STRING = "cmd-place-text-string";
         CMD_MENU_PLACE_TEXT_STRING = "cmd-menu-place-text-string";
         CMD_PLACE_TEXT_FRAME = "cmd-place-text-frame";
@@ -424,6 +431,12 @@ define_ids! {
         CMD_TOGGLE_RATSNEST = "cmd-toggle-ratsnest";
         CMD_MENU_TOGGLE_RATSNEST = "cmd-menu-toggle-ratsnest";
         CMD_TOGGLE_ORIGIN_MARKER = "cmd-toggle-origin-marker";
+        CMD_SET_BOARD_ORIGIN = "cmd-set-board-origin";
+        CMD_MENU_SET_BOARD_ORIGIN = "cmd-menu-set-board-origin";
+        CMD_RESET_BOARD_ORIGIN = "cmd-reset-board-origin";
+        CMD_MENU_RESET_BOARD_ORIGIN = "cmd-menu-reset-board-origin";
+        CMD_SNAP_BOARD_ORIGIN_TO_CORNER = "cmd-snap-board-origin-to-corner";
+        CMD_MENU_SNAP_BOARD_ORIGIN_TO_CORNER = "cmd-menu-snap-board-origin-to-corner";
         CMD_MENU_TOGGLE_ORIGIN_MARKER = "cmd-menu-toggle-origin-marker";
         CMD_NEXT_LAYER = "cmd-next-layer";
         CMD_MENU_NEXT_LAYER = "cmd-menu-next-layer";
@@ -469,6 +482,10 @@ define_ids! {
         CMD_MENU_SET_ACTIVE_LAYER = "cmd-menu-set-active-layer";
         CMD_SET_LAYER_COLOR = "cmd-set-layer-color";
         CMD_MENU_SET_LAYER_COLOR = "cmd-menu-set-layer-color";
+        CMD_EDIT_LAYER_COLOR = "cmd-edit-layer-color";
+        CMD_MENU_EDIT_LAYER_COLOR = "cmd-menu-edit-layer-color";
+        CMD_RESET_LAYER_COLORS = "cmd-reset-layer-colors";
+        CMD_MENU_RESET_LAYER_COLORS = "cmd-menu-reset-layer-colors";
         CMD_SHOW_USED_LAYERS_ONLY = "cmd-show-used-layers-only";
         CMD_MENU_SHOW_USED_LAYERS_ONLY = "cmd-menu-show-used-layers-only";
         CMD_SET_OBJECT_VISIBLE = "cmd-set-object-visible";

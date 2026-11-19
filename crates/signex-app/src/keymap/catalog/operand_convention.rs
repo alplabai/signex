@@ -53,6 +53,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("size", OperandKind::Point),
     ("file", OperandKind::Text),
     ("direction", OperandKind::Text),
+    // #1276: a sheet symbol by id or name.
+    ("symbol", OperandKind::Text),
     ("apply", OperandKind::Bool),
     ("baseline", OperandKind::Text),
     ("layer", OperandKind::Text),
@@ -101,6 +103,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("shape", OperandKind::Text),
     ("delta", OperandKind::Text),
     ("corners", OperandKind::Text),
+    // #1699: the ERC rule ids a No-ERC directive silences, comma separated.
+    ("rules", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

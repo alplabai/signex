@@ -30,6 +30,7 @@ fn the_board_menu_swaps_pins_and_saves_and_places_reuse_blocks() {
         copyable: true,
         pad_pair: true,
         one_footprint: true,
+        footprints: 1,
         ..PcbTargets::default()
     };
     let blocks = vec!["amp".to_string()];
@@ -63,12 +64,104 @@ fn the_board_menu_swaps_pins_and_saves_and_places_reuse_blocks() {
         ..PcbTargets::default()
     };
     let rows = pcb_canvas_menu_with_blocks(i18n, TID, &board_ctx(empty), None, &sc, &[]);
-    assert!(row_message(&rows, "Swap Pins").is_none());
-    assert!(row_message(&rows, "Save as Reuse Block").is_none());
+    // 2026-11-18: the empty-area menu has no selection rows.
+    assert!(absent(&rows, "Swap Pins"));
+    assert!(absent(&rows, "Save as Reuse Block"));
     assert!(
         row_message(&rows, "Place Reuse Block").is_none(),
         "greyed with no block"
     );
+}
+
+/// Whether the menu has no row `label` at all.
+fn absent(rows: &[DropdownEntry<Message>], label: &str) -> bool {
+    !rows
+        .iter()
+        .any(|row| matches!(row, DropdownEntry::Item(it) if it.label == label))
+}
+
+/// The labels of the menu's rows, in order.
+fn labels(rows: &[DropdownEntry<Message>]) -> Vec<String> {
+    rows.iter()
+        .filter_map(|row| match row {
+            DropdownEntry::Item(it) => Some(it.label.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// 2026-11-18 (maintainer request): a right-click on an empty area with
+/// nothing selected shows the short menu, no selection or object row.
+#[test]
+fn the_empty_area_menu_is_short() {
+    let empty = rows(PcbTargets {
+        shown: true,
+        ..PcbTargets::default()
+    });
+    assert_eq!(
+        labels(&empty),
+        [
+            "Find",
+            "Place",
+            "Undo",
+            "Redo",
+            "Paste",
+            "Paste Special",
+            "Select All",
+            "Board Sketch",
+            "Place Reuse Block",
+            "Toggle Ratsnest",
+        ]
+    );
+}
+
+/// 2026-11-18: with a footprint selected the footprint rows show and the
+/// route rows do not; with a track the route rows show and the footprint
+/// rows do not; the net rows need an object with a net.
+#[test]
+fn the_object_menu_shows_the_rows_of_the_selected_kind() {
+    let footprint = rows(PcbTargets {
+        net: true,
+        ..footprint_picked()
+    });
+    for label in [
+        "Find Similar Objects...",
+        "Change Footprint...",
+        "Swap Pins",
+        "Swap Gates",
+        "Arrange in Box",
+        "Select Net",
+        "Delete",
+    ] {
+        assert!(!absent(&footprint, label), "{label} on a footprint");
+    }
+    for label in ["Gloss Selected Routes", "Add Teardrops", "Lock", "Unlock"] {
+        assert!(absent(&footprint, label), "{label} is a route row");
+    }
+    let track = rows(PcbTargets {
+        shown: true,
+        any: true,
+        routes: true,
+        lockable: true,
+        copyable: true,
+        ..PcbTargets::default()
+    });
+    for label in ["Gloss Selected Routes", "Add Teardrops", "Lock", "Unlock"] {
+        assert!(!absent(&track, label), "{label} on a track");
+    }
+    for label in ["Change Footprint...", "Swap Pins", "Select Net"] {
+        assert!(absent(&track, label), "{label} on a track without a net");
+    }
+    // Only the pointer over an object: the object rows, no selection rows.
+    let hovered = rows(PcbTargets {
+        shown: true,
+        hovered: true,
+        net: true,
+        ..PcbTargets::default()
+    });
+    assert!(!absent(&hovered, "Find Similar Objects..."));
+    assert!(!absent(&hovered, "Select Net"));
+    assert!(absent(&hovered, "Delete"));
 }
 
 fn rows(board: PcbTargets) -> Vec<DropdownEntry<Message>> {
@@ -140,7 +233,7 @@ fn the_board_menu_properties_row_is_live_with_a_selection() {
         shown: true,
         ..PcbTargets::default()
     };
-    assert!(row_message(&rows(empty), "Properties...").is_none());
+    assert!(absent(&rows(empty), "Properties..."));
 }
 
 /// #2366: Change Footprint... runs `change_footprint` with an unlocked
@@ -151,6 +244,7 @@ fn the_board_menu_change_footprint_row_needs_an_unlocked_footprint() {
         shown: true,
         any: true,
         placeable: true,
+        footprints: 1,
         ..PcbTargets::default()
     };
     assert!(runs(
@@ -160,6 +254,7 @@ fn the_board_menu_change_footprint_row_needs_an_unlocked_footprint() {
     let locked = PcbTargets {
         shown: true,
         any: true,
+        footprints: 1,
         ..PcbTargets::default()
     };
     let rows = rows(locked);
@@ -180,6 +275,7 @@ fn the_board_menu_lock_rows_follow_the_selected_tracks_and_vias() {
         shown: true,
         any: true,
         lockable: true,
+        routes: true,
         ..PcbTargets::default()
     });
     assert!(runs(
@@ -191,6 +287,7 @@ fn the_board_menu_lock_rows_follow_the_selected_tracks_and_vias() {
         shown: true,
         any: true,
         unlockable: true,
+        routes: true,
         ..PcbTargets::default()
     });
     assert!(runs(
@@ -204,7 +301,10 @@ fn the_board_menu_lock_rows_follow_the_selected_tracks_and_vias() {
 /// selected.
 #[test]
 fn the_board_menu_has_find_similar_net_and_mirror_rows_that_run_their_commands() {
-    let rows = rows(footprint_picked());
+    let rows = rows(PcbTargets {
+        net: true,
+        ..footprint_picked()
+    });
     for (label, command) in [
         ("Find Similar Objects...", "find_similar_objects"),
         ("Find", "find"),
@@ -276,6 +376,7 @@ fn a_read_only_board_greys_every_editing_row() {
         copyable: true,
         read_only: true,
         footprints: 1,
+        net: true,
         ..PcbTargets::default()
     };
     let rows = rows(read_only);
@@ -340,13 +441,15 @@ fn the_board_place_flyout_runs_the_tools_and_greys_them_when_read_only() {
 
 /// #2408, #2409: the board menu offers the selection tools, each running
 /// its command: live with a selection (Arrange in Box with unlocked
-/// components), greyed without; Add Teardrops acts on every net then.
+/// components); an empty-area menu has none of them (2026-11-18).
 #[test]
 fn the_board_menu_offers_the_selection_tools() {
     let picked = rows(PcbTargets {
         shown: true,
         any: true,
         placeable: true,
+        routes: true,
+        footprints: 1,
         ..PcbTargets::default()
     });
     for (label, command) in [
@@ -362,13 +465,16 @@ fn the_board_menu_offers_the_selection_tools() {
         shown: true,
         ..PcbTargets::default()
     });
-    assert!(runs(row_message(&empty, "Add Teardrops"), "add_teardrops"));
+    assert!(absent(&empty, "Add Teardrops"), "a route row needs a route");
     for label in [
         "Gloss Selected Routes",
         "Board Shape from Selection",
         "Keepout from Selection",
         "Arrange in Box",
     ] {
-        assert!(row_message(&empty, label).is_none(), "{label} greyed");
+        assert!(
+            absent(&empty, label),
+            "{label} is not on the empty-area menu"
+        );
     }
 }

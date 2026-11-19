@@ -127,6 +127,11 @@ impl Signex {
         rows: &[crate::library::state::EditorAddress],
         next: SaveAllNext,
     ) -> Task<Message> {
+        // Save All and every save before a close: part fields that do not
+        // evaluate are named in Messages, as Ctrl+S names them (#1986).
+        for path in paths {
+            self.report_part_field_issues(path);
+        }
         let dirs = self.loose_parent_dirs(paths);
         let plan = SaveAllPlan {
             context: context.to_string(),
