@@ -384,7 +384,9 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
         // Lists the parts of the active schematic's project.
-        | "assign_footprints" => Needs::Schematic,
+        | "assign_footprints"
+        // Dots the bare pin touches of the sheet in view.
+        | "repair_pin_junctions" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc"
         | "reannotate_board"

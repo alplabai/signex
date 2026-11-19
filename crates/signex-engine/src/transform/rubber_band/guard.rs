@@ -7,8 +7,8 @@
 //! any difference is a bug in the route, not a feature: the offending contacts
 //! (moved pins, and the points a dragged wire carries) are escalated (normal
 //! -> forced new path -> plain move) and the pass is run again. A plain pin is
-//! compared where the plain move put it, on exactly its plain net (provisional
-//! decision (b)), and the user gets a warning. Each round escalates at least
+//! compared where the plain move put it, on exactly its plain net (decision
+//! (b)), and the user gets a warning. Each round escalates at least
 //! one contact, so there are at most two rounds per contact.
 //!
 //! The reference is the *intent*, not the pre-move sheet: the nets of the
@@ -717,7 +717,7 @@ impl<'a> Guard<'a> {
         power_stays && self.only_symbols_moved()
     }
 
-    /// Provisional decision (b): a warned pin ends on exactly the net the plain
+    /// Decision (b): a warned pin ends on exactly the net the plain
     /// move gives it. Neither reference holds that alone: the pre-move nets
     /// leave warned pins out, and the intent puts a kept pin on its old net
     /// even when that is a warned pin's plain net (a kept power port then

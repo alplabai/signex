@@ -220,3 +220,82 @@ fn an_unrelated_edit_keeps_a_pin_dot_whose_pin_and_wire_stay() {
     });
     assert!(both, "R1's pins stay on their wires, now one net");
 }
+
+/// J1's wire A (0,40)-(60,40) and J2's wire B (40,40)-(100,40) overlap from
+/// x 40 to 60 on two nets: an end inside the other wire is no connection.
+fn two_net_overlap(sheet: &mut SchematicSheet) -> (Uuid, Uuid) {
+    let j1 = add_pin(sheet, "J1", (0.0, 40.0));
+    let j2 = add_pin(sheet, "J2", (100.0, 40.0));
+    add_wire(sheet, (0.0, 40.0), (60.0, 40.0));
+    add_wire(sheet, (40.0, 40.0), (100.0, 40.0));
+    (j1, j2)
+}
+
+/// The notices of the last commands that name a pin end left bare on wires
+/// of two nets.
+fn crossed_notices(engine: &mut Engine) -> Vec<String> {
+    (engine.take_warnings().into_iter())
+        .filter(|w| w.starts_with("could not join"))
+        .collect()
+}
+
+/// A pin dot never merges two nets (maintainer decision 2026-11-19): a part
+/// moved so its pin end lands where wires of two nets overlap gets no dot,
+/// both nets stay apart, and one notice names the pin and both nets.
+#[test]
+fn a_pin_moved_onto_wires_of_two_nets_gets_no_dot_and_a_notice() {
+    let mut sheet = test_sheet();
+    let (j1, j2) = two_net_overlap(&mut sheet);
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 10.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    assert!(!one_net(engine.document(), &[j1, j2]), "two nets to start");
+
+    let part = SelectedItem::new(tp1, SelectedKind::Symbol);
+    mv(&mut engine, vec![part], 0.0, 30.0, false);
+    assert!(dots(&engine).is_empty(), "no dot: {:?}", dots(&engine));
+    let sheet = engine.document();
+    assert!(!one_net(sheet, &[j1, j2]), "J1 and J2 stay apart");
+    assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j2]));
+    let notices = crossed_notices(&mut engine);
+    assert_eq!(notices.len(), 1, "{notices:?}");
+    assert!(
+        notices[0].contains("TP1 pin 1") && notices[0].contains("two nets"),
+        "{notices:?}"
+    );
+}
+
+/// The same landing with "keep wires" on: TP1 keeps its wire to J3, its pin
+/// end still lands inside wires of two nets, and still no dot merges them.
+#[test]
+fn a_kept_pin_moved_onto_wires_of_two_nets_gets_no_dot_and_a_notice() {
+    let mut sheet = test_sheet();
+    let (j1, j2) = two_net_overlap(&mut sheet);
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 10.0));
+    add_pin(&mut sheet, "J3", (20.0, 10.0));
+    add_wire(&mut sheet, (20.0, 10.0), (50.0, 10.0));
+    let mut engine = Engine::new(sheet).unwrap();
+
+    let part = SelectedItem::new(tp1, SelectedKind::Symbol);
+    mv(&mut engine, vec![part], 0.0, 30.0, true);
+    let tip = Point::new(50.0, 40.0);
+    assert!(!dots(&engine).contains(&tip), "no dot: {:?}", dots(&engine));
+    let sheet = engine.document();
+    assert!(!one_net(sheet, &[j1, j2]), "J1 and J2 stay apart");
+    assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j2]));
+    let notices = crossed_notices(&mut engine);
+    assert_eq!(notices.len(), 1, "{notices:?}");
+    assert!(notices[0].contains("TP1 pin 1"), "{notices:?}");
+}
+
+/// A pin end already sitting where wires of two nets overlap is no bare touch
+/// to repair: a dot there would merge the nets.
+#[test]
+fn a_touch_on_wires_of_two_nets_is_not_reported_for_repair() {
+    let mut sheet = test_sheet();
+    two_net_overlap(&mut sheet);
+    add_pin(&mut sheet, "TP1", (50.0, 40.0));
+    let engine = Engine::new(sheet).unwrap();
+    assert!(bare_pin_taps(engine.document()).is_empty());
+    let repairs = pin_junction_repairs(engine.document(), &mut SequentialIds::default());
+    assert!(repairs.is_empty());
+}

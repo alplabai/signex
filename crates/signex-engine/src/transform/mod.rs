@@ -215,11 +215,17 @@ impl Engine {
         // A pin end the edit put inside a wire joins it through a dot; the
         // dot is the connection, as #107 has it (see `pin_junctions`). Found
         // before the index, so the wires near each new dot are in the index
-        // that judges it: the local and the full-scan commit then agree.
+        // that judges it: the local and the full-scan commit then agree. A pin
+        // end where wires of two nets overlap gets no dot; the command names
+        // it in a notice once it is committed (`Engine::execute`).
         let before = self.taps_before.as_deref();
         let mut pin_dots = match frozen {
             Some(frozen) => pin_junctions::frozen_pin_dots(&self.document, frozen.pin_dots),
-            None => pin_junctions::pin_dots_for(&self.document, items, before),
+            None => {
+                let decided = pin_junctions::pin_dots_for(&self.document, items, before);
+                self.crossed_taps.extend(decided.crossed);
+                decided.dots
+            }
         };
         let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
@@ -707,7 +713,7 @@ pub(crate) struct Frozen<'f> {
     pub(crate) bare: &'f std::collections::HashSet<signex_net::uf::Key>,
 }
 pub use pin_junctions::{bare_pin_taps, bare_tap_keys, pin_junction_repairs};
-pub(crate) use pin_junctions::{new_pin_dots, pin_owners};
+pub(crate) use pin_junctions::{crossed_taps_notice, new_pin_dots, pin_owners};
 use wire_index::WireIndex;
 
 // ---------------------------------------------------------------------------

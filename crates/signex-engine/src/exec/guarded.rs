@@ -106,7 +106,7 @@ pub(crate) fn take_record() -> Option<Record> {
 
 /// One notice for `names`: `one` of the name when there is one, else `many` of
 /// the count, then the first few names.
-fn notice(
+pub(crate) fn notice(
     names: &[String],
     one: impl Fn(&str) -> String,
     many: impl Fn(usize) -> String,

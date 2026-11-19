@@ -1,25 +1,25 @@
-//! The joins a guarded move asks for beyond the plain move, and the two open
+//! The joins a guarded move asks for beyond the plain move, and the two
 //! questions of how they compose, each answered in one place.
 //!
 //! The intent is the plain move's nets with every kept contact restored: a
 //! moved pin on the net its old tip sits on (`guard::place_moved_pins`), and a
 //! point a dragged wire carries joining the net at its old place to the net
-//! the wire landed on. Both answers below are provisional, pending the
-//! maintainer (docs/DECISIONS.md, 2026-11-19); each is the conservative
-//! choice, which never merges two nets the move did not already join.
+//! the wire landed on. Both answers below are the maintainer's decisions
+//! (docs/DECISIONS.md, 2026-11-19); each is the conservative choice, which
+//! never merges two nets the move did not already join.
 
 use std::collections::BTreeMap;
 
 use signex_net::{NetSignature, pt_key, uf, uf::Key};
 use signex_types::schematic::Point;
 
-/// Spec gap (a), provisional: a pin that keep-wires holds on its old net and
+/// Spec gap (a): a pin that keep-wires holds on its old net and
 /// whose new tip lands inside a wire of another net joins only its old net.
 /// No pin dot is made into the other net while the pin is held; the user is
 /// told. `true` would join both nets.
 pub(super) const KEPT_PIN_JOINS_LANDING_NET: bool = false;
 
-/// Spec gap (b), provisional: a pin left as a plain move (warned) ends on
+/// Spec gap (b): a pin left as a plain move (warned) ends on
 /// exactly the net the plain move gives it; a carried wire's kept contact may
 /// not join that net to another. `true` would let it.
 pub(super) const WARNED_PIN_MAY_JOIN_CARRIED_NET: bool = false;

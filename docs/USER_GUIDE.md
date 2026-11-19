@@ -312,6 +312,15 @@ tool.
 
 Once you have placed parts (section 5), connect the wires to their pins.
 
+A pin end placed or moved onto the middle of a wire joins it: Signex adds a
+junction dot there. It adds none where the dot would join two of the part's
+own pins, or where two overlapping wires of different nets pass; in that case
+Messages names the pin and both nets. A sheet saved by an older Signex or
+another tool may have pins that touch a wire with no dot, which are not
+connected. Signex leaves them as they are when it opens the sheet, and
+Messages says how many there are. Choose **Tools ▸ Repair Pin Junctions**, or
+the link on that Messages row, to add their dots in one undo step.
+
 ![A resistor R1 with a wire from its lower pin to the net label SENSE](../assets/screenshots/guide-wired-symbol.png)
 
 ## 7. Label a net

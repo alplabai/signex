@@ -518,6 +518,19 @@ by designator. The project's sheets are read off the UI thread when it opens.
   and no closed file can drift between the read and Apply. A sheet written by
   a newer Signex is listed read-only too.
 
+## Tools ▸ Repair Pin Junctions {#tools-repair-pin-junctions}
+
+Right after Assign Footprints, Tools ▸ Repair Pin Junctions runs
+`repair_pin_junctions` (maintainer decision 2026-11-19, `DECISIONS.md`):
+greyed without a schematic in view, it adds an automatic junction dot at every
+pin end of the sheet in view that touches a wire mid-span with no dot, as one
+undo step, and says in Messages how many it added, or that there were none. A
+touch where a dot would short the pin's own part, or where wires of two nets
+overlap, is left alone. Opening a sheet that holds such touches never changes
+it: Messages says "N pins touch a wire without a junction", and that row has a
+Repair Pin Junctions link that runs the same command
+(`panels::messages_row::row_action`).
+
 ## View ▸ Net Inspector {#view-net-inspector}
 
 Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector

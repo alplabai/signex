@@ -46,7 +46,7 @@ pub(crate) mod form_look;
 pub(crate) mod graphite;
 mod library;
 mod messages;
-mod messages_row;
+pub(crate) mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;

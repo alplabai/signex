@@ -23,12 +23,15 @@ pub(crate) fn bare_taps_line(file: &str, count: usize) -> String {
 }
 
 /// Tell Messages how many pin ends of the sheet opened from `path` lie inside
-/// a wire with no dot; the sheet is left as it is. The count reported.
+/// a wire with no dot; the sheet is left as it is. The count reported. The
+/// line is logged under its own target, so its Messages row links to Repair
+/// Pin Junctions (`panels::messages_row::row_action`).
 pub(crate) fn report_bare_pin_taps(path: &Path, sheet: &SchematicSheet) -> usize {
     let count = signex_engine::bare_pin_taps(sheet).len();
     if count > 0 {
         let file = path.file_name().unwrap_or_default().to_string_lossy();
-        crate::diagnostics::log_warning(bare_taps_line(&file, count));
+        let line = bare_taps_line(&file, count);
+        log::warn!(target: crate::panels::messages_row::PIN_JUNCTIONS_TARGET, "{line}");
     }
     count
 }
@@ -54,14 +57,14 @@ impl Signex {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use signex_types::schematic::{
         LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, Symbol, Wire,
     };
 
     /// TP1's pin end inside a wire (0,10)-(40,10), with no dot.
-    fn sheet_with_bare_tap() -> SchematicSheet {
+    pub(crate) fn sheet_with_bare_tap() -> SchematicSheet {
         let mut lib: LibSymbol =
             serde_json::from_value(serde_json::json!({ "id": "TP" })).expect("lib symbol");
         lib.pins.push(LibPin {
@@ -125,6 +128,21 @@ mod tests {
         assert_eq!(report_bare_pin_taps(path, &sheet), 1);
         assert_eq!(crate::diagnostics::logged_count(&line), before + 1);
         assert!(sheet.junctions.is_empty(), "the report changes nothing");
+    }
+
+    /// The report's Messages row offers Repair Pin Junctions as a link.
+    #[test]
+    fn the_report_row_links_to_the_repair() {
+        let line = bare_taps_line("linked_report.snxsch", 1);
+        let before = crate::diagnostics::logged_count(&line); // installs the logger
+        report_bare_pin_taps(Path::new("linked_report.snxsch"), &sheet_with_bare_tap());
+        let entry = (crate::diagnostics::recent_entries().into_iter())
+            .rev()
+            .find(|entry| entry.message == line)
+            .expect("the report is logged");
+        assert_eq!(crate::diagnostics::logged_count(&line), before + 1);
+        let (command, _) = crate::panels::messages_row::row_action(&entry.code).expect("a link");
+        assert_eq!(command, "repair_pin_junctions");
     }
 
     #[test]

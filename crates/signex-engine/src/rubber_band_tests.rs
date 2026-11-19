@@ -1529,7 +1529,7 @@ fn random_rubber_band_moves_never_change_the_netlist() {
     // cap about two points above. Its causes: moved pins that cannot be kept
     // (the pin pass, as for symbol-only), a dragged wire that cannot be
     // carried whole (the rule that an edit makes no new T dot), and held pins
-    // touching their landing wire (provisional decision (a)).
+    // touching their landing wire (decision (a)).
     // TODO: lower the fallback rate, #2521.
     for (kind, share, cap) in [
         ("symbol-only", total.symbols_only, 20),
@@ -1542,7 +1542,7 @@ fn random_rubber_band_moves_never_change_the_netlist() {
             share.cases
         );
     }
-    // A held pin kept off the wire it landed in (provisional decision (a)) is
+    // A held pin kept off the wire it landed in (decision (a)) is
     // told but kept; those notices are bounded apart. Measured 7 of 5366
     // symbol-only and 2 of 2548 co-selected cases (2026-11-19); the cap is 1 %
     // per kind of case.
@@ -1753,7 +1753,10 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
         describe(after)
     );
     // A pin end the plain move put inside a wire joins it through a new pin
-    // dot (2026-11-18): the user's placement, which may join two nets. The
+    // dot (2026-11-18): the user's placement, which may join the pin's net to
+    // the wire's. It never merges two wire nets: where wires of two nets
+    // overlap the pin end gets no dot (2026-11-19), so the plain nets the
+    // oracles read keep them apart. The
     // closure oracle reads the plain nets, so it still holds such a pin; the
     // strict net equality below leaves out just that pin (counted, bounded).
     let (dot_terminals, dot_pins, dot_spots) = plain_pin_dot_pins(&sheet, plain.document(), &items);

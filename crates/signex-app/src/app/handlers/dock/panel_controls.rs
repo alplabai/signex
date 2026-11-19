@@ -227,6 +227,13 @@ impl Signex {
             crate::panels::PanelMsg::RunDrc => {
                 follow = self.update(Message::Pcb(PcbMsg::DrcRequested));
             }
+            // A Messages link runs its command as a menu row does.
+            crate::panels::PanelMsg::MessageLinkPressed(command) => {
+                if let Ok(id) = crate::keymap::AppCommandId::new(*command) {
+                    let run = crate::menu_bar::MenuMessage::Command(id);
+                    follow = self.update(Message::Menu(run));
+                }
+            }
             crate::panels::PanelMsg::OpenRules => {
                 follow = self.update(Message::Project(ProjectMsg::Rules(
                     crate::app::RulesTabMsg::OpenRequested { project: None },

@@ -178,6 +178,7 @@ Tools/Annotation/Back Annotate Schematics...	item	Back Annotate Schematics...	-	
 Tools/Annotation/Number Schematic Sheets...	item	Number Schematic Sheets...	-	-	NumberSchematicSheets	01001000	cmd:number_schematic_sheets
 Tools/---	separator	-	-	-	-	-	-
 Tools/Assign Footprints	item	Assign Footprints	-	-	AssignFootprints	01000000	cmd:assign_footprints
+Tools/Repair Pin Junctions	item	Repair Pin Junctions	-	-	RepairPinJunctions	01000000	cmd:repair_pin_junctions
 Tools/Library Editor	item	Library Editor	-	-	OpenLibraryEditor	01000000	cmd:open_library_browser
 Tools/---	separator	-	-	-	-	-	-
 Tools/Design Rule Check	item	Design Rule Check	-	-	RunDrc	01100000	cmd:run_drc

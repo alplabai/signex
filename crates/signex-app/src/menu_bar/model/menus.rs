@@ -526,6 +526,9 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // The project's parts and their row's footprints:
         // docs/MENU_BAR.md#tools-assign-footprints
         cmd_item_gated(ctx, cmd("assign_footprints", "")),
+        // A dot on every bare pin touch of the sheet in view:
+        // docs/MENU_BAR.md#tools-repair-pin-junctions
+        cmd_item_gated(ctx, cmd("repair_pin_junctions", "")),
         // Opens or focuses a Library Browser tab: docs/MENU_BAR.md#tools-library-editor
         cmd_item_gated(ctx, cmd("open_library_browser", "")),
         SEP,

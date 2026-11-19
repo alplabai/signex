@@ -278,6 +278,9 @@ pub struct Engine {
     /// Where pin ends touched a wire bare before the command in flight: the
     /// reconcile leaves those contacts be (`transform::pin_junctions`).
     taps_before: Option<std::sync::Arc<PinKeys>>,
+    /// Pin ends the command in flight left without a dot because the wires
+    /// through them carry two nets; named in a notice once it commits.
+    crossed_taps: Vec<signex_types::schematic::Point>,
     /// The bare pin contacts and the pin ends of the pre-move sheet, so a drag
     /// preview does not scan the whole sheet for them on every frame.
     preset_taps: Option<std::sync::Arc<PinKeys>>,
@@ -474,6 +477,7 @@ impl Engine {
             preset_wires: None,
             preset_sheet: None,
             taps_before: None,
+            crossed_taps: Vec::new(),
             preset_taps: None,
             preset_pin_owners: None,
             #[cfg(test)]
@@ -519,6 +523,7 @@ impl Engine {
             preset_wires: None,
             preset_sheet: None,
             taps_before: None,
+            crossed_taps: Vec::new(),
             preset_taps: None,
             preset_pin_owners: None,
             #[cfg(test)]
@@ -738,6 +743,7 @@ impl Engine {
         } else {
             None
         };
+        self.crossed_taps.clear();
 
         let result = match cmd {
             Command::ReplaceDocument { .. }
@@ -813,6 +819,16 @@ impl Engine {
             }
         };
         self.taps_before = None;
+        // A pin end the edit left bare where wires of two nets overlap: no dot
+        // merges two nets (2026-11-19), and the user is told which. A drag
+        // preview's throwaway engine shows no notice, so it names nothing.
+        let crossed = std::mem::take(&mut self.crossed_taps);
+        if self.preset_sheet.is_none()
+            && result.as_ref().is_ok_and(|done| done.changed)
+            && let Some(notice) = transform::crossed_taps_notice(&self.document, &crossed)
+        {
+            self.warnings.push(notice);
+        }
         self.note_command_result(&result);
         if result.as_ref().is_ok_and(|done| !done.changed) {
             self.restore_revision(mark);
