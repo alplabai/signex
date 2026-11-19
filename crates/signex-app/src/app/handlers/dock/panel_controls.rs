@@ -34,6 +34,20 @@ impl Signex {
         );
     }
 
+    /// Apply one Page Options frame change (border, title block, zone
+    /// counts) to the engine's settings, not the panel's copy, so two edits
+    /// in one frame both land. One undo step.
+    fn apply_sheet_frame_edit(&mut self, edit: crate::panels::SheetFrameEdit) {
+        if let Some(engine) = self.document_state.active_engine() {
+            let settings = edit.apply(engine.document().frame);
+            self.apply_engine_command(
+                signex_engine::Command::SetSheetFrame { settings },
+                false,
+                false,
+            );
+        }
+    }
+
     /// Write the active sheet's draft for `field` as one undoable edit
     /// (#1080). Other fields' drafts, and other sheets', stay as they are;
     /// surrounding whitespace is trimmed, and an empty value clears the field.
@@ -634,15 +648,14 @@ impl Signex {
                 self.document_state.panel_ctx.canvas_font_popup_open = false;
             }
             crate::panels::PanelMsg::EditSheetFrame(edit) => {
-                // Applied to the engine's settings, not the panel's copy, so
-                // two edits in one frame both land.
-                if let Some(engine) = self.document_state.active_engine() {
-                    let settings = edit.apply(engine.document().frame);
-                    self.apply_engine_command(
-                        signex_engine::Command::SetSheetFrame { settings },
-                        false,
-                        false,
-                    );
+                self.apply_sheet_frame_edit(*edit);
+            }
+            crate::panels::PanelMsg::DocumentOptions(msg) => {
+                // View state only; a submitted zone count is a frame edit.
+                let sheet = self.document_state.active_path.clone();
+                let ui = &mut self.document_state.panel_ctx.document_options;
+                if let Some(edit) = ui.apply(msg.clone(), sheet) {
+                    self.apply_sheet_frame_edit(edit);
                 }
             }
             crate::panels::PanelMsg::SetPageFormatMode(mode) => {

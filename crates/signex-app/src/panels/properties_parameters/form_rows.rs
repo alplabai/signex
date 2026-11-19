@@ -191,38 +191,6 @@ pub struct PaperEdgeDraft {
     pub text: String,
 }
 
-/// Form row: label | floating-point mm text_input (no spinner buttons).
-/// Shows `draft` while one is being typed, else the model `value`; typing
-/// only reports the text, and Enter commits it.
-pub fn form_mm_edit_row<'a>(
-    label: signex_i18n::Localized,
-    value: f32,
-    draft: Option<&str>,
-    edge: PaperEdge,
-    label_c: Color,
-    _input_bg: Color,
-    _input_border: Color,
-) -> Element<'a, PanelMsg> {
-    let text_value = draft.map_or_else(|| format!("{value:.1}"), str::to_string);
-    container(
-        row![
-            property_label(label, label_c),
-            signex_widgets::text_input(signex_i18n::UserText::new(String::new()), text_value)
-                .on_input(move |s| PanelMsg::CustomPaperEdgeTyping(edge, s))
-                .on_submit(PanelMsg::CommitCustomPaperEdge(edge))
-                .size(TS.body)
-                .padding([3, 6])
-                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-                .style(form_look::text_input_style),
-        ]
-        .spacing(SP.m)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([2, PROPERTY_ROW_PAD_X])
-    .width(Length::Fill)
-    .boxed()
-}
-
 /// Form row: label | pick_list (dropdown).
 pub fn form_pick_row<'a, T>(
     label: impl Into<signex_widgets::Label<'a>>,
@@ -357,86 +325,6 @@ pub fn form_check_row<'a>(
     .padding([2, PROPERTY_ROW_PAD_X])
     .width(Length::Fill)
     .boxed()
-}
-
-/// Altium-style grid row: [Label] [checkbox toggle] [pick_list] [shortcut hint]
-/// Used for both "Visible Grid" (eye/visible toggle) and "Snap Grid" (snap enable toggle).
-/// Labels and values are shown in the current `unit` (mm or mil).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "a generic form-row builder: label, value, bounds, styling and the message constructor are all independent"
-)]
-pub fn form_grid_row(
-    label: signex_i18n::Localized,
-    current_mm: f32,
-    unit: Unit,
-    has_checkbox: bool,
-    on_size: impl Fn(f32) -> PanelMsg + 'static,
-    label_c: Color,
-    active: bool,
-    on_toggle: PanelMsg,
-) -> Element<'static, PanelMsg> {
-    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZE_LABELS_MIL, GRID_SIZES_MM};
-
-    let labels: &'static [&'static str] = if unit == Unit::Mil {
-        GRID_SIZE_LABELS_MIL
-    } else {
-        GRID_SIZE_LABELS
-    };
-
-    let selected: Option<&'static str> = GRID_SIZES_MM
-        .iter()
-        .zip(labels.iter())
-        .find(|(sz, _)| (**sz - current_mm).abs() < 1e-4)
-        .map(|(_, lbl)| *lbl);
-
-    // raw: grid pitches with their unit symbol (mm, mil), not language.
-    let pick = iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
-        .graphite()
-        .on_select(move |lbl: &'static str| {
-            // Map label back to mm value (labels and GRID_SIZES_MM are parallel arrays)
-            let mm = GRID_SIZE_LABELS
-                .iter()
-                .chain(GRID_SIZE_LABELS_MIL.iter())
-                .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
-                .find(|(l, _)| **l == lbl)
-                .map(|(_, v)| *v)
-                .unwrap_or(2.54);
-            on_size(mm)
-        })
-        .width(Length::Fill);
-
-    let label_widget = property_label(label, label_c);
-
-    let content: Element<PanelMsg> = if has_checkbox {
-        // Snap Grid row: checkbox before pick_list
-        row![
-            label_widget,
-            signex_widgets::checkbox(active)
-                .on_toggle(move |_| on_toggle.clone())
-                .size(TS.label)
-                .spacing(SP.s)
-                .style(form_look::checkbox_style),
-            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center)
-        .boxed()
-    } else {
-        // Visible Grid row: no checkbox
-        row![
-            label_widget,
-            container(pick).width(Length::FillPortion(PROPERTY_CONTROL_PORTION))
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center)
-        .boxed()
-    };
-
-    container(content)
-        .padding([2, PROPERTY_ROW_PAD_X])
-        .width(Length::Fill)
-        .boxed()
 }
 
 /// Form row: checkbox with a keyboard shortcut hint on the right.

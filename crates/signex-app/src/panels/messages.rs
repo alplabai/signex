@@ -1101,6 +1101,9 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// Document Options view events: Parameters filter, zone counts and the
+    /// illustration hover (#2531).
+    DocumentOptions(super::DocumentOptionsMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

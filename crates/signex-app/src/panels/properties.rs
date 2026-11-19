@@ -304,44 +304,64 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── Nothing selected: show Document Options (Altium default) ──
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    col = col.push(
-        container(
-            text(signex_i18n::t!(
-                ctx.i18n,
-                signex_i18n::ids::PANELS_PROPERTIES_DOCUMENT_OPTIONS
-            ))
+    // ── Header: the title, then the sheet's file name (#2531) ──
+    let mut header = row![
+        text(t!(ctx.i18n, ids::PANELS_PROPERTIES_DOCUMENT_OPTIONS))
             .size(TS.title)
             .color(primary),
-        )
-        .padding([10.0, 12.0])
-        .width(Length::Fill)
-        .boxed(),
+        Space::new().width(Length::Fill),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    if let Some(name) = ctx
+        .title_block_sheet
+        .as_deref()
+        .and_then(std::path::Path::file_name)
+    {
+        header = header.push(
+            text(signex_i18n::UserText::new(name.to_string_lossy()))
+                .size(TS.caption)
+                .color(muted)
+                .font(crate::fonts::iced_font_for_family(
+                    crate::fonts::CHROME_MONO_FONT,
+                ))
+                .boxed(),
+        );
+    }
+    col = col.push(
+        container(header)
+            .padding([10.0, 12.0])
+            .width(Length::Fill)
+            .boxed(),
     );
 
-    // ── General | Parameters tab bar ──
+    // ── General | Parameters: a segmented switch ──
     let tab = ctx.properties_tab;
-    let text_inactive = crate::styles::ti(ctx.tokens.text_secondary);
+    let r = crate::styles::tokens::resolve(&ctx.tokens);
+    let tab_style = signex_widgets::SegmentedStyle::new(
+        r.sunken,
+        r.raised,
+        r.shadow,
+        r.ink3,
+        crate::styles::ti(ctx.tokens.text),
+        TS.body,
+    )
+    .fill_width(true);
+    let tabs: [(usize, signex_widgets::Label<'a>); 2] = [
+        (0, t!(ctx.i18n, ids::PANELS_PROPERTIES_TAB_GENERAL).into()),
+        (
+            1,
+            t!(ctx.i18n, ids::PANELS_PROPERTIES_TAB_PARAMETERS).into(),
+        ),
+    ];
     col = col.push(
-        container(
-            row![
-                props_tab_btn(
-                    t!(ctx.i18n, ids::PANELS_PROPERTIES_TAB_GENERAL),
-                    tab == 0,
-                    PanelMsg::PropertiesTab(0),
-                    primary,
-                    text_inactive
-                ),
-                props_tab_btn(
-                    t!(ctx.i18n, ids::PANELS_PROPERTIES_TAB_PARAMETERS),
-                    tab == 1,
-                    PanelMsg::PropertiesTab(1),
-                    primary,
-                    text_inactive
-                ),
-            ]
-            .spacing(SP.xs),
-        )
-        .padding([SP.s, 12.0])
+        container(signex_widgets::segmented(
+            tabs,
+            tab.min(1),
+            tab_style,
+            PanelMsg::PropertiesTab,
+        ))
+        .padding([SP.xs, 12.0])
         .boxed(),
     );
     // ── Tab content ──

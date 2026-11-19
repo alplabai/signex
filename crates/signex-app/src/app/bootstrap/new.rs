@@ -618,6 +618,7 @@ impl Signex {
                     canvas_font_popup_open: false,
 
                     properties_tab: 0,
+                    document_options: Default::default(),
                     projects_view: Default::default(),
                     net_classes: Default::default(),
                     pcb_layers: Default::default(),

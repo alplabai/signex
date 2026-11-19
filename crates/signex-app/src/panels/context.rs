@@ -74,6 +74,9 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Document Options view state: Parameters filter, zone drafts and the
+    /// illustration hover (#2531); kept across context rebuilds.
+    pub document_options: super::DocumentOptionsUi,
     /// Projects panel filter text and collapsed groups; view-only.
     pub projects_view: super::ProjectsView,
     /// Net Classes section of the General tab (#1042).
