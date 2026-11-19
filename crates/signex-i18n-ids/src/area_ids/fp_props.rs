@@ -78,6 +78,7 @@ define_ids! {
     EDITORS_FP_PROPS_PARAMETER_PLACEHOLDER = "editors-fp-props-parameter-placeholder";
     EDITORS_FP_PROPS_SECTION_WARNINGS = "editors-fp-props-section-warnings";
     EDITORS_FP_PROPS_WARNINGS_NONE = "editors-fp-props-warnings-none";
+    EDITORS_FP_PROPS_OPEN_SKETCH = "editors-fp-props-open-sketch";
     EDITORS_FP_PROPS_HINT_PADS = "editors-fp-props-hint-pads";
     EDITORS_FP_PROPS_HINT_SKETCH = "editors-fp-props-hint-sketch";
     EDITORS_FP_PROPS_HINT_VIEW3D = "editors-fp-props-hint-view3d";
@@ -104,5 +105,4 @@ define_ids! {
     EDITORS_FP_PROPS_PAD_STACK_RESTORE = "editors-fp-props-pad-stack-restore";
     EDITORS_FP_PROPS_PAD_STACK_KEEP = "editors-fp-props-pad-stack-keep";
     EDITORS_FP_PROPS_PAD_STACK_NO_PASTE = "editors-fp-props-pad-stack-no-paste";
-    EDITORS_FP_PROPS_PAD_STACK_MORE = "editors-fp-props-pad-stack-more";
 }

@@ -72,7 +72,7 @@ pub(super) fn view_pad_stack_check<'a>(
         if total > LISTED_PADS {
             let more = t!(
                 i18n,
-                ids::EDITORS_FP_PROPS_PAD_STACK_MORE,
+                ids::EDITORS_FP_PROPS_MORE,
                 "count" => total - LISTED_PADS
             );
             listed.push(more.into_string());

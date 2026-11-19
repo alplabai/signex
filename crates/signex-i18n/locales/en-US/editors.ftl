@@ -465,6 +465,7 @@ editors-fp-props-parameters-none = None yet: add one through an expression.
 editors-fp-props-parameter-placeholder = expression…
 editors-fp-props-section-warnings = Solve warnings
 editors-fp-props-warnings-none = None
+editors-fp-props-open-sketch = Open the sketch (Edit Sketch in the active bar) to see the constraints on the canvas.
 # Hint at the bottom of the panel, by editor mode.
 editors-fp-props-hint-pads = Click a pad to edit its properties.
 editors-fp-props-hint-sketch = Click a sketch entity (Point, Line, Arc or Circle) to edit it.
@@ -528,9 +529,6 @@ editors-fp-props-pad-stack-no-paste = { $count ->
         [one] Warning: 1 SMD pad has paste disabled on its copper side and gets no stencil opening: { $pads }
        *[other] Warning: { $count } SMD pads have paste disabled on their copper side and get no stencil opening: { $pads }
     }
-# Appended to a cut-short pad list.
-editors-fp-props-pad-stack-more = +{ $count } more
-
 ## Component editor empty states
 editors-component-alternates-empty = No alternate drawings; the row uses its default symbol only.
 editors-component-datasheets-empty = No datasheet on this component yet.

@@ -98,9 +98,9 @@ separately as over-constrained.
 
 ## The sketch in the Properties panel
 
-With nothing selected, the footprint Properties panel shows the Footprint and
-Snap & Grid sections in one scroll; in Sketch mode the sketch sections follow
-them, with the solve state and the sketch parameters:
+With nothing selected, the footprint Properties panel shows the Footprint,
+Snap & Grid and sketch sections in one scroll, in any mode. The sketch
+sections hold the solve state and the sketch parameters:
 
 - **Sketch solve**: a pill in the header names the state (DOF 0 in green when
   fully constrained, Under-constrained in blue, Over-constrained in red, or

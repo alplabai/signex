@@ -128,18 +128,19 @@ fn nothing_selected_shows_every_section_in_one_scroll() {
         "0.25 mm",
         "SNAP OPTIONS",
         "GRID MANAGER",
+        "SKETCH SOLVE",
     ] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
     }
-    // No page switch; the sketch sections stay in Sketch mode; the empty
-    // Settings header is dropped.
-    for label in ["Snap & Grid", "SKETCH SOLVE", "Settings"] {
-        assert!(!has(&texts, label), "{label:?} shown outside Sketch mode");
+    // No page switch, and the empty Settings header is dropped.
+    for label in ["Snap & Grid", "Settings"] {
+        assert!(!has(&texts, label), "{label:?} shown: {texts:#?}");
     }
     assert!(top_of(&texts, "8 pads") < top_of(&texts, "Name"));
     assert!(top_of(&texts, "Name") < top_of(&texts, "COURTYARD & SILKSCREEN"));
     assert!(top_of(&texts, "COURTYARD & SILKSCREEN") < top_of(&texts, "SNAP OPTIONS"));
     assert!(top_of(&texts, "SNAP OPTIONS") < top_of(&texts, "GRID MANAGER"));
+    assert!(top_of(&texts, "GRID MANAGER") < top_of(&texts, "SKETCH SOLVE"));
 }
 
 #[test]
@@ -216,10 +217,9 @@ fn snapping_off_greys_the_snap_fields_and_they_take_no_clicks() {
 }
 
 #[test]
-fn sketch_mode_adds_the_solve_statistics_and_parameters() {
+fn the_sketch_sections_show_the_solve_statistics_and_parameters() {
     let app = app_with_eight_pads();
     let mut fp = panel_ctx(&app);
-    fp.mode_kind = FootprintModeKind::Sketch;
     fp.last_solve = Some(FootprintSolveSummary {
         iterations: 6,
         elapsed_ms: 2,
@@ -244,7 +244,6 @@ fn sketch_mode_adds_the_solve_statistics_and_parameters() {
     ] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
     }
-    assert!(top_of(&texts, "GRID MANAGER") < top_of(&texts, "SKETCH SOLVE"));
 }
 
 /// A sketch line selected in Sketch mode, with no role.

@@ -1,8 +1,8 @@
 //! The footprint Properties body for every state but a selected pad in Pads
 //! mode and pad placement (#124): its own object header, then the body.
 //!
-//! - Nothing selected: the pad stack check, then the Footprint and Snap &
-//!   Grid sections and, in Sketch mode, the sketch sections, in one scroll.
+//! - Nothing selected: the pad stack check, then the Footprint, Snap & Grid
+//!   and sketch sections in one scroll.
 //! - A sketch entity: its role sub-form or header, the Entity section, then
 //!   Snap Options and the sketch sections as before.
 //! - A silk graphic: the silk form, then Snap Options.
@@ -14,6 +14,7 @@
 mod footprint_illustration;
 mod footprint_page;
 mod header;
+mod sketch_page;
 mod snap_illustration;
 mod snap_page;
 
@@ -170,9 +171,9 @@ fn view_board<'a>(
 }
 
 /// Nothing selected: the Footprint header, the pad stack check, then every
-/// section in one scroll (Footprint, Snap & Grid, and in Sketch mode the
-/// sketch sections), each collapsible. Pages or one scroll is an open
-/// maintainer decision (m124); one scroll is the shipped behaviour.
+/// section in one scroll (Footprint, Snap & Grid, Sketch), each
+/// collapsible. Pages or one scroll is an open maintainer decision (m124);
+/// one scroll is the shipped behaviour.
 fn view_nothing_selected<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -186,9 +187,7 @@ fn view_nothing_selected<'a>(
     col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, i18n);
     col = footprint_page::view(col, cx);
     col = snap_page::view(col, cx);
-    if cx.fp.mode_kind == FootprintModeKind::Sketch {
-        col = super::sections::view_sketch_sections(col, cx);
-    }
+    col = sketch_page::view(col, cx);
     col.push(hint(cx))
 }
 
