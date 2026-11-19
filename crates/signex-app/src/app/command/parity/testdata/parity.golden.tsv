@@ -176,7 +176,7 @@ create_sheet_symbol_from_sheet	bridge	Edit(SheetSync(CreateSymbolRequested))	gui
 create_sheet_symbol_from_sheet	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
 create_sheet_symbol_from_sheet	in_window_rewrite	document_window	gui	window	routing
 create_sheet_symbol_from_sheet	refusal_needs	Schematic	core	active document	routing
-create_sheet_symbol_from_sheet	headless_without_operands	run_operands	core	none	gate
+create_sheet_symbol_from_sheet	headless_without_operands	run_operands	core	active document	handler
 cross_probe	bridge	CrossProbe(ProbeRequested)	gui	active document,selection	gate
 cross_probe	in_window_rewrite	document_window	gui	window	routing
 cross_probe	refusal_needs	ProbeTarget	gui	active document,selection	routing
@@ -1019,7 +1019,7 @@ repair_pin_junctions	bridge	Erc(PinJunctionRepairRequested)	gui	active document	
 repair_pin_junctions	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
 repair_pin_junctions	in_window_rewrite	document_window	gui	window	routing
 repair_pin_junctions	refusal_needs	Schematic	core	active document	routing
-repair_pin_junctions	headless_without_operands	run_operands	core	none	gate
+repair_pin_junctions	headless_without_operands	run_operands	core	active document	handler
 repeat_last_item	bridge	Edit(RepeatLastItem)	gui	active document	gate
 repeat_last_item	in_window_rewrite	document_window	gui	window	routing
 repeat_last_item	refusal_needs	Schematic	gui	active document	routing
@@ -1038,12 +1038,12 @@ repour_selected	in_window_rewrite	document_window	gui	window	routing
 repour_selected	refusal_needs	Pcb	gui	active document	routing
 repour_selected	headless_refusal	headless_refusal	core	none	routing
 reset_board_origin	bridge	Pcb(Origin(ResetPicked))	gui	active document	gate
-reset_board_origin	operand_handler	run_operands: named document	core	origin	gate
+reset_board_origin	operand_handler	run_operands: named document	core	origin	handler
 reset_board_origin	in_window_rewrite	document_window	gui	window	routing
 reset_board_origin	refusal_needs	EditablePcb	core	active document	routing
 reset_board_origin	headless_missing_operand	needs `document`	core	none	routing
 reset_layer_colors	bridge	Pcb(View(LayerColoursReset))	gui	active document	gate
-reset_layer_colors	operand_handler	run_operands: named document	core	origin	gate
+reset_layer_colors	operand_handler	run_operands: named document	core	origin	handler
 reset_layer_colors	in_window_rewrite	board_view_in_window|document_window	gui	window	routing
 reset_layer_colors	refusal_needs	EditablePcb	core	active document	routing
 reset_layer_colors	headless_missing_operand	needs `document`	core	none	routing

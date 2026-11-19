@@ -420,6 +420,14 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[Settings],
     ),
     (&["open_document"], Operand, &[]),
+    // Headless with no `document`: they act on the sheet in view (#2522).
+    (
+        &["create_sheet_symbol_from_sheet", "repair_pin_junctions"],
+        HeadlessWithoutOperands,
+        &[ActiveDocument],
+    ),
+    // The named board only (#2522): nothing implicit.
+    (&["reset_board_origin", "reset_layer_colors"], Operand, &[]),
     (
         &["new_pcb_document", "new_schematic_sheet"],
         HeadlessWithoutOperands,
