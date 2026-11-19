@@ -1,5 +1,6 @@
 # Allowed workspace dependency edges (normal deps only).
 # Checked by scripts/check_arch_guard.sh. Add a line to add an edge.
+chrome-catalog -> signex-i18n
 chrome-catalog -> signex-types
 chrome-catalog -> signex-widgets
 pcb-geom -> signex-types
