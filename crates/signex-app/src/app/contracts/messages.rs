@@ -452,10 +452,21 @@ pub enum BomPreviewMsg {
     SetGrouping(signex_output::BomGrouping),
     /// User changed BOM output format (CSV / XLSX / HTML).
     SetFormat(signex_output::BomFormat),
-    /// User toggled "Include DNP" in the BOM preview modal.
-    SetIncludeDnp(bool),
-    /// User toggled "Include Not Fitted" in the BOM preview modal.
-    SetIncludeNotFitted(bool),
+    /// User ticked or cleared "Include not-fitted parts (DNP) for this
+    /// variant". Sets `BomOptions.include_dnp` and `include_not_fitted`
+    /// together (decisions F25).
+    NotFittedIncludedToggled(bool),
+    /// User typed in the toolbar filter. View-only: it hides lines and never
+    /// changes what Export writes.
+    FilterChanged(String),
+    /// User clicked a table line; carries its row index in `table.rows`.
+    RowSelected(usize),
+    /// User clicked an issue in the Rules tab; carries its index in the
+    /// validation report. Selects and reveals the issue's line.
+    IssueSelected(usize),
+    /// The table body scrolled; carries its horizontal offset so the sticky
+    /// header follows it.
+    BodyScrolled(f32),
     /// User toggled a single column on / off in the BOM preview
     /// column picker. The handler flips the column's presence in
     /// `BomOptions.columns`, preserving the existing display order
@@ -489,8 +500,8 @@ pub enum BomPreviewMsg {
     ColumnResizeStart(usize),
     /// User released the mouse — clears the in-flight resize state.
     ColumnResizeEnd,
-    /// User clicked a Properties-sidebar tab (General / Columns) in
-    /// the BOM preview modal.
+    /// User clicked a Properties-sidebar tab (General / Columns / Rules), or
+    /// the toolbar's issue chip, which opens Rules.
     SetSidebarTab(crate::app::state::BomSidebarTab),
     /// User toggled one validation rule in the Rules tab.
     SetRule(signex_output::BomRule, bool),
