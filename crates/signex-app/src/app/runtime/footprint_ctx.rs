@@ -663,5 +663,41 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_array,
         selected_pad_shape_params,
         numeric_buffers: editor.state.numeric_buffers.clone(),
+        courtyard_extent_mm: courtyard_extent_mm(&editor.state),
+        courtyard_expansion_mm: crate::library::editor::footprint::state::COURTYARD_SLACK_MM,
+        pad_outlines: editor
+            .state
+            .pads
+            .iter()
+            .map(|pad| crate::panels::PadOutlineSummary {
+                position_mm: [pad.position_mm.0, pad.position_mm.1],
+                size_mm: [pad.size_mm.0, pad.size_mm.1],
+                rotation_deg: pad.rotation_deg,
+                corners_mm: pad.rotated_corners_mm().map(|(x, y)| [x, y]),
+                shape: pad.shape.clone(),
+                has_drill: pad.drill_diameter_mm.is_some(),
+            })
+            .collect(),
+        sketch_state: {
+            let (tone, label) = crate::library::editor::standalone::dof_chip::dof_state(editor);
+            crate::panels::SketchStateSummary { tone, label }
+        },
+    })
+}
+
+/// The courtyard's extent: the generated rectangle, else the extent of the
+/// outline-following polygon.
+fn courtyard_extent_mm(
+    state: &crate::library::editor::footprint::state::FootprintEditorState,
+) -> Option<[f64; 4]> {
+    if let Some(c) = state.courtyard_mm {
+        return Some([c.min_x, c.min_y, c.max_x, c.max_y]);
+    }
+    let outline = state.courtyard_outline()?;
+    outline.iter().fold(None, |extent, &(x, y)| {
+        Some(match extent {
+            Some([x0, y0, x1, y1]) => [f64::min(x0, x), f64::min(y0, y), x1.max(x), y1.max(y)],
+            None => [x, y, x, y],
+        })
     })
 }

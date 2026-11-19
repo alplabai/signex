@@ -15,7 +15,7 @@
 //! tree.
 
 mod board_sketch;
-mod dof_chip;
+pub(crate) mod dof_chip;
 mod footprint;
 pub(crate) mod symbol;
 
