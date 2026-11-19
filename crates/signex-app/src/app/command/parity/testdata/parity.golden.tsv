@@ -173,7 +173,7 @@ create_sheet_from_sheet_symbol	bridge	ContextMenu(Action(CreateChildSheet))	gui	
 create_sheet_from_sheet_symbol	in_window_rewrite	document_window	gui	window	routing
 create_sheet_from_sheet_symbol	headless_refusal	headless_refusal	core	none	routing
 create_sheet_symbol_from_sheet	bridge	Edit(SheetSync(CreateSymbolRequested))	gui	active document	gate
-create_sheet_symbol_from_sheet	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
+create_sheet_symbol_from_sheet	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 create_sheet_symbol_from_sheet	in_window_rewrite	document_window	gui	window	routing
 create_sheet_symbol_from_sheet	refusal_needs	Schematic	core	active document	routing
 create_sheet_symbol_from_sheet	headless_without_operands	run_operands	core	active document	handler
@@ -319,7 +319,7 @@ edit_layer_color	headless_refusal	headless_refusal	core	none	routing
 edit_library_symbol	bridge	Library(PlacedPart(ActionRequested(EditSymbol)))	gui	selection	handler
 edit_library_symbol	in_window_rewrite	document_window	gui	window	routing
 edit_library_symbol	headless_refusal	headless_refusal	core	none	routing
-edit_no_erc_rules	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
+edit_no_erc_rules	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 edit_no_erc_rules	refusal_needs	Schematic	core	active document	routing
 edit_no_erc_rules	refusal_needs_operands	needs_operands_reason	gui	none	routing
 edit_no_erc_rules	headless_missing_operand	needs `id`	core	none	routing
@@ -1016,7 +1016,7 @@ rename_net_class	operand_handler	run_operands: named document	core	origin	handle
 rename_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 rename_net_class	headless_missing_operand	needs `document`	core	none	routing
 repair_pin_junctions	bridge	Erc(PinJunctionRepairRequested)	gui	active document	gate
-repair_pin_junctions	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
+repair_pin_junctions	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 repair_pin_junctions	in_window_rewrite	document_window	gui	window	routing
 repair_pin_junctions	refusal_needs	Schematic	core	active document	routing
 repair_pin_junctions	headless_without_operands	run_operands	core	active document	handler
@@ -1239,7 +1239,7 @@ set_selection_filters	headless_missing_operand	needs `kinds`	core	none	routing
 set_sheet_symbol_size	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_sheet_symbol_size	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_sheet_symbol_size	headless_missing_operand	needs `id`	core	none	routing
-set_sheet_variable	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
+set_sheet_variable	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 set_sheet_variable	refusal_needs_operands	needs_operands_reason	gui	none	routing
 set_sheet_variable	headless_missing_operand	needs `name`	core	none	routing
 set_symbol_parameter	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
@@ -1311,7 +1311,7 @@ switch_segment_posture	bridge	Tool(CornerFlipRequested)	gui	tool state,in-progre
 switch_segment_posture	in_window_rewrite	document_window	gui	window	routing
 switch_segment_posture	headless_refusal	headless_refusal	core	none	routing
 sync_sheet_entries	bridge	Edit(SheetSync(Requested))	gui	active document	gate
-sync_sheet_entries	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
+sync_sheet_entries	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	handler
 sync_sheet_entries	in_window_rewrite	document_window	gui	window	routing
 sync_sheet_entries	refusal_needs	Schematic	core	active document	routing
 sync_sheet_entries	headless_missing_operand	needs `symbol`	core	none	routing
