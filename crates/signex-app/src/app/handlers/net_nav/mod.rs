@@ -18,6 +18,7 @@ mod index_job;
 mod inspector;
 mod messages;
 mod navigate;
+mod parts;
 mod selection_nets;
 mod target;
 

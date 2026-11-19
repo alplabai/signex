@@ -83,4 +83,26 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_NET_INSPECTOR_BY_NET = "panels-net-inspector-by-net";
+    PANELS_NET_INSPECTOR_BY_COMPONENT = "panels-net-inspector-by-component";
+    PANELS_NET_INSPECTOR_FILTER_PARTS = "panels-net-inspector-filter-parts";
+    PANELS_NET_INSPECTOR_COLUMN_PART = "panels-net-inspector-column-part";
+    PANELS_NET_INSPECTOR_COLUMN_VALUE_FOOTPRINT = "panels-net-inspector-column-value-footprint";
+    PANELS_NET_INSPECTOR_FOOTPRINT_SUFFIX = "panels-net-inspector-footprint-suffix";
+    PANELS_NET_INSPECTOR_COLUMN_PIN = "panels-net-inspector-column-pin";
+    PANELS_NET_INSPECTOR_COLUMN_PIN_NET = "panels-net-inspector-column-pin-net";
+    PANELS_NET_INSPECTOR_COLUMN_PIN_NAME = "panels-net-inspector-column-pin-name";
+    PANELS_NET_INSPECTOR_UNCONNECTED = "panels-net-inspector-unconnected";
+    PANELS_NET_INSPECTOR_MORE_PINS = "panels-net-inspector-more-pins";
+    PANELS_NET_INSPECTOR_PARTS_SUMMARY = "panels-net-inspector-parts-summary";
+    PANELS_NET_INSPECTOR_FOOTER_HINT = "panels-net-inspector-footer-hint";
+    PANELS_NET_INSPECTOR_NO_PROJECT_TITLE = "panels-net-inspector-no-project-title";
+    PANELS_NET_INSPECTOR_READING_TITLE = "panels-net-inspector-reading-title";
+    PANELS_NET_INSPECTOR_UNAVAILABLE_TITLE = "panels-net-inspector-unavailable-title";
+    PANELS_NET_INSPECTOR_OPEN_MESSAGES = "panels-net-inspector-open-messages";
+    PANELS_NET_INSPECTOR_EMPTY_BODY = "panels-net-inspector-empty-body";
+    PANELS_NET_INSPECTOR_EMPTY_NONE = "panels-net-inspector-empty-none";
+    PANELS_NET_INSPECTOR_EMPTY_PARTS = "panels-net-inspector-empty-parts";
+    PANELS_NET_INSPECTOR_EMPTY_PARTS_BODY = "panels-net-inspector-empty-parts-body";
+    PANELS_NET_INSPECTOR_CLEAR_FILTER = "panels-net-inspector-clear-filter";
 }
