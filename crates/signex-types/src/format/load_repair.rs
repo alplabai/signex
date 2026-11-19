@@ -24,6 +24,10 @@ pub(in crate::format) mod kind {
     pub const DRAWING: &str = "drawing";
     pub const NO_ERC_DIRECTIVE: &str = "no-ERC directive";
     pub const DIRECTIVE: &str = "directive";
+    pub const HARNESS_CONNECTOR: &str = "harness connector";
+    pub const HARNESS_ENTRY: &str = "harness entry";
+    pub const HARNESS_WIRE: &str = "harness wire";
+    pub const UNION: &str = "union";
     pub const FOOTPRINT: &str = "footprint";
     pub const PAD: &str = "pad";
     pub const TRACK: &str = "track";
