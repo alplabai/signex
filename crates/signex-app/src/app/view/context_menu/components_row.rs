@@ -1,29 +1,39 @@
-//! Right-click menu of a Components panel row: Place or open the component
-//! for editing.
+//! Right-click menu of a Components panel row (Place, Edit Component) and
+//! the card that follows a row dragged toward the canvas (#2535).
 
 use super::*;
 
 use iced::Widget as _;
 
 use super::items::{dd_msg, text};
+use crate::dock::{PanelPosition, PanelSite};
 use crate::library::messages::LibraryMessage;
 use crate::library::state::ComponentsRowAction;
 use signex_i18n::{I18n, menu_ids};
-use signex_widgets::active_bar_dropdown::DropdownEntry;
+use signex_types::theme::ThemeId;
+use signex_widgets::active_bar_dropdown::{DropdownEntry, MenuMetrics};
+
+/// The command whose key the Place row shows: Enter accepts a placement.
+const PLACE_HINT_COMMAND: &str = "placement_accept";
 
 /// Menu rows: pure data, so the labels and messages are tested without a
-/// renderer.
-pub(super) fn components_row_menu_entries(i18n: &I18n) -> Vec<DropdownEntry<Message>> {
+/// renderer. `place_hint` is the key the active profile gives Enter's
+/// command ("" when it binds none); the icon column aligns the labels.
+pub(super) fn components_row_menu_entries(
+    i18n: &I18n,
+    theme: ThemeId,
+    place_hint: &str,
+) -> Vec<DropdownEntry<Message>> {
     let pick = |action| Message::Library(LibraryMessage::ComponentsPanelRowMenuPicked(action));
     vec![
         dd_msg(
-            None,
+            Some(crate::icons::icon_plus(theme)),
             &text(i18n, menu_ids::CTX_COMPONENTS_ROW_PLACE),
-            "",
+            place_hint,
             pick(ComponentsRowAction::Place),
         ),
         dd_msg(
-            None,
+            Some(crate::icons::icon_dd_properties(theme)),
             &text(i18n, menu_ids::CTX_COMPONENTS_ROW_EDIT),
             "",
             pick(ComponentsRowAction::Open),
@@ -31,9 +41,28 @@ pub(super) fn components_row_menu_entries(i18n: &I18n) -> Vec<DropdownEntry<Mess
     ]
 }
 
+/// Where the row menu opens: right-aligned inside the dock that holds the
+/// panel, level with the pointer. A floating or bottom-docked panel keeps
+/// the pointer anchor. `area` is the document area between the docks.
+fn dock_menu_anchor(
+    site: Option<PanelSite>,
+    area: iced::Rectangle,
+    window_width: f32,
+    pointer: (f32, f32),
+    menu_width: f32,
+) -> (f32, f32) {
+    let dock_right = match site {
+        Some(PanelSite::Docked(PanelPosition::Left, _)) => area.x,
+        Some(PanelSite::Docked(PanelPosition::Right, _)) => window_width,
+        _ => return pointer,
+    };
+    let x = (dock_right - menu_width - super::placement::EDGE_MARGIN).max(0.0);
+    (x, pointer.1)
+}
+
 impl Signex {
-    /// The open row menu with its click-outside backdrop, clamped into the
-    /// window; empty when no menu is open.
+    /// The open row menu with its click-outside backdrop; empty when no
+    /// menu is open.
     pub(in crate::app::view) fn components_row_context_menu_overlay(
         &self,
         window_id: iced::window::Id,
@@ -45,15 +74,30 @@ impl Signex {
             return Vec::new();
         }
         let panel_ctx = &self.document_state.panel_ctx;
-        let menu = super::placement::menu_card(
-            components_row_menu_entries(&self.ui_state.i18n),
-            &panel_ctx.tokens,
-            &panel_ctx.ui_font_name,
+        let entries = components_row_menu_entries(
+            &self.ui_state.i18n,
+            self.ui_state.effective_theme_id(),
+            &self.keymap_shortcut_label(PLACE_HINT_COMMAND),
         );
+        let pointer = (menu_ctx.x, menu_ctx.y);
+        let anchor = match menu_ctx.window {
+            None => dock_menu_anchor(
+                self.document_state
+                    .dock
+                    .locate(crate::panels::PanelKind::Components),
+                self.document_area_in(None),
+                self.ui_state.window_size.0,
+                pointer,
+                MenuMetrics::GRAPHITE.fitted_width(&entries, f32::MAX, &panel_ctx.ui_font_name),
+            ),
+            // An undocked panel window is the panel: the pointer is in it.
+            Some(_) => pointer,
+        };
+        let menu = super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name);
         let layers = Self::menu_overlay(
             Message::Library(LibraryMessage::ComponentsPanelRowMenuDismissed),
             menu.element,
-            (menu_ctx.x, menu_ctx.y),
+            anchor,
         );
         match menu_ctx.window {
             None => layers,
@@ -73,23 +117,20 @@ impl Signex {
 }
 
 impl Signex {
-    /// The part number of the row being dragged, as a small label beside the
-    /// pointer; empty until the press has become a drag.
+    /// The card beside the pointer while a row is dragged: the symbol
+    /// thumbnail, the part number and "release to place". Empty until the
+    /// press has become a drag, and once the part itself follows the
+    /// pointer on the canvas. Kept left of the canvas's right edge.
     pub(in crate::app::view) fn components_row_drag_label_overlay(
         &self,
         window_id: iced::window::Id,
     ) -> Vec<Element<'_, Message>> {
-        use iced::widget::{column, row};
+        use iced::widget::{column, container, row};
 
         const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
         const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-        let Some(drag) = self
-            .library
-            .components_panel
-            .drag
-            .as_ref()
-            .filter(|d| d.started)
-        else {
+        let panel = &self.library.components_panel;
+        let Some(drag) = panel.drag.as_ref().filter(|d| d.started) else {
             return Vec::new();
         };
         if !self.overlay_belongs_to(drag.window, window_id) {
@@ -97,38 +138,66 @@ impl Signex {
         }
         // Over the canvas the part itself follows the pointer.
         let (px, py) = self.interaction_state.last_mouse_pos;
+        let canvas = self.canvas_bounds_in(drag.window);
         if drag.armed
             && (self.interaction_state.placement.is_some() || self.has_pcb_part_in_hand())
-            && self.canvas_bounds().contains(iced::Point::new(px, py))
+            && canvas.contains(iced::Point::new(px, py))
         {
             return Vec::new();
         }
         let key = &drag.key;
-        let Some(pn) = self
+        let Some(row_data) = self
             .library
             .library_at(&key.library_path)
             .and_then(|lib| lib.tables.get(&key.table))
             .and_then(|rows| rows.iter().find(|r| r.row_id == key.row_id.0))
-            .map(|r| r.internal_pn.to_string())
         else {
             return Vec::new();
         };
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let label = container(
-            signex_widgets::text(signex_widgets::raw(pn))
-                .size(TS.caption)
-                .color(signex_widgets::theme_ext::text_primary(tokens)),
+        let panel_ctx = &self.document_state.panel_ctx;
+        let tokens = &panel_ctx.tokens;
+        let look = crate::panels::components_panel::thumbs::ThumbLook {
+            colors: panel_ctx.canvas_colors,
+            device_px_per_logical_px: panel_ctx.device_px_per_logical_px,
+        };
+        let thumb: Element<'_, Message> = match panel.thumbs.get(&row_data.symbol_ref) {
+            Some(symbol) => look.thumb(symbol.clone()),
+            None => look.placeholder(),
+        };
+        let ink = signex_widgets::theme_ext::text_primary(tokens);
+        let muted = crate::styles::tokens::resolve(tokens).ink4;
+        let i18n = &self.ui_state.i18n;
+        let card = container(
+            row![
+                thumb,
+                column![
+                    signex_widgets::text(signex_i18n::UserText::new(
+                        row_data.internal_pn.to_string()
+                    ))
+                    .size(TS.caption)
+                    .color(ink),
+                    signex_widgets::text(signex_i18n::t!(
+                        i18n,
+                        signex_i18n::ids::PANELS_COMPONENTS_DRAG_RELEASE
+                    ))
+                    .size(TS.caption)
+                    .color(muted),
+                ]
+                .spacing(SP.xs / 2.0),
+            ]
+            .spacing(SP.s)
+            .align_y(iced::Alignment::Center),
         )
         .padding([SP.xs, SP.s])
         .style(crate::styles::context_menu(tokens));
-        // Offset so the label never sits under the pointer.
-        let (x, y) = self.interaction_state.last_mouse_pos;
+        // Today's offset from the pointer, then clamped so the card stays
+        // left of the canvas's right edge (and inside the window).
+        let anchored = super::anchored::AnchoredMenu::new(card.boxed(), (px + SP.l, py + SP.l));
         vec![
-            column![
-                iced::widget::Space::new().height(y + SP.l),
-                row![iced::widget::Space::new().width(x + SP.l), label],
-            ]
-            .boxed(),
+            container(anchored.boxed())
+                .width(iced::Length::Fixed(canvas.x + canvas.width))
+                .height(iced::Length::Fill)
+                .boxed(),
         ]
     }
 }
@@ -137,16 +206,72 @@ impl Signex {
 mod tests {
     use super::*;
 
-    #[test]
-    fn the_menu_offers_place_and_edit_component() {
-        let labels: Vec<String> = components_row_menu_entries(I18n::en_us_ref())
+    fn labels_and_hints(entries: Vec<DropdownEntry<Message>>) -> Vec<(String, Option<String>)> {
+        entries
             .into_iter()
             .filter_map(|e| match e {
-                DropdownEntry::Item(item) => Some(item.label.to_string()),
+                DropdownEntry::Item(item) => Some((item.label.to_string(), item.shortcut.clone())),
                 _ => None,
             })
-            .collect();
-        assert_eq!(labels, ["Place", "Edit Component"]);
+            .collect()
+    }
+
+    /// Place (with Enter on the right) and Edit Component, both with an
+    /// icon so the labels align; no Copy Part Number (an open decision).
+    #[test]
+    fn the_menu_offers_place_with_its_key_and_edit_component() {
+        let entries =
+            components_row_menu_entries(I18n::en_us_ref(), ThemeId::GraphiteDark, "Enter");
+        assert!(entries.iter().all(|e| match e {
+            DropdownEntry::Item(item) => item.icon.is_some(),
+            _ => true,
+        }));
+        assert_eq!(
+            labels_and_hints(entries),
+            [
+                ("Place".to_owned(), Some("Enter".to_owned())),
+                ("Edit Component".to_owned(), None),
+            ]
+        );
+    }
+
+    /// A profile that binds no key to Enter's command shows no hint.
+    #[test]
+    fn an_unbound_place_key_shows_no_hint() {
+        let entries = components_row_menu_entries(I18n::en_us_ref(), ThemeId::GraphiteLight, "");
+        assert_eq!(labels_and_hints(entries)[0].1, None);
+    }
+
+    /// The menu opens right-aligned inside the dock holding the panel.
+    #[test]
+    fn the_menu_opens_right_aligned_inside_its_dock() {
+        let area =
+            iced::Rectangle::new(iced::Point::new(240.0, 60.0), iced::Size::new(900.0, 700.0));
+        let margin = super::super::placement::EDGE_MARGIN;
+        let left = dock_menu_anchor(
+            Some(PanelSite::Docked(PanelPosition::Left, 0)),
+            area,
+            1400.0,
+            (100.0, 300.0),
+            180.0,
+        );
+        assert_eq!(left, (240.0 - 180.0 - margin, 300.0));
+        let right = dock_menu_anchor(
+            Some(PanelSite::Docked(PanelPosition::Right, 1)),
+            area,
+            1400.0,
+            (1300.0, 300.0),
+            180.0,
+        );
+        assert_eq!(right, (1400.0 - 180.0 - margin, 300.0));
+        let floating = dock_menu_anchor(
+            Some(PanelSite::Floating(0)),
+            area,
+            1400.0,
+            (5.0, 6.0),
+            180.0,
+        );
+        assert_eq!(floating, (5.0, 6.0));
     }
 
     /// The opened menu, laid out, shows each row's label on one line at its
