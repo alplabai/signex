@@ -105,6 +105,8 @@ ctx-part-actions = Part Actions
 ctx-sheet-actions = Sheet Actions
 ctx-references = References
 ctx-align = Align
+# Board menu: runs `compare_board_with_schematic` under a shorter name (#2462).
+ctx-compare-with-schematic = Compare with Schematic
 ctx-unions = Unions
 ctx-snippets = Snippets
 ctx-comment = Comment...

@@ -276,6 +276,8 @@ define_ids! {
         CMD_OPEN_PROJECT_OPTIONS = "cmd-open-project-options";
         CMD_MENU_OPEN_PROJECT_OPTIONS = "cmd-menu-open-project-options";
         CMD_UPDATE_PCB_FROM_SCHEMATIC = "cmd-update-pcb-from-schematic";
+        CMD_COMPARE_BOARD_WITH_SCHEMATIC = "cmd-compare-board-with-schematic";
+        CMD_MENU_COMPARE_BOARD_WITH_SCHEMATIC = "cmd-menu-compare-board-with-schematic";
         CMD_BACK_ANNOTATE_SCHEMATICS = "cmd-back-annotate-schematics";
         CMD_MENU_BACK_ANNOTATE_SCHEMATICS = "cmd-menu-back-annotate-schematics";
         CMD_OPEN_SELECTION_FILTER = "cmd-open-selection-filter";

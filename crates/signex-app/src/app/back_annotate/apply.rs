@@ -18,7 +18,7 @@ use crate::app::{Message, Signex, UndoGroupKind};
 const LABEL: &str = "Back Annotate";
 
 /// The edits of one sheet file: whether it is placed once, and its edits.
-type FileEdits = (bool, Vec<SheetEdit>);
+pub(crate) type FileEdits = (bool, Vec<SheetEdit>);
 
 impl Signex {
     /// The list no longer describes the board or the design: the board moved
@@ -82,11 +82,7 @@ impl Signex {
             Ok(plan) => plan,
             Err(why) => return self.refuse_back_annotate_execute(why),
         };
-        let to_check: Vec<_> = edits
-            .keys()
-            .filter(|file| !self.document_state.engines.contains_key(*file))
-            .map(|file| (file.clone(), read.stamps.get(file).copied().flatten()))
-            .collect();
+        let to_check = self.closed_sheets_to_check(&read, &edits);
         let pending = PendingWrite {
             checked: to_check.iter().map(|(file, _)| file.clone()).collect(),
             rows: list.rows.iter().filter(|r| r.applies()).count(),
@@ -151,24 +147,7 @@ impl Signex {
             let why = t!(self.ui_state.i18n, ids::BACK_ANNOTATE_STALE).into_string();
             return self.refuse_back_annotate_execute(why);
         }
-        let unchecked = pending.edits.keys().find(|file| {
-            !self.document_state.engines.contains_key(*file) && !pending.checked.contains(*file)
-        });
-        if let Some(file) = unchecked {
-            let why = self.back_annotate_text_path(ids::BACK_ANNOTATE_DISK_CHANGED, file);
-            return self.refuse_back_annotate_execute(why);
-        }
-        let write = SheetWrite {
-            label: LABEL,
-            outcome: "back-annotated",
-            kind: UndoGroupKind::BackAnnotate,
-            loaded: &read.loaded,
-        };
-        let result =
-            self.write_sheets_as_group(&write, pending.edits, |document, (single, edits)| {
-                sheet_commands(document, edits, *single)
-            });
-        match result {
+        match self.write_back_annotation(&read, pending.edits, &pending.checked) {
             Ok(sheets) => {
                 crate::diagnostics::log_info(
                     t!(
@@ -182,17 +161,80 @@ impl Signex {
                 self.ui_state.back_annotate = None;
                 Task::none()
             }
-            Err(refusal) => {
-                let (id, path) = match refusal {
-                    SheetWriteRefusal::Busy(p) => (ids::BACK_ANNOTATE_BUSY, p),
-                    SheetWriteRefusal::ReadOnly(p) => (ids::BACK_ANNOTATE_READ_ONLY, p),
-                    SheetWriteRefusal::NotLoaded(p) => (ids::BACK_ANNOTATE_NOT_LOADED, p),
-                    SheetWriteRefusal::NotChanged(p) => (ids::BACK_ANNOTATE_NOT_CHANGED, p),
-                };
-                let why = self.back_annotate_text_path(id, &path);
-                self.refuse_back_annotate_execute(why)
-            }
+            Err(why) => self.refuse_back_annotate_execute(why),
         }
+    }
+
+    /// Block the value rows of `list` (read as `read` for project `owner`)
+    /// whose sheet file another open project reaches: a value written there
+    /// would change that project's part too (#1224).
+    pub(crate) fn block_values_shared_elsewhere(
+        &self,
+        owner: crate::app::state::ProjectId,
+        read: &BackRead,
+        list: &mut BackChangeList,
+    ) {
+        let shared: std::collections::HashSet<(
+            signex_types::schematic::InstancePath,
+            Vec<uuid::Uuid>,
+        )> = read
+            .files
+            .iter()
+            .filter(|(_, part)| self.shared_with_project_other_than(owner, &part.file))
+            .map(|(key, _)| key.clone())
+            .collect();
+        list.block_shared_values(|sheet, units| shared.contains(&(sheet.clone(), units.to_vec())));
+    }
+
+    /// The closed sheet files `edits` reaches, with the stamp each was read
+    /// at, for the disk check before the write.
+    pub(crate) fn closed_sheets_to_check(
+        &self,
+        read: &BackRead,
+        edits: &BTreeMap<PathBuf, FileEdits>,
+    ) -> Vec<(PathBuf, Option<crate::library::closed_sheets::FileStamp>)> {
+        edits
+            .keys()
+            .filter(|file| !self.document_state.engines.contains_key(*file))
+            .map(|file| (file.clone(), read.stamps.get(file).copied().flatten()))
+            .collect()
+    }
+
+    /// Write `edits` into their sheets as ONE Back Annotate undo group. A
+    /// sheet no engine holds is loaded from the copy `read` took; one not in
+    /// `checked` (stated again since the read) refuses the whole write. The
+    /// number of sheets changed, or why nothing was. Back Annotate's Execute
+    /// and Compare Board with Schematic's Apply share it.
+    pub(crate) fn write_back_annotation(
+        &mut self,
+        read: &BackRead,
+        edits: BTreeMap<PathBuf, FileEdits>,
+        checked: &std::collections::BTreeSet<PathBuf>,
+    ) -> Result<usize, String> {
+        let unchecked = edits.keys().find(|file| {
+            !self.document_state.engines.contains_key(*file) && !checked.contains(*file)
+        });
+        if let Some(file) = unchecked {
+            return Err(self.back_annotate_text_path(ids::BACK_ANNOTATE_DISK_CHANGED, file));
+        }
+        let write = SheetWrite {
+            label: LABEL,
+            outcome: "back-annotated",
+            kind: UndoGroupKind::BackAnnotate,
+            loaded: &read.loaded,
+        };
+        let result = self.write_sheets_as_group(&write, edits, |document, (single, edits)| {
+            sheet_commands(document, edits, *single)
+        });
+        result.map_err(|refusal| {
+            let (id, path) = match refusal {
+                SheetWriteRefusal::Busy(p) => (ids::BACK_ANNOTATE_BUSY, p),
+                SheetWriteRefusal::ReadOnly(p) => (ids::BACK_ANNOTATE_READ_ONLY, p),
+                SheetWriteRefusal::NotLoaded(p) => (ids::BACK_ANNOTATE_NOT_LOADED, p),
+                SheetWriteRefusal::NotChanged(p) => (ids::BACK_ANNOTATE_NOT_CHANGED, p),
+            };
+            self.back_annotate_text_path(id, &path)
+        })
     }
 
     /// The ready list, its read and its edits per sheet file, or why Execute
@@ -217,6 +259,18 @@ impl Signex {
         if self.back_annotate_stale() {
             return Err(t!(self.ui_state.i18n, ids::BACK_ANNOTATE_STALE).into_string());
         }
+        let by_file = self.back_annotate_edits(state.project, list, &read)?;
+        Ok((list.clone(), read, by_file))
+    }
+
+    /// The edits of the rows of `list` that apply, by sheet file of
+    /// `project`, or why one has no file. Staleness is the caller's check.
+    pub(crate) fn back_annotate_edits(
+        &self,
+        project: crate::app::state::ProjectId,
+        list: &BackChangeList,
+        read: &BackRead,
+    ) -> Result<BTreeMap<PathBuf, FileEdits>, String> {
         let mut by_file: BTreeMap<PathBuf, FileEdits> = BTreeMap::new();
         for edit in list.sheet_edits() {
             let key = (edit.placement.clone(), edit.units.clone());
@@ -225,15 +279,14 @@ impl Signex {
             };
             // A sheet another open project reaches keeps its `reference`
             // for that project: write a per-placement entry instead (#1224).
-            let single =
-                part.single && !self.shared_with_project_other_than(state.project, &part.file);
+            let single = part.single && !self.shared_with_project_other_than(project, &part.file);
             by_file
                 .entry(part.file.clone())
                 .or_insert_with(|| (single, Vec::new()))
                 .1
                 .push(edit);
         }
-        Ok((list.clone(), read, by_file))
+        Ok(by_file)
     }
 
     /// Keep the dialog open with `why` shown; the Messages panel gets it too.

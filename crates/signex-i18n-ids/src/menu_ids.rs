@@ -53,6 +53,7 @@ define_ids! {
         CTX_SHEET_ACTIONS = "ctx-sheet-actions";
         CTX_REFERENCES = "ctx-references";
         CTX_ALIGN = "ctx-align";
+        CTX_COMPARE_WITH_SCHEMATIC = "ctx-compare-with-schematic";
         CTX_UNIONS = "ctx-unions";
         CTX_SNIPPETS = "ctx-snippets";
         CTX_COMMENT = "ctx-comment";

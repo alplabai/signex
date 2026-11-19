@@ -27,9 +27,14 @@
 //! - A part that cannot be read back is never removed or changed.
 //! - A placed part whose footprint cannot be resolved gets a note, and the
 //!   pads of it and of an unread part are left out of net sync.
+//!
+//! [`compare`] joins this list and Back Annotate's into one report of
+//! differences with a direction per row (Compare Board with Schematic,
+//! #2462).
 
 mod back;
 mod change;
+mod compare;
 mod diff;
 mod lower;
 mod nets;
@@ -41,6 +46,10 @@ pub use back::{
 };
 pub use change::{
     ChangeReason, EcoBlock, EcoChange, EcoChangeList, EcoGroup, EcoKey, EcoNote, EcoRow, GroupTicks,
+};
+pub use compare::{
+    CompareAction, CompareCounts, CompareJump, CompareKind, CompareObject, CompareReport,
+    CompareRow, CompareRowId, CompareValue, Compared, Direction, Unavailable, compare,
 };
 pub use diff::diff_board;
 pub(crate) use diff::remint_pads;

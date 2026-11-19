@@ -448,6 +448,7 @@ impl Signex {
                 fab_outputs_writes: 0,
                 board_output: Default::default(),
                 back_annotate: None,
+                compare_board: None,
                 find_similar: None,
                 find_similar_generation: 0,
                 assign_footprints: None,

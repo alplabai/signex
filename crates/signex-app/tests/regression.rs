@@ -204,6 +204,9 @@ mod board_free_primitives;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;
+// #2462: Compare Board with Schematic.
+#[path = "regression/compare_board.rs"]
+mod compare_board;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;

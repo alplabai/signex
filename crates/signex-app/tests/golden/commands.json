@@ -240,6 +240,11 @@
     "category": "view"
   },
   {
+    "id": "compare_board_with_schematic",
+    "group": "Schematic",
+    "category": "pcb_sync"
+  },
+  {
     "id": "copy",
     "group": "General",
     "category": "edit"

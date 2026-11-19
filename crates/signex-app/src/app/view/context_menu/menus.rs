@@ -15,7 +15,7 @@ use super::*;
 
 use super::items::{
     command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_msg, dd_planned, dd_planned_because,
-    dd_planned_submenu, dd_ruled, submenu_launcher, text,
+    dd_planned_submenu, dd_ruled, submenu_launcher, tag_command, text,
 };
 use crate::app::command::CommandContext;
 use crate::icons as ic;
@@ -564,8 +564,8 @@ pub(super) fn pcb_canvas_menu_entries(
 /// The board canvas menu (#2240, #2405): Find Similar and Find; the Place
 /// and Align flyouts; Undo and Redo; the clipboard; move, turn, flip and
 /// mirror; the pin swap and reuse block group (#2410); Delete; Board Sketch;
-/// the net of the selection; Cross Probe and
-/// Properties; then the View group's Toggle Ratsnest. Each row runs its
+/// the net of the selection; Cross Probe, Properties and Compare with
+/// Schematic; then the View group's Toggle Ratsnest. Each row runs its
 /// catalog command like the keys and the Edit menu do, and is live exactly
 /// when that command is enabled in `ctx`: on a read-only board every editing
 /// row is greyed. Align is offered with a selection, as on a sheet.
@@ -669,11 +669,36 @@ pub(super) fn pcb_canvas_menu_with_blocks(
             Some(ic::icon_dd_properties(tid)),
             "edit_selected_object_properties",
         ),
+        compare_with_schematic_row(i18n, ctx),
         DropdownEntry::Separator,
         // View group (#2223): the View menu's board-view row.
         row(None, "toggle_ratsnest"),
     ]);
     v
+}
+
+/// The board menu's Compare with Schematic row (#2462): runs
+/// `compare_board_with_schematic` under a shorter name than its menu text,
+/// live exactly when the command is.
+fn compare_with_schematic_row(i18n: &I18n, ctx: &CommandContext) -> DropdownEntry<Message> {
+    const ID: &str = "compare_board_with_schematic";
+    let label = text(i18n, menu_ids::CTX_COMPARE_WITH_SCHEMATIC);
+    let live = AppCommandId::new(ID)
+        .ok()
+        .filter(|id| crate::app::command::is_enabled(id, ctx));
+    let entry = match live {
+        Some(id) => dd_msg(
+            None,
+            &label,
+            "",
+            Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command {
+                id,
+                project: None,
+            })),
+        ),
+        None => dd_disabled(None, &label, None),
+    };
+    tag_command(entry, ID)
 }
 
 /// What the document-tab menu is built from: the clicked tab and the facts

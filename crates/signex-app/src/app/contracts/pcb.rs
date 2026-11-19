@@ -66,6 +66,8 @@ pub enum PcbMsg {
     Panel(crate::app::BoardPanelMsg),
     /// Back Annotate and its dialog (#1312).
     BackAnnotate(crate::app::BackAnnotateMsg),
+    /// Compare Board with Schematic and its dialog (#2462).
+    CompareBoard(crate::app::CompareBoardMsg),
     /// Board Reports (#2404) and Board Print / PDF (#2402).
     Output(crate::app::BoardOutputMsg),
     /// The PCB Active Bar's dropdowns (#2352).

@@ -360,6 +360,25 @@ impl Signex {
             .then(|| self.view_back_annotate_dialog())
     }
 
+    /// Compare Board with Schematic (#2462).
+    pub(in crate::app::view) fn compare_board_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .compare_board
+            .is_some()
+            .then(|| self.view_compare_board_dialog())
+    }
+
+    /// The confirmation before its Apply deletes from the board.
+    pub(in crate::app::view) fn compare_board_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .compare_board
+            .as_ref()
+            .is_some_and(|state| state.confirming)
+            .then(|| self.view_compare_board_confirm())
+    }
+
     /// Update PCB from Schematic (#1312); a headless `apply=true` run has no
     /// dialog.
     pub(in crate::app::view) fn update_pcb_overlay(&self) -> Option<Element<'_, Message>> {

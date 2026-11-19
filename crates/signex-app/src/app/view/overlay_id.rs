@@ -110,6 +110,10 @@ pub(crate) enum OverlayId {
     BoardOutput,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
     BackAnnotate,
+    /// Project ▸ Compare Board with Schematic… (#2462).
+    CompareBoard,
+    /// Its confirmation listing the board deletions, above it.
+    CompareBoardConfirm,
     AnnotateDialog,
     AnnotateResetConfirm,
     ReprefixConfirm,
@@ -151,7 +155,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 72] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -207,6 +211,9 @@ pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::FabOutputs,
     OverlayId::BoardOutput,
     OverlayId::BackAnnotate,
+    OverlayId::CompareBoard,
+    // Above its dialog: Esc closes the confirmation first.
+    OverlayId::CompareBoardConfirm,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
     OverlayId::ReprefixConfirm,
@@ -335,6 +342,8 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::FabOutputs
         | OverlayId::BoardOutput
         | OverlayId::BackAnnotate
+        | OverlayId::CompareBoard
+        | OverlayId::CompareBoardConfirm
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
         | OverlayId::ReprefixConfirm
@@ -560,6 +569,10 @@ impl Signex {
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
+            OverlayId::CompareBoard => layers.extend(self.compare_board_overlay()),
+            OverlayId::CompareBoardConfirm => {
+                layers.extend(self.compare_board_confirm_overlay());
+            }
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
             OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),

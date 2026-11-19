@@ -7,7 +7,7 @@
 //! revision, so it is one undo step and refused once the board moved on.
 
 mod command;
-mod design;
+pub(crate) mod design;
 mod execute;
 mod fix;
 mod new_pcb;
