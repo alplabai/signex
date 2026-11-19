@@ -555,7 +555,7 @@ mod tests {
                 "Close".to_string(),
             ] {
                 assert!(
-                    shown.iter().any(|t| *t == expected),
+                    shown.contains(&expected),
                     "{id:?}: {expected:?} not in {shown:?}"
                 );
             }
@@ -585,10 +585,7 @@ mod tests {
             }
         );
         let shown = texts(view(i18n, &tokens, &sections, &filtered, &facts()));
-        assert!(
-            shown.iter().any(|t| *t == caption),
-            "{caption:?} not in {shown:?}"
-        );
+        assert!(shown.contains(&caption), "{caption:?} not in {shown:?}");
     }
 
     #[test]

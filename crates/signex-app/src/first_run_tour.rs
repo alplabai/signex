@@ -291,7 +291,7 @@ mod tests {
 
         let tokens = theme_tokens(ThemeId::GraphiteLight);
         let shown = texts(view(i18n, &tokens, &facts(WheelMode::Scroll)));
-        assert!(shown.iter().any(|t| *t == scroll), "{shown:?}");
+        assert!(shown.contains(&scroll), "{shown:?}");
         assert!(
             shown.iter().any(|t| t == "Wheel set to Scroll ·"),
             "{shown:?}"
