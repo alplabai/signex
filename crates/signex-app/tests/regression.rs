@@ -739,3 +739,7 @@ mod sketch_canvas_values;
 // board rows turn that off without an undo step.
 #[path = "regression/sketch_snap_board.rs"]
 mod sketch_snap_board;
+// mockup 179d / mockup 190 - board sketch outline checks in Properties and the bake
+// preview drawn on the canvas.
+#[path = "regression/board_sketch_checks.rs"]
+mod board_sketch_checks;

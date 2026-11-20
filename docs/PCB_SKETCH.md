@@ -188,7 +188,18 @@ Bake**.
   "Discard changes"). It never writes.
 - **Bake preview** opens a card with what Bake would write, a count per
   board target, or why the sketch does not bake; "Back to sketch" closes
-  it. It writes nothing.
+  it. It writes nothing. While it is open the canvas draws the result
+  (Graphite mockup #190): a veil in the ground colour, then the baked outline over the
+  board area, cutouts and mounting holes as openings, keepouts outlined
+  and faintly filled, V-scores dashed, all in the theme slots of
+  [Drawing the board](#drawing-the-board), with the sketch faint on top.
+  The bake runs in `BoardSketchSession::refresh_preview` and the canvas
+  reads it from `SketchExit::board_result`; a refused bake draws nothing.
+  When the sketch does not bake, the card names why, and a click on the
+  reason selects the entity the refusal names
+  (`BoardBakeError::place`). The card also lists the failed
+  [outline checks](#outline-checks), each selecting its place; they warn
+  only.
 
 A save, close, quit or undock still commits the copy and keeps the mode on
 (`settle_board_sketch_of`), so a save never drops sketch work; the working
@@ -215,6 +226,31 @@ Top · grid …") and its Parameters button and table
 ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#parameters)); on a board, Esc
 with only the table open still acts as Discard changes, so close the
 table with its Close button.
+
+## Outline checks {#outline-checks}
+
+With nothing selected, Properties shows an **Outline checks** section under
+the Board summary (Graphite mockup #179d). The checks run on the solve the editor already
+has (no second solve) and walk the outline with the bake's own profile walk
+(`signex_bake::board::outline_checks`), so they see what Bake would write.
+They are read each time the panel is built, so every edit, Properties edit,
+undo or solve shows them at once.
+
+| Check | Fails with |
+|---|---|
+| Closed: one loop | each pair of open ends (the two edges and the gap between their ends, in mm), a fork, or the number of loops |
+| No self-intersection | the two crossing edges and the point |
+| Holes, cutouts and keepouts inside the outline | each opening that is not inside (a mounting hole by its drill; touching the edge counts as inside) |
+| Inside corners | never runs yet: it needs the router tool diameter, which no fab profile or rule carries (open decision) |
+
+A check that cannot run says why: no outline drawn (the board keeps its
+own), the outline not one closed loop yet, or the sketch not solved. A
+failing line names its place, and a click selects that entity (the first
+one, for a pair). An open outline names the gap only: there is no Close
+gap action until the heal tolerance is decided.
+
+**A failing check warns; Bake still applies the sketch** (`DECISIONS.md`,
+2026-11-20, pending whether a failing check should block Bake).
 
 ## Drawing the board {#drawing-the-board}
 
@@ -249,9 +285,6 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
   anchor, and the Create / Modify rows Slot, Polygon, Chamfer, Extend and
   Linear Pattern (#2518): none is offered until it bakes. Patterns bake
   their instances with #2517.
-- The bake preview drawn on the canvas in layer colours; today it is a
-  count per target.
-
 - Drawing V-scores. (Exporting them is done: through cutouts go to the
   Gerber profile, mounting holes to the drill files and V-scores to their own
   Gerber image; see [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).)

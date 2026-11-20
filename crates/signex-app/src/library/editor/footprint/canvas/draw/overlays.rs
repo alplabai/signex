@@ -328,5 +328,7 @@ impl FootprintCanvas<'_> {
             // The badge's words name the snap target (mockup #188).
             super::sketch::draw_sketch_snap_badge(frame, cstate, sketch, self.state);
         }
+        // mockup 190 — the bake preview, over the sketch it faints.
+        self.draw_bake_preview(frame, cstate);
     }
 }

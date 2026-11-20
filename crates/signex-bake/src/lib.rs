@@ -30,7 +30,7 @@ pub mod traced_loops;
 pub mod vscore;
 
 pub use array::bake_arrays;
-pub use board::{BoardBakeError, bake_board};
+pub use board::{BoardBakeError, OutlineChecks, bake_board, outline_checks};
 pub use body3d::bake_body3d;
 pub use courtyard::bake_courtyard;
 pub use cutout::bake_cutouts;

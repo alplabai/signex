@@ -114,7 +114,16 @@ reads **Bake preview · Discard changes · Bake**:
   leaves at once. It never writes to disk.
 - **Bake preview** shows a count per footprint target (pads, silk,
   courtyard, mask, paste, pours, keepouts, cutouts, V-scores); "Back to
-  sketch" closes it.
+  sketch" closes it. While it is open the canvas draws the result (Graphite mockup #190):
+  a veil in the ground colour, then the baked pads, silk and courtyard as
+  Pads mode draws them and the mask openings, paste apertures, pours,
+  keepouts and cutouts in their layer colours (the board palette's
+  `board_layer_colour`), with the sketch faint on top. The pads, silk and
+  courtyard are the editor's own (the footprint bakes on every solve); the
+  other fields are baked from the same solve when the canvas redraws
+  (`canvas/draw/sketch/bake_overlay.rs`). The card also lists the last
+  bake's warnings, the features it left out; they name no entity, so a
+  click on them does nothing.
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.

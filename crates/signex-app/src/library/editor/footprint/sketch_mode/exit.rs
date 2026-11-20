@@ -6,7 +6,10 @@
 //! module is the footprint host's half and the state both read.
 //! See `docs/FOOTPRINT_SKETCH.md`, "Leaving sketch mode".
 
+use std::sync::Arc;
+
 use signex_library::Footprint;
+use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::baked_kinds::BakedKind;
 
 use crate::app::FootprintDocument;
@@ -25,6 +28,10 @@ pub struct SketchExit {
     pub preview: bool,
     /// Discard changes asked to confirm and waits for the answer.
     pub confirming_discard: bool,
+    /// What a board bake of the sketch writes, while the preview is open
+    /// and the sketch bakes: the canvas draws it (mockup 190). Always `None` on
+    /// a footprint, whose own fields are the bake result.
+    pub board_result: Option<Arc<BakedBoard>>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +100,8 @@ pub fn apply(editor: &mut FootprintDocument, msg: &FootprintEditorMsg) -> ExitOu
         FootprintEditorMsg::SketchBakePreviewToggled => {
             let exit = &mut editor.state.sketch_exit;
             exit.preview = !exit.preview;
+            // The canvas draws the bake result while the preview is open.
+            editor.canvas_cache.clear();
             ExitOutcome::Stay
         }
         FootprintEditorMsg::SketchBakeRequested => ExitOutcome::Leave,
@@ -161,3 +170,7 @@ pub fn footprint_count(fp: &Footprint, kind: BakedKind) -> Option<usize> {
 #[cfg(test)]
 #[path = "exit_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "exit_preview_tests.rs"]
+mod preview_tests;

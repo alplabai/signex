@@ -24,6 +24,7 @@
 //!   `SnappingMode`, `GridDisplay`.
 
 mod board_backdrop;
+pub mod board_checks;
 pub mod canvas_text;
 pub mod conflict;
 pub mod context_menu;
@@ -42,6 +43,7 @@ pub mod tool;
 mod zoom_request;
 
 pub use board_backdrop::{BackdropTrack, BoardBackdrop};
+pub use board_checks::{CheckLine, CheckStatus, check_lines};
 pub use canvas_text::SketchCanvasText;
 pub use context_menu::{
     FootprintContextAction, FootprintContextMenuState, FootprintContextSubmenu,

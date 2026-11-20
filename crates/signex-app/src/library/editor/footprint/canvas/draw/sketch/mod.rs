@@ -15,6 +15,7 @@
 //! keeps its original primitive-push sequence byte-for-byte.
 
 mod arrows;
+mod bake_overlay;
 mod constraints;
 mod entities;
 mod fills;
