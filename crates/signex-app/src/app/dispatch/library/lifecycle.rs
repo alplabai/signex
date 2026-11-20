@@ -181,7 +181,7 @@ impl Signex {
                     ));
                 }
             };
-        match result {
+        let link = match result {
             Ok(prepared) => {
                 let library_id = prepared.entry.library_id;
                 let newly_mounted = self.library.library_at(&prepared.entry.root).is_none();
@@ -191,24 +191,28 @@ impl Signex {
                     return self.readmit_stock_copies(&path);
                 }
                 self.library.drift.check_pending = true;
+                // The primitive picker's "Link without copying" binds now.
+                let link = self.picker_link_after_mount(&path);
                 self.picker_mount_settled(&path, None);
                 // Sheets opened before this library mounted skipped its
                 // symbols; scan them now (#1449).
                 if newly_mounted {
                     self.rescan_library_updates_after_mount(library_id);
                 }
+                link
             }
             Err(e) => {
                 report(self, &path, &e);
                 return self.readmit_stock_copies(&path);
             }
-        }
-        match intent {
+        };
+        let open = match intent {
             crate::library::mount::MountIntent::Silent => Task::none(),
             crate::library::mount::MountIntent::OpenBrowserTab => {
                 self.finish_open_library_browser(path)
             }
-        }
+        };
+        Task::batch([link, open])
     }
 
     /// When `path` is the bundled stock and its mount failed, mount the

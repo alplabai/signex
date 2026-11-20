@@ -2,15 +2,12 @@
 //! at a path, the open-library picker, adding standalone symbol /
 //! footprint files, and registering a standalone library onto the
 //! active project.
-//!
-//! Extracted verbatim from the library dispatcher (`dispatch/library`);
-//! pure code motion, zero behaviour change.
 
 use super::*;
 
 impl Signex {
     /// Resolution of the "New Component Library" save-as dialog — pops
-    /// the "Library Options" modal (Git / LFS opt-in) rather than
+    /// the New Library dialog (Git / LFS opt-in) rather than
     /// creating immediately.
     pub(super) fn handle_prompt_library_create_options(
         &mut self,
@@ -18,8 +15,8 @@ impl Signex {
         lib_path: std::path::PathBuf,
     ) -> Task<Message> {
         // Stage 11 of `v0.9-snxlib-as-file-plan.md`: pop the
-        // "Library Options" modal here instead of creating
-        // immediately. The modal lets the user opt into Git
+        // New Library dialog here instead of creating
+        // immediately. The dialog lets the user opt into Git
         // LFS for binary 3D models before any disk +
         // `git init` runs. Confirming dispatches
         // `LibraryCreateOptionsConfirm` which calls into
@@ -34,7 +31,7 @@ impl Signex {
         Task::none()
     }
 
-    /// "Library Options" modal — toggle the "Use Git LFS" checkbox.
+    /// New Library dialog — toggle the "Use Git LFS" switch.
     pub(super) fn handle_library_create_options_toggle_lfs(&mut self) -> Task<Message> {
         if let Some(state) = self.library.create_options.as_mut() {
             state.use_lfs = !state.use_lfs;
@@ -42,8 +39,8 @@ impl Signex {
         Task::none()
     }
 
-    /// "Library Options" modal — toggle the "Enable version control"
-    /// checkbox.
+    /// New Library dialog — toggle the "Enable version control" switch.
+    /// Clears a refusal: it only applies with version control on.
     pub(super) fn handle_library_create_options_toggle_git(&mut self) -> Task<Message> {
         if let Some(state) = self.library.create_options.as_mut() {
             state.enable_git = !state.enable_git;
@@ -59,7 +56,7 @@ impl Signex {
         Task::none()
     }
 
-    /// "Library Options" modal — Create Library button.
+    /// New Library dialog — Create Library button.
     pub(super) fn handle_library_create_options_confirm(&mut self) -> Task<Message> {
         // Refuse before anything is registered or written, and keep the modal
         // open with the reason so the user can pick another place.
@@ -80,6 +77,17 @@ impl Signex {
             )
         } else {
             Task::none()
+        }
+    }
+
+    /// New Library dialog — "Choose another location…" on the refusal
+    /// banner: close the dialog and reopen the save-as picker for the same
+    /// project. Nothing is written; the reopened dialog starts with its
+    /// options off again.
+    pub(super) fn handle_library_create_options_relocate(&mut self) -> Task<Message> {
+        match self.library.create_options.take() {
+            Some(state) => self.handle_create_library_for_project(state.project_path),
+            None => Task::none(),
         }
     }
 
@@ -175,7 +183,7 @@ impl Signex {
         )
     }
 
-    /// Resolution of the "Library Options" modal (Stage 11 of
+    /// Resolution of the New Library dialog (Stage 11 of
     /// `v0.9-snxlib-as-file-plan.md`). Re-resolves the project (in
     /// case it was unloaded between modal spawn + confirm), then
     /// **registers** a pending library — no disk writes here. The
@@ -184,8 +192,8 @@ impl Signex {
     /// `commands::create_pending_library`, called from
     /// `begin_project_save`. Closes
     /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
-    /// explicit user save" invariant. `use_lfs` carries the modal's
-    /// checkbox state — when on, the eventual adapter writes
+    /// explicit user save" invariant. `use_lfs` carries the dialog's
+    /// switch state — when on, the eventual adapter writes
     /// `.gitattributes` for `*.step` / `*.stp` / `*.wrl` / `*.iges`
     /// and stages it into the initial commit.
     pub(super) fn handle_create_library_at_path(
@@ -309,13 +317,21 @@ impl Signex {
             PickerMsg::PanelSearchChanged(_)
             | PickerMsg::PanelLibraryToggled(_)
             | PickerMsg::PanelComponentClicked(_) => {}
+            // A filter that hides the selected row drops the selection, so
+            // Enter and Place never act on a row the list does not show.
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
                 self.library.sync_view_caches_in(&self.ui_state.i18n);
+                if let Some(picker) = self.library.picker.as_mut() {
+                    picker.drop_hidden_selection();
+                }
             }
             PickerMsg::RangeFilter(msg) => {
                 picker.range_filters.apply(msg);
                 self.library.sync_view_caches_in(&self.ui_state.i18n);
+                if let Some(picker) = self.library.picker.as_mut() {
+                    picker.drop_hidden_selection();
+                }
             }
             PickerMsg::SelectComponent(row_id) => {
                 // `ComponentSummary` carries `row_id` directly in the
@@ -331,7 +347,7 @@ impl Signex {
             PickerMsg::PlaceSelected
                 if !matches!(picker.mode, crate::library::state::PickerMode::Place) => {}
             PickerMsg::PlaceSelected => {
-                let Some((path, summary)) = picker.selected.clone() else {
+                let Some((path, summary)) = picker.shown_selection().cloned() else {
                     return Task::none();
                 };
                 let Some(table) = self.library.table_of_row(&path, summary.row_id) else {

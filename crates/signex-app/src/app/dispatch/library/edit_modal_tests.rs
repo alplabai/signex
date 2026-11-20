@@ -533,3 +533,242 @@ fn a_slot_the_row_holds_or_the_template_lacks_is_not_added() {
         Some(signex_library::ParamValue::Text("kept".into()))
     );
 }
+
+// ─── mockup row 130: the Internal PN conflict (lib-07) ───────────────
+
+/// A second row holding `pn`, cached in `table` of the library at `root`.
+fn cache_row(app: &mut Signex, root: &Path, table: &str, pn: &str) {
+    let mut other = row();
+    other.row_id = Uuid::now_v7();
+    other.internal_pn = InternalPn::new(pn);
+    app.library
+        .library_at_mut(root)
+        .expect("library")
+        .tables
+        .entry(table.to_string())
+        .or_default()
+        .push(other);
+}
+
+fn conflict(app: &Signex, root: &Path, pn: &str, row_id: RowId) -> Option<String> {
+    let lib = app.library.library_at(root).expect("library");
+    crate::library::edit_row_modal::pn_conflict(lib, pn, row_id)
+}
+
+#[test]
+fn a_row_never_collides_with_itself() {
+    let (app, root, row_id) = app_with_browser();
+    assert_eq!(conflict(&app, &root, "R-1500", row_id), None);
+    assert_eq!(conflict(&app, &root, " R-1500 ", row_id), None);
+}
+
+#[test]
+fn a_pn_another_table_holds_is_a_conflict_naming_that_table() {
+    let (mut app, root, row_id) = app_with_browser();
+    cache_row(&mut app, &root, "C", "C-1");
+    assert_eq!(conflict(&app, &root, "C-1", row_id), Some("C".to_string()));
+    assert_eq!(conflict(&app, &root, "C-2", row_id), None);
+}
+
+/// The modal asks the backends' own rule: trimmed, case-sensitive, a blank
+/// PN never clashes.
+#[test]
+fn the_conflict_compares_the_way_the_backends_refuse_a_write() {
+    let (mut app, root, row_id) = app_with_browser();
+    cache_row(&mut app, &root, "C", "C-1");
+    cache_row(&mut app, &root, "C", "");
+    for wanted in ["C-1", " C-1", "C-1 ", "c-1", "C-10", "", "  "] {
+        assert_eq!(
+            conflict(&app, &root, wanted, row_id).is_some(),
+            InternalPn::clashes(wanted, "C-1") || InternalPn::clashes(wanted, ""),
+            "{wanted:?}"
+        );
+    }
+    assert_eq!(conflict(&app, &root, " C-1", row_id), Some("C".to_string()));
+    assert_eq!(conflict(&app, &root, "c-1", row_id), None);
+    assert_eq!(conflict(&app, &root, "", row_id), None);
+}
+
+/// Keeping the stored PN is no conflict even where another row already has
+/// it: the backends only check a changed PN, so such a row stays editable.
+#[test]
+fn keeping_a_pn_the_library_already_holds_twice_is_no_conflict() {
+    let (mut app, root, row_id) = app_with_browser();
+    cache_row(&mut app, &root, "C", "R-1500");
+    assert_eq!(conflict(&app, &root, "R-1500", row_id), None);
+}
+
+/// The texts of the open edit modal laid out at its card size, without
+/// Fluent's isolation marks, and what a click on `click` publishes.
+fn edit_modal_texts(app: &Signex, root: &Path, click: &str) -> (Vec<String>, Vec<LibraryMessage>) {
+    use crate::library::edit_row_modal::{EditRowContext, view};
+    let edit = app.library.library_browsers[root]
+        .edit_modal
+        .as_ref()
+        .expect("the modal is open");
+    let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let size = iced::Size::new(860.0, 640.0);
+    let build = || {
+        let context = EditRowContext::resolve(&app.library, root, edit, Vec::new());
+        view(root, edit, &tokens, i18n, false, context)
+    };
+    let texts = crate::layout_probe::lay_out_texts(build(), size)
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+    (
+        texts,
+        crate::layout_probe::messages_on_click(build(), size, click),
+    )
+}
+
+#[test]
+fn a_pn_conflict_shows_under_the_field_and_in_the_footer_and_holds_save() {
+    let (mut app, root, row_id) = app_with_browser();
+    cache_row(&mut app, &root, "C", "C-1");
+    open_modal(&mut app, &root, row_id);
+    let (_, clicked) = edit_modal_texts(&app, &root, "Save");
+    assert!(
+        clicked.iter().any(|m| matches!(
+            m,
+            LibraryMessage::BrowserEdit {
+                msg: BrowserEditMsg::Save,
+                ..
+            }
+        )),
+        "without a conflict Save is pressable: {clicked:?}"
+    );
+
+    let _ = app.update(edit(&root, BrowserEditMsg::SetInternalPn("C-1".into())));
+    let (texts, clicked) = edit_modal_texts(&app, &root, "Save");
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "Internal PN \u{201C}C-1\u{201D} is already used in C."),
+        "{texts:?}"
+    );
+    assert!(
+        texts.iter().any(|t| t == "1 problem: Internal PN"),
+        "{texts:?}"
+    );
+    assert!(clicked.is_empty(), "Save waits: {clicked:?}");
+}
+
+/// Save sent through update while another row holds the draft's Internal
+/// PN is refused there too, not only by the disabled button: no save
+/// starts and the stored row is unchanged.
+#[test]
+fn save_with_a_conflicting_pn_through_update_writes_nothing() {
+    let (mut app, root, row_id) = app_with_browser();
+    cache_row(&mut app, &root, "C", "C-1");
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(&root, BrowserEditMsg::SetInternalPn("C-1".into())));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
+
+    let modal = app.library.library_browsers[&root]
+        .edit_modal
+        .as_ref()
+        .expect("the modal stays open");
+    assert!(modal.saving.is_none(), "no save started");
+    assert_eq!(modal.draft.internal_pn.as_str(), "C-1", "the draft is kept");
+    let library_id = app.library.library_at(&root).expect("library").library_id;
+    let written = app
+        .library
+        .set
+        .get(library_id)
+        .expect("adapter")
+        .read_row(TABLE, row_id)
+        .expect("the row");
+    assert_eq!(written.internal_pn.as_str(), "R-1500", "nothing is written");
+}
+
+#[test]
+fn a_failed_save_shows_in_the_footer_summary() {
+    let (mut app, root, row_id) = app_with_browser();
+    open_modal(&mut app, &root, row_id);
+    app.library
+        .library_browsers
+        .get_mut(&root)
+        .and_then(|b| b.edit_modal.as_mut())
+        .expect("modal")
+        .error = Some("the backend refused".into());
+    let (texts, _) = edit_modal_texts(&app, &root, "Save");
+    assert!(
+        texts.iter().any(|t| t == "the backend refused"),
+        "{texts:?}"
+    );
+}
+
+/// Template rows carry the "template" pill and no ✕; a custom row keeps
+/// its ✕.
+#[test]
+fn template_rows_have_a_pill_and_no_remove_and_custom_rows_keep_it() {
+    let (mut app, root, row_id) = app_with_browser();
+    with_slot_template(&mut app, &root);
+    open_modal(&mut app, &root, row_id);
+    add_slot(&mut app, &root, "count");
+    let _ = app.update(edit(&root, BrowserEditMsg::AddParam));
+    let (texts, clicked) = edit_modal_texts(&app, &root, "\u{2715}");
+    let count = |label: &str| texts.iter().filter(|t| *t == label).count();
+    assert_eq!(count("template"), 1, "{texts:?}");
+    assert_eq!(count("\u{2715}"), 1, "{texts:?}");
+    assert!(
+        clicked.iter().any(|m| matches!(
+            m,
+            LibraryMessage::BrowserEdit {
+                msg: BrowserEditMsg::DeleteParam { key },
+                ..
+            } if key.starts_with("param_")
+        )),
+        "the custom row's ✕ removes it: {clicked:?}"
+    );
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.starts_with("Template parameters come from the ")),
+        "{texts:?}"
+    );
+}
+
+// ─── mockup row 137: the delete-row confirm ──────────────────────────
+
+#[test]
+fn the_delete_confirm_names_the_row_and_its_close_cancels() {
+    let (_app, root, row_id) = app_with_browser();
+    let confirm = crate::library::state::DeleteConfirmState {
+        table: TABLE.into(),
+        row_id,
+        internal_pn: "R-1500".into(),
+    };
+    let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let size = iced::Size::new(480.0, 400.0);
+    let build = || {
+        crate::library::edit_row_modal::view_delete_confirm(&root, &confirm, &tokens, i18n, false)
+    };
+    let texts: Vec<String> = crate::layout_probe::lay_out_texts(build(), size)
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect();
+    for wanted in [
+        "Delete Component?",
+        "Delete R-1500?",
+        "Delete row R-1500 from R? This cannot be undone from the UI.",
+    ] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted}: {texts:?}");
+    }
+    // The mockup row 137 caption is only a proposal: it is not drawn until accepted.
+    assert!(
+        !texts.iter().any(|t| t.contains("embedded copy")),
+        "{texts:?}"
+    );
+    let clicked = crate::layout_probe::messages_on_click(build(), size, "\u{00D7}");
+    assert!(
+        clicked
+            .iter()
+            .any(|m| matches!(m, LibraryMessage::BrowserDeleteRowCancel { .. })),
+        "{clicked:?}"
+    );
+}

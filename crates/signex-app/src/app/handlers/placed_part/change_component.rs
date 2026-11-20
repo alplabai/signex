@@ -50,7 +50,7 @@ impl Signex {
             return Task::none();
         };
         let (PickerMode::ChangeComponent(target), Some((path, summary))) =
-            (&picker.mode, picker.selected.clone())
+            (&picker.mode, picker.shown_selection().cloned())
         else {
             return Task::none();
         };

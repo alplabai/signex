@@ -301,7 +301,8 @@ dialog-title-open-library = Open Library
 dialog-title-edit-component = Edit Component Details
 dialog-title-pick-primitive = Pick Primitive
 dialog-title-document-options = Document Options
-dialog-title-library-options = Library Options
+# The dialog that sets up a library about to be created (its version control).
+dialog-title-library-options = New Library
 dialog-title-copy-to-library = Copy to Library
 dialog-title-library-updates = Library Updates Available
 dialog-title-close-library = Close Library

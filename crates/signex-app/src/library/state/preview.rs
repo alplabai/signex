@@ -15,6 +15,23 @@ pub struct PickerState {
     pub mode: super::placed_part::PickerMode,
 }
 
+impl PickerState {
+    /// The selected row, only while the list shows it: Enter and Place act
+    /// on nothing the filter has hidden.
+    pub fn shown_selection(&self) -> Option<&(PathBuf, ComponentSummary)> {
+        self.selected
+            .as_ref()
+            .filter(|(path, summary)| self.rows.shows(path, summary.row_id))
+    }
+
+    /// Clear the selection when the filter no longer shows it.
+    pub(crate) fn drop_hidden_selection(&mut self) {
+        if self.shown_selection().is_none() {
+            self.selected = None;
+        }
+    }
+}
+
 /// Inline form state for "+ New Table…" on the Library Browser
 /// tab strip — collects the name (and validation error if any) before the
 /// dispatcher calls `create_empty_table` on the active library.

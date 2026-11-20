@@ -555,7 +555,7 @@ pub struct LibraryState {
     pub recovery: Option<super::recovery::RecoveryDialog>,
     /// Library Missing dialogs queued behind `recovery` (#1897).
     pub missing: missing_queue::MissingLibraries,
-    /// "Library Options" modal state — `None` while closed. Opens
+    /// New Library dialog state — `None` while closed. Opens
     /// after the user picks a `.snxlib` save target in the New Library
     /// Save-As dialog (Stage 11 of `v0.9-snxlib-as-file-plan.md`). The
     /// modal lets the user opt into Git LFS for binary 3D models
@@ -667,6 +667,9 @@ pub struct LibraryState {
     pub owed_cascades: owed_cascades::OwedCascades,
     /// Libraries whose close waits for their writes to finish.
     pub closing: std::collections::HashSet<PathBuf>,
+    /// Libraries mounted read-only because their Git history is missing
+    /// (Skip for now on Git Repository Missing), until it is restored.
+    pub history_missing: std::collections::HashSet<PathBuf>,
     /// Libraries unmounted since the last `finish_update`, which drains
     /// this to close their Library Browser and Component Preview tabs.
     pub unmounted: Vec<PathBuf>,
@@ -952,7 +955,7 @@ pub struct DocumentOptionsModalState {
     pub draft: LibraryDisplaySettings,
 }
 
-/// State for the "Library Options" modal that pops up between the
+/// State for the New Library dialog that pops up between the
 /// Save-As dialog (where the user picked the `.snxlib` filename) and
 /// the actual `LocalGitAdapter::init` call. Carries the project the
 /// library should attach to + the chosen `.snxlib` path so the

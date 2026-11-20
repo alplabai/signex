@@ -81,6 +81,9 @@ pub(crate) use state::library_entry;
 pub(crate) use state::rule_profile_ui;
 pub(crate) use state::scope::{deepest_owner, deepest_owners, path_key_with};
 pub(crate) use state::volume_case::probe_directory_case;
+// The Library dialogs' window-size tests name the modal they open.
+#[cfg(test)]
+pub(crate) use state::ModalId;
 #[cfg(test)]
 mod draft_save_point_tests;
 pub(crate) mod stitched_netlist;
