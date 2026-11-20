@@ -175,11 +175,11 @@ impl Signex {
             );
             return;
         }
-        self.ui_state.find_similar = Some(FindSimilarState::new(
+        self.ui_state.find_similar = Some(Box::new(FindSimilarState::new(
             describe(sheet, &seed),
             values,
             self.document_state.active_path.clone(),
-        ));
+        )));
     }
 
     /// Select N: select the matches on this sheet. On a project scope the

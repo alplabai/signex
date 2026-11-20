@@ -270,8 +270,9 @@ impl Signex {
             SelectionFilterMsg::OpenCustom => {
                 if let Some(editor) = self.active_footprint_editor() {
                     let filter = editor.state.selection_filter;
-                    self.ui_state.selection_filter_custom =
-                        Some(crate::app::SelectionFilterCustomState::from_filter(filter));
+                    self.ui_state.selection_filter_custom = Some(Box::new(
+                        crate::app::SelectionFilterCustomState::from_filter(filter),
+                    ));
                 }
                 self.finish_update()
             }

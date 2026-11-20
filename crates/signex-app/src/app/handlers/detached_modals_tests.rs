@@ -74,7 +74,7 @@ fn open(app: &mut Signex, modal: ModalId) {
             })
         }
         ModalId::SelectionFilterCustom => {
-            ui.selection_filter_custom = Some(SelectionFilterCustomState {
+            ui.selection_filter_custom = Some(Box::new(SelectionFilterCustomState {
                 pads: true,
                 tracks: true,
                 arcs: true,
@@ -88,7 +88,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 fills: true,
                 other: true,
                 preset_name: String::new(),
-            })
+            }))
         }
         ModalId::About => ui.about_open = true,
         ModalId::KeyboardShortcuts => ui.keyboard_shortcuts_open = true,

@@ -58,7 +58,7 @@ impl Signex {
             .map(|l| l.text.trim())
             .find(|text| !text.is_empty())
             .map(str::to_owned);
-        self.ui_state.paste_array = Some(dialog);
+        self.ui_state.paste_array = Some(Box::new(dialog));
     }
 
     pub(crate) fn handle_paste_array_message(&mut self, msg: PasteArrayMsg) -> Task<Message> {
