@@ -561,11 +561,17 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   derived again. While the panel is open, a project with no current index has
   one built off the UI thread; after an edit the last list stays shown until
   the new index lands.
-- Each row shows the net's name, its first matching net class and how many
-  component pins it connects. Named nets come first, then auto-named ones. The
-  filter matches the net name or the class name.
-- Clicking a net expands it to its pins, labels, power ports and sheet entries,
-  each with its sheet. Clicking a member highlights the net on every sheet and
+- Each row shows the net's name, its first matching net class as a pill and,
+  on the right, how many component pins it connects (Graphite mockup #58).
+  Named nets come first, then auto-named ones. The filter matches the net
+  name or the class name.
+- Clicking a net expands it, on the selection fill, to its pins, labels,
+  power ports and sheet entries, each with a kind icon (power ports in the
+  power colour, the kind named in its tooltip), a pin's name and its sheet. A
+  long list shows six rows, then "+ N more pins".
+- No project, a read in progress, an index that could not be read (with Open
+  Messages) and a filter with no match (with Clear filter) each show a card.
+  The summary footer stays under the list in both tabs. Clicking a member highlights the net on every sheet and
   goes to the member through net navigation (`go_to_member`), opening its
   sheet when needed.
 - Two tabs at the top (#1274), each with the count of its list: By Net, the
