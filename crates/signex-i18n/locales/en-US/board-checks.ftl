@@ -9,11 +9,6 @@ drc-panel-severity-warning = Warning
 drc-panel-severity-info = Info
 drc-panel-severity-off = Off
 drc-panel-show-waived = Show waived
-drc-panel-waived-count =
-    { $count ->
-        [one] 1 violation waived
-       *[other] { $count } violations waived
-    }
 drc-panel-group = { $rule } ({ $count })
 drc-panel-objects =
     { $count ->
@@ -23,14 +18,9 @@ drc-panel-objects =
 drc-panel-none-shown = No violations match the filters.
 drc-panel-waive = Waive
 drc-panel-unwaive = Unwaive
-drc-panel-waive-note = Why is this violation accepted?
-drc-panel-waive-confirm = Waive
-drc-panel-waive-cancel = Cancel
 drc-panel-waived-note = Waived: { $note }
 drc-panel-waived-no-note = Waived
 drc-panel-rule-link = Rule
-# The rule link of a group, while the Rules table is not on boards yet.
-drc-panel-rule-link-unavailable = Opens this rule in the Rules table, which boards do not have yet.
 # Undo labels.
 drc-panel-waive-undo = Waive DRC Violation
 drc-panel-unwaive-undo = Unwaive DRC Violation
@@ -66,3 +56,44 @@ board-net-classes-patterns =
     }
 board-net-classes-invalid-number = { $field } must be a number of millimetres, or empty for the board's value.
 board-net-classes-invalid-color = The colour must be #RRGGBB or #RRGGBBAA, or empty for none.
+
+## DRC panel (#87, #88): the idle header, notices, count tiles and rows.
+drc-panel-rules = Rules
+drc-panel-default-clearance = No clearance rule set on this board; checked with { $clearance } mm.
+drc-panel-default-clearance-written = No clearance rule set on this board; { $clearance } mm applies where no written rule does.
+# A link after the default-clearance notice: opens the Rules tab on Clearance.
+drc-panel-set-in-rules = Set it in Rules
+drc-panel-see-messages = see Messages
+drc-panel-rules-not-applied =
+    { $count ->
+        [one] 1 written rule was not applied;
+       *[other] { $count } written rules were not applied;
+    }
+drc-panel-rule-text-unparsed = The rule text has a syntax error and was not applied;
+drc-panel-keepouts-skipped =
+    { $count ->
+        [one] 1 keepout could not be checked;
+       *[other] { $count } keepouts could not be checked;
+    }
+# Captions under the count tiles, short to fit four in a row.
+drc-panel-tile-clearance = clearance
+drc-panel-tile-short = short
+drc-panel-tile-unconnected = unconn.
+drc-panel-tile-keepout = keepout
+drc-panel-tiles-hint = Click a tile to list only that category.
+# $category is one of the category names below.
+drc-panel-tiles-showing = Showing { $category } only
+drc-panel-category-clearance = clearance violations
+drc-panel-category-short = shorts
+drc-panel-category-unconnected = unconnected links
+drc-panel-category-keepout = keepout violations
+drc-panel-clear-filter = Clear filter
+drc-panel-show-waived-count =
+    { $count ->
+        [one] (1 violation waived)
+       *[other] ({ $count } violations waived)
+    }
+drc-panel-show = Show
+# The second line of a row: layer, position and how many objects.
+drc-panel-row-place = { $layer } · { $place } · { $objects }
+drc-panel-row-place-no-layer = { $place } · { $objects }

@@ -2,43 +2,14 @@
 
 drc-run = Run DRC
 drc-heading = Design rule check
-drc-default-clearance = No clearance rule set on this board; checked with { $clearance } mm. Set it in Board Setup.
 drc-idle = Run DRC to check the board against its rules.
 drc-running = Checking the board...
 drc-clean = No violations.
-# With written DRC rules (#2307): the board value holds only where none applies.
-drc-default-clearance-written = No clearance rule set on this board; { $clearance } mm applies where no written rule does. Set it in Board Setup.
-drc-rules-not-applied =
-    { $count ->
-        [one] 1 written rule was not applied; see Messages.
-       *[other] { $count } written rules were not applied; see Messages.
-    }
-drc-rule-text-unparsed = The rule text has a syntax error and was not applied; see Messages.
 drc-stale = The board changed after this check; run it again.
-drc-summary =
-    { $clearance ->
-        [one] 1 clearance violation
-       *[other] { $clearance } clearance violations
-    }, { $short ->
-        [one] 1 short
-       *[other] { $short } shorts
-    }, { $unconnected ->
-        [one] 1 unconnected link
-       *[other] { $unconnected } unconnected links
-    }, { $keepout ->
-        [one] 1 keepout violation
-       *[other] { $keepout } keepout violations
-    }
 drc-skipped =
     { $count ->
         [one] 1 item could not be checked.
        *[other] { $count } items could not be checked.
-    }
-# A keepout whose outline does not convert was not checked (#2300).
-drc-keepouts-skipped =
-    { $count ->
-        [one] 1 keepout could not be checked; see Messages.
-       *[other] { $count } keepouts could not be checked; see Messages.
     }
 drc-more = and { $count } more not shown
 # A violation row was clicked while some of its items sit on hidden layers.

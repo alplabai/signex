@@ -2,10 +2,13 @@
 //! them. Pure data; which footprints a part may take comes from its own
 //! library row (`footprint_choices_for`, the list Properties shows).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 
 use uuid::Uuid;
+
+use super::filter::AssignFilter;
+use super::preview::PreviewLoad;
 
 /// One footprint a part's library row offers: the default or an alternate.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,8 +28,10 @@ pub enum PartAccess {
     SheetClosed,
     /// Its sheet was written by a newer Signex and opens read-only.
     ReadOnly,
-    /// Its library row is not open, or it has no row (a hand-made part).
-    NoRow,
+    /// It links to a library row, but that library is not open.
+    RowNotOpen,
+    /// It has no library link (a hand-made part).
+    NoLink,
     /// Its row offers one footprint only.
     NoAlternates,
 }
@@ -78,6 +83,18 @@ pub struct AssignFootprintsState {
     pub(crate) selected: BTreeSet<usize>,
     /// Why the read failed or Apply refused, shown in the dialog.
     pub(crate) error: Option<AssignProblem>,
+    /// The filter chip that is on.
+    pub(crate) filter: AssignFilter,
+    /// The filter field: designator, value or library row.
+    pub(crate) query: String,
+    /// The row under the pointer: its "Tick all from this row" link shows.
+    pub(crate) hovered: Option<usize>,
+    /// The row the preview column draws.
+    pub(crate) preview_row: Option<usize>,
+    /// The preview column is widened.
+    pub(crate) preview_wide: bool,
+    /// Footprints read for the preview, by binding.
+    pub(crate) previews: HashMap<String, PreviewLoad>,
 }
 
 /// Why the read failed or Apply refused. The dialog words it through the
@@ -138,14 +155,23 @@ impl AssignFootprintsState {
             picks: Vec::new(),
             selected: BTreeSet::new(),
             error: None,
+            filter: AssignFilter::All,
+            query: String::new(),
+            hovered: None,
+            preview_row: None,
+            preview_wide: false,
+            previews: HashMap::new(),
         }
     }
 
-    /// The read arrived: every part starts at the footprint it has today.
+    /// The read arrived: every part starts at the footprint it has today,
+    /// and the first one is previewed.
     pub(crate) fn show(&mut self, parts: Vec<FootprintPart>) {
         self.picks = vec![None; parts.len()];
+        self.preview_row = (!parts.is_empty()).then_some(0);
         self.parts = Some(parts);
         self.selected.clear();
+        self.hovered = None;
         self.error = None;
     }
 
@@ -202,10 +228,13 @@ impl AssignFootprintsState {
         }
     }
 
-    /// Tick every editable part, or none.
+    /// Tick every editable part the filter shows, or untick every part.
     pub(crate) fn select_all(&mut self, on: bool) {
         self.selected = if on {
-            self.editable_rows().collect()
+            let shown = self.visible_rows();
+            self.editable_rows()
+                .filter(|index| shown.contains(index))
+                .collect()
         } else {
             BTreeSet::new()
         };
@@ -223,7 +252,7 @@ impl AssignFootprintsState {
         self.selected.extend(same);
     }
 
-    fn editable_rows(&self) -> impl Iterator<Item = usize> + '_ {
+    pub(crate) fn editable_rows(&self) -> impl Iterator<Item = usize> + '_ {
         self.parts()
             .iter()
             .enumerate()
@@ -231,9 +260,14 @@ impl AssignFootprintsState {
             .map(|(i, _)| i)
     }
 
-    /// Whether every editable part is ticked (and there is one).
+    /// Whether every editable part the filter shows is ticked (and there is
+    /// one).
     pub fn all_selected(&self) -> bool {
-        let editable: Vec<usize> = self.editable_rows().collect();
+        let shown = self.visible_rows();
+        let editable: Vec<usize> = self
+            .editable_rows()
+            .filter(|index| shown.contains(index))
+            .collect();
         !editable.is_empty() && editable.iter().all(|i| self.selected.contains(i))
     }
 

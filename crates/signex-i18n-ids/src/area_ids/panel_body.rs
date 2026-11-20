@@ -29,13 +29,11 @@ define_ids! {
     PANELS_HISTORY_MORE = "panels-history-more";
     PANELS_ERC_WAIVE = "panels-erc-waive";
     PANELS_ERC_WAIVER_CANCEL = "panels-erc-waiver-cancel";
-    PANELS_ERC_FINDINGS_WAIVED = "panels-erc-findings-waived";
     PANELS_ERC_WAIVER_STATUS_ONE = "panels-erc-waiver-status-one";
     PANELS_ERC_WAIVER_STATUS_MANY = "panels-erc-waiver-status-many";
     PANELS_ERC_WAIVER_STATUS_LAPSED = "panels-erc-waiver-status-lapsed";
     PANELS_ERC_WAIVER_STATUS_UNMATCHED = "panels-erc-waiver-status-unmatched";
     PANELS_ERC_WAIVER_STATUS_INCOMPLETE = "panels-erc-waiver-status-incomplete";
-    PANELS_ERC_VIOLATION_WAIVER_ROW = "panels-erc-violation-waiver-row";
     PANELS_MULTI_TITLE = "panels-multi-title";
     PANELS_MULTI_OBJECTS_SELECTED = "panels-multi-objects-selected";
     PANELS_MULTI_SYMBOLS = "panels-multi-symbols";
