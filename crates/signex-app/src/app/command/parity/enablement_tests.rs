@@ -5,7 +5,7 @@
 use super::super::CommandContext;
 use super::super::enablement::is_enabled;
 use super::inputs::{FACTS, facts_read_by, samples};
-use super::needs::{self, NeedScope};
+use super::needs::{self, NeedReads};
 use crate::keymap::{AppCommandId, all_command_ids};
 
 const GOLDEN: &str = include_str!("testdata/enablement.golden.tsv");
@@ -32,7 +32,7 @@ fn table_text() -> String {
 }
 
 /// Every fact a gate of the catalog reads lands in exactly one half of the
-/// context, so a Core need cannot read a window fact and none is lost.
+/// context, so a `CoreOnly` need cannot read a window fact and none is lost.
 #[test]
 fn every_fact_a_gate_reads_is_in_exactly_one_half_of_the_context() {
     let mut read = std::collections::BTreeSet::new();
@@ -52,12 +52,12 @@ fn every_fact_a_gate_reads_is_in_exactly_one_half_of_the_context() {
     }
 }
 
-/// A Core need reads no fact of the window's half.
+/// A `CoreOnly` need reads no fact of the window's half.
 #[test]
 fn a_core_need_reads_only_core_facts() {
     for id in all_command_ids() {
         let command = AppCommandId::new(id).expect("catalog id is valid");
-        let Some(gate) = needs::needs(&command).filter(|g| g.scope() == NeedScope::Core) else {
+        let Some(gate) = needs::needs(&command).filter(|g| g.reads() == NeedReads::CoreOnly) else {
             continue;
         };
         for name in facts_read_by(|ctx| gate.is_met(ctx)) {

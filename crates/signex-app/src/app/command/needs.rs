@@ -2,11 +2,13 @@
 //! [`super::is_enabled`] (the menu greys by it, a keystroke is dropped by it)
 //! and behind the reason [`super::CommandOutcome::Disabled`] reports.
 //!
-//! Each need is Core or Ui (ADR-0006 slice 7): a Core need reads only the
-//! document, engine and project facts of [`CoreContext`], so the application
-//! core can answer it; a Ui need also reads the window's [`UiContext`]. Which
-//! one a need is, is the function its arm sits in: `is_met_in_core` or
-//! `is_met_in_ui`.
+//! Each need reads core facts only or core and UI facts (ADR-0006 slice 7):
+//! a `CoreOnly` need reads only the document, engine and project facts of
+//! [`CoreContext`], so the application core can answer it; a `CoreAndUi`
+//! need also reads the window's [`UiContext`]. Which one a need is, is the
+//! function its arm sits in: `is_met_from_core` or `is_met_with_ui`. The
+//! category says what the predicate reads; it says nothing about who owns
+//! the commands it gates, which is the parity table's `owner` column.
 
 use signex_i18n::{MessageId, ids};
 
@@ -15,14 +17,14 @@ use crate::keymap::AppCommandId;
 use super::CommandContext;
 use super::need_context::{CoreContext, UiContext};
 
-/// Where a need's facts live.
+/// What a need's predicate reads.
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum NeedScope {
-    /// Document, engine and project state: [`CoreContext`].
-    Core,
-    /// Window, canvas, selection, tool or clipboard state: [`UiContext`].
-    Ui,
+pub(crate) enum NeedReads {
+    /// Document, engine and project state alone: [`CoreContext`].
+    CoreOnly,
+    /// Also window, canvas, selection, tool or clipboard state: [`UiContext`].
+    CoreAndUi,
 }
 
 /// A precondition on the window's [`CommandContext`].
@@ -114,27 +116,28 @@ pub(crate) enum Needs {
 }
 
 impl Needs {
-    /// Core or Ui: whether the need is answered from a [`CoreContext`]
-    /// alone.
+    /// What the predicate reads: whether the need is answered from a
+    /// [`CoreContext`] alone.
     #[cfg(test)]
-    pub(crate) fn scope(self) -> NeedScope {
-        if self.is_met_in_core(&CoreContext::default()).is_some() {
-            NeedScope::Core
+    pub(crate) fn reads(self) -> NeedReads {
+        if self.is_met_from_core(&CoreContext::default()).is_some() {
+            NeedReads::CoreOnly
         } else {
-            NeedScope::Ui
+            NeedReads::CoreAndUi
         }
     }
 
     pub(crate) fn is_met(self, ctx: &CommandContext) -> bool {
         let core = ctx.core();
-        match self.is_met_in_core(&core) {
+        match self.is_met_from_core(&core) {
             Some(met) => met,
-            None => self.is_met_in_ui(&core, &ctx.ui()),
+            None => self.is_met_with_ui(&core, &ctx.ui()),
         }
     }
 
-    /// A Core need, from the core facts alone; `None` for a Ui need.
-    fn is_met_in_core(self, ctx: &CoreContext) -> Option<bool> {
+    /// A `CoreOnly` need, from the core facts alone; `None` for a
+    /// `CoreAndUi` need.
+    fn is_met_from_core(self, ctx: &CoreContext) -> Option<bool> {
         Some(match self {
             Self::Planned => false,
             Self::SaveTarget => {
@@ -182,7 +185,7 @@ impl Needs {
             Self::Library => ctx.has_open_library,
             // Sheet numbers are the project's; a loose sheet has none.
             Self::ProjectSheet => ctx.has_project_sheet,
-            // The Ui needs, met in `is_met_in_ui`.
+            // The CoreAndUi needs, met in `is_met_with_ui`.
             Self::CopyTarget
             | Self::CutTarget
             | Self::PasteTarget
@@ -208,8 +211,8 @@ impl Needs {
         })
     }
 
-    /// A Ui need, from the core facts and the window's.
-    fn is_met_in_ui(self, core: &CoreContext, ctx: &UiContext) -> bool {
+    /// A `CoreAndUi` need, from the core facts and the window's.
+    fn is_met_with_ui(self, core: &CoreContext, ctx: &UiContext) -> bool {
         match self {
             Self::CopyTarget if core.pcb.shown => ctx.pcb.copyable,
             Self::CopyTarget => ctx.has_selection,
@@ -241,6 +244,7 @@ impl Needs {
             Self::TurnedPcbView => core.has_pcb && ctx.pcb_view_turned,
             // On a sheet, rotate also turns a part on the cursor with
             // nothing selected; on a board too (#2364).
+            // Split into core and in-hand parts in slice 6 (#2326 kill-check decision 3).
             Self::Turn if core.pcb.shown => {
                 ctx.pcb.placeable || ctx.pcb.part_in_hand || ctx.pcb.routing
             }
@@ -264,7 +268,7 @@ impl Needs {
             // it has nothing to do.
             Self::TileableWindows => ctx.can_tile_windows,
             Self::Tiled => ctx.is_tiled,
-            // The Core needs, met in `is_met_in_core`.
+            // The CoreOnly needs, met in `is_met_from_core`.
             Self::Planned
             | Self::SaveTarget
             | Self::SaveAsTarget
@@ -287,7 +291,7 @@ impl Needs {
             | Self::PcbSync
             | Self::OpenProject
             | Self::Library
-            | Self::ProjectSheet => unreachable!("a Core need is met in is_met_in_core"),
+            | Self::ProjectSheet => unreachable!("a CoreOnly need is met in is_met_from_core"),
         }
     }
 
