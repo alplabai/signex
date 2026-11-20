@@ -197,6 +197,9 @@ pub struct InteractionState {
     /// Clamped to `0..custom_filter_presets.len()` whenever the list
     /// changes; ignored entirely when the list is empty.
     pub active_custom_filter_tab: usize,
+    /// SCH Filter's inline preset rename: the preset and the name typed so
+    /// far. Mirrored into each panel context after every update.
+    pub filter_preset_rename: Option<(usize, String)>,
     /// User-defined footprint-editor filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch; parallel to

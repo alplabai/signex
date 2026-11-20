@@ -67,22 +67,21 @@ impl Signex {
                     .custom_filter_presets
                     .get(idx)
                     .map(|preset| preset.name.clone());
-                self.document_state.panel_ctx.selection_filter.rename = name.map(|n| (idx, n));
+                self.interaction_state.filter_preset_rename = name.map(|n| (idx, n));
                 Task::none()
             }
             SchFilterMsg::PresetRenameTyped(typed) => {
-                let rename = &mut self.document_state.panel_ctx.selection_filter.rename;
-                if let Some((_, name)) = rename {
+                if let Some((_, name)) = &mut self.interaction_state.filter_preset_rename {
                     *name = typed;
                 }
                 Task::none()
             }
             SchFilterMsg::PresetRenamed(idx, name) => {
-                self.document_state.panel_ctx.selection_filter.rename = None;
+                self.interaction_state.filter_preset_rename = None;
                 self.handle_rename_custom_filter_preset(idx, name)
             }
             SchFilterMsg::PresetDeleted(idx) => {
-                self.document_state.panel_ctx.selection_filter.rename = None;
+                self.interaction_state.filter_preset_rename = None;
                 self.handle_remove_custom_filter_preset(idx)
             }
         }

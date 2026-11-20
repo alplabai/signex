@@ -357,3 +357,24 @@ fn the_presets_section_names_the_edited_preset_and_its_kinds() {
         [PanelMsg::SchFilter(SchFilterMsg::PresetSaved)]
     ));
 }
+
+/// The rename draft lives in the Model: a full panel context rebuild keeps
+/// it, and it is dropped once its preset is gone.
+#[test]
+fn the_rename_draft_survives_a_panel_context_rebuild() {
+    let mut app = app_with_presets(&["A", "B"]);
+    send(&mut app, SchFilterMsg::PresetRenameStarted(1));
+    send(&mut app, SchFilterMsg::PresetRenameTyped("Pwr".to_string()));
+    assert_eq!(
+        app.interaction_state.filter_preset_rename,
+        Some((1, "Pwr".to_string()))
+    );
+    app.refresh_panel_ctx();
+    assert_eq!(
+        app.document_state.panel_ctx.selection_filter.rename,
+        Some((1, "Pwr".to_string()))
+    );
+    app.interaction_state.custom_filter_presets.truncate(1);
+    app.refresh_panel_ctx();
+    assert_eq!(app.document_state.panel_ctx.selection_filter.rename, None);
+}

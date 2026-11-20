@@ -1,7 +1,7 @@
 //! The filter panels' part of the panel context (Graphite mockup #55,
 //! Graphite mockup #56): the editor the Filter panel follows and its
 //! per-kind counts, taken once per document revision, and SCH Filter's
-//! preset rename, kept across rebuilds.
+//! preset rename, read from the Model.
 
 use super::super::*;
 use crate::panels::{FilterEditor, KindCounts, SelectionFilterFacts};
@@ -9,13 +9,23 @@ use crate::panels::{FilterEditor, KindCounts, SelectionFilterFacts};
 impl Signex {
     pub(super) fn selection_filter_facts(&self) -> SelectionFilterFacts {
         let previous = &self.document_state.panel_ctx.selection_filter;
-        let presets = self.interaction_state.custom_filter_presets.len();
-        let rename = previous.rename.clone().filter(|(idx, _)| *idx < presets);
         let facts = self
             .board_filter_facts(previous)
             .or_else(|| self.schematic_filter_facts(previous))
             .unwrap_or_default();
-        SelectionFilterFacts { rename, ..facts }
+        SelectionFilterFacts {
+            rename: self.filter_preset_rename(),
+            ..facts
+        }
+    }
+
+    /// SCH Filter's preset rename, while its preset still exists.
+    pub(in crate::app) fn filter_preset_rename(&self) -> Option<(usize, String)> {
+        let presets = self.interaction_state.custom_filter_presets.len();
+        self.interaction_state
+            .filter_preset_rename
+            .clone()
+            .filter(|(idx, _)| *idx < presets)
     }
 
     /// A board tab: its kinds counted, or kept from `previous` at the same

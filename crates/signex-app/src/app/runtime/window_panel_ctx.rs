@@ -320,12 +320,14 @@ impl Signex {
             .keys()
             .map(|w| (*w, self.window_shares_main_navigator(*w)))
             .collect();
+        let rename = self.filter_preset_rename();
         let document = &mut self.document_state;
         for (window, shares_navigator) in shares {
             let Some(ctx) = document.window_panel_ctx.get_mut(&window) else {
                 continue;
             };
             ctx.adopt_shared_from(&document.panel_ctx);
+            ctx.selection_filter.rename = rename.clone();
             if !shares_navigator {
                 if ctx.navigator.hierarchy.is_some() {
                     ctx.navigator = Default::default();
