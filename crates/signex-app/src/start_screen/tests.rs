@@ -310,10 +310,13 @@ fn assert_labels_fit(fx: &Fixture, window: iced::Size, labels: &[&str]) {
         // The primary button's label fills the button's height, so its
         // box is the button's, not a line's; wrapping shows as a
         // narrower-than-natural box, which the width check below catches.
-        let natural = crate::layout_probe::natural::<()>(
-            text(raw(label.to_string())).size(label_size(label)).boxed(),
-            label,
-        );
+        // Project names are drawn in Inter Medium (mockup m1): measure them
+        // in the font they are drawn in.
+        let mut probe = text(raw(label.to_string())).size(label_size(label));
+        if label.ends_with(".snxprj") {
+            probe = probe.font(super::kit::weighted(iced::font::Weight::Medium));
+        }
+        let natural = crate::layout_probe::natural::<()>(probe.boxed(), label);
         if label != "New project" {
             assert!(
                 bounds.height < one_line,
@@ -436,10 +439,12 @@ fn every_button_label_fits_at_small_window_sizes() {
         let texts = fx.texts(window);
         for (label, size) in &labels {
             let bounds = find(&texts, label).bounds;
-            let natural = crate::layout_probe::natural::<()>(
-                text(raw(label.clone())).size(*size).boxed(),
-                label,
-            );
+            // The project list is drawn in Inter Medium (mockup m1).
+            let mut probe = text(raw(label.clone())).size(*size);
+            if list_labels.iter().any(|(listed, _)| listed == label) {
+                probe = probe.font(super::kit::weighted(iced::font::Weight::Medium));
+            }
+            let natural = crate::layout_probe::natural::<()>(probe.boxed(), label);
             // "New project" fills its button's height (see above).
             if label != "New project" {
                 assert!(
