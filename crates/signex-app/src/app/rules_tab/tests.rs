@@ -42,9 +42,11 @@ fn track(n: u128, net: u32, a: (f64, f64), b: (f64, f64)) -> Segment {
     }
 }
 
-/// GND and SIG 0.35 mm apart centre to centre (0.1 mm gap).
+/// GND and SIG 0.35 mm apart centre to centre (0.1 mm gap), on a 2-layer
+/// board: `Custom` takes the layer count (Standard is 4 layers) and the
+/// standard values.
 fn board() -> PcbBoard {
-    let mut board = signex_types::project::SetupProfile::Standard
+    let mut board = signex_types::project::SetupProfile::Custom
         .pcb(2)
         .new_board();
     board.nets = [(1, "GND"), (2, "SIG")]
