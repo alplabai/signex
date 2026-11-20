@@ -84,14 +84,28 @@ impl TestAdapter {
             let y = from.1 + (to.1 - from.1) * t;
             self.drag_step(x, y)?;
         }
+        let before = self.undo_position(path);
         self.send(Message::CanvasEvent(CanvasEvent::MoveSelected {
             dx: to.0 - from.0,
             dy: to.1 - from.1,
             connections: MoveConnections::Preference,
-        }))
+        }))?;
+        if self.undo_position(path) == before {
+            return Err(nothing(format!("the drop to {to:?} recorded no undo step")));
+        }
+        Ok(())
     }
 
-    fn activate(&mut self, path: &Path) -> Result<(), AdapterError> {
+    /// Where the sheet at `path` stands in its history.
+    fn undo_position(&self, path: &Path) -> Option<usize> {
+        self.app
+            .document_state
+            .engines
+            .get(path)
+            .map(|engine| engine.undo_position())
+    }
+
+    pub(super) fn activate(&mut self, path: &Path) -> Result<(), AdapterError> {
         if self.app.activate_tab_for_path(path) {
             return Ok(());
         }

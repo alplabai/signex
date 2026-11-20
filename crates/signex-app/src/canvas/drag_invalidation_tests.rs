@@ -225,6 +225,10 @@ fn assert_drag_within(counts: &DragCounts, per_step: Counts, whole_drag: Counts,
         total.within(whole_drag),
         "{what} steps together invalidated more than the baseline: {total:?} > {whole_drag:?}"
     );
+    assert_eq!(
+        total.drag_scene_builds, 1,
+        "{what}: the drag's static scene is built exactly once"
+    );
 }
 
 // Baselines measured on trunk ecae6fb61. Lower them when a slice does; a

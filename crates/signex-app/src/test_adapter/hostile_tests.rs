@@ -9,10 +9,17 @@
 //! the edge of the storable range, an unknown pin reference, full turns,
 //! a tiny length, text with `..`, other scripts or 10 000 characters, odd
 //! but valid colours, an unknown document id, paths with `..`, a folder.
-//! The documents are a sheet and a board in an open project; an id runs
-//! against the document its valid call accepts. A per-kind floor of calls
-//! that reach a handler (past parsing and past finding the document) keeps
-//! the walk from going vacuous.
+//! The documents are a sheet and a board in an open project. An id runs
+//! against the document its all-valid call reaches a handler for, with that
+//! document's tab active and `document=` given wherever the id takes it.
+//! A call reached a handler when it ran, or when its refusal is neither an
+//! enablement gate's (`Needs::reason` over the whole catalog) nor one the
+//! document resolver gives for that id (probed with no document, the other
+//! kind and an unknown id); a junk `document` counts only when it ran. A
+//! per-kind floor of such calls keeps the walk from going vacuous.
+//!
+//! Control: with `assert!(value.as_deref() != Some(".."))` before
+//! `app.set_sheet_variable(..)` in `placed_operands.rs`, this test fails.
 //!
 //! A panic found today is listed in [`KNOWN_PANICS`] with its issue; a hang
 //! (the deliver limit reached) in [`KNOWN_HANGS`]. Both lists only shrink:
@@ -38,28 +45,20 @@ const KNOWN_HANGS: &[(&str, &str)] = &[];
 const DELIVER_LIMIT: Duration = Duration::from_secs(5);
 
 /// Per kind, a floor under the junk calls that reached a handler: about half
-/// of what trunk reached when this landed (point 485, angle 36, turn 9,
-/// text 1591, path 66, bool 75, color 12, document 198, length 4).
+/// of what trunk reached when this landed (point 140, angle 12, turn 3,
+/// text 739, path 32, bool 29, color 4, document 65, length 0). The only
+/// length operand, `stitch_vias pitch`, needs a net in the area, which the
+/// fixture board has not, so its floor is 0.
 const MIN_REACHED: &[(OperandKind, usize)] = &[
-    (OperandKind::Point, 240),
-    (OperandKind::Angle, 18),
-    (OperandKind::Turn, 4),
-    (OperandKind::Text, 800),
-    (OperandKind::Path, 33),
-    (OperandKind::Bool, 37),
-    (OperandKind::Color, 6),
-    (OperandKind::Document, 99),
-    (OperandKind::Length, 2),
-];
-
-/// Refusals given before any handler reads the operands: the document was
-/// not found, is not open, is of the other kind, or is in no project.
-const RESOLUTION_REFUSALS: &[&str] = &[
-    "no document has the id",
-    "is not open",
-    "not part of an open project",
-    "is a schematic, not a board",
-    "is a board, not a schematic",
+    (OperandKind::Point, 70),
+    (OperandKind::Angle, 6),
+    (OperandKind::Turn, 1),
+    (OperandKind::Text, 370),
+    (OperandKind::Path, 16),
+    (OperandKind::Bool, 14),
+    (OperandKind::Color, 2),
+    (OperandKind::Document, 32),
+    (OperandKind::Length, 0),
 ];
 
 /// The open project's sheet and board.
@@ -111,7 +110,14 @@ fn project_data(dir: &Path) -> signex_types::project::ProjectData {
         dir: dir.to_string_lossy().into_owned(),
         schematic_root: Some("hostile.snxsch".into()),
         pcb_file: Some("hostile.snxpcb".into()),
-        sheets: Vec::new(),
+        sheets: vec![signex_types::project::SheetEntry {
+            name: "hostile".into(),
+            filename: "hostile.snxsch".into(),
+            symbols_count: 0,
+            wires_count: 0,
+            labels_count: 0,
+            unknown: Default::default(),
+        }],
         variant_definitions: Vec::new(),
         active_variant: None,
         libraries: Vec::new(),
@@ -133,6 +139,16 @@ fn sheet_text() -> String {
     let sheet = signex_types::schematic::SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         paper_size: "A4".into(),
+        // A wire through the valid point, for the commands that need one.
+        wires: vec![signex_types::schematic::Wire {
+            uuid: uuid::Uuid::now_v7(),
+            start: signex_types::schematic::Point::new(10.16, 10.16),
+            end: signex_types::schematic::Point::new(30.48, 10.16),
+            stroke_width: 0.0,
+            color: None,
+            locked: false,
+            unknown_columns: Default::default(),
+        }],
         ..Default::default()
     };
     signex_types::format::SnxSchematic::new(sheet)
@@ -165,6 +181,21 @@ fn board_text() -> String {
     signex_types::format::SnxPcb::new(board)
         .write_string()
         .expect("encode the board")
+}
+
+/// Optional operands given a valid value on every call: the document, and
+/// the area `start` / `end` a board tool needs without a zone `id`.
+const ALWAYS_GIVEN: &[&str] = &["document", "start", "end"];
+
+/// A valid value for `op` in the fixture: what its name needs (a board
+/// layer, an area corner), else the form of its kind.
+fn valid_for(op: &Operand, document: &Path) -> String {
+    match op.name {
+        "layer" => "TopCopper".into(),
+        "start" => "0,0".into(),
+        "end" => "20.32,20.32".into(),
+        _ => valid(op.kind, document),
+    }
 }
 
 /// A value of `kind` a handler accepts the form of.
@@ -251,19 +282,50 @@ fn panic_text(payload: &(dyn std::any::Any + Send)) -> String {
         .unwrap_or_else(|| "a panic without a message".into())
 }
 
-/// Whether a call got to a handler: past parsing and past finding its
-/// document.
-fn reached_a_handler(outcome: &Outcome) -> bool {
-    match outcome {
-        Outcome::Ran => true,
-        Outcome::Refused {
-            kind: RefusalKind::Disabled,
-            reason_en,
-        } => !RESOLUTION_REFUSALS
-            .iter()
-            .any(|refusal| reason_en.contains(refusal)),
-        Outcome::Refused { .. } => false,
+/// The refusals that say a call never reached a handler: every enablement
+/// gate's reason in the catalog (`Needs::reason`), and what the document
+/// resolution says for the id at hand, taken from the resolver itself by
+/// probing it (no document, the other kind, an unknown id).
+struct NotReached {
+    gates: BTreeSet<&'static str>,
+    resolution: BTreeSet<String>,
+}
+
+impl NotReached {
+    /// Whether `outcome`, of a call whose junk sat in `bad`, reached a
+    /// handler: it ran, or a handler refused it. A junk `document` is the
+    /// resolver's to refuse, so only a run counts there.
+    fn reached(&self, outcome: &Outcome, bad: &Operand) -> bool {
+        match outcome {
+            Outcome::Ran => true,
+            _ if bad.kind == OperandKind::Document => false,
+            _ => self.handler_refused(outcome),
+        }
     }
+
+    /// A refusal no gate and no resolution gives.
+    fn handler_refused(&self, outcome: &Outcome) -> bool {
+        match outcome {
+            Outcome::Ran => false,
+            Outcome::Refused {
+                kind: RefusalKind::Disabled,
+                reason_en,
+            } => {
+                !self.gates.iter().any(|gate| reason_en.contains(gate))
+                    && !self.resolution.contains(reason_en)
+            }
+            Outcome::Refused { .. } => false,
+        }
+    }
+}
+
+/// Every enablement gate's reason, over the whole catalog.
+fn gate_reasons() -> BTreeSet<&'static str> {
+    all_command_ids()
+        .filter_map(|id| AppCommandId::new(id).ok())
+        .filter_map(|command| crate::app::command::enablement_gate(&command))
+        .map(|gate| gate.reason())
+        .collect()
 }
 
 #[derive(Default)]
@@ -289,29 +351,42 @@ impl Found {
         }
     }
 
-    fn count(&mut self, kind: OperandKind, outcome: &Outcome) {
-        let entry = self.counts.entry(kind.name()).or_default();
+    fn count(&mut self, bad: &Operand, outcome: &Outcome, not: &NotReached) {
+        let entry = self.counts.entry(bad.kind.name()).or_default();
         entry.0 += 1;
-        entry.1 += usize::from(reached_a_handler(outcome));
+        entry.1 += usize::from(not.reached(outcome, bad));
         entry.2 += usize::from(*outcome == Outcome::Ran);
     }
 }
 
-/// The arguments of `id`: every required operand valid, and `bad` set to
-/// `value`.
-fn arguments(operands: &[Operand], bad: &Operand, value: &str, document: &Path) -> Vec<String> {
+/// The arguments of `id`: every required operand and `document` valid,
+/// then `bad` set to `value` (`None`: left out).
+fn arguments(operands: &[Operand], bad: Option<(&Operand, &str)>, document: &Path) -> Vec<String> {
     operands
         .iter()
-        .filter(|op| op.required || op.name == bad.name)
-        .map(|op| {
-            let text = if op.name == bad.name {
-                value.to_string()
-            } else {
-                valid(op.kind, document)
-            };
-            format!("{}={text}", op.name)
+        .filter_map(|op| match bad {
+            Some((bad, value)) if bad.name == op.name => Some(format!("{}={value}", op.name)),
+            _ if op.required || ALWAYS_GIVEN.contains(&op.name) => {
+                Some(format!("{}={}", op.name, valid_for(op, document)))
+            }
+            _ => None,
         })
         .collect()
+}
+
+/// Run `args` on `target`, its tab active as a person would have it.
+fn call_on(
+    fixture: &mut Fixture,
+    target: Target,
+    id: &str,
+    args: &[String],
+) -> Result<Outcome, Failure> {
+    let document = target.path(fixture);
+    fixture
+        .adapter
+        .activate(&document)
+        .expect("the target's tab is open");
+    call(fixture, id, args)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -327,48 +402,111 @@ impl Target {
             Self::Board => fixture.board.clone(),
         }
     }
+
+    fn other(self) -> Self {
+        match self {
+            Self::Sheet => Self::Board,
+            Self::Board => Self::Sheet,
+        }
+    }
+}
+
+/// What the resolver says for `id` on `target` when the document is left
+/// out, of the other kind, or unknown: refusals before any handler.
+fn resolution_refusals(
+    id: &'static str,
+    operands: &[Operand],
+    target: Target,
+    found: &mut Found,
+) -> BTreeSet<String> {
+    let mut fixture = fixture();
+    let valid_args = arguments(operands, None, &target.path(&fixture));
+    let without: Vec<String> = valid_args
+        .iter()
+        .filter(|arg| !arg.starts_with("document="))
+        .cloned()
+        .collect();
+    let mut probes = vec![without.clone()];
+    if operands.iter().any(|op| op.name == "document") {
+        let other = target.other().path(&fixture).display().to_string();
+        for document in [other.as_str(), "00000000-0000-7000-8000-000000000000"] {
+            let mut args = without.clone();
+            args.push(format!("document={document}"));
+            probes.push(args);
+        }
+    }
+    let mut refusals = BTreeSet::new();
+    for args in probes {
+        match call_on(&mut fixture, target, id, &args) {
+            Ok(Outcome::Refused { reason_en, .. }) => {
+                refusals.insert(reason_en);
+            }
+            Ok(Outcome::Ran) => {}
+            Err(failure) => {
+                found.record(id, "document", format!("{id} probe {args:?}"), failure);
+                fixture = self::fixture();
+            }
+        }
+    }
+    refusals
 }
 
 /// The documents `id` accepts: the ones its all-valid call reaches a
-/// handler for. Both when it reaches one for neither or both.
-fn targets(id: &str, operands: &[Operand]) -> Vec<Target> {
-    let both = [Target::Sheet, Target::Board];
-    let accepted: Vec<Target> = both
-        .into_iter()
-        .filter(|target| {
-            let mut fixture = fixture();
-            let document = target.path(&fixture);
-            let args = operands
-                .iter()
-                .filter(|op| op.required)
-                .map(|op| format!("{}={}", op.name, valid(op.kind, &document)))
-                .collect::<Vec<_>>();
-            call(&mut fixture, id, &args).map_or(true, |outcome| reached_a_handler(&outcome))
-        })
-        .collect();
-    if accepted.is_empty() {
-        both.to_vec()
-    } else {
-        accepted
+/// handler for, each with its not-reached set. Both when it reaches one
+/// for neither. A probe that panics or hangs is recorded, not accepted.
+fn targets(
+    id: &'static str,
+    operands: &[Operand],
+    gates: &BTreeSet<&'static str>,
+    found: &mut Found,
+) -> Vec<(Target, NotReached)> {
+    let mut all = Vec::new();
+    let mut accepted = Vec::new();
+    for target in [Target::Sheet, Target::Board] {
+        let mut not = NotReached {
+            gates: gates.clone(),
+            resolution: resolution_refusals(id, operands, target, found),
+        };
+        let mut fixture = fixture();
+        let args = arguments(operands, None, &target.path(&fixture));
+        match call_on(&mut fixture, target, id, &args) {
+            Ok(Outcome::Ran) => accepted.push((target, not)),
+            Ok(Outcome::Refused { reason_en, .. }) => {
+                // What the all-valid call is refused for, the junk did not
+                // cause: on this target it never counts as reached.
+                let handler = not.handler_refused(&Outcome::Refused {
+                    kind: RefusalKind::Disabled,
+                    reason_en: reason_en.clone(),
+                });
+                not.resolution.insert(reason_en);
+                if handler {
+                    accepted.push((target, not));
+                } else {
+                    all.push((target, not));
+                }
+            }
+            Err(failure) => found.record(id, "", format!("{id} valid call {args:?}"), failure),
+        }
     }
+    if accepted.is_empty() { all } else { accepted }
 }
 
 /// Every operand of `id` set to each junk value against the documents it
 /// accepts.
-fn walk(id: &'static str, found: &mut Found) {
+fn walk(id: &'static str, gates: &BTreeSet<&'static str>, found: &mut Found) {
     let command = AppCommandId::new(id).expect("catalog id");
     let operands = metadata_for(&command).map_or(&[][..], |meta| meta.operands);
     if operands.is_empty() {
         return;
     }
-    for target in targets(id, operands) {
+    for (target, not) in targets(id, operands, gates, found) {
         let mut fixture = fixture();
         for bad in operands {
             for value in junk(bad.kind, fixture.adapter.root()) {
                 let document = target.path(&fixture);
-                let args = arguments(operands, bad, &value, &document);
-                match call(&mut fixture, id, &args) {
-                    Ok(outcome) => found.count(bad.kind, &outcome),
+                let args = arguments(operands, Some((bad, &value)), &document);
+                match call_on(&mut fixture, target, id, &args) {
+                    Ok(outcome) => found.count(bad, &outcome, &not),
                     Err(failure) => {
                         let shown: String = value.chars().take(40).collect();
                         let what = format!("{id} {}={shown:?} on {}", bad.name, document.display());
@@ -386,8 +524,9 @@ fn walk(id: &'static str, found: &mut Found) {
 fn every_id_survives_junk_in_each_operand() {
     let _ = crate::diagnostics::init_logging();
     let mut found = Found::default();
+    let gates = gate_reasons();
     for id in all_command_ids() {
-        walk(id, &mut found);
+        walk(id, &gates, &mut found);
     }
     for line in &found.report {
         eprintln!("{line}");
