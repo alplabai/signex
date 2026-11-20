@@ -422,19 +422,19 @@ impl<'a, 'w> Walk<'a, 'w> {
                 let Some(count) = self.count("polar", source, &count_ast, &ctx)? else {
                     return Ok(None);
                 };
-                if sweep.unit.family() != signex_expr::UnitFamily::Angle {
+                let Ok(sweep_rad) = sweep.as_rad() else {
                     self.warnings.push(format!(
                         "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
                     ));
                     return Ok(None);
-                }
+                };
                 let mut slots = Vec::new();
                 for i in 0..count {
                     ctx.array_index = Some((i, 0));
                     if !self.kept(depopulation.as_ref(), mask.as_ref(), &ctx, source) {
                         continue;
                     }
-                    let theta = i as f64 * sweep.value / count as f64;
+                    let theta = i as f64 * sweep_rad / count as f64;
                     slots.push(Slot::new(
                         i,
                         0,

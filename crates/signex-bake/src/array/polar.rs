@@ -106,18 +106,14 @@ pub(super) fn bake_polar(
         return Ok(());
     }
 
-    // Sweep angle is an Altium-style degrees-or-radians value via the
-    // expression's unit family. We expect rad here (the parser
-    // resolves `deg` → rad). On unit error, surface and skip.
+    // The sweep is an angle in degrees or radians; the evaluator keeps
+    // the written unit, so convert. On unit error, surface and skip.
     let sweep_q = eval(&sweep_ast, &ctx).map_err(SketchError::Expr)?;
-    let sweep_rad = match sweep_q.unit.family() {
-        signex_expr::UnitFamily::Angle => sweep_q.value,
-        _ => {
-            warnings.push(format!(
-                "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
-            ));
-            return Ok(());
-        }
+    let Ok(sweep_rad) = sweep_q.as_rad() else {
+        warnings.push(format!(
+            "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
+        ));
+        return Ok(());
     };
 
     let denom = (count as f64).max(1.0);
