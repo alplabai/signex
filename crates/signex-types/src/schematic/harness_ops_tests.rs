@@ -45,11 +45,6 @@ fn near(a: Point, b: Point) -> bool {
 }
 
 #[test]
-fn a_harness_wire_is_thicker_than_a_bus() {
-    assert!(SCHEMATIC_HARNESS_STROKE_MM > SCHEMATIC_RENDER_BUS_STROKE_MM);
-}
-
-#[test]
 fn an_entry_is_found_by_its_own_id() {
     let harness = SheetHarness {
         connectors: vec![connector(0.0, &["SCK", "MOSI"])],

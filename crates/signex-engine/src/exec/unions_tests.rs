@@ -52,6 +52,14 @@ fn created(members: &[u128]) -> Engine {
     engine
 }
 
+/// The engine's sheet as the file would hold it (`SchematicSheet` has no
+/// `PartialEq`).
+fn written(engine: &Engine) -> String {
+    signex_types::format::SnxSchematic::new(engine.document().clone())
+        .write_string()
+        .unwrap()
+}
+
 fn junction(n: u128) -> SelectedItem {
     SelectedItem::new(id(n), SelectedKind::Junction)
 }
@@ -275,7 +283,7 @@ fn locked(members: &[u128]) -> Engine {
 #[test]
 fn a_locked_unions_members_cannot_be_moved_or_deleted() {
     let mut engine = locked(&[1, 2]);
-    let before = engine.document().clone();
+    let before = written(&engine);
     let moved = engine.execute(Command::MoveSelection {
         items: vec![junction(1)],
         dx: 2.54,
@@ -296,7 +304,11 @@ fn a_locked_unions_members_cannot_be_moved_or_deleted() {
         }),
         Err(EngineError::ItemLocked { .. })
     ));
-    assert_eq!(engine.document(), &before);
+    assert_eq!(
+        written(&engine),
+        before,
+        "the refused edits changed nothing"
+    );
     // An object outside the union is not held.
     engine
         .execute(Command::DeleteSelection {
