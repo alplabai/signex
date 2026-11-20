@@ -160,7 +160,16 @@ fn the_profile_menu_toggles_and_a_row_closes_it_and_runs_its_action() {
     ));
     assert!(!app.ui_state.erc_profile_menu_open);
     assert!(app.active_project_stores_rules());
-    assert_eq!(app.erc_profile_actions(), [ErcProfileAction::SaveAsProfile]);
+    // The stored rules are the shipped defaults, so they record the
+    // built-in profile and Update is offered too.
+    assert!(app.active_project_has_profile());
+    assert_eq!(
+        app.erc_profile_actions(),
+        [
+            ErcProfileAction::SaveAsProfile,
+            ErcProfileAction::UpdateFromProfile
+        ]
+    );
 }
 
 #[test]
