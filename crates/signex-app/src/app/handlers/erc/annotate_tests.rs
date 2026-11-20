@@ -809,3 +809,40 @@ fn closing_the_dialog_closes_its_reset_confirm() {
         "its Run would no longer leave the unticked sheet out"
     );
 }
+
+/// Closing the dialog's OS window is the same close: the Reset confirm goes
+/// and a Re-prefix request in flight goes stale.
+#[test]
+fn closing_the_dialogs_window_closes_its_reset_confirm() {
+    use crate::app::state::{ModalId, WindowKind};
+    use crate::app::{AnnotateMsg, Message, WindowMsg};
+    let (mut app, dir) = project(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
+    let _ = app.update(Message::Annotate(AnnotateMsg::OpenDialog));
+    app.handle_annotate_sheet_tick_toggled(dir.join("z_child.snxsch"));
+    let _ = app.update(Message::Annotate(AnnotateMsg::ResetPressed(
+        signex_engine::AnnotateMode::ResetAndRenumber,
+    )));
+    assert!(app.ui_state.annotate_reset_confirm, "the confirm is open");
+    let is_dialog =
+        |kind: &WindowKind| matches!(kind, WindowKind::DetachedModal(ModalId::AnnotateDialog));
+    let found = (app.ui_state.windows.iter()).find_map(|(id, kind)| is_dialog(kind).then_some(*id));
+    let window = found.unwrap_or_else(|| {
+        let id = iced::window::Id::unique();
+        let kind = WindowKind::DetachedModal(ModalId::AnnotateDialog);
+        app.ui_state.windows.insert(id, kind);
+        id
+    });
+    let generation = app.ui_state.reprefix_generation;
+
+    let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(window)));
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(!app.ui_state.annotate_dialog_open);
+    assert!(
+        !app.ui_state.annotate_reset_confirm,
+        "its Run would no longer leave the unticked sheet out"
+    );
+    assert!(
+        app.ui_state.reprefix_generation > generation,
+        "a Re-prefix lookup in flight is stale"
+    );
+}
