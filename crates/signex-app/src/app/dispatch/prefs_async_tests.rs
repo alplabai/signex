@@ -129,7 +129,7 @@ fn saving_preferences_leaves_prefs_json_to_the_returned_tasks() {
 fn clearing_recent_projects_leaves_prefs_json_to_the_returned_task() {
     let (mut app, _task) = Signex::new();
     let seeded = vec![std::path::PathBuf::from("/signex-1351/a.snxprj")];
-    crate::fonts::write_recent_projects(&seeded);
+    crate::fonts::write_recent_projects_and_times(&seeded, &Default::default());
     app.ui_state.recent_projects =
         crate::recent_projects::RecentProjects::from_paths(seeded.clone());
 

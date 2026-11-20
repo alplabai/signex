@@ -102,7 +102,10 @@ fn read_paths_from(json: Option<&serde_json::Value>, key: &str) -> Vec<PathBuf> 
 }
 
 /// Persist the recent-projects paths into `path` without clobbering the
-/// other keys.
+/// other keys, and without times: the shape prefs written before the
+/// last-opened times had. The app writes through
+/// [`write_recent_projects_and_times`].
+#[cfg(test)]
 pub(super) fn write_recent_projects_at(path: &Path, projects: &[PathBuf]) {
     write_paths_at(path, RECENT_PROJECTS_KEY, projects)
 }
@@ -136,11 +139,6 @@ pub fn write_pinned_projects(projects: &[PathBuf]) {
 /// Recent projects from the user's `prefs.json`, most recent first.
 pub fn read_recent_projects() -> Vec<PathBuf> {
     read_recent_projects_at(&prefs_path())
-}
-
-/// Persist the recent-projects list to the user's `prefs.json`.
-pub fn write_recent_projects(projects: &[PathBuf]) {
-    write_recent_projects_at(&prefs_path(), projects)
 }
 
 #[cfg(test)]
