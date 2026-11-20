@@ -296,14 +296,14 @@ fn shape(entries: &[DropdownEntry<Message>]) -> String {
         .map(|entry| match entry {
             DropdownEntry::Header(_) => 'H',
             DropdownEntry::Separator => '-',
-            DropdownEntry::Item(item) if item.current => '*',
+            DropdownEntry::Item(item) if item.selected => '*',
             DropdownEntry::Item(_) => '.',
             DropdownEntry::Custom(_) => '?',
         })
         .collect()
 }
 
-/// m108: a group's dropdown opens with its name as a heading, in capitals,
+/// mockup row 108: a group's dropdown opens with its name as a heading, in capitals,
 /// then its rows; every group with a dropdown has one.
 #[test]
 fn a_group_dropdown_is_headed_by_the_group_name() {
@@ -331,7 +331,7 @@ fn a_group_dropdown_is_headed_by_the_group_name() {
     }
 }
 
-/// m108: the commands of a group (Repour, Change Footprint) sit below a
+/// mockup row 108: the commands of a group (Repour, Change Footprint) sit below a
 /// separator after its tools; a group of tools only, or of commands only,
 /// has none.
 #[test]
@@ -355,7 +355,7 @@ fn a_group_dropdown_puts_its_commands_below_a_separator() {
     }
 }
 
-/// m108: the row the group's button shows is drawn current in its dropdown,
+/// mockup row 108: the row the group's button shows is drawn current in its dropdown,
 /// and follows the last tool used.
 #[test]
 fn the_last_used_row_is_current_in_its_dropdown() {
@@ -363,7 +363,7 @@ fn the_last_used_row_is_current_in_its_dropdown() {
     let current = |app: &Signex, group: PcbBarGroup| -> Vec<Option<&'static str>> {
         rows(app, PcbBarMenu::Group(group))
             .into_iter()
-            .filter(|row| row.current)
+            .filter(|row| row.selected)
             .map(|row| row.command_id)
             .collect()
     };

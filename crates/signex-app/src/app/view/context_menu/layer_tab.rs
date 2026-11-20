@@ -1,5 +1,5 @@
 //! Right-click menu of a layer tab under the board canvas (#2379, #2394,
-//! m104): hide or highlight the layer, its colour (saved with the board,
+//! mockup row 104): hide or highlight the layer, its colour (saved with the board,
 //! 2026-11-18), show it alone or every layer, hide or show every layer of a
 //! kind or one layer of it, the board editors, the tab names and the flip
 //! of the board view. Every row has the 16 px icon column, so the labels
@@ -54,7 +54,7 @@ pub(super) struct TabColours {
     pub read_only: bool,
 }
 
-/// How the menu is drawn (m104): the theme the row icons are tinted for
+/// How the menu is drawn (mockup row 104): the theme the row icons are tinted for
 /// and the colours of the Tab names switch and the Show layer numbers row.
 #[derive(Clone, Copy)]
 pub(super) struct TabMenuLook<'a> {
@@ -107,14 +107,14 @@ fn live_row(
 }
 
 /// A flyout launcher: a click or the pointer opens `submenu`; while it is
-/// open the row keeps the current-row look (accent-soft fill and ink), not
-/// the active highlight, which would win over it.
+/// open the row is the selected row (accent-soft fill and ink), not
+/// the active highlight.
 fn launcher(label: String, submenu: LayerTabSubmenu, open: bool) -> DropdownEntry<Message> {
     let opens = menu_msg(LayerTabMenuMsg::SubmenuOpened(submenu));
     let item = DropdownItem::new(label, opens.clone())
         .submenu()
         .hover(opens, Message::noop())
-        .current(open);
+        .selected(open);
     DropdownEntry::Item(item)
 }
 
@@ -371,7 +371,7 @@ pub(super) fn layer_tab_menu_rows(
     rows
 }
 
-/// The rows of Hide layers ▸ or Show layers ▸ (m104): a HIDE or SHOW
+/// The rows of Hide layers ▸ or Show layers ▸ (mockup row 104): a HIDE or SHOW
 /// header and All layers; then per kind of layer a row for every layer of
 /// it, followed by the layers of that kind the row would change one by one
 /// (the shown ones under Hide, the hidden ones under Show).

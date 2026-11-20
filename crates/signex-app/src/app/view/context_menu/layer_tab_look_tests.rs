@@ -1,4 +1,4 @@
-//! m104: the layer tab menu's look: the icon column, the Tab names switch
+//! mockup row 104: the layer tab menu's look: the icon column, the Tab names switch
 //! and the Show layer numbers row, the open launcher, and the HIDE / SHOW
 //! flyouts with All layers first.
 
@@ -59,7 +59,7 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
     let tokens = theme_tokens(ThemeId::GraphiteDark);
     let i18n = I18n::en_us();
     let entries = layer_tab_menu_rows(&i18n, &state(layer, &view, &prefs), look(&tokens));
-    // m104: Tab names is a header over one switch, Show layer numbers a
+    // mockup row 104: Tab names is a header over one switch, Show layer numbers a
     // checkbox row, and Flip follows it with no separator; the colour rows
     // (2026-11-18) follow Highlight.
     assert_eq!(shape(&entries), "IIIIISIISIISIIISHCCI");
@@ -160,9 +160,8 @@ fn the_tab_names_switch_marks_the_style_in_use() {
     assert_eq!(on, [LayerNameStyle::Short]);
 }
 
-/// The open flyout's launcher keeps the current-row look and not the
-/// active highlight (which `row_fill` would draw over it); the other
-/// launcher has neither.
+/// The open flyout's launcher is the selected row, not the active
+/// highlight; the other launcher has neither.
 #[test]
 fn the_open_launcher_is_the_current_row() {
     let view = PcbLayerView::default();
@@ -175,7 +174,7 @@ fn the_open_launcher_is_the_current_row() {
             .into_iter()
             .filter_map(|e| match e {
                 DropdownEntry::Item(item) if item.submenu => {
-                    Some((item.label, item.active, item.current))
+                    Some((item.label, item.active, item.selected))
                 }
                 _ => None,
             })
@@ -207,7 +206,7 @@ fn the_flyouts_hide_or_show_every_kind() {
     let i18n = I18n::en_us();
     let view = PcbLayerView::default();
     let entries = layer_kind_entries(&i18n, LayerTabSubmenu::Hide, &[], &view);
-    // m104: a header, All layers first, a separator, then the kinds.
+    // mockup row 104: a header, All layers first, a separator, then the kinds.
     assert!(matches!(&entries[0], DropdownEntry::Header(h) if h == "HIDE"));
     assert!(matches!(entries[2], DropdownEntry::Separator));
     let kinds = kind_rows(entries);

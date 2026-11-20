@@ -3,7 +3,6 @@
 //! place a caller expects it cannot drift apart.
 
 use super::{DropdownEntry, DropdownItem};
-use crate::theme_ext::TypeScale;
 
 /// Family the shortcut column draws in on the Graphite look.
 pub const MONO_FAMILY: &str = "JetBrains Mono";
@@ -24,8 +23,6 @@ pub struct MenuMetrics {
     pub shortcut_size: f32,
     /// Whether the shortcut column is drawn in [`MONO_FAMILY`].
     pub mono_shortcut: bool,
-    /// Text size of a row hint (in the label face).
-    pub hint_size: f32,
     /// Text size of a section header.
     pub header_size: f32,
     /// Text size of the check mark.
@@ -72,7 +69,6 @@ impl MenuMetrics {
         label_size: MENU_LABEL_SIZE,
         shortcut_size: MENU_SHORTCUT_SIZE,
         mono_shortcut: true,
-        hint_size: TypeScale::DEFAULT.caption,
         header_size: 11.0,
         check_size: 13.0,
         chevron_size: 15.0,
@@ -166,9 +162,9 @@ impl MenuMetrics {
     /// Width a card of `entries` needs, clamped to this look's fitted range
     /// and to `max_w`. It mirrors the row layout: panel padding, row
     /// padding, the icon column when a row has an icon, the label, the gap
-    /// before the shortcut column, the hint, the shortcut, the check and the
-    /// chevron column. Labels and hints are measured in `ui_family`, the face
-    /// the menu draws in, and shortcuts in the face their column draws in. `Custom` rows
+    /// before the shortcut column, the shortcut, the check and the chevron
+    /// column. Labels are measured in `ui_family`, the face the menu draws
+    /// in, and shortcuts in the face their column draws in. `Custom` rows
     /// are not measured; a caller with custom rows sizes for them itself.
     pub fn fitted_width<M: Clone>(
         &self,
@@ -194,10 +190,7 @@ impl MenuMetrics {
                         w += self.icon_size + self.row_spacing;
                     }
                     w += self.row_spacing + self.cluster_gap;
-                    if let Some(h) = &item.hint {
-                        w += self.row_spacing + advance(h, self.hint_size, family);
-                    }
-                    if let Some(s) = &item.shortcut {
+                    for s in [&item.caption, &item.shortcut].into_iter().flatten() {
                         w += self.row_spacing + advance(s, self.shortcut_size, shortcut_family);
                     }
                     if item.checked && item.lead_check.is_none() {

@@ -73,7 +73,7 @@ pub(super) fn group_button(
     })
 }
 
-/// The dropdown of `group` (m108): a heading with the group's name, then
+/// The dropdown of `group` (mockup row 108): a heading with the group's name, then
 /// its rows, the commands (Repour, Change Footprint) below a separator
 /// after the tools. The row the button shows (`last`) is drawn current. A
 /// live row runs its command, greyed as its menu row is in `ctx`; a tool the
@@ -95,7 +95,7 @@ pub(super) fn entries(
             entries.push(DropdownEntry::Separator);
         }
         after_tool = is_tool;
-        let item = row_item(row, i18n, ctx).current(row == current);
+        let item = row_item(row, i18n, ctx).selected(row == current);
         entries.push(DropdownEntry::Item(item.icon(menu_icon(row, tid))));
     }
     entries

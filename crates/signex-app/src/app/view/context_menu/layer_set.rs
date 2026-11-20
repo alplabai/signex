@@ -1,5 +1,5 @@
 //! Menu of the layer set button at the left end of the layer strip (#2394,
-//! m104): the built-in sets, the user's saved sets, Save current as set... (a
+//! mockup row 104): the built-in sets, the user's saved sets, Save current as set... (a
 //! name field in the same card) and Manage sets... (the saved sets with
 //! Delete).
 
@@ -25,8 +25,8 @@ fn set_msg(event: LayerSetMenuMsg) -> Message {
     Message::Pcb(PcbMsg::LayerSetMenu(event))
 }
 
-/// The rows to pick a set from (m104): a LAYER SETS header, the built-in
-/// sets, the saved ones with a "saved" hint, then Save current as set...
+/// The rows to pick a set from (mockup row 104): a LAYER SETS header, the built-in
+/// sets, the saved ones with a "saved" caption, then Save current as set...
 /// and Manage sets.... The shown set has its check in the icon column.
 /// `shown` is the set the board view shows (`None`: every layer, the All
 /// set); `theme` tints the plus of Save current as set....
@@ -50,13 +50,13 @@ pub(super) fn layer_set_entries(
     if !prefs.saved_sets.is_empty() {
         entries.push(DropdownEntry::Separator);
     }
-    let saved_hint = text(i18n, ids::PCB_LAYER_SET_SAVED_HINT);
+    let saved_caption = text(i18n, ids::PCB_LAYER_SET_SAVED_HINT);
     for saved in &prefs.saved_sets {
         let on = shown == LayerSetId::Saved(saved.name.clone());
         let picked = set_msg(LayerSetMenuMsg::SavedPicked(saved.name.clone()));
         let item = DropdownItem::new(saved.name.clone(), picked)
             .lead_check(on)
-            .hint(saved_hint.clone());
+            .caption(saved_caption.clone());
         entries.push(DropdownEntry::Item(item));
     }
     entries.push(DropdownEntry::Separator);
@@ -256,11 +256,11 @@ mod tests {
         let i18n = I18n::en_us();
         let mut prefs = LayerStripPrefs::default();
         let entries = layer_set_entries(&i18n, &prefs, None, THEME);
-        // m104: a LAYER SETS header first; the check sits in the icon
+        // mockup row 104: a LAYER SETS header first; the check sits in the icon
         // column, never at the right.
         assert!(matches!(&entries[0], DropdownEntry::Header(h) if h == "LAYER SETS"));
         assert!(entries.iter().all(|e| match e {
-            DropdownEntry::Item(item) => !item.checked && item.hint.is_none(),
+            DropdownEntry::Item(item) => !item.checked && item.caption.is_none(),
             _ => true,
         }));
         let save_has_plus = entries.iter().any(|e| {
@@ -297,14 +297,14 @@ mod tests {
         assert!(assembly.is_some_and(|(_, on, _)| *on));
         assert!(!with[0].1, "All is not checked while a saved set is shown");
         assert!(with.last().is_some_and(|(_, _, live)| *live));
-        // A saved set carries the "saved" hint; a built-in one does not.
-        let hint = |label: &str| {
+        // A saved set carries the "saved" caption; a built-in one does not.
+        let caption = |label: &str| {
             entries.iter().find_map(|e| match e {
-                DropdownEntry::Item(item) if item.label == label => Some(item.hint.clone()),
+                DropdownEntry::Item(item) if item.label == label => Some(item.caption.clone()),
                 _ => None,
             })
         };
-        assert_eq!(hint("Assembly"), Some(Some("saved".to_owned())));
-        assert_eq!(hint("All Layers"), Some(None));
+        assert_eq!(caption("Assembly"), Some(Some("saved".to_owned())));
+        assert_eq!(caption("All Layers"), Some(None));
     }
 }
