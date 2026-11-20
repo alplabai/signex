@@ -10,6 +10,7 @@ use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme
 use signex_i18n::{Arg, I18n, ids, t};
 use signex_renderer::pcb::{BuiltinLayerSet, LayerSetId};
 use signex_types::pcb_layer::PcbLayer;
+use signex_widgets::PickListPlaceholder as _;
 use signex_widgets::dropdown_style::{DropdownLook, GraphiteDropdown as _};
 use signex_widgets::text;
 
@@ -106,7 +107,7 @@ pub(super) fn view<'a>(panel: &'a PcbLayersPanel, ctx: &'a PanelContext) -> Elem
     let label = move |layer: &PcbLayer| layer_style::layer_name(i18n, *layer).into_string();
     let active = pick_list(panel.active, panel.board_layers.clone(), label)
         .graphite()
-        .placeholder(t!(i18n, ids::PCB_LAYERS_NO_ACTIVE).into_string())
+        .placeholder_label(t!(i18n, ids::PCB_LAYERS_NO_ACTIVE))
         .on_select(active_picked)
         .font(medium())
         .padding([SP.xs, SP.xs])
@@ -132,7 +133,8 @@ pub(super) fn view<'a>(panel: &'a PcbLayersPanel, ctx: &'a PanelContext) -> Elem
         move |choice: &SetChoice| set_label(i18n, choice),
     )
     .graphite()
-    .placeholder(set_current(panel))
+    // The caption carries a saved set's own name.
+    .placeholder_label(signex_i18n::UserText::new(set_current(panel)))
     .on_select(set_picked)
     .padding([SP.xs, SP.xs])
     .style(bare);
