@@ -266,7 +266,7 @@ mod tests {
     /// stay above the footer; a longer reason grows it more.
     #[test]
     fn a_refusal_grows_the_window() {
-        use crate::app::state::ModalId;
+        use crate::app::ModalId;
         let (mut app, _boot) = crate::app::Signex::new();
         app.library.create_options = Some(state(true, None));
         let plain = app.modal_window_size(ModalId::LibraryCreateOptions);
