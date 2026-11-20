@@ -162,6 +162,21 @@ pub enum AnnotateMsg {
         result: std::sync::Arc<Result<Vec<crate::app::handlers::erc::SheetWrite>, String>>,
         hold: crate::autosave::SaveHold,
     },
+    /// The change list's Changes / All switch was picked (#75).
+    ListViewPicked(crate::app::handlers::erc::AnnotateListView),
+    /// The change list's filter text was edited (#75).
+    ListFilterEdited(String),
+    /// A sheet row's tick was clicked: the sheet file (every placement row
+    /// of it) joins or leaves the run (#75).
+    SheetTickToggled(std::path::PathBuf),
+    /// The sheets table's header tick was clicked: tick (`true`) or untick
+    /// every sheet.
+    AllSheetsTicked(bool),
+    /// The "Fixed options" group was opened or closed.
+    FixedOptionsToggled,
+    /// Reset All (`ResetOnly`) or Reset & Renumber (`ResetAndRenumber`) was
+    /// pressed in the dialog footer: open the confirm for that reset (#76).
+    ResetPressed(signex_engine::AnnotateMode),
 }
 
 /// ERC dialog message family (ADR-0001 D3). Namespaced under
@@ -246,6 +261,45 @@ pub enum ErcMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::ErcRunOutcome, String>>,
     },
+    /// The footer's "Profile" menu button was pressed: the menu opened, or
+    /// closed when it was open.
+    ProfileMenuToggled,
+    /// A row of the "Profile" menu was chosen. The menu closes and the row's
+    /// action runs as its own message ([`ErcProfileAction::message`]).
+    ProfileMenuRowChosen(ErcProfileAction),
+}
+
+/// The rows of the ERC dialog's "Profile" menu (#2413). Each runs the
+/// message the dialog's footer button of the same name sent before.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErcProfileAction {
+    /// "Store ERC rules in this project".
+    StoreInProject,
+    /// "Save as profile".
+    SaveAsProfile,
+    /// "Update from profile".
+    UpdateFromProfile,
+}
+
+impl ErcProfileAction {
+    /// The message the row runs.
+    pub fn message(self) -> ErcMsg {
+        match self {
+            Self::StoreInProject => ErcMsg::StoreRulesInProject,
+            Self::SaveAsProfile => ErcMsg::ProfileSaveDialogOpened,
+            Self::UpdateFromProfile => ErcMsg::ProfileUpdateRequested,
+        }
+    }
+
+    /// The row's label.
+    pub fn label(self) -> signex_i18n::MessageId {
+        use signex_i18n::ids;
+        match self {
+            Self::StoreInProject => ids::DIALOG_ERC_STORE_RULES,
+            Self::SaveAsProfile => ids::DIALOG_ERC_SAVE_AS_PROFILE,
+            Self::UpdateFromProfile => ids::DIALOG_ERC_UPDATE_FROM_PROFILE,
+        }
+    }
 }
 
 /// Preferences modal message family (ADR-0001 D3). Namespaced under

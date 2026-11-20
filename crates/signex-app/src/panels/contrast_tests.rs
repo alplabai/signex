@@ -1,9 +1,9 @@
 //! #1769 - labels painted on an accent or selection fill must stay readable
 //! on the light built-in theme, and the dark themes must not change.
 
+use super::erc_panel::{erc_row_text, erc_severity_text};
 use super::palette::PanelPalette;
 use super::properties_parameters::{check_state_color, seg_text};
-use super::status::{erc_row_text, erc_severity_text};
 use crate::app::Signex;
 use crate::styles::ti;
 use crate::styles::tokens::{

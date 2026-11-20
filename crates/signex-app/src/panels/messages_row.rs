@@ -8,8 +8,8 @@ use signex_i18n::{MessageId, command_ids, ids};
 use crate::diagnostics::{DiagnosticEntry, MessageLink};
 
 /// The short Source name of a Messages row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MessageSource {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MessageSource {
     App,
     Tasks,
     Erc,
@@ -112,6 +112,11 @@ pub(crate) fn row_action(entry: &DiagnosticEntry) -> Option<(MessageLink, Messag
 /// `at` on the operating system's local clock as `HH:MM:SS`. Display only.
 pub(crate) fn clock_time(at: DateTime<Utc>) -> String {
     clock_time_in(at, &chrono::Local)
+}
+
+/// `at` on the operating system's local clock as `HH:MM`. Display only.
+pub(crate) fn clock_minutes(at: DateTime<Utc>) -> String {
+    at.with_timezone(&chrono::Local).format("%H:%M").to_string()
 }
 
 fn clock_time_in<Z: TimeZone>(at: DateTime<Utc>, zone: &Z) -> String

@@ -715,6 +715,10 @@ mod net_color_palette_clear_all;
 #[path = "regression/placement_pause_esc.rs"]
 mod placement_pause_esc;
 
+#[path = "regression/annotate_graphite.rs"]
+mod annotate_graphite;
+#[path = "regression/erc_dialog_graphite.rs"]
+mod erc_dialog_graphite;
 #[path = "regression/setup_profile_cards.rs"]
 mod setup_profile_cards;
 #[path = "regression/sketch_host.rs"]
@@ -723,6 +727,8 @@ mod sketch_host;
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/validation_panels_graphite.rs"]
+mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
 
@@ -733,3 +739,12 @@ mod find_replace_whole_word;
 // Move Selection offsets are typed in the display unit.
 #[path = "regression/move_selection_unit.rs"]
 mod move_selection_unit;
+
+// Graphite #78 / #80 - Number Schematic Sheets greys Apply on a clash, gap
+// or high number; Assign Footprints filter chips, ticked bar and reason pills.
+#[path = "regression/sheet_tools_graphite.rs"]
+mod sheet_tools_graphite;
+
+// #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
+#[path = "regression/board_sync_graphite.rs"]
+mod board_sync_graphite;

@@ -10,6 +10,7 @@ use crate::library::messages::LibraryMessage;
 impl Signex {
     pub(crate) fn handle_open_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = true;
+        self.ui_state.erc_profile_menu_open = false;
         self.interaction_state.context_menu = None;
         let drift = self.check_profile_drift_task();
         let detach = self.handle_detach_modal(super::super::super::state::ModalId::ErcDialog);
@@ -18,6 +19,7 @@ impl Signex {
 
     pub(crate) fn handle_close_erc_dialog(&mut self) -> Task<Message> {
         self.ui_state.erc_dialog_open = false;
+        self.ui_state.erc_profile_menu_open = false;
         self.ui_state.pending_profile_update = None;
         self.ui_state.save_profile_dialog = None;
         self.close_detached_modal(super::super::super::state::ModalId::ErcDialog)
@@ -464,7 +466,7 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
     match modal {
         ModalId::AnnotateDialog => iced::Size::new(1000.0, 680.0),
         ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
-        ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 191.0),
+        ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 261.0),
         ModalId::ReprefixConfirm => iced::Size::new(560.0, 500.0),
         // Content-fit (#66, #71): heights from the type scale.
         ModalId::MoveSelection => iced::Size::new(

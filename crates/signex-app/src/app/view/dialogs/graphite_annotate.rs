@@ -1,14 +1,17 @@
 //! Graphite controls of the Annotate dialog: the checkbox pip, the order
-//! and lock toggles, the field box and the order-preview cell.
+//! and lock toggles, the field box, the order-preview cell and the sheets
+//! table.
 
 use iced::widget::{Column, Row, Space, canvas, container};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
-use signex_i18n::{I18n, Localized, ids, t};
+use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text};
 
+use crate::app::handlers::erc::{PlacementLabel, SheetTickRow, TickState, tick_state};
 use crate::app::state::AnnotateOrder;
-use crate::styles::{Radii, Spacing, TypeScale, tokens};
+use crate::app::{AnnotateMsg, Message};
+use crate::styles::{PillTone, Radii, Spacing, TypeScale, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -16,14 +19,27 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Read-only checkbox pip: accent fill with a check when on, an empty
 /// field box with a strong hairline when off.
 pub(super) fn checkbox_pip<'a, M: 'a>(theme_tokens: &ThemeTokens, on: bool) -> Element<'a, M> {
+    tick_pip(
+        theme_tokens,
+        if on { TickState::All } else { TickState::None },
+    )
+}
+
+/// A checkbox pip in one of three states: ticked, unticked, or a dash for
+/// a header over a mix.
+pub(super) fn tick_pip<'a, M: 'a>(theme_tokens: &ThemeTokens, state: TickState) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
     let accent = tokens::accent_fill(theme_tokens);
     let side = TS.body + 2.0;
-    let mark = if on { "\u{2713}" } else { " " };
-    let (fill, edge) = if on {
-        (accent, accent)
-    } else {
+    let mark = match state {
+        TickState::All => "\u{2713}",
+        TickState::Some => "\u{2013}",
+        TickState::None => " ",
+    };
+    let (fill, edge) = if state == TickState::None {
         (r.field, r.line_strong)
+    } else {
+        (accent, accent)
     };
     container(
         // raw: a tick glyph (or a blank), not language.
@@ -260,58 +276,115 @@ pub(super) fn order_diagram<'a, M: 'a>(
         .boxed()
 }
 
-/// One sheet of the Annotate table.
-pub(super) struct SheetRow {
-    pub name: String,
-    pub on: bool,
+/// Width of the sheets table's Start column: the mock's 54 px.
+const START_COL_W: f32 = TS.body * 4.5;
+
+/// A tick button over `pip`: sends `message` when the table is editable.
+fn tick_button<'a>(pip: Element<'a, Message>, message: Option<Message>) -> Element<'a, Message> {
+    button(pip)
+        .padding(0.0)
+        .style(bare_button_style)
+        .on_press_maybe(message)
+        .boxed()
 }
 
-/// The sheets table card: sunken header (Schematic Sheet / Start / Add
-/// Suffix), then one ruled row per sheet with a checkbox and a mono name.
-pub(super) fn sheet_table<'a, M: 'a>(
+/// One row's sheet cell: the mono file name, then the current-sheet pill or
+/// the placement it stands for.
+fn sheet_name_cell<'a>(
     theme_tokens: &ThemeTokens,
     i18n: &I18n,
-    rows: Vec<SheetRow>,
-    empty: Localized,
-) -> Element<'a, M> {
+    sheet: &SheetTickRow,
+) -> Element<'a, Message> {
     let r = tokens::resolve(theme_tokens);
-    let ink = crate::styles::ti(theme_tokens.text);
-    let pad = [0.0, SP.m];
-    let cols = |lead: Element<'a, M>,
-                name: Element<'a, M>,
-                start: Element<'a, M>,
-                suffix: Element<'a, M>| {
-        Row::<Element<'a, M>>::new()
-            .push(lead)
-            .push(name)
-            .push(start)
-            .push(suffix)
-            .spacing(SP.m)
-            .align_y(iced::Alignment::Center)
+    let ink = if sheet.ticked {
+        crate::styles::ti(theme_tokens.text)
+    } else {
+        r.ink4
     };
-    let cell = |s: Localized, color: iced::Color, width: Length| -> Element<'a, M> {
-        text(s).size(TS.caption).color(color).width(width).boxed()
-    };
+    let mut cell = Row::<Element<'a, Message>>::new()
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill)
+        .push(
+            text(UserText::new(sheet.name.clone()))
+                .size(TS.body)
+                .color(ink)
+                .font(mono())
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        );
+    if let Some(placement) = &sheet.placement {
+        let label = match placement {
+            PlacementLabel::Named(name) => UserText::new(format!("\u{b7} {name}")),
+            PlacementLabel::Ordinal(n) => UserText::new(format!(
+                "\u{b7} {}",
+                t!(i18n, ids::DIALOG_ANNOTATE_SHEET_PLACEMENT, "n" => *n).into_string()
+            )),
+        };
+        cell = cell.push(text(label).size(TS.body).color(r.ink4).font(mono()).boxed());
+    }
+    if sheet.is_current {
+        let (fill, pill_ink) = crate::styles::pill_colors(theme_tokens, PillTone::Accent);
+        cell = cell.push(
+            container(
+                text(t!(i18n, ids::DIALOG_ANNOTATE_SHEET_CURRENT))
+                    .size(TS.caption)
+                    .color(pill_ink),
+            )
+            .padding([0.0, SP.s])
+            .style(move |_: &Theme| container::Style {
+                background: Some(Background::Color(fill)),
+                border: Border {
+                    radius: Radii::GRAPHITE.pill.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            })
+            .boxed(),
+        );
+    }
+    cell.boxed()
+}
+
+/// The sheets table card: a sunken header (header tick / Schematic Sheet /
+/// Start), then one ruled row per sheet or placement with its tick. A tick
+/// sends the row's sheet file; every placement row of it follows.
+pub(super) fn sheet_table<'a>(
+    theme_tokens: &ThemeTokens,
+    i18n: &I18n,
+    rows: &[SheetTickRow],
+    editable: bool,
+    empty: Localized,
+) -> Element<'a, Message> {
+    let r = tokens::resolve(theme_tokens);
+    let cols =
+        |lead: Element<'a, Message>, name: Element<'a, Message>, start: Element<'a, Message>| {
+            Row::<Element<'a, Message>>::new()
+                .push(lead)
+                .push(name)
+                .push(start)
+                .spacing(SP.m)
+                .align_y(iced::Alignment::Center)
+        };
+    let header_state = tick_state(rows);
+    let header_tick = (editable && !rows.is_empty())
+        .then(|| Message::Annotate(AnnotateMsg::AllSheetsTicked(header_state != TickState::All)));
     let head = cols(
-        Space::new().width(Length::Fixed(TS.body + 2.0)).boxed(),
-        cell(
-            t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_COL_SHEET),
-            r.ink4,
-            Length::Fill,
-        ),
-        cell(
-            t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_COL_START),
-            r.ink4,
-            Length::Fixed(70.0),
-        ),
-        cell(
-            t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_COL_SUFFIX),
-            r.ink4,
-            Length::Fixed(70.0),
-        ),
+        tick_button(tick_pip(theme_tokens, header_state), header_tick),
+        text(t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_COL_SHEET))
+            .size(TS.caption)
+            .color(r.ink4)
+            .width(Length::Fill)
+            .boxed(),
+        text(t!(i18n, ids::DIALOG_ANNOTATE_SHEETS_COL_START))
+            .size(TS.caption)
+            .color(r.ink4)
+            .width(Length::Fixed(START_COL_W))
+            .align_x(iced::alignment::Horizontal::Right)
+            .boxed(),
     );
     let sunken = r.sunken;
-    let mut body: Column<Element<'a, M>> = Column::new().width(Length::Fill);
+    let mut body: Column<Element<'a, Message>> = Column::new().width(Length::Fill);
     body = body.push(
         container(head)
             .padding([SP.s, SP.m])
@@ -323,7 +396,7 @@ pub(super) fn sheet_table<'a, M: 'a>(
             .boxed(),
     );
     let rule_color = r.line_soft;
-    let rule = move || -> Element<'a, M> {
+    let rule = move || -> Element<'a, Message> {
         container(Space::new().width(Length::Fill).height(Length::Fixed(1.0)))
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(rule_color)),
@@ -339,37 +412,34 @@ pub(super) fn sheet_table<'a, M: 'a>(
                 .boxed(),
         );
     }
+    let current_fill = tokens::selection_tint(theme_tokens);
     for sheet in rows {
-        let name_ink = if sheet.on { ink } else { r.ink3 };
+        let toggle =
+            editable.then(|| Message::Annotate(AnnotateMsg::SheetTickToggled(sheet.path.clone())));
         let line = cols(
-            checkbox_pip(theme_tokens, sheet.on),
-            text(signex_i18n::UserText::new(sheet.name))
-                .size(TS.body)
-                .color(name_ink)
-                .font(mono())
-                .width(Length::Fill)
-                .boxed(),
-            // raw: the start number and the dash for "no suffix" are not
-            // language.
+            tick_button(checkbox_pip(theme_tokens, sheet.ticked), toggle),
+            sheet_name_cell(theme_tokens, i18n, sheet),
+            // raw: the start number is not language; it cannot change yet.
             text(raw("1"))
-                .size(TS.body)
-                .color(r.ink3)
-                .font(mono())
-                .width(Length::Fixed(70.0))
-                .boxed(),
-            text(raw("\u{2014}"))
                 .size(TS.body)
                 .color(r.ink4)
                 .font(mono())
-                .width(Length::Fixed(70.0))
+                .width(Length::Fixed(START_COL_W))
+                .align_x(iced::alignment::Horizontal::Right)
                 .boxed(),
         );
+        let fill = sheet.is_current.then_some(current_fill);
         body = body.push(rule());
         body = body.push(
             container(line)
-                .padding(pad)
+                .padding([0.0, SP.m])
+                .width(Length::Fill)
                 .height(Length::Fixed(TS.body + 2.0 * SP.m + SP.s))
                 .align_y(iced::alignment::Vertical::Center)
+                .style(move |_: &Theme| container::Style {
+                    background: fill.map(Background::Color),
+                    ..container::Style::default()
+                })
                 .boxed(),
         );
     }

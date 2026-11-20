@@ -57,6 +57,7 @@ fn waiver(v: &Violation, fingerprint: &str, note: &str) -> DrcWaiver {
         rule: rule_id(v).into(),
         note: note.into(),
         fingerprint: fingerprint.into(),
+        author: String::new(),
     }
 }
 
@@ -163,6 +164,7 @@ fn a_finding_is_matched_to_its_waiver_and_filed_under_its_rule() {
             rule: "builtin::short".into(),
             note: String::new(),
             fingerprint: String::new(),
+            author: String::new(),
         },
         waiver(v, &fingerprint(v, &b), "accepted"),
     ];
