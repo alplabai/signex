@@ -278,7 +278,7 @@ impl Signex {
         match cell {
             Some(cell) => {
                 // Selected, not opened for typing: no editor to focus.
-                let _ = self.press_rules_cell(id, cell);
+                drop(self.press_rules_cell(id, cell));
                 self.update_grid_view(id, GridMessage::EditCancelled);
                 Task::none()
             }
