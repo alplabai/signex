@@ -11,6 +11,7 @@ mod board_3d;
 mod board_net_classes;
 mod board_project;
 mod board_sketch;
+mod bom_preview;
 #[cfg(test)]
 mod case_fold_tests;
 pub(crate) mod check_runs;
@@ -42,6 +43,7 @@ pub(crate) mod pcb_edit;
 pub(crate) mod pcb_query;
 mod pcb_ratsnest;
 mod pcb_revision;
+mod pdf_dialog;
 mod pdf_page_setup;
 mod pdf_preview_raster;
 mod placement;
@@ -70,12 +72,14 @@ pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
+pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use parameter_table::{ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
+pub use pdf_dialog::{ANGLE_PRESETS, PdfDialogState, PdfSection, WatermarkPreset};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
     PageSetupMemory, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
@@ -84,9 +88,7 @@ pub use pdf_preview_raster::{
 pub use placement::{
     LastPlacement, PasteCounters, PlacementKind, PlacementSession, SheetPlacementPause,
 };
-pub use preview::{
-    BomPreviewState, BomSidebarTab, ColumnResizeState, PdfPreviewTab, PdfQuality, PreviewState,
-};
+pub use preview::{PdfQuality, PreviewState};
 pub use profile_update::PendingProfileUpdate;
 pub use tab_placements::{TabPlacements, default_placement};
 pub use ui::{DEFAULT_BOTTOM_PANEL_HEIGHT, UiState};

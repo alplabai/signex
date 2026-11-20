@@ -33,6 +33,7 @@ mod documents;
 pub(crate) mod engine_notices;
 pub(crate) mod fab_outputs;
 pub(crate) mod file_extension;
+pub mod gerber_read;
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
@@ -116,12 +117,12 @@ pub use contracts::{
     LayerSetCard, LayerSetMenu, LayerSetMenuMsg, LayerSetMsg, LayerStripMsg, LayerTabMenu,
     LayerTabMenuMsg, LayerTabSubmenu, LibraryRowRef, Message, MoveSelectionMsg, NetColorMsg,
     NetNavMsg, OverlayMsg, ParameterManagerMsg, PartSwapMsg, PasteIntent, PasteRequest, PcbBarMenu,
-    PcbBarMsg, PcbMsg, PcbViewMsg, PlacementExtrasMsg, PreferencesMsg, PrintPreviewMsg,
-    ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob, ProjectTreeAction,
-    ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg, RenameDialogState,
-    RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest, TabContextAction,
-    TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem, TuneMsg, UiMsg,
-    VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
+    PcbBarMsg, PcbMsg, PcbViewMsg, PdfOptionMsg, PlacementExtrasMsg, PreferencesMsg,
+    PrintPreviewMsg, ProjectCloseChoice, ProjectCloseConfirmState, ProjectMsg, ProjectRenameJob,
+    ProjectTreeAction, ProjectTreeContextMenuState, RemoveChoice, RemoveDialogState, RemoveMsg,
+    RenameDialogState, RenameMsg, SelectionFilterCustomState, SelectionFilterMsg, StatusBarRequest,
+    TabContextAction, TabContextMenuState, TextEditMsg, TextEditState, TextEditTarget, TrackItem,
+    TuneMsg, UiMsg, VersionControlScope, ViewAngleEntry, ViewRotationMsg, WindowMsg,
 };
 pub(crate) use document::{Document, DocumentKey};
 pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};

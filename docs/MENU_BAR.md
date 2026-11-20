@@ -70,7 +70,9 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 **Reports** (outputs of the open schematic, all greyed without one):
 
 - Bill of Materials... (the one BOM dialog; the old Design ▸ Generate BOM row
-  was a second row for the same message and is folded in)
+  was a second row for the same message and is folded in). File ▸ Export ▸
+  Export BOM… opens the same dialog. This row keeps its name until BOM Studio
+  (mockup row 113) takes the Reports row.
 - Netlist (Protel .NET)...
 - ERC Report...
 
@@ -99,7 +101,9 @@ Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
 Outline... (`import_dxf_outline`), greyed without a board in view; each asks
 for the file and imports it as one undo step (#2410, see
 [BOARD_IMPORT_AND_REUSE.md](BOARD_IMPORT_AND_REUSE.md)). **File ▸
-Export** keeps PDF only.
+Export** has PDF…, Export BOM… (the BOM export dialog, named by its result,
+greyed without a schematic; mockup row 112, Caner 2026-11-20) and STEP 3D
+Model….
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
@@ -342,10 +346,43 @@ Component Library, then Add New ▸ Component on the library node.
 
 Print Preview used to be a top-level File row that duplicated Export ▸ PDF's
 shortcut, so it was folded into Export ▸ PDF. File ▸ Print... (#1765) and
-Export ▸ PDF open the same print preview / PDF export modal (`print`, Ctrl+P,
+Export ▸ PDF open the same Export PDF dialog (`print`, Ctrl+P,
 goes through the keymap command bridge in `app/command/bridge.rs`; Export ▸ PDF
 runs as `print` in an undocked window, so both preview that window's document). Only
-File ▸ Print... shows Ctrl+P, so one shortcut appears on one row.
+File ▸ Print... shows Ctrl+P, so one shortcut appears on one row. The menu rows
+keep their names; whether to rename them to "Export PDF…" is still open.
+
+The dialog is one screen (#2430): the sheets as thumbnails on the left (an
+unticked sheet's thumbnail is dimmed, not removed), the page in the middle with
+a toolbar for page stepping and zoom and a caption in paper units ("ISO A4
+landscape · 297 × 210 mm · Fit to Page"), and the settings on the right. The
+settings sections, top to bottom: Sheets (Select All · Clear, "N of M"), Pages
+(All / Current / Specific), Page Setup (size, orientation, scale, the margins
+as two rows of two in mm from the page edge), Output (schematic and PCB colour
+mode, quality, title block), Variant (one variant per PDF), Structure (folded,
+"Logical" or "Physical"; the expanded names greyed until Use Physical
+Structure is ticked), Watermark, PDF Layers, Bookmarks, Bookmarks and Nets
+(folded, "N on") and Schematics include (folded, "N of 7"). The footer says
+how many pages print, on which paper and at which quality, or the last
+export's outcome; Cancel closes the dialog (Close once an export finished)
+and Export PDF… asks where to save.
+
+Watermark, PDF Layers and Bookmarks (#1298): "Print a watermark" is off by
+default; on, it prints DRAFT, CONFIDENTIAL or a custom text at the chosen
+opacity and angle (0, 45, 90 or typed), in a fixed red (#C0392B, shown as a
+swatch; the dialog has no colour picker), on every page or the first only,
+optionally with a "Rev · date" line in English (the revision from the title
+block, the date of the export). The page preview draws it where the PDF
+prints it; switched off, its settings are kept for when it is on again.
+"Write PDF layers" is off by default, so the PDF stays flat as before; on,
+each group (wires and buses, parts, net labels and ports, power ports, title
+block and border, watermark) is a layer a PDF reader can switch, its box says
+whether it is visible when the PDF opens; the watermark row is greyed while no
+watermark prints. Bookmarks: one per sheet, one per part (grouped by sheet or
+A–Z) and one per net (the nets information the PDF has always carried; it is
+no longer also under Bookmarks and Nets). Part bookmarks follow "One bookmark
+per part" only; Bookmarks and Nets has no Include Component Parameters box
+any more, because the exporter writes no parameter rows yet.
 
 On a board (#2402) both rows are live and open Board Print / PDF instead: the
 layer sets, one page per set or one composite page, the bottom side mirrored,

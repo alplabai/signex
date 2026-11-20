@@ -196,12 +196,12 @@ impl Signex {
         Some(card.boxed())
     }
 
-    /// Print Preview overlay. Shows thumbnails of every rendered page on
-    /// the left, the selected page full-size on the right, with Export PDF
-    /// and Close buttons at the bottom. Triggered by File → Print Preview
-    /// (Ctrl+P) and File → Export PDF; disappears on Close or when the
-    /// export completes. In-window flavour wraps the body in `wrap_dialog`
-    /// for backdrop + drag-to-position.
+    /// The Export PDF dialog: one screen with the page list, the page and
+    /// the settings column (`pdf_preview/`), Cancel and Export PDF… in the
+    /// footer. Opened by File → Print (Ctrl+P) and File → Export → PDF;
+    /// closed by the header X or Cancel (Close once an export finished). The
+    /// in-window flavour wraps the body in `wrap_dialog` for backdrop +
+    /// drag-to-position.
     pub(super) fn view_print_preview(&self) -> Element<'_, Message> {
         use crate::app::state::ModalId;
         // `pdf_modal_size` is already fitted; fitting again is a no-op.
@@ -228,10 +228,12 @@ impl Signex {
     }
 
     fn view_print_preview_inner(&self, draggable: bool) -> Element<'_, Message> {
-        use crate::app::state::{ModalId, PdfPreviewTab};
-        use crate::app::view::dialogs::{draggable_header, modal_title_header, os_title_bar_slot};
+        use crate::app::state::ModalId;
+        use crate::app::view::dialogs::{
+            DIALOG_HEADER_H, draggable_header, graphite_header, os_title_bar_slot,
+        };
         use iced::widget::{column, container};
-        use signex_widgets::{raw, text};
+        use signex_widgets::text;
 
         let preview = match &self.document_state.preview {
             Some(p) => p,
@@ -242,10 +244,13 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let text_muted = crate::styles::ti(tokens.text_secondary);
 
-        // Header — same chrome as every other modal.
-        let header_content: Element<'_, Message> = modal_title_header(
-            "Export PDF",
+        // Header — the modal chrome, with the file and its sheet count.
+        let header_content: Element<'_, Message> = graphite_header(
+            i18n.message_plain(ids::DIALOG_PRINT_PREVIEW_EXPORT_PDF, &[]),
+            Some(self.pdf_dialog_subtitle(preview)),
+            None,
             Message::PrintPreview(PrintPreviewMsg::Close),
+            DIALOG_HEADER_H,
             tokens,
         );
         let header = if draggable {
@@ -258,36 +263,37 @@ impl Signex {
             os_title_bar_slot()
         };
 
-        // Tab strip — Preview | Settings.
-        let tab_strip = self.view_pdf_tab_strip(preview.active_tab);
+        // One screen: page list, page, settings column.
+        let body = self.view_pdf_dialog_body(preview);
 
-        // Body switches by tab.
-        let body: Element<'_, Message> = match preview.active_tab {
-            PdfPreviewTab::Preview => self.view_pdf_preview_tab(preview),
-            PdfPreviewTab::Settings => self.view_pdf_settings_tab(preview),
+        // Footer — the status caption, then Cancel before the action and
+        // Close once an export has finished, and Export PDF….
+        let dismiss = if preview.export_status.is_some() {
+            ids::DIALOG_BUTTON_CLOSE
+        } else {
+            ids::DIALOG_BUTTON_CANCEL
         };
-
-        // Footer — page count + Export PDF.
-        let footer_caption: signex_widgets::Label<'_> =
-            match (&preview.export_status, preview.pages.is_empty()) {
-                // raw: the export status is worded by the export handler (#2061).
-                (Some(status), _) => raw(status.clone()),
-                (None, true) => t!(i18n, ids::DIALOG_PRINT_PREVIEW_NO_FILES).into(),
-                (None, false) => t!(
-                    i18n,
-                    ids::DIALOG_PRINT_PREVIEW_PAGE_COUNT,
-                    "count" => preview.pages.len().to_string()
-                )
-                .into(),
-            };
         let footer = dialog_footer_split(
-            vec![text(footer_caption).size(TS.body).color(text_muted).boxed()],
-            vec![dialog_button(
-                t!(i18n, ids::DIALOG_PRINT_PREVIEW_EXPORT_PDF),
-                DialogButtonKind::Primary,
-                Some(Message::PrintPreview(PrintPreviewMsg::Export)),
-                tokens,
-            )],
+            vec![
+                text(self.pdf_footer_caption(preview))
+                    .size(TS.body)
+                    .color(text_muted)
+                    .boxed(),
+            ],
+            vec![
+                dialog_button(
+                    t!(i18n, dismiss),
+                    DialogButtonKind::Cancel,
+                    Some(Message::PrintPreview(PrintPreviewMsg::Close)),
+                    tokens,
+                ),
+                dialog_button(
+                    t!(i18n, ids::PDF_EXPORT_PDF),
+                    DialogButtonKind::Primary,
+                    Some(Message::PrintPreview(PrintPreviewMsg::Export)),
+                    tokens,
+                ),
+            ],
         );
 
         // Detached: the OS window owns the size, so fill it.
@@ -297,13 +303,9 @@ impl Signex {
         } else {
             (Length::Fill, Length::Fill)
         };
-        let dialog = container(
-            column![header, tab_strip, body, footer]
-                .width(modal_w)
-                .height(modal_h),
-        )
-        .style(crate::styles::modal_card(tokens))
-        .clip(true);
+        let dialog = container(column![header, body, footer].width(modal_w).height(modal_h))
+            .style(crate::styles::modal_card(tokens))
+            .clip(true);
         dialog.boxed()
     }
 }

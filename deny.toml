@@ -62,6 +62,7 @@ exceptions = [
     { crate = "signex-expr", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-erc", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-erc-dsl", allow = ["FSL-1.1-ALv2"] },
+    { crate = "signex-gerber", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-gfx", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-history", allow = ["FSL-1.1-ALv2"] },
     { crate = "signex-i18n", allow = ["FSL-1.1-ALv2"] },

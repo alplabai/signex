@@ -7,7 +7,7 @@
 //! assigns sequential `Ref`s and writes the outline dict + every
 //! item dict.
 //!
-//! Layout (Altium parity):
+//! Default layout:
 //! ```text
 //! Outline root
 //! ├── Sheet 1: Power
@@ -21,16 +21,15 @@
 //! └── Sheet 2: ...
 //! ```
 //!
-//! With `global_bookmarks = true` the Components / Nets groups are
-//! pulled out from under each sheet and aggregated into two
-//! top-level groups instead. Per-sheet items still appear as their
-//! own top-level entries so navigation by page is preserved.
+//! Which groups move to the top level, and when parts are listed A to Z,
+//! is set out in docs/PDF_EXPORT.md, "Bookmarks".
 
 use pdf_writer::{Finish, Pdf, Ref, TextStr};
 
-use super::PdfOptions;
 use super::layout::PageTransform;
+use super::{PartBookmarkOrder, PdfOptions};
 use crate::ExportContext;
+use signex_types::designator::compare_references;
 use signex_types::schematic::LabelType;
 
 /// A bookmark target before any PDF refs have been allocated.
@@ -85,24 +84,28 @@ pub(crate) fn build_bookmarks(
     let mm_to_pt = 72.0 / 25.4;
 
     let mut items: Vec<PendingBookmark> = Vec::new();
+    let parts_top_level = parts_group_top_level(opts);
+    let nets_top_level = nets_group_top_level(opts);
 
-    // Top-level group nodes for the global mode. Per-sheet items
-    // still appear at the top level so users can jump to a page
-    // without diving into a group.
-    let global_components_idx = if opts.global_bookmarks && opts.include_component_parameters {
+    // Top-level group nodes. Per-sheet items, when on, still appear at
+    // the top level so users can jump to a page without diving into a
+    // group.
+    let global_components_idx = if opts.bookmark_parts && parts_top_level {
         let i = items.len();
         items.push(PendingBookmark::new_root_node("Components"));
         Some(i)
     } else {
         None
     };
-    let global_nets_idx = if opts.global_bookmarks && nets_group_active(opts) {
+    let global_nets_idx = if nets_group_active(opts) && nets_top_level {
         let i = items.len();
         items.push(PendingBookmark::new_root_node("Nets"));
         Some(i)
     } else {
         None
     };
+    // Parts listed A to Z are gathered from every page, then sorted.
+    let mut alphabetical_parts: Vec<(String, PendingBookmark)> = Vec::new();
 
     for (page_idx, &sheet_idx) in page_sheet_indices.iter().enumerate() {
         let Some(sheet) = ctx.sheets.get(sheet_idx) else {
@@ -111,60 +114,36 @@ pub(crate) fn build_bookmarks(
 
         let xform = PageTransform::new(sheet, page_w_mm, page_h_mm, opts, mm_to_pt);
 
-        // Sheet bookmark — always emitted when any sub-bookmark is
-        // active. Variant tag in the title lets readers tell
+        // Sheet bookmark. Variant tag in the title lets readers tell
         // expanded physical structures apart at a glance.
-        let sheet_title = build_sheet_title(sheet, opts);
-        let sheet_bookmark_idx = items.len();
-        items.push(PendingBookmark {
-            title: sheet_title,
-            parent_idx: None,
-            children: Vec::new(),
-            page_idx,
-            // Destination at page top-left so the outline jump
-            // shows the title-block area rather than mid-sheet.
-            x_pt: 0.0,
-            y_pt: page_h_pt,
-        });
-
-        // Per-sheet groups in non-global mode: nest Components / Nets
-        // under the sheet so the outline matches Altium's tree.
-        let local_components_idx = if !opts.global_bookmarks && opts.include_component_parameters {
+        let sheet_bookmark_idx = if opts.bookmark_sheets {
             let i = items.len();
             items.push(PendingBookmark {
-                title: "Components".to_string(),
-                parent_idx: Some(sheet_bookmark_idx),
+                title: build_sheet_title(sheet, opts),
+                parent_idx: None,
                 children: Vec::new(),
                 page_idx,
+                // Destination at page top-left so the outline jump
+                // shows the title-block area rather than mid-sheet.
                 x_pt: 0.0,
                 y_pt: page_h_pt,
             });
-            items[sheet_bookmark_idx].children.push(i);
             Some(i)
         } else {
             None
         };
 
-        let local_nets_idx = if !opts.global_bookmarks && nets_group_active(opts) {
-            let i = items.len();
-            items.push(PendingBookmark {
-                title: "Nets".to_string(),
-                parent_idx: Some(sheet_bookmark_idx),
-                children: Vec::new(),
-                page_idx,
-                x_pt: 0.0,
-                y_pt: page_h_pt,
-            });
-            items[sheet_bookmark_idx].children.push(i);
-            Some(i)
-        } else {
-            None
-        };
+        // Per-sheet groups: nest Components / Nets under the sheet.
+        let local_components_idx = sheet_bookmark_idx
+            .filter(|_| opts.bookmark_parts && !parts_top_level)
+            .map(|sheet_item| push_sheet_group(&mut items, sheet_item, "Components"));
+        let local_nets_idx = sheet_bookmark_idx
+            .filter(|_| nets_group_active(opts) && !nets_top_level)
+            .map(|sheet_item| push_sheet_group(&mut items, sheet_item, "Nets"));
 
-        // Components — every symbol in the sheet, gated by the
-        // include_component_parameters toggle.
-        if opts.include_component_parameters {
-            let parent_idx = if opts.global_bookmarks {
+        // Components — one bookmark per part, gated by bookmark_parts.
+        if opts.bookmark_parts {
+            let parent_idx = if parts_top_level {
                 global_components_idx
             } else {
                 local_components_idx
@@ -174,98 +153,134 @@ pub(crate) fn build_bookmarks(
                     if sym.reference.is_empty() {
                         continue;
                     }
-                    let item_idx = items.len();
-                    items.push(PendingBookmark {
+                    let item = PendingBookmark {
                         title: format_component_title(&sym.reference, &sym.value, opts),
                         parent_idx: Some(parent_idx),
                         children: Vec::new(),
                         page_idx,
                         x_pt: xform.x(sym.position.x),
                         y_pt: xform.pdf_y(sym.position.y, page_h_pt),
-                    });
-                    items[parent_idx].children.push(item_idx);
+                    };
+                    if opts.part_bookmark_order == PartBookmarkOrder::Alphabetical {
+                        alphabetical_parts.push((sym.reference.clone(), item));
+                    } else {
+                        push_child(&mut items, item);
+                    }
                 }
             }
         }
 
         // Nets — net labels (and ports / pins as sub-categories).
         if opts.generate_nets_info {
-            let parent_idx = if opts.global_bookmarks {
+            let parent_idx = if nets_top_level {
                 global_nets_idx
             } else {
                 local_nets_idx
             };
             if let Some(parent_idx) = parent_idx {
-                if opts.bookmark_net_labels {
-                    for label in &sheet.schematic.labels {
-                        if !matches!(label.label_type, LabelType::Net | LabelType::Global) {
-                            continue;
-                        }
-                        if label.text.is_empty() {
-                            continue;
-                        }
-                        let item_idx = items.len();
-                        items.push(PendingBookmark {
-                            title: format!("/{}", label.text),
-                            parent_idx: Some(parent_idx),
-                            children: Vec::new(),
-                            page_idx,
-                            x_pt: xform.x(label.position.x),
-                            y_pt: xform.pdf_y(label.position.y, page_h_pt),
-                        });
-                        items[parent_idx].children.push(item_idx);
-                    }
-                }
-                if opts.bookmark_ports {
-                    for label in &sheet.schematic.labels {
-                        if !matches!(label.label_type, LabelType::Hierarchical) {
-                            continue;
-                        }
-                        if label.text.is_empty() {
-                            continue;
-                        }
-                        let item_idx = items.len();
-                        items.push(PendingBookmark {
-                            title: format!("port {}", label.text),
-                            parent_idx: Some(parent_idx),
-                            children: Vec::new(),
-                            page_idx,
-                            x_pt: xform.x(label.position.x),
-                            y_pt: xform.pdf_y(label.position.y, page_h_pt),
-                        });
-                        items[parent_idx].children.push(item_idx);
-                    }
-                }
-                if opts.bookmark_pins {
-                    // Standard doesn't store per-pin physical positions
-                    // separately from the parent symbol — render a
-                    // pin entry per symbol-pin pair using the symbol
-                    // anchor as the destination. Coarse but matches
-                    // Altium's "find this pin" behaviour well enough.
-                    for sym in sheet.schematic.symbols.iter().filter(|s| !s.is_power) {
-                        // HashMap order is random; sort so the outline is
-                        // reproducible run to run.
-                        let mut pin_numbers: Vec<&String> = sym.pin_uuids.keys().collect();
-                        pin_numbers.sort();
-                        for pin_number in pin_numbers {
-                            let item_idx = items.len();
-                            items.push(PendingBookmark {
-                                title: format!("pin {}.{}", sym.reference, pin_number),
-                                parent_idx: Some(parent_idx),
-                                children: Vec::new(),
-                                page_idx,
-                                x_pt: xform.x(sym.position.x),
-                                y_pt: xform.pdf_y(sym.position.y, page_h_pt),
-                            });
-                            items[parent_idx].children.push(item_idx);
-                        }
-                    }
-                }
+                let at = |x: f64, y: f64| (xform.x(x), xform.pdf_y(y, page_h_pt));
+                push_net_items(&mut items, sheet, opts, parent_idx, page_idx, at);
             }
         }
     }
 
+    // A to Z: natural designator order (R2 before R10), the order every
+    // BOM and report uses. The sort is stable, so one designator on
+    // several pages keeps page order.
+    alphabetical_parts.sort_by(|(a, _), (b, _)| compare_references(a, b));
+    for (_, item) in alphabetical_parts {
+        push_child(&mut items, item);
+    }
+
     items
+}
+
+/// Push `item` and link it under its parent.
+fn push_child(items: &mut Vec<PendingBookmark>, item: PendingBookmark) {
+    let item_idx = items.len();
+    if let Some(parent_idx) = item.parent_idx {
+        items[parent_idx].children.push(item_idx);
+    }
+    items.push(item);
+}
+
+/// Push a group node under the sheet item at `sheet_item`, pointing at
+/// the sheet's page top-left.
+fn push_sheet_group(items: &mut Vec<PendingBookmark>, sheet_item: usize, title: &str) -> usize {
+    let sheet = &items[sheet_item];
+    let group = PendingBookmark {
+        title: title.to_string(),
+        parent_idx: Some(sheet_item),
+        children: Vec::new(),
+        page_idx: sheet.page_idx,
+        x_pt: sheet.x_pt,
+        y_pt: sheet.y_pt,
+    };
+    let group_idx = items.len();
+    push_child(items, group);
+    group_idx
+}
+
+/// Net labels, ports and pins of one sheet under the Nets group at
+/// `parent_idx`. `at` turns a sheet point (mm) into a PDF destination.
+fn push_net_items(
+    items: &mut Vec<PendingBookmark>,
+    sheet: &crate::SheetSnapshot,
+    opts: &PdfOptions,
+    parent_idx: usize,
+    page_idx: usize,
+    at: impl Fn(f64, f64) -> (f32, f32),
+) {
+    let mut push = |title: String, (x_pt, y_pt): (f32, f32)| {
+        push_child(
+            items,
+            PendingBookmark {
+                title,
+                parent_idx: Some(parent_idx),
+                children: Vec::new(),
+                page_idx,
+                x_pt,
+                y_pt,
+            },
+        );
+    };
+    let labels = &sheet.schematic.labels;
+    if opts.bookmark_net_labels {
+        for label in labels.iter().filter(|l| !l.text.is_empty()) {
+            if matches!(label.label_type, LabelType::Net | LabelType::Global) {
+                push(
+                    format!("/{}", label.text),
+                    at(label.position.x, label.position.y),
+                );
+            }
+        }
+    }
+    if opts.bookmark_ports {
+        for label in labels.iter().filter(|l| !l.text.is_empty()) {
+            if matches!(label.label_type, LabelType::Hierarchical) {
+                push(
+                    format!("port {}", label.text),
+                    at(label.position.x, label.position.y),
+                );
+            }
+        }
+    }
+    if opts.bookmark_pins {
+        // Pins carry no position of their own in the sheet data, so a
+        // pin entry jumps to its symbol's anchor.
+        for sym in sheet.schematic.symbols.iter().filter(|s| !s.is_power) {
+            // HashMap order is random; sort so the outline is
+            // reproducible run to run.
+            let mut pin_numbers: Vec<&String> = sym.pin_uuids.keys().collect();
+            pin_numbers.sort();
+            for pin_number in pin_numbers {
+                push(
+                    format!("pin {}.{}", sym.reference, pin_number),
+                    at(sym.position.x, sym.position.y),
+                );
+            }
+        }
+    }
 }
 
 /// Number of items nested anywhere below `idx` (PDF `/Count` semantics).
@@ -374,7 +389,21 @@ pub(crate) fn emit_bookmarks(
 /// Returns true when at least one toggle that produces a bookmark
 /// is enabled.
 fn any_bookmark_toggle_on(opts: &PdfOptions) -> bool {
-    opts.include_component_parameters || opts.generate_nets_info
+    opts.bookmark_sheets || opts.bookmark_parts || opts.generate_nets_info
+}
+
+/// The Components group sits at the top level, not under each sheet:
+/// with no sheet items, with parts listed A to Z, or in global mode.
+fn parts_group_top_level(opts: &PdfOptions) -> bool {
+    !opts.bookmark_sheets
+        || opts.part_bookmark_order == PartBookmarkOrder::Alphabetical
+        || opts.global_bookmarks
+}
+
+/// The Nets group sits at the top level: with no sheet items, or in
+/// global mode.
+fn nets_group_top_level(opts: &PdfOptions) -> bool {
+    !opts.bookmark_sheets || opts.global_bookmarks
 }
 
 /// Returns true when the Nets group has any reason to exist.
