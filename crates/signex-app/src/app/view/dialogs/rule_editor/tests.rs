@@ -221,3 +221,16 @@ fn the_shipped_rules_are_the_builtin_profile_resolved_once() {
         "every frame reads the same value"
     );
 }
+
+/// A hand-edited file may override a pair only on its upper cell: the
+/// drawn lower cell shows that override, as the check reads it.
+#[test]
+fn a_pair_overridden_only_on_its_upper_cell_is_drawn_with_that_override() {
+    let hand = signex_erc::pin_matrix::baseline_cell(4, 1).cycled();
+    let overrides = HashMap::from([((1, 4), hand)]);
+    let cells = lower_triangle(&overrides, &shipped());
+    let cell = cells[4][1];
+    assert_eq!((cell.row, cell.col), (4, 1));
+    assert_eq!(cell.severity, hand);
+    assert!(cell.changed, "it differs from the shipped matrix");
+}

@@ -65,12 +65,8 @@ impl Signex {
                 // The level the click moves the cell to, from what the screen
                 // shows, so the file ends up exactly there.
                 let target = self.ui_state.profile_manager.selected_profile().map(|l| {
-                    signex_erc::project_rules::resolve(&l.profile.erc)
-                        .pin_matrix
-                        .get(&(row, col))
-                        .copied()
-                        .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(row, col))
-                        .cycled()
+                    let resolved = signex_erc::project_rules::resolve(&l.profile.erc);
+                    signex_erc::pin_matrix::pair_cell(&resolved.pin_matrix, row, col).cycled()
                 });
                 match target {
                     Some(target) => self.edit_selected_profile(RuleEdit::PinCell(row, col, target)),

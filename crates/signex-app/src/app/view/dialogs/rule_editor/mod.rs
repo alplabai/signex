@@ -14,6 +14,7 @@ use std::collections::HashMap;
 
 use iced::widget::{container, row};
 use iced::{Background, Border, Element, Length, Theme, Widget};
+use signex_erc::pin_matrix::pair_cell;
 use signex_erc::project_rules::ResolvedRules;
 use signex_erc::{PinAxis, RuleGroup, RuleKind, Severity};
 use signex_i18n::{I18n, MessageId, ids, t};
@@ -112,19 +113,6 @@ pub(crate) fn effective_severity(
         || rule.default_severity(),
         |chosen| rule.normalize_override(chosen),
     )
-}
-
-/// The severity of one matrix cell under `overrides`: the override, else the
-/// factory cell.
-pub(crate) fn effective_cell(
-    overrides: &HashMap<(u8, u8), Severity>,
-    row: u8,
-    col: u8,
-) -> Severity {
-    overrides
-        .get(&(row, col))
-        .copied()
-        .unwrap_or_else(|| signex_erc::pin_matrix::baseline_cell(row, col))
 }
 
 /// One row of the rule list.
@@ -248,7 +236,9 @@ pub(crate) struct MatrixCell {
 }
 
 /// The cells to draw: the lower triangle (column <= row), one list per axis
-/// row. The matrix is symmetric, so the upper triangle would repeat it.
+/// row. The matrix is symmetric, so the upper triangle would repeat it; a
+/// cell overridden only on its mirror (a hand-edited file) shows that
+/// override, as the check reads it (`signex_erc::pin_matrix::pair_cell`).
 pub(crate) fn lower_triangle(
     pin_matrix: &HashMap<(u8, u8), Severity>,
     shipped: &ResolvedRules,
@@ -257,12 +247,12 @@ pub(crate) fn lower_triangle(
         .map(|row| {
             (0..=row)
                 .map(|col| {
-                    let severity = effective_cell(pin_matrix, row, col);
+                    let severity = pair_cell(pin_matrix, row, col);
                     MatrixCell {
                         row,
                         col,
                         severity,
-                        changed: severity != effective_cell(&shipped.pin_matrix, row, col),
+                        changed: severity != pair_cell(&shipped.pin_matrix, row, col),
                     }
                 })
                 .collect()
