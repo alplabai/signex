@@ -1,0 +1,35 @@
+G04 Inner copper L2 as returned by the board house*
+%TF.GenerationSoftware,Example Vendor,Example CAM,1.0*%
+%TF.ProjectId,dcdc-buck,0001,revB*%
+%TF.FileFunction,Copper,L2,Inr,Plane*%
+%TF.FilePolarity,Positive*%
+%FSLAX46Y46*%
+%MOMM*%
+G04 Apertures*
+%TA.AperFunction,ViaPad*%
+%ADD10C,0.600000*%
+%TA.AperFunction,Conductor*%
+%ADD11C,0.250000*%
+%TD*%
+G04 The ground plane*
+%TO.N,GND*%
+G36*
+X0Y0D02*
+G01*
+X32000000Y0D01*
+X32000000Y24000000D01*
+X0Y24000000D01*
+X0Y0D01*
+G37*
+%TA.AperFunction,ThermalReliefPad*%
+%ADD21THERMAL80,2.3X1.5X0.3*%
+%TD.AperFunction*%
+D21*
+X6200000Y11500000D03*
+X26400000Y6000000D03*
+%TD*%
+%TO.N,VIN_12V*%
+D10*
+X12000000Y12000000D03*
+%TD*%
+M02*

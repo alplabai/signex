@@ -5723,6 +5723,7 @@ dependencies = [
  "signex-erc",
  "signex-erc-dsl",
  "signex-expr",
+ "signex-gerber",
  "signex-gfx",
  "signex-history",
  "signex-i18n",
@@ -5868,6 +5869,18 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "signex-gerber"
+version = "26.11.0"
+dependencies = [
+ "pcb-geom",
+ "serde_json",
+ "signex-output",
+ "signex-types",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]

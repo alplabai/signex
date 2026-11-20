@@ -487,7 +487,6 @@ fn moved_dialog_button_labels_keep_their_english() {
         (ids::DIALOG_ANNOTATE_ACCEPT, "Accept Changes"),
         (ids::DIALOG_AUTOSAVE_RECOVERY_RESTORE, "Restore"),
         (ids::DIALOG_AUTOSAVE_RECOVERY_LATER, "Decide later"),
-        (ids::DIALOG_BOM_EXPORT, "Export\u{2026}"),
         (ids::DIALOG_UNSAVED_DISCARD_ALL, "Discard All"),
         (ids::DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING, "Open it"),
         (ids::DIALOG_CREATE_CHILD_SHEET_BROWSE, "Browse..."),

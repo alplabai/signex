@@ -127,6 +127,14 @@ fn export(ctx: &MenuContext) -> Vec<MenuEntry> {
             MenuMessage::ExportPdf,
             enabled(ctx, "print"),
         ),
+        // The BOM export dialog, the one Reports ▸ Bill of Materials… opens,
+        // named by its result (mockup row 112).
+        item_if(
+            ctx,
+            menu_ids::MENU_FILE_EXPORT_BOM,
+            MenuMessage::ExportBom,
+            ctx.commands.has_schematic,
+        ),
         // The board and its parts as a STEP model (#2488); greyed without
         // a board in view.
         cmd_item_gated(ctx, cmd("export_board_step", "")),
