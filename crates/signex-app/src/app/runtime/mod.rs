@@ -207,6 +207,8 @@ impl Signex {
         self.cancel_move_pick();
         // A half-placed two-click shape belongs to the tab it was started in.
         self.clear_shape_anchors();
+        // The zoom presets opened over the previous tab's pill.
+        self.interaction_state.zoom_presets_open = false;
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.
         let active_path = self

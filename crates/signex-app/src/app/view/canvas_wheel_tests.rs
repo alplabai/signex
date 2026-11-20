@@ -389,3 +389,27 @@ fn fit_selection_does_nothing_without_a_selection() {
         "{messages:?}"
     );
 }
+
+/// The menu belongs to the sheet it opened over: switching to another tab
+/// closes it, so it does not hang over the next sheet's pill.
+#[test]
+fn a_tab_switch_closes_the_presets() {
+    let (mut app, _main) = app();
+    let other = std::path::PathBuf::from("other.snxsch");
+    let engine = signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default())
+        .expect("engine");
+    app.document_state.engines.insert(other.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "other".to_string(),
+        path: other,
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    open_presets(&mut app);
+    let _ = app.step_document_tab(true);
+    assert!(
+        !app.interaction_state.zoom_presets_open,
+        "the menu stayed open over the next tab"
+    );
+}
