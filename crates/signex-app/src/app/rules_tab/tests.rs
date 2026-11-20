@@ -1194,7 +1194,11 @@ fn the_findings_line_says_why_it_has_no_count() {
         findings_reason(&app, id, "sig_b"),
         Some(ids::RULES_BLANK_NOT_CHECKED)
     );
-    let task = app.handle_pcb_drc_requested();
+    // The tab's own Run DRC: with the Rules tab in view there is no active
+    // board for `handle_pcb_drc_requested` to run.
+    let task = app.update(Message::Project(ProjectMsg::Rules(
+        RulesTabMsg::DrcRequested { project_id: id },
+    )));
     crate::task_driver::TaskDriver::new()
         .settle(&mut app, task)
         .expect("the run lands");

@@ -202,14 +202,27 @@ fn pair_gaps_commit_with_no_column() {
     }
 }
 
+/// A pair is drawn only when the matrix shows it a value (no value, no
+/// drawing), so a gap of 0 is a real value: it keeps its label and can be
+/// typed over.
 #[test]
-fn a_pair_at_zero_gap_has_no_label() {
+fn a_pair_at_zero_gap_keeps_an_editable_label() {
     let target = PreviewTarget::ClassPair {
         a: "A".into(),
         b: "B".into(),
         gap_mm: 0.0,
     };
-    assert!(fields_of(&target).is_empty());
+    assert_eq!(fields_of(&target), [None], "one gap label, no rule column");
+    let scene = scene_of(&target, BoardInk::new());
+    assert_eq!(scene.labels[0].value_mm, 0.0);
+    let mut state = RulePreview::default();
+    assert_eq!(
+        type_into(&mut state, &target, 0, "0.3"),
+        Some(PreviewCommit {
+            field: None,
+            value_mm: 0.3,
+        })
+    );
 }
 
 #[test]
