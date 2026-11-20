@@ -98,7 +98,7 @@ pub struct PcbLayersPanel {
     pub origin_marker_visible: bool,
     /// The layers the board has objects on, while Used On is on.
     pub used: Option<HashSet<PcbLayer>>,
-    /// The view's own colours and transparencies.
+    /// The board's layer colours and the view's transparencies.
     pub paint: BoardPaint,
     /// The kinds of object the view hides.
     pub hidden_objects: Vec<BoardObject>,
@@ -197,7 +197,7 @@ impl PcbLayersPanel {
         self.used.as_ref().is_none_or(|used| used.contains(&layer))
     }
 
-    /// The colour `layer` is drawn in, in this view.
+    /// The colour `layer` is drawn in: the board's, else the palette's.
     pub fn colour(&self, layer: PcbLayer) -> Color {
         layer_style::painted_layer_colour(&self.paint, layer)
     }

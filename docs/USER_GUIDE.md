@@ -976,8 +976,10 @@ The **Active** row shows the active layer, and its **Set** dropdown switches
 between sets of layers. The **⋯** button beside the search field saves and
 deletes sets, flips the view to the bottom side and opens the layer stack.
 The **View Options** tab shows or hides each kind of object and switches 3D
-and **Single Layer Mode**. Apart from the colours, these are view settings;
-they never change the board file.
+and **Single Layer Mode**. The layer colours are part of the board: a
+colour picked in the colour card or typed in its hex field is one undo
+step, marks the board changed and is saved in the board file. The other
+settings on both tabs are view settings; they never change the board file.
 
 <!-- screenshot: the Layers panel, Layers & Colors tab, on a four-layer board -->
 

@@ -108,7 +108,8 @@ impl Signex {
     }
 
     /// The open colour card's hex field reads as a colour: the layer takes
-    /// it at once, and the card stays open for the next keystroke.
+    /// it at once, and the card stays open for the next keystroke. The
+    /// colour is the board's: one undo step, saved with it (2026-11-20).
     fn apply_typed_layer_colour(&mut self) {
         let ui = &self.document_state.panel_ctx.pcb_layers_ui;
         let (Some(layer), Some(colour)) = (ui.picker, ui.hex_colour()) else {
@@ -127,3 +128,7 @@ impl Signex {
 #[cfg(test)]
 #[path = "pcb_layers_panel_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "pcb_layers_panel_colour_tests.rs"]
+mod colour_tests;
