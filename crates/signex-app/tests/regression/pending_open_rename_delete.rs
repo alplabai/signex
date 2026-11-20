@@ -99,7 +99,7 @@ fn renaming_a_file_that_is_still_opening_is_refused() {
     let tmp = TempDir::new().expect("tempdir");
     let (mut app, sheet) = project_with_sheet(tmp.path());
     app.document_state.pending_opens.insert(sheet.clone());
-    app.ui_state.rename_dialog = Some(rename_dialog(&sheet, "Y.snxsch"));
+    app.ui_state.rename_dialog = Some(Box::new(rename_dialog(&sheet, "Y.snxsch")));
 
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 
@@ -230,7 +230,7 @@ fn renaming_a_file_whose_restore_is_still_running_is_refused() {
     let (mut app, sheet) = project_with_sheet(tmp.path());
     // A restore's atomic write would recreate the old path after the move.
     app.document_state.pending_restores.begin(sheet.clone());
-    app.ui_state.rename_dialog = Some(rename_dialog(&sheet, "Y.snxsch"));
+    app.ui_state.rename_dialog = Some(Box::new(rename_dialog(&sheet, "Y.snxsch")));
 
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 
