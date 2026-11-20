@@ -834,6 +834,11 @@ impl Signex {
             app.ui_state.grid_visible,
             app.ui_state.visible_grid_mm as f64,
         );
+        // Read once here, not in `DistributorSettings::default` or a view.
+        app.library.settings.set_start_environment(
+            crate::library::settings::digikey_oauth::env_client_configured(),
+            crate::library::settings::persistence::config_path().as_deref(),
+        );
         // v0.9 Stage 9: the globally-configured libraries and the bundled
         // stock library (#328) are mounted off the UI thread (#1470): the
         // config list and the stock path probe are cheap, but every manifest

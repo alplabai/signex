@@ -17,6 +17,30 @@ fn distributor_settings_default_order() {
     assert_eq!(s.preferred_order[0], DistributorSource::DigiKey);
 }
 
+/// `Default` reads neither the environment nor the config directory; the
+/// app's bootstrap passes in the DigiKey client id check and the order
+/// file's path once.
+#[test]
+fn distributor_settings_default_reads_nothing_and_bootstrap_fills_it_in() {
+    let s = DistributorSettings::default();
+    assert!(!s.digikey_client_configured);
+    assert_eq!(s.preferred_order_path, None);
+
+    let (app, _task) = crate::app::Signex::new();
+
+    let settings = &app.library.settings;
+    assert_eq!(
+        settings.digikey_client_configured,
+        crate::library::settings::digikey_oauth::env_client_configured()
+    );
+    assert_eq!(
+        settings.preferred_order_path,
+        crate::library::settings::persistence::config_path()
+            .map(|path| path.display().to_string())
+    );
+    assert!(settings.preferred_order_path.is_some());
+}
+
 #[test]
 fn preview_tab_order_is_five_tabs() {
     assert_eq!(PreviewTab::ORDER[0], PreviewTab::Preview);
