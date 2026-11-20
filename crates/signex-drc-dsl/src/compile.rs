@@ -338,16 +338,10 @@ impl Checker<'_> {
             self.error(&ast.number.span, msg);
             return None;
         };
-        let mm_per_unit = match unit.text.as_str() {
-            "mm" => 1.0,
-            "mil" => 0.0254,
-            "um" | "\u{b5}m" | "\u{3bc}m" => 1e-3,
-            "nm" => 1e-6,
-            other => {
-                let msg = format!("unknown unit '{other}' (mm, mil, um or nm)");
-                self.error(&unit.span, msg);
-                return None;
-            }
+        let Some(mm_per_unit) = mm_per_unit(&unit.text) else {
+            let msg = format!("unknown unit '{}' (mm, mil, um or nm)", unit.text);
+            self.error(&unit.span, msg);
+            return None;
         };
         let value: f64 = ast.number.text.parse().ok()?;
         match mm_to_nm(value * mm_per_unit, "rule limit") {
@@ -358,6 +352,30 @@ impl Checker<'_> {
             }
         }
     }
+}
+
+/// Millimetres per length unit of the rule text; `None` for a word that
+/// is not one.
+fn mm_per_unit(unit: &str) -> Option<f64> {
+    match unit {
+        "mm" => Some(1.0),
+        "mil" => Some(0.0254),
+        "um" | "\u{b5}m" | "\u{3bc}m" => Some(1e-3),
+        "nm" => Some(1e-6),
+        _ => None,
+    }
+}
+
+/// A length as the rule text writes it (`0.2mm`, `8 mil`, `50µm`) in nm,
+/// read with the compiler's units. `None` for a bare number or text that
+/// is not a length.
+pub fn length_nm(text: &str) -> Option<i64> {
+    let text = text.trim();
+    let unit_at = text.find(|c: char| !(c.is_ascii_digit() || c == '.'))?;
+    let (number, rest) = text.split_at(unit_at);
+    let unit = rest.strip_prefix(' ').unwrap_or(rest);
+    let value: f64 = number.parse().ok()?;
+    mm_to_nm(value * mm_per_unit(unit)?, "rule limit").ok()
 }
 
 /// A limit as written: `width >= 0.3mm`.
