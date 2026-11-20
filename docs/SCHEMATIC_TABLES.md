@@ -36,7 +36,9 @@ changed gets one undo step; a sheet whose tables are already current gets
 none. A title and revision come from the title block of the sheet file the
 compile read, matched by its path, never by file name alone. A table set to
 Refresh Off keeps its rows. A table whose part left the sheet keeps its rows,
-and Properties says the part is gone.
+and Properties says the part is gone. The refresh is a normal edit through the
+mutation gateway, so a sheet showing a channel tab or a read-only sheet
+refuses it and Messages says why (`docs/MULTI_CHANNEL.md`, "Bound tables").
 
 ## CSV
 
