@@ -396,8 +396,9 @@ group each for parts, labels and wires. A value the objects disagree on reads
 `<mixed>`. Type a new value and press `Enter` (or flip a checkbox) to set it on
 every object of that group in one undo step. Parts offer value, footprint, DNP,
 In BOM, On board and their custom parameters; labels size, justification and
-rotation (0, 90, 180 or 270); wires width, picked from Smallest, Small, Medium
-and Large. Label text is not edited in bulk,
+rotation (0, 90, 180 or 270); wires width, picked from the Smallest, Small,
+Medium and Large presets or typed as an Exact Width in the panel's unit. Label
+text is not edited in bulk,
 because giving labels one name would merge their nets. Value, footprint and
 parameter edits skip locked parts and the Messages panel says which; DNP, In BOM
 and On board apply to locked parts too. An empty parameter value removes that
