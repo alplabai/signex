@@ -72,6 +72,10 @@ impl Signex {
                 let task = self.handle_net_inspector_message(inspector_msg.clone());
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::ObjectList(list_msg) = panel_msg {
+                let task = self.handle_object_list_message(list_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let crate::panels::PanelMsg::Part(part_msg) = panel_msg {
                 let task = self.handle_dock_part_message(part_msg);
                 return Task::batch([task, self.finish_update()]);
@@ -83,6 +87,10 @@ impl Signex {
                 return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_project_navigation_panel_message(panel_msg) {
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::NavigatorPanel(navigator_msg) = panel_msg {
+                let task = self.handle_navigator_message(navigator_msg.clone());
                 return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_navigator_panel_message(panel_msg) {

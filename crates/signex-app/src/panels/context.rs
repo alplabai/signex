@@ -113,6 +113,9 @@ pub struct PanelContext {
     /// The active project's nets, for the Net Inspector panel; filled only
     /// while that panel is open.
     pub net_inspector: super::NetInspectorView,
+    /// The Object List's rows and picks; filled only while that panel is open
+    /// (#1259).
+    pub object_list: super::ObjectListView,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
@@ -282,6 +285,9 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+    /// The editor the Filter panel follows, its per-kind counts and SCH
+    /// Filter's preset rename (Graphite mockup #55, Graphite mockup #56).
+    pub selection_filter: super::SelectionFilterFacts,
     /// The field / callout hover of the Properties illustration (#2523).
     pub illustration_hover: super::PanelIllustrationHover,
     /// View state of the selection forms: kind chips, rule filter, hover (#1699).

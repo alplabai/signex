@@ -708,6 +708,8 @@ impl Signex {
                 .map(crate::panels::PcbNetsSummary::of),
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
+            // Kept in step with the documents by `sync_object_list`.
+            object_list: self.document_state.panel_ctx.object_list.clone(),
             pcb_board: self.pcb_board_summary(),
             layer_stack: self.layer_stack_facts(),
             selection_count,
@@ -774,6 +776,7 @@ impl Signex {
             symbol_editor: build_symbol_editor_panel_ctx(self),
             footprint_editor: build_footprint_editor_panel_ctx(self),
             history: self.document_state.history.clone(),
+            selection_filter: self.selection_filter_facts(),
             illustration_hover: self.document_state.panel_ctx.illustration_hover.clone(),
             selection_form: crate::panels::SelectionForm {
                 kinds: crate::panels::SelectionKinds::of(

@@ -223,6 +223,9 @@ mod dock_side_width;
 #[path = "regression/dock_tab_controls.rs"]
 mod dock_tab_controls;
 
+#[path = "regression/core_safety_net.rs"]
+mod core_safety_net;
+
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
 // #1826 / #1827 / #1828 — a save writes the file the document is.
@@ -764,6 +767,20 @@ mod preferences_keymap_page;
 // #2621 — Preferences ▸ Library: Distributor APIs and Component Classes pages.
 #[path = "regression/preferences_library_pages.rs"]
 mod preferences_library_pages;
+
+// Graphite mockup #55: the Filter panel edits the filter a box select picks with.
+#[path = "regression/selection_filter_panels.rs"]
+mod selection_filter_panels;
+// #1259 - the Object List lists the sheet's objects; a row click selects.
+#[path = "regression/object_list.rs"]
+mod object_list;
+
+// #2267 — a canvas menu row runs against the window the menu opened in.
+#[path = "regression/context_menu_in_window.rs"]
+mod context_menu_in_window;
+
+#[path = "regression/floating_panel_menu.rs"]
+mod floating_panel_menu;
 
 #[path = "regression/rules_grid.rs"]
 mod rules_grid;

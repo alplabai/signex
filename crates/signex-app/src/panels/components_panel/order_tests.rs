@@ -1,7 +1,7 @@
 //! The flat library list: source chip order, library order, and the badge and
 //! count each library row carries. Replaces the four-section order test.
 
-use super::tests::{fixture_row, library_with};
+use super::tests::{fixture_row, library_with, thumb_look};
 use super::*;
 
 /// One library per source, mounted in a scrambled order (global, installed
@@ -41,7 +41,7 @@ fn chips_and_libraries_follow_the_source_order_whatever_the_mount_order() {
 
     use ComponentsMountSource::{Global, Installed, Project, Stock};
     assert_eq!(
-        SourceCounts::of(&listed).chips(),
+        SourceCounts::of(&listed, &state.components_panel.rows).chips(),
         [
             None,
             Some(Stock),
@@ -55,7 +55,7 @@ fn chips_and_libraries_follow_the_source_order_whatever_the_mount_order() {
     state.open_libraries.retain(|l| l.display_name != "pr");
     let listed = listed_libraries(&state, &project);
     assert_eq!(
-        SourceCounts::of(&listed).chips(),
+        SourceCounts::of(&listed, &state.components_panel.rows).chips(),
         [None, Some(Stock), Some(Installed), Some(Global)]
     );
 }
@@ -88,6 +88,7 @@ fn each_library_row_shows_its_source_badge_then_its_component_count() {
             source,
             &state.components_panel,
             "",
+            thumb_look(),
             &tokens,
             &signex_i18n::I18n::en_us(),
         );

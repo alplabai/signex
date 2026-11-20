@@ -45,6 +45,7 @@ mod mixed_versions;
 pub(crate) mod modal_sizing;
 pub mod native_menu;
 pub mod net_nav;
+mod object_list;
 mod pan_zoom_bench;
 pub mod parameter_manager;
 pub mod paste;

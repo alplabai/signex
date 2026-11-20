@@ -338,7 +338,7 @@ fn only_commands_that_edit_the_shown_sheet_run_in_a_windows_swap() {
         Message::Erc(crate::app::ErcMsg::Run),
     ] {
         assert!(
-            !command_edits_shown_sheet(&message),
+            !command_runs_in_shown_document(&message),
             "{message:?} would run inside the window's swap"
         );
     }
@@ -347,7 +347,7 @@ fn only_commands_that_edit_the_shown_sheet_run_in_a_windows_swap() {
         Message::Menu(MenuMessage::ZoomIn),
         Message::Selection(crate::app::selection_request::SelectionRequest::SelectAll),
     ] {
-        assert!(command_edits_shown_sheet(&message), "{message:?}");
+        assert!(command_runs_in_shown_document(&message), "{message:?}");
     }
 }
 
@@ -810,6 +810,9 @@ mod edits;
 
 #[path = "find.rs"]
 mod find;
+
+#[path = "menu_rows.rs"]
+mod menu_rows;
 
 #[path = "scoped.rs"]
 mod scoped;

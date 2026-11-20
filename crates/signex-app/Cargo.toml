@@ -100,7 +100,8 @@ getrandom = "0.4"
 # gating in code paths that regular `cargo build`/`cargo run` never see).
 # The workspace's `resolver = "2"` keeps this feature from leaking into
 # non-test builds of the `signex` binary. See issue #437, hoisted to
-# cover all four resolvers in #440.
+# cover all four resolvers in #440. It also compiles the ADR-0006 test
+# adapter (`test_adapter`) for those binaries.
 test-prefs-redirect = []
 
 [dev-dependencies]

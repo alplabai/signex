@@ -39,6 +39,7 @@ mod window_gate_tests;
 mod zoom_pill;
 #[cfg(test)]
 pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
+mod zoom_presets;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.
@@ -435,6 +436,7 @@ impl Signex {
             self.ui_state.effective_theme_id(),
             has_selection,
             has_net_colors,
+            &|id| self.keymap_shortcut_label(id),
         )
         .map(Message::ActiveBar)
         .boxed();

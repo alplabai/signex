@@ -330,6 +330,7 @@ impl Signex {
         interaction.project_tree_context_menu = None;
         interaction.active_bar_menu = None;
         interaction.grid_picker = None;
+        interaction.zoom_presets_open = false;
         interaction.editing_text = None;
     }
 
