@@ -101,6 +101,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("shape", OperandKind::Text),
     ("delta", OperandKind::Text),
     ("corners", OperandKind::Text),
+    // The shared waiver form's Author (#2449).
+    ("author", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma
