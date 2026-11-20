@@ -182,8 +182,8 @@ Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
 (the **Align…** dialog, which aligns or spaces the selection per axis, the
 single align and distribute operations, and **Align To Grid**), **Rotate
 Selection** (`Space`), **Flip Selection** (`X`), **Rectangular Pattern…**,
-**Edit Sketch**, Properties, Pad Actions, Cut, Copy, Find Similar, and
-**Delete** last. In the symbol editor the menu starts with **Place ▸**, then
+**Edit Sketch**, Properties, Pad Actions, Cut, Copy, Paste (while a pad is
+on the clipboard), Find Similar, and **Delete** last. In the symbol editor the menu starts with **Place ▸**, then
 **Rotate Selection** and **Align ▸ Align To Grid**, then Join into Polygon,
 Select All, Deselect All, Fit to Window and **Delete**.
 
