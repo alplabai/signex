@@ -123,6 +123,10 @@ pub struct DrcWaiver {
     /// again.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub fingerprint: String,
+    /// Who accepted it. A waiver saved before the author existed has none
+    /// and writes no `author` key.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub author: String,
 }
 
 impl BoardOptions {

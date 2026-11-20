@@ -24,9 +24,9 @@ panels-messages-column-time = TIME
 # Shown when nothing has been logged.
 panels-messages-empty = No runtime messages yet
 
-# Hint beside the empty state: the environment variables that turn on
-# verbose logging. Keep the variable names as they are.
-panels-messages-verbose-hint = Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output
+# Hint under the empty state; the environment variables that turn on verbose
+# logging follow it on their own line, in mono.
+panels-messages-verbose-hint = Set one of these for verbose output:
 
 # A cell with no value (messages carry no document or time yet).
 panels-messages-no-value = —
@@ -499,16 +499,10 @@ panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with
 # Measure tool prompts.
 panels-status-bar-measure-first = Click the first point
 panels-status-bar-measure-second = Click the second point
-panels-erc-run = Run ERC (F8)
-panels-erc-clear = Clear
 panels-erc-running = Running…
-panels-erc-stale = Results may be out of date: the sheet changed since the last run. Run ERC again.
 panels-erc-no-findings-left = No findings left since the last run
-panels-erc-no-diagnostics = No ERC diagnostics yet
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
-panels-erc-results-title = ERC Diagnostic Results
 panels-erc-add-no-connect = Add No-Connect
-panels-erc-show-on-canvas = Show on Canvas
 panels-erc-waive-net = Waive net
 panels-erc-restore = Restore
 panels-properties-needs-schematic = Properties are available when a schematic is active
@@ -559,9 +553,6 @@ panels-child-sheet-file = File
 
 ## ERC panel counts and waivers. $count is a whole number.
 panels-erc-count-errors = { $count } errors
-panels-erc-count-warnings = { $count } warnings
-panels-erc-count-info = { $count } info
-panels-erc-waived = { $count } waived
 # A net waiver: the rule id, the net name and how many findings it hid in the
 # newest run.
 panels-erc-waiver-row = { $rule }  net { $net }  ({ $hidden ->
@@ -670,6 +661,57 @@ panels-placed-sheet-file = Sheet File
 # parameters apply to every net inside it.
 panels-directive-blanket = Blanket
 panels-directive-net-class = Net Class
+
+## ERC panel (#85): Run ERC, the count tiles, findings grouped by rule and
+## the Waived group. The Run ERC key cap comes from the keymap.
+panels-erc-run-button = Run ERC
+panels-erc-clear-tooltip = Clear the ERC results
+panels-erc-stale-banner = Results may be out of date: the sheet changed since the last run.
+# Captions under the count tiles; $count is a whole number.
+panels-erc-tile-errors =
+    { $count ->
+        [one] error
+       *[other] errors
+    }
+panels-erc-tile-warnings =
+    { $count ->
+        [one] warning
+       *[other] warnings
+    }
+panels-erc-tile-info = info
+panels-erc-clean = No problems found.
+# A clean run: what it checked and when. $time is the clock time, HH:MM.
+panels-erc-clean-detail = { $sheets ->
+        [one] 1 sheet
+       *[other] { $sheets } sheets
+    }, { $symbols ->
+        [one] 1 symbol
+       *[other] { $symbols } symbols
+    } and { $nets ->
+        [one] 1 net
+       *[other] { $nets } nets
+    } checked at { $time }.
+# The second line of a finding: its sheet and position.
+panels-erc-finding-place = { $sheet } · { $x }, { $y }
+# The one row action that selects and frames a finding (AV-13).
+panels-erc-show = Show
+panels-erc-waived-group = Waived
+# A net waiver in the Waived group: the rule id and the net.
+panels-erc-net-waiver-title = { $rule } · net { $net }
+# Who waived a finding and when, as they wrote it.
+panels-erc-waived-by = by { $author } · { $date }
+
+## The waiver form ERC and DRC share (AV-13).
+panels-waiver-needs-both = Write a reason and an author to waive it.
+
+## Messages panel (#86): level chips, source and document filters.
+panels-messages-level-all = All
+panels-messages-all-sources = All sources
+panels-messages-all-documents = All documents
+panels-messages-filter-hint = Filter messages
+panels-messages-copy-tooltip = Copy the shown messages
+panels-messages-clear-tooltip = Clear the messages
+panels-messages-none-match = No messages match the filters.
 # Tab + compact dock panel pair (#2523): the panel header's link that opens
 # the same view as a document tab.
 panels-paired-open-as-tab = Open as tab

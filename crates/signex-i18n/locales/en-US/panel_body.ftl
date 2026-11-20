@@ -43,9 +43,6 @@ panels-history-more = More: new branch here, tag, copy SHA
 ## ERC panel: per-finding waivers
 panels-erc-waive = Waive
 panels-erc-waiver-cancel = Cancel
-# $count is how many findings the stored waivers hide, a whole number. The
-# English keeps "findings" for every count.
-panels-erc-findings-waived = { $count } findings waived
 # The status of one stored waiver.
 panels-erc-waiver-status-one = waived
 # $count is a whole number above one.
@@ -53,12 +50,6 @@ panels-erc-waiver-status-many = waives { $count } findings
 panels-erc-waiver-status-lapsed = LAPSED: an involved object changed
 panels-erc-waiver-status-unmatched = matches no finding
 panels-erc-waiver-status-incomplete = ignored: no reason or author
-# One stored waiver, on two lines: $rule the rule id, $message the finding,
-# $status one of the statuses above; then $reason, $author and $date as the
-# user wrote them. Keep the double spaces and the indent of the second line.
-panels-erc-violation-waiver-row =
-    { $rule }  { $message }  ({ $status })
-    {"  "}Reason: { $reason }  by { $author } { $date }
 
 ## Properties of a multi-selection
 panels-multi-title = Multi-Selection

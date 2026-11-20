@@ -642,10 +642,6 @@ pub enum PanelMsg {
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.
     FocusErcViolation(usize),
-    /// Focus previous ERC diagnostic row in the global list.
-    FocusPrevErcDiagnostic,
-    /// Focus next ERC diagnostic row in the global list.
-    FocusNextErcDiagnostic,
     /// User clicked the Quick Fix chip on an ERC violation row. Routes
     /// to a per-rule handler — UnusedPin places a NoConnect at the
     /// pin, every other rule falls back to "zoom + select" (same as
@@ -660,6 +656,13 @@ pub enum PanelMsg {
     },
     /// Per-finding waivers with a reason (#1285).
     ErcWaiver(super::ErcWaiverMsg),
+    /// The ERC panel's tiles, rule groups and row hover (#85).
+    ErcView(super::ErcPanelMsg),
+    /// The Messages panel's chips, filters, Copy and Clear (#86).
+    MessagesView(super::MessagesPanelMsg),
+    /// The user identity a waiver's Author starts as was read (AV-13);
+    /// `None` when neither git nor the login names anyone.
+    WaiverIdentityResolved(Option<String>),
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),

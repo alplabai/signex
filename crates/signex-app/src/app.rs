@@ -90,8 +90,8 @@ pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
 pub use assign_footprints::{
-    AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer, FootprintPart,
-    PartAccess,
+    AssignFilter, AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer,
+    FootprintPart, PartAccess, TickedBar,
 };
 pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
 pub use board_output::{
@@ -101,6 +101,7 @@ pub use board_output::{
 pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use board_reuse::ReuseBlockMsg;
+pub use contracts::ErcProfileAction;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,

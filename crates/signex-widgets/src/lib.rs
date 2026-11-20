@@ -25,6 +25,7 @@ pub mod passive_calculator;
 pub mod press_outside;
 pub mod property_illustration;
 pub mod segmented;
+pub mod stat_tiles;
 pub mod status_bar;
 pub mod tab_pill;
 pub mod target_band;

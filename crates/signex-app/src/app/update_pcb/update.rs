@@ -56,7 +56,25 @@ impl Signex {
                 Task::none()
             }
             M::ProblemsOnlyToggled(on) => {
-                self.with_update_pcb_table(|table| table.problems_only = on);
+                use super::table::RowFilter;
+                self.with_update_pcb_table(|table| {
+                    table.filter = on.then_some(RowFilter::Problems);
+                });
+                Task::none()
+            }
+            M::FilterQueryChanged(query) => {
+                self.with_update_pcb_table(|table| table.query = query);
+                Task::none()
+            }
+            M::FilterCleared => {
+                self.with_update_pcb_table(|table| {
+                    table.filter = None;
+                    table.query.clear();
+                });
+                Task::none()
+            }
+            M::NotesFolded(folded) => {
+                self.with_update_pcb_table(|table| table.notes_open = !folded);
                 Task::none()
             }
             M::RowFocused(key) => {
