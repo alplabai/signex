@@ -305,6 +305,9 @@ pub struct FootprintEditorState {
     /// The sketch mode exit set: bake preview, discard confirmation and
     /// the footprint as sketch mode found it (#2518).
     pub sketch_exit: super::sketch_mode::SketchExit,
+    /// The sketch parameters table, when open (#189); boxed, it is rarely
+    /// open.
+    pub parameters_table: Option<Box<super::parameters_table::ParametersTableState>>,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -420,6 +423,7 @@ impl FootprintEditorState {
             zoom_request: ZoomRequest::default(),
             board_backdrop: None,
             sketch_exit: Default::default(),
+            parameters_table: None,
         }
     }
 

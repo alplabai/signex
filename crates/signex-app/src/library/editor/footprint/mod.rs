@@ -22,6 +22,7 @@ pub(crate) mod pad_shape_warnings;
 pub mod pad_stack_check;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
+pub mod parameters_table;
 pub mod preview3d;
 #[cfg(test)]
 mod silk_ownership_tests;

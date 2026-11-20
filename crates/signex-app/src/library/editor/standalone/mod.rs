@@ -18,6 +18,7 @@ mod board_sketch;
 mod dof_chip;
 mod footprint;
 pub(crate) mod sketch_exit;
+mod sketch_info_bar;
 pub(crate) mod symbol;
 
 pub use board_sketch::view_board_sketch;

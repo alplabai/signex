@@ -510,6 +510,7 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::ActiveBarSelectAll
         | FootprintEditorMsg::ActiveBarClearSelection
         | FootprintEditorMsg::ActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
+        FootprintEditorMsg::SketchParameters(m) => sketch::parameters::apply(editor, m),
     }
 }
 
@@ -683,6 +684,9 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarFlipSelection
         | ActiveBarAlignSelectionToGrid
         | ActiveBarMoveOriginToGrid => false,
+        // The parameters table: typing records here; its other edits record
+        // their own step, only when they change something.
+        SketchParameters(m) => m.records_undo_step(),
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

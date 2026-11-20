@@ -210,6 +210,12 @@ board starts with a fresh copy. A session whose board is no longer open
 The DOF chip's second pill names the board (its file stem), with no pad
 count.
 
+The board sketch has the footprint sketch's info bar ("Board shape · plane
+Top · grid …") and its Parameters button and table
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#parameters)); on a board, Esc
+with only the table open still acts as Discard changes, so close the
+table with its Close button.
+
 ## Drawing the board {#drawing-the-board}
 
 Outside sketch mode the PCB canvas draws the board's outline (the board

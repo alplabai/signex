@@ -595,4 +595,8 @@ pub enum FootprintEditorMsg {
     /// v0.13.3 — Inline numeric input for the Dimension tool /
     /// editable Distance value. Updates `state.dimension_input`.
     SketchDimensionInput(String),
+
+    /// The sketch parameters table and the info bar's Parameters button
+    /// (#189).
+    SketchParameters(crate::library::editor::footprint::parameters_table::SketchParametersMsg),
 }
