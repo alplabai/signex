@@ -220,10 +220,14 @@ mod tests {
             matches!(pressed.as_slice(), [PanelMsg::RunDrc]),
             "{pressed:?}"
         );
+        // While running, the button itself reads "Checking the board..."
+        // and pressing it sends nothing.
         let busy = context(true);
-        assert!(texts(&busy).iter().any(|t| t == "Checking the board..."));
+        let busy_texts = texts(&busy);
+        assert!(busy_texts.iter().any(|t| t == "Checking the board..."));
+        assert!(busy_texts.iter().all(|t| t != "Run DRC"), "{busy_texts:?}");
         let busy_section = super::super::drc_results::view(&busy);
-        assert!(messages_on_click(busy_section, window, "Run DRC").is_empty());
+        assert!(messages_on_click(busy_section, window, "Checking the board...").is_empty());
     }
 
     /// #2307, #87: with written rules the default-clearance notice says the

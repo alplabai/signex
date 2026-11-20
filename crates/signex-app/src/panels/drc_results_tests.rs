@@ -5,7 +5,7 @@ use signex_types::pcb_layer::CopperLayer;
 use signex_types::violation::Severity;
 
 use super::*;
-use crate::layout_probe::{lay_out_texts, messages_on_click};
+use crate::layout_probe::{lay_out_inputs, lay_out_texts, messages_on_click};
 
 fn row(index: usize, kind: ViolationKind, rule: &str, waiver: Option<&str>) -> DrcRow {
     DrcRow {
@@ -167,14 +167,28 @@ fn waive_and_unwaive_are_row_actions_on_hover() {
     );
     assert!(!texts(&ctx).iter().any(|t| t == "Waive" || t == "Show"));
     hover(&mut ctx, "k0");
+    // The probe's fresh tree sees the pointer enter the row first; the
+    // press itself sends only the action, not the row's own press.
     let pressed = messages_on_click(view(&ctx), window, "Waive");
     assert!(
-        matches!(pressed.as_slice(), [PanelMsg::Drc(DrcPanelMsg::WaiveStarted(k))] if k == "k0"),
+        matches!(
+            pressed.as_slice(),
+            [
+                PanelMsg::Drc(DrcPanelMsg::RowEntered(e)),
+                PanelMsg::Drc(DrcPanelMsg::WaiveStarted(k)),
+            ] if e == "k0" && k == "k0"
+        ),
         "{pressed:?}"
     );
     let pressed = messages_on_click(view(&ctx), window, "Show");
     assert!(
-        matches!(pressed.as_slice(), [PanelMsg::Drc(DrcPanelMsg::RowPicked(k))] if k == "k0"),
+        matches!(
+            pressed.as_slice(),
+            [
+                PanelMsg::Drc(DrcPanelMsg::RowEntered(e)),
+                PanelMsg::Drc(DrcPanelMsg::RowPicked(k)),
+            ] if e == "k0" && k == "k0"
+        ),
         "{pressed:?}"
     );
     let mut ctx = context(
@@ -187,7 +201,13 @@ fn waive_and_unwaive_are_row_actions_on_hover() {
     hover(&mut ctx, "k0");
     let pressed = messages_on_click(view(&ctx), window, "Unwaive");
     assert!(
-        matches!(pressed.as_slice(), [PanelMsg::Drc(DrcPanelMsg::Unwaived(k))] if k == "k0"),
+        matches!(
+            pressed.as_slice(),
+            [
+                PanelMsg::Drc(DrcPanelMsg::RowEntered(e)),
+                PanelMsg::Drc(DrcPanelMsg::Unwaived(k)),
+            ] if e == "k0" && k == "k0"
+        ),
         "{pressed:?}"
     );
 }
@@ -292,7 +312,12 @@ fn waive_opens_the_shared_form_under_the_row() {
     }
     let shown = texts(&ctx);
     assert!(shown.iter().any(|t| t == "Cancel"), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "C. Alp"), "{shown:?}");
+    // The Author is a text input: its value is read off the inputs.
+    let inputs: Vec<String> = lay_out_inputs(view(&ctx), iced::Size::new(1400.0, 1200.0))
+        .into_iter()
+        .map(|t| t.text)
+        .collect();
+    assert!(inputs.iter().any(|t| t == "C. Alp"), "{inputs:?}");
     assert!(
         shown
             .iter()

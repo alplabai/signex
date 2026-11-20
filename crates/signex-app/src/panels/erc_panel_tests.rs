@@ -134,9 +134,17 @@ fn row_actions_show_on_hover_or_selection_only() {
     assert!(!texts(&ctx).iter().any(|t| t == "Show"));
     ctx.validation.erc.hovered = Some(3);
     let window = iced::Size::new(300.0, 4000.0);
+    // The probe's fresh tree sees the pointer enter the row first; the
+    // press itself sends only Show's message, not the row's own press.
     let pressed = messages_on_click(view_erc(&ctx), window, "Show");
     assert!(
-        matches!(pressed.as_slice(), [PanelMsg::FocusErcViolation(3)]),
+        matches!(
+            pressed.as_slice(),
+            [
+                PanelMsg::ErcView(ErcPanelMsg::RowEntered(3)),
+                PanelMsg::FocusErcViolation(3),
+            ]
+        ),
         "{pressed:?}"
     );
 }
