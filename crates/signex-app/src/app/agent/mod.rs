@@ -35,6 +35,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use iced::futures::channel::oneshot;
 
 pub(crate) use crate::app::core::origin::Origin;
+// The parity table lists this route (`command::parity`).
+#[cfg(test)]
+pub(in crate::app) use allow::is_window_layout;
 pub(crate) use deferred::WaitingCommand;
 pub use reply::{
     ChangeSnapshot, MessageLine, Status, changed_between, messages_since, outcome_verdict,

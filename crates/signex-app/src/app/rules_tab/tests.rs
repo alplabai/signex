@@ -146,7 +146,7 @@ fn design_rules_opens_one_rules_tab_per_project() {
     open(&mut app);
     let tab = &app.document_state.tabs[app.document_state.active_tab];
     assert!(matches!(tab.kind, TabKind::Rules(held) if held == id));
-    assert_eq!(tab.title, "Rules");
+    assert_eq!(tab.title, "ProjectA — Rules");
     let tabs = app.document_state.tabs.len();
     command(&mut app, "previous_document_tab");
     open(&mut app);

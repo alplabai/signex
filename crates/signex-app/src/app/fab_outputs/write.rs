@@ -41,6 +41,9 @@ pub(crate) struct GenerateJob {
     pub kinds: FabOutputKinds,
     pub documents: DocumentsJob,
     pub folder: PathBuf,
+    /// The standard `board`'s designators are shown under (#1416): the
+    /// test netlist writes them stored.
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
 }
 
 /// Run `job`: make every file first, then write them all; when one cannot
@@ -52,7 +55,11 @@ pub(crate) fn run_generate(job: GenerateJob) -> Result<FabWritten, FabProblem> {
         .to_string();
     let mut made = Vec::new();
     let notes = if job.kinds.has_fab_files() {
-        fab_files(&board, &fab_options(&job.kinds, &name), &mut made)?
+        let options = FabOptions {
+            designator_standard: job.designator_standard,
+            ..fab_options(&job.kinds, &name)
+        };
+        fab_files(&board, &options, &mut made)?
     } else {
         Vec::new()
     };

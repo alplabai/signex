@@ -1,0 +1,127 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "thunderscope-rev5-3",
+  "net_classes": [
+    {
+      "clearance": 0.127,
+      "name": "50Z",
+      "patterns": [
+        "*s/SYNC*",
+        "/SYNC",
+        "*s/REFINOUT*",
+        "/REFINOUT",
+        "*U7-*C1P*",
+        "*U10-R*"
+      ],
+      "trace_width": 0.213
+    },
+    {
+      "clearance": 0.127,
+      "name": "FE_100Z_Diff",
+      "patterns": [
+        "/CH1_*",
+        "/CH2_*",
+        "/CH3_*",
+        "/CH4_*",
+        "*/OUT_P",
+        "*/OUT_N"
+      ]
+    },
+    {
+      "clearance": 0.127,
+      "name": "FE_50Z",
+      "patterns": [
+        "*/TERM_1M*",
+        "*/TERM_50Z*",
+        "*/ATTEN_IN",
+        "*/ATTEN_1X",
+        "*/ATTEN_50X*",
+        "*/ATTEN_OUT*",
+        "*/BUF_IN"
+      ],
+      "trace_width": 0.213,
+      "via_diameter": 2.0,
+      "via_drill": 1.0
+    },
+    {
+      "clearance": 0.127,
+      "name": "FE_50Z_INPUT",
+      "patterns": [
+        "*/BNC_IN"
+      ],
+      "trace_width": 0.213
+    },
+    {
+      "clearance": 0.127,
+      "name": "LVDS_ADC",
+      "patterns": [
+        "/ADC/D*_N",
+        "/ADC/D*_P",
+        "/ADC/FCLK*",
+        "/ADC/LCLK*"
+      ]
+    },
+    {
+      "name": "LVDS_ADC_CLK",
+      "patterns": [
+        "*ADC_CLK*"
+      ]
+    },
+    {
+      "clearance": 0.127,
+      "name": "LVDS_SYNC",
+      "patterns": [
+        "*SYNC_IN*",
+        "*SYNC_OUT*"
+      ]
+    },
+    {
+      "clearance": 0.127,
+      "name": "LVDS_USRIO",
+      "patterns": [
+        "*USRIO*"
+      ]
+    },
+    {
+      "name": "PCIe",
+      "patterns": [
+        "*_PER*_*",
+        "*_PET*",
+        "*_REFCLK*",
+        "*MGT_*"
+      ]
+    },
+    {
+      "clearance": 0.127,
+      "name": "PWR",
+      "patterns": [
+        "*+*V*",
+        "-*",
+        "GND"
+      ],
+      "trace_width": 0.254,
+      "via_diameter": 0.4064,
+      "via_drill": 0.2032
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.127,
+      "via_diameter": 0.4064,
+      "via_drill": 0.2032
+    }
+  ],
+  "pcb_file": "thunderscope-rev5-3.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

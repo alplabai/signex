@@ -65,15 +65,26 @@
 //! Which items drag wires: pins of moved symbols (power ports included,
 //! unit-filtered), pins of moved child sheets and individually moved sheet
 //! pins. Labels, junctions, no-connects and text never drag wires on their
-//! own; wires that are themselves selected move as they always did.
+//! own. A selected wire carries what joins it (its ends, and the dots and
+//! sheet pins on its span) by the same rules, see [`wire_contacts`].
 
+#[cfg(test)]
+mod counters;
 mod env;
 mod guard;
 mod guard_local;
+mod intent;
+mod wire_contacts;
+
+pub use intent::pin_dots_to_keep;
+pub use wire_contacts::{
+    WireContact, bailing_wires, carried_points, carry_points, follow_wire_grip, held_at,
+    moved_wire_contacts, wire_axis, wire_contact_points,
+};
 
 pub use guard::{BeforeNets, Guard, Policy, before_nets};
 #[cfg(test)]
-pub(crate) use guard::{self_check, tally};
+pub(crate) use guard::{reasons, self_check, tally};
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -144,6 +155,71 @@ impl PinTip {
     pub fn old_key(&self) -> Key {
         pt_key(&self.old)
     }
+
+    /// Where the tip is in `document` (after the move); `None` when its
+    /// part or pin is gone.
+    #[must_use]
+    pub fn now(&self, document: &SchematicSheet) -> Option<Point> {
+        match self.source {
+            TipSource::SymbolPin(local) => (document.symbols.iter())
+                .find(|s| s.uuid == self.owner)
+                .map(|s| SymbolTransform::from_symbol(s).apply(local)),
+            TipSource::SheetPin => (document.child_sheets.iter())
+                .flat_map(|c| c.pins.iter())
+                .find(|p| p.uuid == self.owner)
+                .map(|p| p.position),
+        }
+    }
+}
+
+/// A point a selected wire carries: one contact of a guarded move, beside the
+/// moved pins. Read with the move applied, so `new` is where the wire put it.
+#[derive(Debug, Clone, Copy)]
+pub struct WirePoint {
+    wire: Uuid,
+    old: Point,
+    new: Point,
+}
+
+impl WirePoint {
+    /// The dragged wire.
+    #[must_use]
+    pub fn wire(&self) -> Uuid {
+        self.wire
+    }
+
+    /// Where the point was before the move.
+    #[must_use]
+    pub fn old(&self) -> Point {
+        self.old
+    }
+
+    /// Where the wire put it.
+    #[must_use]
+    pub fn new_point(&self) -> Point {
+        self.new
+    }
+
+    /// Key of the point before the move: its key in the guard's policy.
+    #[must_use]
+    pub fn old_key(&self) -> Key {
+        pt_key(&self.old)
+    }
+
+    /// Key of the point where the wire put it.
+    #[must_use]
+    pub fn new_key(&self) -> Key {
+        pt_key(&self.new)
+    }
+
+    fn as_move(&self) -> Move {
+        Move {
+            old: self.old,
+            new: self.new,
+            sheet_pin: false,
+            wire: Some(WireJoin::Carried(self.wire)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -161,6 +237,9 @@ pub struct Follow {
     /// Old-tip keys whose handling edited something; the only tips the pass
     /// can be blamed for when a net difference names no moved pin.
     pub edited_tips: Vec<Key>,
+    /// The selected wires the carry pass could not carry whole: they moved
+    /// plainly at every point (`wire_contacts`).
+    pub bailed: Vec<Uuid>,
 }
 
 /// Pin tips carried by `items`, read before they move.
@@ -235,26 +314,37 @@ pub(super) struct Move {
     pub(super) new: Point,
     /// A child-sheet pin: it also connects through a wire's interior.
     pub(super) sheet_pin: bool,
+    /// A point a selected wire carries, rather than a pin.
+    pub(super) wire: Option<WireJoin>,
+}
+
+/// How a point a selected wire carries treats what holds its old place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum WireJoin {
+    /// The wire was dragged whole: a pin, label or wire it joined there keeps
+    /// the connection through a new path.
+    Carried(Uuid),
+    /// One end was dragged by its grip: it leaves the pin or wire it sat on;
+    /// only the wire ends attached there follow it.
+    Grip(Uuid),
+}
+
+impl WireJoin {
+    /// The dragged wire; a new path copies its stroke and colour.
+    pub(super) fn wire(self) -> Uuid {
+        match self {
+            Self::Carried(wire) | Self::Grip(wire) => wire,
+        }
+    }
 }
 
 fn resolve_moves(document: &SchematicSheet, tips: &[PinTip]) -> (Vec<Move>, HashSet<Uuid>) {
     let mut moves = Vec::new();
     let mut owners = HashSet::new();
     for tip in tips {
-        let new = match tip.source {
-            TipSource::SymbolPin(local) => document
-                .symbols
-                .iter()
-                .find(|s| s.uuid == tip.owner)
-                .map(|s| SymbolTransform::from_symbol(s).apply(local)),
-            TipSource::SheetPin => document
-                .child_sheets
-                .iter()
-                .flat_map(|c| c.pins.iter())
-                .find(|p| p.uuid == tip.owner)
-                .map(|p| p.position),
+        let Some(new) = tip.now(document) else {
+            continue;
         };
-        let Some(new) = new else { continue };
         if pt_key(&new) == pt_key(&tip.old) {
             continue;
         }
@@ -263,6 +353,7 @@ fn resolve_moves(document: &SchematicSheet, tips: &[PinTip]) -> (Vec<Move>, Hash
             old: tip.old,
             new,
             sheet_pin: matches!(tip.source, TipSource::SheetPin),
+            wire: None,
         });
     }
     (moves, owners)

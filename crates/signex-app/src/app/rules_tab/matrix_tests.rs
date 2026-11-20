@@ -608,7 +608,7 @@ fn the_preset_commands_diff_and_apply_tiers_and_profiles() {
     let diff = answer(&mut app, "rules_preset_diff", &["preset=advanced"]);
     assert_eq!(diff["mode"], "merge");
     assert_eq!(diff["added"], 7);
-    assert_eq!(diff["fab"]["published"], "2026-11-17", "{diff}");
+    assert_eq!(diff["fab"]["published"], "2026-11-19", "{diff}");
     // An empty field is left out, as in the file: a tier names no maker.
     assert!(diff["fab"].get("manufacturer").is_none(), "{diff}");
     assert_eq!(diff["removed"], 0);

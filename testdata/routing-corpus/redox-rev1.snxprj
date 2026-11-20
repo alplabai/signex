@@ -1,0 +1,24 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "redox-rev1",
+  "net_classes": [
+    {
+      "clearance": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.25,
+      "via_diameter": 0.6,
+      "via_drill": 0.4
+    }
+  ],
+  "pcb_file": "redox-rev1.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

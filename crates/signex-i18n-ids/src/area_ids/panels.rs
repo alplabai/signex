@@ -51,6 +51,8 @@ define_ids! {
     PANELS_DIRECTIVE_NET_CLASS = "panels-directive-net-class";
     PANELS_DIRECTIVE_ERC_EXCLUSIONS = "panels-directive-erc-exclusions";
     PANELS_DIRECTIVE_ALL_RULES = "panels-directive-all-rules";
+    PANELS_NO_ERC_RULES = "panels-no-erc-rules";
+    PANELS_NO_ERC_ALL_RULES = "panels-no-erc-all-rules";
     PANELS_STATUS_BAR_X = "panels-status-bar-x";
     PANELS_STATUS_BAR_Y = "panels-status-bar-y";
     PANELS_STATUS_BAR_ZOOM = "panels-status-bar-zoom";
@@ -83,4 +85,22 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS = "panels-net-classes-patterns";
     PANELS_COMPONENT_SHEET_SECTION_COMPONENT = "panels-component-sheet-section-component";
     PANELS_COMPONENT_SHEET_SECTION_STORAGE = "panels-component-sheet-section-storage";
+    PANELS_PAIRED_OPEN_AS_TAB = "panels-paired-open-as-tab";
+    PANELS_PAIRED_LENGTH_MATCHING = "panels-paired-length-matching";
+    PANELS_COMPACT_GROUP_MEMBERS = "panels-compact-group-members";
+    PANELS_COMPACT_GROUP_BAND = "panels-compact-group-band";
+    PANELS_COMPACT_GROUP_OUT_OF_BAND = "panels-compact-group-out-of-band";
+    PANELS_COMPACT_GROUP_ALL_IN_BAND = "panels-compact-group-all-in-band";
+    PANELS_COMPACT_GROUP_PAIR = "panels-compact-group-pair";
+    PANELS_COMPACT_GROUP_XSIGNAL = "panels-compact-group-xsignal";
+    PANELS_MESSAGES_DRAGGED_WIRE_LEFT_ONE = "panels-messages-dragged-wire-left-one";
+    PANELS_MESSAGES_DRAGGED_WIRE_LEFT_MANY = "panels-messages-dragged-wire-left-many";
+    PANELS_MESSAGES_GRIP_END_LEFT = "panels-messages-grip-end-left";
+    PANELS_MESSAGES_HELD_PINS_ONE = "panels-messages-held-pins-one";
+    PANELS_MESSAGES_HELD_PINS_MANY = "panels-messages-held-pins-many";
+    PANELS_MESSAGES_PIN_DOT_REFUSED_ONE = "panels-messages-pin-dot-refused-one";
+    PANELS_MESSAGES_PIN_DOT_REFUSED_MANY = "panels-messages-pin-dot-refused-many";
+    PANELS_MESSAGES_PIN_DOT_REFUSED_ENTRY = "panels-messages-pin-dot-refused-entry";
+    PANELS_MESSAGES_UNNAMED_NET = "panels-messages-unnamed-net";
+    PANELS_MESSAGES_LIST_MORE = "panels-messages-list-more";
 }

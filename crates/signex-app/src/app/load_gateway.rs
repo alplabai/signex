@@ -506,6 +506,8 @@ impl Signex {
     ) {
         warn_if_read_only(&path, sheet.unknown.newer_minor_source.as_deref());
         report_unrecognized_sheet_size(&path, &sheet.paper_size);
+        // Pins touching a wire with no dot are reported, never fixed on open.
+        super::pin_junction_repair::report_bare_pin_taps(&path, &sheet);
         // A read-only sheet cannot be saved, so a repair to it stays a report.
         let repaired = super::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs())
             && !sheet.is_read_only();

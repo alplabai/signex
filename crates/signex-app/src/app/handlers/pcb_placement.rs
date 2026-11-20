@@ -452,9 +452,12 @@ impl Signex {
             .pcb_tool
             .as_ref()
             .is_some_and(|s| s.is_routing() && s.is_for(path.as_deref(), undocked));
-        let selection = state
-            .filter(|s| s.document().is_some() && s.document() == path.as_deref())
-            .map(|s| s.selection());
+        let aligned = state.filter(|s| s.document().is_some() && s.document() == path.as_deref());
+        let selection = aligned.map(|s| s.selection());
+        // What the pointer is over: the board menu offers the object rows.
+        let hover = aligned.and_then(|s| s.hover());
+        let hovered = hover.is_some();
+        let has_net = |item| pcb_geom::item_net(board, item).is_some();
         // A read-only board takes no edit: nothing on it is placeable,
         // deletable or a paste target (#2405).
         let read_only = board.unknown.newer_minor_source.is_some();
@@ -466,6 +469,8 @@ impl Signex {
                 part_in_hand,
                 routing,
                 read_only,
+                hovered,
+                net: hover.is_some_and(has_net),
                 ..PcbTargets::default()
             };
         };
@@ -492,6 +497,11 @@ impl Signex {
             footprints: footprints.len(),
             pad_pair: unlocked && selected_pad_pair(selection).is_some(),
             one_footprint: unlocked && footprints.len() == 1,
+            routes: selection
+                .items()
+                .any(|item| matches!(item, ItemRef::Track(_) | ItemRef::Via(_))),
+            hovered,
+            net: selection.items().chain(hover).any(has_net),
         }
     }
 }

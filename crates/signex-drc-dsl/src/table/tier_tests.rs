@@ -70,7 +70,7 @@ fn each_tier_seeds_its_exact_fab_rule_set() {
         (
             FabTemplate::Hdi,
             [
-                "0.075mm", "0.075mm", "0.3mm", "0.15mm", "0.1mm", "0.075mm", "0.3mm", "0.2mm",
+                "0.075mm", "0.075mm", "0.25mm", "0.1mm", "0.1mm", "0.075mm", "0.3mm", "0.2mm",
                 "0.06mm", "0.075mm",
             ],
         ),

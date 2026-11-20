@@ -66,9 +66,12 @@
 //! and [`Claim`] are the shape it would migrate to, so please extend
 //! this module rather than inventing a parallel one.
 
+mod key_repeat;
+
 use super::*;
 use crate::keymap::{KeyStroke, ModifiersExt as _};
 use iced::keyboard;
+use key_repeat::{HeldKeyContext, runs_on_key_repeat};
 
 /// Where an input event landed, and therefore what the user can see
 /// while pressing the key.
@@ -268,15 +271,20 @@ impl Signex {
         window: iced::window::Id,
         event: keyboard::Event,
     ) -> Task<Message> {
-        let message = self.route_key(window, &event);
+        let (message, swallowed_by) = self.route_key_by(window, &event);
         // #1378 - a key press that is not a keymap stroke (Esc, F1, a
         // selection slot, a palette or recorder key) abandons the pending
         // chord instead of leaving it armed behind the user's back.
         //
         // A bare modifier or lock key is the exception: it is never a
         // stroke, but it is how the user reaches `Shift+G` mid-chord, and
-        // on Windows a held one auto-repeats `KeyPressed`.
+        // on Windows a held one auto-repeats `KeyPressed`. So is the
+        // auto-repeat of a run-once command, the only key the keymap
+        // swallows: the same key is still down, so the chord wait runs out
+        // and fires once. A repeat any other consumer drops still cancels.
+        let run_once_repeat = swallowed_by == Some(InputConsumer::Keymap);
         if matches!(&event, keyboard::Event::KeyPressed { key, .. } if !is_modifier_key(key))
+            && !run_once_repeat
             && !matches!(message, Some(Message::Ui(UiMsg::KeymapStroke { .. })))
         {
             self.cancel_pending_chord();
@@ -297,13 +305,25 @@ impl Signex {
         self.route_key(window, event)
     }
 
+    /// The message [`Self::route_key_by`] returns, for the tests.
+    #[cfg(test)]
+    fn route_key(&self, window: iced::window::Id, event: &keyboard::Event) -> Option<Message> {
+        self.route_key_by(window, event).0
+    }
+
     /// Walk [`CLAIM_ORDER`] and return the one message this event earns,
-    /// or `None` when it was swallowed or nobody wanted it.
+    /// or `None` when it was swallowed or nobody wanted it, with the
+    /// consumer that swallowed it when one did (`None` for a claimed,
+    /// locked-out or unwanted event).
     ///
     /// `&self` on purpose: this is the testable heart. Build a `Signex`,
     /// set state, feed an event, assert the message — none of which was
     /// possible while these branches lived in a subscription closure.
-    fn route_key(&self, window: iced::window::Id, event: &keyboard::Event) -> Option<Message> {
+    fn route_key_by(
+        &self,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> (Option<Message>, Option<InputConsumer>) {
         let target = self.input_target(Some(window));
         // A confirm dialog in its own window locks the main window and the
         // undocked tabs: no stroke reaches the keymap or a tool there.
@@ -312,16 +332,16 @@ impl Signex {
             && self.locking_confirm_window().is_some()
             && !matches!(event, keyboard::Event::KeyPressed { key, .. } if ESCAPE_KEY.matches(key))
         {
-            return None;
+            return (None, None);
         }
         for consumer in CLAIM_ORDER {
             match self.claim(consumer, target, window, event) {
-                Claim::Consume(message) => return Some(*message),
-                Claim::Swallow => return None,
+                Claim::Consume(message) => return (Some(*message), None),
+                Claim::Swallow => return (None, Some(consumer)),
                 Claim::Pass => continue,
             }
         }
-        None
+        (None, None)
     }
 
     /// What `consumer` makes of this event.
@@ -644,8 +664,9 @@ impl Signex {
     /// multi-stroke chord buffer lives in `UiState`.
     ///
     /// A stroke iced cannot express as a `KeyStroke` (a bare modifier
-    /// press) is ignored. Being last, `Pass` and `Swallow` are equivalent
-    /// here — `Pass` says the honest thing: nobody wanted it.
+    /// press) is passed: nobody wanted it. The auto-repeat of a stroke that
+    /// runs a held-key-once command is swallowed: the keymap saw the
+    /// key, and `handle_key_input` keeps the pending chord for it.
     fn claim_keymap(
         &self,
         target: InputTarget,
@@ -656,6 +677,7 @@ impl Signex {
             key,
             physical_key,
             modifiers,
+            repeat,
             ..
         } = event
         else {
@@ -667,6 +689,10 @@ impl Signex {
         let stroke = KeyStroke::physical_fallback(key, *physical_key, *modifiers)
             .filter(|_| !self.stroke_matches_anything(window, target, &logical))
             .unwrap_or(logical);
+        // Some commands run once on a held key: docs/DECISIONS.md, "Held keys".
+        if *repeat && self.repeat_is_ignored(window, target, &stroke) {
+            return Claim::Swallow;
+        }
         Claim::consume(Message::Ui(UiMsg::KeymapStroke {
             window: Some(window),
             stroke,
@@ -684,16 +710,57 @@ impl Signex {
     ) -> bool {
         let contexts = self.shortcut_contexts(Some(window));
         let keymap = &self.ui_state.active_keymap;
-        let mut with_prefix = if self.ui_state.keymap_pending_target == Some(target) {
+        [
+            self.after_pending_chord(target, stroke),
+            vec![stroke.clone()],
+        ]
+        .iter()
+        .any(|sequence| {
+            let lookup = keymap.lookup(sequence, &contexts);
+            lookup.command.is_some() || lookup.matched || lookup.pending
+        })
+    }
+
+    /// Whether `stroke` would run a command a held key runs only once
+    /// ([`runs_on_key_repeat`]): the command after the pending chord prefix,
+    /// or, when that sequence is no binding and no prefix, the stroke's own
+    /// command.
+    fn repeat_is_ignored(
+        &self,
+        window: iced::window::Id,
+        target: InputTarget,
+        stroke: &KeyStroke,
+    ) -> bool {
+        let contexts = self.shortcut_contexts(Some(window));
+        let keymap = &self.ui_state.active_keymap;
+        let chord = keymap.lookup(&self.after_pending_chord(target, stroke), &contexts);
+        let command = match chord.command {
+            Some(command) => Some(command),
+            None if chord.matched || chord.pending => None,
+            None => {
+                keymap
+                    .lookup(std::slice::from_ref(stroke), &contexts)
+                    .command
+            }
+        };
+        // The run the command would bend is the one in the key's window: an
+        // undocked tab acts in its own window, every other window in the main.
+        let acting = (target == InputTarget::UndockedTab).then_some(window);
+        let ctx = HeldKeyContext {
+            run_open: self.has_open_run_in(acting),
+        };
+        command.is_some_and(|command| !runs_on_key_repeat(&command, ctx))
+    }
+
+    /// The pending chord prefix of `target`, if any, followed by `stroke`.
+    fn after_pending_chord(&self, target: InputTarget, stroke: &KeyStroke) -> Vec<KeyStroke> {
+        let mut sequence = if self.ui_state.keymap_pending_target == Some(target) {
             self.ui_state.keymap_pending_sequence.clone()
         } else {
             Vec::new()
         };
-        with_prefix.push(stroke.clone());
-        [with_prefix, vec![stroke.clone()]].iter().any(|sequence| {
-            let lookup = keymap.lookup(sequence, &contexts);
-            lookup.command.is_some() || lookup.matched || lookup.pending
-        })
+        sequence.push(stroke.clone());
+        sequence
     }
 }
 
@@ -740,6 +807,9 @@ fn selection_slot_from_key(key: &str) -> Option<usize> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod key_repeat_tests;
 
 #[cfg(test)]
 mod physical_key_tests;

@@ -38,8 +38,10 @@ mod special_strings;
 mod surface;
 #[cfg(test)]
 mod tool_click_tests;
+mod value_widths;
 mod viewport_resize;
 mod wheel;
+mod wire_grip;
 pub mod zoom_pill;
 
 use gpu_mount::ContentMode;
@@ -105,6 +107,8 @@ pub struct CanvasState {
     move_float: Option<move_pick::Float>,
     /// The rubber-banded drag ghost, filled from `update`, read by `draw`.
     ghost: drag_preview::GhostState,
+    /// Set while the drag holds one end of a selected wire by its grip.
+    wire_grip: Option<wire_grip::WireGrip>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -627,6 +631,9 @@ pub struct CanvasViewPrefs<'a> {
     pub wire_class_revision: u64,
     /// The sheet's project defaults for unset widths and sizes (#2026).
     pub schematic_defaults: signex_types::schematic::SchematicDefaults,
+    /// The sheet's project designator standard, for how references draw
+    /// (#1416).
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
     pub selection_filters: &'a std::collections::HashSet<crate::active_bar::SelectionFilter>,
     /// Content attached to the cursor, for the window whose document is the
     /// session's target sheet only (`None` everywhere else).
@@ -648,6 +655,8 @@ impl CanvasViewPrefs<'_> {
         crate::schematic_runtime::WireWidths {
             class_styles: Some(self.wire_class_styles),
             defaults: self.schematic_defaults,
+            designator_standard: self.designator_standard,
+            special_strings: None,
         }
     }
 
@@ -696,6 +705,7 @@ impl<'a> SchematicCanvas<'a> {
             designators: Some(&self.slot.designators),
             special_strings: self.slot.special_strings.as_ref(),
             defaults: self.prefs.schematic_defaults,
+            designator_standard: self.prefs.designator_standard,
         }
     }
 
@@ -716,6 +726,11 @@ impl<'a> SchematicCanvas<'a> {
         let session = layers.session_for(snap, revision, &self.selected);
         if let Some(frame) = self.ready_ghost_frame(state, drag_offset, revision) {
             return Some(frame);
+        }
+        // A grip moves one end, never the whole selection: until its ghost is
+        // ready the sheet is drawn as it stands.
+        if state.held_grip().is_some() {
+            return None;
         }
         // Locked items stay in place in the ghost, as on commit (#1918).
         let moved = state.ghost.plain_selection(revision, &self.selected);
@@ -738,6 +753,9 @@ impl<'a> SchematicCanvas<'a> {
     fn drag_delta(&self, state: &CanvasState) -> Option<(f64, f64)> {
         if !self.is_moving(state) {
             return None;
+        }
+        if let Some(grip) = state.held_grip() {
+            return self.grip_delta(state, grip);
         }
         state
             .move_origin
@@ -774,6 +792,10 @@ impl<'a> SchematicCanvas<'a> {
             self.hotspot_cache.borrow_mut().clear();
             return;
         };
+        if let Some(grip) = state.held_grip() {
+            self.refresh_grip_ghost(state, grip, (dx, dy));
+            return;
+        }
         let too_big = self.selected.len() > drag_preview::MAX_RUBBER_BAND_GHOST_ITEMS;
         if self.selected.is_empty() {
             return;
@@ -957,6 +979,16 @@ pub enum CanvasEvent {
         world_x: f64,
         world_y: f64,
     },
+    /// A grip drag dropped one end of a selected wire (its start when
+    /// `start`) at `(x, y)`, snapped (world coords).
+    WireEndDragged {
+        wire: uuid::Uuid,
+        start: bool,
+        x: f64,
+        y: f64,
+        /// How this gesture treats wires (#1266).
+        connections: MoveConnections,
+    },
 }
 
 mod gesture;
@@ -1001,6 +1033,8 @@ mod rotated_label_pixel_tests;
 mod sheet_color_tests;
 #[cfg(test)]
 mod view_gesture_tests;
+#[cfg(test)]
+mod wire_grip_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1058,6 +1092,7 @@ mod tests {
             wire_class_styles: class_styles,
             wire_class_revision: 0,
             schematic_defaults: Default::default(),
+            designator_standard: None,
             selection_filters: filters,
             placement: None,
             power_port_pending: false,
