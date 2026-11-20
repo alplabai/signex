@@ -27,7 +27,7 @@ pub struct VariantRow {
     pub designator: String,
     /// The value the BOM lists: an `=` value evaluated on its sheet.
     pub value: String,
-    /// The value as written, which the parts filter matches.
+    /// The value as written, which the parts filter also matches.
     pub source_value: String,
     pub footprint: String,
     /// Fitted per column: Base first, then each of [`VariantMatrix::variants`].
@@ -55,8 +55,8 @@ impl VariantRow {
     }
 
     /// Whether the row passes the parts filter: terms split at commas and
-    /// spaces, any of which matches the designator or the value as written,
-    /// ignoring case. A term with `*` is a wildcard pattern over the whole text
+    /// spaces, any of which matches the designator, the value as written or
+    /// the value shown (evaluated), ignoring case. A term with `*` is a wildcard pattern over the whole text
     /// (`U*`); a term without one matches anywhere in it (`10k`). An empty
     /// filter passes every row.
     pub fn matches(&self, filter: &str) -> bool {
@@ -68,7 +68,9 @@ impl VariantRow {
             return true;
         }
         terms.any(|term| {
-            term_matches(term, &self.designator) || term_matches(term, &self.source_value)
+            term_matches(term, &self.designator)
+                || term_matches(term, &self.source_value)
+                || term_matches(term, &self.value)
         })
     }
 }

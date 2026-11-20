@@ -148,7 +148,7 @@ fn app_with(symbols: Vec<Symbol>) -> (Signex, ProjectId, tempfile::TempDir) {
 
 /// Maintainer decision 2026-11-20 (Caner): the Value column shows the value
 /// the BOM lists, an `=` value evaluated on its sheet with the project's
-/// parameters. The parts filter still matches the value as written.
+/// parameters. The parts filter matches the value as written and as shown.
 #[test]
 fn the_value_column_shows_an_expression_value_evaluated_as_the_bom_lists_it() {
     let (mut app, id, _dir) = app_with(vec![
@@ -165,7 +165,10 @@ fn the_value_column_shows_an_expression_value_evaluated_as_the_bom_lists_it() {
     let shown = super::matrix::shown_rows(matrix(&app, id), "Rbase", false);
     let names: Vec<&str> = shown.iter().map(|row| row.designator.as_str()).collect();
     assert_eq!(names, ["R2"]);
-    assert!(super::matrix::shown_rows(matrix(&app, id), "20k", false).is_empty());
+    let shown = super::matrix::shown_rows(matrix(&app, id), "20k", false);
+    let names: Vec<&str> = shown.iter().map(|row| row.designator.as_str()).collect();
+    assert_eq!(names, ["R2"]);
+    assert!(super::matrix::shown_rows(matrix(&app, id), "33k", false).is_empty());
     let _ = app.view_project_tab(id);
 }
 

@@ -228,10 +228,10 @@ fn an_expression_value_shows_evaluated_in_the_matrix_as_in_the_bom() {
     assert_eq!(in_matrix, listed, "the matrix shows the BOM's values");
 }
 
-/// The parts filter matches the value as written, not the evaluated one: the
-/// maintainer's 2026-11-20 answer names the Value column only.
+/// The parts filter matches the designator, the value as written and the
+/// value shown (maintainer answer 2026-11-20).
 #[test]
-fn the_filter_matches_an_expression_value_as_written() {
+fn the_filter_matches_an_expression_value_as_written_and_as_shown() {
     let ctx = context(vec![part("R1", "= Rbase * 2", &[("Rbase", "10kΩ")])]);
     let matrix = variant_matrix(&ctx, &[]);
     let row = &matrix.rows[0];
@@ -239,7 +239,9 @@ fn the_filter_matches_an_expression_value_as_written() {
     assert_eq!(row.source_value, "= Rbase * 2");
     assert!(row.matches("Rbase"));
     assert!(row.matches("="));
-    assert!(!row.matches("20k"));
+    assert!(row.matches("20k"));
+    assert!(row.matches("R1"));
+    assert!(!row.matches("33k"));
 }
 
 #[test]

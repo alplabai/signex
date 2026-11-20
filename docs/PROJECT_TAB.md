@@ -47,8 +47,8 @@ message. The chrome catalog draws a sample of it.
   pages by file key), and changing that would renumber the nets of an
   exported netlist.
 - **Variants** — the Variant Manager layout (#1293). The top bar holds the
-  Active variant select (Base or a definition), the parts filter (designator
-  or value as written; terms split at commas and spaces, `U*` a wildcard over the whole
+  Active variant select (Base or a definition), the parts filter (designator,
+  value as written or value shown; terms split at commas and spaces, `U*` a wildcard over the whole
   text, a plain term such as `10k` anywhere in it) and Only rows that differ
   with its count. The list on the left shows Base and each definition with
   how many parts it fits and how many it fits differently from Base, and the
