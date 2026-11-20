@@ -63,7 +63,9 @@ impl DocumentPatch {
     pub const HARNESS: Self = Self(1 << 16);
     /// The sheet's unions (unions-change-paste).
     pub const UNIONS: Self = Self(1 << 17);
-    pub const FULL: Self = Self(u32::MAX);
+    /// Every named bit and no other, so the OR of all of them is FULL.
+    /// UNIONS is the top bit; a new bit moves this.
+    pub const FULL: Self = Self((Self::UNIONS.0 << 1) - 1);
     /// Every collection a net is derived from: pins (symbols and the library
     /// parts they instantiate), wires, labels, junctions, no-connects, buses,
     /// sheet entries and harnesses. An edit outside this set cannot change
