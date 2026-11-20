@@ -530,3 +530,20 @@ fn row_json(row: &DrcRow) -> Value {
         "waiver": row.waiver,
     })
 }
+
+#[cfg(test)]
+mod domain_tests {
+    use super::rules_domain_of;
+    use crate::app::RulesDomain;
+    use signex_drc::ViolationKind;
+
+    /// Keep parts inside is set on the room, so its finding opens the Rules
+    /// tab at Assembly, where the nearest placement rules are.
+    #[test]
+    fn a_part_outside_its_room_opens_the_rules_at_assembly() {
+        assert_eq!(
+            rules_domain_of(ViolationKind::PartOutsideRoom),
+            RulesDomain::Assembly
+        );
+    }
+}
