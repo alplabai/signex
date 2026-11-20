@@ -1,5 +1,6 @@
-//! Graphite parts shared by the dialog bodies: the subtitled header, the
-//! changed-row tint and the recovery icon tile.
+//! Graphite parts shared by the dialog bodies: the mono face, the subtitled
+//! header, the call-to-action kind, the changed-designator ink and the
+//! recovery icon tile.
 
 use iced::widget::container;
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
