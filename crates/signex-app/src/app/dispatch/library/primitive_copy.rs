@@ -142,6 +142,9 @@ impl Signex {
         if let Some(picker) = self.library.primitive_picker.as_mut() {
             picker.copy_confirm = None;
         }
+        // Requested although already open: a mount request cancels a close
+        // still waiting on the library's writes (#1728), so the library the
+        // row now binds stays open. It also rescans it, as project open does.
         Task::batch([self.mount_added_libraries(vec![library]), pick])
     }
 

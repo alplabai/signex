@@ -1,14 +1,7 @@
-//! "Copy into library?" (#131, decision lib-10): the small card that takes
-//! the picker's place while a chosen symbol outside the row's library waits
-//! for an answer (#1841).
-//!
-//! - A file in no library: Cancel, or copy it into the row's library. A row
-//!   binds a library id and a uuid, so there is nothing to link to.
-//! - A symbol of a library that is not open: Cancel, link without copying
-//!   (open that library and bind its symbol), or copy it into the row's
-//!   library.
-//!
-//! Cancel goes back to the picker and changes nothing.
+//! "Copy into library?" (mockup row 131, decision lib-10): the card that
+//! takes the picker's place while a chosen symbol outside the row's library
+//! waits for an answer (#1841). See docs/architecture/library-dialogs.md,
+//! "Copy into library confirm".
 
 use iced::widget::{Space, column, container};
 use iced::{Element, Length, Widget};

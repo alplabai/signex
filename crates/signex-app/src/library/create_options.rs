@@ -1,22 +1,6 @@
-//! New Library dialog (the m133 mock): the version-control options of a
-//! library about to be created.
-//!
-//! Pops up between the New Library save-as dialog (where the user picked
-//! the `.snxlib` path, shown as the header note) and the registration of
-//! the pending library. Two option cards:
-//! - "Enable version control (Git)", off by default so a fresh library
-//!   lives on disk as plain files;
-//! - "Use Git LFS for binary 3D models", indented under it, greyed and
-//!   inert while Git is off (disable-when-off).
-//!
-//! A refused Create (the folder is the root of a repository with history)
-//! shows as an error banner with "Choose another location…", and Create
-//! stays disabled until the refusal clears.
-//!
-//! Mounted as a full-screen overlay backdrop via
-//! `app/view/mod.rs::collect_overlays` when
-//! `LibraryState::create_options.is_some()`; `create_options_overlay`
-//! owns that guard.
+//! New Library dialog (mockup row 133): the version-control options of a
+//! library about to be created. See docs/architecture/library-dialogs.md,
+//! "New Library dialog".
 
 use iced::font::Weight;
 use iced::widget::{Space, column, container, row};

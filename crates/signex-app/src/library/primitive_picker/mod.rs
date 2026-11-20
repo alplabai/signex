@@ -1,30 +1,7 @@
-//! Primitive picker modal (#131): Pick Symbol / Pick Footprint / Pick Sim
-//! Model.
-//!
-//! Listing source: every mounted library's cached primitive summaries
-//! (`OpenLibrary::cached_symbols` / `cached_footprints` / `cached_sims`),
-//! so the view does no disk IO. The filter matches the primitive name and
-//! its uuid, case-insensitively; the uuid is not shown.
-//!
-//! Shape:
-//!
-//! ```text
-//! ┌─[Pick Symbol   for R-0402-10K-1% ─────────────────── X]─┐
-//! │ [⌕ Filter…]                                              │
-//! ├──────────────────────────────────────────────────────────┤
-//! │ PASSIVES (3)                                             │
-//! │   resistor.snxsym · R                                    │
-//! │ IN LIBRARY POWER-ICS (NOT OPEN) (1)                      │
-//! │   sense.snxsym · R_Shunt                  Open library   │
-//! │ NOT IN A LIBRARY (1)                                     │
-//! │   C:\work\old\res_trim.snxsym                            │
-//! ├──────────────────────────────────────────────────────────┤
-//! │ Browse filesystem…                          [ Cancel ]   │
-//! └──────────────────────────────────────────────────────────┘
-//! ```
-//!
-//! A row click picks at once. A symbol outside the row's library opens the
-//! copy confirm ([`copy_confirm`]) in place of the list.
+//! Primitive picker modal (mockup row 131): Pick Symbol / Pick Footprint /
+//! Pick Sim Model, listed from the mounted libraries' cached summaries. A
+//! symbol outside the row's library opens the copy confirm in place of the
+//! list. See docs/architecture/library-dialogs.md, "Primitive picker".
 
 mod copy_confirm;
 mod list;

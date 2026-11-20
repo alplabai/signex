@@ -1,39 +1,7 @@
-//! "Library Updates Available" modal — Stage 16 of
-//! `v0.9-snxlib-as-file-plan.md` §3.5.
-//!
-//! Surfaces drift between a freshly-opened schematic's placed
-//! `Symbol`s and their source library rows. Each placed Symbol that
-//! went through the `.snxlib` picker carries `library_id`, `row_id`,
-//! and `library_version` (Stage 16's schema additions on
-//! `signex_types::schematic::Symbol`). On schematic open the
-//! dispatcher walks every Symbol that has a `library_id` set and
-//! compares its pinned version to the row's current version through
-//! the mounted `LibrarySet`. Mismatches accumulate into a
-//! [`LibraryUpdatesState`].
-//!
-//! In **Personal** workflow mode (the manifest's
-//! `[workflow] mode = "personal"` default) drift is auto-applied to
-//! every instance silently — no modal opens, just a `tracing::info`
-//! line and a dirty mark on the schematic.
-//!
-//! In **Team** workflow mode the dispatcher opens this modal so the
-//! user can review which updates to accept, with checkboxes
-//! pre-toggled by `BumpKind`:
-//!
-//! - `Patch` — checked by default (compatible auto-update);
-//! - `Minor` — unchecked by default (review before accepting);
-//! - `Major` — unchecked + ⚠ warning (likely-breaking).
-//!
-//! "Update Selected Components" rewrites the picked Symbols to the
-//! latest version + dirty-marks the schematic. "Skip All" leaves
-//! everything pinned and the dispatcher records the schematic in
-//! `LibraryState.skipped_updates_for`. Nothing renders that set yet; the
-//! user-visible trace of a refused or unreadable update is its line in the
-//! Messages panel.
-//!
-//! Painted by `library_updates_overlay` via `collect_overlays`, which
-//! runs every frame; the builder's `library_updates.is_some()` guard is
-//! the only open check. The card itself is in [`view`].
+//! "Library Updates Available" modal: the placed parts whose library row
+//! has a newer version, for the user to accept or skip in Team workflow
+//! mode (Personal mode applies them silently). The card is in [`view`].
+//! See docs/architecture/library-dialogs.md, "Library Updates dialog".
 
 use std::path::PathBuf;
 
