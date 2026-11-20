@@ -75,10 +75,14 @@ fn place_sheet_entry_from_an_undocked_sheets_menu_arms_beside_a_board() {
 /// Sheet Actions ▸ Sync Sheet Entries in the undocked sheet opens the dialog
 /// for the window's sheet and its selected sheet symbol, not for the board
 /// the main window shows.
+///
+/// The sheet has a real folder: a child reference resolves against the
+/// sheet's own directory, and a bare file name has none, so it is refused.
 #[test]
 fn sync_sheet_entries_from_an_undocked_sheets_menu_syncs_that_sheets_symbol() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let parent = dir.path().join("parent.snxsch");
     let symbol = Uuid::now_v7();
-    let mut app = app_with_empty_sheet();
     let sheet = SchematicSheet {
         uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
@@ -98,11 +102,8 @@ fn sync_sheet_entries_from_an_undocked_sheets_menu_syncs_that_sheets_symbol() {
         }],
         ..Default::default()
     };
-    app.document_state.engines.insert(
-        PathBuf::from(SHEET),
-        signex_engine::Engine::new(sheet).expect("engine"),
-    );
-    let (mut app, window) = undock_beside_a_board(app, Path::new(SHEET));
+    write_sheet(&parent, sheet.clone());
+    let (mut app, window) = undock_beside_a_board(app_with_sheet_at(&parent, sheet), &parent);
     app.interaction_state
         .canvases
         .get_mut(&window)
@@ -116,7 +117,7 @@ fn sync_sheet_entries_from_an_undocked_sheets_menu_syncs_that_sheets_symbol() {
         .sheet_sync
         .as_ref()
         .expect("the sync dialog opened");
-    assert_eq!(dialog.parent, PathBuf::from(SHEET), "the window's sheet");
+    assert_eq!(dialog.parent, parent, "the window's sheet");
     assert_eq!(dialog.symbol, symbol, "the window's selected sheet symbol");
     assert_eq!(
         app.document_state.active_path, None,
@@ -129,6 +130,27 @@ fn write_sheet(path: &Path, sheet: SchematicSheet) {
         .write_string()
         .expect("encode");
     std::fs::write(path, text).expect("write sheet");
+}
+
+/// `sheet` open at `path` in the one tab, which is active.
+fn app_with_sheet_at(path: &Path, sheet: SchematicSheet) -> Signex {
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let engine =
+        signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())).expect("engine");
+    app.document_state
+        .engines
+        .insert(path.to_path_buf(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "parent".to_string(),
+        path: path.to_path_buf(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(path.to_path_buf());
+    app
 }
 
 /// Sheet Actions ▸ Create Sheet Symbol From Sheet in the undocked sheet: the
@@ -150,21 +172,7 @@ fn create_sheet_symbol_from_an_undocked_sheets_menu_lands_on_that_sheet() {
             ..SchematicSheet::default()
         },
     );
-    let (mut app, _boot) = Signex::new();
-    app.ui_state.first_run_tour_open = false;
-    let engine =
-        signex_engine::Engine::new_with_path(SchematicSheet::default(), Some(parent.clone()))
-            .expect("engine");
-    app.document_state.engines.insert(parent.clone(), engine);
-    app.document_state.tabs.push(TabInfo {
-        title: "parent".to_string(),
-        path: parent.clone(),
-        cached_document: None,
-        project_id: None,
-        kind: TabKind::Schematic,
-    });
-    app.document_state.active_tab = 0;
-    app.document_state.active_path = Some(parent.clone());
+    let app = app_with_sheet_at(&parent, SchematicSheet::default());
     let (mut app, window) = undock_beside_a_board(app, &parent);
     let answers = HeadlessAnswers::default();
     app.ui_state.io = IoPorts::headless(answers.clone());
