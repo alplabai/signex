@@ -877,3 +877,37 @@ fn a_tier_card_previews_old_and_new_values_and_applies_as_one_step() {
     }
     assert!(dsl(&app).contains("rule fab_clearance on clearance require clearance >= 0.1mm"));
 }
+
+#[test]
+fn a_matrix_cell_stores_its_length_as_typed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    show_matrix(&mut app, id);
+    let live = ClassPair { row: 1, col: 0 };
+    let key = CellKey::new("LV", "HV");
+    for (step, (typed, written, mm)) in
+        [("8mil", "8mil", 0.2032), ("0.12345", "0.12345mm", 0.12345)]
+            .into_iter()
+            .enumerate()
+    {
+        act(&mut app, id, MatrixMessage::CellPressed(live));
+        act(&mut app, id, MatrixMessage::EditTextChanged(typed.into()));
+        act(&mut app, id, MatrixMessage::EditSubmitted);
+        let text = dsl(&app);
+        assert!(
+            text.contains(&format!("clearance >= {written} then")),
+            "{typed} is stored as typed: {text}"
+        );
+        assert_eq!(shown_at(&app, id, &key), Some(Shown::Written(mm)));
+        assert_eq!(undo_steps(&app, id), step + 1);
+        assert!(
+            app.document_state.project_tabs[&id]
+                .rules
+                .matrix
+                .edit()
+                .is_none(),
+            "the cell closed"
+        );
+        let _ = app.view_rules_tab(id);
+    }
+}

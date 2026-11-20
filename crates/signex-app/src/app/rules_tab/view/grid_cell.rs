@@ -15,7 +15,7 @@ use signex_widgets::{button, text, text_input, tooltip};
 use super::table::act;
 use super::{Frame, TS, user};
 use crate::app::Message;
-use crate::app::rules_tab::grid::{CellShow, RowRef, mm_format};
+use crate::app::rules_tab::grid::{CellShow, RowRef};
 use crate::styles::HAIRLINE;
 
 /// Border width of the selected cell's ring and a set value's edge.
@@ -40,10 +40,9 @@ pub(super) fn view<'a>(
     let cells = frame.cells();
     let show = cells.show(at);
     if let (Some(edit), true) = (editing, show.is_editable()) {
-        let placeholder: signex_widgets::Label<'a> = match cells.parent_value(at) {
-            CellShow::Value { mm: Some(mm), .. } => user(mm_format(frame.i18n).number(mm)).into(),
-            _ => user(String::new()).into(),
-        };
+        let parent = cells.parent_value(at);
+        let placeholder: signex_widgets::Label<'a> =
+            user(parent.written().unwrap_or_default().to_string()).into();
         let is_invalid = edit.is_invalid;
         let input: Element<'a, Message> = text_input(placeholder, edit.text.as_str())
             .id(EDITOR_ID)
@@ -148,12 +147,9 @@ fn face<'a>(
         ),
         CellShow::Empty => (String::new(), style.muted_ink, Font::DEFAULT),
         CellShow::Value {
-            written,
-            mm,
-            source,
-            ..
+            written, source, ..
         } => {
-            let shown = mm.map_or_else(|| written.clone(), |mm| mm_format(frame.i18n).number(mm));
+            let shown = written.clone();
             match source {
                 CellSource::Own { .. } if !is_all => (shown, style.ink, strong()),
                 CellSource::Set { .. } => (shown, style.ink, Font::DEFAULT),
@@ -210,9 +206,10 @@ fn source_tip(frame: &Frame, show: &CellShow, at: CellRef, is_all: bool) -> Loca
         CellShow::Value { source, .. } => match source {
             _ if is_all => t!(i18n, ids::RULES_CELL_FROM_ALL),
             CellSource::Own { .. } => {
-                let back = match frame.cells().parent_value(at) {
-                    CellShow::Value { mm: Some(mm), .. } => mm_format(i18n).number(mm),
-                    _ => t!(i18n, ids::RULES_CELL_EMPTY).into_string(),
+                let parent = frame.cells().parent_value(at);
+                let back = match parent.written() {
+                    Some(written) => written.to_string(),
+                    None => t!(i18n, ids::RULES_CELL_EMPTY).into_string(),
                 };
                 t!(i18n, ids::RULES_CELL_FROM_ROW, "value" => back)
             }

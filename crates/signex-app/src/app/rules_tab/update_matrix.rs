@@ -9,7 +9,8 @@ use signex_types::coord::Unit;
 use signex_widgets::LengthFormat;
 use signex_widgets::constraint_grid::{ClassPair, MatrixChange, MatrixMessage};
 
-use super::matrix::{ClassClearances, MatrixDefaults, mm_text, typed_value};
+use super::grid::{mm_text, typed_value};
+use super::matrix::{ClassClearances, MatrixDefaults};
 use super::{ClearanceView, MatrixEdit, RulesPanel, RulesTabMsg, SetFormField};
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
@@ -263,6 +264,10 @@ impl Signex {
     /// opens its object pairs and pins the preview; a value change is
     /// written as one undo step.
     fn act_on_matrix(&mut self, id: ProjectId, msg: MatrixMessage) {
+        if msg == MatrixMessage::EditSubmitted {
+            self.submit_matrix_cell(id);
+            return;
+        }
         let msg = match msg {
             MatrixMessage::CellPressed(pair) => {
                 MatrixMessage::CellPressed(ClassPair::new(pair.row, pair.col))
@@ -296,6 +301,26 @@ impl Signex {
         };
         let result = self.set_matrix_cell(id, &key, &value);
         self.note_rules_result(id, result);
+    }
+
+    /// Enter in a matrix cell: the text is written as typed (a bare number
+    /// in mm, `8mil` kept), as a grid cell's is. Untouched text writes
+    /// nothing; a refusal keeps the cell open.
+    fn submit_matrix_cell(&mut self, id: ProjectId) {
+        let Some(edit) = self.rules_tab_mut(id).matrix.edit().cloned() else {
+            return;
+        };
+        if edit.text.trim() == edit.opened.trim() {
+            self.matrix_widget_update(id, MatrixMessage::EditCancelled);
+            return;
+        }
+        let Some(key) = self.matrix_book(id).values().key(edit.pair) else {
+            return;
+        };
+        let result = self.set_matrix_cell(id, &key, &typed_value(&edit.text));
+        if self.note_rules_result(id, result).is_some() {
+            self.matrix_widget_update(id, MatrixMessage::EditCancelled);
+        }
     }
 
     /// Apply the previewed preset; the preview closes once it is applied.

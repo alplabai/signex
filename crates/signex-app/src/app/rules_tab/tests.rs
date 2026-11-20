@@ -1061,3 +1061,38 @@ fn a_board_wide_rule_no_cell_shows_is_a_scoped_row() {
     assert!(!rows.contains(&RowRef::Scoped("wide_b".into())), "{rows:?}");
     let _ = app.view_rules_tab(id);
 }
+
+#[test]
+fn a_cell_shows_its_length_as_written_in_any_unit_the_rules_take() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    let at = cell(&app, id, &RowRef::All, "clearance_min");
+    for (typed, mm) in [("8mil", 0.2032), ("50\u{b5}m", 0.05), ("50\u{3bc}m", 0.05)] {
+        type_in(&mut app, id, at, typed);
+        let text = dsl(&app).expect("stored");
+        assert!(
+            text.contains(&format!("clearance >= {typed} then")),
+            "{text}"
+        );
+        let tab = rules_tab(&app, id);
+        let sets = std::collections::BTreeMap::new();
+        let table = signex_drc_dsl::table::table(&text);
+        let cells = Cells {
+            grid: &tab.grid,
+            table: &table,
+            sets: &sets,
+        };
+        let show = cells.show(at);
+        assert_eq!(
+            show.written(),
+            Some(typed),
+            "the cell shows {typed}, not mm"
+        );
+        assert!(
+            matches!(show, CellShow::Value { mm: Some(v), .. } if (v - mm).abs() < 1e-9),
+            "{typed} reads as {mm} mm: {show:?}"
+        );
+        let _ = app.view_rules_tab(id);
+    }
+}

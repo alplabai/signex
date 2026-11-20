@@ -115,23 +115,6 @@ pub(crate) fn class_defaults(classes: &[NetClass]) -> MatrixDefaults {
     out
 }
 
-/// What a value typed in a cell writes: a bare number is in mm, a length
-/// with its unit (`8mil`) is kept as typed.
-pub(crate) fn typed_value(text: &str) -> String {
-    let trimmed = text.trim();
-    match trimmed.parse::<f64>() {
-        Ok(number) if number.is_finite() => format!("{trimmed}mm"),
-        _ => trimmed.to_string(),
-    }
-}
-
-/// `value_mm` as the rule text writes a length (`0.8mm`).
-pub(crate) fn mm_text(value_mm: f64) -> String {
-    let fixed = format!("{value_mm:.4}");
-    let trimmed = fixed.trim_end_matches('0').trim_end_matches('.');
-    format!("{trimmed}mm")
-}
-
 /// The clearance a written cell holds, in mm.
 fn written_mm(row: &RuleRow) -> Option<f64> {
     row.compiled

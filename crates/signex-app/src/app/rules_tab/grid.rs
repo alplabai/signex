@@ -500,6 +500,14 @@ pub(crate) enum CellShow {
 }
 
 impl CellShow {
+    /// The value as the rule text writes it: a cell shows `8mil` as typed.
+    pub fn written(&self) -> Option<&str> {
+        match self {
+            CellShow::Value { written, .. } => Some(written),
+            _ => None,
+        }
+    }
+
     pub fn is_editable(&self) -> bool {
         matches!(self, CellShow::Empty | CellShow::Value { .. })
     }
@@ -639,34 +647,28 @@ pub(crate) fn applies(table: &RuleTable, row: &RowRef, field: LimitField) -> boo
     }
 }
 
-/// A written length in mm: a number and an optional unit (mm, mil, um,
-/// nm; mm when none). `None` for text that is not a length.
+/// A length as the rule text writes it, in mm, read with the compiler's
+/// units (`signex_drc_dsl::length_nm`). `None` for text that is not one.
 pub(crate) fn length_mm(written: &str) -> Option<f64> {
-    let text = written.trim();
-    let split = text
-        .find(|c: char| c.is_ascii_alphabetic())
-        .unwrap_or(text.len());
-    let (number, unit) = text.split_at(split);
-    let value: f64 = number.trim().parse().ok()?;
-    let per_mm = match unit.trim() {
-        "" | "mm" => 1.0,
-        "mil" => 0.0254,
-        "um" => 0.001,
-        "nm" => 0.000_001,
-        _ => return None,
-    };
-    let mm = value * per_mm;
-    mm.is_finite().then_some(mm)
+    signex_drc_dsl::length_nm(written).map(super::json::mm)
 }
 
-/// A value typed in a cell as rule text: a bare number is millimetres.
-pub(crate) fn typed_length(text: &str) -> String {
-    let text = text.trim();
-    if !text.is_empty() && text.parse::<f64>().is_ok() {
-        format!("{text}mm")
-    } else {
-        text.to_string()
+/// What a value typed in a cell or on the matrix writes: a bare number is
+/// in mm, a length with its unit (`8mil`) is kept as typed.
+pub(crate) fn typed_value(text: &str) -> String {
+    let trimmed = text.trim();
+    match trimmed.parse::<f64>() {
+        Ok(number) if number.is_finite() => format!("{trimmed}mm"),
+        _ => trimmed.to_string(),
     }
+}
+
+/// `value_mm` (a value set on the drawing or the matrix) as the rule text
+/// writes a length (`0.8mm`).
+pub(crate) fn mm_text(value_mm: f64) -> String {
+    let fixed = format!("{value_mm:.4}");
+    let trimmed = fixed.trim_end_matches('0').trim_end_matches('.');
+    format!("{trimmed}mm")
 }
 
 /// The domain a rule shows in: its first limit's column group's, else

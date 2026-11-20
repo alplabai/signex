@@ -11,7 +11,9 @@ use signex_drc_dsl::table::{self, LimitField, RuleField, RuleTable};
 use signex_widgets::constraint_grid::{CellRef, GridMessage, RowId};
 
 use super::drawing::{self, PreviewMsg, same_subject};
-use super::grid::{Cells, RowRef, RowSource, RulesGrid, mm_format, scoped_on, typed_length};
+use super::grid::{
+    Cells, RowRef, RowSource, RulesGrid, mm_format, mm_text, scoped_on, typed_value,
+};
 use super::matrix::matrix_preview;
 use super::search::FindHit;
 use super::{RulesPanel, RulesTabMsg};
@@ -251,7 +253,7 @@ impl Signex {
             self.update_grid_view(id, GridMessage::EditCancelled);
             return;
         }
-        if self.write_rules_cell(id, edit.cell, &typed_length(&edit.text)) {
+        if self.write_rules_cell(id, edit.cell, &typed_value(&edit.text)) {
             self.update_grid_view(id, GridMessage::EditCancelled);
         }
     }
@@ -394,10 +396,7 @@ impl Signex {
             .field
             .and_then(|field| column_of(grid, field))
             .unwrap_or(selected.column);
-        let value = format!(
-            "{}mm",
-            mm_format(&self.ui_state.i18n).number(commit.value_mm)
-        );
+        let value = mm_text(commit.value_mm);
         self.write_rules_cell(id, CellRef::new(selected.row, column), &value);
         task
     }
