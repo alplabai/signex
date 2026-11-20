@@ -74,7 +74,7 @@ fn open(app: &mut Signex, modal: ModalId) {
             })
         }
         ModalId::SelectionFilterCustom => {
-            ui.selection_filter_custom = Some(SelectionFilterCustomState {
+            ui.selection_filter_custom = Some(Box::new(SelectionFilterCustomState {
                 pads: true,
                 tracks: true,
                 arcs: true,
@@ -87,7 +87,8 @@ fn open(app: &mut Signex, modal: ModalId) {
                 regions: true,
                 fills: true,
                 other: true,
-            })
+                preset_name: String::new(),
+            }))
         }
         ModalId::About => ui.about_open = true,
         ModalId::KeyboardShortcuts => ui.keyboard_shortcuts_open = true,
@@ -306,7 +307,7 @@ fn a_detached_dialog_does_not_paint_in_the_main_window() {
         (ModalId::About, "Copy version info"),
         (
             ModalId::FindReplace,
-            "Targets: labels, notes, designators, values",
+            "Searches labels, notes, designators, values",
         ),
     ];
     for (modal, probe) in probes {

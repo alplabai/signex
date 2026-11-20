@@ -389,6 +389,8 @@ fn a_project_replace_started_in_a_window_finishes_in_that_windows_project() {
     let mut messages = Vec::new();
     for message in [
         FindReplaceMsg::ScopeChanged(crate::find_replace::FindScope::Project),
+        // Substring matching, so `NET` reaches `B_NET` (#2525).
+        FindReplaceMsg::WholeWordToggled,
         FindReplaceMsg::QueryChanged("NET".into()),
         FindReplaceMsg::ReplacementChanged("NETX".into()),
     ] {

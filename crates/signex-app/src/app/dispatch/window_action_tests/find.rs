@@ -7,7 +7,7 @@ use super::*;
 use crate::app::path_ops::settle_task;
 use crate::find_replace::FindReplaceMsg;
 
-const FIND_FOOTER: &str = "Targets: labels, notes, designators, values";
+const FIND_FOOTER: &str = "Searches labels, notes, designators, values";
 
 #[test]
 fn find_opened_in_a_window_searches_and_selects_in_that_windows_sheet() {

@@ -284,6 +284,11 @@ impl Signex {
                             ((&title, &text), (&ref_title, &ref_text)),
                         )
                 }),
+            ModalId::NetColorPalette => Some(
+                crate::app::handlers::editing_commands::net_color_palette::palette_window_height(
+                    self.palette_net_count(),
+                ),
+            ),
             _ => None,
         };
         let logical = height.map_or(fixed, |h| Size::new(fixed.width, h));

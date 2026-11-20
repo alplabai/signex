@@ -45,15 +45,29 @@ impl Signex {
         )
     }
 
-    /// The Active Bar's "Clear All Net Colors" and the command of the same id
-    /// (`only`: the one sheet its `path` operand names): clear, disarm the
-    /// pen and say what happened in Messages.
+    /// The Active Bar's "Clear All Net Colors", the command of the same id
+    /// (`only`: the one sheet its `path` operand names) and the palette's
+    /// "Clear all colours" (`only`: the active sheet, one undo step): clear,
+    /// disarm the pen and say what happened in Messages.
     pub(crate) fn run_clear_all_net_colors(
         &mut self,
         only: Option<&std::path::Path>,
     ) -> ColorsCleared {
         // #1005: each sheet keeps its own undo step for what this removes.
         let cleared = self.clear_net_colors(only);
+        // The palette's per-name record spans every sheet: it goes when all
+        // sheets were cleared, or one sheet's clear left none coloured, so
+        // the Active Bar's Clear entries offer no clear with nothing left.
+        let none_left = || {
+            !self
+                .document_state
+                .engines
+                .values()
+                .any(|engine| has_painted_element(engine.document()))
+        };
+        if only.is_none() || none_left() {
+            self.ui_state.net_colors.clear();
+        }
         self.ui_state.pending_net_color = None;
         self.interaction_state.active_canvas_mut().pending_net_color = None;
         self.interaction_state

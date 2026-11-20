@@ -258,10 +258,16 @@ fn norm_ccw(a: f64, b: f64) -> f64 {
     if d < 0.0 { d + TAU } else { d }
 }
 
+pub(crate) mod move_selection_dialog;
+#[cfg(test)]
+mod net_color_clear_all_tests;
 #[cfg(test)]
 pub(crate) mod net_color_driver;
 #[cfg(test)]
 mod net_color_guard_tests;
+pub(crate) mod net_color_palette;
+#[cfg(test)]
+mod net_color_palette_tests;
 #[cfg(test)]
 mod net_color_persist_tests;
 #[cfg(test)]
