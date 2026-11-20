@@ -483,7 +483,7 @@ mod layout_tests {
     #[test]
     fn no_preferences_page_draws_restore_defaults() {
         let (mut app, _task) = Signex::new();
-        for nav in crate::preferences::PrefNav::ALL {
+        for nav in crate::preferences::PrefNav::ALL.iter().copied() {
             app.ui_state.preferences_nav = nav;
 
             let texts: Vec<String> =
