@@ -36,13 +36,17 @@ pub(in crate::panels::pcb_primitive_properties) fn illustration(
     let ring = shape.r + shape.ws / 2.0;
     let ray = |angle: f32, name: signex_i18n::MessageId, key: &FieldId| {
         [
-            dashed(shape.centre, shape.point(angle, ring + 8.0), &[key.clone()]),
+            dashed(
+                shape.centre,
+                shape.point(angle, ring + 8.0),
+                std::slice::from_ref(key),
+            ),
             label(
                 shape.point(angle, ring + 17.0),
                 t!(i18n, name),
                 Anchor::Middle,
                 TextRole::Caption,
-                &[key.clone()],
+                std::slice::from_ref(key),
             ),
         ]
     };
