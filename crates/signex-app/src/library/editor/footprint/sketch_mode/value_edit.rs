@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use signex_expr::{ExprNode, Quantity, UnitFamily};
 use signex_sketch::SketchData;
-use signex_sketch::array::{ArrayId, ArrayKind, ArrayLayout};
+use signex_sketch::array::{ArrayId, ArrayKind};
 use signex_sketch::constraint::{ConstraintKind, DimTarget, parse_dimension_input};
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::id::ConstraintId;
@@ -293,40 +293,6 @@ pub fn pattern_glyph_text(
         ),
         ArrayKind::Polar { .. } => format!("{}×{}", text.pattern_polar, count(PatternField::Count)),
     }
-}
-
-/// The evaluated shape of `kind`, with a polar pattern turning about
-/// `center`. `None` when a value does not evaluate or the pattern has more
-/// slots than the canvas lays out.
-pub fn array_layout(
-    sketch: &SketchData,
-    kind: &ArrayKind,
-    center: Option<(f64, f64)>,
-) -> Option<ArrayLayout> {
-    let q = |field: PatternField| field.expr(kind).and_then(|src| eval_source(sketch, src));
-    let layout = match kind {
-        ArrayKind::Linear { .. } => ArrayLayout::Linear {
-            count: as_count(q(PatternField::Count)?)?,
-            step: (
-                as_length(q(PatternField::SpacingX)?)?,
-                as_length(q(PatternField::SpacingY)?)?,
-            ),
-        },
-        ArrayKind::Grid { .. } => ArrayLayout::Grid {
-            nx: as_count(q(PatternField::Columns)?)?,
-            ny: as_count(q(PatternField::Rows)?)?,
-            step: (
-                as_length(q(PatternField::SpacingX)?)?,
-                as_length(q(PatternField::SpacingY)?)?,
-            ),
-        },
-        ArrayKind::Polar { .. } => ArrayLayout::Polar {
-            count: as_count(q(PatternField::Count)?)?,
-            sweep_rad: as_angle(q(PatternField::Sweep)?)?,
-            center: center?,
-        },
-    };
-    (layout.slot_count() <= MAX_DRAWN_SLOTS).then_some(layout)
 }
 
 /// The text an edit of a value starts with.

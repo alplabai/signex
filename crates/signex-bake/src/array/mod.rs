@@ -44,8 +44,10 @@ mod overrides;
 mod polar;
 #[cfg(test)]
 mod polar_tests;
+mod slots;
 
 pub use instance_at::instance_at;
+pub use slots::{PatternSlot, pattern_slots};
 
 /// Most pad instances one array may expand to. Array counts come from
 /// user / file expressions and the bake runs on the editor's update

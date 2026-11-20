@@ -1,13 +1,21 @@
-//! mockup row 187 / mockup row 191 (B5) - the sketch canvas's values and pattern instances:
+//! mockup row 187 / mockup row 191 - the sketch canvas's values and pattern instances:
 //! one suppression helper on the array type, used by the canvas instance
 //! click and the Properties pattern form, round-trips a grid and a polar
-//! array and leaves a linear one alone; a pattern value written on the
-//! drawing lands in the right expression; the conflict badge counts.
+//! array and leaves a linear one alone; the canvas's instance slots sit
+//! where the bake puts the pads; a pattern value written on the drawing
+//! lands in the right expression; the conflict badge counts.
+
+use std::collections::HashMap;
 
 use signex_app::library::editor::footprint::PatternField;
 use signex_app::library::editor::footprint::SketchCanvasText;
-use signex_sketch::array::{ArrayKind, ArrayLayout, GridDepopulation};
+use signex_sketch::SketchData;
+use signex_sketch::array::{Array, ArrayId, ArrayKind, GridDepopulation, NumberingScheme};
+use signex_sketch::attr::{PadAttr, PadKind, PadShape, PadSide};
+use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
+use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use signex_sketch::solver::Solver;
 
 fn grid() -> ArrayKind {
     ArrayKind::Grid {
@@ -91,26 +99,83 @@ fn a_linear_pattern_has_no_suppression_and_never_changes() {
     assert_eq!(kind, before);
 }
 
+/// A pad source at (10, 20) and a 3 × 2 grid of it whose x pitch grows
+/// with the column (`i`), instance (2, 0) suppressed and column 1 masked.
+fn baked_grid() -> (SketchData, ArrayId) {
+    let plane = PlaneId::new();
+    let source = SketchEntityId::new();
+    let mut point = Entity::new(source, plane, EntityKind::Point { x: 10.0, y: 20.0 });
+    point.pad = Some(PadAttr {
+        number: "1".into(),
+        kind: PadKind::Smd,
+        side: PadSide::Top,
+        shape: PadShape::Rect,
+        size_x_expr: "0.3mm".into(),
+        size_y_expr: "0.3mm".into(),
+        ..PadAttr::default()
+    });
+    let array = ArrayId::new();
+    let sketch = SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        entities: vec![point],
+        arrays: vec![Array {
+            id: array,
+            kind: ArrayKind::Grid {
+                source,
+                nx_expr: "4".into(),
+                ny_expr: "2".into(),
+                dx_expr: "1mm + i * 0.5mm".into(),
+                dy_expr: "0.5mm".into(),
+                depopulation: Some(GridDepopulation {
+                    mask_expr: "i != 1".into(),
+                    suppressed_instances: vec![(2, 0)],
+                }),
+            },
+            numbering: NumberingScheme::default(),
+        }],
+        ..SketchData::default()
+    };
+    (sketch, array)
+}
+
 #[test]
 fn instance_slots_sit_where_the_bake_expands_them() {
-    let grid = ArrayLayout::Grid {
-        nx: 3,
-        ny: 2,
-        step: (1.0, 0.5),
-    };
-    assert_eq!(grid.slot_count(), 6);
-    assert_eq!(grid.slots()[0], (0, 0), "the source's slot first");
-    assert_eq!(grid.position((10.0, 20.0), 2, 1), (12.0, 20.5));
+    let (sketch, array) = baked_grid();
+    let solved = Solver::default()
+        .solve(&sketch, &HashMap::new())
+        .expect("the grid solves");
+    let (mut pads, mut warnings) = (Vec::new(), Vec::new());
+    signex_bake::bake_pads(&sketch, &solved, &HashMap::new(), &mut pads, &mut warnings).unwrap();
+    signex_bake::bake_arrays(&sketch, &solved, &HashMap::new(), &mut pads, &mut warnings).unwrap();
 
-    let polar = ArrayLayout::Polar {
-        count: 4,
-        sweep_rad: std::f64::consts::TAU,
-        center: (0.0, 0.0),
-    };
-    let (x, y) = polar.position((1.0, 0.0), 1, 0);
+    let slots = signex_bake::pattern_slots(&sketch, &solved, array, (10.0, 20.0), 100)
+        .expect("the grid lays out");
+    assert_eq!((slots[0].i, slots[0].j), (0, 0), "the source's slot first");
+    assert!(slots.iter().all(|s| s.i != 1), "a masked slot has no ring");
+    let shown: Vec<_> = slots.iter().filter(|s| !s.suppressed).collect();
+    assert_eq!(
+        shown.len(),
+        pads.len(),
+        "{slots:?} vs {pads:?}, {warnings:?}"
+    );
+    for slot in &shown {
+        assert!(
+            pads.iter().any(|p| (p.position[0] - slot.at.0).abs() < 1e-9
+                && (p.position[1] - slot.at.1).abs() < 1e-9),
+            "no pad under slot {slot:?}: {pads:?}"
+        );
+    }
+    let held = slots
+        .iter()
+        .find(|s| (s.i, s.j) == (2, 0))
+        .expect("the suppressed slot keeps its ring");
+    assert!(held.suppressed);
     assert!(
-        x.abs() < 1e-9 && (y - 1.0).abs() < 1e-9,
-        "a quarter turn: {x}, {y}"
+        (held.at.0 - 14.0).abs() < 1e-9,
+        "the per-instance pitch: 2 × (1 + 2 × 0.5) mm, {held:?}"
     );
 }
 

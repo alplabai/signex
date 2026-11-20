@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use iced::{Point, Rectangle, Size};
 use signex_sketch::SketchData;
-use signex_sketch::array::{Array, ArrayId, ArrayKind};
+use signex_sketch::array::{Array, ArrayId};
 use signex_sketch::constraint::{Constraint, ConstraintKind};
 use signex_sketch::entity::EntityKind;
 use signex_sketch::id::{ConstraintId, SketchEntityId};
@@ -593,7 +593,9 @@ fn mirror_glyphs(l: &Lookup<'_>, cstate: &FootprintCanvasState, out: &mut Vec<Gl
 }
 
 /// The instance slots of a selected grid or polar pattern, the source's
-/// own slot left out (it is the source pad, edited as such).
+/// own slot left out (it is the source pad, edited as such). The slots
+/// come from the bake's own walk (`signex_bake::pattern_slots`), so a ring
+/// sits where the bake puts the pad; a slot the mask drops has no ring.
 fn instance_glyphs(
     array: &Array,
     source_at: (f64, f64),
@@ -604,16 +606,22 @@ fn instance_glyphs(
     if !array.kind.has_suppression_model() {
         return;
     }
-    let center = match &array.kind {
-        ArrayKind::Polar { center, .. } => l.anchor(*center),
-        _ => None,
+    let Some(solve) = l.state.last_solve.as_ref() else {
+        return;
     };
-    let Some(layout) = value_edit::array_layout(l.sketch, &array.kind, center) else {
+    let Some(slots) = signex_bake::pattern_slots(
+        l.sketch,
+        solve,
+        array.id,
+        source_at,
+        value_edit::MAX_DRAWN_SLOTS,
+    ) else {
         return;
     };
     let r = GLYPH_TEXT * INSTANCE_RADIUS_EM;
-    for (i, j) in layout.slots().into_iter().filter(|&slot| slot != (0, 0)) {
-        let at = cstate.world_to_screen(layout.position(source_at, i, j));
+    for slot in slots.into_iter().filter(|s| (s.i, s.j) != (0, 0)) {
+        let (i, j) = (slot.i, slot.j);
+        let at = cstate.world_to_screen(slot.at);
         out.push(Glyph {
             target: GlyphTarget::Instance {
                 array: array.id,
@@ -621,7 +629,7 @@ fn instance_glyphs(
                 j,
             },
             face: GlyphFace::Instance {
-                suppressed: array.kind.is_instance_suppressed(i, j),
+                suppressed: slot.suppressed,
             },
             anchor: at,
             rect: Rectangle::new(Point::new(at.x - r, at.y - r), Size::new(2.0 * r, 2.0 * r)),

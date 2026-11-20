@@ -3,9 +3,10 @@
 //! of its source, and a live mirror reflects each instance of its pattern.
 //!
 //! A plain array without links or overrides still bakes through
-//! `bake_one_array`; this walk serves the arrays that have them and the
-//! mirrors. The w9a instance walk (`walk.rs`) is meant to absorb it. See
-//! docs/FOOTPRINT_SKETCH.md, "Pattern links".
+//! `bake_one_array`; this walk serves the arrays that have them, the
+//! mirrors and the canvas's instance slots (`slots.rs`). Folding the plain
+//! bake into one walk is a follow-up; see docs/FOOTPRINT_SKETCH.md,
+//! "Pattern links".
 
 use std::collections::BTreeMap;
 
@@ -165,6 +166,9 @@ pub(crate) struct Walk<'a, 'w> {
     /// The patterns being expanded, outermost first: a pattern met again is
     /// a loop (only a damaged file has one).
     stack: Vec<ArrayId>,
+    /// Keep the slots the suppression list holds back, marked `listed`
+    /// ([`super::slots`]); the bake drops them.
+    keep_listed: bool,
 }
 
 impl<'a, 'w> Walk<'a, 'w> {
@@ -180,7 +184,14 @@ impl<'a, 'w> Walk<'a, 'w> {
             params_ast,
             warnings,
             stack: Vec::new(),
+            keep_listed: false,
         }
+    }
+
+    /// This walk, keeping the slots the suppression list holds back.
+    pub(crate) fn keeping_listed(mut self) -> Self {
+        self.keep_listed = true;
+        self
     }
 
     fn xy(&self, id: SketchEntityId) -> Option<(f64, f64)> {
@@ -268,9 +279,10 @@ impl<'a, 'w> Walk<'a, 'w> {
 
     fn expand_array(&mut self, array: &'a Array) -> Result<Option<Expansion<'a>>, SketchError> {
         let source = array.kind.source();
-        let Some(walked) = self.walk_slots(array)? else {
+        let Some(mut walked) = self.walk_slots(array)? else {
             return Ok(None);
         };
+        walked.slots.retain(|s| !s.listed);
         let linked = self
             .sketch
             .pattern_source_of(array.id)
@@ -335,7 +347,7 @@ impl<'a, 'w> Walk<'a, 'w> {
 
     /// The kept slots of one array's own layout, as its plain bake walks
     /// them (same counts, steps, suppression and mask).
-    fn walk_slots(&mut self, array: &Array) -> Result<Option<Walked>, SketchError> {
+    pub(crate) fn walk_slots(&mut self, array: &Array) -> Result<Option<Walked>, SketchError> {
         let source = array.kind.source();
         let mut ctx = EvalContext {
             params: self.params_ast.clone(),
@@ -363,6 +375,7 @@ impl<'a, 'w> Walk<'a, 'w> {
                         0,
                         i as u64,
                         Place::translation(i as f64 * dx, i as f64 * dy),
+                        false,
                     ));
                 }
                 Ok(Some(Walked::new(slots, count as u64, None)))
@@ -391,13 +404,15 @@ impl<'a, 'w> Walk<'a, 'w> {
                 for j in 0..ny {
                     for i in 0..nx {
                         ctx.array_index = Some((i, j));
-                        if !self.kept(depopulation.as_ref(), mask.as_ref(), &ctx, source) {
+                        let Some(listed) =
+                            self.visits(depopulation.as_ref(), mask.as_ref(), &ctx, source)
+                        else {
                             continue;
-                        }
+                        };
                         let dx = crate::params::eval_length_mm(&dx_ast, &ctx)?;
                         let dy = crate::params::eval_length_mm(&dy_ast, &ctx)?;
                         let place = Place::translation(i as f64 * dx, j as f64 * dy);
-                        slots.push(Slot::new(i, j, (j * nx + i) as u64, place));
+                        slots.push(Slot::new(i, j, (j * nx + i) as u64, place, listed));
                     }
                 }
                 Ok(Some(Walked::new(slots, (nx * ny) as u64, Some(nx))))
@@ -431,15 +446,18 @@ impl<'a, 'w> Walk<'a, 'w> {
                 let mut slots = Vec::new();
                 for i in 0..count {
                     ctx.array_index = Some((i, 0));
-                    if !self.kept(depopulation.as_ref(), mask.as_ref(), &ctx, source) {
+                    let Some(listed) =
+                        self.visits(depopulation.as_ref(), mask.as_ref(), &ctx, source)
+                    else {
                         continue;
-                    }
+                    };
                     let theta = i as f64 * sweep_rad / count as f64;
                     slots.push(Slot::new(
                         i,
                         0,
                         i as u64,
                         Place::rotation_about(centre, theta),
+                        listed,
                     ));
                 }
                 Ok(Some(Walked::new(slots, count as u64, None)))
@@ -468,17 +486,19 @@ impl<'a, 'w> Walk<'a, 'w> {
         Ok(super::within_instance_cap(label, source, Some(n), self.warnings).then_some(n))
     }
 
-    /// Whether the slot at `ctx`'s index survives the suppression list and
-    /// the mask (a mask that fails to evaluate keeps it, warned).
-    fn kept(
+    /// Whether the walk visits the slot at `ctx`'s index: `Some(false)`
+    /// when it survives the suppression list and the mask (a mask that
+    /// fails to evaluate keeps it, warned), `Some(true)` when the list
+    /// holds it back and the walk keeps listed slots, else `None`.
+    fn visits(
         &mut self,
         depopulation: Option<&GridDepopulation>,
         mask: Option<&ExprNode>,
         ctx: &EvalContext,
         source: SketchEntityId,
-    ) -> bool {
+    ) -> Option<bool> {
         let Some((i, j)) = ctx.array_index else {
-            return true;
+            return Some(false);
         };
         let listed = depopulation.is_some_and(|d| {
             d.suppressed_instances
@@ -486,17 +506,17 @@ impl<'a, 'w> Walk<'a, 'w> {
                 .any(|&(si, sj)| (si as usize, sj as usize) == (i, j))
         });
         if listed {
-            return false;
+            return self.keep_listed.then_some(true);
         }
         match mask.map(|ast| eval(ast, ctx)) {
-            Some(Ok(q)) => q.value.abs() >= 1e-9,
+            Some(Ok(q)) => (q.value.abs() >= 1e-9).then_some(false),
             Some(Err(e)) => {
                 self.warnings.push(format!(
                     "array source {source}: depopulation eval failed at ({i}, {j}): {e:?} — keeping instance"
                 ));
-                true
+                Some(false)
             }
-            None => true,
+            None => Some(false),
         }
     }
 }
@@ -513,23 +533,32 @@ fn mask_ast(depopulation: Option<&GridDepopulation>) -> Result<Option<ExprNode>,
         .map_err(SketchError::Expr)
 }
 
-struct Slot {
-    i: usize,
-    j: usize,
+pub(crate) struct Slot {
+    pub i: usize,
+    pub j: usize,
     flat: u64,
-    place: Place,
+    pub place: Place,
+    /// Held back by the suppression list (only kept by a walk
+    /// [`Walk::keeping_listed`]).
+    pub listed: bool,
 }
 
 impl Slot {
-    fn new(i: usize, j: usize, flat: u64, place: Place) -> Self {
-        Self { i, j, flat, place }
+    fn new(i: usize, j: usize, flat: u64, place: Place, listed: bool) -> Self {
+        Self {
+            i,
+            j,
+            flat,
+            place,
+            listed,
+        }
     }
 }
 
-struct Walked {
-    slots: Vec<Slot>,
+pub(crate) struct Walked {
+    pub slots: Vec<Slot>,
     /// Every slot of the layout, suppressed ones included.
-    count: u64,
+    pub count: u64,
     nx: Option<usize>,
 }
 
