@@ -360,7 +360,8 @@ impl Signex {
                 && let Some(group) = group
             {
                 // Discarded, not undone: an undo would leave the half run on
-                // the redo stack for Ctrl+Y to bring back.
+                // the redo stack for Ctrl+Y to bring back. No library drift
+                // check: a take-back of the same call is not a Step.
                 match engine.discard_undo_group_top(group) {
                     Ok(Some(_)) => {}
                     // The run is still in the sheet: it must stay dirty.

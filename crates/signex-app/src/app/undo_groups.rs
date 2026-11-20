@@ -330,6 +330,10 @@ impl Signex {
                 StepDirection::Undo => engine.undo(),
                 StepDirection::Redo => engine.redo(),
             };
+            if matches!(result, Ok(Some(_))) {
+                // Undo/redo can bring back an older embedded library symbol.
+                self.library.drift.check_pending = true;
+            }
             match result {
                 Ok(Some(patch_pair)) if *path == active_path => {
                     active_patch = Some(patch_pair.document);
@@ -464,6 +468,8 @@ impl Signex {
             match if undo { engine.undo() } else { engine.redo() } {
                 Ok(Some(pair)) => {
                     moved.push(path.clone());
+                    // Undo/redo can bring back an older embedded library symbol.
+                    self.library.drift.check_pending = true;
                     if active.as_ref() == Some(path) {
                         active_patch = Some(pair.document);
                     } else {
