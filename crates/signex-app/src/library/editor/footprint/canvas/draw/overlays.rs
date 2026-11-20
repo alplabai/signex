@@ -39,7 +39,7 @@ impl FootprintCanvas<'_> {
             let p = cstate.world_to_screen((cx, cy));
             let half = 7.0_f32;
             let arm = 4.5_f32;
-            let ink = CursorInk::for_sketch_on(self.bg_color);
+            let ink = CursorInk::sketch();
             let square_path = Path::rectangle(
                 Point::new(p.x - half, p.y - half),
                 iced::Size::new(half * 2.0, half * 2.0),
@@ -80,7 +80,7 @@ impl FootprintCanvas<'_> {
             && let Some(p) = cursor_screen
         {
             let arm = 5.0_f32;
-            let ink = CursorInk::for_sketch_on(self.bg_color);
+            let ink = CursorInk::sketch();
             let stroke = Stroke::default().with_width(1.0).with_color(ink.mark);
 
             // Hit-test the cursor against sketch Lines to find the one
@@ -325,7 +325,7 @@ impl FootprintCanvas<'_> {
             // The badge's words name the snap target (mockup row 188).
             super::sketch::draw_sketch_snap_badge(frame, cstate, sketch, self.state);
         }
-        // mockup 190 — the bake preview, over the sketch it faints.
+        // mockup row 190 — the bake preview, over the sketch it faints.
         self.draw_bake_preview(frame, cstate);
     }
 }

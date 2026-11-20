@@ -1,4 +1,4 @@
-//! The bake preview on the canvas (mockup 190): while Bake preview is open, what
+//! The bake preview on the canvas (mockup row 190): while Bake preview is open, what
 //! Bake writes, drawn in its layer colours, with the sketch faint on top. A
 //! veil in the ground colour pushes back what is under it. A board draws its
 //! bake (outline, cutouts, mounting holes, keepouts, V-scores) in the board
@@ -87,7 +87,7 @@ impl FootprintCanvas<'_> {
             }
             SketchHost::Footprint => self.draw_footprint_bake(frame, cstate, sketch),
         }
-        let ink = CursorInk::for_sketch_on(self.bg_color).mark;
+        let ink = CursorInk::sketch().mark;
         draw_faint_sketch(
             frame,
             cstate,
@@ -259,7 +259,7 @@ fn draw_board_bake(frame: &mut canvas::Frame, cstate: &FootprintCanvasState, bak
 /// The pours, mechanical drawings and component anchors of a board bake
 /// (decision 2): pours filled in their copper colour, drawings in their
 /// mechanical layer's colour, an anchor as a cross in a ring with the
-/// component's designator (mockup 179). A slot is a cutout and is drawn
+/// component's designator (mockup row 179). A slot is a cutout and is drawn
 /// with them.
 fn draw_board_items(
     frame: &mut canvas::Frame,

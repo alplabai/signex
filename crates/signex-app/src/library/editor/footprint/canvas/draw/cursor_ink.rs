@@ -23,10 +23,10 @@ const LIGHT_INK: CursorInk = CursorInk {
 };
 
 impl CursorInk {
-    /// The ink of sketch mode on a canvas whose background colour is
-    /// `_bg`: sketch mode paints the board ground whatever the canvas
-    /// colour (see `background::draw_backdrop`), so the ink is the board's.
-    pub(in crate::library::editor::footprint::canvas) fn for_sketch_on(_bg: Color) -> Self {
+    /// The ink of sketch mode: it paints the board ground whatever the
+    /// canvas colour (see `background::draw_backdrop`), so the ink is the
+    /// board's.
+    pub(in crate::library::editor::footprint::canvas) fn sketch() -> Self {
         LIGHT_INK
     }
 }
@@ -51,17 +51,17 @@ mod tests {
     #[test]
     fn the_cursor_marks_read_on_the_board_ground() {
         let ground = board_look().bg;
-        let ink = CursorInk::for_sketch_on(ground);
+        let ink = CursorInk::sketch();
         assert!(contrast(ink.mark, ground) > 0.6, "{ink:?} on {ground:?}");
         assert!(contrast(ink.frame, ground) > 0.4, "{ink:?} on {ground:?}");
         assert!(contrast(ink.halo, ink.mark) > 0.6, "{ink:?}");
     }
 
-    /// Every other canvas colour paints sketch mode on the board ground
-    /// too (decision 7): the marks stay light.
+    /// Every theme paints sketch mode on the board ground (Caner
+    /// 2026-11-20, decision 7): the marks stay light.
     #[test]
     fn the_cursor_marks_read_on_the_board_ground_on_every_theme() {
-        let ink = CursorInk::for_sketch_on(Color::BLACK);
+        let ink = CursorInk::sketch();
         assert_eq!(ink, LIGHT_INK);
         assert!(contrast(ink.mark, board_look().bg) > 0.6);
     }
