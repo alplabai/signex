@@ -218,3 +218,33 @@ pub(super) fn waived_group<'a>(ctx: &'a PanelContext, has_findings: bool) -> Ele
     }
     col.boxed()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::place_text;
+
+    /// A finding's place is the sheet's file name and the point to two
+    /// decimals, on one line: no folder, whatever folder the sheet is in.
+    #[test]
+    fn a_finding_location_is_the_file_name_and_the_point_on_one_line() {
+        let (mut app, _boot) = crate::app::Signex::new();
+        let path = std::path::PathBuf::from("w").join("sub").join("top.snxsch");
+        let finding = signex_erc::Violation::new(
+            signex_erc::RuleId::builtin(signex_erc::RuleKind::UnusedPin),
+            signex_erc::RuleKind::UnusedPin,
+            signex_erc::Severity::Warning,
+            "finding",
+            signex_types::schematic::Point::new(12.346, -6.0),
+        );
+        app.ui_state
+            .erc_violations_by_path
+            .insert(path, vec![finding]);
+        let entries = app.build_erc_diagnostic_entries();
+        let i18n = signex_i18n::I18n::en_us();
+        let label = place_text(&i18n, &entries[0])
+            .to_string()
+            .replace(['\u{2068}', '\u{2069}'], "");
+        assert_eq!(label, "top.snxsch · 12.35, -6.00");
+        assert!(!label.contains('/') && !label.contains('\\') && !label.contains('\n'));
+    }
+}
