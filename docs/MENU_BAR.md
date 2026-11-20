@@ -48,8 +48,10 @@ the id back to that name.
 
 A header is a small caption over a group of rows, such as BUILT-IN and YOUR
 LAYOUTS in [View ▸ Window ▸ Layouts](#window-layouts). It is not a command
-row and not a greyed row (maintainer decision 2026-11-20). In the model it is
-a row in the `ItemState::Header` state, built by `header()` in
+row and not a greyed row (maintainer decision, Caner, 2026-11-20). In the
+model it is a `MenuItem` in the `ItemState::Header` state, not a `MenuEntry`
+variant of its own (`MenuEntry` stays `Item`, `Submenu`, `Separator`), built
+by `header()` in
 `model/items.rs`, with catalog text, no command, no shortcut and no check
 mark. `MenuItem::is_header()` says which rows are headers.
 
