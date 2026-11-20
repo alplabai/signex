@@ -22,8 +22,9 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 use crate::app::handlers::modal_sizing::TRACK_LIST_MAX_HEIGHT;
 
-/// Side of a row's checkbox.
-const ROW_CHECKBOX: f32 = 14.0;
+/// Side of a row's checkbox: the title step, the mock's 14 px at the 12 px
+/// body (14.2), following the base size.
+const ROW_CHECKBOX: f32 = TS.title;
 /// Gap between an option's control and its text.
 const OPTION_GAP: f32 = 8.0;
 
