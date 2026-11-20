@@ -560,6 +560,7 @@ impl Signex {
                 // OK button: resume placement but keep pre_placement so the
                 // next click uses the values the user just edited.
                 self.interaction_state.active_canvas_mut().placement_paused = false;
+                self.interaction_state.end_sheet_placement_pause();
             }
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;

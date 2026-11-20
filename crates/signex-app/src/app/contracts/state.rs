@@ -139,6 +139,8 @@ pub struct SelectionFilterCustomState {
     pub regions: bool,
     pub fills: bool,
     pub other: bool,
+    /// The name Apply saves the filter under as a preset; blank = "Filter N".
+    pub preset_name: String,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's

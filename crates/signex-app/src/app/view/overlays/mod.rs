@@ -31,7 +31,9 @@ mod net_hover;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;
+mod placement_paused;
 pub(super) mod read_only_badge;
+mod text_edit;
 #[cfg(test)]
 mod window_gate_tests;
 mod zoom_pill;
