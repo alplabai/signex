@@ -42,6 +42,7 @@ define_ids! {
     FIND_SIMILAR_SCOPE_PROJECT = "find-similar-scope-project";
     FIND_SIMILAR_FOOTER = "find-similar-footer";
     FIND_SIMILAR_SEED = "find-similar-seed";
+    FIND_SIMILAR_PART = "find-similar-part";
     PASTE_ARRAY_TITLE = "paste-array-title";
     PASTE_ARRAY_COPIES = "paste-array-copies";
     PASTE_ARRAY_X_SPACING = "paste-array-x-spacing";

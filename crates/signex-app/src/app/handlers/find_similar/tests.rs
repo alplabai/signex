@@ -9,6 +9,11 @@ use super::*;
 use crate::app::{TabInfo, TabKind};
 use crate::find_similar::{FindSimilarMsg, SimilarScope};
 
+/// The seed line as the dialog shows it in en-US.
+fn shown(seed_label: &str) -> String {
+    crate::find_similar::shown_seed(seed_label, &signex_i18n::I18n::en_us())
+}
+
 fn part(reference: &str, value: &str, x: f64) -> Symbol {
     Symbol {
         uuid: Uuid::now_v7(),
@@ -109,7 +114,7 @@ fn ok_selects_every_match_on_the_sheet_and_closes_the_dialog() {
 
     let _ = app.update(find_similar_msg(FindSimilarMsg::OpenRequested { at: None }));
     let state = app.ui_state.find_similar.as_ref().expect("dialog opened");
-    assert_eq!(state.seed_label, "Part R1");
+    assert_eq!(shown(&state.seed_label), "Part R1");
     assert_eq!(state.scope, SimilarScope::Sheet);
     // Kind is Same by default: every part matches, the wire does not.
     assert_eq!(state.sheet_matches, 3, "Select 3");
@@ -200,7 +205,7 @@ fn the_object_under_the_cursor_seeds_the_dialog() {
         at: Some((5.0, 20.0)),
     }));
     let state = app.ui_state.find_similar.as_ref().expect("dialog opened");
-    assert_eq!(state.seed_label, "Wire");
+    assert_eq!(shown(&state.seed_label), "Wire");
     let _ = app.update(find_similar_msg(FindSimilarMsg::ApplyPressed));
     assert_eq!(selected_ids(&app).len(), 2, "both wires match on kind");
     assert!(selected_ids(&app).contains(&hovered.uuid));

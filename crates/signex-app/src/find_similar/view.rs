@@ -1,7 +1,7 @@
 //! The Find Similar Objects card (#2526): the seed's properties with a Same /
 //! Any choice each, the scope, the live counts and Select N.
 
-use super::state::shown_kind;
+use super::state::{shown_kind, shown_seed};
 use super::{FindSimilarMsg, FindSimilarState, SimilarScope};
 use iced::widget::{Column, Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Font, Length, Theme, Widget};
@@ -57,10 +57,10 @@ pub(super) fn shown_value(value: &str) -> ShownValue {
 }
 
 /// The value a row shows: a Kind reads with the dialog's kind names.
-fn row_value(v: &SimilarValue) -> &str {
+fn row_value(v: &SimilarValue, i18n: &I18n) -> String {
     match v.property {
-        signex_engine::SimilarProperty::Kind => shown_kind(&v.value),
-        _ => &v.value,
+        signex_engine::SimilarProperty::Kind => shown_kind(&v.value, i18n),
+        _ => v.value.clone(),
     }
 }
 
@@ -142,7 +142,7 @@ fn property_row<'a>(
             .size(TS.body)
             .color(ti(tokens.text))
             .width(PROPERTY_W),
-        container(value_cell(row_value(v), tokens, i18n)).width(Length::Fill),
+        container(value_cell(&row_value(v, i18n), tokens, i18n)).width(Length::Fill),
         container(choice).width(MATCH_W),
     ]
     .align_y(Alignment::Center)
@@ -269,8 +269,9 @@ pub fn view<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, FindSimilarMsg> {
-    // The seed is named by the selection handler, in English (#2061).
-    let seed = t!(i18n, ids::FIND_SIMILAR_SEED, "seed" => state.seed_label.as_str());
+    // The rest of the seed is named by the selection handler, in English (#2061).
+    let seed_text = shown_seed(&state.seed_label, i18n);
+    let seed = t!(i18n, ids::FIND_SIMILAR_SEED, "seed" => seed_text.as_str());
     let header = crate::app::view::dialogs::graphite_header(
         t!(i18n, ids::FIND_SIMILAR_TITLE).into_string(),
         Some(seed.into_string()),
@@ -382,16 +383,18 @@ mod tests {
         assert_eq!(state.criteria().len(), 1);
         assert_eq!(state.criteria()[0].property, SimilarProperty::Kind);
         assert_eq!(state.scope, SimilarScope::Sheet);
-        assert_eq!(state.seed_label, "Part R1");
+        let en = I18n::en_us();
+        let seed = shown_seed(&state.seed_label, &en);
+        assert_eq!(seed, "Part R1");
         assert_eq!(
-            I18n::en_us().message_plain(
+            en.message_plain(
                 ids::FIND_SIMILAR_SEED,
-                &[("seed", Arg::from(state.seed_label.as_str()))]
+                &[("seed", Arg::from(seed.as_str()))]
             ),
             "Seed: Part R1"
         );
         // The Kind cell reads Part; matching keeps the engine's value.
-        assert_eq!(row_value(&state.values[0]), "Part");
+        assert_eq!(row_value(&state.values[0], &en), "Part");
         assert_eq!(state.criteria()[0].value, "Symbol");
     }
 

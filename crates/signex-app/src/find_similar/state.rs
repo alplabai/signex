@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use signex_engine::{SimilarProperty, SimilarValue};
+use signex_i18n::{I18n, ids, t};
 
 /// How far a Find Similar search reaches.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -14,35 +15,35 @@ pub enum SimilarScope {
     Project,
 }
 
-/// The engine's kind name of a placed part; the dialog says [`PART_NOUN`].
+/// The engine's kind name of a placed part; the dialog names it with the
+/// catalog's part noun.
 const ENGINE_PART_KIND: &str = "Symbol";
-/// The one user-facing noun for a placed part.
-const PART_NOUN: &str = "Part";
 
 /// The kind name the dialog shows for an engine kind value: a placed part is
 /// a Part; every other kind reads as the engine names it. Matching still
 /// compares the engine's values.
-pub fn shown_kind(kind: &str) -> &str {
+pub fn shown_kind(kind: &str, i18n: &I18n) -> String {
     if kind == ENGINE_PART_KIND {
-        PART_NOUN
+        t!(i18n, ids::FIND_SIMILAR_PART).into_string()
     } else {
-        kind
+        kind.to_owned()
     }
 }
 
 /// The seed line for an engine description (`Symbol R1`): its leading kind
 /// word as the dialog shows it (`Part R1`).
-pub fn shown_seed(described: &str) -> String {
+pub fn shown_seed(described: &str, i18n: &I18n) -> String {
     match described.split_once(' ') {
-        Some((kind, rest)) => format!("{} {rest}", shown_kind(kind)),
-        None => shown_kind(described).to_owned(),
+        Some((kind, rest)) => format!("{} {rest}", shown_kind(kind, i18n)),
+        None => shown_kind(described, i18n),
     }
 }
 
 /// The open dialog: the seed's properties, which must match, and where to look.
 #[derive(Debug, Clone)]
 pub struct FindSimilarState {
-    /// `Part R1`: what the seed is, for the header's subtitle.
+    /// The engine's description of the seed (`Symbol R1`); the header shows
+    /// it through [`shown_seed`].
     pub seed_label: String,
     /// The seed's properties, `Kind` first.
     pub values: Vec<SimilarValue>,
@@ -66,14 +67,14 @@ pub struct FindSimilarState {
 
 impl FindSimilarState {
     /// A fresh dialog for a seed: only `Kind` is Same, as the rest start Any.
-    /// The seed label is kept with the dialog's kind names.
+    /// The seed label is the engine's description.
     pub fn new(
         seed_label: String,
         values: Vec<SimilarValue>,
         origin: Option<std::path::PathBuf>,
     ) -> Self {
         Self {
-            seed_label: shown_seed(&seed_label),
+            seed_label,
             values,
             same: BTreeSet::from([SimilarProperty::Kind]),
             scope: SimilarScope::Sheet,
@@ -148,12 +149,13 @@ mod tests {
 
     #[test]
     fn a_placed_part_reads_as_a_part_and_other_kinds_as_named() {
-        assert_eq!(shown_kind("Symbol"), "Part");
-        assert_eq!(shown_kind("Wire"), "Wire");
-        assert_eq!(shown_seed("Symbol R3"), "Part R3");
-        assert_eq!(shown_seed("Symbol"), "Part");
-        assert_eq!(shown_seed("Label VCC"), "Label VCC");
-        assert_eq!(shown_seed("Bus entry"), "Bus entry");
+        let en = I18n::en_us();
+        assert_eq!(shown_kind("Symbol", &en), "Part");
+        assert_eq!(shown_kind("Wire", &en), "Wire");
+        assert_eq!(shown_seed("Symbol R3", &en), "Part R3");
+        assert_eq!(shown_seed("Symbol", &en), "Part");
+        assert_eq!(shown_seed("Label VCC", &en), "Label VCC");
+        assert_eq!(shown_seed("Bus entry", &en), "Bus entry");
     }
 
     #[test]

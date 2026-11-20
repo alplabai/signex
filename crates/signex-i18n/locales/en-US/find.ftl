@@ -64,6 +64,8 @@ find-similar-footer = Selects every match. Matches on other sheets are only coun
 # $seed names the object the search starts from, such as "Part R1", in
 # English.
 find-similar-seed = Seed: { $seed }
+# The kind name of a placed part, in the Kind cell and the seed line.
+find-similar-part = Part
 
 ## Paste Array
 paste-array-title = Paste Array
