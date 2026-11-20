@@ -321,14 +321,7 @@ impl FootprintCanvas<'_> {
             // v0.22 Phase A6 — Inferred-constraint snap glyph on top.
             draw_sketch_snap_glyph(frame, cstate, self.state);
             // Values on the drawing, pattern glyphs, conflict badge (#187).
-            draw_sketch_values(
-                frame,
-                cstate,
-                sketch,
-                self.state,
-                self.bg_color,
-                conflict_colour,
-            );
+            draw_sketch_values(frame, cstate, sketch, self.state, conflict_colour);
             // The badge's words name the snap target (mockup #188).
             super::sketch::draw_sketch_snap_badge(frame, cstate, sketch, self.state);
         }

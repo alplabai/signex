@@ -7,7 +7,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle};
 
 use super::super::{FootprintCanvas, FootprintCanvasState};
-use super::graphite::{dot_step_px, look_from_bg};
+use super::graphite::{board_look, dot_step_px, look_from_bg};
 use super::grid::{draw_grid, draw_grid_dots};
 use crate::library::editor::footprint::state::{
     EditorMode, GridDisplay as Gd, GuideAxis, SnapOptions,
@@ -28,7 +28,8 @@ pub(crate) const BACKDROP_GRID: Color = Color {
 pub(crate) struct BackdropLook<'a> {
     pub bg: Color,
     pub grid: Color,
-    /// Sketch mode flips to a white canvas + single mid-grey grid.
+    /// Sketch mode paints the board ground on every theme (decision 7,
+    /// Caner 2026-11-20).
     pub sketch: bool,
     pub snap: &'a SnapOptions,
 }
@@ -40,25 +41,16 @@ pub(crate) fn draw_backdrop(
     bounds: Rectangle,
     look: BackdropLook<'_>,
 ) {
-    if let Some(g) = look_from_bg(look.bg) {
+    if let Some(g) = look_from_bg(look.bg).or_else(|| look.sketch.then(board_look)) {
         draw_graphite_backdrop(frame, cam, bounds, g, look.snap);
         return;
     }
-    let bg = if look.sketch { Color::WHITE } else { look.bg };
-    let grid = if look.sketch {
-        Color::from_rgba(0.55, 0.55, 0.55, 1.0)
-    } else {
-        look.grid
-    };
-    frame.fill_rectangle(Point::ORIGIN, bounds.size(), bg);
+    let grid = look.grid;
+    frame.fill_rectangle(Point::ORIGIN, bounds.size(), look.bg);
 
     let fine_step = (look.snap.grid_step_mm as f32) * cam.scale;
     let coarse_step = fine_step * look.snap.coarse_multiplier.max(1) as f32;
-    let (fine_alpha, coarse_alpha) = if look.sketch {
-        (0.50, 0.55)
-    } else {
-        (0.10, 0.30)
-    };
+    let (fine_alpha, coarse_alpha) = (0.10, 0.30);
     // Fine pass only when each cell is at least 6 px wide.
     if fine_step >= 6.0 {
         let color = Color {
@@ -68,8 +60,7 @@ pub(crate) fn draw_backdrop(
         let style = look.snap.fine_grid_display;
         paint_grid(frame, bounds, cam.offset, fine_step, color, style);
     }
-    // Sketch mode shows only the fine grid.
-    if !look.sketch && coarse_step >= 8.0 {
+    if coarse_step >= 8.0 {
         let color = Color {
             a: coarse_alpha,
             ..grid
@@ -114,14 +105,9 @@ fn paint_grid(
     }
 }
 
-/// Origin crosshair: yellow on the dark canvas, slate on the sketch canvas.
-pub(crate) fn draw_origin(frame: &mut canvas::Frame, cam: &FootprintCanvasState, sketch: bool) {
-    let color = if sketch {
-        Color::from_rgba(0.20, 0.25, 0.32, 0.85)
-    } else {
-        Color::from_rgba(1.0, 0.95, 0.30, 0.85)
-    };
-    draw_origin_in(frame, cam, color);
+/// Origin crosshair: yellow on the black pads canvas.
+pub(crate) fn draw_origin(frame: &mut canvas::Frame, cam: &FootprintCanvasState) {
+    draw_origin_in(frame, cam, Color::from_rgba(1.0, 0.95, 0.30, 0.85));
 }
 
 /// Origin crosshair in an explicit colour.
@@ -209,7 +195,8 @@ impl FootprintCanvas<'_> {
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
-        if let Some(g) = look_from_bg(self.bg_color) {
+        let sketch = matches!(self.state.mode, EditorMode::Sketch);
+        if let Some(g) = look_from_bg(self.bg_color).or_else(|| sketch.then(board_look)) {
             draw_origin_in(
                 frame,
                 cstate,
@@ -220,6 +207,6 @@ impl FootprintCanvas<'_> {
             );
             return;
         }
-        draw_origin(frame, cstate, matches!(self.state.mode, EditorMode::Sketch));
+        draw_origin(frame, cstate);
     }
 }

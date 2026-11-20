@@ -27,6 +27,8 @@ mod tool_ghosts;
 mod conflict_badge;
 mod dimension_labels;
 mod pattern_glyphs;
+// The sketch palette on the board ground (#187, #188).
+mod sketch_ink;
 
 /// The colour of selected sketch geometry, and of what draws as selected
 /// with it: the pad-link profile and the accent of a value on the drawing.
