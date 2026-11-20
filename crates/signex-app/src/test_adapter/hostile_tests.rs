@@ -45,10 +45,10 @@ const KNOWN_HANGS: &[(&str, &str)] = &[];
 const DELIVER_LIMIT: Duration = Duration::from_secs(5);
 
 /// Per kind, a floor under the junk calls that reached a handler: about half
-/// of what trunk reached when this landed (point 140, angle 12, turn 3,
-/// text 739, path 32, bool 29, color 4, document 65, length 0). The only
-/// length operand, `stitch_vias pitch`, needs a net in the area, which the
-/// fixture board has not, so its floor is 0.
+/// of what trunk reached when this landed (point 141, angle 12, turn 3,
+/// text 752, path 32, bool 29, color 4, document 65, length 2). The only
+/// length operand, `stitch_vias pitch`, reaches its handler through the
+/// fixture board's net `GND`.
 const MIN_REACHED: &[(OperandKind, usize)] = &[
     (OperandKind::Point, 70),
     (OperandKind::Angle, 6),
@@ -58,7 +58,7 @@ const MIN_REACHED: &[(OperandKind, usize)] = &[
     (OperandKind::Bool, 14),
     (OperandKind::Color, 2),
     (OperandKind::Document, 32),
-    (OperandKind::Length, 0),
+    (OperandKind::Length, 1),
 ];
 
 /// The open project's sheet and board.
@@ -169,7 +169,11 @@ fn board_text() -> String {
         outline: vec![],
         layers: vec![],
         setup: None,
-        nets: vec![],
+        // A net the area tools (stitch_vias) can name.
+        nets: vec![signex_types::pcb::NetDef {
+            number: 1,
+            name: "GND".into(),
+        }],
         footprints: vec![],
         segments: vec![],
         vias: vec![],
@@ -183,15 +187,17 @@ fn board_text() -> String {
         .expect("encode the board")
 }
 
-/// Optional operands given a valid value on every call: the document, and
-/// the area `start` / `end` a board tool needs without a zone `id`.
-const ALWAYS_GIVEN: &[&str] = &["document", "start", "end"];
+/// Optional operands given a valid value on every call: the document, the
+/// area `start` / `end` a board tool needs without a zone `id`, and the net
+/// it acts on.
+const ALWAYS_GIVEN: &[&str] = &["document", "start", "end", "net"];
 
 /// A valid value for `op` in the fixture: what its name needs (a board
-/// layer, an area corner), else the form of its kind.
+/// layer, an area corner, the board's net), else the form of its kind.
 fn valid_for(op: &Operand, document: &Path) -> String {
     match op.name {
         "layer" => "TopCopper".into(),
+        "net" => "GND".into(),
         "start" => "0,0".into(),
         "end" => "20.32,20.32".into(),
         _ => valid(op.kind, document),
