@@ -257,3 +257,10 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
   copper of that net. It reads no board area today, so the outline does not
   affect it.
 - A corpus golden for a board with a sketch (`SIGNEX_BLESS_CORPUS=1`).
+
+## Values, menus and patterns on the drawing
+
+The board sketch shares the footprint sketch's values on the drawing, its
+constraint and pattern menus, pattern glyphs, instance suppression and
+conflict badge, on the same canvas and the same code
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#values-on-the-drawing)).

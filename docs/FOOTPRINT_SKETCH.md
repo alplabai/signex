@@ -118,3 +118,72 @@ reads **Bake preview · Discard changes · Bake**:
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.
+
+## Values on the drawing {#values-on-the-drawing}
+
+Every dimension constraint (Distance, Distance to line, Distance to circle,
+Angle) draws its value where its letter glyph used to be, in a small label:
+`name · value` when its target is exactly one parameter (`pitch · 0.65 mm`),
+else the evaluated value with its unit (`0.70 mm`, `90°`). Constraints
+that are not dimensions keep their letters. One layout
+(`canvas/glyph_layout.rs`) places every glyph, value and pattern glyph; the
+draw pass and the hit test both read it, so a click lands on what is
+drawn.
+
+With the Select tool, a click on a value opens it for editing on the
+drawing, starting from its expression or number (degrees for an angle).
+Enter writes it through the same path as every sketch edit: one undo step,
+then a solve; a value that over-constrains the sketch is reverted and its
+conflict named, leaving no undo step. A plain number is stored as a
+number, anything else as an expression, kept only when it evaluates; text
+that does not read keeps the field open with a red outline. Esc, or a click
+elsewhere on the canvas, cancels. The dimension input in the Active Bar
+stays.
+
+The words the canvas draws (units, pattern letters, the conflict badge,
+the snap badges) come from the app's language: the app renders them into
+the editor state (`state/canvas_text.rs`) when the editor opens and after
+a language change, because a canvas cannot read the catalog.
+
+## Constraint menu {#constraint-menu}
+
+A right-click on a constraint's glyph or value (Select tool) opens one
+menu at the click: Edit value, Make parameter and Convert to reference
+(dimensions only), Suppress, Select constrained entities, Show conflicts
+(only when the constraint is in a conflict; it selects every entity of the
+conflict) and Delete. Make parameter hands the dimension to the sketch
+parameters table, and is greyed when the value already is a parameter.
+Convert to reference and Suppress are greyed with a tooltip that says why:
+the sketch file cannot store a driven dimension or a suppressed constraint
+yet (see `DECISIONS.md`). Esc closes the menu first. A right-click anywhere
+else keeps its behaviour: it cancels a tool, pans, or opens the footprint
+context menu.
+
+## Patterns on the drawing {#patterns-on-the-drawing}
+
+Each pattern draws a glyph by its source, like a constraint: `L×4`
+(linear), `G×3×4` (rectangular, columns by rows), `P×8` (circular). A
+click on it selects the pattern (a second click, or Esc, drops it); a
+right-click opens its menu: one Edit row per value (count, or columns and
+rows; X and Y spacing; the sweep of a circular pattern) and Delete pattern,
+which keeps the source.
+
+A selected pattern shows its values under its glyph (`count = rows · 4`,
+`spacing X · 0.65 mm`); they edit on the drawing like a dimension and
+write the pattern's expression as typed.
+
+While a rectangular or circular pattern is selected, each of its instance
+slots draws a ring; a click suppresses that instance (one undo step) and a
+second click brings it back. The suppression list is the one the
+Properties pattern form ticks, kept by one helper on the array type
+(`ArrayKind::set_instance_suppressed`). A linear pattern has no
+suppression list, so its instances do not toggle. The source's own slot is
+not offered: it is the source pad.
+
+## Conflicts {#conflicts}
+
+An over-constrained sketch draws no card over the drawing (decision
+fp-15): a compact red badge next to the conflicting dimension, or the
+first conflicting glyph, counts the conflicts and points to Properties
+(`1 conflict · see Properties`). In Properties, each conflict row has a
+Remove button that deletes that constraint in one undo step, then solves.
