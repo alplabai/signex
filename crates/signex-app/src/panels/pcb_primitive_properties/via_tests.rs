@@ -94,15 +94,15 @@ fn header(ctx: &PanelContext, count: usize) -> String {
 fn a_microvia_type_adds_the_greyed_microvia_row_to_the_not_stored_yet_group() {
     let ctx = context();
     let micro = via(ViaType::Micro, true);
-    let texts = texts(&ctx, &micro);
-    assert_eq!(texts.first(), Some(&header(&ctx, 5)), "{texts:?}");
+    let shown = texts(&ctx, &micro);
+    assert_eq!(shown.first(), Some(&header(&ctx, 5)), "{shown:?}");
     for id in [
         ids::PCB_PRIM_MICROVIA,
         ids::PCB_PRIM_MICROVIA_STACKED,
         ids::PCB_PRIM_MICROVIA_STAGGERED,
     ] {
         let wanted = said(&ctx, id);
-        assert!(texts.contains(&wanted), "{wanted} in {texts:?}");
+        assert!(shown.contains(&wanted), "{wanted} in {shown:?}");
     }
     for id in [
         ids::PCB_PRIM_MICROVIA_STACKED,
