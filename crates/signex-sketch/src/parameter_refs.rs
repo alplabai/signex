@@ -435,11 +435,11 @@ macro_rules! expression_walker {
                     visit_some!(visit, site(AttributeField::PourClearance), clearance_expr);
                     visit_some!(visit, site(AttributeField::PourMinThickness), min_thickness_expr);
                 }
-                if let Some(BoardCutoutAttr { edge_radius_expr, through: _ }) = board_cutout {
-                    visit_some!(visit, site(AttributeField::CutoutEdgeRadius), edge_radius_expr);
+                if let Some(BoardCutoutAttr { edge_radius_expr: Some(source), through: _ }) = board_cutout {
+                    visit(site(AttributeField::CutoutEdgeRadius), source);
                 }
-                if let Some(MountingHoleAttr { drill_expr, plated: _, net: _ }) = mounting_hole {
-                    visit_some!(visit, site(AttributeField::MountingHoleDrill), drill_expr);
+                if let Some(MountingHoleAttr { drill_expr: Some(source), plated: _, net: _ }) = mounting_hole {
+                    visit(site(AttributeField::MountingHoleDrill), source);
                 }
                 if let Some(VScoreHintAttr { depth_fraction_expr, min_web_expr, side: _ }) = v_score {
                     visit(site(AttributeField::VScoreDepth), depth_fraction_expr);
