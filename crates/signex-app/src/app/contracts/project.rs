@@ -137,7 +137,7 @@ pub enum FileMsg {
     },
     /// The Save As dialog opened from the File Changed on Disk card returned
     /// `picked` (a `SaveAs` or `SavePrimitiveAs`); a pick onto `conflicted`
-    /// itself is refused (GG-08). `same_on_disk`: the two resolve to one file
+    /// itself is refused (mockup row 11). `same_on_disk`: the two resolve to one file
     /// once links are followed, read in the dialog Task.
     DiskConflictSaveAsPicked {
         conflicted: PathBuf,

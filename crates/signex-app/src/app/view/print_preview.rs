@@ -545,7 +545,7 @@ fn notice_choice_effects<'a>(
 
 /// The choices a notice offers after its leading Cancel (#1826). On File
 /// Changed on Disk both data-losing choices take the same danger outline and
-/// Save As…, which loses nothing, is the primary (GG-08); a board has no
+/// Save As…, which loses nothing, is the primary (mockup row 11); a board has no
 /// Save As, so its card has no primary.
 fn notice_choice_buttons<'a>(
     i18n: &I18n,

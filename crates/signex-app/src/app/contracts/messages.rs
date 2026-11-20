@@ -260,7 +260,7 @@ pub enum OverlayMsg {
     /// "Reload from disk" on the same card: replace the document with the file.
     DiskConflictReloadChosen,
     /// "Save As…" on the same card: write the document to a new file and
-    /// leave the changed one as it is (GG-08).
+    /// leave the changed one as it is (mockup row 11).
     DiskConflictSaveAsChosen,
     /// "Copy" on the error card: its heading, sentence and system part go to
     /// the clipboard.

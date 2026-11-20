@@ -245,7 +245,7 @@ impl Signex {
         Some(path)
     }
 
-    /// The user chose Save As… (GG-08): the document goes to a new file
+    /// The user chose Save As… (mockup row 11): the document goes to a new file
     /// through the regular Save As and the changed file is left as it is.
     /// The document stays modified until that Save As lands; a cancelled
     /// dialog writes nothing and the next save asks again.
