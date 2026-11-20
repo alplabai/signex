@@ -73,6 +73,11 @@ const MATERIALS: Materials = Materials {
     dielectric: Color::from_rgb(0.36, 0.35, 0.27),
 };
 
+/// The copper colour of the stack-up, which the card glyphs share.
+pub(super) const fn copper() -> Color {
+    MATERIALS.copper
+}
+
 fn bar<'a>(color: Color, height: f32) -> Element<'a, NewProjectMsg> {
     container(Space::new())
         .width(Length::Fixed(BAR_W))

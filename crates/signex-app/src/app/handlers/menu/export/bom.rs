@@ -16,6 +16,9 @@ impl Signex {
     pub(crate) fn handle_bom_preview_open(&mut self) -> Task<Message> {
         let anchor = self.document_state.active_path.clone();
         self.commit_drafts_in_scope_of(anchor.as_deref());
+        if let Some(anchor) = anchor.as_deref() {
+            self.report_part_field_issues_in_scope_of(anchor);
+        }
         if !self.document_state.has_active_engine() {
             log::warn!("BOM preview: no active schematic");
             return Task::none();

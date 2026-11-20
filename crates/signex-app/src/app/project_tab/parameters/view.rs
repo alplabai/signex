@@ -1,8 +1,11 @@
 //! Parameters section view (Graphite mockup m30): a filter, then one
 //! bordered list with a Title block and a Variables group. A value box is
 //! outlined only on hover or focus; a variable row shows its remove button
-//! on hover. Pure: reads the project and the tab state, emits
+//! on hover; an `=` expression value shows its result or error under its
+//! row (#1987). Pure: reads the project and the tab state, emits
 //! `ProjectTabMsg`s.
+
+use std::collections::BTreeMap;
 
 use iced::widget::{Column, Space, column, container, hover, row, text_input as input};
 use iced::{
@@ -10,6 +13,7 @@ use iced::{
 };
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
+use signex_types::variables::{FieldText, TextTable, classify, variable_text};
 use signex_widgets::{button, text, text_input};
 
 use super::rename::{RenameNote, problem_words, rename_note};
@@ -112,7 +116,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     ];
     section(
         ids::PROJECT_SECTION_PARAMETERS,
-        ids::PROJECT_PARAMETERS_HELP,
+        ids::PROJECT_PARAMETERS_HINT,
         body,
         i18n,
         tokens,
@@ -183,7 +187,8 @@ impl Rows<'_> {
         if title_block_open {
             let cells = shown.title_block.iter().map(|field| {
                 let value = parameters.get(field.key()).map_or("", String::as_str);
-                self.title_block_row(*field, value)
+                let line = self.title_block_row(*field, value);
+                self.evaluated(line, parameters, field.key())
             });
             list = push_separated(list, cells, look);
         }
@@ -207,7 +212,8 @@ impl Rows<'_> {
                     rename_note(parameters, name, text, refused)
                         .map(|note| self.note_words(note, name, text))
                 });
-                self.variable_row(name, typed, value, note)
+                let line = self.variable_row(name, typed, value, note);
+                self.evaluated(line, parameters, name)
             });
             list = push_separated(list, cells, look);
             list = list.push(hairline(look.line_soft));
@@ -290,13 +296,18 @@ impl Rows<'_> {
     fn title_block_row<'a>(&self, field: TitleBlockField, value: &str) -> Element<'a, Message> {
         let project_id = self.project_id;
         let key = field.key();
-        let value_box = self.inline_input(value, false).on_input(move |value| {
-            tab_message(ProjectTabMsg::ParameterEdited {
-                project_id,
-                name: key.to_string(),
-                value,
+        let value_box = self
+            .inline_input(value, false)
+            .on_input(move |value| {
+                tab_message(ProjectTabMsg::ParameterEdited {
+                    project_id,
+                    name: key.to_string(),
+                    value,
+                })
             })
-        });
+            .on_submit(tab_message(ProjectTabMsg::ParameterSubmitted {
+                project_id,
+            }));
         let name = container(
             text(t!(self.i18n, field_words(field)))
                 .size(TS.body)
@@ -314,6 +325,42 @@ impl Rows<'_> {
         .align_y(Alignment::Center)
         .height(METRICS.field);
         hover(line, wash(self.look, None)).boxed()
+    }
+
+    /// `line` with, under its value, what the parameter `name` evaluates to
+    /// or why it does not (#1987). A literal value shows as typed and adds
+    /// nothing.
+    fn evaluated<'a>(
+        &self,
+        line: Element<'a, Message>,
+        parameters: &BTreeMap<String, String>,
+        name: &str,
+    ) -> Element<'a, Message> {
+        let Some(stored) = parameters.get(name) else {
+            return line;
+        };
+        if let FieldText::Literal(_) = classify(stored) {
+            return line;
+        }
+        let Some(outcome) = variable_text(&TextTable(parameters), name) else {
+            return line;
+        };
+        let (words, ink) = match outcome {
+            Ok(value) => (
+                t!(self.i18n, ids::PROJECT_PARAMETER_SHOWS, "value" => value),
+                self.look.ink3,
+            ),
+            Err(error) => {
+                let error = error.to_string();
+                (
+                    t!(self.i18n, ids::PROJECT_PARAMETER_ERROR, "error" => error),
+                    self.look.err,
+                )
+            }
+        };
+        let note = container(text(words).size(TS.caption).color(ink))
+            .padding(Padding::ZERO.left(TS.body * NAME_EMS + SP.s).bottom(SP.xs));
+        column![line, note].boxed()
     }
 
     /// The words of a rename note and whether it is a refusal (error ink)
@@ -366,13 +413,18 @@ impl Rows<'_> {
                 project_id,
             }));
         let key = name.to_string();
-        let value_box = self.inline_input(value, false).on_input(move |value| {
-            tab_message(ProjectTabMsg::ParameterEdited {
-                project_id,
-                name: key.clone(),
-                value,
+        let value_box = self
+            .inline_input(value, false)
+            .on_input(move |value| {
+                tab_message(ProjectTabMsg::ParameterEdited {
+                    project_id,
+                    name: key.clone(),
+                    value,
+                })
             })
-        });
+            .on_submit(tab_message(ProjectTabMsg::ParameterSubmitted {
+                project_id,
+            }));
         let line = row![
             container(name_box)
                 .padding(Padding::ZERO.left(SP.s))

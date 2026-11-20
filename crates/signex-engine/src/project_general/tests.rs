@@ -449,19 +449,19 @@ fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
     };
     let mut data = project();
     let mut history = ProjectGeneralHistory::default();
-    let hobby = ProjectSetup::from_profile(SetupProfile::Hobby);
+    let advanced = ProjectSetup::from_profile(SetupProfile::Advanced);
     let hdi = ProjectSetup::from_profile(SetupProfile::Hdi);
-    assert!(history.apply(&mut data, pick(&hobby)));
+    assert!(history.apply(&mut data, pick(&advanced)));
     assert!(history.apply(&mut data, pick(&hdi)));
     assert!(history.undo(&mut data));
     assert_eq!(
         data.project_defaults,
-        hobby.defaults(),
-        "Ctrl+Z returns Hobby"
+        advanced.defaults(),
+        "Ctrl+Z returns Advanced"
     );
 
     // Typing in one rule field is one step; a pick after it is another.
-    let mut typed = hobby.clone();
+    let mut typed = advanced.clone();
     for clearance in [0.3, 0.31, 0.315] {
         typed.pcb.clearance_mm = clearance;
         history.apply(
@@ -479,7 +479,7 @@ fn each_project_setup_pick_is_its_own_step_and_typing_one_field_is_one() {
     assert!(history.undo(&mut data));
     assert_eq!(
         data.project_defaults,
-        hobby.defaults(),
+        advanced.defaults(),
         "the typing was one step"
     );
 }

@@ -15,6 +15,7 @@ use signex_types::theme::ThemeTokens;
 
 use super::super::look::{ButtonKind, Glyph, text_button};
 use super::super::table::{note, problem, section_with_action};
+use super::drafts::keys_of;
 use super::words::problem_words;
 use super::{RequirementsMsg, RequirementsTabState, message};
 use crate::app::Message;
@@ -108,10 +109,14 @@ pub(in crate::app::project_tab) fn view<'a>(
     } else if entries.is_empty() {
         body.push(note(t!(i18n, ids::REQUIREMENTS_EMPTY), tokens));
     }
-    for (index, entry) in entries.iter().enumerate() {
+    let keys = keys_of(entries);
+    let problem_at = tab.and_then(|tab| tab.problem_shown_at(entries));
+    for ((index, entry), key) in entries.iter().enumerate().zip(keys) {
         let card = card::Card {
             project_id,
             index,
+            key,
+            refused_here: problem_at == Some(index),
             tab,
             report,
             i18n,

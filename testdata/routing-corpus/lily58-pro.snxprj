@@ -1,0 +1,44 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "lily58-pro",
+  "net_classes": [
+    {
+      "clearance": 0.2,
+      "name": "GND",
+      "nets": [
+        "GND"
+      ],
+      "trace_width": 0.5,
+      "via_diameter": 0.4,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.2,
+      "name": "VCC",
+      "nets": [
+        "VCC"
+      ],
+      "trace_width": 0.5,
+      "via_diameter": 0.4,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.25,
+      "via_diameter": 0.4,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "lily58-pro.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

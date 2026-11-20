@@ -6,6 +6,35 @@ one undo step of the project's history (Ctrl+Z in the tab, or `undo
 document=<.snxprj>`). Storing ERC rules is a step of the project's rule
 history, which the ERC dialog and the Rules tab share.
 
+## Page tabs (#2523)
+
+The Project tab and the Rules tab are page tabs: document tabs that show one
+of a project's pages rather than a drawing. The later page kinds (Layer Stack
+Manager, Length Matching, Polygon Manager, BOM Studio, Export Job, Variant
+Manager, Design Notebook) join them. Two rules hold for every page tab, in
+`app/page_tab.rs`:
+
+- **Title.** `<project> — <page>`, for example `dcdc-buck — Rules` or
+  `sensor-node — Layer Stack`. The project part is the project's name (the
+  `.snxprj` file stem when the name is blank) and follows a project rename;
+  the page part is a catalog message, read in the current language. The tab
+  strip also shows the kind glyph and the close button.
+- **Dirty.** A page tab has no unsaved state of its own. It shows the accent
+  dot exactly when the file it saves into, its owner, has unsaved work: the
+  `.snxprj` for Project and Rules, the board for a Layer Stack tab. The
+  owner's path is the tab's path, so a page kind never adds a second dirty
+  source (#661).
+
+A shared page shell, `signex_widgets::doc_tab_shell`, is ready for page
+bodies; the Project and Rules tabs do not use it yet. It draws, from the top,
+a toolbar row (items from the left, wrapping when the tab is
+narrow, and an end group of totals or pills at the right), a strip of
+sub-tabs (the active one in the ink colour with an accent underline; a
+sub-tab may carry a tag such as "proposal" or a count), the body, and a
+footer with a status line and an optional note at the right. The shell holds
+no state: the caller passes the selected sub-tab and maps a press to its own
+message. The chrome catalog draws a sample of it.
+
 ## Sections (#1689-#1693)
 
 - **Parameters** (#1080) — the values every sheet inherits, in one list
@@ -16,7 +45,8 @@ history, which the ERC dialog and the Rules tab share.
   beside it counts all of them. A value box shows its outline on hover or
   focus; an empty value reads "Not set". A variable's name is edited in
   place: Enter renames it as one undo step, keeping its value. A name that
-  is blank, holds a control character, is a title-block key (`title`,
+  is blank, is not a variable name (letters, digits and `_`, not starting
+  with a digit, as Add requires, #1987), is a title-block key (`title`,
   `rev`, ...) or is already used (names are case-sensitive) is refused: the
   name stays in its box with the reason under the row and nothing changes.
   × on a hovered row removes the variable; Name and Add at the end of
@@ -110,8 +140,8 @@ requirement's id (read-only; `project_set_requirement` with `field=id`
 changes it), a one-line summary of its values, the outcome pill, Remove and
 an expand button. A passed card is closed to that row and every other
 card is open; a card holding a typed value or a refusal stays open. The
-expand button flips a card; the flip is forgotten when an add or a remove
-moves the list. An open card shows the severity, Allow warnings and the
+expand button flips a card; the flip follows its entry through an add or a
+remove of another, like a typed value, and goes with a removed entry. An open card shows the severity, Allow warnings and the
 kind's fields three to a row with the caption above each, then each finding
 of the last run with its measured values. A field box commits on Enter; a
 value that is not valid (a length or cost that is no number above 0, a count

@@ -27,7 +27,7 @@ project-move-down = Move down
 
 # Parameters section (#30): the filter, the Title block and Variables groups,
 # and renaming a variable in place.
-project-parameters-help = Every sheet inherits these; a sheet's own Title Block value overrides one.
+project-parameters-hint = Every sheet inherits these; a sheet's own Title Block value or sheet variable overrides one. A value starting with = is an expression, such as = VCC / 2. Press Enter in a value to check it.
 project-parameters-filter = Filter parameters
 project-parameters-totals = { $title_block } title block · { $variables ->
     [one] 1 variable
@@ -49,10 +49,16 @@ project-parameters-field-drawn-by = Drawn By
 project-parameters-field-checked-by = Checked By
 project-parameters-field-approved-by = Approved By
 project-parameter-name-empty = Enter a parameter name.
-project-parameter-name-invalid = A parameter name cannot contain line breaks or control characters.
+project-parameter-name-invalid = A parameter name is letters, digits and _, and does not start with a digit.
 project-parameter-name-title-block = { $name } is a title block field; choose another name.
 project-parameter-name-taken = The project already has a parameter named { $name }.
 project-parameter-rename-references = Sheet text that uses { $name } as a special string, and sheet values named { $name }, keep the old name: they stop showing this value. Press Enter to rename anyway.
+# What a project variable's `=` expression evaluates to. $value is the
+# result, such as 1.65V.
+project-parameter-shows = Shows { $value }
+# Why a project variable's `=` expression does not evaluate. $error is the
+# reason.
+project-parameter-error = Error: { $error }
 
 # Sheets section (#1689).
 project-sheets-help = The project lists its sheets in this order. The Sheet N of M in a title block and the order of the project tree follow it. PDF export numbers pages by the sheet hierarchy instead; number child sheets with Tools ▸ Annotation ▸ Number Schematic Sheets.

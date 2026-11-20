@@ -1,0 +1,38 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "buspirate5-rev10a",
+  "net_classes": [
+    {
+      "clearance": 0.1524,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "signal1",
+      "patterns": [
+        "BUFDIR0"
+      ],
+      "trace_width": 0.254,
+      "via_diameter": 0.6548,
+      "via_drill": 0.35
+    },
+    {
+      "clearance": 0.15,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.2032,
+      "via_diameter": 0.6548,
+      "via_drill": 0.35
+    }
+  ],
+  "pcb_file": "buspirate5-rev10a.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

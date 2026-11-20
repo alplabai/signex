@@ -17,7 +17,7 @@ define_ids! {
     PROJECT_MOVE_UP = "project-move-up";
     PROJECT_MOVE_DOWN = "project-move-down";
     // Parameters (#30)
-    PROJECT_PARAMETERS_HELP = "project-parameters-help";
+    PROJECT_PARAMETERS_HINT = "project-parameters-hint";
     PROJECT_PARAMETERS_FILTER = "project-parameters-filter";
     PROJECT_PARAMETERS_TOTALS = "project-parameters-totals";
     PROJECT_PARAMETERS_GROUP_TITLE_BLOCK = "project-parameters-group-title-block";
@@ -40,6 +40,8 @@ define_ids! {
     PROJECT_PARAMETER_NAME_TITLE_BLOCK = "project-parameter-name-title-block";
     PROJECT_PARAMETER_NAME_TAKEN = "project-parameter-name-taken";
     PROJECT_PARAMETER_RENAME_REFERENCES = "project-parameter-rename-references";
+    PROJECT_PARAMETER_SHOWS = "project-parameter-shows";
+    PROJECT_PARAMETER_ERROR = "project-parameter-error";
     PROJECT_SHEETS_HELP = "project-sheets-help";
     PROJECT_SHEETS_COL_NUMBER = "project-sheets-col-number";
     PROJECT_SHEETS_PAGE = "project-sheets-page";

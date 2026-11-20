@@ -15,7 +15,8 @@ use crate::app::state::ProjectId;
 pub(super) enum ParameterNameProblem {
     /// Nothing but blanks.
     Empty,
-    /// A line break or another control character.
+    /// A line break or another control character, or not a variable name
+    /// (letters, digits and `_`, not starting with a digit).
     Invalid,
     /// The key of a title-block field.
     TitleBlock,
@@ -39,6 +40,11 @@ pub(super) fn checked_rename(
     }
     if name == from {
         return Ok(None);
+    }
+    // A parameter is a variable (#1987): `${NAME}` and an expression can
+    // only name an identifier, as the Add row already requires.
+    if !signex_types::variables::is_variable_name(name) {
+        return Err(ParameterNameProblem::Invalid);
     }
     if super::is_title_block_key(name) {
         return Err(ParameterNameProblem::TitleBlock);

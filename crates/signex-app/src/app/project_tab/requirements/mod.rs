@@ -9,6 +9,7 @@
 //! Save. Catalog commands: `commands`.
 
 mod commands;
+mod drafts;
 mod view;
 mod words;
 
@@ -28,6 +29,8 @@ pub(crate) use commands::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,
     project_run_requirements, project_set_requirement,
 };
+pub use drafts::EntryKey;
+use drafts::key_at;
 pub(super) use view::view;
 
 use super::ProjectTabMsg;
@@ -46,18 +49,19 @@ pub struct RequirementsRun {
 /// the last refusal, the cards opened or closed by hand, and the last run.
 #[derive(Debug, Clone, Default)]
 pub struct RequirementsTabState {
-    /// Fields as typed, by entry and field, until Enter commits them or an
-    /// undo, redo or section switch shows the stored values again.
-    pub drafts: HashMap<(usize, RequirementField), String>,
+    /// Fields as typed, by entry and field, until Enter commits them, the
+    /// entry is removed, an undo or redo changes it, or a section switch
+    /// shows the stored values again (#2547, `drafts`).
+    pub drafts: HashMap<(EntryKey, RequirementField), String>,
     /// Why the last edit was refused, and the entry it was for (`None`: an
     /// add); cleared by the next edit.
-    pub problem: Option<(Option<usize>, RequirementProblem)>,
+    pub problem: Option<(Option<EntryKey>, RequirementProblem)>,
     /// The field the refused value was typed in, when the refusal was a
     /// field commit; cleared with `problem`.
     pub problem_field: Option<RequirementField>,
-    /// Cards whose open or closed state the user flipped, by list place.
-    /// Forgotten with the drafts, so a flip never lands on another entry.
-    pub toggled: HashSet<usize>,
+    /// Cards whose open or closed state the user flipped, by entry: a flip
+    /// follows its entry like the drafts, so it never lands on another.
+    pub toggled: HashSet<EntryKey>,
     pub running: bool,
     pub last_run: Option<Arc<RequirementsRun>>,
 }
@@ -142,16 +146,23 @@ impl Signex {
                     .ignore("the refusal is kept in the tab and shown at its entry");
             }
             RequirementsMsg::FieldEdited { index, field, text } => {
+                let Some(requirement) = self.requirement_key_at(project_id, index) else {
+                    return Task::none();
+                };
                 let tab = self.requirements_tab(project_id);
-                tab.drafts.insert((index, field), text);
+                tab.drafts.insert((requirement, field), text);
                 tab.problem = None;
                 tab.problem_field = None;
             }
             RequirementsMsg::FieldSubmitted { index, field } => {
+                // The draft of the entry at `index` now: never another's.
+                let Some(requirement) = self.requirement_key_at(project_id, index) else {
+                    return Task::none();
+                };
                 let Some(text) = self
                     .requirements_tab(project_id)
                     .drafts
-                    .get(&(index, field))
+                    .get(&(requirement, field))
                 else {
                     return Task::none();
                 };
@@ -174,9 +185,12 @@ impl Signex {
                     .ignore("the refusal is kept in the tab and shown at its entry");
             }
             RequirementsMsg::ExpandToggled { index } => {
+                let Some(requirement) = self.requirement_key_at(project_id, index) else {
+                    return Task::none();
+                };
                 let toggled = &mut self.requirements_tab(project_id).toggled;
-                if !toggled.remove(&index) {
-                    toggled.insert(index);
+                if !toggled.remove(&requirement) {
+                    toggled.insert(requirement);
                 }
             }
             RequirementsMsg::RunRequested => return self.run_requirements_in_tab(project_id),
@@ -198,6 +212,12 @@ impl Signex {
             .requirements
     }
 
+    /// The key of the requirement at `index` of project `project_id`.
+    fn requirement_key_at(&self, project_id: ProjectId, index: usize) -> Option<EntryKey> {
+        let project = self.document_state.project_by_id(project_id)?;
+        key_at(&project.data.requirements, index)
+    }
+
     fn commit_requirement_field(
         &mut self,
         project_id: ProjectId,
@@ -209,11 +229,15 @@ impl Signex {
         let committed = self
             .edit_requirements_from_tab(project_id, Some(index), &command)
             .is_ok();
-        let tab = self.requirements_tab(project_id);
         if committed {
-            tab.drafts.remove(&(index, field));
+            // Read after the commit: a committed id moved the entry's drafts.
+            if let Some(requirement) = self.requirement_key_at(project_id, index) {
+                self.requirements_tab(project_id)
+                    .drafts
+                    .remove(&(requirement, field));
+            }
         } else {
-            tab.problem_field = Some(field);
+            self.requirements_tab(project_id).problem_field = Some(field);
         }
     }
 
@@ -226,11 +250,13 @@ impl Signex {
         command: &ProjectRequirementCommand,
     ) -> Result<bool, RequirementProblem> {
         let outcome = self.apply_project_requirement(project_id, command);
+        // A refused edit left the list as it was: `index` still names it.
+        let entry = index.and_then(|index| self.requirement_key_at(project_id, index));
         let tab = self.requirements_tab(project_id);
         tab.problem = outcome
             .as_ref()
             .err()
-            .map(|problem| (index, problem.clone()));
+            .map(|problem| (entry, problem.clone()));
         tab.problem_field = None;
         outcome
     }
@@ -239,8 +265,8 @@ impl Signex {
     /// General history and mark the `.snxprj` dirty: the tab's and the
     /// catalog commands' one commit path. `Ok(false)` when nothing changed
     /// or the project is no longer loaded. Drafts and opened or closed
-    /// cards are keyed by list place, so an add or a remove, from the tab or
-    /// a command, forgets them.
+    /// cards are keyed by requirement id: an edit from the tab or a command
+    /// keeps every other entry's.
     pub(crate) fn apply_project_requirement(
         &mut self,
         project_id: ProjectId,
@@ -255,6 +281,7 @@ impl Signex {
             return Ok(false);
         };
         let tab = document.project_tabs.entry(project_id).or_default();
+        let before = project.data.requirements.clone();
         if !tab
             .general_history
             .apply_requirement(&mut project.data, command)?
@@ -262,13 +289,12 @@ impl Signex {
             return Ok(false);
         }
         tab.rules_step_newest = false;
-        if matches!(
-            command,
-            ProjectRequirementCommand::Add { .. } | ProjectRequirementCommand::Remove { .. }
-        ) {
-            tab.requirements.drafts.clear();
-            tab.requirements.toggled.clear();
-        }
+        let removed = match command {
+            ProjectRequirementCommand::Remove { index } => Some(*index),
+            _ => None,
+        };
+        tab.requirements
+            .follow_edit(&before, &project.data.requirements, removed);
         document.sync_project_history_dirty(project_id, true);
         self.after_project_general_change(false);
         Ok(true)

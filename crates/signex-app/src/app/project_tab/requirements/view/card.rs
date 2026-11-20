@@ -18,7 +18,7 @@ use signex_widgets::{ToggleSwitchStyle, checkbox, text, text_input, toggle_switc
 use super::super::super::look::{Glyph, err_box, icon_button, pill};
 use super::super::super::table::{SP, TS, problem};
 use super::super::words::{field_words, kind_words, problem_words};
-use super::super::{RequirementsMsg, RequirementsTabState, message};
+use super::super::{EntryKey, RequirementsMsg, RequirementsTabState, message};
 use super::summary::summary_words;
 use super::{Choice, Verdict, findings_of, plain, stored_text, verdict};
 use crate::app::Message;
@@ -60,6 +60,10 @@ pub(in crate::app::project_tab::requirements) fn is_open(
 pub(super) struct Card<'s> {
     pub(super) project_id: ProjectId,
     pub(super) index: usize,
+    /// The entry's key: its drafts', its refusal's and its flip's.
+    pub(super) key: Option<EntryKey>,
+    /// Whether the last refusal is this entry's.
+    pub(super) refused_here: bool,
     pub(super) tab: Option<&'s RequirementsTabState>,
     pub(super) report: Option<&'s CheckReport>,
     pub(super) i18n: &'s I18n,
@@ -75,7 +79,8 @@ impl Card<'_> {
                 let held = self.has_draft_or_problem();
                 let toggled = self
                     .tab
-                    .is_some_and(|tab| tab.toggled.contains(&self.index));
+                    .zip(self.key.as_ref())
+                    .is_some_and(|(tab, key)| tab.toggled.contains(key));
                 let open = is_open(verdict, held, toggled);
                 let chevron = (!held).then_some(open);
                 col = col.push(self.header(requirement, raw, verdict, chevron));
@@ -377,7 +382,8 @@ impl Card<'_> {
         let (project_id, index) = (self.project_id, self.index);
         let draft = self
             .tab
-            .and_then(|tab| tab.drafts.get(&(index, field)))
+            .zip(self.key.clone())
+            .and_then(|(tab, key)| tab.drafts.get(&(key, field)))
             .cloned();
         let shown = draft.unwrap_or_else(|| stored_text(field, raw));
         let hint = if field.is_optional() {
@@ -454,18 +460,19 @@ impl Card<'_> {
     }
 
     fn has_draft_or_problem(&self) -> bool {
-        self.tab.is_some_and(|tab| {
-            tab.drafts.keys().any(|(at, _)| *at == self.index)
-                || matches!(&tab.problem, Some((Some(at), _)) if *at == self.index)
-        })
+        self.refused_here
+            || self
+                .tab
+                .zip(self.key.as_ref())
+                .is_some_and(|(tab, key)| tab.drafts.keys().any(|(at, _)| at == key))
     }
 
     /// The refusal of this card's `field`, shown under its box.
     fn field_problem(&self, field: RequirementField) -> Option<&RequirementProblem> {
         let tab = self.tab?;
         match &tab.problem {
-            Some((Some(at), refused))
-                if *at == self.index && tab.problem_field == Some(field) && shows(field) =>
+            Some((Some(_), refused))
+                if self.refused_here && tab.problem_field == Some(field) && shows(field) =>
             {
                 Some(refused)
             }
@@ -477,12 +484,12 @@ impl Card<'_> {
     /// an id, or any edit of an entry that cannot be read.
     fn card_problem(&self, entry: &RequirementEntry) -> Option<&RequirementProblem> {
         let tab = self.tab?;
-        let Some((Some(at), refused)) = &tab.problem else {
+        let Some((Some(_), refused)) = &tab.problem else {
             return None;
         };
         let in_box =
             matches!(entry, RequirementEntry::Known { .. }) && tab.problem_field.is_some_and(shows);
-        (*at == self.index && !in_box).then_some(refused)
+        (self.refused_here && !in_box).then_some(refused)
     }
 }
 

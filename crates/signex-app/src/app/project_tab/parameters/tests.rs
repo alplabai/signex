@@ -139,6 +139,11 @@ fn a_rename_is_checked_before_the_engine_sees_it() {
     assert_eq!(check("   "), Err(ParameterNameProblem::Empty));
     assert_eq!(check("V\nIN"), Err(ParameterNameProblem::Invalid));
     assert_eq!(check("V\tIN"), Err(ParameterNameProblem::Invalid));
+    // #1987: a parameter is a variable, named like the Add row requires.
+    assert_eq!(check("V IN"), Err(ParameterNameProblem::Invalid));
+    assert_eq!(check("1V"), Err(ParameterNameProblem::Invalid));
+    assert_eq!(check("V-IN"), Err(ParameterNameProblem::Invalid));
+    assert_eq!(check("_V1"), Ok(Some("_V1".to_string())));
     assert_eq!(check("company"), Err(ParameterNameProblem::TitleBlock));
     assert_eq!(check("rev"), Err(ParameterNameProblem::TitleBlock));
     assert_eq!(check("VOUT"), Err(ParameterNameProblem::Taken));

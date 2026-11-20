@@ -7,6 +7,7 @@ mod followups;
 mod highlight;
 mod history;
 mod hover;
+mod inspector_parts;
 mod partners;
 mod pin_click;
 mod placements;

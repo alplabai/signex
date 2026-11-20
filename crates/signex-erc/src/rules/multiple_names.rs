@@ -86,14 +86,16 @@ pub(crate) fn net_multiple_names(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
     }
     nets.sort_by_key(|s| (s[0].name, pt_key(&s[0].at)));
 
+    let rule_id = crate::RuleId::builtin(RuleKind::NetMultipleNames);
+    let rule = rule_id.as_str();
     for sources in nets {
         let mut names: Vec<&str> = sources.iter().map(|s| s.name).collect();
         names.dedup();
-        // A No-ERC directive on any of the net's names suppresses it, as in
-        // the project pass (`project_names.rs`).
+        // A No-ERC directive that silences the rule on any of the net's names
+        // suppresses it, as in the project pass (`project_names.rs`).
         let skipped = sources
             .iter()
-            .any(|s| reported.contains(&pt_key(&s.at)) || ctx.has_no_erc_directive_at(&s.at));
+            .any(|s| reported.contains(&pt_key(&s.at)) || ctx.has_no_erc_directive_at(&s.at, rule));
         if names.len() < 2 || skipped {
             continue;
         }

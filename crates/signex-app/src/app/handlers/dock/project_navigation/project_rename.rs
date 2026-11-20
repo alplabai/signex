@@ -581,17 +581,13 @@ impl Signex {
         for tab in self.document_state.tabs.iter_mut() {
             if tab.path == from {
                 tab.path = to.to_path_buf();
-                // A Rules tab keeps its own title (#2398).
-                if tab.kind.as_rules().is_some() {
-                    continue;
+                // Page tabs are retitled from the project's new name below.
+                if !tab.kind.is_project_page() {
+                    tab.title = new_stem.to_string();
                 }
-                tab.title = if tab.kind.as_project().is_some() {
-                    crate::app::project_tab::project_tab_title(to)
-                } else {
-                    new_stem.to_string()
-                };
             }
         }
+        self.refresh_page_tab_titles();
         if let Some(engine) = self.document_state.remove_engine(from) {
             self.document_state.insert_engine(to.to_path_buf(), engine);
         }

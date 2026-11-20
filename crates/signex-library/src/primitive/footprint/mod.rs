@@ -13,6 +13,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 use uuid::Uuid;
 
 use crate::param::ParamMap;
@@ -567,9 +568,14 @@ pub struct FootprintFile {
 /// 1.1 (#2242): a pad may carry the `trapezoid:<dx>,<dy>` shape token.
 const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1.1";
 
-/// Every format this build reads. A newer one is refused by name: an older
-/// build cannot tell which of its shapes it would misread.
-const FOOTPRINT_FILE_FORMATS_READ: [&str; 2] = ["snxfpt/1", FOOTPRINT_FILE_FORMAT_TOKEN];
+/// `.snxfpt` version policy. A newer token, minor included, is refused by
+/// name: an older build cannot tell which of its shapes it would misread.
+const FOOTPRINT_FILE_VERSION: FormatVersion = FormatVersion {
+    current: FOOTPRINT_FILE_FORMAT_TOKEN,
+    readable: &["snxfpt/1", FOOTPRINT_FILE_FORMAT_TOKEN],
+    newer_minor: NewerMinor::Refused,
+    missing: MissingToken::Refused,
+};
 
 /// Base column layout for the per-footprint `pads_tsv` block; these
 /// lead every header. Reordering them is a wire-format break — bump
@@ -605,7 +611,8 @@ fn default_footprint_format() -> String {
 /// carrying the TSV-encoded payload.
 #[derive(Serialize, Deserialize)]
 struct FootprintFileWire {
-    format: String,
+    #[serde(default)]
+    format: Option<String>,
     file_uuid: Uuid,
     #[serde(default)]
     display_name: String,
@@ -711,14 +718,12 @@ impl FootprintFile {
         Self::from_toml_str(text)
     }
 
-    /// Parse the TOML+TSV wire format. The format-token check pins us
-    /// to [`FOOTPRINT_FILE_FORMATS_READ`]; any other token surfaces
+    /// Parse the TOML+TSV wire format. The format token is checked by
+    /// [`FOOTPRINT_FILE_VERSION`]; a refused one surfaces
     /// [`FootprintFileError::UnsupportedFormat`].
     pub fn from_toml_str(text: &str) -> Result<Self, FootprintFileError> {
         let wire: FootprintFileWire = signex_types::numeric::parse_toml_finite(text)?;
-        if !FOOTPRINT_FILE_FORMATS_READ.contains(&wire.format.as_str()) {
-            return Err(FootprintFileError::UnsupportedFormat { got: wire.format });
-        }
+        let format = FOOTPRINT_FILE_VERSION.read(wire.format.as_deref())?;
         let mut footprints = Vec::with_capacity(wire.footprints.len());
         for fw in wire.footprints {
             let pads = pads_from_tsv(&fw.pads_tsv)?;
@@ -758,7 +763,7 @@ impl FootprintFile {
             footprints.push(footprint);
         }
         Ok(FootprintFile {
-            format: wire.format,
+            format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
             copied_from: wire.copied_from,
@@ -809,7 +814,7 @@ impl FootprintFile {
             });
         }
         let wire = FootprintFileWire {
-            format: FOOTPRINT_FILE_FORMAT_TOKEN.to_string(),
+            format: Some(FOOTPRINT_FILE_FORMAT_TOKEN.to_string()),
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
             copied_from: self.copied_from,
