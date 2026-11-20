@@ -1686,6 +1686,7 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
     let record = crate::exec::guarded::take_record();
     let reasons = crate::transform::rubber_band::reasons::take();
     let warnings = engine.take_warnings();
+    let notices = engine.take_notices();
     let unkept = engine.take_unkept_pins();
     let kind = if selects_wire {
         "co-selected"
@@ -1698,26 +1699,34 @@ pub(crate) fn property_case(seed: u64, index: usize, case: Case, counts: &mut Ru
         &mut counts.symbols_only
     };
     share.cases += 1;
-    // A fallback is a notice that something could not be kept; a held pin
-    // kept off the wire it landed in is told, but kept.
-    let fell_back = warnings.iter().any(|w| w.starts_with("could not keep"));
+    // A fallback is a notice that something could not be kept: a pin left as
+    // a plain move (an English warning) or a dragged wire's contact parted (a
+    // typed notice). A held pin kept off the wire it landed in is told, but
+    // kept; a refused pin dot is the plain move's own.
+    let dragged_parted = notices
+        .iter()
+        .any(|n| matches!(n, crate::EngineNotice::DraggedWireLeft { .. }));
+    let pin_plain = warnings.iter().any(|w| w.starts_with("could not keep"));
+    let fell_back = pin_plain || dragged_parted;
     share.warned += usize::from(fell_back);
     if fell_back {
-        let notices = (warnings.iter()).filter_map(|w| {
-            if !w.starts_with("could not keep") {
-                None
-            } else if w.contains("on the dragged wire") {
-                Some("notice: a dragged wire's contact parted")
-            } else {
-                Some("notice: a moved pin left as a plain move")
-            }
-        });
-        let causes: std::collections::BTreeSet<&'static str> =
-            reasons.iter().copied().chain(notices).collect();
+        let told = [
+            dragged_parted.then_some("notice: a dragged wire's contact parted"),
+            pin_plain.then_some("notice: a moved pin left as a plain move"),
+        ];
+        let causes: std::collections::BTreeSet<&'static str> = reasons
+            .iter()
+            .copied()
+            .chain(told.into_iter().flatten())
+            .collect();
         for why in causes {
             *counts.fallbacks.entry((kind, why)).or_default() += 1;
         }
-    } else if !warnings.is_empty() {
+    } else if !warnings.is_empty()
+        || notices
+            .iter()
+            .any(|n| matches!(n, crate::EngineNotice::HeldPinsNotJoined { .. }))
+    {
         *counts.unjoined_only.entry(kind).or_default() += 1;
     }
     let after = engine.document();

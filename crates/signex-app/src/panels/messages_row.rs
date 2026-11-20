@@ -5,6 +5,8 @@
 use chrono::{DateTime, TimeZone, Utc};
 use signex_i18n::{MessageId, command_ids, ids};
 
+use crate::diagnostics::{DiagnosticEntry, MessageLink};
+
 /// The short Source name of a Messages row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MessageSource {
@@ -94,19 +96,17 @@ impl MessageSource {
     }
 }
 
-/// The log target of the line that reports bare pin touches on open; its rows
-/// link to Repair Pin Junctions ([`row_action`]).
+/// The log target of the line that reports bare pin touches on open.
 pub(crate) const PIN_JUNCTIONS_TARGET: &str = "signex::pin_junctions";
 
-/// The command a Messages row offers as a link, with its catalog label: a row
-/// logged under a target that names one, by its diagnostic code.
-pub(crate) fn row_action(code: &str) -> Option<(&'static str, MessageId)> {
-    // `diagnostic_code_from_target(PIN_JUNCTIONS_TARGET)`, pinned by a test.
-    const PIN_JUNCTIONS_CODE: &str = "SIGNEX-PIN_JUNCTIONS";
-    (code == PIN_JUNCTIONS_CODE).then_some((
-        "repair_pin_junctions",
-        command_ids::CMD_MENU_REPAIR_PIN_JUNCTIONS,
-    ))
+/// The link a Messages row offers, with its catalog label: the row's own
+/// [`MessageLink`], which names the document it acts on.
+pub(crate) fn row_action(entry: &DiagnosticEntry) -> Option<(MessageLink, MessageId)> {
+    let link = entry.link.clone()?;
+    let label = match &link {
+        MessageLink::RepairPinJunctions(_) => command_ids::CMD_MENU_REPAIR_PIN_JUNCTIONS,
+    };
+    Some((link, label))
 }
 
 /// `at` on the operating system's local clock as `HH:MM:SS`. Display only.
@@ -165,17 +165,26 @@ mod tests {
         assert_eq!(MessageSource::of_code("APP-EVENT"), MessageSource::App);
     }
 
-    /// The bare-touch report links to Repair Pin Junctions (2026-11-19); a
-    /// row from any other target has no link.
+    /// The bare-touch report links to Repair Pin Junctions on its own sheet
+    /// (2026-11-19); a row without a link offers none, whatever its target.
     #[test]
     fn the_bare_touch_line_links_to_the_repair() {
-        let code = diagnostic_code_from_target(PIN_JUNCTIONS_TARGET);
-        let (command, label) = row_action(&code).expect("a link");
-        assert_eq!(command, "repair_pin_junctions");
+        let path = std::path::PathBuf::from("/w/a.snxsch");
+        let entry = |link| DiagnosticEntry {
+            id: 1,
+            level: crate::diagnostics::DiagnosticLevel::Warning,
+            code: diagnostic_code_from_target(PIN_JUNCTIONS_TARGET),
+            message: "a.snxsch: 1 pin touches a wire without a junction".to_string(),
+            at: Utc::now(),
+            link,
+        };
+        let linked = entry(Some(MessageLink::RepairPinJunctions(path.clone())));
+        let (link, label) = row_action(&linked).expect("a link");
+        assert_eq!(link, MessageLink::RepairPinJunctions(path));
         assert_eq!(label, command_ids::CMD_MENU_REPAIR_PIN_JUNCTIONS);
-        let id = crate::keymap::AppCommandId::new(command).expect("a catalog id");
+        let id = crate::keymap::AppCommandId::new("repair_pin_junctions").expect("a catalog id");
         assert!(crate::app::command::bridge::is_dispatchable(&id));
-        assert!(row_action(&diagnostic_code_from_target("signex::project")).is_none());
+        assert!(row_action(&entry(None)).is_none());
     }
 
     #[test]

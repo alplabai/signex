@@ -526,10 +526,12 @@ greyed without a schematic in view, it adds an automatic junction dot at every
 pin end of the sheet in view that touches a wire mid-span with no dot, as one
 undo step, and says in Messages how many it added, or that there were none. A
 touch where a dot would short the pin's own part, or where wires of two nets
-overlap, is left alone. Opening a sheet that holds such touches never changes
-it: Messages says "N pins touch a wire without a junction", and that row has a
-Repair Pin Junctions link that runs the same command
-(`panels::messages_row::row_action`).
+meet (overlapping, crossing, or a bare T), is left alone. Opening a sheet that
+holds such touches never changes it: Messages says "N pins touch a wire without
+a junction", and that row has a Repair Pin Junctions link. The link carries the
+sheet the row names (`diagnostics::MessageLink`): it brings that sheet's tab to
+the front and repairs it, whatever sheet is in view; a sheet closed since is
+refused with a notice (`panels::messages_row::row_action`).
 
 ## View ▸ Net Inspector {#view-net-inspector}
 

@@ -51,6 +51,9 @@ pub struct RouterState {
     /// Pads of no net the route ends on, `(footprint, pad, net)`: each
     /// joins the route's net when it lands (maintainer 2026-11-18).
     pub joined: Vec<(Uuid, Uuid, u32)>,
+    /// What each pad of `joined` says once the route lands: the status bar
+    /// says it at the click, Messages when the net is given.
+    pub joined_lines: Vec<String>,
 }
 
 /// The nets of a pair or bus route and the tracks they run in. The centre
@@ -182,6 +185,9 @@ impl Signex {
                 }
                 router.refused = false;
                 router.joined.extend(joined.as_ref().map(|(join, _)| *join));
+                router
+                    .joined_lines
+                    .extend(joined.as_ref().map(|(_, line)| line.clone()));
             }
             // The status bar says which pad took the route's net.
             session.note = joined.map(|(_, line)| line);
@@ -230,6 +236,7 @@ impl Signex {
                 preview: None,
                 bus: None,
                 joined: Vec::new(),
+                joined_lines: Vec::new(),
             });
         }
     }
@@ -261,6 +268,11 @@ impl Signex {
                 if let Some(router) = self.drawn_router_mut() {
                     router.draft = RouteDraft::default();
                     router.joined.clear();
+                    // A pad that took the route's net is said in Messages
+                    // too: the net is now the pad's, not the status bar's.
+                    for line in std::mem::take(&mut router.joined_lines) {
+                        crate::diagnostics::log_info(line);
+                    }
                 }
                 return RouteEnd::Landed;
             }
@@ -273,6 +285,7 @@ impl Signex {
             if let Some(router) = self.drawn_router_mut() {
                 router.draft = RouteDraft::default();
                 router.joined.clear();
+                router.joined_lines.clear();
             }
             return RouteEnd::Discarded;
         }

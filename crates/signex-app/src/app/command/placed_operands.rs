@@ -76,6 +76,32 @@ pub(super) fn set_symbol_parameter(app: &mut Signex, args: &CommandArgs) -> Ran 
     })
 }
 
+/// `set_sheet_variable name=.. [value=..] [remove=true] [document=..]`: the
+/// Sheet Variables rows' [`Signex::set_sheet_variable`]. Answers with the
+/// variable as stored and the sheet's variables.
+pub(super) fn set_sheet_variable(app: &mut Signex, args: &CommandArgs) -> Ran {
+    run_edit(app, args, |app| {
+        let name = text(args, "name")?.trim().to_string();
+        let remove = matches!(args.operand("remove"), Some(OperandValue::Bool(true)));
+        let value = match (remove, args.operand("value")) {
+            (true, Some(_)) => return Err("`remove=true` takes no `value`".to_string()),
+            (true, None) => None,
+            (false, _) => Some(text(args, "value").unwrap_or_default().trim().to_string()),
+        };
+        app.set_sheet_variable(&name, value)?;
+        let variables = app
+            .document_state
+            .edit_engine()
+            .map(|engine| engine.document().variables.clone())
+            .unwrap_or_default();
+        Ok(CommandOutcome::Answered(json!({
+            "name": name,
+            "value": variables.get(&name),
+            "variables": variables,
+        })))
+    })
+}
+
 fn answered(placed: Placed) -> Result<CommandOutcome, String> {
     placed
         .map(CommandOutcome::Answered)

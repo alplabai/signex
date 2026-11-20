@@ -711,3 +711,28 @@ panels-directive-all-rules = All Rules
 panels-no-erc-rules = Suppressed Rules
 # Checkbox: the No-ERC directive silences every ERC rule at its point.
 panels-no-erc-all-rules = All Rules
+
+## Messages lines for the notices an edit raises (signex_engine::EngineNotice).
+## Pin names ("R7 pin 1") and net names are passed in as they are.
+
+# A dragged wire could not keep what joined it at one point.
+panels-messages-dragged-wire-left-one = could not keep { $name } on the dragged wire
+# The same at several points; $names lists the first few.
+panels-messages-dragged-wire-left-many = could not keep { $count } connections on the dragged wire: { $names }
+# A grip drag of a wire end could not keep the wires attached at the end,
+# which was at ($x, $y) mm.
+panels-messages-grip-end-left = could not keep the wires at ({ $x }, { $y }) on the dragged end
+# "Keep wires" held a pin on its net instead of joining it to the wire of
+# another net its end now lies in.
+panels-messages-held-pins-one = { $name } kept its net and was not joined to the wire it now ends on
+panels-messages-held-pins-many = { $count } pins kept their nets and were not joined to the wires they end on: { $names }
+# A pin end got no junction dot because the dot would merge two nets.
+panels-messages-pin-dot-refused-one = could not join { $pin } to the wires it ends on: they carry two nets, { $through } and { $other }
+# The same for several pins; each entry of $names is "R1 pin 2 (A, B)".
+panels-messages-pin-dot-refused-many = could not join { $count } pins to wires of two nets they end on: { $names }
+# One entry of that list: a pin and the two nets.
+panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
+# Stands for a net nothing names.
+panels-messages-unnamed-net = an unnamed net
+# The end of a list cut after its first few entries.
+panels-messages-list-more = { $names } and { $count } more

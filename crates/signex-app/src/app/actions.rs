@@ -226,19 +226,17 @@ impl Signex {
         )
     }
 
-    /// Where a wire click at `(x, y)` lands: on the nearest electrical hotspot
-    /// (pin end, wire end, junction) within the capture radius when the
-    /// electrical-grid toggle (Shift+E) is on, otherwise on the grid.
-    pub(crate) fn snap_wire_point(&self, x: f64, y: f64) -> (f64, f64) {
-        // An agent's edit list snaps against the sheet it edits, not the
-        // person's canvas.
-        let sheet = if self.document_state.agent_edit_running() {
-            self.document_state
-                .edit_engine()
-                .map(signex_engine::Engine::document)
-        } else {
-            self.active_render_snapshot()
-        };
+    /// Where a wire click at `(x, y)` on `sheet` lands: on the nearest
+    /// electrical hotspot of `sheet` (pin end, wire end, junction) within the
+    /// capture radius when the electrical-grid toggle (Shift+E) is on,
+    /// otherwise on the grid. The caller names the sheet: a canvas click the
+    /// one in view, an operand edit the sheet it edits (#2542).
+    pub(crate) fn snap_wire_point(
+        &self,
+        sheet: Option<&signex_types::schematic::SchematicSheet>,
+        x: f64,
+        y: f64,
+    ) -> (f64, f64) {
         if self.ui_state.snap_hotspots
             && let Some(sheet) = sheet
             && let Some(p) = signex_types::schematic::snap_to_hotspot(

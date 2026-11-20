@@ -24,7 +24,9 @@ pub use crate::part_keys::{follow_part_keys, rename_part_references, rename_part
 
 /// The text of `field` on `symbol`: `Value`, `Footprint`, `Datasheet`,
 /// `Designator` (or `Reference`), else a field or a custom property, an
-/// exact name first, then one in any ASCII case.
+/// exact name first, then one in any ASCII case. Of fields whose names
+/// differ only in case, the first by name (byte order) is read, so the
+/// answer never depends on the map's order.
 pub fn part_field_text<'a>(symbol: &'a Symbol, field: &str) -> Option<&'a str> {
     let builtin = match field.to_ascii_lowercase().as_str() {
         "value" => Some(&symbol.value),
@@ -44,7 +46,12 @@ pub fn part_field_text<'a>(symbol: &'a Symbol, field: &str) -> Option<&'a str> {
         return Some(property.value.as_str());
     }
     let any_case = |key: &str| key.eq_ignore_ascii_case(field);
-    if let Some((_, value)) = symbol.fields.iter().find(|(key, _)| any_case(key)) {
+    let field_in_any_case = symbol
+        .fields
+        .iter()
+        .filter(|(key, _)| any_case(key))
+        .min_by(|(a, _), (b, _)| a.cmp(b));
+    if let Some((_, value)) = field_in_any_case {
         return Some(value.as_str());
     }
     let property = properties.iter().find(|p| any_case(&p.key))?;

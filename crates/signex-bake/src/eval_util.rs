@@ -117,4 +117,48 @@ mod tests {
         );
         assert_eq!(eval_dimensionless("3", &ctx()), Ok(3.0));
     }
+
+    #[test]
+    fn ten_m_via_a_parameter_matches_the_field_or_errors() {
+        let mut sketch = SketchData::default();
+        sketch.parameters.insert("pad_w", "10m");
+        let direct = eval_mm("10m", &ctx());
+        let via_param = signex_sketch::parameter::resolve(&sketch.parameters)
+            .map_err(|e| format!("resolve: {e:?}"))
+            .and_then(|p| eval_mm("= pad_w", &build_ctx(&sketch, &p)));
+        assert_eq!(direct, Ok(10_000.0));
+        assert!(
+            via_param.is_err() || via_param == direct,
+            "via parameter {via_param:?}, direct {direct:?}"
+        );
+    }
+
+    #[test]
+    fn prefix_only_literals_via_a_parameter_match_the_field_or_error() {
+        for literal in ["1u", "4k7", "2n", "10m", "500m", "2n2"] {
+            let mut sketch = SketchData::default();
+            sketch.parameters.insert("pad_w", literal);
+            let direct = eval_mm(literal, &ctx());
+            let via_param = signex_sketch::parameter::resolve(&sketch.parameters)
+                .map_err(|e| format!("resolve: {e:?}"))
+                .and_then(|p| eval_mm("= pad_w", &build_ctx(&sketch, &p)));
+            assert!(
+                via_param.is_err() || via_param == direct,
+                "{literal}: via parameter {via_param:?}, direct {direct:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_parameter_with_a_unit_still_bakes() {
+        let mut sketch = SketchData::default();
+        sketch.parameters.insert("pad_w", "0.5mm");
+        sketch.parameters.insert("pins", "16");
+        let p = signex_sketch::parameter::resolve(&sketch.parameters).unwrap();
+        assert_eq!(eval_mm("= pad_w", &build_ctx(&sketch, &p)), Ok(0.5));
+        assert_eq!(
+            eval_dimensionless("= pins", &build_ctx(&sketch, &p)),
+            Ok(16.0)
+        );
+    }
 }

@@ -15,10 +15,16 @@ pub(crate) enum MutationOutcome {
 
 impl Signex {
     /// Surface the notices a command raised (a rubber-band pin that could
-    /// not be kept connected) in the Messages panel.
+    /// not be kept connected) in the Messages panel: the engine's older
+    /// English lines as they are, its typed notices worded through the
+    /// catalog (`app::engine_notices`).
     pub(crate) fn report_engine_warnings(engine: &mut signex_engine::Engine) {
         for warning in engine.take_warnings() {
             crate::diagnostics::log_warning(warning);
+        }
+        let i18n = signex_i18n::I18n::en_us();
+        for notice in engine.take_notices() {
+            crate::diagnostics::log_warning(super::engine_notices::notice_line(&i18n, &notice));
         }
     }
 

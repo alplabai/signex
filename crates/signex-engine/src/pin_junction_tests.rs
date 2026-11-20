@@ -7,7 +7,7 @@ use crate::rubber_band_tests::{
     add_resistor, add_wire, has, lib_pin, lib_symbol, mv, net_shape, place, segments,
 };
 use crate::test_support::test_sheet;
-use crate::{Command, Engine, bare_pin_taps, pin_junction_repairs};
+use crate::{Command, Engine, EngineNotice, RefusedPinDot, bare_pin_taps, pin_junction_repairs};
 use signex_types::object_id::SequentialIds;
 use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 use uuid::Uuid;
@@ -231,12 +231,22 @@ fn two_net_overlap(sheet: &mut SchematicSheet) -> (Uuid, Uuid) {
     (j1, j2)
 }
 
-/// The notices of the last commands that name a pin end left bare on wires
-/// of two nets.
-fn crossed_notices(engine: &mut Engine) -> Vec<String> {
-    (engine.take_warnings().into_iter())
-        .filter(|w| w.starts_with("could not join"))
+/// The pin ends each notice of the last commands names as left bare where a
+/// dot would merge two nets: one list per notice.
+fn crossed_notices(engine: &mut Engine) -> Vec<Vec<RefusedPinDot>> {
+    (engine.take_notices().into_iter())
+        .filter_map(|notice| match notice {
+            EngineNotice::PinDotRefused { pins } => Some(pins),
+            _ => None,
+        })
         .collect()
+}
+
+/// Whether `refused` names `pin` with the two nets, both named and distinct.
+fn names_two_nets(refused: &[RefusedPinDot], pin: &str) -> bool {
+    refused
+        .iter()
+        .any(|r| r.pin == pin && r.through.is_some() && r.other.is_some() && r.through != r.other)
 }
 
 /// A pin dot never merges two nets (maintainer decision 2026-11-19): a part
@@ -258,10 +268,7 @@ fn a_pin_moved_onto_wires_of_two_nets_gets_no_dot_and_a_notice() {
     assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j2]));
     let notices = crossed_notices(&mut engine);
     assert_eq!(notices.len(), 1, "{notices:?}");
-    assert!(
-        notices[0].contains("TP1 pin 1") && notices[0].contains("two nets"),
-        "{notices:?}"
-    );
+    assert!(names_two_nets(&notices[0], "TP1 pin 1"), "{notices:?}");
 }
 
 /// The same landing with "keep wires" on: TP1 keeps its wire to J3, its pin
@@ -282,9 +289,140 @@ fn a_kept_pin_moved_onto_wires_of_two_nets_gets_no_dot_and_a_notice() {
     let sheet = engine.document();
     assert!(!one_net(sheet, &[j1, j2]), "J1 and J2 stay apart");
     assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j2]));
+    // Every notice, in order: no path to the pin end can avoid the two-net
+    // place, so the guard leaves TP1 as a plain move and says so, then the
+    // commit names the dot it refused.
+    let warnings = engine.take_warnings();
+    assert_eq!(
+        warnings,
+        vec!["could not keep TP1 pin 1 connected without crossing another net".to_string()],
+    );
+    let notices = engine.take_notices();
+    assert_eq!(notices.len(), 1, "{notices:?}");
+    let EngineNotice::PinDotRefused { pins } = &notices[0] else {
+        panic!("a refused pin dot: {notices:?}");
+    };
+    assert_eq!(pins.len(), 1, "{pins:?}");
+    assert!(names_two_nets(pins, "TP1 pin 1"), "{pins:?}");
+}
+
+/// The reviewer's bare T (2026-11-19): J3's wire ends inside J1-J2's wire
+/// with no dot, so the two are separate nets. TP1 moved so its pin end lands
+/// on that point gets no dot, which would merge them, and one notice.
+#[test]
+fn a_pin_moved_onto_a_bare_t_of_two_nets_gets_no_dot_and_a_notice() {
+    let mut sheet = test_sheet();
+    let j1 = add_pin(&mut sheet, "J1", (0.0, 40.0));
+    let j2 = add_pin(&mut sheet, "J2", (100.0, 40.0));
+    add_wire(&mut sheet, (0.0, 40.0), (100.0, 40.0));
+    let j3 = add_pin(&mut sheet, "J3", (50.0, 80.0));
+    add_wire(&mut sheet, (50.0, 80.0), (50.0, 40.0));
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 10.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    assert!(one_net(engine.document(), &[j1, j2]));
+    assert!(
+        !one_net(engine.document(), &[j1, j3]),
+        "a bare T joins nothing"
+    );
+
+    let part = SelectedItem::new(tp1, SelectedKind::Symbol);
+    mv(&mut engine, vec![part], 0.0, 30.0, false);
+    assert!(dots(&engine).is_empty(), "no dot: {:?}", dots(&engine));
+    let sheet = engine.document();
+    assert!(!one_net(sheet, &[j1, j3]), "the T stays bare");
+    assert!(!one_net(sheet, &[tp1, j1]), "TP1 does not join J1-J2");
+    assert!(engine.take_warnings().is_empty());
     let notices = crossed_notices(&mut engine);
     assert_eq!(notices.len(), 1, "{notices:?}");
-    assert!(notices[0].contains("TP1 pin 1"), "{notices:?}");
+    assert!(names_two_nets(&notices[0], "TP1 pin 1"), "{notices:?}");
+}
+
+/// Two wires of different nets crossing at right angles, with no dot: a pin
+/// end moved onto the crossing gets no dot and one notice.
+#[test]
+fn a_pin_moved_onto_a_crossing_of_two_nets_gets_no_dot_and_a_notice() {
+    let mut sheet = test_sheet();
+    let j1 = add_pin(&mut sheet, "J1", (0.0, 40.0));
+    add_wire(&mut sheet, (0.0, 40.0), (100.0, 40.0));
+    let j3 = add_pin(&mut sheet, "J3", (50.0, 80.0));
+    add_wire(&mut sheet, (50.0, 80.0), (50.0, 0.0));
+    let tp1 = add_pin(&mut sheet, "TP1", (70.0, 10.0));
+    let mut engine = Engine::new(sheet).unwrap();
+
+    let part = SelectedItem::new(tp1, SelectedKind::Symbol);
+    mv(&mut engine, vec![part], -20.0, 30.0, false);
+    assert!(dots(&engine).is_empty(), "no dot: {:?}", dots(&engine));
+    let sheet = engine.document();
+    assert!(!one_net(sheet, &[j1, j3]), "the crossing stays a crossing");
+    assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j3]));
+    assert_eq!(crossed_notices(&mut engine).len(), 1);
+}
+
+/// The wire side: two wires of different nets moved so they cross on a pin
+/// end that touched nothing before. No dot joins the three, one notice.
+#[test]
+fn wires_moved_to_cross_on_a_pin_end_get_no_dot_and_a_notice() {
+    let mut sheet = test_sheet();
+    let j1 = add_pin(&mut sheet, "J1", (0.0, 30.0));
+    let row = add_wire(&mut sheet, (0.0, 30.0), (100.0, 30.0));
+    let j3 = add_pin(&mut sheet, "J3", (60.0, 80.0));
+    let column = add_wire(&mut sheet, (60.0, 80.0), (60.0, 0.0));
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 40.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    assert!(
+        bare_pin_taps(engine.document()).is_empty(),
+        "TP1 touches nothing"
+    );
+
+    // The row down onto TP1's row and the column left onto TP1's column, each
+    // with its part, so J1 and J3 keep their wires and their two nets.
+    engine
+        .execute(Command::MoveEach {
+            moves: vec![
+                (SelectedItem::new(row, SelectedKind::Wire), 0.0, 10.0),
+                (SelectedItem::new(j1, SelectedKind::Symbol), 0.0, 10.0),
+                (SelectedItem::new(column, SelectedKind::Wire), -10.0, 0.0),
+                (SelectedItem::new(j3, SelectedKind::Symbol), -10.0, 0.0),
+            ],
+            keep_wires: false,
+            wiring: signex_types::corner::DragWiringMode::Auto,
+        })
+        .unwrap();
+    assert!(
+        !dots(&engine).contains(&Point::new(50.0, 40.0)),
+        "no dot: {:?}",
+        dots(&engine)
+    );
+    let sheet = engine.document();
+    assert!(!one_net(sheet, &[j1, j3]), "the crossing joins nothing");
+    assert!(!one_net(sheet, &[tp1, j1]) && !one_net(sheet, &[tp1, j3]));
+    let notices = crossed_notices(&mut engine);
+    assert_eq!(notices.len(), 1, "{notices:?}");
+    assert!(names_two_nets(&notices[0], "TP1 pin 1"), "{notices:?}");
+}
+
+/// A drag preview's throwaway engine names nothing: the notice belongs to
+/// the commit, so the ghost pushes none frame by frame.
+#[test]
+fn a_drag_preview_pushes_no_notice_for_a_refused_dot() {
+    let mut sheet = test_sheet();
+    two_net_overlap(&mut sheet);
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 10.0));
+    let preview = crate::MovePreview::new(&sheet);
+    let part = SelectedItem::new(tp1, SelectedKind::Symbol);
+    for keep_wires in [false, true] {
+        let (mut engine, _, result) = preview
+            .moved_report(&[(part, 0.0, 30.0)], keep_wires)
+            .expect("a preview engine");
+        assert!(matches!(result, Some(Ok(_))), "the move ran");
+        let tip = Point::new(50.0, 40.0);
+        assert!(
+            !dots(&engine).contains(&tip),
+            "the ghost shows no dot either"
+        );
+        let notices = engine.take_notices();
+        assert!(notices.is_empty(), "{notices:?}");
+    }
 }
 
 /// A pin end already sitting where wires of two nets overlap is no bare touch
@@ -298,4 +436,102 @@ fn a_touch_on_wires_of_two_nets_is_not_reported_for_repair() {
     assert!(bare_pin_taps(engine.document()).is_empty());
     let repairs = pin_junction_repairs(engine.document(), &mut SequentialIds::default());
     assert!(repairs.is_empty());
+}
+
+// The co-maintainer's dotless-T repros from the #2522 review, verbatim: a dot
+// at a dotless T would merge the two nets, from Repair Pin Junctions and from
+// a plain move alike.
+fn dotless_t_two_nets(sheet: &mut SchematicSheet) -> (Uuid, Uuid) {
+    use crate::rubber_band_tests::add_label;
+    let b = add_wire(sheet, (0.0, 10.0), (40.0, 10.0));
+    add_label(sheet, "B", (0.0, 10.0));
+    let a = add_wire(sheet, (20.0, 10.0), (20.0, 30.0));
+    add_label(sheet, "A", (20.0, 30.0));
+    (a, b)
+}
+fn wires_one_net(sheet: &SchematicSheet, a: Uuid, b: Uuid) -> bool {
+    (signex_net::build_netlist(sheet).nets.iter())
+        .any(|net| net.wires.contains(&a) && net.wires.contains(&b))
+}
+#[test]
+fn a_repair_at_a_dotless_t_does_not_merge_two_nets() {
+    let mut sheet = test_sheet();
+    let (a, b) = dotless_t_two_nets(&mut sheet);
+    add_pin(&mut sheet, "TP1", (20.0, 10.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    assert!(!wires_one_net(engine.document(), a, b), "two nets to start");
+    let repairs = pin_junction_repairs(engine.document(), &mut SequentialIds::default());
+    engine.execute_batch(repairs).unwrap();
+    assert!(
+        !wires_one_net(engine.document(), a, b),
+        "repair merged A and B; dots {:?}",
+        dots(&engine)
+    );
+}
+#[test]
+fn moving_a_pin_onto_a_dotless_t_does_not_merge_two_nets() {
+    let mut sheet = test_sheet();
+    let (a, b) = dotless_t_two_nets(&mut sheet);
+    let tp1 = add_pin(&mut sheet, "TP1", (60.0, 60.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    mv(
+        &mut engine,
+        vec![SelectedItem::new(tp1, SelectedKind::Symbol)],
+        -40.0,
+        -50.0,
+        false,
+    );
+    assert!(
+        !wires_one_net(engine.document(), a, b),
+        "move merged A and B; dots {:?}",
+        dots(&engine)
+    );
+}
+
+/// A power port's pin anchored at the point names a net there: a part pin end
+/// landing inside a wire of another net at that point gets no dot.
+#[test]
+fn a_pin_moved_onto_a_power_pin_inside_a_wire_of_another_net_gets_no_dot() {
+    let mut sheet = test_sheet();
+    let j1 = add_pin(&mut sheet, "J1", (0.0, 40.0));
+    add_wire(&mut sheet, (0.0, 40.0), (100.0, 40.0));
+    let gnd = add_pin(&mut sheet, "#PWR1", (50.0, 40.0));
+    let port = sheet
+        .symbols
+        .iter_mut()
+        .find(|s| s.uuid == gnd)
+        .expect("port");
+    port.is_power = true;
+    port.value = "GND".to_string();
+    let tp1 = add_pin(&mut sheet, "TP1", (50.0, 10.0));
+    let mut engine = Engine::new(sheet).unwrap();
+    mv(
+        &mut engine,
+        vec![SelectedItem::new(tp1, SelectedKind::Symbol)],
+        0.0,
+        30.0,
+        false,
+    );
+    assert!(dots(&engine).is_empty(), "no dot: {:?}", dots(&engine));
+    assert!(!one_net(engine.document(), &[tp1, j1]));
+    // One notice naming only the part moved, never the power port's own pin:
+    // J1's wire passes through, and nothing at the point names the port's net.
+    let notices = crossed_notices(&mut engine);
+    assert_eq!(notices.len(), 1, "{notices:?}");
+    let pins: Vec<&str> = notices[0].iter().map(|r| r.pin.as_str()).collect();
+    assert_eq!(pins, ["TP1 pin 1"], "{notices:?}");
+    assert!(notices[0][0].through.is_some(), "{notices:?}");
+    assert_eq!(notices[0][0].other, None, "{notices:?}");
+}
+
+/// The engine mints no pin-dot id (#2429): a pin dot made by a move takes
+/// its id from the host's source.
+#[test]
+fn a_pin_dot_takes_its_id_from_the_host_source() {
+    let (mut engine, _, _) = wire_from_j1();
+    engine.set_id_source(Box::new(SequentialIds::default()));
+    place_part(&mut engine, "TP1", (50.0, 40.0));
+    let dot = &engine.document().junctions[0];
+    assert!(dot.minted);
+    assert_eq!(dot.uuid, Uuid::from_u128(1), "the host's first id");
 }

@@ -37,6 +37,33 @@ pub(super) fn sync_sheet_entries(app: &mut Signex, args: &CommandArgs) -> Ran {
     run_edit(app, args, |app| app.sync_sheet_entries_from_operands(args))
 }
 
+/// The sheet symbol Create Sheet Symbol From Sheet placed.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct SymbolFromSheet {
+    pub(crate) id: uuid::Uuid,
+    pub(crate) name: String,
+    /// The file reference it carries.
+    pub(crate) reference: String,
+    pub(crate) at: signex_types::schematic::Point,
+    pub(crate) size: (f64, f64),
+    /// Its sheet entries, one per port of the file.
+    pub(crate) entries: Vec<String>,
+}
+
+impl SymbolFromSheet {
+    /// What the operand form answers.
+    fn answer(&self) -> Value {
+        json!({
+            "id": self.id.to_string(),
+            "name": self.name,
+            "file": self.reference,
+            "at": [self.at.x, self.at.y],
+            "size": [self.size.0, self.size.1],
+            "entries": self.entries,
+        })
+    }
+}
+
 /// The `path` operand as the text `child_file_target` resolves.
 pub(super) fn sheet_file_operand(args: &CommandArgs) -> Result<String, String> {
     path_operand(args).map(|path| path.to_string_lossy().into_owned())
@@ -95,20 +122,14 @@ impl Signex {
             .ok_or_else(|| format!("no sheet symbol `{key}` on this sheet"))
     }
 
-    /// The checks of `place_sheet_symbol` (the file, a loop at any depth, the
-    /// frozen name rule unless `allow_merge`, the connection rule), then one
-    /// sheet symbol with an entry for every port of the file as one undo step.
+    /// `create_sheet_symbol_from_sheet` from its operands:
+    /// [`Self::place_symbol_from_sheet_file`], answered with the new symbol.
     fn symbol_from_sheet_from_operands(
         &mut self,
         args: &CommandArgs,
     ) -> Result<CommandOutcome, String> {
         let allow_merge = matches!(args.operand("allow_merge"), Some(OperandValue::Bool(true)));
         let file = sheet_file_operand(args)?;
-        let reference = self.child_file_reference(&file, allow_merge)?;
-        let (_, path, _) = self.child_file_target(&file)?;
-        let child = self
-            .prefetched_sheet(&path)?
-            .ok_or_else(|| format!("there is no file at {}", path.display()))?;
         let at = match args.operand("at") {
             Some(_) => {
                 refuse_pin_ref(args, "at")?;
@@ -116,6 +137,30 @@ impl Signex {
             }
             None => None,
         };
+        let placed = self.place_symbol_from_sheet_file(&file, at, allow_merge)?;
+        Ok(CommandOutcome::Answered(placed.answer()))
+    }
+
+    /// Create Sheet Symbol From Sheet on the sheet an edit acts on, for the
+    /// GUI and the operand form alike (one command id, one behaviour): the
+    /// file rules (`check_sheet_file`: the project folder, a loop at any
+    /// depth, and unless `allow_merge` an unreadable subtree and a file placed
+    /// already), placed once on this sheet, the connection rule and, unless
+    /// `allow_merge`, the frozen name rule; then one sheet symbol with an
+    /// entry for every port of the file as one undo step. `at` left out puts
+    /// it under the sheet's content. Reads nothing: what the checks need was
+    /// read before (`edit_reads`).
+    pub(crate) fn place_symbol_from_sheet_file(
+        &mut self,
+        file: &str,
+        at: Option<signex_types::schematic::Point>,
+        allow_merge: bool,
+    ) -> Result<SymbolFromSheet, String> {
+        let reference = self.child_file_reference(file, allow_merge)?;
+        let (_, path, _) = self.child_file_target(file)?;
+        let child = self
+            .prefetched_sheet(&path)?
+            .ok_or_else(|| format!("there is no file at {}", path.display()))?;
         let sheet = self
             .document_state
             .edit_engine()
@@ -143,14 +188,14 @@ impl Signex {
             at,
             &mut signex_types::object_id::UuidV7Ids,
         );
-        let answer = json!({
-            "id": symbol.uuid.to_string(),
-            "name": name,
-            "file": reference,
-            "at": [at.x, at.y],
-            "size": [symbol.size.0, symbol.size.1],
-            "entries": symbol.pins.iter().map(|p| p.name.clone()).collect::<Vec<_>>(),
-        });
+        let placed = SymbolFromSheet {
+            id: symbol.uuid,
+            name,
+            reference,
+            at,
+            size: symbol.size,
+            entries: symbol.pins.iter().map(|p| p.name.clone()).collect(),
+        };
         let command = Command::PlaceChildSheet {
             child_sheet: symbol,
         };
@@ -160,7 +205,7 @@ impl Signex {
         }
         let (outcome, reason) = self.apply_engine_commands_reporting(vec![command], false, true);
         applied(outcome, reason)?;
-        Ok(CommandOutcome::Answered(answer))
+        Ok(placed)
     }
 
     /// The dialog's Apply for `direction`, without the dialog: the changes

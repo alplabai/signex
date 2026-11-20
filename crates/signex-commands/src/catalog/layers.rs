@@ -297,7 +297,9 @@ pub(super) const LAYERS: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_RESET_LAYER_COLORS),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        // A CLI or an agent names the board.
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

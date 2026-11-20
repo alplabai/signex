@@ -10,7 +10,6 @@
 //! with a via (`start_on_copper`).
 
 use signex_engine::pcb::draw::{self, TrackStyle};
-use signex_engine::pcb::route::copper_under;
 use signex_types::net_class::NetClass;
 use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
@@ -25,8 +24,34 @@ impl Signex {
     /// Whether a track run is being drawn on the board this window shows:
     /// Space and Shift+Space bend it.
     pub(crate) fn is_routing_board_track(&self) -> bool {
-        self.own_board_tool()
-            .is_some_and(BoardToolSession::is_routing)
+        let path = self.active_tab_path();
+        self.is_routing_on(path.as_deref(), self.interaction_state.acting_window)
+    }
+
+    /// [`Self::is_routing_board_track`] for `window` (`None`: the main
+    /// window) before that window's board is swapped in, as a key from it
+    /// is judged: an undocked window's own tab, else the main window's.
+    pub(crate) fn is_routing_board_track_in(&self, window: Option<iced::window::Id>) -> bool {
+        let undocked = window.filter(|id| self.ui_state.main_window_id != Some(*id));
+        let path = match undocked {
+            Some(id) => match self.ui_state.windows.get(&id) {
+                Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => Some(path.clone()),
+                _ => None,
+            },
+            None => self.active_tab_path(),
+        };
+        self.is_routing_on(path.as_deref(), undocked)
+    }
+
+    /// The one rule both read: the armed tool is for the board at `path`
+    /// shown in `window`, and a run is open on it.
+    fn is_routing_on(
+        &self,
+        path: Option<&std::path::Path>,
+        window: Option<iced::window::Id>,
+    ) -> bool {
+        (self.interaction_state.pcb_tool.as_ref())
+            .is_some_and(|session| session.is_for(path, window) && session.is_routing())
     }
 
     /// Space (flip the bend) or Shift+Space (next corner mode) mid-run.
@@ -164,28 +189,16 @@ pub(super) fn next_leg_style(
     (style, via)
 }
 
-/// `style`, started at `at`: with no net on its layer there and none set in
-/// Properties, it takes the layer and net of the netted copper under `at` on
-/// another copper layer (a surface pad off the active layer), so the first
-/// leg adds a via there and runs on the active layer (maintainer
-/// 2026-11-18). Over bare board it stays as it is, of no net.
+/// `style`, started at `at` (`signex_engine::pcb::route::start_on_copper`);
+/// a net set in Properties keeps it on the active layer.
 pub(super) fn start_on_copper(
     board: &PcbBoard,
     defaults: &BoardToolDefaults,
     at: Point,
     style: TrackStyle,
 ) -> TrackStyle {
-    if style.net != 0 || defaults.track_net.is_some() {
-        return style;
-    }
-    match copper_under(board, at) {
-        Some((layer, net)) => TrackStyle {
-            layer,
-            net,
-            ..style
-        },
-        None => style,
-    }
+    let net_set = defaults.track_net.is_some();
+    signex_engine::pcb::route::start_on_copper(board, at, style, net_set)
 }
 
 /// The net classes that size a track: none once the tool's form set a width

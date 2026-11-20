@@ -108,47 +108,32 @@ pub(crate) fn take_record() -> Option<Record> {
     LAST.with(|last| last.borrow_mut().take())
 }
 
-/// One notice for `names`: `one` of the name when there is one, else `many` of
-/// the count, then the first few names.
-pub(crate) fn notice(
-    names: &[String],
-    one: impl Fn(&str) -> String,
-    many: impl Fn(usize) -> String,
-) -> String {
-    const NAMED: usize = 3;
-    let shown = names
-        .iter()
-        .take(NAMED)
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(", ");
-    match names.len() {
-        1 => one(&shown),
-        n if n <= NAMED => format!("{}: {shown}", many(n)),
-        n => format!("{}: {shown} and {} more", many(n), n - NAMED),
-    }
-}
-
 impl Engine {
     /// The contacts of a move with "keep wires", read with the move applied:
     /// the points the dragged wires carry (a wire that cannot be carried
     /// whole bails at every point), and the moved pins that do not ride on a
-    /// carried wire.
+    /// carried wire. Which wires bail is judged with the bends of `wiring`,
+    /// the drag's mode, as the rounds will carry them.
     pub(super) fn contacts_of(
         &self,
         owners: Ownership,
         wires: &[crate::WireContact],
         items: &[SelectedItem],
+        wiring: DragWiringMode,
     ) -> Contacts {
         let points = crate::carried_points(&self.document, wires, items, &owners.pin_owned());
-        let bailing = crate::bailing_wires(&self.document, &points, items);
+        let policy = crate::Policy {
+            wiring,
+            ..crate::Policy::default()
+        };
+        let bailing = crate::bailing_wires(&self.document, &points, items, &policy);
         let (bailed, live): (Vec<_>, Vec<_>) =
             (points.into_iter()).partition(|point| bailing.contains(&point.wire()));
         Contacts {
             tips: owners.pin_tips(&bailing),
             wires: live,
             bailed,
-            wiring: DragWiringMode::Auto,
+            wiring,
         }
     }
 
@@ -330,19 +315,33 @@ impl Engine {
             // A wire the round laid over a pin end that the plain move leaves
             // free: a bare touch with no dot (no connection, #107) and no
             // notice. The contacts that edited take it down the ladder.
+            // With no contact left to step down (a bus entry's far-end stretch
+            // made the touch), the plain move is committed instead: a bare
+            // touch is never committed silently.
+            let mut commit_plain = !equal;
             if verdict.is_none() && self.makes_bare_taps(&touched, at) {
                 #[cfg(test)]
                 crate::transform::rubber_band::reasons::note("a new bare touch of a pin end");
                 let live = live_keys(contacts, &policy, &edited);
-                if !live.is_empty() {
+                if live.is_empty() {
+                    // Every contact moves plainly then, so the notices name
+                    // what the plain move leaves unkept.
+                    commit_plain = true;
+                    policy
+                        .plain
+                        .extend(contacts.tips.iter().map(crate::PinTip::old_key));
+                    policy
+                        .plain
+                        .extend(contacts.wires.iter().map(crate::WirePoint::old_key));
+                } else {
                     verdict = Some(live);
                 }
             }
             let Some(blamed) = verdict else {
-                if !equal {
+                if commit_plain {
                     // Every contact is plain and the nets still differ from the
-                    // intent: nothing is left to step down, so the plain move
-                    // itself is what is committed.
+                    // intent, or the round leaves a bare touch nothing can step
+                    // down: the plain move itself is what is committed.
                     self.document.clone_from(at.plain);
                     patch = DocumentPatch::from_selected_items(&[items, followed].concat())
                         | DocumentPatch::WIRES
@@ -509,11 +508,8 @@ impl Engine {
         if names.is_empty() {
             return;
         }
-        self.warnings.push(notice(
-            &names,
-            |name| format!("could not keep {name} on the dragged wire"),
-            |n| format!("could not keep {n} connections on the dragged wire"),
-        ));
+        self.notices
+            .push(crate::EngineNotice::DraggedWireLeft { held: names });
     }
 
     /// One notice for the pins held on their old net whose new tip lies
@@ -539,11 +535,8 @@ impl Engine {
             .filter(|(_, now)| now.is_some_and(|p| unjoined.iter().any(|u| key(u) == key(&p))))
             .map(|(tip, _)| tip.label().to_string())
             .collect();
-        self.warnings.push(notice(
-            &names,
-            |name| format!("{name} kept its net and was not joined to the wire it now ends on"),
-            |n| format!("{n} pins kept their nets and were not joined to the wires they end on"),
-        ));
+        self.notices
+            .push(crate::EngineNotice::HeldPinsNotJoined { pins: names });
     }
 }
 

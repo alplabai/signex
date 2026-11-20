@@ -329,12 +329,6 @@ impl Signex {
             },
             ContextMenuMsg::Show(x, y) => self.show_canvas_context_menu(x, y, None),
             ContextMenuMsg::Close => {
-                // Title-bar drag diagnosis: a press in the strip that no
-                // widget captured never reached a drag zone.
-                let (x, y) = self.interaction_state.last_mouse_pos;
-                if y < crate::menu_bar::MENU_BAR_HEIGHT {
-                    tracing::debug!(x, y, "title bar: press reached no widget");
-                }
                 self.interaction_state.context_menu = None;
                 self.interaction_state.context_submenu = None;
                 self.interaction_state.pending_submenu = None;

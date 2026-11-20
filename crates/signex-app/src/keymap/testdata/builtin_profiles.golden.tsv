@@ -56,9 +56,11 @@ altium	bind	Global	Mod+Shift+G	command:toggle_visible_grid
 altium	bind	Global	Mod+Shift+P	command:open_command_palette
 altium	bind	Global	Ctrl+Shift+TAB	command:previous_document_tab
 altium	bind	Global	Mod+Shift+X	command:toggle_cross_select_mode
+altium	bind	Global@macos	Alt+I	command:copy_attributes_or_add_vertex
 altium	bind	Global@macos	Mod+Alt+F	command:find_and_replace
 altium	bind	Global@macos	Mod+Shift+Z	command:redo
 altium	bind	Global@macos	Mod+W	command:close_active_document
+altium	bind	Global@macos	Shift+TAB	command:cycle_wiring_mode
 altium	bind	Global	Ctrl+Shift+Z	command:redo
 altium	bind	Global	Ctrl+TAB	command:next_document_tab
 altium	bind	Global	Ctrl+Y	command:redo
@@ -177,6 +179,7 @@ altium	hint	-	-	open_datasheet
 altium	hint	-	-	change_component
 altium	hint	-	-	open_parameter_manager
 altium	hint	-	-	set_symbol_parameter
+altium	hint	-	-	set_sheet_variable
 altium	hint	-	-	lock_board_items
 altium	hint	-	-	unlock_board_items
 altium	hint	-	-	bring_drawings_forward
@@ -684,6 +687,7 @@ classic	hint	-	D	open_datasheet
 classic	hint	-	-	change_component
 classic	hint	-	-	open_parameter_manager
 classic	hint	-	-	set_symbol_parameter
+classic	hint	-	-	set_sheet_variable
 classic	hint	-	-	lock_board_items
 classic	hint	-	-	unlock_board_items
 classic	hint	-	-	bring_drawings_forward

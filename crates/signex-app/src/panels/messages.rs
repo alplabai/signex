@@ -12,9 +12,9 @@ pub enum PanelMsg {
     Navigator(TreeMsg),
     SetUnit(Unit),
     RunErc,
-    /// A Messages row's command link was pressed: the catalog id it runs
-    /// (`messages_row::row_action`).
-    MessageLinkPressed(&'static str),
+    /// A Messages row's command link was pressed: the command and the
+    /// document it acts on (`messages_row::row_action`).
+    MessageLinkPressed(crate::diagnostics::MessageLink),
     /// v0.14.2 — Properties panel toggle for the active footprint
     /// editor's Auto-fit Courtyard setting. Routes through
     /// `handle_dock_sch_library_message` (same dispatcher every other

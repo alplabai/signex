@@ -144,7 +144,7 @@ impl Signex {
             return Task::none();
         }
         let (wx, wy) = if self.interaction_state.current_tool == Tool::Wire {
-            self.snap_wire_point(world_x, world_y)
+            self.snap_wire_point(self.active_render_snapshot(), world_x, world_y)
         } else {
             self.snap_to_grid(world_x, world_y)
         };

@@ -23,20 +23,37 @@ pub(crate) fn bare_taps_line(file: &str, count: usize) -> String {
 }
 
 /// Tell Messages how many pin ends of the sheet opened from `path` lie inside
-/// a wire with no dot; the sheet is left as it is. The count reported. The
-/// line is logged under its own target, so its Messages row links to Repair
-/// Pin Junctions (`panels::messages_row::row_action`).
+/// a wire with no dot; the sheet is left as it is. The count reported. Its
+/// Messages row links to Repair Pin Junctions on that sheet, wherever the view
+/// is when the link is pressed (`panels::messages_row::row_action`).
 pub(crate) fn report_bare_pin_taps(path: &Path, sheet: &SchematicSheet) -> usize {
     let count = signex_engine::bare_pin_taps(sheet).len();
     if count > 0 {
         let file = path.file_name().unwrap_or_default().to_string_lossy();
-        let line = bare_taps_line(&file, count);
-        log::warn!(target: crate::panels::messages_row::PIN_JUNCTIONS_TARGET, "{line}");
+        crate::diagnostics::log_warning_with_link(
+            crate::panels::messages_row::PIN_JUNCTIONS_TARGET,
+            bare_taps_line(&file, count),
+            crate::diagnostics::MessageLink::RepairPinJunctions(path.to_path_buf()),
+        );
     }
     count
 }
 
 impl Signex {
+    /// Repair Pin Junctions on the sheet at `path`, the one a Messages row
+    /// names: its tab comes to the front first. A sheet no longer open is
+    /// refused with a notice; the sheet in view is left alone.
+    pub(crate) fn repair_pin_junctions_at(&mut self, path: &Path) {
+        if !self.activate_tab_for_path(path) {
+            let file = path.file_name().unwrap_or_default().to_string_lossy();
+            crate::diagnostics::log_warning(format!(
+                "{file} is not open; open it to repair its pin junctions"
+            ));
+            return;
+        }
+        self.repair_pin_junctions();
+    }
+
     /// Repair Pin Junctions: a dot on every bare contact of the active sheet,
     /// one undo step. Says so in Messages when there is nothing to repair.
     pub(crate) fn repair_pin_junctions(&mut self) {
@@ -141,8 +158,55 @@ pub(crate) mod tests {
             .find(|entry| entry.message == line)
             .expect("the report is logged");
         assert_eq!(crate::diagnostics::logged_count(&line), before + 1);
-        let (command, _) = crate::panels::messages_row::row_action(&entry.code).expect("a link");
-        assert_eq!(command, "repair_pin_junctions");
+        let (link, _) = crate::panels::messages_row::row_action(&entry).expect("a link");
+        let named = std::path::PathBuf::from("linked_report.snxsch");
+        assert_eq!(
+            link,
+            crate::diagnostics::MessageLink::RepairPinJunctions(named)
+        );
+        let code = crate::diagnostics::diagnostic_code_from_target(
+            crate::panels::messages_row::PIN_JUNCTIONS_TARGET,
+        );
+        assert_eq!(entry.code, code, "the row keeps its own source");
+    }
+
+    /// The link repairs the sheet its row names, not the one in view: that
+    /// sheet's tab comes to the front and only it gets the dot. A sheet that
+    /// is no longer open is refused and nothing changes.
+    #[test]
+    fn the_link_repairs_the_sheet_its_row_names() {
+        let (mut app, named) = app_with(sheet_with_bare_tap());
+        let other = std::path::PathBuf::from("in_view.snxsch");
+        let engine = signex_engine::Engine::new(sheet_with_bare_tap()).unwrap();
+        app.document_state.engines.insert(other.clone(), engine);
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "in_view".to_string(),
+            path: other.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        app.document_state.active_path = Some(other.clone());
+
+        let link = crate::diagnostics::MessageLink::RepairPinJunctions(named.clone());
+        let pressed = crate::panels::PanelMsg::MessageLinkPressed(link);
+        let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
+            pressed,
+        )));
+        let dots = |app: &Signex, path: &std::path::PathBuf| {
+            app.document_state.engines[path].document().junctions.len()
+        };
+        assert_eq!(dots(&app, &named), 1, "the named sheet is repaired");
+        assert_eq!(dots(&app, &other), 0, "the sheet in view is not");
+        assert_eq!(app.document_state.active_path.as_ref(), Some(&named));
+
+        let gone = std::path::PathBuf::from("closed.snxsch");
+        let notice = "closed.snxsch is not open; open it to repair its pin junctions";
+        let before = crate::diagnostics::logged_count(notice);
+        app.repair_pin_junctions_at(&gone);
+        assert_eq!(crate::diagnostics::logged_count(notice), before + 1);
+        assert_eq!(dots(&app, &other), 0, "nothing else is repaired");
     }
 
     #[test]

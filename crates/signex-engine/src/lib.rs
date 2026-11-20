@@ -5,6 +5,9 @@ mod patch;
 mod annotation;
 mod annotation_placements;
 mod clipboard_text;
+mod derived_ids;
+mod notice;
+pub use notice::{EngineNotice, RefusedPinDot};
 mod history;
 mod history_snapshot;
 mod id_collision;
@@ -22,6 +25,13 @@ mod selection;
 mod selection_payload;
 mod sheet;
 mod sheet_entry;
+mod sheet_file_rules;
+#[cfg(test)]
+mod sheet_file_rules_tests;
+pub use sheet_file_rules::{
+    SheetFilePlacement, SheetFileRefusal, SheetGraph, SheetGraphNode, SubtreeFacts,
+    carries_reaching_name, check_sheet_file, subtree_facts,
+};
 mod sheet_identity;
 pub use sheet_identity::other_sheet_symbol_using_file;
 pub mod pcb;
@@ -262,6 +272,9 @@ pub struct Engine {
     /// Notices raised by the last commands (rubber-band pins that could
     /// not be kept connected); the app drains them into the Messages panel.
     warnings: Vec<String>,
+    /// Notices raised by the last commands as data (see [`EngineNotice`]);
+    /// the app words them through its catalog.
+    notices: Vec<EngineNotice>,
     /// The pins behind the last notice, one "R1 pin 2" each.
     unkept_pins: Vec<String>,
     /// Pre-move nets computed ahead of time (drag previews).
@@ -281,9 +294,11 @@ pub struct Engine {
     /// Where pin ends touched a wire bare before the command in flight: the
     /// reconcile leaves those contacts be (`transform::pin_junctions`).
     taps_before: Option<std::sync::Arc<PinKeys>>,
-    /// Pin ends the command in flight left without a dot because the wires
-    /// through them carry two nets; named in a notice once it commits.
+    /// Pin ends the command in flight left without a dot because
+    /// a dot there would merge two nets; named in a notice once it commits.
     crossed_taps: Vec<signex_types::schematic::Point>,
+    /// The host's id source for the pin dots the engine derives (#2429).
+    derived_ids: derived_ids::DerivedIds,
     /// The bare pin contacts and the pin ends of the pre-move sheet, so a drag
     /// preview does not scan the whole sheet for them on every frame.
     preset_taps: Option<std::sync::Arc<PinKeys>>,
@@ -495,6 +510,8 @@ impl Engine {
             preset_sheet: None,
             taps_before: None,
             crossed_taps: Vec::new(),
+            derived_ids: derived_ids::DerivedIds::default(),
+            notices: Vec::new(),
             preset_taps: None,
             preset_pin_owners: None,
             #[cfg(test)]
@@ -541,6 +558,8 @@ impl Engine {
             preset_sheet: None,
             taps_before: None,
             crossed_taps: Vec::new(),
+            derived_ids: derived_ids::DerivedIds::default(),
+            notices: Vec::new(),
             preset_taps: None,
             preset_pin_owners: None,
             #[cfg(test)]
@@ -550,6 +569,12 @@ impl Engine {
             #[cfg(test)]
             full_scan_follow: false,
         })
+    }
+
+    /// Where the ids of the dots this engine derives (pin junctions) come
+    /// from: the host's source; the production v7 source until it is set.
+    pub fn set_id_source(&mut self, ids: Box<dyn signex_types::object_id::IdSource + Send + Sync>) {
+        self.derived_ids = derived_ids::DerivedIds::new(ids);
     }
 
     /// The pins the last commands could not keep connected (drained).
@@ -568,6 +593,15 @@ impl Engine {
             return Vec::new();
         }
         std::mem::take(&mut self.warnings)
+    }
+
+    /// Drain the typed notices raised since the last call, held and dropped
+    /// with a transaction as [`Self::take_warnings`]'s are.
+    pub fn take_notices(&mut self) -> Vec<EngineNotice> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
+        std::mem::take(&mut self.notices)
     }
 
     pub fn save(&mut self) -> Result<(), EngineError> {
@@ -844,7 +878,7 @@ impl Engine {
             && result.as_ref().is_ok_and(|done| done.changed)
             && let Some(notice) = transform::crossed_taps_notice(&self.document, &crossed)
         {
-            self.warnings.push(notice);
+            self.notices.push(notice);
         }
         self.note_command_result(&result);
         if result.as_ref().is_ok_and(|done| !done.changed) {

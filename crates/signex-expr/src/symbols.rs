@@ -9,15 +9,20 @@
 use crate::dimension::Dimension;
 use crate::unit::{Quantity, Unit};
 
-/// Where a literal is read. Only the meaning of a bare `m` depends on it
-/// (see [`bare_m_meaning`]).
+/// Where a literal is read. The meaning of a bare `m` depends on it (see
+/// [`bare_m_meaning`]), and [`LiteralContext::Geometry`] refuses a literal
+/// whose suffix is only an SI prefix.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LiteralContext {
-    /// Any value: a field, a variable, a sketch parameter.
+    /// Any value: a field, a variable, a BOM column.
     #[default]
     General,
     /// A value that must be a length (a pad width, a clearance).
     Length,
+    /// A sketch parameter: a length, an angle or a count that drives
+    /// geometry. A prefix-only literal (`10m`, `1u`, `4k7`, `2n`) has no
+    /// single reading there, so it is refused rather than baked.
+    Geometry,
 }
 
 /// What a bare `m` after a number means.
@@ -27,17 +32,27 @@ pub enum BareM {
     Metre,
     /// The milli prefix on a plain number: `10m` is 0.01.
     Milli,
+    /// No meaning: the literal is refused.
+    Refused,
 }
 
 /// The one rule for a bare `m` after a number (maintainer decision
 /// 2026-11-18, #1984, `docs/DECISIONS.md`): metre where a length is
-/// expected, milli everywhere else. An `m` followed by another unit symbol
-/// (`10mV`, `4.7mF`) is always milli and never reaches this function.
+/// expected, milli where any value is, refused in a sketch parameter. An
+/// `m` followed by another unit symbol (`10mV`, `4.7mF`) is always milli
+/// and never reaches this function.
 pub fn bare_m_meaning(context: LiteralContext) -> BareM {
     match context {
         LiteralContext::Length => BareM::Metre,
         LiteralContext::General => BareM::Milli,
+        LiteralContext::Geometry => BareM::Refused,
     }
+}
+
+/// True when `context` refuses a literal whose suffix is only an SI prefix
+/// (`1u`, `2n`) or that is written in RKM notation (`4k7`).
+pub(crate) fn refuses_prefix_only(context: LiteralContext) -> bool {
+    context == LiteralContext::Geometry
 }
 
 /// Millimetres in one metre.
@@ -144,12 +159,16 @@ pub(crate) fn apply_suffix(value: f64, suffix: &str, context: LiteralContext) ->
         return Some(Quantity { value, unit });
     }
     if suffix == "m" {
-        return Some(match bare_m_meaning(context) {
-            BareM::Metre => Quantity::length(value * MM_PER_M),
-            BareM::Milli => Quantity::count(value * 1e-3),
-        });
+        return match bare_m_meaning(context) {
+            BareM::Metre => Some(Quantity::length(value * MM_PER_M)),
+            BareM::Milli => Some(Quantity::count(value * 1e-3)),
+            BareM::Refused => None,
+        };
     }
     if let Some(factor) = prefix_factor(suffix) {
+        if refuses_prefix_only(context) {
+            return None;
+        }
         return Some(Quantity::count(value * factor));
     }
     if let Some(dim) = named_unit(suffix) {

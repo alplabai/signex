@@ -11,13 +11,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use uuid::Uuid;
 
-use super::{Point, SchematicSheet, Wire};
+use super::{SchematicSheet, Wire};
 use crate::theme::Color;
-
-/// The 1 um key the netlist calls "the same point".
-fn key(p: &Point) -> (i64, i64) {
-    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
-}
 
 /// Dots by row (`y` key to `(x key, dot index)`) and by column.
 struct DotLines {
@@ -82,12 +77,16 @@ pub fn junction_wire_colors(
     if sheet.junctions.is_empty() {
         return HashMap::new();
     }
-    let dots: Vec<(i64, i64)> = sheet.junctions.iter().map(|j| key(&j.position)).collect();
+    let dots: Vec<(i64, i64)> = sheet
+        .junctions
+        .iter()
+        .map(|j| j.position.um_key())
+        .collect();
     let lines = DotLines::of(&dots);
     // Per dot: each colour met and how many wires carry it.
     let mut votes: Vec<Vec<(Option<Color>, usize)>> = vec![Vec::new(); dots.len()];
     for wire in &sheet.wires {
-        let on = dots_on(key(&wire.start), key(&wire.end), &dots, &lines);
+        let on = dots_on(wire.start.um_key(), wire.end.um_key(), &dots, &lines);
         if on.is_empty() {
             continue;
         }
@@ -125,6 +124,7 @@ fn majority(tally: &[(Option<Color>, usize)]) -> Option<Color> {
 mod tests {
     use super::*;
     use crate::schematic::Junction;
+    use crate::schematic::Point;
 
     const GREEN: Color = Color {
         r: 0,
