@@ -94,3 +94,29 @@ fn a_save_as_rekey_moves_engine_tab_dirty_mark_and_windows_together() {
         Some(to.as_path())
     );
 }
+
+#[test]
+fn a_panicking_save_as_keeps_the_engine_at_its_old_path() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, from, to, _revision) = app_with_dirty_sheet(dir.path());
+
+    let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        app.with_active_schematic_session_mut(|_| -> () { panic!("injected") })
+    }));
+
+    assert!(unwound.is_err(), "the injected panic must reach the caller");
+    let engines = &app.document_state.engines;
+    assert_eq!(
+        engines.get(&from).and_then(|e| e.path()),
+        Some(from.as_path()),
+        "the engine stays in the map at its old path"
+    );
+    assert!(!engines.contains_key(&to), "no engine exists at the target");
+    assert_eq!(
+        app.document_state.active_path.as_deref(),
+        Some(from.as_path())
+    );
+    assert_eq!(active_tab(&app).path, from);
+    assert_eq!(active_tab(&app).title, "a");
+    assert!(app.document_state.is_document_dirty(&from));
+}
