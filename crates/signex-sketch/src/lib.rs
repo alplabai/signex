@@ -30,6 +30,7 @@ pub mod expr;
 pub mod geom;
 pub mod id;
 pub mod parameter;
+pub mod parameter_refs;
 pub mod plane;
 pub mod sketch;
 pub mod solver;
