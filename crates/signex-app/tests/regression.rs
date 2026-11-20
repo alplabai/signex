@@ -218,6 +218,9 @@ mod dock_side_width;
 #[path = "regression/dock_tab_controls.rs"]
 mod dock_tab_controls;
 
+#[path = "regression/core_safety_net.rs"]
+mod core_safety_net;
+
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
 // #1826 / #1827 / #1828 — a save writes the file the document is.
