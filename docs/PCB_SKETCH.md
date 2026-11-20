@@ -131,43 +131,73 @@ forbids it; see `docs/architecture/pcb-drc.md`, "Keepouts".
 One command, `board_sketch` (Design ▸ Board Sketch, the PCB Active Bar's
 Board Sketch button, the board canvas menu, the palette; `1` on a board in
 both built-in profiles),
-enters sketch mode on the board in view, or leaves it when it is on. Only
-the main window's board can be in sketch mode, one board at a time;
-entering on another board leaves the first one (committing it) first.
+enters sketch mode on the board in view, or leaves it when it is on (as
+Bake does). Only the main window's board can be in sketch mode, one board
+at a time; entering on another board leaves the first one (committing it)
+first.
 
 **The editor is the footprint editor's sketch tool.** The mode hosts a
 `FootprintDocument` that exists only in `BoardSketchSession`
 (`app/state/board_sketch.rs`): its one footprint holds a working copy of
-the board's sketch, keyed by the board's path. The footprint canvas,
-the sketch Active Bar (line, arc, circle, rectangle, dimension,
-constraints, construction toggle), the DOF chip and Properties row, the
-snap glyphs, the solver and its off-thread solve all run unchanged on it.
-What differs for a board (`FootprintEditorState::board_backdrop` is set):
+the board's sketch, keyed by the board's path. The footprint canvas, the
+sketch Active Bar, the DOF chip and Properties row, the snap glyphs, the
+solver and its off-thread solve all run unchanged on it.
 
-- the canvas draws the board (outline, tracks, vias) faint under the
-  sketch, on the dark board ground;
-- the Active Bar shows the sketch tools only, no pad, silk or 3D triggers;
-- the footprint bake is off: nothing is baked into the hosting footprint;
-- Properties adds a Board section: Board outline for an edge, Mounting
-  hole for a circle, and the hole's Drill (empty: the circle's diameter),
-  Plated and Net. Keepouts (layer and kinds) and cutouts use the Role
-  picker and its sub-forms, as in a footprint.
+### Hosts {#hosts}
+
+One sketch editor serves two hosts, `SketchHost::Footprint` and
+`SketchHost::Board` (`signex-types/src/sketch/host.rs`, #2518). The editor
+asks `FootprintEditorState::sketch_host()` (a board sketch carries the
+board backdrop) and nothing else. The host decides:
+
+- **the role picker** (`SketchHost::roles`): a footprint keeps its fifteen
+  roles; a board offers Board outline, Cutout, Keepout, V-score and
+  Mounting hole, the targets `bake_board` writes today
+  (`SketchHost::bake_targets`). A board role needs its shape: an outline
+  an edge, a hole a circle, a V-score a line (`SketchRole::fits`); a pick
+  on the wrong shape changes nothing;
+- **the actions** (`SketchHost::offers`): Make Pad from Profile is greyed
+  on a board, "footprint only";
+- **the bake**: a footprint bakes on every solve; a board bakes only when
+  Bake commits it.
+
+Both hosts show the same Active Bar: Select | Create ▾ | Modify ▾ |
+constraint strip | dimension input | Linetype (Normal / Construction /
+Centerline segments) | Snap ▾. Create holds Point. The canvas draws the
+board (outline, tracks, vias) faint under the sketch, on the dark board
+ground. Properties adds a Board section: Board outline for an edge,
+Mounting hole for a circle, and the hole's Drill (empty: the circle's
+diameter), Plated and Net.
 
 **Nothing touches the board or the disk while editing.** Undo and Redo
 step the working copy while the mode is on. There is no auto-save.
 
-**Commit.** Leave (the bar's button, Esc with no tool armed, or
-`board_sketch` again) commits a changed copy, then ends the mode; Apply
-commits and stays; Discard ends the mode and drops the copy. A commit runs
-`bake_board` on the copy and, if it bakes, executes
-`BoardCommand::set_board_sketch` as one board step: undo, dirty and save
-are those of any board edit, and the working copy continues from what the
-board stored (with its `baked_kinds`). If the bake (or the board command)
-refuses, the error text is shown on the notice card, in Messages and in the
-mode's bar; the board is unchanged and the mode stays on.
+### The way out {#way-out}
 
-**Esc** first drops an armed sketch tool, a gesture in flight or an open
-menu (the footprint editor's `ToolEscape`), then leaves the mode.
+The mode bar is the same on both hosts: **Bake preview · Discard changes ·
+Bake**.
+
+- **Bake** (tooltip "Apply to board") commits a changed copy and ends the
+  mode. A commit runs `bake_board` on the copy and, if it bakes, executes
+  `BoardCommand::set_board_sketch` as one board step: undo, dirty and save
+  are those of any board edit. If the bake (or the board command) refuses,
+  the error text is shown on the notice card, in Messages and in the mode
+  bar; the board is unchanged and the mode stays on.
+- **Discard changes** ends the mode without committing. When the copy
+  differs from what the board last took it asks first ("Keep editing" or
+  "Discard changes"). It never writes.
+- **Bake preview** opens a card with what Bake would write, a count per
+  board target, or why the sketch does not bake; "Back to sketch" closes
+  it. It writes nothing.
+
+A save, close, quit or undock still commits the copy and keeps the mode on
+(`settle_board_sketch_of`), so a save never drops sketch work; the working
+copy continues from what the board stored (with its `baked_kinds`).
+
+**Esc** answers an open discard question with Keep editing, then drops an
+armed sketch tool, a gesture in flight or an open menu (the footprint
+editor's `ToolEscape`), then acts as Discard changes. Esc never applies the
+sketch to the board.
 
 **The mode ends with its board.** Closing the board's tab (parked or not),
 a History restore or recovery copy read into it, or a failed reload ends
@@ -208,6 +238,13 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
 2026-11-11, #2262.
 
 ## Not done yet
+
+- The board targets Slot, Pour, Room, Mechanical layer and Component
+  anchor, and the Create / Modify rows Slot, Polygon, Chamfer, Extend and
+  Linear Pattern (#2518): none is offered until it bakes. Patterns bake
+  their instances with #2517.
+- The bake preview drawn on the canvas in layer colours; today it is a
+  count per target.
 
 - Drawing V-scores. (Exporting them is done: through cutouts go to the
   Gerber profile, mounting holes to the drill files and V-scores to their own

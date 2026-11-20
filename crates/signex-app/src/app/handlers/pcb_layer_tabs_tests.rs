@@ -102,6 +102,16 @@ fn press(app: &mut Signex, window: iced::window::Id, keys: &str) {
     }));
 }
 
+/// Hide the mechanical kind (3D body, assembly, fab, courtyard, the board
+/// outline...), whose tabs come before the silkscreen in the panel's order.
+fn hide_mechanical(app: &mut Signex) {
+    let event = crate::app::PcbViewMsg::LayerKindVisibilitySet {
+        kind: signex_renderer::pcb::LayerKind::Mechanical,
+        visible: false,
+    };
+    let _ = app.update(Message::Pcb(PcbMsg::View(event)));
+}
+
 fn pill(app: &Signex, window: iced::window::Id) -> Option<String> {
     app.status_active_layer(window)
         .map(|(_, name)| name.into_string())
@@ -132,6 +142,9 @@ fn a_tab_click_sets_the_active_layer_and_the_status_readout() {
     assert_eq!(snapshot.traces.last().map(|t| t.p0[1]), Some(5.0));
 
     // A non-copper tab is a layer like any other.
+    // The tabs before the silkscreen in the panel's order go with their
+    // layers, so the Top Silkscreen tab is on screen.
+    hide_mechanical(&mut app);
     let sent = messages_on_click(app.view(main), WINDOW, "Top Silkscreen");
     for msg in sent {
         let _ = app.update(msg);
@@ -317,6 +330,7 @@ fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
     // m104: a hidden layer has no tab.
     assert!(tab_right_click(&app, main, "Bottom Layer").is_none());
 
+    hide_mechanical(&mut app);
     right_click_tab(&mut app, main, "Top Silkscreen");
     pick_row(&mut app, main, "Show only this layer");
     let view = app.pcb_layer_view(&path);
@@ -326,18 +340,22 @@ fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
     assert_eq!(traces(&app), 0, "no copper is drawn");
     assert_eq!(pill(&app, main).as_deref(), Some("Top Silkscreen"));
 
-    // The Top Layer is hidden now and has no tab, so Show all layers is
-    // picked from the menu of the one visible tab.
+    // Every other layer is hidden, so only its own tab is left: the Top
+    // Layer has no tab.
     assert!(tab_right_click(&app, main, "Top Layer").is_none());
     right_click_tab(&mut app, main, "Top Silkscreen");
     pick_row(&mut app, main, "Show all layers");
     assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
     assert!(!app.pcb_layer_view(&path).has_hidden());
     assert_eq!(traces(&app), 2);
-    // Every layer is visible again, so every layer has its tab back.
-    for label in ["Top Layer", "Top Silkscreen", "Bottom Layer"] {
+    // Every layer is visible again, so every layer has its tab back; the
+    // mechanical tabs, before the silkscreen in the panel's order, go again
+    // to bring the Top Silkscreen tab on screen.
+    for label in ["Top Layer", "Bottom Layer"] {
         assert!(tab_right_click(&app, main, label).is_some(), "{label} tab");
     }
+    hide_mechanical(&mut app);
+    assert!(tab_right_click(&app, main, "Top Silkscreen").is_some());
 }
 
 /// The Tab names switch and the Show layer numbers row of the drawn tab

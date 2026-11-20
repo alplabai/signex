@@ -335,7 +335,7 @@ fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
         hex: "#386CD0".to_string(),
         ..LayersPanelUi::default()
     };
-    let mut view = PcbLayerView::default();
+    let view = PcbLayerView::default();
     let closed = draw_pixels(panel(&context(&view)), WINDOW);
     let open = context_with(&view, ui);
     for label in ["Palette", "Colour"] {
@@ -345,8 +345,11 @@ fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
         !listed(&open, "Palette colour"),
         "no palette colour again without a colour of its own"
     );
-    view.set_layer_colour(BOTTOM, Some([255, 0, 255]));
-    let ctx = context(&view);
+    let mut coloured = board();
+    let magenta = signex_types::theme::Color::new(255, 0, 255, 255);
+    coloured.options.set_layer_color(BOTTOM, Some(magenta));
+    let mut ctx = context(&view);
+    ctx.pcb_layers = PcbLayersPanel::new(&coloured, &view, ctx.pcb_layers.i18n.clone());
     assert_eq!(
         ctx.pcb_layers.colour(BOTTOM),
         iced::Color::from_rgb8(255, 0, 255)

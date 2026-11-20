@@ -168,14 +168,18 @@ fn a_typed_hex_colour_recolours_the_layer_and_keeps_the_card_open() {
     assert_eq!(ui.hex, start, "the field starts at the layer's colour");
     assert!(start.starts_with('#') && start.len() == 7, "{start}");
 
+    // Layer colours are saved with the board (2026-11-18).
+    let board_colour = |app: &Signex| {
+        app.document_state
+            .pcb_board(&path)
+            .and_then(|board| board.options.layer_color(BOTTOM))
+            .map(|c| [c.r, c.g, c.b])
+    };
     layers(&mut app, LayersPanelMsg::HexEdited("#FF00".to_string()));
-    assert_eq!(app.pcb_layer_view(&path).paint().colour(BOTTOM), None);
+    assert_eq!(board_colour(&app), None);
 
     layers(&mut app, LayersPanelMsg::HexEdited("#FF00FF".to_string()));
-    assert_eq!(
-        app.pcb_layer_view(&path).paint().colour(BOTTOM),
-        Some([255, 0, 255])
-    );
+    assert_eq!(board_colour(&app), Some([255, 0, 255]));
     let ui = &app.document_state.panel_ctx.pcb_layers_ui;
     assert_eq!(ui.picker, Some(BOTTOM), "the card stays open");
     assert_eq!(ui.hex, "#FF00FF");

@@ -1,0 +1,166 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "h616-lpddr4",
+  "net_classes": [
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.093,
+      "diff_pair_width": 0.093,
+      "name": "DDR_ADDR",
+      "nets": [
+        "/DRAM/SA0",
+        "/DRAM/SA1",
+        "/DRAM/SA2",
+        "/DRAM/SA3",
+        "/DRAM/SA4",
+        "/DRAM/SA5",
+        "/DRAM/SCKE0",
+        "/DRAM/SCKE1",
+        "/DRAM/SCKN",
+        "/DRAM/SCKP"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.093,
+      "diff_pair_width": 0.093,
+      "name": "DDR_CMD",
+      "nets": [
+        "/DRAM/SCS0",
+        "/DRAM/SCS1",
+        "/DRAM/SRST"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.093,
+      "diff_pair_width": 0.093,
+      "name": "DDR_DATA_0",
+      "nets": [
+        "/DRAM/SDQ0",
+        "/DRAM/SDQ1",
+        "/DRAM/SDQ2",
+        "/DRAM/SDQ3",
+        "/DRAM/SDQ4",
+        "/DRAM/SDQ5",
+        "/DRAM/SDQ6",
+        "/DRAM/SDQ7",
+        "/DRAM/SDQM0",
+        "/DRAM/SDQS0N",
+        "/DRAM/SDQS0P"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.093,
+      "diff_pair_width": 0.093,
+      "name": "DDR_DATA_1",
+      "nets": [
+        "/DRAM/SDQ10",
+        "/DRAM/SDQ11",
+        "/DRAM/SDQ12",
+        "/DRAM/SDQ13",
+        "/DRAM/SDQ14",
+        "/DRAM/SDQ15",
+        "/DRAM/SDQ8",
+        "/DRAM/SDQ9",
+        "/DRAM/SDQM1",
+        "/DRAM/SDQS1N",
+        "/DRAM/SDQS1P"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.093,
+      "diff_pair_width": 0.093,
+      "name": "DDR_DATA_2",
+      "nets": [
+        "/DRAM/SDQ16",
+        "/DRAM/SDQ17",
+        "/DRAM/SDQ18",
+        "/DRAM/SDQ19",
+        "/DRAM/SDQ20",
+        "/DRAM/SDQ21",
+        "/DRAM/SDQ22",
+        "/DRAM/SDQ23",
+        "/DRAM/SDQM2",
+        "/DRAM/SDQS2N",
+        "/DRAM/SDQS2P"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.093,
+      "diff_pair_width": 0.093,
+      "name": "DDR_DATA_3",
+      "nets": [
+        "/DRAM/SDQ24",
+        "/DRAM/SDQ25",
+        "/DRAM/SDQ26",
+        "/DRAM/SDQ27",
+        "/DRAM/SDQ28",
+        "/DRAM/SDQ29",
+        "/DRAM/SDQ30",
+        "/DRAM/SDQ31",
+        "/DRAM/SDQM3",
+        "/DRAM/SDQS3N",
+        "/DRAM/SDQS3P"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.08,
+      "diff_pair_width": 0.08,
+      "name": "USB",
+      "nets": [
+        "/AUX_D+",
+        "/AUX_D-",
+        "/CODEC_D+",
+        "/CODEC_D-",
+        "/MCU_D+",
+        "/MCU_D-"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.08,
+      "diff_pair_width": 0.08,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    }
+  ],
+  "pcb_file": "h616-lpddr4.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

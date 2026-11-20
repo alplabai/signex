@@ -4,12 +4,12 @@
 
 use std::collections::BTreeMap;
 
+use signex_expr::ExprNode;
+use signex_expr::parse;
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
 use signex_sketch::array::NumberingScheme;
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
@@ -111,7 +111,7 @@ pub(super) fn bake_polar(
     // resolves `deg` → rad). On unit error, surface and skip.
     let sweep_q = eval(&sweep_ast, &ctx).map_err(SketchError::Expr)?;
     let sweep_rad = match sweep_q.unit.family() {
-        signex_sketch::unit::UnitFamily::Angle => sweep_q.value,
+        signex_expr::UnitFamily::Angle => sweep_q.value,
         _ => {
             warnings.push(format!(
                 "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"

@@ -36,7 +36,7 @@ pub(super) fn rgb(color: Color) -> (f32, f32, f32) {
 }
 
 /// The colour `wire` strokes with: its own, else override, else class.
-fn wire_color(
+pub(super) fn wire_color(
     wire: &Wire,
     net_colors: &HashMap<Uuid, Color>,
     classes: &HashMap<Uuid, NetClassStyle>,
@@ -67,17 +67,21 @@ pub(super) fn wire_alpha(
     wire_color(wire, net_colors, classes).map_or(1.0, |c| f32::from(c.a) / 255.0)
 }
 
-/// The fill colour of `junction`. A junction is tinted only by its net's class
-/// colour; a per-net colour override then takes precedence over that, as it
-/// does for a wire. An override alone leaves the palette colour, so a sheet
-/// with no classes prints its junctions as it always did. The canvas applies
-/// the same rule (`junction_color` in `signex-app`).
+/// The fill colour of `junction`: the colour most of its wires share
+/// (`from_wires`, see `signex_types::schematic::junction_wire_colors`), else
+/// its net's class colour with a per-net override over that, else the
+/// palette colour. The canvas applies the same rule (`junction_color` in
+/// `signex-app`).
 pub(super) fn junction_rgb(
     junction: &Junction,
+    from_wires: &HashMap<Uuid, Color>,
     net_colors: &HashMap<Uuid, Color>,
     classes: &HashMap<Uuid, NetClassStyle>,
     palette: (f32, f32, f32),
 ) -> (f32, f32, f32) {
+    if let Some(color) = from_wires.get(&junction.uuid) {
+        return rgb(*color);
+    }
     let Some(class_color) = classes.get(&junction.uuid).and_then(|style| style.color) else {
         return palette;
     };
@@ -152,6 +156,48 @@ mod tests {
             wire_width_mm: width,
             line: Some(NetLineStyle::Dashed),
         }
+    }
+
+    /// A dot on a T of green wires prints green; with no wires it keeps its
+    /// own rule (palette without a class).
+    #[test]
+    fn a_junction_prints_in_the_colour_of_its_wires() {
+        use signex_types::schematic::{Point, SchematicSheet};
+        let green = Color::new(0, 255, 0, 255);
+        let palette = (0.5, 0.5, 0.5);
+        let at = |x: f64, y: f64| Point::new(x, y);
+        let mut sheet = SchematicSheet::default();
+        let spans = [
+            (at(0.0, 0.0), at(10.0, 0.0)),
+            (at(10.0, 0.0), at(20.0, 0.0)),
+            (at(10.0, 0.0), at(10.0, 10.0)),
+        ];
+        for (n, (a, b)) in spans.into_iter().enumerate() {
+            sheet.wires.push(Wire {
+                start: a,
+                end: b,
+                color: Some(green),
+                ..wire(n as u128 + 1, 0.0)
+            });
+        }
+        let dot = Junction {
+            uuid: Uuid::from_u128(9),
+            position: at(10.0, 0.0),
+            ..Junction::default()
+        };
+        sheet.junctions.push(dot.clone());
+        let none = HashMap::new();
+        let from_wires = signex_types::schematic::junction_wire_colors(&sheet, |w| {
+            wire_color(w, &none, &HashMap::new())
+        });
+        assert_eq!(
+            junction_rgb(&dot, &from_wires, &none, &HashMap::new(), palette),
+            (0.0, 1.0, 0.0)
+        );
+        assert_eq!(
+            junction_rgb(&dot, &HashMap::new(), &none, &HashMap::new(), palette),
+            palette
+        );
     }
 
     #[test]

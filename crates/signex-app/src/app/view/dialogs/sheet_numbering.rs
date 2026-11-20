@@ -1,9 +1,10 @@
-//! The Number Schematic Sheets dialog (#2247): the project's pages in
-//! hierarchy order, each with a number field, Auto-number and Apply. Draft
-//! and rules: `app/sheet_numbering/`.
+//! The Number Schematic Sheets dialog (#2247, Graphite #78): the project's
+//! pages in hierarchy order, each with a number field, an error banner over
+//! clashes, gaps and high numbers with Auto-number as the fix, and Apply.
+//! Draft and rules: `app/sheet_numbering/`.
 
-use iced::widget::{Column, Row, Space, column, container, scrollable};
-use iced::{Alignment, Background, Element, Length, Theme, Widget as _};
+use iced::widget::{Column, Row, Space, column, container, scrollable, svg};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_net::NumberingIssue;
 use signex_types::theme::ThemeTokens;
@@ -15,17 +16,23 @@ use crate::app::sheet_numbering::{
 };
 use crate::app::{Message, Signex};
 use crate::styles::{
-    DialogButtonKind, PillTone, Spacing, TypeScale, dialog_button, dialog_footer_split, ti, tokens,
+    DialogButtonKind, PillTone, Radii, Spacing, TypeScale, dialog_button, dialog_footer_split, ti,
+    tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
-/// Width of the Number column: about six digits.
-const NUMBER_W: f32 = TS.body * 5.0;
+/// Width of the Number column.
+const NUMBER_W: f32 = TS.body * 8.0;
+/// Width of the number field inside it: about four digits.
+const FIELD_W: f32 = TS.body * 13.0 / 3.0;
 /// Width of the File column.
-const FILE_W: f32 = TS.body * 14.0;
-/// The table scrolls past about twelve rows.
-const TABLE_MAX_H: f32 = TS.body * 2.4 * 12.0;
+const FILE_W: f32 = TS.body * 50.0 / 3.0;
+/// Side of a banner or button glyph.
+const GLYPH: f32 = TS.body * 7.0 / 6.0;
+
+const ERR_GLYPH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 4v3.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="7" cy="10" r="0.8" fill="currentColor"/></svg>"#;
+const WAND_GLYPH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M2.5 11.5l6.5-6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M9.5 1.8v1.8M8.6 2.7h1.8M11.8 4.6v1.6M11 5.4h1.6" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>"#;
 
 fn sn(msg: SheetNumberingMsg) -> Message {
     Message::from(msg)
@@ -33,6 +40,46 @@ fn sn(msg: SheetNumberingMsg) -> Message {
 
 fn s(i18n: &I18n, id: signex_i18n::MessageId) -> String {
     t!(i18n, id).into_string()
+}
+
+/// A monochrome glyph tinted `ink`.
+fn glyph<'a>(bytes: &'static [u8], ink: Color) -> Element<'a, Message> {
+    svg(svg::Handle::from_memory(bytes))
+        .width(GLYPH)
+        .height(GLYPH)
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        })
+        .boxed()
+}
+
+/// The Auto-number button: the footer's, and the banner's fix (`small`).
+fn auto_number_button<'a>(
+    state: &SheetNumberingState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+    small: bool,
+) -> Element<'a, Message> {
+    let ink = ti(tokens.text);
+    let pad = if small { [SP.xs, SP.m] } else { [SP.m, SP.l] };
+    let label = Row::<Element<'a, Message>>::new()
+        .push(glyph(WAND_GLYPH, ink))
+        .push(
+            text(t!(i18n, ids::DIALOG_SHEET_NUMBERING_AUTO))
+                .size(TS.label)
+                .boxed(),
+        )
+        .spacing(SP.s)
+        .align_y(Alignment::Center);
+    signex_widgets::button(label)
+        .padding(pad)
+        .on_press_maybe(
+            (!state.rows().is_empty() && !state.checking)
+                .then(|| sn(SheetNumberingMsg::AutoNumberRequested)),
+        )
+        .style(crate::styles::outline_button(tokens))
+        .boxed()
 }
 
 impl Signex {
@@ -64,17 +111,11 @@ impl Signex {
             super::header::DIALOG_HEADER_H,
             tokens,
         );
-        let body = container(body(state, i18n, tokens)).padding([SP.xl, SP.xl + SP.m]);
-        let auto =
-            signex_widgets::button(text(t!(i18n, ids::DIALOG_SHEET_NUMBERING_AUTO)).size(TS.label))
-                .padding([SP.m, SP.l])
-                .on_press_maybe(
-                    (!state.rows().is_empty()).then(|| sn(SheetNumberingMsg::AutoNumberRequested)),
-                )
-                .style(crate::styles::outline_button(tokens))
-                .boxed();
+        let body = container(body(state, i18n, tokens))
+            .padding([SP.xl, SP.xl + SP.m])
+            .height(Length::Fill);
         let footer = dialog_footer_split(
-            vec![auto],
+            vec![auto_number_button(state, i18n, tokens, false)],
             vec![
                 dialog_button(
                     t!(i18n, ids::DIALOG_SHEET_NUMBERING_CANCEL),
@@ -95,20 +136,22 @@ impl Signex {
         container(column![header, body, footer].width(Length::Fixed(
             super::widgets::modal_card_width(self.ui_state.window_size, sizes::SHEET_NUMBERING.0),
         )))
+        .height(Length::Fixed(sizes::SHEET_NUMBERING.1))
         .style(crate::styles::modal_card(tokens))
         .clip(true)
         .boxed()
     }
 }
 
-/// The intro, then the table (or why there is none), then the notes.
+/// The intro, then the table (or why there is none), then the error banner
+/// and why Apply refused.
 fn body<'a>(
     state: &'a SheetNumberingState,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let muted = tokens::muted_text(tokens);
-    let mut col: Column<Element<'a, Message>> = Column::new().spacing(SP.l);
+    let mut col: Column<Element<'a, Message>> = Column::new().spacing(SP.m + SP.xs);
     col = col.push(
         text(t!(i18n, ids::DIALOG_SHEET_NUMBERING_INTRO))
             .size(TS.body)
@@ -129,10 +172,19 @@ fn body<'a>(
             .boxed();
     }
     col = col.push(table(state.numbered_rows(), i18n, tokens));
-    for line in notes(state, i18n) {
-        col = col.push(line.into_element(tokens));
+    let lines = banner_lines(state, i18n);
+    if !lines.is_empty() {
+        col = col.push(error_banner(state, lines, i18n, tokens));
     }
-    col.boxed()
+    if let Some(problem) = state.error.as_ref() {
+        col = col.push(
+            text(problem_text(problem, i18n))
+                .size(TS.body)
+                .color(tokens::danger(tokens))
+                .boxed(),
+        );
+    }
+    col.height(Length::Fill).boxed()
 }
 
 /// Why the read failed or Apply refused, in the dialog's language.
@@ -178,34 +230,16 @@ fn problem_text(problem: &NumberingProblem, i18n: &I18n) -> Localized {
     }
 }
 
-/// One line under the table and how loud it is.
-enum Note {
-    Danger(Localized),
-    Warn(Localized),
-}
-
-impl Note {
-    fn into_element<'a>(self, tokens: &ThemeTokens) -> Element<'a, Message> {
-        let (line, color) = match self {
-            Note::Danger(line) => (line, tokens::danger(tokens)),
-            Note::Warn(line) => (line, crate::styles::pill_colors(tokens, PillTone::Warn).1),
-        };
-        text(line).size(TS.body).color(color).boxed()
-    }
-}
-
-/// Why Apply is off or refused, then the clashes, gaps and high numbers.
-fn notes(state: &SheetNumberingState, i18n: &I18n) -> Vec<Note> {
-    let mut notes = Vec::new();
-    if let Some(problem) = state.error.as_ref() {
-        notes.push(Note::Danger(problem_text(problem, i18n)));
-    }
+/// What holds Apply back: a typed number that is not a sheet number, then
+/// the clashes, gaps and numbers above the page count.
+fn banner_lines(state: &SheetNumberingState, i18n: &I18n) -> Vec<Localized> {
+    let mut lines = Vec::new();
     if state.has_invalid() {
-        notes.push(Note::Danger(t!(i18n, ids::DIALOG_SHEET_NUMBERING_INVALID)));
+        lines.push(t!(i18n, ids::DIALOG_SHEET_NUMBERING_INVALID));
     }
     let rows = state.rows();
-    for issue in state.issues() {
-        let line = match issue {
+    for issue in state.blocking_issues() {
+        lines.push(match issue {
             NumberingIssue::Clash { number, .. } => {
                 t!(i18n, ids::DIALOG_SHEET_NUMBERING_CLASH, "number" => number)
             }
@@ -224,35 +258,79 @@ fn notes(state: &SheetNumberingState, i18n: &I18n) -> Vec<Note> {
                 "number" => number,
                 "count" => rows.len()
             ),
-            // Typed numbers are checked by `has_invalid` above.
+            // `blocking_issues` leaves these out; typed numbers are checked
+            // by `has_invalid` above.
             NumberingIssue::InvalidOverride { .. } => continue,
-        };
-        notes.push(Note::Warn(line));
+        });
     }
-    notes
+    lines
 }
 
-/// The page table: a sunken header, then one ruled row per page. A changed
-/// row takes the soft accent fill.
+/// The err-soft banner: the error glyph, the lines, and Auto-number as the
+/// fix.
+fn error_banner<'a>(
+    state: &SheetNumberingState,
+    lines: Vec<Localized>,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let r = tokens::resolve(tokens);
+    let (fill, danger, ink) = (r.err_soft, tokens::danger(tokens), ti(tokens.text));
+    let mut grow: Column<Element<'a, Message>> = Column::new().spacing(SP.xs).width(Length::Fill);
+    for line in lines {
+        grow = grow.push(text(line).size(TS.body).color(ink).boxed());
+    }
+    let bar = Row::<Element<'a, Message>>::new()
+        .push(glyph(ERR_GLYPH, danger))
+        .push(grow.boxed())
+        .push(auto_number_button(state, i18n, tokens, true))
+        .spacing(SP.m)
+        .align_y(Alignment::Center);
+    container(bar)
+        .padding([SP.m, SP.m + SP.xs])
+        .width(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                radius: Radii::GRAPHITE.button.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The page table: a sunken header, then one ruled row per page. A row whose
+/// number clashes takes the err-soft fill.
 fn table<'a>(
     rows: Vec<NumberedRow<'a>>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
-    let heading =
-        |id| -> Element<'a, Message> { text(t!(i18n, id)).size(TS.caption).color(r.ink4).boxed() };
-    let column =
-        |id, width: Length| -> Element<'a, Message> { container(heading(id)).width(width).boxed() };
+    let heading = |id, width: Length, right: bool| -> Element<'a, Message> {
+        let cell = container(text(t!(i18n, id)).size(TS.caption).color(r.ink4)).width(width);
+        if right {
+            cell.align_right(width).boxed()
+        } else {
+            cell.boxed()
+        }
+    };
     let head = Row::<Element<'a, Message>>::new()
-        .push(column(ids::DIALOG_SHEET_NUMBERING_COL_SHEET, Length::Fill))
-        .push(column(
+        .push(heading(
+            ids::DIALOG_SHEET_NUMBERING_COL_SHEET,
+            Length::Fill,
+            false,
+        ))
+        .push(heading(
             ids::DIALOG_SHEET_NUMBERING_COL_FILE,
             Length::Fixed(FILE_W),
+            false,
         ))
-        .push(column(
+        .push(heading(
             ids::DIALOG_SHEET_NUMBERING_COL_NUMBER,
             Length::Fixed(NUMBER_W),
+            true,
         ))
         .spacing(SP.m);
     let sunken = r.sunken;
@@ -265,21 +343,19 @@ fn table<'a>(
             })
             .boxed()
     };
-    // Past about twelve rows the list scrolls; shorter lists take their height.
-    let height = if rows.len() > 12 {
-        Length::Fixed(TABLE_MAX_H)
-    } else {
-        Length::Shrink
-    };
+    let bad_fill = r.err_soft;
     let mut list: Column<Element<'a, Message>> = Column::new().width(Length::Fill);
     for (index, numbered) in rows.into_iter().enumerate() {
-        let changed = numbered.changed;
+        let fill = numbered.clash.then_some(bad_fill);
         list = list.push(rule());
         list = list.push(
             container(page_row(index, numbered, i18n, tokens))
                 .padding([SP.s, SP.m])
                 .width(Length::Fill)
-                .style(super::graphite::changed_row(tokens, changed))
+                .style(move |_: &Theme| container::Style {
+                    background: fill.map(Background::Color),
+                    ..container::Style::default()
+                })
                 .boxed(),
         );
     }
@@ -290,15 +366,22 @@ fn table<'a>(
             background: Some(Background::Color(sunken)),
             ..container::Style::default()
         });
-    container(column![head, scrollable(list).height(height)])
-        .width(Length::Fill)
-        .clip(true)
-        .style(crate::styles::card(tokens))
-        .boxed()
+    container(column![
+        head,
+        scrollable(list)
+            .height(Length::Fill)
+            .style(crate::styles::scrollbar_style(tokens))
+    ])
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .clip(true)
+    .style(crate::styles::card(tokens))
+    .boxed()
 }
 
-/// One page: its name indented by depth, its file, and its number field (a
-/// top-level page shows its number, which follows its position).
+/// One page: its name indented by depth (a top-level page with its pill),
+/// its file, and its number field. An automatic number is faint; a typed one
+/// is full ink; a clashing, high or unreadable one is red.
 fn page_row<'a>(
     index: usize,
     numbered: NumberedRow<'a>,
@@ -307,7 +390,9 @@ fn page_row<'a>(
 ) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
     let ink = ti(tokens.text);
-    let name = Row::<Element<'a, Message>>::new()
+    let danger = tokens::danger(tokens);
+    let top_level = numbered.row.placement.is_none();
+    let mut name = Row::<Element<'a, Message>>::new()
         .push(
             Space::new()
                 .width(Length::Fixed(SP.l * numbered.row.depth as f32))
@@ -319,22 +404,55 @@ fn page_row<'a>(
                 .color(ink)
                 .boxed(),
         )
+        .spacing(SP.s)
+        .align_y(Alignment::Center)
         .width(Length::Fill);
+    if top_level {
+        name = name.push(
+            container(
+                text(t!(i18n, ids::DIALOG_SHEET_NUMBERING_TOP_LEVEL))
+                    .size(TS.caption)
+                    .wrapping(iced::widget::text::Wrapping::None),
+            )
+            .padding([0.0, SP.s])
+            .style(crate::styles::pill(tokens, PillTone::Neutral))
+            .boxed(),
+        );
+    }
     let file = text(UserText::new(numbered.row.sheet.clone()))
         .size(TS.body)
         .color(r.ink3)
         .font(super::graphite::mono())
         .width(FILE_W)
         .boxed();
-    let invalid = numbered.invalid.then(|| tokens::danger(tokens));
-    let number: Element<'a, Message> = if numbered.row.placement.is_some() {
+    let wrong = numbered.clash || numbered.invalid || numbered.out_of_range;
+    let value = if wrong {
+        danger
+    } else if numbered.automatic {
+        r.ink4
+    } else {
+        ink
+    };
+    let field: Element<'a, Message> = if top_level {
+        container(
+            text(UserText::new(numbered.row.number.to_string()))
+                .size(TS.body)
+                .color(value)
+                .font(super::graphite::mono()),
+        )
+        .padding([SP.xs, SP.s])
+        .width(FIELD_W)
+        .style(crate::styles::field(tokens, false))
+        .boxed()
+    } else {
         text_input(
             t!(i18n, ids::DIALOG_SHEET_NUMBERING_COL_NUMBER),
             numbered.draft,
         )
         .style(move |theme: &Theme, status| {
             let mut style = crate::panels::form_look::text_input_style(theme, status);
-            if let Some(danger) = invalid {
+            style.value = value;
+            if wrong {
                 style.border.color = danger;
             }
             style
@@ -343,25 +461,16 @@ fn page_row<'a>(
         .font(super::graphite::mono())
         .size(TS.body)
         .padding([SP.xs, SP.s])
-        .width(NUMBER_W)
-        .boxed()
-    } else {
-        column![
-            text(UserText::new(numbered.row.number.to_string()))
-                .size(TS.body)
-                .color(ink)
-                .font(super::graphite::mono()),
-            text(t!(i18n, ids::DIALOG_SHEET_NUMBERING_TOP_LEVEL))
-                .size(TS.caption)
-                .color(r.ink4),
-        ]
-        .width(NUMBER_W)
+        .width(FIELD_W)
         .boxed()
     };
+    let number = container(field)
+        .width(Length::Fixed(NUMBER_W))
+        .align_right(Length::Fixed(NUMBER_W));
     Row::<Element<'a, Message>>::new()
         .push(name.boxed())
         .push(file)
-        .push(number)
+        .push(number.boxed())
         .spacing(SP.m)
         .align_y(Alignment::Center)
         .boxed()

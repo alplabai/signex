@@ -12,6 +12,7 @@ use iced::Task;
 use super::super::*;
 use crate::app::state::net_nav::PendingNetAction;
 
+mod component_rows;
 mod highlight;
 mod hover;
 mod index_job;

@@ -7,17 +7,22 @@
 //! `cargo test --release -p signex-engine --test routing -- --ignored --nocapture`
 //!
 //! Environment: `SIGNEX_SOAK_SEED` (default 0x2482), `SIGNEX_SOAK_ACTIONS`
-//! (default 10 000), `SIGNEX_SOAK_BOARD` (one board by name). A failure
-//! prints the line that replays it. How it fits together:
-//! `docs/PCB_TOOLS.md`, "Router soak and bench".
+//! (default 10 000), `SIGNEX_SOAK_BOARD` (one board by name, searched in
+//! the whole routing corpus). The short runs take the fixed boards only;
+//! the scheduled ones add every routing corpus board. Per PR the corpus is
+//! checked by loading alone (`corpus_check`). A failure prints the line
+//! that replays it. How it fits together: `docs/PCB_TOOLS.md`, "Router
+//! soak and bench".
 
 mod bench;
+mod corpus_check;
 mod fixtures;
 mod rng;
 mod session;
 mod soak;
 
 use bench::{BoardBench, MEDIAN_LIMIT, P95_LIMIT, ROUNDS_LIMIT, ROUNDS_SHARE};
+use fixtures::Corpus;
 
 const DEFAULT_SEED: u64 = 0x2482;
 
@@ -30,10 +35,12 @@ fn env_number(name: &str) -> Option<u64> {
     Some(parsed.unwrap_or_else(|_| panic!("{name}={text} is not a number")))
 }
 
-/// The boards `SIGNEX_SOAK_BOARD` picks: one by name, else all.
-fn boards() -> Vec<fixtures::Fixture> {
+/// The boards `SIGNEX_SOAK_BOARD` picks: one by name from every board,
+/// else the boards `corpus` picks.
+fn boards(corpus: Corpus) -> Vec<fixtures::Fixture> {
     let only = std::env::var("SIGNEX_SOAK_BOARD").ok();
-    let boards: Vec<_> = fixtures::all()
+    let corpus = if only.is_some() { Corpus::All } else { corpus };
+    let boards: Vec<_> = fixtures::boards(corpus)
         .into_iter()
         .filter(|f| only.as_ref().is_none_or(|name| &f.name == name))
         .collect();
@@ -41,8 +48,8 @@ fn boards() -> Vec<fixtures::Fixture> {
     boards
 }
 
-fn soak_all(seed: u64, actions: usize) {
-    for fixture in boards() {
+fn soak_all(seed: u64, actions: usize, corpus: Corpus) {
+    for fixture in boards(corpus) {
         match soak::run(&fixture, seed, actions) {
             Ok((tally, _)) => println!("soak {:<24} {actions} actions: {tally:?}", fixture.name),
             Err(failure) => panic!("{failure}"),
@@ -50,19 +57,19 @@ fn soak_all(seed: u64, actions: usize) {
     }
 }
 
-/// Per-PR: a short soak on every board.
+/// Per-PR: a short soak on the fixed boards.
 #[test]
 fn soak_short() {
-    soak_all(DEFAULT_SEED, 150);
+    soak_all(DEFAULT_SEED, 150, Corpus::None);
 }
 
-/// Scheduled: 10 000 actions per board, or a replay of a failure.
+/// Scheduled: 10 000 actions on every board, or a replay of a failure.
 #[test]
 #[ignore = "long: the scheduled routing soak runs it in release"]
 fn soak_long() {
     let seed = env_number("SIGNEX_SOAK_SEED").unwrap_or(DEFAULT_SEED);
     let actions = env_number("SIGNEX_SOAK_ACTIONS").unwrap_or(10_000);
-    soak_all(seed, actions as usize);
+    soak_all(seed, actions as usize, Corpus::All);
 }
 
 /// A seed replays exactly: the same actions give the same board.
@@ -82,8 +89,8 @@ fn a_soak_seed_replays_exactly() {
     assert_eq!(run(), first);
 }
 
-fn bench_all(seed: u64, actions: usize) -> Vec<BoardBench> {
-    let benches: Vec<BoardBench> = boards()
+fn bench_all(seed: u64, actions: usize, corpus: Corpus) -> Vec<BoardBench> {
+    let benches: Vec<BoardBench> = boards(corpus)
         .iter()
         .map(|fixture| bench::bench(fixture, seed, actions))
         .collect();
@@ -206,10 +213,10 @@ fn the_drc_delta_check_tells_a_side_effect_from_the_route_own() {
     assert!(bench::drc_delta(&before, &side_effect, &draft).is_err());
 }
 
-/// Per-PR: the DRC delta and convergence on a short run per board.
+/// Per-PR: the DRC delta and convergence on a short run per fixed board.
 #[test]
 fn bench_short() {
-    let benches = bench_all(DEFAULT_SEED, 30);
+    let benches = bench_all(DEFAULT_SEED, 30, Corpus::None);
     assert!(
         benches.iter().any(|b| b.landed > 0 && !b.shoves.is_empty()),
         "the bench routed and shoved something"
@@ -223,7 +230,7 @@ fn bench_short() {
 #[ignore = "latency is only meaningful in release: the scheduled job runs it"]
 fn bench_thresholds() {
     let seed = env_number("SIGNEX_SOAK_SEED").unwrap_or(DEFAULT_SEED);
-    let mut benches = bench_all(seed, 300);
+    let mut benches = bench_all(seed, 300, Corpus::All);
     assert_delta_and_convergence(&benches);
     benches.sort_by_key(|b| b.copper);
     let median = &benches[benches.len() / 2];

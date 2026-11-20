@@ -4,8 +4,9 @@
 //! ends in, so it is one undo step and the dirty flag and the Messages log
 //! behave as for a click. Points are refused off the grid, as for any other
 //! placement. Each answers with the directive it left on the sheet, so an
-//! agent can name it in a later `edit_blanket`. Design note:
-//! `docs/SCHEMATIC_DIRECTIVES.md`.
+//! agent can name it in a later `edit_blanket`. `edit_no_erc_rules` (#1699)
+//! sets a No-ERC directive's rule list the way its Properties checkboxes do.
+//! Design note: `docs/SCHEMATIC_DIRECTIVES.md`.
 
 use iced::Task;
 use serde_json::{Value, json};
@@ -94,20 +95,63 @@ fn optional_text(args: &CommandArgs, name: &str) -> Option<String> {
     }
 }
 
-/// The `exclude` operand as ERC rule ids, `None` when absent. Each id must be
-/// a built-in rule's, a `user::` rule's or `*` (every rule).
+/// The `exclude` operand as ERC rule ids, `None` when absent.
 fn exclusions(args: &CommandArgs) -> Result<Option<Vec<String>>, String> {
-    let Some(OperandValue::Text(text)) = args.operand("exclude") else {
+    rule_ids(args, "exclude")
+}
+
+/// Operand `name` as comma-separated ERC rule ids, `None` when absent. Each
+/// id must be a built-in rule's, a `user::` rule's or `*` (every rule).
+pub(super) fn rule_ids(args: &CommandArgs, name: &str) -> Result<Option<Vec<String>>, String> {
+    let Some(OperandValue::Text(text)) = args.operand(name) else {
         return Ok(None);
     };
     let ids = parse_erc_exclusions(text);
     if let Some(unknown) = ids.iter().find(|id| !is_erc_rule_id(id)) {
         return Err(format!(
-            "`exclude`: `{unknown}` is not an ERC rule id; give ids such as \
+            "`{name}`: `{unknown}` is not an ERC rule id; give ids such as \
              builtin::unused_pin, user::<name> or * for every rule"
         ));
     }
     Ok(Some(ids))
+}
+
+/// `edit_no_erc_rules id=.. [rules=..] [document=..]` (#1699): set the rules
+/// the No-ERC directive `id` silences; `rules` left out or empty silences
+/// every rule.
+/// One undo step through the same `SetNoErcRules` a Properties checkbox
+/// sends. Answers with the directive as stored (its list sorted).
+pub(super) fn edit_no_erc_rules(app: &mut Signex, args: &CommandArgs) -> Ran {
+    run_edit(app, args, |app| {
+        let id = app.no_erc_named(args)?;
+        let rules = rule_ids(args, "rules")?.unwrap_or_default();
+        let command = signex_engine::Command::SetNoErcRules { id, rules };
+        let (outcome, refusal) = app.apply_engine_command_reporting(command, true, true);
+        if let Some(reason) = refusal {
+            return Err(reason);
+        }
+        if outcome == crate::app::mutation_gateway::MutationOutcome::Failed {
+            return Err("the edit was refused".to_string());
+        }
+        Ok(CommandOutcome::Answered(no_erc_answer(app, id)))
+    })
+}
+
+/// What `edit_no_erc_rules` answers: the directive as stored.
+fn no_erc_answer(app: &Signex, id: uuid::Uuid) -> Value {
+    let stored = app.document_state.edit_engine().and_then(|engine| {
+        engine
+            .document()
+            .no_erc_directives
+            .iter()
+            .find(|d| d.uuid == id)
+            .and_then(|d| serde_json::to_value(d).ok())
+    });
+    json!({
+        "id": id.to_string(),
+        "kind": "no_erc",
+        "directive": stored.unwrap_or(Value::Null),
+    })
 }
 
 fn is_erc_rule_id(id: &str) -> bool {
@@ -174,6 +218,26 @@ impl Signex {
     fn place_and_answer(&mut self, directive: SchDirective) -> Result<CommandOutcome, String> {
         self.place_directive(directive.clone())?;
         Ok(CommandOutcome::Answered(answer(self, &directive)))
+    }
+
+    /// The No-ERC directive the `id` operand names on the edit target.
+    fn no_erc_named(&self, args: &CommandArgs) -> Result<uuid::Uuid, String> {
+        let Some(OperandValue::Text(id)) = args.operand("id") else {
+            return Err("operand `id` is missing".to_string());
+        };
+        let id = uuid::Uuid::parse_str(id.trim())
+            .map_err(|_| format!("`id`: `{id}` is not a directive id"))?;
+        let engine = self
+            .document_state
+            .edit_engine()
+            .ok_or_else(|| "no schematic is open".to_string())?;
+        engine
+            .document()
+            .no_erc_directives
+            .iter()
+            .any(|d| d.uuid == id)
+            .then_some(id)
+            .ok_or_else(|| format!("no No-ERC directive {id} is on this sheet"))
     }
 
     /// The Blanket the `id` operand names on the edit target.

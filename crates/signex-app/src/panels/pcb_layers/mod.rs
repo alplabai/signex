@@ -172,7 +172,7 @@ impl PcbLayersPanel {
             ratsnest_visible: view.ratsnest_visible(),
             origin_marker_visible: view.origin_marker_visible(),
             used: view.used_only().then(|| used_layers(board)),
-            paint: view.paint().clone(),
+            paint: view.paint_of(board),
             hidden_objects: BoardObject::ALL
                 .into_iter()
                 .filter(|kind| !view.shows_object(*kind))

@@ -47,6 +47,15 @@ impl Signex {
             self.apply_footprint_assignments();
             return Task::none();
         }
+        if let M::PreviewLoaded {
+            generation,
+            binding,
+            result,
+        } = msg
+        {
+            self.finish_preview_read(generation, binding, result);
+            return Task::none();
+        }
         let Some(state) = self.ui_state.assign_footprints.as_mut() else {
             return Task::none();
         };
@@ -56,10 +65,29 @@ impl Signex {
             M::RowToggled(row) => state.toggle(row),
             M::AllToggled(on) => state.select_all(on),
             M::SameRowTicked(row) => state.select_same_row(row),
-            M::CancelRequested => self.ui_state.assign_footprints = None,
-            M::Requested | M::Read { .. } | M::ApplyRequested => {}
+            M::FilterPicked(filter) => state.filter = filter,
+            M::FilterEdited(query) => state.query = query,
+            M::RowHovered { row, inside } => {
+                if inside {
+                    state.hovered = Some(row);
+                } else if state.hovered == Some(row) {
+                    state.hovered = None;
+                }
+            }
+            M::RowPreviewed(row) => {
+                if row < state.parts().len() {
+                    state.preview_row = Some(row);
+                }
+            }
+            M::PreviewWidthToggled => state.preview_wide = !state.preview_wide,
+            M::CancelRequested => {
+                self.ui_state.assign_footprints = None;
+                return Task::none();
+            }
+            M::Requested | M::Read { .. } | M::ApplyRequested | M::PreviewLoaded { .. } => {}
         }
-        Task::none()
+        // A pick or a click can ask the preview for a footprint not read yet.
+        self.assign_footprints_preview_reads()
     }
 
     /// Open the dialog and start reading the project's sheets.
@@ -97,10 +125,10 @@ impl Signex {
         self.interaction_state.context_menu = None;
         self.ui_state.assign_footprints_reads += 1;
         let generation = self.ui_state.assign_footprints_reads;
-        self.ui_state.assign_footprints = Some(AssignFootprintsState::reading(
+        self.ui_state.assign_footprints = Some(Box::new(AssignFootprintsState::reading(
             generation,
             self.document_state.documents_epoch,
-        ));
+        )));
         Task::perform(
             crate::app::path_op_jobs::run_blocking(move || read_parts(&inputs)),
             move |result| {
@@ -156,7 +184,7 @@ impl Signex {
                 state.error = Some(problem);
             }
         }
-        Task::none()
+        self.assign_footprints_preview_reads()
     }
 
     /// Every listed part of the project, sorted by designator: an open
@@ -270,7 +298,13 @@ impl Signex {
         let access = match sheet_access {
             SheetAccess::ReadOnly => PartAccess::ReadOnly,
             SheetAccess::Closed => PartAccess::SheetClosed,
-            SheetAccess::Open if row.is_none() => PartAccess::NoRow,
+            SheetAccess::Open if row.is_none() => {
+                if symbol.library_id.is_some() && symbol.row_id.is_some() {
+                    PartAccess::RowNotOpen
+                } else {
+                    PartAccess::NoLink
+                }
+            }
             SheetAccess::Open if offers.len() < 2 => PartAccess::NoAlternates,
             SheetAccess::Open => PartAccess::Editable,
         };

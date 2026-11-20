@@ -1,0 +1,113 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "djinn-rev2a",
+  "net_classes": [
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.2,
+      "diff_pair_width": 0.25,
+      "name": "Comms",
+      "nets": [
+        "/SPLIT_COMMS_CONN+",
+        "/SPLIT_COMMS_CONN-",
+        "CC1",
+        "CC2",
+        "D+",
+        "D-",
+        "MISO",
+        "MOSI",
+        "SCK",
+        "SK6812_PWM",
+        "SWCLK",
+        "SWDIO"
+      ],
+      "trace_width": 0.25,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.35,
+      "name": "Power 1.5A",
+      "nets": [
+        "+3V3",
+        "/VBUS_TRS",
+        "/VBUS_TRS_FERRITE",
+        "/VBUS_TRS_FUSED",
+        "LCD_L1_R9",
+        "LCD_L2_R8",
+        "LCD_L8_R2",
+        "LCD_L9_R1",
+        "SK6812_PWR"
+      ],
+      "trace_width": 0.4,
+      "via_diameter": 0.6,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.9,
+      "name": "Power 3A",
+      "nets": [
+        "/SHIELD1",
+        "/SHIELD11",
+        "/SHIELD2",
+        "/SHIELD3",
+        "/SHIELD4",
+        "/SHIELD5",
+        "/SHIELD6",
+        "/SHIELD7",
+        "/VBUS_BLOCKED",
+        "/VBUS_FERRITE",
+        "/VBUS_FUSED",
+        "SHIELD",
+        "VBUS",
+        "VDD",
+        "V_USB"
+      ],
+      "trace_width": 0.55,
+      "via_diameter": 0.9,
+      "via_drill": 0.6
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.45,
+      "name": "Power Input",
+      "trace_width": 0.45,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.127,
+      "diff_pair_width": 0.127,
+      "name": "Tight",
+      "trace_width": 0.127,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.2,
+      "diff_pair_width": 0.25,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.25,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "djinn-rev2a.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

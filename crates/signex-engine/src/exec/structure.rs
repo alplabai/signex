@@ -272,12 +272,19 @@ impl Engine {
             Command::ReconcileChildSheetPins {
                 child_filename,
                 ports,
+                renames,
             } => {
                 let mut changed = false;
                 // Per symbol: pins an earlier symbol just gained are contacts too.
                 for idx in 0..self.document.child_sheets.len() {
                     if self.document.child_sheets[idx].filename != child_filename {
                         continue;
+                    }
+                    if let Some(renames) = &renames {
+                        changed |= sheet_sync::rename_sheet_entries(
+                            &mut self.document.child_sheets[idx],
+                            renames,
+                        );
                     }
                     let contacts = signex_net::SheetPinContacts::of_sheet(&self.document);
                     changed |= sheet::reconcile_child_sheet_pins(
@@ -432,6 +439,23 @@ impl Engine {
 
                 // Sheet-level data rides the PAPER patch, as the paper
                 // size does.
+                let patch_pair = PatchPair {
+                    semantic: SemanticPatch::StyleUpdated,
+                    document: DocumentPatch::PAPER,
+                };
+                self.record_history(before, patch_pair);
+                Ok(CommandResult::changed(patch_pair))
+            }
+            Command::SetSheetVariable { name, value } => {
+                if self.document.variables.get(&name) == value.as_ref() {
+                    return Ok(CommandResult::unchanged());
+                }
+                match value {
+                    Some(value) => self.document.variables.insert(name, value),
+                    None => self.document.variables.remove(&name),
+                };
+                // Rides the PAPER patch with the title block: both change
+                // what special strings resolve to.
                 let patch_pair = PatchPair {
                     semantic: SemanticPatch::StyleUpdated,
                     document: DocumentPatch::PAPER,

@@ -106,6 +106,13 @@ impl MenuMetrics {
         })
     }
 
+    /// Edge of a colour swatch in the icon column: the art box of a menu
+    /// icon, which draws inside a 3-unit inset of its 24-unit grid, so a
+    /// swatch row and an icon row show the same size of mark.
+    pub fn swatch_size(&self) -> f32 {
+        self.icon_size * 18.0 / 24.0
+    }
+
     /// Height of a header row.
     pub fn header_row_height(&self) -> f32 {
         self.header_height
@@ -220,13 +227,14 @@ fn line_height(size: f32) -> f32 {
         .0
 }
 
-/// Whether any item row of `entries` carries an icon or a leading check:
-/// the menu then has an icon column.
+/// Whether any item row of `entries` carries an icon, a swatch or a leading
+/// check: the menu then has an icon column.
 pub(super) fn has_icons<M: Clone>(entries: &[DropdownEntry<M>]) -> bool {
     entries.iter().any(|entry| {
         matches!(
             entry,
-            DropdownEntry::Item(item) if item.icon.is_some() || item.lead_check.is_some()
+            DropdownEntry::Item(item)
+                if item.icon.is_some() || item.swatch.is_some() || item.lead_check.is_some()
         )
     })
 }

@@ -222,7 +222,7 @@ pub(super) fn try_split_ghost_walk(
     kind!(directives, signex_types::schematic::SchDirective::uuid);
     kind!(
         no_erc_directives,
-        |d: &signex_types::schematic::NoConnect| d.uuid
+        |d: &signex_types::schematic::NoErcDirective| d.uuid
     );
     Some(DragFrame {
         moving: Rc::new(moving),

@@ -45,7 +45,8 @@ impl Signex {
     pub(crate) fn machine_rules_notice(&self) -> Option<String> {
         if let Some(why) = &self.ui_state.machine_rules_locked {
             return Some(format!(
-                "The machine's rules are read-only this session, because your old ERC                  preferences could not be merged into User Default yet: {why}"
+                "The machine's rules are read-only this session, because your old ERC \
+                 preferences could not be merged into User Default yet: {why}"
             ));
         }
         if self.ui_state.machine_rules_loading {

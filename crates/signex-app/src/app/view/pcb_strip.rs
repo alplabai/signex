@@ -1,12 +1,14 @@
-//! Layer tabs under the PCB canvas (#2357, m104): the board's visible layers
-//! as tabs with a colour swatch, in a 28 px strip that scrolls sideways
-//! when the tabs do not fit. A click on a tab makes that layer the active
-//! one, the same message a Layers panel row sends, so the tab, the panel row
-//! and the status bar pill always name one layer; the active tab has the
-//! accent bar along its top. A right-click opens the tab's menu (#2379,
-//! #2394). The layer set button at the left end shows the set the strip
-//! lists and opens the set menu (#2394); the tabs name their layers in the
-//! user's style.
+//! Layer tabs under the PCB canvas (#2357, m104): a tab with a colour
+//! swatch for every layer the Layers panel shows, in the panel's order,
+//! then the Multi-Layer while it is shown, in a 28 px strip that scrolls
+//! sideways when the tabs do not fit. Hiding a layer (its eye, its tab's
+//! Hide row) takes its tab away; showing it brings the tab back. A click on
+//! a tab makes that layer the active one, the same message a Layers panel
+//! row sends, so the tab, the panel row and the status bar pill always name
+//! one layer; the active tab has the accent bar along its top. A
+//! right-click opens the tab's menu (#2379, #2394). The layer set button at
+//! the left end shows the set the strip lists and opens the set menu
+//! (#2394); the tabs name their layers in the user's style.
 
 use iced::border::Side;
 use iced::widget::button::{Status, Style as ButtonStyle};
@@ -14,9 +16,11 @@ use iced::widget::scrollable::Direction;
 use iced::widget::{Row, Space, container, mouse_area, row, scrollable};
 use iced::{Background, Border, Color, Element, Font, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
-use signex_renderer::pcb::{LayerSetId, PcbLayerView, board_copper_layers};
+use signex_renderer::pcb::{
+    LayerSetId, PcbLayerView, board_copper_layers, panel_order_layers, used_layers,
+};
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{LayerDef, PcbBoard};
+use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, text};
@@ -75,29 +79,36 @@ fn tab_name(
     }
 }
 
-/// Display name and swatch of a board layer: the name the user's tab style
-/// gives it (a mechanical layer the user named keeps that name), and the
-/// colour the Layers panel gives it; a layer token the format does not know
-/// keeps its own name.
+/// The layers the strip gives a tab: every layer the Layers panel shows,
+/// in the panel's order, that is not hidden. A layer set lists its own
+/// layers alone (#2394); with Used On the panel and the strip list only the
+/// layers the board uses (#2363).
+pub(crate) fn strip_layers(board: &PcbBoard, view: &PcbLayerView) -> Vec<PcbLayer> {
+    let used = view.used_only().then(|| used_layers(board));
+    panel_order_layers(&board.layers)
+        .into_iter()
+        .filter(|&layer| !view.is_hidden(layer) && view.lists_in_strip(layer))
+        .filter(|layer| used.as_ref().is_none_or(|used| used.contains(layer)))
+        .collect()
+}
+
+/// Display name of a board layer: the name the user's tab style gives it;
+/// a mechanical layer the user named keeps that name.
 fn describe(
     i18n: &I18n,
-    def: &LayerDef,
-    tokens: &ThemeTokens,
+    board: &PcbBoard,
+    layer: PcbLayer,
     names: (&LayerStripPrefs, &[signex_types::pcb_layer::CopperLayer]),
-) -> (Label<'static>, iced::Color) {
-    let Some(layer) = parse_pcb_layer(&def.name) else {
-        return (
-            signex_i18n::UserText::new(def.name.clone()).into(),
-            resolve(tokens).ink4,
-        );
-    };
-    let user_name = matches!(layer, PcbLayer::Mechanical(_)) && !def.display_name.is_empty();
-    let label = if user_name {
-        signex_i18n::UserText::new(def.display_name.clone()).into()
-    } else {
-        tab_name(i18n, layer, names.0, names.1).into()
-    };
-    (label, layer_style::layer_colour(layer, tokens))
+) -> Label<'static> {
+    let user_name = board
+        .layers
+        .iter()
+        .filter(|def| matches!(layer, PcbLayer::Mechanical(_)) && !def.display_name.is_empty())
+        .find(|def| parse_pcb_layer(&def.name) == Some(layer));
+    match user_name {
+        Some(def) => signex_i18n::UserText::new(def.display_name.clone()).into(),
+        None => tab_name(i18n, layer, names.0, names.1).into(),
+    }
 }
 
 /// The board the strip belongs to and how its view stands.
@@ -132,16 +143,12 @@ fn menu_opened(window: Option<iced::window::Id>, layer: PcbLayer) -> Message {
 }
 
 /// What a tab sends: a click picks its layer, a right-click opens its menu.
-/// A tab whose layer this build does not know sends neither.
+/// The Multi-Layer tab sends neither: it is never the active layer, and
+/// its eye is the Layers panel's Multi-Layer row. Nor does the tab of a
+/// layer token this build does not know.
 struct TabMessages {
     press: Option<Message>,
     menu: Option<Message>,
-}
-
-/// Whether `layer` gets a tab: the set lists it (#2394) and it is not
-/// hidden (m104). Show all layers brings a hidden layer's tab back.
-fn has_tab(view: &PcbLayerView, layer: PcbLayer) -> bool {
-    view.lists_in_strip(layer) && !view.is_hidden(layer)
 }
 
 /// The strip for the board; `None` when the board declares no layers.
@@ -163,20 +170,44 @@ pub(super) fn layer_strip<'a>(
     let (panel, line) = (ti(tokens.panel_bg), ti(tokens.border));
     let active = view.shown_active();
     let copper = board_copper_layers(&board.layers);
+    let paint = view.paint_of(board);
     let mut tabs: Row<Element<'a, Message>> = Row::new().height(Length::Fill);
-    for def in &board.layers {
-        let layer = parse_pcb_layer(&def.name);
-        // An unknown layer token keeps its tab.
-        if layer.is_some_and(|l| !has_tab(view, l)) {
-            continue;
-        }
-        let selected = layer.is_some() && layer == active;
+    for layer in strip_layers(board, view) {
         let messages = TabMessages {
-            press: layer.map(|l| picked(window, l)),
-            menu: layer.map(|l| menu_opened(window, l)),
+            press: Some(picked(window, layer)),
+            menu: Some(menu_opened(window, layer)),
         };
-        let (label, swatch) = describe(i18n, def, tokens, (prefs, copper.as_slice()));
+        let label = describe(i18n, board, layer, (prefs, copper.as_slice()));
+        // The colour the view gave the layer (Layer colour..., #2363).
+        let swatch = layer_style::painted_layer_colour(&paint, layer);
+        let selected = active == Some(layer);
         tabs = tabs.push(layer_tab(label, swatch, tokens, selected, messages));
+    }
+    // Vias and through-hole pads: shown while the Multi-Layer row is, and
+    // never in a layer set.
+    if view.multi_layer_visible() && view.layer_set().is_none() {
+        let label: Label<'static> = t!(i18n, ids::PCB_LAYER_MULTI_LAYER).into();
+        let messages = TabMessages {
+            press: None,
+            menu: None,
+        };
+        let swatch = layer_style::multi_layer_colour();
+        tabs = tabs.push(layer_tab(label, swatch, tokens, false, messages));
+    }
+    // A layer token this build does not know keeps a tab under its own
+    // name; it picks nothing and opens no menu.
+    let unknown = board
+        .layers
+        .iter()
+        .filter(|def| parse_pcb_layer(&def.name).is_none());
+    for def in unknown {
+        let label: Label<'static> = signex_i18n::UserText::new(def.name.clone()).into();
+        let messages = TabMessages {
+            press: None,
+            menu: None,
+        };
+        let swatch = resolve(tokens).ink4;
+        tabs = tabs.push(layer_tab(label, swatch, tokens, false, messages));
     }
     // A long strip scrolls inside the window instead of widening it.
     let tabs = scrollable(tabs)
@@ -378,161 +409,9 @@ pub(super) fn with_strip<'a>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::layout_probe::{draw_pixels, lay_out_texts, root_size};
-    use iced::Size;
-    use signex_types::pcb_layer::CopperLayer;
-    use signex_types::theme::{ThemeId, theme_tokens};
+#[path = "pcb_strip_tests.rs"]
+mod tests;
 
-    const BOTTOM: PcbLayer = PcbLayer::Copper(CopperLayer::Bottom);
-
-    /// A board that declares the layer tokens `names`, nothing on them.
-    fn board(names: &[&str]) -> PcbBoard {
-        let layers = names
-            .iter()
-            .zip(0u8..)
-            .map(|(name, id)| LayerDef {
-                id,
-                name: (*name).to_owned(),
-                layer_type: String::new(),
-                display_name: String::new(),
-            })
-            .collect();
-        PcbBoard {
-            sketch: None,
-            stackup: None,
-            options: Default::default(),
-            unknown: Default::default(),
-            uuid: uuid::Uuid::now_v7(),
-            version: 1,
-            generator: "signex-test".into(),
-            thickness: 1.6,
-            outline: vec![],
-            layers,
-            setup: None,
-            nets: vec![],
-            footprints: vec![],
-            segments: vec![],
-            vias: vec![],
-            zones: vec![],
-            graphics: vec![],
-            texts: vec![],
-            free: Default::default(),
-        }
-    }
-
-    fn strip<'a>(
-        board: &PcbBoard,
-        view: &PcbLayerView,
-        set_menu_open: bool,
-        tokens: &ThemeTokens,
-    ) -> Element<'a, Message> {
-        let prefs = LayerStripPrefs::default();
-        let strip = StripBoard {
-            board,
-            view,
-            window: None,
-            prefs: &prefs,
-            set_menu_open,
-        };
-        layer_strip(strip, &I18n::en_us(), tokens).expect("the board declares layers")
-    }
-
-    fn names(element: Element<'_, Message>, window: Size) -> Vec<String> {
-        lay_out_texts(element, window)
-            .into_iter()
-            .map(|t| t.text)
-            .collect()
-    }
-
-    /// m104: more tabs than the window is wide scroll inside the strip; every
-    /// visible layer still has its tab, on one line, and the strip keeps to
-    /// the window and its 28 px.
-    #[test]
-    fn the_strip_lays_out_every_visible_tab_inside_its_scrollable() {
-        let board = board(&[
-            "TopCopper",
-            "BottomCopper",
-            "TopSilkscreen",
-            "BottomSilkscreen",
-            "TopSolderMask",
-            "BottomSolderMask",
-            "TopPaste",
-            "BottomPaste",
-            "EdgeCuts",
-            "TopCourtyard",
-            "BottomCourtyard",
-            "Dimensions",
-            "Notes",
-        ]);
-        let view = PcbLayerView::default();
-        let tokens = theme_tokens(ThemeId::GraphiteDark);
-        let window = Size::new(400.0, 600.0);
-        let laid_out = lay_out_texts(strip(&board, &view, false, &tokens), window);
-        for name in [
-            "Top Layer",
-            "Bottom Layer",
-            "Top Silkscreen",
-            "Bottom Silkscreen",
-            "Top Solder",
-            "Bottom Solder",
-            "Top Paste",
-            "Bottom Paste",
-            "Board Outline",
-            "Top Courtyard",
-            "Bottom Courtyard",
-            "Dimensions",
-            "Notes",
-        ] {
-            let tab = laid_out
-                .iter()
-                .find(|t| t.text == name)
-                .unwrap_or_else(|| panic!("no tab {name:?}: {laid_out:#?}"));
-            assert!(tab.bounds.height < 2.0 * TS.body, "{name} on one line");
-        }
-        let size = root_size(strip(&board, &view, false, &tokens), window);
-        assert!(size.width <= window.width, "the strip keeps to the window");
-        assert_eq!(size.height, STRIP_HEIGHT);
-    }
-
-    /// m104: a hidden layer has no tab; showing every layer brings it back.
-    /// A layer token this build does not know keeps its tab.
-    #[test]
-    fn a_hidden_layer_has_no_tab_until_it_is_shown() {
-        let board = board(&["TopCopper", "BottomCopper", "Nowhere"]);
-        let tokens = theme_tokens(ThemeId::GraphiteLight);
-        let window = Size::new(1200.0, 600.0);
-        let mut view = PcbLayerView::default();
-        view.hide(BOTTOM);
-        let shown = names(strip(&board, &view, false, &tokens), window);
-        assert!(!shown.iter().any(|t| t == "Bottom Layer"), "{shown:?}");
-        assert!(shown.iter().any(|t| t == "Top Layer"), "{shown:?}");
-        assert!(shown.iter().any(|t| t == "Nowhere"), "{shown:?}");
-        view.show_all();
-        let shown = names(strip(&board, &view, false, &tokens), window);
-        assert!(shown.iter().any(|t| t == "Bottom Layer"), "{shown:?}");
-    }
-
-    /// m104: the layer set button is filled accent-soft while its menu is
-    /// open, plain with muted ink otherwise, in both Graphite themes.
-    #[test]
-    fn the_set_button_draws_pressed_while_its_menu_is_open() {
-        let board = board(&["TopCopper", "BottomCopper"]);
-        let view = PcbLayerView::default();
-        for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
-            let tokens = theme_tokens(theme);
-            let r = resolve(&tokens);
-            assert_eq!(set_button_look(&tokens, false), (None, r.ink3), "{theme:?}");
-            assert_eq!(
-                set_button_look(&tokens, true),
-                (Some(r.accent_soft), r.accent_soft_ink),
-                "{theme:?}"
-            );
-            let window = Size::new(320.0, STRIP_HEIGHT);
-            let closed = draw_pixels(strip(&board, &view, false, &tokens), window);
-            let open = draw_pixels(strip(&board, &view, true, &tokens), window);
-            assert_ne!(closed, open, "{theme:?}: the open button looks pressed");
-        }
-    }
-}
+#[cfg(test)]
+#[path = "pcb_strip_look_tests.rs"]
+mod look_tests;
