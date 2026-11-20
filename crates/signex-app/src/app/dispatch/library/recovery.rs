@@ -324,8 +324,12 @@ pub(super) fn handle_recovery_git_missing(
     choice: GitMissingChoice,
 ) -> Task<Message> {
     match choice {
-        // The close (x, Esc) is Skip for now too (mockup row 138).
-        GitMissingChoice::Cancel | GitMissingChoice::Skip => open_without_history(app),
+        // The close (x, Esc) leaves the library unopened.
+        GitMissingChoice::Cancel => {
+            app.library.finish_recovery();
+            Task::none()
+        }
+        GitMissingChoice::Skip => open_without_history(app),
         GitMissingChoice::ReInit => {
             let path = match app.library.recovery.as_ref() {
                 Some(RecoveryDialog::GitMissing { path, .. }) => path.clone(),

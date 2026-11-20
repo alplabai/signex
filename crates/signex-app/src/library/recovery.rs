@@ -23,9 +23,10 @@
 //!    commits only the library's own files (the `.snxlib`, its
 //!    folders and its ignore/attributes files) as a single
 //!    "snxlib re-init" commit. Past per-primitive history is lost,
-//!    which a banner says. *Skip for now* (and the close) opens the library
-//!    read-only until its history is restored: every edit is refused with
-//!    the reason. *Restore from remote* is reserved for when the
+//!    which a banner says. *Skip for now* opens the library read-only
+//!    until its history is restored: every edit is refused with the
+//!    reason. The close (x, Esc) leaves the library unopened.
+//!    *Restore from remote* is reserved for when the
 //!    manifest records a `[users.<remote>]` URL; v0.9 leaves the button
 //!    disabled because no remote field exists yet (Stage 13+).
 //!

@@ -418,7 +418,7 @@ fn logged(fragment: &str) -> bool {
 }
 
 /// Write a `.snxfpt` at `path` (parents created) and return its bytes.
-fn write_footprint(path: &Path) -> Vec<u8> {
+pub(crate) fn write_footprint(path: &Path) -> Vec<u8> {
     std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
     let file =
         signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("stock_fp"));
