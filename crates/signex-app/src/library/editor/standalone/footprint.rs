@@ -89,6 +89,12 @@ pub fn view_footprint<'a>(
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
             .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
             .push(mode_switcher)
+            .push(super::sketch_info_bar::overlay(editor, tokens, i18n))
+            .push(
+                crate::library::editor::footprint::parameters_table::view::overlay(
+                    editor, tokens, i18n,
+                ),
+            )
             .boxed(),
         EditorMode::Normal => stack
             .push(super::dof_chip::overlay(editor, tokens, i18n))

@@ -217,6 +217,16 @@ fn tool_escape(editor: &mut crate::app::FootprintDocument) {
         editor.canvas_cache.clear();
         return;
     }
+    // The parameters table (#189): its prompt, rename or row menu first,
+    // then the table itself; the tool and selection stay. It shows in
+    // Sketch mode only.
+    if editor.state.mode == crate::library::editor::footprint::state::EditorMode::Sketch
+        && crate::library::editor::footprint::parameters_table::update::escape(
+            &mut editor.state.parameters_table,
+        )
+    {
+        return;
+    }
     // v0.15 — global Esc tool cancel. Resets both Pads and
     // Sketch tool state, mode-agnostic.
     editor.state.pads_tool = crate::library::editor::footprint::state::PadsTool::Select;

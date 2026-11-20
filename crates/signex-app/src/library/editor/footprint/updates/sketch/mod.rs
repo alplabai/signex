@@ -23,3 +23,5 @@ pub(super) mod redundancy;
 pub(super) mod solved;
 pub(super) mod tools;
 pub(super) mod ui;
+// The parameters table (#189).
+pub(super) mod parameters;

@@ -23,5 +23,11 @@ pub fn view_board_sketch<'a>(
             editor, tokens, look.bg, look.dot,
         ))
         .push(super::dof_chip::overlay(editor, tokens, i18n))
+        .push(super::sketch_info_bar::overlay(editor, tokens, i18n))
+        .push(
+            crate::library::editor::footprint::parameters_table::view::overlay(
+                editor, tokens, i18n,
+            ),
+        )
         .boxed()
 }
