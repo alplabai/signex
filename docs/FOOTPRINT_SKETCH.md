@@ -340,3 +340,15 @@ A pad made in the sketch keeps the id of the entity that drives it
 Not done yet: the outline of the pattern instance a pad came from (pads do
 not record their instance yet), and a "Driven by sketch" section in the pad
 Properties.
+
+## Close gap {#close-gap}
+
+A footprint bakes past an open profile (a courtyard, mask, paste, pour,
+keepout or cutout loop that does not close) and leaves that shape out. When
+the two nearest open ends are at most **0.05 mm** apart (the one heal
+tolerance, `signex_sketch::heal::HEAL_TOLERANCE_MM`, shared with the board
+sketch and the DXF import), the bake preview card's "Why it does not bake"
+names the gap and the tolerance and offers **Close gap**; a wider gap says
+it is wider than the tolerance and offers no button. Close gap joins the two
+end points into one, re-solves and bakes, as one undo step. Same rule on a
+board sketch: `PCB_SKETCH.md`, "Close gap".

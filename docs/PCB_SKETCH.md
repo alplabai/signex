@@ -241,16 +241,36 @@ undo or solve shows them at once.
 | Closed: one loop | each pair of open ends (the two edges and the gap between their ends, in mm), a fork, or the number of loops |
 | No self-intersection | the two crossing edges and the point |
 | Holes, cutouts and keepouts inside the outline | each opening that is not inside (a mounting hole by its drill; touching the edge counts as inside) |
-| Inside corners | never runs yet: it needs the router tool diameter, which no fab profile or rule carries (open decision) |
+| Inside corners: the router can cut them | each corner tighter than the router tool: a concave corner of the outline and every corner of a cutout or slot opening (radius 0 for a sharp corner, the cutout's edge radius when it names one, an arc's radius for a fillet), read `Inside corner R 0.00 < R 1.00 at (x, y)`; drilled mounting holes are skipped |
 
 A check that cannot run says why: no outline drawn (the board keeps its
-own), the outline not one closed loop yet, or the sketch not solved. A
-failing line names its place, and a click selects that entity (the first
-one, for a pair). An open outline names the gap only: there is no Close
-gap action until the heal tolerance is decided.
+own), the outline not one closed loop yet, the sketch not solved, or (for
+inside corners) the project's fab profile names no router tool. A failing
+line names its place, and a click selects that entity (the first one, for a
+pair).
 
-**A failing check warns; Bake still applies the sketch** (`DECISIONS.md`,
-2026-11-20, pending whether a failing check should block Bake).
+The router tool diameter is the project's (`router_tool_diameter` in the
+`.snxprj`), set when a fab tier or a fab profile naming one is applied
+(`DRC_RULES.md`, "Fab profiles"). The board sketch session copies it from
+the board's project on entry and after every edit; Properties shows it in a
+**Fab profile** group (`Router tool Ø 2.00 · from profile`).
+
+**Every outline check warns only; Bake still applies the sketch**
+(`DECISIONS.md`, Caner 2026-11-20, decision 3).
+
+## Close gap {#close-gap}
+
+An open profile whose two nearest open ends are at most **0.05 mm** apart
+(`signex_sketch::heal::HEAL_TOLERANCE_MM`, the one heal tolerance shared with
+the DXF import, decision bs-11) offers **Close gap**: on the open-outline
+line of the Outline checks, and in the bake preview card when the bake
+refuses an open profile. The line names the gap and the tolerance (`Gap 0.03
+mm, closes under the 0.05 mm heal tolerance`); a wider gap says `Gap 0.12 mm
+is wider than the 0.05 mm heal tolerance` and offers no button. Close gap
+joins the two end points into one (every edge, constraint and pattern that
+named the removed end names the kept one; a fixed end is kept), re-solves,
+and is one undo step. The open ends are found by one helper on both hosts,
+`signex_bake::open_ends`.
 
 ## Drawing the board {#drawing-the-board}
 
@@ -298,6 +318,10 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
   copper of that net. It reads no board area today, so the outline does not
   affect it.
 - A corpus golden for a board with a sketch (`SIGNEX_BLESS_CORPUS=1`).
+- Inside corners: the mockup's "Add fillets R 1.00" fix (not part of
+  decision 3), and the Project tab's Project setup tier pick setting the
+  router tool. Undoing a Presets apply puts the rules back but keeps the
+  router tool it set (the rule history holds the rules only).
 
 ## Values, menus and patterns on the drawing
 
