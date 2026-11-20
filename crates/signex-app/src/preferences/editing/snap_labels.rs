@@ -3,8 +3,8 @@
 //! pitch, Esc cancels; the ● handle drags it. Each label shows its field's
 //! text, and a pitch set here goes back through the field's draft message.
 //!
-//! The interaction is the BB5 `DimensionLabels` state machine, kept in
-//! `PagesViewState`. The labels are drawn here with BB5's metrics
+//! The interaction is the `signex_widgets::dimension_label::DimensionLabels`
+//! state machine, kept in `PagesViewState`. The labels are drawn here with its metrics
 //! (`label_box`) rather than by its overlay: that overlay borrows its label
 //! list for the whole frame, and these labels are built from the drafts in
 //! the view, and a refused pitch draws in the error colour.
@@ -32,7 +32,7 @@ use signex_widgets::{LengthFormat, Translate, button, text, text_input};
 
 const TS: styles::TypeScale = styles::TypeScale::DEFAULT;
 
-/// Text size of a pitch label; its other sizes are ems of it, as in BB5.
+/// Text size of a pitch label; its other sizes are ems of it, as in `DimensionLabels`.
 const LABEL_SIZE: f32 = TS.caption;
 /// Room for the pencil glyph after the text, in glyphs.
 const PENCIL_GLYPHS: usize = 2;
