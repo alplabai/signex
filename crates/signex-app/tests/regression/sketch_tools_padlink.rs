@@ -93,7 +93,7 @@ fn edit(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     );
 }
 
-fn click(app: &mut Signex, path: &PathBuf, x_mm: f64, y_mm: f64, snap: Option<SketchEntityId>) {
+fn click(app: &mut Signex, path: &Path, x_mm: f64, y_mm: f64, snap: Option<SketchEntityId>) {
     edit(
         app,
         path,

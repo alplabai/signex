@@ -155,7 +155,7 @@ fn send(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     );
 }
 
-fn select_pattern(app: &mut Signex, path: &PathBuf, array: ArrayId) {
+fn select_pattern(app: &mut Signex, path: &Path, array: ArrayId) {
     send(
         app,
         path,
@@ -163,7 +163,7 @@ fn select_pattern(app: &mut Signex, path: &PathBuf, array: ArrayId) {
     );
 }
 
-fn click(app: &mut Signex, path: &PathBuf, x_mm: f64, y_mm: f64, snap: Option<SketchEntityId>) {
+fn click(app: &mut Signex, path: &Path, x_mm: f64, y_mm: f64, snap: Option<SketchEntityId>) {
     send(
         app,
         path,

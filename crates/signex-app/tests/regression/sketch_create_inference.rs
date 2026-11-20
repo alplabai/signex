@@ -95,7 +95,7 @@ fn edit(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     );
 }
 
-fn click(app: &mut Signex, path: &PathBuf, at: (f64, f64)) {
+fn click(app: &mut Signex, path: &Path, at: (f64, f64)) {
     let msg = FootprintEditorMsg::SketchToolClick {
         x_mm: at.0,
         y_mm: at.1,
@@ -104,7 +104,7 @@ fn click(app: &mut Signex, path: &PathBuf, at: (f64, f64)) {
     edit(app, path, msg);
 }
 
-fn click_inferred(app: &mut Signex, path: &PathBuf, at: (f64, f64), inference: SketchInference) {
+fn click_inferred(app: &mut Signex, path: &Path, at: (f64, f64), inference: SketchInference) {
     let msg = FootprintEditorMsg::SketchToolClickInferred {
         x_mm: at.0,
         y_mm: at.1,
