@@ -340,3 +340,81 @@ A pad made in the sketch keeps the id of the entity that drives it
 Not done yet: the outline of the pattern instance a pad came from (pads do
 not record their instance yet), and a "Driven by sketch" section in the pad
 Properties.
+
+## Pattern links {#pattern-links}
+
+Decision 10 (Caner, 2026-11-20, mockup row 191). A pattern may repeat
+another pattern, and a mirror of a pattern stays a pattern.
+
+- **A pattern of a pattern.** With a pattern selected (its glyph clicked),
+  Linear, Rectangular or Circular Pattern makes the new array repeat every
+  instance of the selected one: a linear pattern of a 4-way circular pattern
+  bakes count × 4 pads. The link is `SketchData::pattern_sources`
+  (`PatternSource { array, source }`); the array's own source entity is set
+  to the innermost source, so entity references and the delete cascade
+  work as for any array. Instance numbers run on in the outer pattern's
+  scheme, the inner pattern's instances first: the outer slot `s`, inner
+  instance `k` is number `s · inner slots + k` of the scheme (a grid counts
+  its rows that many times wider). The inner pattern still bakes its own
+  pads; the outer one bakes its other slots.
+- **A live mirror.** With a pattern selected, a Mirror click on a Line (or
+  with a Line selected) adds a `PatternMirror { id, pattern, line }` to
+  `SketchData::pattern_mirrors` instead of copying geometry, as one undo
+  step. Every instance of the pattern is reflected about the solved Line on
+  each bake, so the mirror follows the pattern: change the count and the
+  mirror changes with it. Mirrored pads keep the pattern's numbering scheme
+  and continue it (a row numbered 1 to 4 mirrors as 5 to 8); a pad's
+  rotation is reflected too. Pad offsets and the shape itself are not
+  reflected (a trapezoid keeps its side). Without a pattern selected,
+  Mirror copies geometry as before.
+- **Chains and loops.** A mirror can be the source of another pattern or
+  mirror. A link that would make a pattern repeat itself, directly or
+  through other patterns and mirrors, is refused with a warning and leaves
+  no undo step (`SketchData::set_pattern_source`, `add_pattern_mirror`); a
+  loop in a damaged file is reported by the bake and that pattern bakes
+  nothing. The instance limit (10 000 per pattern) counts every instance a
+  chain expands to.
+- **Delete.** Deleting the entity a chain starts from removes every
+  pattern on it. Deleting a mirror's Line removes the mirror, and links
+  onto a removed pattern are dropped; the array that named it stays and
+  repeats its own source again.
+
+The bake expands links in `signex_bake::array::links`; a plain array with
+no link and no override still bakes through `bake_one_array`.
+
+## Per-pad overrides {#per-pad-overrides}
+
+Decision 9 (Caner, 2026-11-20, mockup row 192 D1). Editing a Pads-mode
+attribute of a pad that is an instance of a pattern (not the pattern's
+source pad) asks, each time, **This pad / All pads / Cancel**; no answer is
+remembered. The edit shows in the Properties panel while the card waits; a
+change of size or position, which an override does not hold, does not ask.
+
+- **This pad** stores only the attributes the edit changed, as an override
+  of that instance: `SketchData::pad_overrides`, keyed by `(pattern, i, j)`
+  (`InstanceOverride`, `PadAttrOverride`: number, net, locked, electrical
+  type, template, library, features, testpoint, hole tolerances and
+  rotation, copper offsets, rotation, drill, mask and paste margins, shape,
+  pad stack). The bake applies it to that instance's pad only. A second
+  edit of the same pad merges into its override.
+- **All pads** writes the changed attributes onto the pattern's source pad,
+  so every instance changes.
+- **Cancel**, or Esc, drops the edit.
+
+Each answer that changes the sketch is one undo step and re-bakes. The key
+of an instance (`signex_bake::instance_at`) is `(array, i, j)` for a plain
+array, `(array, outer slot, inner instance)` for a pattern of a pattern and
+`(mirror, mirrored instance, 0)` for a mirror. An override of a pattern
+that is deleted goes with it.
+
+## Reference dimensions in the file
+
+Decision 5 (storage). `SketchData::driven_dimensions` lists the
+constraints that are reference dimensions: they measure and never drive.
+The list is pruned with its constraints. What they draw and how they
+measure is in the sketch canvas look.
+
+The four lists above (`driven_dimensions`, `pattern_sources`,
+`pattern_mirrors`, `pad_overrides`) are absent from a file when empty;
+any of them makes a save write `snxfpt/1.2`, which a 1.1 build refuses by
+name instead of dropping them ([FORMAT_VERSIONS.md](FORMAT_VERSIONS.md)).

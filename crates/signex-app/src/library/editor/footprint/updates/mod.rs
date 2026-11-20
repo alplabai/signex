@@ -17,11 +17,13 @@ mod attempt;
 mod attempt_tests;
 mod context_menu;
 mod geometry;
+mod pad_scope;
 mod selection;
 mod sketch;
 mod view;
 
 pub(crate) use active_bar::{apply_filter_preset, capture_filter_preset};
+pub(crate) use pad_scope::hold_patterned_pad_edit;
 pub(crate) use sketch::solved::settle_pending_inline;
 
 use crate::library::editor::footprint::sketch_solve_task;
@@ -384,6 +386,12 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             use crate::library::editor::footprint::sketch_mode::exit;
             exit::apply(editor, &FootprintEditorMsg::SketchDiscardCancelled);
         }
+        // Esc answers an open "This pad / All pads" with Cancel (#192 D1).
+        FootprintEditorMsg::ToolEscape if editor.state.pad_scope.is_some() => {
+            use crate::library::editor::footprint::state::pad_scope::PadScope;
+            pad_scope::apply(editor, PadScope::Cancel);
+        }
+        FootprintEditorMsg::PadScopeAnswered(scope) => pad_scope::apply(editor, scope),
         FootprintEditorMsg::SelectActiveIdx(..)
         | FootprintEditorMsg::ToggleSelectionFilter(..)
         | FootprintEditorMsg::SelectSilkF(..)
@@ -702,6 +710,9 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         SketchCanvas(_) => false,
         // A board sketch's Snap ▾ board rows: snap switches, no geometry.
         SketchSnap(_) => false,
+        // This pad / All pads records its own step (`record_edit`) when it
+        // changes the sketch; Cancel changes nothing.
+        PadScopeAnswered(_) => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

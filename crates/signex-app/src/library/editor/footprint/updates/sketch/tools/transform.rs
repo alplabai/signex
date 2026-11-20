@@ -41,6 +41,10 @@ pub(super) fn take_centerline_as_mirror_line(
     x_mm: f64,
     y_mm: f64,
 ) -> bool {
+    // With a pattern selected, Mirror keeps a live mirror of it (#191).
+    if super::mirror_pattern::mirror_selected_pattern(editor, x_mm, y_mm) {
+        return true;
+    }
     let Some(sketch) = editor.primitive().sketch.as_ref() else {
         return false;
     };

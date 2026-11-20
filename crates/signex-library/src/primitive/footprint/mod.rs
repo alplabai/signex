@@ -13,11 +13,13 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 use uuid::Uuid;
 
 use crate::param::ParamMap;
 
+mod format_token;
+#[cfg(test)]
+mod format_token_tests;
 #[cfg(test)]
 mod format_version_tests;
 mod load_repair;
@@ -31,6 +33,7 @@ mod silk_marker;
 #[cfg(test)]
 mod tests;
 
+use format_token::{FOOTPRINT_FILE_VERSION, SNXFPT_FORMAT_V1_1};
 pub use load_repair::LoadRepair;
 pub use mount_style::MountStyle;
 pub use pad::*;
@@ -542,8 +545,8 @@ pub const FOOTPRINT_SCHEMA_VERSION: u32 = 3;
 /// inline TOML since they're variant-shaped or sparse.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FootprintFile {
-    /// The format token the file was read with; a save always writes
-    /// [`FOOTPRINT_FILE_FORMAT_TOKEN`].
+    /// The format token the file was read with; a save writes
+    /// [`FootprintFile::format_token`].
     #[serde(default = "default_footprint_format")]
     pub format: String,
     /// File-level UUID — distinct from any contained footprint's uuid.
@@ -564,22 +567,9 @@ pub struct FootprintFile {
     pub updated: DateTime<Utc>,
 }
 
-/// Current `.snxfpt` format, written on every save (the `.snxpcb` policy).
-/// 1.1 (#2242): a pad may carry the `trapezoid:<dx>,<dy>` shape token.
-const FOOTPRINT_FILE_FORMAT_TOKEN: &str = "snxfpt/1.1";
-
-/// `.snxfpt` version policy. A newer token, minor included, is refused by
-/// name: an older build cannot tell which of its shapes it would misread.
-const FOOTPRINT_FILE_VERSION: FormatVersion = FormatVersion {
-    current: FOOTPRINT_FILE_FORMAT_TOKEN,
-    readable: &["snxfpt/1", FOOTPRINT_FILE_FORMAT_TOKEN],
-    newer_minor: NewerMinor::Refused,
-    missing: MissingToken::Refused,
-};
-
 /// Base column layout for the per-footprint `pads_tsv` block; these
 /// lead every header. Reordering them is a wire-format break — bump
-/// [`FOOTPRINT_FILE_FORMAT_TOKEN`]. The remaining `Pad` fields are
+/// the `.snxfpt` token (`format_token`). The remaining `Pad` fields are
 /// optional trailing columns, see `pad_columns`.
 const PAD_TSV_COLUMNS: &[&str] = &[
     "number",
@@ -603,7 +593,7 @@ const PAD_TSV_COLUMNS: &[&str] = &[
 const PADS_TSV_PLACEHOLDER_PREFIX: &str = "__SIGNEX_PADS_TSV_a1b2c3d4_";
 
 fn default_footprint_format() -> String {
-    FOOTPRINT_FILE_FORMAT_TOKEN.to_string()
+    SNXFPT_FORMAT_V1_1.to_string()
 }
 
 /// On-disk wire shape. Mirrors [`FootprintFile`] but each
@@ -814,7 +804,7 @@ impl FootprintFile {
             });
         }
         let wire = FootprintFileWire {
-            format: Some(FOOTPRINT_FILE_FORMAT_TOKEN.to_string()),
+            format: Some(self.format_token().to_string()),
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
             copied_from: self.copied_from,

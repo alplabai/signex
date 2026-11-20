@@ -24,3 +24,8 @@ pub use host::{SketchAction, SketchHost, SketchRole};
 
 #[cfg(test)]
 mod board_tests;
+pub mod format_level;
+pub mod pad_override;
+pub mod pattern_links;
+#[cfg(test)]
+mod pattern_links_tests;

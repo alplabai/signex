@@ -34,9 +34,16 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 mod grid;
+mod instance_at;
 mod linear;
+mod links;
+#[cfg(test)]
+mod links_tests;
 mod numbering;
+mod overrides;
 mod polar;
+
+pub use instance_at::instance_at;
 
 /// Most pad instances one array may expand to. Array counts come from
 /// user / file expressions and the bake runs on the editor's update
@@ -111,8 +118,14 @@ pub fn bake_arrays(
     let params_ast = crate::params::params_ast(sketch, params_canonical);
 
     for array in &sketch.arrays {
+        // A pattern link or an override bakes through the instance walk.
+        if links::bakes_through_links(sketch, array.id) {
+            links::bake_pattern(array.id, sketch, solve, &params_ast, out, warnings)?;
+            continue;
+        }
         bake_one_array(array, &params_ast, sketch, solve, out, warnings)?;
     }
+    links::bake_mirrors(sketch, solve, &params_ast, out, warnings)?;
 
     Ok(())
 }

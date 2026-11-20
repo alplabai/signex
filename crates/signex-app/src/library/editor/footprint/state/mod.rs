@@ -34,6 +34,7 @@ mod courtyard_tests;
 pub mod mode;
 pub mod pad;
 pub mod pad_link;
+pub mod pad_scope;
 pub mod placement;
 pub mod selection;
 pub mod selection_filter;
@@ -326,6 +327,8 @@ pub struct FootprintEditorState {
     pub sketch_overlay: SketchOverlay,
     /// The pad an Edit in Sketch came from (#192); read it through `live_pad_link`.
     pub pad_link: Option<PadLinkFocus>,
+    /// A patterned pad edit waiting for "This pad / All pads" (#192 D1).
+    pub pad_scope: Option<Box<pad_scope::PadScopePrompt>>,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -445,6 +448,7 @@ impl FootprintEditorState {
             canvas_text: SketchCanvasText::default(),
             sketch_overlay: SketchOverlay::default(),
             pad_link: None,
+            pad_scope: None,
         }
     }
 

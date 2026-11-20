@@ -108,6 +108,9 @@ pub fn view_footprint<'a>(
             .push(super::dof_chip::overlay(editor, tokens, i18n))
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
             .push(mode_switcher)
+            .push(
+                crate::library::editor::footprint::pad_scope_prompt::overlay(editor, tokens, i18n),
+            )
             .boxed(),
         EditorMode::View3d => stack.push(mode_switcher).boxed(),
     };

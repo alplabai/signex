@@ -10,6 +10,9 @@ use crate::sketch::id::{ConstraintId, SketchEntityId};
 use crate::sketch::parameter::ParameterTable;
 use crate::sketch::plane::Plane;
 
+pub use crate::sketch::pad_override::{InstanceOverride, OverrideValue, PadAttrOverride};
+pub use crate::sketch::pattern_links::{PatternCycle, PatternMirror, PatternSource};
+
 /// Top-level container for a footprint sketch. Persisted as part of
 /// a `Footprint`'s schema (v2+).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -29,6 +32,21 @@ pub struct SketchData {
     /// baked re-saves byte-identical. Unknown tokens are kept as read.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub baked_kinds: Vec<String>,
+    /// Reference dimensions: they measure, never drive (decision 5). The
+    /// four lists below are absent when empty, so an older file re-saves
+    /// byte-identical; any of them asks for `snxfpt/1.2`
+    /// ([`Self::needs_format_1_2`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub driven_dimensions: Vec<ConstraintId>,
+    /// Patterns that repeat another pattern (#191).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pattern_sources: Vec<PatternSource>,
+    /// Live mirrors of patterns (#191).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pattern_mirrors: Vec<PatternMirror>,
+    /// Per-instance pad overrides (#192 D1).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pad_overrides: Vec<InstanceOverride>,
 }
 
 /// What [`SketchData::remove_entity_cascade`] took out of the sketch.
@@ -36,6 +54,7 @@ pub struct SketchData {
 pub struct Removed {
     pub entities: Vec<SketchEntityId>,
     pub constraints: Vec<ConstraintId>,
+    /// Arrays, and pattern mirrors whose pattern or line went.
     pub arrays: Vec<ArrayId>,
     /// Entities, constraints and arrays that were already orphaned
     /// (dangling) before the delete and were stripped alongside it. Not
@@ -48,7 +67,8 @@ pub struct Removed {
 impl SketchData {
     /// Remove `id` and everything that cannot exist without it: each
     /// line, arc or circle that names it as an endpoint or centre, and
-    /// each constraint and array that names any removed entity.
+    /// each constraint and array that names any removed entity, and the
+    /// pattern links that name what went ([`Self::prune_pattern_refs`]).
     ///
     /// Only the references this type owns are walked (entity endpoints,
     /// constraints, arrays). Entity ids kept inside attribute payloads
@@ -96,15 +116,19 @@ impl SketchData {
                 !gone
             });
             if removed.entities.len() + removed.constraints.len() + removed.arrays.len() == before {
-                return;
+                break;
             }
             doomed.extend(removed.entities.iter().copied());
         }
+        // Links, mirrors, overrides and driven ids naming what went.
+        let mirrors = self.prune_pattern_refs();
+        removed.arrays.extend(mirrors);
     }
 
-    /// Every entity id that an entity, constraint or array names but the
-    /// sketch does not contain, sorted and de-duplicated. Empty for a
-    /// well-formed sketch. Ids inside attribute payloads are not checked.
+    /// Every entity id that an entity, constraint, array or pattern mirror
+    /// (its line) names but the sketch does not contain, sorted and
+    /// de-duplicated. Empty for a well-formed sketch. Ids inside attribute
+    /// payloads are not checked.
     pub fn dangling_refs(&self) -> Vec<SketchEntityId> {
         let known: HashSet<SketchEntityId> = self.entities.iter().map(|e| e.id).collect();
         let mut missing: Vec<SketchEntityId> = self
@@ -113,6 +137,7 @@ impl SketchData {
             .flat_map(Entity::point_refs)
             .chain(self.constraints.iter().flat_map(|c| c.kind.entity_refs()))
             .chain(self.arrays.iter().flat_map(|a| a.kind.entity_refs()))
+            .chain(self.pattern_mirrors.iter().map(|m| m.line))
             .filter(|r| !known.contains(r))
             .collect();
         missing.sort_by_key(ToString::to_string);

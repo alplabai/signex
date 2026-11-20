@@ -606,4 +606,7 @@ pub enum FootprintEditorMsg {
     SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
     /// #192 — the floating pad link on the sketch canvas.
     PadLink(crate::library::editor::footprint::state::PadLinkMsg),
+    /// #192 D1 — the answer to "This pad / All pads" after an edit of a
+    /// patterned pad.
+    PadScopeAnswered(crate::library::editor::footprint::state::pad_scope::PadScope),
 }

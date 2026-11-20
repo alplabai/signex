@@ -28,13 +28,19 @@ pub(super) fn apply(
 }
 
 /// Add `kind` to the sketch as a new array with sequential numbering and
-/// rebuild, so its instances bake.
+/// rebuild, so its instances bake. With a pattern selected the new array
+/// repeats every instance of it (#191, decision 10).
 fn push_array(editor: &mut crate::app::FootprintDocument, kind: ArrayKind) {
     let array = Array {
         id: ArrayId::new(),
         kind,
         numbering: NumberingScheme::default(),
     };
+    if let Some(source) = super::mirror_pattern::selected_pattern(editor) {
+        push_linked_array(editor, array, source);
+        editor.state.tool_pending = ToolPending::Idle;
+        return;
+    }
     let sketch = editor
         .primitive_mut()
         .sketch
@@ -44,6 +50,21 @@ fn push_array(editor: &mut crate::app::FootprintDocument, kind: ArrayKind) {
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
     });
     editor.state.tool_pending = ToolPending::Idle;
+}
+
+/// Add `array` repeating every instance of pattern `source`; its own source
+/// entity becomes the innermost one. A link that would loop is refused
+/// with a warning and adds nothing.
+fn push_linked_array(editor: &mut crate::app::FootprintDocument, array: Array, source: ArrayId) {
+    use super::mirror_pattern::{link_patterns, refuse};
+    let id = array.id;
+    let linked = link_patterns(editor, |sketch| {
+        sketch.arrays.push(array);
+        sketch.set_pattern_source(id, source)
+    });
+    if let Err(cycle) = linked {
+        refuse(editor, format!("Pattern: {cycle} — no pattern was added"));
+    }
 }
 
 // Linear Pattern (m191). Click 1 picks the source entity, as Rectangular
