@@ -1000,6 +1000,8 @@ mod app_loop_bench_tests;
 #[cfg(test)]
 mod background_reuse_tests;
 #[cfg(test)]
+mod drag_invalidation_tests;
+#[cfg(test)]
 mod draw_order_tests;
 #[cfg(test)]
 mod ghost_split_tests;
