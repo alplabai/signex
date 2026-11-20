@@ -230,6 +230,14 @@ attached:
   `Enter` or the form's **OK** goes on placing with your edits. `Esc` goes on
   placing without them: the part keeps the values it had when you pressed
   `Tab`, and stays on the cursor. A second `Esc` lets go of it.
+- The Position X and Y in that form follow the cursor. Type a position (in
+  the panel's unit; Y counts from the sheet's page origin) and press **OK** or
+  `Enter`: the next object is placed there without a click. A field that is
+  not a number is outlined and **OK** places nothing until it is fixed or
+  cleared. `Esc` drops a typed position with the other edits and places
+  nothing. The wire tool takes a Start and an End and places one straight
+  wire between them. A typed position is used once; the object after it
+  starts from the cursor again. Every placement tool has this form.
 - Click to place it. One click is one **Undo** step. The part stays on the
   cursor, and each further click places another copy with the next free
   designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
@@ -375,6 +383,24 @@ Classic profile has `U` for the designator, `V` for the value and `F` for the
 footprint. A part's footprint has no text on the sheet, so its editor opens at
 the part. A command with nothing to act on says so in the Messages panel.
 
+### Editing a wire or a text note in Properties
+
+Select one wire or bus and its **Location** shows **Start** and **End**, each
+an X / Y row in the panel's unit (Y counts from the sheet's page origin), and
+the **Length** they make. Type a value and press `Enter`: Start moves only the
+start point and End moves only the end point. The other end stays where it is,
+wires attached at the moved end do not follow, and a straight wire may turn.
+Each value is one undo step, and Length follows. A new end on another wire
+gets a junction, as a drawn wire does.
+
+Select one text note and its **Text** box takes several lines (`Enter` starts
+a new line). What you type is applied as one undo step when the box loses
+focus (`Esc`, or a click outside it), on `Ctrl+Enter`, or when you select
+something else. Moving the pointer out of the box applies nothing. Typed text
+is never lost: a save, a tab switch or closing the tab applies it to its own
+sheet first. **Rotation** (0°, 90°, 180°, 270°) and **Justify H** / **Justify
+V** are switches; a click sets the value at once, one undo step each.
+
 ### Editing several objects at once
 
 With more than one object selected, Properties lists the fields they share, a
@@ -382,7 +408,9 @@ group each for parts, labels and wires. A value the objects disagree on reads
 `<mixed>`. Type a new value and press `Enter` (or flip a checkbox) to set it on
 every object of that group in one undo step. Parts offer value, footprint, DNP,
 In BOM, On board and their custom parameters; labels size, justification and
-rotation (0, 90, 180 or 270); wires width. Label text is not edited in bulk,
+rotation (0, 90, 180 or 270); wires width, picked from the Smallest, Small,
+Medium and Large presets or typed as an Exact Width in the panel's unit. Label
+text is not edited in bulk,
 because giving labels one name would merge their nets. Value, footprint and
 parameter edits skip locked parts and the Messages panel says which; DNP, In BOM
 and On board apply to locked parts too. An empty parameter value removes that
@@ -761,26 +789,29 @@ saved to the `.snxprj` with `Ctrl+S`.
 
 A sheet's own parameters are in one list: click an empty spot of the sheet so
 the **Properties** panel shows **Document Options**, and open its
-**Parameters** tab. Each row shows its current value.
+**Parameters** tab. Each row shows its current value. Type in **Filter
+parameters** to show only the rows whose name holds that text; the **All**,
+**Parameters** and **Rules** chips carry their counts (a sheet has no rules
+yet, so **Rules** shows an empty card). Click a group's header to fold it.
 
-- **Title**, **Document No.**, **Revision**, **Date**, **Company**, **Drawn
-  By**, **Checked By**, **Approved By**, **Author**, **Engineer**,
-  **Organization** and **Address 1** to **Address 4** are the sheet's
-  title-block fields. Type a value and press `Enter` to apply it; each
-  applied field is one undo step, and the title block on the sheet shows it.
-  A field you leave empty is not saved. The name shows `(project)` while
-  the field is empty and takes the project's value (shown greyed in the
-  field), and `(overrides project)` while the sheet has its own. Clear the
-  field to fall back to the project's value.
+- The **Title block** group: **Title**, **Document No.**, **Revision**,
+  **Date**, **Company**, **Drawn By**, **Checked By**, **Approved By**,
+  **Author**, **Engineer**, **Organization** and **Address 1** to
+  **Address 4**. Type a value and press `Enter` to apply it; each applied
+  field is one undo step, and the title block on the sheet shows it. A field
+  you leave empty is not saved and reads *Not set*. While the sheet leaves a
+  field empty and the project has a value, the row shows the project's value
+  greyed with a **project** pill; typing a value overrides it for this sheet.
+  Clear the field to fall back to the project's value.
 - An empty **Date** with no project value shows today's date, greyed, and
   its name says `(today)`; nothing is saved for it, so it always shows the
   current day. Type a date to store it.
-- **Current Time**, **Current Date**, **Time**, **Document Full Path**,
-  **Document Name**, **Modified Date**, **Sheet Name**, **Sheet Number**,
-  **Sheet Count** and **Project Name** are read-only. The clock rows show
-  the time the panel was last refreshed, to the minute; **Modified Date** is
-  the date the sheet's file was last read from disk or saved. A row with no
-  value is empty.
+- The **Built-in** group is read-only: **Document Name**, **Sheet Name**,
+  **Sheet Number**, **Sheet Count**, **Project Name**, **Current Time**,
+  **Current Date**, **Time**, **Document Full Path** and **Modified Date**.
+  The clock rows show the time the panel was last refreshed, to the minute;
+  **Modified Date** is the date the sheet's file was last read from disk or
+  saved. A row with no value is empty.
 
 Every row name is also a special string you can type in any text, note or
 title block: `${Title}`, `${CompanyName}`, `${DrawnBy}`, `${Author}`,
@@ -788,18 +819,20 @@ title block: `${Title}`, `${CompanyName}`, `${DrawnBy}`, `${Author}`,
 `${ModifiedDate}`, `${DocumentFullPathAndName}`, `${DocumentName}` and
 so on. The names are matched exactly, before any variable of the same name.
 
-A sheet has its own variables too, under **Sheet Variables** in the same
-tab. Type a name, press **Add**, type the value and press `Enter`; **Remove**
-deletes a variable. A sheet variable replaces the project variable of the
-same name on that sheet only; it is saved in the `.snxsch`.
+A sheet has its own variables too, in the **Sheet variables** group of the
+same tab. Type a name, press **Add variable**, type the value and press
+`Enter`; the ✕ button deletes a variable. A sheet variable replaces the
+project variable of the same name on that sheet only; it is saved in the
+`.snxsch`.
 
 A value that starts with `=` is an expression: `= VCC / 2` with `VCC` set to
 `3.3V` shows `1.65V`. An expression may use other variables, units and the
 functions of the footprint parameters. The value you typed is what is saved;
-the result is what is drawn. A value that does not evaluate (an unknown name,
-or two variables that refer to each other) is drawn as typed, shows its error
-under the field, and is reported in the **Messages** panel when you press
-`Enter`. To start a plain value with `=`, type `==`.
+the result is what is drawn; in the Parameters list it shows in a pill beside
+the field. A value that does not evaluate (an unknown name, or two variables
+that refer to each other) is drawn as typed, shows `?` in the pill and its
+error under the field, and is reported in the **Messages** panel when you
+press `Enter`. To start a plain value with `=`, type `==`.
 
 A part's value and its fields take expressions too. A bare name is the
 part's own field first (`= Rbase * 2`), then a variable; `R1.Value` is the

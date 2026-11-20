@@ -62,6 +62,66 @@ impl Signex {
         self.apply_child_sheet_edit(id, None, Some(filename));
     }
 
+    /// Browse… beside File: pick a sheet file off the update thread, starting
+    /// in the folder of the sheet the edit acts on. Pressed in an undocked
+    /// window, the picked file comes back scoped to that window.
+    pub(super) fn browse_child_sheet_file(&mut self, id: uuid::Uuid) -> iced::Task<Message> {
+        let dir = (self.document_state.active_path.as_deref())
+            .and_then(|path| path.parent().map(std::path::Path::to_path_buf));
+        let window = self.interaction_state.acting_window;
+        let picker = self.ui_state.io.picker.clone();
+        let i18n = self.ui_state.i18n.clone();
+        iced::Task::perform(
+            async move {
+                let mut dialog = picker
+                    .dialog()
+                    .title_in(&i18n, ids::PROPERTIES_SHEET_BROWSE_TITLE)
+                    .filter_in(&i18n, ids::FILE_FILTER_SCHEMATIC, &["snxsch"]);
+                if let Some(dir) = dir {
+                    dialog = dialog.set_directory(dir);
+                }
+                dialog.pick_file().await
+            },
+            move |picked| {
+                let browsed =
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SelectionForm(
+                        crate::panels::SelectionFormMsg::SheetFileBrowsed(id, picked),
+                    ));
+                Message::Dock(match window {
+                    Some(window) => {
+                        crate::dock::DockMessage::ScopedToWindow(window, Box::new(browsed))
+                    }
+                    None => browsed,
+                })
+            },
+        )
+    }
+
+    /// The browsed file becomes the File reference of sheet `id`, relative to
+    /// the active sheet's folder, committed as if typed and Entered: the same
+    /// checks refuse a file outside the folder or used by another symbol.
+    pub(super) fn child_sheet_file_browsed(
+        &mut self,
+        id: uuid::Uuid,
+        picked: Option<&std::path::Path>,
+    ) {
+        let Some(picked) = picked else {
+            return;
+        };
+        let reference = (self.document_state.active_path.as_deref())
+            .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
+            .and_then(|dir| {
+                picked
+                    .strip_prefix(dir)
+                    .ok()
+                    .map(std::path::Path::to_path_buf)
+            })
+            .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_else(|| picked.to_string_lossy().into_owned());
+        self.type_child_sheet_file(id, &reference);
+        self.commit_child_sheet_file(id);
+    }
+
     fn apply_child_sheet_edit(
         &mut self,
         id: uuid::Uuid,

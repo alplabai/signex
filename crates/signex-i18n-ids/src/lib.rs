@@ -548,7 +548,6 @@ define_ids! {
     PANELS_PROPERTIES_OPEN_PROJECT = "panels-properties-open-project";
     PANELS_PROPERTIES_NOTHING_SELECTED = "panels-properties-nothing-selected";
     PANELS_PROPERTIES_ONE_OBJECT_SELECTED = "panels-properties-one-object-selected";
-    PANELS_PROPERTIES_NO_PLACEMENT_OPTIONS = "panels-properties-no-placement-options";
     PANELS_PROPERTIES_TAB_GENERAL = "panels-properties-tab-general";
     PANELS_PROPERTIES_TAB_PARAMETERS = "panels-properties-tab-parameters";
     PANELS_PROPERTIES_TEMPLATE_DEFAULTS = "panels-properties-template-defaults";
@@ -574,7 +573,6 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS_HINT = "panels-net-classes-patterns-hint";
     PANELS_CHILD_SHEET_NAME = "panels-child-sheet-name";
     PANELS_CHILD_SHEET_FILE = "panels-child-sheet-file";
-    PANELS_CHILD_SHEET_LINE_WIDTH = "panels-child-sheet-line-width";
     EDITORS_COMPONENT_HEADER_VERSION = "editors-component-header-version";
     EDITORS_COMPONENT_HEADER_LOCATION = "editors-component-header-location";
     EDITORS_COMPONENT_HEADER_UNPARSED = "editors-component-header-unparsed";
@@ -748,9 +746,6 @@ define_ids! {
     PANELS_FILTER_OTHER = "panels-filter-other";
     PANELS_PROPERTIES_DOCUMENT_OPTIONS = "panels-properties-document-options";
     PANELS_PROPERTIES_UNITS = "panels-properties-units";
-    PANELS_PROPERTIES_FORMATTING = "panels-properties-formatting";
-    PANELS_PROPERTIES_BORDER_ZONES = "panels-properties-border-zones";
-    PANELS_PROPERTIES_TEXT = "panels-properties-text";
     PANELS_PROPERTIES_JUSTIFICATION = "panels-properties-justification";
     PREFERENCES_WHEEL_MODE_LABEL = "preferences-wheel-mode-label";
     PREFERENCES_WHEEL_MODE_HELP = "preferences-wheel-mode-help";

@@ -330,7 +330,7 @@ impl Signex {
         self.interaction_state.placement_pause =
             (!editor.state.placement_paused).then(|| SheetPlacementPause::Footprint {
                 path: path.to_path_buf(),
-                pad_defaults: editor.state.next_pad_defaults.clone(),
+                pad_defaults: Box::new(editor.state.next_pad_defaults.clone()),
             });
     }
 
@@ -344,17 +344,17 @@ impl Signex {
                 at_pause,
                 reference_override,
             }) => {
-                let undone = self.undo_pause_mirrors(at_pause.as_ref());
+                let undone = self.undo_pause_mirrors(at_pause.as_deref());
                 if let Some(session) = self.interaction_state.placement.as_mut() {
                     session.reference_override = reference_override;
                 }
                 self.refresh_placement_reference();
-                self.document_state.panel_ctx.pre_placement = before;
+                self.document_state.panel_ctx.pre_placement = before.map(|form| *form);
                 undone
             }
             Some(SheetPlacementPause::Footprint { path, pad_defaults }) => {
                 if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-                    editor.state.next_pad_defaults = pad_defaults;
+                    editor.state.next_pad_defaults = *pad_defaults;
                 }
                 Task::none()
             }
@@ -386,8 +386,14 @@ impl Signex {
         if now.font_size_pt != base.font_size_pt {
             edits.push(PanelMsg::SetPrePlacementFontSize(base.font_size_pt));
         }
-        if now.justify_h != base.justify_h {
-            edits.push(PanelMsg::SetPrePlacementJustifyH(base.justify_h));
+        // The justification grid's pick moves the ghost's anchor back too.
+        if now.justify_h != base.justify_h || now.justify_v != base.justify_v {
+            edits.push(PanelMsg::PrePlacementPosition(
+                crate::panels::PrePlacementPositionMsg::AnchorPicked(
+                    base.justify_h,
+                    base.justify_v,
+                ),
+            ));
         }
         let tasks: Vec<Task<Message>> = edits
             .into_iter()
