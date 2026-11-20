@@ -360,6 +360,90 @@ fn an_agents_step_says_undone_and_redone_with_its_label() {
     says_once(&format!("Redone: {label}"), || app.handle_redo_requested());
 }
 
+/// Run `name` from `operands` as the operand route runs it.
+fn run_operands(app: &mut Signex, name: &str, operands: &[String]) -> serde_json::Value {
+    let command = crate::keymap::AppCommandId::new(name).unwrap();
+    let refs: Vec<&str> = operands.iter().map(String::as_str).collect();
+    let args = crate::app::command::CommandArgs::parse_operands(&command, &refs).unwrap();
+    match app.run_operands_settled(&command, &args).0 {
+        crate::app::command::CommandOutcome::Answered(value) => value,
+        crate::app::command::CommandOutcome::Ran => serde_json::Value::Null,
+        other => panic!("{name} did not run: {other:?}"),
+    }
+}
+
+/// An agent's edit list on `sheet` labelled `summary`; its answer.
+fn summarised_edits(app: &mut Signex, sheet: &Path, summary: &str) -> serde_json::Value {
+    let revision = app.document_state.engines[sheet].revision();
+    run_operands(
+        app,
+        "apply_edits",
+        &[
+            format!("document={}", sheet.display()),
+            format!("expect_revision={revision}"),
+            r#"edits=[{"id":"place_junction","args":{"at":[50.8,50.8]}}]"#.to_string(),
+            format!("summary={summary}"),
+        ],
+    )
+}
+
+#[test]
+fn an_agents_single_command_says_its_label_and_undo_group() {
+    let dir = tempfile::tempdir().unwrap();
+    let name = format!("{}.snxsch", short_unique("one"));
+    let sheet_at = dir.path().join(&name);
+    // An agent acts on the documents of an open project.
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.path().to_string_lossy(),
+        &[&name],
+    );
+    colours::add_sheet_with(&mut app, &sheet_at, sheet(200));
+    app.document_state.mark_document_clean(&sheet_at);
+    // The agent socket serving: a command naming its document is one step.
+    app.agent.serving = true;
+    let line = format!("Agent: place_junction on {name} (undo group ");
+    says_once(&line, || {
+        run_operands(
+            &mut app,
+            "place_junction",
+            &[
+                format!("document={}", sheet_at.display()),
+                "at=50.8,50.8".to_string(),
+            ],
+        );
+    });
+}
+
+#[test]
+fn an_agents_edit_list_says_how_many_edits_landed_where() {
+    let (mut app, paths) = app_with_sheets(&["agent.snxsch"]);
+    let summary = short_unique("list ");
+    let line = format!("Agent: {summary}: 1 edit(s) applied to agent.snxsch (undo group ");
+    says_once(&line, || {
+        summarised_edits(&mut app, &paths[0], &summary);
+    });
+}
+
+#[test]
+fn an_agents_revert_says_what_it_took_back() {
+    let (mut app, paths) = app_with_sheets(&["agent.snxsch"]);
+    let summary = short_unique("revert ");
+    let group = summarised_edits(&mut app, &paths[0], &summary)["group"]
+        .as_u64()
+        .expect("a group");
+    let line = format!("Reverted Agent: {summary} on agent.snxsch (undo group {group})");
+    says_once(&line, || {
+        run_operands(
+            &mut app,
+            "revert",
+            &[
+                format!("document={}", paths[0].display()),
+                format!("group={group}"),
+            ],
+        );
+    });
+}
+
 /// A sheet with the symbol `reference` locked at the origin and an unlocked
 /// wire, active. The symbol's and the wire's selection items.
 fn locked_symbol(reference: &str) -> (Signex, PathBuf, SelectedItem, SelectedItem) {

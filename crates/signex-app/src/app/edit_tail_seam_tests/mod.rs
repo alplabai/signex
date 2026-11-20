@@ -6,6 +6,7 @@
 
 mod dirty_matrix;
 mod groups;
+mod members;
 mod messages;
 mod refresh;
 
