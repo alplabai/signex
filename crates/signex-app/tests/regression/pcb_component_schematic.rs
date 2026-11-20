@@ -395,6 +395,9 @@ fn the_update_pcb_button_of_a_mismatch_opens_update_pcb() {
     }
     assert_eq!(facts(&f.app).designator_mismatches, 1);
     assert!(f.app.ui_state.update_pcb.is_none());
+    // Update PCB runs for the open project; the fixture adds the project
+    // without opening it, so make it the open one as opening it would.
+    f.app.document_state.active_project = Some(f.app.document_state.projects[0].id);
     send(
         &mut f.app,
         Message::Dock(DockMessage::Panel(PanelMsg::PcbComponent(
