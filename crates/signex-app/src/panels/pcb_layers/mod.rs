@@ -1,4 +1,4 @@
-//! The Layers panel of a board (#2223, #2359, #2363, m103): two tabs.
+//! The Layers panel of a board (#2223, #2359, #2363, mockup row 103): two tabs.
 //! Layers & Colors has a search row (with Used On and the more menu), the
 //! Active | Set row and the board's layers by section (copper, the component
 //! layer pairs, the other technical layers, the other layers and the system
@@ -16,6 +16,7 @@ mod rows;
 mod view_options;
 
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use iced::widget::button::{Status, Style as ButtonStyle};
@@ -114,6 +115,9 @@ pub struct PcbLayersPanel {
     pub layer_stack_live: bool,
     /// A board is open; without one the panel shows its empty state.
     pub board_open: bool,
+    /// The tab path of the board shown, so an open colour card can tell a
+    /// switch of board from an edit of the same one.
+    pub board: Option<PathBuf>,
     pub i18n: Arc<I18n>,
 }
 
@@ -139,6 +143,7 @@ impl Default for PcbLayersPanel {
             board_3d: false,
             layer_stack_live: false,
             board_open: false,
+            board: None,
             i18n: I18n::en_us(),
         }
     }
@@ -242,7 +247,7 @@ pub enum LayersTab {
     ViewOptions,
 }
 
-/// The Layers panel's own state (#2363, m103), kept across rebuilds:
+/// The Layers panel's own state (#2363, mockup row 103), kept across rebuilds:
 /// view-only, never part of a board view.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LayersPanelUi {
@@ -362,6 +367,26 @@ impl LayersPanelUi {
         }
         let byte = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).ok();
         Some([byte(0)?, byte(2)?, byte(4)?])
+    }
+
+    /// Keep the open colour card true to the board after a rebuild: it
+    /// closes when the panel now shows another board (`before` is the board
+    /// it showed), and its hex field takes the layer's colour again when it
+    /// reads as another colour (an undo, a redo or a reset while it was
+    /// open), so the next keystroke never applies a stale colour. A
+    /// half-typed colour is left as typed.
+    pub fn follow_board(&mut self, before: Option<&Path>, now: &PcbLayersPanel) {
+        let Some(layer) = self.picker else {
+            return;
+        };
+        if before != now.board.as_deref() {
+            self.picker = None;
+            return;
+        }
+        let [r, g, b, _] = now.colour(layer).into_rgba8();
+        if self.hex_colour().is_some_and(|typed| typed != [r, g, b]) {
+            self.hex = now.hex_of(layer);
+        }
     }
 }
 

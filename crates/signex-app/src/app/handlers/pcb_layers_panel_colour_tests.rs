@@ -180,3 +180,68 @@ fn a_typed_colour_survives_a_write_and_a_read_of_the_board() {
     assert_eq!(panel.colour(BOTTOM), iced::Color::from_rgb8(255, 0, 255));
     assert_eq!(panel.hex_of(BOTTOM), "#FF00FF");
 }
+
+fn redo(app: &mut Signex) {
+    let _ = app.update(Message::Edit(EditMsg::Redo));
+}
+
+/// The text of the open card's hex field.
+fn hex_field(app: &Signex) -> String {
+    app.document_state.panel_ctx.pcb_layers_ui.hex.clone()
+}
+
+/// An undo or a redo while the card is open puts the layer's colour back in
+/// the hex field, so the next keystroke never applies the colour the field
+/// held before the undo as a new undo step.
+#[test]
+fn an_undo_or_redo_with_the_card_open_rereads_the_hex_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    layers(&mut app, LayersPanelMsg::ColourChipToggled(BOTTOM));
+    let palette = hex_field(&app);
+    layers(&mut app, LayersPanelMsg::HexEdited("#FF00FF".to_string()));
+    assert_eq!(board_colour(&app, &path, BOTTOM), Some(MAGENTA));
+
+    undo(&mut app);
+    assert_eq!(board_colour(&app, &path, BOTTOM), None);
+    let ui = &app.document_state.panel_ctx.pcb_layers_ui;
+    assert_eq!(ui.picker, Some(BOTTOM), "the card stays open");
+    assert_eq!(
+        hex_field(&app),
+        palette,
+        "the field reads the palette again"
+    );
+
+    redo(&mut app);
+    assert_eq!(board_colour(&app, &path, BOTTOM), Some(MAGENTA));
+    assert_eq!(hex_field(&app), "#FF00FF");
+
+    // A half-typed colour is the user's and stays as typed.
+    layers(&mut app, LayersPanelMsg::HexEdited("#12".to_string()));
+    undo(&mut app);
+    assert_eq!(hex_field(&app), "#12");
+}
+
+/// The card closes when another board becomes the active one, so it never
+/// recolours a board it was not opened on.
+#[test]
+fn a_switch_of_board_closes_the_colour_card() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, first) = app_with_board(dir.path());
+    layers(&mut app, LayersPanelMsg::ColourChipToggled(BOTTOM));
+    assert_eq!(
+        app.document_state.panel_ctx.pcb_layers_ui.picker,
+        Some(BOTTOM)
+    );
+
+    let second = dir.path().join("second.snxpcb");
+    app.open_pcb_tab(second.clone(), "second".into(), board());
+    assert_eq!(app.active_tab_path(), Some(second.clone()));
+    assert_eq!(
+        app.document_state.panel_ctx.pcb_layers_ui.picker, None,
+        "the card closed with the switch"
+    );
+    layers(&mut app, LayersPanelMsg::HexEdited("#FF00FF".to_string()));
+    assert_eq!(board_colour(&app, &first, BOTTOM), None);
+    assert_eq!(board_colour(&app, &second, BOTTOM), None);
+}

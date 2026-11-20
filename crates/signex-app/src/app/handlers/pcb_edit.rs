@@ -101,6 +101,7 @@ impl Signex {
             canvas.clear_bg_cache();
             canvas.clear_content_cache();
             self.sync_panel_ctx_from_visible_document();
+            self.refresh_pcb_layers_panel();
         } else {
             self.repaint_undocked_boards(path);
         }
