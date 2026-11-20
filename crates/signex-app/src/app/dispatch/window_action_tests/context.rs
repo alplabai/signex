@@ -258,3 +258,22 @@ fn a_validation_tile_chip_or_identity_change_reaches_an_undocked_window() {
     assert_eq!(window.identity, UserIdentity::Known("Ada".into()));
     assert_eq!(window, &f.app.document_state.panel_ctx.validation);
 }
+
+/// The selected ERC finding shows selected in an undocked window's ERC panel
+/// too, without that window's sheet changing.
+#[test]
+fn the_selected_erc_finding_reaches_an_undocked_window() {
+    let mut f = fixture();
+    f.app.refresh_panel_ctx();
+    assert_eq!(
+        f.app.document_state.window_panel_ctx[&f.window].erc_focus_index,
+        None
+    );
+    f.app.ui_state.erc_focus_global_index = Some(3);
+    f.app.refresh_panel_ctx();
+    assert_eq!(f.app.document_state.panel_ctx.erc_focus_index, Some(3));
+    assert_eq!(
+        f.app.document_state.window_panel_ctx[&f.window].erc_focus_index,
+        Some(3)
+    );
+}

@@ -33,6 +33,7 @@ impl PanelContext {
         self.erc_running = main.erc_running;
         self.erc_results_stale = main.erc_results_stale;
         self.erc_ran = main.erc_ran;
+        self.erc_focus_index = main.erc_focus_index;
         if self.validation != main.validation {
             self.validation.clone_from(&main.validation);
         }
