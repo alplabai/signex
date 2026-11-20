@@ -93,10 +93,12 @@ The **New Project** dialog opens. Nothing is written until you press
 - **Create "<name>" folder** (on by default) puts the project in a new folder
   `<location>/<name>/`. Turn it off to create the project directly in a
   folder you already made.
-- **Start from a profile** sets the board rules and the sheet defaults:
-  **Hobby 2-layer**, **Standard 4-layer** (the default), **HDI 6-layer** or
-  **Custom**. **Customize settings** opens the values behind the profile:
-  the manufacturer rule template (or **Import rules…**), copper layers, board
+- **Start from a profile** sets the board rules: the fab tiers
+  **Standard** (the default), **Advanced** and **HDI**, or **Custom**. The
+  copper layer count is a separate stepper on each card. Hover a card and
+  press the pencil to edit a built-in profile; **Reset to default** in its
+  menu brings the shipped values back. **Customize settings** opens the values
+  behind the profile: the **Fab tier** (or **Import rules…**), copper layers, board
   thickness, clearance, track width, via size and drill, and the schematic's
   sheet size, orientation, title block and designators. The **Preview** shows
   the stack-up and sheet you will get. You can change all of it later in
@@ -879,10 +881,10 @@ Before you start, every part needs a footprint and a unique designator:
    Document**. The dialog **Update PCB from Schematic** opens.
 2. A project with no board yet shows **This project has no board yet.** and a
    **Create PCB** button. Press it.
-3. The **New PCB** dialog opens with the project's setup: the profile cards,
-   **Manufacturer rule template**, **Copper layers**, **Clearance**, **Track
-   width**, **Via size**, **Via drill**, **Board thickness** and a preview of
-   the stack-up. Change what you need and press **Create PCB**.
+3. The **New PCB** dialog opens with the project's setup: a **From project
+   setup** row (**Use another profile…** shows the profile cards), then
+   **Copper layers**, **Clearance**, **Track width**, **Via size**, **Via
+   drill**, **Board thickness** and a preview of the stack-up. Change what you need and press **Create PCB**.
 4. The board is created as `<project name>.snxpcb` next to the `.snxprj`, and
    the Update PCB list is read for it. A new board lists only adds: one row
    per part (**Components**), per net (**Nets**) and per pad that gets a net
@@ -1104,16 +1106,16 @@ More detail: [PCB_TOOLS.md](PCB_TOOLS.md).
 
 **Pick a fab tier**
 
-The rules start from a manufacturing tier, chosen in **Manufacturer rule
-template** in the New Project or **New PCB** dialog: **Standard fab**,
-**Advanced fab** or **HDI fab**. The tier writes seven `fab_*` rules (the
+The rules start from a manufacturing tier, chosen in **Fab tier** in the
+New Project or **New PCB** dialog: **Standard**,
+**Advanced** or **HDI**; the field mirrors the picked profile card. The tier writes seven `fab_*` rules (the
 floor of what the board house can build) into the project's rules:
 
 | Tier | Clearance | Track | Via / drill | Hole | Edge |
 |---|---|---|---|---|---|
 | Standard | 0.15 mm | 0.15 mm | 0.5 / 0.25 mm | 0.25 mm | 0.3 mm |
 | Advanced | 0.1 mm | 0.1 mm | 0.4 / 0.2 mm | 0.2 mm | 0.25 mm |
-| HDI | 0.075 mm | 0.075 mm | 0.3 / 0.15 mm | 0.1 mm | 0.2 mm |
+| HDI | 0.075 mm | 0.075 mm | 0.25 / 0.1 mm | 0.1 mm | 0.2 mm |
 
 These are generic process classes, not one maker's numbers. Check them
 against your board house's published limits.

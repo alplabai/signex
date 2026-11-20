@@ -68,7 +68,7 @@ fn renaming_moves_the_file_and_the_tab_and_recent_list_follow() {
     assert_eq!(f.app.document_state.projects[0].data.name, "Oscillator");
     let tab = &f.app.document_state.tabs[0];
     assert_eq!(tab.path, renamed);
-    assert_eq!(tab.title, "Oscillator.snxprj");
+    assert_eq!(tab.title, "Oscillator — Project");
     let recent = f.app.ui_state.recent_projects.entries();
     assert_eq!(recent.len(), 1);
     assert_eq!(

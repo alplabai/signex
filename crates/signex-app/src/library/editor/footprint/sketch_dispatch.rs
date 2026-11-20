@@ -260,6 +260,12 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
         None => return,
     };
 
+    // A board role on the wrong shape (a V-score off a line, a hole off
+    // a circle) leaves the entity as it was (#2518).
+    if !role.fits(&entity.kind) {
+        return;
+    }
+
     // Clear every role attr first — fresh slate before assigning.
     entity.pad = None;
     entity.silk = None;
@@ -271,6 +277,8 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
     entity.keepout = None;
     entity.board_cutout = None;
     entity.v_score = None;
+    entity.board_outline = false;
+    entity.mounting_hole = None;
 
     let is_point = matches!(entity.kind, EntityKind::Point { .. });
 
@@ -377,6 +385,14 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
                 layer: PcbLayer::Technical(TechnicalLayer::PasteBottom),
             });
         }
+        // The board roles (#2518); `fits` above checked the shape.
+        RoleTag::BoardOutline => entity.board_outline = true,
+        RoleTag::MountingHole => {
+            entity.mounting_hole = Some(signex_sketch::attr::MountingHoleAttr::default());
+        }
+        RoleTag::VScore => {
+            entity.v_score = Some(signex_sketch::attr::VScoreHintAttr::default());
+        }
     }
 }
 
@@ -433,6 +449,15 @@ pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
             PcbLayer::Technical(TechnicalLayer::PasteBottom) => RoleTag::PasteApertureBottom,
             _ => RoleTag::PasteApertureTop,
         };
+    }
+    if entity.board_outline {
+        return RoleTag::BoardOutline;
+    }
+    if entity.mounting_hole.is_some() {
+        return RoleTag::MountingHole;
+    }
+    if entity.v_score.is_some() {
+        return RoleTag::VScore;
     }
     RoleTag::Unassigned
 }

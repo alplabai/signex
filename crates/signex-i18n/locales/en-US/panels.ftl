@@ -670,6 +670,28 @@ panels-placed-sheet-file = Sheet File
 # parameters apply to every net inside it.
 panels-directive-blanket = Blanket
 panels-directive-net-class = Net Class
+# Tab + compact dock panel pair (#2523): the panel header's link that opens
+# the same view as a document tab.
+panels-paired-open-as-tab = Open as tab
+# Title of the length-matching tab and its compact dock panel.
+panels-paired-length-matching = Length Matching
+# Compact group header caption: the group's member count, a whole number.
+panels-compact-group-members =
+    { $count ->
+        [one] { $count } member
+       *[other] { $count } members
+    }
+# Compact group header caption: the target length and its tolerance, both
+# already formatted in the display unit.
+panels-compact-group-band = { $target } ± { $tolerance }
+# Status pill: how many members are outside the target band (whole number).
+panels-compact-group-out-of-band = { $count } out of band
+# Status pill: every member is inside the target band.
+panels-compact-group-all-in-band = all in band
+# Member caption: the member is one half of the differential pair $pair.
+panels-compact-group-pair = pair { $pair }
+# Member caption: the member is an xSignal (a net path through series parts).
+panels-compact-group-xsignal = xSignal
 
 ## Messages lines for the notices an edit raises (signex_engine::EngineNotice).
 ## Pin names ("R7 pin 1") and net names are passed in as they are.
