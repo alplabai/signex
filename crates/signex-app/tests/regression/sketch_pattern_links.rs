@@ -3,7 +3,7 @@
 //! a pattern of that pattern; a link that would loop is refused with a
 //! warning and leaves no undo step.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
@@ -146,10 +146,10 @@ fn rebake(app: &mut Signex, path: &PathBuf) {
         .expect("the fixture solves");
 }
 
-fn send(app: &mut Signex, path: &PathBuf, msg: FootprintEditorMsg) {
+fn send(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     drop(
         app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Footprint(msg),
         })),
     );

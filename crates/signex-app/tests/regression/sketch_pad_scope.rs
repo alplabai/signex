@@ -116,10 +116,10 @@ fn set_net(app: &mut Signex, path: &PathBuf, number: &str, net: &str) {
     ))));
 }
 
-fn answer(app: &mut Signex, path: &PathBuf, scope: PadScope) {
+fn answer(app: &mut Signex, path: &Path, scope: PadScope) {
     drop(
         app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Footprint(FootprintEditorMsg::PadScopeAnswered(scope)),
         })),
     );

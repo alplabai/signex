@@ -4,7 +4,7 @@
 //! constraint, and Ctrl places without inference, the Line's auto H / V
 //! included.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
@@ -86,10 +86,10 @@ fn open(stem: &str, sketch: Sketch, tool: SketchTool) -> (Signex, PathBuf) {
     (app, path)
 }
 
-fn edit(app: &mut Signex, path: &PathBuf, msg: FootprintEditorMsg) {
+fn edit(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     drop(
         app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Footprint(msg),
         })),
     );

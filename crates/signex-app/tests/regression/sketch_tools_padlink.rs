@@ -19,7 +19,7 @@ use signex_sketch::constraint::ConstraintKind;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A sketch under construction: one plane, Points and Lines by position.
 struct Sketch {
@@ -84,10 +84,10 @@ fn with_sketch(sketch: Sketch) -> Footprint {
     fp
 }
 
-fn edit(app: &mut Signex, path: &PathBuf, msg: FootprintEditorMsg) {
+fn edit(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     drop(
         app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-            path: path.clone(),
+            path: path.to_path_buf(),
             msg: PrimitiveEdit::Footprint(msg),
         })),
     );
