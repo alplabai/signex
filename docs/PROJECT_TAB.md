@@ -48,7 +48,7 @@ message. The chrome catalog draws a sample of it.
   exported netlist.
 - **Variants** — the Variant Manager layout (#1293). The top bar holds the
   Active variant select (Base or a definition), the parts filter (designator
-  or value; terms split at commas and spaces, `U*` a wildcard over the whole
+  or value as written; terms split at commas and spaces, `U*` a wildcard over the whole
   text, a plain term such as `10k` anywhere in it) and Only rows that differ
   with its count. The list on the left shows Base and each definition with
   how many parts it fits and how many it fits differently from Base, and the
@@ -65,8 +65,8 @@ message. The chrome catalog draws a sample of it.
   the project, open ones with their unsaved edits, each child sheet once per
   placement as the BOM counts it, with the BOM's own fit rule
   (`signex_output::variant_fit`) and the value the BOM lists (an `=` value
-  evaluated on its sheet, #1986); after a sheet edit the status line offers
-  Read again. Names are trimmed, at most 64 characters, no control
+  evaluated on its sheet, #1986); after a sheet edit or a change of the
+  project parameters the status line offers Read again. Names are trimmed, at most 64 characters, no control
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
   shows its reason and changes nothing. Changing a cell, Duplicate, Set as
   default, Compare variants and Open in BOM Studio are not built yet.

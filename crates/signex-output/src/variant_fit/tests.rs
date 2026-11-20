@@ -228,6 +228,20 @@ fn an_expression_value_shows_evaluated_in_the_matrix_as_in_the_bom() {
     assert_eq!(in_matrix, listed, "the matrix shows the BOM's values");
 }
 
+/// The parts filter matches the value as written, not the evaluated one: the
+/// maintainer's 2026-11-20 answer names the Value column only.
+#[test]
+fn the_filter_matches_an_expression_value_as_written() {
+    let ctx = context(vec![part("R1", "= Rbase * 2", &[("Rbase", "10kΩ")])]);
+    let matrix = variant_matrix(&ctx, &[]);
+    let row = &matrix.rows[0];
+    assert_eq!(row.value, "20kΩ");
+    assert_eq!(row.source_value, "= Rbase * 2");
+    assert!(row.matches("Rbase"));
+    assert!(row.matches("="));
+    assert!(!row.matches("20k"));
+}
+
 #[test]
 fn a_project_with_base_only_has_one_column() {
     let matrix = variant_matrix(&context(vec![part("R1", "1k", &[])]), &[]);
@@ -241,6 +255,7 @@ fn the_filter_matches_designators_and_values_with_wildcards() {
     let row = VariantRow {
         designator: "U12".to_string(),
         value: "10k".to_string(),
+        source_value: "10k".to_string(),
         footprint: String::new(),
         fitted: vec![true],
     };

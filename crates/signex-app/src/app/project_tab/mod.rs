@@ -177,6 +177,9 @@ pub struct ProjectTabState {
     >,
     /// `DocumentState::sheet_edit_epoch` when `variant_parts` was read.
     pub variant_parts_epoch: u64,
+    /// The project parameters the newest parts read evaluates values with
+    /// (#1986); other parameters make the read not current.
+    pub variant_parts_parameters: Option<std::collections::BTreeMap<String, String>>,
     /// The newest parts read started; an older one's result is dropped.
     pub variant_parts_generation: u64,
     /// A parts read is running.

@@ -106,9 +106,7 @@ impl<'v> Manager<'v> {
             Some(Ok(matrix)) => Parts::Read(matrix),
         };
         let stale = match (parts, tab) {
-            (Parts::Read(matrix), Some(tab)) => {
-                tab.variant_parts_epoch != sheet_epoch || !read_for(matrix, definitions)
-            }
+            (Parts::Read(matrix), Some(tab)) => !read_holds(tab, matrix, project, sheet_epoch),
             _ => false,
         };
         Self {
@@ -153,6 +151,20 @@ impl<'v> Manager<'v> {
     fn is_active(&self, variant: Option<&str>) -> bool {
         variant == self.active
     }
+}
+
+/// Whether `matrix`, the read `tab` keeps, still holds: read at the sheet
+/// edit count `sheet_epoch`, for the variant names and with the parameters
+/// `project` has now.
+fn read_holds(
+    tab: &ProjectTabState,
+    matrix: &VariantMatrix,
+    project: &LoadedProject,
+    sheet_epoch: u64,
+) -> bool {
+    tab.variant_parts_epoch == sheet_epoch
+        && read_for(matrix, &project.data.variant_definitions)
+        && tab.variant_parts_parameters.as_ref() == Some(&project.data.parameters)
 }
 
 /// Whether `matrix` was read for the names the project defines now.

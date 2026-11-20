@@ -125,20 +125,15 @@ fn showing_the_section_reads_the_parts_matrix_off_the_ui_thread() {
     let _ = app.view_project_tab(id);
 }
 
-/// Maintainer decision 2026-11-20 (Caner): the Value column shows the value
-/// the BOM lists, an `=` value evaluated on its sheet with the project's
-/// parameters, and the parts filter matches that value.
-#[test]
-fn the_value_column_shows_an_expression_value_evaluated_as_the_bom_lists_it() {
+/// A project whose one open sheet holds `symbols`, with the project
+/// parameter VCC = 5V and its Project tab open.
+fn app_with(symbols: Vec<Symbol>) -> (Signex, ProjectId, tempfile::TempDir) {
     let dir = tempfile::tempdir().expect("a folder");
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch"]);
     app.ui_state.erc_severity_override.clear();
     app.ui_state.pin_matrix_overrides.clear();
     let sheet = SchematicSheet {
-        symbols: vec![
-            part("R1", "= VCC / 10mA", &[]),
-            part("R2", "= Rbase * 2", &[("Rbase", "10kΩ")]),
-        ],
+        symbols,
         ..Default::default()
     };
     open_with(&mut app.document_state, &dir.path().join("a.snxsch"), sheet);
@@ -148,6 +143,18 @@ fn the_value_column_shows_an_expression_value_evaluated_as_the_bom_lists_it() {
         .insert("VCC".to_string(), "5V".to_string());
     app.open_project_tab(0);
     let id = app.document_state.projects[0].id;
+    (app, id, dir)
+}
+
+/// Maintainer decision 2026-11-20 (Caner): the Value column shows the value
+/// the BOM lists, an `=` value evaluated on its sheet with the project's
+/// parameters. The parts filter still matches the value as written.
+#[test]
+fn the_value_column_shows_an_expression_value_evaluated_as_the_bom_lists_it() {
+    let (mut app, id, _dir) = app_with(vec![
+        part("R1", "= VCC / 10mA", &[]),
+        part("R2", "= Rbase * 2", &[("Rbase", "10kΩ")]),
+    ]);
     show_variants(&mut app, id);
     let values: Vec<(&str, &str)> = matrix(&app, id)
         .rows
@@ -155,9 +162,64 @@ fn the_value_column_shows_an_expression_value_evaluated_as_the_bom_lists_it() {
         .map(|row| (row.designator.as_str(), row.value.as_str()))
         .collect();
     assert_eq!(values, [("R1", "500Ω"), ("R2", "20kΩ")]);
-    let shown = super::matrix::shown_rows(matrix(&app, id), "20k", false);
+    let shown = super::matrix::shown_rows(matrix(&app, id), "Rbase", false);
     let names: Vec<&str> = shown.iter().map(|row| row.designator.as_str()).collect();
     assert_eq!(names, ["R2"]);
+    assert!(super::matrix::shown_rows(matrix(&app, id), "20k", false).is_empty());
+    let _ = app.view_project_tab(id);
+}
+
+/// A computed token in a Value prints the clock as the BOM export does.
+#[test]
+fn a_computed_token_in_a_value_shows_the_document_facts() {
+    let (mut app, id, _dir) = app_with(vec![part("R1", "${CurrentDate}", &[])]);
+    app.document_state.times.now = Some(chrono::Local::now());
+    show_variants(&mut app, id);
+    // A panel refresh may read the clock again, so the shape, not the day.
+    let value = &matrix(&app, id).rows[0].value;
+    let dashes: Vec<usize> = value.match_indices('-').map(|(at, _)| at).collect();
+    assert_eq!((value.len(), dashes), (10, vec![4, 7]), "{value}");
+}
+
+/// Undoing a parameter edit on the Variants section leaves an older read
+/// that no longer holds: the status line offers Read again and a non-forced
+/// read starts.
+#[test]
+fn a_parameter_step_makes_the_read_not_current() {
+    let (mut app, id, _dir) = app_with(vec![part("R1", "= VCC / 10mA", &[])]);
+    let task = send(
+        &mut app,
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: ProjectSection::Parameters,
+        },
+    );
+    settle(&mut app, task);
+    let _ = send(
+        &mut app,
+        ProjectTabMsg::ParameterEdited {
+            project_id: id,
+            name: "VCC".into(),
+            value: "10V".into(),
+        },
+    );
+    show_variants(&mut app, id);
+    assert_ne!(matrix(&app, id).rows[0].value, "500Ω");
+
+    assert!(app.step_project_tab_history(id, true));
+    assert_eq!(app.document_state.projects[0].data.parameters["VCC"], "5V");
+    let epoch = app.document_state.sheet_edit_epoch;
+    assert!(!super::read_holds(
+        tab(&app, id),
+        matrix(&app, id),
+        &app.document_state.projects[0],
+        epoch
+    ));
+    let before = tab(&app, id).variant_parts_generation;
+    let task = app.read_variant_parts(id, false);
+    assert_eq!(tab(&app, id).variant_parts_generation, before + 1);
+    settle(&mut app, task);
+    assert_eq!(matrix(&app, id).rows[0].value, "500Ω");
     let _ = app.view_project_tab(id);
 }
 

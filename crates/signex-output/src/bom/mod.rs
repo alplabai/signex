@@ -298,6 +298,8 @@ pub(crate) struct ShownPart {
     /// value evaluated on its sheet, so `20kΩ` rather than the expression
     /// (#1986). One that does not evaluate keeps its source text.
     pub symbol: Symbol,
+    /// The symbol's value as written: an `=` value's expression.
+    pub source_value: String,
     /// The designator the symbol resolves to at its placement.
     pub designator: String,
     /// The sheet placement the symbol sits in.
@@ -317,6 +319,7 @@ pub(crate) fn shown_parts(ctx: &ExportContext) -> Vec<ShownPart> {
             symbol.value = crate::shown_value(&scope, sym).text;
             shown.push(ShownPart {
                 symbol,
+                source_value: sym.value.clone(),
                 designator: sym.designator_in(&path).trim().to_string(),
                 path: path.clone(),
             });

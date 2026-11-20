@@ -32,16 +32,16 @@ struct PartsRead {
     dir: PathBuf,
     fold: CaseFold,
     variants: Vec<String>,
-    /// The project's parameters, so a value evaluates on its sheet as the
-    /// BOM evaluates it (#1986).
+    /// The project's parameters and the document facts (clock, file times),
+    /// so a value evaluates on its sheet as the BOM evaluates it (#1986).
     metadata: ProjectMetadata,
 }
 
 impl Signex {
     /// Read the project's parts for the Variants section. Without `force`,
     /// only while the section is shown and when the last read no longer
-    /// holds (another sheet edit count or other variant names). A closed
-    /// project reads nothing.
+    /// holds (another sheet edit count, other variant names or other
+    /// project parameters). A closed project reads nothing.
     pub(in crate::app::project_tab) fn read_variant_parts(
         &mut self,
         project_id: ProjectId,
@@ -51,35 +51,39 @@ impl Signex {
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return Task::none();
         };
-        let variants = project.data.variant_definitions.clone();
         let current = self
             .document_state
             .project_tabs
             .get(&project_id)
             .is_none_or(|tab| {
                 tab.section != ProjectSection::Variants
-                    || (tab.variant_parts_epoch == epoch
-                        && tab.variant_parts.as_deref().is_some_and(|parts| {
-                            parts
-                                .as_ref()
-                                .is_ok_and(|matrix| super::read_for(matrix, &variants))
-                        }))
+                    || tab.variant_parts.as_deref().is_some_and(|parts| {
+                        parts
+                            .as_ref()
+                            .is_ok_and(|matrix| super::read_holds(tab, matrix, project, epoch))
+                    })
             });
         if current && !force {
             return Task::none();
         }
+        let mut metadata = export_metadata_with(Some(project), &HashMap::new());
+        // The clock and file times the computed tokens print, as the BOM
+        // export reads them.
+        metadata.document_facts = self.document_state.times.facts();
+        let parameters = project.data.parameters.clone();
         let read = PartsRead {
             open: open_sheets_snapshot(&self.document_state),
             pages: project_pages(Some(project)),
             root: project_root_sheet_path(project),
             dir: project.dir().to_path_buf(),
             fold: crate::app::state::project_case::fold_of(Some(project)),
-            variants,
-            metadata: export_metadata_with(Some(project), &HashMap::new()),
+            variants: project.data.variant_definitions.clone(),
+            metadata,
         };
         let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
             return Task::none();
         };
+        tab.variant_parts_parameters = Some(parameters);
         tab.variant_parts_generation += 1;
         tab.variant_parts_reading = true;
         let generation = tab.variant_parts_generation;
