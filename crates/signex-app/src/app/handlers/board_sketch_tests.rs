@@ -351,9 +351,14 @@ fn a_role_on_the_wrong_shape_is_refused_with_a_message() {
         .expect("the point")
         .clone();
     assert_eq!(after, point, "the point keeps its role");
+    // Fluent wraps the role name in isolation marks; read the line without.
     let said = crate::diagnostics::entries_since(mark)
         .entries
         .iter()
-        .any(|e| e.message.contains("V-score was not set"));
+        .any(|e| {
+            e.message
+                .replace(['\u{2068}', '\u{2069}'], "")
+                .contains("V-score was not set")
+        });
     assert!(said, "Messages says why");
 }
