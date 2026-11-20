@@ -49,6 +49,8 @@ pub(crate) fn render_sketch_canvas_text(i18n: &I18n) -> SketchCanvasText {
         pattern_spacing_x: w(ids::SKETCH_CANVAS_PATTERN_SPACING_X),
         pattern_spacing_y: w(ids::SKETCH_CANVAS_PATTERN_SPACING_Y),
         pattern_sweep: w(ids::SKETCH_CANVAS_PATTERN_SWEEP),
+        pattern_mirror: w(ids::SKETCH_CANVAS_PATTERN_MIRROR),
+        pattern_of: w(ids::SKETCH_CANVAS_PATTERN_OF),
     }
 }
 

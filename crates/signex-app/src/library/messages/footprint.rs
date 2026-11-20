@@ -606,4 +606,10 @@ pub enum FootprintEditorMsg {
     SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
     /// #192 — the floating pad link on the sketch canvas.
     PadLink(crate::library::editor::footprint::state::PadLinkMsg),
+    /// Convert to reference, Make driving and Delete mirror, from the
+    /// constraint and pattern menus and the Properties conflict rows
+    /// (#187, #188).
+    SketchReference(
+        crate::library::editor::footprint::sketch_mode::constraint_menu::SketchReferenceMsg,
+    ),
 }

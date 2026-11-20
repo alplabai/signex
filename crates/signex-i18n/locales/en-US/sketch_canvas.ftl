@@ -45,7 +45,6 @@ sketch-canvas-menu-edit-value-hint = click the value
 sketch-canvas-menu-make-parameter = Make parameter…
 sketch-canvas-menu-make-parameter-bound = This value is already the parameter { $name }.
 sketch-canvas-menu-convert-reference = Convert to reference (driven)
-sketch-canvas-menu-convert-reference-why = Not available yet: a sketch cannot store a driven (reference) dimension.
 sketch-canvas-menu-suppress = Suppress
 sketch-canvas-menu-suppress-why = Not available yet: a sketch cannot store a suppressed constraint.
 sketch-canvas-menu-select-entities = Select constrained entities
@@ -82,3 +81,15 @@ sketch-canvas-menu-edit-spacing-x = Edit X spacing…
 sketch-canvas-menu-edit-spacing-y = Edit Y spacing…
 sketch-canvas-menu-edit-sweep = Edit sweep angle…
 sketch-canvas-menu-delete-pattern = Delete pattern
+
+## Reference dimensions and pattern mirrors (#187, #188).
+sketch-canvas-menu-make-driving = Make driving
+sketch-canvas-menu-reference-measures = A reference dimension measures; make it driving to edit it.
+# Tooltip of the Convert to reference button on a Properties conflict row.
+sketch-canvas-conflict-convert = Convert to reference: keep this dimension as a measurement that never drives
+sketch-canvas-pattern-menu-mirror = Mirrored pattern
+sketch-canvas-menu-delete-mirror = Delete mirror
+# The mark before a mirrored pattern's glyph ("⇔ L×4").
+sketch-canvas-pattern-mirror = ⇔
+# Joins a pattern's glyph to the pattern it repeats ("P×4 of L×4").
+sketch-canvas-pattern-of = of

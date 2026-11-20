@@ -1109,6 +1109,9 @@ pub enum PanelMsg {
     FpEditorConflictRemoveClicked {
         constraint: signex_sketch::id::ConstraintId,
     },
+    /// Convert to reference on a Properties conflict row of a dimension
+    /// (#187 E4): that dimension measures from now on, one undo step.
+    FpEditorConflictConvertClicked(signex_sketch::id::ConstraintId),
 }
 
 /// One change to the active sheet's frame settings (#1134).

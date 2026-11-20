@@ -747,3 +747,7 @@ mod board_sketch_checks;
 // centerline, and the pad link of Edit in Sketch.
 #[path = "regression/sketch_tools_padlink.rs"]
 mod sketch_tools_padlink;
+
+// #187 / #188 (decision 5): Convert to reference and Make driving.
+#[path = "regression/sketch_reference.rs"]
+mod sketch_reference;
