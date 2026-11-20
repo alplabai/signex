@@ -344,12 +344,12 @@ impl Signex {
                 at_pause,
                 reference_override,
             }) => {
-                let undone = self.undo_pause_mirrors(at_pause.as_ref());
+                let undone = self.undo_pause_mirrors(at_pause.as_deref());
                 if let Some(session) = self.interaction_state.placement.as_mut() {
                     session.reference_override = reference_override;
                 }
                 self.refresh_placement_reference();
-                self.document_state.panel_ctx.pre_placement = before;
+                self.document_state.panel_ctx.pre_placement = before.map(|form| *form);
                 undone
             }
             Some(SheetPlacementPause::Footprint { path, pad_defaults }) => {

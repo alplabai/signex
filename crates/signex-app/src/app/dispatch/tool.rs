@@ -280,8 +280,13 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().placement_paused = true;
                     self.interaction_state.placement_pause =
                         Some(crate::app::state::SheetPlacementPause::Sheet {
-                            before,
-                            at_pause: self.document_state.panel_ctx.pre_placement.clone(),
+                            before: before.map(Box::new),
+                            at_pause: self
+                                .document_state
+                                .panel_ctx
+                                .pre_placement
+                                .clone()
+                                .map(Box::new),
                             reference_override: self
                                 .interaction_state
                                 .placement
