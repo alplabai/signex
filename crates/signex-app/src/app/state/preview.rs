@@ -7,7 +7,7 @@ use super::pdf_page_setup::PageSetupInputs;
 use super::pdf_preview_raster::{PreviewSlot, RasterSource};
 
 /// Which sidebar tab is currently shown inside the BOM preview's
-/// Properties panel — Altium-style General / Columns / Rules split.
+/// Properties panel: the General / Columns / Rules split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BomSidebarTab {
     General,
@@ -89,7 +89,7 @@ pub enum PdfPreviewTab {
     Settings,
 }
 
-/// Output PDF resolution preset — Altium parity. Drives the Quality
+/// Output PDF resolution preset. Drives the Quality
 /// dropdown in the Settings tab. The export pipeline is vector-only
 /// today, so DPI only affects the *preview* rasterisation: a higher
 /// preset gives a sharper preview when you zoom in. The mapped DPI
