@@ -1,8 +1,9 @@
-//! #119-#121: the one Library panel. It opens on the kind of the active
-//! editor tab, a chip pick holds while that tab stays active, the Parts
-//! filter matches rows, and with nothing open the chips and tools are inert.
-//! (#2262, kept from the SCH Library panel: no title row, the symbol count
-//! in the right plural.)
+//! Mockup rows 119-121: the one Library panel. It opens on the kind of the
+//! active editor tab, a chip pick holds while that tab stays active, the
+//! Parts filter matches rows, Delete never acts on a row the filter hides,
+//! and with nothing open the chips and tools are inert. (#2262, kept from
+//! the SCH Library panel: no title row, the symbol count in the right
+//! plural.)
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +17,7 @@ use crate::app::{FootprintDocument, Message, Signex, SymbolDocument, TabInfo, Ta
 use crate::layout_probe::{lay_out_texts, messages_on_click};
 use crate::library::messages::{LibraryMessage, PickerMsg};
 use crate::library::state::OpenLibrary;
+use crate::panels::PanelMsg;
 
 const WINDOW: iced::Size = iced::Size::new(300.0, 640.0);
 
@@ -275,6 +277,76 @@ fn with_nothing_open_the_chips_and_tools_are_inert() {
             .any(|m| matches!(m, DockMessage::Library(LibraryMessage::OpenLibraryDialog))),
         "the empty card opens a library"
     );
+}
+
+#[test]
+fn delete_is_off_while_the_filter_hides_the_active_symbol() {
+    let (mut app, _boot) = Signex::new();
+    let path = PathBuf::from("logic.snxsym");
+    let mut file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("+3V3"));
+    file.symbols.push(signex_library::Symbol::empty("NAND"));
+    app.document_state
+        .symbol_editors
+        .insert(path.clone(), SymbolDocument::new(path.clone(), file));
+    push_tab(&mut app, &path, TabKind::SymbolEditor(path.clone()));
+    app.refresh_panel_ctx();
+    let delete = |app: &Signex| {
+        symbols::view(&app.library, &app.document_state.panel_ctx)
+            .tools
+            .delete
+    };
+    assert!(
+        matches!(
+            delete(&app),
+            Some(DockMessage::Panel(PanelMsg::SchLibraryDeleteSymbol(0)))
+        ),
+        "with no filter Delete targets the active +3V3"
+    );
+    app.library.panel_search = "NAND".into();
+    assert!(
+        delete(&app).is_none(),
+        "the filter hides +3V3: Delete must not hit a row nobody sees"
+    );
+    app.library.panel_search = "3v3".into();
+    assert!(delete(&app).is_some(), "the active row shows again");
+}
+
+#[test]
+fn edit_and_delete_are_off_while_the_filter_hides_the_highlighted_footprint() {
+    let (mut app, _boot) = Signex::new();
+    let path = PathBuf::from("ics.snxfpt");
+    let mut file =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("SOIC-8"));
+    file.footprints
+        .push(signex_library::Footprint::empty("QFN-16"));
+    let mut doc = FootprintDocument::new(path.clone(), file);
+    doc.panel_selected_idx = Some(0);
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), doc);
+    push_tab(&mut app, &path, TabKind::FootprintEditor(path.clone()));
+    app.refresh_panel_ctx();
+    let tools = |app: &Signex| {
+        let tools = footprints::view(&app.library, &app.document_state.panel_ctx).tools;
+        (tools.edit, tools.delete)
+    };
+    assert!(
+        matches!(
+            tools(&app),
+            (
+                Some(DockMessage::Panel(PanelMsg::FpLibraryEditInternal(0))),
+                Some(DockMessage::Panel(PanelMsg::FpLibraryDeleteInternal(0)))
+            )
+        ),
+        "with no filter Edit and Delete target the highlighted SOIC-8"
+    );
+    app.library.panel_search = "QFN".into();
+    assert!(
+        matches!(tools(&app), (None, None)),
+        "the filter hides SOIC-8: Edit and Delete are off"
+    );
+    app.library.panel_search = "soic".into();
+    assert!(matches!(tools(&app), (Some(_), Some(_))));
 }
 
 #[test]

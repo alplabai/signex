@@ -1,7 +1,7 @@
-//! The Library panel's Symbols kind (#119, was the SCH Library panel,
-//! #120): the symbols of the `.snxsym` open in the symbol editor, the parts
-//! of the active symbol, and the warning of a Delete that hits a placed
-//! symbol.
+//! The Library panel's Symbols kind (mockup row 119, was the SCH Library
+//! panel, mockup row 120): the symbols of the `.snxsym` open in the symbol
+//! editor, the parts of the active symbol, and the warning of a Delete that
+//! hits a placed symbol.
 
 use iced::widget::{Column, column, container, row};
 use iced::{Alignment, Element, Length, Padding, Widget};
@@ -40,12 +40,18 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
         ),
     };
     // Place and Edit stay off as in the SCH Library panel: the symbol is
-    // already open in its tab and placing from here is not wired.
+    // already open in its tab and placing from here is not wired. Delete
+    // acts on the active symbol only while the filter shows its row.
+    let needle = i18n.fold_for_search(library.panel_search.trim());
+    let active_shown = sym
+        .symbols_in_file
+        .iter()
+        .any(|entry| entry.idx == sym.active_idx && shows(entry, &needle, i18n));
     let tools = Tools {
         place: None,
         add: Some(panel(PanelMsg::SchLibraryAddSymbol)),
         edit: None,
-        delete: (sym.symbols_in_file.len() > 1)
+        delete: (sym.symbols_in_file.len() > 1 && active_shown)
             .then(|| panel(PanelMsg::SchLibraryDeleteSymbol(sym.active_idx))),
         delete_blocked: None,
     };
@@ -54,6 +60,14 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
         tools,
         list: list(sym, &library.panel_search, ctx),
     }
+}
+
+/// Whether a symbol's row shows under the folded filter `needle`: its name
+/// or description holds it.
+fn shows(entry: &crate::panels::SymbolFileEntry, needle: &str, i18n: &I18n) -> bool {
+    needle.is_empty()
+        || i18n.fold_for_search(&entry.name).contains(needle)
+        || i18n.fold_for_search(&entry.description).contains(needle)
 }
 
 /// The symbol rows that match the filter, the parts section and the
@@ -69,10 +83,7 @@ fn list<'a>(
     let mut col: Column<Element<'a, DockMessage>> = Column::new().spacing(0).width(Length::Fill);
     let mut shown = 0;
     for entry in &sym.symbols_in_file {
-        let hit = needle.is_empty()
-            || i18n.fold_for_search(&entry.name).contains(&needle)
-            || i18n.fold_for_search(&entry.description).contains(&needle);
-        if !hit {
+        if !shows(entry, &needle, i18n) {
             continue;
         }
         shown += 1;

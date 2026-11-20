@@ -1,5 +1,5 @@
-//! The Library panel's Footprints kind (#119, was the Footprint Library
-//! panel, #121): the footprints inside the `.snxfpt` open in the footprint
+//! The Library panel's Footprints kind (mockup row 119, was the Footprint
+//! Library panel, mockup row 121): the footprints inside the `.snxfpt` open in the footprint
 //! editor. A click highlights a row; Edit (or a double click) makes it the
 //! one the editor shows.
 
@@ -11,7 +11,7 @@ use super::KindView;
 use super::frame::{self, Crumb, RowMark, RowText, SP, Tools, panel};
 use crate::dock::DockMessage;
 use crate::library::state::LibraryState;
-use crate::panels::{FootprintEditorPanelContext, PanelContext, PanelMsg};
+use crate::panels::{FootprintEditorPanelContext, FootprintLibInternalRow, PanelContext, PanelMsg};
 
 pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> KindView<'a> {
     let i18n = &*ctx.i18n;
@@ -41,7 +41,14 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
             "count" => fp.internal_footprints.len()
         ),
     };
-    let selected = fp.internal_selected_idx;
+    // Edit and Delete act on the highlighted footprint only while the
+    // filter shows its row.
+    let needle = i18n.fold_for_search(library.panel_search.trim());
+    let selected = fp.internal_selected_idx.filter(|&idx| {
+        fp.internal_footprints
+            .get(idx)
+            .is_some_and(|row| shows(row, &needle, i18n))
+    });
     // Place stays off: placing a footprint from here is not wired yet.
     let tools = Tools {
         place: None,
@@ -57,6 +64,11 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     }
 }
 
+/// Whether a footprint's row shows under the folded filter `needle`.
+fn shows(row: &FootprintLibInternalRow, needle: &str, i18n: &signex_i18n::I18n) -> bool {
+    needle.is_empty() || i18n.fold_for_search(&row.name).contains(needle)
+}
+
 /// The footprint rows that match the filter. The one the editor shows has
 /// the selection fill; one only highlighted has a lighter one.
 fn list<'a>(
@@ -70,7 +82,7 @@ fn list<'a>(
     let mut col: Column<Element<'a, DockMessage>> = Column::new().spacing(0).width(Length::Fill);
     let mut shown = 0;
     for (idx, row) in fp.internal_footprints.iter().enumerate() {
-        if !needle.is_empty() && !i18n.fold_for_search(&row.name).contains(&needle) {
+        if !shows(row, &needle, i18n) {
             continue;
         }
         shown += 1;
