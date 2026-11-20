@@ -1,11 +1,36 @@
 //! DOF direction-arrow overlay — for every under-constrained Point,
-//! draws a short arrow along its free degree of freedom.
+//! draws a short arrow along its free degree of freedom — and the open
+//! arrowhead it and the dimension lines share.
 
+use iced::Point;
 use iced::widget::canvas::{self, Path, Stroke};
-use iced::{Color, Point};
 
+use super::sketch_ink::SketchInk;
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
 use crate::library::editor::footprint::state::FootprintEditorState;
+
+/// Half-angle of an arrowhead, in radians (about 28°).
+const HEAD_SPREAD_RAD: f64 = 0.5;
+
+/// An open arrowhead at `tip`, pointing away from `from`: two strokes
+/// `len` px long at ±[`HEAD_SPREAD_RAD`] from the shaft.
+pub(super) fn draw_arrow_head(
+    frame: &mut canvas::Frame,
+    tip: Point,
+    from: Point,
+    len: f32,
+    stroke: Stroke<'_>,
+) {
+    let dir_angle = f64::from(tip.y - from.y).atan2(f64::from(tip.x - from.x));
+    for sign in [-1.0_f64, 1.0_f64] {
+        let a = dir_angle + std::f64::consts::PI - sign * HEAD_SPREAD_RAD;
+        let end = Point::new(
+            tip.x + (a.cos() as f32) * len,
+            tip.y + (a.sin() as f32) * len,
+        );
+        frame.stroke(&Path::line(tip, end), stroke);
+    }
+}
 
 /// v0.22 Phase E2 — DOF direction-arrow overlay for under-constrained
 /// Points. For every Point with `DofColor::Under`, draws a 10-px-long
@@ -55,12 +80,10 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_dof_direction_ar
 
     const ARROW_LEN_PX: f32 = 10.0;
     const HEAD_LEN_PX: f32 = 3.0;
-    const HEAD_SPREAD_RAD: f64 = 0.5; // ~28°
-    // v0.27 — DOF arrow shifted to a darker cyan so it reads
-    // against the white sketch canvas without competing with the
-    // blue under-constrained DOF dot underneath.
-    let cyan = Color::from_rgba(0.05, 0.55, 0.80, 1.00);
-    let stroke = Stroke::default().with_width(1.0).with_color(cyan);
+    // A cyan that reads on its ground without competing with the
+    // under-constrained point underneath.
+    let colour = SketchInk::BOARD.dof_arrow;
+    let stroke = Stroke::default().with_width(1.0).with_color(colour);
 
     let m_rows = solve.jacobian.len();
 
@@ -145,16 +168,6 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_dof_direction_ar
         let shaft = Path::line(p_screen, tip);
         frame.stroke(&shaft, stroke);
 
-        // Arrow head: two short strokes at ±HEAD_SPREAD_RAD from the
-        // shaft direction.
-        let dir_angle = (dy_s as f64).atan2(dx_s as f64);
-        for sign in [-1.0_f64, 1.0_f64] {
-            let a = dir_angle + std::f64::consts::PI - sign * HEAD_SPREAD_RAD;
-            let head_end = Point::new(
-                tip.x + (a.cos() as f32) * HEAD_LEN_PX,
-                tip.y + (a.sin() as f32) * HEAD_LEN_PX,
-            );
-            frame.stroke(&Path::line(tip, head_end), stroke);
-        }
+        draw_arrow_head(frame, tip, p_screen, HEAD_LEN_PX, stroke);
     }
 }

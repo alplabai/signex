@@ -37,7 +37,6 @@ define_ids! {
     SKETCH_CANVAS_MENU_MAKE_PARAMETER = "sketch-canvas-menu-make-parameter";
     SKETCH_CANVAS_MENU_MAKE_PARAMETER_BOUND = "sketch-canvas-menu-make-parameter-bound";
     SKETCH_CANVAS_MENU_CONVERT_REFERENCE = "sketch-canvas-menu-convert-reference";
-    SKETCH_CANVAS_MENU_CONVERT_REFERENCE_WHY = "sketch-canvas-menu-convert-reference-why";
     SKETCH_CANVAS_MENU_SUPPRESS = "sketch-canvas-menu-suppress";
     SKETCH_CANVAS_MENU_SUPPRESS_WHY = "sketch-canvas-menu-suppress-why";
     SKETCH_CANVAS_MENU_SELECT_ENTITIES = "sketch-canvas-menu-select-entities";
@@ -70,4 +69,12 @@ define_ids! {
     SKETCH_CANVAS_MENU_EDIT_SPACING_Y = "sketch-canvas-menu-edit-spacing-y";
     SKETCH_CANVAS_MENU_EDIT_SWEEP = "sketch-canvas-menu-edit-sweep";
     SKETCH_CANVAS_MENU_DELETE_PATTERN = "sketch-canvas-menu-delete-pattern";
+    // Reference dimensions and pattern mirrors (#187, #188).
+    SKETCH_CANVAS_MENU_MAKE_DRIVING = "sketch-canvas-menu-make-driving";
+    SKETCH_CANVAS_MENU_REFERENCE_MEASURES = "sketch-canvas-menu-reference-measures";
+    SKETCH_CANVAS_CONFLICT_CONVERT = "sketch-canvas-conflict-convert";
+    SKETCH_CANVAS_PATTERN_MENU_MIRROR = "sketch-canvas-pattern-menu-mirror";
+    SKETCH_CANVAS_MENU_DELETE_MIRROR = "sketch-canvas-menu-delete-mirror";
+    SKETCH_CANVAS_PATTERN_MIRROR = "sketch-canvas-pattern-mirror";
+    SKETCH_CANVAS_PATTERN_OF = "sketch-canvas-pattern-of";
 }

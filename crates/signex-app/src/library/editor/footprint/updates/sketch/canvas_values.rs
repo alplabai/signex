@@ -67,7 +67,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
 
 /// Run `change` on the sketch as one undo step. Returns whether the
 /// sketch changed (a rejected or empty change records nothing).
-fn record_sketch_change(
+pub(super) fn record_sketch_change(
     editor: &mut FootprintDocument,
     change: impl FnOnce(&mut FootprintEditorState, &mut Footprint) -> Result<(), SketchError>,
 ) -> bool {
@@ -94,6 +94,12 @@ fn open_value_edit(editor: &mut FootprintDocument, target: ValueTarget) {
     let Some(buffer) = sketch(editor).and_then(|s| value_edit::initial_buffer(target, s)) else {
         return;
     };
+    // A reference (driven) dimension measures; its value is not edited.
+    if let ValueTarget::Constraint(id) = target
+        && sketch(editor).is_some_and(|s| s.is_driven(id))
+    {
+        return;
+    }
     let overlay = &mut editor.state.sketch_overlay;
     overlay.menu = None;
     if let ValueTarget::Pattern(array, _) = target {

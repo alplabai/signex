@@ -811,6 +811,10 @@ impl Signex {
                 follow = self.fp_editor_remove_conflicting_constraint(*constraint);
                 true
             }
+            PanelMsg::FpEditorConflictConvertClicked(constraint) => {
+                follow = self.fp_editor_convert_conflicting_constraint(*constraint);
+                true
+            }
             _ => false,
         };
         if handled { Some(follow) } else { None }

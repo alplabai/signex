@@ -11,6 +11,7 @@ pub mod attr;
 pub mod baked_kinds;
 pub mod constraint;
 pub mod data;
+pub mod driven;
 pub mod entity;
 pub mod host;
 pub mod id;

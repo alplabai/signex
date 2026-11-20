@@ -1,21 +1,78 @@
-//! Constraint-glyph overlay: each non-dimension constraint's letter at the
-//! centroid of the entities it touches, tinted red when the constraint is
-//! over-constrained. Dimensions draw their value instead
+//! Constraint-mark overlay: each relation's mark (H, V, ∥, ⊥, =, ◡, ⇔, ⌖
+//! …) in a small upright pill by the entities it touches, the coincident
+//! mark as a dot (#187, #188). A conflicting or over-constrained mark
+//! fills in the conflict colour. Dimensions draw their value instead
 //! (`dimension_labels`); both read their place from
 //! [`crate::library::editor::footprint::canvas::glyph_layout`].
 
-use iced::widget::canvas;
-use iced::{Color, Point, Radians, Vector};
+use iced::widget::canvas::{self, Path, Stroke};
+use iced::{Color, Point, Size};
 
-use crate::library::editor::footprint::canvas::glyph_layout::{Glyph, GlyphFace, LETTER_TEXT};
+use super::sketch_ink::SketchInk;
+use crate::library::editor::footprint::canvas::glyph_layout::{
+    COINCIDENT_MARK, Glyph, GlyphFace, MARK_TEXT,
+};
 use crate::library::editor::footprint::state::FootprintEditorState;
 
-/// v0.13.2 Phase 6.6 — render the constraint letters laid out in
-/// `glyphs` above the sketch entities' fills; over-constrained ones in red.
+/// Corner radius of a mark's pill, in mark text heights (the mockups' 3 px
+/// on an 11 px mark).
+const PILL_RADIUS_EM: f32 = 0.27;
+/// Radius of the coincident dot, in mark text heights.
+const DOT_RADIUS_EM: f32 = 0.3;
+/// Alpha of a mark the hovered conflict row is not about.
+const DIMMED_ALPHA: f32 = 0.3;
+
+/// How one mark is painted.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MarkPaint {
+    fill: Color,
+    border: Color,
+    text: Color,
+}
+
+/// The paint of a mark: in conflict it fills with `conflict_colour` and
+/// its text takes the pill colour; while a conflict row is hovered, every
+/// other mark dims.
+fn mark_paint(
+    ink: &SketchInk,
+    conflict_colour: Color,
+    conflicting: bool,
+    dimmed: bool,
+) -> MarkPaint {
+    let paint = if conflicting {
+        MarkPaint {
+            fill: conflict_colour,
+            border: conflict_colour,
+            text: ink.pill,
+        }
+    } else {
+        MarkPaint {
+            fill: ink.pill,
+            border: ink.pill_border,
+            text: ink.label,
+        }
+    };
+    if !dimmed {
+        return paint;
+    }
+    let dim = |c: Color| Color {
+        a: c.a * DIMMED_ALPHA,
+        ..c
+    };
+    MarkPaint {
+        fill: dim(paint.fill),
+        border: dim(paint.border),
+        text: dim(paint.text),
+    }
+}
+
+/// Render the constraint marks laid out in `glyphs` under the sketch
+/// entities; conflicting and over-constrained ones in `conflict_colour`.
 pub(super) fn draw_constraint_icons(
     frame: &mut canvas::Frame,
     glyphs: &[Glyph],
     state: &FootprintEditorState,
+    ink: &SketchInk,
     conflict_colour: Color,
 ) {
     use signex_sketch::id::ConstraintId;
@@ -27,56 +84,69 @@ pub(super) fn draw_constraint_icons(
         .unwrap_or_default();
 
     for glyph in glyphs {
-        let (GlyphFace::Letter { text, rotation }, Some(id)) = (&glyph.face, glyph.constraint())
-        else {
+        let (GlyphFace::Mark { text }, Some(id)) = (&glyph.face, glyph.constraint()) else {
             continue;
         };
-        let p = glyph.anchor;
-        // v0.23 — per-row precision in the Conflicts list. When the
-        // user hovers a specific row, only that constraint renders
-        // at full red; every other glyph (including other
-        // over-constraints) dims so the offender stands out alone.
-        // When no row is hovered, fall back to the v0.22 set-wide
-        // isolation (the whole over-constraint set lights up).
+        // A hovered Conflicts row isolates its constraint: it alone shows
+        // in the conflict colour and every other mark dims. With no row
+        // hovered the whole over-constrained set shows. A rejected edit's
+        // conflict always shows.
         let hover = state.conflicts_row_hovered;
-        let is_over = over_set.contains(&id);
-        let is_conflict = state.conflict.contains_constraint(id);
-        let colour = match (hover, is_over) {
-            // A rejected edit's conflict always shows in the error colour.
-            _ if is_conflict => conflict_colour,
-            // Specific row hovered + this is the row → full red.
-            (Some(h), _) if h == id => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
-            // Specific row hovered + this is NOT the row → dimmed.
-            (Some(_), _) => Color::from_rgba(0.40, 0.40, 0.40, 0.30),
-            // No row hover + over-constrained → red (set-wide focus).
-            (None, true) => Color::from_rgba(0.85, 0.10, 0.10, 1.00),
-            // v0.27 — dark grey reads against both the dark Pads-mode
-            // canvas and the white Sketch-mode canvas.
-            (None, false) => Color::from_rgba(0.30, 0.30, 0.30, 0.95),
-        };
-        let text = canvas::Text {
-            content: (*text).to_string(),
-            // A turned glyph is centred on its anchor; an upright one
-            // keeps the small nudge right of and above it.
-            position: if rotation.is_some() {
-                Point::new(0.0, -10.0)
-            } else {
-                Point::new(glyph.rect.x, glyph.rect.y)
-            },
-            color: colour,
-            size: iced::Pixels(LETTER_TEXT),
-            ..canvas::Text::default()
-        };
-        // v0.27 — the glyph follows its line through a full turn while
-        // the geometry is dragged; letters with no line stay upright.
-        if let Some(angle) = rotation {
-            frame.with_save(|inner| {
-                inner.translate(Vector::new(p.x, p.y));
-                inner.rotate(Radians(*angle));
-                inner.fill_text(text);
-            });
-        } else {
-            frame.fill_text(text);
+        let rejected = state.conflict.contains_constraint(id);
+        let conflicting = rejected || hover.map_or(over_set.contains(&id), |h| h == id);
+        let dimmed = !rejected && hover.is_some_and(|h| h != id);
+        let paint = mark_paint(ink, conflict_colour, conflicting, dimmed);
+        let rect = glyph.rect;
+        let centre = Point::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+        if *text == COINCIDENT_MARK {
+            let colour = if conflicting { paint.fill } else { paint.text };
+            frame.fill(&Path::circle(centre, MARK_TEXT * DOT_RADIUS_EM), colour);
+            continue;
         }
+        let pill = Path::rounded_rectangle(
+            Point::new(rect.x, rect.y),
+            Size::new(rect.width, rect.height),
+            (MARK_TEXT * PILL_RADIUS_EM).into(),
+        );
+        frame.fill(&pill, paint.fill);
+        frame.stroke(
+            &pill,
+            Stroke::default().with_width(1.0).with_color(paint.border),
+        );
+        frame.fill_text(canvas::Text {
+            content: (*text).to_string(),
+            position: centre,
+            color: paint.text,
+            size: iced::Pixels(MARK_TEXT),
+            font: iced::Font {
+                weight: iced::font::Weight::Semibold,
+                ..iced::Font::MONOSPACE
+            },
+            align_x: iced::alignment::Horizontal::Center.into(),
+            align_y: iced::alignment::Vertical::Center,
+            ..canvas::Text::default()
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_mark_at_rest_is_a_pill_in_the_label_ink_and_a_conflict_fills_red() {
+        let red = Color::from_rgb(1.0, 0.0, 0.0);
+        let ink = SketchInk::BOARD;
+        let rest = mark_paint(&ink, red, false, false);
+        assert_eq!(rest.fill, ink.pill);
+        assert_eq!(rest.border, ink.pill_border);
+        assert_eq!(rest.text, ink.label);
+
+        let clash = mark_paint(&ink, red, true, false);
+        assert_eq!(clash.fill, red, "a conflict fills in the conflict colour");
+        assert_eq!(clash.text, ink.pill);
+
+        let dimmed = mark_paint(&ink, red, false, true);
+        assert!(dimmed.text.a < rest.text.a, "the other marks dim");
     }
 }

@@ -136,7 +136,8 @@ fn eval_dim_quantity(
 
 /// Total residual vector for an entire sketch — concatenates the
 /// per-constraint residual vectors in `sketch.constraints` order,
-/// then one implicit closure row per arc.
+/// then one implicit closure row per arc. A driven (reference) dimension
+/// contributes nothing ([`SketchData::driving_constraints`]).
 ///
 /// `total_residual` is the function the Levenberg–Marquardt iteration
 /// (Phase 3) drives toward zero. The output length is the sum of
@@ -150,7 +151,7 @@ pub fn total_residual(
     params: &ResolvedParams,
 ) -> Result<Vec<f64>, SketchError> {
     let mut out = Vec::new();
-    for c in &sketch.constraints {
+    for c in sketch.driving_constraints() {
         out.extend(residual(c, state, index, sketch, params)?);
     }
     // Implicit rows: each arc's end point stays on its circle (#684).

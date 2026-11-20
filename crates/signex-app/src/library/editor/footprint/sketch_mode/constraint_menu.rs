@@ -1,12 +1,13 @@
 //! One constraint menu (#188): a right-click on a constraint's glyph or
 //! value opens it at the click, on the footprint editor and the board
 //! sketch alike. Rows: Edit value, Make parameter and Convert to reference
-//! (dimensions only), Suppress, Select constrained entities, Show
+//! (dimensions only; a reference dimension shows Make driving instead and
+//! greys the value rows), Suppress, Select constrained entities, Show
 //! conflicts (only when the constraint is in one), Delete. A pattern glyph
 //! opens the same card with the pattern's rows: one Edit row per value,
-//! then Delete pattern. Rows the sketch cannot store yet show greyed, with
-//! a tooltip that says why. Drawn with the shared dropdown renderer, over
-//! a click-outside layer that closes it.
+//! then Delete pattern; a mirror glyph offers only Delete mirror. Greyed
+//! rows carry a tooltip that says why. Drawn with the shared dropdown
+//! renderer, over a click-outside layer that closes it.
 
 use std::path::PathBuf;
 
@@ -28,6 +29,46 @@ use crate::library::editor::footprint::state::sketch_overlay::{
 };
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
+/// Convert to reference, Make driving and Delete mirror (#187, #188): each
+/// one undo step, solved like every sketch edit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SketchReferenceMsg {
+    /// Convert to reference: the dimension now measures, never drives.
+    ReferenceConverted(ConstraintId),
+    /// Make driving: the reference dimension drives again.
+    DrivingRestored(ConstraintId),
+    /// Delete mirror, on a pattern mirror's glyph.
+    MirrorDeleted(ArrayId),
+}
+
+/// What a menu row sends.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MenuAction {
+    Canvas(SketchCanvasMsg),
+    Reference(SketchReferenceMsg),
+}
+
+impl From<SketchCanvasMsg> for MenuAction {
+    fn from(msg: SketchCanvasMsg) -> Self {
+        Self::Canvas(msg)
+    }
+}
+
+impl From<SketchReferenceMsg> for MenuAction {
+    fn from(msg: SketchReferenceMsg) -> Self {
+        Self::Reference(msg)
+    }
+}
+
+impl MenuAction {
+    fn into_editor_msg(self) -> FootprintEditorMsg {
+        match self {
+            Self::Canvas(msg) => FootprintEditorMsg::SketchCanvas(msg),
+            Self::Reference(msg) => FootprintEditorMsg::SketchReference(msg),
+        }
+    }
+}
+
 /// Why a row is greyed: the message, and the parameter it names if any.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Why {
@@ -35,12 +76,18 @@ pub struct Why {
     pub name: Option<String>,
 }
 
+impl Why {
+    fn plain(id: MessageId) -> Self {
+        Self { id, name: None }
+    }
+}
+
 /// One row of a canvas menu, as data.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MenuRow {
     pub label: MessageId,
     /// What a click sends; `None` greys the row.
-    pub action: Option<SketchCanvasMsg>,
+    pub action: Option<MenuAction>,
     /// The tooltip of a greyed row.
     pub why: Option<Why>,
     /// A right-aligned hint.
@@ -50,10 +97,10 @@ pub struct MenuRow {
 }
 
 impl MenuRow {
-    fn new(label: MessageId, action: SketchCanvasMsg) -> Self {
+    fn new(label: MessageId, action: impl Into<MenuAction>) -> Self {
         Self {
             label,
-            action: Some(action),
+            action: Some(action.into()),
             why: None,
             hint: None,
             separated: false,
@@ -113,6 +160,48 @@ fn bound_name(kind: &ConstraintKind, sketch: &SketchData) -> Option<String> {
     }
 }
 
+/// The value rows of a driving dimension: Edit value, Make parameter,
+/// Convert to reference.
+fn driving_rows(id: ConstraintId, kind: &ConstraintKind, sketch: &SketchData) -> [MenuRow; 3] {
+    let mut edit = MenuRow::new(
+        ids::SKETCH_CANVAS_MENU_EDIT_VALUE,
+        SketchCanvasMsg::ValueEditOpened(ValueTarget::Constraint(id)),
+    );
+    edit.hint = Some(ids::SKETCH_CANVAS_MENU_EDIT_VALUE_HINT);
+    let make_parameter = match bound_name(kind, sketch) {
+        Some(name) => MenuRow::greyed(
+            ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER,
+            Why {
+                id: ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER_BOUND,
+                name: Some(name),
+            },
+        ),
+        None => MenuRow::new(
+            ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER,
+            SketchCanvasMsg::ParameterRequested(id),
+        ),
+    };
+    let convert = MenuRow::new(
+        ids::SKETCH_CANVAS_MENU_CONVERT_REFERENCE,
+        SketchReferenceMsg::ReferenceConverted(id),
+    );
+    [edit, make_parameter, convert]
+}
+
+/// The value rows of a reference dimension: Edit value and Make parameter
+/// greyed (it measures), then Make driving.
+fn driven_rows(id: ConstraintId) -> [MenuRow; 3] {
+    let measures = || Why::plain(ids::SKETCH_CANVAS_MENU_REFERENCE_MEASURES);
+    [
+        MenuRow::greyed(ids::SKETCH_CANVAS_MENU_EDIT_VALUE, measures()),
+        MenuRow::greyed(ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER, measures()),
+        MenuRow::new(
+            ids::SKETCH_CANVAS_MENU_MAKE_DRIVING,
+            SketchReferenceMsg::DrivingRestored(id),
+        ),
+    ]
+}
+
 /// The rows of constraint `id` of `kind`. `in_conflict` adds Show
 /// conflicts.
 pub fn constraint_rows(
@@ -123,39 +212,15 @@ pub fn constraint_rows(
 ) -> Vec<MenuRow> {
     let mut rows = Vec::new();
     if kind.dim_target().is_some() {
-        let mut edit = MenuRow::new(
-            ids::SKETCH_CANVAS_MENU_EDIT_VALUE,
-            SketchCanvasMsg::ValueEditOpened(ValueTarget::Constraint(id)),
-        );
-        edit.hint = Some(ids::SKETCH_CANVAS_MENU_EDIT_VALUE_HINT);
-        rows.push(edit);
-        rows.push(match bound_name(kind, sketch) {
-            Some(name) => MenuRow::greyed(
-                ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER,
-                Why {
-                    id: ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER_BOUND,
-                    name: Some(name),
-                },
-            ),
-            None => MenuRow::new(
-                ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER,
-                SketchCanvasMsg::ParameterRequested(id),
-            ),
-        });
-        rows.push(MenuRow::greyed(
-            ids::SKETCH_CANVAS_MENU_CONVERT_REFERENCE,
-            Why {
-                id: ids::SKETCH_CANVAS_MENU_CONVERT_REFERENCE_WHY,
-                name: None,
-            },
-        ));
+        if sketch.is_driven(id) {
+            rows.extend(driven_rows(id));
+        } else {
+            rows.extend(driving_rows(id, kind, sketch));
+        }
     }
     rows.push(MenuRow::greyed(
         ids::SKETCH_CANVAS_MENU_SUPPRESS,
-        Why {
-            id: ids::SKETCH_CANVAS_MENU_SUPPRESS_WHY,
-            name: None,
-        },
+        Why::plain(ids::SKETCH_CANVAS_MENU_SUPPRESS_WHY),
     ));
     rows.push(MenuRow::new(
         ids::SKETCH_CANVAS_MENU_SELECT_ENTITIES,
@@ -208,8 +273,18 @@ pub fn pattern_rows(array: ArrayId, kind: &ArrayKind) -> Vec<MenuRow> {
     rows
 }
 
+/// The rows of pattern mirror `mirror`: Delete mirror only. Its values are
+/// the mirrored pattern's, edited there.
+pub fn mirror_rows(mirror: ArrayId) -> Vec<MenuRow> {
+    vec![MenuRow::new(
+        ids::SKETCH_CANVAS_MENU_DELETE_MIRROR,
+        SketchReferenceMsg::MirrorDeleted(mirror),
+    )]
+}
+
 /// The header and rows of the open menu; `None` when no menu is open or
-/// its constraint or pattern is gone.
+/// its constraint, pattern or mirror is gone. A mirror glyph opens through
+/// the pattern target, its id being a pattern-object id.
 fn open_menu(
     state: &FootprintEditorState,
     sketch: &SketchData,
@@ -230,6 +305,10 @@ fn open_menu(
             Some((header, constraint_rows(id, &c.kind, sketch, in_conflict)))
         }
         MenuTarget::Pattern(array) => {
+            if sketch.pattern_mirrors.iter().any(|m| m.id == array) {
+                let header = t!(i18n, ids::SKETCH_CANVAS_PATTERN_MENU_MIRROR).into_string();
+                return Some((header, mirror_rows(array)));
+            }
             let a = sketch.arrays.iter().find(|a| a.id == array)?;
             let header = match a.kind {
                 ArrayKind::Linear { .. } => ids::SKETCH_CANVAS_PATTERN_MENU_LINEAR,
@@ -241,10 +320,10 @@ fn open_menu(
     }
 }
 
-fn fp(path: PathBuf, msg: SketchCanvasMsg) -> LibraryMessage {
+fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
     LibraryMessage::PrimitiveEditorEvent {
         path,
-        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchCanvas(msg)),
+        msg: PrimitiveEdit::Footprint(msg),
     }
 }
 
@@ -263,7 +342,7 @@ pub fn entries(
         }
         let label = t!(i18n, row.label).into_string();
         let mut item = match row.action {
-            Some(action) => DropdownItem::new(label, fp(path.clone(), action)),
+            Some(action) => DropdownItem::new(label, fp(path.clone(), action.into_editor_msg())),
             None => DropdownItem::passive(label).disabled(true),
         };
         if let Some(why) = row.why {
@@ -306,7 +385,10 @@ pub fn overlay<'a>(
     };
     let width = MenuMetrics::GRAPHITE.fitted_width(&entries, f32::MAX, ui_family);
     let card = active_bar_dropdown::view(entries, tokens, Some(width));
-    let close = fp(editor.path.clone(), SketchCanvasMsg::MenuClosed);
+    let close = fp(
+        editor.path.clone(),
+        FootprintEditorMsg::SketchCanvas(SketchCanvasMsg::MenuClosed),
+    );
     let backstop = mouse_area(
         container(Space::new())
             .width(Length::Fill)
@@ -333,6 +415,18 @@ mod tests {
             p2: SketchEntityId::new(),
             target,
         }
+    }
+
+    /// A sketch holding dimension `id` of `kind`, driven when `driven`.
+    fn holding(id: ConstraintId, kind: ConstraintKind, driven: bool) -> SketchData {
+        let mut sketch = SketchData {
+            constraints: vec![signex_sketch::constraint::Constraint { id, kind }],
+            ..SketchData::default()
+        };
+        if driven {
+            assert!(sketch.set_driven(id, true));
+        }
+        sketch
     }
 
     #[test]
@@ -398,16 +492,67 @@ mod tests {
             .filter(|r| r.action.is_none())
             .map(|r| r.label)
             .collect();
+        assert_eq!(greyed, [ids::SKETCH_CANVAS_MENU_SUPPRESS]);
+        let delete = rows.last().expect("rows");
         assert_eq!(
-            greyed,
+            delete.action,
+            Some(MenuAction::Canvas(SketchCanvasMsg::ConstraintDeleted(id)))
+        );
+        assert!(delete.separated);
+    }
+
+    #[test]
+    fn convert_to_reference_is_offered_on_a_driving_dimension() {
+        let id = ConstraintId::new();
+        let kind = distance(DimTarget::Literal(1.0));
+        let sketch = holding(id, kind.clone(), false);
+        let rows = constraint_rows(id, &kind, &sketch, false);
+        let convert = rows
+            .iter()
+            .find(|r| r.label == ids::SKETCH_CANVAS_MENU_CONVERT_REFERENCE)
+            .expect("row");
+        assert_eq!(
+            convert.action,
+            Some(MenuAction::Reference(
+                SketchReferenceMsg::ReferenceConverted(id)
+            ))
+        );
+        assert!(
+            rows.iter()
+                .all(|r| r.label != ids::SKETCH_CANVAS_MENU_MAKE_DRIVING)
+        );
+    }
+
+    #[test]
+    fn a_reference_dimension_offers_make_driving_and_greys_its_value_rows() {
+        let id = ConstraintId::new();
+        let kind = distance(DimTarget::Literal(1.0));
+        let sketch = holding(id, kind.clone(), true);
+        let rows = constraint_rows(id, &kind, &sketch, false);
+        assert_eq!(
+            labels(&rows),
             [
-                ids::SKETCH_CANVAS_MENU_CONVERT_REFERENCE,
-                ids::SKETCH_CANVAS_MENU_SUPPRESS
+                ids::SKETCH_CANVAS_MENU_EDIT_VALUE,
+                ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER,
+                ids::SKETCH_CANVAS_MENU_MAKE_DRIVING,
+                ids::SKETCH_CANVAS_MENU_SUPPRESS,
+                ids::SKETCH_CANVAS_MENU_SELECT_ENTITIES,
+                ids::SKETCH_CANVAS_MENU_DELETE,
             ]
         );
-        let delete = rows.last().expect("rows");
-        assert_eq!(delete.action, Some(SketchCanvasMsg::ConstraintDeleted(id)));
-        assert!(delete.separated);
+        for row in &rows[..2] {
+            assert!(row.action.is_none(), "{row:?}");
+            assert_eq!(
+                row.why,
+                Some(Why::plain(ids::SKETCH_CANVAS_MENU_REFERENCE_MEASURES))
+            );
+        }
+        assert_eq!(
+            rows[2].action,
+            Some(MenuAction::Reference(SketchReferenceMsg::DrivingRestored(
+                id
+            )))
+        );
     }
 
     #[test]
@@ -452,9 +597,21 @@ mod tests {
         );
         assert_eq!(
             rows[0].action,
-            Some(SketchCanvasMsg::ValueEditOpened(ValueTarget::Pattern(
-                array,
-                PatternField::Count
+            Some(MenuAction::Canvas(SketchCanvasMsg::ValueEditOpened(
+                ValueTarget::Pattern(array, PatternField::Count)
+            )))
+        );
+    }
+
+    #[test]
+    fn a_mirror_menu_only_deletes_the_mirror() {
+        let mirror = ArrayId::new();
+        let rows = mirror_rows(mirror);
+        assert_eq!(labels(&rows), [ids::SKETCH_CANVAS_MENU_DELETE_MIRROR]);
+        assert_eq!(
+            rows[0].action,
+            Some(MenuAction::Reference(SketchReferenceMsg::MirrorDeleted(
+                mirror
             )))
         );
     }
@@ -463,13 +620,7 @@ mod tests {
     fn the_rendered_menu_carries_its_tooltips() {
         let mut state = FootprintEditorState::empty();
         let id = ConstraintId::new();
-        let sketch = SketchData {
-            constraints: vec![signex_sketch::constraint::Constraint {
-                id,
-                kind: distance(DimTarget::Literal(1.0)),
-            }],
-            ..SketchData::default()
-        };
+        let sketch = holding(id, distance(DimTarget::Literal(1.0)), false);
         state.sketch_overlay.menu = Some(
             crate::library::editor::footprint::state::sketch_overlay::CanvasMenu {
                 target: MenuTarget::Constraint(id),

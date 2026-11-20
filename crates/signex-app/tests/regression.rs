@@ -754,3 +754,6 @@ mod sketch_pattern_links;
 // #192 D1: an edit of a patterned pad asks This pad / All pads.
 #[path = "regression/sketch_pad_scope.rs"]
 mod sketch_pad_scope;
+// #187 / #188 (decision 5): Convert to reference and Make driving.
+#[path = "regression/sketch_reference.rs"]
+mod sketch_reference;

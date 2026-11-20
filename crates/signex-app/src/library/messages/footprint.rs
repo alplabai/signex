@@ -609,4 +609,10 @@ pub enum FootprintEditorMsg {
     /// #192 D1 — the answer to "This pad / All pads" after an edit of a
     /// patterned pad.
     PadScopeAnswered(crate::library::editor::footprint::state::pad_scope::PadScope),
+    /// Convert to reference, Make driving and Delete mirror, from the
+    /// constraint and pattern menus and the Properties conflict rows
+    /// (#187, #188).
+    SketchReference(
+        crate::library::editor::footprint::sketch_mode::constraint_menu::SketchReferenceMsg,
+    ),
 }

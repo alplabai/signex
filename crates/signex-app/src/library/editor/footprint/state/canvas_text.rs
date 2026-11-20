@@ -55,6 +55,10 @@ pub struct SketchCanvasText {
     pub pattern_spacing_x: String,
     pub pattern_spacing_y: String,
     pub pattern_sweep: String,
+    /// The mark before a mirrored pattern's glyph ("⇔").
+    pub pattern_mirror: String,
+    /// Joins a pattern's glyph to the pattern it repeats ("of").
+    pub pattern_of: String,
 }
 
 impl SketchCanvasText {

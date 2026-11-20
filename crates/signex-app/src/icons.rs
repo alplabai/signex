@@ -319,6 +319,8 @@ canonical_icon!(icon_dd_text_string, "dropdown/text_string.svg");
 canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
+// Convert to reference on a Properties conflict row (#187).
+canonical_icon!(icon_dd_reference, "dropdown/reference.svg");
 
 // ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
 //
