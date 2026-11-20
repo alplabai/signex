@@ -598,11 +598,11 @@ fn moved_dialog_button_labels_keep_their_english() {
             english
         );
     }
-    // The re-prefix count keeps "part(s)" for one part and many.
+    // #77: the re-prefix count takes a real plural.
     for (count, english) in [
-        (1_usize, "Re-prefix 1 part(s)"),
-        (4, "Re-prefix 4 part(s)"),
-        (1156, "Re-prefix 1,156 part(s)"),
+        (1_usize, "Re-prefix 1 part"),
+        (4, "Re-prefix 4 parts"),
+        (1156, "Re-prefix 1,156 parts"),
     ] {
         assert_eq!(
             shown(

@@ -46,6 +46,7 @@ pub(super) fn app_with_wires(wires: Vec<Wire>) -> (Signex, PathBuf) {
         title_block: HashMap::new(),
         text_widths: Default::default(),
         text_extents: Default::default(),
+        variables: Default::default(),
         lib_symbols: Default::default(),
         net_colors: HashMap::new(),
         drawing_placements: Default::default(),
@@ -438,6 +439,7 @@ fn deliver(
             wire_class_styles: &class_styles,
             wire_class_revision: 0,
             schematic_defaults: Default::default(),
+            designator_standard: None,
             selection_filters: &app.interaction_state.selection_filters,
             placement: with_ghost
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))

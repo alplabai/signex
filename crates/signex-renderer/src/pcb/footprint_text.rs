@@ -2,10 +2,13 @@
 //! (#2368): placed, layered, sized and justified by `pcb-geom` (#2434); this
 //! module only keeps the ones the view shows.
 
+use pcb_geom::BoardTextField;
+use signex_types::designator::{DesignatorStandard, display_reference};
 use signex_types::pcb::Footprint;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::schematic::HAlign;
 
+use super::PcbSnapshot;
 use super::layer_view::PcbLayerView;
 
 /// One footprint text to draw.
@@ -26,6 +29,9 @@ pub struct FootprintTextInput {
     /// Where the anchor sits along the line: its left end, middle or right
     /// end, in the text's own (mirrored) frame.
     pub justify: HAlign,
+    /// A footprint's designator, which the project's designator standard
+    /// may show differently from the stored text (#1416).
+    pub designator: bool,
 }
 
 /// The designator and comment texts of `footprint` that `view` shows: not
@@ -47,9 +53,21 @@ pub(super) fn footprint_texts(
                 mirrored: text.placement.mirrored,
                 layer: text.layer,
                 justify: text.justify,
+                designator: text.field == BoardTextField::Designator,
             }
         })
         .collect()
+}
+
+impl PcbSnapshot {
+    /// The designators drawn as `standard` shows them (`-QAC1` under EN IEC
+    /// 81346-2 full class codes, #1416); the board keeps the stored text.
+    pub fn with_designator_standard(mut self, standard: Option<DesignatorStandard>) -> Self {
+        for text in self.texts.iter_mut().filter(|text| text.designator) {
+            text.content = display_reference(standard, &text.content).into_owned();
+        }
+        self
+    }
 }
 
 #[cfg(test)]

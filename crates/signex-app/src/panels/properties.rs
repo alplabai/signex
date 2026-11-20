@@ -348,16 +348,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if tab == 0 {
         col = col.push(view_properties_general(ctx, primary).boxed());
     } else {
-        col = col.push(
-            view_properties_parameters(
-                &ctx.tokens,
-                muted,
-                primary,
-                crate::styles::ti(ctx.tokens.selection),
-                &ctx.i18n,
-            )
-            .boxed(),
-        );
+        col = col.push(view_properties_parameters(ctx, primary).boxed());
     }
 
     // ── Status: Nothing selected ──

@@ -473,3 +473,41 @@ fn baking_twice_gives_the_same_board() {
     s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
     assert_eq!(s.bake().unwrap(), s.bake().unwrap());
 }
+
+/// #2518: the bake preview counts each board target, and a board answers
+/// for exactly the targets the board host lists.
+#[test]
+fn the_preview_counts_every_board_target() {
+    use signex_types::sketch::SketchHost;
+
+    let mut s = Sketch::new();
+    board_outline(&mut s);
+    let hole = s.circle(4.0, 4.0, 1.6);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+    let baked = s.bake().unwrap();
+    assert_eq!(baked_count(&baked, BakedKind::BoardOutline), Some(1));
+    assert_eq!(baked_count(&baked, BakedKind::MountingHoles), Some(1));
+    assert_eq!(baked_count(&baked, BakedKind::Keepouts), Some(0));
+    assert_eq!(baked_count(&baked, BakedKind::Pads), None);
+    for kind in [
+        BakedKind::Pads,
+        BakedKind::SilkF,
+        BakedKind::SilkB,
+        BakedKind::Courtyard,
+        BakedKind::MaskOpenings,
+        BakedKind::MaskExcludes,
+        BakedKind::PasteApertures,
+        BakedKind::Pours,
+        BakedKind::Keepouts,
+        BakedKind::Cutouts,
+        BakedKind::VScores,
+        BakedKind::BoardOutline,
+        BakedKind::MountingHoles,
+    ] {
+        assert_eq!(
+            baked_count(&baked, kind).is_some(),
+            SketchHost::Board.bake_targets().contains(&kind),
+            "{kind:?}"
+        );
+    }
+}

@@ -32,6 +32,7 @@ mod link_policy;
 pub(crate) mod navigator_job;
 pub(crate) mod net_class_styles;
 pub(crate) mod net_nav;
+mod omitted_page;
 pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
@@ -63,6 +64,7 @@ mod window_sizes;
 mod window_tab;
 
 pub use crate::app::core::case_fold::CaseFold;
+pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
@@ -70,6 +72,7 @@ pub use board_sketch::BoardSketchSession;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
+pub use omitted_page::{OmittedPage, OmittedReason};
 pub use parameter_table::ParameterTableState;
 pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
@@ -330,28 +333,6 @@ pub struct NetlistIncompletePrompt {
     pub omitted: Vec<OmittedPage>,
 }
 
-/// One page a netlist export leaves out, as the netlist-incomplete prompt
-/// lists it.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct OmittedPage {
-    /// The page's file as the user knows it: its file name, or the reference
-    /// the placing sheet symbol carries.
-    pub file: String,
-    pub reason: OmittedReason,
-}
-
-/// Why a page is not in the netlist.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum OmittedReason {
-    /// No file at its path. `placed_by` names the sheet symbol that places
-    /// it, when the stitcher knows it.
-    FileMissing { placed_by: Option<String> },
-    /// The file exists but could not be read: the reader's own English text.
-    Unreadable(String),
-    /// The stitcher's English line: a sheet cycle, or two sheets on one key.
-    Stitch(String),
-}
-
 /// One printed page copy in the export file picker: the sheet file plus the
 /// sheet placement it is a copy of (root for a page printed as itself). A
 /// child placed twice is two picker rows with one path, so the path alone
@@ -441,6 +422,8 @@ pub struct DocumentState {
     /// `engine_for_window`. Save-as rekeys an entry via
     /// `rekey_engine(old, new)`.
     pub engines: std::collections::HashMap<PathBuf, signex_engine::Engine>,
+    /// The clock and the file times the computed special strings show.
+    pub times: DocumentTimes,
     /// Per-tab state for open `.snxsym` document tabs. Keyed by the
     /// file path stored on `TabInfo.path` for matching
     /// `TabKind::SymbolEditor(path)` tabs. Insert on
@@ -995,6 +978,15 @@ impl DocumentState {
             return self.active_loaded_project();
         };
         self.document_project(path)
+    }
+
+    /// The designator standard of the project that owns `sheet` (#1416).
+    pub fn designator_standard_for(
+        &self,
+        sheet: &std::path::Path,
+    ) -> Option<signex_types::designator::DesignatorStandard> {
+        self.document_project(sheet)
+            .and_then(|p| p.data.designator_standard())
     }
 
     /// The resolved schematic defaults (#2026) of the project that owns

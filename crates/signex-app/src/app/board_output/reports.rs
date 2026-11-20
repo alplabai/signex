@@ -55,8 +55,8 @@ impl Signex {
         kind: BoardReportKind,
     ) -> Option<BoardReport> {
         self.document_state
-            .pcb_board(board)
-            .map(|b| board_report(b, kind))
+            .pcb_board_shown(board)
+            .map(|b| board_report(&b, kind))
     }
 
     /// The save dialog for the table in view, or the BOM of the board in

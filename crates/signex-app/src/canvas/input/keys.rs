@@ -35,6 +35,7 @@ impl SchematicCanvas<'_> {
             return Some(canvas::Action::capture());
         }
         if state.move_dragging || state.click_on_selected {
+            state.wire_grip = None;
             state.move_dragging = false;
             state.click_on_selected = false;
             state.move_origin = None;

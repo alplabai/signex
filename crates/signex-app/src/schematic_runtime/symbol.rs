@@ -5,8 +5,8 @@
 use super::snapshot::{ArcStroke, push_arc};
 use super::*;
 use signex_types::schematic::{
-    LibSymbol, PinLabelKind, SCHEMATIC_TEXT_MM, SchematicDefaults, SymbolPrimitive, arc_polyline,
-    lower_pin_labels, lower_placed_symbol, primitives_bounds, primitives_bounds_in,
+    BodyFillShape, LibSymbol, PinLabelKind, SCHEMATIC_TEXT_MM, SchematicDefaults, SymbolPrimitive,
+    arc_polyline, lower_pin_labels, lower_placed_symbol, primitives_bounds, primitives_bounds_in,
 };
 
 /// Half extents of the box a symbol gets when its library graphics are
@@ -238,6 +238,30 @@ pub(super) fn pin_text_inputs(
             v_align: label.v_align,
         })
         .collect()
+}
+
+/// The default body fill of one symbol (`signex_types::schematic::
+/// default_body_fill_shapes`), fill only. Pushed before the symbol's
+/// primitives, so the fill sits under its outline, pins and text.
+pub(super) fn push_body_fills(
+    shapes: &[BodyFillShape],
+    color: Color,
+    polygons: &mut Vec<PolygonInput>,
+) {
+    let fill_color = to_rgba(color);
+    polygons.extend(shapes.iter().map(|shape| PolygonInput {
+        vertices: match shape {
+            BodyFillShape::Polygon(points) => {
+                points.iter().map(|p| [p.x as f32, p.y as f32]).collect()
+            }
+            BodyFillShape::Circle { center, radius } => {
+                circle_vertices([center.x, center.y], *radius as f32, 40)
+            }
+        },
+        fill_color,
+        stroke_color: None,
+        stroke_width_mm: 0.0,
+    }));
 }
 
 pub(super) fn push_primitives(

@@ -199,6 +199,11 @@ pub struct PanelContext {
     /// The parameters of the project that owns the active sheet (#1080): the
     /// values a field falls back to while the sheet leaves it empty.
     pub project_parameters: std::collections::BTreeMap<String, String>,
+    /// The active sheet's variables (#1987), as stored: name to source text.
+    pub sheet_variables: std::collections::BTreeMap<String, String>,
+    /// The active sheet's read-only Parameters rows with their values, as
+    /// `signex_output::resolve` gives them; empty with no active sheet.
+    pub builtin_parameters: Vec<(super::BuiltinParameter, String)>,
     /// The app's one store of half-typed title-block fields and custom
     /// paper edges (#2027): a handle the view reads, never a copy.
     pub drafts: super::PanelDrafts,
@@ -226,6 +231,9 @@ pub struct PanelContext {
     pub erc_results_stale: bool,
     /// An ERC run has checked the project; with no findings it was clean.
     pub erc_ran: bool,
+    /// What the ERC, DRC and Messages panels show, and the cached identity
+    /// a waiver's Author starts as (#85-#88).
+    pub validation: super::ValidationPanels,
     /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.

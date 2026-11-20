@@ -9,6 +9,7 @@ define_ids! {
     PLACEHOLDER_COMPONENT_CLASS_LABEL = "placeholder-component-class-label";
     PLACEHOLDER_PROFILE_NAME = "placeholder-profile-name";
     PLACEHOLDER_PROJECT_PARAMETER_NAME = "placeholder-project-parameter-name";
+    PLACEHOLDER_SHEET_VARIABLE_NAME = "placeholder-sheet-variable-name";
     PLACEHOLDER_PROJECT_DESCRIPTION = "placeholder-project-description";
     PLACEHOLDER_PARAMETER_MANAGER_FILTER = "placeholder-parameter-manager-filter";
     PLACEHOLDER_PARAMETER_MANAGER_NEW_KEY = "placeholder-parameter-manager-new-key";

@@ -165,15 +165,22 @@ fn placed_symbols(ctx: &ExportContext) -> Vec<(&Symbol, String)> {
 fn collect_components(ctx: &ExportContext) -> Vec<Component> {
     let mut seen = HashSet::new();
     let mut components = Vec::new();
-    for (sym, designator) in placed_symbols(ctx) {
-        if is_skipped_symbol(sym) || !seen.insert(designator.clone()) {
-            continue;
+    for (sheet, path) in ctx.sheet_placements() {
+        // The comment is the value as shown: an `=` value evaluated (#1986).
+        let metadata = ctx.metadata.for_schematic(sheet);
+        let special = crate::field_value::sheet_context(&metadata);
+        let scope = crate::ValueScope::of_sheet(&sheet.symbols, Some(&special));
+        for sym in &sheet.symbols {
+            let designator = field(sym.designator_in(&path));
+            if is_skipped_symbol(sym) || !seen.insert(designator.clone()) {
+                continue;
+            }
+            components.push(Component {
+                designator,
+                footprint: field(&sym.footprint),
+                comment: field(&crate::shown_value(&scope, sym).text),
+            });
         }
-        components.push(Component {
-            designator,
-            footprint: field(&sym.footprint),
-            comment: field(&sym.value),
-        });
     }
     components
 }

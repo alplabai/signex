@@ -14,6 +14,7 @@ placeholder-profile-name = Profile name
 
 ## Project tab
 placeholder-project-parameter-name = Name
+placeholder-sheet-variable-name = New variable name
 placeholder-project-description = Description
 
 ## Parameter Manager

@@ -196,8 +196,58 @@ fn snxsch_1_1_loads_and_the_old_token_upgrades_on_save() {
     assert!(!old.is_from_newer_minor());
     let out = old.write_string().unwrap();
     assert!(out.starts_with("format = \"snxsch/1.1\""), "{out}");
-    assert!(version::is_newer_minor("snxsch/1.1", "snxsch/1"));
-    assert!(version::refuse_save("snxsch/1.1", "snxsch/1").is_err());
+    let one_zero = FormatVersion {
+        current: "snxsch/1",
+        readable: &["snxsch/1"],
+        ..SNXSCH_VERSION
+    };
+    assert!(one_zero.is_newer_minor("snxsch/1.1"));
+    assert!(one_zero.refuse_save("snxsch/1.1").is_err());
+}
+
+/// #2207: every `.snxsch` / `.snxpcb` token this build reads loads, a save
+/// writes the current one (`snxsch/1.1` for a sheet without No-ERC rule
+/// lists, `snxsch/1.2` included), a newer major is refused naming it, and a
+/// file with no token is refused.
+#[test]
+fn every_readable_token_loads_and_saves_as_current() {
+    for token in SNXSCH_VERSION.readable {
+        let file = SnxSchematic::parse(&format!("format = \"{token}\"\n{SCH_ID}")).unwrap();
+        assert!(!file.is_from_newer_minor(), "{token}");
+        let out = file.write_string().unwrap();
+        assert!(
+            out.starts_with(&format!("format = \"{SNXSCH_FORMAT_V1}\"")),
+            "{out}"
+        );
+    }
+    for token in SNXPCB_VERSION.readable {
+        let file = SnxPcb::parse(&format!("format = \"{token}\"\n{PCB_ID}")).unwrap();
+        assert!(!file.is_from_newer_minor(), "{token}");
+        let out = file.write_string().unwrap();
+        assert!(
+            out.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1}\"")),
+            "{out}"
+        );
+    }
+    let err = SnxPcb::parse(&format!("format = \"snxpcb/2\"\n{PCB_ID}")).unwrap_err();
+    assert!(err.to_string().contains("snxpcb/2"), "{err}");
+    assert!(err.to_string().contains("newer Signex"), "{err}");
+    let err = SnxSchematic::parse(SCH_ID).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::Version(FormatVersionError::Missing { .. })
+        ),
+        "{err:?}"
+    );
+    let err = SnxPcb::parse(PCB_ID).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            FormatError::Version(FormatVersionError::Missing { .. })
+        ),
+        "{err:?}"
+    );
 }
 
 /// #2172 guard: the sheet's and the board's own uuid is the first stored key

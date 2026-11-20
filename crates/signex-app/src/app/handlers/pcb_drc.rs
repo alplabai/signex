@@ -190,10 +190,12 @@ impl Signex {
         let mut panel = crate::panels::DrcPanel {
             running: drc.is_running_for(&path),
             filter: drc.filter.clone(),
+            view: self.ui_state.validation_panels.drc.clone(),
             waive_draft: drc.waive_draft.clone(),
             ..Default::default()
         };
         let Some(done) = drc.done_for(&path) else {
+            self.fill_drc_idle(&mut panel, pcb);
             return Some(panel);
         };
         let revision = self

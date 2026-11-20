@@ -51,7 +51,7 @@ pub struct PcbDrc {
     /// What the DRC results panel shows of the report (#2399): view state,
     /// never board data.
     pub filter: crate::panels::DrcFilter,
-    /// The waiver note being written in the panel.
+    /// The waiver being written in the panel (reason and author, AV-13).
     pub waive_draft: Option<crate::panels::DrcWaiveDraft>,
 }
 

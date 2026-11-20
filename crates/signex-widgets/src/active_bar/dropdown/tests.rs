@@ -217,3 +217,16 @@ fn a_card_with_strong_danger_and_badge_rows_builds() {
         assert_eq!(panel.size().width, Length::Fixed(240.0));
     }
 }
+
+/// A swatch row reserves the icon column like an icon row, so a card mixing
+/// the two starts every label at one x, and the swatch fits inside it.
+#[test]
+fn a_swatch_row_takes_the_icon_column() {
+    let swatch_only = vec![DropdownEntry::Item(
+        DropdownItem::new("Blue", ()).swatch(Color::from_rgb(0.4, 0.4, 0.93)),
+    )];
+    assert!(metrics::has_icons(&swatch_only));
+    assert!(!metrics::has_icons(&labelled("Blue")));
+    let m = MenuMetrics::GRAPHITE;
+    assert!(m.swatch_size() > 0.0 && m.swatch_size() < m.icon_size);
+}

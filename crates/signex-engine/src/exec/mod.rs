@@ -14,15 +14,20 @@ mod directives;
 mod drawings;
 mod edits;
 mod font_family;
+pub(crate) mod guarded;
+mod ownership;
 pub(crate) mod pin_changes;
 mod place;
 mod replace_lib_symbol;
 mod structure;
 mod symbol_body;
 pub(crate) mod transaction;
+mod wire_end;
 
 #[cfg(test)]
 mod change_component_tests;
+#[cfg(test)]
+mod designator_follow_tests;
 #[cfg(test)]
 mod designator_in_tests;
 #[cfg(test)]
@@ -43,5 +48,7 @@ mod register_lib_symbol_tests;
 mod replace_lib_symbol_tests;
 #[cfg(test)]
 mod sheet_page_tests;
+#[cfg(test)]
+mod sheet_variable_tests;
 #[cfg(test)]
 mod symbol_body_tests;

@@ -54,7 +54,7 @@ mod metrics;
 pub use metrics::{MENU_LABEL_SIZE, MENU_SHORTCUT_SIZE, MONO_FAMILY, MenuMetrics};
 
 /// Hover wash and corner radius of a menu row. Public so a `Custom` row
-/// built by the app (the net-colour swatches) hovers like an item row.
+/// built by the app hovers like an item row.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RowPaint {
     pub hover: Color,
@@ -103,6 +103,9 @@ where
     pub label: String,
     /// Leading icon. `None` for items without a glyph.
     pub icon: Option<svg::Handle>,
+    /// Leading colour swatch, drawn in the icon column in place of an
+    /// icon (the net-colour menu). An `icon` wins when both are set.
+    pub swatch: Option<Color>,
     /// `true` paints a small "✓" to the right of the label so the
     /// user sees which row is currently active (toggle items).
     pub checked: bool,
@@ -148,6 +151,7 @@ impl<M: 'static + Clone> DropdownItem<M> {
         Self {
             label: label.into(),
             icon: None,
+            swatch: None,
             checked: false,
             shortcut: None,
             disabled: false,
@@ -190,6 +194,12 @@ impl<M: 'static + Clone> DropdownItem<M> {
     /// Builder: attach a leading SVG icon.
     pub fn icon(mut self, handle: svg::Handle) -> Self {
         self.icon = Some(handle);
+        self
+    }
+
+    /// Builder: attach a leading colour swatch in the icon column.
+    pub fn swatch(mut self, color: Color) -> Self {
+        self.swatch = Some(color);
         self
     }
 
@@ -443,6 +453,7 @@ where
     let DropdownItem {
         label,
         icon,
+        swatch,
         checked,
         shortcut,
         disabled,
@@ -461,17 +472,8 @@ where
         .spacing(m.row_spacing)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
-    if let Some(handle) = icon {
-        let (muted, ink) = (look.muted, look.row_icon_ink(danger));
-        cells = cells.push(
-            svg(handle)
-                .width(m.icon_size)
-                .height(m.icon_size)
-                .style(move |_: &Theme, _| icon_style(disabled, muted, ink))
-                .boxed(),
-        );
-    } else if shape.has_icons {
-        cells = cells.push(Space::new().width(Length::Fixed(m.icon_size)).boxed());
+    if shape.has_icons {
+        cells = cells.push(lead_cell(icon, swatch, disabled, danger, m, look));
     }
     // Menu rows never wrap: a too-narrow card clips rather than reflowing a
     // label onto two lines.
@@ -595,6 +597,56 @@ fn badge_pill<'a, M: 'a>(label: Label<'static>, m: &MenuMetrics, look: Look) -> 
         ..container::Style::default()
     })
     .boxed()
+}
+
+/// The icon column of one row: an icon, a colour swatch or nothing, always
+/// in one `icon_size` square with its content centred, so every label of a
+/// card starts at the same x.
+fn lead_cell<'a, M>(
+    icon: Option<svg::Handle>,
+    swatch: Option<Color>,
+    disabled: bool,
+    danger: bool,
+    m: &MenuMetrics,
+    look: Look,
+) -> Element<'a, M>
+where
+    M: 'static + Clone,
+{
+    let content: Element<'a, M> = match (icon, swatch) {
+        (Some(handle), _) => {
+            let (muted, ink) = (look.muted, look.row_icon_ink(danger));
+            svg(handle)
+                .width(m.icon_size)
+                .height(m.icon_size)
+                .style(move |_: &Theme, _| icon_style(disabled, muted, ink))
+                .boxed()
+        }
+        (None, Some(color)) => {
+            let (edge, side) = (look.border, m.swatch_size());
+            container(Space::new())
+                .width(side)
+                .height(side)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(color)),
+                    border: Border {
+                        width: 1.0,
+                        radius: (side / 4.0).into(),
+                        color: edge,
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                })
+                .boxed()
+        }
+        (None, None) => Space::new().boxed(),
+    };
+    container(content)
+        .width(Length::Fixed(m.icon_size))
+        .height(Length::Fixed(m.icon_size))
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center)
+        .boxed()
 }
 
 /// Toggle chip — used inside `DropdownEntry::Custom`
