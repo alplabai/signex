@@ -707,12 +707,12 @@ mod sheet_variables;
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
 
-#[path = "regression/illustration_hover.rs"]
-mod illustration_hover;
 #[path = "regression/annotate_graphite.rs"]
 mod annotate_graphite;
 #[path = "regression/erc_dialog_graphite.rs"]
 mod erc_dialog_graphite;
+#[path = "regression/illustration_hover.rs"]
+mod illustration_hover;
 #[path = "regression/setup_profile_cards.rs"]
 mod setup_profile_cards;
 #[path = "regression/sketch_host.rs"]
