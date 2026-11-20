@@ -141,6 +141,18 @@ fn send(app: &mut Signex, msg: SheetSyncMsg) {
     settle(app, task);
 }
 
+/// The file dialog picked `file` for the sheet in view.
+fn picked(app: &Signex, file: PathBuf) -> SheetSyncMsg {
+    SheetSyncMsg::CreateSymbolPicked {
+        target: app
+            .document_state
+            .active_path
+            .clone()
+            .expect("a sheet in view"),
+        file: Some(file),
+    }
+}
+
 fn parent_pins(app: &Signex) -> Vec<String> {
     let engine = app.document_state.active_engine().expect("parent");
     let mut names: Vec<String> = engine.document().child_sheets[0]
@@ -285,7 +297,8 @@ fn a_symbol_from_a_sheet_lands_with_every_port_as_one_step() {
             ..SchematicSheet::default()
         },
     );
-    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(other)));
+    let msg = picked(&rig.app, other);
+    send(&mut rig.app, msg);
     let symbols = |app: &Signex| {
         app.document_state
             .active_engine()
@@ -317,7 +330,8 @@ fn a_symbol_from_a_sheet_lands_with_every_port_as_one_step() {
 fn a_file_already_placed_on_the_sheet_is_refused() {
     let mut rig = rig(Vec::new(), vec![hierarchical("A", "input", 10.0)]);
     let child = rig.child.clone();
-    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(child)));
+    let msg = picked(&rig.app, child);
+    send(&mut rig.app, msg);
     let engine = rig.app.document_state.active_engine().expect("parent");
     assert_eq!(engine.document().child_sheets.len(), 1);
 }
@@ -357,7 +371,8 @@ fn a_grandparent_sheet_is_refused_as_a_loop() {
         root: Some(node(&dir, "top.snxsch", vec![mid])),
         ..Default::default()
     });
-    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(top)));
+    let msg = picked(&rig.app, top);
+    send(&mut rig.app, msg);
     let engine = rig.app.document_state.active_engine().expect("parent");
     assert_eq!(engine.document().child_sheets.len(), 1, "nothing placed");
 }
@@ -398,7 +413,8 @@ fn a_loop_through_two_closed_sheets_is_refused() {
     );
     let _ = crate::diagnostics::init_logging();
     let mark = crate::diagnostics::newest_entry_id();
-    send(&mut rig.app, SheetSyncMsg::CreateSymbolPicked(Some(b)));
+    let msg = picked(&rig.app, b);
+    send(&mut rig.app, msg);
     let engine = rig.app.document_state.active_engine().expect("parent");
     assert_eq!(engine.document().child_sheets.len(), 1, "nothing placed");
     let said: Vec<String> = crate::diagnostics::entries_since(mark)

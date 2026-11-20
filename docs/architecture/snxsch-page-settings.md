@@ -36,8 +36,8 @@ Display only. Stored coordinates are always measured from the upper-left
 corner of the paper, Y down; no coordinate is rewritten when the origin
 changes. With Lower Left, the shown Y is `paper_height_mm - y`, the paper
 height coming from the sheet's paper size (Custom included). The status bar,
-Properties ▸ Position (and Start / End / Center rows), the pre-placement X/Y
-readout, the ERC panel's location label and typed drawing coordinates go
+Properties ▸ Position (and Start / End / Center rows), the pre-placement Position
+fields (shown and typed), the ERC panel's location label and typed drawing coordinates go
 through one mapping, refreshed when the origin or the paper size changes (a
 half-typed coordinate box is dropped then), `SchematicSheet::page_y`, which is its own
 inverse. X never changes. A rectangle's Position row is its top-left corner

@@ -445,7 +445,10 @@ them, so the rest is on the author.
   decided-behaviour golden: review the diff, then regenerate it with
   `UPDATE_GOLDEN=1 cargo test -p signex-app golden_parity_table`. Hand
   annotations of implicit inputs live in `parity/annotations.rs`, which a
-  regenerate keeps.
+  regenerate keeps. The owner comes from what the route writes (#2551):
+  document state is `core`, session state or machine settings `gui`, a
+  router over what is in hand `split` with a `split_core_command` row; the
+  hand annotations of those writes live in `parity/owners.rs`.
 - **Deferred work**
   ([ADR-0003](docs/architecture/adr-0003-deferred-work-and-consistent-history.md)):
   owed work is explicit model state. Every boundary (save, undo, redo,

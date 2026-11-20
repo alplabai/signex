@@ -190,7 +190,7 @@ impl MenuMetrics {
                         w += self.icon_size + self.row_spacing;
                     }
                     w += self.row_spacing + self.cluster_gap;
-                    if let Some(s) = &item.shortcut {
+                    for s in [&item.caption, &item.shortcut].into_iter().flatten() {
                         w += self.row_spacing + advance(s, self.shortcut_size, shortcut_family);
                     }
                     if item.checked {

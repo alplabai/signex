@@ -149,7 +149,7 @@ cmd-toggle-electrical-grid = Toggle electrical grid
 cmd-toggle-floating-panels = Toggle floating panels
 cmd-toggle-properties-panel = Toggle Properties panel
 cmd-toggle-schematic-filter-panel = Toggle schematic filter panel
-cmd-toggle-schematic-list-panel = Toggle schematic list panel
+cmd-toggle-schematic-list-panel = Toggle Object List panel
 cmd-toggle-search-panel = Show/hide search panel
 cmd-toggle-selection = Add/remove object from selection
 # Verb: add the picked object to the selection, or remove it when it is in.

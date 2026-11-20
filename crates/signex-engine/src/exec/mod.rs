@@ -21,6 +21,7 @@ mod place;
 mod replace_lib_symbol;
 mod structure;
 mod symbol_body;
+mod text_note_props;
 pub(crate) mod transaction;
 mod wire_end;
 

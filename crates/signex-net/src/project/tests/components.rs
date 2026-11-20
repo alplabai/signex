@@ -78,6 +78,7 @@ fn every_part_is_listed_by_designator_with_the_net_on_each_pin() {
     let parts = indexed(&design()).components();
     let designators: Vec<&str> = parts.iter().map(|p| p.designator.as_str()).collect();
     assert_eq!(designators, ["C1", "R1", "R2", "R?", "R?", "U1"]);
+    assert_eq!(indexed(&design()).component_count(), parts.len());
 
     let r1 = &parts[1];
     assert_eq!(r1.value, "R1 value");
@@ -95,10 +96,13 @@ fn the_units_of_one_designator_are_one_part() {
 }
 
 #[test]
-fn a_pin_wired_to_nothing_is_not_listed_and_power_symbols_are_no_parts() {
+fn a_pin_wired_to_nothing_is_on_no_net_and_power_symbols_are_no_parts() {
     let parts = indexed(&design()).components();
     let c1 = parts.iter().find(|p| p.designator == "C1").expect("C1");
     assert!(c1.pins.is_empty());
+    let open: Vec<&str> = c1.unconnected.iter().map(|p| p.pin.as_str()).collect();
+    assert_eq!(open, ["1"], "the unwired pin is listed on no net");
+    assert_eq!(c1.pin_count(), 1);
     assert!(parts.iter().all(|p| p.designator != "#PWR1"));
     let unannotated: Vec<Uuid> = parts
         .iter()
@@ -115,4 +119,40 @@ fn a_pin_anchor_finds_its_net_again() {
     let pin = &parts[1].pins[0];
     assert_eq!(pin.anchor.pin.as_deref(), Some("1"));
     assert_eq!(index.resolve(&pin.net_name, &pin.anchor), Some(pin.net));
+}
+
+/// `U1` in two units of one symbol: pin 1 on unit 1, pin 7 on unit 2 and
+/// pin 8 on every unit. Unit 1 wires pin 1 to `SIG` and pin 8 to `VCC`;
+/// unit 2 wires nothing.
+fn two_units_sharing_a_pin() -> SchematicSheet {
+    let mut s = empty_sheet();
+    add_lib(&mut s, "OPAMP");
+    let lib = s.lib_symbols.get_mut("OPAMP").unwrap();
+    let mut out_a = lib_pin("1", pt(0.0, 0.0));
+    out_a.unit = 1;
+    let mut out_b = lib_pin("7", pt(0.0, 0.0));
+    out_b.unit = 2;
+    // Unit 0: carried by every unit; 10 mm below the origin on the sheet.
+    let supply = lib_pin("8", pt(0.0, -10.0));
+    lib.pins = vec![out_a, out_b, supply];
+
+    for (unit, x, uuid) in [(1, 0.0, 11), (2, 100.0, 12)] {
+        part(&mut s, "U1", "OPAMP", pt(x, 40.0), uuid);
+        s.symbols.last_mut().unwrap().unit = unit;
+    }
+    for (y, net) in [(40.0, "SIG"), (50.0, "VCC")] {
+        s.wires.push(wire(pt(0.0, y), pt(5.0, y)));
+        s.labels.push(label(net, pt(5.0, y), LabelType::Global));
+    }
+    s
+}
+
+#[test]
+fn a_pin_every_unit_carries_wired_on_one_unit_is_not_also_unconnected() {
+    let parts = indexed(&two_units_sharing_a_pin()).components();
+    let u1 = parts.iter().find(|p| p.designator == "U1").expect("U1");
+    assert_eq!(pins(u1), [("1", "SIG"), ("8", "VCC")]);
+    let open: Vec<&str> = u1.unconnected.iter().map(|p| p.pin.as_str()).collect();
+    assert_eq!(open, ["7"], "pin 8 is wired on unit 1, so it is not open");
+    assert_eq!(u1.pin_count(), 3, "pins 1, 7 and 8, each once");
 }

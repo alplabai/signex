@@ -50,8 +50,19 @@ fn is_save_writes_finished(message: &Message) -> bool {
     )
 }
 
+/// Puts mm back in the process-wide prefs file when dropped, so the mil
+/// this test writes does not stay for every later `Signex::new`.
+struct UnitPrefReset;
+
+impl Drop for UnitPrefReset {
+    fn drop(&mut self) {
+        crate::fonts::write_unit_pref(Unit::Mm);
+    }
+}
+
 #[test]
 fn cycling_the_unit_leaves_prefs_json_to_the_returned_task() {
+    let _reset = UnitPrefReset;
     let (mut app, _task) = Signex::new();
     crate::fonts::write_unit_pref(Unit::Mm);
     app.ui_state.unit = Unit::Mm;

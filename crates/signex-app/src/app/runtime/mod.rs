@@ -16,6 +16,7 @@ pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
 mod placed_ctx;
+mod selection_filter_ctx;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]
@@ -29,8 +30,10 @@ mod window_hierarchies;
 mod window_placement_tests;
 
 impl Signex {
-    /// Copy the UI-state grid/unit/snap fields into the panel context.
+    /// Copy the UI-state grid/unit/snap fields and SCH Filter's preset
+    /// rename into the panel context.
     pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
+        self.document_state.panel_ctx.selection_filter.rename = self.filter_preset_rename();
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
@@ -90,6 +93,7 @@ impl Signex {
         self.sync_component_tab_titles();
         let class_styles = self.refresh_net_class_styles();
         let net_nav = self.refresh_net_nav();
+        let object_list = self.sync_object_list();
         let footprint_card = self.refresh_footprint_card();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
@@ -137,6 +141,7 @@ impl Signex {
             library_tabs,
             class_styles,
             net_nav,
+            object_list,
             footprint_card,
         ])
     }
@@ -202,6 +207,8 @@ impl Signex {
         self.cancel_move_pick();
         // A half-placed two-click shape belongs to the tab it was started in.
         self.clear_shape_anchors();
+        // The zoom presets opened over the previous tab's pill.
+        self.interaction_state.zoom_presets_open = false;
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.
         let active_path = self
@@ -260,6 +267,7 @@ impl Signex {
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
         self.sync_focused_pin(clicked_pin.clone());
+        self.sync_pin_focus_sections(clicked_pin.is_some());
         self.sync_placed_panel();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();

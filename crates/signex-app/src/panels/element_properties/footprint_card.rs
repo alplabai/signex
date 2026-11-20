@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use signex_library::primitive::{Footprint, PrimitiveRef};
 
-use crate::library::editor::footprint::PreviewFootprint;
+use super::illustrations::footprint_thumb::FootprintThumb;
 
 /// Most footprints the cache keeps; a fuller cache drops its finished reads.
 const MAX_CACHED: usize = 32;
@@ -34,7 +34,8 @@ pub struct FootprintCardFacts {
     /// A STEP model is attached; the procedural body every footprint has
     /// does not count.
     pub has_3d_body: bool,
-    pub preview: PreviewFootprint,
+    /// The thumbnail line art.
+    pub thumb: FootprintThumb,
 }
 
 impl FootprintCardFacts {
@@ -44,7 +45,7 @@ impl FootprintCardFacts {
             pad_count: footprint.copper_pad_count(),
             pitch_mm: footprint.pad_pitch_mm(),
             has_3d_body: footprint.step_attachment.is_some(),
-            preview: PreviewFootprint::build(footprint),
+            thumb: FootprintThumb::of(footprint),
         }
     }
 

@@ -602,3 +602,52 @@ fn a_symbol_anchor_stays_on_its_own_pins_net_when_auto_names_renumber() {
     assert_ne!(after.net(now).unwrap().name, name, "the name moved");
     assert_eq!(after.resolve(&name, &anchor), Some(now));
 }
+
+/// Every pin of a part is listed, wired or not, with its name; a wired pin
+/// carries its net and an unconnected one is listed on no net.
+#[test]
+fn components_list_every_pin_with_its_name_and_the_net_of_each_wired_one() {
+    let mut root = empty_sheet();
+    add_lib(&mut root, "IC");
+    if let Some(lib) = root.lib_symbols.get_mut("IC") {
+        lib.pins = vec![lib_pin("14", pt(0.0, 0.0)), lib_pin("9", pt(0.0, 10.0))];
+        lib.pins[0].pin.name = "VOS".into();
+        lib.pins[1].pin.name = "SS/TR".into();
+    }
+    place(&mut root, "U1", "IC", pt(0.0, 0.0));
+    root.symbols[0].uuid = id(7);
+    root.symbols[0].value = "TPS62130".into();
+    root.symbols[0].footprint = "QFN-16".into();
+    root.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    root.labels
+        .push(labelled("VOUT_3V3", pt(5.0, 0.0), LabelType::Net, 8));
+    let index = indexed(&root, &[]);
+
+    let parts = index.components();
+    assert_eq!(parts.len(), 1, "{parts:?}");
+    let u1 = &parts[0];
+    assert_eq!(
+        (
+            u1.designator.as_str(),
+            u1.value.as_str(),
+            u1.footprint.as_str()
+        ),
+        ("U1", "TPS62130", "QFN-16")
+    );
+    assert_eq!(u1.pin_count(), 2);
+    let wired: Vec<(&str, &str, &str)> = u1
+        .pins
+        .iter()
+        .map(|p| (p.pin.as_str(), p.name.as_str(), p.net_name.as_str()))
+        .collect();
+    assert_eq!(wired, [("14", "VOS", "VOUT_3V3")]);
+    assert_eq!(index.net(u1.pins[0].net).unwrap().name, "VOUT_3V3");
+    let open: Vec<(&str, &str)> = u1
+        .unconnected
+        .iter()
+        .map(|p| (p.pin.as_str(), p.name.as_str()))
+        .collect();
+    assert_eq!(open, [("9", "SS/TR")]);
+    assert_eq!(u1.unconnected[0].anchor.id, id(7));
+    assert_eq!(u1.unconnected[0].anchor.pin.as_deref(), Some("9"));
+}

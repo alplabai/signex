@@ -388,6 +388,12 @@ impl DragLayers {
     pub fn builds(&self) -> u32 {
         self.builds
     }
+
+    /// How many times the GPU static layer's scene was built.
+    #[cfg(test)]
+    pub fn static_scene_builds(&self) -> u32 {
+        self.static_scene.builds()
+    }
 }
 
 #[cfg(test)]

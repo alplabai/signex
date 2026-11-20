@@ -218,6 +218,9 @@ mod dock_side_width;
 #[path = "regression/dock_tab_controls.rs"]
 mod dock_tab_controls;
 
+#[path = "regression/core_safety_net.rs"]
+mod core_safety_net;
+
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
 // #1826 / #1827 / #1828 — a save writes the file the document is.
@@ -528,11 +531,16 @@ mod pin_text_on_sheet;
 // #1667 — Autoplace Fields, Copy Attributes, Place Design Block, Import Graphics.
 #[path = "regression/placement_extras.rs"]
 mod placement_extras;
+// #2532 — the Tab form places the next object at a typed Position.
+#[path = "regression/pre_placement_position.rs"]
+mod pre_placement_position;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.
 #[path = "regression/multi_selection_edit.rs"]
 mod multi_selection_edit;
+#[path = "regression/selection_forms.rs"]
+mod selection_forms;
 // #1255, #1670 — in-place editing of a part's designator, value and footprint.
 #[path = "regression/inplace_field_edit.rs"]
 mod inplace_field_edit;
@@ -719,6 +727,8 @@ mod placement_pause_esc;
 mod annotate_graphite;
 #[path = "regression/erc_dialog_graphite.rs"]
 mod erc_dialog_graphite;
+#[path = "regression/illustration_hover.rs"]
+mod illustration_hover;
 #[path = "regression/setup_profile_cards.rs"]
 mod setup_profile_cards;
 #[path = "regression/sketch_host.rs"]
@@ -731,6 +741,20 @@ mod stroke_zoom_law;
 mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// Graphite mockup #55: the Filter panel edits the filter a box select picks with.
+#[path = "regression/selection_filter_panels.rs"]
+mod selection_filter_panels;
+// #1259 - the Object List lists the sheet's objects; a row click selects.
+#[path = "regression/object_list.rs"]
+mod object_list;
+
+// #2267 — a canvas menu row runs against the window the menu opened in.
+#[path = "regression/context_menu_in_window.rs"]
+mod context_menu_in_window;
+
+#[path = "regression/floating_panel_menu.rs"]
+mod floating_panel_menu;
 
 #[path = "regression/rules_grid.rs"]
 mod rules_grid;

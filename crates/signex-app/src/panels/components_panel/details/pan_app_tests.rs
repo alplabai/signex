@@ -274,6 +274,9 @@ struct Live {
     /// Whether the window asked to be redrawn after each event of the last
     /// `drive_with`: without that the runtime shows no change.
     redraws: Vec<bool>,
+    /// The canvas the last `preview_point` measured: its left and right
+    /// edges on the press row, and the first row below the label that grabs.
+    measured: Option<(f32, f32, f32)>,
     _tmp: tempfile::TempDir,
 }
 
@@ -284,6 +287,7 @@ fn start(theme: ThemeId, side: PanelPosition) -> (Live, ComponentsPanelRowKey) {
             app,
             cache: Cache::default(),
             redraws: Vec::new(),
+            measured: None,
             _tmp: tmp,
         },
         key,
@@ -372,6 +376,19 @@ fn drive_with(
     (out, frames)
 }
 
+/// Largest per-channel difference that is still the same pixel: an
+/// antialiased edge rounds 1 level apart at two pan offsets, a real 1 px
+/// shift moves a channel by 40 or more.
+const CHANNEL_TOLERANCE: u8 = 4;
+
+/// Whether two RGB pixels differ by more than [`CHANNEL_TOLERANCE`] in any
+/// channel.
+fn differs(a: &[u8], b: &[u8]) -> bool {
+    a.iter()
+        .zip(b)
+        .any(|(x, y)| x.abs_diff(*y) > CHANNEL_TOLERANCE)
+}
+
 /// Pixels inside `area` of `frame` that differ from `before` shifted by
 /// `shift` px, and the pixel count of `area`. A zero shift counts what
 /// changed; the drag's shift counts what did not follow the pointer.
@@ -389,7 +406,7 @@ fn mismatched_pixels(
     for y in y0..y1 {
         for x in x0..x1 {
             let (i, j) = (at(x, y), at(x - shift.0, y - shift.1));
-            if frame[i..i + 3] != before[j..j + 3] {
+            if differs(&frame[i..i + 3], &before[j..j + 3]) {
                 differ += 1;
             }
         }
@@ -401,12 +418,59 @@ fn moved(to: Point) -> (Event, Point) {
     (Event::Mouse(mouse::Event::CursorMoved { position: to }), to)
 }
 
-/// A point well inside the preview under `label`: the first point below
-/// the label that offers a grab, plus a margin. Panics with the hover scan
-/// when nothing below the label offers one.
+/// The drag of [`assert_drag_pans`], press to last move. Off any grid
+/// multiple, so the moved grid cannot land on itself.
+const DRAG: (f32, f32) = (37.0, 23.0);
+/// The checked band, placed at this offset from the press.
+const BAND_OFFSET: (f32, f32) = (2.0, 15.0);
+const BAND: Size = Size::new(40.0, 30.0);
+/// Distance the band and its drag source keep from the canvas's side edges,
+/// whose border and antialiased edge do not pan.
+const EDGE_MARGIN: f32 = 2.0;
+
+/// Whether a hover at `at` offers a grab.
+fn grabs_at(app: &mut Live, at: Point) -> bool {
+    drive(app, &[moved(at)]) == [mouse::Interaction::Grab]
+}
+
+/// The last x on row `y`, going from `inside` (which grabs) in direction
+/// `dir`, that still grabs: steps narrower than the gap between the two side
+/// by side previews, then halving to a quarter pixel.
+fn grab_edge(app: &mut Live, inside: f32, y: f32, dir: f32) -> f32 {
+    const STEP: f32 = 4.0;
+    let mut grab = inside;
+    let mut outside = loop {
+        let next = grab + dir * STEP;
+        if !grabs_at(app, Point::new(next, y)) {
+            break next;
+        }
+        grab = next;
+        assert!(
+            (0.0..WINDOW.width).contains(&grab),
+            "the preview at y {y} grabs to the window edge"
+        );
+    };
+    while (outside - grab).abs() > 0.25 {
+        let mid = (grab + outside) / 2.0;
+        if grabs_at(app, Point::new(mid, y)) {
+            grab = mid;
+        } else {
+            outside = mid;
+        }
+    }
+    grab
+}
+
+/// The press point of the drag check in the preview under `label`: 40 px
+/// below the preview's top (the first point below the label that offers a
+/// grab), so the band sits between the size readout and the scale bar. Its
+/// x comes from the preview's measured side edges, so the band and the
+/// pixels the drag brings into it both lie inside the canvas however wide
+/// the preview is (side by side in a narrow dock, #2535). Panics with the
+/// hover scan when nothing below the label offers a grab.
 fn preview_point(app: &mut Live, label: Rectangle) -> Point {
-    // Far enough in that the drag's source pixels stay inside the canvas.
-    let x = label.x + 80.0;
+    // Inside even a narrow preview: past its left border.
+    let x = label.x + 30.0;
     let points: Vec<Point> = (0..60)
         .map(|i| Point::new(x, label.y + label.height + i as f32 * 6.0))
         .collect();
@@ -420,15 +484,26 @@ fn preview_point(app: &mut Live, label: Rectangle) -> Point {
                 points.iter().map(|p| p.y as i32).zip(seen).collect();
             panic!("no preview offers a grab below {label:?}: {scan:?}")
         });
-    Point::new(x, points[first].y + 40.0)
+    let y = points[first].y + 40.0;
+    let left = grab_edge(app, x, y, -1.0);
+    let right = grab_edge(app, x, y, 1.0);
+    // The source pixels start DRAG.0 left of the band; both stay a margin
+    // in from the edges.
+    app.measured = Some((left, right, points[first].y));
+    let lowest = left + EDGE_MARGIN + DRAG.0 - BAND_OFFSET.0;
+    let highest = right - EDGE_MARGIN - BAND.width - BAND_OFFSET.0;
+    assert!(
+        lowest <= highest,
+        "the preview below {label:?} spans x {left}..{right}: too narrow for a {BAND:?} band and a {DRAG:?} drag"
+    );
+    Point::new((lowest + highest) / 2.0, y)
 }
 
 /// Hover, press, two moves, release at `from`: the hover grabs, the drag
 /// holds the grab, the release lets go, and the drawn preview has moved.
 fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
-    // Off any grid multiple, so the moved grid cannot land on itself.
     let to = Point::new(from.x + 25.0, from.y + 15.0);
-    let further = Point::new(from.x + 37.0, from.y + 23.0);
+    let further = Point::new(from.x + DRAG.0, from.y + DRAG.1);
     let (seen, frames) = drive_with(
         app,
         &[
@@ -464,19 +539,127 @@ fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
     // band sits below the readout, also at the shifted source rows, and
     // above the scale bar.
     let area = Rectangle::new(
-        Point::new(from.x + 2.0, from.y + 15.0),
-        Size::new(100.0, 30.0),
+        Point::new(from.x + BAND_OFFSET.0, from.y + BAND_OFFSET.1),
+        BAND,
     );
+    let shift = (DRAG.0 as usize, DRAG.1 as usize);
+    let evidence = |found: &str| {
+        let canvas = match app.measured {
+            Some((left, right, top)) => {
+                format!(
+                    "canvas x {left}..{right} on row {}, first grab row {top}",
+                    from.y
+                )
+            }
+            None => "canvas not measured".to_string(),
+        };
+        let files = dump_frames(what, &frames[0], &frames[3], area, shift);
+        format!("{what}: {found} in band {area:?}; {canvas}; {files}")
+    };
     let (changed, total) = mismatched_pixels(&frames[0], &frames[3], area, (0, 0));
-    assert!(
-        changed > 20,
-        "{what}: the drawn preview did not move ({changed} of {total} pixels changed in {area:?})"
+    if changed <= 20 {
+        panic!(
+            "{}",
+            evidence(&format!(
+                "the drawn preview did not move ({changed} of {total} pixels changed)"
+            ))
+        );
+    }
+    let (off, total) = mismatched_pixels(&frames[0], &frames[3], area, shift);
+    if off > total / 50 {
+        panic!(
+            "{}",
+            evidence(&format!(
+                "the drawing did not follow the pointer 1:1 ({off} of {total} pixels off)"
+            ))
+        );
+    }
+}
+
+/// Write the frames before and after the drag, and a map of the band's off
+/// pixels, as PNGs for a failed check; returns where they went (or why not).
+/// The directory is `$CARGO_TARGET_TMPDIR`, else the system temp dir; the
+/// names are `signex-pan-<test>-<what>-{before,after,diff}.png`.
+fn dump_frames(
+    what: &str,
+    before: &[u8],
+    after: &[u8],
+    area: Rectangle,
+    shift: (usize, usize),
+) -> String {
+    let dir = std::env::var_os("CARGO_TARGET_TMPDIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let test = std::thread::current()
+        .name()
+        .unwrap_or("test")
+        .rsplit("::")
+        .next()
+        .unwrap_or("test")
+        .to_string();
+    let slug: String = format!("{test}-{what}")
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let diff = diff_image(before, after, area, shift);
+    let (w, h) = (WINDOW.width as u32, WINDOW.height as u32);
+    let mut written = Vec::new();
+    for (kind, pixels) in [("before", before), ("after", after), ("diff", &diff[..])] {
+        let path = dir.join(format!("signex-pan-{slug}-{kind}.png"));
+        match image::save_buffer(&path, pixels, w, h, image::ColorType::Rgba8) {
+            Ok(()) => written.push(path.display().to_string()),
+            Err(err) => written.push(format!("{} not written: {err}", path.display())),
+        }
+    }
+    format!("frames: {}", written.join(", "))
+}
+
+/// The frame after the drag, dimmed, with the band outlined in yellow, the
+/// source band (the band less the drag) outlined in blue, and every band
+/// pixel that does not match its source in red.
+fn diff_image(before: &[u8], after: &[u8], area: Rectangle, shift: (usize, usize)) -> Vec<u8> {
+    let width = WINDOW.width as usize;
+    let at = |x: usize, y: usize| (y * width + x) * 4;
+    let mut out: Vec<u8> = after
+        .chunks_exact(4)
+        .flat_map(|p| [p[0] / 4, p[1] / 4, p[2] / 4, 255])
+        .collect();
+    let (x0, y0) = (area.x as usize, area.y as usize);
+    let (x1, y1) = (x0 + area.width as usize, y0 + area.height as usize);
+    let mut paint = |x: usize, y: usize, rgb: [u8; 3]| {
+        let i = at(x, y);
+        if let Some(px) = out.get_mut(i..i + 3) {
+            px.copy_from_slice(&rgb);
+        }
+    };
+    let outline = |paint: &mut dyn FnMut(usize, usize, [u8; 3]),
+                   (ax, ay, bx, by): (usize, usize, usize, usize),
+                   rgb: [u8; 3]| {
+        let (ax, ay) = (ax.saturating_sub(1), ay.saturating_sub(1));
+        for x in ax..=bx {
+            paint(x, ay, rgb);
+            paint(x, by, rgb);
+        }
+        for y in ay..=by {
+            paint(ax, y, rgb);
+            paint(bx, y, rgb);
+        }
+    };
+    outline(
+        &mut paint,
+        (x0 - shift.0, y0 - shift.1, x1 - shift.0, y1 - shift.1),
+        [80, 140, 255],
     );
-    let (off, total) = mismatched_pixels(&frames[0], &frames[3], area, (37, 23));
-    assert!(
-        off <= total / 50,
-        "{what}: the drawing did not follow the pointer 1:1 ({off} of {total} pixels off in {area:?})"
-    );
+    outline(&mut paint, (x0, y0, x1, y1), [255, 220, 0]);
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let (i, j) = (at(x, y), at(x - shift.0, y - shift.1));
+            if differs(&after[i..i + 3], &before[j..j + 3]) {
+                paint(x, y, [255, 0, 0]);
+            }
+        }
+    }
+    out
 }
 
 fn panel_previews_pan(side: PanelPosition) {

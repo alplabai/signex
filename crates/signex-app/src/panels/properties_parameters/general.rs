@@ -1,26 +1,30 @@
-//! Properties panel views — Custom Selection Filters section and the
-//! General + Page Options tab (`view_properties_general`) — plus the
-//! filter-tab / preset-chip / segmented-button chrome the Properties views
-//! use. The sheet's parameters live in the Parameters tab
-//! (`parameters_tab`).
+//! Properties panel views — the General tab of Document Options
+//! (`view_properties_general`: General, Page Options, Net Classes and the
+//! Custom Selection Filters section) — plus the filter-tab / preset-chip /
+//! segmented-button chrome the Properties views use. The sheet's parameters
+//! live in the Parameters tab (`parameters_tab`), Page Options in
+//! `page_options`.
 
 use super::super::*;
-use crate::choice::{Choice, chosen};
-use crate::panels::PaperEdge;
+use super::doc_rows::{enable_box, label_row, segmented_row, unless_off};
+use super::document_options::{hover_row, illustration_view};
+use super::grid_illustration::{GridFacts, HOTSPOTS, SNAP_GRID, VISIBLE_GRID, grid_illustration};
+use crate::choice::Choice;
 use crate::panels::form_look;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
-use signex_i18n::{I18n, RenderTranslatable, UserText, ids, t};
-use signex_types::schematic::{SheetOrientation, SheetSize};
+use signex_i18n::{I18n, UserText, ids, t};
+use signex_types::schematic::SheetOrientation;
 use signex_widgets::Label;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 /// The catalog name of a page orientation.
-fn orientation_label(orientation: SheetOrientation) -> signex_i18n::MessageId {
+pub(super) fn orientation_label(orientation: SheetOrientation) -> signex_i18n::MessageId {
     match orientation {
         SheetOrientation::Landscape => ids::PROPERTIES_ORIENTATION_LANDSCAPE,
         SheetOrientation::Portrait => ids::PROPERTIES_ORIENTATION_PORTRAIT,
@@ -28,7 +32,7 @@ fn orientation_label(orientation: SheetOrientation) -> signex_i18n::MessageId {
 }
 
 /// The catalog name of a page origin.
-fn origin_label(origin: PageOrigin) -> signex_i18n::MessageId {
+pub(super) fn origin_label(origin: PageOrigin) -> signex_i18n::MessageId {
     match origin {
         PageOrigin::UpperLeft => ids::PROPERTIES_ORIGIN_UPPER_LEFT,
         PageOrigin::LowerLeft => ids::PROPERTIES_ORIGIN_LOWER_LEFT,
@@ -192,350 +196,188 @@ fn selection_filters_body<'a>(
     c
 }
 
-pub fn view_properties_general<'a>(
+/// The grid pitch pick list in `unit`; picking reports the pitch in mm.
+fn grid_pick<'a>(
+    current_mm: f32,
+    unit: Unit,
+    on_size: impl Fn(f32) -> PanelMsg + 'a,
+) -> Element<'a, PanelMsg> {
+    use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZE_LABELS_MIL, GRID_SIZES_MM};
+    let labels: &'static [&'static str] = if unit == Unit::Mil {
+        GRID_SIZE_LABELS_MIL
+    } else {
+        GRID_SIZE_LABELS
+    };
+    let selected: Option<&'static str> = GRID_SIZES_MM
+        .iter()
+        .zip(labels.iter())
+        .find(|(size, _)| (**size - current_mm).abs() < 1e-4)
+        .map(|(_, label)| *label);
+    // The pitches with their unit symbol (mm, mil), not language.
+    iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
+        .graphite()
+        .on_select(move |picked: &'static str| {
+            let mm = GRID_SIZE_LABELS
+                .iter()
+                .chain(GRID_SIZE_LABELS_MIL.iter())
+                .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
+                .find(|(l, _)| **l == picked)
+                .map_or(2.54, |(_, v)| *v);
+            on_size(mm)
+        })
+        .padding([SP.xs, 6.0])
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// Visible Grid / Snap Grid: the enable box first, in the label column; the
+/// pitch greys and takes no input while the box is off.
+fn grid_row<'a>(
     ctx: &'a PanelContext,
-    primary: Color,
+    label: signex_i18n::Localized,
+    is_on: bool,
+    on_toggle: PanelMsg,
+    current_mm: f32,
+    on_size: impl Fn(f32) -> PanelMsg + 'a,
+) -> Element<'a, PanelMsg> {
+    label_row(
+        enable_box(label, is_on, on_toggle),
+        unless_off(is_on, &ctx.tokens, grid_pick(current_mm, ctx.unit, on_size)),
+    )
+}
+
+/// The General section: the Grid and snap illustration, then one row per
+/// setting.
+fn general_section<'a>(
+    ctx: &'a PanelContext,
+    palette: PanelPalette,
 ) -> Column<Element<'a, PanelMsg>> {
     let i18n: &'a I18n = &ctx.i18n;
-    // Graphite muted ink for labels and hints, on the shared label column.
     let muted = crate::styles::tokens::resolve(&ctx.tokens).ink3;
-    let hairline = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
-    // Derive button/input colors from tokens (Copy values captured in closures)
-    let palette = PanelPalette::from_tokens(&ctx.tokens);
-    let PanelPalette {
-        input_bg,
-        input_bdr,
-        panel_bg,
-        ..
-    } = palette;
+    let hover = &ctx.document_options.hover;
+    let facts = GridFacts {
+        unit: ctx.unit,
+        visible_grid_mm: ctx.visible_grid_mm,
+        snap_grid_mm: ctx.grid_size_mm,
+        grid_visible: ctx.grid_visible,
+        snap_enabled: ctx.snap_enabled,
+        snap_hotspots: ctx.snap_hotspots,
+    };
+    let mut c: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
+    c = c.push(illustration_view(
+        grid_illustration(&facts, i18n),
+        hover,
+        &ctx.tokens,
+    ));
+    c = c.push(segmented_row(
+        t!(i18n, ids::PANELS_PROPERTIES_UNITS),
+        vec![
+            (Unit::Mm, t!(i18n, ids::PROPERTIES_UNIT_MM).into()),
+            (Unit::Mil, t!(i18n, ids::PROPERTIES_UNIT_MILS).into()),
+        ],
+        if ctx.unit == Unit::Mil {
+            Unit::Mil
+        } else {
+            Unit::Mm
+        },
+        &ctx.tokens,
+        PanelMsg::SetUnit,
+    ));
+    let visible = grid_row(
+        ctx,
+        t!(i18n, ids::PROPERTIES_VISIBLE_GRID),
+        ctx.grid_visible,
+        PanelMsg::ToggleGrid,
+        ctx.visible_grid_mm,
+        PanelMsg::SetVisibleGridSize,
+    );
+    c = c.push(hover_row(VISIBLE_GRID, hover, &ctx.tokens, visible));
+    let snap = grid_row(
+        ctx,
+        t!(i18n, ids::PROPERTIES_SNAP_GRID),
+        ctx.snap_enabled,
+        PanelMsg::ToggleSnap,
+        ctx.grid_size_mm,
+        PanelMsg::SetGridSize,
+    );
+    c = c.push(hover_row(SNAP_GRID, hover, &ctx.tokens, snap));
+    let hotspots = form_check_row_shortcut(
+        t!(i18n, ids::PROPERTIES_SNAP_TO_HOTSPOTS),
+        ctx.snap_hotspots,
+        PanelMsg::ToggleSnapHotspots,
+        "Shift+E",
+        muted,
+    );
+    c = c.push(hover_row(HOTSPOTS, hover, &ctx.tokens, hotspots));
+    c = c.push(form_font_link_row(
+        t!(i18n, ids::PROPERTIES_CANVAS_FONT),
+        &ctx.canvas_font_name,
+        ctx.canvas_font_size,
+        ctx.canvas_font_bold,
+        ctx.canvas_font_italic,
+        muted,
+    ));
+    if ctx.canvas_font_popup_open {
+        c = c.push(
+            container(canvas_font_popup(
+                &ctx.canvas_font_name,
+                ctx.canvas_font_size,
+                ctx.canvas_font_bold,
+                ctx.canvas_font_italic,
+                muted,
+                palette,
+                i18n,
+            ))
+            .padding(iced::Padding {
+                top: 0.0,
+                right: 16.0,
+                bottom: 4.0,
+                left: 8.0,
+            })
+            .boxed(),
+        );
+    }
+    let sheet_colors = crate::panels::SchematicSheetColor::options()
+        .into_iter()
+        .map(|color| sheet_color_choice(i18n, color))
+        .collect();
+    c.push(form_choice_row(
+        t!(i18n, ids::PROPERTIES_SHEET_COLOR),
+        sheet_colors,
+        sheet_color_choice(i18n, ctx.sheet_color),
+        PanelMsg::SetSheetColor,
+        muted,
+    ))
+}
 
+pub fn view_properties_general<'a>(
+    ctx: &'a PanelContext,
+    _primary: Color,
+) -> Column<Element<'a, PanelMsg>> {
+    let hairline = crate::styles::tokens::resolve(&ctx.tokens).line_soft;
+    let palette = PanelPalette::from_tokens(&ctx.tokens);
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
 
-    // General (collapsible)
-    {
-        let unit = ctx.unit;
-        let grid_size_mm = ctx.grid_size_mm;
-        let visible_grid_mm = ctx.visible_grid_mm;
-        let snap_enabled = ctx.snap_enabled;
-        let snap_hotspots = ctx.snap_hotspots;
-        let grid_visible = ctx.grid_visible;
-        let canvas_font_name = ctx.canvas_font_name.clone();
-        let canvas_font_size = ctx.canvas_font_size;
-        let canvas_font_bold = ctx.canvas_font_bold;
-        let canvas_font_italic = ctx.canvas_font_italic;
-        let canvas_font_popup_open = ctx.canvas_font_popup_open;
-        let sheet_color = ctx.sheet_color;
-        col = col.push(
-            ctx.collapsible(
-                "prop_general",
-                ids::PROPERTIES_SECTION_GENERAL,
-                &ctx.collapsed_sections,
-                move || {
-                    let mut c: Column<Element<'a, PanelMsg>> =
-                        Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_label(t!(i18n, ids::PANELS_PROPERTIES_UNITS)));
-                    c = c.push(
-                        container(
-                            row![
-                                seg_btn(
-                                    t!(i18n, ids::PROPERTIES_UNIT_MM),
-                                    unit == Unit::Mm,
-                                    PanelMsg::SetUnit(Unit::Mm),
-                                    input_bg,
-                                    primary,
-                                    muted,
-                                ),
-                                seg_btn(
-                                    t!(i18n, ids::PROPERTIES_UNIT_MILS),
-                                    unit == Unit::Mil,
-                                    PanelMsg::SetUnit(Unit::Mil),
-                                    input_bg,
-                                    primary,
-                                    muted,
-                                ),
-                            ]
-                            .spacing(0.0)
-                            .width(Length::Fill),
-                        )
-                        .padding([SP.xs, SP.m])
-                        .style(form_look::segmented_frame)
-                        .boxed(),
-                    );
-                    // Altium-style: Visible Grid and Snap Grid are independent
-                    c = c.push(form_grid_row(
-                        t!(i18n, ids::PROPERTIES_VISIBLE_GRID),
-                        visible_grid_mm,
-                        unit,
-                        false,
-                        PanelMsg::SetVisibleGridSize,
-                        muted,
-                        grid_visible,
-                        PanelMsg::ToggleGrid,
-                    ));
-                    c = c.push(form_grid_row(
-                        t!(i18n, ids::PROPERTIES_SNAP_GRID),
-                        grid_size_mm,
-                        unit,
-                        true,
-                        PanelMsg::SetGridSize,
-                        muted,
-                        snap_enabled,
-                        PanelMsg::ToggleSnap,
-                    ));
-                    c = c.push(form_check_row_shortcut(
-                        t!(i18n, ids::PROPERTIES_SNAP_TO_HOTSPOTS),
-                        snap_hotspots,
-                        PanelMsg::ToggleSnapHotspots,
-                        "Shift+E",
-                        muted,
-                    ));
-                    c = c.push(form_font_link_row(
-                        t!(i18n, ids::PROPERTIES_CANVAS_FONT),
-                        &canvas_font_name,
-                        canvas_font_size,
-                        canvas_font_bold,
-                        canvas_font_italic,
-                        muted,
-                    ));
-                    if canvas_font_popup_open {
-                        c = c.push(
-                            container(canvas_font_popup(
-                                &canvas_font_name,
-                                canvas_font_size,
-                                canvas_font_bold,
-                                canvas_font_italic,
-                                muted,
-                                palette,
-                                i18n,
-                            ))
-                            .padding(iced::Padding {
-                                top: 0.0,
-                                right: 16.0,
-                                bottom: 4.0,
-                                left: 8.0,
-                            })
-                            .boxed(),
-                        );
-                    }
-                    let sheet_colors = crate::panels::SchematicSheetColor::options()
-                        .into_iter()
-                        .map(|color| sheet_color_choice(i18n, color))
-                        .collect();
-                    c = c.push(form_choice_row(
-                        t!(i18n, ids::PROPERTIES_SHEET_COLOR),
-                        sheet_colors,
-                        sheet_color_choice(i18n, sheet_color),
-                        PanelMsg::SetSheetColor,
-                        muted,
-                    ));
-                    c
-                },
-            )
-            .boxed(),
-        );
-    }
+    col = col.push(
+        ctx.collapsible(
+            "prop_general",
+            ids::PROPERTIES_SECTION_GENERAL,
+            &ctx.collapsed_sections,
+            move || general_section(ctx, palette),
+        )
+        .boxed(),
+    );
 
-    // Page Options (collapsible)
     col = col.push(thin_sep(hairline));
-    {
-        let paper_size = ctx.paper_size.clone();
-        let format_mode = ctx.page_format_mode;
-        let sheet_frame = ctx.sheet_frame;
-        let origin = ctx.page_origin;
-        let document_font = ctx.document_font_family.clone();
-        col = col.push(
-            ctx.collapsible(
-                "prop_page_opts",
-                ids::PROPERTIES_SECTION_PAGE_OPTIONS,
-                &ctx.collapsed_sections,
-                move || {
-                    let mut c: Column<Element<'a, PanelMsg>> =
-                        Column::new().spacing(0).width(Length::Fill);
-                    c = c.push(form_label(t!(i18n, ids::PANELS_PROPERTIES_FORMATTING)));
-                    c = c.push(
-                        container(
-                            row![
-                                seg_btn(
-                                    t!(i18n, ids::PROPERTIES_FORMAT_TEMPLATE),
-                                    format_mode == PageFormatMode::Template,
-                                    PanelMsg::SetPageFormatMode(PageFormatMode::Template),
-                                    input_bg,
-                                    primary,
-                                    muted,
-                                ),
-                                seg_btn(
-                                    t!(i18n, ids::PROPERTIES_FORMAT_STANDARD),
-                                    format_mode == PageFormatMode::Standard,
-                                    PanelMsg::SetPageFormatMode(PageFormatMode::Standard),
-                                    input_bg,
-                                    primary,
-                                    muted,
-                                ),
-                                seg_btn(
-                                    t!(i18n, ids::PROPERTIES_FORMAT_CUSTOM),
-                                    format_mode == PageFormatMode::Custom,
-                                    PanelMsg::SetPageFormatMode(PageFormatMode::Custom),
-                                    input_bg,
-                                    primary,
-                                    muted,
-                                ),
-                            ]
-                            .spacing(0.0)
-                            .width(Length::Fill),
-                        )
-                        .padding([SP.xs, SP.m])
-                        .style(form_look::segmented_frame)
-                        .boxed(),
-                    );
-                    let (sheet_size, orientation) = SheetSize::parse(&paper_size);
-                    // Standard + Template modes share the size picker. Custom mode
-                    // replaces it with width/height inputs; both write the sheet's
-                    // own size through the engine, so the canvas, the PDF and the
-                    // saved file agree.
-                    match format_mode {
-                        PageFormatMode::Standard | PageFormatMode::Template => {
-                            let paper_options = paper_size_options();
-                            c = c.push(form_pick_row(
-                                t!(i18n, ids::PROPERTIES_PAPER),
-                                paper_options,
-                                SheetSize::parse(&paper_size)
-                                    .0
-                                    .token(SheetOrientation::Landscape),
-                                PanelMsg::SetPaperSize,
-                                muted,
-                            ));
-                            if matches!(format_mode, PageFormatMode::Template) {
-                                c = c.push(
-                                    container(
-                                        text(t!(i18n, ids::PANELS_PROPERTIES_TEMPLATE_DEFAULTS))
-                                            .size(TS.caption)
-                                            .color(muted),
-                                    )
-                                    .padding([0.0, SP.m])
-                                    .boxed(),
-                                );
-                            }
-                        }
-                        PageFormatMode::Custom => {
-                            let (w, h) = paper_dimensions(&paper_size);
-                            c = c.push(form_mm_edit_row(
-                                t!(i18n, ids::PROPERTIES_PAPER_WIDTH),
-                                w,
-                                ctx.title_block_sheet
-                                    .as_deref()
-                                    .and_then(|sheet| {
-                                        ctx.drafts.paper_edge_text(sheet, PaperEdge::Width)
-                                    })
-                                    .as_deref(),
-                                PaperEdge::Width,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                            c = c.push(form_mm_edit_row(
-                                t!(i18n, ids::PROPERTIES_PAPER_HEIGHT),
-                                h,
-                                ctx.title_block_sheet
-                                    .as_deref()
-                                    .and_then(|sheet| {
-                                        ctx.drafts.paper_edge_text(sheet, PaperEdge::Height)
-                                    })
-                                    .as_deref(),
-                                PaperEdge::Height,
-                                muted,
-                                input_bg,
-                                input_bdr,
-                            ));
-                        }
-                    }
-                    if sheet_size.is_recognized() {
-                        let orientations = Choice::named(
-                            &[SheetOrientation::Landscape, SheetOrientation::Portrait],
-                            orientation_label,
-                            i18n,
-                        );
-                        let current = chosen(&orientations, &orientation)
-                            .unwrap_or_else(|| orientations[0].clone());
-                        c = c.push(form_choice_row(
-                            t!(i18n, ids::PROPERTIES_ORIENTATION),
-                            orientations,
-                            current,
-                            PanelMsg::SetSheetOrientation,
-                            muted,
-                        ));
-                    }
-                    let (w, h) = paper_dimensions(&paper_size);
-                    // The sizes go in as `format!` wrote them and the text has no
-                    // isolation marks, so English reads byte for byte as before.
-                    let dims = signex_i18n::Translatable::new(ids::PROPERTIES_PAPER_DIMENSIONS)
-                        .arg("width", format!("{w:.0}"))
-                        .arg("height", format!("{h:.0}"));
-                    c = c.push(
-                        container(text(dims.localized(i18n)).size(TS.caption).color(muted))
-                            .padding([3.0, SP.m])
-                            .boxed(),
-                    );
-                    c = c.push(form_label(t!(i18n, ids::PANELS_PROPERTIES_BORDER_ZONES)));
-                    c = c.push(form_check_row(
-                        t!(i18n, ids::PROPERTIES_SHOW_BORDER),
-                        sheet_frame.show_border,
-                        PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(
-                            !sheet_frame.show_border,
-                        )),
-                        muted,
-                        panel_bg,
-                    ));
-                    c = c.push(form_check_row(
-                        t!(i18n, ids::PROPERTIES_SHOW_TITLE_BLOCK),
-                        sheet_frame.show_title_block,
-                        PanelMsg::EditSheetFrame(SheetFrameEdit::ShowTitleBlock(
-                            !sheet_frame.show_title_block,
-                        )),
-                        muted,
-                        panel_bg,
-                    ));
-                    let zone_counts: Vec<u8> = (0..=signex_types::schematic::MAX_ZONES).collect();
-                    c = c.push(form_pick_row(
-                        t!(i18n, ids::PROPERTIES_ZONES_VERTICAL),
-                        zone_counts.clone(),
-                        sheet_frame.vertical_zones,
-                        |n| PanelMsg::EditSheetFrame(SheetFrameEdit::VerticalZones(n)),
-                        muted,
-                    ));
-                    c = c.push(form_pick_row(
-                        t!(i18n, ids::PROPERTIES_ZONES_HORIZONTAL),
-                        zone_counts,
-                        sheet_frame.horizontal_zones,
-                        |n| PanelMsg::EditSheetFrame(SheetFrameEdit::HorizontalZones(n)),
-                        muted,
-                    ));
-                    let origins = Choice::named(
-                        &[PageOrigin::UpperLeft, PageOrigin::LowerLeft],
-                        origin_label,
-                        i18n,
-                    );
-                    let current = chosen(&origins, &origin).unwrap_or_else(|| origins[0].clone());
-                    c = c.push(form_choice_row(
-                        t!(i18n, ids::PROPERTIES_ORIGIN),
-                        origins,
-                        current,
-                        PanelMsg::SetPageOrigin,
-                        muted,
-                    ));
-                    c = c.push(form_label(t!(i18n, ids::PANELS_PROPERTIES_TEXT)));
-                    c = c.push(crate::panels::element_properties::font_family_row(
-                        t!(i18n, ids::PROPERTIES_DEFAULT_FONT),
-                        document_font.as_deref(),
-                        muted,
-                        PanelMsg::SetDocumentFontFamily,
-                        i18n,
-                    ));
-                    c
-                },
-            )
-            .boxed(),
-        );
-    }
+    col = col.push(
+        ctx.collapsible(
+            "prop_page_opts",
+            ids::PROPERTIES_SECTION_PAGE_OPTIONS,
+            &ctx.collapsed_sections,
+            move || super::page_options::page_options_section(ctx),
+        )
+        .boxed(),
+    );
 
     col = col.push(thin_sep(hairline));
     col = col.push(view_net_classes_section(ctx).boxed());
