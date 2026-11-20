@@ -376,6 +376,19 @@ fn drive_with(
     (out, frames)
 }
 
+/// Largest per-channel difference that is still the same pixel: an
+/// antialiased edge rounds 1 level apart at two pan offsets, a real 1 px
+/// shift moves a channel by 40 or more.
+const CHANNEL_TOLERANCE: u8 = 4;
+
+/// Whether two RGB pixels differ by more than [`CHANNEL_TOLERANCE`] in any
+/// channel.
+fn differs(a: &[u8], b: &[u8]) -> bool {
+    a.iter()
+        .zip(b)
+        .any(|(x, y)| x.abs_diff(*y) > CHANNEL_TOLERANCE)
+}
+
 /// Pixels inside `area` of `frame` that differ from `before` shifted by
 /// `shift` px, and the pixel count of `area`. A zero shift counts what
 /// changed; the drag's shift counts what did not follow the pointer.
@@ -393,7 +406,7 @@ fn mismatched_pixels(
     for y in y0..y1 {
         for x in x0..x1 {
             let (i, j) = (at(x, y), at(x - shift.0, y - shift.1));
-            if frame[i..i + 3] != before[j..j + 3] {
+            if differs(&frame[i..i + 3], &before[j..j + 3]) {
                 differ += 1;
             }
         }
@@ -641,7 +654,7 @@ fn diff_image(before: &[u8], after: &[u8], area: Rectangle, shift: (usize, usize
     for y in y0..y1 {
         for x in x0..x1 {
             let (i, j) = (at(x, y), at(x - shift.0, y - shift.1));
-            if after[i..i + 3] != before[j..j + 3] {
+            if differs(&after[i..i + 3], &before[j..j + 3]) {
                 paint(x, y, [255, 0, 0]);
             }
         }
