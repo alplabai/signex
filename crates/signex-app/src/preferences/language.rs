@@ -39,8 +39,8 @@ const BUTTONS: [MessageId; 3] = [
     ids::DIALOG_BUTTON_SAVE_ALL,
 ];
 
-/// A real caption: the ERC panel's stale-results line.
-const CAPTION: MessageId = ids::PANELS_ERC_STALE;
+/// A real caption: the ERC panel's stale-results banner.
+const CAPTION: MessageId = ids::PANELS_ERC_STALE_BANNER;
 
 /// The Language page.
 pub(super) fn content_language<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
