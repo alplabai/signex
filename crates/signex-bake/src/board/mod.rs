@@ -8,6 +8,7 @@
 //! command. Construction and centerline entities never bake
 //! (`Entity::bake_skipped`). Rules and formats: `docs/PCB_SKETCH.md`.
 
+mod checks;
 mod error;
 mod features;
 mod geometry;
@@ -15,6 +16,10 @@ mod geometry;
 #[cfg(test)]
 mod tests;
 
+pub use checks::{
+    CheckState, Finding, NotChecked, OutlineCheck, OutlineChecks, outline_checks,
+    outline_checks_after,
+};
 pub use error::BoardBakeError;
 
 use std::collections::HashMap;
@@ -22,6 +27,7 @@ use std::collections::HashMap;
 use signex_sketch::Solver;
 use signex_sketch::baked_kinds::BakedKind;
 use signex_sketch::entity::Entity;
+use signex_sketch::id::SketchEntityId;
 use signex_sketch::parameter::resolve;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
@@ -69,6 +75,26 @@ pub fn baked_count(baked: &BakedBoard, kind: BakedKind) -> Option<usize> {
         BakedKind::VScores => baked.v_scores.len(),
         _ => return None,
     })
+}
+
+impl BoardBakeError {
+    /// The sketch entity the refusal is about, for the bake preview to
+    /// select; `None` when it is about the whole sketch.
+    pub fn place(&self) -> Option<SketchEntityId> {
+        match *self {
+            Self::OpenProfile { edge, .. }
+            | Self::BranchingProfile { edge, .. }
+            | Self::UntraceableProfile { edge, .. } => Some(edge),
+            Self::NotAnEdge { entity, .. }
+            | Self::HoleNotACircle { entity }
+            | Self::HoleDrill { entity, .. }
+            | Self::UnknownNet { entity, .. }
+            | Self::VScoreNotALine { entity }
+            | Self::Expression { entity, .. } => Some(entity),
+            Self::MissingPoint { point, .. } => Some(point),
+            Self::Parameters(_) | Self::Solve(_) | Self::OutlineCount { .. } => None,
+        }
+    }
 }
 
 /// What every bake stage reads.
