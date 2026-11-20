@@ -737,10 +737,9 @@ pub struct LibraryState {
     /// same file does not start a second copy.
     pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
     /// The Properties panel state of each symbol editor (mockup rows 122
-    /// and 123): its
-    /// tab, Pins filter, part chip and illustration hover, by `.snxsym`
-    /// path. Session only; an entry outlives its tab so a reopened file
-    /// shows the same tab.
+    /// and 123): its tab, Pins filter, part chip and illustration hover, by
+    /// `.snxsym` path. Session only; an entry outlives its tab so a
+    /// reopened file shows the same tab.
     pub symbol_props: HashMap<PathBuf, crate::library::editor::symbol::state::SymbolPropsUi>,
 }
 

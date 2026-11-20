@@ -148,6 +148,7 @@ impl Signex {
                         own.as_ref(),
                         &libraries,
                     )
+                    .map_err(|e| e.to_string())
                 })
                 .await
                 .unwrap_or_else(|e| Err(format!("details worker failed: {e}")))

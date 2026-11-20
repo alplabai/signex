@@ -1,6 +1,5 @@
 //! The Library panel with nothing to browse (mockup row 119): a centred
-//! card that
-//! says so, with Open Library… as its action.
+//! card that says so, with Open Library… as its action.
 
 use iced::widget::{column, container};
 use iced::{Alignment, Border, Element, Length, Theme, Widget};

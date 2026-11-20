@@ -144,6 +144,7 @@ impl Signex {
 mod tests {
     use crate::app::Signex;
     use crate::library::state::{BrowserPreviewError, ComponentsPanelRowKey, LibraryBrowserState};
+    use crate::panels::components_panel::details::load::RowReadError;
 
     /// A failed read keeps its typed reason, never English text; a result
     /// of an older read is dropped.
@@ -176,17 +177,15 @@ mod tests {
         );
         assert_eq!(app.library.library_browsers[&root].preview_error, None);
         assert!(app.library.library_browsers[&root].preview.in_flight());
-        let _ = app.handle_browser_preview_loaded(
-            key,
-            newer,
-            Err(BrowserPreviewError::Unreadable("row 7 is gone".into())),
-        );
+        let unreadable = BrowserPreviewError::Unreadable(RowReadError {
+            table: key.table.clone(),
+            row_id: key.row_id,
+            reason: "row 7 is gone".into(),
+        });
+        let _ = app.handle_browser_preview_loaded(key, newer, Err(unreadable.clone()));
         let browser = &app.library.library_browsers[&root];
         assert!(!browser.preview.in_flight());
-        assert_eq!(
-            browser.preview_error,
-            Some(BrowserPreviewError::Unreadable("row 7 is gone".into()))
-        );
+        assert_eq!(browser.preview_error, Some(unreadable));
         assert_eq!(browser.preview.error, None, "no text stored in place of it");
     }
 

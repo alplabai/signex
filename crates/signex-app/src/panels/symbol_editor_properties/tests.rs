@@ -1,7 +1,6 @@
 //! The symbol editor's Properties panel (mockup rows 122 and 123): the UUID
-//! row, the
-//! Pins tab list and its filter, chips and issue marks, the way back from
-//! Pin properties, and what the illustrations leave out.
+//! row, the Pins tab list and its filter, chips and issue marks, the way
+//! back from Pin properties, and what the illustrations leave out.
 
 use iced::widget::Column;
 use iced::{Element, Size, Widget as _};

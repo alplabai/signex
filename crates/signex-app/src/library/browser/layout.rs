@@ -33,9 +33,9 @@ impl Slot<'_> {
 }
 
 /// Position of a column in the Graphite order (mockup row 118): Internal
-/// PN, the Sym
-/// and Fpt status columns, Value, MPN, Manufacturer, Description, Lifecycle,
-/// Price, Updated, then the other parameters and Tags.
+/// PN, the Sym and Fpt status columns, Value, MPN, Manufacturer,
+/// Description, Lifecycle, Price, Updated, then the other parameters and
+/// Tags.
 fn graphite_rank(kind: &ColumnKind) -> u8 {
     match kind {
         ColumnKind::InternalPn => 0,

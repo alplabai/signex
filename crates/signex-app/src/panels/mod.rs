@@ -297,8 +297,8 @@ impl PanelKind {
     }
 
     /// The Library panel kind an alias row opens it in (alias rows kept by
-    /// Caner, 2026-11-20): SCH
-    /// Library opens Symbols and Footprint Library opens Footprints.
+    /// Caner, 2026-11-20): SCH Library opens Symbols and Footprint Library
+    /// opens Footprints.
     pub fn library_alias(self) -> Option<crate::library::state::LibraryPanelKind> {
         use crate::library::state::LibraryPanelKind;
         match self {

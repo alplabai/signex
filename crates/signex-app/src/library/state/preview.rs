@@ -62,8 +62,7 @@ pub enum PreviewTab {
 
 impl PreviewTab {
     /// The Graphite tab strip, in display order (mockup row 128: General,
-    /// Parameters,
-    /// Supply, Datasheet, Simulation, Pin Map, Alternates).
+    /// Parameters, Supply, Datasheet, Simulation, Pin Map, Alternates).
     pub const GRAPHITE_ORDER: &'static [PreviewTab] = &[
         PreviewTab::Preview,
         PreviewTab::Parameters,

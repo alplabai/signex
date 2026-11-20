@@ -1,8 +1,8 @@
 //! The Pins tab (mockup row 122): the open symbol's pins as a compact
-//! list, with a
-//! filter by number or name, part chips and `+ Pin`. A row press selects
-//! the pin, so Properties shows the Pin properties and the canvas the pin.
-//! A duplicate number marks both rows, an empty name is flagged.
+//! list, with a filter by number or name, part chips and `+ Pin`. A row
+//! press selects the pin, so Properties shows the Pin properties and the
+//! canvas the pin. A duplicate number marks both rows, an empty name is
+//! flagged.
 
 use iced::widget::{Column, Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
