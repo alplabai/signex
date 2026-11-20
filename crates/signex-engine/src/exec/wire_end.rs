@@ -44,12 +44,85 @@ impl Engine {
             Some(false) => Point::new(old.x, to.y),
             None => to,
         };
+        Ok(self.put_wire_end(before, index, start, to, keep_wires))
+    }
+
+    /// `Command::SetRunEnd`: one end of a wire or bus exactly at `to`, the
+    /// other kept; nothing attached follows. A wire is reconciled as a
+    /// placed one is (T junctions both ways, collinear fold).
+    pub(crate) fn set_run_end(
+        &mut self,
+        before: SchematicSheet,
+        run: SelectedItem,
+        start: bool,
+        to: Point,
+    ) -> Result<CommandResult, EngineError> {
+        Ok(match run.kind {
+            SelectedKind::Wire => match self.document.wires.iter().position(|w| w.uuid == run.uuid)
+            {
+                Some(index) => self.put_wire_end(before, index, start, to, false),
+                None => CommandResult::unchanged(),
+            },
+            SelectedKind::Bus => self.set_bus_end(before, run.uuid, start, to),
+            _ => CommandResult::unchanged(),
+        })
+    }
+
+    /// Put an end of the bus `id` at `to`; a point on its other end, or
+    /// where the end already is, changes nothing.
+    fn set_bus_end(
+        &mut self,
+        before: SchematicSheet,
+        id: Uuid,
+        start: bool,
+        to: Point,
+    ) -> CommandResult {
+        let Some(bus) = self.document.buses.iter_mut().find(|b| b.uuid == id) else {
+            return CommandResult::unchanged();
+        };
+        let other = if start { bus.end } else { bus.start };
+        let slot = if start { &mut bus.start } else { &mut bus.end };
+        let target = pt_key(&to);
+        if !(to.x.is_finite() && to.y.is_finite())
+            || target == pt_key(slot)
+            || target == pt_key(&other)
+        {
+            return CommandResult::unchanged();
+        }
+        *slot = to;
+        let patch_pair = PatchPair {
+            semantic: SemanticPatch::SelectionMoved,
+            document: DocumentPatch::BUSES,
+        };
+        self.record_history(before, patch_pair);
+        CommandResult::changed(patch_pair)
+    }
+
+    /// The end of the wire at `index` to `to`: the step the grip and a typed
+    /// end share. With `keep_wires` the wires attached at the old end follow
+    /// (see [`Self::guarded_grip`]). One history entry.
+    fn put_wire_end(
+        &mut self,
+        before: SchematicSheet,
+        index: usize,
+        start: bool,
+        to: Point,
+        keep_wires: bool,
+    ) -> CommandResult {
+        let (wire, old, other) = {
+            let w = &self.document.wires[index];
+            if start {
+                (w.uuid, w.start, w.end)
+            } else {
+                (w.uuid, w.end, w.start)
+            }
+        };
         let target = pt_key(&to);
         if !(to.x.is_finite() && to.y.is_finite())
             || target == pt_key(&old)
             || target == pt_key(&other)
         {
-            return Ok(CommandResult::unchanged());
+            return CommandResult::unchanged();
         }
         let pre_wires = self.pre_wires();
         let dragged = &mut self.document.wires[index];
@@ -70,7 +143,7 @@ impl Engine {
             document: patch,
         };
         self.record_history(before, patch_pair);
-        Ok(CommandResult::changed(patch_pair))
+        CommandResult::changed(patch_pair)
     }
 
     /// The grip's follow, checked as committed (see the module docs);
