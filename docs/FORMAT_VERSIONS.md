@@ -34,7 +34,7 @@ format declares only its own table row below.
 | `.snxpcb` | `snxpcb/1.4`, or `1.5` with layer colours | `snxpcb/1` to `snxpcb/1.5` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
-| `.snxfpt` | `snxfpt/1.1` | `snxfpt/1`, `snxfpt/1.1` | refused | refused |
+| `.snxfpt` | `snxfpt/1.1`, or `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides) | `snxfpt/1`, `1.1`, `1.2` | refused | refused |
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content | `snxsym/v1`, `v2`, `v3` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
 
