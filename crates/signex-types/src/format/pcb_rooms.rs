@@ -2,11 +2,10 @@
 //! rooms (`pcb::room`).
 //!
 //! Written only when the board has rooms, so a board without any re-saves
-//! byte-identical and a file from before rooms loads unchanged. The array is
-//! a top-level key, so a `snxpcb/1.4` build without rooms keeps it as a
-//! foreign manifest key and writes it back (`format::unknown`); the format
-//! token is not raised. Lengths are integer nm like every other on-disk
-//! geometry. See `docs/PCB_ROOMS.md`, "File format".
+//! byte-identical and a file from before rooms loads unchanged. A board with
+//! rooms writes `snxpcb/1.6` (`format::snxpcb_token`), so a build that knows
+//! only 1.5 opens it read-only. Lengths are integer nm like every other
+//! on-disk geometry. See `docs/PCB_ROOMS.md`, "File format".
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
