@@ -390,25 +390,6 @@ pub fn view_properties_general<'a>(
     col
 }
 
-/// Properties panel tab button (General / Parameters).
-pub fn props_tab_btn(
-    label: signex_i18n::Localized,
-    active: bool,
-    msg: PanelMsg,
-    text_active: Color,
-    text_inactive: Color,
-) -> Element<'static, PanelMsg> {
-    let text_c = if active { text_active } else { text_inactive };
-    signex_widgets::button(text(label).size(TS.body).color(text_c))
-        .padding([SP.s, SP.l])
-        .on_press(msg)
-        .style(move |theme: &Theme, status: iced::widget::button::Status| {
-            let hover = matches!(status, iced::widget::button::Status::Hovered);
-            form_look::tab_chip(theme, active, hover)
-        })
-        .boxed()
-}
-
 /// Graphite filter chip: accent-soft fill when on, hairline outline when
 /// off, radius 7.
 pub(crate) fn graphite_filter_chip(
