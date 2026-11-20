@@ -289,6 +289,8 @@ mod tests {
     #[test]
     fn switching_to_a_board_closes_the_popover_and_esc_resets_the_tool() {
         let (mut app, window) = app_with_window();
+        // The first-run tour opens on a fresh app and would take the Esc.
+        app.ui_state.first_run_tour_open = false;
         for (name, kind) in [
             ("a.snxsch", crate::app::TabKind::Schematic),
             ("b.snxpcb", crate::app::TabKind::Pcb),
@@ -328,6 +330,8 @@ mod tests {
     #[test]
     fn a_popover_that_does_not_paint_claims_no_escape() {
         let (mut app, window) = app_with_window();
+        // The first-run tour opens on a fresh app and would take the Esc.
+        app.ui_state.first_run_tour_open = false;
         let _ = app.update(right_click(window));
         assert!(app.ui_state.grid_snap_popover.is_some());
         assert!(!app.grid_snap_popover_shown(), "no sheet in the window");
