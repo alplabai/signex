@@ -39,9 +39,14 @@ pub fn bar_items(
 
     use crate::library::editor::footprint::pads_active_bar;
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
-    let mut triggers = dropdown_trigger_items(editor, theme_id).into_iter();
-    let mut take = |n: usize| triggers.by_ref().take(n).collect::<Vec<_>>();
-    let (selection, placement, sketch) = (take(5), take(2), take(1));
+    let (mut selection, mut placement, mut sketch) = (Vec::new(), Vec::new(), Vec::new());
+    for (group, item) in dropdown_trigger_items(editor, theme_id) {
+        match group {
+            TriggerGroup::Selection => selection.push(item),
+            TriggerGroup::Placement => placement.push(item),
+            TriggerGroup::Sketch => sketch.push(item),
+        }
+    }
     let is_pads = editor.state.mode == EditorMode::Normal;
 
     // Selection: Filter, Snap, Move, Select, Align, then the Pads-mode
@@ -193,15 +198,23 @@ pub fn dropdown_overlay<'a>(
     Some(stack![backstop, panel_anchor].boxed())
 }
 
+/// The bar group a dropdown trigger sits in (mockup row 140).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TriggerGroup {
+    Selection,
+    Placement,
+    Sketch,
+}
+
 /// Build the 8 dropdown trigger buttons matching the schematic's
 /// pattern: left-click fires the default action (or toggles the
 /// menu when there's no obvious default — Filter / Snap), right-click
 /// opens the dropdown. Chevron indicator advertises the right-click
-/// secondary action.
+/// secondary action. Each carries the group it is drawn in.
 fn dropdown_trigger_items(
     editor: &FootprintDocument,
     tid: ThemeId,
-) -> Vec<ActiveBarItem<LibraryMessage>> {
+) -> Vec<(TriggerGroup, ActiveBarItem<LibraryMessage>)> {
     let path = editor.path.clone();
     let active = editor.state.active_bar_menu;
 
@@ -231,66 +244,91 @@ fn dropdown_trigger_items(
         })
     };
 
+    use TriggerGroup::{Placement, Selection, Sketch};
     vec![
-        dual(
-            "Selection Filter (left or right click for menu)",
-            ActiveBarIcon::Svg(ic::icon_filter(tid)),
-            FpActiveBarMenu::Filter,
-            None,
+        (
+            Selection,
+            dual(
+                "Selection Filter (left or right click for menu)",
+                ActiveBarIcon::Svg(ic::icon_filter(tid)),
+                FpActiveBarMenu::Filter,
+                None,
+            ),
         ),
-        dual(
-            "Snap Options (left or right click for menu)",
-            ActiveBarIcon::Svg(ic::icon_dd_align_grid(tid)),
-            FpActiveBarMenu::Snap,
-            None,
+        (
+            Selection,
+            dual(
+                "Snap Options (left or right click for menu)",
+                ActiveBarIcon::Svg(ic::icon_dd_align_grid(tid)),
+                FpActiveBarMenu::Snap,
+                None,
+            ),
         ),
-        dual(
-            "Move (right-click for move / transform menu)",
-            ActiveBarIcon::Svg(ic::icon_move(tid)),
-            FpActiveBarMenu::Place,
-            // A footprint has no separate move tool: pad movement IS
-            // drag-under-Select (see `active_bar_dropdowns.rs`'s
-            // `place_entries` — every row in this menu arms Select).
-            // Left-click therefore arms Select directly instead of
-            // routing through `ActiveBarStub`, which only logged
-            // "coming soon" and never opened the menu either.
-            Some(FootprintEditorMsg::SetPadsTool(
-                crate::library::editor::footprint::state::PadsTool::Select,
-            )),
+        (
+            Selection,
+            dual(
+                "Move (right-click for move / transform menu)",
+                ActiveBarIcon::Svg(ic::icon_move(tid)),
+                FpActiveBarMenu::Place,
+                // A footprint has no separate move tool: pad movement IS
+                // drag-under-Select (see `active_bar_dropdowns.rs`'s
+                // `place_entries` — every row in this menu arms Select).
+                // Left-click therefore arms Select directly instead of
+                // routing through `ActiveBarStub`, which only logged
+                // "coming soon" and never opened the menu either.
+                Some(FootprintEditorMsg::SetPadsTool(
+                    crate::library::editor::footprint::state::PadsTool::Select,
+                )),
+            ),
         ),
-        dual(
-            "Select (right-click for selection-mode menu)",
-            ActiveBarIcon::Svg(ic::icon_select(tid)),
-            FpActiveBarMenu::Select,
-            Some(FootprintEditorMsg::SetPadsTool(
-                crate::library::editor::footprint::state::PadsTool::Select,
-            )),
+        (
+            Selection,
+            dual(
+                "Select (right-click for selection-mode menu)",
+                ActiveBarIcon::Svg(ic::icon_select(tid)),
+                FpActiveBarMenu::Select,
+                Some(FootprintEditorMsg::SetPadsTool(
+                    crate::library::editor::footprint::state::PadsTool::Select,
+                )),
+            ),
         ),
-        dual(
-            "Align / Distribute (right-click for menu)",
-            ActiveBarIcon::Svg(ic::icon_align(tid)),
-            FpActiveBarMenu::Align,
-            Some(FootprintEditorMsg::ActiveBarAlignSelectionToGrid),
+        (
+            Selection,
+            dual(
+                "Align / Distribute (right-click for menu)",
+                ActiveBarIcon::Svg(ic::icon_align(tid)),
+                FpActiveBarMenu::Align,
+                Some(FootprintEditorMsg::ActiveBarAlignSelectionToGrid),
+            ),
         ),
-        dual(
-            "3D Body (left or right click for menu)",
-            ActiveBarIcon::Svg(ic::icon_dd_graphic(tid)),
-            FpActiveBarMenu::Body3d,
-            None,
+        (
+            Placement,
+            dual(
+                "3D Body (left or right click for menu)",
+                ActiveBarIcon::Svg(ic::icon_dd_graphic(tid)),
+                FpActiveBarMenu::Body3d,
+                None,
+            ),
         ),
-        dual(
-            "Text (left-click places String, right-click for menu)",
-            ActiveBarIcon::Svg(ic::icon_text(tid)),
-            FpActiveBarMenu::Text,
-            Some(FootprintEditorMsg::SetPadsTool(
-                crate::library::editor::footprint::state::PadsTool::PlaceString,
-            )),
+        (
+            Placement,
+            dual(
+                "Text (left-click places String, right-click for menu)",
+                ActiveBarIcon::Svg(ic::icon_text(tid)),
+                FpActiveBarMenu::Text,
+                Some(FootprintEditorMsg::SetPadsTool(
+                    crate::library::editor::footprint::state::PadsTool::PlaceString,
+                )),
+            ),
         ),
-        dual(
-            "Shapes (right-click for sketch-mode shape menu)",
-            ActiveBarIcon::Svg(ic::icon_shapes(tid)),
-            FpActiveBarMenu::Shapes,
-            None,
+        (
+            Sketch,
+            dual(
+                "Shapes (right-click for sketch-mode shape menu)",
+                ActiveBarIcon::Svg(ic::icon_shapes(tid)),
+                FpActiveBarMenu::Shapes,
+                None,
+            ),
         ),
     ]
 }
@@ -452,5 +490,46 @@ mod tests {
         // the build rather than waiting for a test run.
         const { assert!(DIM_INPUT_W > Metrics::GRAPHITE.btn) };
         const { assert!(LINETYPE_W > Metrics::GRAPHITE.btn) };
+    }
+
+    /// Outside Sketch mode each trigger sits in the group its tag names:
+    /// selection, then placement after the first divider, then Shapes.
+    #[test]
+    fn each_trigger_sits_in_its_tagged_group() {
+        use crate::library::editor::footprint::state::EditorMode;
+        use signex_types::theme::ThemeId;
+
+        let tid = ThemeId::DEFAULT;
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let i18n = signex_i18n::I18n::en_us();
+        let pads = editor_in(EditorMode::Normal);
+        let items = bar_items(&pads, tid, &tokens, &i18n);
+        let mut groups = vec![Vec::new()];
+        for item in &items {
+            match item {
+                ActiveBarItem::Separator => groups.push(Vec::new()),
+                ActiveBarItem::Button(b) => groups.last_mut().unwrap().push(b.tooltip.clone()),
+                ActiveBarItem::Custom { .. } => {}
+            }
+        }
+        let group_of = |prefix: &str| {
+            groups
+                .iter()
+                .position(|g| g.iter().any(|t| t.starts_with(prefix)))
+                .unwrap_or_else(|| panic!("{prefix} is on the bar: {groups:?}"))
+        };
+        for selection in [
+            "Selection Filter",
+            "Snap Options",
+            "Move",
+            "Select (",
+            "Align",
+        ] {
+            assert_eq!(group_of(selection), 0, "{selection}");
+        }
+        assert_eq!(group_of("3D Body"), 1);
+        assert_eq!(group_of("Text ("), 1);
+        assert_eq!(group_of("Shapes"), 2);
+        assert_eq!(groups.len(), 3);
     }
 }
