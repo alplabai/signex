@@ -149,9 +149,15 @@ fn picked_pour(f: &mut Fixture) -> PrimitiveTarget {
 }
 
 /// The edit `run` makes is one undo step: one undo restores the board,
-/// redo replays it, and a second undo leaves nothing of it.
+/// redo replays it, and a second undo leaves nothing of it: it lands where
+/// one undo from the starting board lands (the starting board itself when
+/// there is no earlier step).
 fn assert_one_step(f: &mut Fixture, run: impl FnOnce(&mut Fixture)) -> PcbBoard {
     let before = snapshot(f);
+    send(f, Message::Edit(EditMsg::Undo));
+    let earlier = snapshot(f);
+    send(f, Message::Edit(EditMsg::Redo));
+    assert_eq!(snapshot(f), before, "redo returns to the starting board");
     run(f);
     let after = snapshot(f);
     assert_ne!(before, after, "the board did not change");
@@ -162,7 +168,7 @@ fn assert_one_step(f: &mut Fixture, run: impl FnOnce(&mut Fixture)) -> PcbBoard 
     assert_eq!(snapshot(f), after, "redo replays it");
     send(f, Message::Edit(EditMsg::Undo));
     send(f, Message::Edit(EditMsg::Undo));
-    assert_eq!(snapshot(f), before, "it was a single step");
+    assert_eq!(snapshot(f), earlier, "it was a single step");
     edited
 }
 
