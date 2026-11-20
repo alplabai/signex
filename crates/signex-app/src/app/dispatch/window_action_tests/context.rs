@@ -220,3 +220,60 @@ fn a_window_command_is_enabled_by_the_sheet_the_window_shows_not_mains_tab() {
     assert!(!f.app.command_context(None).has_schematic);
     assert!(f.app.command_context(Some(f.window)).has_schematic);
 }
+
+// ---- Validation panels ----
+
+/// A tile, a chip or the identity set on the main window reaches an undocked
+/// window's ERC, Messages and waiver form: the panels there read it too.
+#[test]
+fn a_validation_tile_chip_or_identity_change_reaches_an_undocked_window() {
+    use crate::panels::{
+        ErcPanelMsg, ErcSeverityLite, MessageLevel, MessagesPanelMsg, UserIdentity,
+    };
+    let mut f = fixture();
+    f.app.refresh_panel_ctx();
+    let before = f.app.document_state.window_panel_ctx[&f.window]
+        .validation
+        .clone();
+    assert_eq!(before.erc.only, None);
+    assert_ne!(before.messages.level, MessageLevel::Warning);
+    assert_ne!(before.identity, UserIdentity::Known("Ada".into()));
+
+    feed(
+        &mut f.app,
+        vec![
+            dock(PanelMsg::ErcView(ErcPanelMsg::TileToggled(
+                ErcSeverityLite::Error,
+            ))),
+            dock(PanelMsg::MessagesView(MessagesPanelMsg::LevelPicked(
+                MessageLevel::Warning,
+            ))),
+            dock(PanelMsg::WaiverIdentityResolved(Some("Ada".into()))),
+        ],
+    );
+
+    let window = &f.app.document_state.window_panel_ctx[&f.window].validation;
+    assert_eq!(window.erc.only, Some(ErcSeverityLite::Error), "the tile");
+    assert_eq!(window.messages.level, MessageLevel::Warning, "the chip");
+    assert_eq!(window.identity, UserIdentity::Known("Ada".into()));
+    assert_eq!(window, &f.app.document_state.panel_ctx.validation);
+}
+
+/// The selected ERC finding shows selected in an undocked window's ERC panel
+/// too, without that window's sheet changing.
+#[test]
+fn the_selected_erc_finding_reaches_an_undocked_window() {
+    let mut f = fixture();
+    f.app.refresh_panel_ctx();
+    assert_eq!(
+        f.app.document_state.window_panel_ctx[&f.window].erc_focus_index,
+        None
+    );
+    f.app.ui_state.erc_focus_global_index = Some(3);
+    f.app.refresh_panel_ctx();
+    assert_eq!(f.app.document_state.panel_ctx.erc_focus_index, Some(3));
+    assert_eq!(
+        f.app.document_state.window_panel_ctx[&f.window].erc_focus_index,
+        Some(3)
+    );
+}

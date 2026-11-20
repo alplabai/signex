@@ -10,8 +10,7 @@
 
 use super::super::*;
 use super::rows::PanelStyle;
-use crate::styles::graphite::{PillTone, pill};
-use crate::styles::{Spacing, TypeScale};
+use crate::styles::{PillTone, Spacing, TypeScale, pill};
 use iced::Widget;
 use signex_i18n::{UserText, ids, t};
 use signex_types::schematic::{HarnessConnector, HarnessDefinition};

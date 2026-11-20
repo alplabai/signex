@@ -128,7 +128,7 @@ impl Signex {
             .into_iter()
             .find(|c| c.index == index)
             .map_or_else(|| index.to_string(), |c| c.name);
-        let i18n = signex_i18n::I18n::en_us_ref();
+        let i18n: &signex_i18n::I18n = &self.ui_state.i18n;
         let line = signex_i18n::t!(
             i18n,
             signex_i18n::ids::PANELS_CHANNEL_READ_ONLY,

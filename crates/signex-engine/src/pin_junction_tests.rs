@@ -514,7 +514,14 @@ fn a_pin_moved_onto_a_power_pin_inside_a_wire_of_another_net_gets_no_dot() {
     );
     assert!(dots(&engine).is_empty(), "no dot: {:?}", dots(&engine));
     assert!(!one_net(engine.document(), &[tp1, j1]));
-    assert_eq!(crossed_notices(&mut engine).len(), 1);
+    // One notice naming only the part moved, never the power port's own pin:
+    // J1's wire passes through, and nothing at the point names the port's net.
+    let notices = crossed_notices(&mut engine);
+    assert_eq!(notices.len(), 1, "{notices:?}");
+    let pins: Vec<&str> = notices[0].iter().map(|r| r.pin.as_str()).collect();
+    assert_eq!(pins, ["TP1 pin 1"], "{notices:?}");
+    assert!(notices[0][0].through.is_some(), "{notices:?}");
+    assert_eq!(notices[0][0].other, None, "{notices:?}");
 }
 
 /// The engine mints no pin-dot id (#2429): a pin dot made by a move takes

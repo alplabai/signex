@@ -1,6 +1,6 @@
 # Every accepted command id, sorted with LC_ALL=C. Checked by
-# removing a line removes a command and needs a maintainer decision.
 # scripts/check_catalog_ids.sh (#2447): adding a command adds its line here;
+# removing a line removes a command and needs a maintainer decision.
 add_board_graphic
 add_net_class
 add_table_of_contents
@@ -347,6 +347,7 @@ set_object_visible
 set_pad_shape
 set_selection_filters
 set_sheet_symbol_size
+set_sheet_variable
 set_symbol_parameter
 set_via_span
 sheet_navigation_back

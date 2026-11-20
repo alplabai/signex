@@ -180,7 +180,9 @@ pub(super) const VIEW: &[CommandMetadata] = &[
         menu_label: Some(command_ids::CMD_MENU_RESET_BOARD_ORIGIN),
         group: CommandGroup::Pcb,
         enable: Enablement::RequiresDocument(DocumentKind::Pcb),
-        flags: CommandFlags::GUI_MUTATES,
+        // A CLI or an agent names the board.
+        flags: CommandFlags::MUTATES,
+        operands: super::operands::DOCUMENT,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

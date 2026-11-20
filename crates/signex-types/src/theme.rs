@@ -291,7 +291,8 @@ pub struct CanvasColors {
     /// Fill of the symbol body shapes a symbol leaves unfilled (closed
     /// rectangles, polygons and circles, see
     /// `schematic::default_body_fill_shapes`); `None` leaves them unfilled.
-    /// Both Graphite themes set a soft tint; the "Fill symbol bodies"
+    /// Both Graphite themes set the symbol body fill, a very light yellow
+    /// (2026-11-19, `docs/DECISIONS.md`); the "Fill symbol bodies"
     /// preference replaces or clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_tint: Option<Color>,
@@ -542,9 +543,10 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     junction: c(0x2B, 0x2D, 0x33),
     body: c(0x2B, 0x2D, 0x33),
     body_fill: c(0xFF, 0xFF, 0xFF),
-    // About 8% of the body ink mixed into the background, stored opaque so
+    // A very light yellow (maintainer decision 2026-11-19): the mock-up's
+    // `color-mix(in srgb, warn-soft 80%, paper)`, stored opaque so
     // the PDF and SVG paint the same colour; pin and field text stay readable.
-    body_tint: s(0xEC, 0xEB, 0xEA),
+    body_tint: s(0xFD, 0xF8, 0xED),
     pin: c(0x2B, 0x2D, 0x33),
     reference: c(0x15, 0x17, 0x1A),
     value: c(0x5B, 0x5E, 0x66),
@@ -622,8 +624,8 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     junction: c(0xC9, 0xCB, 0xD1),
     body: c(0xC9, 0xCB, 0xD1),
     body_fill: c(0x1B, 0x1D, 0x21),
-    // About 8% of the body ink mixed into the background, as in Light.
-    body_tint: s(0x22, 0x24, 0x27),
+    // The same light-yellow mix as in Light, on the dark paper (2026-11-19).
+    body_tint: s(0x26, 0x1F, 0x12),
     pin: c(0xC9, 0xCB, 0xD1),
     reference: c(0xEC, 0xEA, 0xE5),
     value: c(0xA3, 0xA5, 0xAB),
@@ -869,6 +871,18 @@ mod tests {
             assert_eq!(canvas.background, canvas.paper, "{id:?}");
             assert!(!theme_tokens(id).extended.is_empty(), "{id:?}");
         }
+    }
+
+    /// The default symbol body fill is the mock-ups' very light yellow
+    /// (maintainer decision 2026-11-19), opaque in both Graphite themes.
+    #[test]
+    fn the_symbol_body_fill_is_the_mockups_light_yellow() {
+        let fill = |id| {
+            let c = canvas_colors(id).body_tint.expect("a body fill");
+            (c.r, c.g, c.b, c.a)
+        };
+        assert_eq!(fill(ThemeId::GraphiteLight), (0xFD, 0xF8, 0xED, 0xFF));
+        assert_eq!(fill(ThemeId::GraphiteDark), (0x26, 0x1F, 0x12, 0xFF));
     }
 
     /// The symbol body tint sits between the paper and the body ink, much

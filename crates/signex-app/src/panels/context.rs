@@ -241,6 +241,9 @@ pub struct PanelContext {
     pub erc_results_stale: bool,
     /// An ERC run has checked the project; with no findings it was clean.
     pub erc_ran: bool,
+    /// What the ERC, DRC and Messages panels show, and the cached identity
+    /// a waiver's Author starts as (#85-#88).
+    pub validation: super::ValidationPanels,
     /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.

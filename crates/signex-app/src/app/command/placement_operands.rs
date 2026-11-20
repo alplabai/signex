@@ -236,6 +236,17 @@ impl Signex {
         self.point_where_a_click_lands(args, name, Self::snap_to_grid)
     }
 
+    /// Where a wire click lands on the sheet the edit targets (the named
+    /// `document`, else the active sheet): its engine, never the render
+    /// snapshot (#2542).
+    fn snap_wire_on_edit_sheet(&self, x: f64, y: f64) -> (f64, f64) {
+        let sheet = self
+            .document_state
+            .edit_engine()
+            .map(signex_engine::Engine::document);
+        self.snap_wire_point(sheet, x, y)
+    }
+
     /// The point operand `name`: a pin reference is that pin's tip, wherever
     /// it is; a coordinate is refused unless `snap` (what the click of the
     /// same tool applies) leaves it where it is.
@@ -444,10 +455,10 @@ impl Signex {
             );
         }
         // A wire click also pulls onto a nearby pin end, wire end or junction
-        // (`snap_wire_point`); a bus, line or rectangle click only snaps to
-        // the grid.
+        // on the sheet the edit targets (`snap_wire_on_edit_sheet`); a bus,
+        // line or rectangle click only snaps to the grid.
         let snap = match placement {
-            Placement::Wire => Self::snap_wire_point,
+            Placement::Wire => Self::snap_wire_on_edit_sheet,
             _ => Self::snap_to_grid,
         };
         let (start, end) = (

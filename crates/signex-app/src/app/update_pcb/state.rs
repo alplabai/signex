@@ -144,6 +144,15 @@ impl UpdatePcbState {
             .collect()
     }
 
+    /// The rows the Problems card lifts above the list: every blocked row,
+    /// in list order.
+    pub fn problem_rows(&self) -> Vec<&EcoRow> {
+        self.list
+            .as_ref()
+            .map(super::table::problems)
+            .unwrap_or_default()
+    }
+
     /// The tick state of a table group.
     pub fn group_ticks(&self, group: TableGroup) -> Option<GroupTicks> {
         Some(super::table::group_ticks(self.list.as_ref()?, group))

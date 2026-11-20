@@ -133,8 +133,14 @@ twin is a macOS system shortcut stay on the physical Control key (⌃ on macOS):
 profile has exactly one raw owner of that chord, and Windows and Linux are
 unchanged) and gains the Mac chord from a `platform = "macos"` section:
 `Mod+Shift+Z` (⇧⌘Z), so ⌃⇧Z also still redoes on macOS. The Altium profile's
-macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F) and `Mod+W` (Close Document,
-⌘W).
+macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F), `Mod+W` (Close Document,
+⌘W) and `Alt+I` (⌥I, add vertex while drawing, else Copy Attributes): a Mac
+keyboard has no Insert key, so ⌥I is that command's menu hint on macOS. It
+also has `Shift+Tab` (⇧Tab) for `cycle_wiring_mode`, next to ⌃Space, which
+macOS takes for the input source once two exist; ⇧Tab is that command's menu
+hint on macOS. A held Shift does not change the drag (Shift+click adds to the
+selection and Shift+wheel pans, neither mid-drag), unlike ⌥, which flips
+whether the wires follow and so was not used.
 
 Bindings in one section load in alphabetical order of their trigger text, and a
 command's menu hint is its last binding. Respelling `Ctrl+…` as `Mod+…` would
@@ -250,6 +256,19 @@ corner, any slope). Press it during the move and the ghost changes at once; the
 drop commits what the ghost shows. The mode holds for later moves, and the
 status bar names it while it is not Auto. Move By, align and distribute,
 position edits, rotate and mirror always use Auto (#1669).
+
+A key bound in the keymap runs some commands once, however long it is held:
+`cycle_wiring_mode`, the corner mode and posture keys, the grid steps
+(`next_grid`, `previous_grid`), the unit and selection-mode cycles, every
+show/hide toggle, flip and mirror (`X`, `Y`, `L`), and `Insert` (one vertex per
+press mid wire). `Space` and `Shift+Space` bend an open wire, bus or track run
+once per press, in the window the run is open in, but turn a selection on
+every repeat. The rule is the same in every profile, Classic included (a held
+`X`, `Y` or `L` mirrors or flips once, a held `Shift+Space` steps the corner
+mode once). Other commands, such as zoom, undo, nudges and layer stepping,
+repeat while the key is held (`docs/DECISIONS.md`, "Held keys", 2026-11-19).
+The footprint editor canvas handles its own `X` (flip the pad's layer) outside
+the keymap; that one still repeats (#2545).
 
 `Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the

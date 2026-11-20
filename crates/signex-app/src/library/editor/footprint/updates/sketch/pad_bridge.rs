@@ -151,6 +151,14 @@ fn set_role(
 //   Sketch mode already trigger a solve, so this is rare.)
 fn make_pad_from_profile(editor: &mut crate::app::FootprintDocument) {
     editor.state.active_bar_menu = None;
+    // A board has no pads (#2518): the menu greys the row there.
+    if !editor
+        .state
+        .sketch_host()
+        .offers(signex_types::sketch::SketchAction::MakePadFromProfile)
+    {
+        return;
+    }
     use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
     use crate::library::editor::footprint::sketch_mode::SketchEdit;
     use signex_sketch::attr::{

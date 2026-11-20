@@ -458,7 +458,11 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // 2026-11-18: Edit ▸ Origin changes the board.
         | "set_board_origin"
         | "reset_board_origin"
-        | "snap_board_origin_to_corner" => Needs::EditablePcb,
+        | "snap_board_origin_to_corner"
+        // Layer colours are saved with the board: a read-only board keeps them.
+        | "set_layer_color"
+        | "edit_layer_color"
+        | "reset_layer_colors" => Needs::EditablePcb,
         // #2389, #2373: the routing and arc modes change no board.
         "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
         // #2424: a drawing's edits on the board `document` names.
@@ -524,9 +528,6 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #2363: the Layers panel's board view configuration.
         | "set_layer_visible"
         | "set_active_layer"
-        | "set_layer_color"
-        | "edit_layer_color"
-        | "reset_layer_colors"
         | "show_used_layers_only"
         | "set_object_visible"
         | "set_object_transparency" => Needs::Pcb,

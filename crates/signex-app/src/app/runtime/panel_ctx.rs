@@ -707,6 +707,9 @@ impl Signex {
                 .map(crate::panels::PcbNetsSummary::of),
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
+            // Kept: `sync_unions_panel` and `harness_panel_facts` own these.
+            unions: self.document_state.panel_ctx.unions.clone(),
+            harness: self.document_state.panel_ctx.harness.clone(),
             compiled_design: self.compiled_design_view(),
             pcb_board: self.pcb_board_summary(),
             layer_stack: self.layer_stack_facts(),
@@ -754,6 +757,7 @@ impl Signex {
             erc_running: self.ui_state.erc_running,
             erc_results_stale: self.erc_results_stale(),
             erc_ran: !self.ui_state.erc_violations_by_path.is_empty(),
+            validation: self.validation_panels_view(),
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             pcb_drc: self.pcb_drc_panel(),

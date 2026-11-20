@@ -177,4 +177,7 @@ define_ids! {
     SMART_PASTE_PASTE_COPIES = "dialog-smart-paste-paste-copies";
     SMART_PASTE_NOTHING_COPIED = "dialog-smart-paste-nothing-copied";
     SMART_PASTE_SHEET_CHANGED = "dialog-smart-paste-sheet-changed";
+    DIALOG_ERC_SOURCE_PROJECT = "dialog-erc-source-project";
+    DIALOG_ERC_SOURCE_USER_DEFAULT = "dialog-erc-source-user-default";
+    DIALOG_ERC_PROFILE_MENU = "dialog-erc-profile-menu";
 }

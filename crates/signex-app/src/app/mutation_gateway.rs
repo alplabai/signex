@@ -22,9 +22,9 @@ impl Signex {
         for warning in engine.take_warnings() {
             crate::diagnostics::log_warning(warning);
         }
-        let i18n = signex_i18n::I18n::en_us_ref();
+        let i18n = signex_i18n::I18n::en_us();
         for notice in engine.take_notices() {
-            crate::diagnostics::log_warning(super::engine_notices::notice_line(i18n, &notice));
+            crate::diagnostics::log_warning(super::engine_notices::notice_line(&i18n, &notice));
         }
     }
 

@@ -65,6 +65,7 @@ open_datasheet	edit	Open datasheet	Open Datasheet	General	-	-	RequiresSelection	
 change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,name:text,value:text?,document:document?
+set_sheet_variable	edit	Set a sheet variable	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	name:text,value:text?,remove:bool?,document:document?
 lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
 unlock_board_items	modify	Unlock the selected tracks and vias	Unlock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
 create_union	edit	Create a union from the selection	Create Union…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
@@ -224,13 +225,13 @@ back_annotate_schematics	pcb_sync	Back-annotate the board's designators and valu
 run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	runs_headless	-
 check_erc	validation	Check electrical rules	-	General	-	-	Always	-	document:document,baseline:text?
 open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
-repair_pin_junctions	validation	Add a junction where a pin end touches a wire	Repair Pin Junctions	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+repair_pin_junctions	validation	Add a junction where a pin end touches a wire	Repair Pin Junctions	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document?
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 check_drc	validation	Check design rules	-	General	-	-	Always	-	document:document,baseline:text?
 check_requirements	validation	Check project requirements	-	General	-	-	Always	-	document:document,baseline:text?
 open_drc_panel	pcb	Open the DRC results panel	DRC Results	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_drc_violation	pcb	Select a DRC violation and centre the view on it	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,id:text
-waive_drc_violation	pcb	Waive a DRC violation with a note	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,text:text?
+waive_drc_violation	pcb	Waive a DRC violation with a note	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,text:text?,author:text?
 unwaive_drc_violation	pcb	Take back the waiver of a DRC violation	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text
 filter_drc_results	pcb	Filter the DRC results by rule, layer and severity	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,rule:text?,layer:text?,severity:text?,waived:bool?
 open_rules	design	Open the design rules of the project	Rules...	PCB	-	-	Always	gui_only	-
@@ -295,7 +296,7 @@ set_layer_visible	view	Show or hide one layer of the board view	Set Layer Visibl
 set_active_layer	view	Make one layer the active layer	Set Active Layer	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,document:document
 set_layer_color	view	Give one layer its own colour, saved with the board, or the palette colour again	Set Layer Color	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	layer:text,color:color?,document:document
 edit_layer_color	view	Open the colour picker of one layer in the Layers panel	Layer Colour...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
-reset_layer_colors	view	Give every layer the board palette colour again	Reset All Layer Colours	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+reset_layer_colors	view	Give every layer the board palette colour again	Reset All Layer Colours	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 show_used_layers_only	view	List only the layers the board uses in the Layers panel	Show Used Layers Only	PCB	-	-	RequiresDocument(Pcb)	-	on:bool,document:document
 set_object_visible	view	Show or hide one kind of object in the board view	Set Object Visible	PCB	-	-	RequiresDocument(Pcb)	-	kind:text,on:bool,document:document
 set_object_transparency	view	Set how transparent one kind of object is drawn	Set Object Transparency	PCB	-	-	RequiresDocument(Pcb)	-	kind:text,value:text,document:document
@@ -363,7 +364,7 @@ view_rotate_180	view	Rotate the board view 180°	Rotate View 180°	PCB	-	-	Requi
 view_rotate_reset	view	Reset the board view rotation to 0°	Reset View Rotation	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 set_board_origin	edit	Set the board origin at a clicked point	Set	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
-reset_board_origin	edit	Move the board origin to the bottom-left of the board outline	Reset	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+reset_board_origin	edit	Move the board origin to the bottom-left of the board outline	Reset	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 snap_board_origin_to_corner	edit	Move the board origin to the outline corner nearest the pointer	Snap to Outline Corner	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 measure_distance	view	Measure distance	-	General	-	-	Always	gui_only	-
 measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:text?

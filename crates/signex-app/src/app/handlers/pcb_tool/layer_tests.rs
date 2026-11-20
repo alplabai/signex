@@ -279,7 +279,16 @@ fn a_route_ending_on_a_pad_of_no_net_gives_it_the_routes_net() {
     assert_eq!(placed(&app), 5, "the last leg reaches the pad");
     let why = status(&app);
     assert!(why.contains(JOINED), "{why}");
+    let _ = crate::diagnostics::init_logging();
+    let mark = crate::diagnostics::newest_entry_id();
     escape(&mut app);
+    let said = crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|e| e.message.replace(['\u{2068}', '\u{2069}'], ""))
+        .filter(|m| m.contains(JOINED))
+        .count();
+    assert!(said >= 1, "the landed route says it in Messages too");
     let board = board_of(&app, &path);
     let pad = &board.footprints[1].pads[0];
     assert_eq!(pad.net.as_ref().map(|n| n.number), Some(1), "it took net A");

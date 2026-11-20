@@ -12,6 +12,7 @@ use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
 use super::{RouteDraft, RouteRefusal, RouteRules};
+use crate::pcb::draw::TrackStyle;
 use crate::pcb::{BoardCommand, FootprintPad};
 
 /// A pad a route's point lands on: its footprint and pad ids, the
@@ -63,6 +64,55 @@ pub fn copper_under(board: &PcbBoard, at: Point) -> Option<(CopperLayer, u32)> {
             .iter()
             .find(|item| item.net != 0 && item.layers & bit != 0 && item.shape.contains(p, 0))
             .map(|item| (layer, item.net))
+    })
+}
+
+/// `style`, started at `at`: with no net on its layer there and none set by
+/// the caller (`net_set`, the tool's form), it takes the layer and net of the
+/// netted copper under `at` on another copper layer (a surface pad off the
+/// active layer), so the first leg adds a via there and runs on the active
+/// layer (maintainer 2026-11-18). Over bare board it stays as it is, of no
+/// net.
+pub fn start_on_copper(
+    board: &PcbBoard,
+    at: Point,
+    style: TrackStyle,
+    net_set: bool,
+) -> TrackStyle {
+    if style.net != 0 || net_set {
+        return style;
+    }
+    match copper_under(board, at) {
+        Some((layer, net)) => TrackStyle {
+            layer,
+            net,
+            ..style
+        },
+        None => style,
+    }
+}
+
+/// The via at `to` when a leg of `style` ends on a pad off its layer (a
+/// surface pad on Top while the leg runs on an inner layer). A leg of no
+/// net yet takes the pad's net. `new_via` makes the via at `to` (the caller
+/// sizes it and gives it its id).
+pub fn end_via(
+    board: &PcbBoard,
+    to: Point,
+    style: &mut TrackStyle,
+    new_via: impl FnOnce(Point) -> Via,
+) -> Option<Via> {
+    let pad = pad_at(board, to, u32::MAX)?;
+    if pad.reaches(style.layer) {
+        return None;
+    }
+    if style.net == 0 {
+        style.net = pad.net;
+    }
+    Some(Via {
+        attributes: Default::default(),
+        net: style.net,
+        ..new_via(to)
     })
 }
 

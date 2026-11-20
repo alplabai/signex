@@ -14,12 +14,12 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use signex_expr::{dependency_order, expression_body};
+use signex_expr::{LiteralContext, dependency_order, expression_body, is_reserved_constant};
 
 use crate::expr::ExprError;
 use crate::expr::ast::ExprNode;
 use crate::expr::eval::{EvalContext, eval};
-use crate::expr::parse::parse;
+use crate::expr::parse::parse_with;
 use crate::unit::{Quantity, UnitFamily};
 
 pub use signex_types::sketch::parameter::ParameterTable;
@@ -32,11 +32,17 @@ pub use signex_types::sketch::parameter::ParameterTable;
 /// a cycle through `name`. Other parse / eval errors propagate as
 /// the corresponding [`ExprError`] variant.
 pub fn resolve_quantities(table: &ParameterTable) -> Result<HashMap<String, Quantity>, ExprError> {
-    // 1. Parse every parameter source string into an AST.
+    // 1. Parse every parameter source string into an AST. A name the parser
+    //    reads as a constant (`pi`) could never be referenced, so it is
+    //    refused; a prefix-only literal (`10m`, `4k7`) is refused by the
+    //    `Geometry` context instead of baking as a count of millimetres.
     let mut asts: BTreeMap<String, ExprNode> = BTreeMap::new();
     for (name, src) in table.iter() {
+        if is_reserved_constant(name) {
+            return Err(ExprError::ReservedName(name.clone()));
+        }
         let body = expression_body(src);
-        let ast = parse(body)?;
+        let ast = parse_with(body, LiteralContext::Geometry)?;
         asts.insert(name.clone(), ast);
     }
 
@@ -192,5 +198,48 @@ mod tests {
         let t = ParameterTable::default();
         let r = resolve(&t).unwrap();
         assert!(r.is_empty());
+    }
+
+    #[test]
+    fn a_parameter_named_after_a_reserved_constant_is_refused() {
+        // `= pi * 2` would read the constant, never this value.
+        let mut t = ParameterTable::new();
+        t.insert("pi", "3mm");
+        t.insert("w", "= pi * 2");
+        let err = resolve(&t).unwrap_err();
+        assert_eq!(err, ExprError::ReservedName("pi".to_string()));
+        assert!(err.to_string().contains("reserved constant"));
+    }
+
+    #[test]
+    fn pi_still_reads_as_the_constant_in_a_parameter() {
+        let mut t = ParameterTable::new();
+        t.insert("turn", "= 2 * pi");
+        let r = resolve(&t).unwrap();
+        assert!(approx_eq(*r.get("turn").unwrap(), std::f64::consts::TAU));
+    }
+
+    #[test]
+    fn prefix_only_literals_are_refused_in_a_parameter() {
+        for literal in ["10m", "1u", "4k7", "2n", "= 10m + 1mm"] {
+            let mut t = ParameterTable::new();
+            t.insert("a", literal);
+            assert!(
+                matches!(resolve(&t), Err(ExprError::BadQuantity(_))),
+                "{literal} must be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn literals_with_a_unit_still_resolve_in_a_parameter() {
+        let mut t = ParameterTable::new();
+        t.insert("a", "10mm");
+        t.insert("b", "250um");
+        t.insert("c", "= a + 0.5mm");
+        let r = resolve(&t).unwrap();
+        assert!(approx_eq(*r.get("a").unwrap(), 10.0));
+        assert!(approx_eq(*r.get("b").unwrap(), 0.25));
+        assert!(approx_eq(*r.get("c").unwrap(), 10.5));
     }
 }

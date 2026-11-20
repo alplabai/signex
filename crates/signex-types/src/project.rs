@@ -17,6 +17,7 @@ mod erc_waiver;
 mod fab_outputs;
 mod fab_tier;
 mod order;
+mod profile_override;
 mod requirements;
 mod rule_file;
 mod rule_profile;
@@ -40,6 +41,10 @@ pub use erc_waiver::ErcWaiver;
 pub use fab_outputs::FabOutputKinds;
 pub use fab_tier::FabCapabilities;
 pub use order::ListMove;
+pub use profile_override::{
+    ProfileChange, builtin_override, duplicate_profile, override_builtin, rename_user_profile,
+    reset_builtin, saved_profiles, unique_profile_name,
+};
 pub use requirements::{
     DEFAULT_PART_STATES, LIFECYCLE_STATES, MAX_REQUIREMENT_ID_CHARS, REQUIREMENT_KINDS,
     REQUIREMENTS_KEY, Requirement, RequirementEntry, RequirementField, RequirementKind,
@@ -65,12 +70,15 @@ pub use setup::{
     COPPER_LAYERS, DEFAULT_DESIGNATORS, NEW_BOARD_GRID_MM, PcbDefaults, PcbField, PcbValueError,
     ProjectDefaults, SHEET_SIZES, SheetDefaults, copper_layers,
 };
-pub use setup_profile::{FabTemplate, ProjectSetup, ResolvedSetup, SetupProfile, designator_token};
+pub use setup_profile::{
+    FabTemplate, LAYER_STEP, MIN_STEPPED_LAYERS, ProjectSetup, ResolvedSetup, SetupProfile,
+    designator_token, stepped_layers,
+};
 pub use unknown::UnknownJson;
 pub use user_profile::{
     MAX_PROFILE_NAME_CHARS, PROJECT_PROFILE_TOKEN, ProfileNameProblem, ProfileRef,
-    USER_PROFILE_ID_PREFIX, UserProfile, check_profile_name, find_user_profile, new_profile_id,
-    resolve_profile, save_user_profile, user_profiles_from_value,
+    USER_PROFILE_ID_PREFIX, UserProfile, add_user_profile, check_profile_name, find_user_profile,
+    new_profile_id, resolve_profile, save_user_profile, user_profiles_from_value,
 };
 pub use variants::{BASE_VARIANT, MAX_VARIANT_NAME_CHARS, VariantProblem, is_base_variant};
 

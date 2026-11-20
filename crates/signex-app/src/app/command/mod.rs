@@ -60,6 +60,8 @@ mod operand_handlers;
 mod operands;
 mod outcome;
 #[cfg(test)]
+mod parity;
+#[cfg(test)]
 mod part_operand_tests;
 mod part_operands;
 #[cfg(test)]
@@ -76,6 +78,10 @@ mod project_name_tests;
 mod project_names;
 pub(crate) mod queries;
 #[cfg(test)]
+mod repair_reset_operand_tests;
+mod repair_reset_operands;
+mod routing;
+#[cfg(test)]
 mod selection_filter_operand_tests;
 mod selection_filter_operands;
 #[cfg(test)]
@@ -87,11 +93,15 @@ mod sheet_symbol_checks;
 mod sheet_sync_operand_tests;
 mod sheet_sync_operands;
 #[cfg(test)]
+mod sheet_variable_operand_tests;
+#[cfg(test)]
 mod undo_agreement_tests;
 mod window_document;
 #[cfg(test)]
 mod wire_run_tests;
 mod wire_runs;
+#[cfg(test)]
+mod wire_snap_sheet_tests;
 
 pub use agent_edits::{
     EditSpec, MAX_EDITS, edit_list_text, edit_refusal, operand_text, parse_documents,
@@ -111,8 +121,6 @@ pub use outcome::CommandOutcome;
 pub(crate) use placed_operands::PlacedRefusal;
 
 use iced::Task;
-
-use super::document::{DocumentKey, UndoTarget};
 
 use super::*;
 
@@ -212,12 +220,9 @@ impl Signex {
         // and are gated by its history, not the main window's active tab
         // (#1546).
         if let Some(window_id) = window
-            && matches!(command.as_str(), "undo" | "redo")
+            && routing::is_history_step(command)
             && self.undocked_tab_has_canvas(window)
-            && !matches!(
-                self.undo_target(window),
-                UndoTarget::None | UndoTarget::Document(DocumentKey::Pcb(_))
-            )
+            && routing::steps_through_window_swap(&self.undo_target(window))
         {
             let mut outcome = CommandOutcome::Ran;
             let task = self.run_in_window(window_id, true, |app| {
@@ -231,13 +236,10 @@ impl Signex {
         // (a Component Preview, an undocked editor) step that document, gated
         // by its history, never the main window's tab (#1854). A sheet is
         // stepped through the swap above; the ERC dialog through its message.
-        if matches!(command.as_str(), "undo" | "redo")
+        if routing::is_history_step(command)
             && self.undo_window_is_own(window)
             && let target = self.undo_target(window)
-            && !matches!(
-                target,
-                UndoTarget::ProjectRules(_) | UndoTarget::Document(DocumentKey::Schematic(_))
-            )
+            && routing::steps_own_document(&target)
         {
             let undo = command.as_str() == "undo";
             let (can_undo, can_redo) = self.undo_availability(&target);
@@ -260,7 +262,7 @@ impl Signex {
             return (CommandOutcome::disabled(reason), Task::none());
         }
         // Close Document follows the window the stroke came from (#1787).
-        if command.as_str() == "close_active_document"
+        if routing::closes_in_its_window(command)
             && let Some(result) = self.close_document_in_window(window)
         {
             return result;
@@ -285,11 +287,7 @@ impl Signex {
         // dialog they step the project's rule history and never reach the
         // sheet, whatever that history holds.
         let resolved = if self.erc_dialog_takes_input(window) {
-            match command.as_str() {
-                "undo" => Some(Message::Erc(ErcMsg::RulesUndone)),
-                "redo" => Some(Message::Erc(ErcMsg::RulesRedone)),
-                _ => core_to_message(command, &args),
-            }
+            routing::erc_dialog_step(command).or_else(|| core_to_message(command, &args))
         } else {
             core_to_message(command, &args)
         };
@@ -301,62 +299,43 @@ impl Signex {
             }
             (None, None) => CommandOutcome::UnknownId,
         };
-        let task = match (resolved, window) {
-            (Some(Message::CanvasEvent(event)), Some(window_id))
-                if self.interaction_state.canvases.contains_key(&window_id) =>
-            {
-                self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
-            }
-            // A board-view command typed in an undocked PCB window acts on
-            // the board that window shows (#2223).
-            (Some(Message::Pcb(PcbMsg::View(event))), Some(window_id))
-                if self.undocked_pcb_path(window_id).is_some() =>
-            {
-                self.dispatch_update(Message::Pcb(PcbMsg::ViewInWindow {
-                    window: window_id,
-                    event,
-                }))
-            }
-            // A view turn typed in an undocked PCB window turns that window's
-            // board, the one its enablement read (#2316).
-            (Some(Message::Pcb(PcbMsg::ViewRotation(event))), Some(window_id))
-                if self.undocked_pcb_path(window_id).is_some() =>
-            {
-                self.dispatch_update(Message::Pcb(PcbMsg::ViewRotationInWindow {
-                    window: window_id,
-                    event,
-                }))
-            }
-            // Any other command typed in an undocked document window acts on
-            // the sheet that window shows (#1966).
-            (Some(message), Some(window_id)) if self.is_document_window(window_id) => {
-                self.run_command_in_window(window_id, message)
-            }
-            // Find Next / Previous from main (F3, menu, palette: `None` is
-            // main) take a Sheet-scope Find owned by an undocked window over.
-            (Some(message), w)
-                if is_find_step(&message)
-                    && w.is_none_or(|w| self.ui_state.main_window_id == Some(w)) =>
-            {
-                match self.ui_state.main_window_id {
-                    Some(main_id) => self.step_find_in_window(main_id, message),
-                    None => self.dispatch_update(message),
-                }
-            }
-            (Some(message), _) => self.dispatch_update(message),
-            (None, _) => Task::none(),
+        let task = match resolved {
+            Some(message) => self.run_resolved(message, window),
+            None => Task::none(),
         };
         (outcome, task)
     }
-}
 
-/// F3 / Shift+F3 resolved to a Find step.
-fn is_find_step(message: &Message) -> bool {
-    use crate::find_replace::FindReplaceMsg::{NextRequested, PreviousRequested};
-    matches!(
-        message,
-        Message::FindReplaceMsg(NextRequested | PreviousRequested)
-    )
+    /// Run a resolved command message where [`routing::in_window_route`]
+    /// sends it for the window it was typed in.
+    fn run_resolved(
+        &mut self,
+        message: Message,
+        window: Option<iced::window::Id>,
+    ) -> Task<Message> {
+        use routing::InWindowRoute as Route;
+        let facts = self.window_facts(window);
+        match routing::in_window_route(message, window, facts) {
+            Route::CanvasInWindow(window_id, event) => {
+                self.dispatch_update(Message::CanvasEventInWindow { window_id, event })
+            }
+            Route::BoardViewInWindow(window, event) => {
+                self.dispatch_update(Message::Pcb(PcbMsg::ViewInWindow { window, event }))
+            }
+            Route::BoardTurnInWindow(window, event) => {
+                self.dispatch_update(Message::Pcb(PcbMsg::ViewRotationInWindow { window, event }))
+            }
+            Route::DocumentWindow(window_id, message) => {
+                self.run_command_in_window(window_id, message)
+            }
+            // `None` is main: F3, the menu and the palette.
+            Route::FindFromMain(message) => match self.ui_state.main_window_id {
+                Some(main_id) => self.step_find_in_window(main_id, message),
+                None => self.dispatch_update(message),
+            },
+            Route::Plain(message) => self.dispatch_update(message),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -25,15 +25,15 @@ use tempfile::TempDir;
 use crate::library_footprint_pick::{alternates, binding_key, key_of, place_selected, select};
 use crate::settle_support::{settle, settle_task};
 
-const COMMAND: &str = "assign_footprints";
+pub(crate) const COMMAND: &str = "assign_footprints";
 
-struct Rig {
-    app: Signex,
-    a: PathBuf,
+pub(crate) struct Rig {
+    pub(crate) app: Signex,
+    pub(crate) a: PathBuf,
     b: PathBuf,
     c: PathBuf,
     /// The first alternate footprint of the Stock resistor row, and its name.
-    alt: (PrimitiveRef, String),
+    pub(crate) alt: (PrimitiveRef, String),
     _tmp: TempDir,
 }
 
@@ -92,7 +92,7 @@ fn open_tab(
     });
 }
 
-fn rig() -> Rig {
+pub(crate) fn rig() -> Rig {
     let tmp = TempDir::new().expect("tempdir");
     let dir = tmp.path().to_path_buf();
     let (a, b, c) = (
@@ -177,7 +177,7 @@ fn rig() -> Rig {
     }
 }
 
-fn send(app: &mut Signex, msg: AssignFootprintsMsg) {
+pub(crate) fn send(app: &mut Signex, msg: AssignFootprintsMsg) {
     settle(app, Message::from(msg));
 }
 
@@ -188,7 +188,7 @@ fn footprint_on(app: &Signex, path: &Path) -> String {
 }
 
 /// The dialog has read the three parts: two on open sheets, one closed.
-fn assert_dialog_read(app: &Signex) {
+pub(crate) fn assert_dialog_read(app: &Signex) {
     let state = app
         .ui_state
         .assign_footprints

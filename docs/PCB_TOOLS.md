@@ -170,7 +170,9 @@ their own licences, listed in `testdata/routing-corpus/MANIFEST.tsv` and
 checked by `scripts/check_routing_corpus.sh`; its README says what the
 licences allow. The boards are stored in Git LFS: in a clone without the
 LFS objects each board is a pointer file, and the tests skip it with a
-message (`git lfs pull` fetches them).
+message (`git lfs pull` fetches them). With
+`SIGNEX_REQUIRE_ROUTING_CORPUS=1` the load check fails on a pointer or an
+empty corpus instead.
 
 - **Soak.** A seeded driver applies random actions through `BoardEngine`:
   routes and shoves (one or two legs from a ratsnest line or a pad, landed
@@ -209,7 +211,10 @@ message (`git lfs pull` fetches them).
   comments on the issue "Nightly routing soak is failing". `SIGNEX_SOAK_SEED`,
   `SIGNEX_SOAK_ACTIONS` and `SIGNEX_SOAK_BOARD` pick the seed, the length
   and one board (looked up in the whole corpus, also by the short runs).
-  Both workflows that run these tests check out the LFS objects.
+  `routing-soak` checks out the LFS objects. `test · workspace` fetches
+  them from a `.git/lfs` cache keyed on the boards' object ids, and sets
+  `SIGNEX_REQUIRE_ROUTING_CORPUS=1`, on pushes, the merge queue and on a PR
+  that changes the corpus, `signex-types`, `pcb-geom` or the routing tests.
 
 ## Differential Pair Routing and Multi-Route
 

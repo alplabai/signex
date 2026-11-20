@@ -143,6 +143,52 @@ fn node(dir: &Path, file: &str, children: Vec<SheetNode>) -> SheetNode {
     }
 }
 
+/// Write the sheet `file` in `dir` with one sheet symbol placing `places`.
+fn write_parent(dir: &Path, file: &str, places: &str) -> PathBuf {
+    let path = dir.join(file);
+    let symbol = signex_types::schematic::ChildSheet {
+        uuid: Uuid::now_v7(),
+        name: places.trim_end_matches(".snxsch").to_string(),
+        filename: places.to_string(),
+        position: Point::new(0.0, 0.0),
+        size: (30.0, 30.0),
+        stroke_width: 0.0,
+        fill: signex_types::schematic::FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    };
+    let sheet = SchematicSheet {
+        uuid: Uuid::now_v7(),
+        child_sheets: vec![symbol],
+        ..Default::default()
+    };
+    signex_engine::Engine::new_with_path(sheet, Some(path.clone()))
+        .expect("engine")
+        .save()
+        .expect("write sheet");
+    path
+}
+
+/// main (A, edited) is open; b places c and c places main, both closed and in
+/// no hierarchy a window holds: a symbol for b would close A→B→C→A. The GUI
+/// refuses it the same way (`sheet_sync::tests::a_loop_through_two_closed_sheets_is_refused`).
+#[test]
+fn a_loop_two_levels_down_is_refused() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let d = dir.path();
+    let b = write_parent(d, "b.snxsch", "c.snxsch");
+    write_parent(d, "c.snxsch", "main.snxsch");
+    let mut app = app_in(d);
+    let reason = refusal(create(&mut app, &b, &[]));
+    assert!(reason.contains("places this sheet below it"), "{reason}");
+    let merged = refusal(create(&mut app, &b, &["allow_merge=true".to_string()]));
+    assert!(merged.contains("places this sheet below it"), "{merged}");
+    assert!(doc(&app).child_sheets.is_empty());
+}
+
 /// top places mid, mid places main (the edited sheet): top is main's
 /// grandparent, two levels up.
 #[test]

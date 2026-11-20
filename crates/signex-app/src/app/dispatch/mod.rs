@@ -227,6 +227,7 @@ impl Signex {
                 }
                 let mut layout_persist = Task::none();
                 let mut quit_answer = Task::none();
+                let mut annotate_close = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
@@ -238,7 +239,10 @@ impl Signex {
                     use super::state::{ModalId, WindowKind};
                     match kind {
                         WindowKind::DetachedModal(modal) => match modal {
-                            ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
+                            // The dialog's own close: its confirms go with it.
+                            ModalId::AnnotateDialog => {
+                                annotate_close = self.handle_close_annotate_dialog();
+                            }
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
@@ -403,7 +407,7 @@ impl Signex {
                         WindowKind::ComponentEditor { .. } => {}
                     }
                 }
-                Task::batch([layout_persist, quit_answer])
+                Task::batch([layout_persist, quit_answer, annotate_close])
             }
             WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
             WindowMsg::DetachedModalOpened { modal, id } => {

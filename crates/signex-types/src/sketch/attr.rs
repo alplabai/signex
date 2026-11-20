@@ -652,6 +652,17 @@ fn default_v_depth() -> String {
     "0.333".into()
 }
 
+/// The serde defaults: a third of the board each side, no minimum web.
+impl Default for VScoreHintAttr {
+    fn default() -> Self {
+        Self {
+            depth_fraction_expr: default_v_depth(),
+            min_web_expr: None,
+            side: VScoreSide::default(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum VScoreSide {

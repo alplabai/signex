@@ -38,7 +38,7 @@ pub use ast::{BinOp, ExprNode, Func, UnaryOp};
 pub use deps::{dependency_order, references};
 pub use dimension::{Dimension, MAX_DIM_EXPONENT};
 pub use eval::eval;
-pub use parse::{parse, parse_with};
+pub use parse::{RESERVED_CONSTANTS, is_reserved_constant, parse, parse_with};
 pub use resolver::{Binding, Layered, NoBindings, Resolver};
 pub use source::{FieldText, classify, expression_body};
 pub use symbols::{BareM, LiteralContext, bare_m_meaning};
@@ -56,6 +56,14 @@ pub const MAX_EXPR_DEPTH: usize = 64;
 /// parser recursion, so this count (not the depth cap) bounds the
 /// evaluator's and `Drop`'s recursion for those trees.
 pub const MAX_EXPR_CHAIN: usize = 256;
+
+/// Deepest tree the evaluator walks in one evaluation, counted across every
+/// reference it follows. An expression at the chain cap that names a body at
+/// the chain cap still evaluates; a longer chain of such bodies runs out of
+/// budget with [`ExprError::TooDeep`] instead of overflowing the stack. The
+/// budget is sized to fit a 1 MiB thread stack in a debug build (the Windows
+/// main thread); twice the full tree depth did not.
+pub const MAX_EVAL_DEPTH: usize = 2 * MAX_EXPR_CHAIN + MAX_EXPR_DEPTH / 2;
 
 /// Longest expression source, in bytes, the parser accepts.
 pub const MAX_EXPR_LEN: usize = 4096;
@@ -102,6 +110,11 @@ pub enum ExprError {
     #[error("lookup keys and values have different lengths")]
     LookupShapeMismatch,
 
+    /// A host tried to bind a value under a reserved constant's name
+    /// ([`RESERVED_CONSTANTS`]); every expression would read the constant.
+    #[error("'{0}' is a reserved constant and cannot be a parameter name")]
+    ReservedName(String),
+
     /// Names refer to each other in a cycle (a → b → a).
     #[error("parameter cycle detected involving '{0}'")]
     Cycle(String),
@@ -110,7 +123,9 @@ pub enum ExprError {
     #[error("non-finite number: {0}")]
     NonFinite(String),
 
-    /// Expression nesting exceeds [`MAX_EXPR_DEPTH`].
+    /// Expression nesting exceeds [`MAX_EXPR_DEPTH`], a reference chain is
+    /// longer than [`MAX_EXPR_DEPTH`], or one evaluation, across the
+    /// references it follows, walks deeper than [`MAX_EVAL_DEPTH`].
     #[error("expression nests deeper than {max} levels")]
     TooDeep { max: usize },
 

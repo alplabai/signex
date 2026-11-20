@@ -1730,6 +1730,11 @@
     "category": "edit"
   },
   {
+    "id": "set_sheet_variable",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "set_symbol_parameter",
     "group": "Schematic",
     "category": "edit"

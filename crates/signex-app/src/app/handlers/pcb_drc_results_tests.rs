@@ -89,6 +89,18 @@ fn panel(app: &mut Signex, msg: DrcPanelMsg) {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::Drc(msg))));
 }
 
+/// Type `reason` into the open waiver form's Reason, and an author, as the
+/// shared form does (AV-13: both are required).
+fn write_waiver(app: &mut Signex, reason: &str) {
+    panel(
+        app,
+        DrcPanelMsg::ReasonActed(iced::widget::text_editor::Action::Edit(
+            iced::widget::text_editor::Edit::Paste(std::sync::Arc::new(reason.to_string())),
+        )),
+    );
+    panel(app, DrcPanelMsg::AuthorEdited("A. Designer".into()));
+}
+
 fn rows(app: &Signex) -> Vec<crate::panels::DrcRow> {
     app.pcb_drc_panel().expect("a board in view").rows
 }
@@ -274,10 +286,7 @@ fn a_waiver_is_stored_with_its_note_as_one_undo_step() {
     let clearance = key_of(&app, "builtin::clearance");
 
     panel(&mut app, DrcPanelMsg::WaiveStarted(clearance.clone()));
-    panel(
-        &mut app,
-        DrcPanelMsg::NoteEdited("checked on the prototype".into()),
-    );
+    write_waiver(&mut app, "checked on the prototype");
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
     let waivers = &app
         .document_state
@@ -289,6 +298,7 @@ fn a_waiver_is_stored_with_its_note_as_one_undo_step() {
     assert_eq!(waivers[0].key, clearance);
     assert_eq!(waivers[0].rule, "builtin::clearance");
     assert_eq!(waivers[0].note, "checked on the prototype");
+    assert_eq!(waivers[0].author, "A. Designer");
     let drc = app.pcb_drc_panel().unwrap();
     assert!(!drc.stale, "a waiver changes nothing the check reads");
     assert!(drc.waive_draft.is_none());
@@ -392,7 +402,7 @@ fn undoing_a_waiver_keeps_the_results_current() {
     run_drc(&mut app);
     let clearance = key_of(&app, "builtin::clearance");
     panel(&mut app, DrcPanelMsg::WaiveStarted(clearance));
-    panel(&mut app, DrcPanelMsg::NoteEdited("on purpose".into()));
+    write_waiver(&mut app, "on purpose");
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
     assert!(!app.pcb_drc_panel().unwrap().stale);
     let _ = app.update(Message::Edit(EditMsg::Undo));
@@ -430,7 +440,7 @@ fn a_refused_waiver_keeps_its_note() {
         &mut app,
         DrcPanelMsg::WaiveStarted("not-a-violation".into()),
     );
-    panel(&mut app, DrcPanelMsg::NoteEdited("typed with care".into()));
+    write_waiver(&mut app, "typed with care");
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
     assert!(
         app.document_state
@@ -442,7 +452,7 @@ fn a_refused_waiver_keeps_its_note() {
     );
     let draft = app.pcb_drc_panel().unwrap().waive_draft;
     assert_eq!(
-        draft.map(|d| d.note).as_deref(),
+        draft.map(|d| d.reason.text()).as_deref(),
         Some("typed with care"),
         "the note stays for another try"
     );
@@ -477,7 +487,7 @@ fn a_refused_show_is_logged_as_a_show() {
 fn waive_clearance(app: &mut Signex, note: &str) -> String {
     let clearance = key_of(app, "builtin::clearance");
     panel(app, DrcPanelMsg::WaiveStarted(clearance.clone()));
-    panel(app, DrcPanelMsg::NoteEdited(note.into()));
+    write_waiver(app, note);
     panel(app, DrcPanelMsg::WaiveConfirmed);
     clearance
 }

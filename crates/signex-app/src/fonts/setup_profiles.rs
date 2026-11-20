@@ -3,7 +3,9 @@
 //!
 //! A write is one edit (add or replace by id, or remove by id) merged into
 //! the list the file holds now, never the whole in-memory list: an entry this
-//! build cannot read, or one another running instance saved, is kept.
+//! build cannot read, or one another running instance saved, is kept. An
+//! edited built-in (#2536) is an entry with the tier's id and `"edited":
+//! true`; it is always re-saved in place, never numbered.
 
 use super::*;
 use signex_types::project::{UserProfile, user_profiles_from_value};
@@ -282,6 +284,35 @@ mod tests {
         );
         assert_eq!(read_setup_profiles_at(&path), [again]);
         assert_eq!(json(&path)["setup_profiles"][0], kept);
+    }
+
+    /// #2536: an edited built-in is stored under the tier's own id with the
+    /// edited mark, edited again in place, and Reset to default removes it.
+    #[test]
+    fn a_built_in_override_keeps_the_tier_id_and_reset_removes_it() {
+        use signex_types::project::{override_builtin, reset_builtin};
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("prefs.json");
+        let mut list = Vec::new();
+        let mut pcb = SetupProfile::Advanced.pcb(4);
+        pcb.clearance_mm = 0.11;
+        let change =
+            override_builtin(&mut list, SetupProfile::Advanced, "advanced", pcb).expect("a tier");
+        // What `after_profile_store` sends for an override: always a re-save.
+        let edit = SetupProfileEdit::Upsert {
+            profile: change.profile.clone(),
+            resaved: true,
+        };
+        let id = apply_setup_profile_edit_at(&path, &edit).expect("w");
+        assert_eq!(id.as_deref(), Some("advanced"));
+        assert_eq!(json(&path)["setup_profiles"][0]["edited"], true);
+        assert_eq!(read_setup_profiles_at(&path), list);
+        let id = apply_setup_profile_edit_at(&path, &edit).expect("w");
+        assert_eq!(id.as_deref(), Some("advanced"), "never numbered");
+        assert_eq!(read_setup_profiles_at(&path).len(), 1);
+        let (dropped, _) = reset_builtin(&mut list, SetupProfile::Advanced).expect("dropped");
+        apply_setup_profile_edit_at(&path, &SetupProfileEdit::Remove(dropped.id)).expect("w");
+        assert!(read_setup_profiles_at(&path).is_empty());
     }
 
     /// A `setup_profiles` value of another shape is refused, not replaced.

@@ -493,6 +493,7 @@ fn active_bar_set_sketch_tool(
     use crate::library::editor::footprint::state::{EditorMode, ToolPending};
     if editor.state.mode != EditorMode::Sketch {
         editor.state.mode = EditorMode::Sketch;
+        crate::library::editor::footprint::sketch_mode::exit::begin(editor);
     }
     editor.state.active_tool = tool;
     editor.state.tool_pending = ToolPending::Idle;

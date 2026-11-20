@@ -191,6 +191,13 @@ impl Signex {
         // The rows now in the cache were produced under this rule set; only a
         // successful, current run may name it in the report header.
         self.ui_state.erc_run_rule_set = Some(outcome.rule_set.clone());
+        let [sheets, symbols, nets] = outcome.checked;
+        self.ui_state.validation_panels.erc_checked = Some(crate::panels::ErcChecked {
+            sheets,
+            symbols,
+            nets,
+            at: chrono::Utc::now(),
+        });
         self.ui_state.erc_epoch = self.ui_state.erc_run_epoch;
         for warning in &outcome.warnings {
             crate::diagnostics::log_warning(warning);
@@ -211,12 +218,8 @@ impl Signex {
         self.ui_state.erc_waived_findings = outcome.waived_findings.clone();
         self.ui_state.erc_lapsed_waivers = outcome.lapsed_waivers.clone();
         self.ui_state.erc_page_frames = outcome.page_frames.clone();
-        self.ui_state.erc_focus_global_index = self
-            .ui_state
-            .erc_violations_by_path
-            .values()
-            .any(|v| !v.is_empty())
-            .then_some(0);
+        // A new run renumbers its findings: no row stays selected.
+        self.ui_state.erc_focus_global_index = None;
         self.refresh_active_erc_from_cache(active_path.as_ref());
         self.refresh_panel_ctx();
         true
@@ -351,22 +354,6 @@ impl Signex {
         }
 
         out
-    }
-
-    pub(crate) fn handle_focus_erc_diagnostic_offset(&mut self, delta: isize) -> Task<Message> {
-        let entries = self.build_erc_diagnostic_entries();
-        if entries.is_empty() {
-            self.ui_state.erc_focus_global_index = None;
-            return Task::none();
-        }
-        // Steps among the rows shown, from the focused finding's own row.
-        let focused = self.ui_state.erc_focus_global_index;
-        let current = focused
-            .and_then(|g| entries.iter().position(|e| e.global_index == g))
-            .unwrap_or(0) as isize;
-        let len = entries.len() as isize;
-        let next = (current + delta).rem_euclid(len) as usize;
-        self.handle_focus_erc_diagnostic_index(entries[next].global_index)
     }
 
     /// Quick Fix dispatch from the Messages-panel chip.

@@ -115,33 +115,33 @@ fn headless_new_pcb_with_a_built_in_profile_makes_its_board_without_a_dialog() {
     let hdi = SetupProfile::Hdi.pcb(8);
     assert_eq!(
         board_copper(&f.app, &f.dir.join("demo.snxpcb")),
-        Some((6, hdi.clearance_mm))
+        Some((8, hdi.clearance_mm))
     );
     assert!(!f.dir.join("demo.snxpcb").exists(), "opened unsaved");
 }
 
 #[test]
 fn headless_new_pcb_with_the_project_profile_takes_the_stored_rules() {
-    let hobby = ProjectSetup::from_profile(SetupProfile::Hobby).defaults();
-    let mut f = fixture(hobby);
+    let advanced = ProjectSetup::from_profile(SetupProfile::Advanced).defaults();
+    let mut f = fixture(advanced);
     let outcome = run(&mut f.app, "new_pcb_document", &["profile=project"]);
     assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
     assert_eq!(
         board_copper(&f.app, &f.dir.join("demo.snxpcb")),
-        Some((2, 0.2))
+        Some((6, 0.1))
     );
 }
 
 #[test]
 fn headless_new_pcb_without_a_profile_takes_the_project_setup_as_before() {
-    let hobby = ProjectSetup::from_profile(SetupProfile::Hobby).defaults();
-    let mut f = fixture(hobby);
+    let advanced = ProjectSetup::from_profile(SetupProfile::Advanced).defaults();
+    let mut f = fixture(advanced);
     let outcome = run(&mut f.app, "new_pcb_document", &[]);
     assert!(matches!(outcome, CommandOutcome::Ran), "{outcome:?}");
     assert!(f.app.ui_state.document_setup.is_none(), "no dialog");
     assert_eq!(
         board_copper(&f.app, &f.dir.join("demo.snxpcb")),
-        Some((2, 0.2))
+        Some((6, 0.1))
     );
 }
 
@@ -229,7 +229,7 @@ fn the_default_sheet_name_skips_a_file_already_on_disk() {
 
 #[test]
 fn a_missing_profile_is_said_once_per_session() {
-    let mut stored = ProjectSetup::from_profile(SetupProfile::Hobby).defaults();
+    let mut stored = ProjectSetup::from_profile(SetupProfile::Advanced).defaults();
     stored.profile = Some("user-gone-2232".into());
     let mut f = fixture(stored);
     let needle = "names a setup profile that was removed or is not among your saved profiles";

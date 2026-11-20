@@ -28,6 +28,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("dry_run", OperandKind::Bool),
     ("designator", OperandKind::Text),
     ("value", OperandKind::Text),
+    // Delete what the command names instead of setting it.
+    ("remove", OperandKind::Bool),
     ("net", OperandKind::Text),
     ("ids", OperandKind::Text),
     ("kinds", OperandKind::Text),
@@ -103,6 +105,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("shape", OperandKind::Text),
     ("delta", OperandKind::Text),
     ("corners", OperandKind::Text),
+    // The shared waiver form's Author (#2449).
+    ("author", OperandKind::Text),
     // #1699: the ERC rule ids a No-ERC directive silences, comma separated.
     ("rules", OperandKind::Text),
     // #1281: a Net Parameters directive's diff-pair class, via hole and

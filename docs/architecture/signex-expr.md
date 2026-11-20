@@ -34,8 +34,17 @@ sketch's numbers are bit-identical to before. Every other unit is
 
 A bare `m` after a number is decided in one place,
 `symbols::bare_m_meaning`: metres where the caller parses with
-`LiteralContext::Length`, milli everywhere else. `m` before another unit
-symbol (`10mV`) is always milli. See `docs/DECISIONS.md` (2026-11-18).
+`LiteralContext::Length`, milli in `LiteralContext::General`. `m` before
+another unit symbol (`10mV`) is always milli. See `docs/DECISIONS.md`
+(2026-11-18).
+
+Sketch parameters parse in `LiteralContext::Geometry`. A parameter may be
+a length, an angle or a count, and a prefix-only literal (`10m`, `1u`,
+`2n`) or an RKM literal (`4k7`) has no single reading there, so it is
+refused (`ExprError::BadQuantity`) rather than baked as a count of
+millimetres. A parameter named after a reserved constant (`pi`,
+`RESERVED_CONSTANTS`) is refused with `ExprError::ReservedName`, because
+every expression would read the constant instead.
 
 ## Resolver
 
@@ -52,7 +61,10 @@ host refusal (the sketch's `i` outside an array). `Layered` stacks
 resolvers so an inner scope shadows an outer one (sheet variables over
 project variables). The evaluator owns cycle detection: a name met again
 while it is still being evaluated is `ExprError::Cycle`, and a reference
-chain deeper than `MAX_EXPR_DEPTH` is `ExprError::TooDeep`.
+chain deeper than `MAX_EXPR_DEPTH` is `ExprError::TooDeep`. One recursion
+budget, `MAX_EVAL_DEPTH` tree levels, is shared by every body a reference
+chain leads into, so a chain of full-size bodies is also `TooDeep` rather
+than a stack overflow that aborts the process.
 
 The markup lookups (`${refdes:key}`, `@{name}`, `NET_NAME()`) and the
 output-side refdes tables read the same resolvers (#1987): every table is a
