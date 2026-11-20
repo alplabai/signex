@@ -61,6 +61,10 @@ pub(crate) use canvas::graphite_look_for;
 // What board sketch mode (#2234) hosts the sketch tool with: the tool and
 // mode its messages name, the board backdrop, and the edit router.
 pub use state::{BoardBackdrop, EditorMode, SketchTool, ToolPending};
+
+// What the app's Esc handling, placement pause and Custom Selection Filter
+// dialog name: the pad tool, the next-pad defaults and the filter kinds.
+pub use state::{NextPadDefaults, PadsTool, SelectionFilterKind};
 pub(crate) use updates::apply_footprint_primitive_edit;
 
 #[cfg(test)]

@@ -443,6 +443,7 @@ impl Signex {
                 // foreground grab from a background process).
                 Task::batch([
                     self.focus_new_project_name_once_open(modal),
+                    self.focus_move_selection_dx_once_open(modal),
                     crate::chrome::apply_rounded_corners::<Message>(id),
                     iced::window::gain_focus(id),
                     window_scale_task(id),
@@ -611,110 +612,6 @@ impl Signex {
                 } else {
                     iced::window::close(id)
                 }
-            }
-        }
-    }
-
-    /// Per-net colour override + F5-palette handler (namespaced family,
-    /// ADR-0001 D3).
-    pub(crate) fn dispatch_net_color_message(&mut self, msg: NetColorMsg) -> Task<Message> {
-        match msg {
-            NetColorMsg::Open => {
-                self.ui_state.net_color_palette_open = true;
-                self.handle_detach_modal(super::state::ModalId::NetColorPalette)
-            }
-            NetColorMsg::Close => {
-                self.ui_state.net_color_palette_open = false;
-                self.close_detached_modal(super::state::ModalId::NetColorPalette)
-            }
-            NetColorMsg::Set { net, color } => {
-                if let Some(c) = color {
-                    self.ui_state.net_colors.insert(net, c);
-                } else {
-                    self.ui_state.net_colors.remove(&net);
-                }
-                for canvas in self.interaction_state.all_schematic_canvases_mut() {
-                    canvas.clear_content_cache();
-                }
-                Task::none()
-            }
-            NetColorMsg::CustomShow(show) => {
-                self.ui_state.net_color_custom.show = show;
-                Task::none()
-            }
-            NetColorMsg::CustomDraft(c) => {
-                self.ui_state.net_color_custom.draft = c;
-                Task::none()
-            }
-            NetColorMsg::CustomSubmit(c) => {
-                self.ui_state.net_color_custom.show = false;
-                self.ui_state.net_color_custom.draft = c;
-                let color = signex_types::theme::Color {
-                    r: (c.r * 255.0).round() as u8,
-                    g: (c.g * 255.0).round() as u8,
-                    b: (c.b * 255.0).round() as u8,
-                    a: 255,
-                };
-                self.cancel_placement_session();
-                self.ui_state.pending_net_color = Some(color);
-                self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
-                Task::none()
-            }
-            NetColorMsg::CustomChannel(chan, s) => {
-                // Parse as u8: values above 255 (however large) clamp to
-                // 255. Input that does not parse (e.g. the empty string
-                // while the user types) keeps the channel's previous value,
-                // so the text_input never rejects an intermediate value and
-                // a half-typed edit never zeroes the channel.
-                let Ok(parsed) = s.trim().parse::<u64>() else {
-                    return Task::none();
-                };
-                let parsed = parsed.min(255) as u8;
-                let draft = &mut self.ui_state.net_color_custom.draft;
-                let v = parsed as f32 / 255.0;
-                match chan {
-                    super::contracts::Channel::R => draft.r = v,
-                    super::contracts::Channel::G => draft.g = v,
-                    super::contracts::Channel::B => draft.b = v,
-                }
-                Task::none()
-            }
-        }
-    }
-
-    /// Parameter Manager dialog handler (namespaced family, ADR-0001 D3).
-    pub(crate) fn dispatch_parameter_manager_message(
-        &mut self,
-        msg: ParameterManagerMsg,
-    ) -> Task<Message> {
-        match msg {
-            ParameterManagerMsg::Open => {
-                // Already open: keep the filter and the half-typed column name.
-                if !self.ui_state.parameter_manager_open {
-                    self.ui_state.parameter_table = Default::default();
-                }
-                self.ui_state.parameter_manager_open = true;
-                self.handle_detach_modal(super::state::ModalId::ParameterManager)
-            }
-            ParameterManagerMsg::Close => self.close_parameter_manager(),
-            ParameterManagerMsg::Edit {
-                symbol_uuid,
-                key,
-                value,
-            } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
-            ParameterManagerMsg::CellSubmitted => {
-                self.end_parameter_edit_runs();
-                Task::none()
-            }
-            ParameterManagerMsg::ParameterRemoved { key } => self.handle_parameter_removed(&key),
-            ParameterManagerMsg::NewKeyChanged(key) => {
-                self.ui_state.parameter_table.new_key = key;
-                Task::none()
-            }
-            ParameterManagerMsg::ColumnAdded => self.handle_parameter_column_added(),
-            ParameterManagerMsg::FilterChanged(filter) => {
-                self.ui_state.parameter_table.filter = filter;
-                Task::none()
             }
         }
     }
