@@ -1,4 +1,4 @@
-//! The ERC and annotation section's view (Graphite mockup m34): an ERC rules
+//! The ERC and annotation section's view (mockup row 34): an ERC rules
 //! card with the rule source pill, the severity tiles and Open Electrical
 //! Rules Check…, then an Annotation card. Pure: the project and its facts
 //! in, widgets out.
@@ -20,8 +20,8 @@ use super::super::look::{
 };
 use super::super::table::{SP, TS, section};
 use super::{ErcFacts, ErcSource};
+use crate::app::Message;
 use crate::app::state::{LoadedProject, ProjectId};
-use crate::app::{ErcMsg, Message};
 use crate::styles::tokens::resolve;
 use crate::styles::{HAIRLINE, PillTone, Radii, ti};
 
@@ -55,10 +55,11 @@ fn tile_dot(severity: Severity, tokens: &ThemeTokens) -> Color {
     }
 }
 
-/// Open Electrical Rules Check…: the ERC dialog. The Project tab makes its
-/// project the active one, so the dialog edits this project's rules.
-pub(super) fn open_erc_message() -> Message {
-    Message::Erc(ErcMsg::OpenDialog)
+/// Open Electrical Rules Check…: the ERC dialog for `project_id`. The
+/// message names the project, so the dialog edits this project's rules
+/// whatever document is in front when it lands.
+pub(super) fn open_erc_message(project_id: ProjectId) -> Message {
+    tab_message(ProjectTabMsg::ErcDialogRequested { project_id })
 }
 
 fn annotate_words(choice: AnnotateUndo) -> MessageId {
@@ -105,7 +106,7 @@ fn rules_card<'a>(
     if facts.source != ErcSource::Unreadable {
         body = body
             .push(severity_block(facts, i18n, tokens))
-            .push(edit_hint(i18n, tokens));
+            .push(edit_hint(project_id, i18n, tokens));
     }
     card(Some(header), body.boxed(), tokens)
 }
@@ -237,7 +238,7 @@ fn dot<'a>(colour: Color, size: f32) -> Element<'a, Message> {
 }
 
 /// Where severities are changed, and the button that opens it.
-fn edit_hint<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+fn edit_hint<'a>(project_id: ProjectId, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
     row![
         text(t!(i18n, ids::PROJECT_ERC_EDIT_HINT))
             .size(TS.body)
@@ -246,7 +247,7 @@ fn edit_hint<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
         text_button(
             None,
             t!(i18n, ids::PROJECT_ERC_OPEN_DIALOG),
-            Some(open_erc_message()),
+            Some(open_erc_message(project_id)),
             ButtonKind::Ghost,
             tokens,
         ),

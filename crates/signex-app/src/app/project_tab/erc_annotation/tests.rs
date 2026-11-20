@@ -1,4 +1,4 @@
-//! #34 (Graphite mockup m34): the ERC and annotation section's rule source
+//! Mockup row 34: the ERC and annotation section's rule source
 //! pill, its severity tiles, Store ERC rules in this project and Open
 //! Electrical Rules Check….
 
@@ -98,12 +98,12 @@ fn the_store_button_is_one_rule_history_step_and_the_pill_follows() {
 }
 
 /// Open Electrical Rules Check… opens the ERC dialog over this project: the
-/// Project tab makes its project the one the dialog edits.
+/// message names the project, whose Project tab comes to the front.
 #[test]
 fn open_electrical_rules_check_opens_the_dialog_for_this_project() {
     let (mut app, id) = app();
     app.ui_state.erc_dialog_open = false;
-    let _ = app.update(open_erc_message());
+    let _ = app.update(open_erc_message(id));
     assert!(app.ui_state.erc_dialog_open);
     assert_eq!(
         app.document_state
@@ -113,8 +113,9 @@ fn open_electrical_rules_check_opens_the_dialog_for_this_project() {
     );
 }
 
-/// With two projects loaded and the second one's tab in front, the dialog
-/// edits the second project, not the first.
+/// With two projects loaded and the first one's tab in front when the
+/// second project's button message lands, the dialog edits the second
+/// project, not the first.
 #[test]
 fn open_electrical_rules_check_from_a_second_project_edits_that_project() {
     let (mut app, first) = app();
@@ -127,8 +128,15 @@ fn open_electrical_rules_check_from_a_second_project_edits_that_project() {
     let second_id = second.id;
     app.document_state.projects.push(second);
     app.open_project_tab(1);
+    app.open_project_tab(0);
+    assert_eq!(
+        app.document_state
+            .active_document_project()
+            .map(|project| project.id),
+        Some(first)
+    );
     app.ui_state.erc_dialog_open = false;
-    let _ = app.update(open_erc_message());
+    let _ = app.update(open_erc_message(second_id));
     assert!(app.ui_state.erc_dialog_open);
     let edited = app
         .document_state
@@ -136,6 +144,17 @@ fn open_electrical_rules_check_from_a_second_project_edits_that_project() {
         .map(|project| project.id);
     assert_eq!(edited, Some(second_id));
     assert_ne!(edited, Some(first));
+}
+
+/// A late Open Electrical Rules Check… for a project closed meanwhile opens
+/// nothing.
+#[test]
+fn open_electrical_rules_check_for_a_closed_project_opens_nothing() {
+    let (mut app, _) = app();
+    let gone = app.document_state.mint_project_id();
+    app.ui_state.erc_dialog_open = false;
+    let _ = app.update(open_erc_message(gone));
+    assert!(!app.ui_state.erc_dialog_open);
 }
 
 #[test]

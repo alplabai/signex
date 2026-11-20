@@ -22,6 +22,9 @@ impl Signex {
             ProjectTabMsg::AddSchematicRequested { project_id } => {
                 return self.add_schematic_from_tab(project_id);
             }
+            ProjectTabMsg::ErcDialogRequested { project_id } => {
+                return self.open_erc_from_tab(project_id);
+            }
             _ => {}
         }
         self.apply_project_tab_message(msg);
@@ -184,8 +187,9 @@ impl Signex {
             }
             // Routed by `dispatch_project_tab_message`, which returns their task.
             ProjectTabMsg::SetupEdited { .. } | ProjectTabMsg::Requirements { .. } => {}
-            // Routed by `dispatch_project_tab_message`: it opens a dialog.
-            ProjectTabMsg::AddSchematicRequested { .. } => {}
+            // Routed by `dispatch_project_tab_message`: they open a dialog.
+            ProjectTabMsg::AddSchematicRequested { .. }
+            | ProjectTabMsg::ErcDialogRequested { .. } => {}
             ProjectTabMsg::SheetMoved {
                 project_id,
                 filename,

@@ -162,7 +162,7 @@ pub struct ProjectTabState {
     pub variant_problem: Option<signex_types::project::VariantProblem>,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
-    /// The Parameters filter as typed (Graphite mockup m30).
+    /// The Parameters filter as typed (mockup row 30).
     pub parameter_filter: String,
     /// The Parameters Title block group is folded shut.
     pub parameter_title_block_closed: bool,
@@ -218,7 +218,7 @@ pub enum ProjectTabMsg {
     ParameterAdded {
         project_id: ProjectId,
     },
-    /// The Parameters filter as typed (Graphite mockup m30).
+    /// The Parameters filter as typed (mockup row 30).
     ParameterFilterEdited {
         project_id: ProjectId,
         text: String,
@@ -286,8 +286,8 @@ pub enum ProjectTabMsg {
         filename: String,
         step: signex_types::project::ListMove,
     },
-    /// Add New ▸ Schematic in an empty Sheets section (#31): the project
-    /// tree's New Schematic flow for the project.
+    /// Add New ▸ Schematic in an empty Sheets section (mockup row 31): the
+    /// project tree's New Schematic flow for the project.
     AddSchematicRequested {
         project_id: ProjectId,
     },
@@ -333,6 +333,11 @@ pub enum ProjectTabMsg {
     },
     /// "Store ERC rules in this project": a copy of this machine's rules.
     ErcRulesStoreRequested {
+        project_id: ProjectId,
+    },
+    /// Open Electrical Rules Check…: the ERC dialog for this project, its
+    /// Project tab brought to the front first.
+    ErcDialogRequested {
         project_id: ProjectId,
     },
     /// The Commit every save check (#1693).

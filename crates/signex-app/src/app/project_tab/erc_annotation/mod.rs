@@ -2,7 +2,7 @@
 //! ERC rules come from (stored in the project, this machine's Preferences, or
 //! an unreadable newer set), how many rules are set to each severity, "Store
 //! ERC rules in this project", and the project's Annotate undo choice. The
-//! look (Graphite mockup m34) is in `view`.
+//! look (mockup row 34) is in `view`.
 //!
 //! Migration: Preferences values seed a new project and are the default of a
 //! project that stores none; they never overwrite a project's own values.
@@ -14,11 +14,12 @@ mod view;
 #[cfg(test)]
 mod tests;
 
+use iced::Task;
 use signex_erc::Severity;
 use signex_types::project::AnnotateUndo;
 
-use crate::app::Signex;
 use crate::app::state::{LoadedProject, ProjectId};
+use crate::app::{ErcMsg, Message, Signex};
 
 pub(super) use view::view;
 
@@ -135,5 +136,24 @@ impl Signex {
         if let Err(problem) = self.store_erc_rules_of(project_id) {
             crate::diagnostics::log_warning(format!("Project tab: {problem}"));
         }
+    }
+
+    /// Open Electrical Rules Check… for `project_id`: its Project tab comes
+    /// to the front, so the dialog (which edits the active document's
+    /// project) edits this project. Nothing for a project closed meanwhile.
+    pub(super) fn open_erc_from_tab(&mut self, project_id: ProjectId) -> Task<Message> {
+        let Some(index) = self
+            .document_state
+            .projects
+            .iter()
+            .position(|project| project.id == project_id)
+        else {
+            crate::diagnostics::log_warning(
+                "Project tab: the project was closed; the ERC dialog was not opened",
+            );
+            return Task::none();
+        };
+        self.open_project_tab(index);
+        self.update(Message::Erc(ErcMsg::OpenDialog))
     }
 }
