@@ -68,7 +68,7 @@ pub(crate) use updates::apply_footprint_primitive_edit;
 pub(crate) use state::COURTYARD_SLACK_MM;
 pub use state::{
     EditorPad, FootprintEditorState, GridDef, GridDisplay, NextPadDefaults, PadSide, PadStackTab,
-    SnappingMode, pad_field, pad_field_buffer_key,
+    SnappingMode, pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,
 };
 
 #[cfg(test)]

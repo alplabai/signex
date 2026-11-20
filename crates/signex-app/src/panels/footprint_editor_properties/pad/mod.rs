@@ -10,6 +10,7 @@ mod field;
 mod form;
 mod header;
 mod illustration;
+mod layer_title;
 mod rule_row;
 mod table;
 
@@ -17,4 +18,5 @@ pub(super) use form::{PadEditTarget, view_pad_form};
 #[cfg(test)]
 pub(super) use header::selected_pad_heading;
 pub(super) use header::view_pad_header;
+pub(in crate::panels::footprint_editor_properties) use layer_title::layer_title;
 pub(in crate::panels::footprint_editor_properties) use rule_row::rule_or_manual_row;

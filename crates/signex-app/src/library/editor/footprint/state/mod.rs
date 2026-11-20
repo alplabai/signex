@@ -51,7 +51,7 @@ pub use pad::{
     PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
-pub use properties_view::{pad_field, pad_field_buffer_key};
+pub use properties_view::{pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
 pub use snap_options::{
     GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,

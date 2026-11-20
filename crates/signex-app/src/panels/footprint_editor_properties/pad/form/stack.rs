@@ -116,24 +116,29 @@ pub(super) fn push<'a>(
         }
     }
 
-    let mm = |v: Option<f64>| Shown::value(v.map(|v| format!("{v:.3}")).unwrap_or_default());
-    let offset = pair(
-        number_input(
-            &mm(v.copper_offset_x_mm),
-            move |s| pad_copper_offset_x_msg(target, s),
-            form.tokens,
-        ),
-        number_input(
-            &mm(v.copper_offset_y_mm),
-            move |s| pad_copper_offset_y_msg(target, s),
-            form.tokens,
-        ),
+    let mm = |field: &str, v: Option<f64>| {
+        let stored = v.map(|v| format!("{v:.3}")).unwrap_or_default();
+        Shown::from_buffer(form.buffer(field), stored, false, |_| true)
+    };
+    let (x, y) = (
+        mm(pad_field::COPPER_OFFSET_X, v.copper_offset_x_mm),
+        mm(pad_field::COPPER_OFFSET_Y, v.copper_offset_y_mm),
     );
-    col.push(labelled_row(
+    let offset = pair(
+        number_input(&x, move |s| pad_copper_offset_x_msg(target, s), form.tokens),
+        number_input(&y, move |s| pad_copper_offset_y_msg(target, s), form.tokens),
+    );
+    let row = labelled_row(
         t!(form.i18n, ids::EDITORS_FP_PAD_COPPER_OFFSET),
         offset,
         fw,
         muted,
+    );
+    col.push(with_refusals(
+        row,
+        &[x.refusal, y.refusal],
+        form.tokens,
+        form.i18n,
     ))
 }
 

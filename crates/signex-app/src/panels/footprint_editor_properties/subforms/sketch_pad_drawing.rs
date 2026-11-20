@@ -10,6 +10,7 @@ use signex_widgets::property_illustration::{
 };
 
 use super::super::super::SketchPadAttrSummary;
+use super::super::pad::layer_title;
 use super::drawing::{canvas, centred, corner_note, label};
 use super::expansion::literal_mm;
 use crate::pcb_canvas::layer_style::layer_name;
@@ -106,7 +107,7 @@ pub(super) fn drawing(pad: &SketchPadAttrSummary, i18n: &I18n) -> Illustration {
             Part::leader(Leader {
                 at: Point::new(body.x + 10.0, body.y + body.height - 6.0),
                 label_at: Point::new(4.0, 124.0),
-                label: t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_TOP_PASTE).into(),
+                label: layer_title(i18n, TechnicalLayer::PasteTop).into(),
                 anchor: Anchor::Start,
             })
             .linked(PASTE_TOP),
@@ -116,7 +117,7 @@ pub(super) fn drawing(pad: &SketchPadAttrSummary, i18n: &I18n) -> Illustration {
         Part::leader(Leader {
             at: Point::new(body.x + body.width + 2.0, body.y + body.height + 2.0),
             label_at: Point::new(260.0, 124.0),
-            label: t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_TOP_MASK).into(),
+            label: layer_title(i18n, TechnicalLayer::SolderMaskTop).into(),
             anchor: Anchor::End,
         })
     } else {

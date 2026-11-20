@@ -606,10 +606,8 @@ editors-fp-pad-manual = Manual
 # Tag in a value cell that the board's design rule decides.
 editors-fp-pad-rule-tag = rule
 editors-fp-pad-expansion = Expansion
-editors-fp-pad-top-paste = Top Paste
-editors-fp-pad-bottom-paste = Bottom Paste
-editors-fp-pad-top-solder-mask = Top Solder mask
-editors-fp-pad-bottom-solder-mask = Bottom Solder mask
+# A pad's solder mask section; $layer is the solder mask layer's name from the Layers panel ("Top Solder").
+editors-fp-pad-solder-mask-layer = { $layer } mask
 # Beside a paste layer that is switched off.
 editors-fp-pad-paste-off = off
 # Beside a solder mask layer: an opening over the pad, or the mask covers it.
@@ -730,10 +728,6 @@ editors-role-sketch-pad-edit-in-pads = Edit in Pads ▸
 editors-role-sketch-pad-attributes = Pad Attributes
 # Section title; $layer is a copper layer name.
 editors-role-sketch-pad-side-section = Pad · { $layer }
-editors-role-sketch-pad-top-paste = Top Paste
-editors-role-sketch-pad-bottom-paste = Bottom Paste
-editors-role-sketch-pad-top-mask = Top Solder mask
-editors-role-sketch-pad-bottom-mask = Bottom Solder mask
 # State beside a switched-off paste header.
 editors-role-sketch-pad-off = off
 # State beside a solder mask header: open over the pad, or covering it.

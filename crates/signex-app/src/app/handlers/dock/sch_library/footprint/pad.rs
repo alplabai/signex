@@ -196,7 +196,7 @@ impl Signex {
     }
     /// An optional-mm next-pad default: empty clears it, a number is
     /// stored through `set`, other text is refused and kept for the panel.
-    fn set_next_pad_optional_mm(
+    pub(super) fn set_next_pad_optional_mm(
         &mut self,
         field: &str,
         value: &str,
@@ -453,8 +453,23 @@ impl Signex {
     where
         F: FnOnce(&mut signex_sketch::attr::PadAttr),
     {
+        self.with_selected_sketch_pad_field(id, None, f)
+    }
+
+    /// [`Self::with_selected_sketch_pad`] for a text-input field: keystrokes
+    /// into the same pad's `field` share one undo step.
+    pub(super) fn with_selected_sketch_pad_field<F>(
+        &mut self,
+        id: signex_sketch::id::SketchEntityId,
+        field: Option<&'static str>,
+        f: F,
+    ) -> bool
+    where
+        F: FnOnce(&mut signex_sketch::attr::PadAttr),
+    {
         if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.record_edit(None, |editor| {
+            let key = field.map(|name| (name, id.0.as_u128()));
+            editor.record_edit(key, |editor| {
                 let sketch = editor.primitive_mut().sketch.as_mut();
                 let Some(sketch) = sketch else {
                     return false;
@@ -575,7 +590,7 @@ impl Signex {
     /// An optional-mm field of the selected pad: empty clears it, a number
     /// is stored through `set` (one undo step per field while typing), and
     /// other text is refused and kept for the panel.
-    fn set_selected_pad_optional_mm(
+    pub(super) fn set_selected_pad_optional_mm(
         &mut self,
         idx: usize,
         (field, undo_key): (&'static str, &'static str),
@@ -840,28 +855,6 @@ impl Signex {
         true
     }
 
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_tolerance_plus(
-        &mut self,
-        v: &str,
-    ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.hole_tolerance_plus_mm = fp_parse_optional_mm(v);
-        }
-        self.refresh_panel_ctx();
-        true
-    }
-
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_tolerance_minus(
-        &mut self,
-        v: &str,
-    ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.hole_tolerance_minus_mm = fp_parse_optional_mm(v);
-        }
-        self.refresh_panel_ctx();
-        true
-    }
-
     /// #599 — an unreadable rotation leaves the stored default alone
     /// instead of clearing it.
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_hole_rotation(
@@ -874,28 +867,6 @@ impl Signex {
             && let Some(editor) = self.active_footprint_editor_mut()
         {
             editor.state.next_pad_defaults.hole_rotation_deg = stored;
-        }
-        self.refresh_panel_ctx();
-        true
-    }
-
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_copper_offset_x(
-        &mut self,
-        v: &str,
-    ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.copper_offset_x_mm = fp_parse_optional_mm(v);
-        }
-        self.refresh_panel_ctx();
-        true
-    }
-
-    pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_next_pad_copper_offset_y(
-        &mut self,
-        v: &str,
-    ) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.copper_offset_y_mm = fp_parse_optional_mm(v);
         }
         self.refresh_panel_ctx();
         true

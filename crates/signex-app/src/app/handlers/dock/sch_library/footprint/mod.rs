@@ -21,4 +21,5 @@ mod shape;
 mod silk;
 mod sketch;
 
+pub(in crate::app::handlers::dock::sch_library) use pad_input::PadMm;
 pub(in crate::app::handlers::dock::sch_library) use silk::{SilkLineEndpoint, SilkTextField};

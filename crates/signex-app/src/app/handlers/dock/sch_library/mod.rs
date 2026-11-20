@@ -34,7 +34,7 @@ mod numeric_input;
 mod symbol;
 mod symbol_delete;
 
-use footprint::{SilkLineEndpoint, SilkTextField};
+use footprint::{PadMm, SilkLineEndpoint, SilkTextField};
 use numeric_input::{
     CORNER_RADIUS_PCT_MAX, CORNER_RADIUS_PCT_MIN, fp_parse_optional_number,
     fp_parse_optional_number_in, fp_resolve_optional_number,
@@ -345,31 +345,29 @@ impl Signex {
                 self.handle_fp_editor_set_silk_stroke_width(v)
             }
             PanelMsg::FpEditorSetNextPadHoleTolerancePlus(v) => {
-                self.handle_fp_editor_set_next_pad_hole_tolerance_plus(v)
+                self.fp_pad_mm_edited(None, PadMm::TolerancePlus, v)
             }
             PanelMsg::FpEditorSetNextPadHoleToleranceMinus(v) => {
-                self.handle_fp_editor_set_next_pad_hole_tolerance_minus(v)
+                self.fp_pad_mm_edited(None, PadMm::ToleranceMinus, v)
             }
             PanelMsg::FpEditorSetNextPadHoleRotation(v) => {
                 self.handle_fp_editor_set_next_pad_hole_rotation(v)
             }
             PanelMsg::FpEditorSetNextPadCopperOffsetX(v) => {
-                self.handle_fp_editor_set_next_pad_copper_offset_x(v)
+                self.fp_pad_mm_edited(None, PadMm::OffsetX, v)
             }
             PanelMsg::FpEditorSetNextPadCopperOffsetY(v) => {
-                self.handle_fp_editor_set_next_pad_copper_offset_y(v)
+                self.fp_pad_mm_edited(None, PadMm::OffsetY, v)
             }
             PanelMsg::FpEditorToggleNextPadPlated(plated) => {
                 self.handle_fp_editor_toggle_next_pad_plated(plated)
             }
-            PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.hole_tolerance_plus_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSelectedPadHoleToleranceMinus { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
-                }),
+            PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus { idx, value } => {
+                self.fp_pad_mm_edited(Some(*idx), PadMm::TolerancePlus, value)
+            }
+            PanelMsg::FpEditorSetSelectedPadHoleToleranceMinus { idx, value } => {
+                self.fp_pad_mm_edited(Some(*idx), PadMm::ToleranceMinus, value)
+            }
             // #599 — an unreadable rotation must not overwrite the
             // stored one; `Some(stored)` is the only path that writes.
             PanelMsg::FpEditorSetSelectedPadHoleRotation { idx, value } => {
@@ -387,14 +385,12 @@ impl Signex {
                     }
                 }
             }
-            PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.copper_offset_x_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value } => self
-                .with_selected_pad(*idx, |pad| {
-                    pad.copper_offset_y_mm = fp_parse_optional_mm(value)
-                }),
+            PanelMsg::FpEditorSetSelectedPadCopperOffsetX { idx, value } => {
+                self.fp_pad_mm_edited(Some(*idx), PadMm::OffsetX, value)
+            }
+            PanelMsg::FpEditorSetSelectedPadCopperOffsetY { idx, value } => {
+                self.fp_pad_mm_edited(Some(*idx), PadMm::OffsetY, value)
+            }
             PanelMsg::FpEditorToggleSelectedPadPlated { idx, value } => {
                 self.with_selected_pad(*idx, |pad| {
                     pad.kind = if *value {
@@ -456,14 +452,12 @@ impl Signex {
             PanelMsg::FpEditorToggleSketchPadPasteEnabledBottom { id, value } => {
                 self.with_selected_sketch_pad(*id, |attr| attr.stack.paste_bottom_enabled = *value)
             }
-            PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_tolerance_plus_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.hole_tolerance_minus_mm = fp_parse_optional_mm(value)
-                }),
+            PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value } => {
+                self.fp_sketch_pad_mm_edited(*id, PadMm::TolerancePlus, value)
+            }
+            PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value } => {
+                self.fp_sketch_pad_mm_edited(*id, PadMm::ToleranceMinus, value)
+            }
             // #599 — same refusal for the sketch-mode pad attribute.
             PanelMsg::FpEditorSetSketchPadHoleRotation { id, value } => {
                 match fp_resolve_optional_number(
@@ -480,14 +474,12 @@ impl Signex {
                     }
                 }
             }
-            PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.copper_offset_x_mm = fp_parse_optional_mm(value)
-                }),
-            PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value } => self
-                .with_selected_sketch_pad(*id, |attr| {
-                    attr.copper_offset_y_mm = fp_parse_optional_mm(value)
-                }),
+            PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value } => {
+                self.fp_sketch_pad_mm_edited(*id, PadMm::OffsetX, value)
+            }
+            PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value } => {
+                self.fp_sketch_pad_mm_edited(*id, PadMm::OffsetY, value)
+            }
             // #599 — out of range clamps to the nearest bound, an
             // unreadable buffer is refused; neither clears the value.
             PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => {

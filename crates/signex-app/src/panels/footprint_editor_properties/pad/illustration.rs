@@ -16,6 +16,7 @@ use signex_widgets::{Label, text};
 
 use super::super::super::PanelMsg;
 use super::form::{Form, PadClass};
+use super::layer_title;
 use crate::library::editor::footprint::{PadSide, PadStackTab};
 use crate::styles::board_palette::BoardPalette;
 use crate::styles::{PillTone, Spacing, TypeScale};
@@ -431,25 +432,22 @@ fn leaders(
                 let label = t!(form.i18n, ids::EDITORS_FP_PAD_CALLOUT_CORNER, "value" => format!("{pct:.0}"));
                 parts.push(right(corner, 30.0, Label::from(label)).linked(CORNER));
             }
-            let (paste_id, mask_id) = match side {
+            let (paste, mask) = match side {
                 PadSide::Bottom => (
-                    ids::EDITORS_FP_PAD_BOTTOM_PASTE,
-                    ids::EDITORS_FP_PAD_BOTTOM_SOLDER_MASK,
+                    TechnicalLayer::PasteBottom,
+                    TechnicalLayer::SolderMaskBottom,
                 ),
-                _ => (
-                    ids::EDITORS_FP_PAD_TOP_PASTE,
-                    ids::EDITORS_FP_PAD_TOP_SOLDER_MASK,
-                ),
+                _ => (TechnicalLayer::PasteTop, TechnicalLayer::SolderMaskTop),
             };
             let paste_at = Point::new(c.x - half.width / 2.0, c.y + half.height + pe);
             parts.push(
-                left(paste_at, 126.0, word(form, paste_id))
+                left(paste_at, 126.0, Label::from(layer_title(form.i18n, paste)))
                     .linked(PASTE)
                     .requires(PASTE_ON),
             );
             let mask_at = Point::new(c.x + half.width + me * 0.7, c.y + half.height + me * 0.7);
             parts.push(
-                right(mask_at, 112.0, word(form, mask_id))
+                right(mask_at, 112.0, Label::from(layer_title(form.i18n, mask)))
                     .linked(MASK)
                     .requires(MASK_ON),
             );
@@ -461,7 +459,7 @@ fn leaders(
                 let note = t!(
                     form.i18n,
                     ids::EDITORS_FP_PAD_CALLOUT_TENTED,
-                    "layer" => t!(form.i18n, mask_id).into_string()
+                    "layer" => layer_title(form.i18n, mask).into_string()
                 );
                 parts.push(
                     Part::label(

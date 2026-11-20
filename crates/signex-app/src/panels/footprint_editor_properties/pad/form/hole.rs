@@ -124,23 +124,34 @@ pub(super) fn push<'a>(
         col = col.push(with_refusals(row, &[drill.refusal], tokens, i18n));
     }
 
+    let shown = |field: &str, v: Option<f64>| {
+        Shown::from_buffer(form.buffer(field), mm(v), false, |_| true)
+    };
+    let plus = shown(pad_field::HOLE_TOLERANCE_PLUS, v.hole_tolerance_plus_mm);
+    let minus = shown(pad_field::HOLE_TOLERANCE_MINUS, v.hole_tolerance_minus_mm);
     let tolerance = pair(
         number_input(
-            &Shown::value(mm(v.hole_tolerance_plus_mm)),
+            &plus,
             move |s| pad_hole_tolerance_plus_msg(target, s),
             tokens,
         ),
         number_input(
-            &Shown::value(mm(v.hole_tolerance_minus_mm)),
+            &minus,
             move |s| pad_hole_tolerance_minus_msg(target, s),
             tokens,
         ),
     );
-    col = col.push(labelled_row(
+    let row = labelled_row(
         t!(i18n, ids::EDITORS_FP_PAD_TOLERANCE),
         tolerance,
         fw,
         muted,
+    );
+    col = col.push(with_refusals(
+        row,
+        &[plus.refusal, minus.refusal],
+        tokens,
+        i18n,
     ));
     if current == HoleShapeChoice::Slot {
         let rotation = Shown::value(

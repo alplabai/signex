@@ -111,10 +111,7 @@ define_ids! {
     EDITORS_FP_PAD_MANUAL = "editors-fp-pad-manual";
     EDITORS_FP_PAD_RULE_TAG = "editors-fp-pad-rule-tag";
     EDITORS_FP_PAD_EXPANSION = "editors-fp-pad-expansion";
-    EDITORS_FP_PAD_TOP_PASTE = "editors-fp-pad-top-paste";
-    EDITORS_FP_PAD_BOTTOM_PASTE = "editors-fp-pad-bottom-paste";
-    EDITORS_FP_PAD_TOP_SOLDER_MASK = "editors-fp-pad-top-solder-mask";
-    EDITORS_FP_PAD_BOTTOM_SOLDER_MASK = "editors-fp-pad-bottom-solder-mask";
+    EDITORS_FP_PAD_SOLDER_MASK_LAYER = "editors-fp-pad-solder-mask-layer";
     EDITORS_FP_PAD_PASTE_OFF = "editors-fp-pad-paste-off";
     EDITORS_FP_PAD_MASK_OPENING = "editors-fp-pad-mask-opening";
     EDITORS_FP_PAD_MASK_TENTED = "editors-fp-pad-mask-tented";
@@ -204,10 +201,6 @@ define_ids! {
     EDITORS_ROLE_SKETCH_PAD_EDIT_IN_PADS = "editors-role-sketch-pad-edit-in-pads";
     EDITORS_ROLE_SKETCH_PAD_ATTRIBUTES = "editors-role-sketch-pad-attributes";
     EDITORS_ROLE_SKETCH_PAD_SIDE_SECTION = "editors-role-sketch-pad-side-section";
-    EDITORS_ROLE_SKETCH_PAD_TOP_PASTE = "editors-role-sketch-pad-top-paste";
-    EDITORS_ROLE_SKETCH_PAD_BOTTOM_PASTE = "editors-role-sketch-pad-bottom-paste";
-    EDITORS_ROLE_SKETCH_PAD_TOP_MASK = "editors-role-sketch-pad-top-mask";
-    EDITORS_ROLE_SKETCH_PAD_BOTTOM_MASK = "editors-role-sketch-pad-bottom-mask";
     EDITORS_ROLE_SKETCH_PAD_OFF = "editors-role-sketch-pad-off";
     EDITORS_ROLE_SKETCH_PAD_OPENING = "editors-role-sketch-pad-opening";
     EDITORS_ROLE_SKETCH_PAD_TENTED = "editors-role-sketch-pad-tented";

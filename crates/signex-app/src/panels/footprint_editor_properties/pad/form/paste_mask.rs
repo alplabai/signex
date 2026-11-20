@@ -6,14 +6,15 @@
 
 use iced::Element;
 use iced::widget::Column;
-use signex_i18n::{MessageId, ids, t};
+use signex_i18n::{ids, t};
+use signex_types::pcb_layer::TechnicalLayer;
 use signex_widgets::enable_section::EnableSection;
 use signex_widgets::property_illustration::FieldId;
 
 use super::super::super::super::PanelMsg;
 use super::super::field::caption_line;
 use super::super::illustration::{MASK, MASK_BOTTOM, PASTE};
-use super::super::rule_or_manual_row;
+use super::super::{layer_title, rule_or_manual_row};
 use super::hole::with_header_caption;
 use super::{
     Form, PadClass, PadEditTarget, pad_mask_bottom_msg, pad_mask_tented_bottom_msg,
@@ -26,7 +27,8 @@ use crate::styles::tokens::resolve;
 
 /// One board side's paste or mask layer, as the section draws it.
 struct Layer {
-    title: MessageId,
+    /// Titled by its catalog name (`layer_title`).
+    layer: TechnicalLayer,
     field: FieldId,
     buffer_field: &'static str,
     value_mm: Option<f64>,
@@ -69,7 +71,7 @@ fn paste<'a>(form: &Form<'_>, bottom: bool) -> Element<'a, PanelMsg> {
     let stack = &form.values.stack;
     let layer = if bottom {
         Layer {
-            title: ids::EDITORS_FP_PAD_BOTTOM_PASTE,
+            layer: TechnicalLayer::PasteBottom,
             field: PASTE,
             buffer_field: pad_field::PASTE_BOTTOM,
             value_mm: stack.paste_margin_bottom,
@@ -79,7 +81,7 @@ fn paste<'a>(form: &Form<'_>, bottom: bool) -> Element<'a, PanelMsg> {
         }
     } else {
         Layer {
-            title: ids::EDITORS_FP_PAD_TOP_PASTE,
+            layer: TechnicalLayer::PasteTop,
             field: PASTE,
             buffer_field: pad_field::PASTE_TOP,
             value_mm: stack.paste_margin_top,
@@ -100,7 +102,7 @@ fn mask<'a>(form: &Form<'_>, bottom: bool) -> Element<'a, PanelMsg> {
     let stack = &form.values.stack;
     let layer = if bottom {
         Layer {
-            title: ids::EDITORS_FP_PAD_BOTTOM_SOLDER_MASK,
+            layer: TechnicalLayer::SolderMaskBottom,
             field: if form.class.has_hole() {
                 MASK_BOTTOM
             } else {
@@ -114,7 +116,7 @@ fn mask<'a>(form: &Form<'_>, bottom: bool) -> Element<'a, PanelMsg> {
         }
     } else {
         Layer {
-            title: ids::EDITORS_FP_PAD_TOP_SOLDER_MASK,
+            layer: TechnicalLayer::SolderMaskTop,
             field: MASK,
             buffer_field: pad_field::MASK_TOP,
             value_mm: stack.mask_margin_top,
@@ -161,7 +163,7 @@ fn enable_layer<'a>(
         form.hover,
         form.i18n,
     );
-    let section = EnableSection::new(t!(form.i18n, layer.title), layer.is_on)
+    let section = EnableSection::new(layer_title(form.i18n, layer.layer), layer.is_on)
         .on_toggle(on_toggle)
         .view(enable_section_style(form.tokens), row);
     with_header_caption(section, caption, form.tokens)

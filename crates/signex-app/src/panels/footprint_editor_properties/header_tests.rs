@@ -203,17 +203,19 @@ fn assert_shows(texts: &[String], shown: &[&str], hidden: &[&str]) {
     }
 }
 
-/// Clicks the text `label` and sends the first message `pick` keeps.
+/// Clicks the text `label` (read as `pad_texts` reads it, without the
+/// isolation marks) and sends the first message `pick` keeps.
 fn click(app: &mut Signex, label: &str, pick: impl Fn(&PanelMsg) -> bool) {
-    let msg = crate::layout_probe::messages_on_click_at(
-        view(app),
-        DOCK,
-        Some(label),
-        iced::Point::ORIGIN,
-    )
-    .into_iter()
-    .find(|m| pick(m))
-    .unwrap_or_else(|| panic!("a click on {label:?} sends the expected message"));
+    let at = crate::layout_probe::lay_out_texts(view(app), DOCK)
+        .into_iter()
+        .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == label)
+        .unwrap_or_else(|| panic!("no text {label:?} in the pad form"))
+        .bounds
+        .center();
+    let msg = crate::layout_probe::messages_on_click_at(view(app), DOCK, None, at)
+        .into_iter()
+        .find(|m| pick(m))
+        .unwrap_or_else(|| panic!("a click on {label:?} sends the expected message"));
     panel(app, msg);
 }
 
@@ -470,4 +472,155 @@ fn pad_features_open_on_their_header() {
         ],
         &[],
     );
+}
+
+/// The paste and solder mask sections of the pad form name their layers as
+/// the Layers panel does: a paste section is the layer's catalog name, a
+/// solder mask section the catalog name with "mask".
+#[test]
+fn the_per_side_rows_use_the_layer_catalog_names() {
+    use crate::pcb_canvas::layer_style::layer_name;
+    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer as T};
+    let i18n = signex_i18n::I18n::en_us();
+    let name = |layer: T| layer_name(&i18n, PcbLayer::Technical(layer)).into_string();
+    let mask = |layer: T| format!("{} mask", name(layer));
+
+    let mut app = app_with_eight_pads();
+    edit(&mut app, FootprintEditorMsg::SelectPad(Some(2)));
+    let (top_paste, top_mask) = (name(T::PasteTop), mask(T::SolderMaskTop));
+    let (bottom_paste, bottom_mask) = (name(T::PasteBottom), mask(T::SolderMaskBottom));
+    let (top_paste, top_mask) = (top_paste.as_str(), top_mask.as_str());
+    let (bottom_paste, bottom_mask) = (bottom_paste.as_str(), bottom_mask.as_str());
+    assert_shows(
+        &pad_texts(&app),
+        &[top_paste, top_mask],
+        &[bottom_paste, bottom_mask],
+    );
+
+    let side = |side| PanelMsg::FpEditorSetSelectedPadSide { idx: 2, side };
+    panel(&mut app, side(PadSide::Bottom));
+    assert_shows(
+        &pad_texts(&app),
+        &[bottom_paste, bottom_mask],
+        &[top_paste, top_mask],
+    );
+
+    // A through-hole pad shows both mask layers and no paste.
+    panel(&mut app, side(PadSide::All));
+    assert_shows(
+        &pad_texts(&app),
+        &[top_mask, bottom_mask],
+        &[top_paste, bottom_paste],
+    );
+}
+
+/// How many times the pad form shows `label`.
+fn count(app: &Signex, label: &str) -> usize {
+    pad_texts(app).iter().filter(|t| *t == label).count()
+}
+
+/// Half-typed text in a copper offset or a hole tolerance is refused: the
+/// pad keeps its stored value and the field shows the reason. A number is
+/// taken and empty text clears the value.
+#[test]
+fn a_half_typed_offset_or_tolerance_keeps_the_stored_value() {
+    let mut app = app_with_eight_pads();
+    edit(&mut app, FootprintEditorMsg::SelectPad(Some(2)));
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetSelectedPadSide {
+            idx: 2,
+            side: PadSide::All,
+        },
+    );
+    let offset_x = |value: &str| PanelMsg::FpEditorSetSelectedPadCopperOffsetX {
+        idx: 2,
+        value: value.into(),
+    };
+    let tolerance_plus = |value: &str| PanelMsg::FpEditorSetSelectedPadHoleTolerancePlus {
+        idx: 2,
+        value: value.into(),
+    };
+    panel(&mut app, offset_x("0.1"));
+    panel(&mut app, tolerance_plus("0.05"));
+    assert_eq!(count(&app, "Enter a number"), 0);
+
+    panel(&mut app, offset_x("-"));
+    panel(&mut app, tolerance_plus("0,0"));
+    let pad = selected_pad_3(&app);
+    assert_eq!(pad.copper_offset_x_mm, Some(0.1), "the offset is kept");
+    assert_eq!(
+        pad.hole_tolerance_plus_mm,
+        Some(0.05),
+        "the tolerance is kept"
+    );
+    assert_eq!(count(&app, "Enter a number"), 2, "both fields say why");
+
+    panel(&mut app, offset_x("-0.2"));
+    panel(&mut app, tolerance_plus(""));
+    let pad = selected_pad_3(&app);
+    assert_eq!(pad.copper_offset_x_mm, Some(-0.2));
+    assert_eq!(pad.hole_tolerance_plus_mm, None, "empty clears");
+    assert_eq!(count(&app, "Enter a number"), 0);
+}
+
+/// The next pad's offset and tolerance defaults follow the same rule.
+#[test]
+fn a_half_typed_next_pad_offset_or_tolerance_keeps_the_default() {
+    let mut app = app_with_eight_pads();
+    let defaults = |app: &Signex| {
+        let d = &app.document_state.footprint_editors[&PathBuf::from(PATH)]
+            .state
+            .next_pad_defaults;
+        (d.copper_offset_y_mm, d.hole_tolerance_minus_mm)
+    };
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetNextPadCopperOffsetY("0.3".into()),
+    );
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetNextPadHoleToleranceMinus("0.02".into()),
+    );
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetNextPadCopperOffsetY("-".into()),
+    );
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetNextPadHoleToleranceMinus("x".into()),
+    );
+    assert_eq!(defaults(&app), (Some(0.3), Some(0.02)));
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetNextPadCopperOffsetY(String::new()),
+    );
+    assert_eq!(defaults(&app), (None, Some(0.02)));
+}
+
+/// Undo and redo drop the refused text: it belonged to the state they
+/// leave, so the field shows the restored value again.
+#[test]
+fn undo_and_redo_clear_the_refused_field_text() {
+    use crate::app::EditMsg;
+    let mut app = app_with_eight_pads();
+    edit(&mut app, FootprintEditorMsg::SelectPad(Some(2)));
+    let size_x = |value: &str| PanelMsg::FpEditorSetSelectedPadSizeX {
+        idx: 2,
+        value: value.into(),
+    };
+    let before = selected_pad_3(&app).size_mm;
+    panel(&mut app, size_x("2"));
+    panel(&mut app, size_x("1,5"));
+    assert_eq!(count(&app, "Enter a number"), 1);
+
+    let _ = app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(selected_pad_3(&app).size_mm, before);
+    assert_eq!(count(&app, "Enter a number"), 0, "undo drops the text");
+
+    panel(&mut app, size_x("1,5"));
+    assert_eq!(count(&app, "Enter a number"), 1);
+    let _ = app.update(Message::Edit(EditMsg::Redo));
+    assert_eq!(selected_pad_3(&app).size_mm.0, 2.0);
+    assert_eq!(count(&app, "Enter a number"), 0, "redo drops the text");
 }

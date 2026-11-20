@@ -9,7 +9,7 @@ use iced::{Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_sketch::attr::{ElectricalType, PadFeature, PadKind, PadSide};
 use signex_sketch::id::SketchEntityId;
-use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer};
+use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::property_illustration::FieldId;
 use signex_widgets::{button, text};
@@ -18,13 +18,14 @@ use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FpSubformMsg, PanelMsg, PanelPalette,
     SketchPadAttrSummary, expansion_buffer_key,
 };
-use super::super::pad::rule_or_manual_row;
+use super::super::pad::{layer_title, rule_or_manual_row};
 use super::expansion::literal_mm;
 use super::helpers::{
     SP, TS, caption, check, check_grid, enable_section, example_input, field_row, form, header,
     illustration, input, is_open, pair, pick, section_header, value_box,
 };
 use super::sketch_pad_drawing::{MASK_BOTTOM, MASK_TOP, PASTE_BOTTOM, PASTE_TOP, drawing};
+use crate::library::editor::footprint::{pad_field, sketch_pad_field_buffer_key};
 use crate::pcb_canvas::layer_style::layer_name;
 use crate::styles::tokens::resolve;
 
@@ -130,7 +131,7 @@ pub(super) fn view<'a>(
             i18n,
         ));
         if open {
-            parts.extend(hole_rows(pad, tokens, i18n));
+            parts.extend(hole_rows(fp, pad, tokens, i18n));
         }
     }
     let open = is_open(FEATURES, collapsed, false);
@@ -299,16 +300,16 @@ fn side_rows<'a>(
             &pad.mask_bottom_expr,
         ),
     };
-    let (paste_label, mask_label, paste_field, mask_field) = match side {
+    let (paste_layer, mask_layer, paste_field, mask_field) = match side {
         BoardSide::Top => (
-            ids::EDITORS_ROLE_SKETCH_PAD_TOP_PASTE,
-            ids::EDITORS_ROLE_SKETCH_PAD_TOP_MASK,
+            TechnicalLayer::PasteTop,
+            TechnicalLayer::SolderMaskTop,
             PASTE_TOP,
             MASK_TOP,
         ),
         BoardSide::Bottom => (
-            ids::EDITORS_ROLE_SKETCH_PAD_BOTTOM_PASTE,
-            ids::EDITORS_ROLE_SKETCH_PAD_BOTTOM_MASK,
+            TechnicalLayer::PasteBottom,
+            TechnicalLayer::SolderMaskBottom,
             PASTE_BOTTOM,
             MASK_BOTTOM,
         ),
@@ -330,7 +331,7 @@ fn side_rows<'a>(
     let mask_open = !mask_tented;
     vec![
         enable_section(
-            t!(i18n, paste_label),
+            layer_title(i18n, paste_layer),
             paste_on,
             move |value| paste_toggled(id, side, value),
             (!paste_on).then(|| t!(i18n, ids::EDITORS_ROLE_SKETCH_PAD_OFF)),
@@ -338,7 +339,7 @@ fn side_rows<'a>(
             tokens,
         ),
         enable_section(
-            t!(i18n, mask_label),
+            layer_title(i18n, mask_layer),
             mask_open,
             move |open| mask_toggled(id, side, open),
             Some(t!(i18n, mask_state(mask_open))),
@@ -413,27 +414,38 @@ fn expansion_row<'a>(
     )
 }
 
-/// The shipped hole rows of a drilled pad.
+/// The shipped hole rows of a drilled pad. A tolerance or offset the pad
+/// did not take shows its typed text until it is taken.
 fn hole_rows<'a>(
+    fp: &FootprintEditorPanelContext,
     pad: &'a SketchPadAttrSummary,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Vec<Element<'a, PanelMsg>> {
     let id = pad.id;
-    let mm = |v: Option<f64>| v.map(|v| format!("{v:.3}")).unwrap_or_default();
+    let mm = |field: &str, v: Option<f64>| {
+        fp.numeric_buffers
+            .get(&sketch_pad_field_buffer_key(id, field))
+            .cloned()
+            .unwrap_or_else(|| v.map(|v| format!("{v:.3}")).unwrap_or_default())
+    };
     vec![
         field_row(
             t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_PLUS),
-            example_input("0", mm(pad.hole_tolerance_plus_mm), move |value| {
-                PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value }
-            }),
+            example_input(
+                "0",
+                mm(pad_field::HOLE_TOLERANCE_PLUS, pad.hole_tolerance_plus_mm),
+                move |value| PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value },
+            ),
             tokens,
         ),
         field_row(
             t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_MINUS),
-            example_input("0", mm(pad.hole_tolerance_minus_mm), move |value| {
-                PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value }
-            }),
+            example_input(
+                "0",
+                mm(pad_field::HOLE_TOLERANCE_MINUS, pad.hole_tolerance_minus_mm),
+                move |value| PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value },
+            ),
             tokens,
         ),
         field_row(
@@ -449,16 +461,20 @@ fn hole_rows<'a>(
         ),
         field_row(
             t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_X),
-            example_input("0", mm(pad.copper_offset_x_mm), move |value| {
-                PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value }
-            }),
+            example_input(
+                "0",
+                mm(pad_field::COPPER_OFFSET_X, pad.copper_offset_x_mm),
+                move |value| PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value },
+            ),
             tokens,
         ),
         field_row(
             t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_Y),
-            example_input("0", mm(pad.copper_offset_y_mm), move |value| {
-                PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value }
-            }),
+            example_input(
+                "0",
+                mm(pad_field::COPPER_OFFSET_Y, pad.copper_offset_y_mm),
+                move |value| PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value },
+            ),
             tokens,
         ),
     ]

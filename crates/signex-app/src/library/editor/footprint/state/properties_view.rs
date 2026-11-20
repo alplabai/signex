@@ -12,6 +12,10 @@ pub mod pad_field {
     pub const CORNER_RADIUS: &str = "corner_radius";
     pub const DRILL_DIAMETER: &str = "drill_diameter";
     pub const DRILL_SLOT_LENGTH: &str = "drill_slot_length";
+    pub const HOLE_TOLERANCE_PLUS: &str = "hole_tolerance_plus";
+    pub const HOLE_TOLERANCE_MINUS: &str = "hole_tolerance_minus";
+    pub const COPPER_OFFSET_X: &str = "copper_offset_x";
+    pub const COPPER_OFFSET_Y: &str = "copper_offset_y";
     pub const PASTE_TOP: &str = "paste_top";
     pub const PASTE_BOTTOM: &str = "paste_bottom";
     pub const MASK_TOP: &str = "mask_top";
@@ -25,6 +29,12 @@ pub fn pad_field_buffer_key(idx: Option<usize>, field: &str) -> String {
         Some(idx) => format!("selected.{idx}.{field}"),
         None => format!("next.{field}"),
     }
+}
+
+/// The `numeric_buffers` key of `field` (a `pad_field` name) on the sketch
+/// pad entity `id`.
+pub fn sketch_pad_field_buffer_key(id: signex_sketch::id::SketchEntityId, field: &str) -> String {
+    format!("sketch_pad.{}.{field}", id.0)
 }
 
 #[cfg(test)]
