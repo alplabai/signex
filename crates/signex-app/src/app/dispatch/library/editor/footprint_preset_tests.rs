@@ -131,15 +131,18 @@ fn app_with_active_footprint_tab() -> Signex {
 /// The Custom Selection Filter dialog's Apply, with `name` typed and only
 /// Pads ticked when `pads_only`.
 fn apply_custom(app: &mut Signex, name: &str, pads_only: bool) {
-    use crate::app::{SelectionFilterCustomState, SelectionFilterMsg};
-    use crate::library::editor::footprint::state::selection_filter::SelectionFilter;
-    let mut draft = SelectionFilterCustomState::from_filter(SelectionFilter::default());
+    use crate::app::SelectionFilterMsg;
+    let _ = app.update(Message::SelectionFilter(SelectionFilterMsg::OpenCustom));
+    let draft = app
+        .ui_state
+        .selection_filter_custom
+        .as_mut()
+        .expect("the dialog opens on the footprint editor");
     draft.preset_name = name.to_string();
     if pads_only {
         draft.set_all_shown(false);
         draft.pads = true;
     }
-    app.ui_state.selection_filter_custom = Some(Box::new(draft));
     let _ = app.update(Message::SelectionFilter(SelectionFilterMsg::ApplyCustom));
 }
 
