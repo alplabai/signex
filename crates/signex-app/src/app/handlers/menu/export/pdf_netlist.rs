@@ -91,19 +91,19 @@ impl Signex {
             self.refuse_export(signex_i18n::ids::NOTICE_PDF_NO_FILES);
             return Task::none();
         }
-        // Apply the variant override the user picked in the modal.
-        // The PDF renderer reads `active_variant` out of
-        // `metadata.custom_fields` for title-block substitution; this
-        // keeps the PDF in sync with the modal's variant picker even
-        // when the project's active variant is something else.
-        if let Some(variant) = &options.variant {
-            if variant.eq_ignore_ascii_case("Base") {
-                ctx.metadata.custom_fields.remove("active_variant");
-            } else {
-                ctx.metadata
-                    .custom_fields
-                    .insert("active_variant".to_string(), variant.clone());
-            }
+        // The PDF prints the dialog's variant, never the project's active
+        // one: title-block substitution reads `active_variant` from
+        // `metadata.custom_fields` and `${VARIANT}` from the options. A
+        // request without a variant is Base, named (#2430).
+        let variant = options
+            .variant
+            .get_or_insert_with(|| signex_types::project::BASE_VARIANT.to_string());
+        if signex_types::project::is_base_variant(variant) {
+            ctx.metadata.custom_fields.remove("active_variant");
+        } else {
+            ctx.metadata
+                .custom_fields
+                .insert("active_variant".to_string(), variant.clone());
         }
 
         // Building the PDF and writing it both run off the UI thread.

@@ -90,12 +90,17 @@ impl Signex {
             .unwrap_or_default();
         // Seed `pdf_options.variant` from the project's active variant
         // so the picker reflects the project state on open. The user
-        // can override locally without mutating the project.
+        // can override locally without mutating the project. The choice is
+        // always named, Base included (#2430).
         let mut pdf_opts = pdf_opts;
-        pdf_opts.variant = self
-            .document_state
-            .active_document_project()
-            .and_then(|p| p.data.active_variant.clone());
+        pdf_opts.variant = Some(
+            self.document_state
+                .active_document_project()
+                .map_or(signex_types::project::BASE_VARIANT, |p| {
+                    p.data.active_variant_name()
+                })
+                .to_string(),
+        );
         // Seed the file picker off the export context's own sheet set —
         // open-modal default is "export everything", and user toggles
         // take the box from checked to unchecked. Reading `ctx` rather
@@ -610,9 +615,12 @@ impl Signex {
         self.rerasterize_print_preview()
     }
 
+    /// `None` is the picker's Base row, stored as Base by name so the export
+    /// never falls back to the project's active variant (#2430).
     pub(crate) fn handle_print_preview_set_variant(&mut self, variant: Option<String>) {
         if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.pdf_options.variant = variant;
+            preview.pdf_options.variant =
+                Some(variant.unwrap_or_else(|| signex_types::project::BASE_VARIANT.to_string()));
         }
         // No rerasterize: variant doesn't currently feed into the
         // SVG render pipeline. When it does, move this handler into
