@@ -211,3 +211,13 @@ fn every_group_has_a_catalog_heading() {
         RuleGroup::ALL.into_iter().map(group_heading).collect();
     assert_eq!(headings.len(), RuleGroup::ALL.len());
 }
+
+/// The shipped rules are resolved once and are the built-in profile's.
+#[test]
+fn the_shipped_rules_are_the_builtin_profile_resolved_once() {
+    assert_eq!(*shipped_rules(), shipped());
+    assert!(
+        std::ptr::eq(shipped_rules(), shipped_rules()),
+        "every frame reads the same value"
+    );
+}

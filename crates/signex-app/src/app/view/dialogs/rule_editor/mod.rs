@@ -26,6 +26,17 @@ const TS: TypeScale = TypeScale::DEFAULT;
 /// Width of the matrix pane: 410 px at the 12 px body.
 const MATRIX_PANE_W: f32 = TS.body * 410.0 / 12.0;
 
+/// The shipped profile's rules, resolved once: a constant that every frame
+/// of the ERC dialog and of Rule Profiles compares with.
+pub(crate) fn shipped_rules() -> &'static ResolvedRules {
+    static SHIPPED: std::sync::LazyLock<ResolvedRules> = std::sync::LazyLock::new(|| {
+        signex_erc::project_rules::resolve(
+            &signex_erc::project_rules::profile::builtin_profile().erc,
+        )
+    });
+    &SHIPPED
+}
+
 /// What the editor shows and how a click reaches the caller.
 pub(crate) struct RuleEditor<'a, M> {
     pub i18n: &'a I18n,

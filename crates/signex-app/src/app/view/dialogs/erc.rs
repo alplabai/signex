@@ -11,7 +11,7 @@ use iced::{Element, Length, Widget};
 use signex_i18n::{ids, t};
 use signex_widgets::{raw, text, text_input};
 
-use super::rule_editor::{RuleEditor, rule_editor};
+use super::rule_editor::{RuleEditor, rule_editor, shipped_rules};
 use super::widgets::{draggable_header, fit_modal_size, os_title_bar_slot};
 use crate::app::document::UndoTarget;
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split};
@@ -172,9 +172,7 @@ impl Signex {
             tokens,
             severity: severity_map,
             pin_matrix: pin_map,
-            shipped: &signex_erc::project_rules::resolve(
-                &signex_erc::project_rules::profile::builtin_profile().erc,
-            ),
+            shipped: shipped_rules(),
             editable: true,
             changed_only: self.ui_state.erc_rule_list.changed_only,
             filter: &self.ui_state.erc_rule_list.query,

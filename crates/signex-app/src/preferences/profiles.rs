@@ -11,7 +11,7 @@ use signex_i18n::{I18n, MessageId, ids, t};
 use signex_widgets::{button, raw, text, text_input};
 
 use crate::app::rule_profile_ui::ProfileManager;
-use crate::app::view::dialogs::{RuleEditor, rule_editor};
+use crate::app::view::dialogs::{RuleEditor, rule_editor, shipped_rules};
 use crate::rule_profiles::{ProfileKind, ProfileListing};
 
 /// What an action on the profile library did, for the status line and the
@@ -173,9 +173,7 @@ pub(super) fn content_profiles<'a>(
                 tokens,
                 severity: &resolved.severity,
                 pin_matrix: &resolved.pin_matrix,
-                shipped: &signex_erc::project_rules::resolve(
-                    &signex_erc::project_rules::profile::builtin_profile().erc,
-                ),
+                shipped: shipped_rules(),
                 editable,
                 changed_only: manager.rule_list.changed_only,
                 filter: &manager.rule_list.query,
