@@ -1,6 +1,7 @@
-//! The filter panels' part of the panel context (#55, #56): the editor the
-//! Filter panel follows and its per-kind counts, taken once per document
-//! revision, and SCH Filter's preset rename, kept across rebuilds.
+//! The filter panels' part of the panel context (Graphite mockup #55,
+//! Graphite mockup #56): the editor the Filter panel follows and its
+//! per-kind counts, taken once per document revision, and SCH Filter's
+//! preset rename, kept across rebuilds.
 
 use super::super::*;
 use crate::panels::{FilterEditor, KindCounts, SelectionFilterFacts};

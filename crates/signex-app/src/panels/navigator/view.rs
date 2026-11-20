@@ -1,4 +1,4 @@
-//! The Navigator panel (#54): the Filter sheets field, the Sheets heading
+//! The Navigator panel (Graphite mockup #54): the Filter sheets field, the Sheets heading
 //! with its count, then one row per visible sheet placement (sheet icon,
 //! name, file name in muted mono, page number on the right). The focused
 //! sheet gets the accent bar and fill; problem rows read in the error

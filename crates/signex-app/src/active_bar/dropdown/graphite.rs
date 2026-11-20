@@ -228,7 +228,7 @@ mod tests {
 
     /// Both Graphite filter and net-colour menus keep their entry shape:
     /// one chip grid; seven swatch rows in the icon column, then the Custom
-    /// / Clear rows, every one an ordinary item row (#61).
+    /// / Clear rows, every one an ordinary item row (Graphite mockup #61).
     #[test]
     fn graphite_menus_keep_their_entries() {
         use signex_widgets::active_bar_dropdown::DropdownEntry;

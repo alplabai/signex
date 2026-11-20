@@ -215,8 +215,9 @@ ctx-fp-silk-unknown = Silk graphic { $index }
 ctx-fp-silk-string = String
 ctx-fp-silk-region = Region
 
-## Active Bar Power menu and the Place flyout's power rows (#61, #62): the
-## short port names; the full "Place … power port" text is the tooltip.
+## Active Bar Power menu and the Place flyout's power rows (Graphite
+## mockup #61, Graphite mockup #62): the short port names; the full
+## "Place … power port" text is the tooltip.
 
 ctx-power-common = Common
 ctx-power-styles = Styles
@@ -234,7 +235,7 @@ ctx-power-signal-ground = Signal Ground
 ctx-power-earth = Earth
 ctx-power-chassis = Chassis
 
-## Sheet right-click menu (#62)
+## Sheet right-click menu (Graphite mockup #62)
 
 # Muted first line with nothing selected; { $file } is the sheet's file name.
 ctx-sheet-context = schematic sheet · { $file }
@@ -255,7 +256,7 @@ ctx-place-planned-tools = { $count } planned tools…
 # { $names } lists the planned tools.
 ctx-place-planned-tools-tooltip = Planned: { $names }
 
-## Grid picker (#63)
+## Grid picker (Graphite mockup #63)
 
 ctx-grid-imperial = Imperial
 ctx-grid-metric = Metric
@@ -267,7 +268,7 @@ ctx-grid-preview = Grid preview
 ctx-grid-preview-active = { $step } · active
 ctx-grid-preview-on-pitch = Pins on the 2.54 mm pitch land on this grid
 ctx-grid-preview-off-pitch = Pins on the 2.54 mm pitch fall between grid points
-# The canvas zoom pill (#64). { $percent } is the zoom as a whole number.
+# The canvas zoom pill (Graphite mockup #64). { $percent } is the zoom as a whole number.
 zoom-pill-percent = { $percent }%
 zoom-pill-fit = Fit
 # Hover hint of a pill control: { $action } is the command's menu text,

@@ -281,7 +281,7 @@ pub struct PanelContext {
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
     /// The editor the Filter panel follows, its per-kind counts and SCH
-    /// Filter's preset rename (#55, #56).
+    /// Filter's preset rename (Graphite mockup #55, Graphite mockup #56).
     pub selection_filter: super::SelectionFilterFacts,
 }
 

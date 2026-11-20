@@ -10,7 +10,7 @@ pub enum PanelMsg {
     /// [`PanelMsg::Tree`] because both trees number their rows from `[0]`:
     /// one shared variant would act on the wrong tree.
     Navigator(TreeMsg),
-    /// The Navigator panel's filter and empty-state buttons (#54).
+    /// The Navigator panel's filter and empty-state buttons (Graphite mockup #54).
     NavigatorPanel(super::NavigatorMsg),
     SetUnit(Unit),
     RunErc,

@@ -643,7 +643,7 @@ panels-net-classes-width-cell = { $width } mm
 # Width cell of a class with no width: each wire keeps its own.
 panels-net-classes-wire-width = Wire's own
 panels-net-classes-no-members = None
-# SCH Filter panel (#2417, #56), over the kind toggles.
+# SCH Filter panel (#2417, Graphite mockup #56), over the kind toggles.
 panels-sch-filter-hint = What a click, a box and the hover pick can select.
 
 # Properties of a placed object (#2418). $unit is the panel's length unit (mm, mil, in, um).
@@ -679,7 +679,7 @@ panels-directive-erc-exclusions = ERC Exclusions
 # Checkbox: the Blanket reports no ERC rule at all inside its region.
 panels-directive-all-rules = All Rules
 
-## Net Inspector panel (#58): the By Net / By Component modes, the part
+## Net Inspector panel (Graphite mockup #58): the By Net / By Component modes, the part
 ## list, the empty-state cards and the footer. Column headings are shown in
 ## capitals, so they are written in capitals here.
 
@@ -760,7 +760,7 @@ panels-components-details-subtitle = { $description } · { $library }
 # Second line of the drag card while a row is dragged toward the canvas.
 panels-components-drag-release = release to place
 
-# Filter (#55) and SCH Filter (#56) panels: the kind toggles.
+# Filter (Graphite mockup #55) and SCH Filter (Graphite mockup #56) panels: the kind toggles.
 # All / None cells over the kind toggles.
 panels-filter-all = All
 panels-filter-none = None

@@ -177,7 +177,7 @@ impl Signex {
         Task::none()
     }
 
-    /// The Navigator's filter and empty-state buttons (#54).
+    /// The Navigator's filter and empty-state buttons (Graphite mockup #54).
     pub(crate) fn handle_navigator_message(&mut self, msg: NavigatorMsg) -> Task<Message> {
         let navigator = &mut self.document_state.panel_ctx.navigator;
         match msg {
@@ -530,7 +530,7 @@ mod tests {
         assert!(!app.known_single_placement(path));
     }
 
-    /// #54: a child sheet placed twice is numbered once per placement by the
+    /// Graphite mockup #54: a child sheet placed twice is numbered once per placement by the
     /// project's sheet numbering, and each number lands on its own row.
     #[test]
     fn a_reused_child_sheet_is_numbered_per_placement() {

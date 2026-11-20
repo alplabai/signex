@@ -1,6 +1,6 @@
 //! The selection filter panels: what a click, a box and the hover pick
-//! select. SCH Filter (#56, #2417) is the schematic filter with its saved
-//! presets; Filter (#55) follows the active editor and edits the schematic
+//! select. SCH Filter (Graphite mockup #56, #2417) is the schematic filter with its saved
+//! presets; Filter (Graphite mockup #55) follows the active editor and edits the schematic
 //! or the board filter. Both draw one toggle column (`kinds`) and edit the
 //! filters the Active Bar dropdowns edit, with their messages.
 
@@ -57,7 +57,7 @@ fn board(msg: PcbBoardMsg) -> PanelMsg {
     PanelMsg::PcbBoard(msg)
 }
 
-/// The SCH Filter panel (#56): a caption, the schematic kinds and the
+/// The SCH Filter panel (Graphite mockup #56): a caption, the schematic kinds and the
 /// presets.
 pub(super) fn sch_view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = resolve(&ctx.tokens).ink3;
@@ -76,7 +76,7 @@ pub(super) fn sch_view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .boxed()
 }
 
-/// The Filter panel (#55): the active editor's kinds, or the empty card
+/// The Filter panel (Graphite mockup #55): the active editor's kinds, or the empty card
 /// with no schematic or board tab.
 pub(super) fn filter_view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let (editor, kinds, caption) = match (ctx.selection_filter.editor, ctx.pcb_board.as_ref()) {

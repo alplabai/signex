@@ -272,7 +272,7 @@ fn a_member_that_left_its_net_is_said_and_nothing_moves() {
     );
 }
 
-/// #58: By Component lists the project's parts from the same net index; an
+/// Graphite mockup #58: By Component lists the project's parts from the same net index; an
 /// expanded part lists every pin with its net and pin name, an unwired pin
 /// on no net. `U1` is put on sheet `a` with pin 1 `VIN` on the `VCC` wire
 /// and pin 2 `EN` left open.

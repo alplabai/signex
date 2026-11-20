@@ -1,6 +1,6 @@
-//! The Filter (#55) and SCH Filter (#56) panels: the kind toggles with
-//! their counts, the readout, the editor the Filter panel follows and the
-//! SCH Filter presets.
+//! The Filter (Graphite mockup #55) and SCH Filter (Graphite mockup #56)
+//! panels: the kind toggles with their counts, the readout, the editor the
+//! Filter panel follows and the SCH Filter presets.
 
 use std::path::PathBuf;
 

@@ -1,4 +1,4 @@
-//! #55 — the Filter panel on a schematic tab edits the filter a box select
+//! Graphite mockup #55 — the Filter panel on a schematic tab edits the filter a box select
 //! picks with: Wires toggled off there, a box over two wires selects none.
 
 use signex_app::active_bar::SelectionFilter;

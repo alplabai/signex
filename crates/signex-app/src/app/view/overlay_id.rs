@@ -77,7 +77,7 @@ pub(crate) enum OverlayId {
     LayerTabContextMenu,
     GridPicker,
     PanelList,
-    /// The zoom pill's preset menu (#64).
+    /// The zoom pill's preset menu (Graphite mockup #64).
     ZoomPresets,
 
     // Dialogs.

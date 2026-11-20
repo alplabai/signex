@@ -116,7 +116,7 @@ fn undo_and_redo_rows_step_the_sheet_history() {
     let _ = press(&mut app, "undo");
     assert_eq!(doc(&app).symbols.len(), 1, "undo did not restore the part");
     assert_menu_closed(&app, "undo");
-    // Redo is a row of the empty-spot menu (#62).
+    // Redo is a row of the empty-spot menu (Graphite mockup #62).
     select(&mut app, Vec::new());
     let _ = press(&mut app, "redo");
     assert!(doc(&app).symbols.is_empty(), "redo did not delete it again");
@@ -248,7 +248,7 @@ fn unbuilt_rows_are_greyed_and_say_why() {
     open_menu(&mut app);
     let i18n = signex_i18n::I18n::en_us_ref();
     let top = canvas_rows(&app);
-    // The planned rows sit in the "Planned (N)" flyout, not the menu (#62).
+    // The planned rows sit in the "Planned (N)" flyout, not the menu (Graphite mockup #62).
     for label in [
         "References",
         "Unions",

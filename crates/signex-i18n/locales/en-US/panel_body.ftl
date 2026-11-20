@@ -108,7 +108,7 @@ panels-navigator-rejected = { $name } (rejected)
 panels-navigator-cycle = { $name } (cycle)
 # The hierarchy is too deep to show this sheet's children.
 panels-navigator-not-expanded = { $name } (not expanded)
-# Navigator panel (#54): the filter box, the no-project card and the hint.
+# Navigator panel (Graphite mockup #54): the filter box, the no-project card and the hint.
 panels-navigator-filter = Filter sheets
 panels-navigator-no-project-body = Open a project to see its sheet hierarchy.
 panels-navigator-open-project = Open Project…

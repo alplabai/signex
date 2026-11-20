@@ -194,7 +194,7 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
 
 /// #1257 - the row is live and routes to the Find Similar action, with a
 /// selection or with an object under the right-click; on an empty spot with
-/// nothing selected it is not shown (#62).
+/// nothing selected it is not shown (Graphite mockup #62).
 #[test]
 fn find_similar_row_is_enabled_and_routes_to_its_action() {
     let empty = canvas_menu_entries(
@@ -269,7 +269,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
         &sc,
     );
 
-    // An empty spot offers Find and the paste rows (#62).
+    // An empty spot offers Find and the paste rows (Graphite mockup #62).
     for row in ["Find", "Paste", "Paste Special", "Select All"] {
         assert!(has_row(&without, row), "missing {row}");
     }
@@ -279,7 +279,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
         assert!(has_row(&with, row), "{row} with a selection");
     }
     // Place and Sheet Actions on an empty spot; with a selection Align,
-    // Part Actions and the Planned flyout join them (#62).
+    // Part Actions and the Planned flyout join them (Graphite mockup #62).
     assert_eq!(launchers(&without), 2);
     assert_eq!(launchers(&with), 5);
 }
@@ -297,7 +297,7 @@ fn shape(entries: &[DropdownEntry<Message>]) -> Vec<String> {
         .collect()
 }
 
-/// #62: right-click on an empty spot with nothing selected gives the short
+/// Graphite mockup #62: right-click on an empty spot with nothing selected gives the short
 /// menu, exactly as drawn, with none of the selection rows.
 #[test]
 fn the_empty_spot_menu_has_exactly_the_drawn_rows() {
@@ -351,7 +351,7 @@ fn the_empty_spot_menu_has_exactly_the_drawn_rows() {
     );
 }
 
-/// #62: a right-click on an object adds Find Similar and Highlight Net; a
+/// Graphite mockup #62: a right-click on an object adds Find Similar and Highlight Net; a
 /// net highlight adds Clear Filter.
 #[test]
 fn a_hit_and_a_net_highlight_add_their_rows_to_the_empty_spot_menu() {
@@ -379,7 +379,7 @@ fn a_hit_and_a_net_highlight_add_their_rows_to_the_empty_spot_menu() {
     ));
 }
 
-/// #62: with a selection the menu opens on Properties (bold, the default
+/// Graphite mockup #62: with a selection the menu opens on Properties (bold, the default
 /// row), keeps the drawn order, and ends with Undo and the greyed
 /// "Planned (6)" flyout launcher.
 #[test]
@@ -445,7 +445,7 @@ fn the_selection_menu_keeps_the_drawn_order_and_ends_with_planned() {
     }
 }
 
-/// #62: the muted first line names the sheet, or the one selected part by
+/// Graphite mockup #62: the muted first line names the sheet, or the one selected part by
 /// designator and value, or the count.
 #[test]
 fn the_context_line_names_the_sheet_or_the_selection() {
@@ -645,7 +645,7 @@ fn place_menu_greys_only_the_planned_tools() {
     assert!(has_row(&e, "Wire"));
     assert!(has_row(&e, "Part"));
     // Placement actions are always available; the planned tools (#1249) are
-    // gathered in one greyed row that names them (#62).
+    // gathered in one greyed row that names them (Graphite mockup #62).
     let planned = [
         "Parameter Set",
         "Signal Harness",
@@ -671,7 +671,7 @@ fn place_menu_greys_only_the_planned_tools() {
     }
 }
 
-/// #62: the Place flyout groups its rows under four subheads, and its power
+/// Graphite mockup #62: the Place flyout groups its rows under four subheads, and its power
 /// rows use the short name, the full name as tooltip and the power colour.
 #[test]
 fn place_menu_has_subheads_and_short_power_rows() {
@@ -872,7 +872,7 @@ fn canvas_row_text_is_byte_identical_to_the_old_literals() {
     ] {
         assert!(has_row(&rows, expected), "missing {expected:?}");
     }
-    // The sheet rows moved to the empty-spot menu (#62).
+    // The sheet rows moved to the empty-spot menu (Graphite mockup #62).
     let empty = canvas_menu_entries(
         signex_i18n::I18n::en_us_ref(),
         TID,
@@ -1103,7 +1103,7 @@ fn runs_cross_probe(message: Option<Message>) -> bool {
 }
 
 /// #1312: Cross Probe on the sheet menu runs `cross_probe` with something
-/// selected; with nothing selected it is not offered (#62).
+/// selected; with nothing selected it is not offered (Graphite mockup #62).
 #[test]
 fn canvas_cross_probe_row_runs_the_command_with_a_selection() {
     let sc = shortcuts();

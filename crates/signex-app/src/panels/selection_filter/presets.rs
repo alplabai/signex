@@ -1,4 +1,4 @@
-//! SCH Filter's Presets section (#56): a chip per saved preset (a click
+//! SCH Filter's Presets section (Graphite mockup #56): a chip per saved preset (a click
 //! applies it and makes it the one edited below), Save current, and the
 //! edited preset's name, Delete and kinds. The list is the one the Active
 //! Bar dropdown and Properties show (`active_bar::presets`).

@@ -132,7 +132,7 @@ fn filter_menu_is_a_single_custom_entry() {
     assert!(matches!(entry, DropdownEntry::Custom(_)));
 }
 
-/// #61: the Power menu groups its ports under three subheads, labels each
+/// Graphite mockup #61: the Power menu groups its ports under three subheads, labels each
 /// with the short name and keeps the full "Place … power port" text as the
 /// row's tooltip; every port glyph is drawn in the power colour.
 #[test]

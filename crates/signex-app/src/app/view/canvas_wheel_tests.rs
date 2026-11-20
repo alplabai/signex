@@ -251,7 +251,7 @@ fn in_scroll_mode_ctrl_wheel_zooms() {
     assert!(camera(&app).2 > before.2);
 }
 
-// The zoom pill's presets (#64).
+// The zoom pill's presets (Graphite mockup #64).
 
 fn pill_rect(app: &Signex) -> iced::Rectangle {
     let (w, h) = crate::canvas::zoom_pill::pill_size();

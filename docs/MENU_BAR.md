@@ -672,7 +672,7 @@ documents or windows were arranged.
 
 ## Sheet right-click menu {#sheet-context-menu}
 
-The schematic canvas menu (#2419, #62, `app/view/context_menu/menus.rs`) shows
+The schematic canvas menu (#2419, Graphite mockup #62, `app/view/context_menu/menus.rs`) shows
 rows by what was right-clicked and makes each command row live by the
 command's own enablement rule (`app/command/needs.rs`), the rule the menu bar
 greys the same row by and a keystroke is dropped by. A muted first line names

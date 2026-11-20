@@ -426,7 +426,7 @@ pub enum UiMsg {
     /// history, net highlight and the hover insight.
     NetNav(super::net_nav::NetNavMsg),
     /// The zoom pill's percentage was clicked: the preset menu opens, or
-    /// closes when it is up (#64).
+    /// closes when it is up (Graphite mockup #64).
     ZoomPresetsToggled,
     /// The preset menu was dismissed by Esc or a click outside it.
     ZoomPresetsDismissed,

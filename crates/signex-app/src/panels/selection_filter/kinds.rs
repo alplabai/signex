@@ -1,7 +1,8 @@
-//! The kind toggles both filter panels draw (#55, #56): All / None with the
-//! "10 of 12 kinds" readout, then one full-width toggle per kind with its
-//! checkbox, name and count. One view, generic over the kind like the
-//! preset list (`active_bar::presets::PresetKind`).
+//! The kind toggles both filter panels draw (Graphite mockup #55 and
+//! Graphite mockup #56): All / None with the "10 of 12 kinds" readout, then
+//! one full-width toggle per kind with its checkbox, name and count. One
+//! view, generic over the kind like the preset list
+//! (`active_bar::presets::PresetKind`).
 
 use iced::widget::{Column, Row, Space, container};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};

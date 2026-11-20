@@ -331,7 +331,7 @@ pub(super) fn context_line(i18n: &I18n, context: &MenuContext) -> String {
     }
 }
 
-/// Pure sheet-menu data builder (#62). Rows and their enable state come
+/// Pure sheet-menu data builder (Graphite mockup #62). Rows and their enable state come
 /// only from the passed selection flags, command facts and shortcut hints,
 /// so the menu's shape is unit-testable without a window. With nothing
 /// selected it is the short sheet menu; with a selection it opens on the

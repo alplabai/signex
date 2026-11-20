@@ -43,12 +43,12 @@ const TID: ThemeId = ThemeId::GraphiteDark;
 const SURFACE_LOCAL: &[(&str, &str)] = &[
     // Place flyout power ports: the PlacePower* family becomes one
     // `place_power_port(style)` command (audit §4), so no per-row ids. The
-    // rows show the short port name (#62).
+    // rows show the short port name (Graphite mockup #62).
     ("GND", "power-port family, awaiting place_power_port(style)"),
     ("VCC", "power-port family, awaiting place_power_port(style)"),
     ("+5", "power-port family, awaiting place_power_port(style)"),
     ("+12", "power-port family, awaiting place_power_port(style)"),
-    // Place flyout: the greyed row standing for the planned tools (#62).
+    // Place flyout: the greyed row standing for the planned tools (Graphite mockup #62).
     ("5 planned tools…", "planned tools, no behaviour"),
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
@@ -294,7 +294,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
             let (app, selection, derived_key) = app_in_selection(profile, bits);
             let ctx = app.command_context(None);
             // A right-click on an object adds Find Similar and Highlight
-            // Net; a net highlight adds Clear Filter (#62).
+            // Net; a net highlight adds Clear Filter (Graphite mockup #62).
             for (hit_object, net_highlighted) in [(false, false), (true, true)] {
                 let selection = CanvasSelection {
                     hit_object,

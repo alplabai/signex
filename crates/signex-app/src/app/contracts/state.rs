@@ -52,7 +52,7 @@ pub enum ContextSubmenu {
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
     /// The greyed "Planned (N) ›" launcher of the sheet menu: the features
-    /// not built yet, each row with what it will do (#62).
+    /// not built yet, each row with what it will do (Graphite mockup #62).
     Planned,
 }
 

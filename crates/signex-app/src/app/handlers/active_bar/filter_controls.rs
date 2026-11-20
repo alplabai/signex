@@ -46,9 +46,10 @@ impl Signex {
         Task::none()
     }
 
-    /// A message of the SCH Filter or Filter panel (#2417, #55, #56): the
-    /// Active Bar dropdown's and Properties' handlers, so the panels, the
-    /// dropdown and Properties edit one filter and one preset list.
+    /// A message of the SCH Filter or Filter panel (#2417, Graphite
+    /// mockup #55, Graphite mockup #56): the Active Bar dropdown's and
+    /// Properties' handlers, so the panels, the dropdown and Properties edit
+    /// one filter and one preset list.
     pub(crate) fn handle_sch_filter(&mut self, msg: SchFilterMsg) -> Task<Message> {
         match msg {
             SchFilterMsg::KindToggled(filter) => self.handle_active_bar_filter_toggle(filter),

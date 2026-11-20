@@ -85,7 +85,7 @@ enum PlaceRow {
     ),
 }
 
-/// The Place flyout (#62), under the Wiring / Ports and power / Parts and
+/// The Place flyout (Graphite mockup #62), under the Wiring / Ports and power / Parts and
 /// sheets / Directives and text subheads. A planned tool is not listed in
 /// its group: the planned ones are gathered in one greyed row at the end.
 const PLACE_ROWS: &[PlaceRow] = &[
@@ -141,7 +141,7 @@ const PLACE_ROWS: &[PlaceRow] = &[
     PlaceRow::Tool(ic::icon_dd_note, A::PlaceNote),
 ];
 
-/// Place submenu (#62): wiring, ports and power, parts and sheets,
+/// Place submenu (Graphite mockup #62): wiring, ports and power, parts and sheets,
 /// directives and text, each under its subhead; then one greyed "N planned
 /// tools…" row naming the planned ones in its tooltip. `hint` resolves a
 /// command id to its keymap shortcut.
@@ -211,7 +211,7 @@ fn planned_tools_row(i18n: &I18n, names: &[&str]) -> DropdownEntry<Message> {
     }
 }
 
-/// The "Planned (N)" flyout of the sheet menu (#62): the features not built
+/// The "Planned (N)" flyout of the sheet menu (Graphite mockup #62): the features not built
 /// yet, greyed, each with what it will do as its tooltip.
 pub(super) fn planned_entries(i18n: &I18n, tid: ThemeId) -> Vec<DropdownEntry<Message>> {
     vec![

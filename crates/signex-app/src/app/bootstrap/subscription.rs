@@ -104,7 +104,7 @@ struct OpenOverlays {
     tab_context_menu_open: bool,
     project_tree_context_menu_open: bool,
     grid_picker_open: bool,
-    /// The zoom pill's preset menu is painted (#64).
+    /// The zoom pill's preset menu is painted (Graphite mockup #64).
     zoom_presets_open: bool,
 }
 

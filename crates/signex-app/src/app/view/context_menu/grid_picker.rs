@@ -1,4 +1,4 @@
-//! The grid picker popup (#63): the standard grid ladder under Imperial and
+//! The grid picker popup (Graphite mockup #63): the standard grid ladder under Imperial and
 //! Metric subheads, mil rows captioned with their mm value, the active step
 //! checked on the accent-soft fill, and a final Grid Properties… row; a
 //! read-only preview of the active step sits beside it.

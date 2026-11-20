@@ -293,7 +293,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
 
 impl PanelKind {
     /// Whether this panel requires a schematic document to be open. Filter
-    /// follows the active editor, a schematic's or a board's (#55).
+    /// follows the active editor, a schematic's or a board's (Graphite mockup #55).
     pub fn needs_schematic(self) -> bool {
         matches!(
             self,
@@ -430,7 +430,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Projects => view_projects(ctx),
         PanelKind::Navigator => navigator::view(ctx),
         PanelKind::Properties => view_properties(ctx),
-        // The active editor's selection filter (#55): a schematic's or a
+        // The active editor's selection filter (Graphite mockup #55): a schematic's or a
         // board's kinds, else the empty card.
         PanelKind::Filter => selection_filter::filter_view(ctx),
         PanelKind::Erc => view_erc(ctx),

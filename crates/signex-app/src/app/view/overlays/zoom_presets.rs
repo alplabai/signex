@@ -1,4 +1,4 @@
-//! The zoom presets (#64): the small menu the zoom pill's percentage opens
+//! The zoom presets (Graphite mockup #64): the small menu the zoom pill's percentage opens
 //! above the pill. 50 / 100 / 200 / 400 % zoom the schematic about the canvas
 //! centre (the current one checked), then Fit All and Fit Selection run their
 //! commands; Fit Selection is greyed with nothing selected. A pick, Esc or a

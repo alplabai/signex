@@ -178,7 +178,7 @@ fn a_canvas_right_click_opens_the_menu_at_the_cursor() {
     open_canvas_menu(&mut app, at);
     let metrics = MenuMetrics::GRAPHITE;
     let texts = lay_out_layers(app.context_menu_overlay(main), window);
-    // The muted context line comes first, then Find (#62).
+    // The muted context line comes first, then Find (Graphite mockup #62).
     let first = find(
         &texts,
         &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), "find"),
@@ -225,7 +225,7 @@ fn the_canvas_menu_has_28_px_rows_and_a_fitted_width() {
 /// The click lands on the row that is drawn there: a press in the gap
 /// right of a label, one pixel inside the row's top edge, runs that row and
 /// does not close the menu. The Place launcher is live on an empty spot
-/// (#62); the command rows there follow the sheet's facts (#2419).
+/// (Graphite mockup #62); the command rows there follow the sheet's facts (#2419).
 #[test]
 fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
     let (mut app, main) = graphite_app();
@@ -270,7 +270,7 @@ fn the_place_flyout_lines_up_with_its_launcher() {
         iced::Size::new(1400.0, 1600.0),
     );
     let launcher = find(&tall, "Place").bounds;
-    // The flyout opens on its Wiring subhead (#62): its top meets the
+    // The flyout opens on its Wiring subhead (Graphite mockup #62): its top meets the
     // launcher's top.
     let head = find(&tall, "Wiring").bounds;
     let launcher_top = mid(launcher) - metrics.item_height(true) / 2.0;
