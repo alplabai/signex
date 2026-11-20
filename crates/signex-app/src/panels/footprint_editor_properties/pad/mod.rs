@@ -15,6 +15,9 @@ mod layer_titles;
 mod rule_row;
 mod table;
 
+pub(in crate::panels::footprint_editor_properties) use field::{
+    Shown, number_input, with_refusals,
+};
 pub(super) use form::{PadEditTarget, view_pad_form};
 #[cfg(test)]
 pub(super) use header::selected_pad_heading;

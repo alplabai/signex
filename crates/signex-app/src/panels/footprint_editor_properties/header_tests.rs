@@ -476,11 +476,12 @@ fn pad_features_open_on_their_header() {
 
 /// The paste and solder mask sections of the pad form name their layers as
 /// the Layers panel does: a paste section is the layer's catalog name, a
-/// solder mask section the catalog name with "mask".
+/// solder mask section the catalog name with "mask"; the copper table's
+/// outer rows are the copper layers' catalog names.
 #[test]
 fn the_per_side_rows_use_the_layer_catalog_names() {
     use crate::pcb_canvas::layer_style::layer_name;
-    use signex_types::pcb_layer::{PcbLayer, TechnicalLayer as T};
+    use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer as T};
     let i18n = signex_i18n::I18n::en_us();
     let name = |layer: T| layer_name(&i18n, PcbLayer::Technical(layer)).into_string();
     let mask = |layer: T| format!("{} mask", name(layer));
@@ -512,6 +513,15 @@ fn the_per_side_rows_use_the_layer_catalog_names() {
         &[top_mask, bottom_mask],
         &[top_paste, bottom_paste],
     );
+
+    // Its copper table names the outer copper as the Layers panel does.
+    let copper = |layer| layer_name(&i18n, PcbLayer::Copper(layer)).into_string();
+    let (top, bottom) = (copper(CopperLayer::Top), copper(CopperLayer::Bottom));
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetPadStackTab(PadStackTab::TopMiddleBottom),
+    );
+    assert_shows(&pad_texts(&app), &[top.as_str(), bottom.as_str()], &[]);
 }
 
 /// How many times the pad form shows `label`.

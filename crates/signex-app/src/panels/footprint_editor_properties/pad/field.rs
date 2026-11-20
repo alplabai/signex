@@ -17,7 +17,7 @@ const SP: Spacing = Spacing::DEFAULT;
 
 /// Why the text in a pad field was not taken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Refusal {
+pub(in crate::panels::footprint_editor_properties) enum Refusal {
     NotANumber,
     NotPositive,
     /// The size leaves a trapezoid with no copper.
@@ -52,7 +52,7 @@ impl Refusal {
 
 /// What a number field shows: the refused text while there is one, else
 /// the stored value.
-pub(super) struct Shown {
+pub(in crate::panels::footprint_editor_properties) struct Shown {
     pub text: String,
     pub refusal: Option<Refusal>,
 }
@@ -66,7 +66,7 @@ impl Shown {
     }
 
     /// `buffer` (refused text) when present, else `stored`.
-    pub(super) fn from_buffer(
+    pub(in crate::panels::footprint_editor_properties) fn from_buffer(
         buffer: Option<&String>,
         stored: String,
         positive: bool,
@@ -97,7 +97,7 @@ pub(super) fn segment_style(tokens: &ThemeTokens) -> SegmentedStyle {
 
 /// A number field showing `shown`, outlined in the error ink while its
 /// text is refused.
-pub(super) fn number_input<'a>(
+pub(in crate::panels::footprint_editor_properties) fn number_input<'a>(
     shown: &Shown,
     on_input: impl Fn(String) -> PanelMsg + 'a,
     tokens: &ThemeTokens,
@@ -164,7 +164,7 @@ pub(super) fn pair<'a>(
 }
 
 /// `row` with the reasons of its refused fields under it.
-pub(super) fn with_refusals<'a>(
+pub(in crate::panels::footprint_editor_properties) fn with_refusals<'a>(
     row: Element<'a, PanelMsg>,
     refusals: &[Option<Refusal>],
     tokens: &ThemeTokens,

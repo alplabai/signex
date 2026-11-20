@@ -1,13 +1,17 @@
 //! The Grid Properties draft's own edits (mockup row 142): the multipliers
-//! it offers, its step, and the values set on the preview's labels. The
-//! preview (`view::dialogs::grid_properties::preview`) only draws them.
+//! it offers, its step, and the preview's labels: which values they show
+//! and the values set on them. The preview
+//! (`view::dialogs::grid_properties::preview`) only lays them out.
 
+use iced::Point;
 use signex_i18n::I18n;
 use signex_types::coord::Unit;
 use signex_types::measure::length_field_text;
-use signex_widgets::dimension_label::DimensionLabelMessage;
+use signex_widgets::LengthFormat;
+use signex_widgets::dimension_label::{DimensionLabel, DimensionLabelMessage};
 
 use super::state::GridPropertiesState;
+use crate::library::editor::footprint::GridDisplay;
 
 /// The multipliers the dialog offers, smallest first.
 pub(crate) const MULTIPLIERS: [u32; 4] = [1, 2, 5, 10];
@@ -37,6 +41,21 @@ impl GridPropertiesState {
         crate::numeric_field::validated_grid_step(&self.step_mm).ok()
     }
 
+    /// The values the preview labels show, in order, in mm: the step, then
+    /// the coarse spacing unless the coarse grid is hidden. None while the
+    /// step is not a number above zero.
+    pub(crate) fn preview_label_values(&self) -> Vec<(PreviewLabel, f64)> {
+        let Some(step) = self.draft_step() else {
+            return Vec::new();
+        };
+        let mut out = vec![(PreviewLabel::Step, step)];
+        if self.coarse_display != GridDisplay::Hidden {
+            let coarse = step * f64::from(self.multiplier.max(1));
+            out.push((PreviewLabel::Coarse, coarse));
+        }
+        out
+    }
+
     /// Writes a value the user set on a preview label into the draft: the
     /// step text, or the multiplier closest to the coarse spacing typed.
     /// The step is validated on OK, as one typed in the Step field.
@@ -55,10 +74,13 @@ impl GridPropertiesState {
     /// the draft. Returns whether a label field opened, so the caller
     /// focuses it.
     pub(crate) fn label_edited(&mut self, event: DimensionLabelMessage, i18n: &I18n) -> bool {
-        use crate::app::view::dialogs::grid_properties::preview::{PreviewSize, labels};
-        // Positions do not matter to the update; the values and order do.
-        let size = PreviewSize::new(0.0, self.preview_expanded, 1.0);
-        let (kinds, labels): (Vec<_>, Vec<_>) = labels(self, size, i18n).into_iter().unzip();
+        // The update reads each label's value and unit, not where it sits.
+        let format = LengthFormat::new(i18n, Unit::Mm);
+        let (kinds, labels): (Vec<_>, Vec<_>) = self
+            .preview_label_values()
+            .into_iter()
+            .map(|(kind, value)| (kind, DimensionLabel::new(value, format, Point::ORIGIN)))
+            .unzip();
         let outcome = self.preview_labels.update(event, &labels);
         if let Some(done) = outcome.committed
             && let Some(&kind) = kinds.get(done.index)

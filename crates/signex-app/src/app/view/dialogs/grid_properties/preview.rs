@@ -111,9 +111,8 @@ pub(crate) fn scale(state: &GridPropertiesState, step_mm: f64, size: PreviewSize
     }
 }
 
-/// The labels the preview shows, in order, placed for `size`. None while
-/// the step is not a number above zero; no coarse label while the coarse
-/// grid is hidden.
+/// The draft's preview labels (`GridPropertiesState::preview_label_values`)
+/// laid out for `size`, in the same order.
 pub(crate) fn labels<'a>(
     state: &GridPropertiesState,
     size: PreviewSize,
@@ -132,37 +131,33 @@ pub(crate) fn labels<'a>(
     } else {
         step_from
     };
-    let mut out = vec![(
-        PreviewLabel::Step,
-        DimensionLabel::new(
-            step,
-            format,
+    let (_, coarse_to) = coarse_span(&s, size);
+    let place = |kind: PreviewLabel| match kind {
+        PreviewLabel::Step => (
             Point::new(step_x.min(room), size.em(STEP_ROW_EM)),
-        )
-        .caption(t!(i18n, ids::DIALOG_GRID_PREVIEW_STEP))
-        .decimals(LABEL_DECIMALS)
-        .anchor(LabelAnchor::Start),
-    )];
-    if state.coarse_display != GridDisplay::Hidden {
-        let multiplier = state.multiplier.max(1);
-        let (_, coarse_to) = coarse_span(&s, size);
-        out.push((
-            PreviewLabel::Coarse,
-            DimensionLabel::new(
-                step * f64::from(multiplier),
-                format,
-                Point::new((coarse_to + gap).min(room), size.em(COARSE_ROW_EM)),
-            )
-            .caption(t!(
+            t!(i18n, ids::DIALOG_GRID_PREVIEW_STEP),
+        ),
+        PreviewLabel::Coarse => (
+            Point::new((coarse_to + gap).min(room), size.em(COARSE_ROW_EM)),
+            t!(
                 i18n,
                 ids::DIALOG_GRID_PREVIEW_COARSE,
-                "multiplier" => multiplier
-            ))
-            .decimals(LABEL_DECIMALS)
-            .anchor(LabelAnchor::Start),
-        ));
-    }
-    out
+                "multiplier" => state.multiplier.max(1)
+            ),
+        ),
+    };
+    state
+        .preview_label_values()
+        .into_iter()
+        .map(|(kind, value)| {
+            let (at, caption) = place(kind);
+            let label = DimensionLabel::new(value, format, at)
+                .caption(caption)
+                .decimals(LABEL_DECIMALS)
+                .anchor(LabelAnchor::Start);
+            (kind, label)
+        })
+        .collect()
 }
 
 /// Where the step dimension runs: one fine pitch, one coarse cell in from

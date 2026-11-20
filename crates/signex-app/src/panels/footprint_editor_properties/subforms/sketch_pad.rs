@@ -12,13 +12,13 @@ use signex_sketch::id::SketchEntityId;
 use signex_types::pcb_layer::{BoardSide, CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::property_illustration::FieldId;
-use signex_widgets::{button, text};
+use signex_widgets::{Label, button, text};
 
 use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FpSubformMsg, PanelMsg, PanelPalette,
     SketchPadAttrSummary, expansion_buffer_key,
 };
-use super::super::pad::{layer_title, rule_or_manual_row};
+use super::super::pad::{Shown, layer_title, number_input, rule_or_manual_row, with_refusals};
 use super::expansion::literal_mm;
 use super::helpers::{
     SP, TS, caption, check, check_grid, enable_section, example_input, field_row, form, header,
@@ -414,8 +414,22 @@ fn expansion_row<'a>(
     )
 }
 
+/// A sketch pad field that refuses text that is not a number: the stored
+/// value, or the refused text with a red outline and the reason under the
+/// row, as the pad form shows it.
+fn refusable_row<'a>(
+    label: impl Into<Label<'a>>,
+    shown: Shown,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let row = field_row(label, number_input(&shown, on_input, tokens), tokens);
+    with_refusals(row, &[shown.refusal], tokens, i18n)
+}
+
 /// The shipped hole rows of a drilled pad. A tolerance or offset the pad
-/// did not take shows its typed text until it is taken.
+/// did not take shows its typed text and the reason until it is taken.
 fn hole_rows<'a>(
     fp: &FootprintEditorPanelContext,
     pad: &'a SketchPadAttrSummary,
@@ -424,29 +438,26 @@ fn hole_rows<'a>(
 ) -> Vec<Element<'a, PanelMsg>> {
     let id = pad.id;
     let mm = |field: &str, v: Option<f64>| {
-        fp.numeric_buffers
-            .get(&sketch_pad_field_buffer_key(id, field))
-            .cloned()
-            .unwrap_or_else(|| v.map(|v| format!("{v:.3}")).unwrap_or_default())
+        let buffer = fp
+            .numeric_buffers
+            .get(&sketch_pad_field_buffer_key(id, field));
+        let stored = v.map(|v| format!("{v:.3}")).unwrap_or_default();
+        Shown::from_buffer(buffer, stored, false, |_| true)
     };
     vec![
-        field_row(
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_PLUS),
-            example_input(
-                "0",
-                mm(pad_field::HOLE_TOLERANCE_PLUS, pad.hole_tolerance_plus_mm),
-                move |value| PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value },
-            ),
+            mm(pad_field::HOLE_TOLERANCE_PLUS, pad.hole_tolerance_plus_mm),
+            move |value| PanelMsg::FpEditorSetSketchPadHoleTolerancePlus { id, value },
             tokens,
+            i18n,
         ),
-        field_row(
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_HOLE_TOLERANCE_MINUS),
-            example_input(
-                "0",
-                mm(pad_field::HOLE_TOLERANCE_MINUS, pad.hole_tolerance_minus_mm),
-                move |value| PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value },
-            ),
+            mm(pad_field::HOLE_TOLERANCE_MINUS, pad.hole_tolerance_minus_mm),
+            move |value| PanelMsg::FpEditorSetSketchPadHoleToleranceMinus { id, value },
             tokens,
+            i18n,
         ),
         field_row(
             t!(i18n, ids::EDITORS_PAD_HOLE_ROTATION),
@@ -459,23 +470,19 @@ fn hole_rows<'a>(
             ),
             tokens,
         ),
-        field_row(
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_X),
-            example_input(
-                "0",
-                mm(pad_field::COPPER_OFFSET_X, pad.copper_offset_x_mm),
-                move |value| PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value },
-            ),
+            mm(pad_field::COPPER_OFFSET_X, pad.copper_offset_x_mm),
+            move |value| PanelMsg::FpEditorSetSketchPadCopperOffsetX { id, value },
             tokens,
+            i18n,
         ),
-        field_row(
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_COPPER_OFFSET_Y),
-            example_input(
-                "0",
-                mm(pad_field::COPPER_OFFSET_Y, pad.copper_offset_y_mm),
-                move |value| PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value },
-            ),
+            mm(pad_field::COPPER_OFFSET_Y, pad.copper_offset_y_mm),
+            move |value| PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value },
             tokens,
+            i18n,
         ),
     ]
 }

@@ -364,3 +364,40 @@ fn a_count_that_does_not_evaluate_draws_the_source_only() {
     assert_eq!(shown, &ArrayPreview::Unresolved);
     assert_eq!(shown.kept(), None);
 }
+
+/// A drilled sketch pad's copper offset or hole tolerance that was refused
+/// shows the reason under its row, as the pad form does.
+#[test]
+fn a_refused_sketch_pad_offset_shows_its_reason() {
+    use crate::library::editor::footprint::{pad_field, sketch_pad_field_buffer_key};
+    let mut id = None;
+    let sketch = sketch(|plane, s| {
+        let drill = DrillSpec {
+            diameter_expr: "1mm".into(),
+            slot_length_expr: None,
+            plated: true,
+        };
+        id = Some(pad_point(plane, s, Some(drill)));
+    });
+    let id = id.unwrap();
+    let mut ctx = ctx_with(sketch, id);
+    let reasons = |ctx: &FootprintEditorPanelContext| {
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let palette = PanelPalette::from_tokens(&tokens);
+        let collapsed = CollapsedSections::default();
+        let i18n = signex_i18n::I18n::en_us();
+        let form = view_role_subform(ctx, id, palette, &tokens, &collapsed, &i18n)
+            .expect("a sketch pad form");
+        crate::layout_probe::lay_out_texts(form, iced::Size::new(260.0, 4000.0))
+            .into_iter()
+            .filter(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Enter a number")
+            .count()
+    };
+    assert_eq!(reasons(&ctx), 0);
+
+    let key = sketch_pad_field_buffer_key(id, pad_field::COPPER_OFFSET_X);
+    ctx.numeric_buffers.insert(key, "-".into());
+    let key = sketch_pad_field_buffer_key(id, pad_field::HOLE_TOLERANCE_MINUS);
+    ctx.numeric_buffers.insert(key, "0,0".into());
+    assert_eq!(reasons(&ctx), 2, "each refused field says why");
+}

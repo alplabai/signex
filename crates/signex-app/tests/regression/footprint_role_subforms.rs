@@ -262,3 +262,88 @@ fn half_typed_expansion_text_is_kept_without_touching_the_pad() {
     );
     assert!(!editor(&app, &path).state.numeric_buffers.contains_key(&key));
 }
+
+fn pad_attr<'a>(app: &'a Signex, path: &PathBuf, id: SketchEntityId) -> &'a PadAttr {
+    entity(app, path, id).pad.as_ref().unwrap()
+}
+
+fn panel(app: &mut Signex, msg: PanelMsg) {
+    drop(app.update(Message::Dock(DockMessage::Panel(msg))));
+}
+
+/// A sketch pad's copper offset and hole tolerance refuse half-typed text
+/// as the pad form does: the pad keeps its value and the text is kept
+/// under the sketch pad's own key; empty text clears the value, and the
+/// keystrokes of one field that are taken make one undo step.
+#[test]
+fn half_typed_offset_or_tolerance_on_a_sketch_pad_keeps_the_value() {
+    use signex_app::library::editor::footprint::{pad_field, sketch_pad_field_buffer_key};
+    let (mut footprint, id) = pad_footprint();
+    let attr = footprint
+        .sketch
+        .as_mut()
+        .unwrap()
+        .entities
+        .iter_mut()
+        .find_map(|e| e.pad.as_mut())
+        .unwrap();
+    attr.copper_offset_x_mm = Some(0.1);
+    attr.hole_tolerance_plus_mm = Some(0.05);
+    let (mut app, path) = open_editor("sketch-pad-offset", footprint);
+    let offset_x = |value: &str| PanelMsg::FpEditorSetSketchPadCopperOffsetX {
+        id,
+        value: value.into(),
+    };
+    let tolerance_plus = |value: &str| PanelMsg::FpEditorSetSketchPadHoleTolerancePlus {
+        id,
+        value: value.into(),
+    };
+    let offset_key = sketch_pad_field_buffer_key(id, pad_field::COPPER_OFFSET_X);
+    let tolerance_key = sketch_pad_field_buffer_key(id, pad_field::HOLE_TOLERANCE_PLUS);
+    let buffer =
+        |app: &Signex, key: &str| editor(app, &path).state.numeric_buffers.get(key).cloned();
+
+    panel(&mut app, offset_x("-"));
+    panel(&mut app, tolerance_plus("0,0"));
+    let pad = pad_attr(&app, &path, id);
+    assert_eq!(pad.copper_offset_x_mm, Some(0.1), "the offset is kept");
+    assert_eq!(
+        pad.hole_tolerance_plus_mm,
+        Some(0.05),
+        "the tolerance is kept"
+    );
+    assert_eq!(buffer(&app, &offset_key).as_deref(), Some("-"));
+    assert_eq!(buffer(&app, &tolerance_key).as_deref(), Some("0,0"));
+    assert_eq!(editor(&app, &path).history.undo_len(), 0, "nothing written");
+
+    // Empty text clears the tolerance and drops its typed text.
+    panel(&mut app, tolerance_plus(""));
+    assert_eq!(pad_attr(&app, &path, id).hole_tolerance_plus_mm, None);
+    assert_eq!(buffer(&app, &tolerance_key), None);
+    assert_eq!(editor(&app, &path).history.undo_len(), 1);
+
+    // A number typed key by key is stored in one undo step.
+    panel(&mut app, offset_x("-0"));
+    panel(&mut app, offset_x("-0.2"));
+    assert_eq!(pad_attr(&app, &path, id).copper_offset_x_mm, Some(-0.2));
+    assert_eq!(buffer(&app, &offset_key), None);
+    assert!(editor(&app, &path).is_dirty());
+    assert_eq!(
+        editor(&app, &path).history.undo_len(),
+        2,
+        "one step per field"
+    );
+
+    app.document_state
+        .footprint_editors
+        .get_mut(&path)
+        .unwrap()
+        .undo();
+    let pad = pad_attr(&app, &path, id);
+    assert_eq!(
+        pad.copper_offset_x_mm,
+        Some(0.1),
+        "undo restores the offset"
+    );
+    assert_eq!(pad.hole_tolerance_plus_mm, None);
+}
