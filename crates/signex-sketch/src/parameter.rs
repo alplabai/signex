@@ -257,4 +257,30 @@ mod tests {
         assert!(approx_eq(*r.get("b").unwrap(), 0.25));
         assert!(approx_eq(*r.get("c").unwrap(), 10.5));
     }
+
+    /// One expression reads the resolved table and keeps its unit family;
+    /// the leading `=` is optional. An unknown name, or a table that does
+    /// not resolve, is an error rather than a number.
+    #[test]
+    fn eval_with_parameters_reads_the_table_and_keeps_the_unit_family() {
+        let mut t = ParameterTable::new();
+        t.insert("pitch", "0.5mm");
+        t.insert("n", "4");
+        let length = eval_with_parameters("pitch * (n - 1)", &t).unwrap();
+        assert_eq!(length.unit.family(), UnitFamily::Length);
+        assert!(approx_eq(length.value, 1.5));
+        let with_eq = eval_with_parameters("= pitch * 2", &t).unwrap();
+        assert!(approx_eq(with_eq.value, 1.0));
+        let count = eval_with_parameters("n", &t).unwrap();
+        assert_eq!(count.unit.family(), UnitFamily::Count);
+        assert!(matches!(
+            eval_with_parameters("missing + 1mm", &t),
+            Err(ExprError::Unknown(_))
+        ));
+        t.insert("a", "= a + 1mm");
+        assert!(matches!(
+            eval_with_parameters("pitch", &t),
+            Err(ExprError::Cycle(_))
+        ));
+    }
 }
