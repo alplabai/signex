@@ -1075,8 +1075,8 @@ More detail: [PCB_TOOLS.md](PCB_TOOLS.md).
 **Pick a fab tier**
 
 The rules start from a manufacturing tier, chosen in **Fab tier** in the
-New Project or **New PCB** dialog: **Standard fab**,
-**Advanced fab** or **HDI fab**. The tier writes seven `fab_*` rules (the
+New Project or **New PCB** dialog: **Standard**,
+**Advanced** or **HDI**; the field mirrors the picked profile card. The tier writes seven `fab_*` rules (the
 floor of what the board house can build) into the project's rules:
 
 | Tier | Clearance | Track | Via / drill | Hole | Edge |

@@ -27,7 +27,7 @@ pub struct FabCapabilities {
 }
 
 /// When the tier numbers were last checked.
-const TIERS_REVISED: &str = "2026-11-17";
+const TIERS_REVISED: &str = "2026-11-19";
 
 impl FabTemplate {
     /// The tier's limits: the one tier table. A tier card's clearance and
