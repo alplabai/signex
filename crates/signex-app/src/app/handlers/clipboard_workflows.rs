@@ -250,14 +250,14 @@ fn designator_rule(
     }
 }
 
+/// A drawing's box in mm: its minimum and maximum corners.
+type PreviewBox = ((f64, f64), (f64, f64));
+
 /// The drawables of a copied fragment for the Smart Paste drawing, and
 /// their box.
 fn preview_shapes(
     fragment: &signex_types::schematic::SchematicSheet,
-) -> (
-    Vec<crate::smart_paste::PreviewShape>,
-    ((f64, f64), (f64, f64)),
-) {
+) -> (Vec<crate::smart_paste::PreviewShape>, PreviewBox) {
     use crate::smart_paste::PreviewShape;
     use signex_types::schematic::{SelectedItem, SelectedKind};
     let mut shapes = Vec::new();

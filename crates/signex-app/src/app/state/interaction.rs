@@ -93,7 +93,7 @@ pub struct InteractionState {
     pub polyline_points: Vec<signex_types::schematic::Point>,
     /// The Bezier and dimension tools' clicked points and the text the next
     /// dimension takes (#1267).
-    pub annotation_tool: crate::app::handlers::canvas::AnnotationTool,
+    pub(crate) annotation_tool: crate::app::handlers::canvas::AnnotationTool,
     /// Two-click shape placement: first click sets the anchor, second
     /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
     pub shape_anchor: Option<signex_types::schematic::Point>,

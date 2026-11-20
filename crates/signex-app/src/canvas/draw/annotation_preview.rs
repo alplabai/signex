@@ -118,11 +118,11 @@ impl SchematicCanvas<'_> {
             .with_color(Color { a: 0.5, ..accent })
             .with_width(1.0);
         for p in &draft.points {
-            frame.stroke(&canvas::Path::circle(to_screen(*p), 4.0), stroke.clone());
+            frame.stroke(&canvas::Path::circle(to_screen(*p), 4.0), stroke);
         }
         if let Some(b) = draft.bezier_at(cursor) {
             let [s, c1, c2, e] = b.points().map(to_screen);
-            frame.stroke(&canvas::Path::line(s, c1), guide.clone());
+            frame.stroke(&canvas::Path::line(s, c1), guide);
             frame.stroke(&canvas::Path::line(e, c2), guide);
             let curve = canvas::Path::new(|path| {
                 path.move_to(s);
@@ -146,10 +146,7 @@ impl SchematicCanvas<'_> {
         let stroke = canvas::Stroke::default().with_color(accent).with_width(1.4);
         let g = d.geometry();
         for [a, b] in [g.line, g.extensions[0], g.extensions[1]] {
-            frame.stroke(
-                &canvas::Path::line(to_screen(a), to_screen(b)),
-                stroke.clone(),
-            );
+            frame.stroke(&canvas::Path::line(to_screen(a), to_screen(b)), stroke);
         }
         for head in &g.arrows {
             let tri = canvas::Path::new(|path| {
