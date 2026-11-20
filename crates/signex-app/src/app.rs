@@ -178,6 +178,8 @@ impl Signex {
         // The Rules tab in view re-reads its flags when its rules changed (#2398).
         self.sync_rules_analysis();
         self.sync_undo_depth();
+        // The Start screen's time column reads its clock from the Model.
+        self.sync_start_screen_clock();
         // A resize, a dock collapsed or expanded, or a panel docked into an
         // empty side all change the room beside the canvas (#2347).
         self.fit_side_docks_to_window();

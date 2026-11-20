@@ -367,15 +367,51 @@ fn the_start_screen_clock_lives_in_the_model() {
         project_id: None,
         kind: crate::app::TabKind::Schematic,
     });
-    app.drop_start_row_menu_off_screen();
+    app.sync_start_screen_clock();
     assert_eq!(app.ui_state.start_screen.now, None, "off screen: no clock");
 
     app.document_state.tabs.clear();
-    app.drop_start_row_menu_off_screen();
+    app.sync_start_screen_clock();
     assert!(
         app.ui_state.start_screen.now.is_some(),
         "back on screen: stamped again"
     );
+}
+
+/// Probe: the last tab closed from the tab menu brings the Start screen
+/// back through the ContextMenu route, which skips `finish_update`. The
+/// clock is stamped there too, so the time column never reads 1970.
+#[test]
+fn closing_the_last_tab_from_the_tab_menu_stamps_the_clock() {
+    use crate::app::{ContextMenuMsg, TabContextAction};
+    let (mut app, _boot) = crate::app::Signex::new();
+    let path = PathBuf::from("a.snxfpt");
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "a.snxfpt".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::FootprintEditor(path.clone()),
+    });
+    let file =
+        signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), crate::app::FootprintDocument::new(path, file));
+    app.sync_start_screen_clock();
+    assert_eq!(app.ui_state.start_screen.now, None, "a tab is open");
+
+    let before = Utc::now();
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::TabAction(
+        TabContextAction::CloseAll,
+    )));
+    assert!(app.start_screen_shown(), "the Start screen is back");
+    let now = app
+        .ui_state
+        .start_screen
+        .now
+        .expect("stamped on the way back");
+    assert!(now >= before, "a fresh stamp, not the epoch: {now}");
 }
 
 /// The Home, Projects and Libraries rows send their messages (they sent
