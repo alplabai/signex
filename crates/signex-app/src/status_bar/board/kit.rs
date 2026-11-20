@@ -27,7 +27,7 @@ pub(super) const MONO: f32 = 11.0 * PX;
 /// The count badge: its least side, side padding and figure size.
 pub(super) const BADGE: f32 = 16.0 * PX;
 pub(super) const BADGE_PAD: f32 = 5.0 * PX;
-pub(super) const BADGE_TEXT: f32 = 10.0 * PX;
+pub(super) const BADGE_TEXT: f32 = TS.caption;
 /// A layer swatch.
 pub(super) const SWATCH: f32 = 9.0 * PX;
 /// The card's inner padding, a row's padding and the gap in a row.
