@@ -218,3 +218,67 @@ ctx-fp-silk-region = Region
 ## c13 sch-drawing-tables
 # Place > Graphics > Dimension, and the Drawing Tools group header of the same name.
 menu-place-dimension = Dimension
+
+## Active Bar Power menu and the Place flyout's power rows (Graphite
+## mockup #61, Graphite mockup #62): the short port names; the full
+## "Place … power port" text is the tooltip.
+
+ctx-power-common = Common
+ctx-power-styles = Styles
+ctx-power-grounds = Grounds
+ctx-power-gnd = GND
+ctx-power-vcc = VCC
+ctx-power-plus12 = +12
+ctx-power-plus5 = +5
+ctx-power-minus5 = -5
+ctx-power-arrow = Arrow
+ctx-power-wave = Wave
+ctx-power-bar = Bar
+ctx-power-circle = Circle
+ctx-power-signal-ground = Signal Ground
+ctx-power-earth = Earth
+ctx-power-chassis = Chassis
+
+## Sheet right-click menu (Graphite mockup #62)
+
+# Muted first line with nothing selected; { $file } is the sheet's file name.
+ctx-sheet-context = schematic sheet · { $file }
+ctx-selection-count = { $count ->
+    [one] 1 item selected
+   *[other] { $count } items selected
+}
+# Muted first line with one part selected; { $selected } is ctx-selection-count.
+ctx-selection-part = { $reference } · { $value } · { $selected }
+# Greyed flyout gathering the features not built yet.
+ctx-planned-group = Planned ({ $count })
+ctx-place-group-wiring = Wiring
+ctx-place-group-ports-power = Ports and power
+ctx-place-group-parts-sheets = Parts and sheets
+ctx-place-group-directives-text = Directives and text
+# Greyed row of the Place flyout standing for the planned tools.
+ctx-place-planned-tools = { $count } planned tools…
+# { $names } lists the planned tools.
+ctx-place-planned-tools-tooltip = Planned: { $names }
+
+## Grid picker (Graphite mockup #63)
+
+ctx-grid-imperial = Imperial
+ctx-grid-metric = Metric
+# A grid step in millimetres; { $mm } keeps '.' in every language.
+ctx-grid-mm-caption = { $mm } mm
+ctx-grid-properties = Grid Properties…
+ctx-grid-preview = Grid preview
+# { $step } is the ladder name of the step the preview shows.
+ctx-grid-preview-active = { $step } · active
+ctx-grid-preview-on-pitch = Pins on the 2.54 mm pitch land on this grid
+ctx-grid-preview-off-pitch = Pins on the 2.54 mm pitch fall between grid points
+# The canvas zoom pill (Graphite mockup #64). { $percent } is the zoom as a whole number.
+zoom-pill-percent = { $percent }%
+zoom-pill-fit = Fit
+# Hover hint of a pill control: { $action } is the command's menu text,
+# { $shortcut } its key in the active shortcut profile.
+zoom-pill-hint = { $action } · { $shortcut }
+zoom-pill-presets = Zoom Presets
+# Rows of the menu the pill's percentage opens. { $percent } as above.
+zoom-presets-percent = { $percent }%
+zoom-presets-fit-selection = Fit Selection

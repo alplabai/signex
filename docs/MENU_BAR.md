@@ -574,23 +574,31 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   derived again. While the panel is open, a project with no current index has
   one built off the UI thread; after an edit the last list stays shown until
   the new index lands.
-- Each row shows the net's name, its first matching net class and how many
-  component pins it connects. Named nets come first, then auto-named ones. The
-  filter matches the net name or the class name.
-- Clicking a net expands it to its pins, labels, power ports and sheet entries,
-  each with its sheet. Clicking a member highlights the net on every sheet and
+- Each row shows the net's name, its first matching net class as a pill and,
+  on the right, how many component pins it connects (Graphite mockup #58).
+  Named nets come first, then auto-named ones. The filter matches the net
+  name or the class name.
+- Clicking a net expands it, on the selection fill, to its pins, labels,
+  power ports and sheet entries, each with a kind icon (power ports in the
+  power colour, the kind named in its tooltip), a pin's name and its sheet. A
+  long list shows six rows, then "+ N more pins".
+- No project, a read in progress, an index that could not be read (with Open
+  Messages) and a filter with no match (with Clear filter) each show a card.
+  The summary footer stays under the list in both tabs. Clicking a member highlights the net on every sheet and
   goes to the member through net navigation (`go_to_member`), opening its
   sheet when needed.
-- Two tabs at the top (#1274): By Net, the list above, and By Component.
-  By Component lists every part of the project by designator, with its value,
-  footprint and connected pin count, from `NetIndex::components` (the same
-  index). The units of one designator are one part; a part not annotated yet
-  is listed per symbol. Clicking a part expands it to its connected pins, each
-  with its net and sheet; a pin wired to nothing is on no net and is not
-  listed. Clicking a pin goes to it and highlights its net, as a member click
-  does. The filter matches the designator, value or footprint. The tab is
-  panel state in the Model and is not saved. With a board in view there are
-  no tabs.
+- Two tabs at the top (#1274), each with the count of its list: By Net, the
+  list above, and By Component. By Component lists every part of the project
+  by designator, with its value, footprint and pin count, from
+  `NetIndex::components` (the same index). The units of one designator are
+  one part; a part not annotated yet is listed per symbol. Clicking a part
+  expands it to every pin in pin-number order, each with its net, pin name
+  and the sheet its unit is on; a pin wired to nothing reads
+  "— unconnected". A long list shows six
+  rows, then "+ N more pins". Clicking a wired pin goes to it and highlights
+  its net, as a member click does. The filter matches the designator, value
+  or footprint. The tab is panel state in the Model and is not saved. With a
+  board in view there are no tabs.
 - With a board in view (#2403) the panel lists the board's nets instead,
   from `pcb_geom::net_reports`: routed length, vias, pads and whether the
   net is routed (or how many connections are still open). Each row's Select
@@ -718,17 +726,33 @@ documents or windows were arranged.
 
 ## Sheet right-click menu {#sheet-context-menu}
 
-The schematic canvas menu (#2419, `app/view/context_menu/menus.rs`) shows rows
-by what was right-clicked and makes each command row live by the command's own
-enablement rule (`app/command/needs.rs`), the rule the menu bar greys the same
-row by and a keystroke is dropped by. Rows, top to bottom: Find Similar
-Objects, Find, Clear Filter (`clear_net_highlighting`); the Place, Part Actions
-and Sheet Actions submenus; with a selection, References, Align, Arrange (a
-drawing selected), Unions and Snippets; Cross Probe; Undo, Redo; Cut, Copy,
-Paste, Paste Special, Duplicate, Select All; with a selection, Rotate, Mirror
-X, Mirror Y, Delete; Highlight Net (`highlight_net_under_cursor`), Net Color...
-(`open_net_color_palette`), Assign Net Class...; Comment, Pin Mapping, Project
-Options, Preferences; with a selection, Supplier Links and Properties.
+The schematic canvas menu (#2419, Graphite mockup #62, `app/view/context_menu/menus.rs`) shows
+rows by what was right-clicked and makes each command row live by the
+command's own enablement rule (`app/command/needs.rs`), the rule the menu bar
+greys the same row by and a keystroke is dropped by. A muted first line names
+what the menu stands on: `schematic sheet · <file>`, or the selection
+(`R3 · 100k · 1 item selected`). Rows that need a selection are hidden, not
+greyed, on an empty spot.
+
+With nothing selected, top to bottom: Find; Find Similar Objects only when the
+right-click hit an object; the Place and Sheet Actions submenus; Undo, Redo;
+Paste, Paste Special, Select All; Highlight Net (`highlight_net_under_cursor`)
+only when the right-click hit an object; Net Color... (`open_net_color_palette`);
+Clear Filter (`clear_net_highlighting`) only while a net highlight is on;
+Project Options, Preferences.
+
+With a selection: Properties (bold, the default row), Find Similar Objects,
+Cross Probe; Cut, Copy, Duplicate, Delete; Rotate, Mirror X, Mirror Y, the
+Align submenu, Arrange (a drawing selected) and the Unions submenu; the Part Actions, Sheet Actions
+and Place submenus; Highlight Net, Net Color..., Assign Net Class..., Clear
+Filter while a net highlight is on; Undo; then a greyed "Planned (N)" submenu
+that opens on hover and lists the planned rows below.
+
+The Place submenu groups its rows under Wiring, Ports and power, Parts and
+sheets, and Directives and text. Its power rows show the short port name in
+the power colour, with the full name as the tooltip. The planned tools of
+`active_bar::PLANNED_TOOLS` it would list are gathered in one greyed "N planned
+tools…" row whose tooltip names them.
 
 Part Actions holds Open Datasheet, Edit Symbol and Change Component, then
 Autoplace Fields and Copy Attributes (#1667), live with one placed part
@@ -762,8 +786,11 @@ the cursor's last point on this sheet (else under the sheet's content), with an
 auto-generated entry for every port of the file (outputs on the right edge,
 every other direction on the left). It refuses the sheet itself, a file that
 places this sheet, a sheet above this one at any depth, and a file this sheet
-already places. Both commands also run from operands; see
-[CLI.md](CLI.md#bottom-up-hierarchy).
+already places. The sheet in view is the one the command was asked on (an
+undocked window's sheet when picked there, #2267): the symbol lands on it
+whichever tab is active when the file is read, and nothing is placed, with a
+line in Messages, when that sheet was closed meanwhile. Both commands also run
+from operands; see [CLI.md](CLI.md#bottom-up-hierarchy).
 
 Design ▸ Synchronize Sheet Entries and Ports... (`sync_sheet_entries`) opens a
 dialog for the selected sheet symbol. Choose the side that wins: **Sheet to
@@ -778,13 +805,17 @@ does, and renames on the selected sheet symbol only: a hand-placed entry, or
 an entry of another symbol of the same file, keeps its name; Sheet
 symbol to sheet removes and renames Hierarchical labels only and never touches
 a Global label. A sheet that is not open is changed in memory, left unsaved,
-and refused if its file changed on disk after the dialog read it. The rules:
-`signex_engine::sheet_sync`; decisions: `DECISIONS.md` (#1276).
+and refused if its file changed on disk after the dialog read it. The sheet
+symbol's sheet is the one the command was asked on (an undocked window's sheet
+when picked there, #2618): Apply edits it whichever tab is active, and nothing
+is changed, with a line in Messages, when that sheet was closed meanwhile. The
+rules: `signex_engine::sheet_sync`; decisions: `DECISIONS.md` (#1276).
 
 Assign Net Class... is greyed: `assign_net_class` takes the net and the class
 as operands, which the menu cannot supply yet; its tooltip points at the Net
-Class row of Properties. Planned rows, greyed with a tooltip saying what each
-will do:
+Class row of Properties. The "Planned (N)" submenu holds Snippets and Comment
+with the shared planned tooltip, and these rows, greyed with a tooltip saying
+what each will do:
 
 - **References**: list where the selected objects are used across the project (designators, net labels, sheet entries).
 - **Pin Mapping**: edit the selected part's symbol-pin to footprint-pad map, the map Update PCB reads.

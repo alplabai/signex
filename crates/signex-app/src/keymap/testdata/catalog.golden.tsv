@@ -246,9 +246,9 @@ rules_explain	validation	Explain the value a DRC finding asks for	-	PCB	-	-	Alwa
 rules_conflicts	validation	List shadowed and conflicting design rules	-	PCB	-	-	Always	-	document:document
 rules_matrix_get	validation	Read the class-to-class clearance matrix	-	PCB	-	-	Always	-	document:document
 rules_matrix_set	design	Set a cell of the class-to-class clearance matrix	-	PCB	-	-	Always	mutates_doc,undoable	document:document,class_a:text,class_b:text,object_pair:text?,layer:text?,value:text?
-rules_set_create	design	Create a named rule set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,name:text,values:text,severity:text?
-rules_set_edit	design	Change the limits of a named rule set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,values:text,severity:text?
-rules_set_apply	design	Apply a named rule set to a class or net	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,scope:text
+rules_set_create	design	Create a constraint set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,name:text,values:text,severity:text?
+rules_set_edit	design	Change the limits of a constraint set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,values:text,severity:text?
+rules_set_apply	design	Apply a constraint set to a class or net	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,scope:text
 rules_preset_diff	validation	Show what a rules preset would change	-	PCB	-	-	Always	-	document:document,preset:text
 rules_preset_apply	design	Apply a rules preset	-	PCB	-	-	Always	mutates_doc,undoable	document:document,preset:text
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
@@ -404,4 +404,4 @@ untile_documents	window	Untile documents	Untile	General	-	-	Always	gui_only	-
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-
-toggle_schematic_list_panel	panels	Toggle schematic list panel	-	General	-	-	Always	gui_only	-
+toggle_schematic_list_panel	panels	Toggle Object List panel	-	General	-	-	Always	gui_only	-

@@ -485,10 +485,11 @@ impl DimensionLabels {
         })
     }
 
-    /// The overlay for `labels`; stack it above the drawing.
+    /// The overlay for `labels`; stack it above the drawing. The overlay
+    /// keeps no borrow of the slice, so a caller may build it in `view`.
     pub fn view<'a>(
         &'a self,
-        labels: &'a [DimensionLabel<'a>],
+        labels: &[DimensionLabel<'a>],
         style: DimensionLabelStyle,
     ) -> Element<'a, DimensionLabelMessage> {
         let mut layers: Vec<Element<'a, DimensionLabelMessage>> = Vec::new();

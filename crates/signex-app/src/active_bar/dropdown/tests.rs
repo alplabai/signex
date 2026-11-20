@@ -128,8 +128,116 @@ fn net_color_swatches_and_gated_clear_rows() {
 fn filter_menu_is_a_single_custom_entry() {
     let tokens = signex_types::theme::theme_tokens(TID);
     let filters = std::collections::HashSet::new();
-    let entry = filter_entry(&tokens, &filters, &[]);
+    let entry = filter_entry(signex_i18n::I18n::en_us_ref(), &tokens, &filters, &[]);
     assert!(matches!(entry, DropdownEntry::Custom(_)));
+}
+
+/// Graphite mockup #61: the Power menu groups its ports under three subheads, labels each
+/// with the short name and keeps the full "Place … power port" text as the
+/// row's tooltip; every port glyph is drawn in the power colour.
+#[test]
+fn power_menu_has_subheads_short_labels_and_full_tooltips() {
+    let i18n = signex_i18n::I18n::en_us_ref();
+    for tid in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let e = render(i18n, POWER, tid, false, false);
+        let heads: Vec<&str> = e
+            .iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Header(h) => Some(h.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(heads, ["Common", "Styles", "Grounds"]);
+        assert_eq!(seps(&e), 0);
+        let ink = signex_widgets::theme_ext::power_port(&signex_types::theme::canvas_colors(tid));
+        for entry in &e {
+            let DropdownEntry::Item(it) = entry else {
+                continue;
+            };
+            assert!(!it.label.starts_with("Place"), "{}", it.label);
+            let tip = it.tooltip.as_deref().unwrap_or_default();
+            assert!(
+                tip.starts_with("Place") && tip.contains(&it.label) && tip.ends_with("power port"),
+                "{} -> {tip}",
+                it.label
+            );
+            assert_eq!(it.icon_tint, Some(ink), "{}", it.label);
+        }
+    }
+}
+
+/// The Harness group holds only planned tools, so the bar greys it and
+/// opens no menu; every other group opens one.
+#[test]
+fn only_the_harness_group_is_planned() {
+    use ActiveBarMenu as M;
+    for menu in [
+        M::Filter,
+        M::SelectMode,
+        M::Select,
+        M::Align,
+        M::Wiring,
+        M::Power,
+        M::SheetSymbol,
+        M::Port,
+        M::Directives,
+        M::TextTools,
+        M::Shapes,
+        M::NetColor,
+    ] {
+        assert!(!is_planned_menu(menu), "{menu:?}");
+    }
+    assert!(is_planned_menu(M::Harness));
+}
+
+/// The table rows carry the active profile's key for their command.
+#[test]
+fn wiring_rows_show_the_profiles_keys() {
+    let wire_id = crate::app::command::active_bar::id_for_action(&ActiveBarAction::DrawWire)
+        .expect("wire has a command");
+    let hint = |id: &str| {
+        if id == wire_id {
+            "W".to_string()
+        } else {
+            String::new()
+        }
+    };
+    let e = render_with_hints(
+        signex_i18n::I18n::en_us_ref(),
+        WIRING,
+        TID,
+        false,
+        false,
+        &hint,
+    );
+    let DropdownEntry::Item(wire) = &e[0] else {
+        panic!("wire row");
+    };
+    assert_eq!(wire.shortcut.as_deref(), Some("W"));
+    let DropdownEntry::Item(bus) = &e[1] else {
+        panic!("bus row");
+    };
+    assert_eq!(bus.shortcut, None, "an unbound command shows no key");
+}
+
+/// "Save current" saves the active set while there is room for a preset,
+/// and is inert at the limit.
+#[test]
+fn save_current_is_offered_until_the_preset_limit() {
+    let message = |n: usize| {
+        let presets: Vec<CustomFilterPreset> = (0..n)
+            .map(|i| CustomFilterPreset {
+                name: format!("P{i}"),
+                filters: vec![],
+            })
+            .collect();
+        custom::save_current_message(&presets)
+    };
+    assert!(matches!(
+        message(0),
+        Some(ActiveBarMsg::FilterPresetSavePicked)
+    ));
+    assert!(message(crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT).is_none());
 }
 
 /// Stable serializer for `DropdownEntry` rows, used by the
@@ -452,20 +560,21 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         false,
         &[
-            "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Common",
+            "ITEM:GND|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:VCC|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+12|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+5|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:-5|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Styles",
+            "ITEM:Arrow|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Wave|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Bar|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Circle|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Grounds",
+            "ITEM:Signal Ground|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Earth|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Chassis|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -473,20 +582,21 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         true,
         &[
-            "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Common",
+            "ITEM:GND|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:VCC|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+12|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+5|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:-5|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Styles",
+            "ITEM:Arrow|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Wave|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Bar|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Circle|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Grounds",
+            "ITEM:Signal Ground|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Earth|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Chassis|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -494,20 +604,21 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         false,
         &[
-            "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Common",
+            "ITEM:GND|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:VCC|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+12|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+5|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:-5|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Styles",
+            "ITEM:Arrow|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Wave|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Bar|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Circle|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Grounds",
+            "ITEM:Signal Ground|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Earth|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Chassis|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -515,20 +626,21 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         true,
         &[
-            "ITEM:Place GND power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place VCC power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +12 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place +5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place -5 power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Arrow style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Wave style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Bar style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Circle style power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "SEP",
-            "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
-            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Common",
+            "ITEM:GND|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:VCC|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+12|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:+5|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:-5|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Styles",
+            "ITEM:Arrow|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Wave|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Bar|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Circle|disabled=false|icon=true|checked=false|shortcut=None",
+            "HEADER:Grounds",
+            "ITEM:Signal Ground|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Earth|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Chassis|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (

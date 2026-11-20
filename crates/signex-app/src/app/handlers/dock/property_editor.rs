@@ -154,16 +154,6 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::EditTextNoteText(uuid, new_text) => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateText {
-                        target: signex_engine::TextTarget::TextNote(*uuid),
-                        value: new_text.to_string(),
-                    },
-                    true,
-                    true,
-                );
-            }
             crate::panels::PanelMsg::EditBlanket(uuid, edit) => {
                 self.blanket_panel_edited(*uuid, edit);
             }

@@ -207,6 +207,10 @@ impl Signex {
                     .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b))
                     .unwrap_or(iced::Color::from_rgb(0.40, 0.40, 0.93));
                 self.ui_state.net_color_custom.draft = seed;
+                // The pen, not a palette row's net.
+                self.ui_state.net_color_custom.net = None;
+                self.ui_state.net_color_custom.sheet = None;
+                self.ui_state.net_color_custom.hex = None;
                 self.ui_state.net_color_custom.show = true;
             }
             ActiveBarAction::ClearNetColor => {

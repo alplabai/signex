@@ -67,7 +67,7 @@ mod sheet_numbers;
 
 pub(crate) use channels::{CompiledOccurrence, compiled_occurrences};
 pub use channels::{EntryBuses, channel_uuid};
-pub use components::{ComponentPin, ComponentReport, PlacedSymbol};
+pub use components::{ComponentPin, ComponentReport, PlacedPin, PlacedSymbol, UnconnectedPin};
 pub use members::{NetMember, NetMemberKind, NetMembers};
 pub use name_changes::{ProjectNetChange, project_name_changes};
 pub use names::{MultiNamedNet, NetNameSource};

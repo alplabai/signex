@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn a_bar_button_whose_action_is_planned_says_so() {
-        use super::super::{ActiveBarMsg, button_tooltip};
+        use super::super::{ActiveBarMsg, bar::button_tooltip};
         use signex_i18n::ids;
         let i18n = signex_i18n::I18n::en_us();
         // #1280: the Harness button is live now; a planned sheet tool stands

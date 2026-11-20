@@ -140,17 +140,16 @@ impl Signex {
     }
 
     /// The sheet symbol and the child sheet the dialog syncs, as they are
-    /// now, or [`SheetSyncProblem::Stale`] when the parent is no longer the
-    /// active sheet, the symbol is gone or re-pointed, or a sheet was opened
-    /// or closed since the dialog opened.
+    /// now, or [`SheetSyncProblem::Stale`] when the symbol is gone or
+    /// re-pointed, or a sheet was opened or closed since the dialog opened.
+    /// The symbol is read off the dialog's own parent sheet, whichever sheet
+    /// the main window shows: the dialog may belong to an undocked window.
     pub(super) fn sheet_sync_sides(
         &self,
         state: &SheetSyncState,
     ) -> Result<(ChildSheet, SchematicSheet), SheetSyncProblem> {
         let docs = &self.document_state;
-        if docs.active_path.as_deref() != Some(state.parent.as_path())
-            || docs.documents_epoch != state.epoch
-        {
+        if docs.documents_epoch != state.epoch {
             return Err(SheetSyncProblem::Stale);
         }
         let symbol = docs

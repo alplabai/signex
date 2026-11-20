@@ -89,6 +89,8 @@ pub mod styles;
 pub mod symbol_fill_prefs;
 pub mod tab_bar;
 pub mod task_driver;
+#[cfg(any(test, feature = "test-prefs-redirect"))]
+pub mod test_adapter;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod text_trunc;

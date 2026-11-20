@@ -52,6 +52,11 @@ fn the_tabs_switch_between_the_nets_and_the_parts() {
         view(&p).components.is_empty(),
         "only the tab shown is built"
     );
+    assert_eq!(
+        view(&p).component_total,
+        2,
+        "the tab strip counts the parts"
+    );
 
     inspector(
         &mut p,
@@ -90,7 +95,7 @@ fn a_part_row_has_its_value_and_footprint_and_expands_to_the_net_on_each_pin() {
     assert!(row.expanded);
     assert_eq!(row.pin_rows.len(), 1);
     let pin = &row.pin_rows[0];
-    assert_eq!((pin.pin.as_str(), pin.net.as_str()), ("1", "VCC"));
+    assert_eq!((pin.pin.as_str(), pin.net.as_deref()), ("1", Some("VCC")));
     assert_eq!(pin.sheet, "u");
     assert_eq!(pin.anchor.id, r1);
 
@@ -113,7 +118,7 @@ fn clicking_a_pin_selects_its_part_and_highlights_its_net() {
     p.select_uuid(uuid::Uuid::from_u128(0xBEEF), SelectedKind::Wire);
 
     let click = NetInspectorMsg::MemberClicked {
-        net: pin.net.clone(),
+        net: pin.net.clone().expect("a wired pin"),
         anchor: pin.anchor.clone(),
     };
     let task = p.app.update(Message::Dock(crate::dock::DockMessage::Panel(

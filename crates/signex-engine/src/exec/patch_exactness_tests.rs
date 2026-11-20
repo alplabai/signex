@@ -442,7 +442,9 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 75] = [
+const ALL_KINDS: [CommandKind; 77] = [
+    CommandKind::SetRunEnd,
+    CommandKind::UpdateTextNoteProps,
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -549,6 +551,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::PlaceWireSegment
         | CommandKind::BreakWire
         | CommandKind::MoveWireEnd
+        | CommandKind::SetRunEnd
+        | CommandKind::UpdateTextNoteProps
         | CommandKind::PlaceWireSegmentAsIs
         | CommandKind::PlaceBus
         | CommandKind::PlaceLabel
@@ -944,6 +948,34 @@ fn samples() -> Vec<(String, Command)> {
             },
         );
     }
+    add(
+        "SetRunEnd wire start",
+        Command::SetRunEnd {
+            run: SelectedItem::new(uid(WIRE, 1), SelectedKind::Wire),
+            start: true,
+            to: pt(3.0, 27.0),
+        },
+    );
+    add(
+        "SetRunEnd bus end",
+        Command::SetRunEnd {
+            run: SelectedItem::new(uid(BUS, 1), SelectedKind::Bus),
+            start: false,
+            to: pt(95.0, 12.0),
+        },
+    );
+    add(
+        "UpdateTextNoteProps",
+        Command::UpdateTextNoteProps {
+            note_id: uid(TEXT_NOTE, 1),
+            props: crate::TextNoteProps {
+                justify_h: Some(HAlign::Right),
+                rotation_degrees: Some(90.0),
+                font_size_mm: Some(2.0),
+                ..Default::default()
+            },
+        },
+    );
     add(
         "PlaceBus",
         Command::PlaceBus {

@@ -152,7 +152,7 @@ impl PanelPosition {
             | PanelKind::Messages
             | PanelKind::Filter
             | PanelKind::SchFilter
-            | PanelKind::SchList
+            | PanelKind::ObjectList
             | PanelKind::Drc
             | PanelKind::LayerStack
             | PanelKind::Layers
@@ -433,5 +433,20 @@ mod tests {
         let mut saved = DockArea::new();
         saved.seed_for_editor(EditorContext::Pcb);
         assert!(saved.locate(PanelKind::Drc).is_none());
+    }
+
+    /// #1259: the Object List opens as a tab of the group that holds
+    /// Properties and Navigator.
+    #[test]
+    fn the_object_list_opens_beside_properties_and_navigator() {
+        let home = PanelPosition::default_for(PanelKind::ObjectList);
+        assert_eq!(home, PanelPosition::default_for(PanelKind::Properties));
+        assert_eq!(home, PanelPosition::default_for(PanelKind::Navigator));
+
+        let mut dock = crate::dock::graphite_first_run();
+        dock.show_panel_at(home, PanelKind::ObjectList);
+        let tabs = dock.panel_kinds(home);
+        assert!(tabs.contains(&PanelKind::Properties));
+        assert!(tabs.contains(&PanelKind::ObjectList));
     }
 }

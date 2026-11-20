@@ -38,6 +38,39 @@ pub(crate) fn profile_preset(name: &str) -> String {
     format!("profile:{name}")
 }
 
+/// The minimums a tier card shows, in mm, read from the canonical tier
+/// table (`FabTemplate::capabilities`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct TierSpec {
+    pub clearance: f64,
+    pub width: f64,
+    /// The smallest hole drilled, pad or via.
+    pub drill: f64,
+    pub annular: f64,
+}
+
+pub(crate) fn tier_spec(tier: FabTemplate) -> TierSpec {
+    let limits = tier.capabilities();
+    TierSpec {
+        clearance: limits.clearance,
+        width: limits.track_width,
+        drill: limits.hole,
+        annular: limits.annular_ring,
+    }
+}
+
+/// The limits a rule of a preview had and has, as written (`0.15mm`), one
+/// side `None` for an added or removed rule.
+pub(crate) fn change_values(change: &RowChange) -> (Option<String>, Option<String>) {
+    let limits = |text: &Option<String>| {
+        let rows = signex_drc_dsl::table::table(text.as_deref()?);
+        let row = rows.rows.first()?;
+        let values: Vec<&str> = row.limits.iter().map(|l| l.value.as_str()).collect();
+        (!values.is_empty()).then(|| values.join(", "))
+    };
+    (limits(&change.from), limits(&change.to))
+}
+
 impl Signex {
     /// The rule profiles that hold DRC rules, as read last; `None` while
     /// the library was never read.

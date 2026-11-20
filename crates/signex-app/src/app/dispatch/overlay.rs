@@ -317,6 +317,14 @@ impl Signex {
                 ContextMenuMsg::Show(x, y) => self.run_in_window_document(window, |app| {
                     app.show_canvas_context_menu(x, y, app.overlay_owner(window))
                 }),
+                // A canvas menu's command row is gated and run against the
+                // window the menu opened in, which the dispatch enters
+                // itself (#2267).
+                pick @ ContextMenuMsg::Action(ContextAction::Command { .. })
+                    if self.interaction_state.context_menu.is_some() =>
+                {
+                    self.dispatch_context_menu_message(pick)
+                }
                 // Expanding or rebuilding the tree edits the window's own
                 // tree; opening a tab, a dialog or a file is queued to the
                 // main window like Edit Symbol (#2037).
@@ -449,11 +457,10 @@ impl Signex {
                 Task::none()
             }
             ContextMenuMsg::Action(action) => {
-                let opened_at = self
-                    .interaction_state
-                    .context_menu
-                    .take()
-                    .and_then(|menu| menu.world);
+                let menu = self.interaction_state.context_menu.take();
+                let opened_at = menu.as_ref().and_then(|menu| menu.world);
+                // The window the canvas menu opened in; `None` is the main one.
+                let menu_window = menu.and_then(|menu| menu.window);
                 // The project tree's menu closes with the canvas one: a row of
                 // either runs a command, and neither may outlive the pick.
                 self.interaction_state.project_tree_context_menu = None;
@@ -470,7 +477,9 @@ impl Signex {
                                 project,
                             },
                         );
-                        self.dispatch_command(&id, args, None)
+                        // Gated and run in the menu's window, as a key or the
+                        // undocked menu bar's `UiMsg::MenuInWindow` is.
+                        self.dispatch_command(&id, args, menu_window)
                     }
                     ContextAction::OpenChildSheet => {
                         self.open_selected_child_sheet().unwrap_or_else(Task::none)
@@ -669,6 +678,14 @@ impl Signex {
             }
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)
+            }
+            ErcMsg::RulesChangedOnlyToggled(on) => {
+                self.ui_state.erc_rule_list.changed_only = on;
+                Task::none()
+            }
+            ErcMsg::RuleFilterChanged(query) => {
+                self.ui_state.erc_rule_list.query = query;
+                Task::none()
             }
             ErcMsg::ProfileMenuToggled => self.handle_erc_profile_menu_toggled(),
             ErcMsg::ProfileMenuRowChosen(action) => {
@@ -873,3 +890,7 @@ impl Signex {
         self.library.components_panel.row_menu = None;
     }
 }
+
+#[cfg(test)]
+#[path = "context_menu_window_tests.rs"]
+mod context_menu_window_tests;

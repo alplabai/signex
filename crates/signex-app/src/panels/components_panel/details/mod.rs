@@ -12,7 +12,7 @@ pub(crate) mod symbol_canvas;
 #[path = "pan_app_tests.rs"]
 mod pan_app_tests;
 
-use iced::widget::{Column, Space, column, container, pick_list, scrollable};
+use iced::widget::{Column, Space, column, container, pick_list, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{raw, text};
@@ -203,6 +203,7 @@ impl DetailsState {
 /// The details section for the panel's selected row.
 pub(crate) fn view<'a>(
     panel: &'a ComponentsPanelState,
+    library_name: Option<&'a str>,
     tokens: &'a ThemeTokens,
     canvas_colors: &signex_types::theme::CanvasColors,
     grid: symbol_canvas::SheetGrid,
@@ -246,11 +247,31 @@ pub(crate) fn view<'a>(
         ("", p) => p.to_owned(),
         (m, p) => format!("{m} — {p}"),
     };
-    col = col.push(graphite::header_card(d, maker, tokens));
+    let subtitle: Option<signex_widgets::Label<'a>> =
+        match (d.description.trim(), library_name.map(str::trim)) {
+            (description, Some(library)) if !description.is_empty() && !library.is_empty() => Some(
+                t!(
+                    i18n,
+                    ids::PANELS_COMPONENTS_DETAILS_SUBTITLE,
+                    "description" => description.to_owned(),
+                    "library" => library.to_owned()
+                )
+                .into(),
+            ),
+            ("", Some(library)) if !library.is_empty() => {
+                Some(signex_i18n::UserText::new(library.to_owned()).into())
+            }
+            _ => None,
+        };
+    let place = panel.selected.as_ref().map_or_else(
+        || Space::new().boxed(),
+        |key| place_button(key, tokens, i18n),
+    );
+    col = col.push(graphite::header_card(d, maker, subtitle, place, tokens));
     let title = |label| graphite::section_label(t!(i18n, label), tokens);
 
-    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_SYMBOL));
-    col = col.push(match &d.symbol {
+    // Symbol and Footprint side by side, each under its label.
+    let symbol_preview = match &d.symbol {
         Some(symbol) => preview_box(
             symbol_canvas::symbol_preview(
                 symbol.clone(),
@@ -265,9 +286,8 @@ pub(crate) fn view<'a>(
             tokens,
         ),
         None => empty(note(ids::PANELS_COMPONENTS_DETAILS_NO_SYMBOL), muted),
-    });
+    };
 
-    col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT));
     // The pick belongs to the selected row only (#1234).
     let pick = panel
         .footprint_pick
@@ -276,6 +296,40 @@ pub(crate) fn view<'a>(
         .map(|(_, reference)| reference);
     let shown = d.shown_footprint(pick, i18n);
     let choices = d.footprint_choices(i18n);
+    let preview = d.footprint_preview(shown.as_ref().map(|c| &c.reference));
+    let footprint_preview = match preview {
+        Some(fp) => {
+            let program = footprint_canvas::FootprintPreview::new(fp).with_theme_tokens(tokens);
+            let canvas = iced::widget::canvas(program)
+                .width(Length::Fill)
+                .height(PREVIEW_HEIGHT);
+            preview_box(canvas.boxed(), tokens)
+        }
+        None if d.has_footprint_ref => empty(
+            note(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNREADABLE),
+            muted,
+        ),
+        None => empty(note(ids::PANELS_COMPONENTS_DETAILS_NO_FOOTPRINT), muted),
+    };
+    let half = |label: signex_i18n::MessageId,
+                preview: Element<'a, LibraryMessage>|
+     -> Element<'a, LibraryMessage> {
+        column![title(label), preview]
+            .spacing(SP.xs)
+            .width(Length::FillPortion(1))
+            .boxed()
+    };
+    col = col.push(
+        row![
+            half(ids::PANELS_COMPONENTS_DETAILS_SYMBOL, symbol_preview),
+            half(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT, footprint_preview),
+        ]
+        .spacing(SP.m)
+        .width(Length::Fill)
+        .boxed(),
+    );
+
+    // The footprint the next placement uses, "(default)" marked.
     if choices.len() >= 2 {
         col = col.push(
             pick_list(shown.clone(), choices, |choice: &FootprintChoice| {
@@ -296,21 +350,6 @@ pub(crate) fn view<'a>(
                 .boxed(),
         );
     }
-    let preview = d.footprint_preview(shown.as_ref().map(|c| &c.reference));
-    col = col.push(match preview {
-        Some(fp) => {
-            let program = footprint_canvas::FootprintPreview::new(fp).with_theme_tokens(tokens);
-            let canvas = iced::widget::canvas(program)
-                .width(Length::Fill)
-                .height(PREVIEW_HEIGHT);
-            preview_box(canvas.boxed(), tokens)
-        }
-        None if d.has_footprint_ref => empty(
-            note(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNREADABLE),
-            muted,
-        ),
-        None => empty(note(ids::PANELS_COMPONENTS_DETAILS_NO_FOOTPRINT), muted),
-    });
     for line in &d.notes {
         col = col.push(
             // raw: the notes are worded in English by the details reader (#2061).
@@ -369,6 +408,29 @@ fn preview_box<'a>(
             ..container::Style::default()
         })
         .boxed()
+}
+
+/// The primary Place of the details title: the row menu's Place for `key`.
+fn place_button<'a>(
+    key: &ComponentsPanelRowKey,
+    tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, LibraryMessage> {
+    use signex_i18n::{ids, t};
+    let ink = crate::styles::tokens::resolve(tokens).primary_ink;
+    signex_widgets::button(
+        text(t!(i18n, ids::PANELS_COMPONENTS_PLACE))
+            .size(HINT_TEXT_SIZE)
+            .color(ink),
+    )
+    .padding([SP.xs, SP.m])
+    .on_press(LibraryMessage::ComponentsPanelPlace {
+        library_path: key.library_path.clone(),
+        table: key.table.clone(),
+        row_id: key.row_id,
+    })
+    .style(crate::styles::primary_button(tokens))
+    .boxed()
 }
 
 #[cfg(test)]

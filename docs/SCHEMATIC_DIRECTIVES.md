@@ -241,11 +241,14 @@ per-sheet run (`drop_suppressed` and the rules that check the marker
 themselves, "Pin type conflict" and "Net has multiple names") and the
 project-wide "Net has multiple names" and "Part units not placed" passes.
 
-Properties lists one checkbox per ERC rule under Suppressed Rules, plus All
-Rules, checked while the list is empty. Ticking a rule while All Rules is
-checked narrows the marker to that rule; unticking the last listed rule
-leaves the list empty, which is every rule again. Each checkbox is one undo
-step (`Command::SetNoErcRules`, patch `DocumentPatch::NO_ERC_DIRECTIVES`).
+Properties lists one checkbox per ERC rule under Suppressed rules, after an
+All rules box that is ticked while the list is empty. While All rules is
+ticked the rule filter and the rule boxes are disabled; unticking it opens the
+list (view state only, the marker still silences every rule) and ticking a
+rule then narrows the marker to it. Unticking the last listed rule leaves the
+list empty, which is every rule again. A Blanket shows the same section.
+Each checkbox is one undo step (`Command::SetNoErcRules`, patch
+`DocumentPatch::NO_ERC_DIRECTIVES`).
 The engine stores every list sorted without repeats, and a list naming `*`
 as empty (`canonical_no_erc_rules`), so a file does not depend on the order
 the rules were picked in.

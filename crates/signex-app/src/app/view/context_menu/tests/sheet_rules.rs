@@ -116,6 +116,8 @@ fn undo_and_redo_rows_step_the_sheet_history() {
     let _ = press(&mut app, "undo");
     assert_eq!(doc(&app).symbols.len(), 1, "undo did not restore the part");
     assert_menu_closed(&app, "undo");
+    // Redo is a row of the empty-spot menu (Graphite mockup #62).
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "redo");
     assert!(doc(&app).symbols.is_empty(), "redo did not delete it again");
     assert_menu_closed(&app, "redo");
@@ -244,8 +246,23 @@ fn highlight_net_row_aims_at_the_point_the_menu_was_opened_over() {
 fn unbuilt_rows_are_greyed_and_say_why() {
     let mut app = one_symbol();
     open_menu(&mut app);
-    let rows = canvas_rows(&app);
     let i18n = signex_i18n::I18n::en_us_ref();
+    let top = canvas_rows(&app);
+    // The planned rows sit in the "Planned (N)" flyout, not the menu (Graphite mockup #62).
+    for label in [
+        "References",
+        "Unions",
+        "Pin Mapping...",
+        "Supplier Links...",
+    ] {
+        assert!(
+            !top.iter()
+                .any(|e| matches!(e, DropdownEntry::Item(it) if it.label == label)),
+            "{label} is in the menu itself"
+        );
+    }
+    let mut rows = top;
+    rows.extend(super::super::submenu::planned_entries(i18n, TID));
     for (label, reason) in [
         ("References", menu_ids::CTX_REFERENCES_PLANNED),
         ("Pin Mapping...", menu_ids::CTX_PIN_MAPPING_PLANNED),

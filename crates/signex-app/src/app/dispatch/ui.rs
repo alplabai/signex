@@ -256,6 +256,30 @@ impl Signex {
                 Task::none()
             }
             UiMsg::NetNav(msg) => self.dispatch_net_nav_message(msg),
+            UiMsg::ZoomPresetsToggled => {
+                self.interaction_state.zoom_presets_open =
+                    !self.interaction_state.zoom_presets_open;
+                Task::none()
+            }
+            UiMsg::ZoomPresetsDismissed => {
+                self.interaction_state.zoom_presets_open = false;
+                Task::none()
+            }
+            UiMsg::ZoomPresetPicked(percent) => {
+                self.interaction_state.zoom_presets_open = false;
+                if self.has_active_schematic() {
+                    let canvas = self.interaction_state.active_canvas_mut();
+                    if canvas.zoom_to_percent_about_centre(percent) {
+                        canvas.clear_bg_cache();
+                        canvas.clear_content_cache();
+                    }
+                }
+                Task::none()
+            }
+            UiMsg::ZoomPresetCommandPicked(command) => {
+                self.interaction_state.zoom_presets_open = false;
+                self.run_menu_command(&command, None)
+            }
         }
     }
 
@@ -269,22 +293,10 @@ impl Signex {
         match msg {
             SelectionFilterMsg::OpenCustom => {
                 if let Some(editor) = self.active_footprint_editor() {
-                    let f = editor.state.selection_filter;
-                    self.ui_state.selection_filter_custom =
-                        Some(crate::app::SelectionFilterCustomState {
-                            pads: f.pads,
-                            tracks: f.tracks,
-                            arcs: f.arcs,
-                            pours: f.pours,
-                            bodies_3d: f.bodies_3d,
-                            keepouts: f.keepouts,
-                            cutouts: f.cutouts,
-                            texts: f.texts,
-                            vias: f.vias,
-                            regions: f.regions,
-                            fills: f.fills,
-                            other: f.other,
-                        });
+                    let filter = editor.state.selection_filter;
+                    self.ui_state.selection_filter_custom = Some(Box::new(
+                        crate::app::SelectionFilterCustomState::from_filter(filter),
+                    ));
                 }
                 self.finish_update()
             }
@@ -293,49 +305,77 @@ impl Signex {
                 self.finish_update()
             }
             SelectionFilterMsg::ToggleCustomKind(kind) => {
-                use crate::library::editor::footprint::state::SelectionFilterKind as K;
                 if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
-                    match kind {
-                        K::Pads => state.pads = !state.pads,
-                        K::Tracks => state.tracks = !state.tracks,
-                        K::Arcs => state.arcs = !state.arcs,
-                        K::Pours => state.pours = !state.pours,
-                        K::Bodies3d => state.bodies_3d = !state.bodies_3d,
-                        K::Keepouts => state.keepouts = !state.keepouts,
-                        K::Cutouts => state.cutouts = !state.cutouts,
-                        K::Texts => state.texts = !state.texts,
-                        K::Vias => state.vias = !state.vias,
-                        K::Regions => state.regions = !state.regions,
-                        K::Fills => state.fills = !state.fills,
-                        K::Other => state.other = !state.other,
-                    }
+                    state.toggle(kind);
+                }
+                self.finish_update()
+            }
+            SelectionFilterMsg::CustomKindsAllSet(on) => {
+                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
+                    state.set_all_shown(on);
+                }
+                self.finish_update()
+            }
+            SelectionFilterMsg::CustomPresetNameEdited(name) => {
+                if let Some(state) = self.ui_state.selection_filter_custom.as_mut() {
+                    state.preset_name = name;
                 }
                 self.finish_update()
             }
             SelectionFilterMsg::ApplyCustom => {
-                let draft = self.ui_state.selection_filter_custom.take();
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
-                    editor.state.selection_filter =
-                        crate::library::editor::footprint::state::SelectionFilter {
-                            pads: d.pads,
-                            tracks: d.tracks,
-                            arcs: d.arcs,
-                            pours: d.pours,
-                            bodies_3d: d.bodies_3d,
-                            keepouts: d.keepouts,
-                            cutouts: d.cutouts,
-                            texts: d.texts,
-                            vias: d.vias,
-                            regions: d.regions,
-                            fills: d.fills,
-                            other: d.other,
-                        };
-                    editor.canvas_cache.clear();
-                }
+                let save = self.apply_custom_selection_filter();
                 self.refresh_panel_ctx();
-                self.finish_update()
+                Task::batch([save, self.finish_update()])
             }
         }
+    }
+
+    /// Apply: the draft becomes the active footprint editor's filter and is
+    /// saved as a preset under its typed name, or "Filter N" when none is
+    /// typed. The filter always applies; no preset is added when one already
+    /// holds the same kinds, or at the preset limit (a typed name dropped
+    /// there is said in Messages). The `prefs.json` write rides the ordered
+    /// background writer.
+    fn apply_custom_selection_filter(&mut self) -> Task<Message> {
+        use crate::library::editor::footprint::filter_presets::{capture_preset, existing_twin};
+        use signex_i18n::{ids, t};
+        let Some(draft) = self.ui_state.selection_filter_custom.take() else {
+            return Task::none();
+        };
+        let presets = self.interaction_state.footprint_filter_presets.clone();
+        let typed = !draft.preset_name.trim().is_empty();
+        let name = draft.preset_name_or_numbered(presets.len());
+        let Some(editor) = self.active_footprint_editor_mut() else {
+            return Task::none();
+        };
+        editor.state.selection_filter = draft.to_filter();
+        editor.canvas_cache.clear();
+        let preset = capture_preset(&editor.state, name);
+        let i18n = &self.ui_state.i18n;
+        if let Some(twin) = existing_twin(&presets, &preset, typed) {
+            crate::diagnostics::log_info(
+                t!(i18n, ids::DIALOG_SELECTION_FILTER_PRESET_EXISTS, "name" => twin.name.as_str())
+                    .into_string(),
+            );
+            return Task::none();
+        }
+        let limit = crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
+        if presets.len() >= limit {
+            if typed {
+                crate::diagnostics::log_warning(
+                    t!(i18n, ids::DIALOG_SELECTION_FILTER_PRESET_FULL,
+                        "name" => preset.name.as_str(), "limit" => limit)
+                    .into_string(),
+                );
+            }
+            return Task::none();
+        }
+        let mut next = presets;
+        next.push(preset);
+        self.interaction_state.footprint_filter_presets = next.clone();
+        crate::fonts::background_pref_write("footprint_filter_presets", move || {
+            crate::fonts::write_footprint_filter_presets(&next)
+        })
     }
 
     /// Grid Properties dialog handler (namespaced family, ADR-0001 D3).
@@ -345,6 +385,9 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             GridPropertiesMsg::Open => {
+                // The grid picker's last row opens this dialog; the picker
+                // closes behind it.
+                self.interaction_state.grid_picker = None;
                 // Pre-populate from the active footprint editor's
                 // current step. No-op for non-footprint tabs (the
                 // modal would have nothing to drive).

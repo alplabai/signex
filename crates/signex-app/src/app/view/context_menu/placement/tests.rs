@@ -178,15 +178,17 @@ fn a_canvas_right_click_opens_the_menu_at_the_cursor() {
     open_canvas_menu(&mut app, at);
     let metrics = MenuMetrics::GRAPHITE;
     let texts = lay_out_layers(app.context_menu_overlay(main), window);
+    // The muted context line comes first, then Find (Graphite mockup #62).
     let first = find(
         &texts,
-        &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), "find_similar_objects"),
+        &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), "find"),
     )
     .bounds;
     let row_top = first.y + first.height / 2.0 - metrics.item_height(true) / 2.0;
+    let expected = at.1 + metrics.panel_pad + metrics.header_row_height();
     assert!(
-        (row_top - (at.1 + metrics.panel_pad)).abs() < 0.6,
-        "first row at {row_top}, cursor at {}",
+        (row_top - expected).abs() < 0.6,
+        "first row at {row_top}, expected {expected} below the cursor at {}",
         at.1
     );
     assert!(first.x > at.0 && first.x < at.0 + 60.0, "{first:?}");
@@ -221,9 +223,9 @@ fn the_canvas_menu_has_28_px_rows_and_a_fitted_width() {
 }
 
 /// The click lands on the row that is drawn there: a press in the gap
-/// between a label and its shortcut, one pixel inside the row's top edge,
-/// runs that row and does not close the menu. Find Similar is live on any
-/// sheet; Paste is greyed with an empty clipboard (#2419).
+/// right of a label, one pixel inside the row's top edge, runs that row and
+/// does not close the menu. The Place launcher is live on an empty spot
+/// (Graphite mockup #62); the command rows there follow the sheet's facts (#2419).
 #[test]
 fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
     let (mut app, main) = graphite_app();
@@ -231,17 +233,8 @@ fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
     let window = iced::Size::new(1400.0, 1000.0);
     let metrics = MenuMetrics::GRAPHITE;
     let texts = lay_out_layers(app.context_menu_overlay(main), window);
-    let label = find(
-        &texts,
-        &super::super::items::command_text(signex_i18n::I18n::en_us_ref(), "find_similar_objects"),
-    )
-    .bounds;
-    let hint = app.keymap_shortcut_label("find_similar_objects");
-    let gap_x = if hint.is_empty() {
-        label.x + label.width + 20.0
-    } else {
-        find(&texts, &hint).bounds.x - 4.0
-    };
+    let label = find(&texts, "Place").bounds;
+    let gap_x = label.x + label.width + 20.0;
     let row_top = label.y + label.height / 2.0 - metrics.item_height(true) / 2.0;
     let point = iced::Point::new(gap_x, row_top + 1.0);
     let messages =
@@ -249,8 +242,7 @@ fn a_click_anywhere_on_a_drawn_row_runs_that_row() {
     assert!(
         messages.iter().any(|m| matches!(
             m,
-            Message::ContextMenu(ContextMenuMsg::Action(ContextAction::Command { id, .. }))
-                if id.as_str() == "find_similar_objects"
+            Message::ContextMenu(ContextMenuMsg::SubmenuOpen(ContextSubmenu::Place))
         )),
         "a press at {point:?} sent {messages:?}"
     );
@@ -271,17 +263,23 @@ fn the_place_flyout_lines_up_with_its_launcher() {
     open_canvas_menu(&mut app, (200.0, 150.0));
     app.interaction_state.context_submenu = Some(ContextSubmenu::Place);
     let mid = |b: iced::Rectangle| b.y + b.height / 2.0;
+    let metrics = MenuMetrics::GRAPHITE;
 
     let tall = lay_out_layers(
         app.context_menu_overlay(main),
         iced::Size::new(1400.0, 1600.0),
     );
     let launcher = find(&tall, "Place").bounds;
-    let first = find(&tall, "Wire").bounds;
+    // The flyout opens on its Wiring subhead (Graphite mockup #62): its top meets the
+    // launcher's top.
+    let head = find(&tall, "Wiring").bounds;
+    let launcher_top = mid(launcher) - metrics.item_height(true) / 2.0;
+    let head_top = mid(head) - metrics.header_row_height() / 2.0;
     assert!(
-        (mid(first) - mid(launcher)).abs() < 0.6,
-        "flyout row at {first:?}, launcher at {launcher:?}"
+        (head_top - launcher_top).abs() < 0.6,
+        "flyout subhead at {head:?}, launcher at {launcher:?}"
     );
+    let first = find(&tall, "Wire").bounds;
     assert!(
         first.x > launcher.x + 150.0,
         "the flyout opens right of the card"
@@ -291,9 +289,8 @@ fn the_place_flyout_lines_up_with_its_launcher() {
         app.context_menu_overlay(main),
         iced::Size::new(1400.0, 700.0),
     );
-    let first = find(&short, "Wire").bounds;
-    let metrics = MenuMetrics::GRAPHITE;
-    let flyout_top = mid(first) - metrics.item_height(true) / 2.0 - metrics.panel_pad;
+    let head = find(&short, "Wiring").bounds;
+    let flyout_top = mid(head) - metrics.header_row_height() / 2.0 - metrics.panel_pad;
     assert!(
         flyout_top >= 0.0,
         "the flyout runs above the window: {first:?}"

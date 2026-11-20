@@ -548,7 +548,6 @@ define_ids! {
     PANELS_PROPERTIES_OPEN_PROJECT = "panels-properties-open-project";
     PANELS_PROPERTIES_NOTHING_SELECTED = "panels-properties-nothing-selected";
     PANELS_PROPERTIES_ONE_OBJECT_SELECTED = "panels-properties-one-object-selected";
-    PANELS_PROPERTIES_NO_PLACEMENT_OPTIONS = "panels-properties-no-placement-options";
     PANELS_PROPERTIES_TAB_GENERAL = "panels-properties-tab-general";
     PANELS_PROPERTIES_TAB_PARAMETERS = "panels-properties-tab-parameters";
     PANELS_PROPERTIES_TEMPLATE_DEFAULTS = "panels-properties-template-defaults";
@@ -574,7 +573,6 @@ define_ids! {
     PANELS_NET_CLASSES_PATTERNS_HINT = "panels-net-classes-patterns-hint";
     PANELS_CHILD_SHEET_NAME = "panels-child-sheet-name";
     PANELS_CHILD_SHEET_FILE = "panels-child-sheet-file";
-    PANELS_CHILD_SHEET_LINE_WIDTH = "panels-child-sheet-line-width";
     EDITORS_COMPONENT_HEADER_VERSION = "editors-component-header-version";
     EDITORS_COMPONENT_HEADER_LOCATION = "editors-component-header-location";
     EDITORS_COMPONENT_HEADER_UNPARSED = "editors-component-header-unparsed";
@@ -748,9 +746,6 @@ define_ids! {
     PANELS_FILTER_OTHER = "panels-filter-other";
     PANELS_PROPERTIES_DOCUMENT_OPTIONS = "panels-properties-document-options";
     PANELS_PROPERTIES_UNITS = "panels-properties-units";
-    PANELS_PROPERTIES_FORMATTING = "panels-properties-formatting";
-    PANELS_PROPERTIES_BORDER_ZONES = "panels-properties-border-zones";
-    PANELS_PROPERTIES_TEXT = "panels-properties-text";
     PANELS_PROPERTIES_JUSTIFICATION = "panels-properties-justification";
     PREFERENCES_WHEEL_MODE_LABEL = "preferences-wheel-mode-label";
     PREFERENCES_WHEEL_MODE_HELP = "preferences-wheel-mode-help";
@@ -795,7 +790,7 @@ define_ids! {
     PANELS_KIND_NET_CLASSES = "panels-kind-net-classes";
     PANELS_KIND_VARIANTS = "panels-kind-variants";
     PANELS_KIND_SCH_FILTER = "panels-kind-sch-filter";
-    PANELS_KIND_SCH_LIST = "panels-kind-sch-list";
+    PANELS_KIND_OBJECT_LIST = "panels-kind-object-list";
     PANELS_KIND_BOM_STUDIO = "panels-kind-bom-studio";
     PANELS_KIND_FAVORITES = "panels-kind-favorites";
     PANELS_KIND_SNIPPETS = "panels-kind-snippets";
@@ -900,15 +895,6 @@ define_ids! {
     PANELS_NET_INSPECTOR_KIND_PORT = "panels-net-inspector-kind-port";
     PANELS_NET_INSPECTOR_KIND_SHEET_ENTRY = "panels-net-inspector-kind-sheet-entry";
     PANELS_NET_INSPECTOR_SUMMARY = "panels-net-inspector-summary";
-    PANELS_NET_INSPECTOR_TAB_NETS = "panels-net-inspector-tab-nets";
-    PANELS_NET_INSPECTOR_TAB_COMPONENTS = "panels-net-inspector-tab-components";
-    PANELS_NET_INSPECTOR_FILTER_PARTS = "panels-net-inspector-filter-parts";
-    PANELS_NET_INSPECTOR_EMPTY_PARTS = "panels-net-inspector-empty-parts";
-    PANELS_NET_INSPECTOR_COLUMN_PART = "panels-net-inspector-column-part";
-    PANELS_NET_INSPECTOR_COLUMN_VALUE = "panels-net-inspector-column-value";
-    PANELS_NET_INSPECTOR_COLUMN_FOOTPRINT = "panels-net-inspector-column-footprint";
-    PANELS_NET_INSPECTOR_BLANK = "panels-net-inspector-blank";
-    PANELS_NET_INSPECTOR_PARTS_SUMMARY = "panels-net-inspector-parts-summary";
     DIALOG_ASSIGN_FOOTPRINTS_TITLE = "dialog-assign-footprints-title";
     DIALOG_ASSIGN_FOOTPRINTS_SUBTITLE = "dialog-assign-footprints-subtitle";
     DIALOG_ASSIGN_FOOTPRINTS_INTRO = "dialog-assign-footprints-intro";

@@ -9,7 +9,7 @@
 
 use iced::Task;
 use serde_json::{Value, json};
-use signex_types::schematic::{Point, SelectedItem, SelectedKind};
+use signex_types::schematic::{Point, SchematicSheet, SelectedItem, SelectedKind};
 
 use super::placement_operands::{run_edit, text};
 use super::{CommandArgs, CommandOutcome, OperandValue};
@@ -221,6 +221,50 @@ impl Signex {
             .edit_engine()
             .and_then(|e| signex_engine::move_to_command(e.document(), &item, at, keep_wires))
             .ok_or_else(|| PlacedRefusal::new("this object has no position to set"))?;
+        self.apply_placed_edit(command)?;
+        self.placed_answer(item)
+    }
+
+    /// The end of the wire or bus `item` on `sheet` (stored mm); `None` for
+    /// any other kind. Its start is the `placed_geometry` position.
+    pub(crate) fn run_end(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Point> {
+        signex_engine::run_ends(sheet, item).map(|(_, end)| end)
+    }
+
+    /// Put one end of the wire or bus `item` (its start when `start`) at
+    /// `to` (stored mm), the other end kept: one engine edit, one undo step.
+    /// Refused while a lock holds the run, and when the two ends would meet.
+    pub(crate) fn set_run_end(&mut self, item: SelectedItem, start: bool, to: Point) -> Placed {
+        let engine = self
+            .document_state
+            .edit_engine()
+            .ok_or_else(|| PlacedRefusal::new("no schematic is open"))?;
+        let sheet = engine.document();
+        let (from, end) = signex_engine::run_ends(sheet, &item)
+            .ok_or_else(|| PlacedRefusal::new("only a wire or a bus has ends to set"))?;
+        let kept = if start { end } else { from };
+        if signex_net::pt_key(&to) == signex_net::pt_key(&kept) {
+            return Err(PlacedRefusal::new("the two ends would meet"));
+        }
+        let command = signex_engine::run_end_command(sheet, &item, start, to)
+            .ok_or_else(|| PlacedRefusal::new("only a wire or a bus has ends to set"))?;
+        self.apply_placed_edit(command)?;
+        self.placed_answer(item)
+    }
+
+    /// Set `props` on the text note `item` (its justification, turn or text
+    /// size): one engine edit, one undo step, none when nothing changes.
+    /// Refused while a lock holds the note.
+    pub(crate) fn set_text_note_props(
+        &mut self,
+        item: SelectedItem,
+        props: signex_engine::TextNoteProps,
+    ) -> Placed {
+        let command = self
+            .document_state
+            .edit_engine()
+            .and_then(|e| signex_engine::text_note_props_command(e.document(), &item, props))
+            .ok_or_else(|| PlacedRefusal::new("only a text note has this row"))?;
         self.apply_placed_edit(command)?;
         self.placed_answer(item)
     }

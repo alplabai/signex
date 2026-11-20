@@ -74,6 +74,9 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Document Options view state: Parameters filter, zone drafts and the
+    /// illustration hover (#2531); kept across context rebuilds.
+    pub document_options: super::DocumentOptionsUi,
     /// Projects panel filter text and collapsed groups; view-only.
     pub projects_view: super::ProjectsView,
     /// Net Classes section of the General tab (#1042).
@@ -115,6 +118,9 @@ pub struct PanelContext {
     pub compiled_design: super::compiled_design::CompiledDesignView,
     /// The Unions panel's rows and foot; filled only while it is open (#158).
     pub unions: crate::app::unions::UnionsPanelView,
+    /// The Object List's rows and picks; filled only while that panel is open
+    /// (#1259).
+    pub object_list: super::ObjectListView,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
@@ -223,6 +229,8 @@ pub struct PanelContext {
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
+    /// The placed part's open ⋯ menu and illustration hover (mockup row 42).
+    pub part_panel: super::PartPanelState,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
@@ -290,6 +298,13 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+    /// The editor the Filter panel follows, its per-kind counts and SCH
+    /// Filter's preset rename (Graphite mockup #55, Graphite mockup #56).
+    pub selection_filter: super::SelectionFilterFacts,
+    /// The field / callout hover of the Properties illustration (#2523).
+    pub illustration_hover: super::PanelIllustrationHover,
+    /// View state of the selection forms: kind chips, rule filter, hover (#1699).
+    pub selection_form: super::SelectionForm,
 }
 
 /// One drawing a placed symbol can show: its row's default or an alternate.

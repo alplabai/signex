@@ -25,6 +25,9 @@ pub mod info_keys {
     /// The ERC rule ids a No-ERC directive silences, comma-separated; blank
     /// when it silences every rule (#1699).
     pub const NO_ERC_RULES: &str = "ERC Rules";
+    /// Prefix of a pin's geometry row, `Pin Geometry: <number>`: the length
+    /// in mm and the library rotation in whole degrees, tab-separated.
+    pub const PIN_GEOMETRY_PREFIX: &str = "Pin Geometry: ";
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +263,22 @@ impl Engine {
                                 pin.name,
                                 pin.direction.label(),
                                 if pin.visible { "No" } else { "Yes" }
+                            ),
+                        ));
+                        let rotation = if pin.rotation.is_finite() {
+                            (pin.rotation.rem_euclid(360.0).round() as i64) % 360
+                        } else {
+                            0
+                        };
+                        info.push((
+                            format!("{}{key}", info_keys::PIN_GEOMETRY_PREFIX),
+                            format!(
+                                "{:.2}\t{rotation}",
+                                if pin.length.is_finite() {
+                                    pin.length
+                                } else {
+                                    0.0
+                                }
                             ),
                         ));
                     }

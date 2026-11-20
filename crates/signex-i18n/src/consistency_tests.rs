@@ -377,16 +377,7 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
             .replace(['\u{2068}', '\u{2069}'], "")
     };
     for (id, english) in [
-        (ids::PANELS_DRAWING_START_X, "Start X"),
-        (ids::PANELS_DRAWING_END_Y, "End Y"),
-        (ids::PANELS_DRAWING_POSITION_X, "Position X"),
-        (ids::PANELS_DRAWING_CENTER_Y, "Center Y"),
-        (ids::PANELS_DRAWING_WIDTH, "Width"),
-        (ids::PANELS_DRAWING_WIDTH_MM, "Width (mm)"),
-        (ids::PANELS_DRAWING_HEIGHT_MM, "Height (mm)"),
         (ids::PANELS_DRAWING_BORDER, "Border"),
-        (ids::PANELS_DRAWING_RADIUS, "Radius"),
-        (ids::PANELS_DRAWING_START_ANGLE, "Start Angle"),
         (ids::PANELS_DRAWING_COLOR_AUTO, "Auto"),
         (ids::EDITORS_PAD_ROTATION, "Rotation (\u{B0})"),
         (ids::EDITORS_PAD_TEMPLATE_LIBRARY, "Library"),

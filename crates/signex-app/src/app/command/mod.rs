@@ -51,6 +51,9 @@ mod hierarchy_operands;
 pub(in crate::app) mod interaction_snapshot_tests;
 mod layer_strip_operands;
 mod needs;
+/// The enablement gate, for the hostile-operand test's not-reached set.
+#[cfg(test)]
+pub(crate) use needs::needs as enablement_gate;
 #[cfg(test)]
 mod no_erc_operand_tests;
 mod opened;

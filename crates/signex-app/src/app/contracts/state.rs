@@ -54,6 +54,9 @@ pub enum ContextSubmenu {
     /// "Unions ›": create a union from the selection, add or remove the
     /// selection, break the union (#158). Shown with a selection.
     Unions,
+    /// The greyed "Planned (N) ›" launcher of the sheet menu: the features
+    /// not built yet, each row with what it will do (Graphite mockup #62).
+    Planned,
 }
 
 /// Widget id of the in-place editor, so opening it can focus it.
@@ -139,6 +142,8 @@ pub struct SelectionFilterCustomState {
     pub regions: bool,
     pub fills: bool,
     pub other: bool,
+    /// The name Apply saves the filter under as a preset; blank = "Filter N".
+    pub preset_name: String,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's

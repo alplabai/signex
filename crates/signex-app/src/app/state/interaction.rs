@@ -200,6 +200,9 @@ pub struct InteractionState {
     /// Clamped to `0..custom_filter_presets.len()` whenever the list
     /// changes; ignored entirely when the list is empty.
     pub active_custom_filter_tab: usize,
+    /// SCH Filter's inline preset rename: the preset and the name typed so
+    /// far. Mirrored into each panel context after every update.
+    pub filter_preset_rename: Option<(usize, String)>,
     /// User-defined footprint-editor filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch; parallel to
@@ -212,6 +215,8 @@ pub struct InteractionState {
     pub pending_power: Option<(String, String)>,
     /// A library part attached to the cursor, waiting for its click.
     pub placement: Option<super::PlacementSession>,
+    /// The values the current Tab pause began with; `None` when not paused.
+    pub placement_pause: Option<super::SheetPlacementPause>,
     /// The last label or text note placed, for "Repeat last item" (#1253).
     pub last_placement: Option<super::LastPlacement>,
     /// Designator numbers for pasted parts (Next free), seeded when a paste
@@ -253,9 +258,23 @@ pub struct InteractionState {
     /// card tracks the cursor (offset to bottom-right by ~16 px so it
     /// doesn't obscure the symbol).
     pub hover_screen_pos: Option<(f32, f32)>,
+    /// The zoom pill's preset menu is up (Graphite mockup #64): opened by a click on the
+    /// pill's percentage, closed by a pick, Esc or a click outside it.
+    pub zoom_presets_open: bool,
 }
 
 impl InteractionState {
+    /// Forget a sheet Tab pause once placement is no longer paused, so a
+    /// later Esc never restores its stale values. A footprint pause stays.
+    pub fn end_sheet_placement_pause(&mut self) {
+        if matches!(
+            self.placement_pause,
+            Some(super::SheetPlacementPause::Sheet { .. })
+        ) {
+            self.placement_pause = None;
+        }
+    }
+
     pub fn active_canvas(&self) -> &CanvasSlot {
         &self.canvas
     }

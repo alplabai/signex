@@ -249,8 +249,9 @@ impl Signex {
         self.run_headless_command(command, args)
     }
 
-    /// A test's way past the headless check, for an app made by `Signex::new`.
-    #[cfg(test)]
+    /// A test's way past the headless check, for an app made by `Signex::new`
+    /// (and the test adapter's agent calls, `crate::test_adapter`).
+    #[cfg(any(test, feature = "test-prefs-redirect"))]
     pub(crate) fn run_headless_command_in_test(
         &mut self,
         command: &AppCommandId,

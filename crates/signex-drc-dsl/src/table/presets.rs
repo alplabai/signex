@@ -49,7 +49,9 @@ pub fn with_tier(drc: &DrcRuleSet, tier: FabTemplate) -> Result<DrcRuleSet, Edit
 
 /// A tier's minimums as rule text: one board-wide rule per base rule a
 /// maker limits, named `fab_*` (the fab floor, #2311). Silkscreen and
-/// mask slivers are warnings; the rest are errors.
+/// mask slivers are warnings; the rest are errors. The numbers are read
+/// from `FabTemplate::capabilities`, the one tier table the New Project
+/// tier cards show; the Rules grid shows these rules as its defaults.
 pub fn tier_text(tier: FabTemplate) -> String {
     let c = tier.capabilities();
     format!(

@@ -582,6 +582,15 @@ pub(crate) fn collect_terminals(
         .collect()
 }
 
+/// How a terminal names its pin: the pin number when present, else its name.
+pub(crate) fn terminal_pin_id(lp: &signex_types::schematic::LibPin) -> String {
+    if lp.pin.number.is_empty() {
+        lp.pin.name.clone()
+    } else {
+        lp.pin.number.clone()
+    }
+}
+
 /// [`collect_terminals`] with the world position of each pin's tip beside it.
 pub(crate) fn collect_terminals_at(
     sheet: &SchematicSheet,
@@ -598,12 +607,7 @@ pub(crate) fn collect_terminals_at(
             if !gate.contains(&world_pos) {
                 continue;
             }
-            // Pin id: prefer the pin number when present, else fall back to its name.
-            let pin = if !lp.pin.number.is_empty() {
-                lp.pin.number.clone()
-            } else {
-                lp.pin.name.clone()
-            };
+            let pin = terminal_pin_id(lp);
             let root = uf_find(parent, pt_key(&world_pos));
             let terminal = Terminal {
                 symbol: sym.uuid,

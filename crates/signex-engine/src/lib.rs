@@ -115,7 +115,7 @@ pub use clipboard_text::{CLIPBOARD_MARKER, MAX_CLIPBOARD_TEXT_BYTES};
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
     SelectionTransform, SheetEntryRename, SheetPort, SymbolEntryRenames, SymbolFlag,
-    SymbolTextField, TextTarget,
+    SymbolTextField, TextNoteProps, TextTarget,
 };
 pub use error::EngineError;
 pub use exec::change_component::{
@@ -124,8 +124,8 @@ pub use exec::change_component::{
 };
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
-    DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
-    scan_sheet,
+    DesignatorScope, FindHit, FindKind, FindQuery, MatchOptions, PatternError, designator_commands,
+    replace_all_ci, replace_commands, scan_sheet,
 };
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
@@ -146,6 +146,7 @@ pub use net_class_table::{
 pub use patch::{CommandResult, DocumentPatch, PatchPair, SemanticPatch};
 pub use placed_edit::{
     PlacedGeometry, move_to_command, placed_geometry, placed_item, rotate_to_command,
+    run_end_command, run_ends, text_note_props_command,
 };
 pub use placement::PlacementPayload;
 pub use placement_sources::DesignBlock;
@@ -217,6 +218,7 @@ fn makes_pin_contacts(cmd: &Command) -> bool {
             | Command::BreakWire { .. }
             | Command::PlaceSymbol { .. }
             | Command::MoveWireEnd { .. }
+            | Command::SetRunEnd { .. }
     )
 }
 
@@ -882,6 +884,10 @@ impl Engine {
             | Command::UpdateUnion { .. }
             | Command::SetUnionMembers { .. }
             | Command::BreakUnion { .. } => self.exec_unions(before, cmd),
+            Command::SetRunEnd { run, start, to } => self.set_run_end(before, run, start, to),
+            Command::UpdateTextNoteProps { note_id, props } => {
+                Ok(self.update_text_note_props(before, note_id, props))
+            }
         };
         self.prune_union_members(&mut result);
         self.taps_before = None;

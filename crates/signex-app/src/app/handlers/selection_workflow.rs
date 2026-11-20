@@ -12,20 +12,26 @@ pub(crate) fn passes_filter(
     filters: &std::collections::HashSet<SelectionFilter>,
 ) -> bool {
     use signex_types::schematic::SelectedKind;
-    let required = match item.kind {
-        SelectedKind::Symbol => {
-            let is_power = snapshot
-                .symbols
-                .iter()
-                .find(|s| s.uuid == item.uuid)
-                .map(|s| s.is_power)
-                .unwrap_or(false);
-            if is_power {
-                SelectionFilter::PowerPorts
-            } else {
-                SelectionFilter::Components
-            }
-        }
+    let is_power = matches!(item.kind, SelectedKind::Symbol)
+        && snapshot
+            .symbols
+            .iter()
+            .find(|s| s.uuid == item.uuid)
+            .is_some_and(|s| s.is_power);
+    filters.contains(&selection_filter_of(item.kind, is_power))
+}
+
+/// The Selection Filter kind of a pick: the one rule a click, a box, the
+/// hover pick and the filter panels' counts share. `is_power` says whether
+/// a symbol is a power port.
+pub(crate) fn selection_filter_of(
+    kind: signex_types::schematic::SelectedKind,
+    is_power: bool,
+) -> SelectionFilter {
+    use signex_types::schematic::SelectedKind;
+    match kind {
+        SelectedKind::Symbol if is_power => SelectionFilter::PowerPorts,
+        SelectedKind::Symbol => SelectionFilter::Components,
         SelectedKind::Wire => SelectionFilter::Wires,
         SelectedKind::Bus | SelectedKind::BusEntry => SelectionFilter::Buses,
         SelectedKind::ChildSheet | SelectedKind::SheetPin => SelectionFilter::SheetSymbols,
@@ -40,8 +46,32 @@ pub(crate) fn passes_filter(
         | SelectedKind::HarnessConnector
         | SelectedKind::HarnessEntry
         | SelectedKind::HarnessWire => SelectionFilter::Other,
-    };
-    filters.contains(&required)
+    }
+}
+
+/// How many objects of each Selection Filter kind the sheet holds: every
+/// selectable item, each symbol's designator and value fields with them,
+/// as a recalled selection counts them (`valid_selection_items`).
+pub(crate) fn selection_filter_counts(
+    snapshot: &crate::schematic_runtime::SchematicRenderSnapshot,
+) -> crate::panels::KindCounts<SelectionFilter> {
+    use signex_types::schematic::SelectedKind;
+    let power: std::collections::HashSet<uuid::Uuid> = snapshot
+        .symbols
+        .iter()
+        .filter(|s| s.is_power)
+        .map(|s| s.uuid)
+        .collect();
+    let kinds = all_selectable_items(snapshot).into_iter().flat_map(|item| {
+        let fields = if matches!(item.kind, SelectedKind::Symbol) {
+            2
+        } else {
+            0
+        };
+        let kind = selection_filter_of(item.kind, power.contains(&item.uuid));
+        std::iter::once(kind).chain(std::iter::repeat_n(SelectionFilter::Parameters, fields))
+    });
+    crate::panels::KindCounts::of(kinds)
 }
 
 fn all_selectable_items(

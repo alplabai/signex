@@ -1,6 +1,7 @@
 //! Uniform per-menu entry tables for the Active Bar dropdowns.
 
 use iced::widget::svg;
+use signex_i18n::{MessageId, menu_ids};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
 
@@ -19,16 +20,48 @@ use super::dd_item;
 /// renderer (#457, epic #278).
 pub(super) enum EntrySpec {
     Separator,
-    /// A bold, non-clickable group title (the Drawing Tools' Dimension).
-    Header(signex_i18n::MessageId),
+    /// A subhead over a group of rows (Power's Common / Styles / Grounds,
+    /// the Drawing Tools' Dimension).
+    Header(MessageId),
     Item {
         icon: fn(ThemeId) -> svg::Handle,
         label: &'static str,
         action: ActiveBarAction,
     },
+    /// A power port row: its own port glyph in the power colour and a
+    /// short label; the command's full text is its tooltip.
+    Power {
+        icon: fn(ThemeId) -> svg::Handle,
+        short: MessageId,
+        /// The full text, used when the action has no catalog id.
+        full: &'static str,
+        action: ActiveBarAction,
+    },
 }
 
 impl EntrySpec {
+    /// The action the row runs; `None` for a separator or a subhead.
+    pub(super) fn action(&self) -> Option<&ActiveBarAction> {
+        match self {
+            Self::Item { action, .. } | Self::Power { action, .. } => Some(action),
+            Self::Separator | Self::Header(_) => None,
+        }
+    }
+
+    const fn power(
+        icon: fn(ThemeId) -> svg::Handle,
+        short: MessageId,
+        full: &'static str,
+        action: ActiveBarAction,
+    ) -> Self {
+        Self::Power {
+            icon,
+            short,
+            full,
+            action,
+        }
+    }
+
     pub(super) const fn item(
         icon: fn(ThemeId) -> svg::Handle,
         label: &'static str,
@@ -219,66 +252,82 @@ pub(super) const WIRING: &[EntrySpec] = &[
     ),
 ];
 
+/// Power ports under the Common / Styles / Grounds subheads, each a short
+/// label over its own glyph; the full "Place … power port" text is the
+/// row's tooltip.
 pub(super) const POWER: &[EntrySpec] = &[
-    EntrySpec::item(
+    EntrySpec::Header(menu_ids::CTX_POWER_COMMON),
+    EntrySpec::power(
         ic::icon_dd_gnd,
+        menu_ids::CTX_POWER_GND,
         "Place GND power port",
         ActiveBarAction::PlacePowerGND,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_vcc,
+        menu_ids::CTX_POWER_VCC,
         "Place VCC power port",
         ActiveBarAction::PlacePowerVCC,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_pwr_plus12,
+        menu_ids::CTX_POWER_PLUS12,
         "Place +12 power port",
         ActiveBarAction::PlacePowerPlus12,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_pwr_plus5,
+        menu_ids::CTX_POWER_PLUS5,
         "Place +5 power port",
         ActiveBarAction::PlacePowerPlus5,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_pwr_minus5,
+        menu_ids::CTX_POWER_MINUS5,
         "Place -5 power port",
         ActiveBarAction::PlacePowerMinus5,
     ),
-    EntrySpec::Separator,
-    EntrySpec::item(
+    EntrySpec::Header(menu_ids::CTX_POWER_STYLES),
+    EntrySpec::power(
         ic::icon_dd_pwr_arrow,
+        menu_ids::CTX_POWER_ARROW,
         "Place Arrow style power port",
         ActiveBarAction::PlacePowerArrow,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_pwr_wave,
+        menu_ids::CTX_POWER_WAVE,
         "Place Wave style power port",
         ActiveBarAction::PlacePowerWave,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_pwr_bar,
+        menu_ids::CTX_POWER_BAR,
         "Place Bar style power port",
         ActiveBarAction::PlacePowerBar,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_pwr_circle,
+        menu_ids::CTX_POWER_CIRCLE,
         "Place Circle style power port",
         ActiveBarAction::PlacePowerCircle,
     ),
-    EntrySpec::Separator,
-    EntrySpec::item(
+    EntrySpec::Header(menu_ids::CTX_POWER_GROUNDS),
+    EntrySpec::power(
         ic::icon_dd_pwr_signal_gnd,
+        menu_ids::CTX_POWER_SIGNAL_GROUND,
         "Place Signal Ground power port",
         ActiveBarAction::PlacePowerSignalGND,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_pwr_earth,
+        menu_ids::CTX_POWER_EARTH,
         "Place Earth power port",
         ActiveBarAction::PlacePowerEarth,
     ),
-    EntrySpec::item(
+    EntrySpec::power(
         ic::icon_dd_pwr_chassis,
+        menu_ids::CTX_POWER_CHASSIS,
         "Place Chassis power port",
         ActiveBarAction::PlacePowerChassis,
     ),
@@ -428,6 +477,7 @@ pub(super) const SHAPES: &[EntrySpec] = &[
 /// rows, resolving each row's icon for the active theme and folding in
 /// the same `dd_item` enable/disable gating every row used before the
 /// table refactor.
+#[cfg(test)]
 pub(super) fn render(
     i18n: &signex_i18n::I18n,
     specs: &'static [EntrySpec],
@@ -435,16 +485,93 @@ pub(super) fn render(
     sel: bool,
     nc: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
+    render_with_hints(i18n, specs, tid, sel, nc, &|_| String::new())
+}
+
+/// [`render`] with each command row's key hint from the active profile
+/// (`hint` resolves a command id; empty when the profile binds none).
+pub(super) fn render_with_hints(
+    i18n: &signex_i18n::I18n,
+    specs: &'static [EntrySpec],
+    tid: ThemeId,
+    sel: bool,
+    nc: bool,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<ActiveBarMsg>> {
+    let power_ink = signex_widgets::theme_ext::power_port(&signex_types::theme::canvas_colors(tid));
     specs
         .iter()
-        .map(|spec| match spec {
-            EntrySpec::Separator => DropdownEntry::Separator,
-            EntrySpec::Header(title) => DropdownEntry::Header(i18n.message_plain(*title, &[])),
-            EntrySpec::Item {
-                icon,
-                label,
-                action,
-            } => dd_item(i18n, icon(tid), label, action.clone(), sel, nc),
+        .map(|spec| {
+            let row = match spec {
+                EntrySpec::Separator => return DropdownEntry::Separator,
+                EntrySpec::Header(id) => {
+                    return DropdownEntry::Header(i18n.message_plain(*id, &[]));
+                }
+                EntrySpec::Item {
+                    icon,
+                    label,
+                    action,
+                } => dd_item(i18n, icon(tid), label, action.clone(), sel, nc),
+                EntrySpec::Power {
+                    icon,
+                    short,
+                    full,
+                    action,
+                } => {
+                    let row = PowerRow {
+                        icon: icon(tid),
+                        short: *short,
+                        full,
+                        ink: power_ink,
+                    };
+                    row.entry(i18n, action, sel, nc)
+                }
+            };
+            with_key_hint(row, spec.action(), hint)
         })
         .collect()
+}
+
+/// A power port row as drawn: its glyph in the power colour, a short
+/// label, and the full command text as its tooltip.
+struct PowerRow {
+    icon: svg::Handle,
+    short: MessageId,
+    full: &'static str,
+    ink: iced::Color,
+}
+
+impl PowerRow {
+    fn entry(
+        self,
+        i18n: &signex_i18n::I18n,
+        action: &ActiveBarAction,
+        sel: bool,
+        nc: bool,
+    ) -> DropdownEntry<ActiveBarMsg> {
+        let tooltip = crate::app::command::active_bar::action_label(i18n, action, self.full);
+        match dd_item(i18n, self.icon, self.full, action.clone(), sel, nc) {
+            DropdownEntry::Item(mut item) => {
+                item.label = i18n.message_plain(self.short, &[]);
+                DropdownEntry::Item(item.icon_tint(self.ink).tooltip(tooltip))
+            }
+            other => other,
+        }
+    }
+}
+
+/// `row` with the active profile's key for its action's command, if any.
+fn with_key_hint(
+    row: DropdownEntry<ActiveBarMsg>,
+    action: Option<&ActiveBarAction>,
+    hint: &dyn Fn(&str) -> String,
+) -> DropdownEntry<ActiveBarMsg> {
+    let key = action
+        .and_then(crate::app::command::active_bar::id_for_action)
+        .map(hint)
+        .unwrap_or_default();
+    match row {
+        DropdownEntry::Item(item) if !key.is_empty() => DropdownEntry::Item(item.shortcut(key)),
+        other => other,
+    }
 }

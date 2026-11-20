@@ -9,9 +9,11 @@ use serde_json::Value;
 use signex_drc_dsl::table::matrix::CellKey;
 use signex_types::net_class::NetClass;
 use signex_types::pcb::{NetDef, PcbBoard, Point, Segment};
-use signex_types::project::{DrcRuleSet, ProjectRules, RuleProfile};
+use signex_types::project::{DrcRuleSet, FabTemplate, ProjectRules, RuleProfile};
+use signex_widgets::constraint_grid::{ClassPair, MatrixMessage};
 use uuid::Uuid;
 
+use super::matrix::Shown;
 use super::{ClearanceView, RulesPanel, RulesTabMsg, SetFormField};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::tests::app_workspace;
@@ -61,7 +63,7 @@ fn classes() -> Vec<NetClass> {
     vec![hv, lv]
 }
 
-fn app_with_board(dir: &tempfile::TempDir) -> (Signex, ProjectId) {
+pub(super) fn app_with_board(dir: &tempfile::TempDir) -> (Signex, ProjectId) {
     let _ = crate::diagnostics::init_logging();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
     let path = dir.path().join("board.snxpcb");
@@ -93,11 +95,11 @@ fn drc(app: &Signex) -> DrcRuleSet {
         .unwrap_or_default()
 }
 
-fn dsl(app: &Signex) -> String {
+pub(super) fn dsl(app: &Signex) -> String {
     drc(app).dsl.unwrap_or_default()
 }
 
-fn send(app: &mut Signex, msg: RulesTabMsg) {
+pub(super) fn send(app: &mut Signex, msg: RulesTabMsg) {
     let _ = app.update(Message::Project(ProjectMsg::Rules(msg)));
 }
 
@@ -131,7 +133,7 @@ fn answer(app: &mut Signex, id: &str, operands: &[&str]) -> Value {
     }
 }
 
-fn undo_steps(app: &Signex, id: ProjectId) -> usize {
+pub(super) fn undo_steps(app: &Signex, id: ProjectId) -> usize {
     app.document_state
         .rules_history
         .get(&id)
@@ -175,25 +177,15 @@ fn a_matrix_cell_typed_in_writes_one_rule_as_one_undo_step() {
         .copied();
     assert_eq!(fallback, Some(200_000));
 
-    send(
+    // LV is class 1 and HV class 0: (1, 0) is the live LV-HV cell.
+    act(
         &mut app,
-        RulesTabMsg::MatrixCellOpened {
-            project_id: id,
-            key: CellKey::new("LV", "HV"),
-        },
+        id,
+        MatrixMessage::CellPressed(ClassPair { row: 1, col: 0 }),
     );
     let _ = app.view_rules_tab(id);
-    send(
-        &mut app,
-        RulesTabMsg::MatrixCellEdited {
-            project_id: id,
-            text: "0.8mm".into(),
-        },
-    );
-    send(
-        &mut app,
-        RulesTabMsg::MatrixCellCommitted { project_id: id },
-    );
+    act(&mut app, id, MatrixMessage::EditTextChanged("0.8mm".into()));
+    act(&mut app, id, MatrixMessage::EditSubmitted);
     let text = dsl(&app);
     assert!(text.starts_with(TEXT), "the other rule is as typed: {text}");
     assert!(text.contains(
@@ -202,6 +194,7 @@ fn a_matrix_cell_typed_in_writes_one_rule_as_one_undo_step() {
     assert_eq!(undo_steps(&app, id), 1);
     let tab = &app.document_state.project_tabs[&id].rules;
     assert!(tab.matrix_edit.is_none());
+    assert!(tab.matrix.edit().is_none(), "the cell closed");
     assert_eq!(tab.matrix_open, Some(("LV".into(), "HV".into())));
     let _ = app.view_rules_tab(id);
 
@@ -219,15 +212,9 @@ fn a_sub_grid_cell_narrows_to_an_object_pair_and_clear_drops_it() {
     let key = CellKey::new("HV", "LV").with_pair("track-pad").unwrap();
     send(
         &mut app,
-        RulesTabMsg::MatrixCellOpened {
+        RulesTabMsg::MatrixPairTyped {
             project_id: id,
             key: key.clone(),
-        },
-    );
-    send(
-        &mut app,
-        RulesTabMsg::MatrixCellEdited {
-            project_id: id,
             text: "1mm".into(),
         },
     );
@@ -258,15 +245,9 @@ fn a_bad_matrix_value_is_refused_and_changes_nothing() {
     open(&mut app);
     send(
         &mut app,
-        RulesTabMsg::MatrixCellOpened {
+        RulesTabMsg::MatrixPairTyped {
             project_id: id,
             key: CellKey::new("HV", "LV"),
-        },
-    );
-    send(
-        &mut app,
-        RulesTabMsg::MatrixCellEdited {
-            project_id: id,
             text: "wide".into(),
         },
     );
@@ -653,4 +634,259 @@ fn the_preset_commands_diff_and_apply_tiers_and_profiles() {
     );
     let unknown = run(&mut app, "rules_preset_apply", &["preset=tier:nope"]);
     assert!(matches!(unknown, CommandOutcome::Disabled { .. }));
+}
+
+/// What the matrix shows at `key`, from the rules as stored now.
+pub(super) fn shown_at(app: &Signex, id: ProjectId, key: &CellKey) -> Option<Shown> {
+    let table = signex_drc_dsl::table::table(&dsl(app));
+    super::matrix::shown(&table, &app.rules_matrix_defaults(id), key)
+}
+
+pub(super) fn show_matrix(app: &mut Signex, id: ProjectId) {
+    open(app);
+    send(
+        app,
+        RulesTabMsg::ClearanceViewPicked {
+            project_id: id,
+            view: ClearanceView::Matrix,
+        },
+    );
+    let _ = app.view_rules_tab(id);
+}
+
+fn act(app: &mut Signex, id: ProjectId, msg: MatrixMessage) {
+    send(
+        app,
+        RulesTabMsg::MatrixActed {
+            project_id: id,
+            msg,
+        },
+    );
+}
+
+#[test]
+fn only_the_lower_triangle_of_the_matrix_is_edited() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    show_matrix(&mut app, id);
+    // HV is class 0 and LV class 1: (0, 1) is the mirror half, folded onto
+    // the live cell (1, 0) before the widget sees it.
+    let mirror = ClassPair { row: 0, col: 1 };
+    act(&mut app, id, MatrixMessage::CellPressed(mirror));
+    let tab = &app.document_state.project_tabs[&id].rules;
+    assert_eq!(tab.matrix.pinned(), Some(ClassPair { row: 1, col: 0 }));
+    assert_eq!(tab.matrix_open, Some(("LV".into(), "HV".into())));
+    assert_eq!(tab.matrix_pin, Some(CellKey::new("LV", "HV")));
+    let _ = app.view_rules_tab(id);
+
+    act(&mut app, id, MatrixMessage::EditTextChanged("0.8".into()));
+    act(&mut app, id, MatrixMessage::EditSubmitted);
+    let text = dsl(&app);
+    assert!(text.starts_with(TEXT), "the other rule is as typed: {text}");
+    assert!(
+        text.contains(
+            "rule cc_LV_HV on clearance when class == \"LV\" and other_class == \"HV\" require clearance >= 0.8mm then error"
+        ),
+        "{text}"
+    );
+    assert_eq!(text.matches("rule cc_").count(), 1, "one cell, one rule");
+    assert_eq!(undo_steps(&app, id), 1);
+    assert_eq!(
+        shown_at(&app, id, &CellKey::new("HV", "LV")),
+        Some(Shown::Written(0.8)),
+        "both orders name the same cell"
+    );
+    let _ = app.view_rules_tab(id);
+
+    // A clear on the mirror half clears the live cell, as one more step.
+    act(&mut app, id, MatrixMessage::CellCleared(mirror));
+    assert_eq!(dsl(&app), TEXT);
+    assert_eq!(undo_steps(&app, id), 2);
+}
+
+#[test]
+fn a_cleared_object_pair_falls_back_to_the_all_objects_value() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    show_matrix(&mut app, id);
+    let whole = CellKey::new("HV", "LV");
+    let pair = CellKey::new("HV", "LV").with_pair("track-pad").unwrap();
+    for (key, typed) in [(&whole, "0.8"), (&pair, "1")] {
+        send(
+            &mut app,
+            RulesTabMsg::MatrixPairTyped {
+                project_id: id,
+                key: key.clone(),
+                text: typed.into(),
+            },
+        );
+        send(
+            &mut app,
+            RulesTabMsg::MatrixCellCommitted { project_id: id },
+        );
+    }
+    assert!(dsl(&app).contains("between track and pad"), "{}", dsl(&app));
+    assert_eq!(shown_at(&app, id, &pair), Some(Shown::Written(1.0)));
+    // An object pair with no rule of its own shows the All objects value.
+    let via = CellKey::new("HV", "LV").with_pair("via-via").unwrap();
+    assert_eq!(shown_at(&app, id, &via), Some(Shown::Fallback(0.8)));
+    let _ = app.view_rules_tab(id);
+
+    send(
+        &mut app,
+        RulesTabMsg::MatrixCellCleared {
+            project_id: id,
+            key: pair.clone(),
+        },
+    );
+    assert!(!dsl(&app).contains("track_pad"));
+    assert_eq!(
+        shown_at(&app, id, &pair),
+        Some(Shown::Fallback(0.8)),
+        "cleared, it shows the All objects value"
+    );
+    assert_eq!(undo_steps(&app, id), 3);
+}
+
+#[test]
+fn a_value_typed_on_the_preview_writes_the_pinned_cell() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    show_matrix(&mut app, id);
+    // Nothing pinned: nothing is written.
+    let _ = super::update_matrix::preview_committed(&mut app, id, 0.5);
+    assert_eq!(dsl(&app), TEXT);
+
+    act(
+        &mut app,
+        id,
+        MatrixMessage::CellPressed(ClassPair { row: 1, col: 0 }),
+    );
+    let _ = super::update_matrix::preview_committed(&mut app, id, 0.6);
+    let text = dsl(&app);
+    assert!(text.contains("rule cc_LV_HV on clearance"), "{text}");
+    assert!(text.contains("clearance >= 0.6mm"), "{text}");
+    assert_eq!(undo_steps(&app, id), 1);
+
+    // A clicked object-pair row takes the pin: the drawing writes it, not
+    // the cell under the pointer.
+    let pair = CellKey::new("LV", "HV").with_pair("track-via").unwrap();
+    send(
+        &mut app,
+        RulesTabMsg::MatrixPairPinned {
+            project_id: id,
+            key: pair.clone(),
+        },
+    );
+    send(
+        &mut app,
+        RulesTabMsg::MatrixHovered {
+            project_id: id,
+            key: Some(CellKey::new("LV", "LV")),
+        },
+    );
+    let _ = app.view_rules_tab(id);
+    let _ = super::update_matrix::preview_committed(&mut app, id, 0.45);
+    assert_eq!(shown_at(&app, id, &pair), Some(Shown::Written(0.45)));
+    assert!(!dsl(&app).contains("cc_LV_LV"));
+    assert_eq!(undo_steps(&app, id), 2);
+    command(&mut app, "undo");
+    assert_eq!(shown_at(&app, id, &pair), Some(Shown::Fallback(0.6)));
+}
+
+#[test]
+fn the_tier_cards_show_the_canonical_tier_table() {
+    for tier in FabTemplate::ALL {
+        let spec = super::presets::tier_spec(tier);
+        let table = tier.capabilities();
+        assert_eq!(spec.clearance, table.clearance, "{tier:?}");
+        assert_eq!(spec.width, table.track_width, "{tier:?}");
+        assert_eq!(spec.drill, table.hole, "{tier:?}");
+        assert_eq!(spec.annular, table.annular_ring, "{tier:?}");
+    }
+    let standard = super::presets::tier_spec(FabTemplate::Standard);
+    assert_eq!(
+        (
+            standard.clearance,
+            standard.width,
+            standard.drill,
+            standard.annular
+        ),
+        (0.15, 0.15, 0.25, 0.125)
+    );
+}
+
+#[test]
+fn a_tier_card_previews_old_and_new_values_and_applies_as_one_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    open(&mut app);
+    send(
+        &mut app,
+        RulesTabMsg::PanelPicked {
+            project_id: id,
+            panel: Some(RulesPanel::Presets),
+        },
+    );
+    let added = (None, Some("0.15mm".to_string()));
+    let changed = (Some("0.15mm".to_string()), Some("0.1mm".to_string()));
+    for (tier, steps, values) in [("tier:standard", 1, added), ("tier:advanced", 2, changed)] {
+        send(
+            &mut app,
+            RulesTabMsg::PresetPicked {
+                project_id: id,
+                preset: tier.into(),
+            },
+        );
+        let _ = app.view_rules_tab(id);
+        let preview = app.document_state.project_tabs[&id]
+            .rules
+            .preview
+            .clone()
+            .expect("a preview");
+        let clearance = preview
+            .changes
+            .iter()
+            .find(|c| c.name == "fab_clearance")
+            .expect("the clearance floor changes");
+        assert_eq!(super::presets::change_values(clearance), values, "{tier}");
+        send(&mut app, RulesTabMsg::PresetApplied { project_id: id });
+        assert!(app.document_state.project_tabs[&id].rules.preview.is_none());
+        assert_eq!(undo_steps(&app, id), steps, "one undo step per apply");
+    }
+    assert!(dsl(&app).contains("rule fab_clearance on clearance require clearance >= 0.1mm"));
+}
+
+#[test]
+fn a_matrix_cell_stores_its_length_as_typed() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    show_matrix(&mut app, id);
+    let live = ClassPair { row: 1, col: 0 };
+    let key = CellKey::new("LV", "HV");
+    for (step, (typed, written, mm)) in
+        [("8mil", "8mil", 0.2032), ("0.12345", "0.12345mm", 0.12345)]
+            .into_iter()
+            .enumerate()
+    {
+        act(&mut app, id, MatrixMessage::CellPressed(live));
+        act(&mut app, id, MatrixMessage::EditTextChanged(typed.into()));
+        act(&mut app, id, MatrixMessage::EditSubmitted);
+        let text = dsl(&app);
+        assert!(
+            text.contains(&format!("clearance >= {written} then")),
+            "{typed} is stored as typed: {text}"
+        );
+        assert_eq!(shown_at(&app, id, &key), Some(Shown::Written(mm)));
+        assert_eq!(undo_steps(&app, id), step + 1);
+        assert!(
+            app.document_state.project_tabs[&id]
+                .rules
+                .matrix
+                .edit()
+                .is_none(),
+            "the cell closed"
+        );
+        let _ = app.view_rules_tab(id);
+    }
 }

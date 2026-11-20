@@ -192,16 +192,27 @@ fn dd_msg_row_carries_message_and_optional_shortcut() {
     }
 }
 
-/// #1257 - the row is live and routes to the Find Similar action, with or
-/// without a selection.
+/// #1257 - the row is live and routes to the Find Similar action, with a
+/// selection or with an object under the right-click; on an empty spot with
+/// nothing selected it is not shown (Graphite mockup #62).
 #[test]
 fn find_similar_row_is_enabled_and_routes_to_its_action() {
+    let empty = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        CanvasSelection::default(),
+        None,
+        None,
+        &shortcuts(),
+    );
+    assert!(!has_row(&empty, "Find Similar Objects..."));
     for has_selection in [false, true] {
         let rows = canvas_menu_entries(
             signex_i18n::I18n::en_us_ref(),
             TID,
             CanvasSelection {
                 has_selection,
+                hit_object: !has_selection,
                 ..CanvasSelection::default()
             },
             None,
@@ -258,18 +269,219 @@ fn canvas_menu_grows_and_gates_on_selection() {
         &sc,
     );
 
-    // Clipboard + find rows are always present.
-    for row in ["Find", "Cut", "Copy", "Paste", "Paste Special"] {
+    // An empty spot offers Find and the paste rows (Graphite mockup #62).
+    for row in ["Find", "Paste", "Paste Special", "Select All"] {
         assert!(has_row(&without, row), "missing {row}");
     }
-    // Selection-only rows appear only with a selection.
-    assert!(!has_row(&without, "Rotate"));
-    assert!(has_row(&with, "Rotate"));
-    assert!(has_row(&with, "Properties..."));
-    // Place, Part Actions and Sheet Actions launchers always (#2419); the
-    // Align launcher joins them on selection.
-    assert_eq!(launchers(&without), 3);
-    assert_eq!(launchers(&with), 5);
+    // Selection rows appear only with a selection, and are hidden without.
+    for row in ["Cut", "Copy", "Duplicate", "Rotate", "Properties..."] {
+        assert!(!has_row(&without, row), "{row} without a selection");
+        assert!(has_row(&with, row), "{row} with a selection");
+    }
+    // Place and Sheet Actions on an empty spot; with a selection Align,
+    // Unions (#158), Part Actions and the Planned flyout join them (Graphite
+    // mockup #62).
+    assert_eq!(launchers(&without), 2);
+    assert_eq!(launchers(&with), 6);
+}
+
+/// The rows of `entries` in order, separators as "-", subheads as "#…".
+fn shape(entries: &[DropdownEntry<Message>]) -> Vec<String> {
+    entries
+        .iter()
+        .map(|e| match e {
+            DropdownEntry::Item(it) => it.label.clone(),
+            DropdownEntry::Header(h) => format!("#{h}"),
+            DropdownEntry::Separator => "-".to_string(),
+            DropdownEntry::Custom(_) => "custom".to_string(),
+        })
+        .collect()
+}
+
+/// Graphite mockup #62: right-click on an empty spot with nothing selected gives the short
+/// menu, exactly as drawn, with none of the selection rows.
+#[test]
+fn the_empty_spot_menu_has_exactly_the_drawn_rows() {
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let rows = canvas_menu_entries(
+        i18n,
+        TID,
+        CanvasSelection::default(),
+        None,
+        Some(vec!["7".to_string()]),
+        &shortcuts(),
+    );
+    let label = |id: &str| super::items::command_text(i18n, id);
+    let expected: Vec<String> = vec![
+        label("find"),
+        "-".into(),
+        "Place".into(),
+        "Sheet Actions".into(),
+        "-".into(),
+        label("undo"),
+        label("redo"),
+        "-".into(),
+        label("paste"),
+        label("smart_paste"),
+        label("select_all"),
+        "-".into(),
+        label("open_net_color_palette"),
+        "-".into(),
+        label("open_project_options"),
+        label("open_preferences"),
+    ];
+    assert_eq!(shape(&rows), expected);
+    for gone in [
+        "find_similar_objects",
+        "cross_probe",
+        "cut",
+        "copy",
+        "duplicate",
+        "highlight_net_under_cursor",
+        "assign_net_class",
+        "clear_net_highlighting",
+    ] {
+        assert!(!has_row(&rows, &label(gone)), "{gone} on an empty spot");
+    }
+    assert!(!has_row(&rows, "Part Actions"));
+    assert_eq!(
+        rows.iter()
+            .filter(|e| matches!(e, DropdownEntry::Item(_)))
+            .count(),
+        11
+    );
+}
+
+/// Graphite mockup #62: a right-click on an object adds Find Similar and Highlight Net; a
+/// net highlight adds Clear Filter.
+#[test]
+fn a_hit_and_a_net_highlight_add_their_rows_to_the_empty_spot_menu() {
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let rows = canvas_menu_entries(
+        i18n,
+        TID,
+        CanvasSelection {
+            hit_object: true,
+            net_highlighted: true,
+            ..CanvasSelection::default()
+        },
+        None,
+        None,
+        &shortcuts(),
+    );
+    assert!(has_row(&rows, "Find Similar Objects..."));
+    assert!(has_row(
+        &rows,
+        &super::items::command_text(i18n, "highlight_net_under_cursor")
+    ));
+    assert!(has_row(
+        &rows,
+        &super::items::command_text(i18n, "clear_net_highlighting")
+    ));
+}
+
+/// Graphite mockup #62: with a selection the menu opens on Properties (bold, the default
+/// row), keeps the drawn order, and ends with Undo and the greyed
+/// "Planned (5)" flyout launcher. Unions is live (#158) and sits with Align.
+#[test]
+fn the_selection_menu_keeps_the_drawn_order_and_ends_with_planned() {
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let rows = canvas_menu_entries(i18n, TID, selected(), None, None, &shortcuts());
+    let label = |id: &str| super::items::command_text(i18n, id);
+    let expected: Vec<String> = [
+        label("edit_selected_object_properties"),
+        label("find_similar_objects"),
+        label("cross_probe"),
+        "-".into(),
+        label("cut"),
+        label("copy"),
+        label("duplicate"),
+        label("delete_selection"),
+        "-".into(),
+        label("rotate_counterclockwise"),
+        label("mirror_x"),
+        label("mirror_y"),
+        "Align".into(),
+        "Unions".into(),
+        "-".into(),
+        "Part Actions".into(),
+        "Sheet Actions".into(),
+        "Place".into(),
+        "-".into(),
+        label("highlight_net_under_cursor"),
+        label("open_net_color_palette"),
+        label("assign_net_class"),
+        "-".into(),
+        label("undo"),
+        "Planned (5)".into(),
+    ]
+    .to_vec();
+    assert_eq!(shape(&rows), expected);
+    let DropdownEntry::Item(properties) = &rows[0] else {
+        panic!("Properties row");
+    };
+    assert!(properties.strong, "Properties is the bold default row");
+    let DropdownEntry::Item(planned) = rows.last().expect("rows") else {
+        panic!("Planned row");
+    };
+    assert!(planned.disabled && planned.submenu && planned.on_hover.is_some());
+    assert!(planned.on_press.is_none(), "a click does nothing");
+    // The flyout holds the five planned rows, each with its tooltip.
+    let flyout = super::submenu::planned_entries(i18n, TID);
+    assert_eq!(flyout.len(), 5);
+    for entry in &flyout {
+        let DropdownEntry::Item(item) = entry else {
+            panic!("planned row");
+        };
+        assert!(item.disabled, "{}", item.label);
+        assert!(
+            item.tooltip
+                .as_deref()
+                .is_some_and(|t| t.starts_with("Planned")),
+            "{}",
+            item.label
+        );
+    }
+    for row in ["Paste", "Paste Special", "Preferences..."] {
+        assert!(!has_row(&rows, row), "{row} is on the empty-spot menu");
+    }
+}
+
+/// Graphite mockup #62: the muted first line names the sheet, or the one selected part by
+/// designator and value, or the count.
+#[test]
+fn the_context_line_names_the_sheet_or_the_selection() {
+    use super::menus::{MenuContext, context_line};
+    let i18n = signex_i18n::I18n::en_us_ref();
+    assert_eq!(
+        context_line(
+            i18n,
+            &MenuContext::Sheet {
+                file: "dcdc.snxsch".into()
+            }
+        ),
+        "schematic sheet · dcdc.snxsch"
+    );
+    assert_eq!(
+        context_line(
+            i18n,
+            &MenuContext::Selection {
+                part: Some(("R3".into(), "100k".into())),
+                count: 1
+            }
+        ),
+        "R3 · 100k · 1 item selected"
+    );
+    assert_eq!(
+        context_line(
+            i18n,
+            &MenuContext::Selection {
+                part: None,
+                count: 3
+            }
+        ),
+        "3 items selected"
+    );
 }
 
 fn project_options_row(entries: &[DropdownEntry<Message>]) -> &DropdownItem<Message> {
@@ -434,19 +646,67 @@ fn place_menu_greys_only_the_planned_tools() {
     let e = place_entries(signex_i18n::I18n::en_us_ref(), TID, &|_| String::new());
     assert!(has_row(&e, "Wire"));
     assert!(has_row(&e, "Part"));
-    // Placement actions are always available, except the planned tools
-    // (#1249), which are greyed with the shared tooltip.
+    // Placement actions are always available; the planned tools (#1249) are
+    // gathered in one greyed row that names them (Graphite mockup #62).
+    // Net Parameters and the harness tools are live (#1281, #1280).
+    let planned = ["Device Sheet Symbol"];
     for entry in &e {
         if let DropdownEntry::Item(it) = entry {
-            let planned = matches!(it.label.as_str(), "Device Sheet Symbol");
-            assert_eq!(it.disabled, planned, "{}", it.label);
-            assert_eq!(
-                it.tooltip.as_deref(),
-                planned.then_some("Planned — not available yet"),
-                "{}",
-                it.label
-            );
+            assert!(!planned.contains(&it.label.as_str()), "{}", it.label);
+            let is_planned_row = it.label == "1 planned tools…";
+            assert_eq!(it.disabled, is_planned_row, "{}", it.label);
         }
+    }
+    let DropdownEntry::Item(row) = e.last().expect("rows") else {
+        panic!("the planned row ends the flyout");
+    };
+    assert_eq!(row.label, "1 planned tools…");
+    assert!(row.on_press.is_none());
+    let tip = row.tooltip.as_deref().expect("names the tools");
+    for name in planned {
+        assert!(tip.contains(name), "{name} in {tip}");
+    }
+}
+
+/// Graphite mockup #62: the Place flyout groups its rows under four subheads, and its power
+/// rows use the short name, the full name as tooltip and the power colour.
+#[test]
+fn place_menu_has_subheads_and_short_power_rows() {
+    let e = place_entries(signex_i18n::I18n::en_us_ref(), TID, &|_| String::new());
+    let heads: Vec<&str> = e
+        .iter()
+        .filter_map(|row| match row {
+            DropdownEntry::Header(h) => Some(h.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        heads,
+        [
+            "Wiring",
+            "Ports and power",
+            "Parts and sheets",
+            "Directives and text"
+        ]
+    );
+    assert_eq!(seps(&e), 1, "only the planned row is set apart");
+    let ink = signex_widgets::theme_ext::power_port(&signex_types::theme::canvas_colors(TID));
+    for (short, full) in [
+        ("GND", "GND Power Port"),
+        ("VCC", "VCC Power Port"),
+        ("+5", "+5 Power Port"),
+        ("+12", "+12 Power Port"),
+    ] {
+        let item = e
+            .iter()
+            .find_map(|row| match row {
+                DropdownEntry::Item(it) if it.label == short => Some(it),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("missing {short}"));
+        assert_eq!(item.tooltip.as_deref(), Some(full));
+        assert_eq!(item.icon_tint, Some(ink), "{short}");
+        assert!(!item.disabled);
     }
 }
 
@@ -544,25 +804,25 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
             "Junction",
             "Port",
             "Off Sheet Connector",
-            "GND Power Port",
-            "VCC Power Port",
-            "+5 Power Port",
-            "+12 Power Port",
+            "GND",
+            "VCC",
+            "+5",
+            "+12",
+            "Signal Harness",
+            "Harness Connector",
+            "Harness Entry",
+            "Part",
+            "Sheet Symbol",
+            "Sheet Entry",
             "Net Parameters",
             "Generic No ERC",
             "Differential Pair",
             "Net Blanket",
             "Compile Mask",
-            "Signal Harness",
-            "Harness Connector",
-            "Harness Entry",
-            "Sheet Symbol",
-            "Sheet Entry",
-            "Device Sheet Symbol",
-            "Part",
             "Text String",
             "Text Frame",
             "Note",
+            "1 planned tools…",
         ]
     );
     assert_eq!(
@@ -603,19 +863,27 @@ fn canvas_row_text_is_byte_identical_to_the_old_literals() {
         &shortcuts(),
     );
     for expected in [
-        "Find",
         "Cut",
         "Copy",
-        "Paste",
-        "Paste Special",
         "Rotate",
         "Mirror X",
         "Mirror Y",
         "Delete",
-        "Preferences...",
         "Properties...",
     ] {
         assert!(has_row(&rows, expected), "missing {expected:?}");
+    }
+    // The sheet rows moved to the empty-spot menu (Graphite mockup #62).
+    let empty = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        CanvasSelection::default(),
+        None,
+        None,
+        &shortcuts(),
+    );
+    for expected in ["Find", "Paste", "Paste Special", "Preferences..."] {
+        assert!(has_row(&empty, expected), "missing {expected:?}");
     }
 }
 
@@ -644,23 +912,31 @@ fn shared_command_ids_read_the_same_label_on_every_surface() {
         None,
         &shortcuts(),
     );
-    for (id, row_label) in [
-        ("cut", "Cut"),
-        ("copy", "Copy"),
-        ("paste", "Paste"),
-        ("smart_paste", "Paste Special"),
-        ("mirror_x", "Mirror X"),
-        ("mirror_y", "Mirror Y"),
-        ("delete_selection", "Delete"),
-        ("open_preferences", "Preferences..."),
-        ("edit_selected_object_properties", "Properties..."),
+    let empty = canvas_menu_entries(
+        signex_i18n::I18n::en_us_ref(),
+        TID,
+        CanvasSelection::default(),
+        None,
+        None,
+        &shortcuts(),
+    );
+    for (id, row_label, menu) in [
+        ("cut", "Cut", &rows),
+        ("copy", "Copy", &rows),
+        ("paste", "Paste", &empty),
+        ("smart_paste", "Paste Special", &empty),
+        ("mirror_x", "Mirror X", &rows),
+        ("mirror_y", "Mirror Y", &rows),
+        ("delete_selection", "Delete", &rows),
+        ("open_preferences", "Preferences...", &empty),
+        ("edit_selected_object_properties", "Properties...", &rows),
     ] {
         assert_eq!(
             crate::menu_bar::cmd_label(signex_i18n::I18n::en_us_ref(), id, "<missing>"),
             row_label,
             "{id}"
         );
-        assert!(has_row(&rows, row_label), "{id} row {row_label:?}");
+        assert!(has_row(menu, row_label), "{id} row {row_label:?}");
     }
 
     // Place / Align flyouts: id-backed and labelled by the catalog.
@@ -828,7 +1104,7 @@ fn runs_cross_probe(message: Option<Message>) -> bool {
 }
 
 /// #1312: Cross Probe on the sheet menu runs `cross_probe` with something
-/// selected and is greyed with nothing selected.
+/// selected; with nothing selected it is not offered (Graphite mockup #62).
 #[test]
 fn canvas_cross_probe_row_runs_the_command_with_a_selection() {
     let sc = shortcuts();
@@ -849,8 +1125,7 @@ fn canvas_cross_probe_row_runs_the_command_with_a_selection() {
         &sc,
     );
     assert!(runs_cross_probe(row_message(&with, "Cross Probe")));
-    assert!(row_message(&without, "Cross Probe").is_none());
-    assert!(disabled_of(&without, "Cross Probe"));
+    assert!(!has_row(&without, "Cross Probe"));
 }
 
 /// #1312: the board menu has Cross Probe, live with anything selected.

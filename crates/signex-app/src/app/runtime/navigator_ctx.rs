@@ -21,19 +21,21 @@ use iced::Task;
 
 use super::super::*;
 use crate::app::project_sheets::{
-    assemble_project_sheets_from, open_sheets_snapshot, project_root_sheet_path,
+    ProjectSheetSet, assemble_project_sheets_from, open_sheets_snapshot, project_graph_with,
+    project_root_sheet_path, project_roots, sheet_key_with,
 };
-use crate::app::sheet_hierarchy::build_sheet_hierarchy;
+use crate::app::sheet_hierarchy::{build_sheet_hierarchy, normalised_key};
 use crate::app::state::navigator_job::{NavigatorAssembly, NavigatorRequest};
 use crate::app::state::scope::CaseFold;
-use crate::panels::NavigatorModel;
+use crate::menu_bar::MenuMessage;
+use crate::panels::{NavigatorModel, NavigatorMsg, SheetNumbers};
 
 impl Signex {
     /// The Navigator model for the current state: `previous`'s cached
     /// hierarchy, with a fresh assembly requested when what it was built from
     /// has changed. Never reads the disk.
     pub(super) fn next_navigator_model(&mut self, mut previous: NavigatorModel) -> NavigatorModel {
-        let Some((root, pages, fold)) = self.navigator_project_scope() else {
+        let Some((root, pages, fold, project_name)) = self.navigator_project_scope() else {
             self.document_state.navigator_job.want(None);
             return NavigatorModel::default();
         };
@@ -50,7 +52,7 @@ impl Signex {
             .get(self.document_state.active_tab)
             .map(|tab| tab.path.clone());
 
-        let fingerprint = self.navigator_fingerprint(&root, &pages, fold);
+        let fingerprint = self.navigator_fingerprint(&root, &pages, fold, &project_name);
         let stale = previous.fingerprint != fingerprint || previous.hierarchy.is_none();
         self.document_state
             .navigator_job
@@ -59,6 +61,7 @@ impl Signex {
                 root,
                 pages,
                 fold,
+                project_name,
             }));
         previous.rebuild_tree(active.as_deref(), &open);
         previous
@@ -167,21 +170,37 @@ impl Signex {
             .map(|tab| tab.path.clone());
         let navigator = &mut self.document_state.panel_ctx.navigator;
         navigator.replace_hierarchy(assembly.hierarchy, active.as_deref(), &open);
+        navigator.numbers = assembly.numbers;
         navigator.fingerprint = assembly.fingerprint;
         // The canvas designators are a function of the hierarchy's placements.
         self.refresh_canvas_designators();
         Task::none()
     }
 
+    /// The Navigator's filter and empty-state buttons (Graphite mockup #54).
+    pub(crate) fn handle_navigator_message(&mut self, msg: NavigatorMsg) -> Task<Message> {
+        let navigator = &mut self.document_state.panel_ctx.navigator;
+        match msg {
+            NavigatorMsg::FilterChanged(filter) => navigator.filter = filter,
+            NavigatorMsg::FilterCleared => navigator.filter.clear(),
+            NavigatorMsg::OpenProjectPressed => {
+                return Task::done(Message::Menu(MenuMessage::OpenProject));
+            }
+        }
+        Task::none()
+    }
+
     /// The project the Navigator describes, as `(root sheet, declared pages,
-    /// the project's key rules)`.
+    /// the project's key rules, its name)`.
     ///
     /// The project owning the focused document, else the workspace's active
     /// project. Ownership alone is not enough: it is discovered through the
     /// *open* sheets' child references, so a leaf opened while its ancestors
     /// are closed resolves to no project — and the Navigator would go empty
     /// exactly when the user has navigated deep.
-    pub(crate) fn navigator_project_scope(&self) -> Option<(PathBuf, Vec<PathBuf>, CaseFold)> {
+    pub(crate) fn navigator_project_scope(
+        &self,
+    ) -> Option<(PathBuf, Vec<PathBuf>, CaseFold, String)> {
         let project = self
             .document_state
             .active_document_project()
@@ -189,10 +208,10 @@ impl Signex {
         Self::project_scope_of(project)
     }
 
-    /// `(root sheet, declared pages, key rules)` of `project`.
+    /// `(root sheet, declared pages, key rules, name)` of `project`.
     pub(super) fn project_scope_of(
         project: &crate::app::state::LoadedProject,
-    ) -> Option<(PathBuf, Vec<PathBuf>, CaseFold)> {
+    ) -> Option<(PathBuf, Vec<PathBuf>, CaseFold, String)> {
         let root = project_root_sheet_path(project)?;
         let dir = project.dir();
         let pages = project
@@ -201,16 +220,24 @@ impl Signex {
             .iter()
             .map(|s| dir.join(&s.filename))
             .collect();
-        Some((root, pages, project.case_fold))
+        Some((root, pages, project.case_fold, project.data.name.clone()))
     }
 
+    /// What the hierarchy and its page numbers are built from: the project's
+    /// root, pages and name, the open tabs, and the child-sheet references
+    /// of the open sheets with their manual page numbers.
     pub(super) fn navigator_fingerprint(
         &self,
         root: &std::path::Path,
         pages: &[PathBuf],
         fold: CaseFold,
+        project_name: &str,
     ) -> String {
-        let mut lines = vec![format!("root {}", root.display()), format!("fold {fold:?}")];
+        let mut lines = vec![
+            format!("root {}", root.display()),
+            format!("fold {fold:?}"),
+            format!("name {project_name}"),
+        ];
         lines.extend(pages.iter().map(|p| format!("page {}", p.display())));
         lines.extend(
             self.document_state
@@ -222,20 +249,22 @@ impl Signex {
         engines.sort_by(|a, b| a.0.cmp(b.0));
         for (path, engine) in engines {
             lines.push(format!("sheet {}", path.display()));
-            lines.extend(
-                engine
-                    .document()
-                    .child_sheets
-                    .iter()
-                    .map(|c| format!("  ref {}|{}|{}", c.name, c.filename, c.uuid)),
-            );
+            for child in &engine.document().child_sheets {
+                lines.push(format!(
+                    "  ref {}|{}|{}",
+                    child.name, child.filename, child.uuid
+                ));
+                lines.extend(child.instances.iter().map(|entry| {
+                    format!("    page {}|{}|{}", entry.project, entry.path, entry.page)
+                }));
+            }
         }
         lines.join("\n")
     }
 }
 
-/// The blocking half of the assembly: read the closed sheets and build the
-/// occurrence tree. Runs on a worker thread.
+/// The blocking half of the assembly: read the closed sheets, build the
+/// occurrence tree and number its pages. Runs on a worker thread.
 pub(super) fn assemble_navigator(
     open: &crate::app::project_sheets::OpenSheets,
     request: NavigatorRequest,
@@ -248,11 +277,45 @@ pub(super) fn assemble_navigator(
         &set.pages_outside_the_hierarchy,
         request.fold,
     );
+    let numbers = sheet_numbers(&set, &request);
     NavigatorAssembly {
         fingerprint: request.fingerprint,
         hierarchy,
         unreadable: set.unreadable,
+        numbers,
     }
+}
+
+/// The page number of every placement of `set`, from the same project
+/// sheet numbering the Sheet Numbering dialog and the exports read
+/// (`signex_net::sheet_numbering`), keyed the way the hierarchy keys its
+/// rows. Empty when the root sheet did not assemble.
+fn sheet_numbers(set: &ProjectSheetSet, request: &NavigatorRequest) -> SheetNumbers {
+    let fold = request.fold;
+    let base = request.root.parent();
+    let graph = project_graph_with(&set.sheets, base, Some(&request.root), fold);
+    let root_key = sheet_key_with(&request.root, base, fold);
+    if !graph.sheets.contains_key(&root_key) {
+        return SheetNumbers::new();
+    }
+    let roots = project_roots(root_key, set, &graph, base, fold);
+    let project = signex_net::ProjectGraph {
+        sheets: &graph.sheets,
+        resolved: &graph.resolved,
+        roots: &roots,
+    };
+    let (numbering, _) = signex_net::sheet_numbering(&project, &request.project_name);
+    numbering
+        .pages()
+        .iter()
+        .filter_map(|page| {
+            let path = graph.paths.get(&page.key)?;
+            Some((
+                (normalised_key(path, fold), page.instance_path.clone()),
+                page.number,
+            ))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -316,6 +379,7 @@ mod tests {
             fingerprint: fingerprint.to_string(),
             hierarchy: SheetHierarchy::default(),
             unreadable: Vec::new(),
+            numbers: Default::default(),
         })
     }
 
@@ -465,5 +529,43 @@ mod tests {
         app.refresh_panel_ctx();
         assert!(!app.navigator_is_settled());
         assert!(!app.known_single_placement(path));
+    }
+
+    /// Graphite mockup #54: a child sheet placed twice is numbered once per placement by the
+    /// project's sheet numbering, and each number lands on its own row.
+    #[test]
+    fn a_reused_child_sheet_is_numbered_per_placement() {
+        use crate::app::handlers::menu::export::tests::sheet_with_net;
+        let dir = std::path::Path::new("/nowhere/54");
+        let top = dir.join("top.snxsch");
+        let mut root = sheet_with_net("R1", "N", &["reg.snxsch", "reg.snxsch"]);
+        for (n, name) in [(0usize, "Regulator 3V3"), (1, "Regulator 1V8")] {
+            root.child_sheets[n].uuid = uuid::Uuid::from_u128(n as u128 + 1);
+            root.child_sheets[n].name = name.into();
+        }
+        let open: crate::app::project_sheets::OpenSheets = [
+            (top.clone(), root),
+            (dir.join("reg.snxsch"), sheet_with_net("R2", "M", &[])),
+        ]
+        .into_iter()
+        .collect();
+        let assembly = assemble_navigator(
+            &open,
+            NavigatorRequest {
+                fingerprint: "fp".into(),
+                root: top.clone(),
+                pages: vec![top],
+                fold: CaseFold::host_default(),
+                project_name: "P".into(),
+            },
+        );
+        let mut model = NavigatorModel::default();
+        model.replace_hierarchy(assembly.hierarchy, None, &[]);
+        model.numbers = assembly.numbers;
+        assert_eq!(
+            [&[0][..], &[0, 0], &[0, 1]].map(|row| model.number_at(row)),
+            [Some(1), Some(2), Some(3)]
+        );
+        assert_eq!(model.sheet_count(), 3);
     }
 }

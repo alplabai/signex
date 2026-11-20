@@ -122,6 +122,20 @@ impl Signex {
         }
         self.refresh_panel_ctx();
     }
+
+    /// After a person's edit run through `on_edit_target` on `path`: when
+    /// that sheet is the main window's active one, its selection overlay and
+    /// the Properties panel's selection fields follow the edit, as the
+    /// gateway's own refresh does for an edit of the active sheet.
+    pub(crate) fn refresh_selection_on(&mut self, path: &Path) {
+        if self.document_state.active_path.as_deref() != Some(path) {
+            return;
+        }
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
+        self.update_selection_info();
+    }
 }
 
 impl Signex {

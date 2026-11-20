@@ -19,6 +19,8 @@ pub struct NavigatorRequest {
     pub root: PathBuf,
     pub pages: Vec<PathBuf>,
     pub fold: CaseFold,
+    /// The project's name: which manual sheet numbers apply.
+    pub project_name: String,
 }
 
 /// A finished assembly, ready to swap into the Navigator model.
@@ -28,6 +30,8 @@ pub struct NavigatorAssembly {
     pub hierarchy: SheetHierarchy,
     /// Sheets that exist but could not be read, with why.
     pub unreadable: Vec<(PathBuf, String)>,
+    /// The page number of every placement, from the project's sheet numbering.
+    pub numbers: crate::panels::SheetNumbers,
 }
 
 /// How many times a failing assembly is tried for one fingerprint. `update`
@@ -154,6 +158,7 @@ mod tests {
             root: PathBuf::from("r.snxsch"),
             pages: Vec::new(),
             fold: CaseFold::host_default(),
+            project_name: String::new(),
         }
     }
 

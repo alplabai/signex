@@ -2,7 +2,8 @@ use crate::exec::change_component::ComponentReplacement;
 use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
-    NoErcDirective, SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
+    NoErcDirective, SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, VAlign,
+    Wire,
 };
 use uuid::Uuid;
 
@@ -94,6 +95,8 @@ pub enum CommandKind {
     PlaceWireSegment,
     BreakWire,
     MoveWireEnd,
+    SetRunEnd,
+    UpdateTextNoteProps,
     PlaceWireSegmentAsIs,
     PlaceBus,
     PlaceLabel,
@@ -144,6 +147,18 @@ pub enum CommandKind {
     UpdateUnion,
     SetUnionMembers,
     BreakUnion,
+}
+
+/// The text-note properties [`Command::UpdateTextNoteProps`] sets; `None`
+/// keeps a property as it is.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct TextNoteProps {
+    pub justify_h: Option<HAlign>,
+    pub justify_v: Option<VAlign>,
+    /// Stored degrees, counter-clockwise; normalised into `0..360`.
+    pub rotation_degrees: Option<f64>,
+    /// Must be above zero; a size at or below zero is ignored.
+    pub font_size_mm: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -348,6 +363,22 @@ pub enum Command {
         start: bool,
         to: signex_types::schematic::Point,
         keep_wires: bool,
+    },
+    /// Put one end of the wire or bus `run` (its start when `start`) exactly
+    /// at `to`, the other end kept: a typed Start or End. Unlike the grip, a
+    /// straight run may turn and nothing attached follows. A wire's
+    /// junctions are reconciled and collinear wires folded as when a wire
+    /// is placed. A `to` on the run's other end changes nothing.
+    SetRunEnd {
+        run: SelectedItem,
+        start: bool,
+        to: signex_types::schematic::Point,
+    },
+    /// Set the justification, turn or text size of one text note; `None`
+    /// keeps that property. One undo step, none when nothing changes.
+    UpdateTextNoteProps {
+        note_id: Uuid,
+        props: TextNoteProps,
     },
     PlaceWireSegment {
         wire: Wire,
@@ -779,6 +810,8 @@ impl Command {
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Command::BreakWire { .. } => CommandKind::BreakWire,
             Command::MoveWireEnd { .. } => CommandKind::MoveWireEnd,
+            Command::SetRunEnd { .. } => CommandKind::SetRunEnd,
+            Command::UpdateTextNoteProps { .. } => CommandKind::UpdateTextNoteProps,
             Command::PlaceWireSegmentAsIs { .. } => CommandKind::PlaceWireSegmentAsIs,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,

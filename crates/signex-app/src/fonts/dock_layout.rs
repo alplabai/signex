@@ -101,7 +101,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Filter => "filter",
         Erc => "erc",
         SchFilter => "sch_filter",
-        SchList => "sch_list",
+        ObjectList => "object_list",
         Messages => "messages",
         Drc => "drc",
         BomStudio => "bom_studio",
@@ -136,7 +136,7 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "filter" => Filter,
         "erc" => Erc,
         "sch_filter" => SchFilter,
-        "sch_list" => SchList,
+        "object_list" => ObjectList,
         "messages" => Messages,
         "drc" => Drc,
         "bom_studio" => BomStudio,
@@ -248,6 +248,32 @@ mod tests {
             crate::panels::ALL_PANELS
                 .iter()
                 .all(|k| panel_kind_key(*k) != "signex_ai")
+        );
+    }
+
+    /// #1259: the Object List saves as `object_list` and loads back; a layout
+    /// saved under the old `sch_list` key drops that panel (no alias).
+    #[test]
+    fn the_object_list_round_trips_and_the_old_key_is_dropped() {
+        assert_eq!(panel_kind_key(PanelKind::ObjectList), "object_list");
+        assert_eq!(parse_panel_kind("object_list"), Some(PanelKind::ObjectList));
+        assert_eq!(parse_panel_kind("sch_list"), None);
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let text = saved(&dir).replace("history", "object_list");
+        let json: serde_json::Value = serde_json::from_str(&text).expect("prefs.json parses");
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties, PanelKind::ObjectList]
+        );
+
+        let old = saved(&dir).replace("history", "sch_list");
+        let json: serde_json::Value = serde_json::from_str(&old).expect("prefs.json parses");
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout still loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties]
         );
     }
 
