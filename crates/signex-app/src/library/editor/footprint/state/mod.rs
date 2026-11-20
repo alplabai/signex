@@ -329,6 +329,8 @@ pub struct FootprintEditorState {
     pub pad_link: Option<PadLinkFocus>,
     /// A patterned pad edit waiting for "This pad / All pads" (#192 D1).
     pub pad_scope: Option<Box<pad_scope::PadScopePrompt>>,
+    /// The mode the 3D toggle returns to (#187); set when 3D is entered.
+    pub mode_before_3d: EditorMode,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -449,6 +451,7 @@ impl FootprintEditorState {
             sketch_overlay: SketchOverlay::default(),
             pad_link: None,
             pad_scope: None,
+            mode_before_3d: EditorMode::Normal,
         }
     }
 

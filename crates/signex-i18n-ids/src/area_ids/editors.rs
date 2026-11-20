@@ -160,4 +160,8 @@ define_ids! {
     EDITORS_SKETCH_ROLE_COMPONENT_ANCHOR = "editors-sketch-role-component-anchor";
     EDITORS_SKETCH_TARGET_MECHANICAL = "editors-sketch-target-mechanical";
     EDITORS_SKETCH_TARGET_COMPONENT_ANCHORS = "editors-sketch-target-component-anchors";
+    EDITORS_MODE_FOOTPRINT = "editors-mode-footprint";
+    EDITORS_MODE_SKETCH = "editors-mode-sketch";
+    EDITORS_MODE_3D = "editors-mode-3d";
+    EDITORS_MODE_3D_TOOLTIP = "editors-mode-3d-tooltip";
 }

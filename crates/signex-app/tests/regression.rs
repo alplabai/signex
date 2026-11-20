@@ -770,3 +770,7 @@ mod sketch_create_inference;
 // and the inside-corner check, and Close gap on both hosts.
 #[path = "regression/board_sketch_router.rs"]
 mod board_sketch_router;
+// #187 (decision 8): the footprint editor bar's Footprint / Sketch switch and
+// the 3D toggle that returns to the mode it came from.
+#[path = "regression/editor_mode_switch.rs"]
+mod editor_mode_switch;

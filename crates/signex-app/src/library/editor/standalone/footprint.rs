@@ -57,16 +57,20 @@ pub fn view_footprint<'a>(
     // Active bar floats OVER the canvas via Stack so the canvas
     // drawing area extends edge-to-edge behind it instead of being
     // clipped under the bar's bottom. Mirrors Fusion 360 / Altium.
-    // v0.14.2 — mode switcher is its own floating widget at the
-    // canvas's top-LEFT, separate from the centered active bar.
-    let mode_switcher =
-        crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(editor, tokens);
+    // The editor bar (#187): Footprint / Sketch switch, 3D toggle and, in
+    // sketch mode, the sketch info caption and Parameters.
+    let mode_switcher = crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(
+        editor,
+        tokens,
+        i18n,
+        super::sketch_info_bar::editor_bar_items(editor, tokens, i18n),
+    );
     // v0.18.11.1 — canvas-overlay multi-footprint tab strip removed.
     // The Footprint Library left-dock panel (v0.18.8) renders the
     // same list (internal `file.footprints[i]`) with proper
     // Place/Add/Delete/Edit buttons, so the redundant on-canvas
-    // chip was just visual noise. Keep `mode_switcher` (Sketch /
-    // Pads / 3D) at top-right since it has no panel equivalent.
+    // chip was just visual noise. Keep `mode_switcher` (the editor
+    // bar) at top-right since it has no panel equivalent.
 
     // v0.18.14 — single unified active bar carries mode-keyed
     // tools (left half) + the eight Selection Filter pills (right
@@ -91,7 +95,6 @@ pub fn view_footprint<'a>(
             .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
             .push(super::pad_link::overlay_link(editor, tokens, i18n))
             .push(mode_switcher)
-            .push(super::sketch_info_bar::overlay(editor, tokens, i18n))
             .push(
                 crate::library::editor::footprint::parameters_table::view::overlay(
                     editor, tokens, i18n,

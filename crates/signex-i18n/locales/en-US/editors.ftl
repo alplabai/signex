@@ -497,3 +497,9 @@ editors-sketch-role-component-anchor = Component anchor
 # Bake preview rows of a board sketch.
 editors-sketch-target-mechanical = Mechanical
 editors-sketch-target-component-anchors = Anchors
+# The footprint editor bar's mode switch (#187): a two-state segment and a
+# 3D toggle beside it.
+editors-mode-footprint = Footprint
+editors-mode-sketch = Sketch
+editors-mode-3d = 3D
+editors-mode-3d-tooltip = Show the 3D body; click again to go back

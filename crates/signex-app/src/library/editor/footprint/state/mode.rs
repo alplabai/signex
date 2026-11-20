@@ -1,4 +1,7 @@
-//! Editor-mode enum + active-bar menu enum + pad-stack tab strip.
+//! Editor-mode enum + editor bar mode switch + active-bar menu enum +
+//! pad-stack tab strip.
+
+use signex_i18n::{MessageId, ids};
 
 /// Footprint editor mode — gate sketch tooling on / off without
 /// rewriting the canvas state machine. Phase 5.3 of the v0.13 sketch-
@@ -12,6 +15,60 @@ pub enum EditorMode {
     Sketch,
     /// 3D body preview (existing v0.10 viewer).
     View3d,
+}
+
+impl EditorMode {
+    /// The editor bar label of this mode: Footprint, Sketch, or 3D for the
+    /// toggle.
+    pub fn switch_label(self) -> MessageId {
+        match self {
+            EditorMode::Normal => ids::EDITORS_MODE_FOOTPRINT,
+            EditorMode::Sketch => ids::EDITORS_MODE_SKETCH,
+            EditorMode::View3d => ids::EDITORS_MODE_3D,
+        }
+    }
+}
+
+/// The editor bar's mode switch as the view draws it (#187): a two-state
+/// Footprint / Sketch segment and a 3D toggle beside it. In 3D the segment
+/// of the mode the toggle returns to stays lit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModeSwitch {
+    /// The mode whose segment is lit.
+    pub lit: EditorMode,
+    pub is_3d_on: bool,
+    /// The mode a click on the 3D toggle switches to.
+    pub toggle_target: EditorMode,
+}
+
+impl ModeSwitch {
+    /// The segments, left to right.
+    pub const SEGMENTS: [EditorMode; 2] = [EditorMode::Normal, EditorMode::Sketch];
+
+    /// The switch in `mode`; `before_3d` is the mode 3D was entered from.
+    pub fn of(mode: EditorMode, before_3d: EditorMode) -> Self {
+        // 3D returns to a segment's mode, never to itself.
+        let back = match before_3d {
+            EditorMode::View3d => EditorMode::Normal,
+            other => other,
+        };
+        match mode {
+            EditorMode::View3d => Self {
+                lit: back,
+                is_3d_on: true,
+                toggle_target: back,
+            },
+            other => Self {
+                lit: other,
+                is_3d_on: false,
+                toggle_target: EditorMode::View3d,
+            },
+        }
+    }
+
+    pub fn is_lit(self, segment: EditorMode) -> bool {
+        self.lit == segment
+    }
 }
 
 /// v0.13 — Altium-style footprint active bar dropdown menus. One per
@@ -99,5 +156,54 @@ impl PadStackTab {
             PadStackTab::TopMiddleBottom => "Top-Middle-Bottom",
             PadStackTab::FullStack => "Full Stack",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EditorMode, ModeSwitch};
+
+    #[test]
+    fn footprint_mode_lights_footprint_and_the_toggle_enters_3d() {
+        let s = ModeSwitch::of(EditorMode::Normal, EditorMode::Sketch);
+        assert!(s.is_lit(EditorMode::Normal));
+        assert!(!s.is_lit(EditorMode::Sketch));
+        assert!(!s.is_3d_on);
+        assert_eq!(s.toggle_target, EditorMode::View3d);
+    }
+
+    #[test]
+    fn sketch_mode_lights_sketch_and_the_toggle_enters_3d() {
+        let s = ModeSwitch::of(EditorMode::Sketch, EditorMode::Normal);
+        assert!(s.is_lit(EditorMode::Sketch));
+        assert!(!s.is_lit(EditorMode::Normal));
+        assert!(!s.is_3d_on);
+        assert_eq!(s.toggle_target, EditorMode::View3d);
+    }
+
+    #[test]
+    fn in_3d_the_toggle_is_on_and_returns_to_the_mode_it_came_from() {
+        for from in ModeSwitch::SEGMENTS {
+            let s = ModeSwitch::of(EditorMode::View3d, from);
+            assert!(s.is_3d_on, "from {from:?}");
+            assert_eq!(s.toggle_target, from);
+            assert!(s.is_lit(from), "the segment 3D returns to stays lit");
+        }
+    }
+
+    #[test]
+    fn three_d_never_returns_to_itself() {
+        let s = ModeSwitch::of(EditorMode::View3d, EditorMode::View3d);
+        assert_eq!(s.toggle_target, EditorMode::Normal);
+        assert!(s.is_lit(EditorMode::Normal));
+    }
+
+    #[test]
+    fn the_segments_read_footprint_then_sketch() {
+        assert_eq!(
+            ModeSwitch::SEGMENTS,
+            [EditorMode::Normal, EditorMode::Sketch]
+        );
+        assert!(!ModeSwitch::SEGMENTS.contains(&EditorMode::View3d));
     }
 }

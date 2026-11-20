@@ -105,6 +105,10 @@ fn set_mode(
     // and closes the sketch canvas overlays, so a hidden value edit
     // cannot keep the keyboard in another mode.
     editor.state.sketch_overlay = Default::default();
+    // The 3D toggle returns to the mode 3D was entered from (#187).
+    if mode == EditorMode::View3d && editor.state.mode != EditorMode::View3d {
+        editor.state.mode_before_3d = editor.state.mode;
+    }
     editor.state.mode = mode;
     // Run the dispatcher so the sketch is initialised + solved
     // on first switch into Sketch mode (or no-op otherwise).

@@ -96,6 +96,24 @@ duplicate. They are listed under "Redundant" in the footprint editor's
 DOF / Last solve section. Conflicts are reported separately as
 over-constrained.
 
+## Switching modes {#switching-modes}
+
+The footprint editor bar floats at the canvas's top right, just under the
+Active Bar (Graphite mockup #187). At its left a two-state segment reads
+**Footprint | Sketch**: Footprint is the pads view, Sketch opens the
+sketcher. Beside it the **3D** toggle shows the body in 3D; it is lit while
+3D is on, and a second click goes back to the mode 3D was entered from
+(Footprint or Sketch). In 3D the segment of that mode stays lit, and a
+click on a segment leaves 3D for that mode. Leaving Sketch this way does
+what leaving it always does: the pad link, the canvas value edits and the
+bake preview close. In sketch mode the bar goes on with the sketch info
+caption and **Parameters** (see [Parameters](#parameters)). The keys `1`
+(Sketch), `2` (Footprint) and `3` (3D) switch the same way. A board sketch
+has no Footprint / Sketch switch.
+
+The switch replaces the Sketch · Pads · 3D segment; "Pads" now reads
+"Footprint". Decided by Caner on 2026-11-20 (`docs/DECISIONS.md`).
+
 ## Leaving sketch mode {#leaving-sketch-mode}
 
 The footprint editor shares the board sketch's tools and its way out
@@ -135,8 +153,9 @@ pattern counts and spacings, pad sizes and the other bake attributes
 (#189). They are kept per footprint (or per board sketch); there are no
 family tables shared between footprints.
 
-**The sketch info bar** sits at the canvas's top right in sketch mode,
-under the mode switcher and clear of the DOF chips: "Footprint sketch ·
+**The sketch info bar** sits at the canvas's top right in sketch mode, on
+the editor bar after the 3D toggle ([Switching modes](#switching-modes)),
+clear of the DOF chips; a board floats it alone: "Footprint sketch ·
 plane Top · grid 0.05 mm" (a board reads "Board shape · …"), and the
 **Parameters** button, which opens or closes the table.
 
