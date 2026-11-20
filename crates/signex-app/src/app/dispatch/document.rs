@@ -589,8 +589,8 @@ impl Signex {
                 Task::batch([task, self.finish_update()])
             }
             PrintPreviewMsg::SetVariant(v) => {
-                self.handle_print_preview_set_variant(v);
-                self.finish_update()
+                let task = self.handle_print_preview_set_variant(v);
+                Task::batch([task, self.finish_update()])
             }
             // Visual toggles (No-ERC Markers, No-Connect Markers, Notes) — affect what
             // the SVG renderer emits, so we mutate `pdf_options`

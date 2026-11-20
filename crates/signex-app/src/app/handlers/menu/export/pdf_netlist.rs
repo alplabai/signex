@@ -91,20 +91,7 @@ impl Signex {
             self.refuse_export(signex_i18n::ids::NOTICE_PDF_NO_FILES);
             return Task::none();
         }
-        // The PDF prints the dialog's variant, never the project's active
-        // one: title-block substitution reads `active_variant` from
-        // `metadata.custom_fields` and `${VARIANT}` from the options. A
-        // request without a variant is Base, named (#2430).
-        let variant = options
-            .variant
-            .get_or_insert_with(|| signex_types::project::BASE_VARIANT.to_string());
-        if signex_types::project::is_base_variant(variant) {
-            ctx.metadata.custom_fields.remove("active_variant");
-        } else {
-            ctx.metadata
-                .custom_fields
-                .insert("active_variant".to_string(), variant.clone());
-        }
+        super::apply_printed_variant(&mut ctx.metadata, &mut options.variant);
 
         // Building the PDF and writing it both run off the UI thread.
         self.export_pdf(ctx, options, save_path, source)

@@ -395,6 +395,7 @@ impl Signex {
         // Class styles follow the context's own netlist, so sheets that are
         // not open in a tab are styled in the preview as in the export.
         let mut pdf_opts = pdf_opts;
+        super::apply_printed_variant(&mut ctx.metadata, &mut pdf_opts.variant);
         pdf_opts.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         pdf_opts.schematic_defaults = self.document_state.schematic_defaults_for(&source);
@@ -616,16 +617,17 @@ impl Signex {
     }
 
     /// `None` is the picker's Base row, stored as Base by name so the export
-    /// never falls back to the project's active variant (#2430).
-    pub(crate) fn handle_print_preview_set_variant(&mut self, variant: Option<String>) {
+    /// never falls back to the project's active variant (#2430). Re-renders:
+    /// the title block prints the variant.
+    pub(crate) fn handle_print_preview_set_variant(
+        &mut self,
+        variant: Option<String>,
+    ) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.pdf_options.variant =
                 Some(variant.unwrap_or_else(|| signex_types::project::BASE_VARIANT.to_string()));
         }
-        // No rerasterize: variant doesn't currently feed into the
-        // SVG render pipeline. When it does, move this handler into
-        // the visual-toggle group in the dispatcher (call
-        // `handle_print_preview_rerender` after mutating).
+        self.rerasterize_print_preview()
     }
 }
 

@@ -68,7 +68,7 @@ impl Signex {
     }
 
     /// The Bookmarks and Nets section body: the jump zoom, what a net
-    /// bookmark lists, component parameters and global bookmarks.
+    /// bookmark lists and global bookmarks.
     pub(super) fn view_pdf_bookmarks_and_nets<'a>(
         &'a self,
         preview: &'a PreviewState,

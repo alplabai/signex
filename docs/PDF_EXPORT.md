@@ -30,8 +30,11 @@ Export PDF dialog ("Write PDF layers" is off by default, Caner 2026-11-20).
 `variant` names the variant the PDF prints. The Export PDF dialog always
 names one, Base included: it opens on the project's active variant, and Base
 picked in the dialog prints Base even while the project's active variant is
-another one (#2430). With Use Physical Structure on, `${VARIANT}` and the
-sheet bookmarks show the name ("Sheet 1: Top [Base]").
+another one (#2430). The preview follows the same rule (one helper,
+`apply_printed_variant`, serves the preview and the export) and is redrawn
+when the variant changes, so it shows what the PDF prints. With Use Physical
+Structure on, `${VARIANT}` and the sheet bookmarks show the name
+("Sheet 1: Top [Base]").
 
 ## Watermark
 

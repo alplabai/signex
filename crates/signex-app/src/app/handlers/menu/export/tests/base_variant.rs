@@ -121,3 +121,37 @@ fn the_dialog_opens_on_the_projects_variant_named() {
     );
     assert_eq!(chosen(&on_base).as_deref(), Some("Base"));
 }
+
+/// Open Export PDF, turn on Use Physical Structure so `${VARIANT}` prints,
+/// pick `variant` (`None` is the picker's Base row), and return the pixels
+/// of the shown preview page.
+fn preview(app: &mut Signex, variant: Option<&str>) -> Vec<u8> {
+    send(app, Message::PrintPreview(PrintPreviewMsg::Requested));
+    send(
+        app,
+        Message::PrintPreview(PrintPreviewMsg::SetUsePhysicalStructure(true)),
+    );
+    send(
+        app,
+        Message::PrintPreview(PrintPreviewMsg::SetVariant(variant.map(str::to_string))),
+    );
+    let preview = app.document_state.preview.as_ref().expect("dialog open");
+    match preview.pages[preview.selected].handle() {
+        Some(iced::widget::image::Handle::Rgba { pixels, .. }) => pixels.to_vec(),
+        _ => panic!("the shown preview page is drawn"),
+    }
+}
+
+#[test]
+fn base_picked_while_the_project_is_on_lite_previews_base() {
+    let mut on_lite = project(Some("Lite"), VARIANT_NOTE);
+    let base = preview(&mut on_lite, None);
+
+    // The preview shows what the PDF prints: "[Base]", no trace of Lite.
+    let mut typed = project(None, "[Base]");
+    assert_eq!(base, preview(&mut typed, None));
+
+    // Lite picked previews Lite, so the comparison above can tell them apart.
+    let mut lite = project(Some("Lite"), VARIANT_NOTE);
+    assert_ne!(base, preview(&mut lite, Some("Lite")));
+}
