@@ -10,8 +10,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::FormatError;
 use super::units::{NonFiniteField, mm_to_nm, nm_to_mm};
-use super::{FormatError, UnknownFields};
 use crate::pcb::room::is_room_colour;
 use crate::pcb::{PcbBoard, Point, Room, RoomLayer, RoomOutline, RoomSource};
 use crate::schematic::InstancePath;
@@ -49,9 +49,6 @@ pub(in crate::format) struct RoomRaw {
     margin: i64,
     #[serde(default)]
     locked: bool,
-    /// Keys of the entry this build does not know.
-    #[serde(flatten)]
-    unknown: UnknownFields,
 }
 
 fn refused(row: usize, field: &str, message: impl Into<String>) -> FormatError {
@@ -145,7 +142,6 @@ fn read_room(row: usize, r: RoomRaw) -> Result<Room, FormatError> {
         keep_parts_inside: r.keep_parts_inside,
         margin_mm: nm_to_mm(r.margin),
         locked: r.locked,
-        unknown: r.unknown,
     })
 }
 
@@ -192,7 +188,6 @@ fn write_room(room: &Room) -> Result<RoomRaw, NonFiniteField> {
         keep_parts_inside: room.keep_parts_inside,
         margin: mm_to_nm(room.margin_mm, "margin")?,
         locked: room.locked,
-        unknown: room.unknown.clone(),
     })
 }
 

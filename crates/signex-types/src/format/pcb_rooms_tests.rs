@@ -120,30 +120,14 @@ fn a_non_finite_room_is_refused_on_write() {
     ));
 }
 
+/// Caner (2026-11-20): a room keeps no key this build does not know.
 #[test]
-fn a_foreign_key_of_a_room_survives_a_save() {
+fn a_key_a_room_does_not_know_is_not_kept() {
     let text = with_rooms().replacen("name = \"dcdc\"", "name = \"dcdc\"\nfuture_room_key = 7", 1);
     let board = SnxPcb::parse(&text).expect("parses").board;
-    assert!(board.rooms[0].unknown.contains_key("future_room_key"));
+    assert_eq!(board.rooms, rooms());
     let out = SnxPcb::new(board).write_string().expect("writes");
-    assert!(out.contains("future_room_key = 7"), "{out}");
-}
-
-/// A top-level array this build does not declare is kept by the manifest
-/// catch-all and written back. The 1.6 token is what keeps a 1.5 build from
-/// saving over rooms; this catch-all is the fallback for a key added without
-/// a token change.
-#[test]
-fn an_older_build_keeps_the_rooms_as_a_foreign_key() {
-    let text = with_rooms().replace("[[rooms]]", "[[rooms_unknown_here]]");
-    let board = SnxPcb::parse(&text).expect("parses").board;
-    assert!(board.rooms.is_empty());
-    assert!(board.unknown.manifest.contains_key("rooms_unknown_here"));
-    let out = SnxPcb::new(board).write_string().expect("writes");
-    let back = SnxPcb::parse(&out.replace("[[rooms_unknown_here]]", "[[rooms]]"))
-        .expect("reads back")
-        .board;
-    assert_eq!(back.rooms, rooms(), "{out}");
+    assert!(!out.contains("future_room_key"), "{out}");
 }
 
 /// 2026-11-20: rooms raise the token over layer colours and only rooms do.

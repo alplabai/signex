@@ -157,8 +157,9 @@ of `x`, `y`, `width` and `height`; a channel room adds `channel = <n>`. A
 room that cannot be read (an unknown layer or shape, a colour that is not
 `#RRGGBB`, a rectangle without size, a polygon under three corners, a
 negative margin, a bad sheet path) refuses the file, naming block `rooms` and
-the room's row. Keys of a room this build does not know are kept and written
-back.
+the room's row. A key this build does not know in a room is not kept: the
+format keeps no unknown keys (Caner, 2026-11-08, #2207; 2026-11-20 for
+rooms).
 
 A board with rooms writes the format token `snxpcb/1.6` (`snxpcb_token`, from
 content), so a build that reads only up to `snxpcb/1.5` opens it read-only

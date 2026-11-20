@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{Footprint, Point};
-use crate::format::UnknownFields;
 use crate::schematic::InstancePath;
 
 /// Room colours, assigned per sheet in creation order and stored in the
@@ -54,9 +53,6 @@ pub struct Room {
     /// A locked room refuses a move.
     #[serde(default)]
     pub locked: bool,
-    /// Keys of its `[[rooms]]` entry this build does not know.
-    #[serde(default, skip_serializing_if = "UnknownFields::is_empty")]
-    pub unknown: UnknownFields,
 }
 
 /// The sheet placement a room was made for. A sheet placed several times
@@ -310,7 +306,6 @@ impl Room {
             keep_parts_inside: false,
             margin_mm: ROOM_DEFAULT_MARGIN_MM,
             locked: false,
-            unknown: UnknownFields::default(),
         }
     }
 
