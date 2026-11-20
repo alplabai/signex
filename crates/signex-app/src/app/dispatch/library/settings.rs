@@ -398,7 +398,7 @@ impl Signex {
     /// Persist the preferred order; a failure is kept for the inline error.
     /// Up / Down and a dropped grip all save here, still as a synchronous
     /// `atomic_write` of the small `distributors.toml` inside `update`;
-    /// moving it to a Task is a follow-up issue (number pending).
+    /// moving it to a Task is #2626.
     fn save_preferred_order(&mut self) {
         let saved = crate::library::settings::persistence::save_preferred_order(
             &self.library.settings.preferred_order,

@@ -1,4 +1,4 @@
-//! Mockup row 145 — the Keyboard shortcuts page. The context chips and the
+//! #2621, mockup row 145 — the Keyboard shortcuts page. The context chips and the
 //! conflict banner's Show are page view state: they filter the table, never
 //! touch the keymap working copy, never mark the dialog dirty, and start
 //! over each time Preferences opens. Delete stays refused on a built-in.

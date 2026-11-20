@@ -119,7 +119,7 @@ mod pcb_view_rotation;
 #[path = "regression/pcb_board_3d.rs"]
 mod pcb_board_3d;
 
-// Mockup row 175 - the board 3D view's toolbar: Left and Right, Reset, Flip, Explode,
+// #2622, mockup row 175 - the board 3D view's toolbar: Left and Right, Reset, Flip, Explode,
 // lighting, screenshots, the unread toast; no undo step from any of them.
 #[path = "regression/pcb_board_3d_toolbar.rs"]
 mod pcb_board_3d_toolbar;
@@ -744,24 +744,24 @@ mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
 
-// Mockup rows 143 and 144a — Preferences shell (nav, dirty dots, Open folder)
+// #2621, mockup rows 143 and 144a — Preferences shell (nav, dirty dots, Open folder)
 // and the Language page (a draft applied on Apply or OK).
 #[path = "regression/preferences_language.rs"]
 mod preferences_language;
 #[path = "regression/preferences_shell.rs"]
 mod preferences_shell;
 
-// Mockup rows 144 and 147 — Preferences Appearance and Editing pages: the fast grid row
+// #2621, mockup rows 144 and 147 — Preferences Appearance and Editing pages: the fast grid row
 // error, the snap preview's pitch labels and the Increment step stepper.
 #[path = "regression/preferences_pages.rs"]
 mod preferences_pages;
 
-// Mockup row 145 — Preferences ▸ Keyboard shortcuts page: context chips, the
+// #2621, mockup row 145 — Preferences ▸ Keyboard shortcuts page: context chips, the
 // conflict banner's Show, Delete on a built-in profile.
 #[path = "regression/preferences_keymap_page.rs"]
 mod preferences_keymap_page;
 
-// Preferences ▸ Library: Distributor APIs and Component Classes pages.
+// #2621 — Preferences ▸ Library: Distributor APIs and Component Classes pages.
 #[path = "regression/preferences_library_pages.rs"]
 mod preferences_library_pages;
 
