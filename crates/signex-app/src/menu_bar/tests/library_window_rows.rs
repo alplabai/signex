@@ -399,3 +399,53 @@ fn the_reset_row_shows_only_while_the_active_built_in_is_edited() {
             .is_edited(BuiltinLayout::Schematic)
     );
 }
+
+/// 2026-11-20 decision: BUILT-IN and YOUR LAYOUTS are header captions, not
+/// greyed rows. A header is neither a live row nor a disabled one, carries no
+/// command or check mark, and a click on it has no message to send.
+#[test]
+fn the_layout_group_captions_are_headers() {
+    let mut app = layouts_app();
+    save_layout_as(&mut app, "Bench");
+    for caption in ["BUILT-IN", "YOUR LAYOUTS"] {
+        let path = format!("View/Window/Layouts/{caption}");
+        with_row(&app, &path, |row| {
+            assert!(row.is_header(), "{path}");
+            assert!(matches!(row.state, ItemState::Header), "{path}");
+            assert!(!row.is_enabled(), "{path}");
+            assert!(row.dispatches().is_none(), "{path}");
+            assert!(row.shortcut.is_none(), "{path}");
+            assert_eq!(row.checked, None, "{path}");
+        });
+    }
+}
+
+/// The two captions are the only headers in the bar, so every other row,
+/// live or greyed, stays a command row.
+#[test]
+fn only_the_layout_captions_are_headers() {
+    fn headers(menu: &Menu, parent: &str, out: &mut Vec<String>) {
+        for entry in &menu.entries {
+            match entry {
+                MenuEntry::Item(item) if item.is_header() => {
+                    out.push(format!("{parent}/{}", item.label));
+                }
+                MenuEntry::Submenu(sub) => headers(sub, &format!("{parent}/{}", sub.title), out),
+                MenuEntry::Item(_) | MenuEntry::Separator => {}
+            }
+        }
+    }
+    let mut app = layouts_app();
+    save_layout_as(&mut app, "Bench");
+    let mut found = Vec::new();
+    for menu in &menu_bar_model(&menu_context(&app)).menus {
+        headers(menu, &menu.title, &mut found);
+    }
+    assert_eq!(
+        found,
+        [
+            "View/Window/Layouts/BUILT-IN",
+            "View/Window/Layouts/YOUR LAYOUTS"
+        ]
+    );
+}

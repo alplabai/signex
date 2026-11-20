@@ -503,6 +503,7 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
                     ItemState::Placeholder { .. } | ItemState::Unavailable => {
                         ("stub", "-".to_string())
                     }
+                    ItemState::Header => ("header", "-".to_string()),
                     ItemState::Live { action, .. } => ("item", action_name(action)),
                 };
                 let (id, text) = item

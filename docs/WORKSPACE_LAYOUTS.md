@@ -50,9 +50,10 @@ applies the built-in as shipped.
 View ▸ Window ▸ Layouts (the Window rows moved into View on 2026-11-19,
 #2524; Layouts sits after the tiling rows and before Close All Documents):
 
-- BUILT-IN (a caption row), then Schematic, Layout, Review and Notebook. The
+- BUILT-IN (a header caption, not a row:
+  [MENU_BAR.md](MENU_BAR.md#header-entries)), then Schematic, Layout, Review and Notebook. The
   active layout carries the check mark.
-- YOUR LAYOUTS (a caption row) and one row per layout of yours, in your
+- YOUR LAYOUTS (a header caption) and one row per layout of yours, in your
   order, when you have any; the active one is checked.
 - Save Layout…, Manage Layouts…, and Reset "<name>" while the active
   built-in is edited.

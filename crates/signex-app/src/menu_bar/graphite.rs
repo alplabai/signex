@@ -16,6 +16,8 @@ use super::{MenuColors, MenuMessage, model};
 
 /// Row metrics of a dropdown: the same card numbers as every context menu.
 const M: MenuMetrics = MenuMetrics::GRAPHITE;
+/// Type steps; a section header draws at the caption step.
+const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 /// Width of the leading check-mark column every row keeps, so all labels of
 /// a dropdown start on one line: the width `MenuMetrics::fitted_width`
 /// reserves for a checked row, so the card fits its rows.
@@ -120,6 +122,9 @@ pub(super) fn dropdown_width(menu: &model::Menu, ui_font: &str) -> f32 {
         .entries
         .iter()
         .filter_map(|entry| match entry {
+            model::MenuEntry::Item(item) if item.is_header() => {
+                Some(DropdownEntry::Header(item.label.clone()))
+            }
             model::MenuEntry::Item(item) => {
                 let mut row = DropdownItem::passive(item.label.clone()).checked(true);
                 if let Some(s) = &item.shortcut {
@@ -174,6 +179,24 @@ pub(super) fn item_btn(
         cells = cells.push(chevron_cell("", mc));
     }
     row_button(cells, mc, msg)
+}
+
+/// A section header: a small muted caption on the row padding, the shared
+/// card's header height. A plain container, not a button, so it takes no
+/// hover fill and no press, and iced_aw never makes it the active row. The
+/// model already holds the label as catalog text.
+pub(super) fn header_row(label: &str, mc: MenuColors) -> Element<'static, MenuMessage> {
+    container(
+        text(signex_i18n::UserText::new(label))
+            .size(TS.caption)
+            .color(mc.text_muted)
+            .wrapping(text::Wrapping::None),
+    )
+    .padding([0.0, M.row_pad_x])
+    .height(M.header_row_height())
+    .align_y(iced::alignment::Vertical::Center)
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// A row that opens a submenu: label and chevron, no shortcut; iced_aw opens

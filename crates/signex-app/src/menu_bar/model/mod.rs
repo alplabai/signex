@@ -46,7 +46,8 @@ pub struct MenuItem {
 /// A placeholder is a feature with no handler yet (greyed, its `reason` as
 /// the tooltip, else "planned"); an unavailable row is greyed informational
 /// text; a live row has one and is greyed out unless enabled in the current
-/// context.
+/// context; a header is a small caption over the rows below it, not a
+/// command at all: docs/MENU_BAR.md#header-entries
 #[derive(Debug, Clone)]
 pub enum ItemState {
     Placeholder {
@@ -57,6 +58,7 @@ pub enum ItemState {
         action: MenuMessage,
         is_enabled: bool,
     },
+    Header,
 }
 
 /// A row's shortcut: the display text, plus the command id it belongs to so a
@@ -82,6 +84,11 @@ impl MenuItem {
 
     pub fn is_enabled(&self) -> bool {
         self.dispatches().is_some()
+    }
+
+    /// Whether the row is a section caption rather than a command row.
+    pub fn is_header(&self) -> bool {
+        matches!(self.state, ItemState::Header)
     }
 }
 

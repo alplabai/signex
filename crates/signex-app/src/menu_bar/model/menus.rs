@@ -2,8 +2,8 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, item_if_command,
-    item_named, panel_item, placeholder, submenu, unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, header, item, item_if,
+    item_if_command, item_named, panel_item, placeholder, submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
@@ -651,12 +651,13 @@ fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
 }
 
 /// View ▸ Window ▸ Layouts (#166): the built-ins (the active one checked),
-/// your layouts, then Save Layout…, Manage Layouts… and, while the active
-/// built-in carries your edit, its Reset row.
+/// your layouts, each group under its header caption, then Save Layout…,
+/// Manage Layouts… and, while the active built-in carries your edit, its
+/// Reset row.
 fn layouts(ctx: &MenuContext) -> Vec<MenuEntry> {
     use crate::workspace_layouts::BuiltinLayout;
     let menu = &ctx.layouts;
-    let mut rows = vec![unavailable(ctx, menu_ids::MENU_WINDOW_LAYOUTS_BUILTIN)];
+    let mut rows = vec![header(ctx, menu_ids::MENU_WINDOW_LAYOUTS_BUILTIN)];
     for (row, builtin) in [
         (cmd("apply_layout_schematic", ""), BuiltinLayout::Schematic),
         (cmd("apply_layout_board", ""), BuiltinLayout::Layout),
@@ -666,7 +667,7 @@ fn layouts(ctx: &MenuContext) -> Vec<MenuEntry> {
         rows.push(cmd_toggle(ctx, row, menu.active_builtin == Some(builtin)));
     }
     if !menu.user.is_empty() {
-        rows.push(unavailable(ctx, menu_ids::MENU_WINDOW_LAYOUTS_YOURS));
+        rows.push(header(ctx, menu_ids::MENU_WINDOW_LAYOUTS_YOURS));
         for layout in &menu.user {
             rows.push(MenuEntry::Item(super::MenuItem {
                 label: layout.name.clone(),

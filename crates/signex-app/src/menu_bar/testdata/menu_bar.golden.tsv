@@ -107,7 +107,7 @@ View/Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd
 View/Window/Untile	item	Untile	-	-	UntileDocuments	00000100	cmd:untile_documents
 View/Window/---	separator	-	-	-	-	-	-
 View/Window/Layouts	submenu	Layouts	-	-	-	-	-
-View/Window/Layouts/BUILT-IN	stub	BUILT-IN	-	-	-	00000000	never
+View/Window/Layouts/BUILT-IN	header	BUILT-IN	-	-	-	00000000	never
 View/Window/Layouts/Schematic	item	Schematic	-	-	ApplyLayoutSchematic	11111111	always
 View/Window/Layouts/Layout	item	Layout	-	-	ApplyLayoutBoard	11111111	always
 View/Window/Layouts/Review	item	Review	-	-	ApplyLayoutReview	11111111	always

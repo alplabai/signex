@@ -44,6 +44,29 @@ greyed row's is `Disabled`. The golden fixture still names each such row by the
 message it used to send; `COMMAND_ROW_NAMES` in `menu_bar/golden_tests.rs` maps
 the id back to that name.
 
+## Header entries {#header-entries}
+
+A header is a small caption over a group of rows, such as BUILT-IN and YOUR
+LAYOUTS in [View ▸ Window ▸ Layouts](#window-layouts). It is not a command
+row and not a greyed row (maintainer decision 2026-11-20). In the model it is
+a row in the `ItemState::Header` state, built by `header()` in
+`model/items.rs`, with catalog text, no command, no shortcut and no check
+mark. `MenuItem::is_header()` says which rows are headers.
+
+- **In-window bar.** The caption is drawn at the caption type step in the
+  muted text colour, with the row padding and the shared menu card's header
+  height. It is a plain container, not a button, so it has no hover fill and
+  no press handler, and iced_aw never makes it the active row.
+- **Command walks.** A header never dispatches (`dispatches()` is `None`), so
+  it is not a live row, and it is not a planned or unexplained greyed row:
+  the `stub` and `unavailable` ratchets in `menu_bar/planned_tests.rs` do not
+  count it. It has no command id, so the shortcut, catalog and accelerator
+  checks skip it too.
+- **Golden fixture.** `menu_bar.golden.tsv` lists it with the kind `header`,
+  enablement `0` and gate `never`.
+- **Native macOS menu.** An OS menu has no caption row, so the header shows
+  as inert text there.
+
 ## Root menus {#root-menus}
 
 Eight roots, left to right: File, Edit, View, Project, Place, Design, Tools,
@@ -732,16 +755,16 @@ documents or windows were arranged.
 ## View ▸ Window ▸ Layouts {#window-layouts}
 
 Workspace layouts (#166), between the tiling rows' separator and Close All
-Documents: a caption row BUILT-IN (greyed), the four built-ins Schematic,
+Documents: the [header](#header-entries) BUILT-IN, the four built-ins Schematic,
 Layout, Review and Notebook (`apply_layout_schematic`, `apply_layout_board`,
 `apply_layout_review`, `apply_layout_notebook`; check rows, the active
-layout checked), then, when you have saved any, a caption row YOUR LAYOUTS
+layout checked), then, when you have saved any, the header YOUR LAYOUTS
 and one row per layout of yours in your order (`MenuMessage::
 WorkspaceLayoutChosen` with the layout's id, checked while active), a
 separator, Save Layout… (`save_workspace_layout`), Manage Layouts…
 (`manage_workspace_layouts`), and Reset "<name>" (`reset_workspace_layout`)
-only while the active built-in carries your edit. Every row is live in every
-context; none has a key by default. The native macOS bar shows the same
+only while the active built-in carries your edit. Every row other than the
+two headers is live in every context; none has a key by default. The native macOS bar shows the same
 three-level submenu. Rules, dialogs and storage:
 [WORKSPACE_LAYOUTS.md](WORKSPACE_LAYOUTS.md).
 
