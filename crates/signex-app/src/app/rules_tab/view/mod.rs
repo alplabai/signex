@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 use iced::widget::{column, container, row};
 use iced::{Element, Length, Widget as _};
 use signex_drc::{Effective, RuleResult};
-use signex_drc_dsl::table::catalog::Domain;
+use signex_drc_dsl::table::catalog::{CatalogGroup, Domain};
 use signex_drc_dsl::table::{RuleRow, RuleTable};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::project::{DrcRuleSet, NamedRuleSet};
@@ -84,17 +84,23 @@ impl<'a> Frame<'a> {
         }
     }
 
-    /// The per-rule results of the last run, when there was one and the
-    /// board has not changed since.
-    pub fn results(&self) -> Option<&BTreeMap<String, RuleResult>> {
-        match &*self.checked {
-            Checked::Ran {
-                stale: false,
-                results,
-                ..
-            } => Some(results),
-            _ => None,
-        }
+    /// Whether there was a run and the board has not changed since.
+    fn has_current_run(&self) -> bool {
+        matches!(&*self.checked, Checked::Ran { stale: false, .. })
+    }
+
+    /// The findings of `domain`'s rules in the last run, counting only
+    /// rules unchanged since it ([`Self::result`]); `None` with no current
+    /// run.
+    pub fn domain_findings(&self, domain: Domain) -> Option<usize> {
+        self.has_current_run()
+            .then(|| super::grid::domain_findings(&self.table, domain, |row| self.result(row)))
+    }
+
+    /// The findings of `group`'s rules, as [`Self::domain_findings`].
+    pub fn group_findings(&self, group: &CatalogGroup) -> Option<usize> {
+        self.has_current_run()
+            .then(|| super::grid::group_findings(&self.table, group, |row| self.result(row)))
     }
 
     /// The layer's severity entry for `row`: `Some(None)` switches it off.
@@ -220,7 +226,8 @@ impl Signex {
             .boxed()
     }
 
-    fn rules_frame<'a>(
+    /// What one frame of tab `id` reads.
+    pub(super) fn rules_frame<'a>(
         &'a self,
         id: ProjectId,
         i18n: &'a I18n,

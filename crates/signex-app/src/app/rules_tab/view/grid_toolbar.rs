@@ -19,7 +19,6 @@ use signex_widgets::{SegmentedStyle, button, segmented, text, text_input};
 use super::grid_icons::{Icon, icon};
 use super::{Checked, Frame, SP, TS, up, user};
 use crate::app::Message;
-use crate::app::rules_tab::grid::domain_findings;
 use crate::app::rules_tab::search::{column_label, domain_label, group_label, type_label};
 use crate::app::rules_tab::{ClearanceView, RulesPanel, RulesTabMsg};
 use crate::styles::tokens::resolve;
@@ -61,7 +60,6 @@ pub(super) fn domains<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
         },
         zero_ink: r.ink4,
     };
-    let results = frame.results();
     let tabs = Domain::ALL.into_iter().map(|domain| {
         if domain == Domain::SignalIntegrity {
             // Signal integrity arrives with the simulation band.
@@ -69,11 +67,8 @@ pub(super) fn domains<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
                 .dimmed(true);
         }
         let tab = TabChip::new(domain, t!(i18n, domain_label(domain)));
-        match results {
-            Some(results) => {
-                let n = domain_findings(&frame.table, results, domain);
-                tab.count(u32::try_from(n).unwrap_or(u32::MAX))
-            }
+        match frame.domain_findings(domain) {
+            Some(n) => tab.count(u32::try_from(n).unwrap_or(u32::MAX)),
             None => tab,
         }
     });

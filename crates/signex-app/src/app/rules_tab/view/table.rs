@@ -19,7 +19,7 @@ use super::grid_icons::{Icon, icon};
 use super::{Frame, SP, TS, up, user};
 use crate::app::Message;
 use crate::app::rules_tab::RulesTabMsg;
-use crate::app::rules_tab::grid::{RowGroup, RowRef, RulesGrid, group_findings, sets_on};
+use crate::app::rules_tab::grid::{RowGroup, RowRef, RulesGrid, sets_on};
 use crate::app::rules_tab::search::{column_label, group_label, type_label};
 use crate::styles::tokens::resolve;
 use crate::styles::{HAIRLINE, Radii, ti};
@@ -182,10 +182,7 @@ fn group_header<'a>(
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
         );
-        let findings = frame
-            .results()
-            .map(|results| group_findings(&frame.table, results, group))
-            .unwrap_or(0);
+        let findings = frame.group_findings(group).unwrap_or(0);
         if findings > 0 {
             face = face.push(badge(findings, ti(tokens.error), ti(tokens.paper)));
         }

@@ -714,12 +714,13 @@ pub(crate) fn sets_on(row: &RowRef, sets: &BTreeMap<String, NamedRuleSet>) -> Ve
         .collect()
 }
 
-/// The findings of the last run per rule name, summed over the rules that
-/// set a limit of `group`.
+/// The findings of the last run, summed over the rules that set a limit of
+/// `group`. `result` is a rule's result, `None` for one the run says
+/// nothing of as it is now (`view::Frame::result`).
 pub(crate) fn group_findings(
     table: &RuleTable,
-    results: &BTreeMap<String, signex_drc::RuleResult>,
     group: &CatalogGroup,
+    result: impl Fn(&RuleRow) -> Option<signex_drc::RuleResult>,
 ) -> usize {
     table
         .rows
@@ -729,22 +730,23 @@ pub(crate) fn group_findings(
                 .iter()
                 .any(|l| group.columns.iter().any(|c| c.field == Some(l.field)))
         })
-        .filter_map(|row| results.get(&row.id()))
+        .filter_map(result)
         .map(|r| r.violations)
         .sum()
 }
 
-/// The findings of the last run of the rules with a column on `domain`.
+/// The findings of the last run of the rules with a column on `domain`;
+/// `result` as for [`group_findings`].
 pub(crate) fn domain_findings(
     table: &RuleTable,
-    results: &BTreeMap<String, signex_drc::RuleResult>,
     domain: Domain,
+    result: impl Fn(&RuleRow) -> Option<signex_drc::RuleResult>,
 ) -> usize {
     table
         .rows
         .iter()
         .filter(|row| domains_of(row).contains(&domain))
-        .filter_map(|row| results.get(&row.id()))
+        .filter_map(result)
         .map(|r| r.violations)
         .sum()
 }

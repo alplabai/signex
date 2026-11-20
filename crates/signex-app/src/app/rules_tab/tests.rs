@@ -1093,3 +1093,65 @@ fn a_cell_shows_its_length_as_written_in_any_unit_the_rules_take() {
         let _ = app.view_rules_tab(id);
     }
 }
+
+/// The Clearance tab's and the clearance group's findings badges, as the
+/// view reads them.
+fn clearance_badges(app: &Signex, id: ProjectId) -> (Option<usize>, Option<usize>) {
+    let state = rules_tab(app, id);
+    let (src, origin) = app.rules_text_of(id).expect("rules");
+    let frame = app.rules_frame(
+        id,
+        &app.ui_state.i18n,
+        &app.document_state.panel_ctx.tokens,
+        state,
+        src,
+        origin,
+    );
+    let group = signex_drc_dsl::table::catalog::group_of(LimitField::MinClearance)
+        .expect("the clearance group");
+    (
+        frame.domain_findings(Domain::Clearance),
+        frame.group_findings(group),
+    )
+}
+
+#[test]
+fn a_findings_badge_drops_a_rule_changed_since_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    let task = app.handle_pcb_drc_requested();
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    open(&mut app);
+    let sig_b = match &rules_tab(&app, id)
+        .analysis
+        .as_ref()
+        .expect("analysed")
+        .checked
+    {
+        super::analysis::Checked::Ran { results, .. } => {
+            results.get("user::sig_b").map_or(0, |r| r.violations)
+        }
+        other => panic!("a run: {other:?}"),
+    };
+    assert!(sig_b > 0, "sig_b asks 0.4 mm of a 0.1 mm gap");
+    let (domain, group) = clearance_badges(&app, id);
+    let domain = domain.expect("a current run");
+    assert_eq!(group, Some(domain), "every clearance rule is in the group");
+
+    answer(
+        &mut app,
+        "rules_set",
+        &["id=sig_b", "field=min_clearance", "value=0.5mm"],
+    );
+    // Any message runs `update`, which analyses the rules again.
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    let (domain_after, group_after) = clearance_badges(&app, id);
+    assert_eq!(
+        domain_after,
+        Some(domain - sig_b),
+        "sig_b changed since the run"
+    );
+    assert_eq!(group_after, Some(domain - sig_b));
+}

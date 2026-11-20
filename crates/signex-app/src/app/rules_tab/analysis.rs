@@ -31,8 +31,8 @@ struct ShownKey {
     selected: Option<String>,
 }
 
-/// What the last DRC run of the project's board says, for the Actual,
-/// Margin and Violations cells.
+/// What the last DRC run of the project's board says, for the findings
+/// badges and the detail strip's findings and blank reasons.
 #[derive(Debug, Clone)]
 pub(crate) enum Checked {
     NoBoard,
