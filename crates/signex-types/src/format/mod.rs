@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::format_version::{FormatVersion, FormatVersionError, MissingToken, NewerMinor};
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
@@ -56,7 +57,6 @@ mod units;
 mod unknown;
 mod unknown_columns;
 mod uuid_repair;
-mod version;
 mod wire_color_repair;
 
 #[cfg(test)]
@@ -84,9 +84,13 @@ mod library_link_tests;
 #[cfg(test)]
 mod net_colors_tests;
 #[cfg(test)]
+mod no_erc_tests;
+#[cfg(test)]
 mod non_finite_tests;
 #[cfg(test)]
 mod object_lock_tests;
+#[cfg(test)]
+mod part_field_expression_tests;
 #[cfg(test)]
 mod pcb_component_tests;
 #[cfg(test)]
@@ -109,6 +113,8 @@ mod pcb_uuid_repair_tests;
 mod sheet_frame_tests;
 #[cfg(test)]
 mod sheet_page_tests;
+#[cfg(test)]
+mod sheet_variables_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -158,15 +164,19 @@ use tsv::{parse_optional_block, write_tsv_section};
 // Format version tokens
 // ---------------------------------------------------------------------------
 
-/// Current `.snxsch` format version. The token is `<kind>/<major>[.<minor>]`;
-/// see `version.rs` for the load/save policy. A major bump is a wire-format
-/// break: older Signex versions refuse to open the file.
-///
-/// 1.1 (#2209): `lib_symbols` is keyed by body ref (`<lib_id>#<hash>`) and a
-/// symbol names its body in `body_ref`. A 1.0 build reads that table by
-/// `lib_id` and would show parts without pins, so 1.0 builds open 1.1 files
-/// read-only (`is_newer_minor`) instead.
+/// The `.snxsch` token a sheet without No-ERC rule lists writes; the policy
+/// is [`SNXSCH_VERSION`] (`docs/FORMAT_VERSIONS.md`). 1.1 (#2209):
+/// `lib_symbols` is keyed by body ref (`<lib_id>#<hash>`) and a symbol names
+/// its body in `body_ref`. A 1.0 build reads that table by `lib_id` and would
+/// show parts without pins, so 1.0 builds open 1.1 files read-only
+/// (`is_newer_minor`) instead.
 pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
+
+/// Written instead of [`SNXSCH_FORMAT_V1`] when a No-ERC directive names the
+/// rules it silences (#1699). A 1.1 build would drop the list on its next
+/// save and the marker would silence every rule, so it opens 1.2 read-only.
+/// A sheet without lists stays 1.1, byte for byte.
+pub const SNXSCH_FORMAT_NO_ERC_RULES: &str = "snxsch/1.2";
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
 /// by uuid (1.0 keyed by reference designator) and the stackup carries
@@ -176,9 +186,66 @@ pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
 /// `0..=0.5` is a load error. 1.4: the `trapezoid` and `custom` pad shapes
 /// return with their parameters in the optional `trapezoid_delta` and
 /// `custom_outline` pad columns, and a parameter that cannot make copper is
-/// a load error. Builds that predate the policy refuse 1.1 outright; a build
-/// opens a file one minor newer than itself read-only.
+/// a load error. The policy is [`SNXPCB_VERSION`].
 pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.4";
+
+/// `.snxsch` version policy: a newer minor opens read-only. A save writes the
+/// lowest token its content needs ([`snxsch_token`]).
+pub const SNXSCH_VERSION: FormatVersion = FormatVersion {
+    current: SNXSCH_FORMAT_NO_ERC_RULES,
+    readable: &["snxsch/1", SNXSCH_FORMAT_V1, SNXSCH_FORMAT_NO_ERC_RULES],
+    newer_minor: NewerMinor::ReadOnly,
+    missing: MissingToken::Refused,
+};
+
+/// The token a save of `sheet` writes: [`SNXSCH_FORMAT_NO_ERC_RULES`] when a
+/// No-ERC directive names rules, else [`SNXSCH_FORMAT_V1`]. From content, not
+/// the token the file loaded with, so a sheet whose last list is cleared
+/// goes back to 1.1.
+pub fn snxsch_token(sheet: &SchematicSheet) -> &'static str {
+    if sheet
+        .no_erc_directives
+        .iter()
+        .any(|directive| !directive.rules.is_empty())
+    {
+        SNXSCH_FORMAT_NO_ERC_RULES
+    } else {
+        SNXSCH_FORMAT_V1
+    }
+}
+
+/// Written instead of [`SNXPCB_FORMAT_V1`] when the board carries layer
+/// colours (`[board_options.layer_colors]`, 2026-11-18): a build that knows
+/// only 1.4 would drop them on save, so it opens 1.5 read-only. A board
+/// without layer colours stays 1.4, byte for byte.
+pub const SNXPCB_FORMAT_LAYER_COLORS: &str = "snxpcb/1.5";
+
+/// The token a save of `board` writes: [`SNXPCB_FORMAT_LAYER_COLORS`] when
+/// a layer has a colour of its own, else [`SNXPCB_FORMAT_V1`]. From content,
+/// so a board whose last colour is reset goes back to 1.4.
+pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
+    if board.options.layer_colors.is_empty() {
+        SNXPCB_FORMAT_V1
+    } else {
+        SNXPCB_FORMAT_LAYER_COLORS
+    }
+}
+
+/// `.snxpcb` version policy: a newer minor opens read-only. A save writes
+/// the lowest token its content needs ([`snxpcb_token`]).
+pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
+    current: SNXPCB_FORMAT_LAYER_COLORS,
+    readable: &[
+        "snxpcb/1",
+        "snxpcb/1.1",
+        "snxpcb/1.2",
+        "snxpcb/1.3",
+        SNXPCB_FORMAT_V1,
+        SNXPCB_FORMAT_LAYER_COLORS,
+    ],
+    newer_minor: NewerMinor::ReadOnly,
+    missing: MissingToken::Refused,
+};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -192,16 +259,8 @@ pub enum FormatError {
     TomlDeserialize(#[from] toml::de::Error),
     #[error("non-finite number (nan/inf) at `{path}`; fix the value to open this file")]
     NonFiniteNumber { path: String },
-    #[error(
-        "unsupported format version {found:?}: this build reads {expected:?} \
-         (same major version, any minor)"
-    )]
-    UnsupportedVersion { found: String, expected: String },
-    #[error(
-        "this file was written by a newer Signex ({found}); saving it with this build \
-         ({current}) would lose data -- open it in the newer version"
-    )]
-    NewerMinorReadOnly { found: String, current: String },
+    #[error(transparent)]
+    Version(#[from] FormatVersionError),
     #[error(
         "footprints {first:?} and {second:?} share uuid {uuid}; pads are keyed by footprint \
          uuid, so their pads cannot be told apart"
@@ -426,22 +485,22 @@ impl SnxSchematic {
 
     /// True when the file was written by a newer minor version than this
     /// build knows: it loaded for viewing but `write_string` refuses to
-    /// save it (unknown content would be lost); the caller should warn. See `version.rs`.
+    /// save it (unknown content would be lost); the caller should warn.
     pub fn is_from_newer_minor(&self) -> bool {
-        version::is_newer_minor(&self.format, SNXSCH_FORMAT_V1) || self.sheet.is_read_only()
+        SNXSCH_VERSION.is_newer_minor(&self.format) || self.sheet.is_read_only()
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
     pub fn write_string(&self) -> Result<String, FormatError> {
-        version::refuse_save(&self.format, SNXSCH_FORMAT_V1)?;
+        SNXSCH_VERSION.refuse_save(&self.format)?;
         if let Some(src) = &self.sheet.unknown.newer_minor_source {
-            version::refuse_save(src, SNXSCH_FORMAT_V1)?;
+            SNXSCH_VERSION.refuse_save(src)?;
         }
         let mut out = String::new();
 
         // Manifest header — emit as a small TOML document.
         let manifest = SchManifest {
-            format: SNXSCH_FORMAT_V1.to_string(),
+            format: snxsch_token(&self.sheet).to_string(),
             schematic_id: self.sheet.uuid,
             version: self.sheet.version,
             generator: self.sheet.generator.clone(),
@@ -555,7 +614,7 @@ impl SnxSchematic {
         // manifest header + bulk blocks + extras.
         let raw: SchRaw = parse_finite(input)?;
 
-        version::check(&raw.format, SNXSCH_FORMAT_V1)?;
+        let format = SNXSCH_VERSION.read(raw.format.as_deref())?;
 
         // Stage 2: parse each TSV block into adapter rows.
         let component_rows =
@@ -647,6 +706,7 @@ impl SnxSchematic {
             no_erc_directives: sheet_extras.no_erc_directives,
             directives: sheet_extras.directives,
             title_block: sheet_extras.title_block.into_iter().collect(),
+            variables: sheet_extras.variables,
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
             text_widths: Default::default(),
             text_extents,
@@ -667,8 +727,9 @@ impl SnxSchematic {
                 page: sheet_extras.page.unknown,
                 sheets: raw.sheets.unknown,
                 extras_root: extras.unknown,
-                newer_minor_source: version::is_newer_minor(&raw.format, SNXSCH_FORMAT_V1)
-                    .then(|| raw.format.clone()),
+                newer_minor_source: SNXSCH_VERSION
+                    .is_newer_minor(&format)
+                    .then(|| format.clone()),
                 load_repairs: Vec::new(),
             },
         };
@@ -683,10 +744,7 @@ impl SnxSchematic {
             .load_repairs
             .extend(wire_color_repair::unreadable_wire_colors(&sheet));
 
-        Ok(SnxSchematic {
-            format: raw.format,
-            sheet,
-        })
+        Ok(SnxSchematic { format, sheet })
     }
 }
 
@@ -731,7 +789,8 @@ struct SchSheetsRaw {
 
 #[derive(Debug, Clone, Deserialize)]
 struct SchRaw {
-    format: String,
+    #[serde(default)]
+    format: Option<String>,
     schematic_id: Uuid,
     #[serde(default)]
     version: u32,
@@ -780,23 +839,23 @@ impl SnxPcb {
 
     /// True when the file was written by a newer minor version than this
     /// build knows: it loaded for viewing but `write_string` refuses to
-    /// save it (unknown content would be lost); the caller should warn. See `version.rs`.
+    /// save it (unknown content would be lost); the caller should warn.
     pub fn is_from_newer_minor(&self) -> bool {
-        version::is_newer_minor(&self.format, SNXPCB_FORMAT_V1)
+        SNXPCB_VERSION.is_newer_minor(&self.format)
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
     pub fn write_string(&self) -> Result<String, FormatError> {
-        version::refuse_save(&self.format, SNXPCB_FORMAT_V1)?;
+        SNXPCB_VERSION.refuse_save(&self.format)?;
         if let Some(src) = &self.board.unknown.newer_minor_source {
-            version::refuse_save(src, SNXPCB_FORMAT_V1)?;
+            SNXPCB_VERSION.refuse_save(src)?;
         }
         pcb_footprints::check_unique_footprint_uuids(&self.board.footprints)?;
         let mut out = String::new();
 
         // Manifest header.
         let manifest = PcbManifest {
-            format: SNXPCB_FORMAT_V1.to_string(),
+            format: snxpcb_token(&self.board).to_string(),
             pcb_id: self.board.uuid,
             version: self.board.version,
             generator: self.board.generator.clone(),
@@ -949,7 +1008,7 @@ impl SnxPcb {
     pub fn parse(input: &str) -> Result<Self, FormatError> {
         let raw: PcbRaw = parse_finite(input)?;
 
-        version::check(&raw.format, SNXPCB_FORMAT_V1)?;
+        let format = SNXPCB_VERSION.read(raw.format.as_deref())?;
 
         let footprint_rows = parse_optional_block::<PcbFootprintRow>("footprints", raw.footprints)?;
         let pad_rows = parse_optional_block::<PcbPadRow>("pads", raw.pads)?;
@@ -1020,17 +1079,15 @@ impl SnxPcb {
                 extras: board_extras.unknown,
                 extras_root: extras.unknown,
                 board_sketch: board_sketch_unknown,
-                newer_minor_source: version::is_newer_minor(&raw.format, SNXPCB_FORMAT_V1)
-                    .then(|| raw.format.clone()),
+                newer_minor_source: SNXPCB_VERSION
+                    .is_newer_minor(&format)
+                    .then(|| format.clone()),
                 load_repairs: Vec::new(),
             },
         };
         board.unknown.load_repairs = pcb_uuid_repair::repair_duplicate_uuids(&mut board);
 
-        Ok(SnxPcb {
-            format: raw.format,
-            board,
-        })
+        Ok(SnxPcb { format, board })
     }
 }
 
@@ -1051,7 +1108,8 @@ struct PcbManifest {
 
 #[derive(Debug, Clone, Deserialize)]
 struct PcbRaw {
-    format: String,
+    #[serde(default)]
+    format: Option<String>,
     pcb_id: Uuid,
     #[serde(default)]
     version: u32,

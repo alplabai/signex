@@ -211,8 +211,22 @@ pub(super) fn zone_facts(
                 .map(|z| (z.thermal_relief, z.thermal_width, z.thermal_gap)),
         ),
         menu_open: false,
+        unfilled: pour_unfilled(board, zones, fills),
         common,
     }
+}
+
+/// Why the first selected pour with no fill has none.
+fn pour_unfilled(
+    board: &PcbBoard,
+    zones: &[&Zone],
+    fills: Option<&ZoneFills>,
+) -> Option<pcb_geom::Unfilled> {
+    let fills = fills?;
+    zones.iter().find_map(|zone| {
+        let index = board.zones.iter().position(|z| z.uuid == zone.uuid)?;
+        fills.unfilled(index)
+    })
 }
 
 /// The area edit `edit` stands for; `None` for a field areas do not have.

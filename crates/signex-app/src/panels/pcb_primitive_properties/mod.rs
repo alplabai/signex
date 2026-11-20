@@ -57,6 +57,7 @@ pub use facts::{
 pub use linked::{EndChoice, end_choices, ends_tip};
 pub use via::ViaMsg;
 pub use zone::PourMsg;
+pub(crate) use zone::unfilled_reason;
 
 use super::{PanelContext, PanelMsg, form_look};
 use crate::styles::{PillTone, Radii, Spacing, TypeScale, pill_colors, tokens::resolve};

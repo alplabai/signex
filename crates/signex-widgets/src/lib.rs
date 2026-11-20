@@ -6,11 +6,14 @@
 pub mod active_bar;
 pub mod chevron;
 pub mod chips;
+pub mod compact_group;
 pub mod constraint_grid;
 pub mod dimension_label;
+pub mod doc_tab_shell;
 pub mod dropdown_style;
 pub mod enable_section;
 pub mod flow_progress;
+pub mod history_graph;
 pub mod history_pane;
 mod house;
 mod house_extra;
@@ -21,8 +24,10 @@ pub mod length_format;
 pub mod passive_calculator;
 pub mod property_illustration;
 pub mod segmented;
+pub mod stat_tiles;
 pub mod status_bar;
 pub mod tab_pill;
+pub mod target_band;
 pub mod theme_ext;
 pub mod toggle_switch;
 pub mod translate;
@@ -33,6 +38,7 @@ pub mod tree_view;
 // `signex_widgets::active_bar_dropdown::…` consumers resolve unchanged.
 pub use active_bar::dropdown as active_bar_dropdown;
 
+pub use history_graph::{HistoryGraph, HistoryGraphStyle};
 pub use history_pane::{HistoryEntry, history_pane};
 pub use house::{CheckboxLabel, Content, button, checkbox, text, text_input, tooltip};
 pub use house_extra::{

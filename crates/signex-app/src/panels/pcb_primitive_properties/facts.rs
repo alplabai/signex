@@ -416,6 +416,8 @@ pub struct ZoneFacts {
     pub thermal: Option<(bool, f64, f64)>,
     /// The Copper card's menu of board-wide pour commands is open.
     pub menu_open: bool,
+    /// Why a selected pour has no fill, when one has none.
+    pub unfilled: Option<pcb_geom::Unfilled>,
 }
 
 /// Free arcs (#2373). Positions and angles are read from the board origin

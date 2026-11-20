@@ -569,3 +569,21 @@ fn an_island_on_a_free_pad_or_arc_of_the_net_is_kept() {
         .push(free_arc(10, 1, (-3.0, 9.3), (0.0, 9.5), (3.0, 9.3)));
     assert_eq!(pieces(&b).len(), 2, "the GND free arc keeps the strip");
 }
+
+/// A pour with no fill says why (maintainer 2026-11-18).
+#[test]
+fn a_pour_with_no_fill_says_why() {
+    let mut b = board(Vec::new());
+    b.zones = vec![
+        zone(1, 1, POUR_FILL, "TopSilkscreen", (0.0, 0.0, 5.0, 5.0)),
+        zone(2, 1, POUR_FILL, "TopCopper", (0.0, 0.0, 5.0, 0.0)),
+        zone(3, 1, POUR_FILL, "TopCopper", (0.0, 0.0, 5.0, 5.0)),
+    ];
+    b.zones[1].outline.truncate(2);
+    let fills = zone_fills(&b);
+    assert_eq!(fills.unfilled(0), Some(Unfilled::NoCopperLayer));
+    assert_eq!(fills.unfilled(1), Some(Unfilled::Outline));
+    assert_eq!(fills.unfilled(2), None, "the third one fills");
+    assert!(fills.of(2).is_some());
+    assert_eq!(fills.unfilled_pours().len(), 2);
+}

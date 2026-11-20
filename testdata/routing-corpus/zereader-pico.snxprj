@@ -1,0 +1,94 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "zereader-pico",
+  "net_classes": [
+    {
+      "clearance": 0.15,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "GND",
+      "nets": [
+        "GND"
+      ],
+      "patterns": [
+        "GND"
+      ],
+      "trace_width": 0.4,
+      "via_diameter": 0.7,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.15,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "PWR",
+      "nets": [
+        "+3.3V",
+        "/01_MCU/VBUS",
+        "/01_MCU/VSYS",
+        "/02_Power/USB_VBUS",
+        "/02_Power/V_USB_LIPO",
+        "/02a_USB-Battery-Charging/USB_VBUS",
+        "/02a_USB-Battery-Charging/V_USB_LIPO",
+        "/03_ePaper-Driver/Drain",
+        "/03_ePaper-Driver/VGH",
+        "/03_ePaper-Driver/VGL",
+        "Net-(D3-A)",
+        "Net-(D3-K)",
+        "Net-(D4-A)",
+        "Net-(D4-K)",
+        "Net-(D6-K)",
+        "Net-(J1-VDD)",
+        "Net-(J3-VBUS)",
+        "Net-(Q1-Pad3)",
+        "Net-(Q3-Pad3)",
+        "Net-(U3-IN)",
+        "VBUS",
+        "VSYS"
+      ],
+      "patterns": [
+        "VSYS",
+        "VBUS",
+        "3V3",
+        "USB_VBUS",
+        "V_USB_LIPO"
+      ],
+      "trace_width": 0.4,
+      "via_diameter": 0.7,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.15,
+      "diff_pair_gap": 0.2,
+      "diff_pair_width": 0.8,
+      "name": "USB",
+      "patterns": [
+        "/01_MCU/USB_DP",
+        "/01_MCU/USB_DN"
+      ],
+      "trace_width": 0.4,
+      "via_diameter": 0.7,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.15,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.3,
+      "via_diameter": 0.7,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "zereader-pico.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

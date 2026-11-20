@@ -695,6 +695,8 @@ mod sheet_frame_canvas;
 mod planned_tools;
 
 // #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/page_tab_titles.rs"]
+mod page_tab_titles;
 #[path = "regression/project_parameters.rs"]
 mod project_parameters;
 #[path = "regression/project_tab.rs"]
@@ -705,14 +707,26 @@ mod project_tab_rename;
 mod project_tab_saves;
 #[path = "regression/project_tab_support.rs"]
 mod project_tab_support;
+#[path = "regression/sheet_variables.rs"]
+mod sheet_variables;
 
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
 
+#[path = "regression/annotate_graphite.rs"]
+mod annotate_graphite;
+#[path = "regression/erc_dialog_graphite.rs"]
+mod erc_dialog_graphite;
+#[path = "regression/setup_profile_cards.rs"]
+mod setup_profile_cards;
+#[path = "regression/sketch_host.rs"]
+mod sketch_host;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/validation_panels_graphite.rs"]
+mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
 
@@ -720,3 +734,12 @@ mod wire_tab_options;
 // link, the bounding-box size row and the tile-callout hover.
 #[path = "regression/board_options_panel.rs"]
 mod board_options_panel;
+
+// Graphite #78 / #80 - Number Schematic Sheets greys Apply on a clash, gap
+// or high number; Assign Footprints filter chips, ticked bar and reason pills.
+#[path = "regression/sheet_tools_graphite.rs"]
+mod sheet_tools_graphite;
+
+// #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
+#[path = "regression/board_sync_graphite.rs"]
+mod board_sync_graphite;

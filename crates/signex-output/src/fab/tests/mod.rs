@@ -10,6 +10,7 @@ mod odb;
 mod odb_eda;
 mod origin;
 mod panel;
+mod reference_sign;
 mod same_net;
 
 use std::path::PathBuf;

@@ -47,13 +47,41 @@ impl ZoneFill {
     }
 }
 
-/// The fills of a board's pours, in board order.
+/// Why a pour has no fill.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unfilled {
+    /// Its layer is no copper layer.
+    NoCopperLayer,
+    /// Its outline has fewer than three corners the geometry can hold.
+    Outline,
+    /// Its clearance is not a length the geometry can hold.
+    Clearance,
+}
+
+/// The fills of a board's pours, in board order, and why the pours with
+/// none have none.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ZoneFills {
     fills: Vec<ZoneFill>,
+    /// `(index in PcbBoard::zones, zone, why)`, in board order.
+    unfilled: Vec<(usize, Uuid, Unfilled)>,
 }
 
 impl ZoneFills {
+    /// Why the pour at `index` of `PcbBoard::zones` has no fill; `None`
+    /// when it has one or is no pour.
+    pub fn unfilled(&self, index: usize) -> Option<Unfilled> {
+        self.unfilled
+            .iter()
+            .find(|(at, _, _)| *at == index)
+            .map(|(_, _, why)| *why)
+    }
+
+    /// Every pour with no fill: its index, id and why.
+    pub fn unfilled_pours(&self) -> &[(usize, Uuid, Unfilled)] {
+        &self.unfilled
+    }
+
     /// The fill of the zone at `index` of `PcbBoard::zones`, if it is a
     /// pour that could be filled.
     pub fn of(&self, index: usize) -> Option<&ZoneFill> {
@@ -74,7 +102,8 @@ impl ZoneFills {
 
 /// The fill of every pour of `board`. A shelved pour, a pour on no copper
 /// layer, or one with an outline or clearance the geometry cannot hold, has
-/// no fill.
+/// no fill; [`ZoneFills::unfilled`] says which of the last three it is (a
+/// shelved pour is left out on purpose and is not listed).
 pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
     let inside = board_area(board);
     let mut order: Vec<(usize, &Zone)> = board
@@ -85,13 +114,16 @@ pub fn zone_fills(board: &PcbBoard) -> ZoneFills {
         .collect();
     order.sort_by_key(|(index, zone)| (Reverse(zone.priority), *index));
     let mut fills: Vec<ZoneFill> = Vec::with_capacity(order.len());
+    let mut unfilled = Vec::new();
     for (index, zone) in order {
-        if let Some(fill) = fill_pour(board, index, zone, &fills, inside.as_deref()) {
-            fills.push(fill);
+        match fill_pour(board, index, zone, &fills, inside.as_deref()) {
+            Ok(fill) => fills.push(fill),
+            Err(why) => unfilled.push((index, zone.uuid, why)),
         }
     }
     fills.sort_by_key(|fill| fill.index);
-    ZoneFills { fills }
+    unfilled.sort_by_key(|(index, _, _)| *index);
+    ZoneFills { fills, unfilled }
 }
 
 /// The copper area a zone's outline and usable holes enclose; `None` for an
@@ -128,14 +160,17 @@ fn fill_pour(
     zone: &Zone,
     earlier: &[ZoneFill],
     inside: Option<&[Polygon]>,
-) -> Option<ZoneFill> {
+) -> Result<ZoneFill, Unfilled> {
     let layers = layer_mask(std::iter::once(zone.layer.as_str()));
     if layers == 0 {
-        return None;
+        return Err(Unfilled::NoCopperLayer);
     }
-    let area = zone_area(zone).filter(|a| a.outer.len() >= 3)?;
-    let clearance = mm_to_nm(zone.pour_clearance_mm(board), "zone.clearance").ok()?;
-    let reach = area.bounds()?.inflate(clearance);
+    let area = zone_area(zone)
+        .filter(|a| a.outer.len() >= 3)
+        .ok_or(Unfilled::Outline)?;
+    let clearance = mm_to_nm(zone.pour_clearance_mm(board), "zone.clearance")
+        .map_err(|_| Unfilled::Clearance)?;
+    let reach = area.bounds().ok_or(Unfilled::Outline)?.inflate(clearance);
     let obstacles = Obstacles {
         board,
         zone,
@@ -155,7 +190,7 @@ fn fill_pour(
         pieces = without_thin_parts(&pieces, min);
     }
     let (pieces, islands_removed) = islands::drop_islands(board, zone, layers, pieces);
-    Some(ZoneFill {
+    Ok(ZoneFill {
         zone: zone.uuid,
         index,
         net: zone.net,

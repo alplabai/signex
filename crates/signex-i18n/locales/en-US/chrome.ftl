@@ -44,3 +44,12 @@ chrome-active-bar-corner-90 = 90°
 chrome-active-bar-corner-45 = 45°
 # The wire may leave at any angle.
 chrome-active-bar-corner-any = Any
+
+## Page tabs: document tabs that show one of a project's pages (#2523)
+
+# A page tab's title: the project's name, then the page's own name, e.g.
+# "sensor-node — Layer Stack". $project is the project name as the user
+# wrote it; $page is the page name below or another catalog page name.
+chrome-page-tab-title = { $project } — { $page }
+# The page name of the Project tab (Project ▸ Project Options...).
+chrome-page-tab-project = Project

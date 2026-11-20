@@ -28,8 +28,8 @@
 //! Altium-flavoured and was already independent of the Standard markup
 //! syntax.
 
+use crate::variables::{Binding, Resolver, variable_text};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Rich text segments
@@ -48,18 +48,37 @@ pub enum RichSegment {
 }
 
 // ---------------------------------------------------------------------------
-// Expression substitution context (unchanged from before — Altium-flavoured)
+// Expression substitution context
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Default)]
+/// What the markup lookups read. Every table is a `signex-expr` resolver
+/// (#1987): `at_variables` is the one variable model (part fields, then
+/// sheet variables, then project variables, stacked with
+/// [`crate::variables::Layered`]); the designator and pin-net tables are
+/// [`crate::variables::TextTable`]s read as stored text.
+#[derive(Clone, Default)]
 pub struct ExpressionEvalContext<'a> {
     pub current_refdes: Option<&'a str>,
     pub current_value: Option<&'a str>,
     pub current_pin: Option<&'a str>,
     pub cell: Option<&'a str>,
-    pub at_variables: Option<&'a HashMap<String, String>>,
-    pub refdes_variables: Option<&'a HashMap<String, String>>,
-    pub net_name_by_pin: Option<&'a HashMap<String, String>>,
+    pub at_variables: Option<&'a dyn Resolver>,
+    pub refdes_variables: Option<&'a dyn Resolver>,
+    pub net_name_by_pin: Option<&'a dyn Resolver>,
+}
+
+impl std::fmt::Debug for ExpressionEvalContext<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExpressionEvalContext")
+            .field("current_refdes", &self.current_refdes)
+            .field("current_value", &self.current_value)
+            .field("current_pin", &self.current_pin)
+            .field("cell", &self.cell)
+            .field("at_variables", &self.at_variables.is_some())
+            .field("refdes_variables", &self.refdes_variables.is_some())
+            .field("net_name_by_pin", &self.net_name_by_pin.is_some())
+            .finish()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -491,14 +510,21 @@ fn starts_with_ascii_ci(haystack: &[u8], start: usize, needle: &[u8]) -> bool {
         .all(|(h, n)| h.eq_ignore_ascii_case(n))
 }
 
-fn lookup_ci(map: Option<&HashMap<String, String>>, key: &str) -> Option<String> {
-    let map = map?;
-    if let Some(v) = map.get(key) {
-        return Some(v.clone());
+/// The stored text `key` is bound to in `table` (a designator, a pin's
+/// net), as written: never evaluated.
+fn lookup_text(table: Option<&dyn Resolver>, key: &str) -> Option<String> {
+    match table?.resolve(key).ok()?? {
+        Binding::Text(text) => Some(text.into_owned()),
+        Binding::Value(value) => Some(value.to_string()),
+        Binding::Expr(_) => None,
     }
-    map.iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case(key))
-        .map(|(_, v)| v.clone())
+}
+
+/// What the variable `key` shows through the one variable model: a
+/// literal as written, an `=` expression evaluated. One that does not
+/// evaluate leaves the markup unresolved.
+fn lookup_variable(model: Option<&dyn Resolver>, key: &str) -> Option<String> {
+    variable_text(model?, key)?.ok()
 }
 
 fn eval_dollar_expression(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option<String> {
@@ -514,7 +540,7 @@ fn eval_dollar_expression(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option
         {
             return ctx.current_refdes.map(ToString::to_string);
         }
-        if let Some(v) = lookup_ci(ctx.refdes_variables, key) {
+        if let Some(v) = lookup_text(ctx.refdes_variables, key) {
             return Some(v);
         }
         return None;
@@ -527,7 +553,7 @@ fn eval_dollar_expression(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option
         return ctx.current_value.map(ToString::to_string);
     }
 
-    lookup_ci(ctx.at_variables, expr)
+    lookup_variable(ctx.at_variables, expr)
 }
 
 fn eval_at_expression(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option<String> {
@@ -541,7 +567,7 @@ fn eval_at_expression(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option<Str
     if expr.eq_ignore_ascii_case("value") {
         return ctx.current_value.map(ToString::to_string);
     }
-    lookup_ci(ctx.at_variables, expr)
+    lookup_variable(ctx.at_variables, expr)
 }
 
 fn eval_net_name(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option<String> {
@@ -549,7 +575,7 @@ fn eval_net_name(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option<String> 
     if pin_key.is_empty() || pin_key.eq_ignore_ascii_case("pin") {
         pin_key = ctx.current_pin?;
     }
-    lookup_ci(ctx.net_name_by_pin, pin_key)
+    lookup_text(ctx.net_name_by_pin, pin_key)
 }
 
 // ---------------------------------------------------------------------------
@@ -559,6 +585,8 @@ fn eval_net_name(expr: &str, ctx: &ExpressionEvalContext<'_>) -> Option<String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::variables::{Layered, TextTable};
+    use std::collections::{BTreeMap, HashMap};
 
     #[test]
     fn plain_text() {
@@ -784,11 +812,12 @@ mod tests {
         at.insert("Comment".to_string(), "Decoupling".to_string());
         let mut refdes = HashMap::new();
         refdes.insert("U1_UUID".to_string(), "U1".to_string());
+        let (at_table, refdes_table) = (TextTable(&at), TextTable(&refdes));
 
         let ctx = ExpressionEvalContext {
             current_refdes: Some("U7"),
-            at_variables: Some(&at),
-            refdes_variables: Some(&refdes),
+            at_variables: Some(&at_table),
+            refdes_variables: Some(&refdes_table),
             ..ExpressionEvalContext::default()
         };
 
@@ -800,10 +829,11 @@ mod tests {
     fn evaluates_cell_and_net_name() {
         let mut nets = HashMap::new();
         nets.insert("A1".to_string(), "ADC_IN".to_string());
+        let net_table = TextTable(&nets);
         let ctx = ExpressionEvalContext {
             current_pin: Some("A1"),
             cell: Some("2"),
-            net_name_by_pin: Some(&nets),
+            net_name_by_pin: Some(&net_table),
             ..ExpressionEvalContext::default()
         };
 
@@ -816,5 +846,32 @@ mod tests {
         let ctx = ExpressionEvalContext::default();
         let out = evaluate_expressions("${refdes:U1} @{foo} NET_NAME(1)", &ctx);
         assert_eq!(out, "${refdes:U1} @{foo} NET_NAME(1)");
+    }
+
+    /// #1987: `${name}` and `@{name}` read the one variable model; a part
+    /// field shadows a sheet variable, which shadows a project variable, and
+    /// an `=` value is evaluated.
+    #[test]
+    fn both_lookups_read_the_layered_variable_model() {
+        let part = HashMap::from([("Tolerance".to_string(), "1%".to_string())]);
+        let sheet = BTreeMap::from([("VCC".to_string(), "3.3V".to_string())]);
+        let project = BTreeMap::from([
+            ("VCC".to_string(), "5V".to_string()),
+            ("VREF".to_string(), "= VCC / 2".to_string()),
+            ("LOOP".to_string(), "= LOOP + 1".to_string()),
+        ]);
+        let (part_t, sheet_t, project_t) =
+            (TextTable(&part), TextTable(&sheet), TextTable(&project));
+        let model = Layered::new(vec![&part_t as &dyn Resolver, &sheet_t, &project_t]);
+        let ctx = ExpressionEvalContext {
+            at_variables: Some(&model),
+            ..ExpressionEvalContext::default()
+        };
+        assert_eq!(
+            evaluate_expressions("@{VREF} ${VREF} @{tolerance} ${VCC}", &ctx),
+            "1.65V 1.65V 1% 3.3V"
+        );
+        // A cycle leaves the markup as written.
+        assert_eq!(evaluate_expressions("@{LOOP}", &ctx), "@{LOOP}");
     }
 }

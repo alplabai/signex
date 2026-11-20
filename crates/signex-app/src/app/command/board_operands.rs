@@ -72,14 +72,18 @@ fn show_drc_violation_answer(app: &mut Signex, args: &CommandArgs) -> Result<Val
     app.show_drc_violation(&board, &key)
 }
 
-/// `waive_drc_violation document=.. id=K [text=note]`: waive it with the
-/// note, as the panel's Waive does; one board undo step.
+/// `waive_drc_violation document=.. id=K [text=note] [author=name]`: waive
+/// it with the note and author, as the panel's Waive does; one board undo
+/// step.
 fn waive_drc_violation_answer(app: &mut Signex, args: &CommandArgs) -> Result<Value, String> {
     let what = "`waive_drc_violation`";
     let board = named_board(app, args, what)?;
     let key = required_text(args, "id", what)?.to_string();
-    let note = text(args, "text").unwrap_or_default().to_string();
-    app.set_drc_waiver(&board, &key, Some(note))
+    let waiver = crate::app::handlers::DrcWaiverText {
+        note: text(args, "text").unwrap_or_default().to_string(),
+        author: text(args, "author").unwrap_or_default().to_string(),
+    };
+    app.set_drc_waiver(&board, &key, Some(waiver))
 }
 
 /// `unwaive_drc_violation document=.. id=K`: take its waiver back.

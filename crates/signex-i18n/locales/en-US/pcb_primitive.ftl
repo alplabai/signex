@@ -191,6 +191,8 @@ pcb-prim-pour-copper-value = { $area } mm² in { $pieces ->
    *[other] { $pieces } pieces
 }
 pcb-prim-pour-copper-tip = Computed from the board; Repour fills it again.
+# A pour with no fill; $why says why (pcb-pour-unfilled-*).
+pcb-prim-pour-unfilled = not filled: { $why }
 
 ## Free arcs, strings and dimensions (#2373). A free pad uses the pad rows.
 pcb-prim-arc-title = Arc

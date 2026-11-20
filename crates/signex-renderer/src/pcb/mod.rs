@@ -200,7 +200,7 @@ pub use board_paint::{BoardObject, BoardPaint};
 use emit::*;
 pub use footprint_text::FootprintTextInput;
 pub use graphics::{GraphicInput, GraphicShapeInput};
-pub use layer_pairs::{LayerPair, SINGLE_TECHNICAL_LAYERS};
+pub use layer_pairs::{LayerPair, SINGLE_TECHNICAL_LAYERS, panel_order_layers};
 pub use layer_rows::{
     LayerGroup, LayerRow, board_copper_layers, board_layers, group_layers, layer_rows,
     plane_layers, signal_layers,
@@ -209,7 +209,9 @@ pub use layer_sets::{
     BuiltinLayerSet, LayerKind, LayerSetId, ShownLayerSet, builtin_set_layers, kind_layers,
     listed_layers,
 };
-pub use layer_view::{BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView, zone_object};
+pub use layer_view::{
+    BOARD_OUTLINE, DIMMED_ALPHA, Emphasis, PcbLayerView, board_paint, zone_object,
+};
 pub use ratsnest::ratsnest_inputs;
 pub use used_layers::used_layers;
 pub use zone_fill::ZoneFillPiece;

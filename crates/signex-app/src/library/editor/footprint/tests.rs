@@ -256,7 +256,7 @@ fn place_move_button(
 
     let tid = ThemeId::GraphiteDark;
     let tokens = theme_tokens(tid);
-    bar_items(&editor, tid, &tokens).remove(2)
+    bar_items(&editor, tid, &tokens, &signex_i18n::I18n::en_us()).remove(2)
 }
 
 // ---------------------------------------------------------------------

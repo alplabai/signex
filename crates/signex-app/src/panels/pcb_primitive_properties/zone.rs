@@ -350,13 +350,17 @@ fn veiled<'a>(tokens: &ThemeTokens, content: Element<'a, PanelMsg>) -> Element<'
     }
 }
 
-/// The Copper card: what the fill holds (or that the pour is shelved),
-/// Repour, Shelve or Unshelve, and the ⋯ menu of board-wide commands.
+/// The Copper card: what the fill holds (or that the pour is shelved, or
+/// why it has no fill), Repour, Shelve or Unshelve, and the ⋯ menu of
+/// board-wide commands.
 fn copper_card<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
     let r = resolve(look.tokens());
     let shelved = f.shelved == Some(true);
     let value: Option<Label<'a>> = if shelved {
         Some(look.t(ids::PCB_PRIM_POUR_SHELVED_VALUE).into())
+    } else if let Some(why) = f.unfilled {
+        let why = t!(look.ctx.i18n, unfilled_reason(why)).into_string();
+        Some(t!(look.ctx.i18n, ids::PCB_PRIM_POUR_UNFILLED, "why" => why).into())
     } else {
         f.copper.map(|(area, pieces)| {
             t!(
@@ -597,6 +601,15 @@ pub(super) fn card_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::
     }
 }
 
+/// Why a pour has no fill, as Properties and Messages say it.
+pub(crate) fn unfilled_reason(why: pcb_geom::Unfilled) -> MessageId {
+    match why {
+        pcb_geom::Unfilled::NoCopperLayer => ids::PCB_POUR_UNFILLED_NO_LAYER,
+        pcb_geom::Unfilled::Outline => ids::PCB_POUR_UNFILLED_OUTLINE,
+        pcb_geom::Unfilled::Clearance => ids::PCB_POUR_UNFILLED_CLEARANCE,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pcb_geom::{ItemRef, PickKind};
@@ -626,6 +639,7 @@ mod tests {
             shelved,
             thermal: Some((false, 0.0, 0.0)),
             menu_open: false,
+            unfilled: None,
         }
     }
 

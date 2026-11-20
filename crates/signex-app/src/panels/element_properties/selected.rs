@@ -99,7 +99,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
             | signex_types::schematic::SelectedKind::BusEntry
             | signex_types::schematic::SelectedKind::Junction
             | signex_types::schematic::SelectedKind::NoConnect
-            | signex_types::schematic::SelectedKind::NoErcDirective
             | signex_types::schematic::SelectedKind::SheetPin,
         )
         | None => {
@@ -107,6 +106,9 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         }
         Some(signex_types::schematic::SelectedKind::Directive) => {
             col = super::directive::push_directive_sections(col, ctx, uuid, st);
+        }
+        Some(signex_types::schematic::SelectedKind::NoErcDirective) => {
+            col = super::no_erc::push_no_erc_sections(col, ctx, uuid, st);
         }
     }
 

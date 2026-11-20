@@ -51,9 +51,10 @@ use crate::uf::{Key, find as uf_find, union as uf_union};
 /// 1 µm integer bucket — the union-find key space and the single definition of
 /// "same point" for the whole derivation (D5.5). `pub` so `signex-erc`'s rules
 /// can compare positions with the exact same metric instead of hand-rolling a
-/// second float-epsilon `same()` (issue #388).
+/// second float-epsilon `same()` (issue #388). Defined once, on
+/// [`Point::um_key`], so the types crate's own readers share it.
 pub fn pt_key(p: &Point) -> Key {
-    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
+    p.um_key()
 }
 
 /// True when `p` lies on segment `a`–`b` (endpoints included) in the integer
@@ -497,6 +498,14 @@ pub fn flood_net_elements(sheet: &SchematicSheet, target_wire: Uuid) -> Option<F
 /// hazard the two-level stitcher relies on this to avoid.
 pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
     merged_connectivity(sheet).parent
+}
+
+/// The logical connectivity of `sheet`: wires and junctions plus the
+/// same-name label and power-port merges, the nets [`build_netlist`] reports.
+/// Two points share a net iff their [`SheetConnectivity::root_of`] agree.
+#[must_use]
+pub fn logical_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
+    merged_connectivity(sheet)
 }
 
 /// The whole per-sheet topology a consumer must read to agree with
