@@ -52,6 +52,9 @@ impl Signex {
             ActiveBarAction::PlacePowerEarth => {
                 follow = self.set_pending_power_port("Earth", "power:Earth");
             }
+            ActiveBarAction::PlacePowerChassis => {
+                follow = self.set_pending_power_port("Chassis", "power:Chassis");
+            }
             ActiveBarAction::PlacePort => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((
@@ -171,6 +174,10 @@ impl Signex {
                     .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b))
                     .unwrap_or(iced::Color::from_rgb(0.40, 0.40, 0.93));
                 self.ui_state.net_color_custom.draft = seed;
+                // The pen, not a palette row's net.
+                self.ui_state.net_color_custom.net = None;
+                self.ui_state.net_color_custom.sheet = None;
+                self.ui_state.net_color_custom.hex = None;
                 self.ui_state.net_color_custom.show = true;
             }
             ActiveBarAction::ClearNetColor => {

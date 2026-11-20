@@ -5,6 +5,9 @@ mod patch;
 mod annotation;
 mod annotation_placements;
 mod clipboard_text;
+mod derived_ids;
+mod notice;
+pub use notice::{EngineNotice, RefusedPinDot};
 mod history;
 mod history_snapshot;
 mod id_collision;
@@ -22,10 +25,20 @@ mod selection;
 mod selection_payload;
 mod sheet;
 mod sheet_entry;
+mod sheet_file_rules;
+#[cfg(test)]
+mod sheet_file_rules_tests;
+pub use sheet_file_rules::{
+    SheetFilePlacement, SheetFileRefusal, SheetGraph, SheetGraphNode, SubtreeFacts,
+    carries_reaching_name, check_sheet_file, subtree_facts,
+};
 mod sheet_identity;
 pub use sheet_identity::other_sheet_symbol_using_file;
 pub mod pcb;
 mod sheet_placement;
+mod sheet_sync;
+#[cfg(test)]
+mod sheet_sync_tests;
 mod transform;
 
 mod dxf_plane;
@@ -44,6 +57,8 @@ mod annotation_tests;
 #[cfg(test)]
 mod document_id_tests;
 
+#[cfg(test)]
+mod carry_guard_tests;
 #[cfg(test)]
 mod commit_local_tests;
 #[cfg(test)]
@@ -81,9 +96,13 @@ mod symbol_drag_local_tests;
 #[cfg(test)]
 mod id_source_tests;
 #[cfg(test)]
+mod pin_junction_tests;
+#[cfg(test)]
 mod sheet_identity_tests;
 #[cfg(test)]
 mod undo_depth_tests;
+#[cfg(test)]
+mod wire_drag_tests;
 
 use std::path::{Path, PathBuf};
 
@@ -91,7 +110,8 @@ pub use annotation::{AnnotatePlacement, AnnotateScope};
 pub use clipboard_text::{CLIPBOARD_MARKER, MAX_CLIPBOARD_TEXT_BYTES};
 pub use command::{
     AnnotateMode, Command, CommandKind, DrawingArrange, MirrorAxis, ReorderDirection,
-    SelectionTransform, SheetPort, SymbolFlag, SymbolTextField, TextTarget,
+    SelectionTransform, SheetEntryRename, SheetPort, SymbolEntryRenames, SymbolFlag,
+    SymbolTextField, TextTarget,
 };
 pub use error::EngineError;
 pub use exec::change_component::{
@@ -100,8 +120,8 @@ pub use exec::change_component::{
 };
 pub use exec::pin_changes::{SwitchBlockers, switch_blockers};
 pub use find::{
-    DesignatorScope, FindHit, FindKind, designator_commands, replace_all_ci, replace_commands,
-    scan_sheet,
+    DesignatorScope, FindHit, FindKind, FindQuery, MatchOptions, PatternError, designator_commands,
+    replace_all_ci, replace_commands, scan_sheet,
 };
 pub use find_similar::{
     SimilarProperty, SimilarValue, describe, find_similar, kind_label, properties_of,
@@ -145,13 +165,23 @@ pub use sheet_placement::{
     DEFAULT_CHILD_SHEET_STROKE_MM, MIN_CHILD_SHEET_EDGE_MM, child_sheet_from_corners,
     unused_sheet_stem,
 };
+pub use sheet_sync::{
+    SheetSyncDirection, SheetSyncPreview, entry_changes_from_sheet, port_changes_from_symbol,
+    port_sync_commands, sheet_symbol_from_sheet, sheet_symbol_spot, sync_from_sheet_command,
+    unused_sheet_symbol_name,
+};
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{SchematicSheet, SelectedItem};
+pub use transform::bare_pin_taps;
+pub use transform::pin_junction_repairs;
 pub use transform::place_fields_for_new_symbol;
 pub use transform::rubber_band::{
-    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, before_nets, follow_moved_pins,
-    moved_pin_tips,
+    BeforeNets, Follow, Guard, PinIdent, PinTip, Policy, WireContact, before_nets,
+    follow_moved_pins, follow_wire_grip, moved_pin_tips, moved_wire_contacts, wire_contact_points,
+};
+pub(crate) use transform::rubber_band::{
+    WirePoint, bailing_wires, carried_points, carry_points, held_at, pin_dots_to_keep,
 };
 
 pub(crate) use transform::{PreWires, TouchingPairs};
@@ -167,7 +197,30 @@ pub fn is_reserved_symbol_key(key: &str) -> bool {
     )
 }
 
+/// Whether `cmd` can make a pin end touch a wire, so its reconcile needs the
+/// bare contacts the sheet held before it (`transform::pin_junctions`).
+fn makes_pin_contacts(cmd: &Command) -> bool {
+    matches!(
+        cmd,
+        Command::MoveSelection { .. }
+            | Command::MoveEach { .. }
+            | Command::RotateSelection { .. }
+            | Command::MirrorSelection { .. }
+            | Command::TransformSelection { .. }
+            | Command::PlaceWireSegment { .. }
+            | Command::PlaceWireSegmentAsIs { .. }
+            | Command::BreakWire { .. }
+            | Command::PlaceSymbol { .. }
+            | Command::MoveWireEnd { .. }
+    )
+}
+
 const JUNCTION_TOLERANCE_MM: f64 = 0.01;
+
+/// Pin points in the netlist's 1 um key space.
+type PinKeys = std::collections::HashSet<signex_net::uf::Key>;
+/// Each pin point with the parts whose pin ends sit there.
+type PinOwners = std::collections::HashMap<signex_net::uf::Key, Vec<uuid::Uuid>>;
 
 #[derive(Debug)]
 pub struct Engine {
@@ -219,6 +272,9 @@ pub struct Engine {
     /// Notices raised by the last commands (rubber-band pins that could
     /// not be kept connected); the app drains them into the Messages panel.
     warnings: Vec<String>,
+    /// Notices raised by the last commands as data (see [`EngineNotice`]);
+    /// the app words them through its catalog.
+    notices: Vec<EngineNotice>,
     /// The pins behind the last notice, one "R1 pin 2" each.
     unkept_pins: Vec<String>,
     /// Pre-move nets computed ahead of time (drag previews).
@@ -235,6 +291,18 @@ pub struct Engine {
     /// The pre-move sheet itself, which a drag preview's move reads in place
     /// of a copy of the engine's document (drag previews).
     preset_sheet: Option<std::sync::Arc<SchematicSheet>>,
+    /// Where pin ends touched a wire bare before the command in flight: the
+    /// reconcile leaves those contacts be (`transform::pin_junctions`).
+    taps_before: Option<std::sync::Arc<PinKeys>>,
+    /// Pin ends the command in flight left without a dot because
+    /// a dot there would merge two nets; named in a notice once it commits.
+    crossed_taps: Vec<signex_types::schematic::Point>,
+    /// The host's id source for the pin dots the engine derives (#2429).
+    derived_ids: derived_ids::DerivedIds,
+    /// The bare pin contacts and the pin ends of the pre-move sheet, so a drag
+    /// preview does not scan the whole sheet for them on every frame.
+    preset_taps: Option<std::sync::Arc<PinKeys>>,
+    preset_pin_owners: Option<std::sync::Arc<PinOwners>>,
     /// Test switch: a move folds by weighing every wire, as it did before the
     /// fold looked only where wires changed.
     #[cfg(test)]
@@ -266,6 +334,9 @@ pub struct MovePreview {
     base: Option<std::sync::Arc<signex_net::NetBase>>,
     dots: Option<std::sync::Arc<transform::DotVerdicts>>,
     wires: std::sync::Arc<PreWires>,
+    /// The pre-move sheet's bare pin contacts and pin ends, read once.
+    taps: std::sync::Arc<PinKeys>,
+    pin_owners: std::sync::Arc<PinOwners>,
     /// Test switch: fold the moved sheet by weighing every wire.
     #[cfg(test)]
     full_scan_moves: bool,
@@ -287,6 +358,8 @@ impl MovePreview {
             base: Some(std::sync::Arc::new(base)),
             dots: transform::DotVerdicts::new(sheet).map(std::sync::Arc::new),
             wires: std::sync::Arc::new(PreWires::new(&sheet.wires)),
+            taps: std::sync::Arc::new(transform::bare_tap_keys(sheet)),
+            pin_owners: std::sync::Arc::new(transform::pin_owners(sheet)),
             #[cfg(test)]
             full_scan_moves: false,
             #[cfg(test)]
@@ -364,6 +437,8 @@ impl MovePreview {
         engine.preset_dots.clone_from(&self.dots);
         engine.preset_wires = Some(self.wires.clone());
         engine.preset_sheet = Some(self.sheet.clone());
+        engine.preset_taps = Some(self.taps.clone());
+        engine.preset_pin_owners = Some(self.pin_owners.clone());
         #[cfg(test)]
         {
             engine.full_scan_moves = self.full_scan_moves;
@@ -433,6 +508,12 @@ impl Engine {
             preset_dots: None,
             preset_wires: None,
             preset_sheet: None,
+            taps_before: None,
+            crossed_taps: Vec::new(),
+            derived_ids: derived_ids::DerivedIds::default(),
+            notices: Vec::new(),
+            preset_taps: None,
+            preset_pin_owners: None,
             #[cfg(test)]
             full_scan_moves: false,
             #[cfg(test)]
@@ -475,6 +556,12 @@ impl Engine {
             preset_dots: None,
             preset_wires: None,
             preset_sheet: None,
+            taps_before: None,
+            crossed_taps: Vec::new(),
+            derived_ids: derived_ids::DerivedIds::default(),
+            notices: Vec::new(),
+            preset_taps: None,
+            preset_pin_owners: None,
             #[cfg(test)]
             full_scan_moves: false,
             #[cfg(test)]
@@ -482,6 +569,12 @@ impl Engine {
             #[cfg(test)]
             full_scan_follow: false,
         })
+    }
+
+    /// Where the ids of the dots this engine derives (pin junctions) come
+    /// from: the host's source; the production v7 source until it is set.
+    pub fn set_id_source(&mut self, ids: Box<dyn signex_types::object_id::IdSource + Send + Sync>) {
+        self.derived_ids = derived_ids::DerivedIds::new(ids);
     }
 
     /// The pins the last commands could not keep connected (drained).
@@ -500,6 +593,15 @@ impl Engine {
             return Vec::new();
         }
         std::mem::take(&mut self.warnings)
+    }
+
+    /// Drain the typed notices raised since the last call, held and dropped
+    /// with a transaction as [`Self::take_warnings`]'s are.
+    pub fn take_notices(&mut self) -> Vec<EngineNotice> {
+        if self.transaction.is_some() {
+            return Vec::new();
+        }
+        std::mem::take(&mut self.notices)
     }
 
     pub fn save(&mut self) -> Result<(), EngineError> {
@@ -681,6 +783,18 @@ impl Engine {
         let mark = self.revision_mark();
         self.bump_revision();
         let before = self.pre_image(&cmd);
+        // The bare pin contacts the sheet holds now: an edit that can make a
+        // pin end touch a wire dots only the contacts it makes.
+        self.taps_before = if makes_pin_contacts(&cmd) {
+            let taps = self
+                .preset_taps
+                .clone()
+                .unwrap_or_else(|| std::sync::Arc::new(transform::bare_tap_keys(&self.document)));
+            Some(taps)
+        } else {
+            None
+        };
+        self.crossed_taps.clear();
 
         let result = match cmd {
             Command::ReplaceDocument { .. }
@@ -719,6 +833,7 @@ impl Engine {
             | Command::PlaceSheetPin { .. }
             | Command::PlaceWireSegment { .. }
             | Command::BreakWire { .. }
+            | Command::MoveWireEnd { .. }
             | Command::PlaceWireSegmentAsIs { .. }
             | Command::PlaceJunction { .. }
             | Command::PlaceNoConnect { .. }
@@ -740,19 +855,31 @@ impl Engine {
             | Command::SetSheetColor { .. }
             | Command::SetPageOrigin { .. }
             | Command::SetTitleBlockField { .. }
+            | Command::SetSheetVariable { .. }
             | Command::SetDocumentFontFamily { .. }
             | Command::SetNetColors { .. } => self.exec_structure(before, cmd),
             Command::ArrangeDrawings { .. } | Command::SetDrawingPlacement { .. } => {
                 self.exec_drawings(before, cmd)
             }
             Command::ResizeChildSheet { .. } => self.exec_resize_child_sheet(before, cmd),
-            Command::PlaceDirective { .. } | Command::UpdateDirective { .. } => {
-                self.exec_directives(before, cmd)
-            }
+            Command::PlaceDirective { .. }
+            | Command::UpdateDirective { .. }
+            | Command::SetNoErcRules { .. } => self.exec_directives(before, cmd),
             Command::AutoplaceFields { symbol_ids } => {
                 Ok(self.exec_autoplace_fields(before, &symbol_ids))
             }
         };
+        self.taps_before = None;
+        // A pin end the edit left bare where wires of two nets overlap: no dot
+        // merges two nets (2026-11-19), and the user is told which. A drag
+        // preview's throwaway engine shows no notice, so it names nothing.
+        let crossed = std::mem::take(&mut self.crossed_taps);
+        if self.preset_sheet.is_none()
+            && result.as_ref().is_ok_and(|done| done.changed)
+            && let Some(notice) = transform::crossed_taps_notice(&self.document, &crossed)
+        {
+            self.notices.push(notice);
+        }
         self.note_command_result(&result);
         if result.as_ref().is_ok_and(|done| !done.changed) {
             self.restore_revision(mark);
@@ -1055,6 +1182,7 @@ mod tests {
                         direction: "output".to_string(),
                     },
                 ],
+                renames: None,
             })
             .unwrap();
 
@@ -1110,6 +1238,7 @@ mod tests {
                     name: "SDA".to_string(),
                     direction: "output".to_string(),
                 }],
+                renames: None,
             })
             .unwrap();
 

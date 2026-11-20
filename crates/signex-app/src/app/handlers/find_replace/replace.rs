@@ -17,6 +17,10 @@ impl Signex {
             return Vec::new();
         };
         let find = &self.ui_state.find_replace;
+        // An invalid regex lists nothing, so it replaces nothing.
+        let Ok(query) = find.find_query() else {
+            return Vec::new();
+        };
         let active = self.document_state.active_path.as_deref();
         matches
             .into_iter()
@@ -24,7 +28,7 @@ impl Signex {
             // must not be applied to the wrong document.
             .filter(|hit| hit.sheet.as_deref() == active)
             .flat_map(|hit| {
-                replace_commands(engine.document(), &hit.hit, &find.query, &find.replacement)
+                replace_commands(engine.document(), &hit.hit, &query, &find.replacement)
             })
             .collect()
     }
@@ -63,15 +67,16 @@ impl Signex {
         if self.replace_on_board(None) {
             return Task::none();
         }
-        if self.ui_state.find_replace.matches.is_empty() {
+        // Only the rows whose include box is set (#2525); the rest stay.
+        let matches = self.ui_state.find_replace.included_matches();
+        if matches.is_empty() {
             return Task::none();
         }
         if self.ui_state.find_replace.scope == crate::find_replace::FindScope::Project {
-            let matches = self.ui_state.find_replace.matches.clone();
             return self.start_project_replace(matches);
         }
-        let commands =
-            self.active_sheet_replace_commands(self.ui_state.find_replace.matches.iter());
+        // One batch: the whole Replace All is one undo step.
+        let commands = self.active_sheet_replace_commands(matches.iter());
         self.apply_engine_commands(commands, true, true);
         self.refresh_find_matches()
     }

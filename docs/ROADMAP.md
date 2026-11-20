@@ -373,8 +373,8 @@ moved from Advanced Schematic to PCB Design.
 - **Signex names.** Plan text and the UI use Signex's own names: Object
   List, PDF Export, Export Job, Net Blanket and the Net Parameters
   directive. Harnesses keep the generic name.
-- **Dock panels.** The Object List, the compiled design view and the
-  Parameter Manager are dock panels.
+- **Dock panels.** The Object List and the compiled design view are dock
+  panels; the Parameter Manager stays a modal (Caner 2026-11-18).
 - **Rich notes.** Typst (Apache-2.0) is allowed as a dependency for rich
   text notes (#1114). A project carries a font (#1178) only when the
   font's licence permits redistribution.

@@ -1,5 +1,6 @@
 # Allowed workspace dependency edges (normal deps only).
 # Checked by scripts/check_arch_guard.sh. Add a line to add an edge.
+chrome-catalog -> signex-i18n
 chrome-catalog -> signex-types
 chrome-catalog -> signex-widgets
 pcb-geom -> signex-types
@@ -13,6 +14,7 @@ signex-app -> signex-drc-dsl
 signex-app -> signex-engine
 signex-app -> signex-erc
 signex-app -> signex-erc-dsl
+signex-app -> signex-expr
 signex-app -> signex-gfx
 signex-app -> signex-history
 signex-app -> signex-i18n
@@ -24,6 +26,7 @@ signex-app -> signex-req
 signex-app -> signex-sketch
 signex-app -> signex-types
 signex-app -> signex-widgets
+signex-bake -> signex-expr
 signex-bake -> signex-library
 signex-bake -> signex-sketch
 signex-bake -> signex-types
@@ -63,6 +66,8 @@ signex-renderer -> signex-mcad
 signex-renderer -> signex-types
 signex-req -> signex-bom
 signex-req -> signex-types
+signex-sketch -> signex-expr
 signex-sketch -> signex-types
+signex-types -> signex-expr
 signex-widgets -> signex-i18n
 signex-widgets -> signex-types

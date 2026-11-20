@@ -2,6 +2,7 @@
 //! added after the list in `lib.rs` reached the file-size cap. `ids`
 //! re-exports them, so callers write `ids::NAME` either way.
 
+mod assign_footprints;
 mod board_checks;
 mod board_output;
 mod board_panel;
@@ -34,8 +35,10 @@ mod project;
 mod properties;
 mod requirements;
 mod rules;
+mod sheet_sync;
 mod update_pcb;
 
+pub use assign_footprints::*;
 pub use board_checks::*;
 pub use board_output::*;
 pub use board_panel::*;
@@ -68,12 +71,14 @@ pub use project::*;
 pub use properties::*;
 pub use requirements::*;
 pub use rules::*;
+pub use sheet_sync::*;
 pub use update_pcb::*;
 
 /// Every id of every area list.
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
+        assign_footprints::ASSIGN_FOOTPRINTS,
         board_checks::BOARD_CHECKS,
         board_output::BOARD_OUTPUT,
         board_panel::BOARD_PANEL,
@@ -106,6 +111,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         properties::PROPERTIES,
         requirements::REQUIREMENTS,
         rules::RULES,
+        sheet_sync::SHEET_SYNC,
         update_pcb::UPDATE_PCB,
     ]
     .concat()

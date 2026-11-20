@@ -3,6 +3,7 @@
 //! `docs/FABRICATION_OUTPUTS.md`, "Test netlist".
 
 use pcb_geom::{PointNm, mm_to_nm, pad_world_rotation_deg};
+use signex_types::designator::{DesignatorStandard, stored_reference};
 use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard};
 use signex_types::pcb_layer::CopperLayer;
 
@@ -48,10 +49,15 @@ struct Record {
     covered: (bool, bool),
 }
 
+/// `standard` is the one `board`'s designators are shown under: the test
+/// netlist writes them stored (`CAA100`, not `-CAA100`), since the
+/// 6-character field would cut a signed one into another part's name
+/// (#1416).
 pub(crate) fn write_ipc356(
     board: &PcbBoard,
     stack: &CopperStack,
     name: &str,
+    standard: Option<DesignatorStandard>,
     skipped: &mut usize,
 ) -> String {
     let mut records = Vec::new();
@@ -65,7 +71,10 @@ pub(crate) fn write_ipc356(
         .flat_map(|fp| fp.pads.iter().map(move |pad| (fp, pad)));
     for (footprint, pad) in owned.chain(free) {
         match pad_record(board, footprint, pad, frame) {
-            Some(record) => records.push(record),
+            Some(mut record) => {
+                record.designator = stored_reference(standard, &record.designator).to_owned();
+                records.push(record);
+            }
             None => *skipped += 1,
         }
     }

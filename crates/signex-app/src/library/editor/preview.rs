@@ -77,7 +77,7 @@ pub(crate) fn pin_map_tab<'a>(
     read_only: bool,
 ) -> Element<'a, LibraryMessage> {
     let veil = super::read_only_veil(tokens);
-    scrollable(super::inert::unless_read_only_veiled(
+    scrollable(signex_widgets::inert::unless_read_only_veiled(
         read_only,
         veil,
         pin_map_subsection(state, tokens, i18n, address),

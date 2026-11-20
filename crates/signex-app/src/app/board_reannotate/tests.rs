@@ -19,6 +19,8 @@ fn state(renames: usize, problem: Option<ReannotateProblem>) -> BoardReannotateS
         },
         revision: 1,
         problem,
+        in_order: Vec::new(),
+        show_in_order: false,
     }
 }
 

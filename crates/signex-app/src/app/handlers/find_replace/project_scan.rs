@@ -19,7 +19,8 @@ use crate::find_replace::{FindMatch, FindReplaceMsg, ProjectScan};
 
 /// Everything the scan needs, captured from `update`.
 pub(super) struct ScanInputs {
-    pub(super) query: String,
+    /// The query under the dialog's match options (#2525).
+    pub(super) query: signex_engine::FindQuery,
     pub(super) open: OpenSheets,
     pub(super) pages: Vec<PathBuf>,
     pub(super) root: PathBuf,
@@ -127,12 +128,15 @@ impl Signex {
     /// Capture the scan's inputs from live state (memory only, no IO) and
     /// claim a new generation. `None` when there is nothing to search.
     fn begin_project_scan(&mut self) -> Option<(u64, ScanInputs)> {
-        let query = self.ui_state.find_replace.query.trim().to_string();
-        let inputs = self.capture_scan_inputs(&query);
+        // An invalid regex searches nothing; the field shows why (#2525).
+        let query = self.ui_state.find_replace.find_query().ok();
+        let inputs = query
+            .filter(|query| !query.is_empty())
+            .and_then(|query| self.capture_scan_inputs(query));
         let find = &mut self.ui_state.find_replace;
         find.scan_generation += 1;
         let generation = find.scan_generation;
-        let Some(inputs) = inputs.filter(|_| !query.is_empty()) else {
+        let Some(inputs) = inputs else {
             find.matches.clear();
             find.selected_index = None;
             find.scanning = false;
@@ -144,10 +148,13 @@ impl Signex {
 
     /// The project as the search sees it, captured from live state (memory
     /// only). `None` when there is no project root to search from.
-    pub(super) fn capture_scan_inputs(&self, query: &str) -> Option<ScanInputs> {
+    pub(super) fn capture_scan_inputs(
+        &self,
+        query: signex_engine::FindQuery,
+    ) -> Option<ScanInputs> {
         let ds = &self.document_state;
         Some(ScanInputs {
-            query: query.to_string(),
+            query,
             open: project_sheets::open_sheets_snapshot(ds),
             pages: project_sheets::declared_pages(ds),
             root: project_sheets::resolve_netlist_root(ds)?,

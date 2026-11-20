@@ -141,6 +141,12 @@ impl Signex {
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
             WindowMsg::WindowResizedFor(id, w, h) => {
+                // A minimised window reports 0x0: keep the last real size,
+                // so nothing is fitted or laid out against it, and the
+                // restore arrives as a resize to the size already stored.
+                if !UiState::is_real_window_size((w, h)) {
+                    return Task::none();
+                }
                 let settle = self.note_window_geometry_changed(id);
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
@@ -220,6 +226,7 @@ impl Signex {
                 }
                 let mut layout_persist = Task::none();
                 let mut quit_answer = Task::none();
+                let mut annotate_close = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
@@ -231,7 +238,10 @@ impl Signex {
                     use super::state::{ModalId, WindowKind};
                     match kind {
                         WindowKind::DetachedModal(modal) => match modal {
-                            ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
+                            // The dialog's own close: its confirms go with it.
+                            ModalId::AnnotateDialog => {
+                                annotate_close = self.handle_close_annotate_dialog();
+                            }
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
@@ -396,7 +406,7 @@ impl Signex {
                         WindowKind::ComponentEditor { .. } => {}
                     }
                 }
-                Task::batch([layout_persist, quit_answer])
+                Task::batch([layout_persist, quit_answer, annotate_close])
             }
             WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
             WindowMsg::DetachedModalOpened { modal, id } => {
@@ -433,6 +443,7 @@ impl Signex {
                 // foreground grab from a background process).
                 Task::batch([
                     self.focus_new_project_name_once_open(modal),
+                    self.focus_move_selection_dx_once_open(modal),
                     crate::chrome::apply_rounded_corners::<Message>(id),
                     iced::window::gain_focus(id),
                     window_scale_task(id),
@@ -519,10 +530,15 @@ impl Signex {
                 // `Level::Normal` open-behind issue as the modal/tab.
                 Task::batch([iced::window::gain_focus(id), window_scale_task(id)])
             }
-            WindowMsg::StartMainWindowDrag => match self.ui_state.main_window_id {
-                Some(id) => crate::chrome::start_window_drag(id),
-                None => Task::none(),
-            },
+            WindowMsg::StartMainWindowDrag => {
+                // Title-bar drag diagnosis: the press reached a drag zone.
+                let window = self.ui_state.main_window_id;
+                tracing::debug!(?window, "title bar: drag zone pressed");
+                match window {
+                    Some(id) => crate::chrome::start_window_drag(id),
+                    None => Task::none(),
+                }
+            }
             WindowMsg::StartMainWindowResize(direction) => match self.ui_state.main_window_id {
                 Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),
@@ -596,110 +612,6 @@ impl Signex {
                 } else {
                     iced::window::close(id)
                 }
-            }
-        }
-    }
-
-    /// Per-net colour override + F5-palette handler (namespaced family,
-    /// ADR-0001 D3).
-    pub(crate) fn dispatch_net_color_message(&mut self, msg: NetColorMsg) -> Task<Message> {
-        match msg {
-            NetColorMsg::Open => {
-                self.ui_state.net_color_palette_open = true;
-                self.handle_detach_modal(super::state::ModalId::NetColorPalette)
-            }
-            NetColorMsg::Close => {
-                self.ui_state.net_color_palette_open = false;
-                self.close_detached_modal(super::state::ModalId::NetColorPalette)
-            }
-            NetColorMsg::Set { net, color } => {
-                if let Some(c) = color {
-                    self.ui_state.net_colors.insert(net, c);
-                } else {
-                    self.ui_state.net_colors.remove(&net);
-                }
-                for canvas in self.interaction_state.all_schematic_canvases_mut() {
-                    canvas.clear_content_cache();
-                }
-                Task::none()
-            }
-            NetColorMsg::CustomShow(show) => {
-                self.ui_state.net_color_custom.show = show;
-                Task::none()
-            }
-            NetColorMsg::CustomDraft(c) => {
-                self.ui_state.net_color_custom.draft = c;
-                Task::none()
-            }
-            NetColorMsg::CustomSubmit(c) => {
-                self.ui_state.net_color_custom.show = false;
-                self.ui_state.net_color_custom.draft = c;
-                let color = signex_types::theme::Color {
-                    r: (c.r * 255.0).round() as u8,
-                    g: (c.g * 255.0).round() as u8,
-                    b: (c.b * 255.0).round() as u8,
-                    a: 255,
-                };
-                self.cancel_placement_session();
-                self.ui_state.pending_net_color = Some(color);
-                self.interaction_state.active_canvas_mut().pending_net_color = Some(color);
-                Task::none()
-            }
-            NetColorMsg::CustomChannel(chan, s) => {
-                // Parse as u8: values above 255 (however large) clamp to
-                // 255. Input that does not parse (e.g. the empty string
-                // while the user types) keeps the channel's previous value,
-                // so the text_input never rejects an intermediate value and
-                // a half-typed edit never zeroes the channel.
-                let Ok(parsed) = s.trim().parse::<u64>() else {
-                    return Task::none();
-                };
-                let parsed = parsed.min(255) as u8;
-                let draft = &mut self.ui_state.net_color_custom.draft;
-                let v = parsed as f32 / 255.0;
-                match chan {
-                    super::contracts::Channel::R => draft.r = v,
-                    super::contracts::Channel::G => draft.g = v,
-                    super::contracts::Channel::B => draft.b = v,
-                }
-                Task::none()
-            }
-        }
-    }
-
-    /// Parameter Manager dialog handler (namespaced family, ADR-0001 D3).
-    pub(crate) fn dispatch_parameter_manager_message(
-        &mut self,
-        msg: ParameterManagerMsg,
-    ) -> Task<Message> {
-        match msg {
-            ParameterManagerMsg::Open => {
-                // Already open: keep the filter and the half-typed column name.
-                if !self.ui_state.parameter_manager_open {
-                    self.ui_state.parameter_table = Default::default();
-                }
-                self.ui_state.parameter_manager_open = true;
-                self.handle_detach_modal(super::state::ModalId::ParameterManager)
-            }
-            ParameterManagerMsg::Close => self.close_parameter_manager(),
-            ParameterManagerMsg::Edit {
-                symbol_uuid,
-                key,
-                value,
-            } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
-            ParameterManagerMsg::CellSubmitted => {
-                self.end_parameter_edit_runs();
-                Task::none()
-            }
-            ParameterManagerMsg::ParameterRemoved { key } => self.handle_parameter_removed(&key),
-            ParameterManagerMsg::NewKeyChanged(key) => {
-                self.ui_state.parameter_table.new_key = key;
-                Task::none()
-            }
-            ParameterManagerMsg::ColumnAdded => self.handle_parameter_column_added(),
-            ParameterManagerMsg::FilterChanged(filter) => {
-                self.ui_state.parameter_table.filter = filter;
-                Task::none()
             }
         }
     }

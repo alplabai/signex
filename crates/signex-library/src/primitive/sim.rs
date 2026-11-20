@@ -9,9 +9,18 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 use uuid::Uuid;
 
 const SIM_FILE_FORMAT_TOKEN: &str = "snxsim/v1";
+
+/// `.snxsim` version policy: one version, written on every save.
+const SIM_FILE_VERSION: FormatVersion = FormatVersion {
+    current: SIM_FILE_FORMAT_TOKEN,
+    readable: &[SIM_FILE_FORMAT_TOKEN],
+    newer_minor: NewerMinor::Refused,
+    missing: MissingToken::Refused,
+};
 
 /// Sentinel string substituted for each model's `body` field before
 /// TOML serialise; replaced post-emit with the literal multi-line
@@ -109,7 +118,8 @@ fn default_sim_format() -> String {
 
 #[derive(Serialize, Deserialize)]
 struct SimFileWire {
-    format: String,
+    #[serde(default)]
+    format: Option<String>,
     file_uuid: Uuid,
     #[serde(default)]
     display_name: String,
@@ -160,13 +170,11 @@ impl SimFile {
         Self::from_toml_str(text)
     }
 
-    /// Parse the TOML wire format. Format-token mismatch surfaces
-    /// [`SimFileError::UnsupportedFormat`].
+    /// Parse the TOML wire format. A token [`SIM_FILE_VERSION`] refuses
+    /// surfaces [`SimFileError::UnsupportedFormat`].
     pub fn from_toml_str(text: &str) -> Result<Self, SimFileError> {
         let wire: SimFileWire = toml::from_str(text)?;
-        if wire.format != SIM_FILE_FORMAT_TOKEN {
-            return Err(SimFileError::UnsupportedFormat { got: wire.format });
-        }
+        let format = SIM_FILE_VERSION.read(wire.format.as_deref())?;
         let models = wire
             .models
             .into_iter()
@@ -183,7 +191,7 @@ impl SimFile {
             })
             .collect();
         Ok(SimFile {
-            format: wire.format,
+            format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
             created: wire.created,
@@ -224,7 +232,7 @@ impl SimFile {
             });
         }
         let wire = SimFileWire {
-            format: self.format.clone(),
+            format: Some(SIM_FILE_FORMAT_TOKEN.to_string()),
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
             created: self.created,
@@ -259,8 +267,8 @@ pub enum SimFileError {
     TomlDeserialize(#[from] toml::de::Error),
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
-    #[error("unsupported .snxsim format token {got:?}; this build supports \"snxsim/v1\"")]
-    UnsupportedFormat { got: String },
+    #[error(".snxsim {0}")]
+    UnsupportedFormat(#[from] signex_types::format_version::FormatVersionError),
     #[error(
         "model[{model_index}].body contains the literal triple-quote sequence '''; \
          the literal multi-line string envelope cannot escape it"
@@ -408,8 +416,8 @@ mod tests {
             updated = "2026-05-04T00:00:00Z"
         "#;
         match SimFile::from_toml_str(bad) {
-            Err(SimFileError::UnsupportedFormat { got }) => {
-                assert_eq!(got, "snxsim/v99");
+            Err(SimFileError::UnsupportedFormat(reason)) => {
+                assert_eq!(reason.found(), Some("snxsim/v99"));
             }
             other => panic!("expected UnsupportedFormat, got {other:?}"),
         }

@@ -150,6 +150,10 @@ mod parameter_manager_open;
 #[path = "regression/parameter_manager_table.rs"]
 mod parameter_manager_table;
 
+// #1784 - Revert changes undoes the Parameter Manager session as one step.
+#[path = "regression/parameter_manager_revert.rs"]
+mod parameter_manager_revert;
+
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
@@ -684,6 +688,8 @@ mod sheet_frame_canvas;
 mod planned_tools;
 
 // #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/page_tab_titles.rs"]
+mod page_tab_titles;
 #[path = "regression/project_parameters.rs"]
 mod project_parameters;
 #[path = "regression/project_tab.rs"]
@@ -694,13 +700,51 @@ mod project_tab_rename;
 mod project_tab_saves;
 #[path = "regression/project_tab_support.rs"]
 mod project_tab_support;
+#[path = "regression/sheet_variables.rs"]
+mod sheet_variables;
 
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
 
+#[path = "regression/paste_array_count_up.rs"]
+mod paste_array_count_up;
+
+#[path = "regression/net_color_palette_clear_all.rs"]
+mod net_color_palette_clear_all;
+
+#[path = "regression/placement_pause_esc.rs"]
+mod placement_pause_esc;
+
+#[path = "regression/annotate_graphite.rs"]
+mod annotate_graphite;
+#[path = "regression/erc_dialog_graphite.rs"]
+mod erc_dialog_graphite;
+#[path = "regression/setup_profile_cards.rs"]
+mod setup_profile_cards;
+#[path = "regression/sketch_host.rs"]
+mod sketch_host;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/validation_panels_graphite.rs"]
+mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #2525 — Find and Replace: Whole word renames only the exact net.
+#[path = "regression/find_replace_whole_word.rs"]
+mod find_replace_whole_word;
+
+// Move Selection offsets are typed in the display unit.
+#[path = "regression/move_selection_unit.rs"]
+mod move_selection_unit;
+
+// Graphite #78 / #80 - Number Schematic Sheets greys Apply on a clash, gap
+// or high number; Assign Footprints filter chips, ticked bar and reason pills.
+#[path = "regression/sheet_tools_graphite.rs"]
+mod sheet_tools_graphite;
+
+// #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
+#[path = "regression/board_sync_graphite.rs"]
+mod board_sync_graphite;

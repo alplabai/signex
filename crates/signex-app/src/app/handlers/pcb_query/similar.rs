@@ -39,7 +39,9 @@ impl Signex {
         }
         let label = similar::describe(board, seed);
         let origin = self.active_tab_path();
-        self.ui_state.find_similar = Some(FindSimilarState::new(label, values, origin).on_board());
+        self.ui_state.find_similar = Some(Box::new(
+            FindSimilarState::new(label, values, origin).on_board(),
+        ));
     }
 
     /// OK on a board: select what the criteria match and close the dialog.

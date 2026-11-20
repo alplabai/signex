@@ -31,6 +31,12 @@ impl Signex {
                 .recovery
                 .as_ref()
                 .map(crate::library::recovery::title),
+            // The reset confirm is titled after the reset asked for (#76).
+            ModalId::AnnotateResetConfirm => Some(
+                self.ui_state
+                    .i18n
+                    .message_plain(self.ui_state.annotate_session.reset_title(), &[]),
+            ),
             _ => None,
         }
         .unwrap_or_else(|| {
@@ -51,6 +57,10 @@ impl Signex {
                 |p| p.data.name.clone(),
             )),
             ModalId::BomPreview => Some(i18n.message_plain(ids::DIALOG_SUBTITLE_BOM, &[])),
+            ModalId::ParameterManager => self.parameter_manager_subtitle(),
+            ModalId::MoveSelection => Some(self.move_selection_subtitle()),
+            ModalId::NetColorPalette => Some(self.net_color_palette_subtitle()),
+            ModalId::NetColorCustom => self.ui_state.net_color_custom.net.clone(),
             _ => None,
         }
     }

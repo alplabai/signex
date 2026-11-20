@@ -38,6 +38,19 @@ through via (top to bottom copper) with the board's via size
 the active copper layer; with a non-copper layer active the tool says so and
 draws nothing.
 
+Board tools draw on the active layer (maintainer 2026-11-18). While one is
+armed the status bar says how to use it, that Tab paused it, that it needs
+another kind of layer, or why the last click added nothing; Messages keeps
+the same lines. Arming a tool with a form brings Properties to the front on
+what the next click places; the canvas keeps the keyboard, so a Properties
+window of its own is left where it is.
+
+- A run started on netted copper that does not reach the active copper
+  layer (a surface pad on Top with an inner layer active) takes that
+  copper's net and starts with a via there (the via of a layer change, in
+  the same undo step as the first legs). A pad that reaches the active
+  layer (through-hole) starts directly. A leg ending on such a pad ends
+  with a via there, in the same step.
 - The first click starts the run on the net of the copper under it. A run
   started over bare board takes the net of the copper its next point lands
   on.
@@ -65,7 +78,21 @@ clearance the design rules ask from other nets' copper (#2389).
 
 - **Start.** The first click starts the route on the net of the copper under
   it (a pad or a track end), or no net over bare board, which then takes the
-  net of the copper its next point lands on.
+  net of the copper its next point lands on. Copper that does not reach the
+  active layer (a surface pad on Top with an inner layer active) gives the
+  route its net and a via there with the first leg, as for a Track run
+  (`signex_engine::pcb::route::copper_under`). Quick Route starts the same
+  way.
+- **Ends.** A leg aimed at a pad of another net is refused; the status bar
+  and Messages name the pad and both nets ("U1.1 is on net B, the route is
+  on net A"). A route that ends on a pad of no net connects: when it lands
+  the pad joins the route's net, locked as a connection made on the board,
+  in the same undo step; the status bar says "U1.1 joined net A", and
+  Update PCB lists the pad as keeping a net set on the board
+  (`signex_engine::pcb::route::pad_end`, `join_pads`). A leg ending on a
+  pad that does not reach its layer (a Top pad while routing on an inner
+  layer) ends with a via there, checked like a layer change's via. Track
+  runs end on such a pad with a via too.
 - **Rules.** The route reads the rules the Design Rule Check of this board
   reads (`DrcRules`, the same project layers and net classes, compiled once
   when the route starts): the clearance between each pair of items
@@ -88,7 +115,10 @@ clearance the design rules ask from other nets' copper (#2389).
   depends on (the pointer's grid point, a leg, the board revision, the
   corner rule, the mode, the layer), not per repaint, with a smaller search
   budget than a click (`PREVIEW_BUDGET`); a leg the preview gives up on
-  still routes on the click.
+  still routes on the click. A leg with no way, or aimed at a pad it may
+  not end on, is drawn straight to the pointer in the DRC error colour
+  instead of vanishing, and the status bar says why. The route on the cursor is drawn at the full
+  colour of its layer, never dimmed.
 - **Push and shove.** `cycle_route_mode` (the palette; no default key)
   switches between walking around (the default) and pushing. In push mode
   the rule's legs go straight to the point and other nets' tracks in the
@@ -132,10 +162,17 @@ clearance the design rules ask from other nets' copper (#2389).
 ### Router soak and bench
 
 `signex-engine`'s `tests/routing/` measures the router against its quality
-bar (#2482, #2483) on every board it finds: a synthetic board, the realistic
-corpus boards (`signex-types/tests/corpus/pcb/real/`) and, once it is in,
-the routing corpus (`testdata/routing-corpus/*.snxpcb`, net classes from the
-`.snxprj` beside each board).
+bar (#2482, #2483) on a synthetic board, the realistic corpus boards
+(`signex-types/tests/corpus/pcb/real/`) and the routing corpus
+(`testdata/routing-corpus/*.snxpcb`, net classes from the `.snxprj` beside
+each board). The routing corpus (#2481) is 50 third-party boards under
+their own licences, listed in `testdata/routing-corpus/MANIFEST.tsv` and
+checked by `scripts/check_routing_corpus.sh`; its README says what the
+licences allow. The boards are stored in Git LFS: in a clone without the
+LFS objects each board is a pointer file, and the tests skip it with a
+message (`git lfs pull` fetches them). With
+`SIGNEX_REQUIRE_ROUTING_CORPUS=1` the load check fails on a pointer or an
+empty corpus instead.
 
 - **Soak.** A seeded driver applies random actions through `BoardEngine`:
   routes and shoves (one or two legs from a ratsnest line or a pad, landed
@@ -162,14 +199,22 @@ the routing corpus (`testdata/routing-corpus/*.snxpcb`, net classes from the
   landed step, and the DRC delta: every design rule check finding a route
   adds, other than an unrouted link, names the route's own tracks or vias.
 - **Runs.** `cargo test -p signex-engine --test routing` runs a short soak
-  and bench with every test run (DRC delta and convergence asserted). The
-  scheduled `routing-soak` workflow runs the ignored `soak_long` (10 000
-  actions per board) and `bench_thresholds` (shoves converged within 8 rounds on 95%
+  and bench with every test run (DRC delta and convergence asserted) on the
+  fixed boards only: routing a corpus board in the debug test profile takes
+  too long for per-PR CI. Per PR the routing corpus is checked by loading
+  alone (`tests/routing/corpus_check.rs`): every board parses, names only
+  layers this build knows (copper items on copper), and no track end lands
+  on another net's pad once the pads are placed. The scheduled `routing-soak` workflow runs the ignored
+  `soak_long` (10 000 actions on every board) and `bench_thresholds` (shoves converged within 8 rounds on 95%
   of actions; median latency at most 16 ms and p95 at most 33 ms on the
   median board by copper count) in release; a failed night opens or
   comments on the issue "Nightly routing soak is failing". `SIGNEX_SOAK_SEED`,
   `SIGNEX_SOAK_ACTIONS` and `SIGNEX_SOAK_BOARD` pick the seed, the length
-  and one board.
+  and one board (looked up in the whole corpus, also by the short runs).
+  `routing-soak` checks out the LFS objects. `test · workspace` fetches
+  them from a `.git/lfs` cache keyed on the boards' object ids, and sets
+  `SIGNEX_REQUIRE_ROUTING_CORPUS=1`, on pushes, the merge queue and on a PR
+  that changes the corpus, `signex-types`, `pcb-geom` or the routing tests.
 
 ## Differential Pair Routing and Multi-Route
 
@@ -183,11 +228,13 @@ the active copper layer as one route (#2389).
   when the net's class sets a differential-pair gap and holds exactly two
   of the board's nets, the other one (the first by name is the positive).
   Multi-Route takes the nets of the selected tracks, pads and vias, two or
-  more. A net in no pair, no selection or a net with no copper on the layer
-  starts nothing, and the Messages panel says why.
+  more. A net in no pair, no selection or a net with no copper on any
+  layer starts nothing, and the Messages panel says why.
 - **Start.** Each net starts at its own copper nearest the first click (a
   pad centre, a track end or a via); the route's centre line starts in the
-  middle of those points.
+  middle of those points. A net with no copper on the active layer starts
+  from its copper on the topmost layer that has some, with a via there
+  (maintainer 2026-11-18); the vias land with the tracks.
 - **Width and gap.** The width is the first net's route width (as
   Interactive Routing's). A pair takes its class's differential-pair width
   and gap where they are set; the gap between neighbours is never under the
@@ -256,13 +303,16 @@ Coupled (both nets at once) pair meanders are not done yet.
 
 `place_board_fill` (`P F`) and `place_board_region` (`P R`). Both add solid
 copper on the active copper layer, stored as a zone (`fill_type = "solid"`)
-on the net of the copper under its first point, or no net. With a
-non-copper layer active the tool says so and draws nothing.
+on the net set in Properties (Tab), else the net of the copper under its
+first corner on copper, or no net. With a non-copper layer active the tool
+says so and draws nothing.
 
 - **Fill:** the first click is one corner, the second the opposite corner of
   the rectangle.
-- **Solid Region:** each click adds a corner. A click on the first corner,
-  or a right-click once there are three, closes it; Esc drops it.
+- **Solid Region:** each click adds a corner. A click on the first corner
+  (or within half a grid step of it), a double-click, or a right-click once
+  there are three, closes it; Esc drops it. Polygon Pour and Keepout close
+  the same way.
 - A shape whose corners are on one line has no area (checked in integer nm)
   and is not added; the Messages panel says so.
 
@@ -284,8 +334,12 @@ keepout zone's id.
 ## Polygon Pour
 
 `place_board_polygon_pour` (`P G`, #2216). Drawn like a Solid Region, on the
-active copper layer, on the net of the copper under its first corner, or no
-net. With a non-copper layer active the tool says so and draws nothing. It is
+active copper layer, on the net set in Properties (Tab), else the net of the
+copper under its first corner on copper, or no net; a pour placed with no
+net says so in the status bar and Messages. A pour with no fill (on no
+copper layer, an outline or clearance the geometry cannot hold) says why in
+Messages when placed and in its Properties (`pcb_geom::Unfilled`). With a
+non-copper layer active the tool says so and draws nothing. It is
 stored as a zone with `fill_type = "pour"` and `clearance = 0`, which follows
 the board's clearance (`Zone::pour_clearance_mm`: the zone's own clearance
 when above 0, else `PcbSetup::clearance`, else 0.2 mm).
@@ -620,27 +674,47 @@ value=<v>` with `field` one of `x`, `y` (from the board origin, Y up),
 `rotation`, `height` and `justify` (`left`, `center`, `right`). Rules:
 `docs/RENDERING_RULES.md`, "pcb-footprint-text".
 
+## Layer tabs
+
+The strip under the board has a tab for every layer the Layers panel shows
+that is not hidden, in the panel's order: the copper top to bottom, each
+component pair's top then bottom layer, Board Outline, Margin, Dimensions,
+Notes, ECO 1 and 2, Drill Drawing, the board's mechanical layers, then
+Multi-Layer while it is shown (2026-11-18). Hiding a layer, by its eye in the
+panel or its tab's Hide row, takes its tab away; Show layers ▸ or the eye
+brings it back. The strip scrolls sideways when the tabs do not fit. A tab's
+swatch is the layer's colour on this board.
+
 ## Layer tab menu
 
 A right-click on a layer tab under the board opens its menu (#2379, #2394):
 
 - Hide <layer>, Highlight <layer> (every other layer is drawn dimmed;
-  picking it again ends the highlight), Show only this layer and Show all
-  layers. Show only this layer makes the layer active and hides every other
-  layer the Layers panel lists; the board outline and the Multi-Layer row
-  keep their state, as in single-layer mode.
-- Hide layers ▸ and Show layers ▸, one row per kind: signal, plane, overlay,
-  mask (solder mask and adhesive), paste, mechanical (board outline,
-  documentation and mechanical layers) and all.
+  picking it again ends the highlight).
+- Layer colour..., Reset layer colour and Reset all layer colours
+  (2026-11-18). Layer colour... opens the Layers panel on Layers & Colors with
+  that layer's colours open under its row; it is greyed for the keep-out and
+  mechanical layers, which have no colour row yet. A colour is saved with the
+  board (`[board_options.layer_colors]`, `docs/PCB_BOARD_OPTIONS.md`), one
+  undo step; the resets are greyed while there is nothing to reset.
+- Show only this layer and Show all layers. Show only this layer makes the
+  layer active and hides every other layer the Layers panel lists; the board
+  outline and the Multi-Layer row keep their state, as in single-layer mode.
+- Hide layers ▸ and Show layers ▸: per kind (signal, plane, silkscreen, mask
+  (solder mask and adhesive), paste, mechanical (board outline,
+  documentation and mechanical layers)) a row for the whole kind, then the
+  layers of that kind the row would change, one by one: the shown ones under
+  Hide, the hidden ones under Show. All layers ends the list.
 - Layer stack... runs `board_layer_stack` (#2401) from the window the menu
   was opened in and is greyed exactly when that command is. Drill symbols...
   and Layer drawing order... are greyed with the reason as their hover text:
   neither editor exists yet.
 - Short, Medium and Long tab names and Show layer numbers. Short names are
-  `TL`, `BL`, `M1` (Mid-Layer 1), `TO`, `BS` and so on; Medium names are
-  `Top`, `Bottom`, `Mid 1`, and a technical layer keeps its long name. A
-  number goes in front: a copper layer's place in the stack (1 is the top),
-  a mechanical layer's index; technical layers have none.
+  `TL`, `BL`, `M1` (Mid-Layer 1), `TO` (Top Silkscreen), `TS` (Top Solder)
+  and so on; Medium names are `Top`, `Bottom`, `Mid 1`, and a technical layer
+  keeps its long name. A number goes in front: a copper layer's place in the
+  stack (1 is the top), a mechanical layer's index; technical layers have
+  none.
 - Flip board view: the board seen from below. The view is mirrored left to
   right (the turn of the view, #2316, still applies on top), board text
   reads mirrored, a box selection keeps its left-to-right and right-to-left
@@ -648,9 +722,25 @@ A right-click on a layer tab under the board opens its menu (#2379, #2394):
   drawn over the copper nearer the top. The active or highlighted layer still
   draws last.
 
-The rows change the view of the board in the window the menu was opened in,
-never the board file. The tab names are per user (`prefs.json`,
-`pcb_layer_strip`); the flip is the board view's, for the session.
+The rows change the view of the board in the window the menu was opened in;
+only the colour rows change the board file. The tab names are per user
+(`prefs.json`, `pcb_layer_strip`); the flip is the board view's, for the
+session.
+
+## Board canvas menu
+
+A right-click on the board opens a menu that follows what is under the
+pointer (2026-11-18). On an empty area with nothing selected: Find, Place ▸,
+Undo, Redo, Paste, Paste Special, Select All, Board Sketch, the reuse block
+Place rows and Toggle Ratsnest. On an object, or with a selection, Find
+Similar Objects and the rows that act on it follow: with a selection Align ▸,
+Cut, Copy, Duplicate, Move Selection, the turns and mirrors, Save as Reuse
+Block, Delete, Board Shape and Keepout from Selection; Change Footprint, Swap
+Pins, Swap Gates and Arrange in Box only with a footprint selected; Lock,
+Unlock, Gloss Selected Routes and Add Teardrops only with a track or via
+selected; Select Net and Highlight Net only when the selection or the object
+under the pointer has a net; Cross Probe and Properties. Each row runs its
+catalog command and is live by that command's own rule.
 
 ## Layer sets
 
@@ -675,7 +765,9 @@ Every row is also a catalog command with typed operands: `show_layer_set`,
 `show_layer_group` name their board with `document` and are on the agent
 channel; `delete_layer_set` and `set_layer_tab_names` change per-user
 settings and name no board; `toggle_layer_numbers` and `flip_board_view` are
-View menu rows. See `docs/COMMANDS.md`.
+View menu rows; `edit_layer_color` opens the colour picker of the active
+layer and `reset_layer_colors` gives every layer the palette colour again
+(`set_layer_color` sets one, saved with the board). See `docs/COMMANDS.md`.
 
 ## Board view configuration
 
@@ -697,7 +789,7 @@ which keeps the rows whose name holds the text, and two tabs.
 - Component Layer Pairs: Top | Layer | Bottom, an eye and a colour chip per
   side. The rows map onto the named technical layers: 3D Body, Assembly,
   Component Outline (the fabrication layers), Courtyard, Designator,
-  Overlay (silkscreen), Paste, Solder (solder mask), Adhesive, Fiducial and
+  Silkscreen, Paste, Solder (solder mask), Adhesive, Fiducial and
   Keep-Out. Coating, Component Center, Tenting and Value have no layer and
   are greyed.
 - Other Technical Layers: Board Outline, Margin, Dimensions, Notes, ECO 1
@@ -758,8 +850,8 @@ as on a sheet (#2403). The numbers and matches come from the domain crates
 - **Find Similar Objects** (`find_similar_objects`): the seed is the object
   under the cursor, else the one selected; the dialog lists its properties
   (kind, value, footprint, designator prefix, layer, width, size, drill, pad
-  shape, net) and OK selects every object of the board that matches the ones
-  set to Same.
+  shape, net) and Select N selects every object of the board that matches
+  the ones set to Same; the button counts them.
 - **Select Net** and **Highlight Net** (`select_board_net`,
   `highlight_board_net`): the net `net=<name>` names, else the net of the
   selection or of what is under the cursor. Select puts its tracks, vias,

@@ -14,12 +14,13 @@ placeholder-profile-name = Profile name
 
 ## Project tab
 placeholder-project-parameter-name = Name
+placeholder-sheet-variable-name = New variable name
 placeholder-project-description = Description
 
 ## Parameter Manager
 placeholder-parameter-manager-filter = Filter rows
 # The name of a parameter column to add.
-placeholder-parameter-manager-new-key = New parameter
+placeholder-parameter-manager-new-key = New parameter name
 
 ## Dialogs
 # Move Selection: an offset in millimetres.

@@ -151,6 +151,25 @@ name = "X"
     assert!(matches!(err, LibraryFileError::UnsupportedFormat { .. }));
 }
 
+/// #2207: a newer token is refused naming it, and a file without a token is
+/// refused rather than read as some version.
+#[test]
+fn parse_refuses_a_newer_or_missing_format_token() {
+    let body = "library_id = \"0192a8c0-0000-7000-8000-000000000000\"\n\n[library]\nname = \"X\"\n";
+    let current = LibraryFile::parse(&format!("format = \"{FORMAT_TOKEN}\"\n{body}")).unwrap();
+    assert_eq!(current.manifest.format, FORMAT_TOKEN);
+    let err = LibraryFile::parse(&format!("format = \"snxlib/3\"\n{body}")).unwrap_err();
+    let message = err.to_string();
+    assert!(
+        message.contains("snxlib/3") && message.contains("newer Signex"),
+        "{message}"
+    );
+    match LibraryFile::parse(body) {
+        Err(LibraryFileError::UnsupportedFormat(reason)) => assert_eq!(reason.found(), None),
+        other => panic!("expected UnsupportedFormat, got {other:?}"),
+    }
+}
+
 #[test]
 fn parse_rejects_duplicate_columns() {
     let s = r#"format = "snxlib/2"

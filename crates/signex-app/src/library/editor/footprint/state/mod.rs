@@ -34,6 +34,7 @@ pub mod pad;
 pub mod placement;
 pub mod selection;
 pub mod selection_filter;
+mod selection_filter_draft;
 pub mod silk_selection;
 pub mod snap_options;
 pub mod tool;
@@ -299,9 +300,12 @@ pub struct FootprintEditorState {
     /// The zoom pill's last `-` / `+` click, applied once by the canvas.
     pub zoom_request: ZoomRequest,
     /// Set when this editor edits a board sketch (#2234): the board drawn
-    /// under the sketch. The Active Bar then offers the sketch tools only,
-    /// and the footprint bake is off (the board bakes on commit).
+    /// under the sketch. Which host the editor serves is read through
+    /// `sketch_host()` (#2518), never from this field directly.
     pub board_backdrop: Option<std::sync::Arc<BoardBackdrop>>,
+    /// The sketch mode exit set: bake preview, discard confirmation and
+    /// the footprint as sketch mode found it (#2518).
+    pub sketch_exit: super::sketch_mode::SketchExit,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -416,6 +420,7 @@ impl FootprintEditorState {
             fit_pending: false,
             zoom_request: ZoomRequest::default(),
             board_backdrop: None,
+            sketch_exit: Default::default(),
         }
     }
 

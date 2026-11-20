@@ -190,6 +190,16 @@ pub struct UiState {
     pub net_hover_enabled: bool,
     /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
     pub preferences_draft_net_hover_enabled: bool,
+    /// Saved "Fill symbol bodies" preference: the body shapes a symbol
+    /// leaves unfilled draw filled, in the theme tint unless the user chose
+    /// a colour. On by default.
+    pub symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// Draft mirror of [`Self::symbol_body_fill`] for the Preferences dialog.
+    pub preferences_draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// The fill colour field's preset palette is open (view state only).
+    pub preferences_body_fill_palette_open: bool,
+    /// The fill colour field's custom colour picker is open (view state only).
+    pub preferences_body_fill_picker_open: bool,
     /// Saved "Two-finger scroll pans" preference: a trackpad scroll (pixel
     /// deltas) pans the canvas instead of zooming. Pinch and Ctrl/Cmd+scroll
     /// still zoom. Off by default.
@@ -473,6 +483,11 @@ pub struct UiState {
     /// Generation of the newest Number Schematic Sheets read. Outside the
     /// dialog's state so a reopened dialog never takes an older read.
     pub sheet_numbering_reads: u64,
+    /// The Synchronize Sheet Entries and Ports dialog, while open (#1276);
+    /// boxed so the closed dialog costs one pointer (#2412).
+    pub sheet_sync: Option<Box<crate::app::SheetSyncState>>,
+    /// Generation of the newest sync dialog read, as `sheet_numbering_reads`.
+    pub sheet_sync_reads: u64,
     /// Tools ▸ Re-Annotate Board (#1312), while open. Execute is one board
     /// undo step; nothing is written to disk.
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
@@ -491,28 +506,34 @@ pub struct UiState {
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
     pub back_annotate: Option<Box<crate::app::BackAnnotateState>>,
-    /// The Find Similar Objects dialog, while open (#1257).
-    pub find_similar: Option<crate::find_similar::FindSimilarState>,
+    /// The Find Similar Objects dialog, while open (#1257); boxed so the
+    /// closed dialog costs one pointer (#2412).
+    pub find_similar: Option<Box<crate::find_similar::FindSimilarState>>,
     /// Token of the newest Find Similar project search. Lives outside the
     /// dialog state so a reopened dialog never reuses an old token.
     pub find_similar_generation: u64,
     /// The Tools ▸ Assign Footprints dialog, while open (#2248). Apply
-    /// changes the open sheets in memory; the user saves.
-    pub assign_footprints: Option<crate::app::AssignFootprintsState>,
+    /// changes the open sheets in memory; the user saves. Boxed: a closed
+    /// dialog costs one pointer (#2412).
+    pub assign_footprints: Option<Box<crate::app::AssignFootprintsState>>,
     /// Generation of the newest Assign Footprints read. Outside the dialog's
     /// state so a reopened dialog never takes an older read.
     pub assign_footprints_reads: u64,
     /// The Net Inspector panel's filter and expanded nets (#1269).
     pub net_inspector: crate::panels::NetInspectorState,
-    /// The open Paste Array dialog (#1264).
-    pub paste_array: Option<crate::paste_array::PasteArrayState>,
+    /// The open Paste Array dialog (#1264); boxed as `find_similar`.
+    pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers
     /// read answers only the dialog that asked for it.
     pub paste_array_opens: u64,
+    /// In-place text editors opened this session; the key hint above the
+    /// editor shows for the first few. Not persisted: no preference stores
+    /// such counters.
+    pub text_edit_opens: u32,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
-    /// commits on Apply, discards on Cancel.
-    pub selection_filter_custom: Option<crate::app::SelectionFilterCustomState>,
+    /// commits on Apply, discards on Cancel. Boxed as `find_similar`.
+    pub selection_filter_custom: Option<Box<crate::app::SelectionFilterCustomState>>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -535,8 +556,12 @@ pub struct UiState {
     pub erc_page_frames: crate::app::handlers::erc::PageFrames,
     /// The waiver being written in the ERC panel, if any (#1285).
     pub erc_waive_draft: Option<crate::panels::ErcWaiveDraft>,
-    /// Global cursor into the flattened ERC diagnostics list spanning all
-    /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
+    /// What the ERC and Messages panels show, the cached user identity and
+    /// what the newest ERC run checked (#85, #86, AV-13); boxed so its
+    /// growth stays off `UiState` (#2412).
+    pub validation_panels: Box<crate::panels::ValidationPanels>,
+    /// The selected ERC finding: its index into the flattened list spanning
+    /// all sheets in `erc_violations_by_path`.
     pub erc_focus_global_index: Option<usize>,
     /// Token of the newest ERC run; a finished run applies only if it still
     /// matches (#111).
@@ -578,9 +603,16 @@ pub struct UiState {
     pub annotate_order: AnnotateOrder,
     /// ERC dialog open flag — opens the full severity-matrix + pin-matrix UI.
     pub erc_dialog_open: bool,
+    /// The ERC dialog's "Profile" menu is open (#2413). Cleared when the
+    /// dialog opens or closes and when a row is chosen.
+    pub erc_profile_menu_open: bool,
     /// Reset-and-renumber confirmation modal. When true, the Design →
     /// Reset menu item shows a confirm before discarding every number.
     pub annotate_reset_confirm: bool,
+    /// The Annotate dialog's session: change-list view and filter, sheet
+    /// ticks, the Fixed options fold and which reset the confirm runs.
+    /// Boxed: a closed dialog costs one pointer (#2412).
+    pub annotate_session: Box<crate::app::handlers::erc::AnnotateSession>,
     /// Per-modal offset in window pixels from the centered position.
     /// Updated when the user drags the title bar. Persists until the app
     /// closes so reopening a dialog lands where it was last placed.
@@ -596,6 +628,9 @@ pub struct UiState {
     pub move_selection: MoveSelectionState,
     /// F5 Net Color palette state — open flag and transient edit buffer.
     pub net_color_palette_open: bool,
+    /// F5 Net Color palette: filter text and the open row chooser; boxed so
+    /// its growth stays off `UiState` (#2412).
+    pub net_color_palette: Box<crate::app::state::NetColorPaletteState>,
     /// Parameter Manager dialog state.
     pub parameter_manager_open: bool,
     /// Parameter Manager table: the new-column name, the row filter and the
@@ -747,6 +782,7 @@ impl UiState {
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
             || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
+            || self.preferences_draft_symbol_body_fill != self.symbol_body_fill
             || self.preferences_draft_trackpad_pan != self.trackpad_pan
             || self.preferences_draft_wheel_mode != self.wheel_mode
             || self.preferences_draft_remember_window_geometry != self.remember_window_geometry
@@ -821,6 +857,16 @@ mod tests {
                 field_size(|ui| &ui.pending_profile_update),
             ),
             ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
+            ("find_similar", field_size(|ui| &ui.find_similar)),
+            ("paste_array", field_size(|ui| &ui.paste_array)),
+            (
+                "selection_filter_custom",
+                field_size(|ui| &ui.selection_filter_custom),
+            ),
+            ("assign_footprints", field_size(|ui| &ui.assign_footprints)),
+            ("annotate_session", field_size(|ui| &ui.annotate_session)),
+            ("validation_panels", field_size(|ui| &ui.validation_panels)),
+            ("sheet_sync", field_size(|ui| &ui.sheet_sync)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

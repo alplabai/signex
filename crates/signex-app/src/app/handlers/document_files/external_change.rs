@@ -47,6 +47,9 @@ impl Signex {
     /// compare with, and the real file behind the path.
     pub(crate) fn record_disk_read(&mut self, path: &Path, disk: crate::persist::DiskRead) {
         self.record_disk_baseline(path, disk.hash);
+        if let Some(modified) = disk.modified {
+            self.document_state.times.set_modified(path, modified);
+        }
         if let Some(real) = disk.real_path {
             self.document_state
                 .document_saves
@@ -139,6 +142,10 @@ impl Signex {
         self.document_state
             .document_saves
             .set_baseline(path.to_path_buf(), ContentHash::of(&saved.bytes));
+        // The write just landed: the file's modified time is now, well
+        // within the day `${ModifiedDate}` shows.
+        let now = std::time::SystemTime::now();
+        self.document_state.times.set_modified(path, now);
     }
 
     /// For the blocking save of `try_save_dirty_path_with` (Exclude from

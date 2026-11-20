@@ -14,7 +14,7 @@ dialog-assign-footprints-subtitle =
         [one] { $count } part
        *[other] { $count } parts
     }
-dialog-assign-footprints-intro = Each part can take only the footprints its own library row offers. Tick several parts to set them at once. Apply changes the open sheets as one undo step; nothing is saved until you save.
+dialog-assign-footprints-intro = Each part can take only the footprints its own library row offers. Apply changes the open sheets as one undo step; nothing is saved until you save.
 dialog-assign-footprints-reading = Reading the project's sheets…
 # $why is the system's reason, in English.
 dialog-assign-footprints-read-failed = The sheets could not be read: { $why }
@@ -53,12 +53,62 @@ dialog-assign-footprints-err-not-changed = { $path } refused the change. Nothing
 dialog-assign-footprints-err-stale = The footprint of { $part } changed after the list was read. Nothing was changed; open the dialog again.
 dialog-assign-footprints-cancel = Cancel
 dialog-assign-footprints-apply = Apply
+# Reason pill of a part with no library link (a hand-made part).
+dialog-assign-footprints-no-link = No library link
+# Placeholder of the filter field above the table.
+dialog-assign-footprints-filter = Filter designator, value or row
+# Filter chips above the table; each shows its count beside it.
+dialog-assign-footprints-chip-all = All
+dialog-assign-footprints-chip-changed = Changed
+dialog-assign-footprints-chip-no-alternates = No alternates
+# The chips and the filter field list no part.
+dialog-assign-footprints-filtered-empty = No part matches the filter.
+# The ticked bar: $count is how many parts are ticked (a whole number).
+dialog-assign-footprints-ticked =
+    { $count ->
+        [one] { $count } ticked
+       *[other] { $count } ticked
+    }
+dialog-assign-footprints-clear-ticks = Clear ticks
+# The footprint preview column on the right.
+dialog-assign-footprints-preview-title = Footprint preview
+dialog-assign-footprints-preview-expand = Expand preview
+dialog-assign-footprints-preview-collapse = Narrow preview
+dialog-assign-footprints-preview-caption = Click a row to preview its footprint. A change draws the current and the new footprint side by side at the same scale. Read-only here; pads are edited in the footprint editor.
+# The previewed part: $designator and $value as the part holds them.
+dialog-assign-footprints-preview-part = { $designator } · { $value }
+# A fact the preview cannot state.
+dialog-assign-footprints-preview-none = —
+dialog-assign-footprints-preview-loading = Reading the footprint…
+# $why is the system's reason, in English.
+dialog-assign-footprints-preview-failed = The footprint could not be read: { $why }
+dialog-assign-footprints-preview-unlinked = This footprint is not in an open library, so it cannot be drawn.
+# Tags under the two footprints of a change: the current one and the new one.
+dialog-assign-footprints-preview-now = NOW
+dialog-assign-footprints-preview-new = NEW
+# Layer legend chips under the preview.
+dialog-assign-footprints-legend-top-copper = Top copper
+dialog-assign-footprints-legend-silkscreen = Silkscreen
+dialog-assign-footprints-legend-courtyard = Courtyard
+# Facts under the preview.
+dialog-assign-footprints-fact-pads = Pads
+dialog-assign-footprints-fact-pad-one = Pad 1 (mm)
+dialog-assign-footprints-fact-courtyard = Courtyard (mm)
+dialog-assign-footprints-fact-pin-map = Pin map
+# A size in mm: $w by $h, or the diameter $d of a round pad.
+dialog-assign-footprints-size-rect = { $w } × { $h }
+dialog-assign-footprints-size-round = Ø { $d }
+# Every pin keeps its pad. $pairs lists "1 → 1, 2 → 2".
+dialog-assign-footprints-pin-map-matches = { $pairs } · matches
+# Pins whose pad number is not on the new footprint; $numbers is a list.
+dialog-assign-footprints-pin-map-missing = Pads { $numbers } are not on the new footprint
+# Between the current and the new value of a fact.
+dialog-assign-footprints-arrow = →
 
 dialog-annotate-matching-unavailable = Parameter matching is not available yet.
-dialog-annotate-sheet-options-unavailable = Start and Add Suffix cannot be changed yet.
+dialog-annotate-sheet-options-unavailable = Start cannot be changed yet. Add Suffix is hidden until suffixes work.
 
 ## Graphite views (#2225)
-dialog-annotate-current-sheet = Current Sheet
 dialog-annotate-order-heading = Order of Processing
 dialog-annotate-order-up-then-across = Up Then Across
 dialog-annotate-order-across-then-down = Across Then Down
@@ -68,7 +118,6 @@ dialog-annotate-process-location = Process Location of
 dialog-annotate-process-location-designator = Designator
 dialog-annotate-replace-sub-parts = Replace Sub-Parts
 dialog-annotate-replace-sub-parts-off = Off
-dialog-annotate-no-custom-parameters = No custom parameters on any symbol yet.
 dialog-annotate-matching-heading = Matching Options
 dialog-annotate-complete-packages = Complete Existing Packages
 dialog-annotate-complete-packages-none = None
@@ -76,7 +125,6 @@ dialog-annotate-sheets-heading = Schematic Sheets To Annotate
 dialog-annotate-sheets-empty = No schematic tab open.
 dialog-annotate-sheets-col-sheet = Schematic Sheet
 dialog-annotate-sheets-col-start = Start
-dialog-annotate-sheets-col-suffix = Add Suffix
 dialog-annotate-changes-heading = Proposed Change List
 dialog-annotate-col-lock = Lock
 dialog-annotate-col-current = Current
@@ -85,13 +133,12 @@ dialog-annotate-col-location = Location
 dialog-annotate-loading = Loading project sheets…
 dialog-annotate-load-failed = Could not load the project's sheets - see the Messages panel.
 dialog-annotate-nothing-to-number = No symbols need annotation — every reference has a number.
-dialog-annotate-summary-nothing = Annotation has nothing to do — all { $total } symbols on '{ $sheet }' already carry a designator. Use Reset All or Reset & Renumber below to renumber from scratch.
-dialog-annotate-summary-changes = Annotation will assign new designators to { $changes } of { $total } symbols on '{ $sheet }'. The list updates live. Click Accept Changes to apply, or Reset All to clear every number first.
-dialog-annotate-summary-heading = Annotation Summary
-# Count on the Proposed Change List heading. Both are whole numbers.
+# Banner when no designator changes. $total is a whole number.
+dialog-annotate-summary-nothing = Nothing to number: all { $total } designators are set. Reset All or Reset & Renumber renumbers from scratch.
+# Bold lead of the change-list banner. Both are whole numbers.
 dialog-annotate-change-count = { $changes } of { $total } designators will change
 dialog-annotate-reprefix-unavailable = Re-prefix to standard is unavailable: this project follows no designator standard. Pick one in Project Options.
-dialog-annotate-reprefix-note = Re-prefix to standard re-issues the prefix of every placed part under { $standard } and renumbers them, across the whole project, as one undo step, after you confirm a list of the changes. Sheets that are not open are loaded unsaved; nothing is written until you save. Locked parts, hand-edited prefixes and parts without a library link are left alone and listed in Messages. PCB references are not updated.
+dialog-annotate-reprefix-note = Re-prefix to standard uses { $standard } (Project Options) and works on the whole project after a confirm list. Locked parts, hand-edited prefixes and parts without a library link are left alone.
 dialog-annotate-running = Running…
 dialog-version-control-track-heading = Track in repository
 dialog-version-control-lfs = Track binary 3D models via Git LFS
@@ -106,7 +153,7 @@ dialog-grid-dots = Dots
 dialog-grid-hidden = Hidden
 dialog-grid-multiplier = Multiplier
 dialog-grid-help = The step applies to both axes (one grid step per footprint editor). Display: Lines / Dots / Hidden. Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults).
-dialog-selection-filter-help = Toggle which kinds the canvas hit-test will accept. Pads is the only kind functionally wired today; the rest store flags for forward compatibility.
+dialog-selection-filter-help = Only Pads filters the canvas today. The other kinds are stored for later.
 dialog-selection-filter-pads = Pads
 dialog-selection-filter-tracks = Tracks
 dialog-selection-filter-arcs = Arcs
@@ -138,12 +185,11 @@ dialog-annotate-reprefix = Re-prefix to standard
 dialog-annotate-reset-all = Reset All
 dialog-annotate-reset-renumber = Reset & Renumber
 dialog-annotate-accept = Accept Changes
-# Re-prefix confirm button. $count is how many parts change (a whole number);
-# the English keeps "part(s)" for every count.
+# Re-prefix confirm button. $count is how many parts change (a whole number).
 dialog-annotate-reprefix-parts =
     { $count ->
-        [one] Re-prefix { $count } part(s)
-       *[other] Re-prefix { $count } part(s)
+        [one] Re-prefix { $count } part
+       *[other] Re-prefix { $count } parts
     }
 # Autosave recovery: load the recovered copy as unsaved edits.
 dialog-autosave-recovery-restore = Restore
@@ -171,6 +217,11 @@ dialog-parameter-manager-add-column = Add column
 dialog-parameter-manager-column-reference = Reference
 dialog-parameter-manager-column-value = Value
 dialog-parameter-manager-column-footprint = Footprint
+# The Parameter Manager footer and its no-match card.
+dialog-parameter-manager-clear-filter = Clear filter
+# Undoes every cell edit since the dialog opened; $count is how many.
+dialog-parameter-manager-revert = Revert changes ({ $count })
+dialog-parameter-manager-done = Done
 # The file changed or vanished on disk since it was opened.
 dialog-disk-conflict-reload = Reload from disk
 dialog-disk-conflict-recreate = Re-create
@@ -259,3 +310,11 @@ dialog-title-library-recovery = Library Recovery
 dialog-title-net-color-custom = Custom Net Colour
 # $path is the parent sheet's file.
 dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused
+
+## ERC dialog (#2413): where the rules come from, and the Profile menu
+# Pill under the title: the dialog edits the rules stored in the project.
+dialog-erc-source-project = Rules: this project
+# Pill under the title: the dialog edits this machine's "User Default" rule profile.
+dialog-erc-source-user-default = User Default
+# Footer menu button holding Store / Save as profile / Update from profile.
+dialog-erc-profile-menu = Profile

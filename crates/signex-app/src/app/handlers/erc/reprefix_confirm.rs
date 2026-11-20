@@ -1,18 +1,39 @@
-//! The Re-prefix to standard confirm (#1315): what the user is shown before
-//! anything is rewritten. Built from a plan, pure text and counts.
+//! The Re-prefix to standard confirm (#1315, #77): what the user is shown
+//! before anything is rewritten. Built from a plan: counts, the change rows
+//! and the skip counts; the view words them through the catalog.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use signex_i18n::{MessageId, ids};
 use signex_types::designator::DesignatorStandard;
 use uuid::Uuid;
 
 use super::reprefix_plan::{ReprefixPlan, SkipReason};
 use crate::library::reprefix_lookup::ReprefixLookup;
 
-/// Changes named in the confirm; the rest are counted ("+K more"), not hidden.
+/// Changes named in the confirm; the last row counts the rest.
 const NAMED_CHANGES: usize = 60;
+
+/// One change row: the part and its old and new prefix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReprefixChangeRow {
+    /// The part's designator now (`D5`, `U?`).
+    pub reference: String,
+    pub old_prefix: String,
+    pub new_prefix: String,
+    /// Matched through its library symbol, not a stored row (#1417).
+    pub by_symbol: bool,
+}
+
+/// How many parts one skip reason leaves as they are, and the catalog
+/// message that counts them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReprefixSkipCount {
+    pub label: MessageId,
+    pub count: usize,
+}
 
 /// An open confirm. It keeps the library answer so Confirm can re-plan
 /// against the state of THAT moment without asking the libraries again.
@@ -27,15 +48,33 @@ pub struct ReprefixConfirm {
     /// The changes shown, so a re-plan that differs is shown again instead of
     /// being applied unseen.
     pub shown: HashMap<Uuid, String>,
-    pub headline: String,
-    /// `D5: D -> V`, up to [`NAMED_CHANGES`] of them.
-    pub change_lines: Vec<String>,
+    /// Up to [`NAMED_CHANGES`] change rows, in plan order.
+    pub changes: Vec<ReprefixChangeRow>,
     /// Changes beyond the named ones.
     pub more: usize,
-    /// How many parts stay as they are, and why.
-    pub skip_lines: Vec<String>,
+    /// Distinct sheets holding a unit of a changed part.
+    pub sheets: usize,
+    /// Parts matched through their library symbol.
+    pub by_symbol: usize,
+    /// Parts left as they are, one count per reason.
+    pub skips: Vec<ReprefixSkipCount>,
     /// How many parts the Confirm button re-prefixes.
     pub parts: usize,
+}
+
+/// The catalog message that counts the parts `reason` leaves unchanged.
+fn skip_label(reason: SkipReason) -> MessageId {
+    match reason {
+        SkipReason::ReadOnlySheet => ids::DIALOG_REPREFIX_SKIP_READ_ONLY,
+        SkipReason::Locked => ids::DIALOG_REPREFIX_SKIP_LOCKED,
+        SkipReason::NoRowLink => ids::DIALOG_REPREFIX_SKIP_NO_LINK,
+        SkipReason::LibraryNotMounted => ids::DIALOG_REPREFIX_SKIP_NOT_MOUNTED,
+        SkipReason::RowMissing => ids::DIALOG_REPREFIX_SKIP_ROW_MISSING,
+        SkipReason::RowAmbiguous => ids::DIALOG_REPREFIX_SKIP_AMBIGUOUS,
+        SkipReason::RetargetedByInstance => ids::DIALOG_REPREFIX_SKIP_PER_PLACEMENT,
+        SkipReason::MixedVersions => ids::DIALOG_REPREFIX_SKIP_MIXED_VERSIONS,
+        SkipReason::UserEdited => ids::DIALOG_REPREFIX_SKIP_HAND_EDITED,
+    }
 }
 
 impl ReprefixConfirm {
@@ -47,40 +86,16 @@ impl ReprefixConfirm {
         plan: &ReprefixPlan,
     ) -> Self {
         let parts = plan.changes.len();
-        let by_symbol = plan.changes.iter().filter(|c| c.by_symbol).count();
-        let matched = if by_symbol == 0 {
-            String::new()
-        } else {
-            format!(
-                " {by_symbol} of them have no stored library row (their sheet was saved before \
-                 the file kept it) and were matched through their library symbol."
-            )
-        };
-        let headline = format!(
-            "Re-issue the prefix of {parts} part(s) across {} sheet(s) under {standard}, then \
-             renumber them.{matched} It is one undo step: {undo} on any sheet this changes \
-             undoes it on all of them. Every sheet, open or not, stays unsaved until you save \
-             it. PCB references are not updated.",
-            plan.sheets_changed,
-            undo = crate::keymap::shown("Mod+Z")
-        );
-        let change_lines: Vec<String> = plan
-            .changes
-            .iter()
+        let changes: Vec<ReprefixChangeRow> = (plan.changes.iter())
             .take(NAMED_CHANGES)
-            .map(|c| {
-                let note = if c.by_symbol {
-                    " (matched by symbol)"
-                } else {
-                    ""
-                };
-                format!(
-                    "{}:  {} -> {}{note}",
-                    c.reference, c.old_prefix, c.new_prefix
-                )
+            .map(|c| ReprefixChangeRow {
+                reference: c.reference.clone(),
+                old_prefix: c.old_prefix.clone(),
+                new_prefix: c.new_prefix.clone(),
+                by_symbol: c.by_symbol,
             })
             .collect();
-        let mut skipped: std::collections::BTreeMap<SkipReason, usize> = Default::default();
+        let mut skipped: BTreeMap<SkipReason, usize> = BTreeMap::new();
         for part in &plan.skipped {
             *skipped.entry(part.reason).or_default() += 1;
         }
@@ -90,12 +105,16 @@ impl ReprefixConfirm {
             lookup,
             standard,
             shown: plan.targets(),
-            headline,
-            more: parts - change_lines.len(),
-            change_lines,
-            skip_lines: skipped
+            more: parts - changes.len(),
+            changes,
+            sheets: plan.sheets_changed,
+            by_symbol: plan.changes.iter().filter(|c| c.by_symbol).count(),
+            skips: skipped
                 .into_iter()
-                .map(|(reason, n)| format!("{n} part(s) {}: left unchanged", reason.heading()))
+                .map(|(reason, count)| ReprefixSkipCount {
+                    label: skip_label(reason),
+                    count,
+                })
                 .collect(),
             parts,
         }

@@ -24,27 +24,66 @@ use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit
 impl Signex {
     pub(crate) fn handle_board_sketch(&mut self, event: BoardSketchMsg) -> Task<Message> {
         match event {
+            // The toggle while "Discard changes?" is open answers Keep
+            // editing, as Esc does; it never applies the sketch.
+            BoardSketchMsg::ModeToggled
+                if self
+                    .board_sketch_in_view()
+                    .is_some_and(|s| s.editor.state.sketch_exit.confirming_discard) =>
+            {
+                return self.handle_board_sketch(BoardSketchMsg::DiscardCancelled);
+            }
             BoardSketchMsg::ModeToggled if self.board_sketch_in_view().is_some() => {
                 self.leave_board_sketch();
             }
             BoardSketchMsg::ModeToggled => self.enter_board_sketch(),
-            BoardSketchMsg::LeaveRequested => {
+            BoardSketchMsg::BakeRequested => {
                 self.leave_board_sketch();
             }
-            BoardSketchMsg::ApplyRequested => {
-                let changed = self
-                    .interaction_state
-                    .board_sketch
-                    .as_ref()
-                    .is_some_and(BoardSketchSession::has_changes);
-                if changed {
-                    self.commit_board_sketch();
+            BoardSketchMsg::BakePreviewToggled => {
+                if let Some(session) = self.interaction_state.board_sketch.as_mut() {
+                    let exit = &mut session.editor.state.sketch_exit;
+                    exit.preview = !exit.preview;
+                }
+                self.refresh_board_sketch_preview();
+            }
+            BoardSketchMsg::DiscardRequested => self.request_board_sketch_discard(),
+            BoardSketchMsg::DiscardConfirmed => self.interaction_state.board_sketch = None,
+            BoardSketchMsg::DiscardCancelled => {
+                if let Some(session) = self.interaction_state.board_sketch.as_mut() {
+                    session.editor.state.sketch_exit.confirming_discard = false;
                 }
             }
-            BoardSketchMsg::DiscardRequested => self.interaction_state.board_sketch = None,
         }
         self.refresh_panel_ctx();
         Task::none()
+    }
+
+    /// Discard changes: leave at once when the board already has what the
+    /// copy holds, else ask first (#2518). Nothing is written either way.
+    fn request_board_sketch_discard(&mut self) {
+        let Some(session) = self.interaction_state.board_sketch.as_mut() else {
+            return;
+        };
+        if session.has_changes() {
+            session.editor.state.sketch_exit.confirming_discard = true;
+        } else {
+            self.interaction_state.board_sketch = None;
+        }
+    }
+
+    /// Re-bake the open bake preview of the board sketch against its
+    /// board's nets; a closed preview drops its result.
+    fn refresh_board_sketch_preview(&mut self) {
+        let Some(session) = self.interaction_state.board_sketch.as_mut() else {
+            return;
+        };
+        let nets = self
+            .document_state
+            .pcb_board(&session.board_path)
+            .map(|board| board.nets.as_slice())
+            .unwrap_or_default();
+        session.refresh_preview(nets);
     }
 
     /// The sketch mode of the board the main window shows, if it is on.
@@ -176,19 +215,33 @@ impl Signex {
         // Messages stays en-US whatever the UI language.
         let held = Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name.as_str());
         crate::diagnostics::log_warning(held.render_en_us());
-        // The refusal nests as a message, so the card renders it in the view.
+        let detail = self.board_sketch_held_detail(name);
+        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
+    }
+
+    /// Why a board named `name` holds: the hold and the bake's refusal, which
+    /// nests as a message so the card renders it in the view.
+    fn board_sketch_held_detail(&self, name: String) -> Translatable {
         let refusal = self
             .interaction_state
             .board_sketch
             .as_ref()
             .and_then(|session| session.refusal.clone());
-        let detail = match refusal {
+        match refusal {
             Some(refusal) => Translatable::new(ids::NOTICE_BOARD_SKETCH_HELD_WHY)
                 .arg("board", name)
                 .arg("refusal", refusal),
             None => Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name),
-        };
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
+        }
+    }
+
+    /// Why the board at `board` holds a close, in en-US: a caller's refusal.
+    pub(crate) fn board_sketch_held_reason(&self, board: &Path) -> String {
+        let name = board
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.board_sketch_held_detail(name).render_en_us()
     }
 
     /// Whether the board at `path` is shown in its own window.
@@ -332,27 +385,33 @@ impl Signex {
         apply_footprint_primitive_edit(&mut session.editor, msg);
         let solve = dispatch_pending(&mut session.editor, &path).map(Message::Library);
         let redundancy = dispatch_redundancy(&mut session.editor, &path).map(Message::Library);
+        self.refresh_board_sketch_preview();
         self.refresh_panel_ctx();
         Task::batch([solve, redundancy])
     }
 
-    /// What Esc does on a board in sketch mode: cancel the tool, gesture or
-    /// menu in flight first, then leave the mode.
+    /// What Esc does on a board in sketch mode: answer an open discard
+    /// question with Keep editing, cancel the tool, gesture or menu in
+    /// flight, then Discard changes, which asks first when there are
+    /// changes. Esc never applies the sketch to the board (#2518).
     pub(crate) fn board_sketch_escape(&self) -> Option<Message> {
         let session = self.board_sketch_in_view()?;
         let state = &session.editor.state;
+        let sketch = |event| Some(Message::Pcb(PcbMsg::Sketch(event)));
+        if state.sketch_exit.confirming_discard {
+            return sketch(BoardSketchMsg::DiscardCancelled);
+        }
         let busy = state.active_tool != SketchTool::Select
             || !matches!(state.tool_pending, ToolPending::Idle)
             || state.context_menu.is_some()
             || state.active_bar_menu.is_some();
-        Some(if busy {
-            Message::Library(LibraryMessage::PrimitiveEditorEvent {
+        if busy {
+            return Some(Message::Library(LibraryMessage::PrimitiveEditorEvent {
                 path: session.board_path.clone(),
                 msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToolEscape),
-            })
-        } else {
-            Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::LeaveRequested))
-        })
+            }));
+        }
+        sketch(BoardSketchMsg::DiscardRequested)
     }
 
     /// `(can_undo, can_redo)` of the working copy when the board at `path`
@@ -379,6 +438,7 @@ impl Signex {
         };
         if moved {
             session.editor.canvas_cache.clear();
+            self.refresh_board_sketch_preview();
             self.refresh_panel_ctx();
         }
         Some(moved)

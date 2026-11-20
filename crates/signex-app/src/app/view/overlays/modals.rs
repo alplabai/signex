@@ -36,6 +36,9 @@ impl Signex {
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
             draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
+            draft_symbol_body_fill: ui.preferences_draft_symbol_body_fill,
+            body_fill_palette_open: ui.preferences_body_fill_palette_open,
+            body_fill_picker_open: ui.preferences_body_fill_picker_open,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
             draft_wheel_mode: ui.preferences_draft_wheel_mode,
             draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
@@ -102,7 +105,7 @@ impl Signex {
     /// Find Similar Objects dialog (#1257). In-window only: it has no
     /// detached form.
     pub(in crate::app::view) fn find_similar_overlay(&self) -> Option<Element<'_, Message>> {
-        let state = self.ui_state.find_similar.as_ref()?;
+        let state = self.ui_state.find_similar.as_deref()?;
         Some(
             crate::find_similar::view(
                 state,
@@ -120,7 +123,7 @@ impl Signex {
 
     /// Paste Array dialog (#1264). In-window only: it has no detached form.
     pub(in crate::app::view) fn paste_array_overlay(&self) -> Option<Element<'_, Message>> {
-        let state = self.ui_state.paste_array.as_ref()?;
+        let state = self.ui_state.paste_array.as_deref()?;
         Some(
             crate::paste_array::view(
                 state,
@@ -329,6 +332,13 @@ impl Signex {
             .sheet_numbering
             .is_some()
             .then(|| self.view_sheet_numbering_dialog())
+    }
+
+    pub(in crate::app::view) fn sheet_sync_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .sheet_sync
+            .is_some()
+            .then(|| self.view_sheet_sync_dialog())
     }
 
     pub(in crate::app::view) fn board_reannotate_overlay(&self) -> Option<Element<'_, Message>> {

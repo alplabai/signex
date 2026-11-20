@@ -13,7 +13,7 @@ use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, tooltip};
 
-use super::{Action, nav_strip, project_sections};
+use super::{Action, StartScreenMsg, StartSection, message, nav_strip, project_sections};
 use crate::app::Message;
 use crate::pinned_projects::PinnedProjects;
 use crate::styles::{
@@ -155,7 +155,20 @@ pub(super) fn nav_chrome(
     }
 }
 
-/// A navigation row; `active` marks the current page (not pressable).
+/// What a navigation page row sends: it picks its section.
+pub(super) fn page_message(section: StartSection) -> Message {
+    message(StartScreenMsg::SectionPicked(section))
+}
+
+/// Whether the Home and the Projects rows are highlighted on `section`.
+pub(super) fn active_page_rows(section: StartSection) -> [bool; 2] {
+    [
+        section == StartSection::Home,
+        section == StartSection::Projects,
+    ]
+}
+
+/// A navigation row; `active` marks the current page.
 fn nav_row<'a>(
     tokens: &ThemeTokens,
     label: Localized,
@@ -178,6 +191,7 @@ fn nav<'a>(
     open_shortcut: &str,
     recent_count: usize,
     libraries: &[super::LoadedLibrary],
+    section: StartSection,
 ) -> Element<'a, Message> {
     let cap_fill = resolve(tokens).sunken;
     let cap_ink = resolve(tokens).ink3;
@@ -235,12 +249,30 @@ fn nav<'a>(
             .style(outline_button(tokens)),
     ]
     .spacing(8);
+    let [home_on, projects_on] = active_page_rows(section);
     let items = column![
-        nav_row(tokens, t!(i18n, ids::START_HOME), None, true),
-        nav_count_row(tokens, i18n, ids::START_PROJECTS, Some(recent_count)),
-        nav_count_row(tokens, i18n, ids::START_LIBRARIES, Some(libraries.len())),
+        nav_row(
+            tokens,
+            t!(i18n, ids::START_HOME),
+            Some(page_message(StartSection::Home)),
+            home_on
+        ),
+        nav_count_row(
+            tokens,
+            i18n,
+            ids::START_PROJECTS,
+            Some(recent_count),
+            (Some(page_message(StartSection::Projects)), projects_on)
+        ),
+        nav_count_row(
+            tokens,
+            i18n,
+            ids::START_LIBRARIES,
+            Some(libraries.len()),
+            (Some(message(StartScreenMsg::LibrariesPicked)), false)
+        ),
         coming_soon(
-            nav_count_row(tokens, i18n, ids::START_PARTS_SEARCH, None),
+            nav_count_row(tokens, i18n, ids::START_PARTS_SEARCH, None, (None, false)),
             tokens,
             i18n,
             tooltip::Position::Right,
@@ -308,13 +340,15 @@ fn coming_soon<'a>(
     tooltip(content, hint, position).gap(4).boxed()
 }
 
-/// A navigation row with the real count at the right (none when unavailable).
-/// Rows that open nothing yet are wrapped by the caller in the stub tooltip.
+/// A navigation row with the real count at the right (none when unavailable),
+/// sending `action` and highlighted when `active`, as [`nav_row`]. Rows that
+/// open nothing yet are wrapped by the caller in the stub tooltip.
 fn nav_count_row<'a>(
     tokens: &ThemeTokens,
     i18n: &I18n,
     label: MessageId,
     count: Option<usize>,
+    (action, active): (Option<Message>, bool),
 ) -> Element<'a, Message> {
     let (ink, ink3) = (ti(tokens.text), resolve(tokens).ink3);
     let mut line =
@@ -328,10 +362,14 @@ fn nav_count_row<'a>(
                 .boxed(),
         );
     }
-    container(line)
-        .padding([NAV_ROW_PAD_Y, 14.0])
+    let mut b = button(line)
         .width(Length::Fill)
-        .boxed()
+        .padding([NAV_ROW_PAD_Y, 14.0])
+        .style(nav_row_style(tokens, active));
+    if let Some(message) = action {
+        b = b.on_press(message);
+    }
+    b.boxed()
 }
 
 /// The loaded libraries and their component count, from the library state.
@@ -435,14 +473,14 @@ fn sample_card<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, Message> {
         .boxed()
 }
 
-/// The Graphite start screen.
+/// The Graphite start screen, `section`'s navigation row highlighted.
 pub fn view<'a>(
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
     open_shortcut: &str,
-    recent: &'a [PathBuf],
-    pinned: &'a PinnedProjects,
+    (recent, pinned): (&'a [PathBuf], &'a PinnedProjects),
     libraries: &[super::LoadedLibrary],
+    section: StartSection,
 ) -> Element<'a, Message> {
     let open_shortcut = open_shortcut.to_owned();
     let libraries = libraries.to_vec();
@@ -455,6 +493,7 @@ pub fn view<'a>(
             &open_shortcut,
             (recent, pinned),
             &libraries,
+            section,
             size.width,
         )
     })
@@ -467,6 +506,7 @@ fn view_sized<'a>(
     open_shortcut: &str,
     (recent, pinned): (&'a [PathBuf], &'a PinnedProjects),
     libraries: &[super::LoadedLibrary],
+    section: StartSection,
     width: f32,
 ) -> Element<'a, Message> {
     // This iced fork has no max-width; the main column takes the room left
@@ -495,11 +535,12 @@ fn view_sized<'a>(
         container(main)
             .padding([40.0, MAIN_PAD_X])
             .center_x(Length::Fill),
-    );
+    )
+    .id(super::MAIN_SCROLL_ID);
     let navigation = if nav_collapsed(width) {
-        nav_strip::view(tokens, i18n, open_shortcut)
+        nav_strip::view(tokens, i18n, open_shortcut, section)
     } else {
-        nav(tokens, i18n, open_shortcut, listed, libraries)
+        nav(tokens, i18n, open_shortcut, listed, libraries, section)
     };
     row![
         navigation,

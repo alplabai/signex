@@ -19,6 +19,11 @@ impl Signex {
             BoardReannotateMsg::BottomPicked(bottom) => {
                 self.replan_board_reannotate(|o| o.bottom = bottom);
             }
+            BoardReannotateMsg::InOrderShown(show) => {
+                if let Some(state) = self.ui_state.board_reannotate.as_mut() {
+                    state.show_in_order = show;
+                }
+            }
             BoardReannotateMsg::ExecuteRequested => self.execute_board_reannotate(),
             BoardReannotateMsg::CancelRequested => self.ui_state.board_reannotate = None,
         }
@@ -55,13 +60,16 @@ impl Signex {
     ) -> Option<BoardReannotateState> {
         let engine = self.document_state.board_engine(&board)?;
         let read_only = engine.board().unknown.newer_minor_source.is_some();
+        let plan = plan_reannotate(engine.board(), options);
         Some(BoardReannotateState {
-            plan: plan_reannotate(engine.board(), options),
+            in_order: super::preview::in_order(engine.board(), &plan),
+            plan,
             revision: engine.revision(),
             problem: read_only.then_some(ReannotateProblem::ReadOnly),
             board,
             board_name,
             options,
+            show_in_order: false,
         })
     }
 
@@ -73,8 +81,13 @@ impl Signex {
         let mut options = state.options;
         change(&mut options);
         self.ui_state.board_reannotate_options = options;
-        self.ui_state.board_reannotate =
-            self.board_reannotate_state(state.board, state.board_name, options);
+        let show_in_order = state.show_in_order;
+        self.ui_state.board_reannotate = self
+            .board_reannotate_state(state.board, state.board_name, options)
+            .map(|fresh| BoardReannotateState {
+                show_in_order,
+                ..fresh
+            });
     }
 
     /// Run the plan as one labelled step at the revision it was made from.
@@ -95,9 +108,11 @@ impl Signex {
             return;
         };
         if engine.revision() != state.revision {
+            let show_in_order = state.show_in_order;
             let fresh = self.board_reannotate_state(state.board, state.board_name, state.options);
             self.ui_state.board_reannotate = fresh.map(|s| BoardReannotateState {
                 problem: s.problem.clone().or(Some(ReannotateProblem::Stale)),
+                show_in_order,
                 ..s
             });
             return;
