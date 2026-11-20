@@ -249,6 +249,13 @@ impl Signex {
                     self.repair_pin_junctions_at(path);
                 }
             },
+            // A Properties action button runs its catalog command.
+            crate::panels::PanelMsg::CommandButtonPressed(command) => {
+                if let Ok(id) = crate::keymap::AppCommandId::new(*command) {
+                    let run = crate::menu_bar::MenuMessage::Command(id);
+                    follow = self.update(Message::Menu(run));
+                }
+            }
             crate::panels::PanelMsg::OpenRules => {
                 follow = self.update(Message::Project(ProjectMsg::Rules(
                     crate::app::RulesTabMsg::OpenRequested { project: None },

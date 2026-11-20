@@ -213,8 +213,10 @@ fn text_box<'a>(
     }
     // A press outside takes the editor's focus: the draft is applied then.
     let submitted = PanelMsg::PlacedEdit(PlacedEditMsg::NoteSubmitted { item });
-    let boxed =
-        signex_widgets::press_outside::PressOutside::new(editor, draft.edited.then_some(submitted));
+    let boxed = signex_widgets::press_outside::PressOutside::new(
+        editor.boxed(),
+        draft.edited.then_some(submitted),
+    );
     container(
         row![
             property_label(t!(i18n, ids::PROPERTIES_TEXT), muted),

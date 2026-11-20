@@ -121,7 +121,7 @@ fn missing_banner<'a>(ctx: &'a PanelContext, sheet: &ChildSheet) -> Element<'a, 
     let actions = row![
         button(text(t!(i18n, ids::PROPERTIES_SHEET_CREATE)).size(TS.caption))
             .padding([SP.xs, SP.m])
-            .on_press(PanelMsg::MessageLinkPressed(CREATE_SHEET_COMMAND))
+            .on_press(PanelMsg::CommandButtonPressed(CREATE_SHEET_COMMAND))
             .style(form_look::option_tile(true)),
         button(text(t!(i18n, ids::PROPERTIES_SHEET_BROWSE)).size(TS.caption))
             .padding([SP.xs, SP.m])
@@ -207,7 +207,7 @@ fn properties_section<'a>(
                 .boxed();
             let open = button(text(t!(i18n, ids::PROPERTIES_SHEET_OPEN)).size(TS.caption))
                 .padding([SP.s, SP.m])
-                .on_press(PanelMsg::MessageLinkPressed(OPEN_SHEET_COMMAND))
+                .on_press(PanelMsg::CommandButtonPressed(OPEN_SHEET_COMMAND))
                 .style(form_look::ghost_button);
             let name_label = t!(i18n, ids::PANELS_CHILD_SHEET_NAME);
             let file_label = t!(i18n, ids::PANELS_CHILD_SHEET_FILE);

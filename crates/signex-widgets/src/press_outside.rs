@@ -23,14 +23,8 @@ where
 {
     /// Wrap `content`; `on_press` is sent on a left press outside it, and
     /// `None` sends nothing.
-    pub fn new(
-        content: impl Into<Element<'a, Message, Theme, Renderer>>,
-        on_press: Option<Message>,
-    ) -> Self {
-        Self {
-            content: content.into(),
-            on_press,
-        }
+    pub fn new(content: Element<'a, Message, Theme, Renderer>, on_press: Option<Message>) -> Self {
+        Self { content, on_press }
     }
 }
 
@@ -153,7 +147,7 @@ mod tests {
     /// Press the left button at `at` over a 40x20 box wrapped with message
     /// 9, in a 200x100 window, and return what was sent.
     fn press_at(at: Point, armed: bool) -> Vec<u8> {
-        let inner: Element<'static, u8, Theme, ()> = Space::new().width(40).height(20).into();
+        let inner: Element<'static, u8, Theme, ()> = Space::new().width(40).height(20).boxed();
         let mut element: Element<'static, u8, Theme, ()> =
             PressOutside::new(inner, armed.then_some(9)).into();
         let mut tree = Tree::new(&element);
