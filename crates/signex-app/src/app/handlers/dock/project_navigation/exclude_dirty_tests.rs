@@ -457,6 +457,7 @@ fn save_all_ignores_a_project_with_an_empty_dir() {
             project_defaults: Default::default(),
             agent_journal: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

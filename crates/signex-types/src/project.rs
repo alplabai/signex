@@ -19,6 +19,7 @@ mod fab_tier;
 mod order;
 mod profile_override;
 mod requirements;
+mod router_tool;
 mod rule_file;
 mod rule_profile;
 mod rules;
@@ -314,6 +315,17 @@ pub struct ProjectData {
     /// profile. Skipped on save when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requirements: Vec<RequirementEntry>,
+    /// The router tool diameter of the project's fab tier or profile, in mm
+    /// (mockup row 179d). `None` when none was applied, skipped on save. A
+    /// value that is not a positive number reads as `None`. Read and set it
+    /// through [`ProjectData::router_tool_diameter`] and
+    /// [`ProjectData::set_router_tool_diameter`].
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "router_tool::lenient_router_tool_diameter"
+    )]
+    pub router_tool_diameter: Option<f64>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -322,9 +334,6 @@ pub struct ProjectData {
 
 /// The `.snxprj` key of the project's rule set.
 const RULES_KEY: &str = "rules";
-
-/// The `.snxprj` key of the router tool diameter (mockup row 179d).
-const ROUTER_TOOL_DIAMETER_KEY: &str = "router_tool_diameter";
 
 /// Interpret a `rules` section, or keep it for re-save when this build
 /// cannot: a newer `schema`, or a value whose shape it does not know. The
@@ -343,30 +352,17 @@ impl ProjectData {
         self.rules.is_none() && self.unknown.get(RULES_KEY).is_some()
     }
 
-    /// The router tool diameter of the project's fab tier or profile, in mm
-    /// (mockup row 179d): the top-level `router_tool_diameter` key, absent when none
-    /// was applied. A value that is not a positive number reads as absent.
-    /// Held with the keys this type does not declare, so an older build
-    /// keeps it the same way (see `docs/FORMAT_VERSIONS.md`).
+    /// The router tool diameter in mm, absent when none was applied or the
+    /// stored value is not a positive number.
     pub fn router_tool_diameter(&self) -> Option<f64> {
-        self.unknown
-            .get(ROUTER_TOOL_DIAMETER_KEY)
-            .and_then(Value::as_f64)
-            .filter(|mm| mm.is_finite() && *mm > 0.0)
+        self.router_tool_diameter
+            .filter(|mm| router_tool::is_usable_diameter(*mm))
     }
 
     /// Store the router tool diameter; `None`, or a value that is not a
-    /// positive number, removes the key.
+    /// positive number, clears it.
     pub fn set_router_tool_diameter(&mut self, mm: Option<f64>) {
-        let stored = mm
-            .filter(|mm| mm.is_finite() && *mm > 0.0)
-            .and_then(serde_json::Number::from_f64);
-        match stored {
-            Some(number) => self
-                .unknown
-                .insert(ROUTER_TOOL_DIAMETER_KEY.into(), Value::Number(number)),
-            None => self.unknown.remove(ROUTER_TOOL_DIAMETER_KEY),
-        }
+        self.router_tool_diameter = mm.filter(|mm| router_tool::is_usable_diameter(*mm));
     }
 
     /// Resolve a [`LibraryEntry`]'s `path` to an absolute path. Project-
@@ -587,6 +583,7 @@ mod tests {
             project_defaults: Default::default(),
             agent_journal: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -624,6 +621,7 @@ mod tests {
             project_defaults: Default::default(),
             agent_journal: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -859,6 +857,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         project_defaults: Default::default(),
         agent_journal: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Vec::new(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),

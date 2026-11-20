@@ -43,9 +43,9 @@ format declares only its own table row below.
 (`docs/architecture/snxrules-format.md`); a newer schema is refused there too.
 It is content-driven: `2` only while the `fab` block names a
 `router_tool_diameter` (mockup row 179d), else as read; this build reads `1` and `2`.
-The project's copy, the top-level `.snxprj` key `router_tool_diameter`, needs
-no token: an older build keeps it as an unknown key, as `fab_outputs`. No
-`.snxpcb` content is added for it.
+The project's copy, the top-level `.snxprj` key `router_tool_diameter`, is a
+declared `ProjectData` field and needs no token: an older build keeps it as an
+unknown key, as `fab_outputs`. No `.snxpcb` content is added for it.
 
 ## Changing a format
 

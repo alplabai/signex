@@ -316,6 +316,16 @@ renames the file, through the same flow as the project tree's Rename; saving
 never renames anything
 (`docs/superpowers/specs/2026-10-26-project-tab-shell-design.md`).
 
+## Router tool diameter (`router_tool_diameter`)
+
+`ProjectData.router_tool_diameter` is an optional top-level number, the
+diameter in mm of the bit that cuts the board outline (mockup row 179d; see
+`docs/DRC_RULES.md`, "Fab profiles"). It is a declared field, not a key kept
+in the unknown-key bag. It is omitted when absent, so a project without one
+saves byte-identical; a value that is not a positive number reads as absent
+and is dropped on the next save. No format token changes: a build that
+predates the field keeps the key as an unknown key.
+
 ## Known gaps (open questions)
 
 - **Unknown keys and the version token (#788, fixed).** `ProjectData`,

@@ -540,6 +540,7 @@ fn a_paste_into_a_sheet_of_another_project_brings_the_body() {
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
                 fab_outputs: None,
+                router_tool_diameter: None,
                 requirements: Default::default(),
                 parameters: Default::default(),
                 unknown: Default::default(),

@@ -232,6 +232,7 @@ fn a_file_another_sheet_of_the_project_references_is_refused() {
             project_defaults: Default::default(),
             agent_journal: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),

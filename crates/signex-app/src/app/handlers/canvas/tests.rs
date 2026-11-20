@@ -54,6 +54,7 @@ fn app_focused_on(focused: &str) -> Signex {
             project_defaults: Default::default(),
             agent_journal: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
