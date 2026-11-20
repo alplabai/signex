@@ -28,7 +28,7 @@ impl Signex {
             M::HoleNetEdited { id, .. } => (*id, Some(("hole_net", id.0.as_u128()))),
         };
         if let Some(editor) = self.active_footprint_editor_mut()
-            && editor.state.board_backdrop.is_some()
+            && editor.state.sketch_host() == signex_types::sketch::SketchHost::Board
         {
             editor.record_edit(key, |editor| {
                 let Some(entity) = sketch_entity_mut(editor, id) else {

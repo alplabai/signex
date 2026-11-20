@@ -239,6 +239,130 @@ fn the_held_save_card_renders_its_refusal_in_the_view() {
     );
 }
 
+/// #2518: the board's mode bar is the shared exit set, Bake preview ·
+/// Discard changes · Bake; Leave and Apply are gone. With edits, Discard
+/// changes turns the bar into its question.
+#[test]
+fn the_mode_bar_is_the_shared_exit_set() {
+    let (mut app, _tmp) = sketching();
+    let texts = main_window_texts(&mut app);
+    for label in ["Board Sketch", "Bake preview", "Discard changes", "Bake"] {
+        assert!(texts.iter().any(|t| t == label), "{label:?} in {texts:#?}");
+    }
+    // The bar's old Apply / Leave / Discard buttons.
+    for gone in ["Leave", "Discard"] {
+        assert!(!texts.iter().any(|t| t == gone), "{gone:?} in {texts:#?}");
+    }
+
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    session.editor.state.sketch_exit.confirming_discard = true;
+    let texts = main_window_texts(&mut app);
+    assert!(
+        texts
+            .iter()
+            .any(|t| t == "Discard the changes made in this sketch?"),
+        "{texts:#?}"
+    );
+    assert!(texts.iter().any(|t| t == "Keep editing"), "{texts:#?}");
+}
+
+/// #2518: Esc never applies the sketch. Without edits it leaves; it never
+/// commits a board command.
+#[test]
+fn esc_without_edits_leaves_and_writes_nothing() {
+    let (mut app, _tmp) = sketching();
+    let message = app.board_sketch_escape().expect("the mode is in view");
+    assert!(
+        matches!(
+            message,
+            Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::DiscardRequested))
+        ),
+        "{message:?}"
+    );
+    send(&mut app, message);
+    assert!(app.interaction_state.board_sketch.is_none());
+}
+
+/// #2518: the mode toggle while "Discard changes?" is open answers Keep
+/// editing, as Esc does: the mode stays on and nothing is applied.
+#[test]
+fn the_toggle_answers_an_open_discard_question_with_keep_editing() {
+    let (mut app, _tmp) = sketching();
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    session.editor.state.sketch_exit.confirming_discard = true;
+    send(
+        &mut app,
+        Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::ModeToggled)),
+    );
+    let session = app
+        .interaction_state
+        .board_sketch
+        .as_ref()
+        .expect("the mode stays on");
+    assert!(!session.editor.state.sketch_exit.confirming_discard);
+}
+
+/// #2518: a board role picked for a shape it cannot take (a V-score on a
+/// point) leaves the role as it was and Messages says why.
+#[test]
+fn a_role_on_the_wrong_shape_is_refused_with_a_message() {
+    let _ = crate::diagnostics::init_logging();
+    use crate::library::editor::footprint::apply_footprint_primitive_edit;
+    use crate::library::messages::{FootprintEditorMsg, RoleTag};
+    let (mut app, _tmp) = sketching();
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    apply_footprint_primitive_edit(
+        &mut session.editor,
+        FootprintEditorMsg::SketchPlacePoint {
+            x_mm: 5.0,
+            y_mm: 5.0,
+        },
+    );
+    let point = session
+        .editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .and_then(|s| {
+            s.entities
+                .iter()
+                .rev()
+                .find(|e| matches!(e.kind, signex_sketch::entity::EntityKind::Point { .. }))
+        })
+        .expect("the point")
+        .clone();
+    let mark = crate::diagnostics::newest_entry_id();
+    send(
+        &mut app,
+        Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::FpEditorSetRole {
+                id: point.id,
+                role: RoleTag::VScore,
+            },
+        )),
+    );
+    let session = app.interaction_state.board_sketch.as_ref().expect("on");
+    let after = session
+        .editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .and_then(|s| s.entities.iter().find(|e| e.id == point.id))
+        .expect("the point")
+        .clone();
+    assert_eq!(after, point, "the point keeps its role");
+    // Fluent wraps the role name in isolation marks; read the line without.
+    let said = crate::diagnostics::entries_since(mark)
+        .entries
+        .iter()
+        .any(|e| {
+            e.message
+                .replace(['\u{2068}', '\u{2069}'], "")
+                .contains("V-score was not set")
+        });
+    assert!(said, "Messages says why");
+}
+
 /// #2546: a close by operand that a refused bake holds answers with the
 /// refusal and its reason, never `Ran`, and the tab stays open.
 #[test]

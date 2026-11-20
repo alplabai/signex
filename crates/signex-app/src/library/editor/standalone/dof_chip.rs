@@ -6,6 +6,7 @@ use iced::widget::{Space, column, container, row};
 use iced::{Border, Element, Length, Widget};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_sketch::solver::dof::DofColor;
+use signex_types::sketch::SketchHost;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{Label, text};
@@ -90,7 +91,7 @@ pub fn overlay<'a>(
     let dof = pill(t!(i18n, label).into(), dot, fill, ink, line);
 
     // A board sketch has no pads: its pill names the board only (#2234).
-    let info: Label<'static> = if editor.state.board_backdrop.is_some() {
+    let info: Label<'static> = if editor.state.sketch_host() == SketchHost::Board {
         UserText::new(editor.primitive().name.as_str()).into()
     } else {
         t!(

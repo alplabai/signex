@@ -221,8 +221,20 @@ pub(super) fn view_selection<'a>(
                 && let Some(id) = fp.selected_sketch_entity_id
             {
                 use crate::library::messages::RoleTag;
+                // The host's roles (#2518): a board offers its five bake
+                // targets, a footprint its fifteen roles.
+                let host = fp.sketch_host;
+                let labels =
+                    crate::library::editor::footprint::sketch_mode::roles::role_labels(host, i18n);
                 let current = fp.selected_sketch_role;
-                let dropdown = pick_list(Some(current), RoleTag::ALL, |r: &RoleTag| r.to_string())
+                let label_of = move |r: &RoleTag| {
+                    labels
+                        .iter()
+                        .find(|(role, _)| role == r)
+                        .map(|(_, label)| label.clone())
+                        .unwrap_or_default()
+                };
+                let dropdown = pick_list(Some(current), host.roles(), label_of)
                     .graphite()
                     .on_select(move |new_role| PanelMsg::FpEditorSetRole { id, role: new_role })
                     .padding([3.0, SP.m])
@@ -233,7 +245,7 @@ pub(super) fn view_selection<'a>(
                         .width(Length::Fill)
                         .boxed(),
                 );
-                if !fp.selected_sketch_is_point {
+                if !fp.selected_sketch_is_point && host.offers_role(RoleTag::Pad) {
                     col = col.push(
                         container(
                             text(t!(i18n, ids::EDITORS_FOOTPRINT_ROLE_POINTS_ONLY))
