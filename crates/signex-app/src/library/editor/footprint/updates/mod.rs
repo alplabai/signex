@@ -510,6 +510,7 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::ActiveBarSelectAll
         | FootprintEditorMsg::ActiveBarClearSelection
         | FootprintEditorMsg::ActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
+        FootprintEditorMsg::SketchCanvas(msg) => sketch::canvas_values::apply(editor, msg),
     }
 }
 
@@ -683,6 +684,9 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarFlipSelection
         | ActiveBarAlignSelectionToGrid
         | ActiveBarMoveOriginToGrid => false,
+        // The canvas values and menus record their own step for the edits
+        // that change the sketch (`record_edit`), and none for UI state.
+        SketchCanvas(_) => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

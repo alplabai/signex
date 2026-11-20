@@ -89,6 +89,12 @@ pub fn view_footprint<'a>(
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
             .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
             .push(mode_switcher)
+            // The constraint / pattern menu at the right-click (#188).
+            .push(
+                crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
+                    editor, tokens, i18n,
+                ),
+            )
             .boxed(),
         EditorMode::Normal => stack
             .push(super::dof_chip::overlay(editor, tokens, i18n))

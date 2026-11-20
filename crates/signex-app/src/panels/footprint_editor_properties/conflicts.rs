@@ -83,11 +83,35 @@ pub(super) fn conflict_row<'a>(row: &ConflictRowView) -> Element<'a, PanelMsg> {
             .boxed(),
     };
     let constraint = row.constraint;
-    mouse_area(inner)
+    let line = iced::widget::row![inner, remove_button(constraint)]
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill);
+    mouse_area(line)
         .on_enter(PanelMsg::FpEditorHoverOverConstraint {
             constraint: Some(constraint),
         })
         .on_exit(PanelMsg::FpEditorHoverOverConstraint { constraint: None })
+        .boxed()
+}
+
+/// Remove (decision fp-15): deletes the row's constraint as one undo step.
+/// A delete glyph in the danger colour; the row carries no text of its own
+/// because the panel builds it without the app's language.
+fn remove_button<'a>(constraint: ConstraintId) -> Element<'a, PanelMsg> {
+    use iced::widget::svg;
+    let glyph = svg(crate::icons::icon_dd_delete(
+        signex_types::theme::ThemeId::DEFAULT,
+    ))
+    .width(Length::Fixed(TS.body))
+    .height(Length::Fixed(TS.body))
+    .style(|theme: &Theme, _| svg::Style {
+        color: Some(theme.palette().danger.base.color),
+        ..Default::default()
+    });
+    button(glyph)
+        .padding([SP.xs, SP.s])
+        .on_press(PanelMsg::FpEditorConflictRemoveClicked { constraint })
+        .style(|_: &Theme, _| iced::widget::button::Style::default())
         .boxed()
 }
 

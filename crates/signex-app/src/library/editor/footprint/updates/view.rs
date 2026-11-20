@@ -217,6 +217,12 @@ fn tool_escape(editor: &mut crate::app::FootprintDocument) {
         editor.canvas_cache.clear();
         return;
     }
+    // The sketch canvas's constraint menu, value edit, then selected
+    // pattern close next, one per Esc (#188).
+    if editor.state.sketch_overlay.close_innermost() {
+        editor.canvas_cache.clear();
+        return;
+    }
     // v0.15 — global Esc tool cancel. Resets both Pads and
     // Sketch tool state, mode-agnostic.
     editor.state.pads_tool = crate::library::editor::footprint::state::PadsTool::Select;

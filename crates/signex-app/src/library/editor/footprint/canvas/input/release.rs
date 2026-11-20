@@ -14,10 +14,40 @@ use iced::{Point, Rectangle};
 
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
-use super::super::hit_test::{sketch_hit_other, sketch_snap};
+use super::super::hit_test::{sketch_glyph_at, sketch_hit_other, sketch_snap};
 use super::super::{DragState, FootprintCanvas, FootprintCanvasState};
 
 impl FootprintCanvas<'_> {
+    /// A right-click that did not pan, in sketch mode with the Select tool
+    /// (#188): on a constraint glyph or value it opens the constraint menu,
+    /// on a pattern glyph or value the pattern menu, at the click. `None`
+    /// anywhere else, so the footprint context menu opens as before.
+    pub(in crate::library::editor::footprint::canvas) fn released_secondary_on_glyph(
+        &self,
+        cstate: &FootprintCanvasState,
+        cursor_pos: Point,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        use super::super::glyph_layout::GlyphTarget;
+        use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+        use crate::library::editor::footprint::state::{EditorMode, SketchTool};
+        if self.state.mode != EditorMode::Sketch || self.state.active_tool != SketchTool::Select {
+            return None;
+        }
+        let glyph = sketch_glyph_at(self.sketch, self.state, cstate, cursor_pos)?;
+        let (x, y) = (cursor_pos.x, cursor_pos.y);
+        let msg = match glyph.target {
+            GlyphTarget::Constraint(constraint) => {
+                SketchCanvasMsg::ConstraintMenuOpened { constraint, x, y }
+            }
+            GlyphTarget::Pattern(array) | GlyphTarget::PatternValue(array, _) => {
+                SketchCanvasMsg::PatternMenuOpened { array, x, y }
+            }
+            GlyphTarget::Instance { .. } => return None,
+        };
+        self.cache.clear();
+        Some(canvas::Action::publish(self.sketch_canvas_event(msg)).and_capture())
+    }
+
     /// The `pad_idx == usize::MAX` left-release branch: a press that
     /// started on empty canvas. Either it moved (Text Frame commit /
     /// rubber-band select) or it was a click (sketch click-add / place

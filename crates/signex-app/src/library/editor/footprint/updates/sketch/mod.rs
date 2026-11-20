@@ -23,3 +23,5 @@ pub(super) mod redundancy;
 pub(super) mod solved;
 pub(super) mod tools;
 pub(super) mod ui;
+// Values on the drawing, constraint and pattern menus (#187, #188, #191).
+pub(super) mod canvas_values;

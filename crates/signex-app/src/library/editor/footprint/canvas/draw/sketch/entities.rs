@@ -6,6 +6,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 
 use crate::library::editor::footprint::canvas::FootprintCanvasState;
+use crate::library::editor::footprint::canvas::glyph_layout::sketch_glyphs;
 use crate::library::editor::footprint::state::FootprintEditorState;
 
 use super::constraints::draw_constraint_icons;
@@ -94,8 +95,10 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     // v0.13.2 Phase 6.6 — Constraint icon overlay. Render BEFORE
     // entities so glyphs sit underneath the geometry layer and don't
     // hide pad-edge clicks. Tinted red for over-constrained
-    // constraints; muted otherwise.
-    draw_constraint_icons(frame, cstate, sketch, state, conflict_colour);
+    // constraints; muted otherwise. Values and pattern glyphs draw on
+    // top (`draw_sketch_values`), from the same layout.
+    let glyphs = sketch_glyphs(sketch, state, cstate);
+    draw_constraint_icons(frame, &glyphs, state, conflict_colour);
 
     // v0.16.1 — Filled rendering for closed loops. Walks the line
     // graph, finds simple cycles whose Lines are NOT all

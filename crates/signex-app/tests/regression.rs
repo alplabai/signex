@@ -727,3 +727,7 @@ mod sheet_tools_graphite;
 // #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
 #[path = "regression/board_sync_graphite.rs"]
 mod board_sync_graphite;
+
+// #187 / #191: the sketch canvas's pattern values and instance suppression.
+#[path = "regression/sketch_canvas_values.rs"]
+mod sketch_canvas_values;

@@ -9,6 +9,7 @@ use iced::{Color, Point, Radians, Vector};
 
 use super::super::{DRAG_THRESHOLD_PX, FootprintCanvas, FootprintCanvasState};
 use super::cursor_ink::CursorInk;
+use super::sketch::draw_sketch_values;
 use super::sketch::{
     draw_dof_direction_arrows, draw_sketch_overlay, draw_sketch_snap_glyph,
     draw_sketch_tool_preview,
@@ -315,6 +316,15 @@ impl FootprintCanvas<'_> {
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);
             // v0.22 Phase A6 — Inferred-constraint snap glyph on top.
             draw_sketch_snap_glyph(frame, cstate, self.state);
+            // Values on the drawing, pattern glyphs, conflict badge (#187).
+            draw_sketch_values(
+                frame,
+                cstate,
+                sketch,
+                self.state,
+                self.bg_color,
+                conflict_colour,
+            );
         }
     }
 }

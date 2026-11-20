@@ -1104,6 +1104,11 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// Remove on a Properties conflict row (decision fp-15): delete that
+    /// constraint from the sketch in view, one undo step.
+    FpEditorConflictRemoveClicked {
+        constraint: signex_sketch::id::ConstraintId,
+    },
 }
 
 /// One change to the active sheet's frame settings (#1134).
