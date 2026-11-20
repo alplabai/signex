@@ -316,3 +316,51 @@ fn save_on_the_exclude_prompt_writes_the_typed_note() {
         .sheet;
     assert_eq!(saved.text_notes[0].text, "note!");
 }
+
+/// Discard on the Exclude prompt throws the typed text away with the
+/// sheet's other edits: the file keeps its old text, no typed box is left
+/// in any Properties context, and the next update has nothing owed to
+/// apply (it would warn that the note is gone).
+#[test]
+fn discard_on_the_exclude_prompt_drops_the_typed_note() {
+    use crate::app::{ExcludeDirtyChoice, RemoveChoice, RemoveMsg};
+    let (mut app, sheet, _dir) = remove_dialog_on_typed_note();
+    let on_file = signex_types::format::SnxSchematic::new(sheet_with_note())
+        .write_string()
+        .expect("encodes");
+    std::fs::write(&sheet, on_file).expect("the sheet is on disk");
+    let _ = app.handle_remove_confirm(RemoveChoice::ExcludeFromProject);
+    let discard = Message::Remove(RemoveMsg::ExcludeDirty(ExcludeDirtyChoice::Discard));
+    let task = app.update(discard);
+    settle(&mut app, task);
+
+    let on_disk = std::fs::read_to_string(&sheet).expect("still on disk");
+    let read = signex_types::format::SnxSchematic::parse(&on_disk)
+        .expect("parses")
+        .sheet;
+    assert_eq!(read.text_notes[0].text, "note", "the old text stays");
+
+    let docs = &app.document_state;
+    let panels = std::iter::once(&docs.panel_ctx.placed)
+        .chain(docs.window_panel_ctx.values().map(|ctx| &ctx.placed));
+    for placed in panels {
+        assert!(placed.notes_owed.is_empty(), "{:?}", placed.notes_owed);
+        assert!(
+            placed.note.as_ref().is_none_or(|d| !d.edited),
+            "no typed box is left"
+        );
+    }
+
+    let gone = "the note is no longer there";
+    let (said, gone_before) = (
+        crate::diagnostics::said_on_this_thread(),
+        crate::diagnostics::logged_count(gone),
+    );
+    let _ = app.update(Message::Ui(crate::app::UiMsg::Noop));
+    assert_eq!(
+        crate::diagnostics::said_on_this_thread(),
+        said,
+        "the next update logs nothing"
+    );
+    assert_eq!(crate::diagnostics::logged_count(gone), gone_before);
+}
