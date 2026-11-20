@@ -2,14 +2,6 @@
 
 use crate::app::{Signex, TabInfo, TabKind};
 
-/// The Project tab's title: the `.snxprj` file name, so it never reads
-/// like the root sheet's tab, which shows the same stem.
-pub(crate) fn project_tab_title(path: &std::path::Path) -> String {
-    path.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.display().to_string())
-}
-
 impl Signex {
     /// Project Options (project tree): focus the project's tab, or open it.
     /// One tab per project.
@@ -30,13 +22,17 @@ impl Signex {
         let idx = match existing {
             Some(idx) => idx,
             None => {
+                let kind = TabKind::Project(id);
+                // A page tab: "<project> — Project" (docs/PROJECT_TAB.md,
+                // "Page tabs").
+                let title = self.page_tab_title(&kind).unwrap_or_default();
                 self.document_state.project_tabs.entry(id).or_default();
                 self.document_state.tabs.push(TabInfo {
-                    title: project_tab_title(&path),
+                    title,
                     path,
                     cached_document: None,
                     project_id: Some(id),
-                    kind: TabKind::Project(id),
+                    kind,
                 });
                 self.document_state.tabs.len() - 1
             }

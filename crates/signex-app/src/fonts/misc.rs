@@ -280,6 +280,24 @@ pub fn write_net_hover_pref_at(path: &Path, enabled: bool) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Fill symbol bodies
+// ──────────────────────────────────────────────────────────────────────────
+
+pub fn read_symbol_body_fill_pref_at(path: &Path) -> crate::symbol_fill_prefs::SymbolBodyFill {
+    crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(read_prefs_json(path).as_ref())
+}
+
+pub fn write_symbol_body_fill_pref(fill: crate::symbol_fill_prefs::SymbolBodyFill) {
+    write_symbol_body_fill_pref_at(&prefs_path(), fill)
+}
+
+pub fn write_symbol_body_fill_pref_at(path: &Path, fill: crate::symbol_fill_prefs::SymbolBodyFill) {
+    update_prefs_json(path, crate::symbol_fill_prefs::ENABLED_KEY, |prefs| {
+        fill.write_into(prefs);
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Trackpad two-finger pan / remember window geometry
 // ──────────────────────────────────────────────────────────────────────────
 

@@ -62,6 +62,10 @@ pub struct FabOptions {
     /// The ODB++ job (#2485), and whether it is a folder or one archive;
     /// `None` writes none.
     pub odb: Option<OdbForm>,
+    /// The designator standard the board's designators are shown under
+    /// (`show_board_references`, #1416); the test netlist writes them
+    /// stored. `None`: as they are.
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
 }
 
 /// How the ODB++ job is written.
@@ -86,6 +90,7 @@ impl FabOptions {
             test_netlist: true,
             ipc2581: true,
             odb: Some(OdbForm::Archive),
+            designator_standard: None,
         }
     }
 
@@ -246,7 +251,13 @@ pub fn generate(
         files.push(FabFile {
             name: format!("{name}-netlist.ipc"),
             kind: FabFileKind::TestNetlist,
-            contents: ipc356::write_ipc356(board, &stack, name, &mut ipc_skipped),
+            contents: ipc356::write_ipc356(
+                board,
+                &stack,
+                name,
+                options.designator_standard,
+                &mut ipc_skipped,
+            ),
         });
         skipped = skipped.max(ipc_skipped);
     }

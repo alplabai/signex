@@ -484,6 +484,14 @@ impl Signex {
                 }
             }
             "sync_sheet_pins" => self.plan_child_read(args, list, target, plan),
+            // #1276: the sheet a symbol is made from is read for its ports,
+            // and checked as a `place_sheet_symbol` file is.
+            "create_sheet_symbol_from_sheet" => {
+                if let Ok(file) = super::sheet_sync_operands::sheet_file_operand(args) {
+                    self.plan_symbol_sheet_read(&file, plan);
+                }
+            }
+            "sync_sheet_entries" => self.plan_entry_sync_read(args, list, target, plan),
             // The file a design block or a graphics import places (#1667).
             "place_design_block" => {
                 if let Ok(path) = super::placement_extras_operands::path_operand(args)
@@ -499,6 +507,66 @@ impl Signex {
             }
             _ => {}
         }
+    }
+
+    /// The sheet file `file` a sheet symbol is made from: read for its ports,
+    /// and checked as a `place_sheet_symbol` file is.
+    fn plan_symbol_sheet_read(&self, file: &str, plan: &mut ReadPlan) {
+        if let Ok((dir, path, _)) = self.child_file_target(file) {
+            plan.seeds.push(path.clone());
+            plan.links.push((dir, path.clone()));
+            if !self.document_state.engines.contains_key(&path) {
+                plan.children.push(path);
+            }
+        }
+    }
+
+    /// The GUI's Create Sheet Symbol From Sheet (#1276): the same reads the
+    /// operand form makes for `file` on the active sheet `target`, so both run
+    /// [`Self::place_symbol_from_sheet_file`] on the same facts. The future
+    /// yields the reads; the revisions are what they depend on.
+    pub(crate) fn symbol_sheet_reads(
+        &self,
+        target: &Path,
+        file: &Path,
+    ) -> (
+        BTreeMap<PathBuf, u64>,
+        impl std::future::Future<Output = EditReads> + use<>,
+    ) {
+        let mut plan = ReadPlan::default();
+        self.plan_symbol_sheet_read(&file.to_string_lossy(), &mut plan);
+        self.plan_project_read(target, &mut plan);
+        let revisions = self.watched_revisions(target);
+        let read = async move { landed(tokio::task::spawn_blocking(move || plan.read()).await) };
+        (revisions, read)
+    }
+
+    /// Run `place` on the reads a GUI edit of `target` waited for, as
+    /// [`Self::run_with_reads`] runs an operand edit: refused when the reads
+    /// failed or the sheets changed meanwhile.
+    pub(crate) fn with_gui_reads<T>(
+        &mut self,
+        target: &Path,
+        revisions: &BTreeMap<PathBuf, u64>,
+        reads: Arc<EditReads>,
+        place: impl FnOnce(&mut Self) -> Result<T, String>,
+    ) -> Result<T, String> {
+        if let Some(why) = &reads.failed {
+            return Err(format!(
+                "reading the files this edit needs failed ({why}); nothing was applied"
+            ));
+        }
+        if self.watched_revisions(target) != *revisions {
+            return Err(
+                "the document changed while its project and files were read; nothing was applied"
+                    .to_string(),
+            );
+        }
+        self.document_state.agent_edits.reads = Some(reads);
+        let placed = place(self);
+        self.document_state.agent_edits.reads = None;
+        self.document_state.agent_edits.project_wanted.set(false);
+        placed
     }
 
     /// The library row a `place_component` names, when it names one.
@@ -534,8 +602,37 @@ impl Signex {
         let Some(file) = self.planned_child_file(&name, list, target) else {
             return;
         };
+        self.plan_child_file(&file, target, plan);
+    }
+
+    /// The closed child file of the sheet symbol a `sync_sheet_entries` names
+    /// (#1276): by id on the target sheet, else by name as `sync_sheet_pins`.
+    fn plan_entry_sync_read(
+        &self,
+        args: &CommandArgs,
+        list: &[ListedEdit],
+        target: &Path,
+        plan: &mut ReadPlan,
+    ) {
+        let Ok(key) = text(args, "symbol") else {
+            return;
+        };
+        let file = match Uuid::parse_str(key.trim()) {
+            Ok(id) => self.document_state.edit_engine().and_then(|engine| {
+                let found = engine.document().child_sheets.iter().find(|c| c.uuid == id);
+                found.map(|c| c.filename.clone())
+            }),
+            Err(_) => self.planned_child_file(&key, list, target),
+        };
+        if let Some(file) = file {
+            self.plan_child_file(&file, target, plan);
+        }
+    }
+
+    /// Read the child file `file` of `target` unless an engine holds it.
+    fn plan_child_file(&self, file: &str, target: &Path, plan: &mut ReadPlan) {
         let dir = target.parent().unwrap_or_else(|| Path::new(""));
-        if let Ok(path) = resolve_child_reference_quiet(dir, &file)
+        if let Ok(path) = resolve_child_reference_quiet(dir, file)
             && !self.document_state.engines.contains_key(&path)
         {
             plan.children.push(path);

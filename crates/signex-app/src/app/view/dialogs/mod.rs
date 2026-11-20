@@ -29,6 +29,7 @@ mod project;
 mod quit_confirm;
 mod rule_editor;
 mod sheet_numbering;
+mod sheet_sync;
 mod sizes;
 mod title_bar;
 mod update_pcb;

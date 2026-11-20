@@ -74,6 +74,8 @@ impl Signex {
     pub(crate) fn save_active_document(&mut self) -> Result<iced::Task<Message>> {
         if let Some(path) = self.document_state.active_path.clone() {
             self.commit_title_block_drafts_where(|sheet| sheet == path);
+            // Part fields that do not evaluate are named in Messages (#1986).
+            self.report_part_field_issues(&path);
         }
         // A board in sketch mode takes its sketch before it is written; a
         // refused bake holds the save (#2234).

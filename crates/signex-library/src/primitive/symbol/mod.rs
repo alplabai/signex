@@ -7,6 +7,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 use uuid::Uuid;
 
 use crate::param::ParamMap;
@@ -580,6 +581,19 @@ const SYMBOL_FILE_FORMAT_TOKEN_V2: &str = "snxsym/v2";
 /// v2 and v3.
 const SYMBOL_FILE_FORMAT_TOKEN_V3: &str = "snxsym/v3";
 
+/// `.snxsym` version policy. `current` is the newest token; a save writes
+/// the lowest of the three the content needs (see `to_toml_string`).
+const SYMBOL_FILE_VERSION: FormatVersion = FormatVersion {
+    current: SYMBOL_FILE_FORMAT_TOKEN_V3,
+    readable: &[
+        SYMBOL_FILE_FORMAT_TOKEN,
+        SYMBOL_FILE_FORMAT_TOKEN_V2,
+        SYMBOL_FILE_FORMAT_TOKEN_V3,
+    ],
+    newer_minor: NewerMinor::Refused,
+    missing: MissingToken::Refused,
+};
+
 /// Stable column layout for the per-symbol `pins_tsv` block. Adding
 /// or reordering columns is a wire-format break — bump
 /// [`SYMBOL_FILE_FORMAT_TOKEN`]. This is the legacy 20-column layout,
@@ -629,7 +643,8 @@ fn default_format() -> String {
 /// encoded payload.
 #[derive(Serialize, Deserialize)]
 struct SymbolFileWire {
-    format: String,
+    #[serde(default)]
+    format: Option<String>,
     file_uuid: Uuid,
     #[serde(default)]
     display_name: String,
@@ -796,9 +811,8 @@ impl SymbolFile {
         Self::from_toml_str(text)
     }
 
-    /// Parse the TOML+TSV wire format. The format-token check accepts
-    /// either [`SYMBOL_FILE_FORMAT_TOKEN`] or
-    /// [`SYMBOL_FILE_FORMAT_TOKEN_V2`] or [`SYMBOL_FILE_FORMAT_TOKEN_V3`]; any other token surfaces
+    /// Parse the TOML+TSV wire format. The format token is checked by
+    /// [`SYMBOL_FILE_VERSION`]; a refused one surfaces
     /// [`SymbolFileError::UnsupportedFormat`].
     ///
     /// Every loaded `Arc` graphic passes through
@@ -810,15 +824,7 @@ impl SymbolFile {
     /// corrected values, healing the file on disk too.
     pub fn from_toml_str(text: &str) -> Result<Self, SymbolFileError> {
         let wire: SymbolFileWire = signex_types::numeric::parse_toml_finite(text)?;
-        if ![
-            SYMBOL_FILE_FORMAT_TOKEN,
-            SYMBOL_FILE_FORMAT_TOKEN_V2,
-            SYMBOL_FILE_FORMAT_TOKEN_V3,
-        ]
-        .contains(&wire.format.as_str())
-        {
-            return Err(SymbolFileError::UnsupportedFormat { got: wire.format });
-        }
+        let format = SYMBOL_FILE_VERSION.read(wire.format.as_deref())?;
         let mut symbols = Vec::with_capacity(wire.symbols.len());
         for sw in wire.symbols {
             let pins = pins_from_tsv(&sw.pins_tsv)?;
@@ -872,7 +878,7 @@ impl SymbolFile {
             });
         }
         Ok(SymbolFile {
-            format: wire.format,
+            format,
             file_uuid: wire.file_uuid,
             display_name: wire.display_name,
             copied_from: wire.copied_from,
@@ -953,7 +959,7 @@ impl SymbolFile {
             });
         }
         let wire = SymbolFileWire {
-            format,
+            format: Some(format),
             file_uuid: self.file_uuid,
             display_name: self.display_name.clone(),
             copied_from: self.copied_from,
@@ -991,10 +997,8 @@ pub enum SymbolFileError {
     NonFiniteNumber { path: String },
     #[error("TOML serialise failed: {0}")]
     TomlSerialize(toml::ser::Error),
-    #[error(
-        "unsupported .snxsym format token {got:?}; this build supports \"snxsym/v1\", \"snxsym/v2\" or \"snxsym/v3\""
-    )]
-    UnsupportedFormat { got: String },
+    #[error(".snxsym {0}")]
+    UnsupportedFormat(#[from] signex_types::format_version::FormatVersionError),
     #[error(
         "TSV cell in column {column:?} contains a tab, newline, or triple-quote: \
          {value:?}; cells must be free of \\t, \\n, and the literal \"'''\""

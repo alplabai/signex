@@ -163,6 +163,7 @@ impl Signex {
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
+        let symbol_body_fill = crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
         let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
@@ -368,6 +369,10 @@ impl Signex {
                 preferences_draft_move_keeps_wires: move_keeps_wires,
                 net_hover_enabled,
                 preferences_draft_net_hover_enabled: net_hover_enabled,
+                symbol_body_fill,
+                preferences_draft_symbol_body_fill: symbol_body_fill,
+                preferences_body_fill_palette_open: false,
+                preferences_body_fill_picker_open: false,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
                 wheel_mode,
@@ -441,6 +446,8 @@ impl Signex {
                 update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,
+                sheet_sync: None,
+                sheet_sync_reads: 0,
                 board_reannotate: None,
                 board_reannotate_options: Default::default(),
                 fab_outputs: None,
@@ -462,6 +469,7 @@ impl Signex {
                 erc_lapsed_waivers: std::collections::BTreeSet::new(),
                 erc_page_frames: Default::default(),
                 erc_waive_draft: None,
+                validation_panels: Default::default(),
                 erc_focus_global_index: None,
                 erc_epoch: 0,
                 erc_run_epoch: 0,
@@ -485,7 +493,9 @@ impl Signex {
                 annotate_dialog_open: false,
                 annotate_order: crate::app::state::AnnotateOrder::default(),
                 erc_dialog_open: false,
+                erc_profile_menu_open: false,
                 annotate_reset_confirm: false,
+                annotate_session: Box::default(),
                 modal_offsets: std::collections::HashMap::new(),
                 modal_dragging: None,
                 tab_dragging: None,
@@ -546,6 +556,7 @@ impl Signex {
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
+                times: crate::app::state::DocumentTimes::at(chrono::Local::now()),
                 symbol_editors: std::collections::HashMap::new(),
                 footprint_editors: std::collections::HashMap::new(),
                 pad_clipboard: None,
@@ -652,6 +663,8 @@ impl Signex {
                     child_sheet_file_buf: None,
                     title_block: std::collections::BTreeMap::new(),
                     project_parameters: std::collections::BTreeMap::new(),
+                    sheet_variables: std::collections::BTreeMap::new(),
+                    builtin_parameters: Vec::new(),
                     drafts: drafts.clone(),
                     numeric_draft: None,
                     title_block_sheet: None,
@@ -665,6 +678,7 @@ impl Signex {
                     erc_running: false,
                     erc_results_stale: false,
                     erc_ran: false,
+                    validation: Default::default(),
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     pcb_drc: None,
@@ -726,6 +740,7 @@ impl Signex {
                 pcb_tool: None,
                 pcb_tool_defaults: Default::default(),
                 pcb_guide_place: None,
+                pcb_origin_place: None,
                 pcb_query: Default::default(),
                 pcb_arrange_box: None,
                 pcb_ratsnest: Default::default(),
@@ -759,6 +774,7 @@ impl Signex {
                 grid_picker: None,
                 tab_context_menu: None,
                 start_row_menu: None,
+                start_section: Default::default(),
                 context_submenu: None,
                 pending_submenu: None,
                 submenu_launcher_hovered: None,

@@ -222,6 +222,16 @@ preferences-annotate-undo = Annotate undo
 # $undo is the Undo shortcut, such as "Ctrl+Z".
 preferences-annotate-undo-help = How many undo steps one annotate run is. One step reverts every sheet the run touched together from whichever sheet { $undo } is pressed on; per sheet undoes each sheet on its own. Applies to the next annotate run.
 
+## Schematic ▸ Display
+# The page of how the schematic is drawn.
+preferences-page-schematic-display = Display
+preferences-section-schematic-display = Schematic — Display
+preferences-symbol-body-fill = Fill symbol bodies
+preferences-symbol-body-fill-help = When on, the closed rectangles, polygons and circles that form a symbol's body are drawn filled: on the canvas, in the symbol previews, and in PDF, SVG and print. Pins, text and open lines are never filled, and power ports are not filled. A body shape the symbol fills itself keeps its own fill.
+# Label of the swatch: the colour symbol bodies are filled with.
+preferences-symbol-body-fill-colour = Fill colour
+preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a colour. Reset to Default goes back to the theme's tint.
+
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
 preferences-classes-help = Seeds the class registry of newly-created libraries. Per-library edits live inside each .snxlib's manifest (forthcoming Library Properties pane); this list controls only what new libraries inherit.

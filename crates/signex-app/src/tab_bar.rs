@@ -7,7 +7,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::tab_pill::TabPill;
 use signex_widgets::{Label, text, tooltip};
 
-use crate::app::{Document, DocumentKey, TabInfo};
+use crate::app::{Document, DocumentKey, LoadedProject, TabInfo, page_tab};
 use crate::styles::{self, Spacing, TypeScale};
 
 mod graphite;
@@ -92,6 +92,8 @@ pub struct TabMarks<'p> {
     pub project_name: Option<&'p str>,
     /// The language the tab marks read in.
     pub i18n: &'p signex_i18n::I18n,
+    /// The open projects, which title the page tabs.
+    pub projects: &'p [LoadedProject],
 }
 
 pub fn view<'a>(
@@ -108,6 +110,7 @@ pub fn view<'a>(
         tooltips_enabled,
         project_name,
         i18n,
+        projects,
     } = *marks;
     // Tabs sit flush against each other — Altium parity. The active
     // pill's accent underline distinguishes it from neighbours; no
@@ -130,12 +133,11 @@ pub fn view<'a>(
         // Tab title. A document with unsaved changes also gets a dot
         // (the Projects tree row keeps its own), before the title; the
         // close × sits after it.
-        // A Rules tab's title is a catalog message, read in the current
-        // language rather than the one it was opened in.
-        let catalog_title = matches!(tab.kind, crate::app::TabKind::Rules(_))
-            .then(|| signex_i18n::t!(i18n, signex_i18n::ids::RULES_TAB_TITLE).into_string());
+        // A page tab reads "<project> — <page>" from the project's current
+        // name, in the current language rather than the one it was opened in.
+        let page_title = page_tab::tab_title(&tab.kind, projects, i18n);
         let label = ellipsize_title(
-            catalog_title.as_deref().unwrap_or(&tab.title),
+            page_title.as_deref().unwrap_or(&tab.title),
             MAX_TAB_TITLE_CHARS,
         );
 
@@ -232,8 +234,9 @@ pub fn placeholder<'a, M: 'a>(tokens: &ThemeTokens) -> Element<'a, M> {
 /// Tab label font size; the dirty dot is sized from it.
 const TAB_FONT_SIZE: f32 = TS.body;
 
-/// Whether `tab` has unsaved changes: its path is in `dirty`, the set from
-/// [`dirty_tab_paths`] (Component Preview tabs have a synthetic path).
+/// Whether `tab` has unsaved changes: the file it saves into is in `dirty`,
+/// the set from [`dirty_tab_paths`] (Component Preview tabs have a
+/// synthetic path). A page tab follows its owner file (#661).
 pub(crate) fn tab_is_dirty(
     tab: &TabInfo,
     dirty: &std::collections::HashSet<std::path::PathBuf>,
@@ -241,7 +244,7 @@ pub(crate) fn tab_is_dirty(
     dirty.contains(&tab.path)
 }
 
-/// The paths of `tabs` whose document has unsaved work, asked of each
+/// The owner paths of `tabs` whose document has unsaved work, asked of each
 /// document through [`Document`]. A tab with no document owner (a Library
 /// Browser, a project tab whose project closed) falls back to the dirty
 /// path set.
@@ -315,6 +318,7 @@ mod tests {
             tooltips_enabled: true,
             project_name: Some("Sensor node rev B"),
             i18n: &signex_i18n::I18n::en_us(),
+            projects: &[],
         };
         let strip = super::view(&[], 0, None, &none, &marks, &tokens);
         assert_eq!(strip.size().height, fixed);
@@ -356,7 +360,6 @@ mod tests {
         assert!(tab_is_dirty(&tab("a.snxsch"), &dirty));
         assert!(!tab_is_dirty(&tab("b.snxsch"), &dirty));
     }
-
     #[test]
     fn reveal_offset_is_exact_at_both_ends_and_proportional_between() {
         assert_eq!(reveal_offset(0, 1).x, 0.0);

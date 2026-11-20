@@ -526,10 +526,30 @@ mod copy_tests {
     fn multi_line_dialog_texts_keep_their_english() {
         let en = I18n::en_us();
         let undo = || signex_i18n::Arg::from("Ctrl+Z");
+        // #76 / AV-05: the reset detail names its scope; undo is stated once,
+        // in the confirm's banner, the same way as the Annotate footer.
+        let scope = |renumber: &'static str| {
+            en.message_plain(
+                ids::DIALOG_ANNOTATE_RESET_DETAIL,
+                &[
+                    ("sheets", signex_i18n::Arg::from(5_usize)),
+                    ("symbols", signex_i18n::Arg::from(42_usize)),
+                    ("renumber", signex_i18n::Arg::from(renumber)),
+                ],
+            )
+        };
         assert_eq!(
-            en.message_plain(ids::DIALOG_ANNOTATE_RESET_DETAIL, &[("undo", undo())]),
-            "Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
-This cannot be undone through Ctrl+Z alone — consider saving first."
+            scope("yes"),
+            "Every reference designator on the 5 ticked sheets (42 symbols) is reset to '?', \
+             then renumbered from 1."
+        );
+        assert_eq!(
+            scope("no"),
+            "Every reference designator on the 5 ticked sheets (42 symbols) is reset to '?'."
+        );
+        assert_eq!(
+            en.message_plain(ids::DIALOG_ANNOTATE_RESET_ONE_STEP, &[("undo", undo())]),
+            "One undo step: Ctrl+Z restores every sheet."
         );
         // The recovery hint is split into the callout (Restore) and the
         // caption (Discard, Decide later); together they keep every word.

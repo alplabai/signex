@@ -1,0 +1,26 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "ligra-back",
+  "net_classes": [
+    {
+      "clearance": 0.127,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.25,
+      "via_diameter": 0.5,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "ligra-back.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

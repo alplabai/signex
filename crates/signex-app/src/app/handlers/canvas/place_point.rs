@@ -1,8 +1,11 @@
 //! The one-click placements as plain-value methods (#1930): power port,
 //! no-connect, junction and no-ERC directive. Each takes an already-snapped
 //! point and says whether it placed anything.
+//! A No-ERC directive's rule list is edited here too (#1699).
 
-use signex_types::schematic::{Junction, NoConnect, Point};
+use signex_types::schematic::{Junction, NoConnect, NoErcDirective, Point};
+
+use crate::panels::NoErcRuleEdit;
 
 use super::super::super::*;
 
@@ -106,14 +109,46 @@ impl Signex {
     }
 
     pub(crate) fn place_no_erc_directive_at(&mut self, at: Point) -> bool {
-        let directive = NoConnect {
-            uuid: uuid::Uuid::now_v7(),
-            position: at,
-        };
+        self.place_no_erc_directive(NoErcDirective::new(uuid::Uuid::now_v7(), at))
+    }
+
+    /// Place `directive` as it is, its rule list included (#1699).
+    pub(crate) fn place_no_erc_directive(&mut self, directive: NoErcDirective) -> bool {
         self.apply_engine_command(
             signex_engine::Command::PlaceNoErcDirective { directive },
             false,
             false,
         )
+    }
+
+    /// A Properties edit of the rules the No-ERC directive `id` silences
+    /// (#1699). Each checkbox is one undo step; an empty list silences every
+    /// rule.
+    pub(crate) fn edit_no_erc_rules(&mut self, id: uuid::Uuid, edit: &NoErcRuleEdit) {
+        let Some(mut rules) = self.document_state.edit_engine().and_then(|engine| {
+            engine
+                .document()
+                .no_erc_directives
+                .iter()
+                .find(|d| d.uuid == id)
+                .map(|d| d.rules.clone())
+        }) else {
+            return;
+        };
+        match edit {
+            NoErcRuleEdit::AllRules => rules.clear(),
+            NoErcRuleEdit::Rule { rule_id, silenced } => {
+                rules.retain(|r| r != rule_id);
+                if *silenced {
+                    rules.push(rule_id.clone());
+                }
+            }
+        }
+        // The gateway logs a refusal itself; an unchanged list is no edit.
+        self.apply_engine_command(
+            signex_engine::Command::SetNoErcRules { id, rules },
+            true,
+            true,
+        );
     }
 }
