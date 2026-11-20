@@ -341,3 +341,12 @@ circle is not carried yet.
 The backdrop also draws placed pads (top, bottom or Multi-Layer copper)
 and component courtyards faint, in the board palette's colours, which are
 the same in both Graphite themes.
+
+## Pattern links on a board
+
+A board sketch stores pattern sources, pattern mirrors and per-instance
+overrides in `[board_sketch.sketch]` as a footprint sketch does
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#pattern-links)), but only a
+footprint bake expands them for now: a board bake still bakes one instance
+per pattern until the instance walk of #2517, and ignores links and
+mirrors.
