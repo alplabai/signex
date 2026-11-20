@@ -1,13 +1,15 @@
 //! The replacement builder: hits in, `Command`s out.
 
-use super::{FindHit, FindKind};
+use super::{FindHit, FindKind, FindQuery, MatchOptions};
 use crate::{Command, TextTarget};
 use signex_types::schematic::{InstancePath, SchematicSheet};
 
-/// The commands that apply `replacement` for `needle` at `hit`, computed
-/// from `sheet` as it is *now*. The hit's own text is never read: it dates
-/// from the scan, and a replace that trusted it would write over an edit
-/// made since. Empty when the item is gone or no longer contains `needle`.
+/// The commands that replace every hit of `query` in the text at `hit` with
+/// `replacement`, computed from `sheet` as it is *now*. The hit's own text
+/// is never read: it dates from the scan, and a replace that trusted it
+/// would write over an edit made since. Empty when the item is gone or
+/// `query` no longer matches it. Only `query`'s hits are rewritten, so with
+/// Whole word on, `VOUT_3V3` keeps its `VOUT`.
 ///
 /// A designator goes where a Properties edit of it would (#1151, #1200):
 /// - at a non-root placement of a sheet placed more than once (or not known
@@ -18,14 +20,13 @@ use signex_types::schematic::{InstancePath, SchematicSheet};
 pub fn replace_commands(
     sheet: &SchematicSheet,
     hit: &FindHit,
-    needle: &str,
+    query: &FindQuery,
     replacement: &str,
 ) -> Vec<Command> {
-    let needle = needle.trim();
     let Some(live) = live_text(sheet, hit) else {
         return Vec::new();
     };
-    let value = replace_all_ci(&live, needle, replacement);
+    let value = query.replace_all(&live, replacement);
     if value == live {
         return Vec::new();
     }
@@ -117,27 +118,14 @@ pub fn designator_commands(
     }
 }
 
-/// Replace every occurrence of `needle` in `haystack` with `replacement`,
-/// preserving the rest of the string. Case is ignored under the same
-/// per-char rule the scan uses, so positions stay valid for any script. An
-/// empty needle is a no-op (the find layer never produces an empty query).
+/// Replace every case-insensitive substring `needle` (trimmed) in `haystack`
+/// with `replacement`: [`FindQuery::replace_all`] under
+/// [`MatchOptions::SUBSTRING`]. The board's Find still matches this way. An
+/// empty needle is a no-op.
 pub fn replace_all_ci(haystack: &str, needle: &str, replacement: &str) -> String {
-    let needle = super::fold::folded(needle);
-    if needle.is_empty() {
-        return haystack.to_string();
-    }
-    let chars: Vec<char> = haystack.chars().collect();
-    let hay = super::fold::folded(haystack);
-    let mut out = String::with_capacity(haystack.len());
-    let mut i = 0;
-    while i < chars.len() {
-        if super::fold::matches_at(&hay, i, &needle) {
-            out.push_str(replacement);
-            i += needle.len();
-        } else {
-            out.push(chars[i]);
-            i += 1;
-        }
-    }
-    out
+    // A literal query never fails to compile.
+    FindQuery::new(needle, MatchOptions::SUBSTRING).map_or_else(
+        |_| haystack.to_string(),
+        |query| query.replace_all(haystack, replacement),
+    )
 }

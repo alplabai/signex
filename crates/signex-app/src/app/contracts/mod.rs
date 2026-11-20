@@ -180,6 +180,7 @@ mod net_nav;
 mod pcb;
 mod pdf_option;
 mod placement_extras;
+mod project;
 mod state;
 
 pub use cross_probe::CrossProbeMsg;
@@ -197,6 +198,7 @@ pub use pcb::{
 };
 pub use pdf_option::PdfOptionMsg;
 pub use placement_extras::PlacementExtrasMsg;
+pub use project::*;
 pub use state::*;
 
 #[cfg(test)]
