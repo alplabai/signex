@@ -338,7 +338,7 @@ impl Signex {
                 Ok(Some(patch_pair)) if *path == active_path => {
                     active_patch = Some(patch_pair.document);
                 }
-                Ok(Some(_)) => {
+                Ok(Some(patch_pair)) => {
                     // A parked sheet undone back to what was loaded from disk
                     // has nothing to save; redo marks it dirty again.
                     let back_at_disk = direction == StepDirection::Undo
@@ -358,6 +358,7 @@ impl Signex {
                         dropped_now.push(path.clone());
                     } else {
                         self.document_state.sync_history_dirty(path);
+                        self.repaint_member_sheet(path, patch_pair.document);
                     }
                 }
                 Ok(None) => {}
@@ -474,6 +475,7 @@ impl Signex {
                         active_patch = Some(pair.document);
                     } else {
                         self.document_state.sync_history_dirty(path);
+                        self.repaint_member_sheet(path, pair.document);
                     }
                 }
                 Ok(None) => {}

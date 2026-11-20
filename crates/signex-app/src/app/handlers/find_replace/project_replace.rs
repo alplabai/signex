@@ -378,6 +378,8 @@ impl Signex {
                 // Recorded in the sheet's history: undo back to the save
                 // point clears the mark.
                 self.document_state.mark_history_edit_dirty(&done.path);
+                let patch = done.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
+                self.repaint_member_sheet(&done.path, patch);
             }
         }
         let names: Vec<String> = applied

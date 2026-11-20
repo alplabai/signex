@@ -289,6 +289,13 @@ impl Signex {
             return PassApplied::without_writes(task);
         }
         self.warn_mixed_after_renumbering(&before);
+        // Windows and tile panes on the other annotated sheets follow; the
+        // engine method reports no patch, so they are redrawn whole.
+        for path in &touched_sheets.live {
+            if active_path.as_deref() != Some(path.as_path()) {
+                self.repaint_member_sheet(path, signex_engine::DocumentPatch::FULL);
+            }
+        }
         let changed_sheets = touched_sheets.live.len();
         touched_sheets.parked = parked_here.iter().cloned().collect();
         // Owed to disk already, so an undo before the write lands still names them.

@@ -9,6 +9,7 @@ mod groups;
 mod members;
 mod messages;
 mod refresh;
+mod repaint;
 
 use std::path::{Path, PathBuf};
 
