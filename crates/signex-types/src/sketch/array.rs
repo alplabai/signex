@@ -90,6 +90,134 @@ impl ArrayKind {
             Self::Polar { source, center, .. } => vec![*source, *center],
         }
     }
+
+    /// Whether single instances of this array can be suppressed. A grid
+    /// and a polar array keep a suppression list; a linear array has none.
+    pub fn has_suppression_model(&self) -> bool {
+        !matches!(self, Self::Linear { .. })
+    }
+
+    /// Whether instance `(i, j)` is on the suppression list (`j` is 0 for
+    /// a polar array). The mask expression is not evaluated here.
+    pub fn is_instance_suppressed(&self, i: u32, j: u32) -> bool {
+        self.depopulation()
+            .is_some_and(|d| d.suppressed_instances.contains(&(i, j)))
+    }
+
+    /// Put instance `(i, j)` on the suppression list or take it off.
+    /// The list gains a depopulation with an empty mask when it first
+    /// needs one, and drops it again when the list empties and the mask is
+    /// blank. Returns whether the array changed; a linear array never does.
+    pub fn set_instance_suppressed(&mut self, i: u32, j: u32, suppressed: bool) -> bool {
+        let slot = match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => depopulation,
+            Self::Linear { .. } => return false,
+        };
+        if suppressed {
+            let d = slot.get_or_insert_with(|| GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: Vec::new(),
+            });
+            if d.suppressed_instances.contains(&(i, j)) {
+                return false;
+            }
+            d.suppressed_instances.push((i, j));
+            return true;
+        }
+        let Some(d) = slot.as_mut() else {
+            return false;
+        };
+        let before = d.suppressed_instances.len();
+        d.suppressed_instances.retain(|&entry| entry != (i, j));
+        let changed = d.suppressed_instances.len() != before;
+        if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
+            *slot = None;
+        }
+        changed
+    }
+
+    /// Flip the suppression of instance `(i, j)`. Returns whether the
+    /// array changed.
+    pub fn toggle_instance_suppressed(&mut self, i: u32, j: u32) -> bool {
+        let suppressed = self.is_instance_suppressed(i, j);
+        self.set_instance_suppressed(i, j, !suppressed)
+    }
+
+    fn depopulation(&self) -> Option<&GridDepopulation> {
+        match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => {
+                depopulation.as_ref()
+            }
+            Self::Linear { .. } => None,
+        }
+    }
+}
+
+/// An array's shape once its expressions are evaluated: the counts and
+/// steps as numbers (mm, rad). Places each instance slot relative to the
+/// source, the way the bake expands the array.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ArrayLayout {
+    /// `count` instances, each `step` further from the source.
+    Linear { count: u32, step: (f64, f64) },
+    /// `nx` by `ny` instances; `i` steps along x, `j` along y.
+    Grid { nx: u32, ny: u32, step: (f64, f64) },
+    /// `count` instances turned about `center`, together sweeping
+    /// `sweep_rad`.
+    Polar {
+        count: u32,
+        sweep_rad: f64,
+        center: (f64, f64),
+    },
+}
+
+impl ArrayLayout {
+    /// How many instance slots the array has.
+    pub fn slot_count(&self) -> u64 {
+        match *self {
+            Self::Linear { count, .. } | Self::Polar { count, .. } => u64::from(count),
+            Self::Grid { nx, ny, .. } => u64::from(nx) * u64::from(ny),
+        }
+    }
+
+    /// Every instance slot `(i, j)`, the source's `(0, 0)` first.
+    pub fn slots(&self) -> Vec<(u32, u32)> {
+        match *self {
+            Self::Linear { count, .. } | Self::Polar { count, .. } => {
+                (0..count).map(|i| (i, 0)).collect()
+            }
+            Self::Grid { nx, ny, .. } => {
+                (0..ny).flat_map(|j| (0..nx).map(move |i| (i, j))).collect()
+            }
+        }
+    }
+
+    /// Where slot `(i, j)` sits when the source sits at `source`.
+    pub fn position(&self, source: (f64, f64), i: u32, j: u32) -> (f64, f64) {
+        match *self {
+            Self::Linear { step, .. } => (
+                source.0 + f64::from(i) * step.0,
+                source.1 + f64::from(i) * step.1,
+            ),
+            Self::Grid { step, .. } => (
+                source.0 + f64::from(i) * step.0,
+                source.1 + f64::from(j) * step.1,
+            ),
+            Self::Polar {
+                count,
+                sweep_rad,
+                center,
+            } => {
+                let theta = f64::from(i) * sweep_rad / f64::from(count.max(1));
+                let (dx, dy) = (source.0 - center.0, source.1 - center.1);
+                let (sin, cos) = theta.sin_cos();
+                (
+                    center.0 + dx * cos - dy * sin,
+                    center.1 + dx * sin + dy * cos,
+                )
+            }
+        }
+    }
 }
 
 /// Predicate evaluated per `(i, j)` index in a Grid array.

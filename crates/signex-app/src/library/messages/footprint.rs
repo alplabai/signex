@@ -599,4 +599,7 @@ pub enum FootprintEditorMsg {
     /// The sketch parameters table and the info bar's Parameters button
     /// (#189).
     SketchParameters(crate::library::editor::footprint::parameters_table::SketchParametersMsg),
+    /// Values on the sketch drawing, the constraint and pattern menus and
+    /// instance suppression (#187, #188, #191).
+    SketchCanvas(crate::library::editor::footprint::sketch_mode::SketchCanvasMsg),
 }

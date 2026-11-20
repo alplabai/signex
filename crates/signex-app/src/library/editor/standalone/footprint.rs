@@ -95,6 +95,12 @@ pub fn view_footprint<'a>(
                     editor, tokens, i18n,
                 ),
             )
+            // The constraint / pattern menu at the right-click (#188).
+            .push(
+                crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
+                    editor, tokens, i18n,
+                ),
+            )
             .boxed(),
         EditorMode::Normal => stack
             .push(super::dof_chip::overlay(editor, tokens, i18n))

@@ -20,12 +20,17 @@ mod entities;
 mod fills;
 mod preview;
 mod snap;
+// Values on the drawing, pattern glyphs and the conflict badge (#187).
+mod conflict_badge;
+mod dimension_labels;
+mod pattern_glyphs;
 
 // Entry points reached from the sibling `draw::overlays` layer methods
 // via `use super::sketch::{…}`. Re-exported at their original
 // `pub(super)` reach so the `draw::sketch::<entry>` paths keep resolving
 // unchanged.
 pub(super) use arrows::draw_dof_direction_arrows;
+pub(super) use dimension_labels::draw_sketch_values;
 pub(super) use entities::draw_sketch_overlay;
 pub(super) use preview::draw_sketch_tool_preview;
 pub(super) use snap::draw_sketch_snap_glyph;

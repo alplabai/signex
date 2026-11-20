@@ -25,6 +25,13 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 - **Rename and delete parameters** — a row's ⋯ menu has Rename…, which renames every reference (whole names only), and Delete; deleting a used parameter asks first, naming its uses, and Replace with value puts its value in each use, as one undo step (#189).
 - **Make parameter** — a dimension's value becomes a named parameter the dimension reads, as one undo step, and the table opens on it (#189).
 
+### Added — footprint and board sketch: values on the drawing
+
+- Dimensions show `name · value` on the drawing instead of a letter; click one to edit it in place, Enter applies and re-solves, Esc cancels (#187).
+- One constraint menu on a right-click of a constraint glyph or value: Edit value, Make parameter, Convert to reference and Suppress (greyed, with the reason), Select constrained entities, Show conflicts, Delete (#188).
+- Patterns draw a glyph (`L×4`, `G×3×4`, `P×8`) that selects the pattern and opens its menu; count and spacing edit on the drawing, and a click on an instance of a selected rectangular or circular pattern suppresses it (#187, #191).
+- Conflicts show as a small red badge by the conflicting dimension; each Properties conflict row has a Remove button (#187).
+
 ## [26.11.0] — 2026-11-17
 
 _The Community Preview release: the schematic and PCB editors are supported, the whole app moves to the Graphite light and dark interface, and Signex is now licensed under FSL-1.1-ALv2. The footprint, symbol and library editors and the board 3D view ship at an earlier stage._

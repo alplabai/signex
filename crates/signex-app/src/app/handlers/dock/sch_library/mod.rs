@@ -807,6 +807,10 @@ impl Signex {
                     Unit::Micrometer => Unit::Mm,
                 };
             }),
+            PanelMsg::FpEditorConflictRemoveClicked { constraint } => {
+                follow = self.fp_editor_remove_conflicting_constraint(*constraint);
+                true
+            }
             _ => false,
         };
         if handled { Some(follow) } else { None }

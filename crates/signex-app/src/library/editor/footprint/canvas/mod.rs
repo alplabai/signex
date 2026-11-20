@@ -22,6 +22,7 @@
 
 mod draw;
 mod geometry;
+mod glyph_layout;
 mod hit_test;
 mod input;
 mod preview_model;

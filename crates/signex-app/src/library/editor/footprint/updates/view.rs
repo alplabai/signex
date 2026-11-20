@@ -217,6 +217,12 @@ fn tool_escape(editor: &mut crate::app::FootprintDocument) {
         editor.canvas_cache.clear();
         return;
     }
+    // The sketch canvas's constraint menu, value edit, then selected
+    // pattern close next, one per Esc (#188).
+    if editor.state.sketch_overlay.close_innermost() {
+        editor.canvas_cache.clear();
+        return;
+    }
     // The parameters table (#189): its prompt, rename or row menu first,
     // then the table itself; the tool and selection stay. It shows in
     // Sketch mode only.

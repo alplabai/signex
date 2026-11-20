@@ -549,14 +549,9 @@ impl Signex {
 
     /// v0.23 — Toggle a single `(i, j)` instance in an array's
     /// per-instance suppression list. `value=true` enables the
-    /// instance (removes the entry); `value=false` suppresses it
-    /// (adds the entry, deduplicated). Polar arrays set `j = 0`.
-    ///
-    /// When the suppression list grows from empty, the array gains a
-    /// fresh `GridDepopulation { mask_expr: "", suppressed_instances }`.
-    /// When the list returns to empty AND the existing `mask_expr` is
-    /// blank, the depopulation is removed entirely so the array
-    /// returns to its parametric-only state.
+    /// instance; `value=false` suppresses it. Polar arrays set `j = 0`.
+    /// The list itself is kept by `ArrayKind::set_instance_suppressed`,
+    /// the one helper the canvas instance click uses too.
     pub(crate) fn fp_editor_toggle_array_instance(
         &mut self,
         array_id: signex_sketch::array::ArrayId,
@@ -564,45 +559,42 @@ impl Signex {
         j: u32,
         value: bool,
     ) -> bool {
-        use signex_sketch::array::{ArrayKind, GridDepopulation};
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.record_edit(None, |editor| {
                 let Some(array) = sketch_array_mut(editor, array_id) else {
                     return false;
                 };
-                let depop_slot: &mut Option<GridDepopulation> = match &mut array.kind {
-                    ArrayKind::Grid { depopulation, .. } => depopulation,
-                    ArrayKind::Polar { depopulation, .. } => depopulation,
-                    ArrayKind::Linear { .. } => return false,
-                };
-                if value {
-                    // Re-enable the instance — drop matching entries.
-                    if let Some(d) = depop_slot.as_mut() {
-                        d.suppressed_instances
-                            .retain(|(si, sj)| !(*si == i && *sj == j));
-                        if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
-                            *depop_slot = None;
-                        }
-                    }
-                } else {
-                    // Suppress the instance — append if absent.
-                    let d = depop_slot.get_or_insert_with(|| GridDepopulation {
-                        mask_expr: String::new(),
-                        suppressed_instances: Vec::new(),
-                    });
-                    if !d
-                        .suppressed_instances
-                        .iter()
-                        .any(|(si, sj)| *si == i && *sj == j)
-                    {
-                        d.suppressed_instances.push((i, j));
-                    }
+                if !array.kind.has_suppression_model() {
+                    return false;
                 }
+                array.kind.set_instance_suppressed(i, j, !value);
                 rebuild_sketch(editor);
                 true
             });
         }
         self.refresh_panel_ctx();
         true
+    }
+
+    /// Properties' conflict row Remove: delete that constraint from the
+    /// editor in view, as the canvas constraint menu's Delete does (one
+    /// undo step, then a solve).
+    pub(crate) fn fp_editor_remove_conflicting_constraint(
+        &mut self,
+        constraint: signex_sketch::id::ConstraintId,
+    ) -> iced::Task<crate::app::Message> {
+        use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+        use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+        let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) else {
+            return iced::Task::none();
+        };
+        self.update(crate::app::Message::Library(
+            LibraryMessage::PrimitiveEditorEvent {
+                path,
+                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchCanvas(
+                    SketchCanvasMsg::ConstraintDeleted(constraint),
+                )),
+            },
+        ))
     }
 }

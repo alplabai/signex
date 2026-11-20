@@ -732,3 +732,6 @@ mod board_sync_graphite;
 // (fp-07) and Make parameter, each one undo step.
 #[path = "regression/sketch_parameters.rs"]
 mod sketch_parameters;
+// #187 / #191: the sketch canvas's pattern values and instance suppression.
+#[path = "regression/sketch_canvas_values.rs"]
+mod sketch_canvas_values;

@@ -24,6 +24,7 @@
 //!   `SnappingMode`, `GridDisplay`.
 
 mod board_backdrop;
+pub mod canvas_text;
 pub mod conflict;
 pub mod context_menu;
 mod courtyard;
@@ -35,11 +36,13 @@ pub mod placement;
 pub mod selection;
 pub mod selection_filter;
 pub mod silk_selection;
+pub mod sketch_overlay;
 pub mod snap_options;
 pub mod tool;
 mod zoom_request;
 
 pub use board_backdrop::{BackdropTrack, BoardBackdrop};
+pub use canvas_text::SketchCanvasText;
 pub use context_menu::{
     FootprintContextAction, FootprintContextMenuState, FootprintContextSubmenu,
     FootprintContextTarget,
@@ -51,6 +54,7 @@ pub use pad::{
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
+pub use sketch_overlay::SketchOverlay;
 pub use snap_options::{
     GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,
 };
@@ -308,6 +312,10 @@ pub struct FootprintEditorState {
     /// The sketch parameters table, when open (#189); boxed, it is rarely
     /// open.
     pub parameters_table: Option<Box<super::parameters_table::ParametersTableState>>,
+    /// The words the sketch canvas draws, rendered by the app per language.
+    pub canvas_text: SketchCanvasText,
+    /// Values edited on the drawing, the constraint menu, the selected pattern.
+    pub sketch_overlay: SketchOverlay,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -424,6 +432,8 @@ impl FootprintEditorState {
             board_backdrop: None,
             sketch_exit: Default::default(),
             parameters_table: None,
+            canvas_text: SketchCanvasText::default(),
+            sketch_overlay: SketchOverlay::default(),
         }
     }
 

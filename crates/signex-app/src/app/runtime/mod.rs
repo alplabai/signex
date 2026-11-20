@@ -24,6 +24,7 @@ mod symbol_ctx;
 mod value_evaluation;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
+mod sketch_canvas_text;
 mod window_hierarchies;
 #[cfg(test)]
 mod window_placement_tests;
@@ -45,6 +46,7 @@ impl Signex {
             canvas.set_grid(visible, visible_grid_mm);
         }
         self.sync_zoom_step();
+        self.sync_sketch_canvas_text();
     }
 
     /// Push the effective "Zoom speed" into the canvases that hold their

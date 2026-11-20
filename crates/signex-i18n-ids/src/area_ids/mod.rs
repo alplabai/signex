@@ -36,6 +36,7 @@ mod properties;
 mod requirements;
 mod rules;
 mod sheet_sync;
+mod sketch_canvas;
 mod sketch_parameters;
 mod update_pcb;
 
@@ -73,6 +74,7 @@ pub use properties::*;
 pub use requirements::*;
 pub use rules::*;
 pub use sheet_sync::*;
+pub use sketch_canvas::*;
 pub use sketch_parameters::*;
 pub use update_pcb::*;
 
@@ -116,6 +118,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         sheet_sync::SHEET_SYNC,
         update_pcb::UPDATE_PCB,
         sketch_parameters::SKETCH_PARAMETERS,
+        sketch_canvas::SKETCH_CANVAS,
     ]
     .concat()
 }
