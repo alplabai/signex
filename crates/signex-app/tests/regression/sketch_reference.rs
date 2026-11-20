@@ -12,7 +12,7 @@ use signex_app::library::editor::footprint::ValueTarget;
 use signex_app::library::editor::footprint::sketch_mode::SketchCanvasMsg;
 use signex_app::library::editor::footprint::sketch_mode::constraint_menu::SketchReferenceMsg;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
-use signex_app::panels::PanelMsg;
+use signex_app::panels::{PanelMsg, SketchFixMsg};
 use signex_library::{Footprint, FootprintFile};
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::entity::{Entity, EntityKind};
@@ -276,7 +276,9 @@ fn the_properties_conflict_convert_does_what_the_menu_does() {
     rig.reject_an_edit();
     let before = rig.undo_steps();
 
-    rig.panel(PanelMsg::FpEditorConflictConvertClicked(rig.second));
+    rig.panel(PanelMsg::SketchFix(SketchFixMsg::ConflictConvertClicked(
+        rig.second,
+    )));
 
     assert!(rig.sketch().is_driven(rig.second));
     assert!(

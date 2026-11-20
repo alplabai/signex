@@ -3,14 +3,14 @@
 //! One row per constraint, in the theme's danger colour. A click selects the
 //! row's focus entity; hovering isolates the constraint's glyph on the canvas.
 //! Each row has Remove; a dimension's row also has Convert to reference
-//! (mockup row 187 E4), which keeps it as a measurement that never drives.
+//! (mockup row 187, item E4), which keeps it as a measurement that never drives.
 
 use iced::widget::{container, mouse_area};
 use iced::{Background, Element, Length, Theme, Widget};
 use signex_i18n::{ids, t};
 use signex_widgets::{button, raw, text};
 
-use super::super::{OverConstraintSummary, PanelMsg, RejectedConflictSummary};
+use super::super::{OverConstraintSummary, PanelMsg, RejectedConflictSummary, SketchFixMsg};
 use crate::styles::{Spacing, TypeScale};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
 
@@ -120,25 +120,25 @@ pub(super) fn conflict_row<'a>(
         .boxed()
 }
 
-/// Remove (decision fp-15): deletes the row's constraint as one undo step.
+/// Remove (Caner 2026-11-20): deletes the row's constraint as one undo step.
 /// A delete glyph in the danger colour, named by its tooltip.
 fn remove_button<'a>(constraint: ConstraintId, i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
     glyph_button(
         crate::icons::icon_dd_delete(signex_types::theme::ThemeId::DEFAULT),
         |theme| theme.palette().danger.base.color,
-        PanelMsg::FpEditorConflictRemoveClicked { constraint },
+        PanelMsg::SketchFix(SketchFixMsg::ConflictRemoveClicked { constraint }),
         (i18n, ids::SKETCH_CANVAS_CONFLICT_REMOVE),
     )
 }
 
-/// Convert to reference (mockup row 187 E4): the row's dimension measures from now
+/// Convert to reference (mockup row 187, item E4): the row's dimension measures from now
 /// on, one undo step. A reference glyph in the text colour, named by its
 /// tooltip.
 fn convert_button<'a>(constraint: ConstraintId, i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
     glyph_button(
         crate::icons::icon_dd_reference(signex_types::theme::ThemeId::DEFAULT),
         |theme| theme.palette().background.base.text,
-        PanelMsg::FpEditorConflictConvertClicked(constraint),
+        PanelMsg::SketchFix(SketchFixMsg::ConflictConvertClicked(constraint)),
         (i18n, ids::SKETCH_CANVAS_CONFLICT_CONVERT),
     )
 }

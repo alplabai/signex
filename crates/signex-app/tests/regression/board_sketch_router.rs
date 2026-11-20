@@ -11,7 +11,7 @@ use signex_app::app::{
 };
 use signex_app::library::editor::footprint::{CheckLine, CheckStatus};
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
-use signex_app::panels::{BoardSketchAttrMsg, BoardSketchProps, PanelMsg};
+use signex_app::panels::{BoardSketchAttrMsg, BoardSketchProps, PanelMsg, SketchFixMsg};
 use signex_i18n::{RenderTranslatable, Translatable, ids};
 use signex_library::{Footprint, FootprintFile};
 use signex_sketch::SketchData;
@@ -231,10 +231,10 @@ fn a_small_outline_gap_offers_close_gap_and_closing_is_one_undo_step() {
 
     panel(
         &mut f,
-        PanelMsg::FpEditorCloseGapClicked {
+        PanelMsg::SketchFix(SketchFixMsg::CloseGapClicked {
             keep: offer.keep,
             merge: offer.merge,
-        },
+        }),
     );
 
     let lines = props(&f).outline_checks;
@@ -288,10 +288,10 @@ fn a_wide_outline_gap_offers_no_button_and_says_why() {
         .working_sketch();
     panel(
         &mut f,
-        PanelMsg::FpEditorCloseGapClicked {
+        PanelMsg::SketchFix(SketchFixMsg::CloseGapClicked {
             keep: offer.keep,
             merge: offer.merge,
-        },
+        }),
     );
     let session = f.app.interaction_state.board_sketch.as_ref().unwrap();
     assert_eq!(session.working_sketch(), before);

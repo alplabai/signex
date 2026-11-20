@@ -1104,20 +1104,8 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
-    /// Remove on a Properties conflict row (decision fp-15): delete that
-    /// constraint from the sketch in view, one undo step.
-    FpEditorConflictRemoveClicked {
-        constraint: signex_sketch::id::ConstraintId,
-    },
-    /// Convert to reference on a Properties conflict row of a dimension
-    /// (mockup row 187 E4): that dimension measures from now on, one undo step.
-    FpEditorConflictConvertClicked(signex_sketch::id::ConstraintId),
-    /// Close gap on an open outline's check line (mockup row 190): join the two open
-    /// ends in the sketch in view, one undo step.
-    FpEditorCloseGapClicked {
-        keep: signex_sketch::id::SketchEntityId,
-        merge: signex_sketch::id::SketchEntityId,
-    },
+    /// A sketch fix picked in Properties for the sketch in view.
+    SketchFix(super::SketchFixMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

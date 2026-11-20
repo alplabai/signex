@@ -1,4 +1,4 @@
-//! The Outline checks section of board sketch mode (mockup 179d): under the Board
+//! The Outline checks section of board sketch mode (mockup row 179d): under the Board
 //! summary with nothing selected, one line per check of the current solve,
 //! a failing check one line per place. A click on a failing line selects
 //! its entity; an open outline says whether its gap heals and offers Close
@@ -13,7 +13,7 @@ use signex_widgets::{button, text};
 
 use crate::library::editor::footprint::{GapOffer, format_check_mm};
 use crate::library::editor::standalone::sketch_exit::status_line;
-use crate::panels::{BoardSketchProps, CollapsedSections, PanelMsg, PanelPalette};
+use crate::panels::{BoardSketchProps, CollapsedSections, PanelMsg, PanelPalette, SketchFixMsg};
 use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
 
@@ -85,10 +85,10 @@ fn close_gap_row<'a>(
         line = line.push(
             button(text(t!(i18n, ids::SKETCH_BAKE_CLOSE_GAP)).size(TS.caption))
                 .padding([SP.xs, SP.s])
-                .on_press(PanelMsg::FpEditorCloseGapClicked {
+                .on_press(PanelMsg::SketchFix(SketchFixMsg::CloseGapClicked {
                     keep: offer.keep,
                     merge: offer.merge,
-                })
+                }))
                 .style(crate::panels::form_look::ghost_button)
                 .boxed(),
         );
@@ -99,7 +99,7 @@ fn close_gap_row<'a>(
         .boxed()
 }
 
-/// The Fab profile group (mockup 179d): the router tool of the project's
+/// The Fab profile group (mockup row 179d): the router tool of the project's
 /// fab profile, or that it names none.
 fn view_fab_profile<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
