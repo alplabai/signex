@@ -266,6 +266,48 @@ fn the_menu_row_sets_ticked_parts_on_two_sheets_as_one_undo_step_in_memory() {
     );
 }
 
+/// What the tile pane on `path` draws as the first part's footprint.
+fn drawn_footprint(app: &Signex, path: &Path) -> String {
+    let slot = &app.interaction_state.tile_panes.schematic[path];
+    slot.active_snapshot().expect("a render cache").symbols[0]
+        .footprint
+        .clone()
+}
+
+/// Epic #2326 M3: a tile pane on `b`, open but not active, draws the
+/// assigned footprint after Apply and the old one after the grouped undo.
+#[test]
+fn apply_and_its_undo_repaint_a_tile_pane_on_another_open_sheet() {
+    let mut rig = rig();
+    let before = footprint_on(&rig.app, &rig.b);
+    let engine = &rig.app.document_state.engines[&rig.b];
+    let mut pane = signex_app::canvas::CanvasSlot::default();
+    pane.set_render_cache(Some(
+        signex_app::schematic_runtime::SchematicRenderCache::from_sheet_at(
+            engine.document(),
+            engine.revision(),
+        ),
+    ));
+    rig.app
+        .interaction_state
+        .tile_panes
+        .schematic
+        .insert(rig.b.clone(), pane);
+    settle(&mut rig.app, crate::menu_support::menu_row(COMMAND));
+    send(&mut rig.app, AssignFootprintsMsg::AllToggled(true));
+    send(
+        &mut rig.app,
+        AssignFootprintsMsg::TickedPicked(binding_key(&rig.alt.0)),
+    );
+    send(&mut rig.app, AssignFootprintsMsg::ApplyRequested);
+    assert_eq!(footprint_on(&rig.app, &rig.b), rig.alt.1);
+    assert_eq!(drawn_footprint(&rig.app, &rig.b), rig.alt.1, "after Apply");
+
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(footprint_on(&rig.app, &rig.b), before);
+    assert_eq!(drawn_footprint(&rig.app, &rig.b), before, "after the undo");
+}
+
 #[test]
 fn one_part_takes_a_pick_and_cancel_changes_nothing() {
     let mut rig = rig();
