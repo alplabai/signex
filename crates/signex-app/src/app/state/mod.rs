@@ -78,7 +78,7 @@ pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
-    PageSetupMemory, PreviewSlot, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
+    PageSetupMemory, RasterOutcome, RasterQueue, RasterSource, RememberedPageSetup,
     forget_page_setup, rekey_page_setup,
 };
 pub use placement::{

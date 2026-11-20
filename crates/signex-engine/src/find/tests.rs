@@ -344,5 +344,8 @@ fn a_literal_needle_is_trimmed_and_a_regex_is_kept_as_typed() {
         !pattern.is_match("VOUT"),
         "the space is part of the pattern"
     );
-    assert_eq!(pattern.ranges("Keep VOUT short"), [4..9]);
+    assert_eq!(
+        pattern.ranges("Keep VOUT short"),
+        std::slice::from_ref(&(4..9))
+    );
 }
