@@ -928,6 +928,10 @@ fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
 }
 
 #[cfg(test)]
+#[path = "load_seam_tests.rs"]
+mod load_seam_tests;
+
+#[cfg(test)]
 mod sheet_size_report_tests {
     use crate::app::handlers::menu::export::tests::app_workspace;
 
