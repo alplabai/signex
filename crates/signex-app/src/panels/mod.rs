@@ -54,6 +54,7 @@ mod net_class_panel;
 mod net_class_table;
 pub mod net_inspector;
 mod numeric_draft;
+pub mod paired;
 mod palette;
 mod paper;
 pub mod pcb_board_properties;

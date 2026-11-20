@@ -22,4 +22,6 @@ define_ids! {
     CHROME_ACTIVE_BAR_CORNER_90 = "chrome-active-bar-corner-90";
     CHROME_ACTIVE_BAR_CORNER_45 = "chrome-active-bar-corner-45";
     CHROME_ACTIVE_BAR_CORNER_ANY = "chrome-active-bar-corner-any";
+    CHROME_PAGE_TAB_TITLE = "chrome-page-tab-title";
+    CHROME_PAGE_TAB_PROJECT = "chrome-page-tab-project";
 }

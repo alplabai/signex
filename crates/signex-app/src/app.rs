@@ -40,6 +40,7 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+pub(crate) mod page_tab;
 pub mod parent_reference_disk;
 pub mod path_op_jobs;
 pub mod path_ops;
