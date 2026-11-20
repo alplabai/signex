@@ -161,6 +161,10 @@ dialog-selection-filter-not-wired = not wired
 dialog-selection-filter-preset-name = Preset name
 # Footer count. $count and $total are whole numbers.
 dialog-selection-filter-selectable = { $count } of { $total } selectable
+# Messages: Apply at the preset limit. $name is the typed preset name, $limit a whole number.
+dialog-selection-filter-preset-full = Filter applied; preset { $name } was not saved: the { $limit } preset slots are full.
+# Messages: Apply with the kinds of a preset that already exists. $name is that preset.
+dialog-selection-filter-preset-exists = Filter applied; no preset added: { $name } already holds these kinds.
 
 ## Move Selection
 # Header subtitle. $count is how many objects are selected, a whole number.

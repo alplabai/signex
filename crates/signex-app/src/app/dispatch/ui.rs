@@ -308,24 +308,44 @@ impl Signex {
 
     /// Apply: the draft becomes the active footprint editor's filter and is
     /// saved as a preset under its typed name, or "Filter N" when none is
-    /// typed. At the preset limit the filter still applies; no preset is
-    /// added. The `prefs.json` write rides the ordered background writer.
+    /// typed. The filter always applies; no preset is added when one already
+    /// holds the same kinds, or at the preset limit (a typed name dropped
+    /// there is said in Messages). The `prefs.json` write rides the ordered
+    /// background writer.
     fn apply_custom_selection_filter(&mut self) -> Task<Message> {
+        use crate::library::editor::footprint::filter_presets::{capture_preset, existing_twin};
+        use signex_i18n::{ids, t};
         let Some(draft) = self.ui_state.selection_filter_custom.take() else {
             return Task::none();
         };
         let presets = self.interaction_state.footprint_filter_presets.clone();
+        let typed = !draft.preset_name.trim().is_empty();
         let name = draft.preset_name_or_numbered(presets.len());
         let Some(editor) = self.active_footprint_editor_mut() else {
             return Task::none();
         };
         editor.state.selection_filter = draft.to_filter();
         editor.canvas_cache.clear();
-        if presets.len() >= crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT {
+        let preset = capture_preset(&editor.state, name);
+        let i18n = &self.ui_state.i18n;
+        if let Some(twin) = existing_twin(&presets, &preset, typed) {
+            crate::diagnostics::log_info(
+                t!(i18n, ids::DIALOG_SELECTION_FILTER_PRESET_EXISTS, "name" => twin.name.as_str())
+                    .into_string(),
+            );
             return Task::none();
         }
-        let preset =
-            crate::library::editor::footprint::filter_presets::capture_preset(&editor.state, name);
+        let limit = crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT;
+        if presets.len() >= limit {
+            if typed {
+                crate::diagnostics::log_warning(
+                    t!(i18n, ids::DIALOG_SELECTION_FILTER_PRESET_FULL,
+                        "name" => preset.name.as_str(), "limit" => limit)
+                    .into_string(),
+                );
+            }
+            return Task::none();
+        }
         let mut next = presets;
         next.push(preset);
         self.interaction_state.footprint_filter_presets = next.clone();

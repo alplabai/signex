@@ -72,6 +72,8 @@ define_ids! {
     DIALOG_SELECTION_FILTER_NOT_WIRED = "dialog-selection-filter-not-wired";
     DIALOG_SELECTION_FILTER_PRESET_NAME = "dialog-selection-filter-preset-name";
     DIALOG_SELECTION_FILTER_SELECTABLE = "dialog-selection-filter-selectable";
+    DIALOG_SELECTION_FILTER_PRESET_FULL = "dialog-selection-filter-preset-full";
+    DIALOG_SELECTION_FILTER_PRESET_EXISTS = "dialog-selection-filter-preset-exists";
     DIALOG_MOVE_SELECTION_COUNT = "dialog-move-selection-count";
     DIALOG_MOVE_SELECTION_DX = "dialog-move-selection-dx";
     DIALOG_MOVE_SELECTION_DY = "dialog-move-selection-dy";
