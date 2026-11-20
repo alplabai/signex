@@ -401,13 +401,59 @@ fn moved(to: Point) -> (Event, Point) {
     (Event::Mouse(mouse::Event::CursorMoved { position: to }), to)
 }
 
-/// A point well inside the preview under `label`: the first point below
-/// the label that offers a grab, plus a margin. Panics with the hover scan
-/// when nothing below the label offers one.
+/// The drag of [`assert_drag_pans`], press to last move. Off any grid
+/// multiple, so the moved grid cannot land on itself.
+const DRAG: (f32, f32) = (37.0, 23.0);
+/// The checked band, placed at this offset from the press.
+const BAND_OFFSET: (f32, f32) = (2.0, 15.0);
+const BAND: Size = Size::new(40.0, 30.0);
+/// Distance the band and its drag source keep from the canvas's side edges,
+/// whose border and antialiased edge do not pan.
+const EDGE_MARGIN: f32 = 2.0;
+
+/// Whether a hover at `at` offers a grab.
+fn grabs_at(app: &mut Live, at: Point) -> bool {
+    drive(app, &[moved(at)]) == [mouse::Interaction::Grab]
+}
+
+/// The last x on row `y`, going from `inside` (which grabs) in direction
+/// `dir`, that still grabs: steps narrower than the gap between the two side
+/// by side previews, then halving to a quarter pixel.
+fn grab_edge(app: &mut Live, inside: f32, y: f32, dir: f32) -> f32 {
+    const STEP: f32 = 4.0;
+    let mut grab = inside;
+    let mut outside = loop {
+        let next = grab + dir * STEP;
+        if !grabs_at(app, Point::new(next, y)) {
+            break next;
+        }
+        grab = next;
+        assert!(
+            (0.0..WINDOW.width).contains(&grab),
+            "the preview at y {y} grabs to the window edge"
+        );
+    };
+    while (outside - grab).abs() > 0.25 {
+        let mid = (grab + outside) / 2.0;
+        if grabs_at(app, Point::new(mid, y)) {
+            grab = mid;
+        } else {
+            outside = mid;
+        }
+    }
+    grab
+}
+
+/// The press point of the drag check in the preview under `label`: 40 px
+/// below the preview's top (the first point below the label that offers a
+/// grab), so the band sits between the size readout and the scale bar. Its
+/// x comes from the preview's measured side edges, so the band and the
+/// pixels the drag brings into it both lie inside the canvas however wide
+/// the preview is (side by side in a narrow dock, #2535). Panics with the
+/// hover scan when nothing below the label offers a grab.
 fn preview_point(app: &mut Live, label: Rectangle) -> Point {
-    // Far enough in that the drag's source pixels stay inside the canvas,
-    // near enough that the checked band fits a half-width preview (#2535).
-    let x = label.x + 45.0;
+    // Inside even a narrow preview: past its left border.
+    let x = label.x + 30.0;
     let points: Vec<Point> = (0..60)
         .map(|i| Point::new(x, label.y + label.height + i as f32 * 6.0))
         .collect();
@@ -421,15 +467,25 @@ fn preview_point(app: &mut Live, label: Rectangle) -> Point {
                 points.iter().map(|p| p.y as i32).zip(seen).collect();
             panic!("no preview offers a grab below {label:?}: {scan:?}")
         });
-    Point::new(x, points[first].y + 40.0)
+    let y = points[first].y + 40.0;
+    let left = grab_edge(app, x, y, -1.0);
+    let right = grab_edge(app, x, y, 1.0);
+    // The source pixels start DRAG.0 left of the band; both stay a margin
+    // in from the edges.
+    let lowest = left + EDGE_MARGIN + DRAG.0 - BAND_OFFSET.0;
+    let highest = right - EDGE_MARGIN - BAND.width - BAND_OFFSET.0;
+    assert!(
+        lowest <= highest,
+        "the preview below {label:?} spans x {left}..{right}: too narrow for a {BAND:?} band and a {DRAG:?} drag"
+    );
+    Point::new((lowest + highest) / 2.0, y)
 }
 
 /// Hover, press, two moves, release at `from`: the hover grabs, the drag
 /// holds the grab, the release lets go, and the drawn preview has moved.
 fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
-    // Off any grid multiple, so the moved grid cannot land on itself.
     let to = Point::new(from.x + 25.0, from.y + 15.0);
-    let further = Point::new(from.x + 37.0, from.y + 23.0);
+    let further = Point::new(from.x + DRAG.0, from.y + DRAG.1);
     let (seen, frames) = drive_with(
         app,
         &[
@@ -465,15 +521,16 @@ fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
     // band sits below the readout, also at the shifted source rows, and
     // above the scale bar.
     let area = Rectangle::new(
-        Point::new(from.x + 2.0, from.y + 15.0),
-        Size::new(40.0, 30.0),
+        Point::new(from.x + BAND_OFFSET.0, from.y + BAND_OFFSET.1),
+        BAND,
     );
     let (changed, total) = mismatched_pixels(&frames[0], &frames[3], area, (0, 0));
     assert!(
         changed > 20,
         "{what}: the drawn preview did not move ({changed} of {total} pixels changed in {area:?})"
     );
-    let (off, total) = mismatched_pixels(&frames[0], &frames[3], area, (37, 23));
+    let shift = (DRAG.0 as usize, DRAG.1 as usize);
+    let (off, total) = mismatched_pixels(&frames[0], &frames[3], area, shift);
     assert!(
         off <= total / 50,
         "{what}: the drawing did not follow the pointer 1:1 ({off} of {total} pixels off in {area:?})"
