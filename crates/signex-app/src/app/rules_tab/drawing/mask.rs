@@ -1,6 +1,6 @@
 //! Solder mask and paste: two pads of a fine-pitch part. The mask is drawn
-//! over the pads only, as dashed opening edges, never as a flood (CX review
-//! 2026-11-19); the sliver is the mask web left between the openings.
+//! over the pads only, as dashed opening edges, never as a flood; the
+//! sliver is the mask web left between the openings.
 //! Paste draws its aperture against the pad.
 
 use iced::{Point, Rectangle};

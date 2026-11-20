@@ -1,7 +1,7 @@
 //! Live rule drawings (#2530): the selected rule, class pair or object
 //! pair drawn on the board ground with its values as editable dimension
-//! labels. The Rules grid's detail strip (#89) and the clearance matrix
-//! (#90) show it. A label commits a value as a [`PreviewCommit`]; the
+//! labels. The Rules grid's detail strip (mockup row 89) and the clearance
+//! matrix (mockup row 90) show it. A label commits a value as a [`PreviewCommit`]; the
 //! caller writes it to its rule, so the grid cell and the label stay one
 //! value. This module never touches the rule text.
 //!
