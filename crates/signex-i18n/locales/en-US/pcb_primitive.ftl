@@ -225,8 +225,8 @@ pcb-prim-precision = Precision
 pcb-prim-value = Value
 pcb-prim-not-a-precision = the precision is a whole number of decimals from 0 to 6
 
-## w2/prim-shell (#2523): the panel shell, Net Information, the Track, Arc
-## and Drawing panels and their illustrations.
+## #2523: the panel shell, Net Information, the Track, Arc and Drawing
+## panels and their illustrations.
 # A field whose selected items differ.
 pcb-prim-mixed = Mixed
 # A value that cannot be shown yet.
@@ -380,8 +380,7 @@ pcb-prim-plated = Plated
 pcb-prim-plated-tip = A plated hole connects the copper on every layer. Plating follows the pad type, which the footprint sets.
 pcb-prim-solder-tented = Solder mask: Tented
 
-## w2/zone-text-dim (#2523): the pour, string and dimension panels and
-## their illustrations.
+## #2523: the pour, string and dimension panels and their illustrations.
 # The unit after an area field.
 pcb-prim-unit-mm2 = mm²
 pcb-prim-pour-fill-mode = Fill Mode

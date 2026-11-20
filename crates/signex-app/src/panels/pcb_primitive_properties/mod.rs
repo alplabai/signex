@@ -6,7 +6,7 @@
 //! facts the app copies from the board (`facts`); every edit is a
 //! [`PcbPrimitiveMsg`] the app turns into one board command.
 //!
-//! The header is this module's own (#2523, decisions.html pcb-08: header,
+//! The header is this module's own (#2523, mockup rows 95 to 102: header,
 //! search, illustration, sections): the kind, a count pill, the lock icon,
 //! then the search, or while placing the paused callout. Each kind's view
 //! opens with its illustration (`drawing`, linked to its rows by

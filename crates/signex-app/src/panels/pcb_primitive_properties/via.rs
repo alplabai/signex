@@ -671,3 +671,7 @@ fn not_stored<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
             .collect(),
     )
 }
+
+#[cfg(test)]
+#[path = "via_tests.rs"]
+mod tests;

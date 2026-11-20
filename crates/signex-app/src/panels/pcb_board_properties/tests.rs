@@ -678,8 +678,8 @@ fn closed_sections_show_their_summary_and_open_on_a_click() {
     assert!(shown.iter().any(|t| t == "3D Bodies"), "{shown:?}");
 }
 
-/// #2523 (R10): the size is read from the board shape and read-only; the
-/// size row says so and offers Edit board shape….
+/// #2523 (mockup row 93): the size is read from the board shape and
+/// read-only; the size row says so and offers Edit board shape….
 #[test]
 fn the_size_row_reads_the_board_shape_and_offers_to_edit_it() {
     let ctx = context(0);

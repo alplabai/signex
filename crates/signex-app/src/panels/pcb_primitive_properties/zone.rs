@@ -38,9 +38,12 @@ use crate::styles::{Radii, ti};
 /// An event of a pour's Copper card (#2523).
 #[derive(Debug, Clone, PartialEq)]
 pub enum PourMsg {
-    /// Repour: the board in view is filled again and the selected pours
-    /// reported. Nothing in the document changes.
-    RepourPressed,
+    /// Repour: the board of `target`, which need not be the tab in view, is
+    /// filled again and the target's pours reported. Nothing in the
+    /// document changes.
+    RepourPressed {
+        target: PrimitiveTarget,
+    },
     /// Shelve or Unshelve: one board undo step.
     ShelveToggled {
         target: PrimitiveTarget,
@@ -252,7 +255,7 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
 }
 
 /// Fill Mode: Solid, the only fill there is; Hatched greyed. No None
-/// (AV-21): the outline-only state is Shelve.
+/// (mockup row 99): the outline-only state is Shelve.
 fn fill_mode<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
     let modes = segments(vec![
         Segment {
@@ -456,7 +459,9 @@ fn card_actions<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
 /// What Repour sends: nothing while the pour is shelved, so the button is
 /// greyed until it is unshelved.
 fn repour_message(f: &ZoneFacts) -> Option<PourMsg> {
-    (f.shelved != Some(true)).then_some(PourMsg::RepourPressed)
+    (f.shelved != Some(true)).then(|| PourMsg::RepourPressed {
+        target: f.common.target.clone(),
+    })
 }
 
 /// What Shelve (or, for a shelved pour, Unshelve) sends; nothing on a board
@@ -658,9 +663,12 @@ mod tests {
 
     #[test]
     fn repour_is_greyed_while_the_pour_is_shelved() {
+        let open = pour(Some(false));
         assert_eq!(
-            repour_message(&pour(Some(false))),
-            Some(PourMsg::RepourPressed)
+            repour_message(&open),
+            Some(PourMsg::RepourPressed {
+                target: open.common.target.clone()
+            })
         );
         assert_eq!(repour_message(&pour(Some(true))), None);
     }

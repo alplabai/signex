@@ -444,13 +444,16 @@ Shelve.
 The Copper card shows the copper the fill holds (area and pieces, read from
 the fills the app holds), or "shelved · no copper". Its buttons:
 
-- **Repour** fills the board again and reports the selected pours, as
-  Repour Selected does; greyed while the pour is shelved.
+- **Repour** fills the board again and reports the pours the panel shows,
+  as Repour Selected does; greyed while the pour is shelved.
 - **Shelve** / **Unshelve** sets `shelved` on the selected pours, one undo
   step (`ZoneEdit::Shelved`). The fields stay editable while shelved.
 - **⋯** opens Repour all, Shelve all and Unshelve all, which act on every
-  pour of the board in view; Shelve all and Unshelve all are one undo step
-  each (`pour_edit::shelve_all_pours`). A pick closes the menu.
+  pour of the board; Shelve all and Unshelve all are one undo step each
+  (`pour_edit::shelve_all_pours`). A pick closes the menu.
+
+Every button acts on the board the panel shows, which need not be the tab
+in view: the message carries that board.
 
 A fill, region or keepout has no Copper card. The area lock is not a row:
 the panel header shows it greyed, with the reason as its tooltip.

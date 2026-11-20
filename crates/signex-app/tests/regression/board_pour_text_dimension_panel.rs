@@ -225,7 +225,7 @@ fn repour_of_a_shelved_pour_changes_nothing() {
     let target = picked_pour(&mut f);
     send(&mut f, shelve(&target, true));
     let before = snapshot(&f);
-    send(&mut f, pour(PourMsg::RepourPressed));
+    send(&mut f, pour(PourMsg::RepourPressed { target }));
     assert_eq!(snapshot(&f), before, "a repour writes nothing");
     assert_eq!(area_panel(&f).copper, None, "and fills no shelved pour");
 }
@@ -264,28 +264,69 @@ fn board_at(f: &Fixture, path: &std::path::Path) -> PcbBoard {
         .clone()
 }
 
-#[test]
-fn the_pour_menu_acts_on_the_board_the_panel_shows_not_the_tab_in_view() {
-    let mut f = open_board();
-    picked_pour(&mut f);
-    send(&mut f, pour(PourMsg::MenuToggled));
-    let shown = f.path.clone();
+/// Opens a second board with one pour (the first has two, so a Repour line
+/// says which board it filled) as the tab in view; its path.
+fn open_other_board(f: &mut Fixture) -> std::path::PathBuf {
     let other = f._tmp.path().join("other.snxpcb");
     let mut second = board();
     second.uuid = Uuid::from_u128(2);
+    second.zones.truncate(1);
     std::fs::write(&other, SnxPcb::new(second).write_string().unwrap()).unwrap();
-    send(&mut f, Message::File(FileMsg::Opened(Some(other.clone()))));
+    send(f, Message::File(FileMsg::Opened(Some(other.clone()))));
     let docs = &f.app.document_state;
     assert_eq!(
         docs.tabs[docs.active_tab].path, other,
         "the other board is the tab in view"
     );
+    other
+}
+
+/// Whether a Messages line logged after the entry `after` contains `needle`
+/// (isolation marks stripped).
+fn said_since(after: Option<u64>, needle: &str) -> bool {
+    diagnostics::entries_since(after).entries.iter().any(|e| {
+        e.message
+            .replace(['\u{2068}', '\u{2069}'], "")
+            .contains(needle)
+    })
+}
+
+#[test]
+fn repour_on_the_copper_card_reports_the_pours_of_the_board_the_panel_shows() {
+    let mut f = open_board();
+    let target = picked_pour(&mut f);
+    assert_eq!(target.board, f.path);
+    open_other_board(&mut f);
+
+    let before = diagnostics::newest_entry_id();
+    send(&mut f, pour(PourMsg::RepourPressed { target }));
+    assert!(
+        said_since(before, "Repour: 1 polygon pour filled, 1 areas of copper"),
+        "pour A of the panel's board is reported: {:?}",
+        diagnostics::entries_since(before).entries
+    );
+}
+
+#[test]
+fn the_pour_menu_acts_on_the_board_the_panel_shows_not_the_tab_in_view() {
+    let mut f = open_board();
+    picked_pour(&mut f);
+    send(&mut f, pour(PourMsg::MenuToggled));
+    let shown = area_panel(&f).common.target.board;
+    assert_eq!(shown, f.path);
+    let other = open_other_board(&mut f);
 
     let before = serde_json::to_string(&board_at(&f, &other)).unwrap();
+    let said = diagnostics::newest_entry_id();
     let repour = PourMsg::RepourAllPressed {
         board: shown.clone(),
     };
     send(&mut f, pour(repour));
+    assert!(
+        said_since(said, "Repour: 2 polygon pours filled, 2 areas of copper"),
+        "Repour all counts the two pours of the panel's board: {:?}",
+        diagnostics::entries_since(said).entries
+    );
     send(
         &mut f,
         pour(PourMsg::ShelveAllPressed {

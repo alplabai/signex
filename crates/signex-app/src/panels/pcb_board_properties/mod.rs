@@ -373,8 +373,8 @@ pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a
         .boxed();
     }
     let form = Form::new(ctx, &board.view.search, &board.view.illustration_hover);
-    // One order on every PCB Properties panel (#2523, pcb-08): the header
-    // row and the tabs, Search, the illustration, then the sections.
+    // One order on every PCB Properties panel (#2523, mockup row 93): the
+    // header row and the tabs, Search, the illustration, then the sections.
     let mut col: Column<Element<'a, PanelMsg>> = Column::new()
         .width(Length::Fill)
         .push(header::view(&form, board));

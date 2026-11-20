@@ -1,8 +1,7 @@
-//! The Component view's header block (Graphite m94; order per decision
-//! pcb-08): the title row (Component, the selection pill, the footprint name
-//! of one component), the General / Parameters tabs with the parameter
-//! count, then the row search. The illustration follows it on the General
-//! tab.
+//! The Component view's header block (mockup row 94): the title row
+//! (Component, the selection pill, the footprint name of one component),
+//! the General / Parameters tabs with the parameter count, then the row
+//! search. The illustration follows it on the General tab.
 
 use iced::widget::{Column, Row, Space, container, svg};
 use iced::{Element, Length, Padding, Theme, Widget as _};

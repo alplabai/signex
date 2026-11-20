@@ -1,7 +1,8 @@
-//! The Arc illustration (m98, `R.arc`): the arc as a band with its Radius
+//! The Arc illustration (mockup row 98): the arc as a band with its Radius
 //! and Width callouts, the Start and End rays and the centre; no rotation
-//! arrow (review.md, 2026-11-18). The arc runs counter-clockwise from the
-//! start angle to the end angle, read with Y up as the fields are.
+//! arrow (docs/DECISIONS.md, the 2026-11-19 PCB primitive panels row). The
+//! arc runs counter-clockwise from the start angle to the end angle, read
+//! with Y up as the fields are.
 
 use iced::Point;
 use signex_i18n::{I18n, ids, t};

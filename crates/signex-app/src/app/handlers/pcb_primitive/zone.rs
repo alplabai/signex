@@ -16,6 +16,7 @@ use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PcbBoard, Zone};
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 use signex_types::zone_keepout::KEEPOUT_FILL;
+use uuid::Uuid;
 
 use super::PrimitiveEdit;
 use crate::app::Signex;
@@ -34,7 +35,9 @@ impl Signex {
                 panel.pour_menu_open = !panel.pour_menu_open;
                 return;
             }
-            PourMsg::RepourPressed => self.repour_board_in_view(true),
+            PourMsg::RepourPressed { target } => {
+                self.repour_pours(&target.board, &zone_ids(&target.items).collect());
+            }
             PourMsg::ShelveToggled { target, shelved } => self.shelve_pours(target, *shelved),
             PourMsg::RepourAllPressed { board } => self.repour_board(board, false),
             PourMsg::ShelveAllPressed { board } => self.shelve_board_pours(board, true),
@@ -49,14 +52,7 @@ impl Signex {
         if target.is_placement() {
             return;
         }
-        let zones: Vec<_> = target
-            .items
-            .iter()
-            .filter_map(|i| match i {
-                ItemRef::Zone { zone, .. } => Some(*zone),
-                _ => None,
-            })
-            .collect();
+        let zones: Vec<_> = zone_ids(&target.items).collect();
         let what = if shelved {
             ids::PCB_PRIM_POUR_SHELVE
         } else {
@@ -83,6 +79,14 @@ impl Signex {
             Ok(shelve_all_pours(board, shelved).into_iter().collect())
         });
     }
+}
+
+/// The zones among `items`.
+fn zone_ids(items: &[ItemRef]) -> impl Iterator<Item = Uuid> + '_ {
+    items.iter().filter_map(|i| match i {
+        ItemRef::Zone { zone, .. } => Some(*zone),
+        _ => None,
+    })
 }
 
 /// What kind of area `zone` is; `None` for a zone none of the tools makes.
@@ -215,13 +219,7 @@ pub(super) fn zone_command(
     items: &[ItemRef],
     edit: &PrimitiveEdit,
 ) -> Result<Option<BoardCommand>, PrimitiveEditRefusal> {
-    let ids: Vec<_> = items
-        .iter()
-        .filter_map(|i| match i {
-            ItemRef::Zone { zone, .. } => Some(*zone),
-            _ => None,
-        })
-        .collect();
+    let ids: Vec<_> = zone_ids(items).collect();
     match zone_edit(edit) {
         Some(e) => zone_edit_command(board, &ids, e),
         None => Ok(None),

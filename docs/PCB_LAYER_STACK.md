@@ -94,9 +94,9 @@ span, diameter, drill and tenting as one undo step. A via whose diameter or
 drill differs from its type's is an override: the panel shows Override on
 for it, with its own sizes in bold, and turning Override off puts both back
 to the type's in one step. A via that matches its type shows its sizes and
-stack tiles greyed until Override is switched on. The finished hole is the drill less twice
-`VIA_PLATING_MM` (0.025 mm); a drill below `PcbSetup::via_min_drill` shows a
-warning.
+stack tiles greyed until Override is switched on. The finished hole is the
+drill less twice `VIA_PLATING_MM` (0.025 mm); a drill below
+`PcbSetup::via_min_drill` shows a warning.
 
 A known trap of derived types: the type's size is the one most of its vias
 share, so an override on most vias of a type moves the type's size with it.

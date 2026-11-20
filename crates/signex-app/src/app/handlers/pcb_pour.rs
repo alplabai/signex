@@ -72,11 +72,30 @@ impl Signex {
     /// Repour the board at `path` (the board in view is drawn again) and
     /// say in Messages what its pours, or the selected ones, came to.
     pub(crate) fn repour_board(&mut self, path: &Path, selected: bool) {
+        self.refill_pours();
+        let only = selected.then(|| self.selected_pours(path));
+        self.report_pours(path, only.as_ref());
+    }
+
+    /// Repour the board at `path` and say in Messages what the pours in
+    /// `only` came to. Repour on a pour's Copper card names its pours, so
+    /// it holds for a board the canvas selection is not on.
+    pub(crate) fn repour_pours(&mut self, path: &Path, only: &BTreeSet<Uuid>) {
+        self.refill_pours();
+        self.report_pours(path, Some(only));
+    }
+
+    /// Drop the computed fills; the board in view is filled and drawn again.
+    fn refill_pours(&mut self) {
         self.interaction_state.pcb_ratsnest.invalidate();
         self.sync_pcb_canvas_from_visible_board();
-        let only = selected.then(|| self.selected_pours(path));
+    }
+
+    /// Say in Messages what the pours of the board at `path` (those in
+    /// `only`, when given) came to.
+    fn report_pours(&self, path: &Path, only: Option<&BTreeSet<Uuid>>) {
         let i18n = &self.ui_state.i18n;
-        if only.as_ref().is_some_and(BTreeSet::is_empty) {
+        if only.is_some_and(BTreeSet::is_empty) {
             let line = t!(i18n, ids::PCB_POUR_NONE_SELECTED).into_string();
             crate::diagnostics::log_warning(line);
             return;
@@ -93,7 +112,7 @@ impl Signex {
                 &computed
             }
         };
-        let report = pour_report(board, fills, only.as_ref());
+        let report = pour_report(board, fills, only);
         if report.is_empty() {
             crate::diagnostics::log_info(t!(i18n, ids::PCB_POUR_NONE).into_string());
             return;

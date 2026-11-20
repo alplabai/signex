@@ -169,8 +169,8 @@ define_ids! {
     PCB_PRIM_POUR_COPPER_VALUE = "pcb-prim-pour-copper-value";
     PCB_PRIM_POUR_UNFILLED = "pcb-prim-pour-unfilled";
     PCB_PRIM_POUR_COPPER_TIP = "pcb-prim-pour-copper-tip";
-    // w2/prim-shell (#2523): the panel shell, Net Information, the Track,
-    // Arc and Drawing panels and their illustrations.
+    // #2523: the panel shell, Net Information, the Track, Arc and Drawing
+    // panels and their illustrations.
     PCB_PRIM_MIXED = "pcb-prim-mixed";
     PCB_PRIM_NO_VALUE = "pcb-prim-no-value";
     PCB_PRIM_UNIT_MM = "pcb-prim-unit-mm";
@@ -199,9 +199,9 @@ define_ids! {
     PCB_PRIM_DRAWING_INNER_LAYER = "pcb-prim-drawing-inner-layer";
     PCB_PRIM_DRAWING_NEXT = "pcb-prim-drawing-next";
     PCB_PRIM_DRAWING_CURSOR = "pcb-prim-drawing-cursor";
-    // w2/via-pad (#2523, mockup rows 96 and 97): via types, Override, IPC-4761
-    // protection, the shared mask rows, the pad's copper table and the via
-    // and pad illustrations.
+    // #2523, mockup rows 96 and 97: the Via and Pad panels: via types,
+    // Override, IPC-4761 protection, the shared mask rows, the pad's copper
+    // table and the via and pad illustrations.
     PCB_PRIM_VIA_TYPE = "pcb-prim-via-type";
     PCB_PRIM_VIA_TYPE_TIP = "pcb-prim-via-type-tip";
     PCB_PRIM_VIA_TYPE_ENTRY = "pcb-prim-via-type-entry";
@@ -282,8 +282,7 @@ define_ids! {
     PCB_PRIM_PLATED = "pcb-prim-plated";
     PCB_PRIM_PLATED_TIP = "pcb-prim-plated-tip";
     PCB_PRIM_SOLDER_TENTED = "pcb-prim-solder-tented";
-    // w2/zone-text-dim (#2523): the pour, string and dimension panels and
-    // their illustrations.
+    // #2523: the pour, string and dimension panels and their illustrations.
     PCB_PRIM_UNIT_MM2 = "pcb-prim-unit-mm2";
     PCB_PRIM_POUR_FILL_MODE = "pcb-prim-pour-fill-mode";
     PCB_PRIM_POUR_FILL_SOLID = "pcb-prim-pour-fill-solid";
