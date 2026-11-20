@@ -9,8 +9,8 @@
 #
 # The calls come from ast-grep (scripts/app-catch-unwind.yml): `catch_unwind(…)`
 # and `<path>::catch_unwind(…)`, not inside an item under `#[cfg(test)]`.
-# Test files (`tests.rs`, `*_tests.rs`, anything under a `tests/` directory)
-# are skipped. Blind spots: a renamed import (`use std::panic::catch_unwind as
+# Test files (`tests.rs`, `*_tests.rs`, anything under a `tests/` or
+# `*_tests/` directory) are skipped. Blind spots: a renamed import (`use std::panic::catch_unwind as
 # c`), `catch_unwind` passed as a value, and the FutureExt method
 # `fut.catch_unwind()`, which catches a task's panic, not one inside `update`.
 #
@@ -40,7 +40,7 @@ if ! scan="$(ast-grep scan --rule "$RULE" --json=compact "$SRC")"; then
   exit 2
 fi
 hits="$(printf '%s' "$scan" | jq -r '.[]
-  | select(.file | test("(^|/)tests/|(^|/|_)tests\\.rs$") | not)
+  | select(.file | test("(^|/|_)tests/|(^|/|_)tests\\.rs$") | not)
   | "\(.file):\(.range.start.line + 1)"' | sort)"
 found="$(printf '%s\n' "$hits" | grep -c . || true)"
 allowed="$(grep -vE '^[[:space:]]*(#|$)' "$BASELINE" | head -n 1 | tr -d '[:space:]')"

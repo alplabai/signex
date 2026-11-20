@@ -39,6 +39,8 @@ run_case test_fn pass ui.rs '#[cfg(test)]
 fn t() { catch_unwind(|| 1); }' 0
 run_case tests_file pass save_tests.rs 'fn t() { catch_unwind(|| 1); }' 0
 run_case tests_dir pass agent/tests/client.rs 'fn t() { catch_unwind(|| 1); }' 0
+run_case suffixed_tests_dir pass dispatch/window_action_tests/undo.rs 'fn t() { catch_unwind(|| 1); }' 0
+run_case tests_named_prod_dir fail dispatch/contests/x.rs 'fn f() { catch_unwind(|| 1); }' 0
 run_case future_method pass ui.rs 'fn f() { fut.catch_unwind(); }' 0
 
 # A tree without the app sources is an error, never a pass.
