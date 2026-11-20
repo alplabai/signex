@@ -131,6 +131,9 @@ fn chamfer_and_extend_need_no_selection_and_linear_pattern_does() {
 fn the_new_rows_arm_their_tools_and_show_the_armed_one() {
     let mut state = footprint_state();
     state.active_tool = SketchTool::Extend;
+    // Linear Pattern needs a selection: without one its row is greyed and
+    // sends nothing.
+    state.selected_sketch = Some(signex_sketch::id::SketchEntityId::new());
     let entries = modify_entries(&state, PathBuf::from("t"), ThemeId::DEFAULT, &en_us());
     let armed_by = |name: &str| {
         entries.iter().find_map(|entry| match entry {
