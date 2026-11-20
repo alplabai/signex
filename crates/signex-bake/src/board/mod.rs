@@ -12,13 +12,14 @@ mod checks;
 mod error;
 mod features;
 mod geometry;
+mod inside_corners;
 
 #[cfg(test)]
 mod tests;
 
 pub use checks::{
     CheckState, Finding, NotChecked, OutlineCheck, OutlineChecks, outline_checks,
-    outline_checks_after,
+    outline_checks_after, outline_checks_with, outline_checks_with_router,
 };
 pub use error::BoardBakeError;
 

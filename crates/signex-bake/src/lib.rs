@@ -20,6 +20,7 @@ mod eval_util;
 pub mod keepout;
 pub mod layer_label;
 pub mod mask;
+pub mod open_ends;
 pub mod pad;
 pub(crate) mod params;
 pub mod pour;
