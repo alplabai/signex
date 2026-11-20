@@ -13,7 +13,8 @@ use signex_widgets::{Label, button, checkbox, text, text_input, tooltip};
 
 use super::super::form_look;
 use super::super::properties_parameters::{chip_label, graphite_filter_chip};
-use super::super::{PROPERTY_LABEL_COLUMN, PanelContext, PanelMsg, section_title};
+use super::super::widgets::section_title;
+use super::super::{PROPERTY_LABEL_COLUMN, PanelContext, PanelMsg};
 use super::PcbBoardMsg;
 use crate::styles::tokens::{hover_overlay, resolve};
 use crate::styles::{HAIRLINE, PillTone, Spacing, TypeScale, pill, ti};
