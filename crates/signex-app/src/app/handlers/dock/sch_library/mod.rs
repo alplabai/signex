@@ -811,6 +811,23 @@ impl Signex {
                 follow = self.fp_editor_remove_conflicting_constraint(*constraint);
                 true
             }
+            // Close gap (#190): the editor in view, footprint or board sketch.
+            PanelMsg::FpEditorCloseGapClicked { keep, merge } => {
+                if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
+                    follow = self.update(Message::Library(
+                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
+                            path,
+                            msg: crate::library::messages::PrimitiveEdit::Footprint(
+                                crate::library::messages::FootprintEditorMsg::SketchCloseGapRequested {
+                                    keep: *keep,
+                                    merge: *merge,
+                                },
+                            ),
+                        },
+                    ));
+                }
+                true
+            }
             _ => false,
         };
         if handled { Some(follow) } else { None }

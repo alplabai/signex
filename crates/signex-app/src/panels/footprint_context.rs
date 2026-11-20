@@ -693,6 +693,9 @@ pub struct BoardSketchProps {
     /// The Outline checks lines of the current solve (mockup 179d): Properties
     /// lists them with nothing selected, the bake preview the failed ones.
     pub outline_checks: Vec<crate::library::editor::footprint::state::CheckLine>,
+    /// The project's router tool diameter in mm (#179d), for the Fab
+    /// profile group; `None` when its fab profile names none.
+    pub router_tool_diameter: Option<f64>,
 }
 
 /// A mounting hole's fields as the Properties panel edits them.

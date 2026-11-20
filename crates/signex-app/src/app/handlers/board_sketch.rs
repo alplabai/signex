@@ -76,6 +76,7 @@ impl Signex {
     /// Re-bake the open bake preview of the board sketch against its
     /// board's nets; a closed preview drops its result.
     fn refresh_board_sketch_preview(&mut self) {
+        self.sync_board_sketch_router();
         let Some(session) = self.interaction_state.board_sketch.as_mut() else {
             return;
         };
@@ -85,6 +86,28 @@ impl Signex {
             .map(|board| board.nets.as_slice())
             .unwrap_or_default();
         session.refresh_preview(nets);
+    }
+
+    /// Copy the router tool diameter of the board's project into the sketch
+    /// session, for its inside-corner check (#179d): on entry, on every
+    /// sketch edit and when a fab tier or profile sets it. Memory only.
+    pub(crate) fn sync_board_sketch_router(&mut self) {
+        let Some(path) = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .map(|session| session.board_path.clone())
+        else {
+            return;
+        };
+        let ds = &self.document_state;
+        let diameter = ds
+            .document_project(&path)
+            .or_else(|| ds.project_for_path(&path))
+            .and_then(|project| project.data.router_tool_diameter());
+        if let Some(session) = self.interaction_state.board_sketch.as_mut() {
+            session.editor.state.sketch_exit.router_tool_diameter = diameter;
+        }
     }
 
     /// The sketch mode of the board the main window shows, if it is on.
@@ -288,6 +311,7 @@ impl Signex {
         };
         let session = BoardSketchSession::open(&path, board);
         self.interaction_state.board_sketch = Some(session);
+        self.sync_board_sketch_router();
         // The board's own selection is hidden in the mode: no key may act
         // on it unseen.
         self.clear_pcb_selection();

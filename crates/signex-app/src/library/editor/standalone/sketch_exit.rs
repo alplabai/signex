@@ -16,8 +16,10 @@ use signex_widgets::{text, theme_ext};
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_mode::{BakePreview, SketchExit};
 use crate::library::editor::footprint::state::CheckStatus;
+use crate::library::editor::footprint::state::board_checks::GapOffer;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::{DialogButtonKind, dialog_button};
+use signex_sketch::id::SketchEntityId;
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -250,6 +252,31 @@ pub struct PreviewIssues<M> {
     pub lines: Vec<(CheckStatus, Localized, Option<M>)>,
     /// Under `lines`.
     pub caption: Option<MessageId>,
+    /// An open profile's gap (#190): whether it heals, and the message
+    /// Close gap sends when it does.
+    pub gap: Option<GapLine<M>>,
+}
+
+/// The open-profile line of the preview card: the gap and the heal
+/// tolerance, and Close gap's message when the gap heals.
+pub struct GapLine<M> {
+    pub text: Localized,
+    pub close: Option<M>,
+}
+
+impl<M> GapLine<M> {
+    /// The line for `offer`; `close` makes the message Close gap sends.
+    pub fn of(
+        offer: &GapOffer,
+        i18n: &I18n,
+        close: impl FnOnce(SketchEntityId, SketchEntityId) -> M,
+    ) -> Self {
+        use signex_i18n::RenderTranslatable as _;
+        Self {
+            text: offer.text().localized(i18n),
+            close: offer.closes().then(|| close(offer.keep, offer.merge)),
+        }
+    }
 }
 
 /// The bake preview card: a count per target of the host, or why the
@@ -288,6 +315,11 @@ pub fn preview_card<'a, M: Clone + 'a>(
                 );
             }
             card = card.push(caption(ids::SKETCH_BAKE_DRAWN));
+            // A footprint bakes past an open profile; the gap is why one
+            // shape is missing.
+            if issues.gap.is_some() {
+                card = card.push(heading(ids::SKETCH_BAKE_ERRORS));
+            }
         }
         BakePreview::Refused(reason) => {
             let refused = t!(i18n, ids::EDITORS_SKETCH_BAKE_REFUSED, "reason" => reason.as_str());
@@ -299,6 +331,9 @@ pub fn preview_card<'a, M: Clone + 'a>(
                     issues.refusal_select.clone(),
                 ));
         }
+    }
+    if let Some(gap) = issues.gap {
+        card = card.push(gap_line(gap, tokens, i18n));
     }
     let selectable = issues.refusal_select.is_some()
         || issues.lines.iter().any(|(_, _, select)| select.is_some());
@@ -319,6 +354,27 @@ pub fn preview_card<'a, M: Clone + 'a>(
         .padding([SP.s, SP.m])
         .style(crate::styles::modal_card(tokens))
         .boxed()
+}
+
+/// The gap and the tolerance, then Close gap when the gap heals.
+fn gap_line<'a, M: Clone + 'a>(
+    gap: GapLine<M>,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, M> {
+    let has_button = gap.close.is_some();
+    let mut line = row![status_line(CheckStatus::Failed, gap.text, None)]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center);
+    if has_button {
+        line = line.push(dialog_button(
+            t!(i18n, ids::SKETCH_BAKE_CLOSE_GAP),
+            DialogButtonKind::Primary,
+            gap.close,
+            tokens,
+        ));
+    }
+    line.boxed()
 }
 
 /// The footprint editor's mode bar, with the preview card above it when
@@ -364,6 +420,15 @@ pub fn footprint_overlay<'a>(
                 })
                 .collect(),
             caption: None,
+            // An open profile: why its shape is missing, and Close gap.
+            gap: editor
+                .state
+                .gap_offer(editor.primitive().sketch.as_ref())
+                .map(|offer| {
+                    GapLine::of(&offer, i18n, |keep, merge| {
+                        fp(FootprintEditorMsg::SketchCloseGapRequested { keep, merge })
+                    })
+                }),
         };
         stack = stack.push(preview_card(&preview, issues, tokens, i18n));
     }

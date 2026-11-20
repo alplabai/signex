@@ -1109,6 +1109,12 @@ pub enum PanelMsg {
     FpEditorConflictRemoveClicked {
         constraint: signex_sketch::id::ConstraintId,
     },
+    /// Close gap on an open outline's check line (#190): join the two open
+    /// ends in the sketch in view, one undo step.
+    FpEditorCloseGapClicked {
+        keep: signex_sketch::id::SketchEntityId,
+        merge: signex_sketch::id::SketchEntityId,
+    },
 }
 
 /// One change to the active sheet's frame settings (#1134).

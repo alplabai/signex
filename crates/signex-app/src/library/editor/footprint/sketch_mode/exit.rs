@@ -32,6 +32,10 @@ pub struct SketchExit {
     /// and the sketch bakes: the canvas draws it (mockup 190). Always `None` on
     /// a footprint, whose own fields are the bake result.
     pub board_result: Option<Arc<BakedBoard>>,
+    /// The router tool diameter of the board's project, in mm (#179d), set
+    /// by the board session from the open project; the inside-corner check
+    /// reads it. Always `None` on a footprint.
+    pub router_tool_diameter: Option<f64>,
 }
 
 #[derive(Debug, Clone)]

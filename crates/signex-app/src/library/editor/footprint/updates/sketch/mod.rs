@@ -27,3 +27,5 @@ pub(super) mod ui;
 pub(super) mod parameters;
 // Values on the drawing, constraint and pattern menus (#187, #188, #191).
 pub(super) mod canvas_values;
+// Close gap on an open profile (#190).
+pub(super) mod close_gap;

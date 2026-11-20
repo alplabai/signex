@@ -158,16 +158,19 @@ impl Signex {
         let seeded = self
             .rules_with_tier(id, tier)
             .and_then(|rules| self.commit_drc_section(id, |drc| *drc = rules.drc));
-        if let Err(why) = seeded {
-            crate::diagnostics::log_warning(format!(
+        match seeded {
+            Ok(()) => self.set_project_router_tool(id, tier.capabilities().router_tool_diameter),
+            Err(why) => crate::diagnostics::log_warning(format!(
                 "New PCB: the {} fab tier rules were not added: {why}",
                 tier.token()
-            ));
+            )),
         }
     }
 
     /// Apply `preview` as one undo step, unless the rules moved since it
-    /// was computed.
+    /// was computed. A tier, or a fab profile naming a router tool, also
+    /// sets the project's router tool diameter (#179d); a profile naming
+    /// none leaves it as it is.
     pub(crate) fn apply_preset(
         &mut self,
         id: ProjectId,
@@ -180,7 +183,31 @@ impl Signex {
             return Err("the rules changed since the preview; pick the preset again".into());
         }
         let result: DrcRuleSet = preview.result.clone();
-        self.commit_drc_section(id, |drc| *drc = result)
+        self.commit_drc_section(id, |drc| *drc = result)?;
+        if let Some(diameter) = preview
+            .fab
+            .as_ref()
+            .and_then(|fab| fab.router_tool_diameter)
+        {
+            self.set_project_router_tool(id, diameter);
+        }
+        Ok(())
+    }
+
+    /// Store `diameter` mm as `id`'s router tool and show it in an open
+    /// board sketch. Memory only; the project saves with the next save.
+    fn set_project_router_tool(&mut self, id: ProjectId, diameter: f64) {
+        let ds = &mut self.document_state;
+        let Some(project) = ds.project_by_id_mut(id) else {
+            return;
+        };
+        if project.data.router_tool_diameter() == Some(diameter) {
+            return;
+        }
+        project.data.set_router_tool_diameter(Some(diameter));
+        ds.sync_project_history_dirty(id, false);
+        self.sync_board_sketch_router();
+        self.refresh_panel_ctx();
     }
 
     /// `rules_preset_diff`: what applying `preset` changes. A profile

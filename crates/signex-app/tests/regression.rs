@@ -747,3 +747,7 @@ mod board_sketch_checks;
 // centerline, and the pad link of Edit in Sketch.
 #[path = "regression/sketch_tools_padlink.rs"]
 mod sketch_tools_padlink;
+// Decisions 3 and 4 (#179d, #190): the router tool of the project's fab tier
+// and the inside-corner check, and Close gap on both hosts.
+#[path = "regression/board_sketch_router.rs"]
+mod board_sketch_router;

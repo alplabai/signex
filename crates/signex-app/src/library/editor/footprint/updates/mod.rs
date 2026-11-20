@@ -519,6 +519,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             editor.state.apply_pad_link(msg);
             editor.canvas_cache.clear();
         }
+        FootprintEditorMsg::SketchCloseGapRequested { keep, merge } => {
+            sketch::close_gap::apply(editor, keep, merge)
+        }
     }
 }
 
@@ -702,6 +705,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         SketchCanvas(_) => false,
         // A board sketch's Snap ▾ board rows: snap switches, no geometry.
         SketchSnap(_) => false,
+        // Close gap records its own step (`record_edit`), only when it joins.
+        SketchCloseGapRequested { .. } => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

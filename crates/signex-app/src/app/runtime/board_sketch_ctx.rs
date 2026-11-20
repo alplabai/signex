@@ -20,6 +20,7 @@ pub(super) fn board_sketch_props(editor: &FootprintDocument) -> Option<BoardSket
         board_area_mm2: backdrop.outline_area_mm2(),
         // Read here, where every path that solves ends up, so they are live.
         outline_checks: check_lines(editor.state.board_checks(sketch).as_ref()),
+        router_tool_diameter: editor.state.sketch_exit.router_tool_diameter,
         ..BoardSketchProps::default()
     };
     let selected = editor.state.selected_sketch;

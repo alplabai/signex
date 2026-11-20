@@ -606,4 +606,10 @@ pub enum FootprintEditorMsg {
     SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
     /// #192 — the floating pad link on the sketch canvas.
     PadLink(crate::library::editor::footprint::state::PadLinkMsg),
+    /// Close gap was pressed on an open profile (#190): join the open end
+    /// `merge` into `keep`, one undo step, on either host.
+    SketchCloseGapRequested {
+        keep: signex_sketch::id::SketchEntityId,
+        merge: signex_sketch::id::SketchEntityId,
+    },
 }

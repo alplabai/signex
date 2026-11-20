@@ -30,4 +30,8 @@ define_ids! {
     BOARD_SKETCH_CHECK_KEEPOUT_OUTSIDE = "board-sketch-check-keepout-outside";
     BOARD_SKETCH_CHECK_HOLE_OUTSIDE = "board-sketch-check-hole-outside";
     BOARD_SKETCH_CHECK_OPENING_OUTSIDE = "board-sketch-check-opening-outside";
+    BOARD_SKETCH_CHECK_CORNER_TIGHT = "board-sketch-check-corner-tight";
+    BOARD_SKETCH_FAB_SECTION = "board-sketch-fab-section";
+    BOARD_SKETCH_FAB_ROUTER = "board-sketch-fab-router";
+    BOARD_SKETCH_FAB_ROUTER_NONE = "board-sketch-fab-router-none";
 }

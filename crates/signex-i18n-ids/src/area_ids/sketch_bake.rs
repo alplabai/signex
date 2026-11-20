@@ -10,4 +10,7 @@ define_ids! {
     SKETCH_BAKE_CHECKS_WARN = "sketch-bake-checks-warn";
     SKETCH_BAKE_SELECT_HINT = "sketch-bake-select-hint";
     SKETCH_BAKE_DRAWN = "sketch-bake-drawn";
+    SKETCH_BAKE_CLOSE_GAP = "sketch-bake-close-gap";
+    SKETCH_BAKE_GAP_CLOSES = "sketch-bake-gap-closes";
+    SKETCH_BAKE_GAP_TOO_WIDE = "sketch-bake-gap-too-wide";
 }

@@ -14,8 +14,9 @@ use crate::app::{BoardSketchMsg, Message, PcbMsg, Signex};
 use crate::dock::DockMessage;
 use crate::library::editor::footprint::state::CheckStatus;
 use crate::library::editor::standalone::sketch_exit::{
-    ModeBarLook, ModeBarMessages, PreviewIssues, mode_bar, preview_card,
+    GapLine, ModeBarLook, ModeBarMessages, PreviewIssues, mode_bar, preview_card,
 };
+use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::panels::PanelMsg;
 use crate::styles::{Spacing, TypeScale};
 use signex_i18n::RenderTranslatable as _;
@@ -133,6 +134,32 @@ impl Signex {
                 })
                 .collect(),
             caption: Some(ids::SKETCH_BAKE_CHECKS_WARN),
+            gap: board_gap_line(session, i18n),
         }
     }
+}
+
+/// The gap of an open profile the bake refuses (#190): whether it heals
+/// under the tolerance, and Close gap when it does.
+fn board_gap_line(
+    session: &BoardSketchSession,
+    i18n: &signex_i18n::I18n,
+) -> Option<GapLine<Message>> {
+    if !matches!(
+        session.preview_error,
+        Some(signex_bake::BoardBakeError::OpenProfile { .. })
+    ) {
+        return None;
+    }
+    let editor = &session.editor;
+    let offer = editor.state.gap_offer(editor.primitive().sketch.as_ref())?;
+    Some(GapLine::of(&offer, i18n, |keep, merge| {
+        Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: session.board_path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchCloseGapRequested {
+                keep,
+                merge,
+            }),
+        })
+    }))
 }
