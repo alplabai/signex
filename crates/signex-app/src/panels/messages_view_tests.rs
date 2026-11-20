@@ -10,6 +10,7 @@ fn entry(id: u64, level: DiagnosticLevel, code: &str, message: &str) -> Diagnost
         code: code.into(),
         message: message.into(),
         at: chrono::Utc::now(),
+        link: None,
     }
 }
 
@@ -145,6 +146,61 @@ fn the_panel_draws_the_chips_and_an_error_row_and_a_chip_picks_its_level() {
             ))]
         ),
         "{pressed:?}"
+    );
+}
+
+/// A row with a link shows its command as a button; pressing it sends the
+/// link with the sheet the row names.
+#[test]
+fn a_linked_row_shows_its_command_and_pressing_it_sends_the_link() {
+    let (app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    let named = std::path::PathBuf::from("/w/a.snxsch");
+    let mut linked = entry(
+        1,
+        DiagnosticLevel::Warning,
+        "SIGNEX-SCHEMATIC",
+        "a.snxsch: 1 pin touches a wire without a junction",
+    );
+    linked.link = Some(crate::diagnostics::MessageLink::RepairPinJunctions(
+        named.clone(),
+    ));
+    ctx.diagnostics = vec![linked];
+    ctx.diagnostics_level = "info".into();
+    let window = iced::Size::new(1200.0, 600.0);
+    let shown: Vec<String> = lay_out_texts(view_messages(&ctx), window)
+        .into_iter()
+        .map(|t| t.text)
+        .collect();
+    assert!(
+        shown.iter().any(|t| t == "Repair Pin Junctions"),
+        "{shown:?}"
+    );
+    let pressed = messages_on_click(view_messages(&ctx), window, "Repair Pin Junctions");
+    assert!(
+        matches!(
+            pressed.as_slice(),
+            [PanelMsg::MessageLinkPressed(
+                crate::diagnostics::MessageLink::RepairPinJunctions(path)
+            )] if *path == named
+        ),
+        "{pressed:?}"
+    );
+}
+
+#[test]
+fn a_row_without_a_link_shows_no_command() {
+    let (app, _boot) = crate::app::Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.diagnostics = log();
+    ctx.diagnostics_level = "info".into();
+    let shown: Vec<String> = lay_out_texts(view_messages(&ctx), iced::Size::new(1200.0, 2000.0))
+        .into_iter()
+        .map(|t| t.text)
+        .collect();
+    assert!(
+        !shown.iter().any(|t| t == "Repair Pin Junctions"),
+        "{shown:?}"
     );
 }
 
