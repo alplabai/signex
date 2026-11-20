@@ -510,6 +510,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::ActiveBarSelectAll
         | FootprintEditorMsg::ActiveBarClearSelection
         | FootprintEditorMsg::ActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
+        FootprintEditorMsg::SketchSnap(snap) => {
+            crate::library::editor::footprint::snap_menu::apply(editor, snap)
+        }
     }
 }
 
@@ -683,6 +686,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarFlipSelection
         | ActiveBarAlignSelectionToGrid
         | ActiveBarMoveOriginToGrid => false,
+        // A board sketch's Snap ▾ board rows: snap switches, no geometry.
+        SketchSnap(_) => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

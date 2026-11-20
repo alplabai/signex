@@ -595,4 +595,7 @@ pub enum FootprintEditorMsg {
     /// v0.13.3 — Inline numeric input for the Dimension tool /
     /// editable Distance value. Updates `state.dimension_input`.
     SketchDimensionInput(String),
+
+    /// A board-feature row of a board sketch's Snap ▾ (#2518).
+    SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
 }

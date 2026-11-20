@@ -43,6 +43,10 @@ pub mod sketch_solve_task;
 #[cfg(test)]
 mod sketch_solve_task_tests;
 pub mod snap;
+pub mod snap_board;
+#[cfg(test)]
+mod snap_board_tests;
+pub mod snap_menu;
 pub mod state;
 pub(crate) mod status;
 pub mod step_attach;

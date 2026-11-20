@@ -57,6 +57,10 @@ pub use snap_options::{
 pub use tool::{PadsTool, SketchTool, ToolPending};
 pub use zoom_request::ZoomRequest;
 
+// What a board sketch snaps to on its board (#2518).
+pub use board_backdrop::{BackdropCourtyard, BackdropPad, PadCopper};
+pub use snap_options::BoardFeatureSnaps;
+
 use signex_library::{Footprint, LayerId};
 
 use super::layers::LayerVisibility;

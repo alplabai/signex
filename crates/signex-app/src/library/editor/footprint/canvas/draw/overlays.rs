@@ -315,6 +315,8 @@ impl FootprintCanvas<'_> {
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);
             // v0.22 Phase A6 — Inferred-constraint snap glyph on top.
             draw_sketch_snap_glyph(frame, cstate, self.state);
+            // The badge's words name the snap target (mockup #188).
+            super::sketch::draw_sketch_snap_badge(frame, cstate, sketch, self.state);
         }
     }
 }

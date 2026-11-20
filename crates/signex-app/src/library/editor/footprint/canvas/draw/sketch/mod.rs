@@ -34,3 +34,6 @@ pub(super) use snap::draw_sketch_snap_glyph;
 // through the `draw::` re-export; keep them at their original
 // canvas-wide reach.
 pub(in crate::library::editor::footprint::canvas) use fills::{ClosedLoop, find_closed_loops};
+
+// The snap badge's words beside the glyph (Graphite mockup #188).
+pub(super) use snap::draw_sketch_snap_badge;

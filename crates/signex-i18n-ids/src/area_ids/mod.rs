@@ -36,6 +36,7 @@ mod properties;
 mod requirements;
 mod rules;
 mod sheet_sync;
+mod sketch_snap;
 mod update_pcb;
 
 pub use assign_footprints::*;
@@ -72,6 +73,7 @@ pub use properties::*;
 pub use requirements::*;
 pub use rules::*;
 pub use sheet_sync::*;
+pub use sketch_snap::*;
 pub use update_pcb::*;
 
 /// Every id of every area list.
@@ -112,6 +114,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         requirements::REQUIREMENTS,
         rules::RULES,
         sheet_sync::SHEET_SYNC,
+        sketch_snap::SKETCH_SNAP,
         update_pcb::UPDATE_PCB,
     ]
     .concat()
