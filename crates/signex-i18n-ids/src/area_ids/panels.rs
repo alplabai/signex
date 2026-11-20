@@ -2,21 +2,7 @@
 
 define_ids! {
     PANELS;
-    PANELS_DRAWING_START_X = "panels-drawing-start-x";
-    PANELS_DRAWING_START_Y = "panels-drawing-start-y";
-    PANELS_DRAWING_END_X = "panels-drawing-end-x";
-    PANELS_DRAWING_END_Y = "panels-drawing-end-y";
-    PANELS_DRAWING_POSITION_X = "panels-drawing-position-x";
-    PANELS_DRAWING_POSITION_Y = "panels-drawing-position-y";
-    PANELS_DRAWING_CENTER_X = "panels-drawing-center-x";
-    PANELS_DRAWING_CENTER_Y = "panels-drawing-center-y";
-    PANELS_DRAWING_WIDTH = "panels-drawing-width";
-    PANELS_DRAWING_WIDTH_MM = "panels-drawing-width-mm";
-    PANELS_DRAWING_HEIGHT_MM = "panels-drawing-height-mm";
     PANELS_DRAWING_BORDER = "panels-drawing-border";
-    PANELS_DRAWING_RADIUS = "panels-drawing-radius";
-    PANELS_DRAWING_START_ANGLE = "panels-drawing-start-angle";
-    PANELS_DRAWING_END_ANGLE = "panels-drawing-end-angle";
     PANELS_DRAWING_COLOR_AUTO = "panels-drawing-color-auto";
     PANELS_NET_CLASSES_COLUMN_NAME = "panels-net-classes-column-name";
     PANELS_NET_CLASSES_COLUMN_COLOR = "panels-net-classes-column-color";
@@ -29,14 +15,7 @@ define_ids! {
     PANELS_SCH_FILTER_HINT = "panels-sch-filter-hint";
     PANELS_PLACED_LOCATION = "panels-placed-location";
     PANELS_PLACED_PROPERTIES = "panels-placed-properties";
-    PANELS_PLACED_X = "panels-placed-x";
-    PANELS_PLACED_Y = "panels-placed-y";
-    PANELS_PLACED_START_X = "panels-placed-start-x";
-    PANELS_PLACED_START_Y = "panels-placed-start-y";
-    PANELS_PLACED_WIDTH = "panels-placed-width";
-    PANELS_PLACED_HEIGHT = "panels-placed-height";
     PANELS_PLACED_ROTATION = "panels-placed-rotation";
-    PANELS_PLACED_DEGREES = "panels-placed-degrees";
     PANELS_PLACED_LOCKED = "panels-placed-locked";
     PANELS_PLACED_PARAMETERS = "panels-placed-parameters";
     PANELS_PLACED_PARAMETERS_NONE = "panels-placed-parameters-none";
@@ -49,10 +28,6 @@ define_ids! {
     PANELS_PLACED_SHEET_FILE = "panels-placed-sheet-file";
     PANELS_DIRECTIVE_BLANKET = "panels-directive-blanket";
     PANELS_DIRECTIVE_NET_CLASS = "panels-directive-net-class";
-    PANELS_DIRECTIVE_ERC_EXCLUSIONS = "panels-directive-erc-exclusions";
-    PANELS_DIRECTIVE_ALL_RULES = "panels-directive-all-rules";
-    PANELS_NO_ERC_RULES = "panels-no-erc-rules";
-    PANELS_NO_ERC_ALL_RULES = "panels-no-erc-all-rules";
     PANELS_STATUS_BAR_X = "panels-status-bar-x";
     PANELS_STATUS_BAR_Y = "panels-status-bar-y";
     PANELS_STATUS_BAR_ZOOM = "panels-status-bar-zoom";

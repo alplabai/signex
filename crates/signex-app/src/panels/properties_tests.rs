@@ -17,13 +17,9 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_SECTION_GRAPHICAL, "Graphical"),
     (ids::PROPERTIES_SECTION_STYLE, "Style"),
     (ids::PROPERTIES_SECTION_STATE, "State"),
-    (ids::PROPERTIES_SECTION_FONT, "Font"),
     (ids::PROPERTIES_SECTION_BASIC, "Basic Properties"),
     (ids::PROPERTIES_SECTION_TEXT, "Text Properties"),
     (ids::PROPERTIES_SECTION_FOOTPRINT, "Footprint"),
-    (ids::PROPERTIES_SECTION_NET_GENERAL, "General (Net)"),
-    (ids::PROPERTIES_SECTION_NET_PARAMETERS, "Parameters (Net)"),
-    (ids::PROPERTIES_SECTION_PARAMETERS, "Parameters"),
     (ids::PROPERTIES_SECTION_PAGE_OPTIONS, "Page Options"),
     (
         ids::PROPERTIES_SECTION_SELECTION_FILTERS,
@@ -62,19 +58,15 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_TEXT_SIZE, "Text Size"),
     (ids::PROPERTIES_YES, "Yes"),
     (ids::PROPERTIES_NO, "No"),
-    (ids::PROPERTIES_ELECTRICAL_TYPE, "Electrical Type"),
     (ids::PROPERTIES_NET, "Net"),
     (ids::PROPERTIES_HIDDEN, "Hidden"),
     (ids::PROPERTIES_PINS_COLUMN_PIN, "Pin"),
     (ids::PROPERTIES_PINS_COLUMN_NAME, "Name"),
     (ids::PROPERTIES_PINS_COLUMN_TYPE, "Type"),
     (ids::PROPERTIES_PINS_COLUMN_NET, "Net"),
-    (ids::PROPERTIES_PINS_COLUMN_HIDDEN, "Hidden"),
     (ids::PROPERTIES_SYMBOL, "Symbol"),
     (ids::PROPERTIES_FOOTPRINT, "Footprint"),
-    (ids::PROPERTIES_FOOTPRINT_OVERRIDE, "Footprint override"),
     (ids::PROPERTIES_LIBRARY, "Library"),
-    (ids::PROPERTIES_LIBRARY_ID, "Library ID"),
     (ids::PROPERTIES_ACTION_OPEN_DATASHEET, "Open Datasheet"),
     (ids::PROPERTIES_ACTION_EDIT_SYMBOL, "Edit Symbol"),
     (
@@ -118,12 +110,8 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_TAB_PARAMETERS, "Parameters"),
     (ids::PROPERTIES_TAB_RULES, "Rules"),
     (ids::PROPERTIES_TAB_CLASSES, "Classes"),
-    (ids::PROPERTIES_NET_PARAMS_NAME, "Name"),
-    (ids::PROPERTIES_NET_PARAMS_VALUE, "Value"),
     (ids::PROPERTIES_NET_PARAMS_ADD, "Add \u{25BE}"),
     (ids::PROPERTIES_NET_NO_PARAMETERS, "No Parameters"),
-    (ids::PROPERTIES_NET_NO_RULES, "No Rules"),
-    (ids::PROPERTIES_NET_NO_CLASSES, "No Classes"),
     (ids::PROPERTIES_WIRE_WIDTH, "Width"),
     (ids::PROPERTIES_WIRE_WIDTH_SMALLEST, "Smallest"),
     (ids::PROPERTIES_WIRE_WIDTH_SMALL, "Small"),
@@ -134,8 +122,6 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_COLOR_PRESETS, "Preset Colours"),
     (ids::PROPERTIES_COLOR_CUSTOM, "Custom\u{2026}"),
     (ids::PROPERTIES_COLOR_RESET, "Reset to Default"),
-    (ids::PROPERTIES_BORDER_COLOUR, "Border Colour"),
-    (ids::PROPERTIES_FILL_COLOUR, "Fill Colour"),
     (ids::PROPERTIES_UNIT_MM, "mm"),
     (ids::PROPERTIES_UNIT_MILS, "mils"),
     (ids::PROPERTIES_VISIBLE_GRID, "Visible Grid"),
@@ -153,15 +139,11 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_FORMAT_STANDARD, "Standard"),
     (ids::PROPERTIES_FORMAT_CUSTOM, "Custom"),
     (ids::PROPERTIES_PAPER, "Paper"),
-    (ids::PROPERTIES_PAPER_WIDTH, "Width"),
-    (ids::PROPERTIES_PAPER_HEIGHT, "Height"),
     (ids::PROPERTIES_ORIENTATION, "Orientation"),
     (ids::PROPERTIES_ORIENTATION_LANDSCAPE, "Landscape"),
     (ids::PROPERTIES_ORIENTATION_PORTRAIT, "Portrait"),
     (ids::PROPERTIES_SHOW_BORDER, "Show Border"),
     (ids::PROPERTIES_SHOW_TITLE_BLOCK, "Show Title Block"),
-    (ids::PROPERTIES_ZONES_VERTICAL, "Vertical"),
-    (ids::PROPERTIES_ZONES_HORIZONTAL, "Horizontal"),
     (ids::PROPERTIES_ORIGIN, "Origin"),
     (ids::PROPERTIES_ORIGIN_UPPER_LEFT, "Upper Left"),
     (ids::PROPERTIES_ORIGIN_LOWER_LEFT, "Lower Left"),
@@ -200,18 +182,9 @@ fn every_new_message_reads_as_the_literal_it_replaced() {
         assert_eq!(en.message_plain(*id, &[]), *literal, "{}", id.as_str());
     }
     let with = |id: MessageId, args: &[(&str, Arg)]| en.message_plain(id, args);
-    // Numbers go in as `format!` wrote them, so 1000 is not grouped.
-    assert_eq!(
-        with(ids::PANELS_PLACED_DEGREES, &[("degrees", "270".into())]),
-        "270 Degrees"
-    );
     assert_eq!(
         with(ids::PROPERTIES_PIN_TITLE, &[("pin", "A1".into())]),
         "Pin A1"
-    );
-    assert_eq!(
-        with(ids::PROPERTIES_PINS_TITLE, &[("count", "1200".into())]),
-        "Pins (1200)"
     );
     let pads = |n: usize| {
         with(
@@ -243,27 +216,6 @@ fn every_new_message_reads_as_the_literal_it_replaced() {
             &[("hex", "#123456".into())]
         ),
         "Custom (#123456)"
-    );
-    assert_eq!(
-        with(
-            ids::PROPERTIES_PAPER_DIMENSIONS,
-            &[("width", "1189".into()), ("height", "841".into())]
-        ),
-        "Width: 1189mm  Height: 841mm"
-    );
-    assert_eq!(
-        with(
-            ids::PROPERTIES_TITLE_BLOCK_FROM_PROJECT,
-            &[("field", "Drawn By".into())]
-        ),
-        "Drawn By (project)"
-    );
-    assert_eq!(
-        with(
-            ids::PROPERTIES_TITLE_BLOCK_OVERRIDES_PROJECT,
-            &[("field", "Title".into())]
-        ),
-        "Title (overrides project)"
     );
     assert_eq!(
         with(
@@ -398,7 +350,7 @@ fn a_fields_yes_and_no_values_follow_the_language() {
 }
 
 /// The Border row opens the border picker and the Fill row the fill picker
-/// (#46 shortened the labels).
+/// (mockup row 46 shortened the labels).
 #[test]
 fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
     let id = uuid::Uuid::from_u128(9);
@@ -505,7 +457,7 @@ fn each_pick_list_shows_the_stored_entry() {
         );
     }
 
-    // A power port's Style is a tile grid now (#45); `power_port::tests`
+    // A power port's Style is a tile grid now (mockup row 45); `power_port::tests`
     // checks the tile it marks, Chassis (#1284) included.
     let body = one_selected(
         SelectedKindForTest::Symbol,
@@ -525,7 +477,7 @@ fn each_pick_list_shows_the_stored_entry() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
-/// Pressing a power-port style tile asks for that style's library id (#45:
+/// Pressing a power-port style tile asks for that style's library id (mockup row 45:
 /// the Style list became a grid of toggle tiles).
 #[test]
 fn picking_a_power_port_style_asks_for_its_library_id() {
@@ -789,7 +741,7 @@ fn the_net_class_field_rows_keep_their_names_and_order() {
 }
 
 /// A sheet entry's facts sit under a Properties section, its own title. (A
-/// wire's End and Length moved into Location, #43; `placed_rows_tests`
+/// wire's End and Length moved into Location, mockup row 43; `placed_rows_tests`
 /// covers them.)
 #[test]
 fn a_sheet_entrys_facts_sit_under_properties() {
@@ -829,7 +781,7 @@ fn a_blankets_sections_keep_their_titles() {
     );
 }
 
-/// A text note's Rotation and Justify rows are segmented controls (#47):
+/// A text note's Rotation and Justify rows are segmented controls (mockup row 47):
 /// each row lays its own steps out on its line, in order. Which step is on
 /// is read from the engine's keys (`text_note::tests`).
 #[test]

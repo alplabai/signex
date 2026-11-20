@@ -34,14 +34,9 @@ properties-section-general = General
 properties-section-graphical = Graphical
 properties-section-style = Style
 properties-section-state = State
-properties-section-font = Font
 properties-section-basic = Basic Properties
 properties-section-text = Text Properties
 properties-section-footprint = Footprint
-# The net a power port names.
-properties-section-net-general = General (Net)
-properties-section-net-parameters = Parameters (Net)
-properties-section-parameters = Parameters
 properties-section-page-options = Page Options
 properties-section-selection-filters = Custom Selection Filters
 
@@ -85,27 +80,20 @@ properties-no = No
 
 ## Pins of a placed part
 
-properties-electrical-type = Electrical Type
 properties-net = Net
 properties-hidden = Hidden
 # The clicked pin's own section. $pin is the pin's designator.
 properties-pin-title = Pin { $pin }
-# $count is how many pins the part has.
-properties-pins-title = Pins ({ $count })
 properties-pins-column-pin = Pin
 properties-pins-column-name = Name
 properties-pins-column-type = Type
 properties-pins-column-net = Net
-properties-pins-column-hidden = Hidden
 
 ## Library rows of a placed part
 
 properties-symbol = Symbol
 properties-footprint = Footprint
-# The free-text footprint field under a footprint pick list.
-properties-footprint-override = Footprint override
 properties-library = Library
-properties-library-id = Library ID
 properties-action-open-datasheet = Open Datasheet
 properties-action-edit-symbol = Edit Symbol
 properties-action-change-component = Change Component…
@@ -156,13 +144,9 @@ properties-tab-all = All
 properties-tab-parameters = Parameters
 properties-tab-rules = Rules
 properties-tab-classes = Classes
-properties-net-params-name = Name
-properties-net-params-value = Value
 # Button that opens the add menu; the triangle marks the menu.
 properties-net-params-add = Add ▾
 properties-net-no-parameters = No Parameters
-properties-net-no-rules = No Rules
-properties-net-no-classes = No Classes
 
 ## Wire style and colours
 
@@ -177,8 +161,6 @@ properties-color-default = Default
 properties-color-presets = Preset Colours
 properties-color-custom = Custom…
 properties-color-reset = Reset to Default
-properties-border-colour = Border Colour
-properties-fill-colour = Fill Colour
 
 ## Document Options
 
@@ -204,19 +186,11 @@ properties-format-template = Template
 properties-format-standard = Standard
 properties-format-custom = Custom
 properties-paper = Paper
-properties-paper-width = Width
-properties-paper-height = Height
-# $width and $height are the page size in whole mm.
-properties-paper-dimensions = Width: { $width }mm  Height: { $height }mm
 properties-orientation = Orientation
 properties-orientation-landscape = Landscape
 properties-orientation-portrait = Portrait
 properties-show-border = Show Border
 properties-show-title-block = Show Title Block
-# Number of border zones down the page.
-properties-zones-vertical = Vertical
-# Number of border zones across the page.
-properties-zones-horizontal = Horizontal
 properties-origin = Origin
 properties-origin-upper-left = Upper Left
 properties-origin-lower-left = Lower Left
@@ -232,21 +206,13 @@ properties-title-block-company = Company
 properties-title-block-drawn-by = Drawn By
 properties-title-block-checked-by = Checked By
 properties-title-block-approved-by = Approved By
-# The sheet leaves the field empty, so the project's value shows. $field is
-# the field's name.
-properties-title-block-from-project = { $field } (project)
-# The sheet's own value replaces the project's. $field is the field's name.
-properties-title-block-overrides-project = { $field } (overrides project)
 properties-title-block-hint = Press Enter to apply a field.
-properties-section-sheet-variables = Sheet Variables
-properties-sheet-variable-add = Add
 properties-sheet-variable-remove = Remove
 # What a variable's `=` expression evaluates to. $value is the result, such
 # as 1.65V.
 properties-sheet-variable-shows = Shows { $value }
 # Why a variable's `=` expression does not evaluate. $error is the reason.
 properties-sheet-variable-error = Error: { $error }
-properties-sheet-variables-hint = A sheet variable replaces the project variable of the same name. A value starting with = is an expression. Press Enter to apply.
 # The read-only rows of Document Options, Parameters: special strings of the
 # sheet that nothing in the panel edits.
 properties-parameter-document-name = Document Name
@@ -311,6 +277,9 @@ properties-zones = Zones
 properties-zones-v-short = V
 # Short axis name of the zones counted along the top (1, 2, 3...).
 properties-zones-h-short = H
+# Under the zone counts when a typed count was over the limit. $max is the
+# most zones a border has, $used the count stored instead.
+properties-zones-clamped = Out of range (0 to { $max }): { $used } is used.
 # Short name of the paper width field.
 properties-paper-w-short = W
 # Short name of the paper height field.
@@ -374,7 +343,7 @@ properties-anchor-bottom-left = Bottom left
 properties-anchor-bottom = Bottom
 properties-anchor-bottom-right = Bottom right
 
-## Placed part, Graphite layout (#42)
+## Placed part, Graphite layout (mockup row 42)
 
 # The free-text footprint field under the footprint pick list.
 properties-override = Override
@@ -393,7 +362,7 @@ properties-part-illustration-position = Position { $x }, { $y }
 # Corner note of the part illustration when the part is mirrored both ways.
 properties-part-illustration-mirror-xy = Mirror X · Mirror Y
 
-## Pin of a placed part (#50)
+## Pin of a placed part (mockup row 50)
 
 # Caption under the pin illustration.
 properties-pin-read-only-note = Read-only on a placed part · Edit in Symbol Editor changes it
@@ -450,7 +419,7 @@ properties-text-size-unit = Text Size ({ $unit })
 # One step of a 4-step Rotation control, e.g. 90°.
 properties-degrees-short = { $degrees }°
 
-# Sheet symbol Properties (#46). "Open Sheet" does what double-clicking the
+# Sheet symbol Properties (mockup row 46). "Open Sheet" does what double-clicking the
 # symbol does.
 properties-sheet-open = Open Sheet
 properties-sheet-browse = Browse…
@@ -480,7 +449,7 @@ properties-axis-w = W
 properties-axis-h = H
 properties-angle-start = Start
 properties-angle-end = End
-# Drawing shape Properties (#48).
+# Drawing shape Properties (mockup row 48).
 properties-drawing-position = Position
 properties-drawing-size = Size
 properties-drawing-center = Center
@@ -494,7 +463,7 @@ properties-fill-solid = Solid
 properties-fill-none-tip = No fill: only the border is drawn.
 properties-fill-outline-tip = Filled with the border colour.
 properties-fill-solid-tip = Filled with the sheet background, so it hides what is behind it.
-# Directive and No-ERC Properties (#49). Rule names come from the ERC
+# Directive and No-ERC Properties (mockup row 49). Rule names come from the ERC
 # engine in English.
 properties-suppressed-rules = Suppressed rules
 # Header count of the rules a directive silences.
@@ -505,7 +474,7 @@ properties-rule-filter = Filter rules
 properties-all-rules-on = All rules is on: every rule is silenced here. Untick it to pick rules.
 # $query is the text typed in the rule filter.
 properties-rule-no-match = No rule matches “{ $query }”.
-# Multi-selection Properties (#51): the kind chips and sections.
+# Multi-selection Properties (mockup row 51): the kind chips and sections.
 properties-kind-all = All
 properties-kind-parts = Parts
 properties-kind-labels = Labels
