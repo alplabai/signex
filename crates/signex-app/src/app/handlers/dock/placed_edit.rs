@@ -95,6 +95,22 @@ impl Signex {
         }
     }
 
+    /// The sheets with a typed note box not applied yet, the owed and the
+    /// selected ones, in the main window's Properties and every undocked
+    /// window's: a scope (a project, an export) adds them to the sheets it
+    /// commits.
+    pub(crate) fn typed_note_sheets(&self) -> Vec<std::path::PathBuf> {
+        let docs = &self.document_state;
+        std::iter::once(&docs.panel_ctx.placed)
+            .chain(docs.window_panel_ctx.values().map(|ctx| &ctx.placed))
+            .flat_map(|placed| {
+                let selected = placed.note.iter().filter(|d| d.edited);
+                placed.notes_owed.iter().chain(selected)
+            })
+            .map(|draft| draft.sheet.clone())
+            .collect()
+    }
+
     /// The owed note boxes (and with `selected` the typed selected boxes) of
     /// the sheets `matches` picks, from the main window's Properties and
     /// every undocked window's.

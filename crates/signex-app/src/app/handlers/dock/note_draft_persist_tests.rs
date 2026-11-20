@@ -182,3 +182,68 @@ fn a_save_while_typing_writes_the_typed_note() {
     let draft = app.document_state.panel_ctx.placed.note.as_ref();
     assert!(draft.is_some_and(|d| !d.edited), "the box is applied once");
 }
+
+/// Project `ProjectA` with its sheet (the note on it) open and active, and
+/// "!" typed into the note's box without Ctrl+Enter.
+fn project_with_typed_note() -> (Signex, PathBuf, crate::app::ProjectId) {
+    use crate::app::handlers::menu::export::tests as fx;
+    let mut app = fx::app_workspace("/w/p", &["top.snxsch"]);
+    let id = app.document_state.projects[0].id;
+    let sheet = PathBuf::from("/w/p/top.snxsch");
+    fx::open_with(&mut app.document_state, &sheet, sheet_with_note());
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "top".to_string(),
+        path: sheet.clone(),
+        cached_document: None,
+        project_id: Some(id),
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(sheet.clone());
+    let recorder = Arc::new(Recorder::default());
+    app.document_state.document_saves = DocumentSaves::new(recorder);
+    type_into_note(&mut app, '!');
+    assert_eq!(note_text(&app, &sheet), "note", "still a draft");
+    (app, sheet, id)
+}
+
+/// Close Project while the note box is typed in: the text reaches the sheet
+/// before the gate reads the dirty marks, so the gate asks instead of
+/// closing and dropping it.
+#[test]
+fn close_project_while_typing_a_note_commits_it_and_prompts() {
+    use crate::app::{ContextMenuMsg, ProjectMsg, ProjectTreeAction};
+    let (mut app, sheet, id) = project_with_typed_note();
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
+        ProjectTreeAction::CloseProject(vec![id.to_string()]),
+    )));
+    let result = app.resolve_sheet_refs_blocking();
+    let _ = app.update(Message::Project(ProjectMsg::CloseRefsResolved {
+        project_id: id,
+        result,
+    }));
+    assert_eq!(note_text(&app, &sheet), "note!", "nothing is lost");
+    assert!(app.document_state.is_document_dirty(&sheet));
+    assert!(
+        app.ui_state.project_close_confirm.is_some(),
+        "the typed note is an unsaved edit"
+    );
+    assert!(app.document_state.projects.iter().any(|p| p.id == id));
+}
+
+/// Project ▸ Close Project (the active project's route) commits it too.
+#[test]
+fn close_active_project_while_typing_a_note_commits_it() {
+    let (mut app, sheet, _id) = project_with_typed_note();
+    let _ = app.close_active_project();
+    assert_eq!(note_text(&app, &sheet), "note!");
+    assert!(app.document_state.is_document_dirty(&sheet));
+}
+
+/// An export reads the sheet with the text typed into the note box.
+#[test]
+fn an_export_while_typing_a_note_reads_the_typed_text() {
+    let (mut app, sheet, _id) = project_with_typed_note();
+    let _ = app.handle_bom_preview_open();
+    assert_eq!(note_text(&app, &sheet), "note!");
+}

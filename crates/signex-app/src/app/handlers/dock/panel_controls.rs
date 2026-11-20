@@ -112,9 +112,10 @@ impl Signex {
         self.commit_note_drafts_where(&matches);
     }
 
-    /// Commit the pending title-block drafts of the document `anchor` and of
-    /// the other sheets of its project: the scope of an export or a project
-    /// close. Another project's drafts stay pending.
+    /// Commit the pending drafts (title-block fields, sheet variables, typed
+    /// note text) of the document `anchor` and of the other sheets of its
+    /// project: the scope of an export or a project close. Another project's
+    /// drafts stay pending.
     pub(crate) fn commit_drafts_in_scope_of(&mut self, anchor: Option<&std::path::Path>) {
         let Some(anchor) = anchor else {
             return;
@@ -126,6 +127,7 @@ impl Signex {
             .title_block_sheets()
             .into_iter()
             .chain(self.document_state.drafts.sheet_variable_sheets())
+            .chain(self.typed_note_sheets())
             .filter(|sheet| {
                 sheet == anchor
                     || project.is_some_and(|id| {
