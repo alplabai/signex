@@ -178,6 +178,7 @@ mod tests {
             (Capability::Save, "save_document_as"),
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
+            (Capability::Save, "save_workspace_layout"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),
