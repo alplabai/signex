@@ -245,9 +245,10 @@ every other rule stays exactly as typed. A value the cell would still not
 show, because another rule of the row or the fab floor is stricter, is
 refused and the tab names that rule. A rule the hierarchy cannot express (a
 pattern, an object pair, a layer on a class, a condition or limit the grid
-has no column for), and a board-wide rule no cell shows (another rule of its
-row is stricter on every limit it sets), is a row of the Scoped rules group
-and is edited there or in the text view. Every edit (a
+has no column for), and a rule no cell shows (one that is off or that the
+compiler refuses, or one another rule of its row beats on every limit it
+sets, on any row), is a row of the Scoped rules group and is edited there or
+in the text view, so its On and Remove stay in reach. Every edit (a
 cell, ↺, a value on the drawing, On, Add, Remove, Apply in the text view) is
 one undo step on the project's rule history, the same history the ERC dialog
 steps; Ctrl+Z and Ctrl+Y in the tab step it, and ERC runs again when it has

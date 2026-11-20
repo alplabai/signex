@@ -500,19 +500,48 @@ fn a_value_the_cell_would_not_show_is_refused_naming_the_winner() {
     );
 }
 
+fn scoped_names(text: &str) -> Vec<String> {
+    scoped_rules(&table(text))
+        .iter()
+        .map(|r| r.name.clone())
+        .collect()
+}
+
+/// A rule another rule of its row beats on every limit is listed, on All,
+/// a class or a net row alike; the winners and the fab floor are not.
 #[test]
-fn a_losing_board_wide_duplicate_is_a_scoped_rule() {
+fn a_losing_duplicate_is_a_scoped_rule_on_any_row() {
     let text = "\
 rule wide_a on track require width >= 0.2mm then error
 rule wide_b on track require width >= 0.3mm then error
 rule cls_a on track when class == \"HV\" require width >= 0.2mm then error
 rule cls_b on track when class == \"HV\" require width >= 0.3mm then error
+rule net_a on track when net == \"GND\" require width >= 0.2mm then error
+rule net_b on track when net == \"GND\" require width >= 0.3mm then error
 rule fab_track on track require width >= 0.1mm then error
 ";
-    let rows = table(text);
-    let names: Vec<&str> = scoped_rules(&rows)
-        .iter()
-        .map(|r| r.name.as_str())
-        .collect();
-    assert_eq!(names, ["wide_a"], "only the hidden board-wide rule");
+    assert_eq!(scoped_names(text), ["wide_a", "cls_a", "net_a"]);
+}
+
+/// A rule no cell shows because it is not applied stays listed, so it can
+/// be switched on or removed: one turned off, and one the compiler
+/// refuses (a minimum above its maximum).
+#[test]
+fn a_rule_that_is_off_or_refused_is_a_scoped_rule() {
+    let text = "\
+rule live on track require width >= 0.2mm then error
+disabled rule resting on track when class == \"HV\" require width >= 0.3mm then error
+rule vias on via require diameter >= 0.3mm then error
+";
+    assert_eq!(scoped_names(text), ["resting"]);
+    let refused = "\
+rule live on track require width >= 0.2mm then error
+rule inverted on track when net == \"GND\" require width >= 2mm and width <= 1mm then error
+";
+    let rows = table(refused);
+    assert!(
+        !rows.row("inverted").expect("listed in the table").applied,
+        "the compiler refuses a minimum above its maximum"
+    );
+    assert_eq!(scoped_names(refused), ["inverted"]);
 }

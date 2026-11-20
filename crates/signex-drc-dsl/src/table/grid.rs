@@ -281,9 +281,10 @@ fn is_matrix_cell(row: &RuleRow) -> bool {
 
 /// The rules the grid has no row for, in written order: an object pair, a
 /// pattern, a layer on a net or class scope, or a condition or limit the
-/// table cannot show. A board-wide rule no cell shows (another rule of
-/// its row is stricter on every limit it sets) is listed too, so it does
-/// not hide. Class-matrix cells are the matrix's.
+/// table cannot show. A rule no cell shows is listed too, so its On and
+/// Remove stay in reach: one that is not applied (off, or refused by the
+/// compiler), and one another rule of its row beats on every limit it
+/// sets. Class-matrix cells are the matrix's.
 pub fn scoped_rules(table: &RuleTable) -> Vec<&RuleRow> {
     table
         .rows
@@ -292,18 +293,18 @@ pub fn scoped_rules(table: &RuleTable) -> Vec<&RuleRow> {
         .filter(|r| {
             match GridScope::of(&r.scope, r.layer.as_deref()).filter(|scope| scope.holds(r)) {
                 None => true,
+                Some(_) if !r.applied => true,
                 Some(scope) => is_losing_duplicate(table, &scope, r),
             }
         })
         .collect()
 }
 
-/// Whether `row`, an applied board-wide rule of grid row `scope`, governs
-/// none of the limits it sets there. A `fab_*` floor is not listed: the
-/// cell names it when it governs.
+/// Whether `row`, an applied rule of grid row `scope`, governs none of the
+/// limits it sets there. A `fab_*` floor is not listed: the cell names it
+/// when it governs.
 fn is_losing_duplicate(table: &RuleTable, scope: &GridScope, row: &RuleRow) -> bool {
-    matches!(scope, GridScope::All | GridScope::Layer(_))
-        && row.applied
+    row.applied
         && !is_fab_rule(&row.name)
         && !row.limits.is_empty()
         && row.limits.iter().all(|limit| {
