@@ -10,7 +10,7 @@ use std::str::FromStr;
 type Row = (ShortcutContext, String, String);
 
 /// The approved platform-standard set: `(key, shift)` chords that are `Mod`.
-const STANDARD: [(&str, bool); 25] = [
+const STANDARD: [(&str, bool); 26] = [
     ("n", false),
     ("o", false),
     ("s", false),
@@ -36,6 +36,7 @@ const STANDARD: [(&str, bool); 25] = [
     ("e", true),
     ("f", true),
     ("a", true),
+    ("g", false),
 ];
 
 fn compiled(platform: Platform, id: &str) -> CompiledKeymap {
@@ -57,7 +58,7 @@ fn macos_moves_exactly_the_approved_standard_set() {
     for (id, moved, extra) in [
         (
             "altium",
-            18,
+            19,
             vec![
                 "\u{2325}I",
                 "\u{2325}\u{2318}F",
