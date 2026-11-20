@@ -267,6 +267,9 @@ fn wire_port_note_app() -> (tempfile::TempDir, Signex) {
         &dir.path().join("wire_port_note.snxsch"),
         wire_port_note_sheet(),
     );
+    // The rows are typed in mm: pinned, not read from the shared prefs.
+    app.ui_state.unit = Unit::Mm;
+    app.document_state.panel_ctx.unit = Unit::Mm;
     (dir, app)
 }
 

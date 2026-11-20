@@ -210,6 +210,9 @@ fn placed_text_stores_the_project_font() {
 fn the_pre_placement_position_reads_y_from_the_page_origin() {
     use crate::panels::{PageOrigin, PositionField, PrePlacementPositionMsg};
     let (mut app, _sheet, _window) = app();
+    // Positions in mm: the unit is pinned, not read from the shared prefs.
+    app.ui_state.unit = signex_types::coord::Unit::Mm;
+    app.document_state.panel_ctx.unit = signex_types::coord::Unit::Mm;
     app.document_state.panel_ctx.pre_placement = Some(app.document_state.new_pre_placement(
         String::new(),
         crate::panels::PrePlacementKind::Other,
