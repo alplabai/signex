@@ -112,9 +112,10 @@ pub enum LastPlacement {
 }
 
 /// The values a Tab pause began with, so Esc can resume placing without the
-/// edits made in the panel while paused (#2529).
+/// edits made in the panel while paused (#2529). The board editor's twin is
+/// `handlers::pcb_tool::PlacementPause`.
 #[derive(Debug, Clone)]
-pub enum PlacementPause {
+pub enum SheetPlacementPause {
     /// A sheet tool or a part on the cursor.
     Sheet {
         /// The Tab form before this Tab built it; Esc puts it back.

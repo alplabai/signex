@@ -263,7 +263,7 @@ impl Signex {
                     // Resume or Enter; Esc resumes without the edits.
                     self.interaction_state.active_canvas_mut().placement_paused = true;
                     self.interaction_state.placement_pause =
-                        Some(crate::app::state::PlacementPause::Sheet {
+                        Some(crate::app::state::SheetPlacementPause::Sheet {
                             before,
                             at_pause: self.document_state.panel_ctx.pre_placement.clone(),
                             reference_override: self

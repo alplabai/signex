@@ -26,7 +26,7 @@
 
 use super::input::InputTarget;
 use super::*;
-use crate::app::state::PlacementPause;
+use crate::app::state::SheetPlacementPause;
 
 impl Signex {
     /// Resolve one Esc against the window it was typed in.
@@ -328,7 +328,7 @@ impl Signex {
             return;
         };
         self.interaction_state.placement_pause =
-            (!editor.state.placement_paused).then(|| PlacementPause::Footprint {
+            (!editor.state.placement_paused).then(|| SheetPlacementPause::Footprint {
                 path: path.to_path_buf(),
                 pad_defaults: editor.state.next_pad_defaults.clone(),
             });
@@ -339,7 +339,7 @@ impl Signex {
     /// tool stays armed (#2529).
     fn resume_placement_without_edits(&mut self) -> Task<Message> {
         let undone = match self.interaction_state.placement_pause.take() {
-            Some(PlacementPause::Sheet {
+            Some(SheetPlacementPause::Sheet {
                 before,
                 at_pause,
                 reference_override,
@@ -352,7 +352,7 @@ impl Signex {
                 self.document_state.panel_ctx.pre_placement = before;
                 undone
             }
-            Some(PlacementPause::Footprint { path, pad_defaults }) => {
+            Some(SheetPlacementPause::Footprint { path, pad_defaults }) => {
                 if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
                     editor.state.next_pad_defaults = pad_defaults;
                 }
@@ -1010,6 +1010,39 @@ mod tests {
         );
         tool(&mut app, ToolMessage::ResumePlacement);
         assert_eq!(wire_width(&app), Some(WireWidthPreset::Large));
+        assert!(app.interaction_state.placement_pause.is_none());
+    }
+
+    /// The form's OK ends the pause with the edits, like Resume: nothing is
+    /// left for a later Esc to put back.
+    #[test]
+    fn ok_on_the_form_ends_the_pause_record() {
+        use crate::app::ToolMessage;
+        use crate::panels::PanelMsg;
+        use signex_types::schematic::WireWidthPreset;
+        let mut app = quiet_app();
+        app.interaction_state.current_tool = Tool::Wire;
+        tool(&mut app, ToolMessage::PrePlacementTab);
+        panel(
+            &mut app,
+            PanelMsg::SetPrePlacementWireWidth(WireWidthPreset::Large),
+        );
+        panel(&mut app, PanelMsg::ConfirmPrePlacement);
+        assert!(!app.interaction_state.active_canvas().placement_paused);
+        assert!(app.interaction_state.placement_pause.is_none());
+        assert_eq!(wire_width(&app), Some(WireWidthPreset::Large));
+    }
+
+    /// Clearing the tool state while paused ends the pause record too.
+    #[test]
+    fn a_tool_clear_ends_the_pause_record() {
+        use crate::app::ToolMessage;
+        let mut app = quiet_app();
+        app.interaction_state.current_tool = Tool::Wire;
+        tool(&mut app, ToolMessage::PrePlacementTab);
+        assert!(app.interaction_state.placement_pause.is_some());
+        app.clear_transient_schematic_tool_state();
+        assert!(!app.interaction_state.active_canvas().placement_paused);
         assert!(app.interaction_state.placement_pause.is_none());
     }
 

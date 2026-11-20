@@ -82,7 +82,7 @@ pub use pdf_preview_raster::{
     forget_page_setup, rekey_page_setup,
 };
 pub use placement::{
-    LastPlacement, PasteCounters, PlacementKind, PlacementPause, PlacementSession,
+    LastPlacement, PasteCounters, PlacementKind, PlacementSession, SheetPlacementPause,
 };
 pub use preview::{
     BomPreviewState, BomSidebarTab, ColumnResizeState, PdfPreviewTab, PdfQuality, PreviewState,
