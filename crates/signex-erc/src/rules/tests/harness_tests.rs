@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::context::ErcContext;
 use crate::fixtures::{harness_connector, harness_definition};
+use crate::pin_matrix::ErcConfig;
 use crate::{RuleKind, engine};
 
 fn pt(x: f64, y: f64) -> Point {
@@ -21,6 +22,20 @@ fn found(ctx: &ErcContext, kind: RuleKind) -> Vec<crate::Diagnostic> {
     engine::run_all(ctx)
         .into_iter()
         .filter(|d| d.rule_kind == kind)
+        .collect()
+}
+
+/// The messages of `kind` with the project's harness `definitions`.
+fn found_with_definitions(
+    ctx: &ErcContext,
+    definitions: &[signex_types::schematic::HarnessDefinition],
+    kind: RuleKind,
+) -> Vec<String> {
+    let config = ErcConfig::default().with_harness_definitions(definitions);
+    engine::run_all_with_config(ctx, &config)
+        .into_iter()
+        .filter(|d| d.rule_kind == kind)
+        .map(|d| d.message)
         .collect()
 }
 
@@ -112,23 +127,23 @@ fn matching_sides_report_nothing() {
 
 #[test]
 fn an_entry_the_definition_does_not_list_is_reported() {
-    let ctx = ErcContext::from_snapshot(&child(&["SCK", "CS", "IRQ"]))
-        .with_harness_definitions(&[harness_definition("SPI_BUS", &["SCK", "CS"])]);
-    let messages: Vec<String> = found(&ctx, RuleKind::HarnessEntryMismatch)
-        .into_iter()
-        .map(|d| d.message)
-        .collect();
+    let ctx = ErcContext::from_snapshot(&child(&["SCK", "CS", "IRQ"]));
+    let messages = found_with_definitions(
+        &ctx,
+        &[harness_definition("SPI_BUS", &["SCK", "CS"])],
+        RuleKind::HarnessEntryMismatch,
+    );
     assert_eq!(messages, ["SPI_BUS defines no entry IRQ"]);
 }
 
 #[test]
 fn a_definition_entry_missing_on_the_connector_names_both() {
-    let ctx = ErcContext::from_snapshot(&child(&["SCK", "CS"]))
-        .with_harness_definitions(&[harness_definition("SPI_BUS", &["SCK", "CS_ADC"])]);
-    let messages: Vec<String> = found(&ctx, RuleKind::HarnessEntryMismatch)
-        .into_iter()
-        .map(|d| d.message)
-        .collect();
+    let ctx = ErcContext::from_snapshot(&child(&["SCK", "CS"]));
+    let messages = found_with_definitions(
+        &ctx,
+        &[harness_definition("SPI_BUS", &["SCK", "CS_ADC"])],
+        RuleKind::HarnessEntryMismatch,
+    );
     assert_eq!(
         messages,
         ["SPI_BUS expects entry CS_ADC; this harness has CS"]
