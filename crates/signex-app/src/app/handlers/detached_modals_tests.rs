@@ -607,7 +607,7 @@ fn copy_to_library_ends_with_cancel_then_new_library_and_no_empty_band() {
             .find(|t| t.text.contains("No writable library"))
             .expect("the empty-list hint");
         let gap = cancel.y - (hint.bounds.y + hint.bounds.height);
-        // The hint sits in a card (#134): its padding and border add to the
+        // The hint sits in a card (mockup row 134): its padding and border add to the
         // gap, so the card's inset comes off before the old 48 px bound.
         let card = crate::library::stock_copy::EMPTY_CARD_PAD_Y + crate::styles::HAIRLINE;
         assert!(
@@ -652,8 +652,8 @@ fn copy_to_library_notes_each_add_a_banner_and_stay_above_the_footer() {
     let (none, scale) = height_with(false, false);
     let (one, _) = height_with(false, true);
     let (two, _) = height_with(true, true);
-    // Each note is a banner (#134): one banner block, and more when its text
-    // wraps (the previous-library note names a path).
+    // Each note is a banner (mockup row 134): one banner block, and more
+    // when its text wraps (the previous-library note names a path).
     let banner = |text: &str| {
         crate::app::handlers::modal_sizing::banner_height(
             crate::app::handlers::erc::modal_size(ModalId::LibraryStockCopy).width,
@@ -667,9 +667,16 @@ fn copy_to_library_notes_each_add_a_banner_and_stay_above_the_footer() {
     )
     .into_string();
     let block = crate::app::handlers::modal_sizing::BANNER_BLOCK * scale;
+    // The one-line error, written out: 7 px padding above and below, one
+    // 16.5 px body line (12 px x 1.375) and the 8.7 px gap above the banner.
+    let one_line_banner = (7.0 + 16.5 + 7.0 + 8.7) * scale;
     assert!(
-        (one - none - banner("The copy could not be written")).abs() <= 2.0,
-        "one note: {none} -> {one}"
+        (one - none - one_line_banner).abs() <= 2.0,
+        "one note: {none} -> {one}, a one-line banner is {one_line_banner} px"
+    );
+    assert!(
+        (banner("The copy could not be written") - one_line_banner).abs() <= 1.0,
+        "the sizing helper agrees for the one-line error"
     );
     assert!(
         (two - one - banner(&previous)).abs() <= 2.0,
