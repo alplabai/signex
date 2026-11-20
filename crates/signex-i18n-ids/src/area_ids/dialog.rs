@@ -97,4 +97,7 @@ define_ids! {
     DIALOG_TITLE_DELETE_COMPONENT = "dialog-title-delete-component";
     DIALOG_TITLE_LIBRARY_RECOVERY = "dialog-title-library-recovery";
     DIALOG_TITLE_NET_COLOR_CUSTOM = "dialog-title-net-color-custom";
+    DIALOG_ERC_SOURCE_PROJECT = "dialog-erc-source-project";
+    DIALOG_ERC_SOURCE_USER_DEFAULT = "dialog-erc-source-user-default";
+    DIALOG_ERC_PROFILE_MENU = "dialog-erc-profile-menu";
 }

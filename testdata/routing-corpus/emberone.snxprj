@@ -1,0 +1,26 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "emberone",
+  "net_classes": [
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.2,
+      "via_diameter": 0.5,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "emberone.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

@@ -6,10 +6,10 @@
 //! `DropdownItem` at build time, so no render-time selection guard is
 //! needed here.
 
-use iced::widget::{button, svg};
-use iced::{Background, Border, Color, Element, Theme};
+use iced::widget::svg;
+use iced::{Color, Element};
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, RowPaint};
+use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 use super::{
     ActiveBarAction, ActiveBarMenu, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
@@ -69,7 +69,7 @@ pub fn view_dropdown<'a>(
 }
 
 /// One icon + label dropdown row. Disabled rows drop their `on_press`
-/// (the widget greys the row and ignores clicks — Altium parity).
+/// (the widget greys the row and ignores clicks).
 fn dd_item(
     i18n: &signex_i18n::I18n,
     icon: svg::Handle,
@@ -78,6 +78,33 @@ fn dd_item(
     has_selection: bool,
     has_net_colors: bool,
 ) -> DropdownEntry<ActiveBarMsg> {
+    let row = dd_row(i18n, label, action, has_selection, has_net_colors);
+    DropdownEntry::Item(row.icon(icon))
+}
+
+/// One colour swatch + label dropdown row (the net-colour menu). The swatch
+/// sits in the same icon column as the icon rows, so every label of the
+/// card starts at one x.
+fn dd_swatch(
+    i18n: &signex_i18n::I18n,
+    color: Color,
+    label: &'static str,
+    action: ActiveBarAction,
+    has_selection: bool,
+    has_net_colors: bool,
+) -> DropdownEntry<ActiveBarMsg> {
+    let row = dd_row(i18n, label, action, has_selection, has_net_colors);
+    DropdownEntry::Item(row.swatch(color))
+}
+
+/// The label, message, enablement and planned hint of one action row.
+fn dd_row(
+    i18n: &signex_i18n::I18n,
+    label: &'static str,
+    action: ActiveBarAction,
+    has_selection: bool,
+    has_net_colors: bool,
+) -> DropdownItem<ActiveBarMsg> {
     let enabled = action_enabled(&action, has_selection, has_net_colors);
     // #271 — the visible text comes from the command catalog when the
     // action has an id, so the Active Bar stops being the only surface
@@ -87,13 +114,11 @@ fn dd_item(
     // to these literals so nothing the user sees moves.
     let label = crate::app::command::active_bar::action_label(i18n, &action, label);
     let planned = super::is_planned(&action);
-    let mut item = DropdownItem::new(label, ActiveBarMsg::Action(action))
-        .icon(icon)
-        .disabled(!enabled);
+    let mut item = DropdownItem::new(label, ActiveBarMsg::Action(action)).disabled(!enabled);
     if planned {
         item = item.tooltip(i18n.message_plain(signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP, &[]));
     }
-    DropdownEntry::Item(item)
+    item
 }
 
 /// Route each `ActiveBarMenu` to its entries. Uniform menus resolve
@@ -129,7 +154,7 @@ fn dropdown_entries(
         ActiveBarMenu::Directives => render(i18n, DIRECTIVES, tid, sel, nc),
         ActiveBarMenu::TextTools => render(i18n, TEXT_TOOLS, tid, sel, nc),
         ActiveBarMenu::Shapes => render(i18n, SHAPES, tid, sel, nc),
-        ActiveBarMenu::NetColor => net_color_entries(i18n, tokens, tid, sel, nc),
+        ActiveBarMenu::NetColor => net_color_entries(i18n, tid, sel, nc),
     }
 }
 
@@ -182,26 +207,4 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
 /// Horizontal offset (in px) to align dropdown below a given button index.
 pub fn dropdown_x_offset(menu: ActiveBarMenu, m: &signex_widgets::active_bar::Metrics) -> f32 {
     super::layout::trigger_left(menu, m)
-}
-
-/// A `Custom` row's button: hovers with the widget's own row paint.
-fn dd_btn_style_f(
-    text_c: Color,
-    paint: RowPaint,
-) -> impl Fn(&Theme, button::Status) -> button::Style {
-    move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered => Some(Background::Color(paint.hover)),
-            _ => None,
-        };
-        button::Style {
-            background: bg,
-            border: Border {
-                radius: paint.radius.into(),
-                ..Border::default()
-            },
-            text_color: text_c,
-            ..button::Style::default()
-        }
-    }
 }

@@ -77,6 +77,9 @@ impl Signex {
         // mutation goes through `apply_sketch_role_with_warnings`
         // (clears all attrs, sets matching one, runs solve+bake).
         // The footprint tab in view, or a board's sketch editor (#2234).
+        if self.say_role_does_not_fit(id, *role) {
+            return follow;
+        }
         if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
             follow = self.update(Message::Library(
                 crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
@@ -92,6 +95,41 @@ impl Signex {
             self.refresh_panel_ctx();
         }
         follow
+    }
+
+    /// A board role picked for a shape it cannot take (#2518): Messages
+    /// says why and the entity keeps its role. Whether it was refused.
+    fn say_role_does_not_fit(
+        &self,
+        id: &signex_sketch::id::SketchEntityId,
+        role: crate::library::messages::RoleTag,
+    ) -> bool {
+        let Some(editor) = self.active_footprint_editor() else {
+            return false;
+        };
+        let misfit = editor
+            .primitive()
+            .sketch
+            .as_ref()
+            .and_then(|sketch| sketch.entities.iter().find(|e| e.id == *id))
+            .is_some_and(|entity| !role.fits(&entity.kind));
+        if misfit {
+            let i18n = &self.ui_state.i18n;
+            let label = crate::library::editor::footprint::sketch_mode::roles::role_label(
+                role,
+                editor.state.sketch_host(),
+                i18n,
+            );
+            crate::diagnostics::log_warning(
+                signex_i18n::t!(
+                    i18n,
+                    signex_i18n::ids::EDITORS_SKETCH_ROLE_DOES_NOT_FIT,
+                    "role" => label
+                )
+                .into_string(),
+            );
+        }
+        misfit
     }
 
     pub(in crate::app::handlers::dock::sch_library) fn handle_fp_editor_set_footprint_description(

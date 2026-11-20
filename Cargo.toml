@@ -21,6 +21,7 @@ members = [
     "crates/chrome-catalog",
     "crates/signex-library",
     "crates/signex-library-server",
+    "crates/signex-expr",
     "crates/signex-sketch",
     "crates/signex-bake",
     "crates/signex-3d-model-importer",
@@ -47,6 +48,7 @@ default-members = [
     "crates/signex-commands",
     "crates/signex-output",
     "crates/signex-library",
+    "crates/signex-expr",
     "crates/signex-sketch",
     "crates/signex-bake",
     "crates/signex-3d-model-importer",
@@ -167,6 +169,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Internal — library
 signex-library = { path = "crates/signex-library" }
+
+# Internal — expression engine shared by sketch parameters and fields (#1984)
+signex-expr = { path = "crates/signex-expr" }
 
 # Internal — sketcher (v0.13)
 signex-sketch = { path = "crates/signex-sketch" }

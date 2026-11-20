@@ -53,8 +53,10 @@ fn options() -> BoardOptions {
             rule: "builtin::clearance".into(),
             note: "Checked by hand: \"tested\" on rev A\nsecond line".into(),
             fingerprint: String::new(),
+            author: "C. Alp".into(),
         }],
         panel: Some(panel()),
+        layer_colors: Vec::new(),
     }
 }
 
@@ -85,6 +87,7 @@ fn a_waived_finding_round_trips_with_its_note() {
         rule: "user::hv".into(),
         note: String::new(),
         fingerprint: String::new(),
+        author: String::new(),
     }];
     let text = SnxPcb::new(board.clone()).write_string().expect("writes");
     assert!(text.contains("drc_waivers"), "{text}");
@@ -103,6 +106,7 @@ fn a_waiver_without_a_fingerprint_loads_and_re_saves_unchanged() {
         rule: "builtin::clearance".into(),
         note: "old".into(),
         fingerprint: String::new(),
+        author: String::new(),
     }];
     let text = SnxPcb::new(board).write_string().expect("writes");
     assert!(!text.contains("fingerprint"), "{text}");
@@ -120,6 +124,7 @@ fn a_waiver_fingerprint_round_trips() {
         rule: "builtin::clearance".into(),
         note: String::new(),
         fingerprint: "00ff00ff00ff00ff00ff00ff00ff00ff".into(),
+        author: String::new(),
     }];
     let text = SnxPcb::new(board.clone()).write_string().expect("writes");
     assert!(
@@ -128,6 +133,45 @@ fn a_waiver_fingerprint_round_trips() {
     );
     let back = SnxPcb::parse(&text).expect("reads back").board;
     assert_eq!(back.options.drc_waivers, board.options.drc_waivers);
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+}
+
+/// AV-13: a waiver's author (multi-line reason and all) is written and read
+/// back, and a second save is byte-identical.
+#[test]
+fn a_waiver_author_round_trips() {
+    let mut board = empty_board();
+    board.options.drc_waivers = vec![DrcWaiver {
+        key: "k1".into(),
+        rule: "builtin::clearance".into(),
+        note: "Checked on the prototype\nby the layout review".into(),
+        fingerprint: "00ff00ff00ff00ff00ff00ff00ff00ff".into(),
+        author: "C. Alp".into(),
+    }];
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(text.contains("author = \"C. Alp\""), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.drc_waivers, board.options.drc_waivers);
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+}
+
+/// AV-13: a board saved before waivers had an author (no `author` key)
+/// loads with an empty one and re-saves without the key.
+#[test]
+fn a_waiver_without_an_author_loads_and_re_saves_unchanged() {
+    let mut board = empty_board();
+    board.options.drc_waivers = vec![DrcWaiver {
+        key: "k1".into(),
+        rule: "builtin::clearance".into(),
+        note: "old".into(),
+        fingerprint: "00ff00ff00ff00ff00ff00ff00ff00ff".into(),
+        author: String::new(),
+    }];
+    let text = SnxPcb::new(board).write_string().expect("writes");
+    assert!(!text.contains("author"), "{text}");
+    let back = SnxPcb::parse(&text).expect("an old board loads").board;
+    assert_eq!(back.options.drc_waivers[0].author, "");
+    assert_eq!(back.options.drc_waivers[0].note, "old");
     assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
 }
 
@@ -209,4 +253,48 @@ fn the_panel_round_trips_and_a_broken_one_is_refused() {
         SnxPcb::parse(&broken),
         Err(FormatError::TsvFieldParse { .. })
     ));
+}
+
+/// 2026-11-18: layer colours round-trip in `[board_options.layer_colors]`
+/// under `snxpcb/1.5`; a board whose colours are all reset writes 1.4 again.
+#[test]
+fn layer_colours_round_trip_and_raise_the_token() {
+    use crate::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
+    let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    let top = PcbLayer::Copper(CopperLayer::Top);
+    let mut board = empty_board();
+    let plain = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(plain.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1}\"")));
+    assert!(board.options.set_layer_color(silk, Some(MARK_COLORS[1])));
+    assert!(board.options.set_layer_color(top, Some(MARK_COLORS[0])));
+    let text = SnxPcb::new(board.clone()).write_string().expect("writes");
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_LAYER_COLORS}\"")),
+        "{text}"
+    );
+    assert!(text.contains("[board_options.layer_colors]"), "{text}");
+    let back = SnxPcb::parse(&text).expect("reads back").board;
+    assert_eq!(back.options.layer_colors, board.options.layer_colors);
+    assert_eq!(back.options.layer_color(silk), Some(MARK_COLORS[1]));
+    assert_eq!(SnxPcb::new(back).write_string().expect("again"), text);
+
+    assert!(board.options.set_layer_color(silk, None));
+    assert!(board.options.set_layer_color(top, None));
+    let reset = SnxPcb::new(board).write_string().expect("writes");
+    assert_eq!(reset, plain, "no colours: byte-identical to before");
+}
+
+/// A colour row naming a layer this build does not know refuses the file
+/// instead of dropping the colour on the next save.
+#[test]
+fn an_unknown_layer_colour_token_refuses_the_file() {
+    let mut board = empty_board();
+    board.options.set_layer_color(
+        crate::pcb_layer::PcbLayer::Technical(crate::pcb_layer::TechnicalLayer::PasteTop),
+        Some(MARK_COLORS[2]),
+    );
+    let text = SnxPcb::new(board).write_string().expect("writes");
+    let broken = text.replacen("TopPaste =", "NoSuchLayer =", 1);
+    assert_ne!(broken, text, "{text}");
+    assert!(SnxPcb::parse(&broken).is_err());
 }

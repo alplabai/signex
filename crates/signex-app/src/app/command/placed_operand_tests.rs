@@ -9,8 +9,8 @@ use std::path::Path;
 use serde_json::Value;
 use signex_types::coord::Unit;
 use signex_types::schematic::{
-    BusEntry, ChildSheet, FillType, HAlign, Junction, Label, LabelType, NoConnect, Point,
-    SchematicSheet, SelectedItem, SelectedKind, SheetPin, Symbol, TextNote, VAlign, Wire,
+    BusEntry, ChildSheet, FillType, HAlign, Junction, Label, LabelType, NoConnect, NoErcDirective,
+    Point, SchematicSheet, SelectedItem, SelectedKind, SheetPin, Symbol, TextNote, VAlign, Wire,
 };
 use uuid::Uuid;
 
@@ -85,9 +85,10 @@ fn sheet() -> SchematicSheet {
             uuid: id(NO_CONNECT),
             position: Point::new(130.0, 10.0),
         }],
-        no_erc_directives: vec![NoConnect {
+        no_erc_directives: vec![NoErcDirective {
             uuid: id(NO_ERC),
             position: Point::new(140.0, 10.0),
+            rules: Vec::new(),
         }],
         text_notes: vec![TextNote {
             uuid: id(NOTE),

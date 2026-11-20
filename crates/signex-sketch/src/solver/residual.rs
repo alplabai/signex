@@ -126,7 +126,9 @@ fn eval_dim_quantity(
 ) -> Result<f64, SketchError> {
     let q = eval_expr(ast, ctx).map_err(SketchError::Expr)?;
     match q.unit.family() {
-        UnitFamily::Length => q.as_mm().map_err(SketchError::Unit),
+        // `as_mm` refuses a derived unit with `WrongFamily`; `eval_expr`
+        // has already refused it at the sketch boundary.
+        UnitFamily::Length | UnitFamily::Derived => q.as_mm().map_err(SketchError::Unit),
         UnitFamily::Angle => q.as_rad().map_err(SketchError::Unit),
         UnitFamily::Count => Ok(q.value),
     }

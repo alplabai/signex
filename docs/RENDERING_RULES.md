@@ -229,6 +229,26 @@ stored data is rewritten.
 
 ---
 
+## sch-junction-colour — Junction colour
+
+A junction dot is drawn in the colour of the wires it joins. Every wire that
+ends on the dot or passes through it votes with the colour it is drawn in (its
+own colour, else the per-net colour, else the net class colour, else the
+default). The colour with strictly more votes than any other wins. When two
+colours tie, or the default wins, the dot keeps its own rule: its net class
+colour, with a per-net colour over that, else the theme's junction colour.
+
+Examples: a T of three green wires draws a green dot; two green wires and one
+default wire draw a green dot; one green, one red and one default wire draw the
+dot's own colour. A per-net colour given to the wires colours the dot as well.
+
+The canvas, the SVG page (and so PDF and print) and the drag ghost read the one
+function, `signex_types::schematic::junction_wire_colors`. During a drag the
+moving items are drawn apart from the rest, so a dot that moves while its
+wires stay (or the other way round) shows its own rule until the drop.
+
+---
+
 ## sch-pan-reuse — Panning moves retained content (#2078)
 
 The CPU schematic canvas tessellates the content layer once and moves it

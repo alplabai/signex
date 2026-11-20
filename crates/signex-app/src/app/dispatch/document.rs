@@ -107,6 +107,7 @@ impl Signex {
                 self.finish_update()
             }
             EditMsg::Extras(msg) => self.dispatch_placement_extras(msg),
+            EditMsg::SheetSync(msg) => self.dispatch_sheet_sync(msg),
         }
     }
 

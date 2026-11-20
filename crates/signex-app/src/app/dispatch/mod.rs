@@ -141,6 +141,12 @@ impl Signex {
     pub(crate) fn dispatch_window_message(&mut self, message: WindowMsg) -> Task<Message> {
         match message {
             WindowMsg::WindowResizedFor(id, w, h) => {
+                // A minimised window reports 0x0: keep the last real size,
+                // so nothing is fitted or laid out against it, and the
+                // restore arrives as a resize to the size already stored.
+                if !UiState::is_real_window_size((w, h)) {
+                    return Task::none();
+                }
                 let settle = self.note_window_geometry_changed(id);
                 // Only main-window resizes drive layout math. Detached
                 // modal + undocked-tab windows have their own sizes
@@ -220,6 +226,7 @@ impl Signex {
                 }
                 let mut layout_persist = Task::none();
                 let mut quit_answer = Task::none();
+                let mut annotate_close = Task::none();
                 // Drop the entry and dismiss the backing modal state so
                 // closing the OS window fully exits the modal instead of
                 // reattaching a phantom copy to the main window on the
@@ -231,7 +238,10 @@ impl Signex {
                     use super::state::{ModalId, WindowKind};
                     match kind {
                         WindowKind::DetachedModal(modal) => match modal {
-                            ModalId::AnnotateDialog => self.ui_state.annotate_dialog_open = false,
+                            // The dialog's own close: its confirms go with it.
+                            ModalId::AnnotateDialog => {
+                                annotate_close = self.handle_close_annotate_dialog();
+                            }
                             ModalId::AnnotateResetConfirm => {
                                 self.ui_state.annotate_reset_confirm = false
                             }
@@ -396,7 +406,7 @@ impl Signex {
                         WindowKind::ComponentEditor { .. } => {}
                     }
                 }
-                Task::batch([layout_persist, quit_answer])
+                Task::batch([layout_persist, quit_answer, annotate_close])
             }
             WindowMsg::DetachModal(modal) => self.handle_detach_modal(modal),
             WindowMsg::DetachedModalOpened { modal, id } => {
@@ -519,10 +529,15 @@ impl Signex {
                 // `Level::Normal` open-behind issue as the modal/tab.
                 Task::batch([iced::window::gain_focus(id), window_scale_task(id)])
             }
-            WindowMsg::StartMainWindowDrag => match self.ui_state.main_window_id {
-                Some(id) => crate::chrome::start_window_drag(id),
-                None => Task::none(),
-            },
+            WindowMsg::StartMainWindowDrag => {
+                // Title-bar drag diagnosis: the press reached a drag zone.
+                let window = self.ui_state.main_window_id;
+                tracing::debug!(?window, "title bar: drag zone pressed");
+                match window {
+                    Some(id) => crate::chrome::start_window_drag(id),
+                    None => Task::none(),
+                }
+            }
             WindowMsg::StartMainWindowResize(direction) => match self.ui_state.main_window_id {
                 Some(id) => crate::chrome::start_window_resize(id, direction),
                 None => Task::none(),

@@ -35,6 +35,10 @@ pub enum LayerTabMenuMsg {
     /// Layer stack... was picked: the menu closes and `board_layer_stack`
     /// (#2401) runs from the window the menu was opened in.
     LayerStackPicked,
+    /// Layer colour... on the tab of a layer, or `edit_layer_color` for the
+    /// active layer (`None`): the menu closes and the Layers panel opens with
+    /// that layer's colours (2026-11-18).
+    ColourEditRequested(Option<PcbLayer>),
 }
 
 /// A flyout of the layer tab menu (#2394).

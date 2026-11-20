@@ -183,7 +183,11 @@ fn run_flow(tag: &str, work: &Path) -> Outputs {
     );
     send(
         &mut app,
-        panel(ErcWaiverMsg::ReasonChanged("by design".into())),
+        panel(ErcWaiverMsg::ReasonActed(
+            iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Paste(
+                std::sync::Arc::new("by design".to_string()),
+            )),
+        )),
     );
     send(
         &mut app,

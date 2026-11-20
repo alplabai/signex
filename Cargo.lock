@@ -5722,6 +5722,7 @@ dependencies = [
  "signex-engine",
  "signex-erc",
  "signex-erc-dsl",
+ "signex-expr",
  "signex-gerber",
  "signex-gfx",
  "signex-history",
@@ -5753,6 +5754,7 @@ version = "26.11.0"
 dependencies = [
  "serde",
  "serde_json",
+ "signex-expr",
  "signex-library",
  "signex-sketch",
  "signex-types",
@@ -5857,6 +5859,15 @@ dependencies = [
  "signex-types",
  "thiserror 2.0.18",
  "uuid",
+]
+
+[[package]]
+name = "signex-expr"
+version = "26.11.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -6050,6 +6061,7 @@ dependencies = [
  "approx",
  "serde",
  "serde_json",
+ "signex-expr",
  "signex-types",
  "thiserror 2.0.18",
  "toml 0.8.23",
@@ -6064,6 +6076,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "signex-expr",
  "tempfile",
  "thiserror 2.0.18",
  "toml 0.8.23",

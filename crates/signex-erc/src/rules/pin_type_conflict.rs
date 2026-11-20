@@ -69,16 +69,18 @@ fn is_power_flag_pair(p: &PinPair<'_>) -> bool {
 }
 
 fn conflicts_on_net(ctx: &ErcContext, net: &ErcNet, matrix: &PinMatrix, out: &mut Vec<Diagnostic>) {
+    let rule_id = crate::RuleId::builtin(RuleKind::PinTypeConflict);
+    let rule = rule_id.as_str();
     let mut pairs: Vec<PinPair<'_>> = Vec::new();
     // Canonical pin order (symbol uuid, anchor): which pin of a pair is the
     // primary, and which pair wins a tie, never depend on document order.
     let mut pins: Vec<&ErcNetPin> = net.pins.iter().collect();
     pins.sort_by_key(|p| (p.symbol, p.anchor()));
     for (i, a) in pins.iter().copied().enumerate() {
-        // A No-ERC directive on a pin tip silences that pin's pairs only. The
-        // merged finding sits on one pin, so the engine's positional
-        // suppression would otherwise drop (or keep) the whole net.
-        if ctx.has_no_erc_directive_at(&a.position) {
+        // A No-ERC directive (for this rule) on a pin tip silences that pin's
+        // pairs only. The merged finding sits on one pin, so the engine's
+        // positional suppression would otherwise drop (or keep) the whole net.
+        if ctx.has_no_erc_directive_at(&a.position, rule) {
             continue;
         }
         let Some(axis_a) = PinAxis::of(a.direction) else {
@@ -91,7 +93,7 @@ fn conflicts_on_net(ctx: &ErcContext, net: &ErcNet, matrix: &PinMatrix, out: &mu
             // are two parts. ERC nets are still per sheet with a root
             // occurrence, so this only differs once nets span placements.
             if (a.symbol == b.symbol && a.occurrence == b.occurrence)
-                || ctx.has_no_erc_directive_at(&b.position)
+                || ctx.has_no_erc_directive_at(&b.position, rule)
             {
                 continue;
             }

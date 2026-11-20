@@ -278,6 +278,7 @@ canonical_icon!(icon_dd_project_options, "dropdown/project_options.svg");
 canonical_icon!(icon_dd_properties, "dropdown/properties.svg");
 canonical_icon!(icon_dd_pwr_arrow, "dropdown/pwr_arrow.svg");
 canonical_icon!(icon_dd_pwr_bar, "dropdown/pwr_bar.svg");
+canonical_icon!(icon_dd_pwr_chassis, "dropdown/pwr_chassis.svg");
 canonical_icon!(icon_dd_pwr_circle, "dropdown/pwr_circle.svg");
 canonical_icon!(icon_dd_pwr_earth, "dropdown/pwr_earth.svg");
 canonical_icon!(icon_dd_pwr_minus5, "dropdown/pwr_minus5.svg");

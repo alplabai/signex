@@ -48,8 +48,9 @@ fn annotate_footer_buttons_stay_inside_a_960_by_540_window() {
             "Annotate",
             "Lock",
             "Re-prefix to standard",
-            "Reset All",
-            "Reset & Renumber",
+            "Reset All…",
+            "Reset & Renumber…",
+            "Close",
             "Accept Changes",
         ],
     );
@@ -240,17 +241,19 @@ fn the_create_sheet_card_fits_a_window_just_wider_than_its_design() {
     );
 }
 
-/// #2262: the Proposed Change List heading counts the rows that change, of
-/// the rows listed, as the mock does.
+/// #2262, #75: the banner counts the rows that change, of the rows listed,
+/// in bold, as the mock does.
 #[test]
 fn the_change_list_heading_counts_the_designators_that_change() {
     use crate::app::handlers::erc::AnnotatePreviewEntry;
     let mut app = app_at_small_window();
     let entry = |current: &str, proposed: &str| AnnotatePreviewEntry {
         sheet: "Power".into(),
+        sheet_path: "power.snxsch".into(),
         current: current.into(),
         proposed: proposed.into(),
         uuid: uuid::Uuid::now_v7(),
+        location: (0.0, 0.0),
     };
     app.ui_state.annotate_preview.entries =
         vec![entry("C5", "C5"), entry("C?", "C9"), entry("R?", "R6")];

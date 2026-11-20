@@ -16,7 +16,7 @@ use super::labels::{
     schematic_text_offset_hier, schematic_text_offset_net, spin_text_style, valign_to_svg,
 };
 use super::markers::{push_no_connect_x, push_no_erc_diamond};
-use super::symbols::{push_symbol_lib_graphics, push_symbol_pins, symbol_eval_variables};
+use super::symbols::{push_symbol_body_fills, push_symbol_lib_graphics, push_symbol_pins};
 use super::text::glyph_em_pt;
 use super::text::{TextStyle, draw_text_outline};
 use super::*;
@@ -29,6 +29,7 @@ use crate::pdf::{ColourMode, PdfOptions};
 use signex_types::markup::ExpressionEvalContext;
 use signex_types::schematic::field_effective_style;
 use signex_types::schematic::{DrawingPlacement, LabelType};
+use signex_types::variables::{Resolver, TextTable};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Stroke};
@@ -121,6 +122,10 @@ impl SvgRenderContext {
             palette,
             &opts.schematic_defaults,
         );
+        // Body fills sit under the wires but belong to their parts.
+        let fills_start = elements.len();
+        push_symbol_body_fills(&mut elements, &sheet.schematic, &xform, palette);
+        layers.mark(PdfLayer::Parts, fills_start..elements.len());
 
         // Base primitives
         let wires_start = elements.len();
@@ -205,6 +210,9 @@ impl SvgRenderContext {
             });
         }
 
+        let from_wires = signex_types::schematic::junction_wire_colors(&sheet.schematic, |wire| {
+            wire_style::wire_color(wire, &sheet.schematic.net_colors, &opts.net_class_styles)
+        });
         for j in &sheet.schematic.junctions {
             // The canvas size, floor included (#2026).
             let radius =
@@ -213,6 +221,7 @@ impl SvgRenderContext {
             let cy = xform.px_y(j.position.y);
             let junction_rgb = wire_style::junction_rgb(
                 j,
+                &from_wires,
                 &sheet.schematic.net_colors,
                 &opts.net_class_styles,
                 palette.junction,
@@ -302,7 +311,7 @@ impl SvgRenderContext {
                     fill_rgb: palette.note_text,
                     text: normalize_standard_text(
                         &match eval_inputs.and_then(|e| e.special_strings) {
-                            Some(special) => crate::resolve(&note.text, special),
+                            Some(special) => crate::resolve_text(&note.text, special),
                             None => note.text.clone(),
                         },
                     ),
@@ -357,19 +366,34 @@ impl SvgRenderContext {
         }
 
         // Full symbol body graphics from library definitions.
+        // The value reads the sheet's parts, variables and special strings
+        // through the one rule the canvas uses too (#1596, #1986).
+        let global_refdes = eval_inputs.map(|e| TextTable(e.global_refdes));
+        let value_scope = crate::ValueScope {
+            symbols: &sheet.schematic.symbols,
+            special: eval_inputs.and_then(|e| e.special_strings),
+            signed: false,
+            refdes: global_refdes.as_ref().map(|t| t as &dyn Resolver),
+            cell: eval_inputs.map(|e| e.cell),
+        };
         for sym in &sheet.schematic.symbols {
             let symbol_start = elements.len();
-            let symbol_vars = symbol_eval_variables(sym);
+            let symbol_vars = crate::field_value::symbol_eval_variables(sym);
+            let part_table = TextTable(&symbol_vars);
             let mut refdes_vars = HashMap::new();
             if !sym.uuid.is_nil() && !sym.reference.is_empty() {
                 refdes_vars.insert(sym.uuid.to_string(), sym.reference.clone());
             }
+            let local_refdes = TextTable(&refdes_vars);
             let symbol_eval_ctx = ExpressionEvalContext {
                 current_refdes: (!sym.reference.is_empty()).then_some(sym.reference.as_str()),
                 current_value: (!sym.value.is_empty()).then_some(sym.value.as_str()),
                 cell: eval_inputs.map(|e| e.cell),
-                at_variables: Some(&symbol_vars),
-                refdes_variables: eval_inputs.map(|e| e.global_refdes).or(Some(&refdes_vars)),
+                at_variables: Some(&part_table),
+                refdes_variables: Some(match &global_refdes {
+                    Some(table) => table as &dyn Resolver,
+                    None => &local_refdes,
+                }),
                 ..ExpressionEvalContext::default()
             };
 
@@ -474,7 +498,7 @@ impl SvgRenderContext {
                     } else {
                         palette.value
                     },
-                    text: normalize_standard_text_with_ctx(&sym.value, &symbol_eval_ctx),
+                    text: crate::shown_value(&value_scope, sym).text,
                 });
             }
             let symbol_layer = if sym.is_power {

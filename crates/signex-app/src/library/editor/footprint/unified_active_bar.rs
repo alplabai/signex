@@ -24,35 +24,27 @@ pub fn bar_items(
     editor: &FootprintDocument,
     theme_id: ThemeId,
     tokens: &ThemeTokens,
+    i18n: &signex_i18n::I18n,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
-    let mut items: Vec<ActiveBarItem<LibraryMessage>> = Vec::new();
-
-    // A board sketch (#2234) gets the sketch tools and nothing that edits
-    // pads, silk or 3D bodies.
-    if editor.state.board_backdrop.is_some() {
-        items.extend(
-            crate::library::editor::footprint::sketch_mode::active_bar::items(
-                editor, theme_id, tokens,
-            ),
+    // Sketch mode shows the one sketch bar on both hosts (#2518): a board
+    // sketch is always in sketch mode, and a footprint in sketch mode gets
+    // the same tools, ending in its own Snap ▾.
+    if editor.state.mode == EditorMode::Sketch {
+        return crate::library::editor::footprint::sketch_mode::active_bar::items(
+            editor, theme_id, tokens, i18n,
         );
-        return items;
     }
 
     // 1) Eight active-bar dropdown trigger buttons at the FRONT.
-    items.extend(dropdown_trigger_items(editor, theme_id));
+    let mut items: Vec<ActiveBarItem<LibraryMessage>> = dropdown_trigger_items(editor, theme_id);
     items.push(ActiveBarItem::Separator);
 
-    // 2) Mode-keyed tool buttons (pads / sketch / 3D-view).
-    let mode_items: Vec<ActiveBarItem<LibraryMessage>> = match editor.state.mode {
-        EditorMode::Sketch => crate::library::editor::footprint::sketch_mode::active_bar::items(
-            editor, theme_id, tokens,
-        ),
-        EditorMode::Normal => {
-            crate::library::editor::footprint::pads_active_bar::items(editor, theme_id)
-        }
-        EditorMode::View3d => Vec::new(),
-    };
-    items.extend(mode_items);
+    // 2) Mode-keyed tool buttons (pads / 3D-view).
+    if editor.state.mode == EditorMode::Normal {
+        items.extend(crate::library::editor::footprint::pads_active_bar::items(
+            editor, theme_id,
+        ));
+    }
     items
 }
 
@@ -115,6 +107,7 @@ pub fn dropdown_overlay<'a>(
     footprint_filter_presets: &[crate::active_bar::FootprintFilterPreset],
     top_padding_px: u16,
     window_width: f32,
+    i18n: &signex_i18n::I18n,
 ) -> Option<iced::Element<'a, LibraryMessage>> {
     use iced::Length;
     use iced::Widget as _;
@@ -128,6 +121,7 @@ pub fn dropdown_overlay<'a>(
         editor.path.clone(),
         theme_id,
         footprint_filter_presets,
+        i18n,
     );
     let width_hint = match menu {
         FpActiveBarMenu::Filter => None,
@@ -152,7 +146,8 @@ pub fn dropdown_overlay<'a>(
     // the items this same bar just built. Clamp the panel's right edge
     // inside the viewport so a near-rightmost button still keeps it
     // fully visible.
-    let (trigger_x, bar_w) = menu_trigger_geometry(&bar_items(editor, theme_id, tokens), menu);
+    let (trigger_x, bar_w) =
+        menu_trigger_geometry(&bar_items(editor, theme_id, tokens, i18n), menu);
     // No trigger on the current bar means nothing to anchor to — a
     // stale menu key from a mode switch. Draw nothing rather than
     // park a panel over an unrelated button.
@@ -312,38 +307,89 @@ mod tests {
         let tokens = signex_types::theme::theme_tokens(tid);
         let m = Metrics::GRAPHITE;
 
+        let i18n = signex_i18n::I18n::en_us();
         let sketch = editor_in(EditorMode::Sketch);
-        let items = bar_items(&sketch, tid, &tokens);
+        let items = bar_items(&sketch, tid, &tokens, &i18n);
         let at = |m| menu_trigger_geometry(&items, m).0;
 
-        // The first shared trigger sits flush against the bar padding.
-        assert_eq!(at(FpActiveBarMenu::Filter), Some(m.padding));
-        // Later shared triggers advance one button-plus-spacing each.
-        assert_eq!(
-            at(FpActiveBarMenu::Snap),
-            Some(m.padding + m.btn + m.spacing)
-        );
-        // Both sketch groups are present, Create left of Modify, and
-        // both right of every shared trigger.
-        let (create, modify) = (
-            at(FpActiveBarMenu::SketchCreate).expect("Create trigger missing in Sketch mode"),
-            at(FpActiveBarMenu::SketchModify).expect("Modify trigger missing in Sketch mode"),
-        );
-        assert!(create < modify);
-        assert!(at(FpActiveBarMenu::Shapes).is_some_and(|shapes| shapes < create));
+        // #2518: the sketch bar is Select | Create ▾ Modify ▾ | ... |
+        // Snap ▾. Create sits after Select and the separator.
+        let create = at(FpActiveBarMenu::SketchCreate).expect("Create trigger in Sketch mode");
+        assert_eq!(create, m.padding + m.btn + m.sep_w + 2.0 * m.spacing);
+        let modify = at(FpActiveBarMenu::SketchModify).expect("Modify trigger in Sketch mode");
+        let snap = at(FpActiveBarMenu::Snap).expect("Snap trigger in Sketch mode");
+        assert!(create < modify && modify < snap, "Snap ends the bar");
+        // The pads-mode menus are not on the sketch bar.
+        assert_eq!(at(FpActiveBarMenu::Filter), None);
+        assert_eq!(at(FpActiveBarMenu::Shapes), None);
 
         // Pads mode has no sketch group triggers — and must say so
         // rather than hand back a stale offset.
         let pads = editor_in(EditorMode::Normal);
-        let pads_items = bar_items(&pads, tid, &tokens);
+        let pads_items = bar_items(&pads, tid, &tokens, &i18n);
         assert_eq!(
             menu_trigger_geometry(&pads_items, FpActiveBarMenu::SketchCreate).0,
             None
         );
-        assert!(
-            menu_trigger_geometry(&pads_items, FpActiveBarMenu::Filter)
-                .0
-                .is_some()
+        // The first pads-mode trigger sits flush against the bar padding,
+        // the next one button-plus-spacing further.
+        assert_eq!(
+            menu_trigger_geometry(&pads_items, FpActiveBarMenu::Filter).0,
+            Some(m.padding)
+        );
+        assert_eq!(
+            menu_trigger_geometry(&pads_items, FpActiveBarMenu::Snap).0,
+            Some(m.padding + m.btn + m.spacing)
+        );
+    }
+
+    /// #2518: a board sketch and a footprint in sketch mode show the same
+    /// bar, slot for slot.
+    #[test]
+    fn both_hosts_show_the_same_sketch_bar() {
+        use crate::library::editor::footprint::state::EditorMode;
+        use signex_types::theme::ThemeId;
+
+        let tid = ThemeId::DEFAULT;
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let i18n = signex_i18n::I18n::en_us();
+        let footprint = editor_in(EditorMode::Sketch);
+        let mut board = editor_in(EditorMode::Sketch);
+        let pcb = signex_types::project::SetupProfile::Standard
+            .pcb(2)
+            .new_board();
+        board.state.board_backdrop = Some(std::sync::Arc::new(
+            crate::library::editor::footprint::BoardBackdrop::from_board(&pcb),
+        ));
+        let shape = |items: &[ActiveBarItem<LibraryMessage>]| -> Vec<String> {
+            items
+                .iter()
+                .map(|item| match item {
+                    ActiveBarItem::Button(b) => b.tooltip.clone(),
+                    ActiveBarItem::Separator => "|".into(),
+                    ActiveBarItem::Custom { .. } => "custom".into(),
+                })
+                .collect()
+        };
+        let footprint_bar = shape(&bar_items(&footprint, tid, &tokens, &i18n));
+        assert_eq!(
+            footprint_bar,
+            shape(&bar_items(&board, tid, &tokens, &i18n))
+        );
+        assert_eq!(
+            footprint_bar,
+            [
+                "Select",
+                "|",
+                "Create: Line, Rectangle, Rounded Rectangle, Circle, Arc, Tangent Arc, Edge Arc, Point",
+                "Modify: Fillet, Trim, Mirror, Offset, patterns, Make Pad from Profile",
+                "|",
+                "custom",
+                "|",
+                "custom",
+                "|",
+                "Snap options (left or right click for menu)",
+            ]
         );
     }
 
@@ -353,7 +399,7 @@ mod tests {
     /// its width is declared, not measured.
     #[test]
     fn bar_width_counts_every_slot_including_the_custom_one() {
-        use crate::library::editor::footprint::sketch_mode::active_bar::DIM_INPUT_W;
+        use crate::library::editor::footprint::sketch_mode::active_bar::{DIM_INPUT_W, LINETYPE_W};
         use crate::library::editor::footprint::state::EditorMode;
         use signex_types::theme::ThemeId;
 
@@ -362,18 +408,21 @@ mod tests {
         let tokens = signex_types::theme::theme_tokens(tid);
         let m = Metrics::GRAPHITE;
         let editor = editor_in(EditorMode::Sketch);
-        let items = bar_items(&editor, tid, &tokens);
+        let items = bar_items(&editor, tid, &tokens, &signex_i18n::I18n::en_us());
 
         let customs = items
             .iter()
             .filter(|i| matches!(i, ActiveBarItem::Custom { .. }))
             .count();
-        assert_eq!(customs, 1, "sketch bar should carry the dimension input");
+        assert_eq!(
+            customs, 2,
+            "sketch bar should carry the dimension input and the linetype segments"
+        );
 
         let expected: f32 = 2.0 * m.padding
             + items.iter().map(|i| i.width(&m)).sum::<f32>()
             + m.spacing * (items.len() - 1) as f32;
-        let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Filter);
+        let (_, measured) = menu_trigger_geometry(&items, FpActiveBarMenu::Snap);
         assert!(
             (measured - expected).abs() < 0.01,
             "{measured} vs {expected}"
@@ -386,5 +435,6 @@ mod tests {
         // anything. Checked in a `const` block so that regression breaks
         // the build rather than waiting for a test run.
         const { assert!(DIM_INPUT_W > Metrics::GRAPHITE.btn) };
+        const { assert!(LINETYPE_W > Metrics::GRAPHITE.btn) };
     }
 }
