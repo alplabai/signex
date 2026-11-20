@@ -114,6 +114,9 @@ fn nothing_selected_shows_every_section_in_one_scroll() {
     let mut fp = panel_ctx(&app);
     fp.mode_kind = FootprintModeKind::Pads;
     fp.snapping_mode = SnappingMode::AllLayers;
+    // Expansion sits under the Courtyard switch; switched off it is greyed
+    // and inert, which hides its text from the layout probe.
+    fp.auto_fit_courtyard = true;
     let texts = texts(&app, &fp);
     for label in [
         "Footprint",
@@ -164,6 +167,9 @@ fn nothing_selected_shows_the_snap_fields_and_the_grid_manager() {
     let app = app_with_eight_pads();
     let mut fp = panel_ctx(&app);
     fp.snapping_mode = SnappingMode::AllLayers;
+    // Axis Snap Range is greyed and inert (hidden from the layout probe)
+    // while snapping to axes is off.
+    fp.snap_options.snap_to_axes = true;
     let texts = texts(&app, &fp);
     for label in [
         "SNAP OPTIONS",
