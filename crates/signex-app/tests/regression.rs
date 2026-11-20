@@ -729,3 +729,7 @@ mod wire_tab_options;
 // #2525 — Find and Replace: Whole word renames only the exact net.
 #[path = "regression/find_replace_whole_word.rs"]
 mod find_replace_whole_word;
+
+// Move Selection offsets are typed in the display unit.
+#[path = "regression/move_selection_unit.rs"]
+mod move_selection_unit;
