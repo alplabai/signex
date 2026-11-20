@@ -61,6 +61,8 @@ pub(crate) mod designator_scan;
 mod designator_scan_tests;
 pub(crate) mod document_setup;
 #[cfg(test)]
+mod edit_tail_seam_tests;
+#[cfg(test)]
 mod edit_tail_tests;
 pub mod palette_index;
 #[cfg(test)]
