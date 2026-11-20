@@ -282,9 +282,11 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
 ## Not done yet
 
 - The board targets Slot, Pour, Room, Mechanical layer and Component
-  anchor, and the Create / Modify rows Slot, Polygon, Chamfer, Extend and
-  Linear Pattern (#2518): none is offered until it bakes. Patterns bake
-  their instances with #2517.
+  anchor, and the Create rows Slot and Polygon (#2518): none is offered
+  until it bakes. Modify offers Chamfer, Extend and Linear Pattern on both
+  hosts ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#modify-tools)); a board
+  bake still bakes one instance of a pattern, and patterns bake their
+  instances with #2517.
 - Drawing V-scores. (Exporting them is done: through cutouts go to the
   Gerber profile, mounting holes to the drill files and V-scores to their own
   Gerber image; see [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).)

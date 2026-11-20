@@ -604,4 +604,6 @@ pub enum FootprintEditorMsg {
     SketchCanvas(crate::library::editor::footprint::sketch_mode::SketchCanvasMsg),
     /// A board-feature row of a board sketch's Snap ▾ (#2518).
     SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
+    /// #192 — the floating pad link on the sketch canvas.
+    PadLink(crate::library::editor::footprint::state::PadLinkMsg),
 }

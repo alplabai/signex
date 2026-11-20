@@ -515,6 +515,10 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         FootprintEditorMsg::SketchSnap(snap) => {
             crate::library::editor::footprint::snap_menu::apply(editor, snap)
         }
+        FootprintEditorMsg::PadLink(msg) => {
+            editor.state.apply_pad_link(msg);
+            editor.canvas_cache.clear();
+        }
     }
 }
 
@@ -687,7 +691,9 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarRotateSelection
         | ActiveBarFlipSelection
         | ActiveBarAlignSelectionToGrid
-        | ActiveBarMoveOriginToGrid => false,
+        | ActiveBarMoveOriginToGrid
+        // #192 — the pad link changes mode and selection only.
+        | PadLink(_) => false,
         // The parameters table: typing records here; its other edits record
         // their own step, only when they change something.
         SketchParameters(m) => m.records_undo_step(),

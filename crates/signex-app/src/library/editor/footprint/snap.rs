@@ -124,7 +124,7 @@ pub fn anchor_for_tool(
         // v0.27 — Fillet first-click stashes a Line, not a Point.
         // Lines aren't valid snap anchors here, so suppress the
         // tethered preview by returning None.
-        ToolPending::FilletFirst { .. } => return None,
+        ToolPending::FilletFirst { .. } | ToolPending::ChamferFirst { .. } => return None,
     };
     point_pos(id, sketch, state)
 }

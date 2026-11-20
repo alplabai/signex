@@ -9,9 +9,14 @@
 //! [`resolve_click_point`] (snap/mint the click into an entity id), and
 //! [`try_consume_repick_polar_center`] (the Pattern re-pick intercept) —
 //! then dispatches to the per-tool sub-modules. Bodies moved verbatim.
+//! Clicks that pick an existing Line by its stroke (Chamfer, Extend,
+//! Mirror's centerline pick) go first, through [`try_stroke_pick`], and
+//! mint no click Point.
 
+mod chamfer_extend;
 mod draw;
 mod edit;
+mod pattern;
 mod transform;
 
 use crate::library::messages::FootprintEditorMsg;
@@ -94,14 +99,23 @@ pub(super) fn resolve_tool_dimension_mm(
         };
     }
 
+    typed_dimension_input_mm(editor).unwrap_or(ToolDimension::Accepted {
+        mm: DEFAULT_TOOL_DIMENSION_MM,
+        from_placement: false,
+    })
+}
+
+/// The Properties-panel `dimension_input` read as a positive length, or
+/// `None` when nothing is typed there. Chamfer and Linear Pattern read only
+/// this buffer: the cursor overlay has no field for them.
+pub(super) fn typed_dimension_input_mm(
+    editor: &crate::app::FootprintDocument,
+) -> Option<ToolDimension> {
     let typed = editor.state.dimension_input.trim();
     if typed.is_empty() {
-        return ToolDimension::Accepted {
-            mm: DEFAULT_TOOL_DIMENSION_MM,
-            from_placement: false,
-        };
+        return None;
     }
-    match parse_positive_mm(typed) {
+    Some(match parse_positive_mm(typed) {
         Some(mm) => ToolDimension::Accepted {
             mm,
             from_placement: false,
@@ -109,7 +123,64 @@ pub(super) fn resolve_tool_dimension_mm(
         None => ToolDimension::Rejected {
             buffer: typed.to_string(),
         },
+    })
+}
+
+/// Hit-test the click against the sketch Lines `keep` accepts (0.30 mm
+/// tolerance, nearest stroke wins).
+pub(super) fn pick_line_where(
+    sketch: &signex_sketch::SketchData,
+    x: f64,
+    y: f64,
+    keep: impl Fn(&Entity) -> bool,
+) -> Option<SketchEntityId> {
+    use signex_sketch::entity::EntityKind;
+    const TOL_MM: f64 = 0.30;
+    let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
+        sketch
+            .entities
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((x, y)),
+                _ => None,
+            })
+    };
+    let mut best: Option<(f64, SketchEntityId)> = None;
+    for e in &sketch.entities {
+        if !keep(e) {
+            continue;
+        }
+        if let EntityKind::Line { start, end } = e.kind {
+            let (Some(a), Some(b)) = (pos_of(start), pos_of(end)) else {
+                continue;
+            };
+            let dx = b.0 - a.0;
+            let dy = b.1 - a.1;
+            let llen2 = dx * dx + dy * dy;
+            if llen2 <= 1e-12 {
+                continue;
+            }
+            let t = ((x - a.0) * dx + (y - a.1) * dy) / llen2;
+            let tc = t.clamp(0.0, 1.0);
+            let px = a.0 + tc * dx;
+            let py = a.1 + tc * dy;
+            let d2 = (px - x).powi(2) + (py - y).powi(2);
+            if d2 <= TOL_MM * TOL_MM && best.as_ref().is_none_or(|(b2, _)| d2 < *b2) {
+                best = Some((d2, e.id));
+            }
+        }
     }
+    best.map(|(_, id)| id)
+}
+
+/// [`pick_line_where`] over every Line.
+pub(super) fn pick_line_at(
+    sketch: &signex_sketch::SketchData,
+    x: f64,
+    y: f64,
+) -> Option<SketchEntityId> {
+    pick_line_where(sketch, x, y, |_| true)
 }
 
 /// A dimension buffer is usable only when it reads as a finite, strictly
@@ -197,6 +268,16 @@ fn handle_tool_click(
     let construction_mode = editor.state.construction_mode;
     let centerline_mode = editor.state.centerline_mode;
 
+    // A click that names an existing Line mints no click Point (and no
+    // plane: the Line has one).
+    if let Some(changed) = try_stroke_pick(editor, x_mm, y_mm) {
+        editor.canvas_cache.clear();
+        if changed {
+            editor.mark_dirty();
+        }
+        return;
+    }
+
     // Resolve the click into either an existing snap Point or a
     // freshly-minted Point. For multi-click tools (Line / Rect /
     // Circle / Arc), the dispatcher reuses the snap target's ID
@@ -251,10 +332,12 @@ fn handle_tool_click(
         | SketchTool::Arc
         | SketchTool::EdgeArc
         | SketchTool::TangentArc => draw::apply(editor, &ctx, tool),
-        SketchTool::Mirror
-        | SketchTool::Offset
-        | SketchTool::RectPattern
-        | SketchTool::CircularPattern => transform::apply(editor, &ctx, tool),
+        SketchTool::Mirror | SketchTool::Offset => transform::apply(editor, &ctx, tool),
+        SketchTool::LinearPattern | SketchTool::RectPattern | SketchTool::CircularPattern => {
+            pattern::apply(editor, &ctx, tool)
+        }
+        // Picked by stroke in `try_stroke_pick`, before any Point is minted.
+        SketchTool::Chamfer | SketchTool::Extend => {}
         // #372 — Break Track joins Fillet / Trim as a curve
         // edit: a single click hit-tests a Line and splits it.
         SketchTool::Fillet | SketchTool::Trim | SketchTool::BreakTrack => {
@@ -280,6 +363,27 @@ fn handle_tool_click(
     }
     editor.canvas_cache.clear();
     editor.mark_dirty();
+}
+
+/// The clicks that pick an existing Line by its stroke: Chamfer, Extend,
+/// and Mirror's centerline pick (m191). `Some(changed)` when the click was
+/// one of them, `None` to go on to the Point-minting tools.
+fn try_stroke_pick(
+    editor: &mut crate::app::FootprintDocument,
+    x_mm: f64,
+    y_mm: f64,
+) -> Option<bool> {
+    use crate::library::editor::footprint::state::SketchTool;
+    let armed = editor.state.active_tool;
+    match armed {
+        tool @ (SketchTool::Chamfer | SketchTool::Extend) => {
+            Some(chamfer_extend::apply(editor, tool, (x_mm, y_mm)))
+        }
+        SketchTool::Mirror if transform::take_centerline_as_mirror_line(editor, x_mm, y_mm) => {
+            Some(false)
+        }
+        _ => None,
+    }
 }
 
 // v0.22 Phase A1 — ensure the sketch has at least one plane so a fresh

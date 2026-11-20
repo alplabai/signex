@@ -743,3 +743,7 @@ mod sketch_snap_board;
 // preview drawn on the canvas.
 #[path = "regression/board_sketch_checks.rs"]
 mod board_sketch_checks;
+// #187 / #191 / #192: Chamfer, Extend, Linear Pattern, Mirror about a
+// centerline, and the pad link of Edit in Sketch.
+#[path = "regression/sketch_tools_padlink.rs"]
+mod sketch_tools_padlink;

@@ -18,15 +18,10 @@ impl Signex {
         &mut self,
         pad_idx: &usize,
     ) -> bool {
+        // #192 D5 — the driving entity is selected and focused: the canvas
+        // highlights its profile and offers Back to pad.
         if let Some(editor) = self.active_footprint_editor_mut() {
-            let entity_id = editor
-                .state
-                .pads
-                .get(*pad_idx)
-                .and_then(|p| p.sketch_entity_id);
-            editor.state.mode = crate::library::editor::footprint::state::EditorMode::Sketch;
-            editor.state.selected_pad = None;
-            editor.state.selected_sketch = entity_id;
+            editor.state.edit_pad_in_sketch(*pad_idx);
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();
@@ -115,17 +110,10 @@ impl Signex {
     ) -> bool {
         // v0.22 Phase D6 — mirror of FpEditorEditPadInSketch:
         // resolve the EditorPad whose `sketch_entity_id` ==
-        // `id`, switch to Pads mode, and select that pad.
+        // `id`, switch to Pads mode, and select that pad. The canvas
+        // link (#192) takes the same path.
         if let Some(editor) = self.active_footprint_editor_mut() {
-            let pad_idx = editor
-                .state
-                .pads
-                .iter()
-                .position(|p| p.sketch_entity_id == Some(*id));
-            editor.state.mode = crate::library::editor::footprint::state::EditorMode::Normal;
-            editor.state.selected_sketch = None;
-            editor.state.selected_sketch_secondary = None;
-            editor.state.selected_pad = pad_idx;
+            editor.state.return_to_pad(*id);
             editor.canvas_cache.clear();
         }
         self.refresh_panel_ctx();

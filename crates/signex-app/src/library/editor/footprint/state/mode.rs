@@ -38,8 +38,9 @@ pub enum FpActiveBarMenu {
     /// Sketch ▸ Create — Line / Rectangle / Rounded Rectangle /
     /// Circle / Arc / Tangent Arc. Sketch-mode only.
     SketchCreate,
-    /// Sketch ▸ Modify — Fillet / Trim / Mirror / Offset /
-    /// Rectangular + Circular Pattern / Make Pad from Profile.
+    /// Sketch ▸ Modify — Fillet / Chamfer / Trim / Extend / Mirror /
+    /// Offset / Linear, Rectangular + Circular Pattern / Make Pad from
+    /// Profile.
     /// Sketch-mode only.
     SketchModify,
 }
@@ -60,9 +61,12 @@ impl FpActiveBarMenu {
     ];
     pub const SKETCH_MODIFY_TOOLS: &'static [super::SketchTool] = &[
         super::SketchTool::Fillet,
+        super::SketchTool::Chamfer,
         super::SketchTool::Trim,
+        super::SketchTool::Extend,
         super::SketchTool::Mirror,
         super::SketchTool::Offset,
+        super::SketchTool::LinearPattern,
         super::SketchTool::RectPattern,
         super::SketchTool::CircularPattern,
     ];

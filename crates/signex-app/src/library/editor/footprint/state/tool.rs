@@ -32,6 +32,11 @@ pub enum PadsTool {
     PlaceVia,
 }
 
+/// Instances a new Linear Pattern makes; edited in the Pattern sub-form.
+pub const LINEAR_PATTERN_DEFAULT_COUNT: u32 = 4;
+/// Pitch of a new Linear Pattern along X when no dimension is typed.
+pub const LINEAR_PATTERN_DEFAULT_SPACING_MM: f64 = 5.0;
+
 /// Sketch-mode drawing tool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SketchTool {
@@ -89,6 +94,15 @@ pub enum SketchTool {
     /// placement tool: it never mints geometry, it only re-arms the
     /// endpoint drag. Arc / circle endpoints are out of scope.
     DragTrackEnd,
+    /// Chamfer two Lines meeting at a corner: click the first Line, then
+    /// the second; both are cut back by the chamfer distance and a Line
+    /// joins the cut ends. See docs/FOOTPRINT_SKETCH.md, "Modify tools".
+    Chamfer,
+    /// Extend a Line: click near one end and it grows to the nearest
+    /// entity it reaches, the inverse of Trim.
+    Extend,
+    /// Linear Pattern: click the source, a one-row `ArrayKind::Linear`.
+    LinearPattern,
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
@@ -149,6 +163,10 @@ pub enum ToolPending {
     },
     /// Fillet, first Line picked. Awaiting second Line.
     FilletFirst {
+        line: signex_sketch::id::SketchEntityId,
+    },
+    /// Chamfer, first Line picked. Awaiting the second Line.
+    ChamferFirst {
         line: signex_sketch::id::SketchEntityId,
     },
 }

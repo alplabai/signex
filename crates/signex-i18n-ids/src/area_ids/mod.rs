@@ -41,6 +41,7 @@ mod sketch_bake;
 mod sketch_canvas;
 mod sketch_parameters;
 mod sketch_snap;
+mod sketch_tools;
 mod update_pcb;
 
 pub use assign_footprints::*;
@@ -82,6 +83,7 @@ pub use sketch_bake::*;
 pub use sketch_canvas::*;
 pub use sketch_parameters::*;
 pub use sketch_snap::*;
+pub use sketch_tools::*;
 pub use update_pcb::*;
 
 /// Every id of every area list.
@@ -128,6 +130,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         sketch_canvas::SKETCH_CANVAS,
         board_sketch::BOARD_SKETCH,
         sketch_bake::SKETCH_BAKE,
+        sketch_tools::SKETCH_TOOLS,
     ]
     .concat()
 }

@@ -314,6 +314,10 @@ impl FootprintCanvas<'_> {
             // v0.22 Phase E2 — DOF direction-arrow overlay.
             draw_dof_direction_arrows(frame, cstate, sketch, self.state);
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);
+            // #192 — the driving profile of an Edit in Sketch from a pad.
+            super::sketch::draw_pad_link_profile(frame, cstate, sketch, self.state);
+            // #187 / #191 — Chamfer, Extend, Mirror and Linear Pattern ghosts.
+            super::sketch::draw_sketch_tool_ghosts(frame, cstate, sketch, self.state);
             // v0.22 Phase A6 — Inferred-constraint snap glyph on top.
             draw_sketch_snap_glyph(frame, cstate, self.state);
             // Values on the drawing, pattern glyphs, conflict badge (#187).

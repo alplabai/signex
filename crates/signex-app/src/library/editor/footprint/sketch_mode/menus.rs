@@ -97,10 +97,12 @@ pub fn create_entries(
     entries
 }
 
-/// Sketch ▸ Modify: the edit tools plus the one-shot Make Pad action.
-/// Mirror / Offset / the two Pattern tools consume a selection, so they
-/// grey out when nothing is selected rather than arming a tool that would
-/// only warn.
+/// Sketch ▸ Modify: the edit tools plus the one-shot Make Pad action, in
+/// the order of m187: Fillet, Chamfer, Trim, Extend | Mirror, Offset,
+/// Linear, Rectangular and Circular Pattern | Make Pad from Profile.
+/// Mirror / Offset / the Pattern tools consume a selection, so they grey
+/// out when nothing is selected rather than arming a tool that would only
+/// warn.
 pub fn modify_entries(
     state: &FootprintEditorState,
     path: PathBuf,
@@ -147,9 +149,21 @@ pub fn modify_entries(
             false,
         ),
         row(
+            ids::SKETCH_TOOLS_CHAMFER,
+            SketchTool::Chamfer,
+            ic::icon_sk_chamfer(tid),
+            false,
+        ),
+        row(
             ids::EDITORS_SKETCH_TOOL_TRIM,
             SketchTool::Trim,
             ic::icon_sk_trim(tid),
+            false,
+        ),
+        row(
+            ids::SKETCH_TOOLS_EXTEND,
+            SketchTool::Extend,
+            ic::icon_sk_extend(tid),
             false,
         ),
         DropdownEntry::Separator,
@@ -164,6 +178,12 @@ pub fn modify_entries(
             ids::EDITORS_SKETCH_TOOL_OFFSET,
             SketchTool::Offset,
             ic::icon_sk_offset(tid),
+            true,
+        ),
+        row(
+            ids::SKETCH_TOOLS_LINEAR_PATTERN,
+            SketchTool::LinearPattern,
+            ic::icon_sk_linear_pattern(tid),
             true,
         ),
         row(
@@ -246,3 +266,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "menus_tests.rs"]
+mod menus_tests;

@@ -395,6 +395,9 @@ fn sketch_tool_icon(
         SketchTool::Offset => icons::icon_sk_offset(theme_id),
         SketchTool::RectPattern => icons::icon_sk_rect_pattern(theme_id),
         SketchTool::CircularPattern => icons::icon_sk_circular_pattern(theme_id),
+        SketchTool::Chamfer => icons::icon_sk_chamfer(theme_id),
+        SketchTool::Extend => icons::icon_sk_extend(theme_id),
+        SketchTool::LinearPattern => icons::icon_sk_linear_pattern(theme_id),
         // BreakTrack (#372) / DragTrackEnd (#361) land on this file via the
         // trunk merge; they are armed from the main bar's "Modify Tracks"
         // dropdown, not a sketch group trigger, so this icon is only a
