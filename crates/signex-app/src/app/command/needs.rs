@@ -372,13 +372,21 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_compile_mask"
         | "place_diff_pair"
         | "edit_blanket"
+        // #1699: a No-ERC directive's rule list.
+        | "edit_no_erc_rules"
         // #1667: the file rows place onto the sheet in view.
         | "place_design_block"
         | "import_graphics"
+        // #1276: a sheet symbol lands on, or is synced from, the sheet in
+        // view; with no sheet symbol selected the sync says what to select.
+        | "create_sheet_symbol_from_sheet"
+        | "sync_sheet_entries"
         // The table lists the active sheet's symbols.
         | "open_parameter_manager"
         // Lists the parts of the active schematic's project.
-        | "assign_footprints" => Needs::Schematic,
+        | "assign_footprints"
+        // Dots the bare pin touches of the sheet in view.
+        | "repair_pin_junctions" => Needs::Schematic,
         "run_erc" | "open_erc_dialog" => Needs::Sheets,
         "run_drc"
         | "reannotate_board"
@@ -426,7 +434,15 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_board_circle"
         | "place_board_rectangle"
         | "place_board_text_frame"
-        | "board_sketch" => Needs::EditablePcb,
+        | "board_sketch"
+        // 2026-11-18: Edit ▸ Origin changes the board.
+        | "set_board_origin"
+        | "reset_board_origin"
+        | "snap_board_origin_to_corner"
+        // Layer colours are saved with the board: a read-only board keeps them.
+        | "set_layer_color"
+        | "edit_layer_color"
+        | "reset_layer_colors" => Needs::EditablePcb,
         // #2389, #2373: the routing and arc modes change no board.
         "cycle_route_mode" | "cycle_arc_mode" => Needs::Pcb,
         // #2424: a drawing's edits on the board `document` names.
@@ -490,7 +506,6 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         // #2363: the Layers panel's board view configuration.
         | "set_layer_visible"
         | "set_active_layer"
-        | "set_layer_color"
         | "show_used_layers_only"
         | "set_object_visible"
         | "set_object_transparency" => Needs::Pcb,

@@ -120,3 +120,16 @@ fn the_open_launcher_top_counts_the_rows_and_separators_above_it() {
         Some(2.0 * m.panel_pad + 2.0 * m.item_height(false) + m.separator_height())
     );
 }
+
+/// A swatch row reserves the icon column like an icon row, so a card mixing
+/// the two starts every label at one x, and the swatch fits inside it.
+#[test]
+fn a_swatch_row_takes_the_icon_column() {
+    let swatch_only = vec![DropdownEntry::Item(
+        DropdownItem::new("Blue", ()).swatch(Color::from_rgb(0.4, 0.4, 0.93)),
+    )];
+    assert!(metrics::has_icons(&swatch_only));
+    assert!(!metrics::has_icons(&labelled("Blue")));
+    let m = MenuMetrics::GRAPHITE;
+    assert!(m.swatch_size() > 0.0 && m.swatch_size() < m.icon_size);
+}

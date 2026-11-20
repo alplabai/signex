@@ -126,7 +126,7 @@ dialog-new-project-preview-sheet = { $paper } sheet
 
 dialog-new-project-preview-note = New schematics and PCBs in this project start from these settings. Edit them any time in Project Options.
 
-dialog-new-project-stack-silk-top = Top Overlay
+dialog-new-project-stack-silk-top = Top Silkscreen
 
 dialog-new-project-stack-mask-top = Top Solder
 

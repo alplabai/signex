@@ -5,6 +5,9 @@
 //! the corner mode), as one undo step. Making another copper layer active
 //! mid-run puts a via at the run's end in the same step, and the run goes
 //! on there. A click on the run's end, Esc or a right-click ends the run.
+//! A run started on copper that does not reach the active layer (a surface
+//! pad on Top with an inner layer active) takes that copper's net and starts
+//! with a via (`start_on_copper`).
 
 use signex_engine::pcb::draw::{self, TrackStyle};
 use signex_types::net_class::NetClass;
@@ -12,6 +15,7 @@ use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
+use super::route_end::end_via;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
@@ -20,8 +24,34 @@ impl Signex {
     /// Whether a track run is being drawn on the board this window shows:
     /// Space and Shift+Space bend it.
     pub(crate) fn is_routing_board_track(&self) -> bool {
-        self.own_board_tool()
-            .is_some_and(BoardToolSession::is_routing)
+        let path = self.active_tab_path();
+        self.is_routing_on(path.as_deref(), self.interaction_state.acting_window)
+    }
+
+    /// [`Self::is_routing_board_track`] for `window` (`None`: the main
+    /// window) before that window's board is swapped in, as a key from it
+    /// is judged: an undocked window's own tab, else the main window's.
+    pub(crate) fn is_routing_board_track_in(&self, window: Option<iced::window::Id>) -> bool {
+        let undocked = window.filter(|id| self.ui_state.main_window_id != Some(*id));
+        let path = match undocked {
+            Some(id) => match self.ui_state.windows.get(&id) {
+                Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => Some(path.clone()),
+                _ => None,
+            },
+            None => self.active_tab_path(),
+        };
+        self.is_routing_on(path.as_deref(), undocked)
+    }
+
+    /// The one rule both read: the armed tool is for the board at `path`
+    /// shown in `window`, and a run is open on it.
+    fn is_routing_on(
+        &self,
+        path: Option<&std::path::Path>,
+        window: Option<iced::window::Id>,
+    ) -> bool {
+        (self.interaction_state.pcb_tool.as_ref())
+            .is_some_and(|session| session.is_for(path, window) && session.is_routing())
     }
 
     /// Space (flip the bend) or Shift+Space (next corner mode) mid-run.
@@ -53,8 +83,8 @@ impl Signex {
         let classes = self.track_tool_net_classes();
         let Some(anchor) = session.points.last().copied() else {
             let defaults = &self.interaction_state.pcb_tool_defaults;
-            let style = defaults
-                .track_style(board, at, layer)
+            let style = defaults.track_style(board, at, layer);
+            let style = start_on_copper(board, defaults, at, style)
                 .with_class_width(board, form_or_class_widths(defaults, classes));
             self.set_route(vec![at], Some(style));
             return;
@@ -65,11 +95,15 @@ impl Signex {
             return;
         }
         let defaults = &self.interaction_state.pcb_tool_defaults;
-        let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
+        let (mut style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
+        // A pad off the run's layer at its end is reached with a via there.
+        let end = end_via(board, defaults, at, &mut style);
         let rule = self.interaction_state.corner_rule;
         let tracks = draw::track_run(anchor, at, rule, style, Uuid::now_v7);
         if let Some(command) = draw::place_route(tracks, via) {
-            self.run_placement("Track", Ok(vec![command]));
+            let mut commands = vec![command];
+            commands.extend(draw::place_route(Vec::new(), end));
+            self.run_placement("Track", Ok(commands));
         }
         let mut points = self
             .own_board_tool()
@@ -111,12 +145,15 @@ impl Signex {
         };
         let defaults = &self.interaction_state.pcb_tool_defaults;
         let classes = self.track_tool_net_classes();
-        let (style, via) = next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
+        let (mut style, via) =
+            next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
+        let end = end_via(board, defaults, cursor, &mut style);
         let rule = self.interaction_state.corner_rule;
         preview
             .segments
             .extend(draw::track_run(anchor, cursor, rule, style, Uuid::nil));
         preview.vias.extend(via);
+        preview.vias.extend(end);
     }
 }
 
@@ -150,6 +187,18 @@ pub(super) fn next_leg_style(
     });
     style.layer = layer;
     (style, via)
+}
+
+/// `style`, started at `at` (`signex_engine::pcb::route::start_on_copper`);
+/// a net set in Properties keeps it on the active layer.
+pub(super) fn start_on_copper(
+    board: &PcbBoard,
+    defaults: &BoardToolDefaults,
+    at: Point,
+    style: TrackStyle,
+) -> TrackStyle {
+    let net_set = defaults.track_net.is_some();
+    signex_engine::pcb::route::start_on_copper(board, at, style, net_set)
 }
 
 /// The net classes that size a track: none once the tool's form set a width

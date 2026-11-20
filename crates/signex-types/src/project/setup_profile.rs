@@ -473,9 +473,9 @@ impl ProjectSetup {
     /// the `new_project_with_profile` command takes. Keys: `layers`,
     /// `thickness`, `clearance`, `track`, `via`, `drill` (mm), `sheet`,
     /// `title_block` (`true`/`false`), `designators` (`ieee315`,
-    /// `din40719_2`, `iec81346_2`) and `fab` (`standard`, `advanced`, `hdi`:
-    /// the tier's rules, and its `fab_*` rules in the new project). Keys
-    /// apply in written order.
+    /// `din40719_2`, `iec81346_2`, `iec81346_2_full`) and `fab` (`standard`,
+    /// `advanced`, `hdi`: the tier's rules, and its `fab_*` rules in the new
+    /// project). Keys apply in written order.
     pub fn apply_overrides(&mut self, text: &str) -> Result<(), String> {
         for pair in text.split(',').map(str::trim).filter(|p| !p.is_empty()) {
             let (key, value) = pair
@@ -533,8 +533,8 @@ impl ProjectSetup {
                     .find(|d| designator_token(*d) == value)
                     .ok_or_else(|| {
                         format!(
-                            "override `designators`: {value} is not ieee315, din40719_2 or \
-                             iec81346_2"
+                            "override `designators`: {value} is not ieee315, din40719_2, \
+                             iec81346_2 or iec81346_2_full"
                         )
                     })?;
             }
@@ -550,5 +550,6 @@ pub const fn designator_token(standard: DesignatorStandard) -> &'static str {
         DesignatorStandard::Ieee315 => "ieee315",
         DesignatorStandard::Din40719_2 => "din40719_2",
         DesignatorStandard::Iec81346_2 => "iec81346_2",
+        DesignatorStandard::Iec81346_2Full => "iec81346_2_full",
     }
 }

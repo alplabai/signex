@@ -483,3 +483,25 @@ fn losing_the_focus_forgets_held_modifiers() {
         "{msg:?}"
     );
 }
+
+/// Two plain clicks close together in quick succession are a
+/// double-click; a third click starts afresh.
+#[test]
+fn a_second_quick_click_nearby_is_a_double_click() {
+    let mut rig = rig();
+    rig.press(100.0, 80.0);
+    let first = rig.release(100.0, 80.0).expect("a click");
+    assert!(matches!(first, PcbCanvasMsg::Clicked { .. }), "{first:?}");
+    rig.press(101.0, 80.0);
+    let second = rig.release(101.0, 80.0).expect("a double-click");
+    assert!(
+        matches!(second, PcbCanvasMsg::DoubleClicked { .. }),
+        "{second:?}"
+    );
+    rig.press(101.0, 80.0);
+    let third = rig.release(101.0, 80.0).expect("a click");
+    assert!(
+        matches!(third, PcbCanvasMsg::Clicked { .. }),
+        "a third click starts afresh: {third:?}"
+    );
+}

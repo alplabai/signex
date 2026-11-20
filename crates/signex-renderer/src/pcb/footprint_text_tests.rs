@@ -144,3 +144,19 @@ fn the_text_keeps_its_justification() {
         Some(HAlign::Left)
     );
 }
+
+/// #1416: under EN IEC 81346-2 full class codes the designator draws as
+/// `-R1`; the comment and the board stay as they are.
+#[test]
+fn the_designator_draws_as_the_designator_standard_shows_it() {
+    let board = board();
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &PcbLayerView::default())
+        .with_designator_standard(Some(DesignatorStandard::Iec81346_2Full));
+    let mut contents: Vec<&str> = snapshot.texts.iter().map(|t| t.content.as_str()).collect();
+    contents.sort_unstable();
+    assert_eq!(contents, ["-R1", "10k"]);
+    assert_eq!(board.footprints[0].reference, "R1");
+    let plain = PcbSnapshot::from_board_with_view(&board, &PcbLayerView::default())
+        .with_designator_standard(Some(DesignatorStandard::Iec81346_2));
+    assert!(designator(&plain.texts).is_some_and(|t| t.designator));
+}

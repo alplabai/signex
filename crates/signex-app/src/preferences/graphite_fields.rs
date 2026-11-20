@@ -17,6 +17,7 @@ pub(super) fn graphite_label(item: PrefNav) -> MessageId {
         PrefNav::Appearance => ids::PREFERENCES_PAGE_THEME,
         PrefNav::Keyboard => ids::PREFERENCES_PAGE_KEYBOARD,
         PrefNav::Editing => ids::PREFERENCES_PAGE_EDITING,
+        PrefNav::SchematicDisplay => ids::PREFERENCES_PAGE_SCHEMATIC_DISPLAY,
         PrefNav::Annotation => ids::PREFERENCES_PAGE_ANNOTATION,
         PrefNav::RuleProfiles => ids::PREFERENCES_PAGE_RULE_PROFILES,
         PrefNav::LibraryDistributors => ids::PREFERENCES_PAGE_DISTRIBUTORS,

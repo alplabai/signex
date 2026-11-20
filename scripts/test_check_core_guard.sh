@@ -92,6 +92,12 @@ run_case std_fs fail 'let s = std::fs::read_to_string(p)?;' "breaks 'std_fs'"
 run_case std_fs_in_group fail 'use std::{fs, io};' "breaks 'std_fs'"
 run_case std_thread fail 'std::thread::sleep(d);' "breaks 'std_thread'"
 run_case std_process fail 'use std::process::Command;' "breaks 'std_process'"
+run_case clock_local_now fail 'let now = chrono::Local::now();' "breaks 'clock'"
+run_case clock_utc_now fail 'let now = Utc::now();' "breaks 'clock'"
+run_case clock_system_time_now fail 'let t = std::time::SystemTime::now();' "breaks 'clock'"
+run_case clock_instant_now fail 'let t = Instant :: now();' "breaks 'clock'"
+run_case clock_stamp_passed_in pass 'pub fn at(now: DateTime<Local>) -> Self { Self { now: Some(now) } }
+let known = Local.timestamp_opt(0, 0); let t: Instant = start; let nowhere = 1;'
 run_case reports_line_number fail 'pub fn ok() {}
 use tokio::sync::mpsc;' "x.rs:2 breaks 'tokio'"
 

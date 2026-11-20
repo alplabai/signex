@@ -239,11 +239,7 @@ fn lower_graphic(graphic: &Graphic, t: &SymbolTransform, out: &mut Vec<SymbolPri
             if points.len() < 2 {
                 return;
             }
-            let (first, last) = (points[0], points[points.len() - 1]);
-            let closed = points.len() > 2
-                && (first.x - last.x).abs() < 0.001
-                && (first.y - last.y).abs() < 0.001;
-            out.push(path(points, closed, *width, *fill));
+            out.push(path(points, polyline_is_closed(points), *width, *fill));
         }
         Graphic::Rectangle {
             start,
@@ -359,7 +355,18 @@ fn text_size(font_size: f64) -> f64 {
     }
 }
 
-fn rect_corners(a: Point, b: Point) -> [Point; 4] {
+/// Whether a polyline closes on itself: more than two points, with the last
+/// on the first.
+pub(super) fn polyline_is_closed(points: &[Point]) -> bool {
+    match (points.first(), points.last()) {
+        (Some(first), Some(last)) if points.len() > 2 => {
+            (first.x - last.x).abs() < 0.001 && (first.y - last.y).abs() < 0.001
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn rect_corners(a: Point, b: Point) -> [Point; 4] {
     [
         Point::new(a.x, a.y),
         Point::new(b.x, a.y),

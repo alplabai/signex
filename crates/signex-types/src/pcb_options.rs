@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::pcb::Point;
+use crate::pcb_layer::PcbLayer;
 pub use crate::pcb_origin::BoardOrigin;
 use crate::theme::Color;
 
@@ -61,6 +62,48 @@ pub struct BoardOptions {
     /// `SetBoardPanel` command.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panel: Option<crate::pcb_panel::BoardPanel>,
+    /// The colours the user gave layers (Layer colour..., 2026-11-18),
+    /// sorted by layer token; a layer not listed takes the palette's.
+    /// Saved as `[board_options.layer_colors]` (`snxpcb/1.5`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layer_colors: Vec<LayerColor>,
+}
+
+/// A colour the user gave one board layer: the canvas, the layer tabs and
+/// the Layers panel draw the layer in it instead of the palette's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "LayerColorRaw", into = "LayerColorRaw")]
+pub struct LayerColor {
+    pub layer: PcbLayer,
+    pub color: Color,
+}
+
+/// [`LayerColor`] as serde holds it: the layer by its `.snxpcb` token.
+#[derive(Serialize, Deserialize)]
+struct LayerColorRaw {
+    layer: String,
+    color: String,
+}
+
+impl From<LayerColor> for LayerColorRaw {
+    fn from(c: LayerColor) -> Self {
+        Self {
+            layer: crate::format::pcb_layer_token(c.layer),
+            color: c.color.to_hex(),
+        }
+    }
+}
+
+impl TryFrom<LayerColorRaw> for LayerColor {
+    type Error = String;
+
+    fn try_from(raw: LayerColorRaw) -> Result<Self, String> {
+        let layer = crate::format::parse_pcb_layer(&raw.layer)
+            .ok_or_else(|| format!("`{}` is not a board layer", raw.layer))?;
+        let color = Color::parse_hex(&raw.color)
+            .ok_or_else(|| format!("{:?} is not #rrggbb or #rrggbbaa", raw.color))?;
+        Ok(Self { layer, color })
+    }
 }
 
 /// One accepted design-rule finding. `key` names the finding the same way
@@ -85,6 +128,29 @@ pub struct DrcWaiver {
 impl BoardOptions {
     pub fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// The colour the user gave `layer`, if any.
+    pub fn layer_color(&self, layer: PcbLayer) -> Option<Color> {
+        self.layer_colors
+            .iter()
+            .find(|c| c.layer == layer)
+            .map(|c| c.color)
+    }
+
+    /// Give `layer` its own colour, or (`None`) the palette's again. Whether
+    /// that changed anything.
+    pub fn set_layer_color(&mut self, layer: PcbLayer, color: Option<Color>) -> bool {
+        if self.layer_color(layer) == color {
+            return false;
+        }
+        self.layer_colors.retain(|c| c.layer != layer);
+        if let Some(color) = color {
+            self.layer_colors.push(LayerColor { layer, color });
+            self.layer_colors
+                .sort_by_key(|c| crate::format::pcb_layer_token(c.layer));
+        }
+        true
     }
 
     /// The grid a carry or placement of `what` snaps to: the first extra

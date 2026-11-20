@@ -187,6 +187,11 @@ pub enum ProjectTabMsg {
         name: String,
         value: String,
     },
+    /// Enter in a parameter's value: the project variables that do not
+    /// evaluate are reported in Messages (#1987).
+    ParameterSubmitted {
+        project_id: ProjectId,
+    },
     ParameterRemoved {
         project_id: ProjectId,
         name: String,

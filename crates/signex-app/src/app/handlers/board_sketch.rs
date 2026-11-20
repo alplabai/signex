@@ -215,19 +215,33 @@ impl Signex {
         // Messages stays en-US whatever the UI language.
         let held = Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name.as_str());
         crate::diagnostics::log_warning(held.render_en_us());
-        // The refusal nests as a message, so the card renders it in the view.
+        let detail = self.board_sketch_held_detail(name);
+        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
+    }
+
+    /// Why a board named `name` holds: the hold and the bake's refusal, which
+    /// nests as a message so the card renders it in the view.
+    fn board_sketch_held_detail(&self, name: String) -> Translatable {
         let refusal = self
             .interaction_state
             .board_sketch
             .as_ref()
             .and_then(|session| session.refusal.clone());
-        let detail = match refusal {
+        match refusal {
             Some(refusal) => Translatable::new(ids::NOTICE_BOARD_SKETCH_HELD_WHY)
                 .arg("board", name)
                 .arg("refusal", refusal),
             None => Translatable::new(ids::BOARD_SKETCH_HELD).arg("board", name),
-        };
-        self.document_state.error_notice = Some(ErrorNotice::new(ids::BOARD_SKETCH_TITLE, detail));
+        }
+    }
+
+    /// Why the board at `board` holds a close, in en-US: a caller's refusal.
+    pub(crate) fn board_sketch_held_reason(&self, board: &Path) -> String {
+        let name = board
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.board_sketch_held_detail(name).render_en_us()
     }
 
     /// Whether the board at `path` is shown in its own window.

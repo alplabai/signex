@@ -646,6 +646,7 @@ impl Signex {
                         self.ui_state.recent_projects.entries(),
                         &self.ui_state.pinned_projects,
                         &libraries,
+                        self.interaction_state.start_section,
                     )
                 }
             }
