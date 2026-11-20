@@ -3,7 +3,8 @@
 //!
 //! Priority chain (highest first):
 //! 1. **Point snap** — cursor within `SKETCH_SNAP_RADIUS_PX` of an
-//!    existing `Point` entity → snap to that Point's position.
+//!    existing `Point` entity → snap to that Point's position. Then, on
+//!    a board sketch only, the board under it ([`super::snap_board`]).
 //! 2. **Horizontal / Vertical inference** — when a multi-click tool
 //!    is mid-gesture (line first endpoint, rect first corner, ...),
 //!    if the cursor's angle relative to the anchor falls within
@@ -71,6 +72,10 @@ pub enum SnapKind {
     Intersection,
     /// Fell through to grid snap.
     Grid,
+    /// Snapped onto a feature of the board under a board sketch (#2518):
+    /// places the point only and lands no constraint. See
+    /// [`super::snap_board`].
+    BoardFeature(super::snap_board::BoardFeatureKind),
 }
 
 /// v0.18.23 — world-mm tolerance used by the guide-snap priority.
@@ -192,6 +197,12 @@ pub fn snap_cursor(
             pos,
             kind: SnapKind::Point(id),
         };
+    }
+
+    // Priority 1.2 — the board under a board sketch (#2518). `None` on
+    // a footprint sketch, which has no board.
+    if let Some(hit) = super::snap_board::board_feature_snap(raw, state) {
+        return hit;
     }
 
     // Priority 1.5 — Guide snap. Snaps the cursor onto enabled

@@ -735,3 +735,7 @@ mod sketch_parameters;
 // #187 / #191: the sketch canvas's pattern values and instance suppression.
 #[path = "regression/sketch_canvas_values.rs"]
 mod sketch_canvas_values;
+// #2518 / Graphite #179: a board sketch snaps to the board under it; Snap ▾
+// board rows turn that off without an undo step.
+#[path = "regression/sketch_snap_board.rs"]
+mod sketch_snap_board;

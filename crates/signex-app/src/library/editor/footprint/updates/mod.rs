@@ -512,6 +512,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::ActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
         FootprintEditorMsg::SketchParameters(m) => sketch::parameters::apply(editor, m),
         FootprintEditorMsg::SketchCanvas(msg) => sketch::canvas_values::apply(editor, msg),
+        FootprintEditorMsg::SketchSnap(snap) => {
+            crate::library::editor::footprint::snap_menu::apply(editor, snap)
+        }
     }
 }
 
@@ -691,6 +694,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // The canvas values and menus record their own step for the edits
         // that change the sketch (`record_edit`), and none for UI state.
         SketchCanvas(_) => false,
+        // A board sketch's Snap ▾ board rows: snap switches, no geometry.
+        SketchSnap(_) => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

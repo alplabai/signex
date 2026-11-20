@@ -602,4 +602,6 @@ pub enum FootprintEditorMsg {
     /// Values on the sketch drawing, the constraint and pattern menus and
     /// instance suppression (#187, #188, #191).
     SketchCanvas(crate::library::editor::footprint::sketch_mode::SketchCanvasMsg),
+    /// A board-feature row of a board sketch's Snap ▾ (#2518).
+    SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
 }
