@@ -66,7 +66,7 @@ fn open_project(adapter: &mut TestAdapter, names: &[&str]) -> Vec<PathBuf> {
     assert_eq!(outcome, Outcome::Ran, "the project opens");
     adapter.deliver(pending).unwrap();
     for path in &paths {
-        let read = adapter.open_from_tree(path);
+        let read = adapter.open_from_tree(path).expect("the tree opens it");
         adapter.deliver(read).unwrap();
         assert!(is_open(adapter, path), "{} opens", path.display());
     }
@@ -172,7 +172,7 @@ fn a_restore_waits_for_every_write_in_flight() {
 
     place_text(&mut adapter, &b, "in-flight-4d21");
     let write_in_flight = save(&mut adapter, &b);
-    let restore = adapter.restore(&a, &sha);
+    let restore = adapter.restore(&a, &sha).expect("the restore starts");
 
     assert!(
         adapter.deliver(restore).is_err(),
@@ -209,6 +209,12 @@ fn a_save_completion_for_a_document_that_moved_on_keeps_it_dirty() {
 
     adapter.deliver(saving).unwrap();
 
+    // Positive control: the save did land, so dirty is the completion's call.
+    assert_eq!(
+        writes_to(&adapter, &path),
+        1,
+        "the save wrote the file once"
+    );
     assert!(
         is_dirty(&mut adapter, &path),
         "the snapshot predates the edit, so the edit is still unsaved"
@@ -227,7 +233,7 @@ fn a_tree_read_finishing_after_close_all_is_dropped() {
     let a = b.with_file_name("a.snxsch");
     std::fs::write(&a, sheet_text("A4")).unwrap();
 
-    let read = adapter.open_from_tree(&a);
+    let read = adapter.open_from_tree(&a).expect("the tree opens it");
     close_all(&mut adapter);
     adapter.deliver(read).unwrap();
 
@@ -245,7 +251,7 @@ fn a_tree_read_finishing_after_close_all_is_dropped() {
 #[test]
 fn a_restore_cancelled_by_close_all_shows_its_file_in_a_clean_reopened_sheet() {
     let (mut adapter, a, restore) = restore_then_close_all();
-    let read = adapter.open_from_tree(&a);
+    let read = adapter.open_from_tree(&a).expect("the tree opens it");
     adapter.deliver(read).unwrap();
     assert_eq!(
         paper(&mut adapter, &a),
@@ -265,18 +271,33 @@ fn a_restore_cancelled_by_close_all_shows_its_file_in_a_clean_reopened_sheet() {
 #[test]
 fn a_restore_cancelled_by_close_all_keeps_the_edits_of_a_reopened_sheet() {
     let (mut adapter, a, restore) = restore_then_close_all();
-    let read = adapter.open_from_tree(&a);
+    let read = adapter.open_from_tree(&a).expect("the tree opens it");
     adapter.deliver(read).unwrap();
     place_text(&mut adapter, &a, "reopened-edit-6c0d");
 
     adapter.deliver(restore).unwrap();
 
+    // Positive control: the restore did rewrite the file.
+    assert!(
+        std::fs::read_to_string(&a).unwrap().contains("A2"),
+        "the restore wrote the A2 version"
+    );
     assert_eq!(paper(&mut adapter, &a), "A4");
     assert!(
         read_document(&mut adapter, &a).contains("reopened-edit-6c0d"),
         "a restore cancelled while it ran replaced an edited reopened sheet"
     );
     assert!(is_dirty(&mut adapter, &a));
+}
+
+/// How many document writes to `path` landed.
+fn writes_to(adapter: &TestAdapter, path: &Path) -> usize {
+    adapter
+        .disk()
+        .writes()
+        .iter()
+        .filter(|write| write.path == path)
+        .count()
 }
 
 /// A project with the sheet `a.snxsch` (paper A4) whose history holds an A2
@@ -296,7 +317,7 @@ fn restore_then_close_all() -> (TestAdapter, PathBuf, signex_app::test_adapter::
         .expect("a commit is made")
         .to_string();
     std::fs::write(&a, opened).unwrap();
-    let restore = adapter.restore(&a, &sha);
+    let restore = adapter.restore(&a, &sha).expect("the restore starts");
     close_all(&mut adapter);
     (adapter, a, restore)
 }
@@ -323,4 +344,65 @@ fn close_all(adapter: &mut TestAdapter) {
     let (outcome, closed) = adapter.execute("close_all_documents", &[], Origin::Person);
     assert_eq!(outcome, Outcome::Ran, "close all runs");
     adapter.deliver(closed).unwrap();
+}
+
+/// The `drag` gesture: a wire dragged one way moves, dirties its sheet and
+/// takes one undo step.
+#[test]
+fn a_dragged_wire_moves_as_one_undo_step() {
+    let mut adapter = TestAdapter::new();
+    let [b] = open_project(&mut adapter, &["b.snxsch"])
+        .try_into()
+        .unwrap();
+    let path = b.with_file_name("w.snxsch");
+    std::fs::write(&path, wire_sheet_text()).unwrap();
+    let read = adapter.open_from_tree(&path).expect("the tree opens it");
+    adapter.deliver(read).unwrap();
+    let before = wires(&mut adapter, &path);
+
+    adapter
+        .drag(&path, (20.32, 10.16), (20.32, 20.32), 4)
+        .expect("the wire is dragged");
+
+    let after = wires(&mut adapter, &path);
+    assert_ne!(after, before, "the wire moved");
+    assert!(after.contains("20.32"), "it landed 10.16 mm lower: {after}");
+    assert!(is_dirty(&mut adapter, &path));
+    let (outcome, undone) = adapter.execute("undo", &[], Origin::Person);
+    assert_eq!(outcome, Outcome::Ran);
+    adapter.deliver(undone).unwrap();
+    assert_eq!(
+        wires(&mut adapter, &path),
+        before,
+        "one undo step undoes it"
+    );
+    assert_eq!(info(&mut adapter, &path)["history"]["can_undo"], false);
+}
+
+fn wire_sheet_text() -> String {
+    use signex_types::schematic::{Point, Wire};
+    let sheet = SchematicSheet {
+        uuid: uuid::Uuid::now_v7(),
+        paper_size: "A4".into(),
+        wires: vec![Wire {
+            uuid: uuid::Uuid::now_v7(),
+            start: Point::new(10.16, 10.16),
+            end: Point::new(30.48, 10.16),
+            stroke_width: 0.0,
+            color: None,
+            locked: false,
+            unknown_columns: Default::default(),
+        }],
+        ..Default::default()
+    };
+    signex_types::format::SnxSchematic::new(sheet)
+        .write_string()
+        .expect("encode the sheet")
+}
+
+fn wires(adapter: &mut TestAdapter, path: &Path) -> String {
+    let answer = adapter
+        .query("read_document", &[&document(path)])
+        .expect("read_document answers");
+    answer["elements"]["wires"].to_string()
 }

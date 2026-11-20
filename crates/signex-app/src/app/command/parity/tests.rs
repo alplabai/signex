@@ -57,7 +57,7 @@ fn every_row_has_implicit_inputs_from_the_vocabulary() {
         unreviewed.join("\n")
     );
     let words: BTreeSet<&str> = Input::ALL.iter().map(|input| input.word()).collect();
-    let bases = [Basis::Handler, Basis::Routing, Basis::Gate].map(Basis::name);
+    let bases = [Basis::Handler, Basis::Routing, Basis::Gate, Basis::Declared].map(Basis::name);
     for line in GOLDEN.lines().skip(1) {
         let cells: Vec<&str> = line.split('\t').collect();
         assert_eq!(cells.len(), 6, "row `{line}` has six cells");
@@ -181,6 +181,22 @@ fn no_core_row_is_gate_only() {
         "core rows whose handler was not read; annotate them in parity/annotations.rs:\n{}",
         unread.join("\n")
     );
+}
+
+/// `declared` stands for no handler read, so only the core command behind a
+/// split router, which has no handler yet, may carry it; every such row
+/// does, so its inputs are never passed off as read.
+#[test]
+fn only_a_split_core_row_is_declared() {
+    for row in rows() {
+        assert_eq!(
+            row.basis == Basis::Declared,
+            row.form == Form::SplitCore,
+            "{} {}",
+            row.id,
+            row.form.name()
+        );
+    }
 }
 
 /// The kill list as the golden spells it: core rows that read in-progress

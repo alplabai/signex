@@ -185,7 +185,7 @@ cut	bridge	Edit(Cut)	split	active document,selection,tool state	handler
 cut	in_window_rewrite	document_window	gui	window	routing
 cut	refusal_needs	CutTarget	split	active document,selection	routing
 cut	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state	handler
-cut	split_core_command	the core command after the router	core	active document,selection	handler
+cut	split_core_command	the core command after the router	core	active document,selection	declared
 cycle_arc_mode	bridge	Pcb(ArcModeStepped)	gui	active document	gate
 cycle_arc_mode	in_window_rewrite	document_window	gui	window	routing
 cycle_arc_mode	refusal_needs	Pcb	gui	active document	routing
@@ -306,7 +306,7 @@ draw_wire	headless_missing_operand	needs `start`	core	none	routing
 duplicate	bridge	Edit(Duplicate)	split	active document,selection,tool state	handler
 duplicate	in_window_rewrite	document_window	gui	window	routing
 duplicate	refusal_needs	CopyTarget	split	active document,selection	routing
-duplicate	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+duplicate	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 edit_blanket	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 edit_blanket	refusal_needs	Schematic	core	active document	routing
 edit_blanket	refusal_needs_operands	needs_operands_reason	gui	none	routing
@@ -410,17 +410,17 @@ flip_selected_x	active_bar	FlipSelectedX	split	active document,selection,tool st
 flip_selected_x	in_window_rewrite	document_window	gui	window	routing
 flip_selected_x	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 flip_selected_x	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
-flip_selected_x	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+flip_selected_x	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 flip_selected_y	active_bar	FlipSelectedY	split	active document,selection,tool state,in-progress edit	handler
 flip_selected_y	in_window_rewrite	document_window	gui	window	routing
 flip_selected_y	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 flip_selected_y	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
-flip_selected_y	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+flip_selected_y	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 flip_selection	bridge	Edit(FlipSelection)	split	active document,selection,tool state	handler
 flip_selection	in_window_rewrite	document_window	gui	window	routing
 flip_selection	refusal_needs	PcbPlacement	split	active document,selection,tool state	routing
 flip_selection	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state	handler
-flip_selection	split_core_command	the core command after the router	core	active document,selection	handler
+flip_selection	split_core_command	the core command after the router	core	active document,selection	declared
 footprint_mode_pads	bridge	Input(FootprintModeShortcut(Normal))	gui	active document	handler
 footprint_mode_pads	in_window_rewrite	document_window	gui	window	routing
 footprint_mode_pads	headless_refusal	headless_refusal	gui	none	routing
@@ -510,12 +510,12 @@ mirror_x	bridge	Edit(MirrorSelectedY)	split	active document,selection,tool state
 mirror_x	in_window_rewrite	document_window	gui	window	routing
 mirror_x	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 mirror_x	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
-mirror_x	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+mirror_x	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 mirror_y	bridge	Edit(MirrorSelectedX)	split	active document,selection,tool state,in-progress edit	handler
 mirror_y	in_window_rewrite	document_window	gui	window	routing
 mirror_y	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 mirror_y	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
-mirror_y	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+mirror_y	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 move_object	active_bar	Move	gui	active document	gate
 move_object	in_window_rewrite	document_window	gui	window	routing
 move_object	refusal_needs	MoveObject	gui	active document	routing
@@ -669,7 +669,7 @@ paste_special	bridge	Edit(SmartPaste)	split	active document,tool state,render ca
 paste_special	in_window_rewrite	document_window	gui	window	routing
 paste_special	refusal_needs	PasteTarget	split	active document,clipboard	routing
 paste_special	disabled_still_runs_refusal	explains_refusal_in	split	active document,tool state,render cache,clipboard	handler
-paste_special	split_core_command	the core command after the router	core	active document,tool state,clipboard	handler
+paste_special	split_core_command	the core command after the router	core	active document,tool state,clipboard	declared
 place_blanket	active_bar	PlaceBlanket	gui	active document	gate
 place_blanket	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_blanket	in_window_rewrite	document_window	gui	window	routing
@@ -917,7 +917,7 @@ place_wire_to_bus_entry	headless_refusal	headless_refusal	gui	none	routing
 placement_accept	bridge	Selection(LassoCommit)	split	in-progress edit,render cache	handler
 placement_accept	in_window_rewrite	document_window	gui	window	routing
 placement_accept	headless_refusal	headless_refusal	split	none	routing
-placement_accept	split_core_command	the core command after the router	core	active document,tool state	handler
+placement_accept	split_core_command	the core command after the router	core	active document,tool state	declared
 placement_properties	bridge	Tool(PrePlacementTab)	gui	tool state	handler
 placement_properties	in_window_rewrite	document_window	gui	window	routing
 placement_properties	headless_refusal	headless_refusal	gui	none	routing
@@ -1069,22 +1069,22 @@ rotate_clockwise	bridge	Edit(RotateSelectedClockwise)	split	active document,sele
 rotate_clockwise	in_window_rewrite	document_window	gui	window	routing
 rotate_clockwise	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 rotate_clockwise	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
-rotate_clockwise	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+rotate_clockwise	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 rotate_counterclockwise	bridge	Edit(RotateSelectedCounterclockwise)	split	active document,selection,tool state,in-progress edit	handler
 rotate_counterclockwise	in_window_rewrite	document_window	gui	window	routing
 rotate_counterclockwise	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 rotate_counterclockwise	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
-rotate_counterclockwise	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+rotate_counterclockwise	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 rotate_selection	active_bar	RotateSelection	split	active document,selection,tool state,in-progress edit	handler
 rotate_selection	in_window_rewrite	document_window	gui	window	routing
 rotate_selection	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 rotate_selection	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
-rotate_selection	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+rotate_selection	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 rotate_selection_cw	active_bar	RotateSelectionCW	split	active document,selection,tool state,in-progress edit	handler
 rotate_selection_cw	in_window_rewrite	document_window	gui	window	routing
 rotate_selection_cw	refusal_needs	Turn	split	active document,selection,tool state,in-progress edit	routing
 rotate_selection_cw	disabled_still_runs_refusal	explains_refusal_in	split	active document,selection,tool state,in-progress edit	handler
-rotate_selection_cw	split_core_command	the core command after the router	core	active document,selection,tool state	handler
+rotate_selection_cw	split_core_command	the core command after the router	core	active document,selection,tool state	declared
 rubber_stamp_copy	bridge	Edit(RubberStampCopy)	gui	active document	gate
 rubber_stamp_copy	in_window_rewrite	document_window	gui	window	routing
 rubber_stamp_copy	refusal_needs	Schematic	gui	active document	routing
@@ -1301,7 +1301,7 @@ smart_paste	bridge	Edit(SmartPaste)	split	active document,tool state,render cach
 smart_paste	in_window_rewrite	document_window	gui	window	routing
 smart_paste	refusal_needs	PasteTarget	split	active document,clipboard	routing
 smart_paste	disabled_still_runs_refusal	explains_refusal_in	split	active document,tool state,render cache,clipboard	handler
-smart_paste	split_core_command	the core command after the router	core	active document,tool state,clipboard	handler
+smart_paste	split_core_command	the core command after the router	core	active document,tool state,clipboard	declared
 snap_board_origin_to_corner	bridge	Pcb(Origin(SnapToCornerPicked))	core	active document,cursor	handler
 snap_board_origin_to_corner	in_window_rewrite	document_window	gui	window	routing
 snap_board_origin_to_corner	refusal_needs	EditablePcb	core	active document	routing

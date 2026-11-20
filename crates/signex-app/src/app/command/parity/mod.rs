@@ -47,6 +47,9 @@ enum Basis {
     Routing,
     /// Only the gate and the routing were read, not the handler behind them.
     Gate,
+    /// No handler exists yet: the inputs of a split router's core command,
+    /// declared from the #2326 decisions (`split_core_command` rows only).
+    Declared,
 }
 
 impl Basis {
@@ -55,6 +58,7 @@ impl Basis {
             Self::Handler => "handler",
             Self::Routing => "routing",
             Self::Gate => "gate",
+            Self::Declared => "declared",
         }
     }
 }
@@ -206,7 +210,13 @@ fn row(
     };
     if let Some(annotated) = annotations::of(id, form) {
         inputs.extend(annotated.iter().copied());
-        basis = Basis::Handler;
+        // The core command behind a split router has no handler yet: its
+        // inputs are declared from the #2326 decisions, not read.
+        basis = if form == Form::SplitCore {
+            Basis::Declared
+        } else {
+            Basis::Handler
+        };
     }
     Row {
         id,

@@ -23,7 +23,6 @@ use std::time::Duration;
 
 use iced::Task;
 
-pub use crate::task_driver::DriveError;
 pub use disk::{DiskWrite, TestDisk};
 
 use crate::app::command::{CommandArgs, CommandOutcome};
@@ -61,6 +60,27 @@ pub enum Outcome {
         reason_en: String,
     },
 }
+
+/// Why the adapter could not do what a test asked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AdapterError {
+    /// A gesture found nothing to act on (no open project holds the path,
+    /// no tab shows it, the tree refused the open).
+    NothingToActOn(String),
+    /// Delivered work did not finish within the limit.
+    Unfinished(String),
+}
+
+impl std::fmt::Display for AdapterError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NothingToActOn(why) => write!(f, "nothing to act on: {why}"),
+            Self::Unfinished(why) => write!(f, "unfinished: {why}"),
+        }
+    }
+}
+
+impl std::error::Error for AdapterError {}
 
 /// Background work a call started, unrun until [`TestAdapter::deliver`].
 #[must_use = "deliver it, or the work it holds is dropped unrun"]
@@ -152,11 +172,13 @@ impl TestAdapter {
 
     /// Run the work `pending` holds and feed what it reports back, until
     /// nothing is left or the limit is reached.
-    pub fn deliver(&mut self, pending: Pending) -> Result<(), DriveError> {
+    pub fn deliver(&mut self, pending: Pending) -> Result<(), AdapterError> {
         let Some(task) = self.pending.remove(&pending.0) else {
             return Ok(());
         };
-        self.driver.settle(&mut self.app, task)
+        self.driver
+            .settle(&mut self.app, task)
+            .map_err(|error| AdapterError::Unfinished(error.to_string()))
     }
 
     fn hold(&mut self, task: Task<Message>) -> Pending {
