@@ -35,16 +35,16 @@ annotate_schematic_quietly	disabled_still_runs	explains_when_unavailable	core	ac
 apply_edits	operand_handler	run_operands: named document	core	active document,tool state,pre-placement form,origin	handler
 apply_edits	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_edits	headless_missing_operand	needs `document`	core	none	routing
-apply_layout_board	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Layout))))	gui	none	gate
+apply_layout_board	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Layout))))	gui	window,settings	handler
 apply_layout_board	in_window_rewrite	document_window	gui	window	routing
 apply_layout_board	headless_refusal	headless_refusal	core	none	routing
-apply_layout_notebook	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Notebook))))	gui	none	gate
+apply_layout_notebook	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Notebook))))	gui	window,settings	handler
 apply_layout_notebook	in_window_rewrite	document_window	gui	window	routing
 apply_layout_notebook	headless_refusal	headless_refusal	core	none	routing
-apply_layout_review	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Review))))	gui	none	gate
+apply_layout_review	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Review))))	gui	window,settings	handler
 apply_layout_review	in_window_rewrite	document_window	gui	window	routing
 apply_layout_review	headless_refusal	headless_refusal	core	none	routing
-apply_layout_schematic	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Schematic))))	gui	none	gate
+apply_layout_schematic	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Schematic))))	gui	window,settings	handler
 apply_layout_schematic	in_window_rewrite	document_window	gui	window	routing
 apply_layout_schematic	headless_refusal	headless_refusal	core	none	routing
 apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unless a document is named	core	settings	handler
@@ -515,7 +515,7 @@ lock_board_items	operand_handler	run_operands: named document	core	origin	handle
 lock_board_items	in_window_rewrite	document_window	gui	window	routing
 lock_board_items	refusal_needs	Pcb	core	active document	routing
 lock_board_items	headless_missing_operand	needs `document`	core	none	routing
-manage_workspace_layouts	bridge	DockLayout(Workspace(Manage(Requested)))	gui	none	gate
+manage_workspace_layouts	bridge	DockLayout(Workspace(Manage(Requested)))	gui	settings	handler
 manage_workspace_layouts	in_window_rewrite	document_window	gui	window	routing
 manage_workspace_layouts	headless_refusal	headless_refusal	core	none	routing
 measure_board	query	run_query	core	origin	handler
@@ -1078,7 +1078,7 @@ reset_local_coordinates	headless_refusal	headless_refusal	core	none	routing
 reset_schematic_designators	bridge	Annotate(OpenResetConfirm)	gui	none	handler
 reset_schematic_designators	in_window_rewrite	document_window	gui	window	routing
 reset_schematic_designators	headless_refusal	headless_refusal	core	none	routing
-reset_workspace_layout	bridge	DockLayout(Workspace(ResetActiveRequested))	gui	none	gate
+reset_workspace_layout	bridge	DockLayout(Workspace(ResetActiveRequested))	gui	window,settings	handler
 reset_workspace_layout	in_window_rewrite	document_window	gui	window	routing
 reset_workspace_layout	headless_refusal	headless_refusal	core	none	routing
 resolve	query	run_query	core	origin	handler
@@ -1175,7 +1175,7 @@ save_layer_set	operand_handler	run_operands: named document	core	origin,settings
 save_layer_set	refusal_needs	Pcb	core	active document	routing
 save_layer_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 save_layer_set	headless_missing_operand	needs `name`	core	none	routing
-save_workspace_layout	bridge	DockLayout(Workspace(Save(Requested)))	gui	none	gate
+save_workspace_layout	bridge	DockLayout(Workspace(Save(Requested)))	gui	settings	handler
 save_workspace_layout	in_window_rewrite	document_window	gui	window	routing
 save_workspace_layout	headless_refusal	headless_refusal	core	none	routing
 select_all	bridge	Selection(SelectAll)	core	active document,render cache	handler

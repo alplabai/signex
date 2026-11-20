@@ -680,6 +680,26 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         Bridge,
         &[Window],
     ),
+    // Workspace layouts live in prefs.json (settings). Apply and Reset also
+    // read which panels are open, detached or floating (`arrange_dock`).
+    (
+        &[
+            "apply_layout_schematic",
+            "apply_layout_board",
+            "apply_layout_review",
+            "apply_layout_notebook",
+            "reset_workspace_layout",
+        ],
+        Bridge,
+        &[Window, Settings],
+    ),
+    // The dialogs open on the saved list: Save's first free name, Manage's
+    // active or first own layout.
+    (
+        &["save_workspace_layout", "manage_workspace_layouts"],
+        Bridge,
+        &[Settings],
+    ),
     // Dialogs, pickers and panels that open on nothing implicit, and the
     // tools that are only armed.
     (
