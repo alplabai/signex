@@ -43,6 +43,7 @@ use signex_types::pcb_layer::PcbLayer;
 use signex_types::zone_keepout::KEEPOUT_FILL;
 use thiserror::Error;
 
+pub use frame::FabFrame;
 pub use notes::FabNote;
 
 use layers::{CopperStack, FabLayer, file_function, file_polarity, file_suffix};

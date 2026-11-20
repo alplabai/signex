@@ -1,0 +1,16 @@
+M48
+; #@! TF.GenerationSoftware,Alp Lab,Signex
+; #@! TF.FileFunction,Plated,1,2,PTH
+FMAT,2
+METRIC
+T1C0.300
+T2C0.800
+%
+G90
+G05
+T1
+X15.000Y-5.000
+T2
+X10.000Y-8.000
+T0
+M30

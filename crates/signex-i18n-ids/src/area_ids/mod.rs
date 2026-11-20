@@ -18,6 +18,7 @@ mod editors;
 mod fab_outputs;
 mod file_dialog;
 mod find;
+mod gerber_viewer;
 mod library;
 mod notice;
 mod overlay;
@@ -55,6 +56,7 @@ pub use editors::*;
 pub use fab_outputs::*;
 pub use file_dialog::*;
 pub use find::*;
+pub use gerber_viewer::*;
 pub use library::*;
 pub use notice::*;
 pub use overlay::*;
@@ -96,6 +98,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         fab_outputs::FAB_OUTPUTS,
         file_dialog::FILE_DIALOG,
         find::FIND,
+        gerber_viewer::GERBER_VIEWER,
         library::LIBRARY,
         notice::NOTICE,
         overlay::OVERLAY,

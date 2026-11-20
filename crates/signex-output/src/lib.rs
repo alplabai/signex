@@ -48,8 +48,9 @@ pub use pdf::board::{
 pub use pdf::{
     ColourMode, MAX_PAGE_EDGE_MM, MAX_SCALE_PERCENT, MIN_CUSTOM_EDGE_MM, MIN_PRINTABLE_MM,
     MarginEdge, MarginUpdate, Margins, PageRange, PageSetupError, PageSize, PageSizeKind,
-    PdfExporter, PdfOptions, PdfOutput, PdfScale, PdfScaleMode, SchematicPalette, check_page_range,
-    parse_custom_edge_mm, parse_mm, parse_percent,
+    PartBookmarkOrder, PdfExporter, PdfLayer, PdfLayerVisibility, PdfOptions, PdfOutput, PdfScale,
+    PdfScaleMode, SchematicPalette, Watermark, WatermarkPages, WatermarkPlacement, WatermarkText,
+    check_page_range, parse_custom_edge_mm, parse_mm, parse_percent,
 };
 pub use preview::{
     MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,

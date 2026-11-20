@@ -1,0 +1,24 @@
+[package]
+name = "signex-gerber"
+description = "Gerber RS-274X with X2 attributes, Excellon drill and Gerber job file reader: exact integer-nanometre images with every read problem kept by file and line"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# UI-free and IO-free: a reader takes a file name and its bytes, so the
+# viewer, the CLI and the tests read the same way (docs/GERBER_VIEWER.md).
+[dependencies]
+pcb-geom = { path = "../pcb-geom" }
+signex-types = { workspace = true }
+signex-output = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# The round-trip test builds its board with item identities.
+uuid = { workspace = true }
+
+[lints]
+workspace = true

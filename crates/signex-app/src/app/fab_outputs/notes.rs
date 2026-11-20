@@ -99,6 +99,35 @@ pub(crate) fn stale_text(written: &FabWritten, i18n: &I18n) -> Option<Localized>
     ))
 }
 
+/// How much a note of a finished Generate matters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteSeverity {
+    /// The set leaves something out: a zone not filled, a part with no
+    /// designator, a model unread.
+    Warning,
+    /// Older files beside the set: sent with it they can break a fab order.
+    Error,
+}
+
+/// Every note of `written`, in the order the dialog lists them, each with
+/// its severity: what the files and the documents leave out, then the stale
+/// files.
+pub(crate) fn outcome_notes(written: &FabWritten, i18n: &I18n) -> Vec<(NoteSeverity, Localized)> {
+    let mut notes: Vec<(NoteSeverity, Localized)> = written
+        .notes
+        .iter()
+        .map(|n| (NoteSeverity::Warning, note_text(*n, i18n)))
+        .collect();
+    notes.extend(
+        written
+            .board_notes
+            .iter()
+            .map(|n| (NoteSeverity::Warning, board_note_text(n, i18n))),
+    );
+    notes.extend(stale_text(written, i18n).map(|line| (NoteSeverity::Error, line)));
+    notes
+}
+
 /// The Messages line of a finished Generate: what was written, then every
 /// note and the stale files. It is a warning when the set is incomplete
 /// or the folder holds older files, so it is not read as a clean set.

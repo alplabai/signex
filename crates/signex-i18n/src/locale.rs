@@ -10,7 +10,7 @@ use icu_provider::{
 };
 use unic_langid::LanguageIdentifier;
 
-use crate::catalog::{AVAILABLE, EN_US};
+use crate::catalog::{AVAILABLE, EN_US, EN_XA};
 
 /// What the user chose in Preferences. An absent saved value is `System`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +34,19 @@ impl LanguagePref {
             Self::Locale(tag) => Some(tag),
         }
     }
+
+    /// Whether this is the pseudo-locale, the testing aid that brackets,
+    /// accents and lengthens every string.
+    pub fn is_pseudo_locale(&self) -> bool {
+        matches!(self, Self::Locale(tag) if tag.eq_ignore_ascii_case(EN_XA))
+    }
+}
+
+/// The locale `pref` renders in: the negotiation [`crate::I18n::new`] runs,
+/// without building its catalogs. Under `System` it reads the operating
+/// system's language list.
+pub fn resolved_locale(pref: &LanguagePref) -> &'static str {
+    negotiate(&requested(&requested_tags(pref)))
 }
 
 /// The best available locale for `requested`, most wanted first: `tr-TR`
@@ -131,4 +144,31 @@ fn resolves<M: DataMarker>(
 /// script variants of an available locale are not lost.
 pub(crate) fn is_dropped(requested: &[LanguageIdentifier], resolved: &str) -> bool {
     resolved == EN_US && requested.first().is_none_or(|first| first.language != "en")
+}
+
+#[cfg(test)]
+mod resolved_tests {
+    use super::*;
+
+    fn tag(tag: &str) -> LanguagePref {
+        LanguagePref::Locale(tag.to_owned())
+    }
+
+    #[test]
+    fn a_locale_resolves_as_the_catalogs_would() {
+        assert_eq!(resolved_locale(&tag("en-XA")), EN_XA);
+        assert_eq!(resolved_locale(&tag("en-GB")), EN_US);
+        assert_eq!(resolved_locale(&tag("tr-TR")), EN_US);
+        for pref in [LanguagePref::System, tag("en-XA"), tag("xx-YY")] {
+            assert_eq!(resolved_locale(&pref), crate::I18n::new(&pref).locale());
+        }
+    }
+
+    #[test]
+    fn only_the_pseudo_locale_is_the_pseudo_locale() {
+        assert!(tag("en-XA").is_pseudo_locale());
+        assert!(tag("en-xa").is_pseudo_locale());
+        assert!(!tag("en-US").is_pseudo_locale());
+        assert!(!LanguagePref::System.is_pseudo_locale());
+    }
 }
