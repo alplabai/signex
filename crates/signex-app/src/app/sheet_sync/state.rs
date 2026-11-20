@@ -55,7 +55,8 @@ pub enum SheetSyncProblem {
 pub struct SheetSyncState {
     /// Which read of the child sheet this dialog waits for.
     pub generation: u64,
-    /// The sheet the sheet symbol is on, active when the dialog opened.
+    /// The sheet the sheet symbol is on: the sheet the dialog was asked on,
+    /// the active one or an undocked window's. Apply edits this sheet.
     pub parent: PathBuf,
     pub symbol: Uuid,
     pub symbol_name: String,

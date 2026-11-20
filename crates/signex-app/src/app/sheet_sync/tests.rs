@@ -431,3 +431,40 @@ fn a_loop_through_two_closed_sheets_is_refused() {
         "refused as a loop, not for another reason"
     );
 }
+
+/// #2618: a parent sheet closed while the dialog is open is refused by name
+/// in the Messages panel, and the dialog stays with the reason shown.
+#[test]
+fn apply_after_the_parent_sheet_closed_is_refused_with_a_messages_line() {
+    let mut rig = rig(
+        vec![pin("GONE", "passive", 2.54, true)],
+        vec![hierarchical("SDA", "input", 10.0)],
+    );
+    send(&mut rig.app, SheetSyncMsg::Requested);
+    let parent = rig
+        .app
+        .ui_state
+        .sheet_sync
+        .as_ref()
+        .expect("dialog open")
+        .parent
+        .clone();
+    rig.app.document_state.engines.remove(&parent);
+    let _ = crate::diagnostics::init_logging();
+    let mark = crate::diagnostics::newest_entry_id();
+
+    send(&mut rig.app, SheetSyncMsg::ApplyRequested);
+
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog stays");
+    assert_eq!(state.problem, Some(super::SheetSyncProblem::Stale));
+    let closed = format!("{} is no longer open", parent.display());
+    let said = crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .any(|e| {
+            e.message
+                .starts_with("Synchronize Sheet Entries and Ports:")
+                && e.message.contains(&closed)
+        });
+    assert!(said, "the Messages panel names the closed parent sheet");
+}
