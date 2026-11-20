@@ -70,7 +70,9 @@ fn the_tree_reads_as_before_in_en_us() {
         "Schematics",
         "PCB",
         "Bill of Materials",
-        "Output Jobs",
+        // The `.snxout` group reads by its UI name (DECISIONS 2026-11-17);
+        // its grouping key stays "Output Jobs".
+        "Export Jobs",
         "Libraries",
         "Settings",
         "a.snxsch",
@@ -86,7 +88,7 @@ fn the_tree_reads_as_before_in_en_us() {
     for (group, file) in [
         ("PCB", "board.snxpcb"),
         ("Bill of Materials", "parts.snxbom"),
-        ("Output Jobs", "fab.snxout"),
+        ("Export Jobs", "fab.snxout"),
     ] {
         let at = shown.iter().position(|t| t == file).expect("the file row");
         assert_eq!(shown[at - 3], group, "{shown:#?}");
@@ -101,7 +103,7 @@ fn the_tree_follows_a_language_switch() {
     for english in [
         "Schematics",
         "Bill of Materials",
-        "Output Jobs",
+        "Export Jobs",
         "Libraries",
         "Settings",
         "gone.snxsch  (missing)",

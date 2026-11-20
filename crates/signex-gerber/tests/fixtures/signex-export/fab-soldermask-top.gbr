@@ -1,0 +1,17 @@
+%TF.GenerationSoftware,Alp Lab,Signex*%
+%TF.FileFunction,Soldermask,Top*%
+%TF.FilePolarity,Negative*%
+%FSLAX46Y46*%
+%MOMM*%
+%TA.AperFunction,Other,PadOpening*%
+%ADD10R,1X1.2*%
+%TA.AperFunction,Other,PadOpening*%
+%ADD11C,1.6*%
+%TD*%
+G75*
+D10*
+X4000000Y-5000000D03*
+X6000000Y-5000000D03*
+D11*
+X10000000Y-8000000D03*
+M02*

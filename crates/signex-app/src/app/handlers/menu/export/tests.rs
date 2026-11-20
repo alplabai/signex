@@ -996,6 +996,7 @@ fn uncovered_pdf_characters_are_named_in_the_export_warning() {
     assert_eq!(super::uncovered_chars_warning(&[]), None, "nothing to say");
 }
 
+mod base_variant;
 mod case_probe;
 mod class_assign;
 mod class_picker;

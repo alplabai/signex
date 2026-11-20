@@ -1,30 +1,26 @@
-//! BOM (Bill of Materials) preview modal — the modal shell (header, toolbar
-//! strip, footer) that stitches together the data grid (`table`) and the
-//! Properties sidebar (`sidebar`).
-//!
-//! Extracted from `view/dialogs.rs` (ADR-0001, issue #164). The section
-//! builders were split into `bom/table.rs` and `bom/sidebar.rs` as pure code
-//! motion — the final `column!`/`row!` child order is preserved byte-for-byte,
-//! so the rendered modal is pixel-identical.
+//! The Bill of Materials export dialog (mockup row 112): header, toolbar,
+//! the data grid (`table`) beside the Properties sidebar (`sidebar`,
+//! `rules`), and the footer (`footer`).
 
 use super::*;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
 use signex_i18n::{ids, t};
-use signex_widgets::{raw, text};
 
 use super::widgets::{draggable_header, os_title_bar_slot};
-use crate::styles::dialog_button;
 
+mod footer;
 mod rules;
 mod sidebar;
 mod table;
+mod toolbar;
+#[cfg(test)]
+mod view_tests;
 
 pub(in crate::app) use table::{default_column_width, sorted_row_order};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+/// Width of the Properties sidebar, as drawn.
+const SIDEBAR_W: f32 = 300.0;
 
 impl Signex {
     pub(in crate::app::view) fn view_bom_preview(&self) -> Element<'_, Message> {
@@ -45,19 +41,27 @@ impl Signex {
     pub(in crate::app::view) fn view_bom_preview_body(&self) -> Element<'_, Message> {
         self.view_bom_preview_body_inner(false)
     }
+
+    /// The project file the BOM is built for (the document's own name when
+    /// it has no project): the header's subtitle.
+    fn bom_subject(&self, source: &std::path::Path) -> Option<String> {
+        let project = self.document_state.document_project(source);
+        let path = project.map_or(source, |p| p.path.as_path());
+        path.file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+    }
+
     fn view_bom_preview_body_inner(&self, draggable: bool) -> Element<'_, Message> {
         let Some(ref preview) = self.document_state.bom_preview else {
             return container(Space::new()).boxed();
         };
         let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
         let i18n = self.ui_state.i18n.as_ref();
-        let text_muted = crate::styles::ti(tokens.text_secondary);
-        let border_c = crate::styles::ti(tokens.border);
+        let line = crate::styles::tokens::resolve(tokens).line_soft;
 
         let header_content: Element<'_, Message> = super::graphite::titled_header(
             t!(i18n, ids::DIALOG_TITLE_BOM).into_string(),
-            self.detached_modal_subtitle(crate::app::state::ModalId::BomPreview),
+            self.bom_subject(&preview.source),
             Message::BomPreview(BomPreviewMsg::Close),
             tokens,
         );
@@ -71,189 +75,17 @@ impl Signex {
             os_title_bar_slot()
         };
 
-        let body = self.bom_table();
-        let sidebar = self.bom_sidebar();
-
-        // A named variant is the user's; the base view is ours.
-        let active_variant_label = preview
-            .options
-            .active_variant
-            .clone()
-            .unwrap_or_else(|| t!(i18n, ids::BOM_VARIANT_BASE).into_string());
-        let row_count = preview.table.rows.len();
-        let total_count = preview.table.rows.len();
-        let status_label = match price_status(i18n, &preview.table, &preview.options.columns) {
-            Some(prices) => t!(
-                i18n,
-                ids::BOM_STATUS_VISIBLE_PRICES,
-                "visible" => row_count,
-                "total" => total_count,
-                "prices" => prices
-            ),
-            None => t!(
-                i18n,
-                ids::BOM_STATUS_VISIBLE,
-                "visible" => row_count,
-                "total" => total_count
-            ),
-        };
-        let variant_label = t!(
-            i18n,
-            ids::BOM_CURRENT_VARIANT,
-            "variant" => active_variant_label.as_str()
-        );
-
-        // Variant dropdown for the top toolbar — placeholder in the
-        // header strip area, sits to the left. (i) info badge sits
-        // on the right.
-        let variant_dropdown: Element<'_, Message> = if preview.variants.is_empty() {
-            text(t!(i18n, ids::BOM_VARIANT_IS, "variant" => active_variant_label.as_str()))
-                .size(TS.body)
-                .color(text_muted)
-                .boxed()
-        } else {
-            container(
-                row![
-                    Space::new().width(Length::Fill),
-                    text(signex_i18n::UserText::new(active_variant_label.clone()))
-                        .size(TS.body)
-                        .color(text_c),
-                    Space::new().width(Length::Fill),
-                    // raw: a disclosure glyph, not language.
-                    text(raw("\u{25BE}")).size(TS.caption).color(text_c),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .width(160)
-            .height(24)
-            .padding([0, 10])
-            .style(move |_: &iced::Theme| iced::widget::container::Style {
-                background: Some(iced::Background::Color(iced::Color::from_rgba(
-                    1.0, 1.0, 1.0, 0.04,
-                ))),
-                border: iced::Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border_c,
-                    ..iced::Border::default()
-                },
-                ..iced::widget::container::Style::default()
-            })
-            .boxed()
-        };
-        // raw: the info badge's "i" is a symbol, not a word.
-        let info_badge: Element<'_, Message> =
-            container(text(raw("i")).size(TS.body).color(iced::Color::WHITE))
-                .width(20)
-                .height(20)
-                .align_x(iced::alignment::Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center)
-                .style(move |_: &iced::Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(iced::Color {
-                        a: 0.7,
-                        ..crate::styles::ti(tokens.accent)
-                    })),
-                    border: iced::Border {
-                        width: 0.0,
-                        radius: 10.0.into(),
-                        color: iced::Color::TRANSPARENT,
-                        ..iced::Border::default()
-                    },
-                    ..iced::widget::container::Style::default()
-                })
-                .boxed();
-        let toolbar_strip = container(
-            row![
-                variant_dropdown,
-                Space::new().width(Length::Fill),
-                info_badge,
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([SP.m, 14.0])
-        .width(Length::Fill)
-        .style(crate::styles::toolbar_strip(tokens));
-
-        // Main row: scrollable table + 1 px divider + sidebar.
-        // Body now uses nested scrollables (vertical inside
-        // horizontal) so the horizontal bar lives below the last
-        // row instead of clipping it — no bottom-padding hack
-        // needed.
+        // Table, a hairline, then the Properties sidebar.
         let main_row = row![
-            container(body)
+            container(self.bom_table())
                 .width(Length::Fill)
-                .height(Length::Fill)
-                .padding([6.0, SP.m]),
-            container(Space::new())
-                .width(1)
-                .height(Length::Fill)
-                .style(move |_: &iced::Theme| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(border_c)),
-                    ..iced::widget::container::Style::default()
-                }),
-            container(sidebar)
-                .width(Length::Fixed(320.0))
+                .height(Length::Fill),
+            hairline(line, true),
+            container(self.bom_sidebar())
+                .width(Length::Fixed(SIDEBAR_W))
                 .height(Length::Fill),
         ]
         .height(Length::Fill);
-
-        // Combined footer: status text on the left + Export button
-        // on the right, in ONE strip with bottom-rounded radius.
-        // Dropping the separate status / button rows removes the
-        // empty band between them and tightens the modal's
-        // bottom chrome.
-        let issue_badge: Element<'_, Message> =
-            match rules::issue_count_label(&preview.validation_report) {
-                Some(label) => {
-                    let severity = if preview.validation_report.has_errors() {
-                        signex_output::BomIssueSeverity::Error
-                    } else {
-                        signex_output::BomIssueSeverity::Warning
-                    };
-                    // raw: the issue count comes from signex-bom (#2060).
-                    text(raw(label))
-                        .size(TS.caption)
-                        .color(rules::severity_color(severity, text_muted, tokens))
-                        .boxed()
-                }
-                None => text(t!(i18n, ids::BOM_NO_ISSUES))
-                    .size(TS.caption)
-                    .color(text_muted)
-                    .boxed(),
-            };
-        let footer = container(
-            row![
-                text(status_label).size(TS.caption).color(text_muted),
-                Space::new().width(12),
-                // raw: a separator glyph, not language.
-                text(raw("|")).size(TS.caption).color(text_muted),
-                Space::new().width(12),
-                text(variant_label).size(TS.caption).color(text_muted),
-                Space::new().width(Length::Fill),
-                issue_badge,
-                Space::new().width(12),
-                dialog_button(
-                    t!(i18n, ids::DIALOG_BOM_EXPORT),
-                    super::graphite::call_to_action(tokens),
-                    Some(Message::BomPreview(BomPreviewMsg::Export)),
-                    tokens,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([SP.s, SP.l])
-        .width(Length::Fill)
-        .style(crate::styles::modal_footer_strip(tokens));
-
-        // 1 px theme-border line — same style the main app uses
-        // between the menu bar and the document tab strip
-        // (`crate::styles::chrome_separator`). The inner Space is
-        // sized Fill on both axes so iced doesn't shrink the
-        // container to zero height in some layout scenarios.
-        let title_separator = container(Space::new().width(Length::Fill).height(Length::Fill))
-            .width(Length::Fill)
-            .height(1)
-            .style(crate::styles::chrome_separator(tokens));
 
         let (modal_w, modal_h): (Length, Length) = if draggable {
             let (w, h) = self.bom_modal_size();
@@ -262,10 +94,18 @@ impl Signex {
             (Length::Fill, Length::Fill)
         };
         let dialog = container(
-            column![header, title_separator, toolbar_strip, main_row, footer]
-                .spacing(0)
-                .width(modal_w)
-                .height(modal_h),
+            column![
+                header,
+                hairline(line, false),
+                self.bom_toolbar(),
+                hairline(line, false),
+                main_row,
+                hairline(line, false),
+                self.bom_footer(),
+            ]
+            .spacing(0)
+            .width(modal_w)
+            .height(modal_h),
         )
         .style(crate::styles::modal_card(tokens))
         .clip(true);
@@ -273,99 +113,19 @@ impl Signex {
     }
 }
 
-/// The footer's price summary while a price column is shown (#1023): the
-/// total per currency, and how many lines have no cached price (no price
-/// for their library row or MPN). `None` while no price column is shown.
-pub(in crate::app) fn price_status(
-    i18n: &signex_i18n::I18n,
-    table: &signex_output::BomTable,
-    columns: &[signex_output::BomColumn],
-) -> Option<String> {
-    if !columns
-        .iter()
-        .any(|column| signex_output::BomColumn::PRICES.contains(column))
-    {
-        return None;
-    }
-    let totals = signex_output::bom::price_totals(table);
-    if totals.is_empty() {
-        return Some(i18n.message_plain(ids::BOM_PRICE_NONE, &[]));
-    }
-    let unpriced = table.rows.iter().filter(|row| row.price.is_none()).count();
-    // Amounts and currency codes are written the same in every language.
-    let sums: Vec<String> = totals
-        .iter()
-        .map(|(currency, total)| format!("{} {currency}", signex_output::bom::money(*total)))
-        .collect();
-    let sums = signex_i18n::Arg::from(sums.join(" + "));
-    Some(if unpriced > 0 {
-        i18n.message_plain(
-            ids::BOM_PRICE_TOTAL_UNPRICED,
-            &[("sums", sums), ("count", unpriced.into())],
-        )
+/// A 1 px rule in `color`: across the dialog, or down it when `vertical`.
+fn hairline<'a>(color: iced::Color, vertical: bool) -> Element<'a, Message> {
+    let (w, h) = if vertical {
+        (Length::Fixed(crate::styles::HAIRLINE), Length::Fill)
     } else {
-        i18n.message_plain(ids::BOM_PRICE_TOTAL, &[("sums", sums)])
-    })
-}
-
-#[cfg(test)]
-mod price_status_tests {
-    use signex_output::bom::BomPrice;
-    use signex_output::{BomColumn, BomRow, BomTable};
-
-    fn price_status(table: &BomTable, columns: &[BomColumn]) -> Option<String> {
-        super::price_status(&signex_i18n::I18n::en_us(), table, columns)
-    }
-
-    fn row(price: Option<(&str, f64)>) -> BomRow {
-        BomRow {
-            price: price.map(|(currency, extended_price)| BomPrice {
-                distributor: "D".into(),
-                currency: currency.into(),
-                unit_price: extended_price,
-                extended_price,
-                buy_qty: 1,
-                stock: None,
-                age: String::new(),
-            }),
-            ..Default::default()
-        }
-    }
-
-    #[test]
-    fn the_footer_shows_totals_and_unpriced_lines_only_with_a_price_column() {
-        let table = BomTable {
-            rows: vec![row(Some(("USD", 1.5))), row(Some(("EUR", 2.0))), row(None)],
-            ..Default::default()
-        };
-        assert_eq!(price_status(&table, &[BomColumn::Name]), None);
-        assert_eq!(
-            price_status(&table, &[BomColumn::UnitPrice]).as_deref(),
-            Some("Total 2.00 EUR + 1.50 USD · 1 line without a cached price")
-        );
-        let two_unpriced = BomTable {
-            rows: vec![row(Some(("USD", 1.5))), row(None), row(None)],
-            ..Default::default()
-        };
-        assert_eq!(
-            price_status(&two_unpriced, &[BomColumn::UnitPrice]).as_deref(),
-            Some("Total 1.50 USD · 2 lines without a cached price")
-        );
-        let all_priced = BomTable {
-            rows: vec![row(Some(("USD", 1.5)))],
-            ..Default::default()
-        };
-        assert_eq!(
-            price_status(&all_priced, &[BomColumn::UnitPrice]).as_deref(),
-            Some("Total 1.50 USD")
-        );
-        let none = BomTable {
-            rows: vec![row(None)],
-            ..Default::default()
-        };
-        assert_eq!(
-            price_status(&none, &[BomColumn::ExtendedPrice]).as_deref(),
-            Some("no cached prices")
-        );
-    }
+        (Length::Fill, Length::Fixed(crate::styles::HAIRLINE))
+    };
+    container(Space::new().width(Length::Fill).height(Length::Fill))
+        .width(w)
+        .height(h)
+        .style(move |_: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(color)),
+            ..iced::widget::container::Style::default()
+        })
+        .boxed()
 }
