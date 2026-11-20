@@ -530,6 +530,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             editor.state.apply_pad_link(msg);
             editor.canvas_cache.clear();
         }
+        FootprintEditorMsg::SketchCloseGapRequested { keep, merge } => {
+            sketch::close_gap::apply(editor, keep, merge)
+        }
     }
 }
 
@@ -718,6 +721,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         // This pad / All pads records its own step (`record_edit`) when it
         // changes the sketch; Cancel changes nothing.
         PadScopeAnswered(_) => false,
+        // Close gap records its own step (`record_edit`), only when it joins.
+        SketchCloseGapRequested { .. } => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

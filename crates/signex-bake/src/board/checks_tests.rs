@@ -11,6 +11,7 @@ use signex_sketch::parameter::resolve;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
+use signex_types::pcb::Point;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 use super::*;
@@ -124,8 +125,8 @@ fn a_clean_rectangle_with_its_openings_inside_passes() {
     assert_eq!(checks.openings_inside, CheckState::Passed);
     assert_eq!(
         checks.inside_corners,
-        CheckState::NotChecked(NotChecked::NeedsRouterDiameter),
-        "the router tool diameter has no source yet"
+        CheckState::NotChecked(NotChecked::NoRouterTool),
+        "no router tool diameter was given"
     );
     assert_eq!(checks.failures().count(), 0);
 }
@@ -164,9 +165,20 @@ fn an_open_outline_names_both_open_ends_and_the_gap() {
 
     let found = findings(&checks.closed);
     assert_eq!(found.len(), 1, "{found:?}");
-    let Finding::OpenEnd { edges, gap_mm, at } = &found[0] else {
+    let Finding::OpenEnd {
+        edges,
+        ends,
+        gap_mm,
+        at,
+    } = &found[0]
+    else {
         panic!("an open end: {found:?}");
     };
+    let mut ends = ends.clone();
+    ends.sort_by_key(|id| id.0);
+    let mut open_points = vec![corners[0], short];
+    open_points.sort_by_key(|id| id.0);
+    assert_eq!(ends, open_points, "the two points Close gap joins");
     let mut edges = edges.clone();
     edges.sort_by_key(|id| id.0);
     let mut expected = vec![bottom, left];
@@ -316,4 +328,226 @@ fn a_bake_refusal_names_the_entity_it_is_about() {
     };
     assert_eq!(refusal.place(), Some(edge));
     assert_eq!(BoardBakeError::OutlineCount { count: 2 }.place(), None);
+}
+
+// ── Inside corners (#179d, decision 3) ──────────────────────────────────
+
+/// An L-shaped board, counter-clockwise: its one concave corner is at
+/// (10, 10).
+const L_BOARD: [(f64, f64); 6] = [
+    (0.0, 0.0),
+    (20.0, 0.0),
+    (20.0, 10.0),
+    (10.0, 10.0),
+    (10.0, 20.0),
+    (0.0, 20.0),
+];
+
+impl Sketch {
+    fn checks_with_router(&self, diameter: Option<f64>) -> OutlineChecks {
+        let solve = self.solve();
+        outline_checks_with(&self.data, &solve, &solve.params, diameter)
+    }
+
+    fn arc(
+        &mut self,
+        center: SketchEntityId,
+        start: SketchEntityId,
+        end: SketchEntityId,
+        sweep_ccw: bool,
+    ) -> SketchEntityId {
+        self.add(EntityKind::Arc {
+            center,
+            start,
+            end,
+            sweep_ccw,
+        })
+    }
+
+    /// [`L_BOARD`] with its concave corner rounded by a tangent arc of
+    /// `radius`; returns the arc.
+    fn filleted_l(&mut self, radius: f64) -> SketchEntityId {
+        let r = radius;
+        let p: Vec<SketchEntityId> = [
+            (0.0, 0.0),
+            (20.0, 0.0),
+            (20.0, 10.0),
+            (10.0 + r, 10.0),
+            (10.0, 10.0 + r),
+            (10.0, 20.0),
+            (0.0, 20.0),
+        ]
+        .iter()
+        .map(|&(x, y)| self.point(x, y))
+        .collect();
+        let center = self.point(10.0 + r, 10.0 + r);
+        let mut edges = vec![
+            self.line(p[0], p[1]),
+            self.line(p[1], p[2]),
+            self.line(p[2], p[3]),
+        ];
+        let arc = self.arc(center, p[3], p[4], false);
+        edges.push(arc);
+        edges.extend([
+            self.line(p[4], p[5]),
+            self.line(p[5], p[6]),
+            self.line(p[6], p[0]),
+        ]);
+        for edge in edges {
+            self.get(edge).board_outline = true;
+        }
+        arc
+    }
+}
+
+/// The corner findings of `checks`, as (entity, at, radius, tool radius).
+fn corners(checks: &OutlineChecks) -> Vec<(SketchEntityId, Point, f64, f64)> {
+    findings(&checks.inside_corners)
+        .iter()
+        .map(|f| match f {
+            Finding::TightCorner {
+                entity,
+                at,
+                radius_mm,
+                tool_radius_mm,
+            } => (*entity, *at, *radius_mm, *tool_radius_mm),
+            other => panic!("a tight corner: {other:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn a_sharp_concave_outline_corner_is_tighter_than_the_router_either_way_round() {
+    let mut reversed = L_BOARD;
+    reversed.reverse();
+    for board in [L_BOARD, reversed] {
+        let mut s = Sketch::new();
+        s.outline(&board);
+
+        let checks = s.checks_with_router(Some(2.0));
+
+        let found = corners(&checks);
+        assert_eq!(found.len(), 1, "only the concave corner: {found:?}");
+        let (entity, at, radius, tool) = found[0];
+        assert!(
+            (at.x - 10.0).abs() < 1e-9 && (at.y - 10.0).abs() < 1e-9,
+            "{at:?}"
+        );
+        assert_eq!(radius, 0.0);
+        assert_eq!(tool, 1.0);
+        let corner = s.get(entity).kind.clone();
+        assert_eq!(
+            corner,
+            EntityKind::Point { x: 10.0, y: 10.0 },
+            "the corner point, so a click selects it"
+        );
+        assert_eq!(findings(&checks.inside_corners)[0].place(), [entity]);
+    }
+}
+
+#[test]
+fn a_convex_board_has_no_inside_corner_to_check() {
+    let mut s = Sketch::new();
+    s.outline(&BOARD);
+    assert_eq!(
+        s.checks_with_router(Some(2.0)).inside_corners,
+        CheckState::Passed
+    );
+}
+
+#[test]
+fn a_fillet_at_least_the_tool_radius_passes_and_a_smaller_one_is_named() {
+    let mut s = Sketch::new();
+    s.filleted_l(1.5);
+    let checks = s.checks_with_router(Some(2.0));
+    assert_eq!(checks.closed, CheckState::Passed);
+    assert_eq!(checks.inside_corners, CheckState::Passed, "R 1.5 >= R 1.0");
+
+    let mut s = Sketch::new();
+    let arc = s.filleted_l(0.5);
+    let found = corners(&s.checks_with_router(Some(2.0)));
+    assert_eq!(
+        found.len(),
+        1,
+        "the arc only, its tangent ends are no corners: {found:?}"
+    );
+    let (entity, at, radius, tool) = found[0];
+    assert_eq!(entity, arc);
+    assert!((radius - 0.5).abs() < 1e-9, "{radius}");
+    assert_eq!(tool, 1.0);
+    // The middle of the arc, toward the corner it rounds.
+    assert!(
+        at.x < 10.5 && at.y < 10.5 && at.x > 10.0 && at.y > 10.0,
+        "{at:?}"
+    );
+}
+
+#[test]
+fn every_corner_of_a_cutout_is_checked_and_its_edge_radius_counts() {
+    let mut s = Sketch::new();
+    s.outline(&BOARD);
+    let cutout = s.rect(20.0, 10.0, 30.0, 20.0);
+    s.get(cutout[0]).board_cutout = Some(BoardCutoutAttr {
+        edge_radius_expr: None,
+        through: true,
+    });
+
+    let found = corners(&s.checks_with_router(Some(2.0)));
+    assert_eq!(found.len(), 4, "{found:?}");
+    assert!(found.iter().all(|&(_, _, radius, _)| radius == 0.0));
+
+    s.get(cutout[0]).board_cutout = Some(BoardCutoutAttr {
+        edge_radius_expr: Some("1.2mm".into()),
+        through: true,
+    });
+    assert_eq!(
+        s.checks_with_router(Some(2.0)).inside_corners,
+        CheckState::Passed,
+        "an edge radius of 1.2 mm is cut by a 2 mm tool"
+    );
+}
+
+#[test]
+fn a_round_cutout_smaller_than_the_tool_is_named_and_a_drilled_hole_is_not() {
+    let mut s = Sketch::new();
+    s.outline(&BOARD);
+    let cutout = s.circle(10.0, 10.0, 0.5);
+    s.get(cutout).board_cutout = Some(BoardCutoutAttr {
+        edge_radius_expr: None,
+        through: true,
+    });
+    let hole = s.circle(40.0, 10.0, 0.3);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+
+    let found = corners(&s.checks_with_router(Some(2.0)));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].0, cutout);
+    assert!((found[0].2 - 0.5).abs() < 1e-9);
+}
+
+#[test]
+fn without_a_router_tool_or_an_outline_the_corners_are_not_checked() {
+    let mut s = Sketch::new();
+    s.outline(&L_BOARD);
+    assert_eq!(
+        s.checks_with_router(None).inside_corners,
+        CheckState::NotChecked(NotChecked::NoRouterTool)
+    );
+    let mut s = Sketch::new();
+    s.rect(0.0, 0.0, 10.0, 10.0);
+    assert_eq!(
+        s.checks_with_router(Some(2.0)).inside_corners,
+        CheckState::NotChecked(NotChecked::NoOutline)
+    );
+}
+
+/// Decision 3: every outline check warns only. A board whose inside corner
+/// fails still bakes.
+#[test]
+fn a_failing_corner_check_does_not_stop_the_bake() {
+    let mut s = Sketch::new();
+    s.outline(&L_BOARD);
+    assert_eq!(corners(&s.checks_with_router(Some(2.0))).len(), 1);
+    let baked = crate::board::bake_board(&s.data, &[]).expect("the board still bakes");
+    assert!(baked.outline.is_some_and(|o| !o.is_empty()));
 }

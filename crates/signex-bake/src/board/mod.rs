@@ -14,13 +14,14 @@ mod features;
 mod geometry;
 mod items;
 mod slot;
+mod inside_corners;
 
 #[cfg(test)]
 mod tests;
 
 pub use checks::{
     CheckState, Finding, NotChecked, OutlineCheck, OutlineChecks, outline_checks,
-    outline_checks_after,
+    outline_checks_after, outline_checks_with, outline_checks_with_router,
 };
 pub use error::BoardBakeError;
 pub use items::{bake_board_items, bake_board_with_items, baked_item_count};

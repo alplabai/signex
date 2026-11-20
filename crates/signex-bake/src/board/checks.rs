@@ -1,14 +1,15 @@
 //! Outline checks of a board sketch (mockup 179d): the outline is one closed
-//! loop, it does not cross itself, and every opening lies inside it. The
-//! checks read the solve the editor already has (no second solve) and walk
-//! the outline with the bake's own profile walk, so they see what Bake
-//! writes. Each finding names the sketch entities of its place. Rules:
-//! `docs/PCB_SKETCH.md`, "Outline checks".
+//! loop, it does not cross itself, every opening lies inside it, and no
+//! inside corner is tighter than the router tool cuts. The checks read the
+//! solve the editor already has (no second solve) and walk the outline with
+//! the bake's own profile walk, so they see what Bake writes. Each finding
+//! names the sketch entities of its place. Every check warns only: Bake
+//! still runs. Rules: `docs/PCB_SKETCH.md`, "Outline checks".
 
 use std::collections::{HashMap, HashSet};
 
 use signex_sketch::baked_kinds::BakedKind;
-use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::entity::EntityKind;
 use signex_sketch::geom::{
     Point2, Segment2, SegmentIntersection, point_in_polygon, point_to_segment_distance,
     segment_segment_intersection,
@@ -18,9 +19,11 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 use signex_types::pcb::Point;
 
-use super::geometry::{boundary, circle, point};
+use super::geometry::{boundary, circle};
+use super::inside_corners::tight_corners;
 use super::{BoardBakeError, Context};
 use crate::eval_util::{build_ctx, eval_mm};
+use crate::open_ends::open_ends;
 use crate::profile::{ARC_SAMPLES, trace_closed_profile_entities};
 use crate::traced_loops::TracedLoops;
 
@@ -77,18 +80,20 @@ pub enum NotChecked {
     /// A point of the outline has no solved position yet (the solve is
     /// behind an edit).
     Unsolved,
-    /// The check needs the router tool diameter, which nothing gives yet.
-    NeedsRouterDiameter,
+    /// The project's fab profile names no router tool diameter.
+    NoRouterTool,
 }
 
 /// A failure and its place.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Finding {
     /// The outline stops at an open end. `edges` are the edges whose ends
-    /// do not meet; `gap_mm` the distance to the nearest other open end and
-    /// `at` the middle of the gap (the end itself when nothing pairs it).
+    /// do not meet and `ends` their open points (the pair Close gap joins);
+    /// `gap_mm` the distance to the nearest other open end and `at` the
+    /// middle of the gap (the end itself when nothing pairs it).
     OpenEnd {
         edges: Vec<SketchEntityId>,
+        ends: Vec<SketchEntityId>,
         gap_mm: Option<f64>,
         at: Option<Point>,
     },
@@ -113,6 +118,15 @@ pub enum Finding {
         entity: SketchEntityId,
         kind: BakedKind,
     },
+    /// An inside corner at `at` is tighter than the router tool cuts:
+    /// `radius_mm` (0 for a sharp corner, an arc's radius for a fillet) is
+    /// under `tool_radius_mm`. `entity` is the corner point or the arc.
+    TightCorner {
+        entity: SketchEntityId,
+        at: Point,
+        radius_mm: f64,
+        tool_radius_mm: f64,
+    },
 }
 
 impl Finding {
@@ -124,9 +138,9 @@ impl Finding {
             Self::SeveralLoops { seeds, .. } => seeds,
             Self::Crossing { edges, .. } => edges,
             Self::Branching { edge } => std::slice::from_ref(edge),
-            Self::Untraceable { entity } | Self::OpeningOutside { entity, .. } => {
-                std::slice::from_ref(entity)
-            }
+            Self::Untraceable { entity }
+            | Self::OpeningOutside { entity, .. }
+            | Self::TightCorner { entity, .. } => std::slice::from_ref(entity),
         }
     }
 }
@@ -154,19 +168,40 @@ impl OutlineChecks {
 }
 
 /// The checks after a solve attempt: none when the sketch did not solve.
+/// No router tool is known, so the inside corners are not checked.
 pub fn outline_checks_after(
     sketch: &SketchData,
     solve: Option<&FullSolveOutput>,
 ) -> Option<OutlineChecks> {
-    solve.map(|solve| outline_checks(sketch, solve, &solve.params))
+    outline_checks_with_router(sketch, solve, None)
+}
+
+/// [`outline_checks_after`] with the project's router tool diameter in mm.
+pub fn outline_checks_with_router(
+    sketch: &SketchData,
+    solve: Option<&FullSolveOutput>,
+    router_tool_diameter: Option<f64>,
+) -> Option<OutlineChecks> {
+    solve.map(|solve| outline_checks_with(sketch, solve, &solve.params, router_tool_diameter))
 }
 
 /// Check the outline of `sketch` at the positions of `solve`, resolved
-/// with `params`.
+/// with `params`, without a router tool.
 pub fn outline_checks(
     sketch: &SketchData,
     solve: &FullSolveOutput,
     params: &HashMap<String, f64>,
+) -> OutlineChecks {
+    outline_checks_with(sketch, solve, params, None)
+}
+
+/// [`outline_checks`] with the router tool diameter in mm: `None` leaves
+/// the inside corners not checked.
+pub fn outline_checks_with(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    params: &HashMap<String, f64>,
+    router_tool_diameter: Option<f64>,
 ) -> OutlineChecks {
     let ctx = Context {
         sketch,
@@ -174,19 +209,19 @@ pub fn outline_checks(
         params,
     };
     let not_checked = |why| CheckState::NotChecked(why);
-    let (closed, no_crossing, openings_inside) = match trace_outline(&ctx) {
-        Outline::Missing => (
-            not_checked(NotChecked::NoOutline),
-            not_checked(NotChecked::NoOutline),
-            not_checked(NotChecked::NoOutline),
-        ),
-        Outline::Unsolved => (
-            not_checked(NotChecked::Unsolved),
-            not_checked(NotChecked::Unsolved),
-            not_checked(NotChecked::Unsolved),
-        ),
+    let all_not_checked = |why| (not_checked(why), not_checked(why), not_checked(why));
+    let (closed, no_crossing, openings_inside, inside_corners) = match trace_outline(&ctx) {
+        Outline::Missing => {
+            let (a, b, c) = all_not_checked(NotChecked::NoOutline);
+            (a, b, c, not_checked(NotChecked::NoOutline))
+        }
+        Outline::Unsolved => {
+            let (a, b, c) = all_not_checked(NotChecked::Unsolved);
+            (a, b, c, not_checked(NotChecked::Unsolved))
+        }
         Outline::Failed(findings) => (
             CheckState::Failed(findings),
+            not_checked(NotChecked::NeedsClosedOutline),
             not_checked(NotChecked::NeedsClosedOutline),
             not_checked(NotChecked::NeedsClosedOutline),
         ),
@@ -194,13 +229,17 @@ pub fn outline_checks(
             CheckState::Passed,
             state_of(crossings(&outline)),
             state_of(openings_outside(&ctx, &outline)),
+            match router_tool_diameter.filter(|d| d.is_finite() && *d > 0.0) {
+                Some(diameter) => state_of(tight_corners(&ctx, &outline, diameter)),
+                None => not_checked(NotChecked::NoRouterTool),
+            },
         ),
     };
     OutlineChecks {
         closed,
         no_crossing,
         openings_inside,
-        inside_corners: not_checked(NotChecked::NeedsRouterDiameter),
+        inside_corners,
     }
 }
 
@@ -220,9 +259,11 @@ enum Outline {
     Closed(ClosedOutline),
 }
 
-/// The one closed outline: its polygon and, per polygon segment (from
-/// vertex `i` to `i + 1`), the sketch edge it lies on.
-struct ClosedOutline {
+/// The one closed outline: the edge it was traced from, its polygon and,
+/// per polygon segment (from vertex `i` to `i + 1`), the sketch edge it
+/// lies on.
+pub(super) struct ClosedOutline {
+    pub(super) seed: SketchEntityId,
     polygon: Vec<Point2>,
     edge_of_segment: Vec<SketchEntityId>,
 }
@@ -259,7 +300,13 @@ fn trace_outline(ctx: &Context<'_>) -> Outline {
         return Outline::Missing;
     }
     if open {
-        findings.extend(open_ends(ctx));
+        let ends = open_ends(ctx.sketch, ctx.solve, |e| e.board_outline);
+        findings.extend(ends.into_iter().map(|end| Finding::OpenEnd {
+            edges: end.edges,
+            ends: end.ends,
+            gap_mm: end.gap_mm,
+            at: end.at,
+        }));
     }
     if closed.len() > 1 {
         findings.push(Finding::SeveralLoops {
@@ -274,73 +321,6 @@ fn trace_outline(ctx: &Context<'_>) -> Outline {
         _ if findings.is_empty() => Outline::Missing,
         _ => Outline::Failed(findings),
     }
-}
-
-/// The open ends of the outline: endpoints of outline edges that no other
-/// baking edge shares (the walk stops there), paired nearest first.
-fn open_ends(ctx: &Context<'_>) -> Vec<Finding> {
-    let mut degree: HashMap<SketchEntityId, usize> = HashMap::new();
-    for (a, b) in ctx.tagged(|_| true).filter_map(edge_ends) {
-        *degree.entry(a).or_default() += 1;
-        *degree.entry(b).or_default() += 1;
-    }
-    let mut ends: Vec<(SketchEntityId, Point)> = Vec::new();
-    for entity in ctx.tagged(|e| e.board_outline) {
-        let Some((a, b)) = edge_ends(entity) else {
-            continue;
-        };
-        for end in [a, b] {
-            if degree.get(&end) == Some(&1)
-                && let Ok(at) = point(ctx, end, KIND)
-            {
-                ends.push((entity.id, at));
-            }
-        }
-    }
-    let mut out = Vec::new();
-    while !ends.is_empty() {
-        let (edge, at) = ends.remove(0);
-        let nearest = ends
-            .iter()
-            .enumerate()
-            .map(|(i, (_, other))| (i, distance(at, *other)))
-            .min_by(|a, b| a.1.total_cmp(&b.1));
-        let Some((i, gap)) = nearest else {
-            out.push(Finding::OpenEnd {
-                edges: vec![edge],
-                gap_mm: None,
-                at: Some(at),
-            });
-            break;
-        };
-        let (other_edge, other) = ends.remove(i);
-        let mut edges = vec![edge];
-        if other_edge != edge {
-            edges.push(other_edge);
-        }
-        out.push(Finding::OpenEnd {
-            edges,
-            gap_mm: Some(gap),
-            at: Some(Point {
-                x: (at.x + other.x) / 2.0,
-                y: (at.y + other.y) / 2.0,
-            }),
-        });
-    }
-    out
-}
-
-/// The two endpoints the profile walk joins an edge by; `None` for points
-/// and circles.
-fn edge_ends(entity: &Entity) -> Option<(SketchEntityId, SketchEntityId)> {
-    match entity.kind {
-        EntityKind::Line { start, end } | EntityKind::Arc { start, end, .. } => Some((start, end)),
-        EntityKind::Point { .. } | EntityKind::Circle { .. } => None,
-    }
-}
-
-fn distance(a: Point, b: Point) -> f64 {
-    (a.x - b.x).hypot(a.y - b.y)
 }
 
 fn to_point2(p: Point) -> Point2 {
@@ -368,6 +348,7 @@ impl ClosedOutline {
             edge_of_segment = vec![seed; polygon.len()];
         }
         Self {
+            seed,
             polygon,
             edge_of_segment,
         }

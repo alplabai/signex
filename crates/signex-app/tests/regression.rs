@@ -766,3 +766,7 @@ mod sketch_reference;
 // Midpoint / Centre / Intersection snaps that land their constraint.
 #[path = "regression/sketch_create_inference.rs"]
 mod sketch_create_inference;
+// Decisions 3 and 4 (#179d, #190): the router tool of the project's fab tier
+// and the inside-corner check, and Close gap on both hosts.
+#[path = "regression/board_sketch_router.rs"]
+mod board_sketch_router;

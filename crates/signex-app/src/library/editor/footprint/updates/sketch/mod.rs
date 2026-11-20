@@ -29,3 +29,5 @@ pub(super) mod parameters;
 pub(super) mod canvas_values;
 // Reference (driven) dimensions and pattern mirrors (#187, #188).
 pub(super) mod reference;
+// Close gap on an open profile (#190).
+pub(super) mod close_gap;

@@ -122,7 +122,7 @@ fn a_clean_outline_reads_ok_and_the_router_check_says_why_it_did_not_run() {
     assert_eq!(english(&lines[0]), "Closed: one loop");
     assert_eq!(
         english(&lines[3]),
-        "Inside corners: not checked, it needs the router tool diameter"
+        "Inside corners: not checked, the project's fab profile names no router tool"
     );
     assert!(lines.iter().all(|l| l.place.is_none()), "nothing to select");
 }
@@ -203,4 +203,118 @@ fn a_footprint_preview_keeps_no_board_result() {
     apply_footprint_primitive_edit(&mut editor, M::SketchBakePreviewToggled);
     assert!(editor.state.sketch_exit.preview);
     assert!(editor.state.sketch_exit.board_result.is_none());
+}
+
+/// #179d: with the project's router tool, a sharp inside corner fails and
+/// names its place; a convex board passes.
+#[test]
+fn with_a_router_tool_a_sharp_inside_corner_fails_and_names_its_point() {
+    let l_board = [
+        (0.0, 0.0),
+        (20.0, 0.0),
+        (20.0, 10.0),
+        (10.0, 10.0),
+        (10.0, 20.0),
+        (0.0, 20.0),
+    ];
+    let (sketch, _) = outline_sketch(&l_board);
+    let mut editor = solved_editor(sketch, true);
+    editor.state.sketch_exit.router_tool_diameter = Some(2.0);
+    let lines = lines_of(&editor);
+    let failed: Vec<&CheckLine> = lines
+        .iter()
+        .filter(|l| l.status == CheckStatus::Failed)
+        .collect();
+    assert_eq!(failed.len(), 1, "{lines:#?}");
+    assert_eq!(
+        english(failed[0]),
+        "Inside corner R 0.00 < R 1.00 at (10.00, 10.00)"
+    );
+    assert!(failed[0].place.is_some(), "a click selects the corner");
+
+    let (sketch, _) = outline_sketch(&BOARD);
+    let mut editor = solved_editor(sketch, true);
+    editor.state.sketch_exit.router_tool_diameter = Some(2.0);
+    let lines = lines_of(&editor);
+    assert_eq!(
+        english(&lines[3]),
+        "Inside corners: the router can cut them"
+    );
+    assert_eq!(lines[3].status, CheckStatus::Passed);
+}
+
+/// #190: the open-outline line carries the Close gap offer of its two ends.
+#[test]
+fn an_open_outline_line_offers_close_gap_within_the_tolerance() {
+    let (mut sketch, edges) = outline_sketch(&BOARD);
+    let plane = sketch.planes[0].id;
+    let short = SketchEntityId::new();
+    sketch.entities.push(Entity::new(
+        short,
+        plane,
+        EntityKind::Point { x: 0.0, y: 0.03 },
+    ));
+    let left = sketch
+        .entities
+        .iter_mut()
+        .find(|e| e.id == edges[3])
+        .unwrap();
+    let EntityKind::Line { start, .. } = left.kind else {
+        unreachable!()
+    };
+    left.kind = EntityKind::Line { start, end: short };
+
+    let editor = solved_editor(sketch, true);
+    let lines = lines_of(&editor);
+    let offer = lines[0].close_gap.expect("the open line offers Close gap");
+    assert!(offer.closes());
+    assert!(offer.keep == short || offer.merge == short, "{offer:?}");
+    let text = offer
+        .text()
+        .render_en_us()
+        .replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(text, "Gap 0.03 mm, closes under the 0.05 mm heal tolerance");
+    assert!(lines[1..].iter().all(|l| l.close_gap.is_none()));
+}
+
+/// #190: a footprint whose courtyard is open offers Close gap in its bake
+/// preview; a closed one offers nothing.
+#[test]
+fn a_footprint_with_an_open_profile_offers_close_gap() {
+    let (mut sketch, edges) = outline_sketch(&BOARD);
+    for entity in &mut sketch.entities {
+        if edges.contains(&entity.id) {
+            entity.board_outline = false;
+            entity.courtyard = Some(signex_sketch::attr::CourtyardAttr {});
+        }
+    }
+    let closed = solved_editor(sketch.clone(), false);
+    assert_eq!(
+        closed.state.gap_offer(closed.primitive().sketch.as_ref()),
+        None
+    );
+
+    let plane = sketch.planes[0].id;
+    let short = SketchEntityId::new();
+    sketch.entities.push(Entity::new(
+        short,
+        plane,
+        EntityKind::Point { x: 0.0, y: 0.02 },
+    ));
+    let left = sketch
+        .entities
+        .iter_mut()
+        .find(|e| e.id == edges[3])
+        .unwrap();
+    let EntityKind::Line { start, .. } = left.kind else {
+        unreachable!()
+    };
+    left.kind = EntityKind::Line { start, end: short };
+    let open = solved_editor(sketch, false);
+    let offer = open
+        .state
+        .gap_offer(open.primitive().sketch.as_ref())
+        .expect("an open courtyard offers Close gap");
+    assert!(offer.closes());
+    assert!((offer.gap_mm - 0.02).abs() < 1e-9);
 }

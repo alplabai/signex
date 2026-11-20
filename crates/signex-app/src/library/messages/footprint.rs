@@ -631,4 +631,10 @@ pub enum FootprintEditorMsg {
         y_mm: f64,
         inference: crate::library::editor::footprint::snap::SketchInference,
     },
+    /// Close gap was pressed on an open profile (#190): join the open end
+    /// `merge` into `keep`, one undo step, on either host.
+    SketchCloseGapRequested {
+        keep: signex_sketch::id::SketchEntityId,
+        merge: signex_sketch::id::SketchEntityId,
+    },
 }

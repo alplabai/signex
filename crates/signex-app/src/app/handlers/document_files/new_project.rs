@@ -347,12 +347,16 @@ fn seed_project_rules(
 }
 
 /// The first content of a dialog-made `.snxprj`: the project as the folder
-/// shows it, with the chosen defaults and designator standard and its id.
-/// Part of the creation: a failure takes the project back.
+/// shows it, with the chosen defaults and designator standard and its id,
+/// and the picked fab tier's router tool (#179d). Part of the creation: a
+/// failure takes the project back.
 fn write_setup(project_path: &Path, setup: &signex_types::project::ProjectSetup) -> Result<()> {
     let mut data = signex_types::project::parse_project_bytes(project_path, b"")
         .with_context(|| format!("read the new project {}", project_path.display()))?;
     data.project_defaults = setup.defaults();
+    if let Some(tier) = setup.fab {
+        data.set_router_tool_diameter(Some(tier.capabilities().router_tool_diameter));
+    }
     data.annotation = Some(signex_types::project::AnnotationSettings {
         designator_standard: Some(setup.designators),
         ..Default::default()
@@ -773,5 +777,42 @@ mod tests {
             .rules;
         let dsl = rules.and_then(|r| r.drc.dsl).unwrap_or_default();
         assert!(!dsl.contains("fab_"), "{dsl}");
+    }
+
+    /// #179d: a fab tier picked in the setup stores its router tool in the
+    /// project; no tier stores none.
+    #[test]
+    fn a_new_project_with_a_fab_tier_stores_its_router_tool() {
+        use signex_types::project::{FabTemplate, ProjectSetup};
+        let tmp = tempfile::tempdir().unwrap();
+        let seed = RuleSeed {
+            dir: Some(tmp.path().join("no-library-yet")),
+            ..RuleSeed::default()
+        };
+        for (tier, diameter) in [
+            (FabTemplate::Standard, 2.0),
+            (FabTemplate::Advanced, 1.6),
+            (FabTemplate::Hdi, 1.0),
+        ] {
+            let mut setup = ProjectSetup::default();
+            setup.apply_fab(tier);
+            let plan = NewProjectPlan {
+                layout: NewProjectLayout::NamedFolder,
+                setup: Some(setup),
+            };
+            let name = format!("{tier:?}.snxprj");
+            let written =
+                write_new_project_files_with(&tmp.path().join(name), &seed, &plan).unwrap();
+            let data = signex_types::project::parse_project(&written).unwrap();
+            assert_eq!(data.router_tool_diameter(), Some(diameter), "{tier:?}");
+        }
+        let plain = NewProjectPlan {
+            layout: NewProjectLayout::NamedFolder,
+            setup: Some(ProjectSetup::default()),
+        };
+        let written =
+            write_new_project_files_with(&tmp.path().join("Plain.snxprj"), &seed, &plain).unwrap();
+        let data = signex_types::project::parse_project(&written).unwrap();
+        assert_eq!(data.router_tool_diameter(), None);
     }
 }

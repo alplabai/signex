@@ -696,6 +696,9 @@ pub struct BoardSketchProps {
     /// The selected entity's Slot, Pour, Mechanical layer or Component
     /// anchor rows (decision 2, 2026-11-20).
     pub target: crate::panels::BoardTargetProps,
+    /// The project's router tool diameter in mm (#179d), for the Fab
+    /// profile group; `None` when its fab profile names none.
+    pub router_tool_diameter: Option<f64>,
 }
 
 /// A mounting hole's fields as the Properties panel edits them.

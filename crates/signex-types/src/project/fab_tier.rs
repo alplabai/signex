@@ -24,6 +24,9 @@ pub struct FabCapabilities {
     pub mask_sliver: f64,
     /// Silkscreen to an exposed pad.
     pub silk_to_pad: f64,
+    /// The router bit that cuts the board outline and its openings: an
+    /// inside corner tighter than half of it cannot be cut (#179d).
+    pub router_tool_diameter: f64,
 }
 
 /// When the tier numbers were last checked.
@@ -45,6 +48,7 @@ impl FabTemplate {
                 edge_clearance: 0.3,
                 mask_sliver: 0.1,
                 silk_to_pad: 0.15,
+                router_tool_diameter: 2.0,
             },
             Self::Advanced => FabCapabilities {
                 clearance: 0.1,
@@ -57,6 +61,7 @@ impl FabTemplate {
                 edge_clearance: 0.25,
                 mask_sliver: 0.075,
                 silk_to_pad: 0.1,
+                router_tool_diameter: 1.6,
             },
             Self::Hdi => FabCapabilities {
                 clearance: 0.075,
@@ -69,6 +74,7 @@ impl FabTemplate {
                 edge_clearance: 0.2,
                 mask_sliver: 0.06,
                 silk_to_pad: 0.075,
+                router_tool_diameter: 1.0,
             },
         }
     }
@@ -86,6 +92,7 @@ impl FabTemplate {
             source: "generic tier shipped with Signex; check your maker's published limits"
                 .to_string(),
             published: TIERS_REVISED.to_string(),
+            router_tool_diameter: Some(self.capabilities().router_tool_diameter),
         }
     }
 }

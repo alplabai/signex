@@ -53,7 +53,7 @@ board-sketch-check-name-corners = Inside corners
 board-sketch-check-skipped-no-outline = { $check }: not checked, the sketch draws no outline (the board keeps its own)
 board-sketch-check-skipped-not-closed = { $check }: not checked until the outline is one closed loop
 board-sketch-check-skipped-unsolved = { $check }: not checked, the sketch is not solved
-board-sketch-check-skipped-router = { $check }: not checked, it needs the router tool diameter
+board-sketch-check-skipped-router = { $check }: not checked, the project's fab profile names no router tool
 # A failed check and its place; $x and $y are millimetres, $gap the gap
 # between the two open ends in millimetres.
 board-sketch-check-open-gap = Outline open: { $gap } mm gap at ({ $x }, { $y })
@@ -80,3 +80,11 @@ board-sketch-anchor-component = Component
 board-sketch-anchor-pick = Pick a component
 # Messages, when Bake meets a locked component; $reference is its designator.
 board-sketch-anchor-locked = { $reference } is locked and stays where it is; unlock it to move it to its anchor
+# An inside corner tighter than the router tool cuts (#179d); $radius is the
+# corner's radius and $tool the tool's radius, both in millimetres.
+board-sketch-check-corner-tight = Inside corner R { $radius } < R { $tool } at ({ $x }, { $y })
+# The Fab profile group of the board sketch Properties (#179d); $diameter
+# in millimetres.
+board-sketch-fab-section = Fab profile
+board-sketch-fab-router = Router tool Ø { $diameter } · from profile
+board-sketch-fab-router-none = Router tool: the project's fab profile names none

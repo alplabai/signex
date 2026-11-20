@@ -39,4 +39,8 @@ define_ids! {
     BOARD_SKETCH_ANCHOR_COMPONENT = "board-sketch-anchor-component";
     BOARD_SKETCH_ANCHOR_PICK = "board-sketch-anchor-pick";
     BOARD_SKETCH_ANCHOR_LOCKED = "board-sketch-anchor-locked";
+    BOARD_SKETCH_CHECK_CORNER_TIGHT = "board-sketch-check-corner-tight";
+    BOARD_SKETCH_FAB_SECTION = "board-sketch-fab-section";
+    BOARD_SKETCH_FAB_ROUTER = "board-sketch-fab-router";
+    BOARD_SKETCH_FAB_ROUTER_NONE = "board-sketch-fab-router-none";
 }
