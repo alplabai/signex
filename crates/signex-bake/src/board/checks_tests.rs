@@ -1,4 +1,4 @@
-//! mockup 179d — the outline checks: a clean board passes, and each failure names
+//! mockup row 179d — the outline checks: a clean board passes, and each failure names
 //! its place.
 
 use signex_sketch::Solver;

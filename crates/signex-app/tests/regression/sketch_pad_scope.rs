@@ -1,4 +1,4 @@
-//! mockup row 192 D1 (decision 9, Caner 2026-11-20) — editing an attribute of a
+//! mockup row 192, item D1 (decision 9, Caner 2026-11-20) — editing an attribute of a
 //! patterned pad asks "This pad / All pads" every time. This pad stores one
 //! per-instance override and only that pad changes, through a save and a
 //! reload; All pads changes every instance; Cancel changes nothing.

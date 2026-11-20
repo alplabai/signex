@@ -18,7 +18,7 @@ impl Signex {
         &mut self,
         pad_idx: &usize,
     ) -> bool {
-        // mockup row 192 D5 — the driving entity is selected and focused: the canvas
+        // mockup row 192, item D5 — the driving entity is selected and focused: the canvas
         // highlights its profile and offers Back to pad.
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.edit_pad_in_sketch(*pad_idx);

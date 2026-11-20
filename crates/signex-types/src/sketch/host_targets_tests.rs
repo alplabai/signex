@@ -73,7 +73,7 @@ fn an_anchor_takes_only_a_point_and_the_edge_roles_never_one() {
     }
 }
 
-/// The picker greys a misfit with the shape it needs (mockup 179).
+/// The picker greys a misfit with the shape it needs (mockup row 179).
 #[test]
 fn a_misfit_names_the_shape_it_needs() {
     let [point, line, _, circle] = shapes();

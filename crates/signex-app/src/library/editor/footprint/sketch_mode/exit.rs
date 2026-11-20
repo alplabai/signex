@@ -30,7 +30,7 @@ pub struct SketchExit {
     /// Discard changes asked to confirm and waits for the answer.
     pub confirming_discard: bool,
     /// What a board bake of the sketch writes, while the preview is open
-    /// and the sketch bakes: the canvas draws it (mockup 190). Always `None` on
+    /// and the sketch bakes: the canvas draws it (mockup row 190). Always `None` on
     /// a footprint, whose own fields are the bake result.
     pub board_result: Option<Arc<BakedBoard>>,
     /// The pours, mechanical drawings and anchors that bake writes.

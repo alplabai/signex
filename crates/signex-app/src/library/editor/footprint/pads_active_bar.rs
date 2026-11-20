@@ -33,7 +33,7 @@ use crate::icons;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
-/// The footprint editor bar (Graphite mockup m187): the two-state
+/// The footprint editor bar (Graphite mockup row 187): the two-state
 /// Footprint / Sketch switch at its left, the 3D toggle beside it, then
 /// `trailing` (the sketch info caption and Parameters in Sketch mode). It
 /// floats at the canvas's top right, just under the Active Bar's band so the
@@ -50,7 +50,7 @@ pub fn mode_switcher_overlay<'a>(
     use iced::widget::{Space, button as button_style, container as container_style};
     use iced::{Alignment, Background, Shadow, Vector};
 
-    // Height of one segment (m187 `.seg > span`: 22 px).
+    // Height of one segment (mockup row 187 `.seg > span`: 22 px).
     const SEGMENT_H: f32 = crate::styles::chrome_px(22.0 * 11.0 / 12.0);
 
     // One segment: the lit one on the field fill with ink, a small shadow

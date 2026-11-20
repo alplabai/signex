@@ -1,4 +1,4 @@
-//! The "This pad / All pads" question (mockup row 192 D1, decision 9, Caner
+//! The "This pad / All pads" question (mockup row 192, item D1, decision 9, Caner
 //! 2026-11-20): an edit of a Pads-mode attribute of a patterned pad (not a
 //! pattern's source pad) waits here until the user says where it goes. It
 //! is asked every time; no answer is remembered.

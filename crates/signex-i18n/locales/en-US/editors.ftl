@@ -479,7 +479,7 @@ editors-sketch-target-board-outline = Outline
 editors-sketch-target-mounting-holes = Holes
 # A count in the bake preview; $count is a whole number.
 editors-sketch-bake-count = { $count }
-# The question after an edit of a patterned pad (mockup row 192 D1); $designator is
+# The question after an edit of a patterned pad (mockup row 192, item D1); $designator is
 # the pad's number.
 editors-pad-scope-question = Pad { $designator } is one of a pattern's pads. Apply the change to:
 editors-pad-scope-this-pad = This pad

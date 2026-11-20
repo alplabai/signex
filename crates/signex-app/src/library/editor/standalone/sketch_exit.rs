@@ -3,7 +3,7 @@
 //! asking first when there are edits. The footprint editor mounts
 //! [`footprint_overlay`]; the board sketch view builds the same bar with
 //! its own messages through [`mode_bar`]. The card lists why a sketch does
-//! not bake and what fails, with its place (mockup 190).
+//! not bake and what fails, with its place (mockup row 190).
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Space, column, container, row};
@@ -176,7 +176,7 @@ pub fn target_label_id(kind: BakedKind) -> MessageId {
 }
 
 /// One line of a check or error list: a status dot and its text. A line
-/// that names a place is a button that sends `select` (mockup 179d, mockup 190).
+/// that names a place is a button that sends `select` (mockup row 179d, mockup row 190).
 /// Shared by the preview card and the Outline checks section.
 pub fn status_line<'a, M: Clone + 'a>(
     status: CheckStatus,

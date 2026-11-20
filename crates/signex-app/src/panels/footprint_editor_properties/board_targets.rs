@@ -1,5 +1,5 @@
 //! The Board section rows of the targets of decision 2 (Caner, 2026-11-20),
-//! for the selected entity (mockup 179, "Bake as"): a Slot's size, read
+//! for the selected entity (mockup row 179, "Bake as"): a Slot's size, read
 //! only; a Pour's copper layer; a Mechanical layer drawing's layer; a
 //! Component anchor's component. A pour's net, fill and priority stay in
 //! the Pour sub-form of the Role section.

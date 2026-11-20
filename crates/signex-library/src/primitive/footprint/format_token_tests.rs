@@ -1,4 +1,4 @@
-//! `snxfpt/1.2` (decisions w9b 5, 9, 10, Caner 2026-11-20): a footprint
+//! `snxfpt/1.2` (Caner 2026-11-20, decisions 5, 9 and 10): a footprint
 //! whose sketch holds reference dimensions, pattern sources or mirrors, or
 //! per-instance pad overrides is written as 1.2 and round-trips them; one
 //! without them stays 1.1, byte for byte; a 1.1-only build refuses 1.2 by

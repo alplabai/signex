@@ -34,7 +34,7 @@ mod board_targets;
 /// The Board section with nothing selected (#2356): the board's name, its
 /// outline's size and area, and the sketch's counts. It stands where a
 /// footprint shows its own fields, none of which apply to a board. The
-/// Outline checks section follows it (mockup 179d).
+/// Outline checks section follows it (mockup row 179d).
 pub(super) fn view_board_summary<'a>(
     col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,

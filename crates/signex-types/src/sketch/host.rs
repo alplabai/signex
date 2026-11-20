@@ -113,7 +113,7 @@ const FOOTPRINT_ROLES: &[SketchRole] = &[
     SketchRole::PasteApertureBottom,
 ];
 
-/// The board picker's order follows the board sketch design (mockup 179,
+/// The board picker's order follows the board sketch design (mockup row 179,
 /// decision 2): outline, cutout, slot, keepout, pour, V-score, mechanical
 /// layer, component anchor, mounting hole. Room waits for rooms.
 const BOARD_ROLES: &[SketchRole] = &[

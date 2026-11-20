@@ -204,7 +204,7 @@ fn relations_draw_the_mockup_marks() {
 /// A point, a line, a linear pattern of the point ("L×4"), a polar
 /// pattern repeating it ("P×6"), and a mirror of the linear pattern.
 fn patterned() -> (SketchData, ArrayId, ArrayId, ArrayId) {
-    use signex_sketch::array::NumberingScheme;
+    use signex_sketch::array::{ArrayKind, NumberingScheme};
     use signex_sketch::sketch::{PatternMirror, PatternSource};
     let plane = PlaneId::new();
     let (p, a, b, line, centre) = (

@@ -1,4 +1,4 @@
-//! mockup row 191 / mockup row 192 D1 / decision 5 — pattern links, live mirrors, per-instance
+//! mockup row 191 / mockup row 192, item D1 / decision 5 — pattern links, live mirrors, per-instance
 //! pad overrides and reference dimensions on the sketch model: the cycle
 //! guard, the delete cascade, the file round trip and the format level.
 

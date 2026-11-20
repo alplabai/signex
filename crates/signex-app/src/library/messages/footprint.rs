@@ -606,7 +606,7 @@ pub enum FootprintEditorMsg {
     SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
     /// mockup row 192 — the floating pad link on the sketch canvas.
     PadLink(crate::library::editor::footprint::state::PadLinkMsg),
-    /// mockup row 192 D1 — the answer to "This pad / All pads" after an edit of a
+    /// mockup row 192, item D1 — the answer to "This pad / All pads" after an edit of a
     /// patterned pad.
     PadScopeAnswered(crate::library::editor::footprint::state::pad_scope::PadScope),
     /// Convert to reference, Make driving and Delete mirror, from the

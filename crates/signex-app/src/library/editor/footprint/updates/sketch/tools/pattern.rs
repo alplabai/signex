@@ -67,7 +67,7 @@ fn push_linked_array(editor: &mut crate::app::FootprintDocument, array: Array, s
     }
 }
 
-// Linear Pattern (m191). Click 1 picks the source entity, as Rectangular
+// Linear Pattern (mockup row 191). Click 1 picks the source entity, as Rectangular
 // Pattern does. The pitch along X is the dimension input when one is
 // typed (a value that is not a positive length is refused, as Fillet
 // refuses it), else LINEAR_PATTERN_DEFAULT_SPACING_MM.

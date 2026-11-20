@@ -1,5 +1,5 @@
 //! Ids of `locales/en-US/sketch_bake.ftl`: what the bake preview card lists
-//! besides its counts, on both sketch hosts (mockup 190).
+//! besides its counts, on both sketch hosts (mockup row 190).
 
 define_ids! {
     SKETCH_BAKE;

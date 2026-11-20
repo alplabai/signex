@@ -1,4 +1,4 @@
-//! mockup 179d / mockup 190 — the outline checks a board sketch editor reads from its
+//! mockup row 179d / mockup row 190 — the outline checks a board sketch editor reads from its
 //! last solve, the lines Properties and the bake preview show for them, and
 //! the bake preview's canvas state on a footprint.
 

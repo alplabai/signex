@@ -108,7 +108,7 @@ pub fn create_entries(
 }
 
 /// Sketch ▸ Modify: the edit tools plus the one-shot Make Pad action, in
-/// the order of m187: Fillet, Chamfer, Trim, Extend | Mirror, Offset,
+/// the order of mockup row 187: Fillet, Chamfer, Trim, Extend | Mirror, Offset,
 /// Linear, Rectangular and Circular Pattern | Make Pad from Profile.
 /// Mirror / Offset / the Pattern tools consume a selection, so they grey
 /// out when nothing is selected rather than arming a tool that would only

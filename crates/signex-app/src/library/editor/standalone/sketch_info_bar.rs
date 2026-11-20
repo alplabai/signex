@@ -1,4 +1,4 @@
-//! The sketch info bar (m187, m179): what is being sketched, on which plane
+//! The sketch info bar (mockup rows 187 and 179): what is being sketched, on which plane
 //! and at which grid step, and the Parameters button that opens the
 //! parameters table. On a footprint it is the sketch half of the editor bar,
 //! after the Footprint / Sketch switch; on a board it floats alone at the
@@ -84,7 +84,7 @@ fn caption_and_parameters<'a>(
     .boxed()
 }
 
-/// The sketch half of a footprint's editor bar (m187): the caption and
+/// The sketch half of a footprint's editor bar (mockup row 187): the caption and
 /// Parameters in Sketch mode, nothing in the other modes.
 pub fn editor_bar_items<'a>(
     editor: &'a FootprintDocument,

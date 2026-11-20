@@ -327,8 +327,8 @@ pub struct FootprintEditorState {
     pub sketch_overlay: SketchOverlay,
     /// The pad an Edit in Sketch came from (mockup row 192); read it through `live_pad_link`.
     pub pad_link: Option<PadLinkFocus>,
-    /// A patterned pad edit waiting for "This pad / All pads" (mockup row 192
-    /// D1); the held value is read through `shown_pad`, never `pads`.
+    /// A patterned pad edit waiting for "This pad / All pads" (mockup row 192,
+    /// item D1); the held value is read through `shown_pad`, never `pads`.
     pub pad_scope: Option<Box<pad_scope::PadScopePrompt>>,
     /// The mode the 3D toggle returns to (mockup row 187); set when 3D is entered.
     pub mode_before_3d: EditorMode,

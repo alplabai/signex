@@ -262,7 +262,7 @@ the board's project on entry and after every edit; Properties shows it in a
 
 An open profile whose two nearest open ends are at most **0.05 mm** apart
 (`signex_sketch::heal::HEAL_TOLERANCE_MM`, the one heal tolerance shared with
-the DXF import, decision bs-11) offers **Close gap**: on the open-outline
+the DXF import, Caner 2026-11-20, decision 4) offers **Close gap**: on the open-outline
 line of the Outline checks, and in the bake preview card when the bake
 refuses an open profile. The line names the gap and the tolerance (`Gap 0.03
 mm, closes under the 0.05 mm heal tolerance`); a wider gap says `Gap 0.12 mm
@@ -383,7 +383,7 @@ dropping them.
 ## Targets {#targets}
 
 Decision 2 (Caner, 2026-11-20) adds four board targets to the role picker,
-in the order of mockup 179 without Room (rooms wait for c14): Board outline,
+in the order of mockup row 179 without Room (rooms are not on the board yet): Board outline,
 Cutout, Slot, Keepout, Pour, V-score, Mechanical layer, Component anchor,
 Mounting hole (`SketchHost::Board.roles()`). The picker refuses a shape a
 role cannot take (`SketchRole::fits`; `SketchRole::misfit` names the shape:

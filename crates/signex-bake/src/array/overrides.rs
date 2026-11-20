@@ -1,5 +1,5 @@
 //! Baking the instances of a linked pattern or mirror, each with its own
-//! per-instance pad override (mockup row 192 D1) applied to the source pad before the
+//! per-instance pad override (mockup row 192, item D1) applied to the source pad before the
 //! pad bake, so only that instance changes.
 
 use std::borrow::Cow;

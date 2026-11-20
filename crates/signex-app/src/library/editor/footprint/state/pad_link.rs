@@ -1,5 +1,5 @@
-//! The link between a pad and the sketch geometry that drives it (mockup row 192,
-//! m192 D5 / D6). Edit in Sketch from a pad focuses its driving entity;
+//! The link between a pad and the sketch geometry that drives it (mockup
+//! row 192, items D5 and D6). Edit in Sketch from a pad focuses its driving entity;
 //! the canvas highlights the driving profile and a floating link goes back
 //! to the pad. A selected pad entity offers Jump to pad. See
 //! docs/FOOTPRINT_SKETCH.md, "Pads and the sketch".
@@ -89,7 +89,7 @@ impl FootprintEditorState {
         Some(PadLinkOffer::JumpToPad { entity })
     }
 
-    /// Edit in Sketch (D5): sketch mode with pad `pad_idx`'s driving entity
+    /// Edit in Sketch (mockup row 192, item D5): sketch mode with pad `pad_idx`'s driving entity
     /// selected and focused.
     pub fn edit_pad_in_sketch(&mut self, pad_idx: usize) {
         let entity = self.pads.get(pad_idx).and_then(|pad| pad.sketch_entity_id);
@@ -100,7 +100,7 @@ impl FootprintEditorState {
         self.sketch_overlay = SketchOverlay::default();
     }
 
-    /// Back to pad / Jump to pad (D6): Footprint mode with the pad `entity`
+    /// Back to pad / Jump to pad (mockup row 192, item D6): Footprint mode with the pad `entity`
     /// drives selected.
     pub fn return_to_pad(&mut self, entity: SketchEntityId) {
         let pad_idx = self.pad_driven_by(entity);

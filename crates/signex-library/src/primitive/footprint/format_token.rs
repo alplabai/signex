@@ -1,4 +1,4 @@
-//! The `.snxfpt` format version (#2242, decision w9b 5/9/10): the token a
+//! The `.snxfpt` format version (#2242, Caner 2026-11-20, decisions 5, 9 and 10): the token a
 //! save writes follows the content, as the schematic's does. A file whose
 //! sketches hold no link writes `snxfpt/1.1` byte for byte.
 

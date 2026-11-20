@@ -403,7 +403,7 @@ fn handle_tool_click(
 }
 
 /// The clicks that pick an existing Line by its stroke: Chamfer, Extend,
-/// and Mirror's centerline pick (m191). `Some(changed)` when the click was
+/// and Mirror's centerline pick (mockup row 191). `Some(changed)` when the click was
 /// one of them, `None` to go on to the Point-minting tools.
 fn try_stroke_pick(
     editor: &mut crate::app::FootprintDocument,

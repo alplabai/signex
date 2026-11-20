@@ -1,4 +1,4 @@
-//! The canvas conflict badge (decision fp-15): no card over the drawing,
+//! The canvas conflict badge (Caner 2026-11-20): no card over the drawing,
 //! just a compact red badge next to the conflicting dimension (or the
 //! first conflicting glyph) that counts the conflicts and points to
 //! Properties, where Remove acts on them.

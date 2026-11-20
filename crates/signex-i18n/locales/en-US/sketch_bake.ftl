@@ -1,4 +1,4 @@
-# The bake preview card of sketch mode, both hosts (mockup 190): what it lists
+# The bake preview card of sketch mode, both hosts (mockup row 190): what it lists
 # besides the count per target.
 
 # Heading of the rows that say why the sketch does not bake.
@@ -8,7 +8,7 @@ sketch-bake-errors = Why it does not bake
 sketch-bake-warnings = Sketch warnings
 # One sketch warning; $warning is the warning's own text.
 sketch-bake-warning = { $warning }
-# Heading of the failed outline checks of a board sketch (mockup 179d).
+# Heading of the failed outline checks of a board sketch (mockup row 179d).
 sketch-bake-checks = Outline checks
 # Under the failed checks: they do not stop Bake.
 sketch-bake-checks-warn = A failing check warns only; Bake still applies the sketch.

@@ -1,4 +1,4 @@
-//! The outline checks of a board sketch (mockup 179d), as Properties and the bake
+//! The outline checks of a board sketch (mockup row 179d), as Properties and the bake
 //! preview list them. They are read from the editor's current solve each
 //! time the panel context is built, so every path that solves (a canvas
 //! edit, a Properties edit, undo, a solve landing from its task) shows them

@@ -734,7 +734,7 @@ mod sheet_tools_graphite;
 mod board_sync_graphite;
 
 // mockup row 189: the sketch parameters table, rename / delete with the in-use prompt
-// (fp-07) and Make parameter, each one undo step.
+// (Caner 2026-11-20) and Make parameter, each one undo step.
 #[path = "regression/sketch_parameters.rs"]
 mod sketch_parameters;
 // mockup row 187 / mockup row 191: the sketch canvas's pattern values and instance suppression.
@@ -744,7 +744,7 @@ mod sketch_canvas_values;
 // board rows turn that off without an undo step.
 #[path = "regression/sketch_snap_board.rs"]
 mod sketch_snap_board;
-// mockup 179d / mockup 190 - board sketch outline checks in Properties and the bake
+// mockup row 179d / mockup row 190 - board sketch outline checks in Properties and the bake
 // preview drawn on the canvas.
 #[path = "regression/board_sketch_checks.rs"]
 mod board_sketch_checks;
@@ -756,7 +756,7 @@ mod sketch_tools_padlink;
 // pattern links; a loop is refused.
 #[path = "regression/sketch_pattern_links.rs"]
 mod sketch_pattern_links;
-// mockup row 192 D1: an edit of a patterned pad asks This pad / All pads.
+// mockup row 192, item D1: an edit of a patterned pad asks This pad / All pads.
 #[path = "regression/sketch_pad_scope.rs"]
 mod sketch_pad_scope;
 // mockup row 187 / mockup row 188 (decision 5): Convert to reference and Make driving.

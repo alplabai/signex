@@ -1,4 +1,4 @@
-//! The parameters table card (m189): Name · Expression · Value · Unit ·
+//! The parameters table card (mockup row 189): Name · Expression · Value · Unit ·
 //! Used by, a row menu, the autocomplete under the row being typed, the
 //! in-use delete prompt, and Add parameter. An overlay at the canvas's top
 //! right, under the sketch info bar; empty while closed.
@@ -555,7 +555,7 @@ fn unit_id(unit: DisplayUnit) -> signex_i18n::MessageId {
     }
 }
 
-/// Rename… and Delete (fp-07).
+/// Rename… and Delete (Caner 2026-11-20).
 fn row_menu<'a>(
     row: &Row,
     send: &Sender,

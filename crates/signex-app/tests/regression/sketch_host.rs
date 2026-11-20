@@ -40,7 +40,7 @@ fn the_board_host_offers_its_targets_and_v_score_bakes_as_one_step() {
     assert_eq!(ctx.sketch_host, SketchHost::Board);
     assert_eq!(
         ctx.sketch_host.roles(),
-        // Decision 2 (Caner, 2026-11-20): the mockup 179 order, Room out.
+        // Decision 2 (Caner, 2026-11-20): the mockup row 179 order, Room out.
         &[
             RoleTag::Unassigned,
             RoleTag::BoardOutline,

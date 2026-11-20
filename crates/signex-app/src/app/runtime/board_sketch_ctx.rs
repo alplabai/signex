@@ -1,6 +1,6 @@
 //! The Board sections of the Properties panel in board sketch mode (#2234):
 //! the board's name and outline facts, the outline checks of the current
-//! solve (mockup 179d), and the selected entity's outline and mounting hole
+//! solve (mockup row 179d), and the selected entity's outline and mounting hole
 //! attributes.
 
 use signex_sketch::entity::EntityKind;

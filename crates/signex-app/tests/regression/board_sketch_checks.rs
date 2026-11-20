@@ -1,4 +1,4 @@
-//! mockup 179d / mockup 190 - board sketch outline checks and the bake preview: the
+//! mockup row 179d / mockup row 190 - board sketch outline checks and the bake preview: the
 //! checks are live in Properties after every edit (a Properties edit too),
 //! a failing one names its place and does not stop Bake, and the open bake
 //! preview hands the canvas what Bake writes. Driven through

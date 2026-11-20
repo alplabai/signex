@@ -1,4 +1,4 @@
-//! "This pad / All pads" for an edit of a patterned pad (mockup row 192 D1,
+//! "This pad / All pads" for an edit of a patterned pad (mockup row 192, item D1,
 //! decision 9, Caner 2026-11-20). [`hold_patterned_pad_edit`] holds the
 //! edit at the Pads-mode commit point; [`apply`] carries out the answer as
 //! one undo step and re-bakes. The question comes back on every such edit.

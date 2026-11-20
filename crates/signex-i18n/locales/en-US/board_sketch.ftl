@@ -35,7 +35,7 @@ board-sketch-area = Area
 board-sketch-area-value = { $area } mm²
 board-sketch-entities = Sketch entities
 board-sketch-constraints = Constraints
-# The Outline checks section of Properties with nothing selected (mockup 179d),
+# The Outline checks section of Properties with nothing selected (mockup row 179d),
 # live after every solve; the bake preview lists the failed ones.
 board-sketch-checks-section = Outline checks
 board-sketch-checks-caption = Live after every solve. A failing check warns; Bake still applies the sketch to the board.

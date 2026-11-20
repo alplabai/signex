@@ -176,7 +176,7 @@ plane Top · grid 0.05 mm" (a board reads "Board shape · …"), and the
 - Typing a letter offers the parameter names that start with it, with
   their values; picking one completes the name. Nothing is offered after a
   number or a unit suffix (`0.5mm`).
-- The row's **⋯** menu has **Rename…** and **Delete** (decision fp-07).
+- The row's **⋯** menu has **Rename…** and **Delete** (Caner 2026-11-20).
   Rename changes the name and every reference to it, whole names only
   (`pitch` never touches `pitch2`), as one undo step; a name that is taken,
   reserved (`pi`, the array indices `i` and `j`) or not a plain identifier
@@ -186,7 +186,7 @@ plane Top · grid 0.05 mm" (a board reads "Board shape · …"), and the
   reference and deletes it, as one undo step; **Cancel** keeps it.
 - **Esc** closes the open prompt, rename or row menu, then the table.
 
-**Make parameter** on a dimension (the constraint menu, m188) creates
+**Make parameter** on a dimension (the constraint menu, mockup row 188) creates
 `dim_N` (`angle_N` for an angle) holding the dimension's current value
 with its unit, points the dimension at it, and opens the table on that
 row, as one undo step. A dimension that already reads exactly one
@@ -268,8 +268,8 @@ not offered: it is the source pad.
 
 ## Conflicts {#conflicts}
 
-An over-constrained sketch draws no card over the drawing (decision
-fp-15): a compact red badge next to the conflicting dimension, or the
+An over-constrained sketch draws no card over the drawing (Caner,
+2026-11-20): a compact red badge next to the conflicting dimension, or the
 first conflicting glyph, counts the conflicts and points to Properties
 (`1 conflict · see Properties`). In Properties, each conflict row has a
 Remove button that deletes that constraint in one undo step, then solves.
@@ -305,7 +305,7 @@ Decided 2026-11-20: Midpoint and Centre are built and land constraints; see
 
 Sketch ▸ Create lists, on both hosts: Line, Rectangle, Rounded Rectangle,
 Circle, Arc, Tangent Arc, Edge Arc, Point, **Slot**, **Polygon** (Caner,
-2026-11-20, item 1; mockup m187). Each shape is placed by its last click as
+2026-11-20, item 1; mockup row 187). Each shape is placed by its last click as
 one edit, so one undo step, and the tool goes back to its first click; Esc
 drops a half-made shape. The geometry is `signex_sketch::geom::shapes`, the
 same helpers the canvas ghost draws from.
@@ -342,7 +342,7 @@ the cursor's typed-value overlay has no field for them yet.
 
 While a drawing tool is armed (the Create rows above), three snaps land a
 constraint on the click's Point, in the click's undo step (Caner,
-2026-11-20, item 6; mockup m188):
+2026-11-20, item 6; mockup row 188):
 
 | Snap | Constraint |
 |---|---|
@@ -470,11 +470,16 @@ another pattern, and a mirror of a pattern stays a pattern.
   repeats its own source again.
 
 The bake expands links in `signex_bake::array::links`; a plain array with
-no link and no override still bakes through `bake_one_array`.
+no link and no override still bakes through `bake_one_array`. The canvas's
+instance rings of a selected grid or polar pattern come from the same walk
+(`signex_bake::pattern_slots`): each ring sits where the bake puts the pad,
+with the per-instance spacing and the sweep's written unit; a slot the
+suppression list holds back draws as suppressed, and a slot the mask drops
+has no ring. One walk for the plain bake as well is a follow-up.
 
 ## Per-pad overrides {#per-pad-overrides}
 
-Decision 9 (Caner, 2026-11-20, mockup row 192 D1). Editing a Pads-mode
+Decision 9 (Caner, 2026-11-20, mockup row 192, item D1). Editing a Pads-mode
 attribute of a pad that is an instance of a pattern (not the pattern's
 source pad) asks, each time, **This pad / All pads / Cancel**; no answer is
 remembered. The edit shows in the Properties panel while the card waits; a

@@ -36,7 +36,7 @@ pub struct BoardSketchSession {
     /// What a bake of the copy writes, while the bake preview is open.
     pub preview: Option<BakePreview>,
     /// Why the open preview's bake refuses, with the entity it names: the
-    /// preview card selects it on a click (mockup 190).
+    /// preview card selects it on a click (mockup row 190).
     pub preview_error: Option<BoardBakeError>,
     /// The sketch as the board last took it (or had it at entry).
     start: SketchData,
@@ -94,7 +94,7 @@ impl BoardSketchSession {
     /// Bake the copy for the preview against `board` (its nets and placed
     /// components), when the preview is open; close it otherwise. Pure: the
     /// board is not touched. The bake also goes to the canvas, which draws
-    /// it (mockup 190).
+    /// it (mockup row 190).
     pub fn refresh_preview(&mut self, board: Option<&PcbBoard>) {
         let open = self.editor.state.sketch_exit.preview;
         let bake = open.then(|| preview_bake(&self.working_sketch(), board));

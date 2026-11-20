@@ -32,7 +32,7 @@ pub(super) fn apply(
     }
 }
 
-/// Mirror's first click without a Line selected (m191): a click on a Line
+/// Mirror's first click without a Line selected (mockup row 191): a click on a Line
 /// of the Centerline linetype takes it as the mirror line. It becomes the
 /// selection, so the next clicks mirror entities about it as with a
 /// selected Line. Returns whether the click was that pick.

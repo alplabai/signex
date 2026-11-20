@@ -1,6 +1,6 @@
 //! Ids of `locales/en-US/board_sketch.ftl` added after the list in `lib.rs`
 //! reached the file-size cap: the Outline checks of board sketch mode
-//! (mockup 179d) and the bake preview's errors (mockup 190).
+//! (mockup row 179d) and the bake preview's errors (mockup row 190).
 
 define_ids! {
     BOARD_SKETCH;

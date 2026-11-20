@@ -17,7 +17,7 @@ use crate::sketch::SketchData;
 use crate::solver::FullSolveOutput;
 use crate::solver::state::point_xy;
 
-/// The one heal tolerance (decision bs-11): the widest gap between two
+/// The one heal tolerance (Caner 2026-11-20, decision 4): the widest gap between two
 /// profile ends that Close gap joins, in mm. DXF import heals with it too.
 pub const HEAL_TOLERANCE_MM: f64 = 0.05;
 

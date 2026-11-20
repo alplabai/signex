@@ -1,7 +1,7 @@
 //! The sketch parameters table (mockup row 189), shared by the footprint sketch and
 //! the board sketch: every parameter with its expression, value, unit and
 //! what reads it; Add parameter; typing re-solves; Rename… and Delete in a
-//! row menu, a used parameter's delete asking first (fp-07). Opened by the
+//! row menu, a used parameter's delete asking first (Caner 2026-11-20). Opened by the
 //! sketch info bar's Parameters button and by Make parameter on a
 //! dimension.
 //!
@@ -53,7 +53,7 @@ pub enum SketchParametersMsg {
     DeleteConfirmed,
     /// "Cancel" answered the in-use prompt.
     DeleteCancelled,
-    /// Make parameter was picked on a dimension (m188).
+    /// Make parameter was picked on a dimension (mockup row 188).
     ParameterFromConstraintRequested { constraint: ConstraintId },
 }
 

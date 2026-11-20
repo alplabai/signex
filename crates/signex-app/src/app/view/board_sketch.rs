@@ -96,8 +96,8 @@ impl Signex {
             .boxed()
     }
 
-    /// What the board's preview card lists besides its counts (mockup 190): the
-    /// refusal's entity, and the failed outline checks (mockup 179d) as
+    /// What the board's preview card lists besides its counts (mockup row 190): the
+    /// refusal's entity, and the failed outline checks (mockup row 179d) as
     /// Properties has them, each selecting its place on a click. A failed
     /// check warns only; Bake stays available.
     fn board_preview_issues(&self, session: &BoardSketchSession) -> PreviewIssues<Message> {

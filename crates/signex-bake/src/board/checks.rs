@@ -1,4 +1,4 @@
-//! Outline checks of a board sketch (mockup 179d): the outline is one closed
+//! Outline checks of a board sketch (mockup row 179d): the outline is one closed
 //! loop, it does not cross itself, every opening lies inside it, and no
 //! inside corner is tighter than the router tool cuts. The checks read the
 //! solve the editor already has (no second solve) and walk the outline with
