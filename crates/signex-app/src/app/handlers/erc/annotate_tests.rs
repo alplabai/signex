@@ -786,3 +786,26 @@ fn a_rollback_that_found_no_run_on_the_active_sheet_leaves_it_unsaved() {
         "the run may still be in the sheet, so it stays unsaved"
     );
 }
+
+/// Closing the dialog closes a Reset confirm opened from it: the ticks go
+/// with the dialog, so that confirm's Run would cover every sheet.
+#[test]
+fn closing_the_dialog_closes_its_reset_confirm() {
+    use crate::app::{AnnotateMsg, Message};
+    let (mut app, dir) = project(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
+    let _ = app.update(Message::Annotate(AnnotateMsg::OpenDialog));
+    app.handle_annotate_sheet_tick_toggled(dir.join("z_child.snxsch"));
+    let _ = app.update(Message::Annotate(AnnotateMsg::ResetPressed(
+        signex_engine::AnnotateMode::ResetAndRenumber,
+    )));
+    assert!(app.ui_state.annotate_reset_confirm, "the confirm is open");
+    assert!(!app.annotate_unticked_sheets().is_empty(), "a sheet is out");
+
+    let _ = app.update(Message::Annotate(AnnotateMsg::CloseDialog));
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(!app.ui_state.annotate_dialog_open);
+    assert!(
+        !app.ui_state.annotate_reset_confirm,
+        "its Run would no longer leave the unticked sheet out"
+    );
+}

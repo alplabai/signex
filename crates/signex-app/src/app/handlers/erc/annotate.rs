@@ -317,8 +317,15 @@ impl Signex {
         // makes any lookup in flight and any open confirm stale.
         self.invalidate_reprefix();
         let close_confirm = self.drain_reprefix_window_close();
+        // So is an open Reset confirm: without the ticks its Run would
+        // cover every sheet.
+        let close_reset = if self.ui_state.annotate_reset_confirm {
+            self.handle_close_annotate_reset_confirm()
+        } else {
+            Task::none()
+        };
         let close = self.close_detached_modal(super::super::super::state::ModalId::AnnotateDialog);
-        Task::batch([close, close_confirm])
+        Task::batch([close, close_confirm, close_reset])
     }
 
     /// Reset Duplicate Designators: find references that
