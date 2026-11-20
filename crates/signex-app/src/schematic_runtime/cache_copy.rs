@@ -56,6 +56,7 @@ pub(crate) fn copy_invalidated(
         drawing_placements,
         frame,
         page,
+        variables,
     } = src;
 
     // The sheet default font is a scalar, not one of the collections below.
@@ -114,5 +115,7 @@ pub(crate) fn copy_invalidated(
         dst.root_sheet_page.clone_from(root_sheet_page);
         dst.frame = *frame;
         dst.page = *page;
+        // A sheet-variable edit rides the PAPER patch with the title block.
+        dst.variables.clone_from(variables);
     }
 }
