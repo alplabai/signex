@@ -330,7 +330,7 @@ impl Signex {
         self.interaction_state.placement_pause =
             (!editor.state.placement_paused).then(|| SheetPlacementPause::Footprint {
                 path: path.to_path_buf(),
-                pad_defaults: editor.state.next_pad_defaults.clone(),
+                pad_defaults: Box::new(editor.state.next_pad_defaults.clone()),
             });
     }
 
@@ -354,7 +354,7 @@ impl Signex {
             }
             Some(SheetPlacementPause::Footprint { path, pad_defaults }) => {
                 if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
-                    editor.state.next_pad_defaults = pad_defaults;
+                    editor.state.next_pad_defaults = *pad_defaults;
                 }
                 Task::none()
             }
