@@ -19,7 +19,7 @@ fn project(patch: P) -> R {
 }
 
 /// Every single-bit patch and the render bits it projects to.
-const TABLE: [(P, R); 16] = [
+const TABLE: [(P, R); 18] = [
     (P::SYMBOLS, R::SYMBOLS),
     (P::WIRES, R::WIRES),
     (P::LABELS, R::LABELS),
@@ -36,6 +36,8 @@ const TABLE: [(P, R); 16] = [
     (P::FONT_FAMILY, R::NONE), // four bits, checked on its own below
     (P::NET_COLORS, R::NET_COLORS),
     (P::DIRECTIVES, R::DIRECTIVES),
+    (P::HARNESS, R::HARNESS),
+    (P::UNIONS, R::UNIONS),
 ];
 
 #[test]
