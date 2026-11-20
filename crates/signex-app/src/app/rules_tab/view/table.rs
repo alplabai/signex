@@ -520,11 +520,15 @@ fn kind_tag<'a>(frame: &Frame<'a>, row: &RowRef) -> Element<'a, Message> {
 }
 
 /// A row's name: user content, or the worded All row and the layer by
-/// its position (L1 is Top, the last is Bottom).
+/// its position (L1 is Top, the last is Bottom); a layer the board lacks
+/// by the token the rules name it with.
 pub(super) fn row_name(frame: &Frame, row: &RowRef) -> Label<'static> {
     let i18n = frame.i18n;
     match row {
         RowRef::All | RowRef::Heading(_) => t!(i18n, ids::RULES_GRID_ROW_ALL).into(),
+        RowRef::Layer {
+            number: 0, token, ..
+        } => user(token.clone()).into(),
         RowRef::Layer { number: 1, .. } => t!(i18n, ids::RULES_GRID_LAYER_TOP, "n" => 1).into(),
         RowRef::Layer { number, count, .. } if number == count => {
             t!(i18n, ids::RULES_GRID_LAYER_BOTTOM, "n" => *number).into()

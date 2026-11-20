@@ -124,23 +124,7 @@ pub fn resolve(
     parents: &[GridScope],
     field: LimitField,
 ) -> Option<GridCell> {
-    let kind = field.limit_kind();
-    let mut best: Option<((u8, u8), i64, &RuleRow, &GridScope)> = None;
-    for row in table.rows.iter().filter(|r| r.applied) {
-        let Some(rule) = &row.compiled else {
-            continue;
-        };
-        let Some(value) = rule.limit(kind) else {
-            continue;
-        };
-        let Some(at) = std::iter::once(scope).chain(parents).find(|s| s.holds(row)) else {
-            continue;
-        };
-        if rule.wins_over(kind, value, best.map(|(rank, v, _, _)| (rank, v))) {
-            best = Some((rule.rank(), value, row, at));
-        }
-    }
-    let (_, _, row, at) = best?;
+    let (row, at) = winner(table, scope, parents, field)?;
     let value = row.limit(field)?.value.clone();
     let rule = row.name.clone();
     let source = if is_fab_rule(&rule) {
@@ -161,6 +145,33 @@ pub fn resolve(
     Some(GridCell { value, source })
 }
 
+/// The applied rule that governs `field` on `scope` (parents nearest
+/// first), and the row it sits on, by the check's precedence.
+fn winner<'a>(
+    table: &'a RuleTable,
+    scope: &'a GridScope,
+    parents: &'a [GridScope],
+    field: LimitField,
+) -> Option<(&'a RuleRow, &'a GridScope)> {
+    let kind = field.limit_kind();
+    let mut best: Option<((u8, u8), i64, &RuleRow, &GridScope)> = None;
+    for row in table.rows.iter().filter(|r| r.applied) {
+        let Some(rule) = &row.compiled else {
+            continue;
+        };
+        let Some(value) = rule.limit(kind) else {
+            continue;
+        };
+        let Some(at) = std::iter::once(scope).chain(parents).find(|s| s.holds(row)) else {
+            continue;
+        };
+        if rule.wins_over(kind, value, best.map(|(rank, v, _, _)| (rank, v))) {
+            best = Some((rule.rank(), value, row, at));
+        }
+    }
+    best.map(|(_, _, row, at)| (row, at))
+}
+
 /// The row's own rules of `kind` the grid edits: plain rules of `scope`,
 /// not the tier's `fab_*` floor.
 fn own_rows<'t>(
@@ -175,11 +186,13 @@ fn own_rows<'t>(
 }
 
 /// `text` with cell `field` of row `scope` set to `value` (a length): the
-/// row's own rule of that kind is rewritten (the first one that sets the
-/// limit, else the first of the kind), else a rule is added for the row.
-/// An empty value resets the cell. A rule a constraint set wrote is
-/// edited like any other; the set writes its own value back when it is
-/// next applied, so a set's value is changed in the set. `table` is
+/// row's own rule the cell shows is rewritten (else the first own rule
+/// that sets the limit, else the first of the kind), else a rule is added
+/// for the row. An empty value resets the cell. A value the cell would
+/// still not show (another rule of the row or a `fab_*` floor is
+/// stricter) is refused, naming that rule. A rule a constraint set wrote
+/// is edited like any other; the set writes its own value back when it
+/// is next applied, so a set's value is changed in the set. `table` is
 /// `text`'s table.
 pub fn set_cell(
     text: &str,
@@ -199,18 +212,38 @@ pub fn set_cell(
             reason: format!("a {} rule is board-wide", kind.keyword()),
         });
     }
-    let own = own_rows(table, scope, kind)
-        .find(|r| r.limit(field).is_some())
+    let shown = winner(table, scope, &[], field)
+        .map(|(row, _)| row)
+        .filter(|row| row.kind == Some(kind) && !is_fab_rule(&row.name));
+    let own = shown
+        .or_else(|| own_rows(table, scope, kind).find(|r| r.limit(field).is_some()))
         .or_else(|| own_rows(table, scope, kind).next());
-    if let Some(row) = own {
-        return set_field(text, &row.name, RuleField::Limit(field), value);
+    let (out, edited) = match own {
+        Some(row) => (
+            set_field(text, &row.name, RuleField::Limit(field), value)?,
+            row.name.clone(),
+        ),
+        None => {
+            let mut draft = RuleDraft::new(kind, "");
+            draft.scope = scope.net_scope();
+            draft.layer = scope.layer();
+            draft.name = free_name(table, &format!("{}_{}", scope.slug(), kind.keyword()));
+            draft.set(RuleField::Limit(field), value)?;
+            add_rule(text, &draft)?
+        }
+    };
+    let after = super::table(&out);
+    match winner(&after, scope, &[], field) {
+        Some((row, _)) if row.name == edited => Ok(out),
+        Some((row, _)) => Err(EditError::Overruled {
+            rule: edited,
+            by: Some(row.name.clone()),
+        }),
+        None => Err(EditError::Overruled {
+            rule: edited,
+            by: None,
+        }),
     }
-    let mut draft = RuleDraft::new(kind, "");
-    draft.scope = scope.net_scope();
-    draft.layer = scope.layer();
-    draft.name = free_name(table, &format!("{}_{}", scope.slug(), kind.keyword()));
-    draft.set(RuleField::Limit(field), value)?;
-    Ok(add_rule(text, &draft)?.0)
 }
 
 /// `text` with cell `field` of row `scope` back to what the row inherits:
@@ -248,14 +281,34 @@ fn is_matrix_cell(row: &RuleRow) -> bool {
 
 /// The rules the grid has no row for, in written order: an object pair, a
 /// pattern, a layer on a net or class scope, or a condition or limit the
-/// table cannot show. Class-matrix cells are the matrix's.
+/// table cannot show. A board-wide rule no cell shows (another rule of
+/// its row is stricter on every limit it sets) is listed too, so it does
+/// not hide. Class-matrix cells are the matrix's.
 pub fn scoped_rules(table: &RuleTable) -> Vec<&RuleRow> {
     table
         .rows
         .iter()
         .filter(|r| !is_matrix_cell(r))
-        .filter(|r| GridScope::of(&r.scope, r.layer.as_deref()).is_none_or(|scope| !scope.holds(r)))
+        .filter(|r| {
+            match GridScope::of(&r.scope, r.layer.as_deref()).filter(|scope| scope.holds(r)) {
+                None => true,
+                Some(scope) => is_losing_duplicate(table, &scope, r),
+            }
+        })
         .collect()
+}
+
+/// Whether `row`, an applied board-wide rule of grid row `scope`, governs
+/// none of the limits it sets there. A `fab_*` floor is not listed: the
+/// cell names it when it governs.
+fn is_losing_duplicate(table: &RuleTable, scope: &GridScope, row: &RuleRow) -> bool {
+    matches!(scope, GridScope::All | GridScope::Layer(_))
+        && row.applied
+        && !is_fab_rule(&row.name)
+        && !row.limits.is_empty()
+        && row.limits.iter().all(|limit| {
+            winner(table, scope, &[], limit.field).is_some_and(|(won, _)| won.name != row.name)
+        })
 }
 
 /// The rows the text writes rules for, in first-written order: the

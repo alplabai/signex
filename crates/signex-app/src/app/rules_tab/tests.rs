@@ -989,3 +989,75 @@ fn a_row_using_a_constraint_set_carries_its_chip_and_resolves_from_it() {
         other => panic!("the set's value: {other:?}"),
     }
 }
+
+/// The project's stored rules replaced with `text`, before the tab opens.
+fn store(app: &mut Signex, text: &str) {
+    app.document_state.projects[0].data.rules = Some(stored(text));
+}
+
+fn layer_rows(app: &Signex, id: ProjectId) -> Vec<RowRef> {
+    grid(app, id)
+        .rows()
+        .iter()
+        .filter(|r| matches!(r, RowRef::Layer { .. }))
+        .cloned()
+        .collect()
+}
+
+#[test]
+fn a_layer_rule_for_a_layer_the_board_lacks_keeps_its_row() {
+    let outer = "rule outer_w on track when layer == outer require width >= 0.25mm then error\n";
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    store(&mut app, outer);
+    open(&mut app);
+    pick(&mut app, id, Domain::Physical);
+    let rows = layer_rows(&app, id);
+    assert_eq!(
+        rows.len(),
+        3,
+        "the two board layers and the written one: {rows:?}"
+    );
+    assert_eq!(
+        rows[2],
+        RowRef::Layer {
+            token: "outer".into(),
+            number: 0,
+            count: 2,
+        }
+    );
+    let _ = app.view_rules_tab(id);
+
+    // With no board open, the written layer is still listed.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
+    store(&mut app, outer);
+    let id = app.document_state.projects[0].id;
+    send(&mut app, RulesTabMsg::OpenRequested { project: Some(id) });
+    pick(&mut app, id, Domain::Physical);
+    assert_eq!(
+        layer_rows(&app, id),
+        [RowRef::Layer {
+            token: "outer".into(),
+            number: 0,
+            count: 0,
+        }]
+    );
+    let _ = app.view_rules_tab(id);
+}
+
+#[test]
+fn a_board_wide_rule_no_cell_shows_is_a_scoped_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    store(
+        &mut app,
+        "rule wide_a on clearance require clearance >= 0.2mm then error\n\
+         rule wide_b on clearance require clearance >= 0.3mm then error\n",
+    );
+    open(&mut app);
+    let rows = grid(&app, id).rows();
+    assert!(rows.contains(&RowRef::Scoped("wide_a".into())), "{rows:?}");
+    assert!(!rows.contains(&RowRef::Scoped("wide_b".into())), "{rows:?}");
+    let _ = app.view_rules_tab(id);
+}

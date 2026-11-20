@@ -433,3 +433,86 @@ rule two on track when net == \"A\" and class == \"B\" require width >= 0.2mm th
         [GridScope::All, GridScope::Layer("outer".into())]
     );
 }
+
+// ---- review fixes (#2530) ---------------------------------------------
+
+/// The cell shows the stricter of two equal rules; a typed value rewrites
+/// that rule, not the first one written.
+#[test]
+fn a_typed_value_rewrites_the_rule_the_cell_shows() {
+    let rows = table(TEXT);
+    let pwr = class("PWR");
+    let out = set_cell(TEXT, &rows, &pwr, LimitField::MinClearance, "0.32mm").unwrap();
+    assert!(
+        out.contains(
+            "rule pwr_clear on clearance when class == \"PWR\" require clearance >= 0.3mm"
+        ),
+        "the losing rule stays as typed: {out}"
+    );
+    assert!(
+        out.contains(
+            "rule pwr_clear2 on clearance when class == \"PWR\" require clearance >= 0.32mm"
+        ),
+        "{out}"
+    );
+    let shown = resolve(
+        &table(&out),
+        &no_sets(),
+        &pwr,
+        &[],
+        LimitField::MinClearance,
+    )
+    .expect("a value");
+    assert_eq!(shown.value, "0.32mm", "the cell shows what was typed");
+}
+
+#[test]
+fn a_value_the_cell_would_not_show_is_refused_naming_the_winner() {
+    let rows = table(TEXT);
+    let refused = set_cell(
+        TEXT,
+        &rows,
+        &class("PWR"),
+        LimitField::MinClearance,
+        "0.25mm",
+    );
+    assert_eq!(
+        refused,
+        Err(super::edit::EditError::Overruled {
+            rule: "pwr_clear2".into(),
+            by: Some("pwr_clear".into()),
+        })
+    );
+    let said = refused.unwrap_err().to_string();
+    assert!(said.contains("pwr_clear"), "{said}");
+    // Below a fab floor on All.
+    let fab = "rule fab_track on track require width >= 0.1mm then error\n";
+    let below = set_cell(
+        fab,
+        &table(fab),
+        &GridScope::All,
+        LimitField::MinWidth,
+        "0.05mm",
+    );
+    assert!(
+        matches!(&below, Err(super::edit::EditError::Overruled { by: Some(by), .. }) if by == "fab_track"),
+        "{below:?}"
+    );
+}
+
+#[test]
+fn a_losing_board_wide_duplicate_is_a_scoped_rule() {
+    let text = "\
+rule wide_a on track require width >= 0.2mm then error
+rule wide_b on track require width >= 0.3mm then error
+rule cls_a on track when class == \"HV\" require width >= 0.2mm then error
+rule cls_b on track when class == \"HV\" require width >= 0.3mm then error
+rule fab_track on track require width >= 0.1mm then error
+";
+    let rows = table(text);
+    let names: Vec<&str> = scoped_rules(&rows)
+        .iter()
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(names, ["wide_a"], "only the hidden board-wide rule");
+}

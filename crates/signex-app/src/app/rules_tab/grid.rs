@@ -52,7 +52,8 @@ pub(crate) enum RowRef {
     Class(String),
     Net(String),
     /// A copper layer by the token rules name it with, numbered from the
-    /// top: L1 is Top, the last is Bottom.
+    /// top: L1 is Top, the last is Bottom. Number 0 is a layer the rules
+    /// name that the board does not have.
     Layer {
         token: String,
         number: usize,
@@ -338,24 +339,17 @@ fn plan_rows(domain: Domain, source: &RowSource, scoped: &[String]) -> Vec<Plann
     if RowGroup::NetClasses.shows_on(domain) {
         net_rows(source, &kept, &mut out);
     }
-    if RowGroup::Layers.shows_on(domain) && !source.layers.is_empty() {
+    if RowGroup::Layers.shows_on(domain) {
         let heading = out.len();
-        let count = source.layers.len();
-        let mut rows = Vec::new();
-        for (i, token) in source.layers.iter().enumerate() {
-            let row = RowRef::Layer {
-                token: token.clone(),
-                number: i + 1,
-                count,
-            };
-            if kept(&row) {
-                rows.push(Planned {
-                    row,
-                    display_parent: Some(heading),
-                    parents: vec![GridScope::All],
-                });
-            }
-        }
+        let rows = layer_rows(source)
+            .into_iter()
+            .filter(|row| kept(row))
+            .map(|row| Planned {
+                row,
+                display_parent: Some(heading),
+                parents: vec![GridScope::All],
+            })
+            .collect();
         push_group(&mut out, RowGroup::Layers, rows);
     }
     if RowGroup::Scoped.shows_on(domain) {
@@ -371,6 +365,35 @@ fn plan_rows(domain: Domain, source: &RowSource, scoped: &[String]) -> Vec<Plann
         push_group(&mut out, RowGroup::Scoped, rows);
     }
     out
+}
+
+/// The board's copper layers top to bottom, then the layers the rule text
+/// writes rules for that the board lacks (or every one with no board),
+/// numbered 0, so no written rule hides.
+fn layer_rows(source: &RowSource) -> Vec<RowRef> {
+    let count = source.layers.len();
+    let mut rows: Vec<RowRef> = source
+        .layers
+        .iter()
+        .enumerate()
+        .map(|(i, token)| RowRef::Layer {
+            token: token.clone(),
+            number: i + 1,
+            count,
+        })
+        .collect();
+    for scope in &source.written {
+        if let GridScope::Layer(token) = scope
+            && !source.layers.contains(token)
+        {
+            rows.push(RowRef::Layer {
+                token: token.clone(),
+                number: 0,
+                count,
+            });
+        }
+    }
+    rows
 }
 
 /// A heading and its rows; no heading over no rows.
