@@ -6,11 +6,19 @@ add_board_graphic	headless_missing_operand	needs `document`	core	none	routing
 add_net_class	operand_handler	run_operands: named document	core	origin	handler
 add_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 add_net_class	headless_missing_operand	needs `document`	core	none	routing
+add_table_of_contents	bridge	Edit(Tables(TableOfContentsRequested))	gui	active document	gate
+add_table_of_contents	in_window_rewrite	document_window	gui	window	routing
+add_table_of_contents	refusal_needs	Sheets	gui	active document	routing
+add_table_of_contents	headless_refusal	headless_refusal	core	none	routing
 add_teardrops	bridge	Pcb(Tools(TeardropsAddRequested))	gui	active document	gate
 add_teardrops	operand_handler	run_operands: named document	core	origin,settings	handler
 add_teardrops	in_window_rewrite	document_window	gui	window	routing
 add_teardrops	refusal_needs	Pcb	core	active document	routing
 add_teardrops	headless_missing_operand	needs `document`	core	none	routing
+add_to_union	bridge	Edit(Unions(AddSelectionRequested))	gui	active document	gate
+add_to_union	in_window_rewrite	document_window	gui	window	routing
+add_to_union	refusal_needs	Schematic	gui	active document	routing
+add_to_union	headless_refusal	headless_refusal	core	none	routing
 align_bottom	active_bar	AlignBottom	core	active document,selection	handler
 align_bottom	in_window_rewrite	document_window	gui	window	routing
 align_horizontal_centers	active_bar	AlignHorizontalCenters	core	active document,selection	handler
@@ -101,6 +109,10 @@ board_sketch	bridge	Pcb(Sketch(ModeToggled))	gui	active document	gate
 board_sketch	in_window_rewrite	document_window	gui	window	routing
 board_sketch	refusal_needs	EditablePcb	gui	active document	routing
 board_sketch	headless_refusal	headless_refusal	core	none	routing
+break_union	bridge	Edit(Unions(BreakRequested))	gui	active document	gate
+break_union	in_window_rewrite	document_window	gui	window	routing
+break_union	refusal_needs	Schematic	gui	active document	routing
+break_union	headless_refusal	headless_refusal	core	none	routing
 break_wire	bridge	Tool(SelectTool(BreakWire))	gui	active document	gate
 break_wire	in_window_rewrite	document_window	gui	window	routing
 break_wire	refusal_needs	Schematic	gui	active document	routing
@@ -162,6 +174,10 @@ color_net	active_bar	NetColorCustom	gui	selection	handler
 color_net	operand_handler	run_operands: named document	core	origin	handler
 color_net	in_window_rewrite	document_window	gui	window	routing
 color_net	headless_missing_operand	needs `at`	core	none	routing
+compile_project	bridge	Project(CompiledDesign(CompileRequested))	gui	active document	gate
+compile_project	in_window_rewrite	document_window	gui	window	routing
+compile_project	refusal_needs	ProjectSheet	gui	active document	routing
+compile_project	headless_refusal	headless_refusal	core	none	routing
 copy	bridge	Edit(Copy)	core	active document,selection,tool state	handler
 copy	in_window_rewrite	document_window	gui	window	routing
 copy	refusal_needs	CopyTarget	core	active document,selection	routing
@@ -177,6 +193,10 @@ create_sheet_symbol_from_sheet	operand_handler	run_operands: active-tab gate unl
 create_sheet_symbol_from_sheet	in_window_rewrite	document_window	gui	window	routing
 create_sheet_symbol_from_sheet	refusal_needs	Schematic	core	active document	routing
 create_sheet_symbol_from_sheet	headless_without_operands	run_operands	core	active document	handler
+create_union	bridge	Edit(Unions(CreateRequested))	gui	active document	gate
+create_union	in_window_rewrite	document_window	gui	window	routing
+create_union	refusal_needs	Schematic	gui	active document	routing
+create_union	headless_refusal	headless_refusal	core	none	routing
 cross_probe	bridge	CrossProbe(ProbeRequested)	gui	active document,selection	gate
 cross_probe	in_window_rewrite	document_window	gui	window	routing
 cross_probe	refusal_needs	ProbeTarget	gui	active document,selection	routing
@@ -245,10 +265,9 @@ draw_arc	active_bar	DrawArc	gui	active document	gate
 draw_arc	in_window_rewrite	document_window	gui	window	routing
 draw_arc	refusal_needs	Schematic	gui	active document	routing
 draw_arc	headless_refusal	headless_refusal	core	none	routing
-draw_bezier	active_bar	DrawBezier	gui	none	handler
+draw_bezier	active_bar	DrawBezier	gui	active document	handler
 draw_bezier	in_window_rewrite	document_window	gui	window	routing
-draw_bezier	refusal_needs	Planned	gui	none	routing
-draw_bezier	disabled_still_runs	explains_when_unavailable	gui	none	handler
+draw_bezier	refusal_needs	Schematic	gui	active document	routing
 draw_bezier	headless_refusal	headless_refusal	core	none	routing
 draw_bus	active_bar	DrawBus	gui	active document	gate
 draw_bus	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
@@ -578,6 +597,9 @@ open_child_sheet	headless_refusal	headless_refusal	core	none	routing
 open_command_palette	bridge	CommandPalette(Open)	gui	none	handler
 open_command_palette	in_window_rewrite	document_window	gui	window	routing
 open_command_palette	headless_refusal	headless_refusal	core	none	routing
+open_compiled_design	bridge	Overlay(OpenPanel(CompiledDesign))	gui	none	gate
+open_compiled_design	in_window_rewrite	document_window	gui	window	routing
+open_compiled_design	headless_refusal	headless_refusal	core	none	routing
 open_components_panel	bridge	Library(OpenPicker)	gui	active document	gate
 open_components_panel	in_window_rewrite	document_window	gui	window	routing
 open_components_panel	refusal_needs	Schematic	gui	active document	routing
@@ -585,6 +607,10 @@ open_components_panel	headless_refusal	headless_refusal	core	none	routing
 open_datasheet	bridge	Library(PlacedPart(ActionRequested(OpenDatasheet)))	gui	selection	handler
 open_datasheet	in_window_rewrite	document_window	gui	window	routing
 open_datasheet	headless_refusal	headless_refusal	core	none	routing
+open_diff_pair_classes	bridge	DiffPairClasses(Requested)	gui	active document	gate
+open_diff_pair_classes	in_window_rewrite	document_window	gui	window	routing
+open_diff_pair_classes	refusal_needs	OpenProject	gui	active document	routing
+open_diff_pair_classes	headless_refusal	headless_refusal	core	none	routing
 open_document	bridge	Menu(OpenProject)	core	dialog answer	handler
 open_document	operand_handler	run_operands: active-tab gate unless a document is named	core	none	handler
 open_document	in_window_rewrite	document_window	gui	window	routing
@@ -604,6 +630,10 @@ open_grid_picker	headless_refusal	headless_refusal	core	none	routing
 open_grid_properties	bridge	GridProperties(Open)	gui	none	handler
 open_grid_properties	in_window_rewrite	document_window	gui	window	routing
 open_grid_properties	headless_refusal	headless_refusal	core	none	routing
+open_harness_definitions	bridge	Dock(Panel(Harness(DefinitionsOpened)))	gui	active document	gate
+open_harness_definitions	in_window_rewrite	document_window	gui	window	routing
+open_harness_definitions	refusal_needs	Schematic	gui	active document	routing
+open_harness_definitions	headless_refusal	headless_refusal	core	none	routing
 open_library_browser	bridge	Library(LibraryEditorRequested)	gui	active document	gate
 open_library_browser	in_window_rewrite	document_window	gui	window	routing
 open_library_browser	refusal_needs	Library	gui	active document	routing
@@ -662,6 +692,10 @@ paste_special	bridge	Edit(SmartPaste)	core	active document,tool state,render cac
 paste_special	in_window_rewrite	document_window	gui	window	routing
 paste_special	refusal_needs	PasteTarget	core	active document,clipboard	routing
 paste_special	disabled_still_runs_refusal	explains_refusal_in	core	active document,tool state,render cache,clipboard	handler
+place_aligned_dimension	active_bar	PlaceAlignedDimension	gui	active document	gate
+place_aligned_dimension	in_window_rewrite	document_window	gui	window	routing
+place_aligned_dimension	refusal_needs	Schematic	gui	active document	routing
+place_aligned_dimension	headless_refusal	headless_refusal	core	none	routing
 place_blanket	active_bar	PlaceBlanket	gui	active document	gate
 place_blanket	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_blanket	in_window_rewrite	document_window	gui	window	routing
@@ -798,15 +832,13 @@ place_graphic	in_window_rewrite	document_window	gui	window	routing
 place_graphic	refusal_needs	Planned	gui	none	routing
 place_graphic	disabled_still_runs	explains_when_unavailable	gui	none	handler
 place_graphic	headless_refusal	headless_refusal	core	none	routing
-place_harness_connector	active_bar	PlaceHarnessConnector	gui	none	handler
+place_harness_connector	active_bar	PlaceHarnessConnector	gui	active document	handler
 place_harness_connector	in_window_rewrite	document_window	gui	window	routing
-place_harness_connector	refusal_needs	Planned	gui	none	routing
-place_harness_connector	disabled_still_runs	explains_when_unavailable	gui	none	handler
+place_harness_connector	refusal_needs	Schematic	gui	active document	routing
 place_harness_connector	headless_refusal	headless_refusal	core	none	routing
-place_harness_entry	active_bar	PlaceHarnessEntry	gui	none	handler
+place_harness_entry	active_bar	PlaceHarnessEntry	gui	active document	handler
 place_harness_entry	in_window_rewrite	document_window	gui	window	routing
-place_harness_entry	refusal_needs	Planned	gui	none	routing
-place_harness_entry	disabled_still_runs	explains_when_unavailable	gui	none	handler
+place_harness_entry	refusal_needs	Schematic	gui	active document	routing
 place_harness_entry	headless_refusal	headless_refusal	core	none	routing
 place_hierarchical_label	bridge	ActiveBar(Action(PlaceOffSheetConnector))	gui	active document	gate
 place_hierarchical_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
@@ -818,6 +850,10 @@ place_junction	operand_handler	run_operands: active-tab gate unless a document i
 place_junction	in_window_rewrite	document_window	gui	window	routing
 place_junction	refusal_needs	Schematic	core	active document	routing
 place_junction	headless_missing_operand	needs `at`	core	none	routing
+place_linear_dimension	active_bar	PlaceLinearDimension	gui	active document	gate
+place_linear_dimension	in_window_rewrite	document_window	gui	window	routing
+place_linear_dimension	refusal_needs	Schematic	gui	active document	routing
+place_linear_dimension	headless_refusal	headless_refusal	core	none	routing
 place_local_net_label	bridge	ActiveBar(Action(PlaceNetLabel))	gui	active document	gate
 place_local_net_label	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,pre-placement form,origin	handler
 place_local_net_label	in_window_rewrite	document_window	gui	window	routing
@@ -846,11 +882,11 @@ place_off_sheet_connector	active_bar	PlaceOffSheetConnector	gui	active document	
 place_off_sheet_connector	in_window_rewrite	document_window	gui	window	routing
 place_off_sheet_connector	refusal_needs	Schematic	gui	active document	routing
 place_off_sheet_connector	headless_refusal	headless_refusal	core	none	routing
-place_parameter_set	active_bar	PlaceParameterSet	gui	none	handler
+place_parameter_set	active_bar	PlaceParameterSet	gui	active document	handler
+place_parameter_set	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
 place_parameter_set	in_window_rewrite	document_window	gui	window	routing
-place_parameter_set	refusal_needs	Planned	gui	none	routing
-place_parameter_set	disabled_still_runs	explains_when_unavailable	gui	none	handler
-place_parameter_set	headless_refusal	headless_refusal	core	none	routing
+place_parameter_set	refusal_needs	Schematic	core	active document	routing
+place_parameter_set	headless_missing_operand	needs `at`	core	none	routing
 place_port	active_bar	PlacePort	gui	active document	gate
 place_port	in_window_rewrite	document_window	gui	window	routing
 place_port	refusal_needs	Schematic	gui	active document	routing
@@ -875,15 +911,18 @@ place_sheet_symbol	operand_handler	run_operands: active-tab gate unless a docume
 place_sheet_symbol	in_window_rewrite	document_window	gui	window	routing
 place_sheet_symbol	refusal_needs	Schematic	core	active document	routing
 place_sheet_symbol	headless_missing_operand	needs `start`	core	none	routing
-place_signal_harness	active_bar	PlaceSignalHarness	gui	none	handler
+place_signal_harness	active_bar	PlaceSignalHarness	gui	active document	handler
 place_signal_harness	in_window_rewrite	document_window	gui	window	routing
-place_signal_harness	refusal_needs	Planned	gui	none	routing
-place_signal_harness	disabled_still_runs	explains_when_unavailable	gui	none	handler
+place_signal_harness	refusal_needs	Schematic	gui	active document	routing
 place_signal_harness	headless_refusal	headless_refusal	core	none	routing
 place_symbol	bridge	Library(OpenPicker)	gui	active document	gate
 place_symbol	in_window_rewrite	document_window	gui	window	routing
 place_symbol	refusal_needs	Schematic	gui	active document	routing
 place_symbol	headless_refusal	headless_refusal	core	none	routing
+place_table	active_bar	DrawTable	gui	active document	gate
+place_table	in_window_rewrite	document_window	gui	window	routing
+place_table	refusal_needs	Schematic	gui	active document	routing
+place_table	headless_refusal	headless_refusal	core	none	routing
 place_text	bridge	ActiveBar(Action(PlaceTextString))	gui	active document	gate
 place_text	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_text	in_window_rewrite	document_window	gui	window	routing
@@ -1003,6 +1042,10 @@ remove_board_panel	operand_handler	run_operands: named document	core	origin	hand
 remove_board_panel	in_window_rewrite	document_window	gui	window	routing
 remove_board_panel	refusal_needs	Pcb	core	active document	routing
 remove_board_panel	headless_missing_operand	needs `document`	core	none	routing
+remove_from_union	bridge	Edit(Unions(RemoveSelectionRequested))	gui	active document	gate
+remove_from_union	in_window_rewrite	document_window	gui	window	routing
+remove_from_union	refusal_needs	Schematic	gui	active document	routing
+remove_from_union	headless_refusal	headless_refusal	core	none	routing
 remove_last_vertex	bridge	Tool(RemoveLastVertex)	gui	active document,selection,in-progress edit	gate
 remove_last_vertex	in_window_rewrite	document_window	gui	window	routing
 remove_last_vertex	refusal_needs	VertexTarget	gui	active document,selection,in-progress edit	routing

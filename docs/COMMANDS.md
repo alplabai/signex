@@ -135,7 +135,6 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
-| `open_harness_definitions` | Open the harness definitions | design | — | — |
 | `open_library_browser` | Open library browser | library | — | — |
 | `open_net_classes` | Open the project's Net Classes panel | design | — | — |
 | `open_net_classes_panel` | Open the Net Classes panel of the project | design | — | — |
@@ -213,6 +212,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `add_table_of_contents` | Add table of contents sheet | design | — | — |
 | `add_to_union` | Add the selection to the selected union | edit | — | — |
 | `align_bottom` | Align bottom | modify | — | — |
 | `align_horizontal_centers` | Align horizontal centers | modify | — | — |
@@ -276,10 +276,12 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_erc_dialog` | Open electrical rules check dialog | validation | — | — |
+| `open_harness_definitions` | Open the harness definitions | design | — | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
 | `open_parameter_manager` | Open Parameter Manager | design | — | — |
 | `open_project_options` | Open Project Options for the active project | file | — | — |
 | `open_selection_filter` | Open the selection filter of the sheet | select | — | — |
+| `place_aligned_dimension` | Place aligned dimension | place | — | — |
 | `place_blanket` | Place net blanket | place | — | — |
 | `place_bus` | Draw bus | place | `P B` | `B` |
 | `place_bus_entry` | Place bus entry | place | `P U` | `Z` |
@@ -294,6 +296,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_harness_entry` | Place harness entry | place | — | — |
 | `place_hierarchical_label` | Place hierarchical label | place | — | — |
 | `place_junction` | Place junction | place | — | `J` |
+| `place_linear_dimension` | Place linear dimension | place | — | — |
 | `place_local_net_label` | Place local net label | place | — | `L` |
 | `place_net_label` | Place net label | place | `P N` | — |
 | `place_no_connect` | Place no-connect flag | place | `P X` | `Q` |
@@ -308,6 +311,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_sheet_symbol` | Place sheet symbol | place | `P S` | `S` |
 | `place_signal_harness` | Place signal harness | place | — | — |
 | `place_symbol` | Place symbol | place | — | `A` |
+| `place_table` | Place table | place | — | — |
 | `place_text` | Place text | place | — | `T` |
 | `place_text_frame` | Place text frame | place | — | — |
 | `place_text_string` | Place text string | place | — | — |
