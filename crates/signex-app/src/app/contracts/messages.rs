@@ -678,10 +678,13 @@ pub enum GridPropertiesMsg {
     /// v0.18.11 — open the Grid Properties modal (Ctrl+G).
     /// Footprint editor only; other contexts no-op.
     Open,
-    /// v0.18.11 — close the Grid Properties modal (Cancel button or
-    /// Esc). Discards in-flight edits; Esc while a preview label is open
-    /// closes only that label.
+    /// v0.18.11 — close the Grid Properties modal (Esc). Discards
+    /// in-flight edits; Esc while a preview label is open closes only
+    /// that label.
     Close,
+    /// Cancel or the header X was pressed: the modal closes, discarding
+    /// in-flight edits and any open preview label.
+    CancelPressed,
     /// v0.18.11 — Grid Properties modal: text input bound to the
     /// Step field (one value for both axes). Strings are validated on
     /// Apply, not per keystroke, so partial input doesn't fight the user.

@@ -75,7 +75,7 @@ fn ok_sends_apply_and_cancel_closes() {
     let [cancel, ok] = footer_buttons();
     assert_eq!(en().message_plain(cancel.0, &[]), "Cancel");
     assert_eq!(cancel.1, DialogButtonKind::Cancel);
-    assert!(matches!(cancel.2, GridPropertiesMsg::Close));
+    assert!(matches!(cancel.2, GridPropertiesMsg::CancelPressed));
     assert_eq!(en().message_plain(ok.0, &[]), "OK");
     assert_eq!(ok.1, DialogButtonKind::Primary);
     assert!(matches!(ok.2, GridPropertiesMsg::Apply));

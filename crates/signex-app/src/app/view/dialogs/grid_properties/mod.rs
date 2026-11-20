@@ -69,7 +69,7 @@ impl Signex {
                 i18n.message_plain(ids::DIALOG_TITLE_GRID_PROPERTIES, &[]),
                 Some(i18n.message_plain(ids::DIALOG_GRID_NOTE, &[])),
                 None,
-                msg(GridPropertiesMsg::Close),
+                msg(GridPropertiesMsg::CancelPressed),
                 DIALOG_HEADER_H,
                 tokens,
             ),
@@ -111,7 +111,7 @@ pub(crate) fn footer_buttons() -> [(MessageId, DialogButtonKind, GridPropertiesM
         (
             ids::DIALOG_BUTTON_CANCEL,
             DialogButtonKind::Cancel,
-            GridPropertiesMsg::Close,
+            GridPropertiesMsg::CancelPressed,
         ),
         (
             ids::DIALOG_BUTTON_OK,

@@ -397,6 +397,7 @@ impl Signex {
             }
             GridPropertiesMsg::SetMultiplier(m) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.drop_open_label();
                     state.multiplier = m.max(1);
                 }
                 self.finish_update()
@@ -406,12 +407,13 @@ impl Signex {
                 if let Some(state) = self.ui_state.grid_properties.as_mut()
                     && state.preview_labels.editing_index().is_some()
                 {
-                    let _ = state.preview_labels.update(
-                        signex_widgets::dimension_label::DimensionLabelMessage::EscapePressed,
-                        &[],
-                    );
+                    state.drop_open_label();
                     return self.finish_update();
                 }
+                self.ui_state.grid_properties = None;
+                self.finish_update()
+            }
+            GridPropertiesMsg::CancelPressed => {
                 self.ui_state.grid_properties = None;
                 self.finish_update()
             }
@@ -437,17 +439,16 @@ impl Signex {
             }
             GridPropertiesMsg::SetStep(value) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.drop_open_label();
                     state.step_mm = value;
                 }
                 self.finish_update()
             }
             GridPropertiesMsg::Apply => {
                 // A preview label still open commits its draft first, as
-                // Enter would, so OK never drops a typed value (a click on
-                // OK blurs the field first; `label_edited` keeps a changed
-                // draft open through that blur). Text that is not a length
-                // refuses OK: the dialog stays open with the label outlined
-                // red until it is fixed or Esc closes it.
+                // Enter (or the blur of a click on OK) would. Text that is
+                // not a length refuses OK: the dialog stays open with the
+                // label outlined red until it is fixed or Esc closes it.
                 let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                 if let Some(state) = self.ui_state.grid_properties.as_mut()
                     && state.preview_labels.editing_index().is_some()

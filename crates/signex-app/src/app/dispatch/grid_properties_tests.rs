@@ -147,7 +147,7 @@ fn ok_is_refused_while_a_preview_label_holds_text_that_is_not_a_length() {
 }
 
 /// A click on OK after typing a length on a fresh label writes it: the
-/// blur that comes first keeps the typed text.
+/// blur that comes first commits the typed text.
 #[test]
 fn ok_clicked_after_typing_a_length_writes_it() {
     use signex_widgets::dimension_label::DimensionLabelMessage as M;
@@ -187,4 +187,72 @@ fn a_refused_draft_stays_when_the_other_label_is_pressed() {
     send(&mut app, GridPropertiesMsg::Close);
     let state = app.ui_state.grid_properties.as_ref().expect("open");
     assert!(state.preview_labels.editing_index().is_none());
+}
+
+fn multiplier(app: &mut Signex) -> u32 {
+    app.active_footprint_editor_mut()
+        .expect("footprint editor is active")
+        .state
+        .snap_options
+        .coarse_multiplier
+}
+
+/// Cancel after typing on a preview label closes the dialog in one click,
+/// whether the text is a length or not; nothing is written.
+#[test]
+fn cancel_after_typing_on_a_preview_label_closes_the_dialog() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    for typed in ["2.5", "abc"] {
+        let mut app = app_with_footprint_editor();
+        let before = step_mm(&mut app);
+        send(&mut app, GridPropertiesMsg::Open);
+        label(&mut app, M::LabelPressed(0));
+        label(&mut app, M::DraftEdited(typed.into()));
+        label(&mut app, M::DraftBlurred(0));
+        send(&mut app, GridPropertiesMsg::CancelPressed);
+        assert!(app.ui_state.grid_properties.is_none(), "typed {typed:?}");
+        assert_eq!(step_mm(&mut app), before, "typed {typed:?}");
+    }
+}
+
+/// A length typed on a preview label is committed when the label loses
+/// focus, so a value typed afterwards in the Step field is what OK writes.
+#[test]
+fn a_step_typed_in_the_field_after_a_label_is_what_ok_writes() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    let mut app = app_with_footprint_editor();
+    send(&mut app, GridPropertiesMsg::Open);
+    label(&mut app, M::LabelPressed(0));
+    label(&mut app, M::DraftEdited("2.5".into()));
+    label(&mut app, M::DraftBlurred(0));
+    let state = app.ui_state.grid_properties.as_ref().expect("open");
+    assert!(state.preview_labels.editing_index().is_none());
+    send(&mut app, GridPropertiesMsg::SetStep("0.5".into()));
+    send(&mut app, GridPropertiesMsg::Apply);
+    assert_eq!(step_mm(&mut app), 0.5);
+    assert!(app.ui_state.grid_properties.is_none());
+}
+
+/// A refused label left open by its blur is dropped when the user edits
+/// the Step field or picks a Multiplier: the value set last wins.
+#[test]
+fn an_edit_in_the_form_drops_a_refused_label() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    let mut app = app_with_footprint_editor();
+    send(&mut app, GridPropertiesMsg::Open);
+    label(&mut app, M::LabelPressed(0));
+    label(&mut app, M::DraftEdited("abc".into()));
+    label(&mut app, M::DraftBlurred(0));
+    send(&mut app, GridPropertiesMsg::SetStep("0.5".into()));
+    let state = app.ui_state.grid_properties.as_ref().expect("open");
+    assert!(state.preview_labels.editing_index().is_none());
+
+    label(&mut app, M::LabelPressed(1));
+    label(&mut app, M::DraftEdited("abc".into()));
+    label(&mut app, M::DraftBlurred(1));
+    send(&mut app, GridPropertiesMsg::SetMultiplier(2));
+    send(&mut app, GridPropertiesMsg::Apply);
+    assert!(app.ui_state.grid_properties.is_none());
+    assert_eq!(step_mm(&mut app), 0.5);
+    assert_eq!(multiplier(&mut app), 2);
 }

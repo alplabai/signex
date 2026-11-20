@@ -192,11 +192,13 @@ Select All, Deselect All, Fit to Window and **Delete**.
 beside it), and how the fine and the coarse grid draw (**Lines**, **Dots** or
 **Hidden**). The preview at the top draws the grids as you set them, with a pad
 for scale; click the step or the coarse label on it to type a new value and
-press `Enter`, or `Esc` to leave it. Text that is not a length is outlined
-red and the preview says why; `Enter` and **OK** wait until it is fixed or
-`Esc` closes the label. The button in its corner draws it taller.
-**OK** applies; a step that is not a number above zero is refused and the
-dialog stays open.
+press `Enter` or click elsewhere, or `Esc` to leave it. Text that is not a
+length is outlined red and the preview says why; `Enter` and **OK** wait until
+it is fixed or `Esc` closes the label. Typing in the **Step** field or picking
+a **Multiplier** closes an open label without using its text. The button in
+its corner draws it taller. **OK** applies; a step that is not a number above
+zero is refused and the dialog stays open. **Cancel** closes the dialog and
+discards the changes.
 
 ## 5. Place a symbol
 

@@ -88,20 +88,21 @@ impl GridPropertiesState {
         self.preview_labels.draft_refused(&labels)
     }
 
-    /// Whether the open preview label `index` holds text other than the
-    /// text it opened with.
-    fn draft_changed(&self, index: usize, labels: &[DimensionLabel<'_>]) -> bool {
-        let (Some(draft), Some(label)) = (self.preview_labels.draft(), labels.get(index)) else {
-            return false;
-        };
-        draft.trim() != label.format.field_text(label.value).trim()
+    /// Closes the open preview label without committing its text. Cancel,
+    /// the header X and an edit in the Step or Multiplier field use it:
+    /// the value set last wins over a draft left on the drawing.
+    pub(crate) fn drop_open_label(&mut self) {
+        if self.preview_labels.editing_index().is_some() {
+            let _ = self
+                .preview_labels
+                .update(DimensionLabelMessage::EscapePressed, &[]);
+        }
     }
 
-    /// Whether `event` is refused before the labels see it. Enter and Tab
-    /// wait while the text is not a length, and so does a press on
-    /// another label. A blur keeps a changed draft open: a click on OK
-    /// blurs the field before OK arrives, and OK then commits or refuses
-    /// the text. Esc still closes the label.
+    /// Whether `event` is refused before the labels see it. Enter, Tab,
+    /// a blur and a press on another label wait while the text is not a
+    /// length, so the label stays open with it. Esc still closes the
+    /// label.
     fn label_event_refused(
         &self,
         event: &DimensionLabelMessage,
@@ -114,19 +115,30 @@ impl GridPropertiesState {
             M::LabelPressed(i) | M::HandlePressed(i) => {
                 open.is_some_and(|o| o != i) && self.preview_labels.draft_refused(labels)
             }
-            M::DraftBlurred(i) => open == Some(i) && self.draft_changed(i, labels),
+            M::DraftBlurred(i) => open == Some(i) && self.preview_labels.draft_refused(labels),
             _ => false,
         }
     }
 
-    /// Routes a preview label event: an Enter commits the typed value into
-    /// the draft, and is refused while the text is not a length. Returns
-    /// whether a label field opened, so the caller focuses it.
+    /// Routes a preview label event: Enter, and a blur of the open label,
+    /// commit the typed value into the draft, and are refused while the
+    /// text is not a length. A click elsewhere (OK, Cancel, a field)
+    /// blurs the label first, so its typed length is in the draft before
+    /// that click acts. Returns whether a label field opened, so the
+    /// caller focuses it.
     pub(crate) fn label_edited(&mut self, event: DimensionLabelMessage, i18n: &I18n) -> bool {
         let (kinds, labels) = self.update_labels(i18n);
         if self.label_event_refused(&event, &labels) {
             return false;
         }
+        let event = match event {
+            DimensionLabelMessage::DraftBlurred(i)
+                if self.preview_labels.editing_index() == Some(i) =>
+            {
+                DimensionLabelMessage::DraftSubmitted
+            }
+            other => other,
+        };
         let outcome = self.preview_labels.update(event, &labels);
         if let Some(done) = outcome.committed
             && let Some(&kind) = kinds.get(done.index)
