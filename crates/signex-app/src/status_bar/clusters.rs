@@ -63,7 +63,7 @@ pub(super) fn segments(r: &Readout<'_>) -> Vec<Segment> {
     if r.pending_git_commits > 0 {
         out.push(S::Saving);
     }
-    if r.altium_import.is_some() {
+    if r.board_import.is_some() {
         out.push(S::Import);
     }
     if r.activity.is_none() {
@@ -127,10 +127,10 @@ fn segment_view<'a>(
         }
         Segment::Import => mono_button(
             mono_message(
-                t!(i18n, ids::PANELS_STATUS_BAR_IMPORTING, "name" => r.altium_import?),
+                t!(i18n, ids::PANELS_STATUS_BAR_IMPORTING, "name" => r.board_import?),
                 ink,
             ),
-            StatusBarRequest::CancelAltiumImport,
+            StatusBarRequest::CancelBoardImport,
         )
         .boxed(),
         Segment::Spacer => space::horizontal().boxed(),
@@ -311,7 +311,7 @@ mod tests {
             grid_size_mm: 1.27,
             selection: None,
             pending_git_commits: 0,
-            altium_import: None,
+            board_import: None,
             activity,
             surface,
         }
@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn a_running_import_keeps_its_cancel_segment() {
         let mut r = readout(None, SurfaceReadout::default());
-        r.altium_import = Some("board.zip");
+        r.board_import = Some("board.zip");
         assert!(segments(&r).contains(&S::Import));
     }
 }

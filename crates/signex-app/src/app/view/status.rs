@@ -15,7 +15,7 @@ impl Signex {
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
         let document = &self.document_state;
-        let altium_import_name = document.altium_import_running.as_ref().map(|run| {
+        let board_import_name = document.altium_import_running.as_ref().map(|run| {
             run.input
                 .file_name()
                 .map(|f| f.to_string_lossy().into_owned())
@@ -42,7 +42,7 @@ impl Signex {
             selected,
             &document.panel_ctx.tokens,
             document.inflight_git_commits.len(),
-            altium_import_name.as_deref(),
+            board_import_name.as_deref(),
             activity.as_ref(),
             SurfaceReadout {
                 active_layer: self.status_layer(window_id),

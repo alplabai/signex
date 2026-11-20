@@ -39,7 +39,8 @@ pub(crate) struct Readout<'r> {
     pub grid_size_mm: f32,
     pub selection: Option<Localized>,
     pub pending_git_commits: usize,
-    pub altium_import: Option<&'r str>,
+    /// The file a running board import reads, shown as "Importing …".
+    pub board_import: Option<&'r str>,
     pub activity: Option<&'r Activity>,
     pub surface: SurfaceReadout,
 }
@@ -156,7 +157,7 @@ pub(crate) fn view<'a>(
     selected: &[SelectedItem],
     tokens: &ThemeTokens,
     pending_git_commits: usize,
-    altium_import: Option<&str>,
+    board_import: Option<&str>,
     activity: Option<&Activity>,
     surface: SurfaceReadout,
     i18n: &signex_i18n::I18n,
@@ -173,7 +174,7 @@ pub(crate) fn view<'a>(
             grid_size_mm,
             selection: selection_summary(selected, i18n),
             pending_git_commits,
-            altium_import,
+            board_import,
             activity,
             surface,
         },

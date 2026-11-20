@@ -227,7 +227,7 @@ impl Signex {
             ),
             UiMsg::StatusBar(StatusBarRequest::ViewAngleSubmitted) => self
                 .dispatch_pcb_message(PcbMsg::ViewRotation(ViewRotationMsg::AngleEntrySubmitted)),
-            UiMsg::StatusBar(StatusBarRequest::CancelAltiumImport) => {
+            UiMsg::StatusBar(StatusBarRequest::CancelBoardImport) => {
                 self.handle_altium_import_cancel();
                 Task::none()
             }

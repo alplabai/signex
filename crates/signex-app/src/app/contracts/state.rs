@@ -668,9 +668,9 @@ pub enum StatusBarRequest {
     /// Click on the selection-summary segment opens the Properties panel
     /// scoped to the current selection.
     OpenPropertiesForSelection,
-    /// Click on the "Importing …" segment cancels the running Altium
+    /// Click on the "Importing …" segment cancels the running board
     /// import (#1123).
-    CancelAltiumImport,
+    CancelBoardImport,
     /// Click on the active-layer pill steps to the next copper layer (#2223).
     ActiveLayerStepRequested,
     /// Click on the board view's angle readout opens or closes its value
