@@ -147,10 +147,6 @@ pub struct PdfOptions {
     pub bookmark_pins: bool,
     pub bookmark_net_labels: bool,
     pub bookmark_ports: bool,
-    /// Add component-parameter rows under each part bookmark. The part
-    /// bookmarks themselves follow `bookmark_parts`; no parameter rows are
-    /// written yet (docs/PDF_EXPORT.md, "Bookmarks").
-    pub include_component_parameters: bool,
     /// Pull the Components and Nets groups out from under each sheet to
     /// the top level. With `PartBookmarkOrder::Alphabetical` it governs
     /// the Nets group only (docs/PDF_EXPORT.md, "Bookmarks").
@@ -291,7 +287,6 @@ impl Default for PdfOptions {
             bookmark_pins: true,
             bookmark_net_labels: true,
             bookmark_ports: true,
-            include_component_parameters: true,
             global_bookmarks: false,
             bookmark_sheets: true,
             bookmark_parts: true,

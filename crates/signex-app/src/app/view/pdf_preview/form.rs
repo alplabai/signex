@@ -275,9 +275,7 @@ pub(super) fn schematics_include() -> [Toggle; 7] {
 }
 
 /// Bookmarks and Nets: what a net bookmark lists (indented under the help
-/// line), then the global bookmarks. No component-parameters box: the
-/// exporter writes no parameter rows yet (docs/PDF_EXPORT.md), so it would
-/// change nothing.
+/// line), then the global bookmarks.
 pub(super) fn net_bookmarks() -> [Toggle; 4] {
     use signex_i18n::ids;
     [

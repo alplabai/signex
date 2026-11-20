@@ -77,7 +77,6 @@ fn default_opts() -> PdfOptions {
         bookmark_pins: false,
         bookmark_net_labels: false,
         bookmark_ports: false,
-        include_component_parameters: false,
         global_bookmarks: false,
         bookmark_sheets: true,
         bookmark_parts: false,
@@ -175,7 +174,6 @@ fn global_bookmarks_pulls_groups_to_top_level() {
 fn variant_tag_appended_when_physical_structure_on() {
     let ctx = ctx_with_one_sheet();
     let opts = PdfOptions {
-        include_component_parameters: true,
         use_physical_structure: true,
         variant: Some("VarA".to_string()),
         ..default_opts()
@@ -468,14 +466,12 @@ fn sheet_bookmarks_alone_list_one_item_per_page() {
     assert_eq!(items[1].page_idx, 1);
 }
 
-/// Component parameters add rows under a part; they never bring the part
-/// bookmarks back when those are off.
+/// Part bookmarks off writes no Components group and no part item.
 #[test]
-fn part_bookmarks_off_writes_no_part_items_even_with_parameters_on() {
+fn part_bookmarks_off_writes_no_part_items() {
     let ctx = ctx_with_one_sheet();
     let opts = PdfOptions {
         bookmark_parts: false,
-        include_component_parameters: true,
         ..default_opts()
     };
     let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);

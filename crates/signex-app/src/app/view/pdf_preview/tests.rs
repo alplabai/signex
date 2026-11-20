@@ -139,10 +139,8 @@ fn folded_sections_show_their_summaries() {
     options.include_probes = false;
     options.include_blankets = false;
     options.include_collapsed_notes = true;
-    // Bookmarks and Nets: Pins, Net Labels and Ports. Component parameters
-    // (on by default) has no box, so it does not count.
+    // Bookmarks and Nets: Pins, Net Labels and Ports.
     options.bookmark_ports = true;
-    options.include_component_parameters = true;
     options.global_bookmarks = false;
     options.use_physical_structure = false;
 
@@ -155,9 +153,8 @@ fn folded_sections_show_their_summaries() {
     assert_eq!(sheets_summary(&preview), (3, 4));
 }
 
-/// Bookmarks and Nets has no "Include Component Parameters" box: the
-/// exporter writes no parameter rows, and part bookmarks follow "One
-/// bookmark per part" in Bookmarks.
+/// Bookmarks and Nets has no "Include Component Parameters" box: part
+/// bookmarks follow "One bookmark per part" in Bookmarks (Caner, 2026-11-20).
 #[test]
 fn bookmarks_and_nets_has_no_component_parameters_box() {
     let (app, _task) = Signex::new();

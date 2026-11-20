@@ -20,12 +20,18 @@ whatever the UI language.
 | `bookmark_parts` | `true` | One bookmark per part, under its sheet. |
 | `part_bookmark_order` | `BySheet` | Parts are listed under the sheet they are on. |
 | `generate_nets_info` | `true` | The "one bookmark per net" option, unchanged. |
-| `include_component_parameters` | `true` | Reserved for parameter rows under each part; see below. |
 | `global_bookmarks` | `false` | The Components and Nets groups sit under each sheet. |
 
 The domain defaults keep the watermark and the layers off, and so does the
-Export PDF dialog. The dialog has no box for `include_component_parameters`
-while it has no effect.
+Export PDF dialog ("Write PDF layers" is off by default, Caner 2026-11-20).
+
+## Variant
+
+`variant` names the variant the PDF prints. The Export PDF dialog always
+names one, Base included: it opens on the project's active variant, and Base
+picked in the dialog prints Base even while the project's active variant is
+another one (#2430). With Use Physical Structure on, `${VARIANT}` and the
+sheet bookmarks show the name ("Sheet 1: Top [Base]").
 
 ## Watermark
 
@@ -118,9 +124,6 @@ With `layers: None` none of this is written: no `/OCProperties`, no
 - `generate_nets_info` writes the Nets group, with net labels, ports and
   pins as chosen by `bookmark_net_labels`, `bookmark_ports` and
   `bookmark_pins`.
-- `include_component_parameters` is meant for the parameter rows under each
-  part. No parameter rows are written yet. It no longer turns the part items
-  on or off; `bookmark_parts` does.
 - With every one of `bookmark_sheets`, `bookmark_parts` and
   `generate_nets_info` off, the PDF has no `/Outlines`.
 
