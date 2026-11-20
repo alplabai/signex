@@ -18,8 +18,8 @@
 mod chamfer_extend;
 mod draw;
 mod edit;
-mod mirror_pattern;
 mod inference;
+mod mirror_pattern;
 mod pattern;
 mod slot_polygon;
 mod transform;

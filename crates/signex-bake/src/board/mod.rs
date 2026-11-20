@@ -12,9 +12,9 @@ mod checks;
 mod error;
 mod features;
 mod geometry;
+mod inside_corners;
 mod items;
 mod slot;
-mod inside_corners;
 
 #[cfg(test)]
 mod tests;

@@ -25,7 +25,8 @@ pub const SNXPCB_FORMAT_LAYER_COLORS: &str = "snxpcb/1.5";
 /// drawing or a component anchor (decision 2, 2026-11-20), or any of the
 /// `snxfpt/1.2` sketch lists (reference dimensions, pattern links and
 /// mirrors, pad overrides): an older build would drop those from
-/// `[board_sketch.sketch]` on save, so it opens 1.7 read-only. 1.6 is the rooms token of another change.
+/// `[board_sketch.sketch]` on save, so it opens 1.7 read-only. 1.6 is the
+/// rooms token of another change.
 pub const SNXPCB_FORMAT_BOARD_SKETCH_TARGETS: &str = "snxpcb/1.7";
 
 /// The token a save of `board` writes, from its content: the board sketch
@@ -33,12 +34,9 @@ pub const SNXPCB_FORMAT_BOARD_SKETCH_TARGETS: &str = "snxpcb/1.7";
 /// [`SNXPCB_FORMAT_LAYER_COLORS`], anything else [`SNXPCB_FORMAT_V1`]. A
 /// board whose last such item is gone goes back to the lower token.
 pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
-    let targets = board
-        .sketch
-        .as_ref()
-        .is_some_and(|stored| {
-            stored.sketch.carries_board_targets() || stored.sketch.needs_format_1_2()
-        });
+    let targets = board.sketch.as_ref().is_some_and(|stored| {
+        stored.sketch.carries_board_targets() || stored.sketch.needs_format_1_2()
+    });
     if targets {
         SNXPCB_FORMAT_BOARD_SKETCH_TARGETS
     } else if board.options.layer_colors.is_empty() {

@@ -121,6 +121,9 @@ pub fn close_gap(
         }
         !twice
     });
+    sketch
+        .driven_dimensions
+        .retain(|id| !dropped_constraints.contains(id));
     Ok(GapClosed {
         kept,
         removed,

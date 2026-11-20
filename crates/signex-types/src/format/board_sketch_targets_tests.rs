@@ -13,11 +13,11 @@ use crate::pcb_options::MARK_COLORS;
 use crate::pcb_sketch::BoardSketch;
 use crate::sketch::SketchData;
 use crate::sketch::array::ArrayId;
-use crate::sketch::pattern_links::PatternMirror;
 use crate::sketch::attr::{BoardCutoutAttr, PourAttr, PourFillType, ThermalRelief};
 use crate::sketch::board_attr::{BoardSlotAttr, ComponentAnchorAttr, MechanicalAttr};
 use crate::sketch::entity::{Entity, EntityKind};
 use crate::sketch::id::SketchEntityId;
+use crate::sketch::pattern_links::PatternMirror;
 use crate::sketch::plane::{Plane, PlaneId, PlaneKind};
 use crate::zone_pour::POUR_FILL;
 
