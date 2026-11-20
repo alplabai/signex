@@ -35,6 +35,13 @@ define_ids! {
     PROJECT_PARAMETERS_FIELD_DRAWN_BY = "project-parameters-field-drawn-by";
     PROJECT_PARAMETERS_FIELD_CHECKED_BY = "project-parameters-field-checked-by";
     PROJECT_PARAMETERS_FIELD_APPROVED_BY = "project-parameters-field-approved-by";
+    PROJECT_PARAMETERS_FIELD_AUTHOR = "project-parameters-field-author";
+    PROJECT_PARAMETERS_FIELD_ENGINEER = "project-parameters-field-engineer";
+    PROJECT_PARAMETERS_FIELD_ORGANIZATION = "project-parameters-field-organization";
+    PROJECT_PARAMETERS_FIELD_ADDRESS_1 = "project-parameters-field-address-1";
+    PROJECT_PARAMETERS_FIELD_ADDRESS_2 = "project-parameters-field-address-2";
+    PROJECT_PARAMETERS_FIELD_ADDRESS_3 = "project-parameters-field-address-3";
+    PROJECT_PARAMETERS_FIELD_ADDRESS_4 = "project-parameters-field-address-4";
     PROJECT_PARAMETER_NAME_EMPTY = "project-parameter-name-empty";
     PROJECT_PARAMETER_NAME_INVALID = "project-parameter-name-invalid";
     PROJECT_PARAMETER_NAME_TITLE_BLOCK = "project-parameter-name-title-block";

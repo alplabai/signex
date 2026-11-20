@@ -46,6 +46,13 @@ pub(super) fn field_words(field: TitleBlockField) -> MessageId {
         TitleBlockField::DrawnBy => ids::PROJECT_PARAMETERS_FIELD_DRAWN_BY,
         TitleBlockField::CheckedBy => ids::PROJECT_PARAMETERS_FIELD_CHECKED_BY,
         TitleBlockField::ApprovedBy => ids::PROJECT_PARAMETERS_FIELD_APPROVED_BY,
+        TitleBlockField::Author => ids::PROJECT_PARAMETERS_FIELD_AUTHOR,
+        TitleBlockField::Engineer => ids::PROJECT_PARAMETERS_FIELD_ENGINEER,
+        TitleBlockField::Organization => ids::PROJECT_PARAMETERS_FIELD_ORGANIZATION,
+        TitleBlockField::Address1 => ids::PROJECT_PARAMETERS_FIELD_ADDRESS_1,
+        TitleBlockField::Address2 => ids::PROJECT_PARAMETERS_FIELD_ADDRESS_2,
+        TitleBlockField::Address3 => ids::PROJECT_PARAMETERS_FIELD_ADDRESS_3,
+        TitleBlockField::Address4 => ids::PROJECT_PARAMETERS_FIELD_ADDRESS_4,
     }
 }
 
