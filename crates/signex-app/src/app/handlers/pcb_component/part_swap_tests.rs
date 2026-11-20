@@ -294,7 +294,7 @@ fn pins_outside_one_swap_group_are_refused_and_nothing_changes() {
     );
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("pin swap group")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("pin swap group")),
         "{outcome:?}"
     );
     assert_eq!(
@@ -319,7 +319,7 @@ fn a_component_with_pin_swapping_off_is_refused_with_the_switch_named() {
     );
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("Pin Swapping")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("Pin Swapping")),
         "{outcome:?}"
     );
 }

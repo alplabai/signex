@@ -97,9 +97,10 @@ fn run_edits(app: &mut Signex, sheets: &[PathBuf], edits: &[Prepared]) -> Execut
             }
             (CommandOutcome::Disabled { reason }, _) => {
                 ran.failure = Some(format!(
-                    "edit {} (`{}`): {reason}",
+                    "edit {} (`{}`): {}",
                     index + 1,
-                    edit.id.as_str()
+                    edit.id.as_str(),
+                    signex_i18n::RenderTranslatable::render_en_us(&reason)
                 ));
                 break;
             }

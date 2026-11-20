@@ -9,6 +9,8 @@ use signex_types::zone_keepout::KEEPOUT_FILL;
 use super::copper_tests::{
     app_with, app_with_board, board, board_of, drc_findings, id, live, run, run_operands, undo,
 };
+use signex_i18n::RenderTranslatable;
+
 use crate::app::command::CommandOutcome;
 use crate::app::{Message, Signex};
 use crate::pcb_canvas::PcbCanvasMsg;
@@ -140,7 +142,7 @@ fn arrange_in_box_packs_the_selected_parts_between_two_clicks() {
         &[&ids, "start=0,40", "end=1,41"],
     );
     assert!(
-        matches!(&small, CommandOutcome::Disabled { reason } if reason.contains("do not fit")),
+        matches!(&small, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("do not fit")),
         "{small:?}"
     );
 }

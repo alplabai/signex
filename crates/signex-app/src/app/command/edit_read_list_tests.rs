@@ -99,6 +99,7 @@ fn a_child_placed_by_the_list_is_read_and_its_names_judged() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("allow_merge"), "{reason}");
 }
 
@@ -175,6 +176,7 @@ fn a_part_after_a_closed_child_in_the_list_is_numbered_past_the_childs_parts() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("is another part"), "{reason}");
 }
 
@@ -216,6 +218,7 @@ fn a_sheet_symbol_naming_a_closed_ancestor_is_refused_with_no_window_hierarchy()
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("is an ancestor of this sheet"), "{reason}");
 }
 
@@ -284,6 +287,7 @@ fn a_reader_that_panicked_is_said_in_messages_and_refused_without_a_retry() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("failed"), "{reason}");
     assert!(!reason.contains("retry"), "{reason}");
     assert_eq!(app.document_state.engines[&top].revision(), revision);

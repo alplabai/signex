@@ -258,9 +258,7 @@ fn assert_refused(session: &mut Session, name: &str) {
     let outcome = session.run(name);
     assert_eq!(
         outcome,
-        CommandOutcome::Disabled {
-            reason: format!("`{name}` only works in a window")
-        },
+        CommandOutcome::disabled(format!("`{name}` only works in a window")),
         "{name}"
     );
     assert_eq!(session.state(), before, "{name} changed something");

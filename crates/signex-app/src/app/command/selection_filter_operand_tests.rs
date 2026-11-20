@@ -203,6 +203,7 @@ fn an_unknown_kind_is_refused_and_changes_nothing() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(
         reason.contains("`rooms`") && reason.contains("net_labels"),
         "{reason}"
@@ -247,7 +248,7 @@ fn an_unknown_preset_is_refused_and_changes_nothing() {
     let given = args("apply_selection_filter_preset", &["name=Power"]);
     let (outcome, _) = app.run_operands(&id("apply_selection_filter_preset"), &given);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("`Power`")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("`Power`")),
         "{outcome:?}"
     );
     assert_eq!(filters(&app), before);
@@ -262,13 +263,7 @@ fn without_operands_the_filter_commands_say_what_they_need() {
         let before = filters(&app);
         let (outcome, _) = app.dispatch_command_reporting(&id(name), CommandArgs::none(), None);
         let reason = super::operand_handlers::needs_operands_reason(&id(name)).expect("a reason");
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: reason.to_string()
-            },
-            "{name}"
-        );
+        assert_eq!(outcome, CommandOutcome::disabled(reason), "{name}");
         assert_eq!(filters(&app), before, "{name}");
     }
 }

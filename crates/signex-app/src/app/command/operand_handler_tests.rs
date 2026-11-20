@@ -3,6 +3,8 @@
 //! and a command that declares operands without a handler is refused.
 
 use std::collections::HashMap;
+
+use signex_i18n::RenderTranslatable;
 use std::path::PathBuf;
 
 use signex_types::schematic::{Point, SchematicSheet, Wire};
@@ -184,7 +186,7 @@ fn color_net_refuses_what_it_cannot_do_and_says_why() {
     let refuse = |app: &mut Signex, args: &[&str]| {
         let (outcome, _) = app.run_operands(&command, &parse("color_net", args));
         match outcome {
-            CommandOutcome::Disabled { reason } => reason,
+            CommandOutcome::Disabled { reason } => reason.render_en_us(),
             other => panic!("expected a refusal, got {other:?}"),
         }
     };
@@ -335,7 +337,7 @@ fn clear_all_net_colors_with_nothing_painted_says_so() {
         &parse("clear_all_net_colors", &[&given]),
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("no net colours")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("no net colours")),
         "{outcome:?}"
     );
 }
@@ -376,7 +378,7 @@ fn run_operands_refuses_a_command_with_operands_and_no_handler() {
 
     assert!(
         matches!(&outcome, CommandOutcome::Disabled { reason }
-            if reason == "operands are declared but not run yet (#1934)"),
+            if reason.render_en_us() == "operands are declared but not run yet (#1934)"),
         "{outcome:?}"
     );
 }
@@ -411,7 +413,7 @@ fn every_operand_command_has_a_handler_or_is_refused() {
         let (mut app, _task) = Signex::new();
         let (outcome, _) = app.run_operands(&command, &parsed);
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("not run yet")),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("not run yet")),
             "{name} declares operands, has no handler, and was not refused: {outcome:?}"
         );
     }

@@ -293,7 +293,7 @@ fn panic_text(payload: &(dyn std::any::Any + Send)) -> String {
 /// resolution says for the id at hand, taken from the resolver itself by
 /// probing it (no document, the other kind, an unknown id).
 struct NotReached {
-    gates: BTreeSet<&'static str>,
+    gates: BTreeSet<String>,
     resolution: BTreeSet<String>,
 }
 
@@ -325,12 +325,13 @@ impl NotReached {
     }
 }
 
-/// Every enablement gate's reason, over the whole catalog.
-fn gate_reasons() -> BTreeSet<&'static str> {
+/// Every enablement gate's reason in en-US, over the whole catalog.
+fn gate_reasons() -> BTreeSet<String> {
+    let en = signex_i18n::I18n::en_us();
     all_command_ids()
         .filter_map(|id| AppCommandId::new(id).ok())
         .filter_map(|command| crate::app::command::enablement_gate(&command))
-        .map(|gate| gate.reason())
+        .map(|gate| en.message_plain(gate.reason(), &[]))
         .collect()
 }
 
@@ -463,7 +464,7 @@ fn resolution_refusals(
 fn targets(
     id: &'static str,
     operands: &[Operand],
-    gates: &BTreeSet<&'static str>,
+    gates: &BTreeSet<String>,
     found: &mut Found,
 ) -> Vec<(Target, NotReached)> {
     let mut all = Vec::new();
@@ -499,7 +500,7 @@ fn targets(
 
 /// Every operand of `id` set to each junk value against the documents it
 /// accepts.
-fn walk(id: &'static str, gates: &BTreeSet<&'static str>, found: &mut Found) {
+fn walk(id: &'static str, gates: &BTreeSet<String>, found: &mut Found) {
     let command = AppCommandId::new(id).expect("catalog id");
     let operands = metadata_for(&command).map_or(&[][..], |meta| meta.operands);
     if operands.is_empty() {

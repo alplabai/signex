@@ -2,6 +2,7 @@
 //! another sheet's landed takes that one back.
 
 use signex_engine::Command;
+use signex_i18n::RenderTranslatable;
 use signex_types::schematic::{NoConnect, Point};
 
 use iced::Task;
@@ -33,7 +34,7 @@ fn spoiling_edit(path: &std::path::Path) -> Prepared {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

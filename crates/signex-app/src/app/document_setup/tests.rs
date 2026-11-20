@@ -149,7 +149,7 @@ fn headless_new_pcb_with_an_unknown_profile_is_refused() {
     let mut f = fixture(ProjectDefaults::default());
     let outcome = run(&mut f.app, "new_pcb_document", &["profile=nope"]);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("nope")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("nope")),
         "{outcome:?}"
     );
     assert!(f.app.document_state.tabs.is_empty());

@@ -247,6 +247,12 @@ fn outcome_of(outcome: CommandOutcome) -> Outcome {
         CommandOutcome::UnknownId => refused(RefusalKind::UnknownId, "unknown id".into()),
         CommandOutcome::NoBridgeArm => refused(RefusalKind::NoRoute, "no bridge arm".into()),
         CommandOutcome::NotHeadless => refused(RefusalKind::NoRoute, "not headless".into()),
-        CommandOutcome::Disabled { reason } => refused(RefusalKind::Disabled, reason),
+        CommandOutcome::Disabled { reason } => refused(
+            RefusalKind::Disabled,
+            signex_i18n::RenderTranslatable::render_en_us(&reason),
+        ),
+        // `CommandOutcome` is `#[non_exhaustive]` since it moved to
+        // signex-commands; a new variant is named here, never taken as run.
+        other => refused(RefusalKind::NoRoute, format!("{other:?}")),
     }
 }

@@ -452,7 +452,7 @@ fn an_unreadable_sheet_is_named_and_the_read_is_refused() {
     .unwrap();
     let outcome = app.run_query_headless(&command, &args).unwrap().0;
     assert!(
-        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("could not be read")),
+        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("could not be read")),
         "{outcome:?}"
     );
     assert!(
@@ -847,7 +847,7 @@ fn a_query_is_refused_in_the_gui_and_not_a_palette_row() {
             None,
         );
         assert!(
-            matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("agents and the CLI")),
+            matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("agents and the CLI")),
             "{name}: {outcome:?}"
         );
         assert_eq!(task.units(), 0);

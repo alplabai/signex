@@ -11,6 +11,8 @@ use signex_types::pcb::{PcbBoard, SymbolLink};
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
+use signex_i18n::RenderTranslatable;
+
 use super::ReuseBlockMsg;
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
@@ -239,7 +241,7 @@ fn an_agent_saves_a_block_by_designators_and_a_bad_name_is_refused() {
         &[&document, "name=../amp", "ids=U1"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("cannot name a block")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("cannot name a block")),
         "{outcome:?}"
     );
 }
@@ -251,7 +253,7 @@ fn place_without_operands_says_what_it_needs() {
     let command = AppCommandId::new("place_board_reuse_block").unwrap();
     let (outcome, _) = app.dispatch_command_reporting(&command, CommandArgs::default(), None);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("designator")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("designator")),
         "{outcome:?}"
     );
 }
@@ -301,7 +303,7 @@ fn a_name_that_differs_from_a_block_only_in_case_is_refused() {
     );
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("named amp")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("named amp")),
         "{outcome:?}"
     );
     assert_eq!(app.reuse_block_names_in_window(None), ["amp"]);
@@ -329,7 +331,7 @@ fn an_agent_save_before_the_blocks_are_read_cannot_overwrite_a_block_named_in_an
     );
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("named R1-U1")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("named R1-U1")),
         "{outcome:?}"
     );
     assert_eq!(
@@ -474,7 +476,7 @@ fn a_failed_block_folder_read_is_retried_on_the_next_save() {
         &[&document, "name=amp", "ids=U1"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("could not be read")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("could not be read")),
         "{outcome:?}"
     );
 

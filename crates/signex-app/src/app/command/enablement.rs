@@ -131,7 +131,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
 pub(crate) fn disabled_reason(
     command: &AppCommandId,
     ctx: &CommandContext,
-) -> Option<&'static str> {
+) -> Option<signex_i18n::MessageId> {
     super::needs::needs(command)
         .filter(|needs| !needs.is_met(ctx))
         .map(super::needs::Needs::reason)
@@ -905,7 +905,11 @@ mod tests {
                     is_enabled(&command, ctx),
                     "{name} in {ctx:?}"
                 );
-                assert!(reason.is_none_or(|r| !r.is_empty()), "{name}");
+                let en = signex_i18n::I18n::en_us();
+                assert!(
+                    reason.is_none_or(|r| !en.message_plain(r, &[]).is_empty()),
+                    "{name}"
+                );
             }
         }
     }

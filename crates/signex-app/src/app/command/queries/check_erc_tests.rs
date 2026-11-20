@@ -4,6 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::Value;
 use signex_types::format::SnxSchematic;
 use signex_types::project::{ErcWaiver, ProjectRules};
@@ -77,7 +79,7 @@ fn report(app: &mut Signex, sheet: &Path, extra: &[&str]) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

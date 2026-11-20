@@ -8,6 +8,8 @@
 //! one a need is, is the function its arm sits in: `is_met_in_core` or
 //! `is_met_in_ui`.
 
+use signex_i18n::{MessageId, ids};
+
 use crate::keymap::AppCommandId;
 
 use super::CommandContext;
@@ -289,62 +291,54 @@ impl Needs {
         }
     }
 
-    /// Why the command has nothing to act on while this is unmet.
-    pub(crate) fn reason(self) -> &'static str {
+    /// Why the command has nothing to act on while this is unmet: a catalog
+    /// message (`command_needs.ftl`), rendered by the front end.
+    pub(crate) fn reason(self) -> MessageId {
         match self {
-            Self::Planned => "Planned, not available yet",
-            Self::SaveTarget => {
-                "Save needs a schematic or editor document, or a project with unsaved changes"
-            }
-            Self::SaveAsTarget => "Save As needs a schematic, symbol or footprint document",
-            Self::PrintTarget => "Print needs an open schematic or PCB",
-            Self::Document => "No document is open",
-            Self::Undo => "Nothing to undo",
-            Self::Redo => "Nothing to redo",
-            Self::CopyTarget => "Nothing is selected to copy",
-            Self::CutTarget => "Nothing is selected to cut, or the selection is locked",
-            Self::PasteTarget => {
-                "Nothing to paste here: no schematic is open, or the clipboard holds no board objects"
-            }
-            Self::SelectAllTarget => "No schematic or PCB is open",
-            Self::DrawingSelection => "No drawing is selected",
-            Self::SelectedObject => "No object is selected",
-            Self::Schematic => "No schematic is open",
-            Self::ParentSheet => "The active sheet has no parent sheet",
-            Self::DeleteTarget => "Nothing is selected to delete, or the selection is locked",
-            Self::VertexTarget => "Nothing is selected and no wire is being drawn",
-            Self::DrawInProgress => "No wire, bus or polyline is being drawn",
-            Self::Sheets => "No schematic or project is open",
-            Self::ActiveSheet => "No sheet is open",
-            Self::Canvas => "No schematic or PCB is open",
-            Self::FitTarget => "No schematic or PCB is open",
-            Self::FootprintEditor => "No footprint editor is open",
-            Self::Pcb => "No PCB is open",
-            Self::NetClassTable => "No schematic or PCB is open",
-            Self::EditablePcb => "No PCB is open, or the board is read-only",
-            Self::MeasureTarget => "No schematic or PCB is in view",
-            Self::TurnedPcbView => "The board view is not rotated",
-            Self::Turn => "Nothing is selected or in hand to turn, or the selection is locked",
-            Self::MoveSelection => "Nothing is selected to move, or the selection is locked",
-            Self::MoveObject => "No schematic or PCB is open",
-            Self::SimilarSeed => "Nothing is selected on a sheet to find similar objects to",
-            Self::PcbPlacement => "No unlocked footprint is selected on a PCB",
-            Self::SwapFootprints => "No unlocked footprint is selected on a PCB",
-            Self::PcbSelection => "Nothing is selected on the PCB in view",
-            Self::PadPair => "Select two pads of one unlocked component on a PCB",
-            Self::ReuseSource => "Nothing is selected on a PCB to save as a reuse block",
-            Self::ReuseAnchor => {
-                "Select one unlocked component of the channel to place the block on"
-            }
-            Self::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
-            Self::PcbSync => "No schematic or PCB of an open project is in view",
-            Self::OpenProject => "No project is open",
-            Self::Library => "No library is open",
-            Self::ProjectSheet => "No sheet of a project is open",
-            Self::TileableWindows => {
-                "Tile needs two documents in the main window, or a document in its own window"
-            }
-            Self::Tiled => "The documents are not tiled",
+            Self::Planned => ids::COMMAND_NEEDS_PLANNED,
+            Self::SaveTarget => ids::COMMAND_NEEDS_SAVE_TARGET,
+            Self::SaveAsTarget => ids::COMMAND_NEEDS_SAVE_AS_TARGET,
+            Self::PrintTarget => ids::COMMAND_NEEDS_PRINT_TARGET,
+            Self::Document => ids::COMMAND_NEEDS_DOCUMENT,
+            Self::Undo => ids::COMMAND_NEEDS_UNDO,
+            Self::Redo => ids::COMMAND_NEEDS_REDO,
+            Self::CopyTarget => ids::COMMAND_NEEDS_COPY_TARGET,
+            Self::CutTarget => ids::COMMAND_NEEDS_CUT_TARGET,
+            Self::PasteTarget => ids::COMMAND_NEEDS_PASTE_TARGET,
+            Self::SelectAllTarget
+            | Self::Canvas
+            | Self::FitTarget
+            | Self::NetClassTable
+            | Self::MoveObject => ids::COMMAND_NEEDS_SCHEMATIC_OR_PCB,
+            Self::DrawingSelection => ids::COMMAND_NEEDS_DRAWING_SELECTION,
+            Self::SelectedObject => ids::COMMAND_NEEDS_SELECTED_OBJECT,
+            Self::Schematic => ids::COMMAND_NEEDS_SCHEMATIC,
+            Self::ParentSheet => ids::COMMAND_NEEDS_PARENT_SHEET,
+            Self::DeleteTarget => ids::COMMAND_NEEDS_DELETE_TARGET,
+            Self::VertexTarget => ids::COMMAND_NEEDS_VERTEX_TARGET,
+            Self::DrawInProgress => ids::COMMAND_NEEDS_DRAW_IN_PROGRESS,
+            Self::Sheets => ids::COMMAND_NEEDS_SHEETS,
+            Self::ActiveSheet => ids::COMMAND_NEEDS_ACTIVE_SHEET,
+            Self::FootprintEditor => ids::COMMAND_NEEDS_FOOTPRINT_EDITOR,
+            Self::Pcb => ids::COMMAND_NEEDS_PCB,
+            Self::EditablePcb => ids::COMMAND_NEEDS_EDITABLE_PCB,
+            Self::MeasureTarget => ids::COMMAND_NEEDS_MEASURE_TARGET,
+            Self::TurnedPcbView => ids::COMMAND_NEEDS_TURNED_PCB_VIEW,
+            Self::Turn => ids::COMMAND_NEEDS_TURN,
+            Self::MoveSelection => ids::COMMAND_NEEDS_MOVE_SELECTION,
+            Self::SimilarSeed => ids::COMMAND_NEEDS_SIMILAR_SEED,
+            Self::PcbPlacement | Self::SwapFootprints => ids::COMMAND_NEEDS_UNLOCKED_FOOTPRINT,
+            Self::PcbSelection => ids::COMMAND_NEEDS_PCB_SELECTION,
+            Self::PadPair => ids::COMMAND_NEEDS_PAD_PAIR,
+            Self::ReuseSource => ids::COMMAND_NEEDS_REUSE_SOURCE,
+            Self::ReuseAnchor => ids::COMMAND_NEEDS_REUSE_ANCHOR,
+            Self::ProbeTarget => ids::COMMAND_NEEDS_PROBE_TARGET,
+            Self::PcbSync => ids::COMMAND_NEEDS_PCB_SYNC,
+            Self::OpenProject => ids::COMMAND_NEEDS_OPEN_PROJECT,
+            Self::Library => ids::COMMAND_NEEDS_LIBRARY,
+            Self::ProjectSheet => ids::COMMAND_NEEDS_PROJECT_SHEET,
+            Self::TileableWindows => ids::COMMAND_NEEDS_TILEABLE_WINDOWS,
+            Self::Tiled => ids::COMMAND_NEEDS_TILED,
         }
     }
 }
