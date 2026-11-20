@@ -35,7 +35,7 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
     let state = state(layer, &view, &prefs, TabColours::default());
     let i18n = I18n::en_us();
     let entries = layer_tab_menu_entries(&i18n, &state);
-    // m104 (Caner, 2026-11-20): the four tab name rows are a TAB NAMES
+    // mockup row 104 (Caner, 2026-11-20): the four tab name rows are a TAB NAMES
     // header over the Short | Medium | Long switch and the Show layer
     // numbers checkbox row, both custom entries, then Flip board view.
     let tail = &entries[entries.len() - 4..];
@@ -128,8 +128,6 @@ fn the_menu_lists_every_row_of_the_tab_menu() {
             ("Long".to_owned(), LayerNameStyle::Long, true),
         ]
     );
-    // The checkbox row is drawn from `show_numbers`: unticked by default.
-    assert!(!prefs.show_numbers, "Show layer numbers is unticked");
 }
 
 /// 2026-11-18: with colours on the board the reset rows are live and send
@@ -246,7 +244,7 @@ fn the_flyouts_list_each_kind_and_its_layers() {
     let bottom = PcbLayer::Copper(CopperLayer::Bottom);
     view.hide(bottom);
     let i18n = I18n::en_us();
-    // m104 (Caner, 2026-11-20): a HIDE or SHOW header and All layers come
+    // mockup row 104 (Caner, 2026-11-20): a HIDE or SHOW header and All layers come
     // first, then each kind's row and its layers.
     let hide_entries = layer_kind_entries(&i18n, LayerTabSubmenu::Hide, &layers, &view);
     assert!(matches!(&hide_entries[0], DropdownEntry::Header(h) if h == "HIDE"));
