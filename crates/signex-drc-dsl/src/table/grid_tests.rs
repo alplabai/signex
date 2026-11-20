@@ -545,3 +545,28 @@ rule inverted on track when net == \"GND\" require width >= 2mm and width <= 1mm
     );
     assert_eq!(scoped_names(refused), ["inverted"]);
 }
+
+/// A typed value equal to another rule of the row is the value the cell
+/// shows (the first written keeps it), so it is accepted.
+#[test]
+fn a_typed_value_equal_to_the_winning_rule_is_accepted() {
+    let rows = table(TEXT);
+    let pwr = class("PWR");
+    let out = set_cell(TEXT, &rows, &pwr, LimitField::MinClearance, "0.3mm")
+        .expect("equal to pwr_clear, not refused");
+    assert!(
+        out.contains(
+            "rule pwr_clear2 on clearance when class == \"PWR\" require clearance >= 0.3mm"
+        ),
+        "{out}"
+    );
+    let shown = resolve(
+        &table(&out),
+        &no_sets(),
+        &pwr,
+        &[],
+        LimitField::MinClearance,
+    )
+    .expect("a value");
+    assert_eq!(shown.value, "0.3mm");
+}

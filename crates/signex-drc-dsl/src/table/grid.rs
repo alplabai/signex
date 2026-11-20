@@ -233,8 +233,12 @@ pub fn set_cell(
         }
     };
     let after = super::table(&out);
+    let nm = |row: &RuleRow| row.compiled.as_ref()?.limit(field.limit_kind());
+    let typed = after.row(&edited).and_then(nm);
     match winner(&after, scope, &[], field) {
         Some((row, _)) if row.name == edited => Ok(out),
+        // An equal rule written first keeps the cell, at the typed value.
+        Some((row, _)) if typed.is_some() && nm(row) == typed => Ok(out),
         Some((row, _)) => Err(EditError::Overruled {
             rule: edited,
             by: Some(row.name.clone()),
