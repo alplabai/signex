@@ -232,7 +232,11 @@ impl Signex {
                     prev_position.wire_anchor = self.wire_anchor();
                     let (cursor_x_mm, cursor_y_mm) =
                         if self.interaction_state.current_tool == Tool::Wire {
-                            self.snap_wire_point(self.ui_state.cursor_x, self.ui_state.cursor_y)
+                            self.snap_wire_point(
+                                self.active_render_snapshot(),
+                                self.ui_state.cursor_x,
+                                self.ui_state.cursor_y,
+                            )
                         } else {
                             self.snap_to_grid(self.ui_state.cursor_x, self.ui_state.cursor_y)
                         };

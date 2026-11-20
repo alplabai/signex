@@ -50,7 +50,7 @@ impl Signex {
             return;
         }
         let (x, y) = if self.interaction_state.current_tool == Tool::Wire {
-            self.snap_wire_point(x, y)
+            self.snap_wire_point(self.active_render_snapshot(), x, y)
         } else {
             self.snap_to_grid(x, y)
         };
