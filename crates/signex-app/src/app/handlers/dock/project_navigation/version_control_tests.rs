@@ -391,7 +391,11 @@ fn the_first_commit_carries_the_dialog_message() {
 
     let repo = git2::Repository::open(tmp.path()).expect("a repository");
     let head = repo.head().unwrap().peel_to_commit().unwrap();
-    assert_eq!(head.message(), Some("First board of demo"), "trimmed");
+    assert_eq!(
+        head.message().expect("utf-8 message"),
+        "First board of demo",
+        "trimmed"
+    );
 }
 
 /// #26 — a blank first commit message withholds Enable: Confirm starts
