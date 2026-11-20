@@ -156,10 +156,12 @@ negative margin, a bad sheet path) refuses the file, naming block `rooms` and
 the room's row. Keys of a room this build does not know are kept and written
 back.
 
-The format token stays `snxpcb/1.4`: a `snxpcb/1.4` build without rooms reads
-`rooms` as a foreign top-level key, keeps it in the manifest's catch-all and
-writes it back, so a round trip through an older build loses no room. Format
-versioning itself belongs to #2207.
+A board with rooms writes the format token `snxpcb/1.6` (`snxpcb_token`, from
+content), so a build that reads only up to `snxpcb/1.5` opens it read-only
+and refuses every save rather than writing the board without its rooms. A
+board without rooms keeps `snxpcb/1.4`, or `snxpcb/1.5` with layer colours,
+byte for byte, and removing the last room writes the lower token again
+(maintainer decision 2026-11-20, `docs/FORMAT_VERSIONS.md`).
 
 ## Not built yet
 
