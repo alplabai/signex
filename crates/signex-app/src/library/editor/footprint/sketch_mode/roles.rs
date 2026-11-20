@@ -70,8 +70,12 @@ mod tests {
                 "Unassigned",
                 "Board outline",
                 "Cutout",
+                "Slot",
                 "Keepout",
+                "Pour",
                 "V-score",
+                "Mechanical layer",
+                "Component anchor",
                 "Mounting hole"
             ]
         );
