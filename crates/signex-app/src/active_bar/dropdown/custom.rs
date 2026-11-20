@@ -68,7 +68,7 @@ pub(super) fn net_color_entries(
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
     let mut rows: Vec<DropdownEntry<ActiveBarMsg>> = NET_COLORS
         .iter()
-        .map(|(label, color, action)| dd_swatch(i18n, *color, *label, action.clone(), sel, nc))
+        .map(|(label, color, action)| dd_swatch(i18n, *color, label, action.clone(), sel, nc))
         .collect();
     rows.extend([
         DropdownEntry::Separator,
