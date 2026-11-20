@@ -155,7 +155,7 @@ pub fn prepare_mount(path: &Path) -> Result<PreparedMount, LibraryError> {
 pub fn prepare_mount_without_history(path: &Path) -> Result<PreparedMount, LibraryError> {
     Ok(prepare_opened(
         path,
-        LocalGitAdapter::open_without_history(path)?,
+        LocalGitAdapter::open_to_read(path)?,
         true,
     ))
 }

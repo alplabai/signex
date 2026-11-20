@@ -275,10 +275,12 @@ impl LocalGitAdapter {
         Ok(adapter)
     }
 
-    /// Open a library whose `.git/` does not open, without looking at its
-    /// history. Only for a read-only mount: nothing may be written through
-    /// this adapter, as its commits would land in a broken repository.
-    pub fn open_without_history(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
+    /// Open a library to read it, without looking at its Git history, so a
+    /// library whose `.git/` does not open still reads. Only for reads (a
+    /// read-only mount, a worker that reads rows and primitives): nothing
+    /// may be written through this adapter, as its commits could land in a
+    /// broken repository.
+    pub fn open_to_read(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
         Self::read_library(file_path.as_ref())
     }
 

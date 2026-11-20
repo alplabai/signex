@@ -112,6 +112,62 @@ fn enter_after_the_filter_hid_the_selected_row_places_nothing() {
     assert!(app.library.picker.is_some(), "the picker stays open");
 }
 
+/// A library opened read-only by Skip for now on Git Repository Missing
+/// (mockup row 138) still places: placing reads the library and never
+/// needs its Git history.
+#[test]
+fn a_library_skipped_to_read_only_still_places() {
+    use signex_app::library::recovery::{GitMissingChoice, RecoveryDialog};
+
+    let f = fixture();
+    let dir = f.snxlib.parent().expect("library folder");
+    // An empty `.git/` does not open: the library's history is missing.
+    std::fs::remove_dir_all(dir.join(".git")).expect("drop the history");
+    std::fs::create_dir(dir.join(".git")).expect("an empty .git/");
+
+    let mut app = crate::library_place_symbol::app_with_empty_sheet();
+    let main = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(main);
+    dispatch_to_completion(
+        &mut app,
+        Message::Library(LibraryMessage::OpenLibraryAt(Some(f.snxlib.clone()))),
+    );
+    assert!(
+        matches!(
+            app.library.recovery,
+            Some(RecoveryDialog::GitMissing { .. })
+        ),
+        "the open raises Git Repository Missing, got {:?}",
+        app.library.recovery
+    );
+    dispatch_to_completion(
+        &mut app,
+        Message::Library(LibraryMessage::RecoveryGitMissing(GitMissingChoice::Skip)),
+    );
+    assert!(app.library.is_read_only(&f.snxlib), "mounted read-only");
+
+    // Back to the sheet from the library's browser tab.
+    dispatch_to_completion(
+        &mut app,
+        Message::Tab {
+            window_id: main,
+            msg: signex_app::tab_bar::TabMessage::Select(0),
+        },
+    );
+    select_in_picker(&mut app, &f);
+    place_selected(&mut app);
+    click(&mut app, PLACE_AT);
+
+    assert_eq!(
+        doc(&app).symbols.len(),
+        1,
+        "the part lands, notice: {:?}",
+        app.document_state.error_notice
+    );
+    assert_eq!(doc(&app).symbols[0].row_id, Some(f.row_id));
+    assert!(app.document_state.error_notice.is_none());
+}
+
 #[test]
 fn a_components_panel_row_place_action_places_on_the_active_schematic() {
     let f = fixture();
