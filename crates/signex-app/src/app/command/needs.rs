@@ -1,10 +1,27 @@
 //! What a command needs before it can act: the one table behind
 //! [`super::is_enabled`] (the menu greys by it, a keystroke is dropped by it)
 //! and behind the reason [`super::CommandOutcome::Disabled`] reports.
+//!
+//! Each need is Core or Ui (ADR-0006 slice 7): a Core need reads only the
+//! document, engine and project facts of [`CoreContext`], so the application
+//! core can answer it; a Ui need also reads the window's [`UiContext`]. Which
+//! one a need is, is the function its arm sits in: `is_met_in_core` or
+//! `is_met_in_ui`.
 
 use crate::keymap::AppCommandId;
 
 use super::CommandContext;
+use super::need_context::{CoreContext, UiContext};
+
+/// Where a need's facts live.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NeedScope {
+    /// Document, engine and project state: [`CoreContext`].
+    Core,
+    /// Window, canvas, selection, tool or clipboard state: [`UiContext`].
+    Ui,
+}
 
 /// A precondition on the window's [`CommandContext`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,8 +112,28 @@ pub(crate) enum Needs {
 }
 
 impl Needs {
+    /// Core or Ui: whether the need is answered from a [`CoreContext`]
+    /// alone.
+    #[cfg(test)]
+    pub(crate) fn scope(self) -> NeedScope {
+        if self.is_met_in_core(&CoreContext::default()).is_some() {
+            NeedScope::Core
+        } else {
+            NeedScope::Ui
+        }
+    }
+
     pub(crate) fn is_met(self, ctx: &CommandContext) -> bool {
-        match self {
+        let core = ctx.core();
+        match self.is_met_in_core(&core) {
+            Some(met) => met,
+            None => self.is_met_in_ui(&core, &ctx.ui()),
+        }
+    }
+
+    /// A Core need, from the core facts alone; `None` for a Ui need.
+    fn is_met_in_core(self, ctx: &CoreContext) -> Option<bool> {
+        Some(match self {
             Self::Planned => false,
             Self::SaveTarget => {
                 ctx.document_is_schematic
@@ -110,37 +147,11 @@ impl Needs {
             Self::Document => ctx.has_document,
             Self::Undo => ctx.can_undo,
             Self::Redo => ctx.can_redo,
-            Self::CopyTarget if ctx.pcb.shown => ctx.pcb.copyable,
-            Self::CopyTarget => ctx.has_selection,
-            Self::CutTarget if ctx.pcb.shown => ctx.pcb.deletable,
-            Self::CutTarget => editable_selection(ctx),
-            Self::PasteTarget if ctx.pcb.shown => ctx.pcb.pasteable,
-            Self::PasteTarget => ctx.has_schematic,
             Self::SelectAllTarget => ctx.has_schematic || ctx.pcb.shown,
-            // Arrange acts on drawings only; a selection of circuit elements
-            // leaves it nothing to do (#1583).
-            Self::DrawingSelection => ctx.has_schematic && ctx.has_drawing_selection,
-            // E edits the selected object in the schematic and in the
-            // footprint / symbol editors, whose selections `has_selection`
-            // does not read, so a keystroke must not be dropped there. On a
-            // board it shows the selection's Properties (#1312).
-            Self::SelectedObject => {
-                ctx.has_selection
-                    || ctx.has_footprint_editor
-                    || ctx.has_symbol_editor
-                    || ctx.pcb.any
-            }
             Self::Schematic => ctx.has_schematic,
             // Up Hierarchy opens the sheet whose symbol places the active
             // one; a top-level page has none (#1772).
             Self::ParentSheet => ctx.has_parent_sheet,
-            // The footprint editor deletes its own selection, which is not
-            // the schematic canvas's; with none it is a no-op. A board
-            // deletes its own selection, never a locked footprint.
-            Self::DeleteTarget if ctx.pcb.shown => ctx.pcb.deletable,
-            Self::DeleteTarget => editable_selection(ctx) || ctx.has_footprint_editor,
-            Self::VertexTarget => ctx.has_selection || ctx.has_footprint_editor || ctx.drawing,
-            Self::DrawInProgress => ctx.drawing,
             // These assemble the project's sheets, not only the active tab's.
             Self::Sheets => ctx.has_schematic || ctx.has_sheets,
             // Annotate acts from the active document's path; with none open it
@@ -148,7 +159,6 @@ impl Needs {
             Self::ActiveSheet => ctx.has_active_path,
             // Zoom steps the main window's schematic or PCB canvas.
             Self::Canvas => ctx.has_schematic || ctx.has_pcb,
-            Self::FitTarget => ctx.has_schematic || ctx.has_pcb || ctx.undocked_has_canvas,
             // The keystroke opens the footprint editor's grid picker and does
             // nothing elsewhere.
             Self::FootprintEditor => ctx.has_footprint_editor,
@@ -156,27 +166,7 @@ impl Needs {
             Self::NetClassTable => ctx.has_schematic || ctx.has_pcb,
             Self::EditablePcb => ctx.has_pcb && !ctx.pcb.read_only,
             Self::MeasureTarget => ctx.has_schematic || ctx.pcb.shown,
-            Self::TurnedPcbView => ctx.has_pcb && ctx.pcb_view_turned,
-            // On a sheet, rotate also turns a part on the cursor with
-            // nothing selected; on a board too (#2364).
-            Self::Turn if ctx.pcb.shown => {
-                ctx.pcb.placeable || ctx.pcb.part_in_hand || ctx.pcb.routing
-            }
-            Self::Turn => ctx.has_schematic && (editable_selection(ctx) || ctx.turn_in_hand),
-            Self::MoveSelection if ctx.pcb.shown => ctx.pcb.placeable,
-            Self::MoveSelection => ctx.has_schematic && editable_selection(ctx),
             Self::MoveObject => ctx.has_schematic || ctx.pcb.shown,
-            Self::SimilarSeed => {
-                (ctx.has_schematic && ctx.has_selection) || (ctx.pcb.shown && ctx.pcb.any)
-            }
-            Self::PcbPlacement => ctx.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
-            Self::SwapFootprints => ctx.pcb.shown && ctx.pcb.placeable,
-            Self::PcbSelection => ctx.pcb.shown && ctx.pcb.any,
-            Self::PadPair => ctx.pcb.shown && ctx.pcb.pad_pair,
-            Self::ReuseSource => ctx.pcb.shown && ctx.pcb.copyable,
-            Self::ReuseAnchor => ctx.pcb.shown && ctx.pcb.one_footprint,
-            Self::ProbeTarget if ctx.pcb.shown => ctx.pcb.any,
-            Self::ProbeTarget => ctx.has_schematic && ctx.has_selection,
             Self::PcbSync => {
                 ctx.has_open_project
                     && (ctx.has_schematic
@@ -190,12 +180,112 @@ impl Needs {
             Self::Library => ctx.has_open_library,
             // Sheet numbers are the project's; a loose sheet has none.
             Self::ProjectSheet => ctx.has_project_sheet,
+            // The Ui needs, met in `is_met_in_ui`.
+            Self::CopyTarget
+            | Self::CutTarget
+            | Self::PasteTarget
+            | Self::DrawingSelection
+            | Self::SelectedObject
+            | Self::DeleteTarget
+            | Self::VertexTarget
+            | Self::DrawInProgress
+            | Self::FitTarget
+            | Self::TurnedPcbView
+            | Self::Turn
+            | Self::MoveSelection
+            | Self::SimilarSeed
+            | Self::PcbPlacement
+            | Self::SwapFootprints
+            | Self::PcbSelection
+            | Self::PadPair
+            | Self::ReuseSource
+            | Self::ReuseAnchor
+            | Self::ProbeTarget
+            | Self::TileableWindows
+            | Self::Tiled => return None,
+        })
+    }
+
+    /// A Ui need, from the core facts and the window's.
+    fn is_met_in_ui(self, core: &CoreContext, ctx: &UiContext) -> bool {
+        match self {
+            Self::CopyTarget if core.pcb.shown => ctx.pcb.copyable,
+            Self::CopyTarget => ctx.has_selection,
+            Self::CutTarget if core.pcb.shown => ctx.pcb.deletable,
+            Self::CutTarget => editable_selection(ctx),
+            Self::PasteTarget if core.pcb.shown => ctx.pcb.pasteable,
+            Self::PasteTarget => core.has_schematic,
+            // Arrange acts on drawings only; a selection of circuit elements
+            // leaves it nothing to do (#1583).
+            Self::DrawingSelection => core.has_schematic && ctx.has_drawing_selection,
+            // E edits the selected object in the schematic and in the
+            // footprint / symbol editors, whose selections `has_selection`
+            // does not read, so a keystroke must not be dropped there. On a
+            // board it shows the selection's Properties (#1312).
+            Self::SelectedObject => {
+                ctx.has_selection
+                    || core.has_footprint_editor
+                    || core.has_symbol_editor
+                    || ctx.pcb.any
+            }
+            // The footprint editor deletes its own selection, which is not
+            // the schematic canvas's; with none it is a no-op. A board
+            // deletes its own selection, never a locked footprint.
+            Self::DeleteTarget if core.pcb.shown => ctx.pcb.deletable,
+            Self::DeleteTarget => editable_selection(ctx) || core.has_footprint_editor,
+            Self::VertexTarget => ctx.has_selection || core.has_footprint_editor || ctx.drawing,
+            Self::DrawInProgress => ctx.drawing,
+            Self::FitTarget => core.has_schematic || core.has_pcb || ctx.undocked_has_canvas,
+            Self::TurnedPcbView => core.has_pcb && ctx.pcb_view_turned,
+            // On a sheet, rotate also turns a part on the cursor with
+            // nothing selected; on a board too (#2364).
+            Self::Turn if core.pcb.shown => {
+                ctx.pcb.placeable || ctx.pcb.part_in_hand || ctx.pcb.routing
+            }
+            Self::Turn => core.has_schematic && (editable_selection(ctx) || ctx.turn_in_hand),
+            Self::MoveSelection if core.pcb.shown => ctx.pcb.placeable,
+            Self::MoveSelection => core.has_schematic && editable_selection(ctx),
+            Self::SimilarSeed => {
+                (core.has_schematic && ctx.has_selection) || (core.pcb.shown && ctx.pcb.any)
+            }
+            Self::PcbPlacement => core.pcb.shown && (ctx.pcb.placeable || ctx.pcb.part_in_hand),
+            Self::SwapFootprints => core.pcb.shown && ctx.pcb.placeable,
+            Self::PcbSelection => core.pcb.shown && ctx.pcb.any,
+            Self::PadPair => core.pcb.shown && ctx.pcb.pad_pair,
+            Self::ReuseSource => core.pcb.shown && ctx.pcb.copyable,
+            Self::ReuseAnchor => core.pcb.shown && ctx.pcb.one_footprint,
+            Self::ProbeTarget if core.pcb.shown => ctx.pcb.any,
+            Self::ProbeTarget => core.has_schematic && ctx.has_selection,
             // Tile shows the main window's documents in panes (#2249) and
             // arranges the main window with the undocked document
             // windows; alone, or before the main window's screen is known,
             // it has nothing to do.
             Self::TileableWindows => ctx.can_tile_windows,
             Self::Tiled => ctx.is_tiled,
+            // The Core needs, met in `is_met_in_core`.
+            Self::Planned
+            | Self::SaveTarget
+            | Self::SaveAsTarget
+            | Self::PrintTarget
+            | Self::Document
+            | Self::Undo
+            | Self::Redo
+            | Self::SelectAllTarget
+            | Self::Schematic
+            | Self::ParentSheet
+            | Self::Sheets
+            | Self::ActiveSheet
+            | Self::Canvas
+            | Self::FootprintEditor
+            | Self::Pcb
+            | Self::NetClassTable
+            | Self::EditablePcb
+            | Self::MeasureTarget
+            | Self::MoveObject
+            | Self::PcbSync
+            | Self::OpenProject
+            | Self::Library
+            | Self::ProjectSheet => unreachable!("a Core need is met in is_met_in_core"),
         }
     }
 
@@ -262,7 +352,7 @@ impl Needs {
 /// A sheet selection an edit can change: something is selected and not all
 /// of it is locked (#2419). The engine skips locked objects, so a selection
 /// that is all locked leaves an edit nothing to do.
-fn editable_selection(ctx: &CommandContext) -> bool {
+fn editable_selection(ctx: &UiContext) -> bool {
     ctx.has_selection && !ctx.selection_all_locked
 }
 
