@@ -9,8 +9,8 @@
 
 use std::collections::HashSet;
 
-use signex_drc::NetScope;
 use crate::table::{self, EditError, LimitField, RowLimit, RuleDraft, RuleKind};
+use signex_drc::NetScope;
 use signex_types::schematic::{InstancePath, NetRules, SchDirective, SchematicSheet};
 
 /// One rule the schematic asks for.
