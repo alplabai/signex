@@ -118,3 +118,69 @@ reads **Bake preview · Discard changes · Bake**:
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.
+
+## Modify tools
+
+Sketch ▸ Modify lists, on both hosts: **Fillet, Chamfer, Trim, Extend**,
+then under "Needs a selection" **Mirror, Offset, Linear Pattern,
+Rectangular Pattern, Circular Pattern**, then **Make Pad from Profile**
+(greyed on a board). The rows under "Needs a selection" grey out while
+nothing is selected.
+
+- **Chamfer** — click the first Line, then the second; they must share an
+  endpoint. Both are cut back from the corner by the chamfer distance and a
+  new Line joins the cut ends, which it shares with the two Lines. The
+  distance is the dimension input, else 0.5 mm; a value that is not a
+  positive length is refused and nothing changes, as for Fillet. A distance
+  that reaches the far end of a Line, or two Lines that run in one
+  direction, are refused with a warning. The new Line and points take the
+  first Line's linetype. The corner Point is left in place, as Fillet leaves
+  it.
+- **Extend** — click near one end of a Line. That end moves to the nearest
+  Line, Circle or Arc ahead of it and a constraint keeps it there (Point on
+  Line, Point on Arc, or zero distance to a Circle). With nothing ahead the
+  Line is left as it is and a warning says so. Only a free end extends: an
+  end that another entity shares, or that a constraint, a pattern or a pad
+  names, is refused rather than torn off.
+- **Mirror** — with a Line selected, each click mirrors the entity under it
+  about that Line and keeps the copy linked with Symmetric constraints. With
+  no Line selected, a click on a Line of the Centerline linetype takes it as
+  the mirror line (it becomes the selection); the next clicks mirror about
+  it. Mirror is under "Needs a selection", so it is armed with something
+  selected.
+- **Linear Pattern** — click the source. The pattern repeats it 4 times
+  along X, at the dimension input as the pitch, else 5 mm; count and pitch
+  are edited in the Pattern section. Rectangular Pattern (2 × 2 at 5 mm) and
+  Circular Pattern (4 around a new centre) work as before.
+
+Chamfer, Extend and Mirror's centerline pick take an existing Line by its
+stroke (0.30 mm), so their clicks place no Point. Each tool shows a ghost
+while armed: the Line a click would take, where an extended end would stop,
+the cursor's mirror image, or where the pattern's instances would land.
+
+On a board the same rows are offered. A board bake still bakes one instance
+of a pattern; baking every instance waits for #2517.
+
+The geometry of Chamfer and Extend is `signex_sketch::geom::line_edit`.
+
+## Pads and the sketch
+
+A pad made in the sketch keeps the id of the entity that drives it
+(`EditorPad::sketch_entity_id`).
+
+- **Edit in Sketch** on a pad switches to sketch mode with that entity
+  selected and focused (`FootprintEditorState::pad_link`). The canvas draws
+  the driving profile in the selection colour: the entity, the Lines of the
+  pad outline, and the closed loop it lies in. A floating link at the
+  canvas's bottom centre reads **◂ Back to pad N** and returns to the pads
+  view with that pad selected.
+- With a pad's driving entity selected in sketch mode and no focus, the
+  link reads **Jump to pad ▸** and does the same.
+- The focus ends when the mode changes or the selection moves to another
+  entity. The link changes the mode and the selection only, so it records
+  no undo step and does not mark the document changed. A board sketch has no pads
+  and shows no link.
+
+Not done yet: the outline of the pattern instance a pad came from (pads do
+not record their instance yet), and a "Driven by sketch" section in the pad
+Properties.

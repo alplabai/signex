@@ -18,6 +18,12 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — footprint sketch: Modify tools and the pad link
+
+- **Chamfer, Extend and Linear Pattern** in Sketch ▸ Modify on both hosts. Chamfer cuts a corner of two Lines by the dimension input; Extend grows a Line's free end to the nearest Line, Circle or Arc ahead of it; Linear Pattern repeats the clicked source along X. Each shows a ghost while armed.
+- **Mirror about a centerline**: with no Line selected, Mirror's first click takes a centerline under it as the mirror line.
+- **Pads and the sketch**: Edit in Sketch on a pad highlights its driving profile and shows a **◂ Back to pad** link on the canvas; a selected pad entity shows **Jump to pad ▸**.
+
 ## [26.11.0] — 2026-11-17
 
 _The Community Preview release: the schematic and PCB editors are supported, the whole app moves to the Graphite light and dark interface, and Signex is now licensed under FSL-1.1-ALv2. The footprint, symbol and library editors and the board 3D view ship at an earlier stage._
