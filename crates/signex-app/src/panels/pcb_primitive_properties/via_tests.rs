@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use super::not_stored;
 use crate::app::Signex;
-use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click};
+use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click_at};
 use crate::panels::PanelContext;
 use crate::panels::pcb_primitive_properties::drawing::fixture;
 use crate::panels::pcb_primitive_properties::rows::Look;
@@ -70,12 +70,22 @@ fn via(kind: ViaType, unstored_open: bool) -> ViaFacts {
     }
 }
 
-fn texts(ctx: &PanelContext, f: &ViaFacts) -> Vec<String> {
+/// The group's laid-out texts, isolation marks stripped. A greyed value is
+/// veiled by `Inert`, which hides its texts from the probe: only labels and
+/// the header are listed.
+fn laid_out(ctx: &PanelContext, f: &ViaFacts) -> Vec<LaidOutText> {
     let group = not_stored(Look::of(ctx), f).expect("the via has rows not stored yet");
     lay_out_texts(group, WINDOW)
         .into_iter()
-        .map(|t: LaidOutText| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .map(|t| LaidOutText {
+            text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+            ..t
+        })
         .collect()
+}
+
+fn texts(ctx: &PanelContext, f: &ViaFacts) -> Vec<String> {
+    laid_out(ctx, f).into_iter().map(|t| t.text).collect()
 }
 
 fn said(ctx: &PanelContext, id: signex_i18n::MessageId) -> String {
@@ -94,27 +104,21 @@ fn header(ctx: &PanelContext, count: usize) -> String {
 fn a_microvia_type_adds_the_greyed_microvia_row_to_the_not_stored_yet_group() {
     let ctx = context();
     let micro = via(ViaType::Micro, true);
-    let shown = texts(&ctx, &micro);
-    assert_eq!(shown.first(), Some(&header(&ctx, 5)), "{shown:?}");
-    for id in [
-        ids::PCB_PRIM_MICROVIA,
-        ids::PCB_PRIM_MICROVIA_STACKED,
-        ids::PCB_PRIM_MICROVIA_STAGGERED,
-    ] {
-        let wanted = said(&ctx, id);
-        assert!(shown.contains(&wanted), "{wanted} in {shown:?}");
-    }
-    for id in [
-        ids::PCB_PRIM_MICROVIA_STACKED,
-        ids::PCB_PRIM_MICROVIA_STAGGERED,
-    ] {
+    let shown = laid_out(&ctx, &micro);
+    let names: Vec<&str> = shown.iter().map(|t| t.text.as_str()).collect();
+    assert_eq!(names.first(), Some(&header(&ctx, 5).as_str()), "{names:?}");
+    let label = said(&ctx, ids::PCB_PRIM_MICROVIA);
+    let row = shown
+        .iter()
+        .find(|t| t.text == label)
+        .unwrap_or_else(|| panic!("{label} in {names:?}"));
+    // The Stacked and Staggered cells share the value column (the right
+    // six tenths of the row): a click on either sends nothing.
+    for x in [0.55, 0.85] {
+        let at = iced::Point::new(WINDOW.width * x, row.bounds.center_y());
         let group = not_stored(Look::of(&ctx), &micro).expect("the group");
-        let sent = messages_on_click(group, WINDOW, &said(&ctx, id));
-        assert!(
-            sent.is_empty(),
-            "{} sends nothing: {sent:?}",
-            said(&ctx, id)
-        );
+        let sent = messages_on_click_at(group, WINDOW, None, at);
+        assert!(sent.is_empty(), "a click at {at:?} sends nothing: {sent:?}");
     }
 
     let closed = texts(&ctx, &via(ViaType::Micro, false));
