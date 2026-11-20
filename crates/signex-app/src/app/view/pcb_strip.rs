@@ -1,4 +1,4 @@
-//! Layer tabs under the PCB canvas (#2357, m104): a tab with a colour
+//! Layer tabs under the PCB canvas (#2357, mockup row 104): a tab with a colour
 //! swatch for every layer the Layers panel shows, in the panel's order,
 //! then the Multi-Layer while it is shown, in a 28 px strip that scrolls
 //! sideways when the tabs do not fit. Hiding a layer (its eye, its tab's
@@ -121,7 +121,7 @@ pub(super) struct StripBoard<'b> {
     /// The user's tab names (#2394).
     pub prefs: &'b LayerStripPrefs,
     /// The layer set menu is open for this strip: its button is drawn
-    /// pressed (m104).
+    /// pressed (mockup row 104).
     pub set_menu_open: bool,
 }
 
@@ -194,21 +194,6 @@ pub(super) fn layer_strip<'a>(
         let swatch = layer_style::multi_layer_colour();
         tabs = tabs.push(layer_tab(label, swatch, tokens, false, messages));
     }
-    // A layer token this build does not know keeps a tab under its own
-    // name; it picks nothing and opens no menu.
-    let unknown = board
-        .layers
-        .iter()
-        .filter(|def| parse_pcb_layer(&def.name).is_none());
-    for def in unknown {
-        let label: Label<'static> = signex_i18n::UserText::new(def.name.clone()).into();
-        let messages = TabMessages {
-            press: None,
-            menu: None,
-        };
-        let swatch = resolve(tokens).ink4;
-        tabs = tabs.push(layer_tab(label, swatch, tokens, false, messages));
-    }
     // A long strip scrolls inside the window instead of widening it.
     let tabs = scrollable(tabs)
         .direction(Direction::Horizontal(crate::styles::thin_scrollbar()))
@@ -260,7 +245,7 @@ fn set_button_look(tokens: &ThemeTokens, open: bool) -> (Option<Color>, Color) {
     }
 }
 
-/// The layer set button at the left end of the strip (#2394, m104): the
+/// The layer set button at the left end of the strip (#2394, mockup row 104): the
 /// set's name and a chevron, a line on its right; a click opens the set
 /// menu.
 fn layer_set_button<'a>(

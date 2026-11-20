@@ -1,4 +1,4 @@
-//! m104: the strip's look: its 28 px height and scrolling, a hidden
+//! mockup row 104: the strip's look: its 28 px height and scrolling, a hidden
 //! layer's tab, and the layer set button while its menu is open.
 
 use super::*;
@@ -69,7 +69,7 @@ fn names(element: Element<'_, Message>, window: Size) -> Vec<String> {
         .collect()
 }
 
-/// m104: more tabs than the window is wide scroll inside the strip; every
+/// mockup row 104: more tabs than the window is wide scroll inside the strip; every
 /// visible layer still has its tab, on one line, and the strip keeps to
 /// the window and its 28 px.
 #[test]
@@ -119,8 +119,9 @@ fn the_strip_lays_out_every_visible_tab_inside_its_scrollable() {
     assert_eq!(size.height, STRIP_HEIGHT);
 }
 
-/// m104: a hidden layer has no tab; showing every layer brings it back.
-/// A layer token this build does not know keeps its tab.
+/// mockup row 104: a hidden layer has no tab; showing every layer brings it back.
+/// A layer token this build does not know has no tab: the strip lists what
+/// the Layers panel shows (Caner, 2026-11-20).
 #[test]
 fn a_hidden_layer_has_no_tab_until_it_is_shown() {
     let board = board(&["TopCopper", "BottomCopper", "Nowhere"]);
@@ -131,13 +132,14 @@ fn a_hidden_layer_has_no_tab_until_it_is_shown() {
     let shown = names(strip(&board, &view, false, &tokens), window);
     assert!(!shown.iter().any(|t| t == "Bottom Layer"), "{shown:?}");
     assert!(shown.iter().any(|t| t == "Top Layer"), "{shown:?}");
-    assert!(shown.iter().any(|t| t == "Nowhere"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "Nowhere"), "{shown:?}");
     view.show_all();
     let shown = names(strip(&board, &view, false, &tokens), window);
     assert!(shown.iter().any(|t| t == "Bottom Layer"), "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "Nowhere"), "{shown:?}");
 }
 
-/// m104: the layer set button is filled accent-soft while its menu is
+/// mockup row 104: the layer set button is filled accent-soft while its menu is
 /// open, plain with muted ink otherwise, in both Graphite themes.
 #[test]
 fn the_set_button_draws_pressed_while_its_menu_is_open() {
