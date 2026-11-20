@@ -192,7 +192,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_floating_panels` | Toggle floating panels | window | `F4` | — |
 | `toggle_properties_panel` | Toggle Properties panel | panels | `F11` | — |
 | `toggle_schematic_filter_panel` | Toggle schematic filter panel | panels | `F12` | — |
-| `toggle_schematic_list_panel` | Toggle schematic list panel | panels | `Shift+F12` | — |
+| `toggle_schematic_list_panel` | Toggle Object List panel | panels | `Shift+F12` | — |
 | `toggle_search_panel` | Show/hide search panel | search | — | `Ctrl+G` |
 | `toggle_selection` | Add/remove object from selection | select | `Shift+Click` | — |
 | `toggle_visible_grid` | Toggle visible grid | view | `Mod+Shift+G` | `Mod+Shift+G` |
