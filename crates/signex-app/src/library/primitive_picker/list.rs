@@ -187,7 +187,7 @@ fn push_loose(
         let rows = loose
             .iter()
             .copied()
-            .filter(|s| s.library.as_deref() == Some(owner) && taken(*s))
+            .filter(|s| s.library.as_deref() == Some(owner) && taken(s))
             .map(|s| ListItem::Row {
                 file: file_name(&s.file),
                 name: Some(s.name.clone()),
@@ -206,7 +206,7 @@ fn push_loose(
     let rows = unowned
         .iter()
         .copied()
-        .filter(|s| taken(*s))
+        .filter(|s| taken(s))
         .map(|s| {
             let shared = unowned.iter().filter(|o| o.file == s.file).count() > 1;
             ListItem::Row {

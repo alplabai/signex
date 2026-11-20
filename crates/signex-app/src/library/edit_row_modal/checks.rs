@@ -18,7 +18,7 @@ pub(crate) fn pn_conflict(lib: &OpenLibrary, pn: &str, row: RowId) -> Option<Str
         .tables
         .values()
         .flatten()
-        .find(|r| is_row(*r))
+        .find(|r| is_row(r))
         .is_some_and(|stored| InternalPn::clashes(pn, stored.internal_pn.as_str()));
     if unchanged {
         return None;

@@ -55,7 +55,6 @@ const KV_COL_GAP: f32 = 10.0;
 enum HeaderEnd {
     Nothing,
     Close(LibraryMessage),
-    Note(String),
     /// A muted note, then the close button.
     NoteAndClose(String, LibraryMessage),
 }
@@ -77,9 +76,6 @@ fn header_strip<'a>(
                 .color(theme_ext::text_secondary(tokens))
         };
         return match end {
-            HeaderEnd::Note(note) => container(note_line(note))
-                .padding([NOTE_LINE_PAD_Y, NOTE_LINE_PAD_X])
-                .boxed(),
             // One line, cut at the end: the window height counts one line.
             HeaderEnd::NoteAndClose(note, _) => container(
                 note_line(note)
@@ -96,7 +92,6 @@ fn header_strip<'a>(
     let (subtitle, close) = match end {
         HeaderEnd::Nothing => (None, None),
         HeaderEnd::Close(message) => (None, Some(message)),
-        HeaderEnd::Note(note) => (Some(note), None),
         HeaderEnd::NoteAndClose(note, message) => (Some(note), Some(message)),
     };
     crate::app::view::dialogs::graphite_header_closing(
@@ -121,19 +116,9 @@ pub(crate) fn header<'a>(
     header_strip(title, HeaderEnd::Close(on_close), windowed, tokens)
 }
 
-/// Header with a muted note at the right end instead of a close button.
-pub(crate) fn header_with_note<'a>(
-    title: &str,
-    note: String,
-    windowed: bool,
-    tokens: &ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    header_strip(title, HeaderEnd::Note(note), windowed, tokens)
-}
-
 /// Header with an optional muted note (the library or project the dialog
 /// is about) and the close button. In its own window the note stays as one
-/// line above the body, as [`header_with_note`] keeps it.
+/// line above the body, as the note-only header did.
 pub(crate) fn header_with_note_closing<'a>(
     title: &str,
     note: Option<String>,
@@ -348,7 +333,6 @@ mod tests {
             let tokens = signex_types::theme::theme_tokens(*id);
             for windowed in [false, true] {
                 let _ = header("Title", LibraryMessage::ClosePicker, windowed, &tokens);
-                let _ = header_with_note("Title", "note".into(), windowed, &tokens);
                 let _ = header_title_only("Title", windowed, &tokens);
                 for note in [None, Some("note".to_owned())] {
                     let _ = header_with_note_closing(
