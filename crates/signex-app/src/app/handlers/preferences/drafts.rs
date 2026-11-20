@@ -10,7 +10,7 @@ use crate::preferences::{PrefMsg, PrefNav};
 
 impl UiState {
     /// Whether `page` holds a draft that differs from its saved value. Every
-    /// draft belongs to exactly one page (#143); a new draft must be added
+    /// draft belongs to exactly one page (mockup row 143); a new draft must be added
     /// here or the dialog will not count it as unsaved.
     ///
     /// The three Symbol Editor terms joined in #629; before that they wrote
@@ -218,7 +218,7 @@ impl Signex {
                 self.ui_state.preferences_draft_symbol_pin_selection = mode;
             }
             PrefMsg::DraftLanguage(pref) => {
-                // A draft (#144a): only the preview catalog changes now; Save
+                // A draft (mockup row 144a): only the preview catalog changes now; Save
                 // switches the UI through `set_language`.
                 self.ui_state.preferences_pages.draft_language = pref;
                 self.refresh_language_preview();

@@ -377,7 +377,7 @@ impl Signex {
                 wheel_mode,
                 preferences_draft_wheel_mode: wheel_mode,
                 i18n: std::sync::Arc::clone(&i18n),
-                // #144a — seeded again (with its preview and the system
+                // Mockup row 144a — seeded again (with its preview and the system
                 // language name) each time Preferences opens.
                 preferences_pages: Box::new(crate::preferences::PreferencesPagesState::new(
                     i18n.pref().clone(),

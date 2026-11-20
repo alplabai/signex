@@ -1,4 +1,4 @@
-//! Graphite Preferences shell (#143): 52 px header with a "Group / Page"
+//! Graphite Preferences shell (mockup row 143): 52 px header with a "Group / Page"
 //! subtitle, the broken-file banner across the full width, a 216 px page
 //! list with an accent dot on every page holding unsaved changes, and the
 //! footer: a note, Cancel, Apply and OK. Cancel, Apply and OK are the
@@ -311,7 +311,7 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
 mod tests {
     use super::*;
 
-    /// #143 / #144a: the footer note follows the mock's precedence.
+    /// Mockup rows 143 and 144a: the footer note follows the mock's precedence.
     #[test]
     fn the_footer_note_follows_the_mock() {
         assert_eq!(

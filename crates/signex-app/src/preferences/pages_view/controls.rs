@@ -1,5 +1,5 @@
 //! Controls the Appearance and Editing pages share, drawn as the Graphite
-//! mockup draws them (#144, #147): the toggle, the segmented choice, the mono
+//! mockup draws them (mockup rows 144 and 147): the toggle, the segmented choice, the mono
 //! readout, the slider look, a glyph button, a help text with More…, and the
 //! frame of a preview with its expand button.
 

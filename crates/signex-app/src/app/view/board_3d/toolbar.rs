@@ -1,4 +1,4 @@
-//! The 3D view's floating toolbar (m109, m175), at the top centre of the
+//! The 3D view's floating toolbar (mockup rows 109 and 175), at the top centre of the
 //! view: the "3D View" title; 2D | 3D; Top, Iso, Front, Left, Right, Back,
 //! Reset and Fit; Flip and Explode; the lighting preset; the screenshot
 //! button and its menu chevron. A tinted button is the active viewpoint, a
@@ -58,7 +58,7 @@ pub(super) fn toolbar<'a>(
         Board3dMsg::FitRequested,
         look,
     );
-    // The title stays until the maintainer settles m109's open title item.
+    // The title stays (Caner, 2026-11-20).
     let title = container(
         text(t!(i18n, ids::PCB_3D_TITLE))
             .size(TS.body)
@@ -74,7 +74,7 @@ pub(super) fn toolbar<'a>(
         preset(ViewPreset::Top),
         preset(ViewPreset::Iso),
         preset(ViewPreset::Front),
-        // Separate Left and Right until m175's open Side item is settled.
+        // Left and Right are separate buttons (Caner, 2026-11-20).
         preset(ViewPreset::Left),
         preset(ViewPreset::Right),
         preset(ViewPreset::Back),

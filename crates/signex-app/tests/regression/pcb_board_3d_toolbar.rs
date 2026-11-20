@@ -1,4 +1,4 @@
-//! Mockup m175 — the board 3D view's toolbar, driven through the messages it
+//! Mockup row 175 — the board 3D view's toolbar, driven through the messages it
 //! sends: Left and Right, the active viewpoint, Reset, Flip and its
 //! animation, Explode, Esc on an open popover, the lighting presets and
 //! their toast, screenshots to the clipboard and to a PNG (and why a copy

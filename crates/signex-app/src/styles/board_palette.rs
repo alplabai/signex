@@ -223,9 +223,9 @@ impl LineArtPalette {
     }
 }
 
-/// The backdrop of the board 3D view under one lighting preset (m175): a
+/// The backdrop of the board 3D view under one lighting preset (mockup row 175): a
 /// vertical gradient from `top` to `bottom`. It follows the preset only and
-/// is the same in both themes (decision 175-3D-BACKDROP-THEME); the toolbar's
+/// is the same in both themes (DECISIONS, the 2026-11-19 board 3D view toolbar row); the toolbar's
 /// lighting swatch shows the same gradient.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LightingBackdrop {

@@ -1,4 +1,4 @@
-//! The drawing of the snap preview on Editing ▸ Grid (#147): the schematic
+//! The drawing of the snap preview on Editing ▸ Grid (mockup row 147): the schematic
 //! canvas with Fast grid 1 as dots and Fast grid 2 as rings, a wire snapped
 //! to the grid, the pointer pulled to the nearest point, and a dimension
 //! arrow per pitch. The pitch labels and handles sit over it

@@ -20,7 +20,7 @@ fn each_group_heading_appears_once_in_the_sidebar() {
     );
 }
 
-/// #143 / #144a: Language sits between Appearance and Keyboard shortcuts.
+/// Mockup rows 143 and 144a: Language sits between Appearance and Keyboard shortcuts.
 #[test]
 fn the_sidebar_lists_language_between_appearance_and_keyboard_shortcuts() {
     let labels: Vec<&str> = PrefNav::ALL.iter().map(|item| item.label()).collect();
@@ -30,7 +30,7 @@ fn the_sidebar_lists_language_between_appearance_and_keyboard_shortcuts() {
     );
 }
 
-/// #143: the whole nav, page by page, with its group.
+/// Mockup row 143: the whole nav, page by page, with its group.
 #[test]
 fn the_sidebar_follows_the_mock_groups() {
     let rows: Vec<(&str, &str)> = PrefNav::ALL

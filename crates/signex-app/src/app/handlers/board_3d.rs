@@ -1,4 +1,4 @@
-//! The board 3D view (#2390, m175): enter and leave it, turn, slide and
+//! The board 3D view (#2390, mockup row 175): enter and leave it, turn, slide and
 //! zoom it, look from a preset, flip, explode and light it, frame it, pick
 //! a part, and read the parts' models off the update thread. Screenshots
 //! are in `board_3d_screenshot`. View state only: no board command, no undo
@@ -311,7 +311,7 @@ impl Signex {
             .filter(|session| session.board_path == board)
         {
             session.add_models(read.models.iter().cloned());
-            // The same lines also show as the view's warn toast (m109).
+            // The same lines also show as the view's warn toast (mockup row 109).
             session.unread.extend(read.failures.iter().cloned());
         }
     }

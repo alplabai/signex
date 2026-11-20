@@ -1,5 +1,5 @@
 //! The one runtime entry that switches the UI language (#2055), and the
-//! Language page's draft state in Preferences (#144a).
+//! Language page's draft state in Preferences (mockup row 144a).
 
 use std::sync::Arc;
 

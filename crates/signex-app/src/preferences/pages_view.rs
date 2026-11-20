@@ -1,4 +1,4 @@
-//! View state of the Appearance and Editing pages (#144, #147): the help
+//! View state of the Appearance and Editing pages (mockup rows 144 and 147): the help
 //! texts opened with More…, the preview that fills the page, and the pitch
 //! labels on the snap preview. None of it is a preference, so none of it
 //! marks the dialog dirty; the shell resets it when Preferences opens.

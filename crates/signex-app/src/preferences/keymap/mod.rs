@@ -1,4 +1,4 @@
-//! Keyboard shortcuts page (#145): the profile row, the conflict banner,
+//! Keyboard shortcuts page (mockup row 145): the profile row, the conflict banner,
 //! the search and context chips, the shortcut table and the recorder
 //! popover anchored to the row under edit. The page's own view state (the
 //! chip that is on) is [`KeymapViewState`]; everything else it shows lives

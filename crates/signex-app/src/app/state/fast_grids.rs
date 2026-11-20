@@ -8,7 +8,7 @@ use signex_i18n::{Arg, I18n, ids};
 impl UiState {
     /// Why a fast-grid field's `text` would be refused on Save, in the UI
     /// language; `None` when Save takes it. The Editing page shows it under
-    /// the field while the user types (#147), and the Save refusal names it.
+    /// the field while the user types (mockup row 147), and the Save refusal names it.
     pub(crate) fn fast_grid_problem(text: &str, i18n: &I18n) -> Option<String> {
         let refusal = parse_fast_grid_field(text).err()?;
         Some(match refusal {

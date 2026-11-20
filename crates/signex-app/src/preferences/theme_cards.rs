@@ -1,4 +1,4 @@
-//! The theme cards of Appearance ▸ Look (#144): Graphite Light and Graphite
+//! The theme cards of Appearance ▸ Look (mockup row 144): Graphite Light and Graphite
 //! Dark side by side, each a radio, a line-art preview drawn in the theme's
 //! own colours, its name, a pill and a description. Choosing a card sends
 //! `DraftTheme`; nothing is written to disk.

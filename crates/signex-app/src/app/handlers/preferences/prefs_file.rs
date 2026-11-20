@@ -1,4 +1,4 @@
-//! The broken-file banner's actions (#602, #143): start a fresh
+//! The broken-file banner's actions (#602, mockup row 143): start a fresh
 //! `prefs.json`, and show the folder that holds it. Split out of `mod.rs`.
 
 use iced::Task;

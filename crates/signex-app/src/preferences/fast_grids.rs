@@ -1,4 +1,4 @@
-//! Fast grid 1 / Fast grid 2 rows of Editing ▸ Grid (#1672, #147): an mm
+//! Fast grid 1 / Fast grid 2 rows of Editing ▸ Grid (#1672, mockup row 147): an mm
 //! field with its mil readout, the row error while Save would refuse the
 //! text, and under the rows why the last Save was refused.
 

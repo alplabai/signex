@@ -1,4 +1,4 @@
-//! What floats over the 3D view besides its toolbar (m109, m175): the
+//! What floats over the 3D view besides its toolbar (mockup rows 109 and 175): the
 //! Explode popover and the screenshot menu (hung under their buttons by
 //! the toolbar), the lighting
 //! toast, the model-unread warn toast and the status pill at the bottom

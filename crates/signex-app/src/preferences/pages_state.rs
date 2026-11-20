@@ -11,7 +11,7 @@ use signex_i18n::{I18n, LanguagePref};
 use super::{ClassesViewState, KeymapViewState, PagesViewState, PrefNav};
 
 pub struct PreferencesPagesState {
-    /// Draft of the interface language (#144a); Save applies it through
+    /// Draft of the interface language (mockup row 144a); Save applies it through
     /// `Signex::set_language`. Equals `i18n.pref()` when clean.
     pub draft_language: LanguagePref,
     /// The drafted language's catalog for the Language page's preview,

@@ -1,4 +1,4 @@
-//! The snap preview block on Editing ▸ Grid (#147) and its two pitch labels.
+//! The snap preview block on Editing ▸ Grid (mockup row 147) and its two pitch labels.
 //! Click a label to type the pitch: Enter commits, Tab moves to the other
 //! pitch, Esc cancels; the ● handle drags it. Each label shows its field's
 //! text, and a pitch set here goes back through the field's draft message.

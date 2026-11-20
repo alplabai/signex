@@ -74,7 +74,7 @@ impl Signex {
             pin_selection: self.ui_state.symbol_pin_selection,
             component_classes: self.ui_state.component_classes.clone(),
         };
-        // #144a — the drafted language: every window redraws in it from the
+        // Mockup row 144a — the drafted language: every window redraws in it from the
         // next frame, no restart. Its write is one more background task.
         // Before the keymap below, which compiles its labels in it.
         writes.push(self.set_language(self.ui_state.preferences_pages.draft_language.clone()));

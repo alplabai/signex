@@ -1,4 +1,4 @@
-//! #144 / #147 - the Preferences Appearance and Editing pages. A fast grid
+//! Mockup rows 144 and 147 - the Preferences Appearance and Editing pages. A fast grid
 //! field shows why Save would refuse it while the user types, and Save
 //! still refuses it (DECISIONS 2026-11-14). A pitch set on the snap
 //! preview fills its field through the field's own draft. The Increment

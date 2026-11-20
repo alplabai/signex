@@ -1,4 +1,4 @@
-//! #143 — the Preferences shell: the page list, the unsaved-changes dots,
+//! Mockup row 143 — the Preferences shell: the page list, the unsaved-changes dots,
 //! the broken-file banner's Open folder, and the footer.
 
 use signex_app::annotate_undo::AnnotateUndo;
@@ -97,7 +97,7 @@ fn the_related_link_opens_editing() {
     assert_eq!(app.ui_state.preferences_nav, PrefNav::Editing);
 }
 
-/// Restore defaults has no backend, so the footer does not draw it (#143);
+/// Restore defaults has no backend, so the footer does not draw it (mockup row 143);
 /// it returns with its backend.
 #[test]
 fn the_footer_has_no_restore_defaults() {

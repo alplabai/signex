@@ -1,9 +1,9 @@
-//! The board 3D view in the main window (#2390, m175): the board's 3D scene
+//! The board 3D view in the main window (#2390, mockup row 175): the board's 3D scene
 //! on its lighting preset's backdrop, with a floating toolbar at the top
 //! centre (its title, 2D | 3D, the viewpoints, Reset and Fit, Flip and Explode, the
 //! lighting preset, the screenshot button), its popovers and toasts, the
 //! view cube, the status pill and the interaction hint. Undocked board
-//! windows stay flat. Layout follows mockups m109 and m175.
+//! windows stay flat. Layout follows mockup rows 109 and 175.
 
 mod icons;
 mod overlays;
@@ -248,7 +248,7 @@ impl Signex {
             lighting: session.lighting,
         };
         // The backdrop follows the lighting preset only, the same in both
-        // themes (decision 175-3D-BACKDROP-THEME).
+        // themes (DECISIONS, the 2026-11-19 board 3D view toolbar row).
         let fill = backdrop_fill(session.lighting, 1.0);
         let backdrop = container(Space::new())
             .width(Length::Fill)

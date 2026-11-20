@@ -1,4 +1,4 @@
-//! The board 3D view (#2390, m175): one board shown in 3D in the main
+//! The board 3D view (#2390, mockup row 175): one board shown in 3D in the main
 //! window, with its toolbar's state (the side shown, the flip in progress,
 //! explode, lighting, the screenshot waiting for a frame). View state like
 //! pan and zoom: nothing here touches the board, its undo history or its

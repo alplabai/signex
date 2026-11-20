@@ -1,4 +1,4 @@
-//! #144a — the Preferences Language page. The chosen language is a draft:
+//! Mockup row 144a — the Preferences Language page. The chosen language is a draft:
 //! nothing changes until Apply or OK, which switch every window with no
 //! restart; Cancel drops it. Only the Language page is marked dirty.
 //!

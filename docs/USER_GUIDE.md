@@ -1320,7 +1320,7 @@ whole project** (one Undo reverts every sheet the run changed) or **Per sheet**
 pasted part is called is set on Editing (Designators on paste); the Annotation
 page links to it.
 
-<!-- Preferences: Keyboard shortcuts page (#145); belongs with section 13. -->
+<!-- Preferences: Keyboard shortcuts page (mockup row 145); belongs with section 13. -->
 ### Editing keyboard shortcuts
 
 **Tools ▸ Preferences… ▸ Keyboard shortcuts** shows the active profile's

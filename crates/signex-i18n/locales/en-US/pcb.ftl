@@ -423,7 +423,7 @@ pcb-place-part-refused = { $part } cannot be placed on a board: { $reason }. Not
 # part was being read.
 pcb-place-part-board-gone = The board { $board } is no longer active; { $part } was not placed.
 
-## The board 3D view (#2390) and its toolbar (mockup m175).
+## The board 3D view (#2390) and its toolbar (mockup row 175).
 
 # The toolbar's title.
 pcb-3d-title = 3D View

@@ -48,7 +48,7 @@ pub(super) fn group_messages(item: PrefNav) -> (MessageId, MessageId) {
     }
 }
 
-/// The English names a page went by before the #143 regroup, so a search
+/// The English names a page went by before the mockup row 143 regroup, so a search
 /// for them still finds it.
 fn former_names(item: PrefNav) -> &'static [&'static str] {
     match item {
@@ -144,7 +144,7 @@ mod tests {
         assert!(!nav_matches(&en, PrefNav::Annotation, "theme"));
     }
 
-    /// #143: the regrouped pages keep answering to their former names, and
+    /// Mockup row 143: the regrouped pages keep answering to their former names, and
     /// the mock's "an" search finds the new Language page.
     #[test]
     fn search_finds_the_former_page_names_and_language() {

@@ -534,14 +534,14 @@ mesh, `signex_gfx::scene3d::Scene3d`):
   hangs below the bottom face, x mirrored and z flipped, which turns it over.
   The component's body opacity scales its alpha.
 
-**Toolbar** (mockups m109 and m175): one floating toolbar at the top
+**Toolbar** (mockup rows 109 and 175): one floating toolbar at the top
 centre of the view, always shown: the "3D View" title; 2D | 3D; Top, Iso,
 Front, Left, Right, Back, Reset and Fit; Flip and Explode; the lighting
 preset; the screenshot button and its menu chevron. The interaction hint is
 a quiet caption at the bottom right, the status pill sits at the bottom
-left, the view cube at the top right. The title and the separate Left and
-Right buttons stay until the maintainer settles the open m109 title item and
-the m175 Side item.
+left, the view cube at the top right. As decided (DECISIONS, the 2026-11-19
+board 3D view toolbar row), the "3D View" title stays and Left and Right
+are separate buttons (no single Side button with Shift+click).
 
 **Camera** (`signex_gfx::camera3d::OrbitCamera`): perspective, orbiting a
 target. Left drag turns it, right or middle drag or Shift left drag slides
@@ -587,7 +587,8 @@ by the preset (`OrbitCamera::uniform_lit`). The backdrop is the preset's
 vertical gradient (`styles::board_palette::LightingBackdrop`: Studio
 #E8E8EA to #BFC2C7, Workshop #EADBC6 to #9C8770, Outdoor #BFD8F2 to #9DB38A,
 Dark #2A2D33 to #0E0F12). It follows the preset only, the same in Graphite
-Light and Dark, as the board palette does (decision 175-3D-BACKDROP-THEME).
+Light and Dark, as the board palette does (DECISIONS, the 2026-11-19 board 3D
+view toolbar row).
 
 **Screenshot**: a click on the camera copies the view to the clipboard;
 the chevron's menu has Copy to clipboard and Save PNG…. The toolbar,

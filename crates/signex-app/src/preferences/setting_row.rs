@@ -1,4 +1,4 @@
-//! The page grid every Preferences page is drawn on (#143): the page
+//! The page grid every Preferences page is drawn on (mockup row 143): the page
 //! padding, the heading with its intro, the section header, and the setting
 //! row with the label and help on the left and the control in a fixed column
 //! on the right. Sizes follow the Graphite mock at the default 12 px base.

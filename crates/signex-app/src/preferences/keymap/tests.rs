@@ -105,7 +105,7 @@ fn a_macos_reserved_chord_is_marked_reserved_on_its_row() {
     assert!(elsewhere.active_conflicts().is_empty());
 }
 
-// ─── #145: chips, sort, states, Show, Delete and the recorder popover ───
+// ─── mockup row 145: chips, sort, states, Show, Delete and the recorder popover ───
 
 /// A custom profile on Windows whose bindings sit in the given contexts.
 fn editor_in_contexts(

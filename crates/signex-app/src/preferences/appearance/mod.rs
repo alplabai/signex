@@ -1,7 +1,7 @@
-//! Appearance page (#144): Look, Canvas, Navigation and Window. Each control
+//! Appearance page (mockup row 144): Look, Canvas, Navigation and Window. Each control
 //! sends the draft message it sent before the page was regrouped; the theme
 //! cards and the grid preview show the drafts live. The fast grids moved to
-//! the Editing page (#147).
+//! the Editing page (mockup row 147).
 
 pub(in crate::preferences) mod grid_preview;
 

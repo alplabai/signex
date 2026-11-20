@@ -1,4 +1,4 @@
-//! The 3D view toolbar's stroke icons (m175), drawn in `currentColor` and
+//! The 3D view toolbar's stroke icons (mockup row 175), drawn in `currentColor` and
 //! tinted with the ink of the button they sit on.
 
 use std::sync::OnceLock;

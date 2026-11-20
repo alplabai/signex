@@ -283,7 +283,8 @@ preferences-paste-designators-next-free = Next free number
 preferences-annotate-undo-project = One step for the whole project
 preferences-annotate-undo-per-sheet = Per sheet
 
-## Preferences shell (#143), Language page (#144a), Annotation page (#146)
+## Preferences shell (mockup row 143), Language page (mockup row 144a),
+## Annotation page (mockup row 146)
 
 # Page name of the interface-language page in the page list.
 preferences-page-language = Language
@@ -332,7 +333,7 @@ preferences-annotation-paste-help = Lives on Editing, because it applies to past
 # Link to the Editing page.
 preferences-annotation-open-editing = Open Editing ›
 
-## Appearance page and Editing page (#144, #147)
+## Appearance page and Editing page (mockup rows 144 and 147)
 
 # Shared by both pages. The link after a shortened help text that shows the
 # whole text; the leading space separates it from that text.
@@ -436,7 +437,7 @@ preferences-editing-snap-help = Click a pitch on the drawing to type it; Enter c
 preferences-editing-increment-down = Step down
 preferences-editing-increment-up = Step up
 
-## Keyboard shortcuts page (#145)
+## Keyboard shortcuts page (mockup row 145)
 # Profile picker entries. $name is the profile's name, $count its number of bindings.
 preferences-keymap-profile-option-built-in = { $name } · { $count ->
     [one] { $count } binding

@@ -211,7 +211,7 @@ Built-in profiles are immutable. Editing starts by creating a custom profile
 copied from the currently active profile. Custom profiles can then be selected,
 edited, deleted, imported, and exported from Preferences > Keyboard Shortcuts.
 
-### The Keyboard shortcuts page (#145)
+### The Keyboard shortcuts page (mockup row 145)
 
 The page (`preferences/keymap/`) reads top to bottom:
 

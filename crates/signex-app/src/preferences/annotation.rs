@@ -1,4 +1,4 @@
-//! Annotation page (#146): the undo scope of an annotate run, and a link to
+//! Annotation page (mockup row 146): the undo scope of an annotate run, and a link to
 //! Designators on paste, which lives on Editing.
 
 use crate::annotate_undo::{AnnotateUndo, annotate_undo_label};
@@ -111,7 +111,7 @@ mod tests {
         assert!(!help.contains('\\'), "{help}");
     }
 
-    /// #146: the help names both choices as the radios read them.
+    /// Mockup row 146: the help names both choices as the radios read them.
     #[test]
     fn the_help_names_both_choices() {
         let en = signex_i18n::I18n::en_us();

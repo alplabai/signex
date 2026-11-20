@@ -1,4 +1,4 @@
-//! Grid preview of Appearance ▸ Canvas (#144): the schematic canvas at
+//! Grid preview of Appearance ▸ Canvas (mockup row 144): the schematic canvas at
 //! 1.27 mm beside the symbol canvas at the symbol editor's default grid,
 //! each in its drafted grid style, in the theme's canvas colours. It sets
 //! nothing: the fast grid pitches are edited on the Editing page's drawing.

@@ -237,7 +237,7 @@ language (#2059).
 The app holds the locale in `UiState::i18n`, saves it as `language` in the
 preferences file and restores it at launch. `Signex::set_language` (reached by
 `UiMsg::LanguageChanged`) switches and persists it at runtime. The Language page
-in Preferences (#144a) keeps the choice as a draft
+in Preferences (mockup row 144a) keeps the choice as a draft
 (`PreferencesPagesState::draft_language`, previewed with a catalog built in
 `update`) and calls that entry on Apply or OK.
 

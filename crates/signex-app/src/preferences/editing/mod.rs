@@ -1,4 +1,4 @@
-//! Editing page (#147): Move and select, Grid, Text and paste, Files and
+//! Editing page (mockup row 147): Move and select, Grid, Text and paste, Files and
 //! agents. Long help texts show a summary with More…; the fast grids moved
 //! in from Appearance with a mil readout and the row error, and the snap
 //! preview edits both pitches on its drawing.

@@ -98,7 +98,7 @@ fn a_stale_slot_is_refused_not_applied_to_another_binding() {
     );
 }
 
-// #145 — the page's chips and the banner's Show are view state only.
+// Mockup row 145 — the page's chips and the banner's Show are view state only.
 mod view_state {
     use super::*;
     use crate::preferences::{KeymapViewMsg, KeymapViewState};

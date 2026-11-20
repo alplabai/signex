@@ -16,7 +16,7 @@ use super::super::super::*;
 use crate::preferences::PrefMsg;
 
 impl Signex {
-    /// The Keyboard shortcuts page's own view state (#145): the context
+    /// The Keyboard shortcuts page's own view state (mockup row 145): the context
     /// chip that is on, and the conflict banner's Show. Pure view state, so
     /// it never marks the dialog dirty and starts no task.
     pub(crate) fn handle_preferences_keymap_view(

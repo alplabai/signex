@@ -1,4 +1,4 @@
-//! Screenshots of the board 3D view (m175): copy to the clipboard or save a
+//! Screenshots of the board 3D view (mockup row 175): copy to the clipboard or save a
 //! PNG. The view hides its toolbar and overlays, the next frame is captured
 //! from the main window and cropped to the view, and the copy or the write
 //! runs as a Task; Messages says how it went. See `docs/RENDERING_RULES.md`,

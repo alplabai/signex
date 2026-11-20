@@ -1,4 +1,4 @@
-//! The view cube at the 3D view's top right (m175): three faces of a cube
+//! The view cube at the 3D view's top right (mockup row 175): three faces of a cube
 //! seen from above the front-left corner, named TOP, LEFT and FRONT, or
 //! BOTTOM, RIGHT and FRONT while the board is turned over.
 

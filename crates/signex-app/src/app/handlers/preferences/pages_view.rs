@@ -1,4 +1,4 @@
-//! View state of the Appearance and Editing pages (#144, #147): help texts
+//! View state of the Appearance and Editing pages (mockup rows 144 and 147): help texts
 //! opened with More…, a preview filling the page, the Increment step
 //! stepper and the pitch labels on the snap preview. A stepper press or a
 //! pitch set on the drawing goes through the same draft message as its

@@ -1,4 +1,4 @@
-//! Language page (#144a): the interface language, a preview of real strings
+//! Language page (mockup row 144a): the interface language, a preview of real strings
 //! in the drafted language, and a note while the pseudo-locale is drafted.
 //! The choice is a draft: Apply or OK switches every window at once, with no
 //! restart.
@@ -225,7 +225,7 @@ mod tests {
         choices.iter().map(|c| c.label.clone()).collect()
     }
 
-    /// #144a: the language list names what System resolves to, shows each
+    /// Mockup row 144a: the language list names what System resolves to, shows each
     /// language by its own name and puts the pseudo-locale last.
     #[test]
     fn the_language_list_follows_the_mock() {

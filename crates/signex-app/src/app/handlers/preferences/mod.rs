@@ -147,7 +147,7 @@ impl Signex {
         self.ui_state.preferences_draft_zoom_step_percent = self.ui_state.zoom_step_percent;
         self.ui_state.preferences_draft_ui_scale_percent =
             crate::ui_scale::scale_to_percent(self.ui_state.ui_scale);
-        // #144a — the language in force, its preview and the system name.
+        // Mockup row 144a — the language in force, its preview and the system name.
         self.seed_language_draft();
         // Fresh working copy of the live profile set for the Keyboard
         // Shortcuts pane; drop any stale recorder / status with it.

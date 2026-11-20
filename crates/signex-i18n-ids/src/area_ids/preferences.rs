@@ -58,7 +58,8 @@ define_ids! {
     PREFERENCES_PASTE_DESIGNATORS_NEXT_FREE = "preferences-paste-designators-next-free";
     PREFERENCES_ANNOTATE_UNDO_PROJECT = "preferences-annotate-undo-project";
     PREFERENCES_ANNOTATE_UNDO_PER_SHEET = "preferences-annotate-undo-per-sheet";
-    // Preferences shell (#143), Language page (#144a), Annotation page (#146).
+    // Preferences shell (mockup row 143), Language page (mockup row 144a),
+    // Annotation page (mockup row 146).
     PREFERENCES_PAGE_LANGUAGE = "preferences-page-language";
     PREFERENCES_LANGUAGE_FOOTER_NOTE = "preferences-language-footer-note";
     PREFERENCES_FILE_WHERE = "preferences-file-where";
@@ -81,7 +82,7 @@ define_ids! {
     PREFERENCES_ANNOTATION_SECTION_RELATED = "preferences-annotation-section-related";
     PREFERENCES_ANNOTATION_PASTE_HELP = "preferences-annotation-paste-help";
     PREFERENCES_ANNOTATION_OPEN_EDITING = "preferences-annotation-open-editing";
-    // Appearance page and Editing page (#144, #147).
+    // Appearance page and Editing page (mockup rows 144 and 147).
     PREFERENCES_PAGES_MORE = "preferences-pages-more";
     PREFERENCES_PAGES_LESS = "preferences-pages-less";
     PREFERENCES_PAGES_EXPAND_PREVIEW = "preferences-pages-expand-preview";
@@ -147,7 +148,7 @@ define_ids! {
     PREFERENCES_EDITING_SNAP_HELP = "preferences-editing-snap-help";
     PREFERENCES_EDITING_INCREMENT_DOWN = "preferences-editing-increment-down";
     PREFERENCES_EDITING_INCREMENT_UP = "preferences-editing-increment-up";
-    // Keyboard shortcuts page (#145)
+    // Keyboard shortcuts page (mockup row 145)
     PREFERENCES_KEYMAP_PROFILE_OPTION_BUILT_IN = "preferences-keymap-profile-option-built-in";
     PREFERENCES_KEYMAP_PROFILE_OPTION_CUSTOM = "preferences-keymap-profile-option-custom";
     PREFERENCES_KEYMAP_IMPORT = "preferences-keymap-import";

@@ -1,5 +1,5 @@
 //! Preferences dialog: the page list on the left, the open page on the
-//! right, the Apply / OK footer under both (#143).
+//! right, the Apply / OK footer under both (mockup row 143).
 //!
 //! Opened via Tools > Preferences (or keyboard shortcut). Every page draws
 //! on the `setting_row` grid.
@@ -64,7 +64,7 @@ pub(in crate::preferences) use widgets::{
 pub enum PrefNav {
     /// Theme, fonts, grids, rendering, scale, navigation and window.
     Appearance,
-    /// The interface language (#144a).
+    /// The interface language (mockup row 144a).
     Language,
     /// Schematic annotation settings (the undo scope of an annotate run).
     Annotation,
@@ -89,7 +89,7 @@ pub enum PrefNav {
 }
 
 impl PrefNav {
-    /// The pages in nav order (#143): System, Schematic, Validation, Library.
+    /// The pages in nav order (mockup row 143): System, Schematic, Validation, Library.
     pub const ALL: &'static [PrefNav] = &[
         PrefNav::Appearance,
         PrefNav::Language,
@@ -208,7 +208,7 @@ pub enum PrefMsg {
     DraftUiScalePercent(u16),
     /// Update the symbol-editor pin-selection mode (persisted on change).
     DraftSymbolPinSelection(PinSelectionMode),
-    /// Choose the interface language (#144a). A draft: Save switches every
+    /// Choose the interface language (mockup row 144a). A draft: Save switches every
     /// window to it, with no restart; Discard drops it.
     DraftLanguage(signex_i18n::LanguagePref),
     /// Rule Profiles pane (#1608). Its edits are written to the profile
@@ -220,7 +220,7 @@ pub enum PrefMsg {
     /// acting: a healthy file is never moved.
     ResetPrefsFile,
     /// The broken-file banner's Open folder: show the folder that holds
-    /// `prefs.json` in the file manager (#143).
+    /// `prefs.json` in the file manager (mockup row 143).
     PrefsFolderOpenRequested,
     /// The Appearance and Editing pages' view state.
     PagesView(PagesViewMsg),
@@ -357,7 +357,7 @@ pub struct PrefsView<'a> {
     pub draft_agent_connections_enabled: bool,
     /// The language the labels read in.
     pub i18n: &'a signex_i18n::I18n,
-    /// The drafted interface language (#144a).
+    /// The drafted interface language (mockup row 144a).
     pub draft_language: &'a signex_i18n::LanguagePref,
     /// The drafted language's catalog, built in `update`, for the Language
     /// page's preview.
@@ -519,7 +519,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
     .boxed()
 }
 
-/// The broken-file banner (#602, #143): full width under the header, in the
+/// The broken-file banner (#602, mockup row 143): full width under the header, in the
 /// error tone. It names the file and the loader's reason, says what is
 /// showing defaults, and offers Start a fresh preferences file and Open
 /// folder. After the recovery action it carries that action's result.
