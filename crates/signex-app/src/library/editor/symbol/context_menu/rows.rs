@@ -29,6 +29,15 @@ pub enum RowIcon {
     Delete,
 }
 
+/// The key a row shows at its right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowKeys {
+    /// The canvas's own key for the same action (Space rotates).
+    Canvas(MessageId),
+    /// The key the active keymap binds to this command id.
+    Command(&'static str),
+}
+
 /// One row of the symbol context menu. `id` is a stable, kebab-case,
 /// `symbol.`-namespaced command id (the command-registry epic will
 /// index these — see `menu_bar` / keymap catalog for the sibling
@@ -37,8 +46,8 @@ pub enum RowIcon {
 /// `submenu`, when present, holds the rows shown in place directly
 /// below this row while it's the open submenu (accordion — mirrors
 /// the footprint context menu's Place ▸ / Align ▸ expand-in-place
-/// behaviour), not a hover flyout. `keys` names the canvas key that does
-/// the same; `divider_before` draws a divider above the row.
+/// behaviour), not a hover flyout. `keys` names the key that does the
+/// same; `divider_before` draws a divider above the row.
 pub struct SymbolMenuRow {
     pub id: &'static str,
     pub label: MessageId,
@@ -46,7 +55,7 @@ pub struct SymbolMenuRow {
     pub msg: Option<SymbolEditorMsg>,
     pub submenu: Option<Vec<SymbolMenuRow>>,
     pub icon: Option<RowIcon>,
-    pub keys: Option<MessageId>,
+    pub keys: Option<RowKeys>,
     pub divider_before: bool,
 }
 
@@ -77,7 +86,7 @@ impl SymbolMenuRow {
         self
     }
 
-    fn keys(mut self, keys: MessageId) -> Self {
+    fn keys(mut self, keys: RowKeys) -> Self {
         self.keys = Some(keys);
         self
     }
@@ -116,7 +125,7 @@ pub fn build_symbol_context_menu_rows(
             },
         )
         .icon(RowIcon::Rotate)
-        .keys(key_ids::KEY_SPACE),
+        .keys(RowKeys::Canvas(key_ids::KEY_SPACE)),
         SymbolMenuRow::submenu(
             "symbol.align",
             menu_ids::CTX_ALIGN,
@@ -161,7 +170,7 @@ pub fn build_symbol_context_menu_rows(
             SymbolEditorMsg::DeleteSelected,
         )
         .icon(RowIcon::Delete)
-        .keys(key_ids::KEY_DEL),
+        .keys(RowKeys::Command("delete_selection")),
     ]
 }
 

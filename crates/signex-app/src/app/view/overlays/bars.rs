@@ -517,6 +517,7 @@ impl Signex {
             editor,
             tokens,
             path,
+            &self.ui_state.active_keymap,
             &self.ui_state.i18n,
         ) else {
             return Vec::new();
