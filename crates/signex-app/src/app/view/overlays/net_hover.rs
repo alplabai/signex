@@ -1,4 +1,4 @@
-//! The net hover card (Graphite m10): the net's name with a pin-count pill,
+//! The net hover card (Graphite mockup row 10): the net's name with a pin-count pill,
 //! its class, and its pins with their sheets (#1270). The card is built in
 //! `update`; this only draws it.
 
@@ -202,7 +202,7 @@ mod tests {
         }
     }
 
-    /// m10: the pill beside the name counts every pin of the net, the shown
+    /// Mockup row 10: the pill beside the name counts every pin of the net, the shown
     /// and the hidden ones, in the singular for one.
     #[test]
     fn the_pin_count_pill_counts_the_shown_and_the_hidden_pins() {

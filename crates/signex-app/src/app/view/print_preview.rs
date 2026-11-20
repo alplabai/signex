@@ -26,7 +26,7 @@ impl Signex {
         }
     }
 
-    /// The error card (Graphite m11): a header with the severity glyph, the
+    /// The error card (Graphite mockup row 11): a header with the severity glyph, the
     /// heading and the close x; the readable sentence; the system part in a
     /// sunken mono block; on a choice card, what each choice does. A plain
     /// card's footer is Copy and OK; a choice card's is Cancel, then the
@@ -334,7 +334,7 @@ impl Signex {
     }
 }
 
-/// Width of a plain error card and of a card that offers choices (m11).
+/// Width of a plain error card and of a card that offers choices (mockup row 11).
 const NOTICE_PLAIN_W: f32 = 460.0;
 const NOTICE_CHOICE_W: f32 = 480.0;
 /// Gap between the sentence, the system block and the choice list (10 px at

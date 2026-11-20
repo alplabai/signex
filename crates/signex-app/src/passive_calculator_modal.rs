@@ -1,5 +1,5 @@
 //! Tools ▸ Passive Network Calculator — the resistor / capacitor / inductor
-//! network calculator plus the RKM encoder (mockup m17). It opens in its
+//! network calculator plus the RKM encoder (mockup row 17). It opens in its
 //! own OS window like the other tool dialogs (docs/DETACHED_MODALS.md); the
 //! in-window card below is the fallback when that window is not available.
 

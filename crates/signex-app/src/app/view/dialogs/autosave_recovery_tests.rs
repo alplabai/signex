@@ -1,4 +1,4 @@
-//! The recovery prompt as drawn (#2262, Graphite mockup m15).
+//! The recovery prompt as drawn (#2262, Graphite mockup row 15).
 
 use std::time::{Duration, SystemTime};
 
@@ -119,7 +119,7 @@ fn the_notes_follow_which_version_is_newer() {
 }
 
 /// The footer order is unchanged by the redraw: Restore, then Discard, at
-/// the left; Decide later alone at the right. The m15 split is an open
+/// the left; Decide later alone at the right. The mockup row 15 split is an open
 /// maintainer question.
 #[test]
 fn restore_and_discard_lead_and_decide_later_ends_the_footer() {

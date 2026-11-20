@@ -1,5 +1,5 @@
 //! Ids of `locales/en-US/passive_calculator.ftl`: Tools ▸ Passive Network
-//! Calculator, the network calculator and the RKM encoder (#872).
+//! Calculator, the network calculator and the RKM encoder (#2262).
 
 define_ids! {
     PASSIVE_CALCULATOR;

@@ -1,4 +1,4 @@
-//! The symbol hover card (Graphite m10): a placed symbol's designator as the
+//! The symbol hover card (Graphite mockup row 10): a placed symbol's designator as the
 //! title, then its value, footprint and library beside a label gutter. The
 //! card shell and title row are shared with the net card (`net_hover.rs`).
 
@@ -64,7 +64,7 @@ impl Signex {
         let ink = crate::styles::ti(tokens.text);
         let label_ink = crate::styles::tokens::resolve(tokens).ink4;
         // The values are data read off the canvas, so they keep the canvas
-        // font. m10 draws the chrome mono instead; that is an open
+        // font. Mockup row 10 draws the chrome mono instead; that is an open
         // maintainer decision.
         let canvas_font_name = self.document_state.panel_ctx.canvas_font_name.as_str();
         let canvas_font = crate::fonts::canvas_iced_font(canvas_font_name);
@@ -145,7 +145,7 @@ impl Signex {
     }
 }
 
-/// The card both hover cards draw (m10): `content` on the raised surface with
+/// The card both hover cards draw (mockup row 10): `content` on the raised surface with
 /// a 1 px border, the card radius and the floating shadow of the menus and
 /// popovers, padded 8 / 10, `width` px wide.
 pub(super) fn hover_card<'a>(
@@ -233,7 +233,7 @@ mod tests {
 
     const R6: uuid::Uuid = uuid::Uuid::from_u128(6);
 
-    /// m10: the designator is the title, above Value / Footprint / Library;
+    /// Mockup row 10: the designator is the title, above Value / Footprint / Library;
     /// no "Designator" row is left, and each value sits beside its label.
     #[test]
     fn the_symbol_card_titles_the_designator_over_its_field_rows() {
@@ -276,7 +276,7 @@ mod tests {
         assert!(texts.iter().all(|t| t.text != "Designator"), "{texts:?}");
     }
 
-    /// The card is never narrower than the m10 minimum nor wider than the cap.
+    /// The card is never narrower than the mockup row 10 minimum nor wider than the cap.
     #[test]
     fn the_symbol_card_width_stays_between_the_minimum_and_the_cap() {
         let short = super::symbol_card_width("R1", &[], "", "");

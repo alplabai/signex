@@ -1,4 +1,4 @@
-//! The calculator's frame and the network page's inputs (mockup m17): the
+//! The calculator's frame and the network page's inputs (mockup row 17): the
 //! mode switch under the dialog header, then the page in a scrolling body.
 
 use iced::widget::{Column, container, pick_list, responsive, scrollable};

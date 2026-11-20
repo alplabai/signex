@@ -1,4 +1,4 @@
-//! The Exit confirm as drawn (#2262, Graphite mockup m16).
+//! The Exit confirm as drawn (#2262, Graphite mockup row 16).
 
 use std::collections::HashMap;
 use std::path::PathBuf;

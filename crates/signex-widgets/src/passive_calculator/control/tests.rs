@@ -79,9 +79,9 @@ fn target_dependent_metrics_read_unavailable_without_a_target() {
     );
 }
 
-// ---- m17 (#872) ----
+// ---- Graphite layout (mockup row 17, #2262) ----
 
-mod m17 {
+mod graphite_layout {
     use chrono::NaiveDate;
     use iced::{Color, Font, Theme};
     use signex_i18n::{I18n, ids, t};

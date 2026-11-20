@@ -359,7 +359,7 @@ fn a_failed_save_as_keeps_the_draft_when_the_original_was_reopened() {
     }
     let notice = app.document_state.error_notice.as_ref().expect("notice");
     // The sentence names the operation; the reason is the error chain, shown
-    // in the card's system block (m11).
+    // in the card's system block (mockup row 11).
     assert_eq!(notice.detail.render_en_us(), "Save As failed");
     assert!(
         notice

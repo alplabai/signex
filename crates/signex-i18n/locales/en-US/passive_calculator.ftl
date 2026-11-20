@@ -1,5 +1,5 @@
 # Tools ▸ Passive Network Calculator: the network calculator and the RKM
-# encoder (#872). Values, codes, unit symbols and E-series names are data and
+# encoder (#2262). Values, codes, unit symbols and E-series names are data and
 # are not in the catalog.
 
 ## Mode switch and component kinds

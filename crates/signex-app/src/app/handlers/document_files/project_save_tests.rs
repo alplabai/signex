@@ -581,7 +581,7 @@ fn a_library_whose_version_control_cannot_be_completed_is_refused_loudly() {
     assert!(project.data.libraries.is_empty());
     let notice = fx.app.document_state.error_notice.clone().expect("card");
     // The sentence names the operation; the reason is the error chain, shown
-    // in the card's system block (m11).
+    // in the card's system block (mockup row 11).
     assert_eq!(notice.detail.render_en_us(), "Failed to save project file");
     assert!(
         notice

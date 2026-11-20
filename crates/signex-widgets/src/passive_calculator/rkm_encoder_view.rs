@@ -1,4 +1,4 @@
-//! The RKM encoder page (mockup m17): Component, Value (with its SI prefix
+//! The RKM encoder page (mockup row 17): Component, Value (with its SI prefix
 //! and unit inside the field) and Tolerance on one line, the folding
 //! "Optional" resistor fields, the enable-first production date, then the
 //! Specification / RKM code / Production date code strip and the colour
