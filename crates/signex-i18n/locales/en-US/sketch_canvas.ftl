@@ -93,3 +93,10 @@ sketch-canvas-menu-delete-mirror = Delete mirror
 sketch-canvas-pattern-mirror = ⇔
 # Joins a pattern's glyph to the pattern it repeats ("P×4 of L×4").
 sketch-canvas-pattern-of = of
+# Snap badges of the Midpoint and Centre snaps (#188), "Midpoint · line",
+# "Centre · circle"; the curve is named by its pad when it has one.
+sketch-canvas-snap-midpoint = Midpoint
+sketch-canvas-snap-centre = Centre
+sketch-canvas-snap-line = line
+sketch-canvas-snap-circle = circle
+sketch-canvas-snap-arc = arc

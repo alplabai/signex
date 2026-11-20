@@ -757,3 +757,7 @@ mod sketch_pad_scope;
 // #187 / #188 (decision 5): Convert to reference and Make driving.
 #[path = "regression/sketch_reference.rs"]
 mod sketch_reference;
+// Caner (2026-11-20) items 1 and 6: Create ▾ Slot and Polygon, and the
+// Midpoint / Centre / Intersection snaps that land their constraint.
+#[path = "regression/sketch_create_inference.rs"]
+mod sketch_create_inference;

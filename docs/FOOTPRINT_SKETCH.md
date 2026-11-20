@@ -267,6 +267,8 @@ badge names the target"; `canvas/draw/sketch/snap.rs`):
 | Horizontal / Vertical inference | ─ / │ | Horizontal / Vertical |
 | Angle | ◇ | Angle 45° (the slope as seen on screen, 0° to 179°) |
 | Intersection | + | Intersection |
+| A Line's midpoint | ◐ | Midpoint · line (or · pad 1 for a pad's Line) |
+| A Circle's or Arc's centre | ⊙ | Centre · circle / arc (or · pad 1) |
 | Guide | none (the guide is drawn) | Guide |
 | A board feature (board sketch only) | ◻ | Pad · J1-1, Courtyard · J1, Board outline, … |
 | Grid, or no snap | none | none |
@@ -277,6 +279,72 @@ tokens (raised fill, strong line, text), since the board ground is Graphite
 Dark in both themes; the glyph keeps its cyan. Midpoint, Centre and the
 other snaps the mockup lists, and whether they land constraints, are not
 decided yet.
+Decided 2026-11-20: Midpoint and Centre are built and land constraints; see
+[Snap inference](#snap-inference).
+
+## Create tools {#create-tools}
+
+Sketch ▸ Create lists, on both hosts: Line, Rectangle, Rounded Rectangle,
+Circle, Arc, Tangent Arc, Edge Arc, Point, **Slot**, **Polygon** (Caner,
+2026-11-20, item 1; mockup m187). Each shape is placed by its last click as
+one edit, so one undo step, and the tool goes back to its first click; Esc
+drops a half-made shape. The geometry is `signex_sketch::geom::shapes`, the
+same helpers the canvas ghost draws from.
+
+- **Slot** — click one end's centre, then the other's, then a third click
+  sets the half width (its distance from the line through the centres). A
+  positive length in the dimension input is the centre distance: the second
+  centre lands that far from the first, towards the cursor; an unreadable
+  one is refused and nothing changes. The slot is two semicircular Arcs on
+  the centres and two Lines joining their ends, plus a construction diameter
+  across each end. Constraints: each centre is the Midpoint of its diameter,
+  each diameter is Perpendicular to a side, the Arcs have Equal radius, and
+  two dimensions: the centre distance (centre to centre) and the width
+  (across the first end's diameter). The slot is then fully defined but for
+  where it sits and which way it points.
+  The ends are held tangent by the diameters, not by Tangent constraints: a
+  Tangent constraint at a point the Line and the Arc share has a residual
+  with its maximum there (the distance from a centre to a line through a
+  point of the circle never exceeds the radius), so its Jacobian row is zero
+  and it pins nothing; the slot would read as under-defined and the
+  redundancy check could flag it.
+- **Polygon** — click the centre, then the first vertex. The dimension input
+  is the side count: empty is 6, a whole number from 3 to 64 is taken, and
+  anything else is refused with a warning, nothing changes and the tool
+  waits for the vertex click again. The polygon is its sides as Lines
+  closing a loop, each vertex held on a construction Circle on the centre
+  (zero distance to the Circle), and each side as long as the next.
+
+Both bake as any closed profile does. The side count and centre distance
+are read from the dimension input (as Chamfer and Linear Pattern read it);
+the cursor's typed-value overlay has no field for them yet.
+
+## Snap inference {#snap-inference}
+
+While a drawing tool is armed (the Create rows above), three snaps land a
+constraint on the click's Point, in the click's undo step (Caner,
+2026-11-20, item 6; mockup m188):
+
+| Snap | Constraint |
+|---|---|
+| Midpoint of a Line | Midpoint (the Point is the Line's midpoint) |
+| Centre of a Circle or Arc | Coincident with the centre Point (the click places its own Point) |
+| Intersection of two curves | Point on Line for a Line, Point on Arc for an Arc, zero distance to a Circle, on each of the two |
+
+Priority: a sketch Point first (a Point that is a Circle's or Arc's centre
+reads as Centre), then the board, then Midpoint and Centre within the Point
+snap's 8 px, then guides, intersections, H / V, angle and grid. Snap ▾ in
+sketch mode has a **Sketch snaps** group (Line midpoints, Circle and arc
+centres, on by default, not saved, no undo step); intersections keep their
+Objects for snapping row. A Line within ±5° of an axis still gets its
+Horizontal or Vertical (one threshold, `snap::AXIS_THRESHOLD_DEG`).
+
+**Ctrl while drawing** (Cmd on macOS) turns inference off for that click:
+the cursor skips the Midpoint, Centre, Intersection, H / V and angle snaps
+(point reuse, the board, guides and grid stay), and the click lands no
+inferred constraint, the Line's auto H / V included. The code is
+`snap::snap_cursor_with` and `snap::click_inference`; the canvas sends
+`SketchToolClickInferred` / `SketchPlacePointInferred` only when one applies.
 
 ## Modify tools
 

@@ -152,4 +152,6 @@ define_ids! {
     EDITORS_PAD_SCOPE_THIS_PAD = "editors-pad-scope-this-pad";
     EDITORS_PAD_SCOPE_ALL_PADS = "editors-pad-scope-all-pads";
     EDITORS_PAD_SCOPE_CANCEL = "editors-pad-scope-cancel";
+    EDITORS_SKETCH_TOOL_SLOT = "editors-sketch-tool-slot";
+    EDITORS_SKETCH_TOOL_POLYGON = "editors-sketch-tool-polygon";
 }

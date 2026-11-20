@@ -736,6 +736,10 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
         // the cursor reticle is the sole visual cue.
         // Chamfer's ghost lives in `tool_ghosts`.
         ToolPending::FilletFirst { .. } | ToolPending::ChamferFirst { .. } => {}
+        // The Slot and Polygon ghosts live in `tool_ghosts`.
+        ToolPending::SlotFirst { .. }
+        | ToolPending::SlotSecond { .. }
+        | ToolPending::PolygonCentre { .. } => {}
     }
 
     // v0.24 Track D — modeless live numeric placement-input overlay.

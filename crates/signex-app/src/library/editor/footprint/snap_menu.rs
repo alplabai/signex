@@ -1,7 +1,9 @@
 //! The board rows of Snap ▾ (#2518, Graphite mockup #179): on a board
 //! sketch the menu gains a Board features group, one switch for all of
 //! them and one per kind, over [`SnapOptions::board_features`]. A
-//! footprint sketch has no board and shows the menu unchanged.
+//! footprint sketch has no board and shows the menu unchanged. In sketch
+//! mode, on both hosts, a Sketch snaps group switches the Midpoint and
+//! Centre snaps that land a constraint (#188).
 //!
 //! [`SnapOptions::board_features`]: super::state::SnapOptions::board_features
 
@@ -12,42 +14,89 @@ use signex_types::sketch::SketchHost;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 use super::snap_board::BoardFeatureKind;
-use super::state::FootprintEditorState;
+use super::state::{EditorMode, FootprintEditorState};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
-/// A click on a board row of Snap ▾.
+/// A click on a sketch or board row of Snap ▾.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SketchSnapMsg {
     /// The Snap to board features switch was flipped.
     BoardFeaturesToggled,
     /// One kind's switch was flipped.
     BoardFeatureKindToggled(BoardFeatureKind),
+    /// The Line midpoints switch was flipped.
+    MidpointsToggled,
+    /// The Circle and arc centres switch was flipped.
+    CentresToggled,
 }
 
 /// Flip the switch the row names. The menu stays open, like the other
 /// Snap ▾ switches; nothing on the board or in the sketch changes.
 pub(crate) fn apply(editor: &mut crate::app::FootprintDocument, msg: SketchSnapMsg) {
-    let snaps = &mut editor.state.snap_options.board_features;
+    let opts = &mut editor.state.snap_options;
     match msg {
-        SketchSnapMsg::BoardFeaturesToggled => snaps.enabled = !snaps.enabled,
-        SketchSnapMsg::BoardFeatureKindToggled(kind) => snaps.toggle(kind),
+        SketchSnapMsg::BoardFeaturesToggled => {
+            opts.board_features.enabled = !opts.board_features.enabled;
+        }
+        SketchSnapMsg::BoardFeatureKindToggled(kind) => opts.board_features.toggle(kind),
+        SketchSnapMsg::MidpointsToggled => opts.snap_midpoints = !opts.snap_midpoints,
+        SketchSnapMsg::CentresToggled => opts.snap_centres = !opts.snap_centres,
     }
     editor.canvas_cache.clear();
 }
 
-/// `entries` (the Snap ▾ rows both hosts share) with the board rows
-/// after them on a board sketch.
+/// `entries` (the Snap ▾ rows both hosts share) with, in sketch mode, the
+/// Sketch snaps rows after them, and on a board sketch the board rows.
 pub fn with_board_rows(
     mut entries: Vec<DropdownEntry<LibraryMessage>>,
     state: &FootprintEditorState,
     path: PathBuf,
     i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
+    if state.mode == EditorMode::Sketch {
+        entries.push(DropdownEntry::Separator);
+        entries.extend(inference_rows(state, path.clone(), i18n));
+    }
     if state.sketch_host() == SketchHost::Board {
         entries.push(DropdownEntry::Separator);
         entries.extend(board_rows(state, path, i18n));
     }
     entries
+}
+
+/// The Sketch snaps group: Line midpoints and Circle and arc centres, each
+/// landing its constraint on a drawing tool's click.
+fn inference_rows(
+    state: &FootprintEditorState,
+    path: PathBuf,
+    i18n: &I18n,
+) -> Vec<DropdownEntry<LibraryMessage>> {
+    let opts = state.snap_options;
+    let row = |label: MessageId, msg: SketchSnapMsg, on: bool| {
+        DropdownEntry::Item(
+            DropdownItem::new(
+                t!(i18n, label).into_string(),
+                LibraryMessage::PrimitiveEditorEvent {
+                    path: path.clone(),
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchSnap(msg)),
+                },
+            )
+            .checked(on),
+        )
+    };
+    vec![
+        DropdownEntry::Header(t!(i18n, ids::SKETCH_SNAP_INFERENCE_HEADER).into_string()),
+        row(
+            ids::SKETCH_SNAP_MIDPOINTS,
+            SketchSnapMsg::MidpointsToggled,
+            opts.snap_midpoints,
+        ),
+        row(
+            ids::SKETCH_SNAP_CENTRES,
+            SketchSnapMsg::CentresToggled,
+            opts.snap_centres,
+        ),
+    ]
 }
 
 /// The label of each kind's row.
@@ -176,6 +225,35 @@ mod tests {
             "the switch for all"
         );
         assert!(items[1..].iter().all(|item| item.disabled));
+    }
+
+    #[test]
+    fn sketch_mode_adds_the_midpoint_and_centre_rows_on_both_hosts() {
+        let mut footprint = FootprintEditorState::from_footprint(&Footprint::empty("t"));
+        footprint.mode = EditorMode::Sketch;
+        let entries = with_board_rows(Vec::new(), &footprint, PathBuf::from("t"), &en_us());
+        assert_eq!(
+            labels(&entries),
+            ["Sketch snaps", "Line midpoints", "Circle and arc centres"]
+        );
+        let all_checked = entries.iter().all(|e| match e {
+            DropdownEntry::Item(item) => item.checked,
+            _ => true,
+        });
+        assert!(all_checked, "midpoint and centre snaps are on by default");
+
+        let mut board = board_state();
+        board.mode = EditorMode::Sketch;
+        let entries = with_board_rows(Vec::new(), &board, PathBuf::from("t"), &en_us());
+        assert_eq!(
+            labels(&entries)[..4],
+            [
+                "Sketch snaps",
+                "Line midpoints",
+                "Circle and arc centres",
+                "Board features"
+            ]
+        );
     }
 
     #[test]

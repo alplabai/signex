@@ -485,3 +485,7 @@ editors-pad-scope-question = Pad { $designator } is one of a pattern's pads. App
 editors-pad-scope-this-pad = This pad
 editors-pad-scope-all-pads = All pads
 editors-pad-scope-cancel = Cancel
+# Sketch ▸ Create rows after Point (#187): two arcs joined by two lines,
+# and a regular polygon.
+editors-sketch-tool-slot = Slot
+editors-sketch-tool-polygon = Polygon

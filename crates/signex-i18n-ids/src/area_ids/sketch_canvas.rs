@@ -77,4 +77,9 @@ define_ids! {
     SKETCH_CANVAS_MENU_DELETE_MIRROR = "sketch-canvas-menu-delete-mirror";
     SKETCH_CANVAS_PATTERN_MIRROR = "sketch-canvas-pattern-mirror";
     SKETCH_CANVAS_PATTERN_OF = "sketch-canvas-pattern-of";
+    SKETCH_CANVAS_SNAP_MIDPOINT = "sketch-canvas-snap-midpoint";
+    SKETCH_CANVAS_SNAP_CENTRE = "sketch-canvas-snap-centre";
+    SKETCH_CANVAS_SNAP_LINE = "sketch-canvas-snap-line";
+    SKETCH_CANVAS_SNAP_CIRCLE = "sketch-canvas-snap-circle";
+    SKETCH_CANVAS_SNAP_ARC = "sketch-canvas-snap-arc";
 }

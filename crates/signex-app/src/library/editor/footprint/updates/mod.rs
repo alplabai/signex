@@ -468,7 +468,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::SketchAddConstraintForSelection(..) => {
             sketch::constraints::apply(editor, msg)
         }
-        FootprintEditorMsg::SketchToolClick { .. } => sketch::tools::apply(editor, msg),
+        FootprintEditorMsg::SketchToolClick { .. }
+        | FootprintEditorMsg::SketchToolClickInferred { .. }
+        | FootprintEditorMsg::SketchPlacePointInferred { .. } => sketch::tools::apply(editor, msg),
         FootprintEditorMsg::ToggleLayer(..)
         | FootprintEditorMsg::LayersShowAllClicked
         | FootprintEditorMsg::LayersTopSideOnlyClicked
