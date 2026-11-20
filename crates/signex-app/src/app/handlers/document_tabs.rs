@@ -491,8 +491,15 @@ impl Signex {
 
     /// The indices, ascending, of the tabs after `idx` that the main tab
     /// strip shows. An undocked tab has its own window and is never closed
-    /// from the strip's menu.
+    /// from the strip's menu; nor does the menu of an undocked tab's own
+    /// one-tab strip reach the main window, so it gets an empty list.
     pub(crate) fn strip_tabs_right_of(&self, idx: usize) -> Vec<usize> {
+        let Some(tab) = self.document_state.tabs.get(idx) else {
+            return Vec::new();
+        };
+        if self.tab_is_undocked(&tab.path) {
+            return Vec::new();
+        }
         self.document_state
             .tabs
             .iter()

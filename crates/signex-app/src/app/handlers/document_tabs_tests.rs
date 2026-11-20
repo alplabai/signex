@@ -139,6 +139,32 @@ fn close_tabs_to_the_right_leaves_an_undocked_tab_open() {
     assert_eq!(tab_names(&app), ["a.snxfpt", "c.snxfpt"]);
 }
 
+/// The menu of an undocked tab's own one-tab strip carries the tab's global
+/// index, but its window holds only that tab: Close Tabs to the Right there
+/// greys and never reaches the main window's tabs.
+#[test]
+fn close_tabs_to_the_right_from_an_undocked_tab_closes_nothing() {
+    let mut app = app_with_tabs(&["a.snxfpt", "b.snxfpt", "c.snxfpt"], 1);
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: PathBuf::from("a.snxfpt"),
+            title: "a".to_string(),
+        },
+    );
+    assert!(
+        app.strip_tabs_right_of(0).is_empty(),
+        "a's own window has no tab after a: the row greys"
+    );
+    let _ = tab_action(&mut app, TabContextAction::CloseToTheRight(0));
+    assert_eq!(tab_names(&app), ["a.snxfpt", "b.snxfpt", "c.snxfpt"]);
+    assert!(
+        app.ui_state.windows.contains_key(&window),
+        "a's window stays open"
+    );
+}
+
 // ─── Copy Path ────────────────────────────────────────────────────
 
 /// The clipboard text is the tab's file path as displayed.
