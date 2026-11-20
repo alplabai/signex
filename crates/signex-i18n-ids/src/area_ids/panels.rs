@@ -243,6 +243,6 @@ define_ids! {
     HARNESS_MSG_DEFS_REFUSED = "panels-harness-msg-defs-refused";
     HARNESS_MSG_RENAME_FAILED = "panels-harness-msg-rename-failed";
     HARNESS_MSG_ENTRY_OFF_CONNECTOR = "panels-harness-msg-entry-off-connector";
-    PANELS_COMPILED_DESIGN_NO_PROJECT = "panels-compiled-design-no-project";
+    PANELS_COMPILED_DESIGN_MSG_NO_PROJECT = "panels-compiled-design-msg-no-project";
     PANELS_COMPILED_DESIGN_NAMING_REFUSED = "panels-compiled-design-naming-refused";
 }

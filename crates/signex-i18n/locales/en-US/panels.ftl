@@ -972,6 +972,6 @@ panels-harness-msg-defs-refused = Harness definitions not changed: { $why }
 # $file is the sheet, $why the engine's reason.
 panels-harness-msg-rename-failed = Harness type not renamed on { $file }: { $why }
 panels-harness-msg-entry-off-connector = Harness entry not placed: click on a harness connector
-panels-compiled-design-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
+panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
 # $why says why the project refused the edit.
 panels-compiled-design-naming-refused = Channel naming not changed: { $why }

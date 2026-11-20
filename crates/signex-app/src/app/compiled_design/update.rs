@@ -115,7 +115,7 @@ impl Signex {
             crate::diagnostics::log_warning(
                 signex_i18n::t!(
                     self.ui_state.i18n,
-                    signex_i18n::ids::PANELS_COMPILED_DESIGN_NO_PROJECT
+                    signex_i18n::ids::PANELS_COMPILED_DESIGN_MSG_NO_PROJECT
                 )
                 .into_string(),
             );
