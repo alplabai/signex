@@ -37,14 +37,27 @@ impl ShortcutScope {
         }
     }
 
-    /// Whether a row bound in `context` is listed in this scope.
+    /// Whether a row bound in `context` is listed in this scope. Exhaustive
+    /// on both sides: a new context or scope must be placed here.
     pub fn shows(self, context: ShortcutContext) -> bool {
-        match (self, context) {
-            (Self::All, _) => true,
-            (_, ShortcutContext::Footprint | ShortcutContext::Library) => false,
-            (Self::Schematic, ShortcutContext::Pcb) => false,
-            (Self::Pcb, ShortcutContext::Schematic) => false,
-            _ => true,
+        match context {
+            ShortcutContext::Global
+            | ShortcutContext::Modal
+            | ShortcutContext::TextInput
+            | ShortcutContext::CommandPalette
+            | ShortcutContext::Placement => true,
+            ShortcutContext::Footprint | ShortcutContext::Library => match self {
+                Self::All => true,
+                Self::Schematic | Self::Pcb => false,
+            },
+            ShortcutContext::Schematic => match self {
+                Self::Schematic | Self::All => true,
+                Self::Pcb => false,
+            },
+            ShortcutContext::Pcb => match self {
+                Self::Pcb | Self::All => true,
+                Self::Schematic => false,
+            },
         }
     }
 }
