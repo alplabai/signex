@@ -309,7 +309,7 @@ pub(super) fn sections<'a>(
         .tip(t!(i18n, ids::PROPERTIES_SHEET_SYMBOL_REPEAT_TIP))
         .view(
             super::super::enable_section::enable_section_style(&ctx.tokens),
-            repeat_rows,
+            repeat_rows.boxed(),
         );
     let naming = super::channel_naming_menu::naming_section(ctx, view);
     let naming: Element<'a, PanelMsg> = if is_on {

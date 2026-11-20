@@ -111,7 +111,7 @@ fn members<'a>(ctx: &'a PanelContext, foot: &'a UnionFoot) -> Element<'a, PanelM
                 .then_some(um(UnionsMsg::RemoveSelectionRequested)),
             tokens,
         ))
-        .push(Space::new().width(Length::Fill))
+        .push(Space::new().width(Length::Fill).boxed())
         .push(dialog_button(
             t!(ctx.i18n, ids::UNIONS_FOOT_BREAK),
             DialogButtonKind::Ghost,

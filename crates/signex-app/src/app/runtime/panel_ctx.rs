@@ -523,6 +523,8 @@ impl Signex {
         let tree_unchanged = previous_projects == projects_panel
             && (project_tree_builds > 0 || projects_panel.is_empty());
         let kept_project_tree = if tree_unchanged { kept_tree } else { vec![] };
+        // Taken before the snapshot below borrows `self`.
+        let directive_panel = self.document_state.panel_ctx.directive_panel.take();
         let active_schematic_snapshot = self.active_render_snapshot();
         let active_pcb_snapshot = self.active_pcb_snapshot();
 
@@ -553,7 +555,6 @@ impl Signex {
         let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
         let annotation = self.annotation_panel_state();
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
-        let directive_panel = self.document_state.panel_ctx.directive_panel.take();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
         let wire_color_picker = self.document_state.panel_ctx.wire_color_picker;
