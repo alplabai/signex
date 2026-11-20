@@ -70,7 +70,7 @@ pub fn open_library_among(
 
 /// Captured shape of a New Library request that hasn't been written
 /// to disk yet. Lives on `LoadedProject.pending_libraries` between
-/// the user clicking "Create Library" on the Library Options modal
+/// the user clicking "Create Library" in the New Library dialog
 /// and the next successful project save (which materialises the
 /// `.snxlib` via `create_pending_library`). Closes
 /// `feedback_no_disk_writes_without_user_save.md`'s "wait for
@@ -365,7 +365,7 @@ pub fn create_library_at(
     let library_id = Uuid::now_v7();
     let manifest = seed_manifest(library_id, stem, &state.new_library_defaults);
 
-    // LFS opt-in (Stage 11): the "Library Options" modal that pops up
+    // LFS opt-in (Stage 11): the New Library dialog that pops up
     // after the New Library Save-As dialog feeds `use_lfs` here. The
     // adapter writes `.gitattributes` for `*.step`/`*.stp`/`*.wrl`/
     // `*.iges` and stages it into the initial commit when `true`.

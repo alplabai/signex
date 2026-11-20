@@ -133,7 +133,7 @@ pub fn compute_drift(
             let entry = current.entry(lib_id.clone()).or_insert_with(|| {
                 let read = adapters
                     .entry(lib.id)
-                    .or_insert_with(|| LocalGitAdapter::open(&lib.path))
+                    .or_insert_with(|| LocalGitAdapter::open_to_read(&lib.path))
                     .as_ref()
                     .map_err(|e| LibraryError::Backend(e.to_string()))
                     .and_then(|a| a.get_symbol(symbol_id));
@@ -503,7 +503,7 @@ fn open_library(libs: &[MountedLibrary], id: Uuid) -> Opened {
         .iter()
         .find(|l| l.id == id)
         .ok_or_else(|| "its library is not open".to_string())?;
-    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open(&lib.path)
+    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open_to_read(&lib.path)
         .map_err(|e| e.to_string())?;
     let tables = adapter.list_tables().map_err(|e| e.to_string());
     Ok(OpenedLibrary { adapter, tables })
@@ -1015,6 +1015,7 @@ mod tests {
         let entry = |s: &Symbol, selected: bool| LibraryUpdateEntry {
             symbol_uuid: s.uuid,
             ref_des: s.reference.clone(),
+            internal_pn: String::new(),
             lib_id: "L:S".into(),
             library_id: library,
             library_name: "Lib".into(),

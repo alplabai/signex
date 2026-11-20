@@ -103,6 +103,7 @@ impl LibraryState {
         self.refresh_in_flight
             .retain(|_, in_flight| in_flight.as_path() != root);
         self.pending_follow_ups.remove(root);
+        self.history_missing.remove(root);
         if let Some(idx) = self.open_libraries.iter().position(|lib| lib.root == root) {
             let entry = self.open_libraries.remove(idx);
             self.touch_data();

@@ -206,11 +206,9 @@ library-edit-row-reload-saved = Reload saved version
 library-picker-next = Next
 library-primitive-picker-browse = Browse filesystem…
 library-primitive-picker-open-library = Open library
-library-primitive-picker-dont-copy = Don't copy
 library-recovery-remove-from-project = Remove from project
 library-recovery-locate = Locate…
 library-recovery-restore-remote = Restore from remote
-library-recovery-skip-read-only = Skip (read-only)
 library-recovery-reinit = Re-init (lose history)
 library-recovery-remove-row = Remove row
 library-recovery-rebind = Re-bind…
@@ -262,3 +260,344 @@ library-distributor-other = Other
 library-order-help = The first matching adapter is tried first when you paste a distributor URL into the Supply tab.
 # $error is the system's reason, in English.
 library-order-save-failed = Could not save the order: { $error }
+
+## Copy to Library (mockup row 134)
+
+# Intro title. $label is the name of the stock symbol or footprint.
+library-stock-copy-intro-title = Copy { $label } to a library
+# Intro text under the title.
+library-stock-copy-intro-text = The stock library is read-only. The copy opens for editing; the stock original is not changed.
+# The chosen library can no longer take the copy. $path is its file.
+library-stock-copy-not-writable = { $path } is not open and writable; pick another library.
+
+## Close Library (mockup row 136)
+
+# Intro title of the prompt shown when a library with unsaved drafts closes.
+library-close-intro-title = Save the drafts before closing?
+# $library is the library's name, $count how many drafts are unsaved.
+library-close-intro-text = '{ $library }' has { $count ->
+        [one] { $count } unsaved draft
+       *[other] { $count } unsaved drafts
+    }.
+# Kind of a draft that is a table row. $table is the table's name.
+library-close-kind-row = { $table } · row
+# Kind of a draft that is a file (a symbol or footprint).
+library-close-kind-file = file
+
+## Library recovery (mockup row 138)
+
+# Footer button: close the dialog and decide later (Git Repository Missing:
+# the library opens read-only).
+library-recovery-skip-for-now = Skip for now
+# Keys of the facts box.
+library-recovery-key-library = Library
+library-recovery-key-expected = Expected
+library-recovery-key-remote = Remote
+library-recovery-key-row = Row
+library-recovery-key-missing-uuid = Missing UUID
+# Library Missing: dialog title, intro and the caption under the facts.
+library-recovery-missing-title = Library Missing
+library-recovery-missing-intro-title = The library file is missing
+library-recovery-missing-intro-text = The project refers to a library that is not on disk.
+# $library is the missing library's name.
+library-recovery-missing-caption = Skip for now opens the project anyway: parts from { $library } keep their embedded copies.
+# Git Repository Missing: dialog title, intro, banners and caption.
+library-recovery-git-title = Git Repository Missing
+library-recovery-git-intro-title = The library's history is missing
+library-recovery-git-intro-text = Version control is on for this library, but its .git folder is gone.
+# $error is the system's reason, in English.
+library-recovery-git-reinit-failed = Re-init failed: { $error }
+library-recovery-git-reinit-warning = Re-init starts a new history: all earlier commits are lost.
+library-recovery-git-caption = Skip for now opens the library read-only until its history is restored.
+# Broken binding: $kind is symbol, footprint, sim or other; $table is the
+# table that holds the row.
+library-recovery-binding-title = Broken { $kind ->
+        [symbol] Symbol
+        [footprint] Footprint
+        [sim] Sim Model
+       *[other] Primitive
+    } Binding
+library-recovery-binding-intro-title = The { $kind ->
+        [symbol] Symbol
+        [footprint] Footprint
+        [sim] Sim Model
+       *[other] Primitive
+    } is missing
+library-recovery-binding-intro-text = A row in '{ $table }' references a { $kind ->
+        [symbol] Symbol
+        [footprint] Footprint
+        [sim] Sim Model
+       *[other] Primitive
+    } that no longer exists on disk.
+library-recovery-binding-caption = Skip for now keeps the row as it is until it is re-bound.
+
+## Edit Component (mockup row 130)
+# Dialog title.
+library-edit-row-title = Edit Component
+# Header note: $pn is the row's part number, $library the library, $table the table.
+library-edit-row-note = { $pn } · { $library } / { $table }
+# Section heading, written in capitals.
+library-edit-row-identity = IDENTITY
+# Section heading, written in capitals.
+library-edit-row-bindings = BINDINGS
+# Section heading, written in capitals.
+library-edit-row-parameters = PARAMETERS
+# Field label, also the field's placeholder.
+library-edit-row-internal-pn = Internal PN
+# Field label: the component class.
+library-edit-row-class = Class
+# Placeholder of the Class dropdown.
+library-edit-row-class-placeholder = Select class…
+# Field label: the lifecycle state.
+library-edit-row-state = State
+# Placeholder of the State dropdown.
+library-edit-row-state-placeholder = Select lifecycle…
+# The lifecycle states of a component row, as its State dropdown and the
+# Place Component State column show them.
+library-lifecycle-draft = Draft
+library-lifecycle-in-review = In review
+library-lifecycle-released = Released
+library-lifecycle-deprecated = Deprecated
+library-lifecycle-obsolete = Obsolete
+# A state written by a newer version of Signex.
+library-lifecycle-unknown = Unknown
+# Field label, also the field's placeholder.
+library-edit-row-manufacturer = Manufacturer
+# Field label: manufacturer part number; also the field's placeholder.
+library-edit-row-mpn = MPN
+# Field label.
+library-edit-row-description = Description
+# Placeholder of the Description field: a sample description.
+library-edit-row-description-placeholder = e.g. 100 nF 50 V X7R 0603
+# Field label.
+library-edit-row-datasheet = Datasheet
+# Placeholder of the Datasheet field: a sample address.
+library-edit-row-datasheet-placeholder = https://example.com/datasheet.pdf
+# A datasheet stored in the library, shown read-only; $file is its file name.
+library-edit-row-datasheet-pinned = Pinned PDF: { $file }
+# Field label.
+library-edit-row-tags = Tags (comma-separated)
+# Placeholder of the Tags field: sample tags.
+library-edit-row-tags-placeholder = e.g. low-noise, RoHS, qualified
+# Error under the Internal PN field; $pn is the typed part number, $table the table of the row that has it.
+library-edit-row-pn-conflict = Internal PN “{ $pn }” is already used in { $table }.
+# Footer summary of what holds Save; $count is a whole number, $fields the field names.
+library-edit-row-problems = { $count ->
+        [one] { $count } problem
+       *[other] { $count } problems
+    }: { $fields }
+# Binding card title.
+library-edit-row-symbol-ref = Symbol ref
+# Binding card title.
+library-edit-row-footprint-ref = Footprint ref
+# Binding card text when the row binds no symbol.
+library-edit-row-symbol-unbound = Unbound — pick a symbol
+# Binding card text when the row binds no footprint.
+library-edit-row-footprint-unbound = Unbound (optional)
+# What a binding resolves to: $file is the file, $name the symbol or footprint.
+library-edit-row-binding = { $file } · { $name }
+# A binding no open library lists; $id is the short id it names.
+library-edit-row-binding-missing = Not in the open libraries ({ $id })
+# Inline confirm before the draft is discarded.
+library-edit-row-reload-confirm = Discard your edits and reload?
+# Button that adds an empty parameter row.
+library-edit-row-add-parameter = + Add Parameter
+# Parameters table column heading.
+library-edit-row-key = Key
+# Parameters table column heading.
+library-edit-row-value = Value
+# Parameters table column heading.
+library-edit-row-unit = Unit
+# Placeholder of a parameter's number field.
+library-edit-row-value-placeholder = value
+# The parameters table when it is empty.
+library-edit-row-no-parameters = No parameters yet.
+# Pill after a parameter that comes from the class template.
+library-edit-row-template-pill = template
+# Caption under the parameters table; $class is the class name.
+library-edit-row-template-caption = Template parameters come from the { $class } class and cannot be removed.
+# Heading over the template parameters the row has no value for yet.
+library-edit-row-template-offer = Template parameters
+# Button that adds a template parameter; $name is the parameter.
+library-edit-row-add-slot = + { $name }
+# Button that adds a template parameter; $name is the parameter, $unit its unit symbol.
+library-edit-row-add-slot-unit = + { $name } ({ $unit })
+# Why a stored value breaks its template rule; $reason is the rule, in English.
+library-edit-row-slot-problem = ✗ { $reason }
+# Tooltip of a unit this version does not know, which is kept unchanged.
+library-edit-row-unit-kept = Kept as written
+
+## Delete Component (mockup row 137)
+# Dialog title.
+library-delete-row-title = Delete Component?
+# Intro title; $pn is the row's part number.
+library-delete-row-intro-title = Delete { $pn }?
+# Intro text; $pn is the row's part number, $table its table.
+library-delete-row-intro = Delete row { $pn } from { $table }? This cannot be undone from the UI.
+
+## Place Component picker (mockup row 129)
+# Dialog title of the picker when it places a part.
+library-picker-title-place = Place Component
+# Dialog title of the picker when it swaps a placed part for another.
+library-picker-title-change = Change Component
+# Dialog title of the picker when it chooses a datasheet to open.
+library-picker-title-datasheet = Open Datasheet
+# Header note: how many open libraries the listed parts come from, and how many parts.
+library-picker-scope = { $libraries ->
+        [one] { $libraries } library
+       *[other] { $libraries } libraries
+    } · { $parts ->
+        [one] { $parts } part
+       *[other] { $parts } parts
+    }
+# Placeholder of the search field.
+library-picker-search = Search internal PN / MPN / description…
+# Column head: the library's own part number.
+library-picker-column-internal-pn = Internal PN
+# Column head: the part's lifecycle state (Draft, Released, …).
+library-picker-column-state = State
+# Column head: the manufacturer part number.
+library-picker-column-mpn = MPN
+# Column head: the part's description.
+library-picker-column-description = Description
+# Shown in place of the list when no part matches.
+library-picker-empty = No components match. Open a library or refine the filter.
+# Footer hint: Enter in the search field places the selected part.
+library-picker-hint-place = Enter to place
+# Footer hint, Change Component: Enter goes on to the change preview.
+library-picker-hint-next = Enter for Next
+
+## Primitive picker (mockup row 131)
+# Dialog titles, by the kind of primitive picked.
+library-primitive-picker-title-symbol = Pick Symbol
+library-primitive-picker-title-footprint = Pick Footprint
+library-primitive-picker-title-sim = Pick Sim Model
+library-primitive-picker-title-primitive = Pick Primitive
+# Header note: the component row the pick is for. $pn is its internal part number.
+library-primitive-picker-for = for { $pn }
+# Placeholder of the filter field.
+library-primitive-picker-filter = Filter…
+# One listed primitive: $file is the file that holds it, $name the primitive's name.
+library-primitive-picker-row = { $file } · { $name }
+# Group head: the footprints the component's own library part offers.
+library-primitive-picker-group-suggested = This component's footprints
+# Group head: symbols of a library that is not open. $library is its name.
+library-primitive-picker-group-not-open = In library { $library } (not open)
+# Group head: symbols of files that belong to no library.
+library-primitive-picker-group-no-library = Not in a library
+# Shown in place of the list when no library is open.
+library-primitive-picker-no-libraries = No libraries open. Use Browse filesystem… to pick a primitive directly.
+# Shown in place of the list when nothing matches the filter.
+library-primitive-picker-no-match = No primitives match. Only primitives saved inside an open `.snxlib` are listed: save the symbol into `<lib>.snxlib/symbols/`, or use Browse filesystem…
+# The library the row belongs to, when its name is not known.
+library-primitive-picker-this-library = this library
+# Title of the confirm shown before a symbol is copied or linked.
+library-primitive-picker-copy-title = Copy into library?
+# The symbol is in no library. $name is the symbol, $library the row's library.
+library-primitive-picker-copy-loose = Copy { $name } into library { $library }?
+# What the copy does. $library is the row's library.
+library-primitive-picker-copy-loose-detail = The original file stays as it is. The row then points at the copy inside { $library }.
+# The symbol belongs to a library that is not open. $name is the symbol, $library that library.
+library-primitive-picker-copy-held = { $name } is in library { $library }, which is not open.
+# Caption under the question. $library is the library that holds the symbol.
+library-primitive-picker-link-caption = A link breaks if { $library } is not open.
+# Button: open the other library and bind the row to its symbol, copying nothing.
+library-primitive-picker-link = Link without copying
+# Button: copy the symbol into the row's library. $library is that library.
+library-primitive-picker-copy-into = Copy into { $library }
+# The copy button while the copy runs.
+library-primitive-picker-copying = Copying…
+# Shown while the library that holds the symbol is being opened.
+library-primitive-picker-opening = Opening library…
+# Link without copying found the library open but without the symbol; nothing
+# is bound. $library is the library, $name the symbol.
+library-primitive-picker-not-listed = { $library } does not list { $name }; nothing was linked.
+
+## Document Options dialog of a library (mockup row 132)
+# Header note: $name is the library's display name.
+library-document-options-note = Library: { $name }
+# Form label: the colour of the symbol and footprint editor sheets.
+library-document-options-sheet-color = Sheet Color
+# Form label of the grid visibility switch.
+library-document-options-grid = Grid
+# Beside the grid switch: the grid is drawn.
+library-document-options-grid-visible = Visible
+# Form label: the distance between grid points.
+library-document-options-grid-spacing = Grid Spacing
+# One grid spacing in the dropdown: $pitch is the number in millimetres,
+# already formatted (three decimals).
+library-document-options-grid-pitch = { $pitch } mm
+# Caption beside the dropdown: $pitches lists the preset spacings,
+# already formatted and separated.
+library-document-options-grid-presets = { $pitches }
+# Form label: the unit coordinates are shown in.
+library-document-options-unit = Unit
+# Unit segment: millimetres.
+library-document-options-unit-mm = mm
+# Unit segment: thousandths of an inch.
+library-document-options-unit-mil = mil
+# Unit segment: inches.
+library-document-options-unit-inch = inch
+# Unit segment: micrometres.
+library-document-options-unit-um = µm
+
+## New Library dialog (mockup row 133)
+# Option card title: put the new library under version control.
+library-create-options-git = Enable version control (Git)
+# Option card help under the version-control title.
+library-create-options-git-help = Initialise a Git repository at the library's parent directory and commit on every save. Off by default; can be enabled later.
+# Option card title, indented under the version-control card.
+library-create-options-lfs = Use Git LFS for binary 3D models
+# Option card help under the Git LFS title; the file patterns and the
+# git lfs command are not translated.
+library-create-options-lfs-help = Tracks *.step, *.stp, *.wrl, *.iges via Git LFS. Requires git lfs installed locally.
+# Refusal banner action: reopen the save-as picker to pick another place.
+library-create-options-relocate = Choose another location…
+# Tooltip of the disabled Create Library button while a refusal shows.
+library-create-options-refused-tip = Choose another location, or turn off version control.
+
+## Library Updates (mockup row 135)
+# Message over the drift table. $count is how many placed components differ
+# from their library rows (a whole number).
+library-updates-summary =
+    { $count ->
+        [one] { $count } placed component drifted from the library since this schematic was last saved.
+       *[other] { $count } placed components drifted from the library since this schematic was last saved.
+    }
+# Summary pill: $count components (a whole number) have a major version change.
+library-updates-count-major = { $count } major
+# Summary pill: $count components (a whole number) have a minor version change.
+library-updates-count-minor = { $count } minor
+# Summary pill: $count components (a whole number) have a patch version change.
+library-updates-count-patch = { $count } patch
+# Column heading of the drift table: the placed part (designator and Internal PN).
+library-updates-column-part = Part
+# Column heading: the library the part comes from.
+library-updates-column-library = Library
+# Column heading: the part's version and its library row's version now.
+library-updates-column-version = Version
+# Column heading: how large the version change is.
+library-updates-column-change = Change
+# Change pill: a major version change, which may break the placed part.
+library-updates-change-major = ⚠ Major
+# Change pill: a minor version change.
+library-updates-change-minor = Minor
+# Change pill: a patch version change.
+library-updates-change-patch = Patch
+# Version cell: $current is the placed part's version, $latest its library
+# row's version now.
+library-updates-version = { $current } → { $latest }
+# Conflict line: caption before the value the placed part holds.
+library-updates-conflict-yours = yours
+# Conflict line: caption before the value the library row holds now.
+library-updates-conflict-library-now = library now
+# Conflict answer: keep the placed part's own value.
+library-updates-keep-mine = Keep mine
+# Conflict answer: take the library row's value.
+library-updates-use-library = Use library value
+# Conflict line: the field that differs, the part's footprint.
+library-updates-field-footprint = Footprint
+# Conflict line: the field that differs, the part's manufacturer.
+library-updates-field-manufacturer = Manufacturer
+# Conflict line: the field that differs, the manufacturer part number.
+library-updates-field-mpn = MPN

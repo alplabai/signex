@@ -612,13 +612,14 @@ pub enum PrimitivePickerMsg {
         read: std::sync::Arc<crate::library::loose_symbols::LooseRead>,
         from_browse: bool,
     },
-    /// A loose symbol was chosen: ask whether to copy it into the library.
+    /// A loose symbol was chosen: ask whether to copy (or link) it.
     PickLoose(crate::library::loose_symbols::LooseSymbol),
-    /// "Copy" was answered yes.
+    /// "Copy into <library>" was chosen.
     CopyConfirmed,
-    /// "Open library" was answered yes for a symbol of an unmounted `.snxlib`.
+    /// "Link without copying" was chosen for a symbol of an unmounted
+    /// `.snxlib`: open it, then bind the row to its symbol.
     OpenLibraryConfirmed,
-    /// "Copy" was answered no: nothing changes.
+    /// Cancel (or ✕) on the copy question: back to the list, nothing changes.
     CopyDeclined,
     /// The copy finished on its worker: the reference to bind, or why not,
     /// with the pick it was made for. The bind happens only if that same

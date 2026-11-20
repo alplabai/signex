@@ -1,135 +1,94 @@
-//! "Library Options" modal — Stage 11 of
-//! `v0.9-snxlib-as-file-plan.md`.
-//!
-//! Pops up between the New Library Save-As dialog (where the user
-//! picked the `.snxlib` filename) and the actual disk + git init
-//! call. Carries a single user-facing toggle: "Use Git LFS for
-//! binary 3D models". Defaults off so `git lfs` doesn't become a
-//! hard prerequisite for casual library creation; production
-//! libraries flip it on at create time so 3D model commits don't
-//! bloat the git pack.
-//!
-//! Mounted as a full-screen overlay backdrop via
-//! `app/view/mod.rs::collect_overlays` when
-//! `LibraryState::create_options.is_some()`; `create_options_overlay`
-//! owns that guard.
+//! New Library dialog (mockup row 133): the version-control options of a
+//! library about to be created. See docs/architecture/library-dialogs.md,
+//! "New Library dialog".
 
+use iced::font::Weight;
 use iced::widget::{Space, column, container, row};
-use iced::{Element, Length, Widget};
-use signex_i18n::{ids, t};
+use iced::{Border, Element, Font, Length, Theme, Widget};
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::theme_ext;
-use signex_widgets::{checkbox, raw, text};
+use signex_widgets::enable_section::dependents_veil;
+use signex_widgets::inert::Inert;
+use signex_widgets::{ToggleSwitchStyle, button, raw, text, toggle_switch, tooltip};
 
 use super::messages::LibraryMessage;
-use super::modal_chrome::{cancel_btn, footer_strip, header_with_note, primary_btn};
+use super::modal_chrome::{
+    cancel_btn, footer_strip, header_with_note_closing, notice_banner, primary_btn_if,
+};
 use super::state::LibraryCreateOptionsState;
+use crate::styles::tokens::{accent, on_accent, resolve};
+use crate::styles::{PillTone, Radii, Spacing, TypeScale, ti};
 
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
+/// How far the LFS card sits in from the Git card (the mock's 24 px on the
+/// spacing scale).
+const LFS_INDENT: f32 = SP.xl + SP.m;
+/// The mock's 10 px on the spacing scale: between the cards, between a
+/// card's switch and its words, and a card's top and bottom padding.
+const CARD_GAP: f32 = SP.m + SP.xs;
 
 pub fn view<'a>(
     state: &'a LibraryCreateOptionsState,
     tokens: &'a ThemeTokens,
-    i18n: &signex_i18n::I18n,
+    i18n: &I18n,
     windowed: bool,
 ) -> Element<'a, LibraryMessage> {
-    let text_c = theme_ext::text_primary(tokens);
-    let muted = theme_ext::text_secondary(tokens);
+    // The full target path is the note, so the user sees where it lands.
+    let header = header_with_note_closing(
+        &i18n.message_plain(ids::DIALOG_TITLE_LIBRARY_OPTIONS, &[]),
+        Some(state.lib_path.display().to_string()),
+        LibraryMessage::LibraryCreateOptionsCancel,
+        windowed,
+        tokens,
+    );
 
-    let lib_label = state
-        .lib_path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| state.lib_path.display().to_string());
-
-    let header = header_with_note("Library Options", lib_label, windowed, tokens);
-
-    // Toggle 1 — Enable Version Control. Off by default so a fresh
-    // library lives on disk as plain files; opting in runs `git init`
-    // at the parent directory and stages an initial commit.
-    let git_check: Element<'a, LibraryMessage> = checkbox(state.enable_git)
-        .style(crate::panels::form_look::checkbox_style)
-        .size(TS.heading)
-        .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleGit)
-        .boxed();
-
-    let git_label = text(raw("Enable version control (Git)"))
-        .size(TS.label)
-        .color(text_c);
-    let git_help = text(raw(
-        "Initialise a Git repository at the library's parent directory and \
-     commit on every save. Off by default — leave plain files unless \
-     you plan to track history or collaborate. Can be enabled later.",
-    ))
-    .size(TS.caption)
-    .color(muted);
-
-    let git_row = container(
-        row![
-            git_check,
-            Space::new().width(8),
-            column![git_label, git_help].spacing(SP.s),
-        ]
-        .align_y(iced::Alignment::Start),
-    )
-    .padding([SP.m, SP.l])
-    .width(Length::Fill);
-
-    // Toggle 2 — LFS, only meaningful when version control is on.
-    // Greyed out otherwise (no `on_toggle` so the checkbox is inert).
-    let lfs_check: Element<'a, LibraryMessage> = if state.enable_git {
-        checkbox(state.use_lfs)
-            .style(crate::panels::form_look::checkbox_style)
-            .size(TS.heading)
-            .on_toggle(|_| LibraryMessage::LibraryCreateOptionsToggleLfs)
-            .boxed()
-    } else {
-        // Inert checkbox — same footprint, can't be clicked.
-        checkbox(false)
-            .style(crate::panels::form_look::checkbox_style)
-            .size(TS.heading)
-            .boxed()
+    let git = option_card(
+        state.enable_git,
+        t!(i18n, ids::LIBRARY_CREATE_OPTIONS_GIT),
+        t!(i18n, ids::LIBRARY_CREATE_OPTIONS_GIT_HELP),
+        LibraryMessage::LibraryCreateOptionsToggleGit,
+        tokens,
+    );
+    let lfs = option_card(
+        state.use_lfs,
+        t!(i18n, ids::LIBRARY_CREATE_OPTIONS_LFS),
+        t!(i18n, ids::LIBRARY_CREATE_OPTIONS_LFS_HELP),
+        LibraryMessage::LibraryCreateOptionsToggleLfs,
+        tokens,
+    );
+    // Disable-when-off: LFS stays visible, greyed and inert, until Git is
+    // on (the handler clears it when Git turns off).
+    let lfs = match dependents_veil(ti(tokens.paper), state.enable_git) {
+        Some(veil) => Inert::new(lfs, veil).boxed(),
+        None => lfs,
     };
 
-    let lfs_text_color = if state.enable_git { text_c } else { muted };
-    let lfs_label = text(raw("Use Git LFS for binary 3D models"))
-        .size(TS.label)
-        .color(lfs_text_color);
-    let lfs_help = text(raw(
-        "Tracks `*.step`, `*.stp`, `*.wrl`, `*.iges` via Git LFS \
-     (recommended for production libraries). Requires `git lfs` \
-     to be installed locally. Only available with version control on.",
-    ))
-    .size(TS.caption)
-    .color(muted);
-
-    let lfs_row = container(
-        row![
-            lfs_check,
-            Space::new().width(8),
-            column![lfs_label, lfs_help].spacing(SP.s),
-        ]
-        .align_y(iced::Alignment::Start),
-    )
-    .padding([SP.m, SP.l])
-    .width(Length::Fill);
-
-    let mut body = column![git_row, lfs_row].spacing(SP.xs);
+    let mut body = column![git, row![Space::new().width(LFS_INDENT), lfs]].spacing(CARD_GAP);
     if let Some(reason) = &state.refusal {
-        body = body.push(
-            container(
-                text(raw(reason.as_str()))
-                    .size(TS.caption)
-                    .color(theme_ext::error_color(tokens)),
-            )
-            .padding([SP.s, SP.l])
-            .width(Length::Fill)
-            .boxed(),
-        );
+        body = body.push(refusal_banner(reason, i18n, tokens));
     }
+
+    let refused = state.refusal.is_some();
+    let create = primary_btn_if(
+        t!(i18n, ids::LIBRARY_CREATE_OPTIONS_CREATE),
+        LibraryMessage::LibraryCreateOptionsConfirm,
+        !refused,
+        tokens,
+    );
+    let create = if refused {
+        tooltip(
+            create,
+            container(text(t!(i18n, ids::LIBRARY_CREATE_OPTIONS_REFUSED_TIP)).size(TS.body))
+                .padding([SP.xs, SP.s]),
+            tooltip::Position::Top,
+        )
+        .style(crate::styles::context_menu(tokens))
+        .boxed()
+    } else {
+        create
+    };
 
     let footer = footer_strip(
         Vec::new(),
@@ -139,17 +98,18 @@ pub fn view<'a>(
                 LibraryMessage::LibraryCreateOptionsCancel,
                 tokens,
             ),
-            primary_btn(
-                t!(i18n, ids::LIBRARY_CREATE_OPTIONS_CREATE),
-                LibraryMessage::LibraryCreateOptionsConfirm,
-                tokens,
-            ),
+            create,
         ],
         tokens,
     );
 
     container(
-        column![header, container(body).padding([SP.s, 0.0]), footer].width(super::card_len(
+        column![
+            header,
+            container(body).padding(SP.xl).width(Length::Fill),
+            footer
+        ]
+        .width(super::card_len(
             windowed,
             super::modal_chrome::CREATE_OPTIONS_W,
         )),
@@ -157,4 +117,160 @@ pub fn view<'a>(
     .style(crate::styles::modal_card(tokens))
     .clip(true)
     .boxed()
+}
+
+/// Weight 500 of the default UI family: an option card's title.
+fn title_font() -> Font {
+    Font {
+        weight: Weight::Medium,
+        ..Font::DEFAULT
+    }
+}
+
+/// An option card: a hairline-bordered card holding a switch, a title and
+/// a help caption. A press anywhere on the card sends `on_toggle`, as the
+/// switch does.
+fn option_card<'a>(
+    is_on: bool,
+    title: Localized,
+    help: Localized,
+    on_toggle: LibraryMessage,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let r = resolve(tokens);
+    let ink = ti(tokens.text);
+    let line = ti(tokens.border);
+    let switch = toggle_switch(
+        is_on,
+        ToggleSwitchStyle::new(accent(tokens), r.line_strong, on_accent(tokens)),
+        Some(on_toggle.clone()),
+    );
+    let words = column![
+        text(title).size(TS.body).font(title_font()).color(ink),
+        text(help).size(TS.caption).color(r.ink3),
+    ]
+    .spacing(SP.xs)
+    .width(Length::Fill);
+    button(
+        row![switch, words]
+            .spacing(CARD_GAP)
+            .align_y(iced::Alignment::Start),
+    )
+    .width(Length::Fill)
+    .padding([CARD_GAP, SP.l])
+    .on_press(on_toggle)
+    .style(move |_: &Theme, _| signex_widgets::button::Style {
+        background: None,
+        text_color: ink,
+        border: Border {
+            width: 1.0,
+            color: line,
+            radius: Radii::GRAPHITE.card.into(),
+            ..Border::default()
+        },
+        ..signex_widgets::button::Style::default()
+    })
+    .boxed()
+}
+
+/// The refusal as an error banner, with the way out: choose another
+/// location (the save-as picker again).
+fn refusal_banner<'a>(
+    reason: &str,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    // raw: the library guard words its own refusal, in English.
+    let body = text(raw(reason.to_owned())).size(TS.body).boxed();
+    notice_banner(
+        PillTone::Err,
+        body,
+        vec![small_btn(
+            t!(i18n, ids::LIBRARY_CREATE_OPTIONS_RELOCATE),
+            LibraryMessage::LibraryCreateOptionsRelocateRequested,
+            tokens,
+        )],
+        tokens,
+    )
+}
+
+/// A small bordered action inside a banner (the mock's `btn sm`).
+fn small_btn<'a>(
+    label: Localized,
+    message: LibraryMessage,
+    tokens: &ThemeTokens,
+) -> Element<'a, LibraryMessage> {
+    let look = crate::styles::outline_button(tokens);
+    button(text(label).size(TS.caption))
+        .padding([SP.xs, SP.m])
+        .on_press(message)
+        .style(move |theme: &Theme, status| {
+            let mut style = look(theme, status);
+            style.border.radius = Radii::GRAPHITE.small.into();
+            style
+        })
+        .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::theme::ThemeId;
+
+    fn state(enable_git: bool, refusal: Option<&str>) -> LibraryCreateOptionsState {
+        LibraryCreateOptionsState {
+            project_path: "p.snxprj".into(),
+            lib_path: "/work/libs/passives.snxlib".into(),
+            enable_git,
+            use_lfs: false,
+            refusal: refusal.map(str::to_owned),
+        }
+    }
+
+    /// The dialog builds in both Graphite themes, Git off and on, with and
+    /// without a refusal, inline and windowed.
+    #[test]
+    fn the_view_builds_in_both_graphite_themes() {
+        let i18n = I18n::en_us();
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = signex_types::theme::theme_tokens(id);
+            for s in [
+                state(false, None),
+                state(true, None),
+                state(true, Some("already has its own history")),
+            ] {
+                for windowed in [false, true] {
+                    let _ = view(&s, &tokens, &i18n, windowed);
+                }
+            }
+        }
+    }
+
+    /// A refusal grows the dialog's own window so the banner and its action
+    /// stay above the footer; a longer reason grows it more.
+    #[test]
+    fn a_refusal_grows_the_window() {
+        use crate::app::ModalId;
+        let (mut app, _boot) = crate::app::Signex::new();
+        app.library.create_options = Some(state(true, None));
+        let plain = app.modal_window_size(ModalId::LibraryCreateOptions);
+        app.library.create_options = Some(state(true, Some("short reason")));
+        let short = app.modal_window_size(ModalId::LibraryCreateOptions);
+        let long_reason = "a long reason ".repeat(40);
+        app.library.create_options = Some(state(true, Some(&long_reason)));
+        let long = app.modal_window_size(ModalId::LibraryCreateOptions);
+        assert_eq!(plain.width, short.width);
+        assert!(short.height > plain.height);
+        assert!(long.height > short.height);
+    }
+
+    /// The dialog is titled New Library, in the window title too.
+    #[test]
+    fn the_dialog_is_titled_new_library() {
+        let i18n = I18n::en_us();
+        assert_eq!(
+            i18n.message_plain(ids::DIALOG_TITLE_LIBRARY_OPTIONS, &[]),
+            "New Library"
+        );
+    }
 }

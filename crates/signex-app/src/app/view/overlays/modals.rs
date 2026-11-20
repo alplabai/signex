@@ -457,6 +457,7 @@ impl Signex {
             .boxed(),
             ModalId::LibraryRecovery => crate::library::recovery::view(
                 lib.recovery.as_ref()?,
+                self.recovery_project_file(),
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
@@ -473,16 +474,19 @@ impl Signex {
             .boxed(),
             ModalId::LibraryEditRow => {
                 let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
-                let classes = self.row_classes_for(path);
-                let template = lib.row_template(path, edit.draft.class.as_str());
+                let context = crate::library::edit_row_modal::EditRowContext::resolve(
+                    lib,
+                    path,
+                    edit,
+                    self.row_classes_for(path),
+                );
                 crate::library::edit_row_modal::view(
                     path,
                     edit,
                     tokens,
                     &self.ui_state.i18n,
                     windowed,
-                    classes,
-                    template,
+                    context,
                 )
                 .map(Message::Library)
                 .boxed()

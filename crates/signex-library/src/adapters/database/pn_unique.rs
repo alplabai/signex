@@ -1,7 +1,7 @@
-//! Part-number uniqueness for the database backend, matching the local git
-//! backend's `check_pn_unique`: a PN is the library-wide key, compared
-//! trimmed and case-sensitively, and a blank PN (an unfilled draft) never
-//! conflicts.
+//! Part-number uniqueness for the database backend, by the same rule as the
+//! local git backend's `check_pn_unique`: [`InternalPn::clashes`] (the PN is
+//! the library-wide key, compared trimmed and case-sensitively, and a blank
+//! PN never conflicts).
 //!
 //! The adapter checks against the rows it reads back before a write, which
 //! gives a clear error early. Two writers racing the same new PN can both
@@ -14,6 +14,7 @@ use uuid::Uuid;
 use super::DatabaseAdapter;
 use crate::adapter::{LibraryAdapter, LibraryError};
 use crate::component::ComponentRow;
+use crate::identity::InternalPn;
 
 /// Refuse `internal_pn` if a row other than `except_row_id` already holds it.
 pub(super) fn ensure_pn_free(
@@ -21,12 +22,10 @@ pub(super) fn ensure_pn_free(
     internal_pn: &str,
     except_row_id: Option<Uuid>,
 ) -> Result<(), LibraryError> {
-    let wanted = internal_pn.trim();
-    if wanted.is_empty() {
-        return Ok(());
-    }
     for (table, stored) in rows {
-        if Some(stored.row_id) != except_row_id && stored.internal_pn.as_str().trim() == wanted {
+        if Some(stored.row_id) != except_row_id
+            && InternalPn::clashes(internal_pn, stored.internal_pn.as_str())
+        {
             return Err(LibraryError::Conflict(format!(
                 "internal_pn {internal_pn:?} already exists in table {table:?}"
             )));

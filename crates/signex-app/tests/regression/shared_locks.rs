@@ -19,10 +19,12 @@ pub(crate) fn new_row_notes() -> MutexGuard<'static, ()> {
     take(&NEW_ROW_NOTES)
 }
 
-/// Who may rely on the shared `global_libraries.toml` being a readable file:
-/// the components-panel test turns it into a directory, and the stock-copy
-/// tests restart an app that must read it back. Held by both for their whole
-/// body.
+/// Who may rely on the shared `global_libraries.toml` being a readable file,
+/// and on the library a stock copy remembers in the shared `prefs.json`: the
+/// components-panel test turns the list into a directory, the stock-copy
+/// tests restart an app that must read both back, and every other test that
+/// finishes a stock copy rewrites the remembered library. Held by all of
+/// them for their whole body.
 pub(crate) fn global_list_file() -> MutexGuard<'static, ()> {
     take(&GLOBAL_LIST_FILE)
 }

@@ -1196,3 +1196,40 @@ fn apply_after_the_sheet_closed_keeps_the_pending_record() {
     let _ = click_apply(&mut app);
     assert!(app.library.skipped_updates_for.contains(&sheet));
 }
+
+/// Mockup row 135: the scan shows each part's Internal PN, read with its row, and the
+/// table's header checkbox ticks every row, then clears every row.
+#[test]
+fn the_header_checkbox_ticks_then_clears_every_update() {
+    let f = team_fixture();
+    let mut app = app_with_library(&f);
+    place(&mut app, &f);
+    make_version_stale(&mut app);
+    {
+        let engine = app.document_state.active_engine_mut().unwrap();
+        let mut d = engine.document().clone();
+        let mut twin = d.symbols[0].clone();
+        twin.uuid = Uuid::now_v7();
+        twin.reference = "U2".into();
+        d.symbols.push(twin);
+        engine.set_document(d);
+    }
+    edit_library_symbol(&f, add_pin);
+    scan(&mut app);
+    let selected = |app: &Signex| -> Vec<bool> {
+        let state = app.library.library_updates.as_ref().unwrap();
+        state.entries.iter().map(|e| e.selected).collect()
+    };
+    let state = app.library.library_updates.as_ref().unwrap();
+    assert_eq!(state.entries.len(), 2);
+    assert!(
+        state.entries.iter().all(|e| e.internal_pn == "SNX-TWO"),
+        "the PN comes from the row"
+    );
+    assert_eq!(selected(&app), vec![false, false], "major bump: off");
+    let header = || Message::Library(LibraryMessage::LibraryUpdatesSelectAllToggled);
+    let _ = app.update(header());
+    assert_eq!(selected(&app), vec![true, true], "some off: tick all");
+    let _ = app.update(header());
+    assert_eq!(selected(&app), vec![false, false], "all on: clear all");
+}

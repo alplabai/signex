@@ -332,6 +332,9 @@ impl Signex {
             LibraryMessage::LibraryCreateOptionsConfirm => {
                 self.handle_library_create_options_confirm()
             }
+            LibraryMessage::LibraryCreateOptionsRelocateRequested => {
+                self.handle_library_create_options_relocate()
+            }
             LibraryMessage::AddLibrarySymbolFilePicked { project_id, path } => {
                 self.handle_add_library_symbol_file_picked(project_id, path)
             }
@@ -487,10 +490,12 @@ impl Signex {
                 self.handle_document_options_set_sheet_color(c)
             }
             LibraryMessage::DocumentOptionsToggleGrid => self.handle_document_options_toggle_grid(),
-            LibraryMessage::DocumentOptionsCycleGridSize => {
-                self.handle_document_options_cycle_grid_size()
+            LibraryMessage::DocumentOptionsGridSpacingPicked(mm) => {
+                self.handle_document_options_grid_spacing_picked(mm)
             }
-            LibraryMessage::DocumentOptionsCycleUnit => self.handle_document_options_cycle_unit(),
+            LibraryMessage::DocumentOptionsUnitPicked(unit) => {
+                self.handle_document_options_unit_picked(unit)
+            }
             LibraryMessage::DocumentOptionsApply => self.handle_document_options_apply(),
             LibraryMessage::DocumentOptionsCancel => {
                 self.library.document_options = None;
@@ -529,6 +534,9 @@ impl Signex {
                 self.library.library_updates = None;
                 self.show_next_queued_updates();
                 Task::none()
+            }
+            LibraryMessage::LibraryUpdatesSelectAllToggled => {
+                self.handle_library_updates_select_all_toggled()
             }
 
             // ── Components Panel (Stage 9) ────────────────────────────
