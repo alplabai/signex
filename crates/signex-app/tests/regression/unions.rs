@@ -8,12 +8,18 @@ use signex_app::app::{EditMsg, Message, Signex};
 use signex_app::dock::DockMessage;
 use signex_app::keymap::{AppCommandId, ShortcutProfileSet};
 use signex_app::panels::PanelMsg;
+use signex_types::format::SnxSchematic;
 use signex_types::schematic::SchematicSheet;
 
 use crate::paste_support::sheet::{app_with_sheet, populated_sheet, select};
 
 fn doc(app: &Signex) -> &SchematicSheet {
     app.document_state.active_engine().unwrap().document()
+}
+
+/// The active sheet as the file would hold it.
+fn written(app: &Signex) -> String {
+    SnxSchematic::new(doc(app).clone()).write_string().unwrap()
 }
 
 fn undo_position(app: &Signex) -> usize {
@@ -99,7 +105,7 @@ fn hiding_a_union_is_not_an_undo_step_and_changes_no_document() {
     let mut app = app_with_union();
     let path = app.document_state.active_path.clone().unwrap();
     let union = doc(&app).unions[0].uuid;
-    let (steps, sheet) = (undo_position(&app), doc(&app).clone());
+    let (steps, sheet) = (undo_position(&app), written(&app));
     panel(
         &mut app,
         UnionsMsg::HideToggled {
@@ -109,7 +115,7 @@ fn hiding_a_union_is_not_an_undo_step_and_changes_no_document() {
     );
     assert!(app.ui_state.unions.is_hidden(&path, union));
     assert_eq!(undo_position(&app), steps, "hide is not an undo step");
-    assert_eq!(doc(&app), &sheet, "the document is unchanged");
+    assert_eq!(written(&app), sheet, "the document is unchanged");
     panel(
         &mut app,
         UnionsMsg::HideToggled {
