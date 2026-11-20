@@ -481,6 +481,47 @@ fn change_component_opens_the_part_picker_for_the_selected_part() {
     assert!(matches!(picker.mode, PickerMode::ChangeComponent(_)));
 }
 
+/// A filter that hides the selected row drops the selection, and Enter
+/// (Change Component's commit) then changes nothing: no pin preview, the
+/// part keeps its symbol. A selection the list does not show is never
+/// committed either.
+#[test]
+fn enter_after_the_filter_hid_the_selected_row_changes_nothing() {
+    use signex_app::library::messages::PickerMsg;
+
+    let (mut app, new) = change_setup("ZC9", renumbered(), &[]);
+    let before = symbol_lib_id(&app);
+    request(&mut app, PlacedPartAction::ChangeComponent);
+    select_row(&mut app, &new);
+
+    settle(
+        &mut app,
+        Message::Library(LibraryMessage::Picker(PickerMsg::FilterChanged(
+            "zzzz-no-such-part".into(),
+        ))),
+    );
+    let picker = app.library.picker.as_ref().expect("the picker stays open");
+    assert!(picker.selected.is_none(), "the hidden row is not selected");
+    send(&mut app, PlacedPartMsg::ChangePartPicked);
+    let picker = app.library.picker.as_ref().expect("the picker stays open");
+    assert!(
+        matches!(picker.mode, PickerMode::ChangeComponent(_)),
+        "no pin preview, got {:?}",
+        picker.mode
+    );
+
+    // The same row held as selected while the filter hides it.
+    select_row(&mut app, &new);
+    send(&mut app, PlacedPartMsg::ChangePartPicked);
+    let picker = app.library.picker.as_ref().expect("the picker stays open");
+    assert!(
+        matches!(picker.mode, PickerMode::ChangeComponent(_)),
+        "a hidden row is not committed, got {:?}",
+        picker.mode
+    );
+    assert_eq!(symbol_lib_id(&app), before, "the part keeps its symbol");
+}
+
 #[test]
 fn a_locked_part_is_not_offered_a_new_component() {
     let (mut app, _new) = change_setup("ZC2", renumbered(), &[]);

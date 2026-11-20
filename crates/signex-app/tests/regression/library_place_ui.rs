@@ -79,6 +79,39 @@ fn the_picker_place_is_one_undo_step() {
     assert!(doc(&app).lib_symbols.is_empty());
 }
 
+/// A filter that hides the selected row drops the selection, and Enter
+/// (the search field's Place) then places nothing. A selection the list
+/// does not show is never placed either.
+#[test]
+fn enter_after_the_filter_hid_the_selected_row_places_nothing() {
+    let f = fixture();
+    let mut app = app_with_library(&f);
+    select_in_picker(&mut app, &f);
+    let selected = app.library.picker.as_ref().and_then(|p| p.selected.clone());
+    assert!(selected.is_some(), "the fixture row is selected");
+
+    dispatch_to_completion(
+        &mut app,
+        Message::Library(LibraryMessage::Picker(PickerMsg::FilterChanged(
+            "zzzz-no-such-part".into(),
+        ))),
+    );
+    let picker = app.library.picker.as_ref().expect("the picker stays open");
+    assert!(picker.selected.is_none(), "the hidden row is not selected");
+
+    place_selected(&mut app);
+    click(&mut app, PLACE_AT);
+    assert!(doc(&app).symbols.is_empty(), "nothing is placed");
+    assert!(app.library.picker.is_some(), "the picker stays open");
+
+    // The same row held as selected while the filter hides it.
+    app.library.picker.as_mut().expect("picker").selected = selected;
+    place_selected(&mut app);
+    click(&mut app, PLACE_AT);
+    assert!(doc(&app).symbols.is_empty(), "a hidden row is not placed");
+    assert!(app.library.picker.is_some(), "the picker stays open");
+}
+
 #[test]
 fn a_components_panel_row_place_action_places_on_the_active_schematic() {
     let f = fixture();

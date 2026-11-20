@@ -317,13 +317,21 @@ impl Signex {
             PickerMsg::PanelSearchChanged(_)
             | PickerMsg::PanelLibraryToggled(_)
             | PickerMsg::PanelComponentClicked(_) => {}
+            // A filter that hides the selected row drops the selection, so
+            // Enter and Place never act on a row the list does not show.
             PickerMsg::FilterChanged(s) => {
                 picker.filter = s;
                 self.library.sync_view_caches_in(&self.ui_state.i18n);
+                if let Some(picker) = self.library.picker.as_mut() {
+                    picker.drop_hidden_selection();
+                }
             }
             PickerMsg::RangeFilter(msg) => {
                 picker.range_filters.apply(msg);
                 self.library.sync_view_caches_in(&self.ui_state.i18n);
+                if let Some(picker) = self.library.picker.as_mut() {
+                    picker.drop_hidden_selection();
+                }
             }
             PickerMsg::SelectComponent(row_id) => {
                 // `ComponentSummary` carries `row_id` directly in the
@@ -339,7 +347,7 @@ impl Signex {
             PickerMsg::PlaceSelected
                 if !matches!(picker.mode, crate::library::state::PickerMode::Place) => {}
             PickerMsg::PlaceSelected => {
-                let Some((path, summary)) = picker.selected.clone() else {
+                let Some((path, summary)) = picker.shown_selection().cloned() else {
                     return Task::none();
                 };
                 let Some(table) = self.library.table_of_row(&path, summary.row_id) else {

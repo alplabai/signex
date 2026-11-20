@@ -1,4 +1,4 @@
-//! Component picker modal (#129).
+//! Component picker modal (mockup row 129).
 //!
 //! Opened from File ▸ Library ▸ Place Component…, Place ▸ Component… and the
 //! Active Bar's Part button; Change Component and Open Datasheet reuse it.
@@ -92,7 +92,7 @@ pub fn view<'a>(
     } else {
         LibraryMessage::Picker(PickerMsg::PlaceSelected)
     };
-    let selected = picker.selected.is_some();
+    let selected = picker.shown_selection().is_some();
     let rows = &picker.rows;
     let r = crate::styles::tokens::resolve(tokens);
 
@@ -111,7 +111,8 @@ pub fn view<'a>(
         tokens,
     );
 
-    // Enter in the search field commits the selected row (#129).
+    // Enter in the search field commits the selected row while the list
+    // shows it (mockup row 129).
     let search = search_field(
         t!(i18n, ids::LIBRARY_PICKER_SEARCH),
         &picker.filter,

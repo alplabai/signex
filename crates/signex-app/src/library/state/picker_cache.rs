@@ -80,6 +80,13 @@ impl PickerRows {
         self.visible.iter().map(|&i| &self.entries[i])
     }
 
+    /// Whether the row `row_id` of the library at `path` is listed under
+    /// the current query and range filters.
+    pub fn shows(&self, path: &Path, row_id: Uuid) -> bool {
+        self.visible()
+            .any(|entry| &*entry.path == path && entry.summary.row_id == row_id)
+    }
+
     /// The parameter columns a range filter can go on.
     pub(crate) fn filter_columns(&self) -> &[FilterColumn] {
         &self.filter_columns
