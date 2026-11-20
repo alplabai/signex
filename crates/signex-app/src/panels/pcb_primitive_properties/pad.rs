@@ -1,12 +1,12 @@
-//! The Pad panel (#97): Net Information; Properties (designator, net, the
+//! The Pad panel (mockup row 97): Net Information; Properties (designator, net, the
 //! layer it sits on, position, rotation); Pad Stack (the illustration, the
 //! copper as a Layer × size table, the hole, Paste and Solder mask); and
 //! the rows the board does not store yet.
 //!
 //! A surface pad sits on one layer: its stack is one copper row, with no
-//! stack tiles and no hole (review decision on #97 and #125). A
-//! through-hole pad keeps the Simple / Top-Middle-Bottom / Full Stack tiles
-//! (#2401) and shows a row per layer its stack sets.
+//! stack tiles and no hole (maintainer decision on mockup rows 97 and 125).
+//! A through-hole pad keeps the Simple / Top-Middle-Bottom / Full Stack
+//! tiles (#2401) and shows a row per layer its stack sets.
 
 use iced::widget::{Row, column, container, row};
 use iced::{Element, Length, Theme, Widget as _};

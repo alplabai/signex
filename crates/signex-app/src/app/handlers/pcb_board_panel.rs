@@ -152,7 +152,8 @@ impl Signex {
             // #2523: the size follows the board shape; edit it in Board
             // sketch, as Design ▸ Board Sketch does.
             PcbBoardMsg::BoardShapeEditPressed => task = run_menu_command("board_sketch"),
-            // #2523, #176: the board's materials live in the Layer Stack.
+            // #2523, mockup row 176: the board's materials live in the Layer
+            // Stack.
             PcbBoardMsg::LayerStackOpened => {
                 task = run_menu_command(crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND);
             }

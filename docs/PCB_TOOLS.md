@@ -32,15 +32,19 @@ are both built from it (see `MENU_BAR.md`, "Place on a board").
 through via (top to bottom copper) with the board's via size
 (`PcbSetup::via_diameter` and `via_drill`, else 0.6 mm and 0.3 mm).
 
-A selected via's Properties panel picks a via type (#96): the type sets the
-span, drill pair, stack and sizes, and its tenting, in one undo step. The
-types are derived from the board's vias until the Layer Stack Manager stores
-them (`docs/PCB_LAYER_STACK.md#via-types`). Diameter and Drill are read-only
-with a "from type" tag until Override is on; a reset arrow puts one back,
-and Override off puts both back. A small illustration shows the via on the
-chosen layer and a cross-section of L1 (Top) to Ln (Bottom); Protection names
-its IPC-4761 type. The form of the via about to be placed keeps Diameter and
-Drill editable.
+A selected via's Properties panel picks a via type (mockup row 96): the type
+sets the span, drill pair, stack and sizes, and its tenting, in one undo
+step. The types are derived from the board's vias until the Layer Stack
+Manager stores them (`docs/PCB_LAYER_STACK.md#via-types`). The stack tiles,
+Diameter and Drill are greyed with a "from type" tag until Override is on.
+A via whose diameter or drill already differs from its type shows Override
+on, its own values in bold with a reset arrow each; a reset arrow puts one
+back, and Override off puts both back in one undo step. A small
+illustration shows the via on the chosen layer and a cross-section of L1
+(Top) to Ln (Bottom); Protection names its IPC-4761 type and keeps Tented
+Top and Bottom editable per via. A microvia type lists Stacked / Staggered
+greyed under "Not stored yet". The form of the via about to be placed keeps
+Diameter and Drill editable.
 
 ## Track
 
@@ -645,8 +649,8 @@ turned), so the copper list, ratsnest, design rule check, pick index,
 renderer, drill file and netlist test points treat it as any pad. A click
 selects it and the pad panel edits it, each edit one undo step.
 
-The pad panel (#97) shows the copper as a Layer × (X-Size, Y-Size, Shape)
-table typed in place. A surface pad has one row, its own layer: no stack
+The pad panel (mockup row 97) shows the copper as a Layer × (X-Size, Y-Size,
+Shape) table typed in place. A surface pad has one row, its own layer: no stack
 tiles, no Middle or Bottom rows and no hole. A through-hole pad keeps the
 Simple / Top-Middle-Bottom / Full Stack tiles and shows "All layers", Top /
 Middle / Bottom or a row per copper layer, then its Hole and Plated (read

@@ -1,5 +1,6 @@
-//! The rows the via and pad stacks share (#2401, #96, #97): the Simple /
-//! Top-Middle-Bottom / Full Stack tiles, one size row per layer, the
+//! The rows the via and pad stacks share (#2401, mockup rows 96 and 97):
+//! the Simple / Top-Middle-Bottom / Full Stack tiles, one size row per
+//! layer, the
 //! "from type" tag, captions and the warn callout, and the one place the
 //! panels reach the shared illustration, hover link and "Not stored yet"
 //! group of the panel shell.

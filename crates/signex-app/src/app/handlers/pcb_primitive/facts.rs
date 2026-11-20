@@ -75,7 +75,8 @@ impl Signex {
                 let mut common = self.primitive_common(board, target, lock)?;
                 common.locked_count = mixed_lock(vias.iter().map(|v| v.locked));
                 let mut facts = via_facts(board, common, &vias, i18n);
-                // Override and the shown layer are the panel's state (#96).
+                // Override and the shown layer are the panel's state
+                // (mockup row 96).
                 let panel = &self.interaction_state.pcb_primitive;
                 facts.override_open = panel.via_override.as_ref() == Some(&facts.common.target);
                 facts.view_layer = panel
@@ -482,7 +483,8 @@ pub(super) fn pad_facts(
         layer_sizes: stack_facts::pad_size_rows(i18n, mode, copper, &only_pads),
         mode,
         common,
-        // A free pad's stand-in footprint has no designator (#97 header pill).
+        // A free pad's stand-in footprint has no designator (mockup row 97,
+        // header pill).
         component_designator: shared(pads.iter().map(|(fp, _)| fp.reference.clone()))
             .filter(|r| !r.is_empty()),
         plated: shared(

@@ -81,7 +81,8 @@ pub(super) fn section<'a>(
 }
 
 /// Board materials: solder mask, silkscreen, surface finish, copper weights
-/// and materials live in the Layer Stack (#2523, #176); the row links there.
+/// and materials live in the Layer Stack (#2523, mockup row 176); the row
+/// links there.
 fn materials<'a>(form: &Form<'a>) -> Shown<'a> {
     let label = form.t(ids::PCB_BOARD_MATERIALS);
     let link_text = form.t(ids::PCB_BOARD_MATERIALS_LINK);

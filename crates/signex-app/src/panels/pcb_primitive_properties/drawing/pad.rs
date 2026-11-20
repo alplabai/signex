@@ -1,4 +1,4 @@
-//! The Pad illustration (#97): the pad's top view with its X and Y sizes,
+//! The Pad illustration (mockup row 97): the pad's top view with its X and Y sizes,
 //! the paste (dashed) and mask openings and the hole, beside a side view
 //! through the board. A surface pad shows top copper only. Line art on the
 //! panel ground; the callouts carry the field names below it.

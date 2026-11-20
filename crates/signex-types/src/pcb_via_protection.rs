@@ -1,4 +1,4 @@
-//! Via protection after IPC-4761 (#96): how a via's hole is filled or
+//! Via protection after IPC-4761 (mockup row 96): how a via's hole is filled or
 //! plugged, whether copper caps it, and which sides the mask tents. The
 //! settings combine; [`ViaProtection::class`] names the IPC-4761 type they
 //! make together. A via stores only its tenting today

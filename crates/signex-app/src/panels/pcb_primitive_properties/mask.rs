@@ -1,8 +1,9 @@
-//! The mask rows of the track and via panels (#2378, #95, #96): what the
-//! board stores per track and via, edited live, in collapsible sections that
-//! stay closed while the rule decides and name Rule, Manual or Mixed in
-//! their header. A setting the selection does not share shows no tile
-//! chosen and a blank field. A side with no opening (tented) greys its rows.
+//! The mask rows of the track and via panels (#2378, mockup rows 95 and
+//! 96): what the board stores per track and via, edited live, in
+//! collapsible sections that stay closed while the rule decides and name
+//! Rule, Manual or Mixed in their header. A setting the selection does not
+//! share shows no tile chosen and a blank field. A side with no opening
+//! (tented) greys its rows.
 
 use iced::widget::{column, container, row};
 use iced::{Element, Length, Theme, Widget as _};
@@ -87,7 +88,7 @@ fn all_rule(masks: &[Option<MaskExpansion>]) -> bool {
 }
 
 /// A collapsible section titled `title` and folded by `key`, closed by
-/// default while `closed`, with `summary` in its header (#95).
+/// default while `closed`, with `summary` in its header (mockup row 95).
 fn collapsible<'a>(
     look: Look<'a>,
     title: MessageId,
@@ -150,7 +151,7 @@ pub(super) fn source_rows<'a>(
     );
 }
 
-/// A track's paste or solder mask section (#95): closed while the rule
+/// A track's paste or solder mask section (mockup row 95): closed while the rule
 /// decides. The solder section leads with Tented Top / Bottom, greyed:
 /// tracks do not store tenting yet.
 pub(super) fn track_mask_section<'a>(
@@ -202,7 +203,7 @@ pub(super) fn track_mask_section<'a>(
     s.finish()
 }
 
-/// A via's solder mask section (#96): each side's Source and Expansion,
+/// A via's solder mask section (mockup row 96): each side's Source and Expansion,
 /// greyed while that side has no opening (tented, or not reached), then
 /// From Hole Edge, greyed while neither side has one. Tenting itself is set
 /// in Protection.

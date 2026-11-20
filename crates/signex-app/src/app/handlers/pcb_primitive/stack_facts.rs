@@ -1,5 +1,5 @@
 //! The per-layer size rows, via span ends and via types the via and pad
-//! panels show (#2401, #2407, #96), read from the board. The via types and
+//! panels show (#2401, #2407, mockup row 96), read from the board. The via types and
 //! their protection class come from `signex_engine::pcb::via_types`; this
 //! module only names them.
 
@@ -79,10 +79,10 @@ fn type_choice(i18n: &I18n, def: &ViaTypeDef) -> ViaTypeChoice {
     }
 }
 
-/// Fill in what `facts` shows of the vias' type (#96): the board's types,
-/// the one the vias share, whether they override its size, the drill pair,
-/// protection, finished hole, the board's minimum drill and the sides the
-/// vias reach.
+/// Fill in what `facts` shows of the vias' type (mockup row 96): the
+/// board's types, the one the vias share, whether they override its size,
+/// the drill pair, protection, finished hole, the board's minimum drill and
+/// the sides the vias reach.
 pub(super) fn fill_via_type_facts(
     facts: &mut ViaFacts,
     board: &PcbBoard,

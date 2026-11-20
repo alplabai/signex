@@ -1,4 +1,4 @@
-//! The Via illustration (#96): a small top view of the via on the shown
+//! The Via illustration (mockup row 96): a small top view of the via on the shown
 //! layer (Diameter, Drill, the mask opening or the tent) beside a
 //! cross-section of the copper layers L1 (Top) to Ln (Bottom) with the span,
 //! the fill, plug or cap, and the mask per side. Line art on the panel

@@ -734,7 +734,7 @@ fn a_shaped_outline_reads_as_a_bounding_box() {
     assert!(PcbBoardSummary::of(&closed, "b".into(), 0).outline_is_rectangle);
 }
 
-/// #2523 (#176, R17): Other links to the Layer Stack for the board's
+/// #2523 (mockup row 176): Other links to the Layer Stack for the board's
 /// materials, and Board Information's header holds Reports.
 #[test]
 fn the_materials_link_and_reports_send_their_messages() {

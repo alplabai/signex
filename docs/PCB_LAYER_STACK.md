@@ -75,8 +75,8 @@ Properties Lock box, the board menu's Lock
 and Unlock rows (`lock_board_items`, `unlock_board_items`) and an agent with
 `ids` set it.
 
-A via's span comes from the via type it picks in the Via panel (#96); the
-free From and To rows are gone. An agent still sets a span with
+A via's span comes from the via type it picks in the Via panel (mockup row
+96); the free From and To rows are gone. An agent still sets a span with
 `set_via_span`: both ends must be different copper layers of the board; Top
 to Bottom is a through via, any other span a blind (or buried) one, and a
 micro via stays micro. DRC reads the span (`pcb_geom::via_layers`).
@@ -91,9 +91,10 @@ share (on a tie the smaller), plus the through via the Via tool places
 come first, then by top layer; a type is named with the span name the panel
 shows ("Thru 1:4"). Picking a type in the Via panel sets the vias' kind,
 span, diameter, drill and tenting as one undo step. A via whose diameter or
-drill differs from its type's is an override: the panel shows its sizes
-read-only until Override is on, and turning Override off puts both back to
-the type's in one step. The finished hole is the drill less twice
+drill differs from its type's is an override: the panel shows Override on
+for it, with its own sizes in bold, and turning Override off puts both back
+to the type's in one step. A via that matches its type shows its sizes and
+stack tiles greyed until Override is switched on. The finished hole is the drill less twice
 `VIA_PLATING_MM` (0.025 mm); a drill below `PcbSetup::via_min_drill` shows a
 warning.
 
@@ -102,7 +103,7 @@ share, so an override on most vias of a type moves the type's size with it.
 Five vias at 0.6/0.3 with three of them overridden to 0.8/0.4 make a 0.8/0.4
 type; the two untouched vias then read as overridden, and turning Override
 off on them sizes them to 0.8/0.4. A type with a single via never reads as
-overridden. Stored via types (#105) end this; until then
+overridden. Stored via types (mockup row 105) end this; until then
 `via_types_tests::overriding_most_vias_of_a_derived_type_moves_the_type`
 pins it.
 

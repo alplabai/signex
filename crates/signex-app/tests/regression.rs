@@ -198,7 +198,8 @@ mod pcb_component_schematic;
 // #2355: the track, via and pad Properties panels.
 #[path = "regression/board_primitive_properties.rs"]
 mod board_primitive_properties;
-// #96, #97: via types, Override and the SMD pad's single copper row.
+// Mockup rows 96 and 97: via types, Override and the SMD pad's single
+// copper row.
 #[path = "regression/board_via_pad_panel.rs"]
 mod board_via_pad_panel;
 // #2373, #2393: free arcs, pads, strings and dimensions on a board.
