@@ -61,6 +61,7 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, status: CompiledStatus) -> Element
             color: edge,
             width: 1.0,
             radius: Radii::GRAPHITE.card.into(),
+            ..Border::default()
         },
         ..container::Style::default()
     });

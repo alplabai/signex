@@ -36,9 +36,14 @@ pub(super) fn view<'a>(
             line = line.push(card(ctx, view, tab, tab.channel.index == active));
         }
         if pair.len() == 1 {
-            line = line.push(Space::new().width(Length::Fill).height(Length::Shrink));
+            line = line.push(
+                Space::new()
+                    .width(Length::Fill)
+                    .height(Length::Shrink)
+                    .boxed(),
+            );
         }
-        grid = grid.push(line);
+        grid = grid.push(line.boxed());
     }
     container(scrollable(container(grid).padding(GAP).width(Length::Fill)))
         .width(Length::Fill)
@@ -84,7 +89,8 @@ fn card<'a>(
             text(UserText::new(name.as_str()))
                 .size(TS.caption)
                 .font(mono)
-                .color(res.ink3),
+                .color(res.ink3)
+                .boxed(),
         );
     }
     let (fill, edge, accent) = (res.raised, res.line_soft, ti(tokens.accent));
@@ -97,6 +103,7 @@ fn card<'a>(
                 color: if is_on { accent } else { edge },
                 width: if is_on { 2.0 } else { 1.0 },
                 radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
             },
             ..container::Style::default()
         });

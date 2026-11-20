@@ -293,6 +293,7 @@ fn class_menu<'a>(
             color: r.line_soft,
             width: 1.0,
             radius: SP.xs.into(),
+            ..Border::default()
         },
         ..container::Style::default()
     })
@@ -386,13 +387,15 @@ fn class_form<'a>(
     .padding([SP.xs, SP.s])
     .style(crate::panels::form_look::text_input_style)
     .width(Length::Fixed(NAME_W));
-    let mut name = Column::new().spacing(SP.xs).push(name_input);
+    let mut name: Column<Element<'_, Message>> =
+        Column::new().spacing(SP.xs).push(name_input.boxed());
     if let Some(lock) = lock {
         name = name.push(
             text(lock_reason(lock, i18n))
                 .size(TS.caption)
                 .color(muted)
-                .wrapping(iced::widget::text::Wrapping::Word),
+                .wrapping(iced::widget::text::Wrapping::Word)
+                .boxed(),
         );
     }
     let name = name.boxed();

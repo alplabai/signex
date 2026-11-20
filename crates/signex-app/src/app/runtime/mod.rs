@@ -624,7 +624,8 @@ impl Signex {
             power_port_pending: self.interaction_state.pending_power.is_some(),
             unions: self.union_view(
                 self.document_state
-                    .sheet_path_for_window(window, &self.ui_state),
+                    .sheet_path_for_window(window, &self.ui_state)
+                    .map(std::path::PathBuf::as_path),
             ),
             device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window),
         }

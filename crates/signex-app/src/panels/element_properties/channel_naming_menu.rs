@@ -117,6 +117,7 @@ fn format_field<'a>(
             color: edge,
             width: 1.0,
             radius: Radii::GRAPHITE.control.into(),
+            ..Border::default()
         },
         ..iced::widget::button::Style::default()
     });
@@ -247,6 +248,7 @@ fn menu<'a>(
                 color: edge,
                 width: 1.0,
                 radius: Radii::GRAPHITE.card.into(),
+                ..Border::default()
             },
             shadow: Shadow {
                 color: shadow,

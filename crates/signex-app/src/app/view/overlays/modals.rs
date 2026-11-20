@@ -172,7 +172,8 @@ impl Signex {
             &self.document_state.panel_ctx.tokens,
             &self.ui_state.i18n,
         )
-        .map(|msg| Message::Edit(crate::app::EditMsg::SmartPasteDialog(msg)));
+        .map(|msg| Message::Edit(crate::app::EditMsg::SmartPasteDialog(msg)))
+        .boxed();
         Some(self.wrap_centred_dialog(card, crate::smart_paste::DIALOG_SIZE))
     }
 

@@ -278,6 +278,7 @@ pub(super) fn stale_banner<'a>(
                     color: edge,
                     width: 1.0,
                     radius: crate::styles::Radii::GRAPHITE.control.into(),
+                    ..Border::default()
                 },
                 ..container::Style::default()
             }),

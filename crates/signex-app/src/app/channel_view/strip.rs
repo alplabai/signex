@@ -63,7 +63,12 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, view: &'a ChannelStripView) -> Ele
             } else {
                 t!(i18n, ids::PANELS_CHANNEL_STRIP_COUNT, "count" => parts)
             };
-            label = label.push(text(count).size(metrics.caption_size).color(res.ink3));
+            label = label.push(
+                text(count)
+                    .size(metrics.caption_size)
+                    .color(res.ink3)
+                    .boxed(),
+            );
         }
         tabs = tabs.push(tab(ctx, metrics, label.boxed(), is_on, pick(Some(index))));
     }
