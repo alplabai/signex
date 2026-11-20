@@ -35,8 +35,7 @@ fn distributor_settings_default_reads_nothing_and_bootstrap_fills_it_in() {
     );
     assert_eq!(
         settings.preferred_order_path,
-        crate::library::settings::persistence::config_path()
-            .map(|path| path.display().to_string())
+        crate::library::settings::persistence::config_path().map(|path| path.display().to_string())
     );
     assert!(settings.preferred_order_path.is_some());
 }
