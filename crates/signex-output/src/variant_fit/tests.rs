@@ -182,6 +182,52 @@ fn rows_that_match_base_everywhere_do_not_differ() {
     );
 }
 
+/// Maintainer decision 2026-11-20 (Caner): the matrix's Value is the one the
+/// BOM lists, an `=` value evaluated on its sheet rather than its source.
+#[test]
+fn an_expression_value_shows_evaluated_in_the_matrix_as_in_the_bom() {
+    let mut ctx = context(vec![
+        part("R1", "= Rbase * 2", &[("Rbase", "10kΩ")]),
+        part("R2", "= VCC / 10mA", &[]),
+        part("R3", "= R9.Value", &[]),
+        part("R4", "4k7", &[]),
+    ]);
+    let params = std::collections::BTreeMap::from([("VCC".to_string(), "5V".to_string())]);
+    ctx.metadata = ProjectMetadata::from_values(&params);
+    ctx.metadata.project_parameters = Some(params);
+
+    let matrix = variant_matrix(&ctx, &names(&["Lite"]));
+    let shown: Vec<(&str, &str)> = matrix
+        .rows
+        .iter()
+        .map(|row| (row.designator.as_str(), row.value.as_str()))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("R1", "20kΩ"),
+            ("R2", "500Ω"),
+            ("R3", "= R9.Value"),
+            ("R4", "4k7"),
+        ],
+        "evaluated values; one that does not evaluate keeps its source"
+    );
+
+    let table = crate::bom::rollup(&ctx, &crate::bom::BomOptions::default());
+    let mut listed: Vec<(String, String)> = table
+        .rows
+        .iter()
+        .map(|row| (row.references.join(","), row.value.clone()))
+        .collect();
+    listed.sort();
+    let mut in_matrix: Vec<(String, String)> = shown
+        .iter()
+        .map(|(designator, value)| (designator.to_string(), value.to_string()))
+        .collect();
+    in_matrix.sort();
+    assert_eq!(in_matrix, listed, "the matrix shows the BOM's values");
+}
+
 #[test]
 fn a_project_with_base_only_has_one_column() {
     let matrix = variant_matrix(&context(vec![part("R1", "1k", &[])]), &[]);

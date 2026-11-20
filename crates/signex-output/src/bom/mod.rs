@@ -265,31 +265,20 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
     // entries lists R1 and R101, the same designators the netlist names. The
     // same unit appearing twice under one designator is two parts, so without
     // entries a child placed N times still yields N parts.
-    // Each part with the value it shows: an `=` value evaluated on its sheet,
-    // so a line shows, and groups by, `20kΩ` rather than the expression
-    // (#1986). One that does not evaluate keeps its source text.
-    let mut shown: Vec<(Symbol, String)> = Vec::new();
+    let shown = shown_parts(ctx);
     // Per entry of `shown`: whether the board's footprint of its part is of
     // a type the BOM leaves out (#2365).
-    let mut left_out: Vec<bool> = Vec::new();
-    for (sheet, path) in bom_sheets(ctx) {
-        let metadata = ctx.metadata.for_schematic(sheet);
-        let special = crate::field_value::sheet_context(&metadata);
-        let scope = crate::ValueScope::of_sheet(&sheet.symbols, Some(&special));
-        for sym in sheet.symbols.iter().filter(|sym| is_part_symbol(sym)) {
-            let mut part = sym.clone();
-            part.value = crate::shown_value(&scope, sym).text;
-            shown.push((part, sym.designator_in(&path).trim().to_string()));
-            left_out.push(
-                opts.board_left_out
-                    .iter()
-                    .any(|link| link.names_part(&path, &[sym.uuid])),
-            );
-        }
-    }
+    let left_out: Vec<bool> = shown
+        .iter()
+        .map(|part| {
+            opts.board_left_out
+                .iter()
+                .any(|link| link.names_part(&part.path, &[part.symbol.uuid]))
+        })
+        .collect();
     let placed: Vec<(&Symbol, &str)> = shown
         .iter()
-        .map(|(sym, designator)| (sym, designator.as_str()))
+        .map(|part| (&part.symbol, part.designator.as_str()))
         .collect();
     let components = placed_components(&placed, &left_out, opts);
 
@@ -301,6 +290,39 @@ fn build_bom_context(ctx: &ExportContext, opts: &BomOptions) -> BomContext {
             date: ctx.metadata.date.clone(),
         },
     }
+}
+
+/// One placed part symbol as the BOM and the variant matrix list it.
+pub(crate) struct ShownPart {
+    /// A copy of the placed symbol whose value is the one it shows: an `=`
+    /// value evaluated on its sheet, so `20kΩ` rather than the expression
+    /// (#1986). One that does not evaluate keeps its source text.
+    pub symbol: Symbol,
+    /// The designator the symbol resolves to at its placement.
+    pub designator: String,
+    /// The sheet placement the symbol sits in.
+    pub path: signex_types::schematic::InstancePath,
+}
+
+/// Every part symbol of every [`bom_sheets`] placement, in sheet order, each
+/// with the value it shows (`crate::shown_value` on its sheet).
+pub(crate) fn shown_parts(ctx: &ExportContext) -> Vec<ShownPart> {
+    let mut shown = Vec::new();
+    for (sheet, path) in bom_sheets(ctx) {
+        let metadata = ctx.metadata.for_schematic(sheet);
+        let special = crate::field_value::sheet_context(&metadata);
+        let scope = crate::ValueScope::of_sheet(&sheet.symbols, Some(&special));
+        for sym in sheet.symbols.iter().filter(|sym| is_part_symbol(sym)) {
+            let mut symbol = sym.clone();
+            symbol.value = crate::shown_value(&scope, sym).text;
+            shown.push(ShownPart {
+                symbol,
+                designator: sym.designator_in(&path).trim().to_string(),
+                path: path.clone(),
+            });
+        }
+    }
+    shown
 }
 
 /// The sheet placements a BOM is built from. When the app derived the project
