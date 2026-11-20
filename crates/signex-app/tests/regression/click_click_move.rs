@@ -447,6 +447,12 @@ fn deliver(
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))
                 .flatten(),
             power_port_pending: false,
+            unions: signex_app::schematic_runtime::unions::UnionView {
+                hidden: &[],
+                ink: signex_app::schematic_runtime::unions::UnionInk::from_tokens(
+                    &signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight),
+                ),
+            },
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
         };
         let view = SchematicCanvas::new(app.interaction_state.active_canvas(), prefs);

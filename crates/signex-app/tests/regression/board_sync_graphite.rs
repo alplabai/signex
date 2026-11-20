@@ -159,6 +159,7 @@ fn add_project(app: &mut Signex, dir: &Path) {
             fab_outputs: None,
             requirements: Default::default(),
             parameters: Default::default(),
+            schematic_design: Default::default(),
             unknown: Default::default(),
         },
         pending_libraries: Default::default(),
