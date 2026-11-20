@@ -15,9 +15,9 @@ use crate::{
 use signex_types::schematic::LinkStamp;
 use signex_types::schematic::{
     AnnotateOrder, BodyStyle, Bus, BusEntry, ChildSheet, FillType, HAlign, Junction, Label,
-    LabelType, LibPin, LibSymbol, NoConnect, Pin, PinDirection, PinShapeStyle, Point, SchDirective,
-    SchDrawing, SchematicSheet, SelectedItem, SelectedKind, SheetPin, StrokeColor, Symbol,
-    SymbolTransform, TextNote, TextProp, VAlign, Wire,
+    LabelType, LibPin, LibSymbol, NoConnect, NoErcDirective, Pin, PinDirection, PinShapeStyle,
+    Point, SchDirective, SchDrawing, SchematicSheet, SelectedItem, SelectedKind, SheetPin,
+    StrokeColor, Symbol, SymbolTransform, TextNote, TextProp, VAlign, Wire,
 };
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -261,9 +261,10 @@ fn fixture() -> SchematicSheet {
             uuid: uid(NO_CONNECT, n),
             position: pt(110.0, 5.0 * n as f64),
         });
-        s.no_erc_directives.push(NoConnect {
+        s.no_erc_directives.push(NoErcDirective {
             uuid: uid(NO_ERC, n),
             position: pt(120.0, 5.0 * n as f64),
+            rules: Vec::new(),
         });
         s.child_sheets.push(child_sheet(n));
         s.drawings.push(drawing(n, 65.0));
@@ -313,6 +314,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         no_erc_directives,
         directives,
         title_block,
+        variables,
         lib_symbols,
         frame,
         page,
@@ -366,6 +368,7 @@ fn changed_collections(a: &SchematicSheet, b: &SchematicSheet) -> DocumentPatch 
         differ(paper_size, &b.paper_size)
             || differ(root_sheet_page, &b.root_sheet_page)
             || differ(&sorted(title_block), &sorted(&b.title_block))
+            || differ(variables, &b.variables)
             || differ(page, &b.page)
             || differ(frame, &b.frame),
         DocumentPatch::PAPER,
@@ -386,7 +389,9 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 63] = [
+const ALL_KINDS: [CommandKind; 68] = [
+    CommandKind::SetRunEnd,
+    CommandKind::UpdateTextNoteProps,
     CommandKind::ReplaceDocument,
     CommandKind::MoveSelection,
     CommandKind::RotateSelection,
@@ -410,6 +415,7 @@ const ALL_KINDS: [CommandKind; 63] = [
     CommandKind::UpdateSymbolFields,
     CommandKind::PlaceWireSegment,
     CommandKind::BreakWire,
+    CommandKind::MoveWireEnd,
     CommandKind::PlaceWireSegmentAsIs,
     CommandKind::PlaceBus,
     CommandKind::PlaceLabel,
@@ -440,6 +446,7 @@ const ALL_KINDS: [CommandKind; 63] = [
     CommandKind::SetSheetColor,
     CommandKind::SetPageOrigin,
     CommandKind::SetTitleBlockField,
+    CommandKind::SetSheetVariable,
     CommandKind::SetTextFontFamily,
     CommandKind::SetSymbolDesignatorIn,
     CommandKind::SetDocumentFontFamily,
@@ -448,6 +455,7 @@ const ALL_KINDS: [CommandKind; 63] = [
     CommandKind::SetDrawingPlacement,
     CommandKind::PlaceDirective,
     CommandKind::UpdateDirective,
+    CommandKind::SetNoErcRules,
     CommandKind::AutoplaceFields,
     CommandKind::MoveEach,
 ];
@@ -480,6 +488,9 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::UpdateSymbolFields
         | CommandKind::PlaceWireSegment
         | CommandKind::BreakWire
+        | CommandKind::MoveWireEnd
+        | CommandKind::SetRunEnd
+        | CommandKind::UpdateTextNoteProps
         | CommandKind::PlaceWireSegmentAsIs
         | CommandKind::PlaceBus
         | CommandKind::PlaceLabel
@@ -510,6 +521,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSheetColor
         | CommandKind::SetPageOrigin
         | CommandKind::SetTitleBlockField
+        | CommandKind::SetSheetVariable
         | CommandKind::SetTextFontFamily
         | CommandKind::SetSymbolDesignatorIn
         | CommandKind::SetDocumentFontFamily
@@ -518,6 +530,7 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetDrawingPlacement
         | CommandKind::PlaceDirective
         | CommandKind::UpdateDirective
+        | CommandKind::SetNoErcRules
         | CommandKind::AutoplaceFields
         | CommandKind::MoveEach => {}
     }
@@ -850,6 +863,45 @@ fn samples() -> Vec<(String, Command)> {
             new_wire: uuid::Uuid::now_v7(),
         },
     );
+    for keep_wires in [false, true] {
+        add(
+            &format!("MoveWireEnd keep_wires {keep_wires}"),
+            Command::MoveWireEnd {
+                wire: uid(WIRE, 1),
+                start: false,
+                to: pt(7.5, 20.0),
+                keep_wires,
+            },
+        );
+    }
+    add(
+        "SetRunEnd wire start",
+        Command::SetRunEnd {
+            run: SelectedItem::new(uid(WIRE, 1), SelectedKind::Wire),
+            start: true,
+            to: pt(3.0, 27.0),
+        },
+    );
+    add(
+        "SetRunEnd bus end",
+        Command::SetRunEnd {
+            run: SelectedItem::new(uid(BUS, 1), SelectedKind::Bus),
+            start: false,
+            to: pt(95.0, 12.0),
+        },
+    );
+    add(
+        "UpdateTextNoteProps",
+        Command::UpdateTextNoteProps {
+            note_id: uid(TEXT_NOTE, 1),
+            props: crate::TextNoteProps {
+                justify_h: Some(HAlign::Right),
+                rotation_degrees: Some(90.0),
+                font_size_mm: Some(2.0),
+                ..Default::default()
+            },
+        },
+    );
     add(
         "PlaceBus",
         Command::PlaceBus {
@@ -941,10 +993,7 @@ fn samples() -> Vec<(String, Command)> {
     add(
         "PlaceNoErcDirective",
         Command::PlaceNoErcDirective {
-            directive: NoConnect {
-                uuid: uid(NO_ERC, NEW),
-                position: pt(5.0, 5.0),
-            },
+            directive: NoErcDirective::new(uid(NO_ERC, NEW), pt(5.0, 5.0)),
         },
     );
     add(
@@ -1018,6 +1067,7 @@ fn samples() -> Vec<(String, Command)> {
                 name: "SDA".into(),
                 direction: "input".into(),
             }],
+            renames: None,
         },
     );
     add(
@@ -1090,6 +1140,13 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "SetSheetVariable",
+        Command::SetSheetVariable {
+            name: "VCC".into(),
+            value: Some("= 3.3V".into()),
+        },
+    );
+    add(
         "SetSymbolDesignatorIn",
         Command::SetSymbolDesignatorIn {
             symbol: uid(SYMBOL, 1),
@@ -1128,6 +1185,13 @@ fn samples() -> Vec<(String, Command)> {
         "UpdateDirective",
         Command::UpdateDirective {
             directive: blanket(1, "HighSpeed"),
+        },
+    );
+    add(
+        "SetNoErcRules",
+        Command::SetNoErcRules {
+            id: uid(NO_ERC, 1),
+            rules: vec!["builtin::unused_pin".into()],
         },
     );
     add(

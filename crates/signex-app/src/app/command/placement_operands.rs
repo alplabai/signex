@@ -18,7 +18,7 @@
 use iced::Task;
 use signex_engine::DocumentPatch;
 use signex_net::NameChange;
-use signex_types::schematic::{LabelType, Point};
+use signex_types::schematic::{LabelType, NoErcDirective, Point};
 
 use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::handlers::canvas::{
@@ -77,24 +77,39 @@ fn run_on_document(
         Ok(path) => path,
         Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
     };
-    let targets = &mut app.document_state.agent_edits;
-    let previous = targets.target.replace(path.clone());
-    // Inside an edit list the list owns the repaint; on its own the run does.
-    let own_repaint = previous.is_none();
-    if own_repaint {
-        targets.owed = DocumentPatch::NONE;
+    app.on_edit_target(&path, |app| run_on_target(app, edit))
+}
+
+impl Signex {
+    /// Run `edit` with the sheet at `path` as the edit target, as an agent's
+    /// edit list sets it: the checks, the commit, undo and dirty go to that
+    /// sheet, never to the active tab. The target and the repaint it owes
+    /// are put back on every path; no tab or focus changes.
+    pub(crate) fn on_edit_target<T>(
+        &mut self,
+        path: &std::path::Path,
+        edit: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let targets = &mut self.document_state.agent_edits;
+        let previous = targets.target.replace(path.to_path_buf());
+        // Inside an edit list the list owns the repaint; on its own the run
+        // does.
+        let own_repaint = previous.is_none();
+        if own_repaint {
+            targets.owed = DocumentPatch::NONE;
+        }
+        let out = edit(self);
+        let owed = if own_repaint {
+            std::mem::take(&mut self.document_state.agent_edits.owed)
+        } else {
+            DocumentPatch::NONE
+        };
+        self.document_state.agent_edits.target = previous;
+        if owed != DocumentPatch::NONE {
+            self.after_sheet_change(path, owed);
+        }
+        out
     }
-    let ran = run_on_target(app, edit);
-    let owed = if own_repaint {
-        std::mem::take(&mut app.document_state.agent_edits.owed)
-    } else {
-        DocumentPatch::NONE
-    };
-    app.document_state.agent_edits.target = previous;
-    if owed != DocumentPatch::NONE {
-        app.after_sheet_change(&path, owed);
-    }
-    ran
 }
 
 fn run_on_target(
@@ -149,7 +164,8 @@ pub(super) fn junction(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, Placement::Junction)
 }
 
-/// `place_no_erc at=x,y`.
+/// `place_no_erc at=x,y [rules=id,id]`: `rules` names the ERC rules it
+/// silences; left out or empty, every rule (#1699).
 pub(super) fn no_erc(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, Placement::NoErc)
 }
@@ -233,6 +249,17 @@ impl Signex {
     /// elsewhere (snapping on, and off the grid).
     pub(super) fn grid_point(&self, args: &CommandArgs, name: &str) -> Result<Point, String> {
         self.point_where_a_click_lands(args, name, Self::snap_to_grid)
+    }
+
+    /// Where a wire click lands on the sheet the edit targets (the named
+    /// `document`, else the active sheet): its engine, never the render
+    /// snapshot (#2542).
+    fn snap_wire_on_edit_sheet(&self, x: f64, y: f64) -> (f64, f64) {
+        let sheet = self
+            .document_state
+            .edit_engine()
+            .map(signex_engine::Engine::document);
+        self.snap_wire_point(sheet, x, y)
     }
 
     /// The point operand `name`: a pin reference is that pin's tip, wherever
@@ -412,7 +439,11 @@ impl Signex {
                 placed(self.place_junction_at(at))
             }
             Placement::NoErc => {
-                placed(self.place_no_erc_directive_at(self.grid_point(args, "at")?))
+                let at = self.grid_point(args, "at")?;
+                let rules = super::directive_operands::rule_ids(args, "rules")?;
+                let mut directive = NoErcDirective::new(uuid::Uuid::now_v7(), at);
+                directive.rules = rules.unwrap_or_default();
+                placed(self.place_no_erc_directive(directive))
             }
             Placement::Text => {
                 placed(self.place_text_at(self.grid_point(args, "at")?, text(args, "text")?))
@@ -439,10 +470,10 @@ impl Signex {
             );
         }
         // A wire click also pulls onto a nearby pin end, wire end or junction
-        // (`snap_wire_point`); a bus, line or rectangle click only snaps to
-        // the grid.
+        // on the sheet the edit targets (`snap_wire_on_edit_sheet`); a bus,
+        // line or rectangle click only snaps to the grid.
         let snap = match placement {
-            Placement::Wire => Self::snap_wire_point,
+            Placement::Wire => Self::snap_wire_on_edit_sheet,
             _ => Self::snap_to_grid,
         };
         let (start, end) = (

@@ -20,6 +20,8 @@ const WINDOW_PALETTE_WIDTH: f32 = 480.0;
 /// Width of the Graphite palette card under the chrome strip (the mock's
 /// 640 px); independent of the search field's own width.
 const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
+/// Least gap between the chrome palette card and either window edge.
+const PALETTE_EDGE_GAP: f32 = 16.0;
 
 mod bars;
 #[cfg(test)]
@@ -29,12 +31,15 @@ mod net_hover;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;
+mod placement_paused;
 pub(super) mod read_only_badge;
+mod text_edit;
 #[cfg(test)]
 mod window_gate_tests;
 mod zoom_pill;
 #[cfg(test)]
 pub(super) use zoom_pill::pill_origin as zoom_pill_origin;
+mod zoom_presets;
 
 impl Signex {
     /// The canvas rectangle in window coordinates, from the live dock sizes.
@@ -312,8 +317,8 @@ impl Signex {
         let (card_x, card_w) = if in_window {
             (16.0, WINDOW_PALETTE_WIDTH)
         } else {
-            let (x, _) = self.chrome_search_bar_geometry();
-            chrome_palette_card(x, self.ui_state.window_size.0)
+            let (x, w) = self.chrome_search_bar_geometry();
+            chrome_palette_card(x, w, self.ui_state.window_size.0)
         };
         let ink4 = crate::styles::tokens::resolve(tokens).ink4;
         let window_input: Option<Element<'_, Message>> =
@@ -431,6 +436,7 @@ impl Signex {
             self.ui_state.effective_theme_id(),
             has_selection,
             has_net_colors,
+            &|id| self.keymap_shortcut_label(id),
         )
         .map(Message::ActiveBar)
         .boxed();
@@ -704,12 +710,18 @@ fn symbol_card_widths(fields: &[(signex_i18n::Localized, String)], family: &str)
     (label_w, card_w)
 }
 
-/// The x and width of the palette card under the chrome strip, its left
-/// edge at the search field's `search_x` unless that would run it off the
-/// right of a `window_w` wide window.
-fn chrome_palette_card(search_x: f32, window_w: f32) -> (f32, f32) {
-    let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 32.0).max(WINDOW_PALETTE_WIDTH));
-    (search_x.min((window_w - w - 16.0).max(16.0)), w)
+/// The x and width of the palette card under the chrome strip, centred on
+/// the search field (`search_x`, `search_w` from
+/// `chrome_search_bar_geometry`) and clamped to stay [`PALETTE_EDGE_GAP`]
+/// inside a `window_w` wide window.
+fn chrome_palette_card(search_x: f32, search_w: f32, window_w: f32) -> (f32, f32) {
+    let room = window_w - 2.0 * PALETTE_EDGE_GAP;
+    let w = GRAPHITE_PALETTE_WIDTH.min(room.max(WINDOW_PALETTE_WIDTH));
+    let centred = search_x + (search_w - w) / 2.0;
+    let x = centred
+        .min(window_w - w - PALETTE_EDGE_GAP)
+        .max(PALETTE_EDGE_GAP);
+    (x, w)
 }
 
 #[cfg(test)]
@@ -717,6 +729,23 @@ mod palette_width_tests {
     /// The palette card is 640 px wide (maintainer, 2026-11-10).
     #[test]
     fn the_chrome_palette_card_is_640_px_wide() {
-        assert_eq!(super::chrome_palette_card(400.0, 1600.0), (400.0, 640.0));
+        assert_eq!(super::chrome_palette_card(700.0, 380.0, 1600.0).1, 640.0);
+    }
+
+    /// The card is centred on the search field when the window has room.
+    #[test]
+    fn the_chrome_palette_card_centres_on_the_search_field() {
+        let (x, w) = super::chrome_palette_card(600.0, 380.0, 1600.0);
+        assert_eq!(x + w / 2.0, 600.0 + 380.0 / 2.0);
+    }
+
+    /// Near either window edge the card is clamped inside the window.
+    #[test]
+    fn the_chrome_palette_card_stays_inside_the_window() {
+        let gap = super::PALETTE_EDGE_GAP;
+        let (x, _) = super::chrome_palette_card(100.0, 380.0, 900.0);
+        assert_eq!(x, gap);
+        let (x, w) = super::chrome_palette_card(1150.0, 380.0, 1560.0);
+        assert_eq!(x + w, 1560.0 - gap);
     }
 }

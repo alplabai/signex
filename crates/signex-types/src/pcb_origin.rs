@@ -26,6 +26,29 @@ pub fn board_area_bottom_left(outline: &[Point]) -> Point {
         })
 }
 
+/// The corners of the board area: the outline's points when it has three
+/// or more, else the four corners of [`EMPTY_BOARD_AREA`].
+pub fn board_area_corners(outline: &[Point]) -> Vec<Point> {
+    if outline.len() >= 3 {
+        return outline.to_vec();
+    }
+    let (min, max) = EMPTY_BOARD_AREA;
+    vec![min, Point::new(max.x, min.y), max, Point::new(min.x, max.y)]
+}
+
+/// The corner of the board area nearest `at` (Edit ▸ Origin ▸ Snap to
+/// Outline Corner, 2026-11-18); the first one on a tie.
+pub fn nearest_area_corner(outline: &[Point], at: Point) -> Point {
+    let distance = |p: &Point| (p.x - at.x).powi(2) + (p.y - at.y).powi(2);
+    board_area_corners(outline)
+        .into_iter()
+        .fold(None, |best: Option<Point>, p| match best {
+            Some(b) if distance(&b) <= distance(&p) => Some(b),
+            _ => Some(p),
+        })
+        .unwrap_or(EMPTY_BOARD_AREA.0)
+}
+
 /// The point a board shows as (0, 0), in board mm. Shown coordinates run
 /// with X to the right and Y up the screen, the usual board convention;
 /// the model's y grows down the screen, so Y is mirrored about the origin.
@@ -81,6 +104,22 @@ impl BoardOrigin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 2026-11-18: Snap to Outline Corner takes the outline corner nearest
+    /// the pointer, or the board area's without an outline.
+    #[test]
+    fn the_nearest_corner_is_of_the_outline_else_of_the_area() {
+        let outline = [
+            Point::new(10.0, 20.0),
+            Point::new(60.0, 20.0),
+            Point::new(60.0, 50.0),
+            Point::new(10.0, 50.0),
+        ];
+        let near = nearest_area_corner(&outline, Point::new(55.0, 45.0));
+        assert_eq!(near, Point::new(60.0, 50.0));
+        let empty = nearest_area_corner(&[], Point::new(90.0, 5.0));
+        assert_eq!(empty, Point::new(100.0, 0.0));
+    }
 
     #[test]
     fn a_new_board_without_an_outline_counts_from_the_area_bottom_left() {

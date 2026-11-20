@@ -102,10 +102,19 @@ dialog-recovery-hint = Restore loads the copy as unsaved edits; nothing is writt
 
 ## Reset All Annotations confirm
 dialog-annotate-reset-question = Reset every designator?
-# $undo is the Undo shortcut, such as "Ctrl+Z".
+# $sheets and $symbols are whole numbers; $renumber is "yes" (Reset & Renumber)
+# or "no" (Reset All).
 dialog-annotate-reset-detail =
-    Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
-    This cannot be undone through { $undo } alone — consider saving first.
+    Every reference designator on { $sheets ->
+        [one] the ticked sheet
+       *[other] the { $sheets } ticked sheets
+    } ({ $symbols ->
+        [one] { $symbols } symbol
+       *[other] { $symbols } symbols
+    }) is reset to '?'{ $renumber ->
+        [yes] , then renumbered from 1.
+       *[no] .
+    }
 
 ## Re-prefix confirm
 dialog-reprefix-question = Change designator prefixes?
@@ -120,14 +129,8 @@ dialog-erc-chip-info = Info
 dialog-erc-chip-off = Off
 
 ## Rule editor (ERC dialog and Preferences ▸ Rule Profiles)
-dialog-rules-col-rule = Rule
-dialog-rules-col-severity = Severity
-# A rule that is only switched on or off; $rule is its name, in English.
-dialog-rules-on-off = { $rule } (on/off; severity per matrix cell)
 dialog-rules-severity-heading = Severity per rule
-dialog-rules-severity-hint = Click a cell to change.
 dialog-rules-matrix-heading = Pin Connection Matrix
-dialog-rules-matrix-hint = Click a cell to cycle severity.
 dialog-rules-on = On
 dialog-rules-off = Off
 # One-letter severities on the rule buttons and the matrix cells.
@@ -148,19 +151,35 @@ dialog-version-control-project = Project: { $name }
 dialog-version-control-library = Library: { $name }
 dialog-grid-title = Cartesian Grid Editor [mm]
 dialog-grid-intro = Grid step and display
-dialog-selection-filter-title = Selection Filter — Customize
+dialog-selection-filter-title = Selection Filter
 dialog-selection-filter-intro = Selectable kinds
+# Subtitle beside the title of the Custom Selection Filter dialog.
+dialog-selection-filter-subtitle = Customize
+# Buttons that turn every kind on or off.
+dialog-selection-filter-all = All
+dialog-selection-filter-none = None
+# Pill on a kind the canvas does not filter by yet.
+dialog-selection-filter-not-wired = not wired
+# Name the filter is saved under as a preset.
+dialog-selection-filter-preset-name = Preset name
+# Footer count. $count and $total are whole numbers.
+dialog-selection-filter-selectable = { $count } of { $total } selectable
+# Messages: Apply at the preset limit. $name is the typed preset name, $limit a whole number.
+dialog-selection-filter-preset-full = Filter applied; preset { $name } was not saved: the { $limit } preset slots are full.
+# Messages: Apply with the kinds of a preset that already exists. $name is that preset.
+dialog-selection-filter-preset-exists = Filter applied; no preset added: { $name } already holds these kinds.
 
 ## Move Selection
-# $count is how many objects are selected, a whole number. The English keeps
-# "item(s)" for every count.
-dialog-move-selection-count = { $count } item(s) selected
-# The offset along X and Y, in millimetres.
-dialog-move-selection-dx = ΔX (mm)
-dialog-move-selection-dy = ΔY (mm)
+# Header subtitle. $count is how many objects are selected, a whole number.
+dialog-move-selection-count = { $count ->
+    [one] { $count } item selected
+   *[other] { $count } items selected
+}
+# The offset along X and Y; the field shows the unit as a suffix.
+dialog-move-selection-dx = ΔX
+dialog-move-selection-dy = ΔY
 
 ## Net colours
-dialog-net-color-pick-title = Pick Net Color
 dialog-net-color-no-nets = No net labels on the active sheet.
 dialog-net-color-custom-rgb = Custom RGB
 # One letter per colour channel: red, green, blue.
@@ -168,3 +187,189 @@ dialog-net-color-channel-r = R
 dialog-net-color-channel-g = G
 dialog-net-color-channel-b = B
 dialog-net-color-quick-pick = Quick Pick
+
+## Rule editor, grouped list and matrix legend (#1289)
+# Filter chip: show only the rules that differ from the shipped profile.
+dialog-rules-changed-only = Changed only
+dialog-rules-filter-placeholder = Filter rules
+dialog-rules-no-match = No rule matches the filter.
+# Subheads of the rule list.
+dialog-rules-group-pins = Pins
+dialog-rules-group-nets = Nets
+dialog-rules-group-labels = Labels
+dialog-rules-group-buses = Buses
+dialog-rules-group-hierarchy = Hierarchy
+dialog-rules-group-parts = Parts
+# Pin connection matrix legend.
+dialog-rules-legend-error = Error
+dialog-rules-legend-warning = Warning
+dialog-rules-legend-info = Info
+dialog-rules-legend-off = No report
+dialog-rules-legend-changed = Changed
+dialog-rules-legend-changed-rule = Changed rule
+dialog-rules-matrix-caption = Pin type conflict is on/off only: its findings take their severity from this matrix.
+
+## Parameter Manager
+# Window subtitle: the active sheet's file, its parts and parameter columns.
+dialog-parameter-manager-subtitle = { $sheet } · { $parts ->
+    [one] 1 part
+   *[other] { $parts } parts
+} · { $parameters ->
+    [one] 1 parameter
+   *[other] { $parameters } parameters
+}
+# Beside the filter box: the fields the filter searches.
+dialog-parameter-manager-filter-hint = Reference, value or footprint
+# An empty parameter cell.
+dialog-parameter-manager-not-set = Not set
+dialog-parameter-manager-remove-column = Remove column
+dialog-parameter-manager-no-match-title = No part matches the filter
+# $sheet is the sheet's file name, $query the typed filter.
+dialog-parameter-manager-no-match-body = No reference, value or footprint on { $sheet } contains { $query }.
+dialog-parameter-manager-no-schematic-title = No active schematic
+dialog-parameter-manager-no-schematic-body = The Parameter Manager edits the parts of the active sheet. Open a schematic sheet, then open it again from Tools ▸ Parameter Manager.
+dialog-parameter-manager-footer-hint = Edits apply as you type · each cell is one undo step (Ctrl+Z)
+# Cells edited since the dialog opened whose value differs from before.
+dialog-parameter-manager-changed = { $count ->
+    [one] 1 cell changed
+   *[other] { $count } cells changed
+}
+# Tooltip of Revert changes.
+dialog-parameter-manager-revert-tip = { $count ->
+    [one] Undo the cell edit as one step
+   *[other] Undo all { $count } cell edits as one step
+}
+
+## Move Selection (#66)
+# The primary button: moves the selection by the offsets.
+dialog-move-selection-move = Move
+# Under the preview. $grid is the grid step and $unit its unit; $x and $y
+# are how many whole grid steps the offsets span. Stored Y counts down.
+dialog-move-selection-help = Positive X moves right, positive Y moves down. Grid { $grid } { $unit }: { $x } × { $y } steps.
+# The same line when an offset is not a whole number of grid steps.
+dialog-move-selection-help-off-grid = Positive X moves right, positive Y moves down. Grid { $grid } { $unit }: off grid.
+
+## Net colour palette (#2528)
+# Header subtitle. $count is how many nets the active sheet labels.
+dialog-net-color-count = { $count ->
+    [one] { $count } net on this sheet
+   *[other] { $count } nets on this sheet
+}
+dialog-net-color-filter = Filter nets
+# Footer link: removes every net colour of the active sheet in one undo step.
+dialog-net-color-clear-all = Clear all colours
+dialog-net-color-row-hint = Click a row to choose
+# Row chooser: opens the custom colour picker for the row's net.
+dialog-net-color-custom = Custom…
+# Row chooser: removes the row's net colour.
+dialog-net-color-clear = Clear
+# Custom picker: the hex code field.
+dialog-net-color-hex = Hex
+# Custom picker preview: the net's colour now, and the pick.
+dialog-net-color-old = Old
+dialog-net-color-new = New
+# Messages: Use Color was pressed after the active sheet changed. $net is the net name.
+dialog-net-color-sheet-changed = Net colour not changed: the picker was opened for { $net } on another sheet.
+
+## Annotate Schematics (#75)
+dialog-annotate-order-up-then-across-help = Columns bottom to top, then the next column to the right.
+dialog-annotate-order-across-then-down-help = Rows left to right, then the next row down.
+dialog-annotate-order-down-then-across-help = Columns top to bottom, then the next column to the right.
+dialog-annotate-order-across-then-up-help = Rows left to right, then the next row up.
+# Count beside the sheets heading. Both are whole numbers.
+dialog-annotate-sheets-ticked = { $ticked } of { $total }
+# Pill on the sheet the active tab shows.
+dialog-annotate-sheet-current = current
+# A sheet placed more than once: $n is the placement's ordinal (a whole number).
+dialog-annotate-sheet-placement = placement { $n }
+dialog-annotate-fixed-options = Fixed options
+dialog-annotate-fixed-read-only = read-only
+# The folded Fixed options group in one line.
+dialog-annotate-fixed-digest = Designator · Sub-parts Off · Packages None · Matching not available yet
+# Banner text after the bold count. $sheets is how many sheets are ticked (a
+# whole number) and $sheet the name of the one; $undo is "project" or "sheet".
+dialog-annotate-banner-scope =
+    { $sheets ->
+        [one] on { $sheet }.
+       *[other] on { $sheets } sheets.
+    } The list updates live; Accept Changes applies it as { $undo ->
+        [sheet] one undo step per sheet.
+       *[project] one undo step.
+    }
+# Change-list switch. $count is a whole number.
+dialog-annotate-view-changes = Changes { $count }
+dialog-annotate-view-all = All { $count }
+dialog-annotate-filter-placeholder = Filter designators
+dialog-annotate-col-sheet = Sheet
+dialog-annotate-kept-locked = Kept (locked)
+dialog-annotate-no-match = No row matches the filter.
+dialog-annotate-no-changes = No designator changes. Pick All to see every row.
+dialog-annotate-reset-all-ellipsis = Reset All…
+dialog-annotate-reset-renumber-ellipsis = Reset & Renumber…
+# Footer caption. $undo is the Undo shortcut, such as "Ctrl+Z".
+dialog-annotate-undo-caption = { $undo } undoes it on every sheet
+dialog-annotate-undo-caption-per-sheet = { $undo } undoes it one sheet at a time
+
+## Reset confirm (#76)
+# The scope before the preview has counted it. $renumber is "yes" or "no".
+dialog-annotate-reset-detail-loading =
+    Every reference designator on the ticked sheets is reset to '?'{ $renumber ->
+        [yes] , then renumbered from 1.
+       *[no] .
+    }
+# $undo is the Undo shortcut, such as "Ctrl+Z".
+dialog-annotate-reset-one-step = One undo step: { $undo } restores every sheet.
+dialog-annotate-reset-per-sheet = { $undo } undoes it one sheet at a time, as the Annotate undo setting asks.
+
+## Re-prefix confirm (#77)
+# Stat tile captions under a count (a whole number).
+dialog-reprefix-tile-parts =
+    { $count ->
+        [one] part changes
+       *[other] parts change
+    }
+dialog-reprefix-tile-sheets =
+    { $count ->
+        [one] sheet
+       *[other] sheets
+    }
+dialog-reprefix-tile-standard = standard
+# $undo is the Undo shortcut, such as "Ctrl+Z".
+dialog-reprefix-bullet-undo = One undo step: { $undo } on any changed sheet undoes it on all of them.
+dialog-reprefix-bullet-unsaved = Sheets stay unsaved until you save. PCB references are not updated.
+# $count is a whole number.
+dialog-reprefix-bullet-by-symbol =
+    { $count ->
+        [one] { $count } part has no stored library row and was matched through its symbol.
+       *[other] { $count } parts have no stored library row and were matched through their symbol.
+    }
+# Caption over a list the last row of which counts the rest. Both are whole numbers.
+dialog-reprefix-caption-named = { $named } named changes of { $total }; the last row counts the rest.
+# Caption over a list that names every change. $count is a whole number.
+dialog-reprefix-caption-all =
+    { $count ->
+        [one] { $count } change.
+       *[other] { $count } changes.
+    }
+dialog-reprefix-scroll = Scroll ↓
+dialog-reprefix-col-part = Part
+dialog-reprefix-col-prefix = Prefix
+dialog-reprefix-col-new = New
+dialog-reprefix-col-note = Note
+dialog-reprefix-note-by-symbol = matched by symbol
+dialog-reprefix-left-unchanged = Left unchanged
+dialog-reprefix-listed-in-messages = listed in Messages
+# Skip pills: $count is how many parts the reason leaves unchanged.
+dialog-reprefix-skip-read-only = { $count } on a read-only sheet
+dialog-reprefix-skip-locked = { $count } locked
+dialog-reprefix-skip-no-link = { $count } without a library link
+dialog-reprefix-skip-not-mounted = { $count } from a library not mounted
+dialog-reprefix-skip-row-missing = { $count } with a deleted library row
+dialog-reprefix-skip-ambiguous = { $count } whose library rows disagree
+dialog-reprefix-skip-per-placement = { $count } with a per-placement designator
+dialog-reprefix-skip-mixed-versions = { $count } with mixed symbol versions
+dialog-reprefix-skip-hand-edited =
+    { $count ->
+        [one] { $count } hand-edited prefix
+       *[other] { $count } hand-edited prefixes
+    }

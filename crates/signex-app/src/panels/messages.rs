@@ -10,8 +10,16 @@ pub enum PanelMsg {
     /// [`PanelMsg::Tree`] because both trees number their rows from `[0]`:
     /// one shared variant would act on the wrong tree.
     Navigator(TreeMsg),
+    /// The Navigator panel's filter and empty-state buttons (Graphite mockup #54).
+    NavigatorPanel(super::NavigatorMsg),
     SetUnit(Unit),
     RunErc,
+    /// A Messages row's command link was pressed: the command and the
+    /// document it acts on (`messages_row::row_action`).
+    MessageLinkPressed(crate::diagnostics::MessageLink),
+    /// A Properties action button was pressed: the catalog command it runs
+    /// (a sheet symbol's Open Sheet, Create Sheet…).
+    CommandButtonPressed(&'static str),
     /// v0.14.2 — Properties panel toggle for the active footprint
     /// editor's Auto-fit Courtyard setting. Routes through
     /// `handle_dock_sch_library_message` (same dispatcher every other
@@ -636,10 +644,6 @@ pub enum PanelMsg {
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.
     FocusErcViolation(usize),
-    /// Focus previous ERC diagnostic row in the global list.
-    FocusPrevErcDiagnostic,
-    /// Focus next ERC diagnostic row in the global list.
-    FocusNextErcDiagnostic,
     /// User clicked the Quick Fix chip on an ERC violation row. Routes
     /// to a per-rule handler — UnusedPin places a NoConnect at the
     /// pin, every other rule falls back to "zoom + select" (same as
@@ -654,6 +658,13 @@ pub enum PanelMsg {
     },
     /// Per-finding waivers with a reason (#1285).
     ErcWaiver(super::ErcWaiverMsg),
+    /// The ERC panel's tiles, rule groups and row hover (#85).
+    ErcView(super::ErcPanelMsg),
+    /// The Messages panel's chips, filters, Copy and Clear (#86).
+    MessagesView(super::MessagesPanelMsg),
+    /// The user identity a waiver's Author starts as was read (AV-13);
+    /// `None` when neither git nor the login names anyone.
+    WaiverIdentityResolved(Option<String>),
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
@@ -717,6 +728,8 @@ pub enum PanelMsg {
     SwitchFootprintChoice(uuid::Uuid, String),
     /// The Net Inspector panel (#1269).
     NetInspector(super::NetInspectorMsg),
+    /// The Object List panel (#1259).
+    ObjectList(super::ObjectListMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.
@@ -747,10 +760,10 @@ pub enum PanelMsg {
     EditLabelDirection(uuid::Uuid, f64, signex_types::schematic::HAlign),
     /// Edit a label's font size in Altium pt (10 = 2.54 mm).
     EditLabelFontSizePt(uuid::Uuid, u32),
-    /// Edit a text note's text (committed on submit).
-    EditTextNoteText(uuid::Uuid, String),
     /// Edit a Blanket's net class or ERC exclusions (#2420).
     EditBlanket(uuid::Uuid, super::BlanketEdit),
+    /// Edit the rules a No-ERC directive silences (#1699).
+    EditNoErcRules(uuid::Uuid, super::NoErcRuleEdit),
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of the selected text item.
     EditTextFontFamily(signex_engine::TextTarget, Option<String>),
@@ -766,10 +779,6 @@ pub enum PanelMsg {
     SetPrePlacementFont(String),
     /// Pre-placement: update font size (pt).
     SetPrePlacementFontSize(u32),
-    /// Pre-placement: set horizontal justification.
-    SetPrePlacementJustifyH(signex_types::schematic::HAlign),
-    /// Pre-placement: set vertical justification.
-    SetPrePlacementJustifyV(signex_types::schematic::VAlign),
     /// Pre-placement: toggle bold / italic / underline.
     TogglePrePlacementBold,
     TogglePrePlacementItalic,
@@ -1027,6 +1036,9 @@ pub enum PanelMsg {
     ResetChildSheetStyle(uuid::Uuid),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
+    /// Pre-placement: a typed Position X / Y (a wire's Start / End) or a
+    /// picked justification anchor (#2532).
+    PrePlacementPosition(super::PrePlacementPositionMsg),
     /// Set snap grid size (mm).
     SetGridSize(f32),
     /// Set visible grid size (mm) — independent of snap grid.
@@ -1087,13 +1099,25 @@ pub enum PanelMsg {
     TitleBlockTyping(super::TitleBlockField, String),
     /// Title Block: Enter in a field writes its draft to the sheet.
     CommitTitleBlockField(super::TitleBlockField),
+    /// Sheet Variables: an edit of the active sheet's variables (#1987).
+    SheetVariables(super::SheetVariableMsg),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
     /// The multi-selection form of the Properties panel (#1258).
     MultiEdit(super::MultiEditMsg),
+    /// The view state of the selection forms: kind chips, the rule filter,
+    /// the illustration hover and the sheet File browse (#1699).
+    SelectionForm(super::SelectionFormMsg),
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    Illustration(signex_widgets::property_illustration::IllustrationMsg),
+    /// Document Options view events: Parameters filter, zone counts and the
+    /// illustration hover (#2531).
+    DocumentOptions(super::DocumentOptionsMsg),
+    /// The placed part's ⋯ menu, its focused pin and its illustration
+    /// hover (mockup rows 42, 50).
+    Part(super::PartPanelMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

@@ -2,8 +2,9 @@
 //! the English the code wrote before, and its pick lists hand back values.
 
 use super::*;
-use crate::layout_probe::{LaidOutText, lay_out_texts, messages_for_events};
+use crate::layout_probe::{LaidOutText, lay_out_texts, messages_for_events, messages_on_click};
 use signex_i18n::{Arg, I18n, MessageId, ids};
+use signex_types::schematic::WireWidthPreset;
 
 const WINDOW: iced::Size = iced::Size::new(360.0, 6000.0);
 
@@ -16,20 +17,14 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_SECTION_GRAPHICAL, "Graphical"),
     (ids::PROPERTIES_SECTION_STYLE, "Style"),
     (ids::PROPERTIES_SECTION_STATE, "State"),
-    (ids::PROPERTIES_SECTION_FONT, "Font"),
     (ids::PROPERTIES_SECTION_BASIC, "Basic Properties"),
     (ids::PROPERTIES_SECTION_TEXT, "Text Properties"),
     (ids::PROPERTIES_SECTION_FOOTPRINT, "Footprint"),
-    (ids::PROPERTIES_SECTION_NET_GENERAL, "General (Net)"),
-    (ids::PROPERTIES_SECTION_NET_PARAMETERS, "Parameters (Net)"),
-    (ids::PROPERTIES_SECTION_PARAMETERS, "Parameters"),
     (ids::PROPERTIES_SECTION_PAGE_OPTIONS, "Page Options"),
-    (ids::PROPERTIES_SECTION_TITLE_BLOCK, "Title Block"),
     (
         ids::PROPERTIES_SECTION_SELECTION_FILTERS,
         "Custom Selection Filters",
     ),
-    (ids::PROPERTIES_XY, "(X/Y)"),
     (ids::PANELS_PLACED_ROTATION, "Rotation"),
     (ids::PROPERTIES_POSITION, "Position"),
     (ids::PROPERTIES_SIZE, "Size"),
@@ -63,19 +58,15 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_TEXT_SIZE, "Text Size"),
     (ids::PROPERTIES_YES, "Yes"),
     (ids::PROPERTIES_NO, "No"),
-    (ids::PROPERTIES_ELECTRICAL_TYPE, "Electrical Type"),
     (ids::PROPERTIES_NET, "Net"),
     (ids::PROPERTIES_HIDDEN, "Hidden"),
     (ids::PROPERTIES_PINS_COLUMN_PIN, "Pin"),
     (ids::PROPERTIES_PINS_COLUMN_NAME, "Name"),
     (ids::PROPERTIES_PINS_COLUMN_TYPE, "Type"),
     (ids::PROPERTIES_PINS_COLUMN_NET, "Net"),
-    (ids::PROPERTIES_PINS_COLUMN_HIDDEN, "Hidden"),
     (ids::PROPERTIES_SYMBOL, "Symbol"),
     (ids::PROPERTIES_FOOTPRINT, "Footprint"),
-    (ids::PROPERTIES_FOOTPRINT_OVERRIDE, "Footprint override"),
     (ids::PROPERTIES_LIBRARY, "Library"),
-    (ids::PROPERTIES_LIBRARY_ID, "Library ID"),
     (ids::PROPERTIES_ACTION_OPEN_DATASHEET, "Open Datasheet"),
     (ids::PROPERTIES_ACTION_EDIT_SYMBOL, "Edit Symbol"),
     (
@@ -109,6 +100,7 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_POWER_STYLE_POWER_GROUND, "Power Ground"),
     (ids::PROPERTIES_POWER_STYLE_SIGNAL_GROUND, "Signal Ground"),
     (ids::PROPERTIES_POWER_STYLE_EARTH, "Earth"),
+    (ids::PROPERTIES_POWER_STYLE_CHASSIS, "Chassis"),
     (ids::PROPERTIES_PHYSICAL_NAME, "Physical Name"),
     (ids::PROPERTIES_POWER_NET, "Power Net"),
     (ids::PROPERTIES_HIGH_SPEED, "High Speed"),
@@ -118,12 +110,8 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_TAB_PARAMETERS, "Parameters"),
     (ids::PROPERTIES_TAB_RULES, "Rules"),
     (ids::PROPERTIES_TAB_CLASSES, "Classes"),
-    (ids::PROPERTIES_NET_PARAMS_NAME, "Name"),
-    (ids::PROPERTIES_NET_PARAMS_VALUE, "Value"),
     (ids::PROPERTIES_NET_PARAMS_ADD, "Add \u{25BE}"),
     (ids::PROPERTIES_NET_NO_PARAMETERS, "No Parameters"),
-    (ids::PROPERTIES_NET_NO_RULES, "No Rules"),
-    (ids::PROPERTIES_NET_NO_CLASSES, "No Classes"),
     (ids::PROPERTIES_WIRE_WIDTH, "Width"),
     (ids::PROPERTIES_WIRE_WIDTH_SMALLEST, "Smallest"),
     (ids::PROPERTIES_WIRE_WIDTH_SMALL, "Small"),
@@ -134,8 +122,6 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_COLOR_PRESETS, "Preset Colours"),
     (ids::PROPERTIES_COLOR_CUSTOM, "Custom\u{2026}"),
     (ids::PROPERTIES_COLOR_RESET, "Reset to Default"),
-    (ids::PROPERTIES_BORDER_COLOUR, "Border Colour"),
-    (ids::PROPERTIES_FILL_COLOUR, "Fill Colour"),
     (ids::PROPERTIES_UNIT_MM, "mm"),
     (ids::PROPERTIES_UNIT_MILS, "mils"),
     (ids::PROPERTIES_VISIBLE_GRID, "Visible Grid"),
@@ -153,15 +139,11 @@ const PLAIN: &[(MessageId, &str)] = &[
     (ids::PROPERTIES_FORMAT_STANDARD, "Standard"),
     (ids::PROPERTIES_FORMAT_CUSTOM, "Custom"),
     (ids::PROPERTIES_PAPER, "Paper"),
-    (ids::PROPERTIES_PAPER_WIDTH, "Width"),
-    (ids::PROPERTIES_PAPER_HEIGHT, "Height"),
     (ids::PROPERTIES_ORIENTATION, "Orientation"),
     (ids::PROPERTIES_ORIENTATION_LANDSCAPE, "Landscape"),
     (ids::PROPERTIES_ORIENTATION_PORTRAIT, "Portrait"),
     (ids::PROPERTIES_SHOW_BORDER, "Show Border"),
     (ids::PROPERTIES_SHOW_TITLE_BLOCK, "Show Title Block"),
-    (ids::PROPERTIES_ZONES_VERTICAL, "Vertical"),
-    (ids::PROPERTIES_ZONES_HORIZONTAL, "Horizontal"),
     (ids::PROPERTIES_ORIGIN, "Origin"),
     (ids::PROPERTIES_ORIGIN_UPPER_LEFT, "Upper Left"),
     (ids::PROPERTIES_ORIGIN_LOWER_LEFT, "Lower Left"),
@@ -200,18 +182,9 @@ fn every_new_message_reads_as_the_literal_it_replaced() {
         assert_eq!(en.message_plain(*id, &[]), *literal, "{}", id.as_str());
     }
     let with = |id: MessageId, args: &[(&str, Arg)]| en.message_plain(id, args);
-    // Numbers go in as `format!` wrote them, so 1000 is not grouped.
-    assert_eq!(
-        with(ids::PANELS_PLACED_DEGREES, &[("degrees", "270".into())]),
-        "270 Degrees"
-    );
     assert_eq!(
         with(ids::PROPERTIES_PIN_TITLE, &[("pin", "A1".into())]),
         "Pin A1"
-    );
-    assert_eq!(
-        with(ids::PROPERTIES_PINS_TITLE, &[("count", "1200".into())]),
-        "Pins (1200)"
     );
     let pads = |n: usize| {
         with(
@@ -243,27 +216,6 @@ fn every_new_message_reads_as_the_literal_it_replaced() {
             &[("hex", "#123456".into())]
         ),
         "Custom (#123456)"
-    );
-    assert_eq!(
-        with(
-            ids::PROPERTIES_PAPER_DIMENSIONS,
-            &[("width", "1189".into()), ("height", "841".into())]
-        ),
-        "Width: 1189mm  Height: 841mm"
-    );
-    assert_eq!(
-        with(
-            ids::PROPERTIES_TITLE_BLOCK_FROM_PROJECT,
-            &[("field", "Drawn By".into())]
-        ),
-        "Drawn By (project)"
-    );
-    assert_eq!(
-        with(
-            ids::PROPERTIES_TITLE_BLOCK_OVERRIDES_PROJECT,
-            &[("field", "Title".into())]
-        ),
-        "Title (overrides project)"
     );
     assert_eq!(
         with(
@@ -305,128 +257,6 @@ fn texts(ctx: &PanelContext) -> Vec<LaidOutText> {
         .collect()
 }
 
-/// The panel built from a real context shows its section titles and its
-/// rows from the catalog: upper-cased titles, a label beside its value.
-#[test]
-fn the_tab_form_shows_its_sections_and_rows_from_the_catalog() {
-    let shown = texts(&net_label_form(0.0));
-    let has = |label: &str| shown.iter().any(|t| t.text == label);
-    for label in ["LOCATION", "PROPERTIES", "(X/Y)", "Rotation", "Net Name"] {
-        assert!(has(label), "{label:?} missing from {shown:#?}");
-    }
-    let xy = shown.iter().find(|t| t.text == "(X/Y)").expect("label");
-    let expected = pre_placement_readout(
-        net_label_form(0.0).pre_placement.as_ref().expect("form"),
-        &net_label_form(0.0),
-    );
-    let value = shown
-        .iter()
-        .find(|t| t.text == expected)
-        .unwrap_or_else(|| panic!("the X/Y reading {expected:?} in {shown:#?}"));
-    assert!(
-        value.bounds.x > xy.bounds.x && (value.bounds.y - xy.bounds.y).abs() < 4.0,
-        "the reading sits beside its label: {xy:?} {value:?}"
-    );
-}
-
-/// The Rotation pick list names its entries as `format!("{:.0} Degrees")`
-/// did and hands back the rotation itself: Command + wheel over the closed
-/// list picks the next entry, 90 after 0.
-#[test]
-fn the_rotation_pick_list_is_typed() {
-    let en = I18n::en_us();
-    let names: Vec<String> = [0.0, 90.0, 180.0, 270.0, 45.0]
-        .into_iter()
-        .map(|deg| properties_parameters_rotation_label(&en, deg))
-        .collect();
-    assert_eq!(
-        names,
-        [
-            "0 Degrees",
-            "90 Degrees",
-            "180 Degrees",
-            "270 Degrees",
-            "45 Degrees"
-        ]
-    );
-
-    let ctx = net_label_form(0.0);
-    let shown = texts(&ctx);
-    let label = shown
-        .iter()
-        .find(|t| t.text == "Rotation")
-        .expect("the Rotation row");
-    let over_list = iced::Point::new(
-        WINDOW.width - 60.0,
-        label.bounds.y + label.bounds.height / 2.0,
-    );
-    let events = [
-        iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
-            iced::keyboard::Modifiers::COMMAND,
-        )),
-        iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
-            delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -1.0 },
-        }),
-    ];
-    let messages = messages_for_events(
-        view_panel(PanelKind::Properties, &ctx),
-        WINDOW,
-        over_list,
-        &events,
-    );
-    let picked: Vec<f64> = messages
-        .into_iter()
-        .filter_map(|m| match m {
-            PanelMsg::SetPrePlacementRotation(deg) => Some(deg),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(picked, [90.0], "the list hands back the next rotation");
-}
-
-/// A stored 89.9999 highlights the 90 entry, as the string-matched list
-/// did (`{:.0}` reads 90): Command + wheel picks the entry after it, 180.
-#[test]
-fn a_rotation_that_rounds_to_a_step_selects_that_step() {
-    let ctx = net_label_form(89.9999);
-    let shown = texts(&ctx);
-    assert_eq!(beside(&shown, "Rotation"), "90 Degrees");
-    let label = shown
-        .iter()
-        .find(|t| t.text == "Rotation")
-        .expect("the Rotation row");
-    let over_list = iced::Point::new(
-        WINDOW.width - 60.0,
-        label.bounds.y + label.bounds.height / 2.0,
-    );
-    let events = [
-        iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
-            iced::keyboard::Modifiers::COMMAND,
-        )),
-        iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
-            delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -1.0 },
-        }),
-    ];
-    let picked: Vec<f64> = messages_for_events(
-        view_panel(PanelKind::Properties, &ctx),
-        WINDOW,
-        over_list,
-        &events,
-    )
-    .into_iter()
-    .filter_map(|m| match m {
-        PanelMsg::SetPrePlacementRotation(deg) => Some(deg),
-        _ => None,
-    })
-    .collect();
-    assert_eq!(picked, [180.0], "the 90 entry is the selected one");
-}
-
-/// The name a rotation entry shows.
-fn properties_parameters_rotation_label(i18n: &I18n, degrees: f64) -> String {
-    crate::panels::properties_parameters::rotation_choice(i18n, degrees).label
-}
-
 /// A panel context with one object of `kind` selected and `info` its rows.
 fn one_selected(kind: SelectedKindForTest, info: &[(&str, &str)]) -> PanelContext {
     let (app, _boot) = crate::app::Signex::new();
@@ -458,6 +288,32 @@ fn beside<'t>(shown: &'t [LaidOutText], label: &str) -> &'t str {
         .map_or("", |t| t.text.as_str())
 }
 
+/// The colour a segment of `row`'s segmented switch is filled with: the
+/// pixel just inside the top-left of its `segment` label, above the glyphs.
+/// The segment drawn on has the active fill, the rest the track.
+fn segment_fill(ctx: &PanelContext, row: &str, segment: &str) -> [u8; 4] {
+    let shown = texts(ctx);
+    let middle = |t: &LaidOutText| t.bounds.y + t.bounds.height / 2.0;
+    // The row label with the segment on its own line (an illustration
+    // callout can carry the same word).
+    let cell = (shown.iter().filter(|t| t.text == row))
+        .find_map(|label| {
+            shown.iter().find(|t| {
+                t.text == segment
+                    && t.bounds.x > label.bounds.x
+                    && (middle(t) - middle(label)).abs() < 8.0
+            })
+        })
+        .unwrap_or_else(|| panic!("{segment:?} of {row:?} missing from {shown:#?}"));
+    let pixels = crate::layout_probe::draw_pixels(view_panel(PanelKind::Properties, ctx), WINDOW);
+    let (x, y) = (
+        (cell.bounds.x + 1.0) as usize,
+        (cell.bounds.y + 1.0) as usize,
+    );
+    let at = (y * WINDOW.width as usize + x) * 4;
+    [pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3]]
+}
+
 /// The clicked pin's rows pair each label with its own value; a hidden pin
 /// reads Yes.
 #[test]
@@ -474,7 +330,7 @@ fn the_focused_pin_rows_pair_labels_with_their_values() {
     assert!(shown.iter().any(|t| t.text == "PIN 1"), "{shown:#?}");
     assert_eq!(beside(&shown, "Designator"), "1");
     assert_eq!(beside(&shown, "Name"), "ANODE");
-    assert_eq!(beside(&shown, "Electrical Type"), "Passive");
+    assert_eq!(beside(&shown, "Type"), "Passive");
     assert_eq!(beside(&shown, "Hidden"), "Yes");
 }
 
@@ -519,8 +375,8 @@ fn a_fields_yes_and_no_values_follow_the_language() {
     assert_eq!(beside(&shown, &label(ids::PROPERTIES_JUSTIFY_H)), "Left");
 }
 
-/// The Border Colour row opens the border picker and the Fill Colour row
-/// the fill picker.
+/// The Border row opens the border picker and the Fill row the fill picker
+/// (mockup row 46 shortened the labels).
 #[test]
 fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
     let id = uuid::Uuid::from_u128(9);
@@ -557,16 +413,16 @@ fn the_sheet_symbol_colour_rows_open_their_own_pickers() {
         )
     };
     assert!(
-        click("Border Colour")
+        click("Border")
             .iter()
             .any(|m| matches!(m, PanelMsg::ToggleChildSheetBorderPicker(i) if *i == id)),
-        "Border Colour opens the border picker"
+        "Border opens the border picker"
     );
     assert!(
-        click("Fill Colour")
+        click("Fill")
             .iter()
             .any(|m| matches!(m, PanelMsg::ToggleChildSheetFillPicker(i) if *i == id)),
-        "Fill Colour opens the fill picker"
+        "Fill opens the fill picker"
     );
 }
 
@@ -584,7 +440,7 @@ fn document_options() -> PanelContext {
 /// entry: a non-first value per list, read from the closed list.
 #[test]
 fn each_pick_list_shows_the_stored_entry() {
-    use signex_types::schematic::{PageOrigin, SheetOrientation, SheetSize, WireWidthPreset};
+    use signex_types::schematic::{PageOrigin, SheetOrientation, SheetSize};
     let mut ctx = document_options();
     ctx.sheet_color = SchematicSheetColor::Preset(SheetColor::Cream);
     ctx.paper_size = SheetSize::parse("A4").0.token(SheetOrientation::Portrait);
@@ -608,14 +464,46 @@ fn each_pick_list_shows_the_stored_entry() {
     };
     let shown = texts(&ctx);
     check("Sheet Color", beside(&shown, "Sheet Color"), "Cream");
-    check("Orientation", beside(&shown, "Orientation"), "Portrait");
-    check("Origin", beside(&shown, "Origin"), "Lower Left");
+    // #2531: Paper names its size at the sheet's orientation.
+    check("Paper", beside(&shown, "Paper"), "A4 · 210 × 297 mm");
     check("Line", beside(&shown, "Line"), "Dashed");
 
+    // Orientation and Origin are segmented switches: the stored Portrait
+    // and Lower Left segments draw as on. A sheet storing the other two
+    // draws those as on instead, so each pair is compared both ways.
+    let mut flipped = ctx.clone();
+    flipped.paper_size = SheetSize::parse("A4").0.token(SheetOrientation::Landscape);
+    flipped.page_origin = PageOrigin::UpperLeft;
+    for (row, stored, other) in [
+        ("Orientation", "Portrait", "Landscape"),
+        ("Origin", "Lower Left", "Upper Left"),
+    ] {
+        let on_here = segment_fill(&ctx, row, stored);
+        let on_there = segment_fill(&flipped, row, other);
+        let off_here = segment_fill(&ctx, row, other);
+        let drawn_on = if on_here == on_there && on_here != off_here {
+            stored
+        } else {
+            "another segment"
+        };
+        check(row, drawn_on, stored);
+    }
+
+    // Width is no pick list since #2523: a 2 x 2 grid of the four presets
+    // (`selected::tests` checks the cell it marks).
     let mut wire = one_selected(SelectedKindForTest::Wire, &[("Type", "Wire")]);
     wire.selected_wire_style = Some((WireWidthPreset::Medium, None));
-    check("Width", beside(&texts(&wire), "Width"), "Medium");
+    let wire_texts = texts(&wire);
+    for preset in WireWidthPreset::ALL {
+        assert!(
+            wire_texts.iter().any(|t| t.text == preset.label()),
+            "Width lacks {}",
+            preset.label()
+        );
+    }
 
+    // A power port's Style is a tile grid now (mockup row 45); `power_port::tests`
+    // checks the tile it marks, Chassis (#1284) included.
     let body = one_selected(
         SelectedKindForTest::Symbol,
         &[("Type", "Symbol"), ("Body Style", "Alternate")],
@@ -626,28 +514,16 @@ fn each_pick_list_shows_the_stored_entry() {
         "Alternate (De Morgan)",
     );
 
-    let port = one_selected(
-        SelectedKindForTest::Symbol,
-        &[("Type", "Power Port"), ("Library ID", "power:Earth")],
-    );
-    check("Style", beside(&texts(&port), "Style"), "Earth");
-
     let note = one_selected(
         SelectedKindForTest::TextNote,
         &[("Type", "Text"), ("Font Family", "Signex Probe Sans")],
     );
     check("Font", beside(&texts(&note), "Font"), "Signex Probe Sans");
-
-    let turned = net_label_form(90.0);
-    check(
-        "Rotation",
-        beside(&texts(&turned), "Rotation"),
-        "90 Degrees",
-    );
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
-/// Picking the next power-port style asks for that style's library id.
+/// Pressing a power-port style tile asks for that style's library id (mockup row 45:
+/// the Style list became a grid of toggle tiles).
 #[test]
 fn picking_a_power_port_style_asks_for_its_library_id() {
     let ctx = one_selected(
@@ -655,20 +531,21 @@ fn picking_a_power_port_style_asks_for_its_library_id() {
         &[("Type", "Power Port"), ("Library ID", "power:bar")],
     );
     let shown = texts(&ctx);
-    let label = shown.iter().find(|t| t.text == "Style").expect("Style row");
-    let over_list = iced::Point::new(WINDOW.width - 60.0, label.bounds.center_y());
+    let tile = shown
+        .iter()
+        .find(|t| t.text == "Arrow")
+        .expect("Arrow tile");
+    let over_tile = iced::Point::new(tile.bounds.center_x(), tile.bounds.center_y());
     let events = [
-        iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
-            iced::keyboard::Modifiers::COMMAND,
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+            iced::mouse::Button::Left,
         )),
-        iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
-            delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: -1.0 },
-        }),
     ];
     let asked: Vec<String> = messages_for_events(
         view_panel(PanelKind::Properties, &ctx),
         WINDOW,
-        over_list,
+        over_tile,
         &events,
     )
     .into_iter()
@@ -680,26 +557,188 @@ fn picking_a_power_port_style_asks_for_its_library_id() {
     assert_eq!(asked, ["power:arrow"]);
 }
 
-/// A title-block field the sheet leaves empty names the project's value; one
-/// the sheet fills says it overrides it.
-#[test]
-fn a_title_block_label_says_where_its_value_comes_from() {
+/// Document Options open on the Parameters tab.
+fn document_parameters() -> PanelContext {
     let mut ctx = document_options();
+    ctx.properties_tab = 1;
+    ctx
+}
+
+/// #2531: a title-block row the sheet leaves empty, while the project has a
+/// value, carries a "project" pill on its own line; once the sheet has its
+/// own value the pill is gone. The row keeps its plain field name.
+#[test]
+fn a_row_inherited_from_the_project_carries_a_project_pill() {
+    let mut ctx = document_parameters();
     ctx.project_parameters
         .insert("drawn_by".into(), "Ann".into());
     let shown = texts(&ctx);
+    let middle = |t: &LaidOutText| t.bounds.y + t.bounds.height / 2.0;
+    let name = shown
+        .iter()
+        .find(|t| t.text == "Drawn By")
+        .unwrap_or_else(|| panic!("Drawn By missing from {shown:#?}"));
+    let pill = shown
+        .iter()
+        .find(|t| t.text == "project")
+        .unwrap_or_else(|| panic!("no project pill in {shown:#?}"));
     assert!(
-        shown.iter().any(|t| t.text == "Drawn By (project)"),
-        "{shown:#?}"
+        (middle(pill) - middle(name)).abs() < 4.0,
+        "{pill:?} {name:?}"
     );
+    assert!(pill.bounds.x > name.bounds.x);
     ctx.title_block.insert("drawn_by".into(), "Bob".into());
     let shown = texts(&ctx);
+    assert!(!shown.iter().any(|t| t.text == "project"), "{shown:#?}");
+    assert!(shown.iter().any(|t| t.text == "Drawn By"), "{shown:#?}");
+}
+
+/// Maintainer decision 2026-11-18: the General tab has no title-block
+/// field; the Parameters tab is the one place they are edited.
+#[test]
+fn the_general_tab_has_no_title_block_field() {
+    let mut ctx = document_options();
+    ctx.title_block.insert("drawn_by".into(), "Bob".into());
+    let shown = texts(&ctx);
+    for name in [
+        "Title",
+        "Drawn By",
+        "TITLE BLOCK",
+        "Sheet Variables",
+        "SHEET VARIABLES",
+    ] {
+        let found = shown.iter().any(|t| t.text == name);
+        assert!(!found, "{name:?} in {shown:#?}");
+    }
+    let shown = texts(&document_parameters());
+    for name in [
+        "Title block",
+        "Title",
+        "Document No.",
+        "Revision",
+        "Sheet variables",
+    ] {
+        let found = shown.iter().any(|t| t.text == name);
+        assert!(found, "{name:?} missing: {shown:#?}");
+    }
+}
+
+/// An empty Date row shows today, greyed, and says so; a typed Date does
+/// not (decision 2026-11-18).
+#[test]
+fn an_empty_date_row_says_it_shows_today() {
+    let mut ctx = document_parameters();
+    ctx.builtin_parameters = vec![(BuiltinParameter::CurrentDate, "2026-11-18".into())];
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t.text == "Date (today)"), "{shown:#?}");
+    ctx.title_block.insert("date".into(), "2026-01-02".into());
+    let shown = texts(&ctx);
+    let today = shown.iter().any(|t| t.text == "Date (today)");
+    assert!(!today, "{shown:#?}");
+}
+
+fn shows(shown: &[LaidOutText], text: &str) -> bool {
+    shown.iter().any(|t| t.text == text)
+}
+
+/// #2531: Format = Custom swaps the Paper and Orientation rows for one Size
+/// row of typed W / H; Standard brings them back.
+#[test]
+fn a_custom_format_swaps_paper_and_orientation_for_typed_w_and_h() {
+    let mut ctx = document_options();
+    ctx.paper_size = "A4".into();
+    ctx.page_format_mode = PageFormatMode::Standard;
+    let shown = texts(&ctx);
     assert!(
-        shown
-            .iter()
-            .any(|t| t.text == "Drawn By (overrides project)"),
+        shows(&shown, "Paper") && shows(&shown, "Orientation"),
         "{shown:#?}"
     );
+    assert!(!shows(&shown, "Size") && !shows(&shown, "W"), "{shown:#?}");
+    ctx.page_format_mode = PageFormatMode::Custom;
+    let shown = texts(&ctx);
+    assert!(
+        !shows(&shown, "Paper") && !shows(&shown, "Orientation"),
+        "{shown:#?}"
+    );
+    assert!(shows(&shown, "Size") && shows(&shown, "W"), "{shown:#?}");
+}
+
+/// #2531: Format, Orientation and Origin are segmented switches; a press on
+/// a segment reports its value.
+#[test]
+fn the_page_switches_report_the_pressed_segment() {
+    let mut ctx = document_options();
+    ctx.paper_size = "A4".into();
+    let pressed = |label: &str| {
+        messages_on_click(view_panel(PanelKind::Properties, &ctx), WINDOW, label)
+            .into_iter()
+            .filter(|m| !matches!(m, PanelMsg::DocumentOptions(_)))
+            .map(|m| format!("{m:?}"))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(pressed("Portrait"), ["SetSheetOrientation(Portrait)"]);
+    assert_eq!(pressed("Lower Left"), ["SetPageOrigin(LowerLeft)"]);
+    assert_eq!(pressed("Custom"), ["SetPageFormatMode(Custom)"]);
+}
+
+/// #2531: the Rules chip shows the empty card, since a sheet has no rules;
+/// the chips carry their counts.
+#[test]
+fn the_rules_chip_shows_the_empty_card() {
+    let mut ctx = document_parameters();
+    let shown = texts(&ctx);
+    assert!(shows(&shown, "Title block"), "{shown:#?}");
+    assert!(!shows(&shown, "No rules"), "{shown:#?}");
+    let picked: Vec<PanelMsg> =
+        messages_on_click(view_panel(PanelKind::Properties, &ctx), WINDOW, "Rules");
+    assert!(
+        picked.iter().any(|m| matches!(
+            m,
+            PanelMsg::DocumentOptions(crate::panels::DocumentOptionsMsg::ParametersFilterPicked(
+                crate::panels::properties_parameters::ParametersFilter::Rules
+            ))
+        )),
+        "{picked:?}"
+    );
+    ctx.document_options.parameters_filter =
+        crate::panels::properties_parameters::ParametersFilter::Rules;
+    let shown = texts(&ctx);
+    assert!(shows(&shown, "No rules"), "{shown:#?}");
+    assert!(!shows(&shown, "Title block"), "{shown:#?}");
+}
+
+/// Maintainer decision 2026-11-18: a Parameters row shows its real value,
+/// never a `*` placeholder, and a long name wraps inside its column instead
+/// of running into the value.
+#[test]
+fn the_parameters_tab_shows_real_values_and_names_clear_of_them() {
+    let mut ctx = document_parameters();
+    ctx.builtin_parameters = vec![
+        (BuiltinParameter::DocumentName, "power.snxsch".into()),
+        (BuiltinParameter::ProjectName, String::new()),
+    ];
+    ctx.project_parameters
+        .insert("approved_by".into(), "Ann".into());
+    ctx.title_block.insert("approved_by".into(), "Bob".into());
+    ctx.sheet_variables
+        .insert("DocumentFullPathAndName".into(), "x".into());
+    let shown = texts(&ctx);
+    assert!(!shown.iter().any(|t| t.text == "*"), "{shown:#?}");
+    assert_eq!(beside(&shown, "Document Name"), "power.snxsch");
+    let value = shown
+        .iter()
+        .find(|t| t.text == "power.snxsch")
+        .expect("the document name");
+    for name in ["Approved By", "DocumentFullPathAndName", "Project Name"] {
+        let at = shown
+            .iter()
+            .find(|t| t.text == name)
+            .unwrap_or_else(|| panic!("{name:?} missing from {shown:#?}"));
+        assert!(
+            at.bounds.x + at.bounds.width <= value.bounds.x,
+            "{name:?} reaches the value column: {at:?} {value:?}"
+        );
+    }
 }
 
 /// The Tab form of a global port names its text Port Name.
@@ -746,19 +785,25 @@ fn the_net_class_field_rows_keep_their_names_and_order() {
     assert!(rows.ends_with(&fields), "{rows:?}");
 }
 
-/// A wire's facts sit under a Properties section, its own title.
+/// A sheet entry's facts sit under a Properties section, its own title. (A
+/// wire's End and Length moved into Location, mockup row 43; `placed_rows_tests`
+/// covers them.)
 #[test]
-fn a_wires_facts_sit_under_properties() {
+fn a_sheet_entrys_facts_sit_under_properties() {
     let ctx = one_selected(
-        SelectedKindForTest::Wire,
-        &[("Type", "Wire"), ("End", "1, 2"), ("Length", "3")],
+        SelectedKindForTest::SheetPin,
+        &[
+            ("Type", "Sheet Entry"),
+            ("Name", "VIN"),
+            ("Direction", "input"),
+        ],
     );
     let shown = texts(&ctx);
     let all = plain(&shown);
     let title = all.iter().position(|t| *t == "PROPERTIES");
-    let end = all.iter().position(|t| *t == "End");
-    assert!(title.is_some() && title < end, "{all:?}");
-    assert_eq!(beside(&shown, "End"), "1, 2");
+    let name = all.iter().position(|t| *t == "Name");
+    assert!(title.is_some() && title < name, "{all:?}");
+    assert_eq!(beside(&shown, "Name"), "VIN");
 }
 
 /// A Blanket's two sections keep their titles above their rows.
@@ -776,14 +821,16 @@ fn a_blankets_sections_keep_their_titles() {
         "{all:?}"
     );
     assert!(
-        at("ERC EXCLUSIONS").is_some() && at("ERC EXCLUSIONS") < at("All Rules"),
+        at("SUPPRESSED RULES").is_some() && at("Net Class") < at("SUPPRESSED RULES"),
         "{all:?}"
     );
 }
 
-/// A text note pairs each justification row with its own value.
+/// A text note's Rotation and Justify rows are segmented controls (mockup row 47):
+/// each row lays its own steps out on its line, in order. Which step is on
+/// is read from the engine's keys (`text_note::tests`).
 #[test]
-fn a_text_notes_justify_rows_pair_with_their_values() {
+fn a_text_notes_rows_lay_out_their_own_steps() {
     let ctx = one_selected(
         SelectedKindForTest::TextNote,
         &[
@@ -794,9 +841,21 @@ fn a_text_notes_justify_rows_pair_with_their_values() {
         ],
     );
     let shown = texts(&ctx);
-    assert_eq!(beside(&shown, "Rotation"), "90");
-    assert_eq!(beside(&shown, "Justify H"), "Left");
-    assert_eq!(beside(&shown, "Justify V"), "Top");
+    let line = |label: &str| {
+        let at = shown.iter().find(|t| t.text == label).expect(label);
+        let mut cells: Vec<&LaidOutText> = (shown.iter())
+            .filter(|t| (t.bounds.center_y() - at.bounds.center_y()).abs() < 4.0)
+            .filter(|t| t.bounds.x > at.bounds.x)
+            .collect();
+        cells.sort_by(|a, b| a.bounds.x.total_cmp(&b.bounds.x));
+        cells
+            .into_iter()
+            .map(|t| t.text.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(line("Rotation"), ["0°", "90°", "180°", "270°"]);
+    assert_eq!(line("Justify H"), ["Left", "Center", "Right"]);
+    assert_eq!(line("Justify V"), ["Top", "Middle", "Bottom"]);
 }
 
 /// A selected net label titles its section "Properties" (trunk's id).
@@ -835,6 +894,7 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
 #[test]
 fn the_properties_panel_draws_no_english_under_en_xa() {
     assert_eq!(same_in_en_xa(document_options()), Vec::<String>::new());
+    assert_eq!(same_in_en_xa(document_parameters()), Vec::<String>::new());
     let mut part = one_selected(
         SelectedKindForTest::Symbol,
         &[("Type", "Symbol"), ("Footprint", "Probe")],

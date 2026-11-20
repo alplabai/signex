@@ -45,7 +45,7 @@ pub fn view_footprint<'a>(
     // Symbol (schematic) canvas stays theme-driven — Altium's
     // schematic editor uses a different (cream-ish) palette.
     // The paper / charcoal ground is painted instead.
-    let graphite = crate::library::editor::footprint::canvas::graphite_look_for(tokens);
+    let graphite = crate::library::editor::footprint::graphite_look_for(tokens);
     let (bg, grid) = (graphite.bg, graphite.dot);
 
     // The canvas fills the tab: layer visibility lives in the Layers dock
@@ -83,7 +83,14 @@ pub fn view_footprint<'a>(
         .height(Length::Fill)
         .push(canvas_area);
     let body = match editor.state.mode {
-        EditorMode::Sketch | EditorMode::Normal => stack
+        // The sketch mode bar: Bake preview · Discard changes · Bake (#2518).
+        EditorMode::Sketch => stack
+            .push(super::dof_chip::overlay(editor, tokens, i18n))
+            .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
+            .push(super::sketch_exit::footprint_overlay(editor, tokens, i18n))
+            .push(mode_switcher)
+            .boxed(),
+        EditorMode::Normal => stack
             .push(super::dof_chip::overlay(editor, tokens, i18n))
             .push(super::dof_chip::zoom_pill_overlay(editor, tokens))
             .push(mode_switcher)

@@ -35,7 +35,7 @@ impl<'a> Resolver<'a> {
         let mut adapters = HashMap::new();
         let mut errors = Vec::new();
         for lib in libraries {
-            match LocalGitAdapter::open(&lib.root) {
+            match LocalGitAdapter::open_to_read(&lib.root) {
                 Ok(adapter) => {
                     adapters.insert(lib.id, adapter);
                 }

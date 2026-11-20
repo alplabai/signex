@@ -107,7 +107,7 @@ pub(crate) fn library_with_rows(dir: &Path, name: &str, count: usize) -> (PathBu
     (snxlib, ids)
 }
 
-fn bytes_of(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+pub(crate) fn bytes_of(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(dir: &Path, root: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).expect("read_dir") {
             let path = entry.expect("entry").path();
@@ -418,7 +418,7 @@ fn logged(fragment: &str) -> bool {
 }
 
 /// Write a `.snxfpt` at `path` (parents created) and return its bytes.
-fn write_footprint(path: &Path) -> Vec<u8> {
+pub(crate) fn write_footprint(path: &Path) -> Vec<u8> {
     std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
     let file =
         signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("stock_fp"));

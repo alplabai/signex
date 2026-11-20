@@ -5,7 +5,7 @@
 //! ([`SiPrefix::all_for`]) and is hidden for units that take none
 //! (`%`, `ppm/C`, `V/us`, `AWG`).
 
-use iced::widget::pick_list;
+use iced::widget::{PickList, pick_list};
 use iced::{Element, Widget as _};
 use signex_types::quantity::{SiPrefix, Unit};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -52,12 +52,15 @@ pub(crate) fn effective_prefix(unit: &Unit, prefix: SiPrefix) -> SiPrefix {
     }
 }
 
-/// The picker, or `None` for a unit that takes no prefix.
-pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
+type PrefixList<'a, M> = PickList<'a, PrefixChoice, Vec<PrefixChoice>, PrefixChoice, M>;
+
+/// The picker in the Graphite dropdown look. It opens with the current
+/// entry under the pointer, so that row shows the look's highlight.
+fn prefix_list<'a, M: Clone + 'a>(
     unit: &Unit,
     selected: SiPrefix,
     on_pick: impl Fn(SiPrefix) -> M + 'a,
-) -> Option<Element<'a, M>> {
+) -> Option<PrefixList<'a, M>> {
     let choices = prefix_choices(unit);
     if choices.is_empty() {
         return None;
@@ -67,9 +70,30 @@ pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
         pick_list(Some(current), choices, |c: &PrefixChoice| c.to_string())
             .graphite()
             .on_select(move |c: PrefixChoice| on_pick(c.prefix))
-            .padding([3, 6])
-            .boxed(),
+            .padding([3, 6]),
     )
+}
+
+/// The picker, or `None` for a unit that takes no prefix.
+pub(crate) fn prefix_picker<'a, M: Clone + 'a>(
+    unit: &Unit,
+    selected: SiPrefix,
+    on_pick: impl Fn(SiPrefix) -> M + 'a,
+) -> Option<Element<'a, M>> {
+    prefix_list(unit, selected, on_pick).map(|list| list.boxed())
+}
+
+/// [`prefix_picker`] drawn as the right segment of a
+/// [`measurement_slot`](super::measurement_slot::measurement_slot).
+pub(crate) fn prefix_segment<'a, M: Clone + 'a>(
+    unit: &Unit,
+    selected: SiPrefix,
+    on_pick: impl Fn(SiPrefix) -> M + 'a,
+) -> Option<Element<'a, M>> {
+    prefix_list(unit, selected, on_pick).map(|list| {
+        list.style(super::measurement_slot::picker_segment_style)
+            .boxed()
+    })
 }
 
 #[cfg(test)]
@@ -92,6 +116,14 @@ mod tests {
             .collect();
         assert_eq!(labels, ["mΩ", "Ω", "kΩ", "MΩ", "GΩ"]);
         assert!(prefix_picker(&Unit::Ohm, SiPrefix::Kilo, |p| p).is_some());
+    }
+
+    /// The slot segment offers the same picker, and none where the unit
+    /// takes no prefix.
+    #[test]
+    fn the_slot_segment_is_the_same_picker() {
+        assert!(prefix_segment(&Unit::Ohm, SiPrefix::Kilo, |p| p).is_some());
+        assert!(prefix_segment(&Unit::Percent, SiPrefix::One, |p| p).is_none());
     }
 
     #[test]

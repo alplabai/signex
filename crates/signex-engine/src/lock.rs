@@ -138,6 +138,9 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         },
         Command::UpdateLabelProps { label_id, .. } => (vec![*label_id], "edited"),
         Command::BreakWire { wire, .. } => (vec![*wire], "broken"),
+        Command::MoveWireEnd { wire, .. } => (vec![*wire], "moved"),
+        Command::SetRunEnd { run, .. } => (vec![run.uuid], "moved"),
+        Command::UpdateTextNoteProps { note_id, .. } => (vec![*note_id], "edited"),
         Command::UpdateSchDrawing { drawing } => (vec![drawing.uuid()], "edited"),
         Command::UpdateSymbolTextSize { symbol_id, .. }
         | Command::UpdateSymbolLibId { symbol_id, .. }
@@ -193,10 +196,12 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         | Command::SetSheetColor { .. }
         | Command::SetPageOrigin { .. }
         | Command::SetTitleBlockField { .. }
+        | Command::SetSheetVariable { .. }
         | Command::ArrangeDrawings { .. }
         | Command::SetDrawingPlacement { .. }
         | Command::PlaceDirective { .. }
         | Command::UpdateDirective { .. }
+        | Command::SetNoErcRules { .. }
         | Command::SetDocumentFontFamily { .. }
         | Command::SetNetColors { .. } => return None,
     };

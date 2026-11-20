@@ -98,8 +98,49 @@ Pair two short parallel strokes. A region is picked by a click near its
 edge, so a click inside it still reaches what it covers
 (`schematic_runtime/directives.rs`).
 
+## No-ERC rule list
+
+A No-ERC directive (`signex_types::schematic::NoErcDirective`, held in
+`SchematicSheet::no_erc_directives`) is a point marker, not one of the
+directives above. It silences ERC findings located on its point. Its `rules`
+list names the ERC rule ids it silences (`builtin::...`, `user::...`, or `*`);
+an empty list silences every rule (#1699). On disk it is an entry of
+`no_erc_directives` in `[extras.sheet]`; `rules` is left out when empty, so a
+marker without a list, including every marker saved before the list existed,
+re-saves byte-identical and loads as "every rule". A sheet where any marker
+has a list is written as `snxsch/1.2` (a sheet without one stays
+`snxsch/1.1`). A build that predates the list reads only up to 1.1, so it
+opens a 1.2 sheet read-only and refuses every save, rather than dropping the
+list and letting the marker silence every rule (`docs/FORMAT_VERSIONS.md`).
+
+Every suppression path asks the one test, `no_erc_rules_suppress`: the
+per-sheet run (`drop_suppressed` and the rules that check the marker
+themselves, "Pin type conflict" and "Net has multiple names") and the
+project-wide "Net has multiple names" and "Part units not placed" passes.
+
+Properties lists one checkbox per ERC rule under Suppressed rules, after an
+All rules box that is ticked while the list is empty. While All rules is
+ticked the rule filter and the rule boxes are disabled; unticking it opens the
+list (view state only, the marker still silences every rule) and ticking a
+rule then narrows the marker to it. Unticking the last listed rule leaves the
+list empty, which is every rule again. A Blanket shows the same section.
+Each checkbox is one undo step (`Command::SetNoErcRules`, patch
+`DocumentPatch::NO_ERC_DIRECTIVES`).
+The engine stores every list sorted without repeats, and a list naming `*`
+as empty (`canonical_no_erc_rules`), so a file does not depend on the order
+the rules were picked in.
+
+Automation: `place_no_erc at [rules] [document]` places a marker with the
+comma-separated `rules` (left out: every rule), and
+`edit_no_erc_rules id [rules] [document]` sets the list of an existing
+marker (`rules` left out or empty: every rule) through the same
+`SetNoErcRules` as a checkbox. An unknown rule id is refused, as for a
+Blanket's `exclude`.
+Copy, cut and paste carry No-ERC directives with their lists.
+
 ## Not yet
 
-Copy and paste do not carry directives. Blanket classes are not applied to
-the project netlist, and nothing on the board reads `diff_pairs` yet; #1278
-and the router's differential pairs build on it.
+Copy and paste do not carry Blankets, Compile Masks or Differential Pair
+directives. Blanket classes are not applied to the project netlist, and
+nothing on the board reads `diff_pairs` yet; #1278 and the router's
+differential pairs build on it.

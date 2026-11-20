@@ -192,6 +192,8 @@ mod net_class_tests;
 #[cfg(test)]
 mod sheet_color_tests;
 #[cfg(test)]
+mod special_string_field_tests;
+#[cfg(test)]
 mod stroke_rule_tests;
 
 #[cfg(test)]
@@ -288,6 +290,12 @@ mod tests {
                 map_black_and_white(palette.symbol_fill, palette.paper),
                 (1.0, 1.0, 1.0),
                 "{id:?} body_fill would print black"
+            );
+            let tint = palette.symbol_body_tint.expect("a body tint");
+            assert_eq!(
+                map_black_and_white(tint, palette.paper),
+                (1.0, 1.0, 1.0),
+                "{id:?} body_tint would print black"
             );
         }
     }

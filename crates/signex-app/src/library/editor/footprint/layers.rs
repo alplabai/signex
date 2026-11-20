@@ -46,8 +46,8 @@ impl FpLayer {
         match self {
             FpLayer::FCu => "Top Layer",
             FpLayer::BCu => "Bottom Layer",
-            FpLayer::FSilks => "Top Overlay",
-            FpLayer::BSilks => "Bottom Overlay",
+            FpLayer::FSilks => "Top Silkscreen",
+            FpLayer::BSilks => "Bottom Silkscreen",
             FpLayer::FFab => "Top Assembly",
             FpLayer::BFab => "Bottom Assembly",
             FpLayer::EdgeCuts => "Keep-Out",

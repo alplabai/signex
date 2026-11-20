@@ -29,7 +29,8 @@ use std::collections::BTreeSet;
 
 use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
 use super::submenu::{
-    align_entries, arrange_entries, part_actions_entries, place_entries, sheet_actions_entries,
+    align_entries, arrange_entries, part_actions_entries, place_entries, planned_entries,
+    sheet_actions_entries,
 };
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::DropdownEntry;
@@ -41,28 +42,19 @@ const TID: ThemeId = ThemeId::GraphiteDark;
 /// A row not listed here and carrying no command id fails the walk.
 const SURFACE_LOCAL: &[(&str, &str)] = &[
     // Place flyout power ports: the PlacePower* family becomes one
-    // `place_power_port(style)` command (audit §4), so no per-row ids.
-    (
-        "GND Power Port",
-        "power-port family, awaiting place_power_port(style)",
-    ),
-    (
-        "VCC Power Port",
-        "power-port family, awaiting place_power_port(style)",
-    ),
-    (
-        "+5 Power Port",
-        "power-port family, awaiting place_power_port(style)",
-    ),
-    (
-        "+12 Power Port",
-        "power-port family, awaiting place_power_port(style)",
-    ),
+    // `place_power_port(style)` command (audit §4), so no per-row ids. The
+    // rows show the short port name (Graphite mockup #62).
+    ("GND", "power-port family, awaiting place_power_port(style)"),
+    ("VCC", "power-port family, awaiting place_power_port(style)"),
+    ("+5", "power-port family, awaiting place_power_port(style)"),
+    ("+12", "power-port family, awaiting place_power_port(style)"),
+    // Place flyout: the greyed row standing for the planned tools (Graphite mockup #62).
+    ("5 planned tools…", "planned tools, no behaviour"),
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
     ("Print...", "tree-addressed wording, no per-surface id"),
-    // Canvas: planned rows that run nothing yet (docs/MENU_BAR.md,
-    // "Sheet right-click menu").
+    // Canvas: planned rows that run nothing yet, in the "Planned (N)"
+    // flyout (docs/MENU_BAR.md, "Sheet right-click menu").
     ("References", "planned submenu stub"),
     ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
@@ -301,22 +293,31 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
         for bits in 0..16u8 {
             let (app, selection, derived_key) = app_in_selection(profile, bits);
             let ctx = app.command_context(None);
-            for project_key in [derived_key, Some(vec!["proj".to_string()])] {
-                let rows = canvas_menu_entries(
-                    signex_i18n::I18n::en_us_ref(),
-                    TID,
-                    selection,
-                    None,
-                    project_key,
-                    &sc,
-                );
-                check_rows(
-                    &format!("canvas {profile} {selection:?}"),
-                    &rows,
-                    &app,
-                    &ctx,
-                    &mut walk,
-                );
+            // A right-click on an object adds Find Similar and Highlight
+            // Net; a net highlight adds Clear Filter (Graphite mockup #62).
+            for (hit_object, net_highlighted) in [(false, false), (true, true)] {
+                let selection = CanvasSelection {
+                    hit_object,
+                    net_highlighted,
+                    ..selection
+                };
+                for project_key in [derived_key.clone(), Some(vec!["proj".to_string()])] {
+                    let rows = canvas_menu_entries(
+                        signex_i18n::I18n::en_us_ref(),
+                        TID,
+                        selection,
+                        None,
+                        project_key,
+                        &sc,
+                    );
+                    check_rows(
+                        &format!("canvas {profile} {selection:?}"),
+                        &rows,
+                        &app,
+                        &ctx,
+                        &mut walk,
+                    );
+                }
             }
             // The Part Actions and Sheet Actions flyouts (#2419).
             let i18n = signex_i18n::I18n::en_us_ref();
@@ -363,6 +364,13 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
         check_rows(
             "arrange flyout",
             &arrange_entries(signex_i18n::I18n::en_us_ref(), &hint),
+            &app,
+            &flyout_ctx,
+            &mut walk,
+        );
+        check_rows(
+            "planned flyout",
+            &planned_entries(signex_i18n::I18n::en_us_ref(), TID),
             &app,
             &flyout_ctx,
             &mut walk,

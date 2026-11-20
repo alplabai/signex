@@ -119,6 +119,11 @@ mod pcb_view_rotation;
 #[path = "regression/pcb_board_3d.rs"]
 mod pcb_board_3d;
 
+// #2622, mockup row 175 - the board 3D view's toolbar: Left and Right, Reset, Flip, Explode,
+// lighting, screenshots, the unread toast; no undo step from any of them.
+#[path = "regression/pcb_board_3d_toolbar.rs"]
+mod pcb_board_3d_toolbar;
+
 // #2240 / #2223 - the board menu's View group: Toggle Ratsnest.
 #[path = "regression/pcb_board_menu_view.rs"]
 mod pcb_board_menu_view;
@@ -149,6 +154,10 @@ mod parameter_manager_open;
 // #1783 - the Parameter Manager table's cell drafts and deletes.
 #[path = "regression/parameter_manager_table.rs"]
 mod parameter_manager_table;
+
+// #1784 - Revert changes undoes the Parameter Manager session as one step.
+#[path = "regression/parameter_manager_revert.rs"]
+mod parameter_manager_revert;
 
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
@@ -213,6 +222,9 @@ mod dock_side_width;
 
 #[path = "regression/dock_tab_controls.rs"]
 mod dock_tab_controls;
+
+#[path = "regression/core_safety_net.rs"]
+mod core_safety_net;
 
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;
@@ -524,11 +536,16 @@ mod pin_text_on_sheet;
 // #1667 — Autoplace Fields, Copy Attributes, Place Design Block, Import Graphics.
 #[path = "regression/placement_extras.rs"]
 mod placement_extras;
+// #2532 — the Tab form places the next object at a typed Position.
+#[path = "regression/pre_placement_position.rs"]
+mod pre_placement_position;
 #[path = "regression/repeat_placement.rs"]
 mod repeat_placement;
 // #1258 — Properties edits the shared fields of a multi-selection.
 #[path = "regression/multi_selection_edit.rs"]
 mod multi_selection_edit;
+#[path = "regression/selection_forms.rs"]
+mod selection_forms;
 // #1255, #1670 — in-place editing of a part's designator, value and footprint.
 #[path = "regression/inplace_field_edit.rs"]
 mod inplace_field_edit;
@@ -684,6 +701,8 @@ mod sheet_frame_canvas;
 mod planned_tools;
 
 // #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/page_tab_titles.rs"]
+mod page_tab_titles;
 #[path = "regression/project_parameters.rs"]
 mod project_parameters;
 #[path = "regression/project_tab.rs"]
@@ -694,13 +713,91 @@ mod project_tab_rename;
 mod project_tab_saves;
 #[path = "regression/project_tab_support.rs"]
 mod project_tab_support;
+#[path = "regression/sheet_variables.rs"]
+mod sheet_variables;
 
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
 
+#[path = "regression/paste_array_count_up.rs"]
+mod paste_array_count_up;
+
+#[path = "regression/net_color_palette_clear_all.rs"]
+mod net_color_palette_clear_all;
+
+#[path = "regression/placement_pause_esc.rs"]
+mod placement_pause_esc;
+
+#[path = "regression/annotate_graphite.rs"]
+mod annotate_graphite;
+#[path = "regression/erc_dialog_graphite.rs"]
+mod erc_dialog_graphite;
+#[path = "regression/illustration_hover.rs"]
+mod illustration_hover;
+#[path = "regression/setup_profile_cards.rs"]
+mod setup_profile_cards;
+#[path = "regression/sketch_host.rs"]
+mod sketch_host;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/validation_panels_graphite.rs"]
+mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #2621, mockup rows 143 and 144a — Preferences shell (nav, dirty dots, Open folder)
+// and the Language page (a draft applied on Apply or OK).
+#[path = "regression/preferences_language.rs"]
+mod preferences_language;
+#[path = "regression/preferences_shell.rs"]
+mod preferences_shell;
+
+// #2621, mockup rows 144 and 147 — Preferences Appearance and Editing pages: the fast grid row
+// error, the snap preview's pitch labels and the Increment step stepper.
+#[path = "regression/preferences_pages.rs"]
+mod preferences_pages;
+
+// #2621, mockup row 145 — Preferences ▸ Keyboard shortcuts page: context chips, the
+// conflict banner's Show, Delete on a built-in profile.
+#[path = "regression/preferences_keymap_page.rs"]
+mod preferences_keymap_page;
+
+// #2621 — Preferences ▸ Library: Distributor APIs and Component Classes pages.
+#[path = "regression/preferences_library_pages.rs"]
+mod preferences_library_pages;
+
+// Graphite mockup #55: the Filter panel edits the filter a box select picks with.
+#[path = "regression/selection_filter_panels.rs"]
+mod selection_filter_panels;
+// #1259 - the Object List lists the sheet's objects; a row click selects.
+#[path = "regression/object_list.rs"]
+mod object_list;
+
+// #2267 — a canvas menu row runs against the window the menu opened in.
+#[path = "regression/context_menu_in_window.rs"]
+mod context_menu_in_window;
+
+#[path = "regression/floating_panel_menu.rs"]
+mod floating_panel_menu;
+
+#[path = "regression/rules_grid.rs"]
+mod rules_grid;
+
+// #2525 — Find and Replace: Whole word renames only the exact net.
+#[path = "regression/find_replace_whole_word.rs"]
+mod find_replace_whole_word;
+
+// Move Selection offsets are typed in the display unit.
+#[path = "regression/move_selection_unit.rs"]
+mod move_selection_unit;
+
+// Graphite #78 / #80 - Number Schematic Sheets greys Apply on a clash, gap
+// or high number; Assign Footprints filter chips, ticked bar and reason pills.
+#[path = "regression/sheet_tools_graphite.rs"]
+mod sheet_tools_graphite;
+
+// #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
+#[path = "regression/board_sync_graphite.rs"]
+mod board_sync_graphite;

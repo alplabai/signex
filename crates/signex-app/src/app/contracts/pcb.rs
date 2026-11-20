@@ -108,6 +108,23 @@ pub enum PcbMsg {
     PartSwap(PartSwapMsg),
     /// Design reuse blocks of the project (#2410).
     ReuseBlock(crate::app::board_reuse::ReuseBlockMsg),
+    /// Edit ▸ Origin on the board in view (2026-11-18).
+    Origin(BoardOriginMsg),
+}
+
+/// Edit ▸ Origin (2026-11-18): where the board in view counts from. Each
+/// change is one `SetBoardOptions` undo step on `BoardOptions::origin`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardOriginMsg {
+    /// Set (`set_board_origin`): the next click on the board sets the
+    /// origin there.
+    SetPicked,
+    /// Reset (`reset_board_origin`): the origin goes to the bottom-left of
+    /// the board outline, or of the board area without one.
+    ResetPicked,
+    /// Snap to Outline Corner (`snap_board_origin_to_corner`): the origin
+    /// goes to the outline corner nearest the pointer.
+    SnapToCornerPicked,
 }
 
 /// Net actions on the board in view (#2403, #2405): the board menu's and the
@@ -225,15 +242,22 @@ pub enum PcbBarMsg {
 /// arrives as the sketch editor's own messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardSketchMsg {
-    /// `board_sketch` ran: enter sketch mode, or leave it when on.
+    /// `board_sketch` ran: enter sketch mode, or leave it when on (as
+    /// Bake does).
     ModeToggled,
-    /// Leave (the bar's button or Esc): commit any change, then leave. A
-    /// refused commit keeps the mode on.
-    LeaveRequested,
-    /// Apply: commit the changes and stay in the mode.
-    ApplyRequested,
-    /// Discard: leave without committing; the board keeps what it had.
+    /// Bake (the mode bar's primary button): commit any change to the
+    /// board as one board command, then leave. A refused commit keeps the
+    /// mode on (#2518).
+    BakeRequested,
+    /// Bake preview, or Back to sketch: show or hide what a bake writes.
+    BakePreviewToggled,
+    /// Discard changes (or Esc): leave without committing, asking first
+    /// when the sketch has changes the board has not taken.
     DiscardRequested,
+    /// The discard was confirmed: leave; the board keeps what it had.
+    DiscardConfirmed,
+    /// The discard was cancelled: keep editing.
+    DiscardCancelled,
 }
 
 /// What the user changed about what a board view shows (#2223): never the
@@ -287,12 +311,17 @@ pub enum PcbViewMsg {
     /// The user showed or hid one layer (an eye of the Layers panel,
     /// `set_layer_visible`, #2363).
     LayerVisibilitySet { layer: PcbLayer, visible: bool },
-    /// The user gave a layer its own colour in this view, or (`None`) the
-    /// board palette's again (a colour chip, `set_layer_color`, #2363).
+    /// The user gave a layer its own colour, or (`None`) the board
+    /// palette's again (a colour chip, Layer colour... and Reset layer
+    /// colour on a tab, `set_layer_color`). Saved with the board as one undo
+    /// step (2026-11-18).
     LayerColourSet {
         layer: PcbLayer,
         colour: Option<[u8; 3]>,
     },
+    /// Reset all layer colours on a tab (`reset_layer_colors`): every layer
+    /// takes the board palette's colour again, as one undo step.
+    LayerColoursReset,
     /// The Layers panel lists only the layers the board uses, or every
     /// layer again (Used On, #2363).
     UsedLayersOnlySet(bool),
@@ -343,12 +372,62 @@ pub enum Board3dMsg {
     /// `view_board_3d` ran (View ▸ 3D View, its key, the palette): the
     /// board in view shows in 3D, or flat again.
     Toggled,
-    /// The 3D view's 2D button: the board shows flat again.
+    /// The toolbar's 2D segment: the board shows flat again.
     LeaveRequested,
-    /// A viewpoint button was picked: the view looks from there, framed.
+    /// A viewpoint button was picked: the view looks from there on the side
+    /// shown, framed.
     PresetPicked(signex_gfx::camera3d::ViewPreset),
     /// The Fit button: the board is framed from where it is seen now.
     FitRequested,
+    /// The Reset button: Iso on the side shown, framed. Flip, explode and
+    /// lighting stay.
+    ResetRequested,
+    /// The Flip button: the board turns over in one animated step.
+    FlipRequested,
+    /// A frame was drawn while the flip turns or a screenshot waits for a
+    /// frame without the toolbar.
+    AnimationTicked(std::time::Instant),
+    /// The Explode button: its popover opens, or closes.
+    ExplodePopoverToggled,
+    /// The explode slider moved to this percent (0 assembled, 100 apart).
+    ExplodeAmountChanged(u8),
+    /// "Separate copper and mask" was ticked or cleared.
+    ExplodeLayersToggled(bool),
+    /// "Lift components" was ticked or cleared.
+    ExplodePartsToggled(bool),
+    /// The lighting button: the next lighting preset, and its toast.
+    LightingCycled,
+    /// The lighting toast of this generation timed out.
+    LightingToastExpired(u64),
+    /// The screenshot button's chevron: its menu opens, or closes.
+    ScreenshotMenuToggled,
+    /// Esc closed the open Explode popover or screenshot menu.
+    PopoverDismissed,
+    /// The screenshot button, or Copy to clipboard in its menu.
+    ScreenshotCopyRequested,
+    /// Save PNG… in the screenshot menu: ask where.
+    ScreenshotSaveRequested,
+    /// The save dialog answered; `None` is a cancel.
+    ScreenshotSavePicked(Option<std::path::PathBuf>),
+    /// The view was captured, cropped to the view; `None` when the window
+    /// had nothing to show. `save_to` is the PNG to write; `None` copies it
+    /// to the clipboard.
+    ScreenshotTaken {
+        save_to: Option<std::path::PathBuf>,
+        shot: Option<Arc<Board3dShot>>,
+    },
+    /// The clipboard took the screenshot, or refused it and why.
+    ScreenshotCopied(Result<(), iced::clipboard::Error>),
+    /// The PNG at `path` was written, or why it was not.
+    ScreenshotSaved {
+        path: std::path::PathBuf,
+        error: Option<String>,
+    },
+    /// The model-unread toast was dismissed; its Messages lines stay.
+    UnreadNoticeDismissed,
+    /// A redraw found the view at another window position, in logical
+    /// pixels: where a screenshot is cropped.
+    ViewportPlaced([f32; 2]),
     /// A redraw found the view at a size it had not reported, in logical
     /// pixels; the first one frames the view for its real shape.
     ViewportSized([f32; 2]),
@@ -376,6 +455,23 @@ pub enum Board3dGesture {
     Zoomed(f32),
     /// A left click at this point of the view.
     Clicked([f32; 2]),
+}
+
+/// A screenshot of the board 3D view: RGBA pixels, `size` wide and tall in
+/// physical pixels.
+#[derive(Clone, PartialEq)]
+pub struct Board3dShot {
+    pub rgba: Vec<u8>,
+    pub size: [u32; 2],
+}
+
+impl std::fmt::Debug for Board3dShot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Board3dShot")
+            .field("bytes", &self.rgba.len())
+            .field("size", &self.size)
+            .finish()
+    }
 }
 
 /// The models read for a board's parts, and why the others could not be.

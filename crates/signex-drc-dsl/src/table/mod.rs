@@ -6,7 +6,9 @@
 //! `text_only`, and is edited in the text. See `docs/DRC_RULES.md`,
 //! "Rules manager".
 
+pub mod catalog;
 mod edit;
+pub mod grid;
 mod kinds;
 pub mod matrix;
 pub mod presets;
@@ -256,6 +258,8 @@ pub(crate) fn tight(src: &str, span: &Span) -> Span {
     start..end.max(start)
 }
 
+#[cfg(test)]
+mod grid_tests;
 #[cfg(test)]
 mod matrix_tests;
 #[cfg(test)]

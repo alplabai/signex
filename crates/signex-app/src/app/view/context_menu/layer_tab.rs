@@ -1,7 +1,8 @@
 //! Right-click menu of a layer tab under the board canvas (#2379, #2394):
-//! hide or highlight the layer, show it alone or every layer, hide or show
-//! every layer of a kind, the board editors, the tab names and the flip of
-//! the board view.
+//! hide or highlight the layer, its colour (saved with the board,
+//! 2026-11-18), show it alone or every layer, hide or show every layer of a
+//! kind or one layer of it, the board editors, the tab names and the flip
+//! of the board view.
 
 use super::*;
 
@@ -9,13 +10,15 @@ use super::items::{dd_disabled, dd_msg, text};
 use crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND;
 use crate::app::{LayerStripMsg, LayerTabMenuMsg, LayerTabSubmenu, PcbMsg, PcbViewMsg};
 use crate::layer_strip_prefs::{LayerNameStyle, LayerStripPrefs};
+use crate::pcb_canvas::layer_style::layer_name;
 use signex_i18n::{Arg, I18n, MessageId, ids};
-use signex_renderer::pcb::{LayerKind, PcbLayerView};
+use signex_renderer::pcb::{BoardPaint, LayerKind, PcbLayerView, kind_layers};
+use signex_types::pcb::LayerDef;
 use signex_types::pcb_layer::PcbLayer;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 /// What the menu of the tab of `layer` shows: the board view it acts on,
-/// the strip's settings and its open flyout.
+/// the board's layer colours, the strip's settings and its open flyout.
 pub(super) struct TabMenuState<'a> {
     pub layer: PcbLayer,
     pub view: &'a PcbLayerView,
@@ -24,6 +27,19 @@ pub(super) struct TabMenuState<'a> {
     /// `board_layer_stack` (#2401) is enabled in the menu's window: the
     /// command's own rule, the one the Design menu row greys by.
     pub layer_stack_live: bool,
+    pub colours: TabColours,
+}
+
+/// Which colours the board gives its layers, for the reset rows.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct TabColours {
+    /// The tab's layer has a colour of its own.
+    pub own: bool,
+    /// Some layer has one.
+    pub any: bool,
+    /// The board takes no edit (its colour commands are greyed): the
+    /// colours are saved with it.
+    pub read_only: bool,
 }
 
 fn menu_msg(event: LayerTabMenuMsg) -> Message {
@@ -39,12 +55,20 @@ fn checked_row(label: String, message: Message, on: bool) -> DropdownEntry<Messa
     DropdownEntry::Item(DropdownItem::new(label, message).checked(on))
 }
 
-/// A greyed row for an editor that is not built, with the reason as its
-/// hover text.
+/// A greyed row with the reason as its hover text.
 fn unavailable(i18n: &I18n, label: MessageId, reason: MessageId) -> DropdownEntry<Message> {
     match dd_disabled(None, &text(i18n, label), None) {
         DropdownEntry::Item(item) => DropdownEntry::Item(item.tooltip(text(i18n, reason))),
         other => other,
+    }
+}
+
+/// A row that sends `message` while `live`, greyed otherwise.
+fn live_row(label: &str, message: Message, live: bool) -> DropdownEntry<Message> {
+    if live {
+        dd_msg(None, label, "", message)
+    } else {
+        dd_disabled(None, label, None)
     }
 }
 
@@ -56,6 +80,49 @@ fn launcher(label: String, submenu: LayerTabSubmenu, open: bool) -> DropdownEntr
         .hover(opens, Message::noop())
         .active(open);
     DropdownEntry::Item(item)
+}
+
+/// Whether Layer colour... can open a picker for `layer`: the board view
+/// recolours it, and the Layers panel lists a row for it (a mechanical
+/// layer has none yet).
+fn colour_editable(layer: PcbLayer) -> bool {
+    BoardPaint::can_recolour(layer) && !matches!(layer, PcbLayer::Mechanical(_))
+}
+
+/// The colour rows (2026-11-18): Layer colour..., Reset layer colour and
+/// Reset all layer colours.
+fn colour_rows(i18n: &I18n, layer: PcbLayer, colours: TabColours) -> Vec<DropdownEntry<Message>> {
+    let edit = if colour_editable(layer) && !colours.read_only {
+        dd_msg(
+            None,
+            &text(i18n, ids::PCB_LAYER_TAB_COLOUR),
+            "",
+            menu_msg(LayerTabMenuMsg::ColourEditRequested(Some(layer))),
+        )
+    } else {
+        unavailable(
+            i18n,
+            ids::PCB_LAYER_TAB_COLOUR,
+            ids::PCB_LAYER_TAB_COLOUR_UNAVAILABLE,
+        )
+    };
+    let reset = PcbViewMsg::LayerColourSet {
+        layer,
+        colour: None,
+    };
+    vec![
+        edit,
+        live_row(
+            &text(i18n, ids::PCB_LAYER_TAB_COLOUR_RESET),
+            pick(reset),
+            colours.own && !colours.read_only,
+        ),
+        live_row(
+            &text(i18n, ids::PCB_LAYER_TAB_COLOUR_RESET_ALL),
+            pick(PcbViewMsg::LayerColoursReset),
+            colours.any && !colours.read_only,
+        ),
+    ]
 }
 
 /// Pure row data for the menu, so the labels and messages are tested
@@ -70,21 +137,17 @@ pub(super) fn layer_tab_menu_entries(
         prefs,
         submenu,
         layer_stack_live,
+        colours,
     } = *state;
     // Layer stack... opens the layer stack manager (#2401) through its
     // catalog command; greyed when that command is.
     let layer_stack = text(i18n, ids::PCB_LAYER_TAB_LAYER_STACK);
-    let layer_stack = if layer_stack_live {
-        dd_msg(
-            None,
-            &layer_stack,
-            "",
-            menu_msg(LayerTabMenuMsg::LayerStackPicked),
-        )
-    } else {
-        dd_disabled(None, &layer_stack, None)
-    };
-    let name = crate::pcb_canvas::layer_style::layer_name(i18n, layer).into_string();
+    let layer_stack = live_row(
+        &layer_stack,
+        menu_msg(LayerTabMenuMsg::LayerStackPicked),
+        layer_stack_live,
+    );
+    let name = layer_name(i18n, layer).into_string();
     let with_layer = |id| i18n.message_plain(id, &[("layer", Arg::from(name.clone()))]);
     let setting = |s| menu_msg(LayerTabMenuMsg::SettingPicked(s));
     let style_row = |label, style: LayerNameStyle| {
@@ -95,7 +158,7 @@ pub(super) fn layer_tab_menu_entries(
             on,
         )
     };
-    vec![
+    let mut rows = vec![
         dd_msg(
             None,
             &with_layer(ids::PCB_LAYER_TAB_HIDE),
@@ -107,6 +170,10 @@ pub(super) fn layer_tab_menu_entries(
             pick(PcbViewMsg::LayerHighlightToggled(layer)),
             view.highlighted() == Some(layer),
         ),
+    ];
+    rows.extend(colour_rows(i18n, layer, colours));
+    rows.extend([
+        DropdownEntry::Separator,
         dd_msg(
             None,
             &text(i18n, ids::PCB_LAYER_TAB_SHOW_ONLY),
@@ -157,28 +224,42 @@ pub(super) fn layer_tab_menu_entries(
             pick(PcbViewMsg::BoardFlipToggled),
             view.flipped(),
         ),
-    ]
+    ]);
+    rows
 }
 
-/// The rows of Hide layers ▸ or Show layers ▸: one per kind of layer.
+/// The rows of Hide layers ▸ or Show layers ▸: per kind of layer a row for
+/// every layer of it, then the layers of that kind the row would change
+/// one by one (the shown ones under Hide, the hidden ones under Show);
+/// last, All layers.
 pub(super) fn layer_kind_entries(
     i18n: &I18n,
     submenu: LayerTabSubmenu,
+    layers: &[LayerDef],
+    view: &PcbLayerView,
 ) -> Vec<DropdownEntry<Message>> {
     let visible = submenu == LayerTabSubmenu::Show;
-    LayerKind::ALL
-        .into_iter()
-        .map(|kind| {
-            let label =
-                i18n.message_plain(ids::PCB_LAYER_KIND, &[("kind", Arg::from(kind.token()))]);
-            dd_msg(
-                None,
-                &label,
-                "",
-                pick(PcbViewMsg::LayerKindVisibilitySet { kind, visible }),
-            )
-        })
-        .collect()
+    let mut rows = Vec::new();
+    for kind in LayerKind::ALL {
+        if !rows.is_empty() {
+            rows.push(DropdownEntry::Separator);
+        }
+        let label = i18n.message_plain(ids::PCB_LAYER_KIND, &[("kind", Arg::from(kind.token()))]);
+        let group = PcbViewMsg::LayerKindVisibilitySet { kind, visible };
+        rows.push(dd_msg(None, &label, "", pick(group)));
+        if kind == LayerKind::All {
+            continue;
+        }
+        let changed = kind_layers(layers, kind)
+            .into_iter()
+            .filter(|&layer| view.is_hidden(layer) == visible);
+        for layer in changed {
+            let one = PcbViewMsg::LayerVisibilitySet { layer, visible };
+            let name = layer_name(i18n, layer).into_string();
+            rows.push(dd_msg(None, &name, "", pick(one)));
+        }
+    }
+    rows
 }
 
 impl Signex {
@@ -203,12 +284,23 @@ impl Signex {
             crate::keymap::AppCommandId::new(LAYER_STACK_COMMAND).is_ok_and(|id| {
                 crate::app::command::is_enabled(&id, &self.command_context(menu.window))
             });
+        let colours_live = crate::keymap::AppCommandId::new("reset_layer_colors").is_ok_and(|id| {
+            crate::app::command::is_enabled(&id, &self.command_context(menu.window))
+        });
+        let board = self.pcb_view_target(menu.window).map(|(_, board)| board);
+        let colours = board.map_or_else(TabColours::default, |board| TabColours {
+            own: board.options.layer_color(menu.layer).is_some(),
+            any: !board.options.layer_colors.is_empty(),
+            read_only: !colours_live,
+        });
+        let layers: &[LayerDef] = board.map(|b| b.layers.as_slice()).unwrap_or_default();
         let state = TabMenuState {
             layer: menu.layer,
             view: &view,
             prefs: &self.ui_state.layer_strip,
             submenu: menu.submenu,
             layer_stack_live,
+            colours,
         };
         let i18n = &self.ui_state.i18n;
         let panel_ctx = &self.document_state.panel_ctx;
@@ -216,8 +308,8 @@ impl Signex {
         let card = super::placement::menu_card(layer_tab_menu_entries(i18n, &state), tokens, font);
         let mut anchored = super::anchored::AnchoredMenu::new(card.element, (menu.x, menu.y));
         if let (Some(submenu), Some(offset)) = (menu.submenu, card.flyout_offset) {
-            let flyout =
-                super::placement::menu_card(layer_kind_entries(i18n, submenu), tokens, font);
+            let rows = layer_kind_entries(i18n, submenu, layers, &view);
+            let flyout = super::placement::menu_card(rows, tokens, font);
             anchored = anchored.flyout(flyout.element, offset);
         }
         Self::anchored_layers(menu_msg(LayerTabMenuMsg::Dismissed), anchored)
@@ -225,130 +317,5 @@ impl Signex {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use signex_types::pcb_layer::CopperLayer;
-
-    fn rows(entries: Vec<DropdownEntry<Message>>) -> Vec<(String, Option<Message>, bool)> {
-        entries
-            .into_iter()
-            .filter_map(|e| match e {
-                DropdownEntry::Item(item) => Some((item.label, item.on_press, item.checked)),
-                _ => None,
-            })
-            .collect()
-    }
-
-    #[test]
-    fn the_menu_lists_every_row_of_the_tab_menu() {
-        let layer = PcbLayer::Copper(CopperLayer::Bottom);
-        let view = PcbLayerView::default();
-        let prefs = LayerStripPrefs::default();
-        let state = TabMenuState {
-            layer,
-            view: &view,
-            prefs: &prefs,
-            submenu: None,
-            layer_stack_live: true,
-        };
-        let rows = rows(layer_tab_menu_entries(&I18n::en_us(), &state));
-        let labels: Vec<&str> = rows.iter().map(|(label, _, _)| label.as_str()).collect();
-        assert_eq!(
-            labels,
-            [
-                "Hide Bottom Layer",
-                "Highlight Bottom Layer",
-                "Show only this layer",
-                "Show all layers",
-                "Hide layers",
-                "Show layers",
-                "Layer stack...",
-                "Drill symbols...",
-                "Layer drawing order...",
-                "Short tab names",
-                "Medium tab names",
-                "Long tab names",
-                "Show layer numbers",
-                "Flip board view",
-            ]
-        );
-        let row = |label: &str| {
-            rows.iter()
-                .find(|(l, _, _)| l == label)
-                .unwrap_or_else(|| panic!("no row {label:?}"))
-        };
-        let sent = |label: &str| view_event(&row(label).1);
-        assert_eq!(
-            sent("Hide Bottom Layer"),
-            Some(PcbViewMsg::LayerHidden(layer))
-        );
-        assert_eq!(
-            sent("Highlight Bottom Layer"),
-            Some(PcbViewMsg::LayerHighlightToggled(layer))
-        );
-        assert_eq!(
-            sent("Show only this layer"),
-            Some(PcbViewMsg::OnlyLayerShown(layer))
-        );
-        assert_eq!(sent("Show all layers"), Some(PcbViewMsg::AllLayersShown));
-        assert_eq!(sent("Flip board view"), Some(PcbViewMsg::BoardFlipToggled));
-        // #2401: Layer stack... runs `board_layer_stack` from the menu.
-        assert!(matches!(
-            row("Layer stack...").1,
-            Some(Message::Pcb(PcbMsg::LayerTabMenu(
-                LayerTabMenuMsg::LayerStackPicked
-            )))
-        ));
-        // The editors that are not built are greyed, never a silent row.
-        for label in ["Drill symbols...", "Layer drawing order..."] {
-            assert!(row(label).1.is_none(), "{label} is greyed");
-        }
-        let long = rows.iter().find(|(l, _, _)| l == "Long tab names");
-        assert!(
-            long.is_some_and(|(_, _, on)| *on),
-            "the default style is checked"
-        );
-    }
-
-    /// #2401: Layer stack... greys exactly when `board_layer_stack` is
-    /// disabled in the menu's window.
-    #[test]
-    fn the_layer_stack_row_follows_its_command() {
-        let view = PcbLayerView::default();
-        let prefs = LayerStripPrefs::default();
-        let state = TabMenuState {
-            layer: PcbLayer::Copper(CopperLayer::Top),
-            view: &view,
-            prefs: &prefs,
-            submenu: None,
-            layer_stack_live: false,
-        };
-        let rows = rows(layer_tab_menu_entries(&I18n::en_us(), &state));
-        let stack = rows.iter().find(|(l, _, _)| l == "Layer stack...");
-        assert!(stack.is_some_and(|(_, message, _)| message.is_none()));
-    }
-
-    #[test]
-    fn the_flyouts_hide_or_show_every_kind() {
-        let rows = rows(layer_kind_entries(&I18n::en_us(), LayerTabSubmenu::Hide));
-        assert_eq!(rows.len(), LayerKind::ALL.len());
-        assert_eq!(rows[0].0, "Signal layers");
-        assert_eq!(
-            view_event(&rows[4].1),
-            Some(PcbViewMsg::LayerKindVisibilitySet {
-                kind: LayerKind::Paste,
-                visible: false
-            })
-        );
-    }
-
-    /// The board-view event a row sends, if it sends one.
-    fn view_event(message: &Option<Message>) -> Option<PcbViewMsg> {
-        match message {
-            Some(Message::Pcb(PcbMsg::LayerTabMenu(LayerTabMenuMsg::Picked(event)))) => {
-                Some(*event)
-            }
-            _ => None,
-        }
-    }
-}
+#[path = "layer_tab_tests.rs"]
+mod tests;

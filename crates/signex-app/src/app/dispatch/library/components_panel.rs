@@ -385,6 +385,7 @@ impl Signex {
             }
             return Task::none();
         }
+        self.record_components_placement(drag.key.clone());
         if self.has_active_pcb() {
             // The footprint on the cursor lands where it shows (#2364).
             if drag.armed {
@@ -584,11 +585,13 @@ impl Signex {
     ) -> Task<Message> {
         // Same flow as the picker: the part attaches to the cursor.
         self.library.components_panel.row_menu = None;
-        let footprint = self.picked_footprint_for(&crate::library::state::ComponentsPanelRowKey {
+        let key = crate::library::state::ComponentsPanelRowKey {
             library_path: library_path.clone(),
             table: table.clone(),
             row_id,
-        });
+        };
+        let footprint = self.picked_footprint_for(&key);
+        self.record_components_placement(key);
         self.handle_place_library_component_with(library_path, table, row_id, footprint)
     }
 }

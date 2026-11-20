@@ -288,6 +288,10 @@ impl Signex {
 
     /// Rebuild the context in the main slot from the active document.
     pub(crate) fn refresh_main_panel_ctx(&mut self) {
+        // The clock is read here, in the runtime layer, and kept in state:
+        // `${CurrentTime}` shows the time the panel was last built, to the
+        // minute, and `view` never reads the clock.
+        self.document_state.times.now = Some(chrono::Local::now());
         // The app-wide requests (project probe, row summaries, Navigator
         // assembly, a pending profile update) belong to the main window. A
         // window's refresh runs with its sheet swapped in and must not
@@ -524,6 +528,7 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
+        let document_options = self.document_state.panel_ctx.document_options.clone();
         let projects_view = self.document_state.panel_ctx.projects_view.clone();
         let pcb_layers_ui = self.document_state.panel_ctx.pcb_layers_ui.clone();
         let selection_count = self.document_state.panel_ctx.selection_count;
@@ -576,12 +581,29 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
+        let sheet_variables = active_schematic_snapshot
+            .map(|snapshot| snapshot.variables.clone())
+            .unwrap_or_default();
         let project_parameters = self
             .document_state
             .active_path
             .as_deref()
             .and_then(|path| self.document_state.document_project(path))
             .map(|project| project.data.parameters.clone())
+            .unwrap_or_default();
+        // The read-only Parameters rows, resolved by the special strings the
+        // canvas and the PDF use.
+        let builtin_parameters: Vec<(crate::panels::BuiltinParameter, String)> = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.special_strings_for_path(path))
+            .map(|special| {
+                crate::panels::BuiltinParameter::ALL
+                    .into_iter()
+                    .map(|parameter| (parameter, special.resolve(parameter.token())))
+                    .collect()
+            })
             .unwrap_or_default();
         // Drafts stay with the sheet they were typed on (shown and committed
         // only there); a closed sheet's drafts are dropped.
@@ -597,6 +619,7 @@ impl Signex {
             .filter(|draft| draft.is_live(self.numeric_field_state(draft.key)));
         let title_block_sheet = self.document_state.active_path.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
+        let part_panel = self.document_state.panel_ctx.part_panel.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
@@ -669,6 +692,7 @@ impl Signex {
             canvas_font_italic: self.ui_state.canvas_font_italic,
             canvas_font_popup_open,
             properties_tab,
+            document_options,
             projects_view,
             net_classes,
             pcb_layers,
@@ -684,6 +708,8 @@ impl Signex {
                 .map(crate::panels::PcbNetsSummary::of),
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
+            // Kept in step with the documents by `sync_object_list`.
+            object_list: self.document_state.panel_ctx.object_list.clone(),
             pcb_board: self.pcb_board_summary(),
             layer_stack: self.layer_stack_facts(),
             selection_count,
@@ -713,10 +739,13 @@ impl Signex {
             child_sheet_file_buf,
             title_block,
             project_parameters,
+            sheet_variables,
+            builtin_parameters,
             drafts,
             numeric_draft,
             title_block_sheet,
             collapsed_sections,
+            part_panel,
             pre_placement,
             erc_diagnostics,
             erc_waivers,
@@ -726,6 +755,7 @@ impl Signex {
             erc_running: self.ui_state.erc_running,
             erc_results_stale: self.erc_results_stale(),
             erc_ran: !self.ui_state.erc_violations_by_path.is_empty(),
+            validation: self.validation_panels_view(),
             diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
             diagnostics: crate::diagnostics::recent_entries(),
             pcb_drc: self.pcb_drc_panel(),
@@ -746,6 +776,14 @@ impl Signex {
             symbol_editor: build_symbol_editor_panel_ctx(self),
             footprint_editor: build_footprint_editor_panel_ctx(self),
             history: self.document_state.history.clone(),
+            selection_filter: self.selection_filter_facts(),
+            illustration_hover: self.document_state.panel_ctx.illustration_hover.clone(),
+            selection_form: crate::panels::SelectionForm {
+                kinds: crate::panels::SelectionKinds::of(
+                    &self.interaction_state.active_canvas().selected,
+                ),
+                ..self.document_state.panel_ctx.selection_form.clone()
+            },
         };
         self.fill_symbol_lists(kept_symbol_lists);
         if !tree_unchanged {

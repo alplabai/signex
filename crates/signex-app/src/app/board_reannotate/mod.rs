@@ -4,6 +4,7 @@
 //! `signex_engine::pcb::designators::plan_reannotate`; the board is read in
 //! memory, so nothing runs on a worker.
 
+pub(crate) mod preview;
 mod update;
 
 use std::path::PathBuf;
@@ -26,6 +27,8 @@ pub enum BoardReannotateMsg {
     Requested,
     OrderPicked(ReannotateOrder),
     BottomPicked(BottomSideOrder),
+    /// The Show already in order box was ticked or unticked.
+    InOrderShown(bool),
     ExecuteRequested,
     CancelRequested,
 }
@@ -51,6 +54,11 @@ pub struct BoardReannotateState {
     pub plan: ReannotatePlan,
     pub revision: u64,
     pub problem: Option<ReannotateProblem>,
+    /// The designators the plan leaves as they are because they are already
+    /// in order, in board order ([`preview::in_order`]).
+    pub in_order: Vec<String>,
+    /// The preview lists the parts already in order too (hidden on open).
+    pub show_in_order: bool,
 }
 
 impl BoardReannotateState {

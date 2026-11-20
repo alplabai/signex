@@ -16,11 +16,13 @@ pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
 mod placed_ctx;
+mod selection_filter_ctx;
 mod sheet_frame;
 mod sheet_tree;
 #[cfg(test)]
 pub(crate) mod sheet_tree_tests;
 mod symbol_ctx;
+mod value_evaluation;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
 mod window_hierarchies;
@@ -28,8 +30,10 @@ mod window_hierarchies;
 mod window_placement_tests;
 
 impl Signex {
-    /// Copy the UI-state grid/unit/snap fields into the panel context.
+    /// Copy the UI-state grid/unit/snap fields and SCH Filter's preset
+    /// rename into the panel context.
     pub(in crate::app) fn sync_panel_ctx_mirrors(&mut self) {
+        self.document_state.panel_ctx.selection_filter.rename = self.filter_preset_rename();
         self.document_state.panel_ctx.unit = self.ui_state.unit;
         self.document_state.panel_ctx.grid_visible = self.ui_state.grid_visible;
         self.document_state.panel_ctx.snap_enabled = self.ui_state.snap_enabled;
@@ -89,6 +93,7 @@ impl Signex {
         self.sync_component_tab_titles();
         let class_styles = self.refresh_net_class_styles();
         let net_nav = self.refresh_net_nav();
+        let object_list = self.sync_object_list();
         let footprint_card = self.refresh_footprint_card();
         self.sync_label_class_pick();
         self.sync_diagnostics_panel_ctx();
@@ -136,6 +141,7 @@ impl Signex {
             library_tabs,
             class_styles,
             net_nav,
+            object_list,
             footprint_card,
         ])
     }
@@ -201,6 +207,8 @@ impl Signex {
         self.cancel_move_pick();
         // A half-placed two-click shape belongs to the tab it was started in.
         self.clear_shape_anchors();
+        // The zoom presets opened over the previous tab's pill.
+        self.interaction_state.zoom_presets_open = false;
         // ERC results are cached per-sheet. On tab switch, repoint the visible
         // list/markers at the newly active sheet instead of dropping results.
         let active_path = self
@@ -259,6 +267,7 @@ impl Signex {
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
         self.sync_focused_pin(clicked_pin.clone());
+        self.sync_pin_focus_sections(clicked_pin.is_some());
         self.sync_placed_panel();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
@@ -302,6 +311,19 @@ impl Signex {
             self.document_state.panel_ctx.selected_uuid = Some(details.selected_uuid);
             self.document_state.panel_ctx.selected_kind = Some(details.selected_kind);
             self.document_state.panel_ctx.selection_info = details.info;
+            // An `=` value's result or error, under its row (#1986).
+            let project = self
+                .document_state
+                .document_project(&path)
+                .map(|project| project.data.parameters.clone())
+                .unwrap_or_default();
+            let rows = value_evaluation::value_evaluation_rows(
+                engine.document(),
+                details.selected_uuid,
+                &project,
+                self.document_state.designator_standard_for(&path),
+            );
+            self.document_state.panel_ctx.selection_info.extend(rows);
             if details.selected_kind == signex_types::schematic::SelectedKind::Wire {
                 self.document_state.panel_ctx.selected_wire_style = engine
                     .document()
@@ -480,9 +502,12 @@ impl Signex {
     /// Canvas colours for a given theme id — the one derivation shared by
     /// the schematic panel context and
     /// [`Self::canvas_view_prefs`] (hands them to the schematic `Program`
-    /// each frame).
+    /// each frame), the symbol previews and the print / export palette. The
+    /// saved "Fill symbol bodies" preference sets the body tint.
     pub(crate) fn canvas_colors_for(&self, id: ThemeId) -> signex_types::theme::CanvasColors {
-        signex_types::theme::canvas_colors(id)
+        self.ui_state
+            .symbol_body_fill
+            .apply(signex_types::theme::canvas_colors(id))
     }
 
     /// UI chrome tokens for a given theme id — the token twin of
@@ -595,6 +620,10 @@ impl Signex {
                 .sheet_path_for_window(window, &self.ui_state)
                 .map(|path| self.document_state.schematic_defaults_for(path))
                 .unwrap_or_default(),
+            designator_standard: self
+                .document_state
+                .sheet_path_for_window(window, &self.ui_state)
+                .and_then(|path| self.document_state.designator_standard_for(path)),
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),

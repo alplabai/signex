@@ -38,6 +38,9 @@ notice-disk-folder-missing-title = Folder Missing on Disk
 
 # $library is the library's name.
 notice-library-read-only-detail = The library "{ $library }" ships with { -brand-name } and is not editable.
+# A library opened read-only after Skip for now on Git Repository Missing.
+# $library is the library's name.
+notice-library-history-missing-detail = The library "{ $library }" is open read-only because its Git history is missing. Close it and open it again to re-init its history, or restore its .git folder.
 # A save found its file changed outside the app. $name is the file name.
 notice-disk-changed =
     { $name } changed on disk since it was opened or last saved. Saving now would discard that change.

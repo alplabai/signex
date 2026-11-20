@@ -1,9 +1,7 @@
 //! Panel implementations — uses signex-widgets for proper Altium-style content.
 
-use iced::mouse;
-use iced::widget::canvas;
 use iced::widget::{Column, Space, container, row, scrollable, svg};
-use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
@@ -18,6 +16,7 @@ pub mod history;
 pub mod layer_stack;
 mod pcb_layers;
 mod placed_edit;
+pub mod pre_placement;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
@@ -34,25 +33,53 @@ mod drc;
 mod drc_results;
 pub use drafts::PanelDrafts;
 mod empty_state;
+pub(crate) mod enable_section;
 pub use board_net_classes::{
     BoardNetClassDraft, BoardNetClassField, BoardNetClassMsg, BoardNetClassView,
 };
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
-pub use drc_results::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcWaiveDraft};
+mod drc_idle;
+pub use drc_idle::BaseRule;
+mod drc_rows;
+pub use drc_results::{
+    DrcCategory, DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcView, DrcWaiveDraft,
+};
 pub(crate) use empty_state::empty_state_card;
+pub(crate) use empty_state::{EmptyStateAction, empty_state_card_with_actions};
+mod erc_panel;
+mod erc_rows;
+pub(super) use erc_panel::view_erc;
+pub use erc_panel::{
+    ErcChecked, ErcDiagnosticEntry, ErcPanelMsg, ErcPanelView, ErcSeverityLite, ErcWaiverEntry,
+};
 mod erc_waivers;
+mod messages_view;
+pub use messages_row::MessageSource;
+pub(super) use messages_view::view_messages;
+pub use messages_view::{MessageLevel, MessagesPanelMsg, MessagesView};
+pub(crate) use messages_view::{
+    copy_text as messages_copy_text, is_verbose, shown as messages_shown,
+};
+mod validation_kit;
+mod validation_state;
+pub use validation_state::ValidationPanels;
+mod waiver_form;
+pub use waiver_form::{UserIdentity, WaiverReason};
 mod footprint_context;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
+pub(crate) mod illustration;
 mod library;
 mod messages;
-mod messages_row;
+pub(crate) mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;
 mod net_class_table;
 pub mod net_inspector;
 mod numeric_draft;
+pub mod object_list;
+pub mod paired;
 mod palette;
 mod paper;
 pub mod pcb_board_properties;
@@ -62,9 +89,11 @@ pub mod pcb_primitive_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
-mod sch_filter;
-pub use sch_filter::SchFilterMsg;
-mod status;
+mod selection_filter;
+pub use selection_filter::{
+    FilterEditor, KindCounts, SchFilterMsg, SelectionFilterFacts, board_counts,
+};
+pub(crate) mod rotation_steps;
 mod symbol_context;
 mod widgets;
 mod wire_style_rows;
@@ -79,7 +108,7 @@ pub(crate) use element_properties::{
 };
 pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
-    FootprintCards,
+    FootprintCards, FootprintThumb, NoErcRuleEdit, PartPanelEffect, PartPanelMsg, PartPanelState,
 };
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
@@ -94,14 +123,15 @@ pub use numeric_draft::{
     shown_text as numeric_shown_text,
 };
 pub use properties_parameters::{
-    PaperEdge, PaperEdgeDraft, TitleBlockDraft, TitleBlockField, typed_mm,
+    BuiltinParameter, DocumentOptionsMsg, DocumentOptionsUi, PaperEdge, PaperEdgeDraft,
+    SheetVariableMsg, TitleBlockDraft, TitleBlockField, TitleBlockSource, shown_title_block_value,
+    title_block_source, typed_mm,
 };
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
-    form_choice_row, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
-    form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row, form_rotation_row,
-    justification_grid, net_numeric_row, net_params_add_bar, net_params_header, net_params_tabs,
-    preplacement_justification_grid, props_tab_btn, section_hdr, seg_btn, thin_sep,
+    form_choice_row, form_edit_row, form_font_link_row, form_input_row, form_input_row_untipped,
+    form_label, form_pick_row, justification_grid, label_anchor, net_params_add_bar,
+    net_params_tabs, props_tab_btn, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
@@ -119,19 +149,27 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
+pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library::{ComponentSheet, LibraryRowDetail};
 pub(super) use library::{
     view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
 };
 pub use messages::{PanelMsg, SheetFrameEdit};
-pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
-pub use navigator::NavigatorModel;
+pub use multi_selection::{
+    MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
+    edit_from_text_in as multi_edit_from_text,
+};
+pub use navigator::{NavigatorModel, NavigatorMsg, NavigatorRow, SheetNumbers};
 pub use net_class_panel::{
     LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
     net_class_choice, net_class_choices, view_net_classes_section,
 };
 pub use net_inspector::{NetInspectorMsg, NetInspectorState, NetInspectorView};
+pub use object_list::{
+    KindChip, ObjectKind, ObjectListMsg, ObjectListState, ObjectListStatus, ObjectListView,
+    ObjectRef, ObjectRow, ObjectScope,
+};
 pub use palette::PanelPalette;
 pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
@@ -148,20 +186,22 @@ pub use pcb_component::{
 pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
-pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};
+pub use placed_edit::{
+    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
+};
+pub use pre_placement::{
+    PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
+    PrePlacementStyle,
+};
+pub(super) use projects::view_projects;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
-pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
-#[cfg(test)]
-pub(crate) use properties::pre_placement_readout;
-pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
+pub use properties::DrawingFieldId;
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,
     PROPERTY_ROW_PAD_X, view_properties,
 };
-pub use status::{ErcDiagnosticEntry, ErcSeverityLite, ErcWaiverEntry};
-pub(super) use status::{view_erc, view_messages};
 pub use symbol_context::{
     GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDeleteWarning, SymbolDisplayOptions,
     SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails,
@@ -169,8 +209,7 @@ pub use symbol_context::{
 };
 pub(super) use widgets::{
     collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,
-    prop_kv_row, property_label, section_title, separator, shape_fill_row, shape_icon_handle,
-    view_stub,
+    prop_kv_row, property_label, shape_fill_row, shape_icon_handle, view_stub,
 };
 pub use wire_style_rows::{WireColorPicker, wire_color_row, wire_width_row};
 
@@ -193,7 +232,9 @@ pub enum PanelKind {
     OutputJobs,
     // Additional Altium schematic panels
     SchFilter,
-    SchList,
+    /// Every object of the sheet or the project, listed and selectable
+    /// (#1259).
+    ObjectList,
     BomStudio,
     Favorites,
     Snippets,
@@ -237,7 +278,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Properties,
     PanelKind::Filter,
     PanelKind::SchFilter,
-    PanelKind::SchList,
+    PanelKind::ObjectList,
     PanelKind::Erc,
     PanelKind::Messages,
     PanelKind::Drc,
@@ -260,16 +301,16 @@ pub const ALL_PANELS: &[PanelKind] = &[
 ];
 
 impl PanelKind {
-    /// Whether this panel requires a schematic document to be open.
+    /// Whether this panel requires a schematic document to be open. Filter
+    /// follows the active editor, a schematic's or a board's (Graphite mockup #55).
     pub fn needs_schematic(self) -> bool {
         matches!(
             self,
             PanelKind::Navigator
                 | PanelKind::Properties
-                | PanelKind::Filter
                 | PanelKind::Erc
                 | PanelKind::SchFilter
-                | PanelKind::SchList
+                | PanelKind::ObjectList
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
                 | PanelKind::Variants
@@ -301,7 +342,7 @@ impl PanelKind {
             PanelKind::NetClasses => ids::PANELS_KIND_NET_CLASSES,
             PanelKind::Variants => ids::PANELS_KIND_VARIANTS,
             PanelKind::SchFilter => ids::PANELS_KIND_SCH_FILTER,
-            PanelKind::SchList => ids::PANELS_KIND_SCH_LIST,
+            PanelKind::ObjectList => ids::PANELS_KIND_OBJECT_LIST,
             PanelKind::BomStudio => ids::PANELS_KIND_BOM_STUDIO,
             PanelKind::Favorites => ids::PANELS_KIND_FAVORITES,
             PanelKind::Snippets => ids::PANELS_KIND_SNIPPETS,
@@ -333,7 +374,7 @@ impl PanelKind {
             PanelKind::NetClasses => "Net Classes",
             PanelKind::Variants => "Variants",
             PanelKind::SchFilter => "SCH Filter",
-            PanelKind::SchList => "SCH List",
+            PanelKind::ObjectList => "Object List",
             PanelKind::BomStudio => "BOM Studio",
             PanelKind::Favorites => "Favorites",
             PanelKind::Snippets => "Snippets",
@@ -351,6 +392,40 @@ impl PanelKind {
     }
 }
 
+/// An icon action a panel puts in its dock title bar.
+pub struct TitleAction {
+    pub icon: svg::Handle,
+    pub tip: signex_i18n::Localized,
+    pub on_press: PanelMsg,
+}
+
+/// The title-bar actions of `kind`: Clear of the ERC panel (#85) while it
+/// holds results, Copy and Clear of the Messages panel (#86).
+pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
+    use signex_i18n::{ids, t};
+    let tid = ctx.theme_id;
+    match kind {
+        PanelKind::Erc if ctx.erc_ran || !ctx.erc_diagnostics.is_empty() => vec![TitleAction {
+            icon: crate::icons::icon_dd_delete(tid),
+            tip: t!(ctx.i18n, ids::PANELS_ERC_CLEAR_TOOLTIP),
+            on_press: PanelMsg::ClearErc,
+        }],
+        PanelKind::Messages => vec![
+            TitleAction {
+                icon: crate::icons::icon_dd_copy(tid),
+                tip: t!(ctx.i18n, ids::PANELS_MESSAGES_COPY_TOOLTIP),
+                on_press: PanelMsg::MessagesView(MessagesPanelMsg::Copied),
+            },
+            TitleAction {
+                icon: crate::icons::icon_dd_delete(tid),
+                tip: t!(ctx.i18n, ids::PANELS_MESSAGES_CLEAR_TOOLTIP),
+                on_press: PanelMsg::MessagesView(MessagesPanelMsg::Cleared),
+            },
+        ],
+        _ => Vec::new(),
+    }
+}
+
 /// Track which sections are collapsed (by section name).
 pub type CollapsedSections = std::collections::HashSet<String>;
 
@@ -362,14 +437,11 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         // detached window both route it there); nothing to show here.
         PanelKind::Components => iced::widget::Space::new().boxed(),
         PanelKind::Projects => view_projects(ctx),
-        PanelKind::Navigator => view_navigator(ctx),
+        PanelKind::Navigator => navigator::view(ctx),
         PanelKind::Properties => view_properties(ctx),
-        PanelKind::Filter => empty_state_card(
-            &ctx.tokens,
-            signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_SELECTION_FILTER_TITLE),
-            signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_SELECTION_FILTER_BODY),
-            None,
-        ),
+        // The active editor's selection filter (Graphite mockup #55): a schematic's or a
+        // board's kinds, else the empty card.
+        PanelKind::Filter => selection_filter::filter_view(ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
         PanelKind::Drc => drc_results::view(ctx),
@@ -391,8 +463,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             ids::PANELS_STUB_OUTPUT_JOBS,
             ctx,
         ),
-        PanelKind::SchFilter => sch_filter::view(ctx),
-        PanelKind::SchList => view_stub(ids::PANELS_KIND_SCH_LIST, ids::PANELS_STUB_SCH_LIST, ctx),
+        PanelKind::SchFilter => selection_filter::sch_view(ctx),
+        PanelKind::ObjectList => return object_list::view(ctx),
         PanelKind::BomStudio => view_stub(
             ids::PANELS_KIND_BOM_STUDIO,
             ids::PANELS_STUB_BOM_STUDIO,

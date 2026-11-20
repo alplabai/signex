@@ -6,23 +6,22 @@
 //! `DropdownItem` at build time, so no render-time selection guard is
 //! needed here.
 
-use iced::widget::{button, svg};
-use iced::{Background, Border, Color, Element, Theme};
+use iced::widget::svg;
+use iced::{Color, Element};
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, RowPaint};
+use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
 use super::{
     ActiveBarAction, ActiveBarMenu, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
     action_enabled,
 };
-pub(crate) use custom::{
-    ChipLayout, FilterChip, FilterMenu, filter_menu_entry, filter_menu_view, preset_label,
-    schematic_filter_menu,
-};
+pub(crate) use custom::{FilterChip, FilterMenu, filter_menu_entry, preset_label};
 use custom::{filter_entry, net_color_entries};
+#[cfg(test)]
+use tables::render;
 use tables::{
-    ALIGN, DIRECTIVES, HARNESS, PORT, POWER, SELECT, SELECT_MODE, SHAPES, SHEET_SYMBOL, TEXT_TOOLS,
-    WIRING, render,
+    ALIGN, DIRECTIVES, EntrySpec, HARNESS, PORT, POWER, SELECT, SELECT_MODE, SHAPES, SHEET_SYMBOL,
+    TEXT_TOOLS, WIRING, render_with_hints,
 };
 
 mod custom;
@@ -33,10 +32,11 @@ mod tests;
 
 // ─── View: Dropdown menus ────────────────────────────────────
 
-/// Render the dropdown menu for the given Active Bar button.
+/// Render the dropdown menu for the given Active Bar button. `hint`
+/// resolves a command id to the active keymap profile's shortcut text.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the language, the menu and the bar's state are separate inputs of one dropdown"
+    reason = "the language, the menu, the bar's state and the keymap are separate inputs of one dropdown"
 )]
 pub fn view_dropdown<'a>(
     i18n: &signex_i18n::I18n,
@@ -47,29 +47,32 @@ pub fn view_dropdown<'a>(
     tid: ThemeId,
     has_selection: bool,
     has_net_colors: bool,
+    hint: &dyn Fn(&str) -> String,
 ) -> Element<'a, ActiveBarMsg> {
-    // Data-driven: each menu produces pure `DropdownEntry` rows and the
-    // shared `signex_widgets::active_bar_dropdown` widget renders them, so
-    // the schematic, footprint, and future PCB active bars share ONE
-    // dropdown widget (see ADR-0003 — active_bar / menus data-driven
-    // redesign). Enable/disable is folded into each `DropdownItem` here
-    // from the passed booleans — #633 removed the render-time
-    // thread-locals the bar buttons used to share.
-    let entries = dropdown_entries(
-        i18n,
-        menu,
+    let state = MenuState {
         tokens,
         filters,
         custom_presets,
         tid,
-        has_selection,
-        has_net_colors,
-    );
+        sel: has_selection,
+        nc: has_net_colors,
+    };
+    let entries = dropdown_entries_with(i18n, menu, &state, hint);
     signex_widgets::active_bar_dropdown::view(entries, tokens, dropdown_min_width(menu))
 }
 
+/// The bar state one dropdown is built from.
+struct MenuState<'s> {
+    tokens: &'s ThemeTokens,
+    filters: &'s std::collections::HashSet<SelectionFilter>,
+    custom_presets: &'s [CustomFilterPreset],
+    tid: ThemeId,
+    sel: bool,
+    nc: bool,
+}
+
 /// One icon + label dropdown row. Disabled rows drop their `on_press`
-/// (the widget greys the row and ignores clicks — Altium parity).
+/// (the widget greys the row and ignores clicks).
 fn dd_item(
     i18n: &signex_i18n::I18n,
     icon: svg::Handle,
@@ -78,6 +81,33 @@ fn dd_item(
     has_selection: bool,
     has_net_colors: bool,
 ) -> DropdownEntry<ActiveBarMsg> {
+    let row = dd_row(i18n, label, action, has_selection, has_net_colors);
+    DropdownEntry::Item(row.icon(icon))
+}
+
+/// One colour swatch + label dropdown row (the net-colour menu). The swatch
+/// sits in the same icon column as the icon rows, so every label of the
+/// card starts at one x.
+fn dd_swatch(
+    i18n: &signex_i18n::I18n,
+    color: Color,
+    label: &'static str,
+    action: ActiveBarAction,
+    has_selection: bool,
+    has_net_colors: bool,
+) -> DropdownEntry<ActiveBarMsg> {
+    let row = dd_row(i18n, label, action, has_selection, has_net_colors);
+    DropdownEntry::Item(row.swatch(color))
+}
+
+/// The label, message, enablement and planned hint of one action row.
+fn dd_row(
+    i18n: &signex_i18n::I18n,
+    label: &'static str,
+    action: ActiveBarAction,
+    has_selection: bool,
+    has_net_colors: bool,
+) -> DropdownItem<ActiveBarMsg> {
     let enabled = action_enabled(&action, has_selection, has_net_colors);
     // #271 — the visible text comes from the command catalog when the
     // action has an id, so the Active Bar stops being the only surface
@@ -87,19 +117,43 @@ fn dd_item(
     // to these literals so nothing the user sees moves.
     let label = crate::app::command::active_bar::action_label(i18n, &action, label);
     let planned = super::is_planned(&action);
-    let mut item = DropdownItem::new(label, ActiveBarMsg::Action(action))
-        .icon(icon)
-        .disabled(!enabled);
+    let mut item = DropdownItem::new(label, ActiveBarMsg::Action(action)).disabled(!enabled);
     if planned {
         item = item.tooltip(i18n.message_plain(signex_i18n::menu_ids::MENU_PLANNED_TOOLTIP, &[]));
     }
-    DropdownEntry::Item(item)
+    item
 }
 
-/// Route each `ActiveBarMenu` to its entries. Uniform menus resolve
-/// through the `EntrySpec` data table + `render` below; the two
-/// irregular menus (Filter chip grid and NetColor swatches) use the
-/// widget's `Custom` escape hatch and keep their own builder.
+/// The uniform table behind `menu`, `None` for the two irregular menus
+/// (Filter chip grid, Net Color swatches).
+fn menu_table(menu: ActiveBarMenu) -> Option<&'static [EntrySpec]> {
+    Some(match menu {
+        ActiveBarMenu::Filter | ActiveBarMenu::NetColor => return None,
+        ActiveBarMenu::SelectMode => SELECT_MODE,
+        ActiveBarMenu::Select => SELECT,
+        ActiveBarMenu::Align => ALIGN,
+        ActiveBarMenu::Wiring => WIRING,
+        ActiveBarMenu::Power => POWER,
+        ActiveBarMenu::Harness => HARNESS,
+        ActiveBarMenu::SheetSymbol => SHEET_SYMBOL,
+        ActiveBarMenu::Port => PORT,
+        ActiveBarMenu::Directives => DIRECTIVES,
+        ActiveBarMenu::TextTools => TEXT_TOOLS,
+        ActiveBarMenu::Shapes => SHAPES,
+    })
+}
+
+/// Whether every row of `menu` is a planned tool: the bar greys its button
+/// and opens no menu whose rows would all say "planned".
+pub(super) fn is_planned_menu(menu: ActiveBarMenu) -> bool {
+    menu_table(menu).is_some_and(|specs| {
+        let mut actions = specs.iter().filter_map(EntrySpec::action).peekable();
+        actions.peek().is_some() && actions.all(super::is_planned)
+    })
+}
+
+/// [`dropdown_entries_with`] with no shortcut hints, as the golden pins it.
+#[cfg(test)]
 #[expect(
     clippy::too_many_arguments,
     reason = "the language, the menu and the bar's state are separate inputs of one dropdown"
@@ -114,22 +168,33 @@ fn dropdown_entries(
     has_selection: bool,
     has_net_colors: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    let sel = has_selection;
-    let nc = has_net_colors;
-    match menu {
-        ActiveBarMenu::Filter => vec![filter_entry(tokens, filters, custom_presets)],
-        ActiveBarMenu::SelectMode => render(i18n, SELECT_MODE, tid, sel, nc),
-        ActiveBarMenu::Select => render(i18n, SELECT, tid, sel, nc),
-        ActiveBarMenu::Align => render(i18n, ALIGN, tid, sel, nc),
-        ActiveBarMenu::Wiring => render(i18n, WIRING, tid, sel, nc),
-        ActiveBarMenu::Power => render(i18n, POWER, tid, sel, nc),
-        ActiveBarMenu::Harness => render(i18n, HARNESS, tid, sel, nc),
-        ActiveBarMenu::SheetSymbol => render(i18n, SHEET_SYMBOL, tid, sel, nc),
-        ActiveBarMenu::Port => render(i18n, PORT, tid, sel, nc),
-        ActiveBarMenu::Directives => render(i18n, DIRECTIVES, tid, sel, nc),
-        ActiveBarMenu::TextTools => render(i18n, TEXT_TOOLS, tid, sel, nc),
-        ActiveBarMenu::Shapes => render(i18n, SHAPES, tid, sel, nc),
-        ActiveBarMenu::NetColor => net_color_entries(i18n, tokens, tid, sel, nc),
+    let state = MenuState {
+        tokens,
+        filters,
+        custom_presets,
+        tid,
+        sel: has_selection,
+        nc: has_net_colors,
+    };
+    dropdown_entries_with(i18n, menu, &state, &|_| String::new())
+}
+
+/// Route each `ActiveBarMenu` to its entries. Uniform menus resolve
+/// through the `EntrySpec` data table; the Filter chip grid rides the
+/// widget's `Custom` escape hatch and the Net Color menu keeps its own
+/// builder.
+fn dropdown_entries_with(
+    i18n: &signex_i18n::I18n,
+    menu: ActiveBarMenu,
+    s: &MenuState<'_>,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<ActiveBarMsg>> {
+    match (menu, menu_table(menu)) {
+        (_, Some(specs)) => render_with_hints(i18n, specs, s.tid, s.sel, s.nc, hint),
+        (ActiveBarMenu::Filter, None) => {
+            vec![filter_entry(i18n, s.tokens, s.filters, s.custom_presets)]
+        }
+        (_, None) => net_color_entries(i18n, s.tid, s.sel, s.nc),
     }
 }
 
@@ -141,15 +206,11 @@ fn dropdown_entries(
 /// full row) without `Fill` propagating to the viewport — which is the
 /// `Length::Fill`-inside-`Length::Shrink` trap iced 0.14 falls into.
 ///
-/// Widths are sized to the longest label in each menu (Inter @ 13 +
-/// 28 px icon column + 24 px button padding + a small safety margin).
+/// Widths are sized to the longest label in each menu (Inter @ 12 +
+/// the 16 px icon column, row padding and the shortcut column).
 /// `Filter` returns `None` because its chip wrap layout already drives
 /// its own width.
 fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
-    // Width formula: ~7 px/char × longest_label + 60 px overhead
-    // (24 px button padding + 20 px icon column + 8 px spacing +
-    //  small safety). Inter @ 13 px averages ~7 px/char, about 7% wider than the
-    // Roboto these were first measured in.
     Some(match menu {
         ActiveBarMenu::Filter => return None,
         // "Flip Selected Sheet Symbols Along X" (36 chars)
@@ -158,10 +219,10 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
         ActiveBarMenu::SelectMode => 195.0,
         // "Align Horizontal Centers" (24)
         ActiveBarMenu::Align => 235.0,
-        // "Net Label" (9) — keep a usable minimum.
-        ActiveBarMenu::Wiring => 150.0,
-        // "Place Signal Ground power port" (30)
-        ActiveBarMenu::Power => 280.0,
+        // "Net Label" plus its key hint.
+        ActiveBarMenu::Wiring => 200.0,
+        // "Signal Ground" (13), as drawn.
+        ActiveBarMenu::Power => 214.0,
         // "Harness Connector" (17)
         ActiveBarMenu::Harness => 195.0,
         // "Device Sheet Symbol" (19)
@@ -174,34 +235,12 @@ fn dropdown_min_width(menu: ActiveBarMenu) -> Option<f32> {
         ActiveBarMenu::TextTools => 150.0,
         // "Round Rectangle" (15)
         ActiveBarMenu::Shapes => 180.0,
-        // "Clear All Net Colors" (20)
-        ActiveBarMenu::NetColor => 215.0,
+        // "Clear All Net Colors" (20), as drawn.
+        ActiveBarMenu::NetColor => 212.0,
     })
 }
 
 /// Horizontal offset (in px) to align dropdown below a given button index.
 pub fn dropdown_x_offset(menu: ActiveBarMenu, m: &signex_widgets::active_bar::Metrics) -> f32 {
     super::layout::trigger_left(menu, m)
-}
-
-/// A `Custom` row's button: hovers with the widget's own row paint.
-fn dd_btn_style_f(
-    text_c: Color,
-    paint: RowPaint,
-) -> impl Fn(&Theme, button::Status) -> button::Style {
-    move |_: &Theme, status: button::Status| {
-        let bg = match status {
-            button::Status::Hovered => Some(Background::Color(paint.hover)),
-            _ => None,
-        };
-        button::Style {
-            background: bg,
-            border: Border {
-                radius: paint.radius.into(),
-                ..Border::default()
-            },
-            text_color: text_c,
-            ..button::Style::default()
-        }
-    }
 }

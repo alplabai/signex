@@ -45,7 +45,8 @@ impl Signex {
     pub(crate) fn machine_rules_notice(&self) -> Option<String> {
         if let Some(why) = &self.ui_state.machine_rules_locked {
             return Some(format!(
-                "The machine's rules are read-only this session, because your old ERC                  preferences could not be merged into User Default yet: {why}"
+                "The machine's rules are read-only this session, because your old ERC \
+                 preferences could not be merged into User Default yet: {why}"
             ));
         }
         if self.ui_state.machine_rules_loading {
@@ -83,17 +84,12 @@ impl Signex {
     /// never shows two different verdicts for the same pair. A value equal to
     /// the baseline drops the override instead of storing it.
     pub(crate) fn cycle_machine_pin_cell(&mut self, row: u8, col: u8) -> Task<Message> {
-        use signex_erc::pin_matrix::baseline_cell;
+        use signex_erc::pin_matrix::{baseline_cell, pair_cell};
         if !self.machine_rules_editable() {
             return Task::none();
         }
-        let current = self
-            .ui_state
-            .pin_matrix_overrides
-            .get(&(row, col))
-            .copied()
-            .unwrap_or_else(|| baseline_cell(row, col));
-        let next = current.cycled();
+        // From the level the pair shows, either cell, as the check reads it.
+        let next = pair_cell(&self.ui_state.pin_matrix_overrides, row, col).cycled();
         for key in [(row, col), (col, row)] {
             if next == baseline_cell(key.0, key.1) {
                 self.ui_state.pin_matrix_overrides.remove(&key);

@@ -237,11 +237,21 @@ Design ▸ Rules (also the command palette, `open_rules`, and the Rules button
 of the DRC section in Messages) opens the project's rules as a document tab
 named **Rules**. One tab per project; Save writes the `.snxprj`.
 
-The table and the rule text are two views of one rule list. Each row is one
-rule of the text. Editing a cell rewrites only that rule's text, on one line;
-every other rule stays exactly as typed. A rule with a condition or limit the
-table has no column for is still a row, marked "Text only", and is edited in
-the text view. Every edit (a cell, On, Add, Remove, Apply in the text view) is
+The constraint grid and the rule text are two views of one rule list. A
+cell is a limit of one row of the object hierarchy; editing it rewrites the
+row's own rule that the cell shows (the stricter of two equal rules), or adds
+one (`all_clearance`, `class_HV_track`, `net_GND_via`, `layer_L1_track`), and
+every other rule stays exactly as typed. A value the cell would still not
+show, because another rule of the row or the fab floor is stricter, is
+refused and the tab names that rule; a value equal to that rule's is taken.
+Pressing a cell names its rule in the detail, or none. A rule the hierarchy
+cannot express (a
+pattern, an object pair, a layer on a class, a condition or limit the grid
+has no column for), and a rule no cell shows (one that is off or that the
+compiler refuses, or one another rule of its row beats on every limit it
+sets, on any row), is a row of the Scoped rules group and is edited there or
+in the text view, so its On and Remove stay in reach. Every edit (a
+cell, ↺, a value on the drawing, On, Add, Remove, Apply in the text view) is
 one undo step on the project's rule history, the same history the ERC dialog
 steps; Ctrl+Z and Ctrl+Y in the tab step it, and ERC runs again when it has
 results the step may outdate. An agent steps the same history with
@@ -253,44 +263,69 @@ While the project stores no rules, the tab shows this machine's rules (what
 Run DRC reads) and says so; the first edit stores them in the project, in the
 same undo step.
 
-- **Sub-tabs.** Clearance (clearance rules, object pairs included, and board
-  edge rules), Routing (track width, via diameter, drill and pad gap), Holes
-  (hole size, annular ring, hole spacing), Mask & paste, and Silkscreen &
-  courtyard, each with the findings of its rules in the last run. Only what
-  Run DRC checks has a column.
-- **Columns.** On, Name, Kind (a sub-tab of several kinds), Scope and Layer
-  (not on the board-wide Mask & paste and Silkscreen & courtyard sub-tabs),
-  Objects (Clearance), one column per limit, Severity, Actual, Margin,
-  Violations and Flags. A length is written as typed (`0.2mm`, `8mil`).
-- **Scope cell.** `net == "GND"`, `class == "HV"` or `net matches "USB_*"`;
-  empty for every net. While it is typed in, the board's nets and the
-  project's classes are offered, and a scope that takes in no net is said.
-- **Actual, Margin, Violations.** From the last Run DRC of the project's
-  board: the number of findings of the rule, the worst measured value and how
-  far past the limit it is. A blank cell says why: not checked yet, stale
-  since the last edit (the board or the rule changed after the run), no
-  objects in scope, off, or the board is not open. "Passes" is a checked rule
-  with no finding.
+- **Domains.** The tabs over the grid: Clearance, Physical, High speed,
+  Manufacturing, SMT, Mask, Plane, Testpoint, Placement and Signal
+  integrity, each with the findings of its rules in the last run (a rule
+  changed since the run is not counted). Each rule
+  type is a column group of its domain, with its own findings badge; a click
+  on a group header collapses it. Every rule type has its columns; a column
+  Run DRC does not check yet is inert and says "Not checked yet". Signal
+  integrity is greyed: its constraints arrive with the simulation band.
+- **Rows.** All, then Net Classes (each project class with its board nets
+  under it, and the nets of no class that have rules of their own), Layers
+  (the board's copper layers by position: L1 is Top, the last is Bottom, the
+  ones between are L2, L3, ...; then, by the name the rules use, a layer the
+  rules write for that the board lacks, or every written layer with no board
+  open) and Scoped rules. When the rows are laid out again (the rules or the
+  board changed), the selected cell stays selected. A row group shows only on
+  the domains whose columns apply to it: Placement has no net rows, and
+  layers carry copper limits only. A column that does not apply to a row is
+  hatched; a board-wide kind (silkscreen, mask, paste, courtyard) is set on
+  All only.
+- **Inheritance.** A cell resolves down the hierarchy: the row's own rule,
+  else a constraint set applied to the row, else its parent (a net's class,
+  then All), else the fab tier default. A value of the row's own is bold
+  with ↺, which drops that value only; an inherited value is muted; a value
+  a constraint set wrote has a blue edge, and the row carries a ⧉ chip
+  naming the set. The tooltip names where the value comes from. Show
+  inherited values (on by default) and Overridden rows only (rows with a
+  value of their own in the domain, and All) filter the view. A length is
+  written as typed (`0.2mm`, `8mil`, `50µm`) and the cell shows it so. A bare
+  number typed in a cell is in mm; an empty cell resets it.
+- **Find a constraint.** Typing a rule type or column name (two letters list
+  the matches, three jump) switches to its domain, opens its group, selects
+  its column on the selected row (else All) and scrolls it into view; Enter
+  steps to the next match.
+- **Toolbar.** Table or Text, Run DRC (the tab stays and the counts fill in),
+  Constraint sets (the set cards), Add (a board-wide rule of the selected
+  column's kind) and Presets. On Clearance, Matrix switches to the class
+  matrix.
+- **Detail strip.** Under the grid, in three columns: the selected cell's
+  live drawing with its row's resolved values, each value editable on the
+  drawing (Enter or a dragged handle writes the cell, as one undo step; Tab
+  and Shift+Tab move between values; a value of 0 keeps its label); the rule
+  that governs the cell, with its text, problems, flags and its findings in
+  the last run, or why it has no count: stale since the last edit (the board
+  changed after the run), changed since the run (the rule), off, no objects in
+  scope, open the board to check, not checked yet, or passes (Jump opens the
+  board and selects the objects it covers); and **Which value wins, and
+  why**, walking the row,
+  its constraint set, its parents and the default, the winner marked, then
+  the board's resolution for the first net the rule takes in.
 - **Flags.** A rule that never applies on the board (another rule always
   wins, "shadowed"), two equally specific rules that ask different values of
   the same nets ("conflict"), a rule that lowers a net class's clearance, a
   scope that matches no net, and a rule below the fab floor ([Fab
   profiles](#fab-profiles)). Found by the check's own resolution over the
   board's nets, copper layers and object pairs.
-- **Detail.** The selected rule's text, its problems and flags, how many board
-  objects it applies to (Show on board opens the board and selects them), and
-  **Why this value?**: for the first net the rule takes in, the value that
-  governs it, where it comes from (a rule, the net class, the board setup),
-  and how each rule of that limit fared (applies, a more specific rule
-  applies, an equally specific stricter rule applies, other nets, layers or
-  objects).
-- **Text view.** The same rules as text, with what the compiler says about the
-  text as typed; Apply stores it as one undo step, Discard drops what was
-  typed. While typed text is not applied, Undo, Redo and the switch back to
-  the table wait and the tab says so; a text view nobody typed in follows the
-  stored rules.
-- **Search and filter.** By name, scope, layer or message; All, With
-  violations, Flagged, Off.
+- **Text view.** The same rules as text in a code field with line numbers and
+  keyword colours. A line the compiler rejects is washed red with the bad span
+  in the error ink, and each problem is a banner under the field ("Line 9,
+  column 32: ..."); clean text shows "No problems in the text." in green.
+  Apply stores the text as one undo step and is off while the text has an
+  error; Discard drops what was typed. While typed text is not applied, Undo,
+  Redo and the switch back to the table wait and the tab says so; a text view
+  nobody typed in follows the stored rules.
 
 ### Commands
 
@@ -299,7 +334,7 @@ step each and answer with data; refusals say why.
 
 | Command | Answer |
 |---|---|
-| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `sets` (as `rules_set_create` answers each), `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain`, `scope`, `layer`, `pair`, `limits` (by column id: `min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`, `min_pad_gap`, `min_hole`, `max_hole`, `min_annular`, `min_hole_spacing`, `min_edge_clearance`, `min_silk_pad`, `min_silk_spacing`, `min_sliver`, `min_mask_expansion`, `max_mask_expansion`, `min_paste_expansion`, `max_paste_expansion`, `min_courtyard_spacing`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
+| `rules_list [kind] [enabled]` | `stored_in` (`project` or `machine`), `board`, `syntax_errors`, `sets` (as `rules_set_create` answers each), `rules`: each with `id`, `name`, `enabled`, `applied`, `kind`, `domain` (the grid domain it shows on: `clearance`, `physical`, `high_speed`, `manufacturing`, `smt`, `mask`, `plane`, `testpoint`, `placement`), `scope`, `layer`, `pair`, `limits` (by column id: `min_clearance`, `min_width`, `max_width`, `min_diameter`, `min_drill`, `min_pad_gap`, `min_hole`, `max_hole`, `min_annular`, `min_hole_spacing`, `min_edge_clearance`, `min_silk_pad`, `min_silk_spacing`, `min_sliver`, `min_mask_expansion`, `max_mask_expansion`, `min_paste_expansion`, `max_paste_expansion`, `min_courtyard_spacing`), `severity` (the word written), `effective_severity` (what a finding gets: a severity entry's, or `off`), `message`, `text_only`, `problems` (with line and column) and `text` |
 | `rules_get id` | one rule as above, plus `flags`, `scope_objects` and `result` (`violations`, `measured_mm`, `required_mm`, `margin_mm`, `stale`) when the board is open |
 | `rules_add kind values [scope] [layer] [pair] [severity] [name]` | `id`, `name`; `kind` is a target (`clearance`, `track`, `via`, `hole`, `edge`, `silk`, `mask`, `paste`, `courtyard`); `values` is `min_width=0.1mm, max_width=12mil` or one bare length for the kind's first limit |
 | `rules_set id field [value]` | `rule`; `field` is `name`, `scope`, `layer`, `pair`, `severity`, `message`, `enabled` or a limit; no `value` clears it |
@@ -318,10 +353,10 @@ step each and answer with data; refusals say why.
 
 ### Class matrix
 
-The Clearance sub-tab's Matrix button shows one row and one column per net
+On the Clearance domain, Matrix shows one row and one column per net
 class of the project, one clearance per cell. A cell is a rule of the text,
 `rule cc_<A>_<B> on clearance when class == "A" and other_class == "B"
-require clearance >= <length> then error`, so the list shows the same rule.
+require clearance >= <length> then error`, so the text view shows the same rule.
 It applies to a clearance between a net of class A and a net of class B, in
 either order, on both sides ([Which rule applies](#which-rule-applies)); the
 diagonal cell (A and A) is between two nets of one class.
@@ -332,18 +367,26 @@ else the setup and class clearances), or with no board open the larger of
 the two class clearances, or "board setup". A cell below what a class asks
 is applied and flagged as lowering that class, as any rule is.
 
-Clicking a cell types in it (Enter stores it; an empty value removes the
-rule, so the cell falls back) and opens its object sub-grid: the whole cell,
-then one cell per object pair (track-track, track-pad, track-via, pad-pad,
-pad-via, via-via), each the same rule narrowed with `between`, each with
-Clear. Every cell edit is one undo step.
+Only the lower triangle is live; the mirror half is inert, and a pair named
+in either order is the same cell. Clicking a cell types in it (Enter stores
+the length as typed, `8mil` too; a bare number is in mm; an empty value
+removes the rule, so the cell falls back), keeps the accent ring and opens its object pairs in a card
+beside the matrix: All objects (the whole cell), then one row per object
+pair (track-track, track-pad, track-via, pad-pad, pad-via, via-via), each
+the same rule narrowed with `between`. An empty object-pair row shows the
+All objects value it falls back to; ↺ on a written row clears it. Every
+cell edit is one undo step.
+
+The preview row under them follows the hovered cell or object pair, else
+the clicked one (the pin). A value typed on the preview drawing writes the
+pinned cell or object-pair row, as one undo step.
 
 Differential-pair classes are not in the matrix yet: there is no
 differential-pair class to name.
 
-### Rule sets
+### Constraint sets
 
-A named rule set holds limits written once (`min_clearance=0.8mm,
+A constraint set holds limits written once (`min_clearance=0.8mm,
 min_width=0.3mm`) and a severity. It is stored beside the rule text in
 `rules.drc.sets` and is not a rule itself. It takes clearance, track, via,
 hole and edge limits only; a board-wide limit (silkscreen, mask, paste,
@@ -355,12 +398,20 @@ wrote, everywhere it is applied: a kind it no longer limits loses its rule,
 a kind it now limits gains one; each rule keeps its name, on/off, layer and
 objects. Each create, apply and change is one undo step that holds the set
 and its rules together. A rule a set wrote can still be edited in the
-table; the set's next change writes over it. A severity entry for a rule
+grid; the set's next change writes over it. A severity entry for a rule
 whose `then` word the set changes is dropped in the same step, so the set's
 severity governs it. A rule a set wrote that was edited in the text into one
-the table cannot show ("Text only") is not written over: the set's change is
-refused and names the rule. In a scope cell, a class pair naming a class the
-project does not have is flagged like a one-class scope.
+the grid cannot show (a scoped rule) is not written over: the set's change
+is refused and names the rule. A class pair naming a class the project does
+not have is flagged like a one-class scope.
+
+In the tab, Constraint sets (with the number of sets) shows one card per
+set under the toolbar: its name, limits and severity, and the scopes it is
+applied to. The form under the cards takes a name, limits, a severity
+(error, warning or info) and a scope: Create set stores a new set, a card's
+Use these limits gives that set the form's limits and severity, and its
+Apply to scope applies it to the form's scope. A set is edited through the
+form only, not on its card.
 
 ### Presets
 
@@ -371,9 +422,12 @@ tier merges seven board-wide rules, `fab_clearance`, `fab_track`, `fab_via`,
 `fab_hole`, `fab_edge`, `fab_mask` and `fab_silk`, into the text by name: a
 rule of that name is replaced, the rest stay. A profile replaces the
 project's DRC rules (text, severity entries and rule sets) as "Update from
-profile" does. Picking one lists the rules it adds, changes and removes
-(spacing alone is not a change) and the other lines; Apply stores it as one
-undo step, and is refused when the rules changed since the list was made.
+profile" does. Each tier is a card with its clearance, width, drill and
+annular minimums, read from the tier table (`FabTemplate::capabilities`).
+Picking one gives it the accent and lists the rules it adds, changes and
+removes (spacing alone is not a change), each with its limits old → new,
+and the other lines; Apply in that card stores it as one undo step, and is
+refused when the rules changed since the list was made.
 
 ## Fab profiles
 
@@ -402,7 +456,7 @@ dates the numbers; they are starting points, not one maker's limits.
 |---|---|---|---|---|---|---|---|---|---|
 | Standard | 0.15 | 0.15 | 0.5 / 0.25 | 0.25 | 0.125 | 0.5 | 0.3 | 0.1 | 0.15 |
 | Advanced | 0.1 | 0.1 | 0.4 / 0.2 | 0.2 | 0.1 | 0.4 | 0.25 | 0.075 | 0.1 |
-| HDI | 0.075 | 0.075 | 0.3 / 0.15 | 0.1 | 0.075 | 0.3 | 0.2 | 0.06 | 0.075 |
+| HDI | 0.075 | 0.075 | 0.25 / 0.1 | 0.1 | 0.075 | 0.3 | 0.2 | 0.06 | 0.075 |
 
 All in mm. Mask sliver and silkscreen rules are warnings, the rest errors.
 Picking a tier in project setup (New Project, the Project tab's Project

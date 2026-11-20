@@ -1,0 +1,20 @@
+[package]
+name = "signex-expr"
+description = "Expression engine for parameters and fields: parser, unit algebra, evaluator, name resolution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# A leaf crate: no workspace dependencies, so signex-types, the sketch, the
+# library and the app can all evaluate expressions without depending on
+# each other (#1984, docs/architecture/signex-expr.md).
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

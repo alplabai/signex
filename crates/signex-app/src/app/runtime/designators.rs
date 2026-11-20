@@ -185,6 +185,9 @@ impl Signex {
             crate::diagnostics::log_warning(format!("Designator edit refused: {why}."));
             return Vec::new();
         }
+        // A `-` typed as the reference is shown is not stored (#1416).
+        let standard = active.and_then(|path| self.document_state.designator_standard_for(path));
+        let value = signex_types::designator::stored_reference(standard, &value).to_owned();
         signex_engine::designator_commands(
             engine.document(),
             symbol,

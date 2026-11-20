@@ -77,6 +77,20 @@ impl Signex {
     ) -> bool {
         use crate::app::RemoveChoice;
         use crate::app::state::ErrorNotice;
+        // No writes into a library open read-only for want of its Git
+        // history (mockup row 138): deleting its files is one.
+        if matches!(choice, RemoveChoice::DeleteFile)
+            && let Some(library) = self
+                .library
+                .history_missing_library_under(&state.target_path)
+        {
+            crate::diagnostics::log_warning(format!(
+                "[remove] refused: {library} is open read-only without its Git history"
+            ));
+            self.document_state.error_notice = Some(ErrorNotice::history_missing(&library));
+            self.refresh_panel_ctx();
+            return true;
+        }
         let blockers = self.remove_blockers(state);
         use signex_i18n::{Translatable, ids};
         let (notice, why): (fn(Translatable) -> ErrorNotice, Translatable) = match choice {

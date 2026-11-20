@@ -83,6 +83,39 @@ pub fn write_stock_copy_target_pref_at(path: &Path, target: &Path) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Components panel row style (#2535)
+// ──────────────────────────────────────────────────────────────────────────
+
+const COMPONENTS_PREVIEWS_KEY: &str = "components_panel_previews";
+
+/// The Components panel "Previews" switch, from `prefs.json`. Compact rows
+/// when the key is missing or not a boolean.
+pub fn read_components_row_style_pref_from(
+    json: Option<&serde_json::Value>,
+) -> crate::library::state::ComponentsRowStyle {
+    let previews = json
+        .and_then(|json| json[COMPONENTS_PREVIEWS_KEY].as_bool())
+        .unwrap_or(false);
+    crate::library::state::ComponentsRowStyle::from_previews(previews)
+}
+
+pub fn write_components_row_style_pref(style: crate::library::state::ComponentsRowStyle) {
+    write_components_row_style_pref_at(&prefs_path(), style)
+}
+
+pub fn write_components_row_style_pref_at(
+    path: &Path,
+    style: crate::library::state::ComponentsRowStyle,
+) {
+    update_prefs_json(path, COMPONENTS_PREVIEWS_KEY, |prefs| {
+        prefs.insert(
+            COMPONENTS_PREVIEWS_KEY.to_string(),
+            serde_json::json!(style.shows_previews()),
+        );
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // Persistent search queries (UX_IMPROVEMENTS_OVER_ALTIUM §1.1)
 // ──────────────────────────────────────────────────────────────────────────
 
@@ -276,6 +309,24 @@ pub fn write_net_hover_pref(enabled: bool) {
 pub fn write_net_hover_pref_at(path: &Path, enabled: bool) {
     update_prefs_json(path, "net_hover_enabled", |prefs| {
         prefs.insert("net_hover_enabled".to_string(), serde_json::json!(enabled));
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Fill symbol bodies
+// ──────────────────────────────────────────────────────────────────────────
+
+pub fn read_symbol_body_fill_pref_at(path: &Path) -> crate::symbol_fill_prefs::SymbolBodyFill {
+    crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(read_prefs_json(path).as_ref())
+}
+
+pub fn write_symbol_body_fill_pref(fill: crate::symbol_fill_prefs::SymbolBodyFill) {
+    write_symbol_body_fill_pref_at(&prefs_path(), fill)
+}
+
+pub fn write_symbol_body_fill_pref_at(path: &Path, fill: crate::symbol_fill_prefs::SymbolBodyFill) {
+    update_prefs_json(path, crate::symbol_fill_prefs::ENABLED_KEY, |prefs| {
+        fill.write_into(prefs);
     })
 }
 

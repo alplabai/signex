@@ -85,7 +85,7 @@ fn every_panel_shortcut_toggles_its_own_panel() {
     for (id, kind) in [
         ("toggle_properties_panel", PanelKind::Properties),
         ("toggle_schematic_filter_panel", PanelKind::SchFilter),
-        ("toggle_schematic_list_panel", PanelKind::SchList),
+        ("toggle_schematic_list_panel", PanelKind::ObjectList),
     ] {
         let (mut app, _task) = Signex::new();
         app.document_state.dock.close_panel(kind);

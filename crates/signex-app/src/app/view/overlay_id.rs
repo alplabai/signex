@@ -52,15 +52,21 @@ pub(crate) enum OverlayId {
     /// The Graphite zoom pill over the schematic canvas.
     CanvasZoomPill,
     FootprintActiveBar,
-    FootprintContextMenu,
     FootprintMoveBy,
     FootprintAlign,
     SymbolEditorActiveBar,
-    SymbolContextMenu,
     TextEdit,
 
-    // Right-click menus, pickers, dock drag zones, floating panels.
+    // The Active Bar dropdown, dock drag zones, floating panels.
     ActiveBarMenu,
+    DockDragZone,
+    ComponentsRowDragLabel,
+    FloatingPanels,
+
+    // Right-click menus and pickers: above the floating panels, so a menu
+    // opened from one is not drawn under it (#2376).
+    FootprintContextMenu,
+    SymbolContextMenu,
     ContextMenu,
     TabContextMenu,
     ProjectTreeContextMenu,
@@ -71,9 +77,8 @@ pub(crate) enum OverlayId {
     LayerTabContextMenu,
     GridPicker,
     PanelList,
-    DockDragZone,
-    ComponentsRowDragLabel,
-    FloatingPanels,
+    /// The zoom pill's preset menu (Graphite mockup #64).
+    ZoomPresets,
 
     // Dialogs.
     Preferences,
@@ -99,6 +104,8 @@ pub(crate) enum OverlayId {
     AssignFootprints,
     /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
     SheetNumbering,
+    /// Design ▸ Synchronize Sheet Entries and Ports (#1276).
+    SheetSync,
     /// Tools ▸ Re-Annotate Board (#1312).
     BoardReannotate,
     /// File ▸ Fabrication Outputs (#2388).
@@ -148,7 +155,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 71] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -158,13 +165,18 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::SchematicActiveBar,
     OverlayId::CanvasZoomPill,
     OverlayId::FootprintActiveBar,
-    OverlayId::FootprintContextMenu,
     OverlayId::FootprintMoveBy,
     OverlayId::FootprintAlign,
     OverlayId::SymbolEditorActiveBar,
-    OverlayId::SymbolContextMenu,
     OverlayId::TextEdit,
     OverlayId::ActiveBarMenu,
+    OverlayId::DockDragZone,
+    OverlayId::ComponentsRowDragLabel,
+    OverlayId::FloatingPanels,
+    // Every right-click menu and picker paints above the floating panels, so
+    // one opened from a floating panel is on top and takes the clicks (#2376).
+    OverlayId::FootprintContextMenu,
+    OverlayId::SymbolContextMenu,
     OverlayId::ContextMenu,
     OverlayId::TabContextMenu,
     OverlayId::ProjectTreeContextMenu,
@@ -173,9 +185,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::LayerTabContextMenu,
     OverlayId::GridPicker,
     OverlayId::PanelList,
-    OverlayId::DockDragZone,
-    OverlayId::ComponentsRowDragLabel,
-    OverlayId::FloatingPanels,
+    OverlayId::ZoomPresets,
     OverlayId::Preferences,
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
@@ -197,6 +207,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 69] = [
     OverlayId::SelectionFilterCustom,
     OverlayId::AssignFootprints,
     OverlayId::SheetNumbering,
+    OverlayId::SheetSync,
     OverlayId::BoardReannotate,
     OverlayId::FabOutputs,
     OverlayId::BoardOutput,
@@ -302,6 +313,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::LayerTabContextMenu
         | OverlayId::GridPicker
         | OverlayId::PanelList
+        | OverlayId::ZoomPresets
         | OverlayId::DockDragZone
         | OverlayId::FloatingPanels
         | OverlayId::Preferences
@@ -324,6 +336,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::NewProject
         | OverlayId::AssignFootprints
         | OverlayId::SheetNumbering
+        | OverlayId::SheetSync
         | OverlayId::BoardReannotate
         | OverlayId::FabOutputs
         | OverlayId::BoardOutput
@@ -365,6 +378,7 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::GridPicker
+            | OverlayId::ZoomPresets
     )
 }
 
@@ -519,6 +533,7 @@ impl Signex {
             OverlayId::LayerTabContextMenu => layers.extend(self.layer_tab_menu_overlay(window_id)),
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
+            OverlayId::ZoomPresets => layers.extend(self.zoom_presets_overlay(window_id)),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
                 layers.extend(self.components_row_drag_label_overlay(window_id))
@@ -548,6 +563,7 @@ impl Signex {
             OverlayId::NewProject => layers.extend(self.new_project_overlay()),
             OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
+            OverlayId::SheetSync => layers.extend(self.sheet_sync_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
@@ -614,6 +630,97 @@ mod tests {
                 OverlayId::BomPreview,
                 OverlayId::NetColorCustom,
             ]
+        );
+    }
+
+    fn paint_slot(id: OverlayId) -> usize {
+        PAINT_ORDER
+            .iter()
+            .position(|o| *o == id)
+            .unwrap_or_else(|| panic!("{id:?} is not in PAINT_ORDER"))
+    }
+
+    /// #2376: every right-click menu and picker paints above the floating
+    /// panels, so one opened from a floating panel is not drawn under it;
+    /// the Esc ladder, walking the same list backwards, closes it first.
+    #[test]
+    fn every_menu_paints_above_the_floating_panels() {
+        let floating = paint_slot(OverlayId::FloatingPanels);
+        let menus = [
+            OverlayId::FootprintContextMenu,
+            OverlayId::SymbolContextMenu,
+            OverlayId::ContextMenu,
+            OverlayId::TabContextMenu,
+            OverlayId::ProjectTreeContextMenu,
+            OverlayId::ComponentsRowContextMenu,
+            OverlayId::StartRowContextMenu,
+            OverlayId::LayerTabContextMenu,
+            OverlayId::GridPicker,
+            OverlayId::PanelList,
+            OverlayId::ZoomPresets,
+        ];
+        for id in menus {
+            assert!(
+                paint_slot(id) > floating,
+                "{id:?} paints under the floating panels"
+            );
+        }
+        for id in PAINT_ORDER
+            .iter()
+            .copied()
+            .filter(|id| has_menu_backdrop(*id))
+        {
+            assert!(
+                paint_slot(id) > floating,
+                "{id:?} paints under the floating panels"
+            );
+        }
+    }
+
+    /// #2376, through the whole main-window view: a right-click menu open over
+    /// a floating panel is the topmost layer there, so its row takes the click.
+    #[test]
+    fn a_menu_over_a_floating_panel_takes_the_click() {
+        use crate::layout_probe::{lay_out_texts, messages_on_click_at};
+        const WINDOW: iced::Size = iced::Size::new(1400.0, 900.0);
+
+        let (mut app, main) = crate::canvas::overlay_camera_tests::graphite_app_showing(|_| {});
+        app.ui_state.window_size = (WINDOW.width, WINDOW.height);
+        let panel = crate::dock::FloatingPanel {
+            kind: crate::panels::PanelKind::Properties,
+            x: 500.0,
+            y: 200.0,
+            width: 320.0,
+            height: 420.0,
+            dragging: false,
+        };
+        let panel_rect = iced::Rectangle::new(
+            iced::Point::new(panel.x, panel.y),
+            iced::Size::new(panel.width, panel.height),
+        );
+        app.document_state.dock.floating.push(panel);
+        app.interaction_state.last_mouse_pos = (panel_rect.x + 40.0, panel_rect.y + 60.0);
+        let _ = app.update(Message::ContextMenu(ContextMenuMsg::ShowProjectTree(None)));
+        assert!(app.interaction_state.project_tree_context_menu.is_some());
+
+        let row = signex_i18n::t!(
+            app.ui_state.i18n,
+            signex_i18n::ids::DIALOG_NEW_PROJECT_ENTRY_ROW
+        )
+        .into_string();
+        let texts = lay_out_texts(app.view(main), WINDOW);
+        let at = texts
+            .iter()
+            .find(|t| t.text == row && panel_rect.contains(t.bounds.center()))
+            .unwrap_or_else(|| panic!("no menu row over the floating panel: {texts:#?}"))
+            .bounds
+            .center();
+        let messages = messages_on_click_at(app.view(main), WINDOW, None, at);
+        assert!(
+            messages
+                .iter()
+                .any(|m| matches!(m, Message::Menu(crate::menu_bar::MenuMessage::NewProject))),
+            "the click did not reach the menu row: {messages:?}"
         );
     }
 }

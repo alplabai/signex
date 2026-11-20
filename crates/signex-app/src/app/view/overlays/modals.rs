@@ -19,59 +19,13 @@ impl Signex {
     /// `handle_preferences_open_requested`, so this in-window path is
     /// the fallback when the detach failed.
     pub(in crate::app::view) fn preferences_overlay(&self) -> Option<Element<'_, Message>> {
-        let ui = &self.ui_state;
-        let document = &self.document_state;
         let prefs_detached = self.modal_detached(crate::app::state::ModalId::Preferences);
-        if !(ui.preferences_open && !prefs_detached) {
+        if !(self.ui_state.preferences_open && !prefs_detached) {
             return None;
         }
-        let pref_view = crate::preferences::view(crate::preferences::PrefsView {
-            nav: ui.preferences_nav,
-            draft_theme: ui.preferences_draft_theme,
-            saved_theme: ui.theme_id,
-            draft_font: &ui.preferences_draft_font,
-            draft_grid_style: ui.preferences_draft_grid_style,
-            draft_pcb_gpu_render: ui.preferences_draft_pcb_gpu_render,
-            draft_antialiasing: ui.preferences_draft_antialiasing,
-            draft_annotate_undo: ui.preferences_draft_annotate_undo,
-            draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
-            draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
-            draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
-            draft_wheel_mode: ui.preferences_draft_wheel_mode,
-            draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
-            draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
-            draft_increment_step: ui.preferences_draft_increment_step,
-            draft_paste_designators: ui.preferences_draft_paste_designators,
-            draft_window_controls_placement: ui.preferences_draft_window_controls_placement,
-            window_controls_restart_note: self.window_controls_needs_restart(),
-            draft_autosave_enabled: ui.preferences_draft_autosave_enabled,
-            draft_agent_connections_enabled: ui.preferences_draft_agent_connections_enabled,
-            i18n: &ui.i18n,
-            draft_symbol_grid_size_mm: ui.preferences_draft_symbol_grid_size_mm,
-            draft_fast_grids: &ui.preferences_draft_fast_grids,
-            fast_grid_status: &ui.preferences_fast_grid_status,
-            draft_symbol_grid_style: ui.preferences_draft_symbol_grid_style,
-            draft_symbol_pin_selection: ui.preferences_draft_symbol_pin_selection,
-            draft_zoom_step_percent: ui.preferences_draft_zoom_step_percent,
-            draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
-            dirty: ui.preferences_dirty,
-            profiles: &ui.profile_manager,
-            default_profile: ui.default_rule_profile.as_deref(),
-            distributor_settings: &self.library.settings,
-            panel_tokens: &document.panel_ctx.tokens,
-            draft_component_classes: &ui.preferences_draft_component_classes,
-            keymap_editor: &ui.preferences_keymap_editor,
-            keymap_status: &ui.preferences_keymap_status,
-            keymap_load_error: ui.keymap_load_error.as_deref(),
-            keymap_backup: ui.keymap_backup.as_deref(),
-            prefs_load_error: ui.prefs_load_error.as_deref(),
-            prefs_status: &ui.preferences_prefs_status,
-            keymap_search: &ui.preferences_keymap_search,
-            nav_search: &ui.preferences_nav_search,
-            keymap_recorder: ui.preferences_keymap_recorder.as_ref(),
-        })
-        .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
-        .boxed();
+        let pref_view = crate::preferences::view(self.preferences_view_inputs())
+            .map(|m| Message::Preferences(PreferencesMsg::Inner(m)))
+            .boxed();
         Some(pref_view)
     }
 
@@ -102,7 +56,7 @@ impl Signex {
     /// Find Similar Objects dialog (#1257). In-window only: it has no
     /// detached form.
     pub(in crate::app::view) fn find_similar_overlay(&self) -> Option<Element<'_, Message>> {
-        let state = self.ui_state.find_similar.as_ref()?;
+        let state = self.ui_state.find_similar.as_deref()?;
         Some(
             crate::find_similar::view(
                 state,
@@ -120,7 +74,7 @@ impl Signex {
 
     /// Paste Array dialog (#1264). In-window only: it has no detached form.
     pub(in crate::app::view) fn paste_array_overlay(&self) -> Option<Element<'_, Message>> {
-        let state = self.ui_state.paste_array.as_ref()?;
+        let state = self.ui_state.paste_array.as_deref()?;
         Some(
             crate::paste_array::view(
                 state,
@@ -331,6 +285,13 @@ impl Signex {
             .then(|| self.view_sheet_numbering_dialog())
     }
 
+    pub(in crate::app::view) fn sheet_sync_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .sheet_sync
+            .is_some()
+            .then(|| self.view_sheet_sync_dialog())
+    }
+
     pub(in crate::app::view) fn board_reannotate_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .board_reannotate
@@ -496,6 +457,7 @@ impl Signex {
             .boxed(),
             ModalId::LibraryRecovery => crate::library::recovery::view(
                 lib.recovery.as_ref()?,
+                self.recovery_project_file(),
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
@@ -512,16 +474,19 @@ impl Signex {
             .boxed(),
             ModalId::LibraryEditRow => {
                 let (path, edit) = self.browser_modal(owner, |b| b.edit_modal.as_ref())?;
-                let classes = self.row_classes_for(path);
-                let template = lib.row_template(path, edit.draft.class.as_str());
+                let context = crate::library::edit_row_modal::EditRowContext::resolve(
+                    lib,
+                    path,
+                    edit,
+                    self.row_classes_for(path),
+                );
                 crate::library::edit_row_modal::view(
                     path,
                     edit,
                     tokens,
                     &self.ui_state.i18n,
                     windowed,
-                    classes,
-                    template,
+                    context,
                 )
                 .map(Message::Library)
                 .boxed()

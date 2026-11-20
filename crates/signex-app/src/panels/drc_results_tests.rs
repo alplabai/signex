@@ -5,7 +5,7 @@ use signex_types::pcb_layer::CopperLayer;
 use signex_types::violation::Severity;
 
 use super::*;
-use crate::layout_probe::{lay_out_texts, messages_on_click};
+use crate::layout_probe::{lay_out_inputs, lay_out_texts, messages_on_click};
 
 fn row(index: usize, kind: ViolationKind, rule: &str, waiver: Option<&str>) -> DrcRow {
     DrcRow {
@@ -124,7 +124,10 @@ fn a_waived_row_is_counted_and_hidden_until_shown() {
         DrcFilter::default(),
     );
     let shown = texts(&ctx);
-    assert!(shown.iter().any(|t| t == "1 violation waived"), "{shown:?}");
+    assert!(
+        shown.iter().any(|t| t == "(1 violation waived)"),
+        "{shown:?}"
+    );
     assert!(
         shown
             .iter()
@@ -147,29 +150,178 @@ fn a_waived_row_is_counted_and_hidden_until_shown() {
     assert!(shown.iter().any(|t| t == "Waived: on purpose"), "{shown:?}");
 }
 
-/// A row's Waive opens its note; Unwaive on a waived row takes it back.
+fn hover(ctx: &mut PanelContext, key: &str) {
+    if let Some(drc) = ctx.pcb_drc.as_mut() {
+        drc.view.hovered = Some(key.to_string());
+    }
+}
+
+/// A row's Waive opens the waiver form; Unwaive on a waived row takes it
+/// back. Both show on hover (or selection) only (#88).
 #[test]
-fn waive_and_unwaive_are_row_buttons() {
+fn waive_and_unwaive_are_row_actions_on_hover() {
     let window = iced::Size::new(1400.0, 1200.0);
-    let ctx = context(
+    let mut ctx = context(
         vec![row(0, ViolationKind::Short, "builtin::short", None)],
         DrcFilter::default(),
     );
+    assert!(!texts(&ctx).iter().any(|t| t == "Waive" || t == "Show"));
+    hover(&mut ctx, "k0");
+    // The probe's fresh tree sees the pointer enter the row first; the
+    // press itself sends only the action, not the row's own press.
     let pressed = messages_on_click(view(&ctx), window, "Waive");
     assert!(
-        matches!(pressed.as_slice(), [PanelMsg::Drc(DrcPanelMsg::WaiveStarted(k))] if k == "k0"),
+        matches!(
+            pressed.as_slice(),
+            [
+                PanelMsg::Drc(DrcPanelMsg::RowEntered(e)),
+                PanelMsg::Drc(DrcPanelMsg::WaiveStarted(k)),
+            ] if e == "k0" && k == "k0"
+        ),
         "{pressed:?}"
     );
-    let ctx = context(
+    let pressed = messages_on_click(view(&ctx), window, "Show");
+    assert!(
+        matches!(
+            pressed.as_slice(),
+            [
+                PanelMsg::Drc(DrcPanelMsg::RowEntered(e)),
+                PanelMsg::Drc(DrcPanelMsg::RowPicked(k)),
+            ] if e == "k0" && k == "k0"
+        ),
+        "{pressed:?}"
+    );
+    let mut ctx = context(
         vec![row(0, ViolationKind::Short, "builtin::short", Some(""))],
         DrcFilter {
             show_waived: true,
             ..DrcFilter::default()
         },
     );
+    hover(&mut ctx, "k0");
     let pressed = messages_on_click(view(&ctx), window, "Unwaive");
     assert!(
-        matches!(pressed.as_slice(), [PanelMsg::Drc(DrcPanelMsg::Unwaived(k))] if k == "k0"),
+        matches!(
+            pressed.as_slice(),
+            [
+                PanelMsg::Drc(DrcPanelMsg::RowEntered(e)),
+                PanelMsg::Drc(DrcPanelMsg::Unwaived(k)),
+            ] if e == "k0" && k == "k0"
+        ),
         "{pressed:?}"
+    );
+}
+
+/// #88: a tile lists only its category, and a group with no row left in it
+/// is hidden, not shown as "(0)". No tile is on at first.
+#[test]
+fn a_tile_lists_its_category_and_hides_the_empty_groups() {
+    let rows = vec![
+        row(0, ViolationKind::Clearance, "user::HV_08", None),
+        row(1, ViolationKind::Short, "builtin::short", None),
+        row(2, ViolationKind::Clearance, "user::HV_08", None),
+    ];
+    let mut ctx = context(rows, DrcFilter::default());
+    if let Some(drc) = ctx.pcb_drc.as_mut() {
+        drc.clearance = 2;
+        drc.short = 1;
+    }
+    let all = texts(&ctx);
+    assert!(all.iter().any(|t| t == "HV_08 (2)"), "{all:?}");
+    assert!(all.iter().any(|t| t == "Short (1)"), "{all:?}");
+    assert!(
+        all.iter()
+            .any(|t| t == "Click a tile to list only that category."),
+        "{all:?}"
+    );
+    let window = iced::Size::new(1400.0, 1200.0);
+    let pressed = messages_on_click(view(&ctx), window, "short");
+    assert!(
+        matches!(
+            pressed.as_slice(),
+            [PanelMsg::Drc(DrcPanelMsg::TileToggled(DrcCategory::Short))]
+        ),
+        "{pressed:?}"
+    );
+    if let Some(drc) = ctx.pcb_drc.as_mut() {
+        drc.view.category = Some(DrcCategory::Short);
+    }
+    let shorts = texts(&ctx);
+    assert!(shorts.iter().any(|t| t == "Short (1)"), "{shorts:?}");
+    assert!(!shorts.iter().any(|t| t.starts_with("HV_08")), "{shorts:?}");
+    assert!(
+        shorts.iter().any(|t| t == "Showing shorts only"),
+        "{shorts:?}"
+    );
+    let drc = ctx.pcb_drc.as_ref().expect("panel");
+    let kept: Vec<usize> = shown_rows(drc).iter().map(|r| r.index).collect();
+    assert_eq!(kept, [1]);
+}
+
+/// #88: a filter that matches no row of a rule hides its whole group.
+#[test]
+fn a_severity_filter_hides_a_group_with_no_matching_row() {
+    let mut warning = row(1, ViolationKind::Unconnected, "builtin::unconnected", None);
+    warning.severity = Some(Severity::Warning);
+    let ctx = context(
+        vec![
+            row(0, ViolationKind::Short, "builtin::short", None),
+            warning,
+        ],
+        DrcFilter {
+            severity: Some(Severity::Warning),
+            ..DrcFilter::default()
+        },
+    );
+    let shown = texts(&ctx);
+    assert!(!shown.iter().any(|t| t.starts_with("Short (")), "{shown:?}");
+    assert!(shown.iter().any(|t| t == "Unconnected (1)"), "{shown:?}");
+}
+
+/// #88: a row's second line names the layer through the shared layer-name
+/// function, the position and the object count.
+#[test]
+fn a_row_names_its_layer_place_and_objects() {
+    let ctx = context(
+        vec![row(0, ViolationKind::Short, "builtin::short", None)],
+        DrcFilter::default(),
+    );
+    let shown = texts(&ctx);
+    let layer = crate::pcb_canvas::layer_style::copper_name(&ctx.i18n, CopperLayer::Top)
+        .into_string()
+        .replace(['\u{2068}', '\u{2069}'], "");
+    let line = format!("{layer} · 1.000, 2.000 mm · 2 objects");
+    assert!(shown.contains(&line), "{line}: {shown:?}");
+}
+
+/// AV-13: Waive opens the shared form under the row: Reason and Author,
+/// with Cancel and Waive, and "both are needed" when one was left empty.
+#[test]
+fn waive_opens_the_shared_form_under_the_row() {
+    let mut ctx = context(
+        vec![row(0, ViolationKind::Short, "builtin::short", None)],
+        DrcFilter::default(),
+    );
+    if let Some(drc) = ctx.pcb_drc.as_mut() {
+        drc.waive_draft = Some(DrcWaiveDraft {
+            key: "k0".into(),
+            author: "C. Alp".into(),
+            blank: true,
+            ..DrcWaiveDraft::default()
+        });
+    }
+    let shown = texts(&ctx);
+    assert!(shown.iter().any(|t| t == "Cancel"), "{shown:?}");
+    // The Author is a text input: its value is read off the inputs.
+    let inputs: Vec<String> = lay_out_inputs(view(&ctx), iced::Size::new(1400.0, 1200.0))
+        .into_iter()
+        .map(|t| t.text)
+        .collect();
+    assert!(inputs.iter().any(|t| t == "C. Alp"), "{inputs:?}");
+    assert!(
+        shown
+            .iter()
+            .any(|t| t == "Write a reason and an author to waive it."),
+        "{shown:?}"
     );
 }

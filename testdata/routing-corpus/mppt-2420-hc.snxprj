@@ -1,0 +1,35 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "mppt-2420-hc",
+  "net_classes": [
+    {
+      "clearance": 0.2,
+      "name": "Power",
+      "nets": [
+        "+3V3",
+        "GND"
+      ],
+      "trace_width": 0.4,
+      "via_diameter": 0.8,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.25,
+      "via_diameter": 0.7,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "mppt-2420-hc.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

@@ -51,6 +51,9 @@ pub enum ContextSubmenu {
     /// Project-tree → "Add New to Project ›" launcher. Items are
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
+    /// The greyed "Planned (N) ›" launcher of the sheet menu: the features
+    /// not built yet, each row with what it will do (Graphite mockup #62).
+    Planned,
 }
 
 /// Widget id of the in-place editor, so opening it can focus it.
@@ -136,6 +139,8 @@ pub struct SelectionFilterCustomState {
     pub regions: bool,
     pub fills: bool,
     pub other: bool,
+    /// The name Apply saves the filter under as a preset; blank = "Filter N".
+    pub preset_name: String,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's

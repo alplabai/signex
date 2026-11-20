@@ -73,15 +73,35 @@ prod_lines() {
   fi
 }
 
+# Every listed file's production line count as "<n> <path>", in ONE awk pass.
+# Same rule as prod_lines: a trailing `#[cfg(test)]` followed by an inline
+# `mod name {` ends production code. One process for all files instead of
+# several per file: on Windows each process start costs ~50 ms, and the
+# per-file version took many minutes there.
+all_prod_lines() {
+  list_files | tr '\n' '\0' | xargs -0 awk '
+    function emit() { if (file != "") print (last ? last - 1 : lines), file }
+    FNR == 1 { emit(); file = FILENAME; pending = 0; last = 0; lines = 0 }
+    { lines = FNR }
+    /^#\[cfg\(test\)\][[:space:]]*$/ { pending = FNR; next }
+    pending {
+      if ($0 ~ /^[[:space:]]*(pub(\([^)]*\))?[[:space:]]+)?mod[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\{[[:space:]]*$/) {
+        last = pending
+      }
+      pending = 0
+    }
+    END { emit() }
+  '
+}
+
 if [[ "${1:-}" == "--generate" ]]; then
   {
     echo "# God-file baseline — production src/ .rs files currently over the ${CAP}-line cap."
     echo "# Format: <production_lines> <path>. Managed by scripts/check_file_size.sh."
     echo "# The list only ever gets SHORTER: shrink a file under the cap, then drop its row."
-    while IFS= read -r f; do
-      n=$(prod_lines "$f")
+    all_prod_lines | while read -r n f; do
       (( n > CAP )) && echo "$n $f"
-    done < <(list_files) | sort -rn
+    done | sort -rn
   } > "$BASELINE"
   echo "Wrote baseline: $BASELINE"
   exit 0
@@ -96,8 +116,7 @@ baseline_size() {
 }
 
 fail=0
-while IFS= read -r f; do
-  n=$(prod_lines "$f")
+while read -r n f; do
   (( n > CAP )) || continue
   b=$(baseline_size "$f")
   if [[ -n "$b" ]]; then
@@ -113,7 +132,7 @@ while IFS= read -r f; do
     echo "      slices (ADR-0001) — messages / state / updates / views per concern."
     fail=1
   fi
-done < <(list_files)
+done < <(all_prod_lines)
 
 # Advisory: nudge trimming the baseline as files shrink under the cap. Never
 # fatal — it only asks the win be recorded so the file can't silently regrow.

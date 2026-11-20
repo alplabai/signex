@@ -60,6 +60,7 @@ struct OpenOverlays {
     update_pcb_open: bool,
     document_setup_open: bool,
     sheet_numbering_open: bool,
+    sheet_sync_open: bool,
     board_reannotate_open: bool,
     fab_outputs_open: bool,
     board_output_open: bool,
@@ -103,6 +104,8 @@ struct OpenOverlays {
     tab_context_menu_open: bool,
     project_tree_context_menu_open: bool,
     grid_picker_open: bool,
+    /// The zoom pill's preset menu is painted (Graphite mockup #64).
+    zoom_presets_open: bool,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -250,6 +253,9 @@ impl OpenOverlays {
             OverlayId::GridPicker => self
                 .grid_picker_open
                 .then_some(Message::Ui(UiMsg::GridPickerClose)),
+            OverlayId::ZoomPresets => self
+                .zoom_presets_open
+                .then_some(Message::Ui(UiMsg::ZoomPresetsDismissed)),
 
             // ── Editor chrome, menus, pickers, panels: no rung ───────
             // None of these is a modal. The symbol editor's menu closes from
@@ -347,6 +353,9 @@ impl OpenOverlays {
             OverlayId::SheetNumbering => self
                 .sheet_numbering_open
                 .then(|| Message::from(crate::app::SheetNumberingMsg::CancelRequested)),
+            OverlayId::SheetSync => self
+                .sheet_sync_open
+                .then(|| Message::from(crate::app::SheetSyncMsg::CancelRequested)),
             OverlayId::BoardReannotate => self
                 .board_reannotate_open
                 .then(|| Message::from(crate::app::BoardReannotateMsg::CancelRequested)),
@@ -665,6 +674,7 @@ impl Signex {
             update_pcb_open: self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply),
             document_setup_open: self.ui_state.document_setup.is_some(),
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
+            sheet_sync_open: self.ui_state.sheet_sync.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
@@ -739,6 +749,7 @@ impl Signex {
                 .project_tree_context_menu
                 .is_some(),
             grid_picker_open: self.interaction_state.grid_picker.is_some(),
+            zoom_presets_open: self.zoom_presets_shown(),
         }
     }
 
@@ -1000,6 +1011,8 @@ impl Signex {
             net_hover_tick,
             library_poll,
             autosave_tick,
+            // Frames only while the 3D view's flip turns or a screenshot waits.
+            self.board_3d_subscription(),
             // None unless started with SIGNEX_BENCH_PAN_ZOOM (#2472).
             self.pan_zoom_bench_subscription(),
         ])
@@ -1186,6 +1199,12 @@ mod tests {
             only(|o| o.paste_array_open = true),
             Some(Message::Edit(crate::app::EditMsg::PasteArray(
                 crate::paste_array::PasteArrayMsg::Closed
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.sheet_sync_open = true),
+            Some(Message::Edit(crate::app::EditMsg::SheetSync(
+                crate::app::SheetSyncMsg::CancelRequested
             )))
         ));
         assert!(matches!(
@@ -1775,6 +1794,7 @@ mod tests {
             update_pcb_open,
             document_setup_open,
             sheet_numbering_open,
+            sheet_sync_open,
             board_reannotate_open,
             fab_outputs_open,
             board_output_open,
@@ -1798,6 +1818,7 @@ mod tests {
             tab_context_menu_open,
             project_tree_context_menu_open,
             grid_picker_open,
+            zoom_presets_open,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1850,6 +1871,7 @@ mod tests {
             ("update_pcb_open", |o| o.update_pcb_open = true),
             ("document_setup_open", |o| o.document_setup_open = true),
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
+            ("sheet_sync_open", |o| o.sheet_sync_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
             ("board_output_open", |o| o.board_output_open = true),
@@ -1905,6 +1927,7 @@ mod tests {
                 o.project_tree_context_menu_open = true
             }),
             ("grid_picker_open", |o| o.grid_picker_open = true),
+            ("zoom_presets_open", |o| o.zoom_presets_open = true),
         ];
 
         // Where a notice lives, not a modal of its own: no rung.

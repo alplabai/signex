@@ -96,6 +96,21 @@ pub const SEGMENT: &[Operand] = &[
     required("end", OperandKind::Point),
     optional("document", OperandKind::Document),
 ];
+/// A No-ERC directive (#1699): its point and, comma separated, the ERC rule
+/// ids it silences there; left out or empty silences every rule.
+pub const NO_ERC: &[Operand] = &[
+    required("at", OperandKind::Point),
+    optional("rules", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// A No-ERC rule list edit (#1699): the directive `id` and the rule ids it
+/// silences, comma separated; left out or empty (a required text operand
+/// cannot be empty) silences every rule.
+pub const EDIT_NO_ERC_RULES: &[Operand] = &[
+    required("id", OperandKind::Text),
+    optional("rules", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// A Blanket (#2420): its two corners, the net class it gives the nets
 /// inside it and the ERC rule ids, comma separated, it does not report there.
 pub const BLANKET: &[Operand] = &[
@@ -204,6 +219,21 @@ pub const SYNC_SHEET: &[Operand] = &[
     required("sheet", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
+/// A sheet symbol for the sheet file `path` with an entry for every port
+/// (#1276): its top-left corner at `at`, else under the sheet's content.
+pub const SHEET_SYMBOL_FROM_SHEET: &[Operand] = &[
+    required("path", OperandKind::Path),
+    optional("at", OperandKind::Point),
+    optional("allow_merge", OperandKind::Bool),
+    optional("document", OperandKind::Document),
+];
+/// The sync of the sheet symbol `symbol` (an id or a name) and its sheet,
+/// `direction` `to_symbol` or `to_sheet` (#1276).
+pub const SYNC_SHEET_ENTRIES: &[Operand] = &[
+    required("symbol", OperandKind::Text),
+    required("direction", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
 /// An absolute move of the placed object `id` (#2418): `at` is where its
 /// position goes (a part's origin, a wire's start, a sheet symbol's top-left).
 pub const OBJECT_POSITION: &[Operand] = &[
@@ -229,6 +259,14 @@ pub const SYMBOL_PARAMETER: &[Operand] = &[
     required("id", OperandKind::Text),
     required("name", OperandKind::Text),
     optional("value", OperandKind::Text),
+    optional("document", OperandKind::Document),
+];
+/// One sheet variable: its `name` and `value` (left out or empty: the
+/// variable stays, with no value), or `remove=true` to delete it.
+pub const SHEET_VARIABLE: &[Operand] = &[
+    required("name", OperandKind::Text),
+    optional("value", OperandKind::Text),
+    optional("remove", OperandKind::Bool),
     optional("document", OperandKind::Document),
 ];
 /// The placed part `id` on the sheet `document` (#1667): named, since an
@@ -385,6 +423,9 @@ pub const COLOR_NET: &[Operand] = &[
 /// The document a command acts on, by id or path. A headless or CLI run names
 /// it every time and never falls back to the active one (#2172).
 pub const DOCUMENT: &[Operand] = &[required("document", OperandKind::Document)];
+/// A sheet edit that takes nothing but the sheet: the one in view, or the one
+/// `document` names (a CLI or an agent's edit list).
+pub const OPTIONAL_DOCUMENT: &[Operand] = &[optional("document", OperandKind::Document)];
 /// A board report written as CSV (#2404): which board, which report
 /// (`bom`, `netlist`, `net_length`, `components`) and the file.
 pub const BOARD_REPORT_EXPORT: &[Operand] = &[
@@ -603,11 +644,13 @@ pub const DRC_VIOLATION: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
 ];
-/// Waive a finding of the named board's last run; `text` is the note.
+/// Waive a finding of the named board's last run; `text` is the note and
+/// `author` who accepted it (AV-13).
 pub const WAIVE_DRC_VIOLATION: &[Operand] = &[
     required("document", OperandKind::Document),
     required("id", OperandKind::Text),
     optional("text", OperandKind::Text),
+    optional("author", OperandKind::Text),
 ];
 /// What the DRC results show: one rule id, one copper layer token, one
 /// severity (`error`, `warning`, `info`), and whether waived findings show.

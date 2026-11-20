@@ -81,7 +81,8 @@ pub fn wire_color(styling: Option<WireStyling<'_>>, wire: &Wire) -> Option<Theme
 }
 
 /// The colour a junction dot is drawn with, before focus dimming, or `None`
-/// for the theme's junction colour.
+/// for the theme's junction colour, when its wires name no colour (they come
+/// first: `signex_types::schematic::junction_wire_colors`).
 ///
 /// A junction is tinted only by its net's class colour; a per-net colour
 /// override then takes precedence over that, as it does for a wire. An
@@ -108,6 +109,12 @@ pub fn junction_color(styling: Option<WireStyling<'_>>, junction: Uuid) -> Optio
 pub struct WireWidths<'a> {
     pub class_styles: Option<&'a WireClassStyles>,
     pub defaults: SchematicDefaults,
+    /// The project's designator standard: a reference field is boxed on the
+    /// text the canvas draws (`-QAC1`, #1416), not the stored one.
+    pub designator_standard: Option<signex_types::designator::DesignatorStandard>,
+    /// What the sheet's special strings and variables resolve to: a value field
+    /// is boxed on the text the canvas draws (#1986).
+    pub special_strings: Option<&'a crate::canvas::SpecialStrings>,
 }
 
 impl WireWidths<'_> {

@@ -2,9 +2,9 @@
 //! the 1D  (Linear) and the 2D
 //!  (Grid). Polar reuses the 1D form.
 
+use signex_expr::parse;
 use signex_sketch::array::NumberingScheme;
 use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 
 use crate::eval_util::strip_eq_prefix;

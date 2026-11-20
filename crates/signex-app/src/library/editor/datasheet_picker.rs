@@ -19,9 +19,9 @@ use signex_widgets::{raw, text, text_input};
 
 use super::super::messages::{DatasheetMsg, EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress};
-use super::inert::unless_read_only_veiled as veiled;
 use super::kit::{self, SP, TS};
 use crate::panels::{PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN};
+use signex_widgets::inert::unless_read_only_veiled as veiled;
 
 /// One-line hint under the section title.
 const INTRO: &str = "The first document is the primary; the schematic opens it.";

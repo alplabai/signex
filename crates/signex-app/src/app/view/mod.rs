@@ -16,8 +16,9 @@ mod chrome;
 mod context_menu;
 mod library_tab;
 mod modals;
+mod net_color;
 mod overlays;
-mod parameter_manager;
+pub(crate) mod parameter_manager;
 mod pcb_active_bar;
 mod pcb_strip;
 mod pdf_preview;
@@ -352,6 +353,7 @@ impl Signex {
                             .active_document_project()
                             .map(|p| p.data.name.as_str()),
                         i18n: &ui.i18n,
+                        projects: &document.projects,
                     },
                     &document.panel_ctx.tokens,
                 )
@@ -645,6 +647,7 @@ impl Signex {
                         self.ui_state.recent_projects.entries(),
                         &self.ui_state.pinned_projects,
                         &libraries,
+                        self.interaction_state.start_section,
                     )
                 }
             }

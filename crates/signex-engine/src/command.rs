@@ -2,7 +2,8 @@ use crate::exec::change_component::ComponentReplacement;
 use signex_types::corner::DragWiringMode;
 use signex_types::schematic::{
     AnnotateOrder, Bus, BusEntry, ChildSheet, HAlign, Junction, Label, LibSymbol, NoConnect,
-    SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, Wire,
+    NoErcDirective, SchematicSheet, SelectedItem, SheetPin, StrokeColor, Symbol, TextNote, VAlign,
+    Wire,
 };
 use uuid::Uuid;
 
@@ -10,6 +11,20 @@ use uuid::Uuid;
 pub struct SheetPort {
     pub name: String,
     pub direction: String,
+}
+
+/// A sheet entry or port that keeps its place and takes a new name (#1276).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetEntryRename {
+    pub from: String,
+    pub to: String,
+}
+
+/// The entry renames a sync makes on one sheet symbol, by its id (#1276).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SymbolEntryRenames {
+    pub symbol: Uuid,
+    pub renames: Vec<SheetEntryRename>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +94,9 @@ pub enum CommandKind {
     UpdateSymbolFields,
     PlaceWireSegment,
     BreakWire,
+    MoveWireEnd,
+    SetRunEnd,
+    UpdateTextNoteProps,
     PlaceWireSegmentAsIs,
     PlaceBus,
     PlaceLabel,
@@ -109,6 +127,7 @@ pub enum CommandKind {
     SetSheetColor,
     SetPageOrigin,
     SetTitleBlockField,
+    SetSheetVariable,
     SetTextFontFamily,
     SetSymbolDesignatorIn,
     SetDocumentFontFamily,
@@ -117,7 +136,20 @@ pub enum CommandKind {
     SetDrawingPlacement,
     PlaceDirective,
     UpdateDirective,
+    SetNoErcRules,
     AutoplaceFields,
+}
+
+/// The text-note properties [`Command::UpdateTextNoteProps`] sets; `None`
+/// keeps a property as it is.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct TextNoteProps {
+    pub justify_h: Option<HAlign>,
+    pub justify_v: Option<VAlign>,
+    /// Stored degrees, counter-clockwise; normalised into `0..360`.
+    pub rotation_degrees: Option<f64>,
+    /// Must be above zero; a size at or below zero is ignored.
+    pub font_size_mm: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -311,6 +343,34 @@ pub enum Command {
         at: signex_types::schematic::Point,
         new_wire: Uuid,
     },
+    /// Move one end of `wire` (its start when `start`) to `to`, as one undo
+    /// step: the grip drag of a selected wire. A horizontal or vertical wire
+    /// keeps its line, so `to` is taken along it. With `keep_wires` the wires
+    /// attached at that end follow it (see `transform::rubber_band`); the end
+    /// leaves a pin or wire it sat on. A move onto the wire's other end
+    /// changes nothing.
+    MoveWireEnd {
+        wire: Uuid,
+        start: bool,
+        to: signex_types::schematic::Point,
+        keep_wires: bool,
+    },
+    /// Put one end of the wire or bus `run` (its start when `start`) exactly
+    /// at `to`, the other end kept: a typed Start or End. Unlike the grip, a
+    /// straight run may turn and nothing attached follows. A wire's
+    /// junctions are reconciled and collinear wires folded as when a wire
+    /// is placed. A `to` on the run's other end changes nothing.
+    SetRunEnd {
+        run: SelectedItem,
+        start: bool,
+        to: signex_types::schematic::Point,
+    },
+    /// Set the justification, turn or text size of one text note; `None`
+    /// keeps that property. One undo step, none when nothing changes.
+    UpdateTextNoteProps {
+        note_id: Uuid,
+        props: TextNoteProps,
+    },
     PlaceWireSegment {
         wire: Wire,
     },
@@ -383,7 +443,7 @@ pub enum Command {
     /// Place a generic No-ERC directive; lands in `no_erc_directives`,
     /// never `no_connects`.
     PlaceNoErcDirective {
-        directive: NoConnect,
+        directive: NoErcDirective,
     },
     PlaceBusEntry {
         bus_entry: BusEntry,
@@ -441,9 +501,14 @@ pub enum Command {
     },
     /// Reconcile parent-sheet symbolic pins for all child sheets that point
     /// to `child_filename`, based on the exposed ports from that child.
+    /// `renames` run first, on the one symbol they name: its auto-generated
+    /// pin named `from` takes the name `to` in place, so its wires stay on
+    /// it (#1276); a symbol that already has a `to` pin keeps both pins as
+    /// they are, and a hand-placed pin is never renamed.
     ReconcileChildSheetPins {
         child_filename: String,
         ports: Vec<SheetPort>,
+        renames: Option<SymbolEntryRenames>,
     },
     /// Re-point every hierarchical child-sheet reference whose `filename`
     /// is `from` at `to` — the follow-up to renaming the referenced
@@ -506,6 +571,13 @@ pub enum Command {
         key: String,
         value: String,
     },
+    /// Set or remove one sheet variable (#1987): `value` is the source text
+    /// (a literal or an `=` expression), saved as typed; `None` removes the
+    /// variable. Stored in `SchematicSheet::variables`.
+    SetSheetVariable {
+        name: String,
+        value: Option<String>,
+    },
     /// Set one symbol's designator at one placement of its sheet: the
     /// instance entry for `placement` (#1151). A blank `reference` removes the
     /// entry, so the placement falls back to the symbol's `reference`. The
@@ -558,6 +630,14 @@ pub enum Command {
     /// one undo step, like typing a field (`Engine::end_field_edit_run`).
     UpdateDirective {
         directive: signex_types::schematic::SchDirective,
+    },
+    /// Set the ERC rule ids the No-ERC directive `id` silences (#1699); an
+    /// empty list silences every rule. Stored sorted without repeats (`*`
+    /// stores as empty). Refused when no such directive exists; unchanged
+    /// when the stored list is already that.
+    SetNoErcRules {
+        id: Uuid,
+        rules: Vec<String>,
     },
     /// Put the reference and value fields of the parts `symbol_ids` where the
     /// autoplacer puts them, as one undo step (#1667). Asked for by name, so a
@@ -666,6 +746,9 @@ impl Command {
             }
             Command::PlaceWireSegment { .. } => CommandKind::PlaceWireSegment,
             Command::BreakWire { .. } => CommandKind::BreakWire,
+            Command::MoveWireEnd { .. } => CommandKind::MoveWireEnd,
+            Command::SetRunEnd { .. } => CommandKind::SetRunEnd,
+            Command::UpdateTextNoteProps { .. } => CommandKind::UpdateTextNoteProps,
             Command::PlaceWireSegmentAsIs { .. } => CommandKind::PlaceWireSegmentAsIs,
             Command::PlaceBus { .. } => CommandKind::PlaceBus,
             Command::PlaceLabel { .. } => CommandKind::PlaceLabel,
@@ -696,6 +779,7 @@ impl Command {
             Command::SetSheetColor { .. } => CommandKind::SetSheetColor,
             Command::SetPageOrigin { .. } => CommandKind::SetPageOrigin,
             Command::SetTitleBlockField { .. } => CommandKind::SetTitleBlockField,
+            Command::SetSheetVariable { .. } => CommandKind::SetSheetVariable,
             Command::SetTextFontFamily { .. } => CommandKind::SetTextFontFamily,
             Command::SetSymbolDesignatorIn { .. } => CommandKind::SetSymbolDesignatorIn,
             Command::SetDocumentFontFamily { .. } => CommandKind::SetDocumentFontFamily,
@@ -704,6 +788,7 @@ impl Command {
             Command::SetDrawingPlacement { .. } => CommandKind::SetDrawingPlacement,
             Command::PlaceDirective { .. } => CommandKind::PlaceDirective,
             Command::UpdateDirective { .. } => CommandKind::UpdateDirective,
+            Command::SetNoErcRules { .. } => CommandKind::SetNoErcRules,
             Command::AutoplaceFields { .. } => CommandKind::AutoplaceFields,
         }
     }

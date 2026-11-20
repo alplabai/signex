@@ -13,8 +13,7 @@ pub(in crate::library::editor::footprint::updates) fn apply(
     match msg {
         FootprintEditorMsg::SketchSelectMany(ids) => select_many(editor, ids),
         FootprintEditorMsg::SketchSetTool(tool) => set_tool(editor, tool),
-        FootprintEditorMsg::SketchToggleConstruction => toggle_construction(editor),
-        FootprintEditorMsg::SketchToggleCenterline => toggle_centerline(editor),
+        FootprintEditorMsg::SketchLinetypePicked(linetype) => pick_linetype(editor, linetype),
         FootprintEditorMsg::SketchToolEscape => tool_escape(editor),
         FootprintEditorMsg::SketchSelect { id, shift } => select(editor, id, shift),
         FootprintEditorMsg::SketchDimensionInput(s) => dimension_input(editor, s),
@@ -51,24 +50,11 @@ fn set_tool(
     editor.canvas_cache.clear();
 }
 
-fn toggle_construction(editor: &mut crate::app::FootprintDocument) {
-    editor.state.construction_mode = !editor.state.construction_mode;
-    // v0.22 Phase A5 — mutual exclusivity with centerline.
-    if editor.state.construction_mode {
-        editor.state.centerline_mode = false;
-    }
-    editor.canvas_cache.clear();
-}
-
-fn toggle_centerline(editor: &mut crate::app::FootprintDocument) {
-    editor.state.centerline_mode = !editor.state.centerline_mode;
-    // Mutual exclusivity — enabling centerline clears
-    // construction (same Fusion 360 convention as the
-    // Linetype submenu where Normal/Construction/Centerline
-    // are radio-style).
-    if editor.state.centerline_mode {
-        editor.state.construction_mode = false;
-    }
+fn pick_linetype(
+    editor: &mut crate::app::FootprintDocument,
+    linetype: crate::library::editor::footprint::sketch_mode::SketchLinetype,
+) {
+    linetype.apply_to(&mut editor.state);
     editor.canvas_cache.clear();
 }
 

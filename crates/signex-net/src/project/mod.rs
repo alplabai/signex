@@ -52,6 +52,7 @@ use crate::build::{
 use crate::uf::{Key, find as uf_find, union as uf_union};
 
 mod buses;
+mod components;
 mod designators;
 mod members;
 mod name_changes;
@@ -60,6 +61,7 @@ mod net_index;
 mod root_order;
 mod sheet_numbers;
 
+pub use components::{ComponentPin, ComponentReport, PlacedPin, PlacedSymbol, UnconnectedPin};
 pub use members::{NetMember, NetMemberKind, NetMembers};
 pub use name_changes::{ProjectNetChange, project_name_changes};
 pub use names::{MultiNamedNet, NetNameSource};
@@ -294,7 +296,7 @@ pub fn build_project_netlist_indexed(graph: &ProjectGraph) -> (ProjectNetlist, N
     let stitched = stitch_project(graph, Want::Members);
     (
         stitched.netlist,
-        NetIndex::from_members(stitched.members, stitched.placements),
+        NetIndex::from_members(stitched.members, stitched.placements, stitched.symbols),
     )
 }
 
@@ -322,6 +324,8 @@ struct Stitched {
     members: Vec<NetMembers>,
     /// Every placement the walk reached, in walk order.
     placements: Vec<(SheetKey, InstancePath)>,
+    /// Every non-power symbol per placement, for [`NetIndex::components`].
+    symbols: Vec<PlacedSymbol>,
 }
 
 fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
@@ -542,6 +546,11 @@ fn stitch_project(graph: &ProjectGraph, want: Want) -> Stitched {
             occs.iter()
                 .map(|o| (o.key.clone(), o.path.clone()))
                 .collect()
+        } else {
+            Vec::new()
+        },
+        symbols: if want_members {
+            components::placed_symbols(&occs)
         } else {
             Vec::new()
         },

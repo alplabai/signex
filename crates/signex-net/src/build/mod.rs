@@ -51,9 +51,10 @@ use crate::uf::{Key, find as uf_find, union as uf_union};
 /// 1 µm integer bucket — the union-find key space and the single definition of
 /// "same point" for the whole derivation (D5.5). `pub` so `signex-erc`'s rules
 /// can compare positions with the exact same metric instead of hand-rolling a
-/// second float-epsilon `same()` (issue #388).
+/// second float-epsilon `same()` (issue #388). Defined once, on
+/// [`Point::um_key`], so the types crate's own readers share it.
 pub fn pt_key(p: &Point) -> Key {
-    ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64)
+    p.um_key()
 }
 
 /// True when `p` lies on segment `a`–`b` (endpoints included) in the integer
@@ -499,6 +500,14 @@ pub(crate) fn merged_sheet_parent(sheet: &SchematicSheet) -> HashMap<Key, Key> {
     merged_connectivity(sheet).parent
 }
 
+/// The logical connectivity of `sheet`: wires and junctions plus the
+/// same-name label and power-port merges, the nets [`build_netlist`] reports.
+/// Two points share a net iff their [`SheetConnectivity::root_of`] agree.
+#[must_use]
+pub fn logical_connectivity(sheet: &SchematicSheet) -> SheetConnectivity {
+    merged_connectivity(sheet)
+}
+
 /// The whole per-sheet topology a consumer must read to agree with
 /// [`build_netlist`]: the physical [`SheetConnectivity`] core (wire endpoints +
 /// junction T-merges) **plus** the logical same-name label merge on top. Every
@@ -571,6 +580,15 @@ pub(crate) fn collect_terminals(
         .collect()
 }
 
+/// How a terminal names its pin: the pin number when present, else its name.
+pub(crate) fn terminal_pin_id(lp: &signex_types::schematic::LibPin) -> String {
+    if lp.pin.number.is_empty() {
+        lp.pin.name.clone()
+    } else {
+        lp.pin.number.clone()
+    }
+}
+
 /// [`collect_terminals`] with the world position of each pin's tip beside it.
 pub(crate) fn collect_terminals_at(
     sheet: &SchematicSheet,
@@ -587,12 +605,7 @@ pub(crate) fn collect_terminals_at(
             if !gate.contains(&world_pos) {
                 continue;
             }
-            // Pin id: prefer the pin number when present, else fall back to its name.
-            let pin = if !lp.pin.number.is_empty() {
-                lp.pin.number.clone()
-            } else {
-                lp.pin.name.clone()
-            };
+            let pin = terminal_pin_id(lp);
             let root = uf_find(parent, pt_key(&world_pos));
             let terminal = Terminal {
                 symbol: sym.uuid,

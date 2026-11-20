@@ -24,9 +24,9 @@ panels-messages-column-time = TIME
 # Shown when nothing has been logged.
 panels-messages-empty = No runtime messages yet
 
-# Hint beside the empty state: the environment variables that turn on
-# verbose logging. Keep the variable names as they are.
-panels-messages-verbose-hint = Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output
+# Hint under the empty state; the environment variables that turn on verbose
+# logging follow it on their own line, in mono.
+panels-messages-verbose-hint = Set one of these for verbose output:
 
 # A cell with no value (messages carry no document or time yet).
 panels-messages-no-value = —
@@ -67,8 +67,8 @@ panels-components-badge-installed = INSTALLED
 panels-components-badge-global = GLOBAL
 panels-components-badge-stock = STOCK
 
-# Empty list: nothing is mounted.
-panels-components-nothing-mounted = No libraries mounted. Use "+ Add" or open a project.
+# Title of the empty-list card: nothing is mounted.
+panels-components-nothing-mounted = No libraries mounted
 # Empty Project section: no project is open.
 panels-components-empty-no-project = No project libraries. Open a project to populate this section.
 # Empty Project section: the open project declares no library. The path
@@ -131,7 +131,7 @@ panels-filters-delete = Delete
 panels-filters-unnamed = Filter { $number }
 
 # Object kinds a selection filter can include.
-panels-filter-components = Components
+panels-filter-components = Parts
 panels-filter-wires = Wires
 panels-filter-buses = Buses
 panels-filter-sheet-symbols = Sheet Symbols
@@ -150,12 +150,6 @@ panels-filter-other = Other
 panels-properties-document-options = Document Options
 # Subsection label: the measurement units.
 panels-properties-units = Units
-# Subsection label of Page Options: paper size and format.
-panels-properties-formatting = Formatting and Size
-# Subsection label of Page Options: the sheet border and its zone grid.
-panels-properties-border-zones = Border and Zones
-# Subsection label of Page Options: the document font.
-panels-properties-text = Text
 # Subsection label: the 3 × 3 text anchor picker.
 panels-properties-justification = Justification
 
@@ -182,7 +176,7 @@ panels-kind-variants = Variants
 # Schematic filter.
 panels-kind-sch-filter = SCH Filter
 # Schematic object list.
-panels-kind-sch-list = SCH List
+panels-kind-object-list = Object List
 # Bill of materials studio.
 panels-kind-bom-studio = BOM Studio
 panels-kind-favorites = Favorites
@@ -485,23 +479,16 @@ panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with
 # Measure tool prompts.
 panels-status-bar-measure-first = Click the first point
 panels-status-bar-measure-second = Click the second point
-panels-erc-run = Run ERC (F8)
-panels-erc-clear = Clear
 panels-erc-running = Running…
-panels-erc-stale = Results may be out of date: the sheet changed since the last run. Run ERC again.
 panels-erc-no-findings-left = No findings left since the last run
-panels-erc-no-diagnostics = No ERC diagnostics yet
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
-panels-erc-results-title = ERC Diagnostic Results
 panels-erc-add-no-connect = Add No-Connect
-panels-erc-show-on-canvas = Show on Canvas
 panels-erc-waive-net = Waive net
 panels-erc-restore = Restore
 panels-properties-needs-schematic = Properties are available when a schematic is active
 panels-properties-open-project = Open a project
 panels-properties-nothing-selected = Nothing selected
 panels-properties-one-object-selected = 1 object selected
-panels-properties-no-placement-options = Click to place. No per-instance options.
 panels-properties-tab-general = General
 panels-properties-tab-parameters = Parameters
 panels-properties-template-defaults = Template: using A-series defaults
@@ -543,13 +530,9 @@ panels-net-classes-nets = Nets
 panels-net-classes-patterns = Patterns
 panels-child-sheet-name = Name
 panels-child-sheet-file = File
-panels-child-sheet-line-width = Line Width (mm)
 
 ## ERC panel counts and waivers. $count is a whole number.
 panels-erc-count-errors = { $count } errors
-panels-erc-count-warnings = { $count } warnings
-panels-erc-count-info = { $count } info
-panels-erc-waived = { $count } waived
 # A net waiver: the rule id, the net name and how many findings it hid in the
 # newest run.
 panels-erc-waiver-row = { $rule }  net { $net }  ({ $hidden ->
@@ -617,25 +600,8 @@ panels-drawing-color = Color
 panels-drawing-placement = Placement
 panels-drawing-placement-behind = Behind circuit
 panels-drawing-placement-above = Above circuit
-# Number rows. X and Y are the sheet axes.
-panels-drawing-start-x = Start X
-panels-drawing-start-y = Start Y
-panels-drawing-end-x = End X
-panels-drawing-end-y = End Y
-panels-drawing-position-x = Position X
-panels-drawing-position-y = Position Y
-panels-drawing-center-x = Center X
-panels-drawing-center-y = Center Y
-# Stroke width of an arc.
-panels-drawing-width = Width
-# Stroke width of a line, or the width of a rectangle.
-panels-drawing-width-mm = Width (mm)
-panels-drawing-height-mm = Height (mm)
 # Stroke width of a closed shape.
 panels-drawing-border = Border
-panels-drawing-radius = Radius
-panels-drawing-start-angle = Start Angle
-panels-drawing-end-angle = End Angle
 # Colour tile: the theme's own colour.
 panels-drawing-color-auto = Auto
 
@@ -652,21 +618,13 @@ panels-net-classes-width-cell = { $width } mm
 # Width cell of a class with no width: each wire keeps its own.
 panels-net-classes-wire-width = Wire's own
 panels-net-classes-no-members = None
-# SCH Filter panel (#2417), over the chip grid.
-panels-sch-filter-hint = Kinds a click, a box and the hover pick can select. Presets are edited in Properties.
+# SCH Filter panel (#2417, Graphite mockup #56), over the kind toggles.
+panels-sch-filter-hint = What a click, a box and the hover pick can select.
 
 # Properties of a placed object (#2418). $unit is the panel's length unit (mm, mil, in, um).
 panels-placed-location = Location
 panels-placed-properties = Properties
-panels-placed-x = X ({ $unit })
-panels-placed-y = Y ({ $unit })
-panels-placed-start-x = Start X ({ $unit })
-panels-placed-start-y = Start Y ({ $unit })
-panels-placed-width = Width ({ $unit })
-panels-placed-height = Height ({ $unit })
 panels-placed-rotation = Rotation
-# A rotation choice; $degrees is a whole number of degrees (0, 90, 180 or 270 in a list, any value for the current one).
-panels-placed-degrees = { $degrees } Degrees
 # Shown above the disabled rows of a locked object; $reason is the lock's own words.
 panels-placed-locked = Locked: { $reason }
 panels-placed-parameters = Parameters ({ $count })
@@ -683,7 +641,285 @@ panels-placed-sheet-file = Sheet File
 # parameters apply to every net inside it.
 panels-directive-blanket = Blanket
 panels-directive-net-class = Net Class
-# Section title: the ERC rules a Blanket does not report inside its region.
-panels-directive-erc-exclusions = ERC Exclusions
-# Checkbox: the Blanket reports no ERC rule at all inside its region.
-panels-directive-all-rules = All Rules
+
+## Net Inspector panel (Graphite mockup #58): the By Net / By Component modes, the part
+## list, the empty-state cards and the footer. Column headings are shown in
+## capitals, so they are written in capitals here.
+
+# Segments of the mode control; $count is how many rows each list has.
+panels-net-inspector-by-net = By Net { $count }
+panels-net-inspector-by-component = By Component { $count }
+# Placeholder of the filter box in By Component mode.
+panels-net-inspector-filter-parts = Filter parts
+panels-net-inspector-column-part = PART
+panels-net-inspector-column-value-footprint = VALUE · FOOTPRINT
+# Follows a part row's value in the same cell: the part's footprint.
+panels-net-inspector-footprint-suffix = · { $footprint }
+# Sub-header of an expanded part, muted, in sentence case.
+panels-net-inspector-column-pin = Pin
+panels-net-inspector-column-pin-net = Net
+panels-net-inspector-column-pin-name = Pin name
+panels-net-inspector-column-pin-sheet = Sheet
+# Net cell of a pin on no net.
+panels-net-inspector-unconnected = — unconnected
+# The row under a long expanded list; clicking it lists the rest. $count is a whole number.
+panels-net-inspector-more-pins = + { $count } more pins
+# Footer in By Component mode. Whole numbers.
+panels-net-inspector-parts-summary =
+    { $shown } of { $total ->
+        [one] { $total } part
+       *[other] { $total } parts
+    }
+panels-net-inspector-footer-hint = Click a row to go to it
+# Empty-state card titles.
+panels-net-inspector-no-project-title = No nets to show
+panels-net-inspector-reading-title = Reading nets
+panels-net-inspector-unavailable-title = Nets unavailable
+panels-net-inspector-open-messages = Open Messages
+# Under "No net matches the filter."; $filter is the filter text, $total a whole number.
+panels-net-inspector-empty-body = Nothing named { $filter } in { $total ->
+        [one] { $total } net
+       *[other] { $total } nets
+    }.
+panels-net-inspector-empty-parts = No part matches the filter.
+panels-net-inspector-empty-parts-body = Nothing named { $filter } in { $total ->
+        [one] { $total } part
+       *[other] { $total } parts
+    }.
+panels-net-inspector-clear-filter = Clear filter
+# Under a no-match title while the filter is empty: the project lists nothing.
+panels-net-inspector-empty-none = The project has nothing to list here yet.
+
+## Components panel rows, chips, Recently placed and empty states (#2535)
+
+# Body of the "No libraries mounted" card.
+panels-components-nothing-mounted-body = Use “+ Add” or open a project.
+# Buttons of the "No libraries mounted" card.
+panels-components-add-library = Add Library…
+panels-components-open-project = Open Project…
+# Caption at the right of the source chips. $count is a whole number.
+panels-components-library-count = { $count ->
+        [one] { $count } library
+       *[other] { $count } libraries
+    }
+# Library header count while a filter is active. $shown and $total are whole numbers.
+panels-components-shown-of-total = { $shown } of { $total }
+# No part matches the filter. $filter is the typed text.
+panels-components-no-match = No components match “{ $filter }”
+# Button that empties the filter.
+panels-components-clear-filter = Clear
+# Inline button on a hovered row, a recent part and the details title row.
+panels-components-place = Place
+# Switch next to Add: rows with a symbol thumbnail and a description.
+panels-components-previews = Previews
+panels-components-previews-tooltip = Rows with symbol preview (remembered as a preference)
+# Section title above the parts placed from this panel, in capitals.
+panels-components-recent-title = RECENTLY PLACED
+# How often a recent part was placed this session. $count is a whole number.
+panels-components-recent-uses = ×{ $count }
+# Hint card before anything was placed from the panel.
+panels-components-recent-empty = Parts you place from this panel show here.
+# Second line of the details title: the description, then the library.
+panels-components-details-subtitle = { $description } · { $library }
+# Second line of the drag card while a row is dragged toward the canvas.
+panels-components-drag-release = release to place
+
+# Filter (Graphite mockup #55) and SCH Filter (Graphite mockup #56) panels: the kind toggles.
+# All / None cells over the kind toggles.
+panels-filter-all = All
+panels-filter-none = None
+# How many kinds are on; $on and $total are counts.
+panels-filter-readout = { $on } of { $total } kinds
+# Filter panel header: the editor it follows, then what it does.
+panels-filter-editor-schematic = Schematic
+panels-filter-editor-board = Board
+panels-filter-follows = follows the active editor
+panels-filter-counts-sheet = Counts are objects on this sheet.
+panels-filter-counts-board = Counts are objects on this board.
+# SCH Filter's Presets section.
+panels-filter-presets = Presets
+panels-filter-save-current = Save current
+panels-filter-save-current-tip = Save the current kinds as a preset
+# Save current at the limit; $limit is the most presets kept.
+panels-filter-preset-limit = At most { $limit } presets: delete one to save another
+panels-filter-preset-name-label = Name
+panels-filter-no-presets = No presets yet. Save current keeps the kinds that are on.
+# A preset and the kinds it turns on; $name is the preset's, $kinds a list of kind names.
+panels-filter-preset-kinds = { $name }: { $kinds }
+panels-filter-preset-no-kinds = { $name }: no kinds
+
+## Object List panel (#1259): every object of the sheet or the project, listed
+## and selectable. The panel title is panels-kind-object-list.
+
+# Placeholder of the box that filters the list by name, value or text.
+panels-object-list-filter = Filter objects
+# Scope switch: only the sheet in view.
+panels-object-list-scope-sheet = This sheet
+# Scope switch: every sheet of the project.
+panels-object-list-scope-project = Project
+# Kind chip that shows every kind.
+panels-object-list-chip-all = All
+# Chip that opens the other kinds' chips.
+panels-object-list-chip-more = More ▾
+# The same chip while the other kinds are shown.
+panels-object-list-chip-fewer = Fewer ▴
+# Kind chips, one per kind of object.
+panels-object-list-kind-part = Parts
+panels-object-list-kind-label = Labels
+panels-object-list-kind-wire = Wires
+panels-object-list-kind-power-port = Power ports
+panels-object-list-kind-port = Ports
+panels-object-list-kind-sheet-symbol = Sheet symbols
+panels-object-list-kind-sheet-entry = Sheet entries
+panels-object-list-kind-text = Texts
+panels-object-list-kind-junction = Junctions
+panels-object-list-kind-bus = Buses
+panels-object-list-kind-drawing = Drawing objects
+panels-object-list-kind-directive = Directives
+# One-letter kind marks in the first column. C is a placed part (component).
+panels-object-list-letter-part = C
+panels-object-list-letter-label = L
+panels-object-list-letter-wire = W
+panels-object-list-letter-power-port = P
+panels-object-list-letter-port = O
+panels-object-list-letter-sheet-symbol = S
+panels-object-list-letter-sheet-entry = E
+panels-object-list-letter-text = T
+panels-object-list-letter-junction = J
+panels-object-list-letter-bus = B
+panels-object-list-letter-drawing = D
+panels-object-list-letter-directive = X
+# Column headings.
+panels-object-list-column-name = Name
+panels-object-list-column-value = Value / text
+panels-object-list-column-sheet = Sheet
+# Name column of an object that has no name of its own.
+panels-object-list-noun-wire = Wire
+panels-object-list-noun-text = Text
+panels-object-list-noun-junction = Junction
+panels-object-list-noun-bus = Bus
+panels-object-list-noun-drawing = Drawing
+panels-object-list-noun-blanket = Blanket
+panels-object-list-noun-compile-mask = Compile mask
+panels-object-list-noun-diff-pair = Differential pair
+# Value column words.
+panels-object-list-value-net-label = net label
+panels-object-list-value-power-port = power port
+panels-object-list-value-port = port
+panels-object-list-value-sheet-entry = sheet entry
+# Value column of a wire on a known net: the net, then the wire's length.
+panels-object-list-value-wire = { $net }, { $length }
+# The row under the drawn rows, while more rows match.
+panels-object-list-more-rows = … { $count } more
+# Caption under the list.
+panels-object-list-hint = Click selects on the canvas, double-click zooms to it.
+# Shown when no object matches the filter or the chips.
+panels-object-list-empty = No object matches.
+# Shown while the project's sheets are being read.
+panels-object-list-reading = Reading the project's sheets…
+# Empty state: no schematic in view (none open, or a board tab).
+panels-object-list-no-schematic = Open a schematic to list its objects.
+# Footer: the objects in scope and how many of them are selected.
+panels-object-list-footer =
+    { $total ->
+        [one] { $total } object
+       *[other] { $total } objects
+    } · { $selected } selected
+
+## ERC panel (#85): Run ERC, the count tiles, findings grouped by rule and
+## the Waived group. The Run ERC key cap comes from the keymap.
+panels-erc-run-button = Run ERC
+panels-erc-clear-tooltip = Clear the ERC results
+panels-erc-stale-banner = Results may be out of date: the sheet changed since the last run.
+# Captions under the count tiles; $count is a whole number.
+panels-erc-tile-errors =
+    { $count ->
+        [one] error
+       *[other] errors
+    }
+panels-erc-tile-warnings =
+    { $count ->
+        [one] warning
+       *[other] warnings
+    }
+panels-erc-tile-info = info
+panels-erc-clean = No problems found.
+# A clean run: what it checked and when. $time is the clock time, HH:MM.
+panels-erc-clean-detail = { $sheets ->
+        [one] 1 sheet
+       *[other] { $sheets } sheets
+    }, { $symbols ->
+        [one] 1 symbol
+       *[other] { $symbols } symbols
+    } and { $nets ->
+        [one] 1 net
+       *[other] { $nets } nets
+    } checked at { $time }.
+# The second line of a finding: its sheet and position.
+panels-erc-finding-place = { $sheet } · { $x }, { $y }
+# The one row action that selects and frames a finding (AV-13).
+panels-erc-show = Show
+panels-erc-waived-group = Waived
+# A net waiver in the Waived group: the rule id and the net.
+panels-erc-net-waiver-title = { $rule } · net { $net }
+# Who waived a finding and when, as they wrote it.
+panels-erc-waived-by = by { $author } · { $date }
+
+## The waiver form ERC and DRC share (AV-13).
+panels-waiver-needs-both = Write a reason and an author to waive it.
+
+## Messages panel (#86): level chips, source and document filters.
+panels-messages-level-all = All
+panels-messages-all-sources = All sources
+panels-messages-all-documents = All documents
+panels-messages-filter-hint = Filter messages
+panels-messages-copy-tooltip = Copy the shown messages
+panels-messages-clear-tooltip = Clear the messages
+panels-messages-none-match = No messages match the filters.
+# Tab + compact dock panel pair (#2523): the panel header's link that opens
+# the same view as a document tab.
+panels-paired-open-as-tab = Open as tab
+# Title of the length-matching tab and its compact dock panel.
+panels-paired-length-matching = Length Matching
+# Compact group header caption: the group's member count, a whole number.
+panels-compact-group-members =
+    { $count ->
+        [one] { $count } member
+       *[other] { $count } members
+    }
+# Compact group header caption: the target length and its tolerance, both
+# already formatted in the display unit.
+panels-compact-group-band = { $target } ± { $tolerance }
+# Status pill: how many members are outside the target band (whole number).
+panels-compact-group-out-of-band = { $count } out of band
+# Status pill: every member is inside the target band.
+panels-compact-group-all-in-band = all in band
+# Member caption: the member is one half of the differential pair $pair.
+panels-compact-group-pair = pair { $pair }
+# Member caption: the member is an xSignal (a net path through series parts).
+panels-compact-group-xsignal = xSignal
+
+## Messages lines for the notices an edit raises (signex_engine::EngineNotice).
+## Pin names ("R7 pin 1") and net names are passed in as they are.
+
+# A dragged wire could not keep what joined it at one point.
+panels-messages-dragged-wire-left-one = could not keep { $name } on the dragged wire
+# The same at several points; $names lists the first few.
+panels-messages-dragged-wire-left-many = could not keep { $count } connections on the dragged wire: { $names }
+# A grip drag of a wire end could not keep the wires attached at the end,
+# which was at ($x, $y) mm.
+panels-messages-grip-end-left = could not keep the wires at ({ $x }, { $y }) on the dragged end
+# "Keep wires" held a pin on its net instead of joining it to the wire of
+# another net its end now lies in.
+panels-messages-held-pins-one = { $name } kept its net and was not joined to the wire it now ends on
+panels-messages-held-pins-many = { $count } pins kept their nets and were not joined to the wires they end on: { $names }
+# A pin end got no junction dot because the dot would merge two nets.
+panels-messages-pin-dot-refused-one = could not join { $pin } to the wires it ends on: they carry two nets, { $through } and { $other }
+# The same for several pins; each entry of $names is "R1 pin 2 (A, B)".
+panels-messages-pin-dot-refused-many = could not join { $count } pins to wires of two nets they end on: { $names }
+# One entry of that list: a pin and the two nets.
+panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
+# Stands for a net nothing names.
+panels-messages-unnamed-net = an unnamed net
+# The end of a list cut after its first few entries.
+panels-messages-list-more = { $names } and { $count } more

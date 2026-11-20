@@ -4,6 +4,10 @@
 //! Pure IO + conversion with no app state, so it can run in
 //! `spawn_blocking`; the `update`-side half is
 //! `app/handlers/library_place.rs`.
+//!
+//! Every library here is opened to read (`LocalGitAdapter::open_to_read`):
+//! placing never needs the Git history, so a library mounted read-only for
+//! want of it (Skip for now, mockup row 138) still places.
 
 use std::path::{Path, PathBuf};
 
@@ -55,7 +59,7 @@ pub fn resolve_board_part(
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
-    let own = LocalGitAdapter::open(library_path).map_err(|e| {
+    let own = LocalGitAdapter::open_to_read(library_path).map_err(|e| {
         BoardPartError::Read(format!("Could not open {}: {e}", library_path.display()))
     })?;
     let row = own.read_row(table, row_id).map_err(|e| {
@@ -68,7 +72,7 @@ pub fn resolve_board_part(
         let (_, path) = open_libraries
             .iter()
             .find(|(id, _)| *id == address.library_id)?;
-        LocalGitAdapter::open(path)
+        LocalGitAdapter::open_to_read(path)
             .ok()?
             .get_footprint(address.uuid)
             .ok()
@@ -105,7 +109,7 @@ pub fn open_library(
         .iter()
         .find(|(id, _)| *id == library)
         .ok_or_else(|| format!("its library {library} is not open"))?;
-    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open(path)
+    let adapter = signex_library::adapters::local_git::LocalGitAdapter::open_to_read(path)
         .map_err(|e| format!("could not open {}: {e}", path.display()))?;
     Ok((adapter, path.clone()))
 }
@@ -141,7 +145,7 @@ pub fn resolve_placement_of(
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
-    let adapter = LocalGitAdapter::open(library_path)
+    let adapter = LocalGitAdapter::open_to_read(library_path)
         .map_err(|e| format!("Could not open {}: {e}", library_path.display()))?;
     let library_id = adapter.library_id();
     let row = adapter
@@ -260,7 +264,7 @@ pub(crate) fn read_footprint_name(
             .iter()
             .find(|(id, _)| *id == reference.library_id)
             .ok_or_else(|| format!("its library {} is not open", reference.library_id))
-            .and_then(|(_, path)| LocalGitAdapter::open(path).map_err(|e| e.to_string()))
+            .and_then(|(_, path)| LocalGitAdapter::open_to_read(path).map_err(|e| e.to_string()))
             .and_then(|a| a.get_footprint(reference.uuid).map_err(|e| e.to_string()))
     };
     read.map(|footprint| footprint.name)
@@ -322,7 +326,7 @@ fn read_symbol(
                 row.internal_pn, reference.library_id
             )
         })?;
-    LocalGitAdapter::open(owner)
+    LocalGitAdapter::open_to_read(owner)
         .map_err(|e| format!("Could not open {}: {e}", owner.display()))?
         .get_symbol(reference.uuid)
         .map_err(|e| format!("Could not read the symbol of {}: {e}", row.internal_pn))
@@ -341,7 +345,7 @@ pub fn resolve_symbol_choice(
     use signex_library::LibraryAdapter as _;
     use signex_library::adapters::local_git::LocalGitAdapter;
 
-    let adapter = LocalGitAdapter::open(library_path)
+    let adapter = LocalGitAdapter::open_to_read(library_path)
         .map_err(|e| format!("Could not open {}: {e}", library_path.display()))?;
     let row = adapter
         .read_row(table, row_id)

@@ -1,6 +1,6 @@
 use signex_types::schematic::{
-    Bus, Junction, Label, NoConnect, Point, SCHEMATIC_PT_TO_MM, SchDrawing, SelectedItem,
-    SelectedKind, Symbol, TextNote, Wire, circumcircle,
+    Bus, Junction, Label, NoConnect, NoErcDirective, Point, SCHEMATIC_PT_TO_MM, SchDrawing,
+    SelectedItem, SelectedKind, Symbol, TextNote, Wire, circumcircle,
 };
 
 use super::Engine;
@@ -22,6 +22,12 @@ pub mod info_keys {
     pub const JUSTIFY_V: &str = "Vertical Justification";
     /// Prefix of the net a pin sits on, `Pin Net: <number>`; absent when open.
     pub const PIN_NET_PREFIX: &str = "Pin Net: ";
+    /// The ERC rule ids a No-ERC directive silences, comma-separated; blank
+    /// when it silences every rule (#1699).
+    pub const NO_ERC_RULES: &str = "ERC Rules";
+    /// Prefix of a pin's geometry row, `Pin Geometry: <number>`: the length
+    /// in mm and the library rotation in whole degrees, tab-separated.
+    pub const PIN_GEOMETRY_PREFIX: &str = "Pin Geometry: ";
 }
 
 // ---------------------------------------------------------------------------
@@ -36,6 +42,7 @@ pub struct ClipboardSelection {
     pub symbols: Vec<Symbol>,
     pub junctions: Vec<Junction>,
     pub no_connects: Vec<NoConnect>,
+    pub no_erc_directives: Vec<NoErcDirective>,
     pub text_notes: Vec<TextNote>,
 }
 
@@ -110,6 +117,16 @@ impl Engine {
                         .find(|nc| nc.uuid == item.uuid)
                     {
                         clipboard.no_connects.push(nc.clone());
+                    }
+                }
+                ClipboardSlot::NoErcDirective => {
+                    if let Some(d) = self
+                        .document
+                        .no_erc_directives
+                        .iter()
+                        .find(|d| d.uuid == item.uuid)
+                    {
+                        clipboard.no_erc_directives.push(d.clone());
                     }
                 }
                 ClipboardSlot::TextNote => {
@@ -240,6 +257,22 @@ impl Engine {
                                 if pin.visible { "No" } else { "Yes" }
                             ),
                         ));
+                        let rotation = if pin.rotation.is_finite() {
+                            (pin.rotation.rem_euclid(360.0).round() as i64) % 360
+                        } else {
+                            0
+                        };
+                        info.push((
+                            format!("{}{key}", info_keys::PIN_GEOMETRY_PREFIX),
+                            format!(
+                                "{:.2}\t{rotation}",
+                                if pin.length.is_finite() {
+                                    pin.length
+                                } else {
+                                    0.0
+                                }
+                            ),
+                        ));
                     }
                 }
             }
@@ -339,6 +372,9 @@ impl Engine {
                         self.document.page_y(directive.position.y)
                     ),
                 ));
+                // The rules it silences; blank means every rule (#1699).
+                let rules = directive.rules.join(", ");
+                info.push((info_keys::NO_ERC_RULES.into(), rules));
             }
             SelectedKind::TextNote => {
                 let text_note = self
@@ -684,6 +720,7 @@ enum ClipboardSlot {
     Symbol,
     Junction,
     NoConnect,
+    NoErcDirective,
     TextNote,
 }
 
@@ -695,9 +732,9 @@ fn clipboard_slot(kind: SelectedKind) -> Option<ClipboardSlot> {
         SelectedKind::Symbol => Some(ClipboardSlot::Symbol),
         SelectedKind::Junction => Some(ClipboardSlot::Junction),
         SelectedKind::NoConnect => Some(ClipboardSlot::NoConnect),
+        SelectedKind::NoErcDirective => Some(ClipboardSlot::NoErcDirective),
         SelectedKind::TextNote => Some(ClipboardSlot::TextNote),
-        SelectedKind::NoErcDirective
-        | SelectedKind::Directive
+        SelectedKind::Directive
         | SelectedKind::BusEntry
         | SelectedKind::SheetPin
         | SelectedKind::ChildSheet
@@ -729,7 +766,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clipboard_can_carry_matches_the_documented_seven_kinds() {
+    fn clipboard_can_carry_matches_the_documented_eight_kinds() {
         // #465: `clipboard_can_carry` and `collect_selection_clipboard` both
         // derive from `clipboard_slot`'s single exhaustive match, so this
         // pins down which kinds that match currently classifies as
@@ -741,6 +778,7 @@ mod tests {
             SelectedKind::BusEntry,
             SelectedKind::Junction,
             SelectedKind::NoConnect,
+            SelectedKind::NoErcDirective,
             SelectedKind::Label,
             SelectedKind::SheetPin,
             SelectedKind::TextNote,
@@ -762,6 +800,7 @@ mod tests {
                 SelectedKind::Bus,
                 SelectedKind::Junction,
                 SelectedKind::NoConnect,
+                SelectedKind::NoErcDirective,
                 SelectedKind::Label,
                 SelectedKind::TextNote,
             ]

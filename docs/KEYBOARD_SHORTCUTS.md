@@ -133,8 +133,14 @@ twin is a macOS system shortcut stay on the physical Control key (⌃ on macOS):
 profile has exactly one raw owner of that chord, and Windows and Linux are
 unchanged) and gains the Mac chord from a `platform = "macos"` section:
 `Mod+Shift+Z` (⇧⌘Z), so ⌃⇧Z also still redoes on macOS. The Altium profile's
-macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F) and `Mod+W` (Close Document,
-⌘W).
+macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F), `Mod+W` (Close Document,
+⌘W) and `Alt+I` (⌥I, add vertex while drawing, else Copy Attributes): a Mac
+keyboard has no Insert key, so ⌥I is that command's menu hint on macOS. It
+also has `Shift+Tab` (⇧Tab) for `cycle_wiring_mode`, next to ⌃Space, which
+macOS takes for the input source once two exist; ⇧Tab is that command's menu
+hint on macOS. A held Shift does not change the drag (Shift+click adds to the
+selection and Shift+wheel pans, neither mid-drag), unlike ⌥, which flips
+whether the wires follow and so was not used.
 
 Bindings in one section load in alphabetical order of their trigger text, and a
 command's menu hint is its last binding. Respelling `Ctrl+…` as `Mod+…` would
@@ -147,7 +153,9 @@ On a board (the `pcb` context, #2406) both profiles bind `1` Board Sketch,
 Footprint and `Q` the unit toggle; the chord profile adds `N` Toggle
 Ratsnest, `P K` Keepout and `T D` Run DRC, Classic `C` Toggle Ratsnest, `K`
 Keepout, `F7` Run DRC and `Ctrl+M` Measure Distance (the chord profile's
-global `Ctrl+M` already measures on a board). A board binding outranks a global one with the same keys, so
+global `Ctrl+M` already measures on a board). Edit ▸ Origin ▸ Set is `E O S`
+in the chord profile and `Shift+O` in Classic, whose `E` alone is taken
+(2026-11-18). A board binding outranks a global one with the same keys, so
 Classic's `L` and `Q` keep their sheet meaning on a sheet. `Q` sits in a
 `pcb` section of its own before the global sections, so `cycle_unit` keeps
 `Ctrl+Q` as its menu hint. A test checks that every `pcb` binding of both
@@ -203,6 +211,44 @@ Built-in profiles are immutable. Editing starts by creating a custom profile
 copied from the currently active profile. Custom profiles can then be selected,
 edited, deleted, imported, and exported from Preferences > Keyboard Shortcuts.
 
+### The Keyboard shortcuts page (mockup row 145)
+
+The page (`preferences/keymap/`) reads top to bottom:
+
+- **Profile row**, on one line: the Profile picker, whose entries read
+  `<name> · <n> bindings` for a built-in and `<name> (custom) · <n> bindings`
+  for a custom profile; **Create** (a custom copy of the active profile);
+  **Delete** (inert on a built-in profile); then **Import…** and **Export…**,
+  which open the file dialogs.
+- **Conflict banner**, a warning shown only when the active profile has a
+  conflict. It counts the conflicts and names the first one: the keys as
+  keycaps and the two commands bound to them (or, for a chord macOS keeps,
+  the one command). **Show** turns on the Conflicts chip.
+- The shortcuts-file banner (#595), the backup row with Restore and Delete
+  (#603), and the status line of the last action stay above the table.
+- **Filter row**: the search field (label, command id or keys) and the
+  context chips **All**, **Global**, **Schematic**, **PCB**, **Footprint**,
+  **Library** and **Conflicts** (with the conflict count). One chip is on at
+  a time. A row shows under the chip of its context; rows of dialogs, text
+  fields, the palette and placement show under All only. Conflicts lists
+  the rows that take part in a conflict of the active profile. The chip is
+  page view state (`KeymapViewState`): it never marks Preferences dirty and
+  starts on All each time Preferences opens.
+- **Table**: Command, Category, Context, Shortcut and State, sorted by
+  command name. Keys show as keycaps, with "then" between the strokes of a
+  sequence; a pointer gesture shows as text; a command with no key shows a
+  dash. State tones: Conflict and Invalid as error pills, Unbound in muted
+  italics, Gesture and Reserved by macOS as neutral pills, Editable and
+  Create custom as a quiet caption. A row whose keys a fixed app key takes
+  first (F1, Esc) names that key in its tooltip ("Overridden by …").
+- **Edit** shows while the pointer is over a keyboard row of a custom
+  profile. It opens the **recorder popover**, anchored under that row over
+  the table: the command, a recording box with the captured keycaps, the
+  current keys, a help line, a warning when a fixed app key would swallow
+  the recorded keys, and Clear, Stop (Record once stopped), Cancel and OK.
+  OK puts the new keys in the working copy; like every Preferences change
+  they are saved by the dialog's Apply or OK.
+
 The editor is backed by `KeymapEditorModel`, which exposes rows with:
 
 - command label and category from command metadata
@@ -248,6 +294,19 @@ corner, any slope). Press it during the move and the ghost changes at once; the
 drop commits what the ghost shows. The mode holds for later moves, and the
 status bar names it while it is not Auto. Move By, align and distribute,
 position edits, rotate and mirror always use Auto (#1669).
+
+A key bound in the keymap runs some commands once, however long it is held:
+`cycle_wiring_mode`, the corner mode and posture keys, the grid steps
+(`next_grid`, `previous_grid`), the unit and selection-mode cycles, every
+show/hide toggle, flip and mirror (`X`, `Y`, `L`), and `Insert` (one vertex per
+press mid wire). `Space` and `Shift+Space` bend an open wire, bus or track run
+once per press, in the window the run is open in, but turn a selection on
+every repeat. The rule is the same in every profile, Classic included (a held
+`X`, `Y` or `L` mirrors or flips once, a held `Shift+Space` steps the corner
+mode once). Other commands, such as zoom, undo, nudges and layer stepping,
+repeat while the key is held (`docs/DECISIONS.md`, "Held keys", 2026-11-19).
+The footprint editor canvas handles its own `X` (flip the pad's layer) outside
+the keymap; that one still repeats (#2545).
 
 `Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the

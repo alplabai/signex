@@ -154,18 +154,11 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::EditTextNoteText(uuid, new_text) => {
-                self.apply_engine_command(
-                    signex_engine::Command::UpdateText {
-                        target: signex_engine::TextTarget::TextNote(*uuid),
-                        value: new_text.to_string(),
-                    },
-                    true,
-                    true,
-                );
-            }
             crate::panels::PanelMsg::EditBlanket(uuid, edit) => {
                 self.edit_blanket_field(*uuid, edit);
+            }
+            crate::panels::PanelMsg::EditNoErcRules(uuid, edit) => {
+                self.edit_no_erc_rules(*uuid, edit);
             }
             crate::panels::PanelMsg::EditTextFontFamily(target, family) => {
                 self.apply_engine_command(

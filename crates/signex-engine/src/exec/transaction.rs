@@ -20,6 +20,7 @@ pub(crate) struct Transaction {
     failed: bool,
     /// Notices already raised when it began: a rollback drops the rest.
     warnings: usize,
+    notices: usize,
     unkept_pins: usize,
 }
 
@@ -57,6 +58,7 @@ impl Engine {
             patch: None,
             failed: false,
             warnings: self.warnings.len(),
+            notices: self.notices.len(),
             unkept_pins: self.unkept_pins.len(),
         });
         self.history_suppressed = true;
@@ -128,6 +130,7 @@ impl Engine {
         self.bump_connectivity_revision();
         // Notices about edits that never happened are not shown.
         self.warnings.truncate(tx.warnings);
+        self.notices.truncate(tx.notices);
         self.unkept_pins.truncate(tx.unkept_pins);
     }
 

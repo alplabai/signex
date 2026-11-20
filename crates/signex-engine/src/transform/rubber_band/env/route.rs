@@ -8,7 +8,7 @@ use signex_types::schematic::{Point, SelectedItem, SelectedKind, Wire};
 use uuid::Uuid;
 
 use super::{Env, key, same_delta, zero_length};
-use crate::transform::rubber_band::{Follow, Move};
+use crate::transform::rubber_band::{Follow, Move, WireJoin};
 
 impl Env {
     /// A wire whose two ends sit on moved pins that move alike translates
@@ -83,6 +83,14 @@ impl Env {
         let attached = self.attached(at);
         let skip: Vec<usize> = attached.iter().map(|(index, _)| *index).collect();
         let mut probe = self.probe(at, &skip);
+        let wire = group.iter().find_map(|m| m.wire);
+        if matches!(wire, Some(WireJoin::Grip(_))) {
+            // A grip drags its end off whatever it sat on; only the wires
+            // attached there come along.
+            probe.stationary_pin = false;
+            probe.label = false;
+            probe.interior = false;
+        }
         let single_target = group.iter().all(|m| key(&m.new) == key(&group[0].new));
         let plain = self.policy.plain.contains(&at);
         if single_target && !plain && !probe.stationary_pin {
@@ -90,19 +98,94 @@ impl Env {
         }
         // A child-sheet pin is anchored to the wire it sits on, interior or end.
         let on_wire = probe.interior && group.iter().any(|m| m.sheet_pin);
-        let connected =
-            !attached.is_empty() || probe.label || !probe.junctions.is_empty() || on_wire;
+        // A wire end on a pin is a connection; a pin tip on a pin tip is not.
+        let pin_held = probe.stationary_pin && wire.is_some();
+        // A locked wire is never stretched: it keeps its place and the carried
+        // point gets a new path.
+        let locked = wire.is_some() && attached.iter().any(|(i, _)| self.wires[*i].locked);
+        let connected = !attached.is_empty()
+            || probe.label
+            || !probe.junctions.is_empty()
+            || on_wire
+            || pin_held;
         if !connected || plain {
             return;
         }
+        // An attached wire that editing would get a T dot it never had is left
+        // alone (see `edit_would_dot`): the point stays as the move left it.
+        if wire.is_some() && self.carried_point_bails(at) {
+            return;
+        }
         let new = group[0].new;
-        let anchored =
-            on_wire || !single_target || self.holds_the_tip(at, &probe, !attached.is_empty());
+        let anchored = on_wire
+            || locked
+            || !single_target
+            || self.holds_the_tip(at, &probe, !attached.is_empty());
         if !anchored && single_target && self.try_follow(at, &attached, new, out) {
             self.carry_dots(&probe.junctions, new, out);
             return;
         }
+        // A point a dragged wire carries that another wire passes through with
+        // no dot was no connection there (#107): a new path ending on it would
+        // make one through a T dot, so the contact is left as the move left it.
+        if wire.is_some() && probe.interior && probe.junctions.is_empty() {
+            return;
+        }
         self.add_paths(group, &attached, &skip, out);
+    }
+
+    /// Whether a point a dragged wire carries from `at` must be left as the
+    /// move left it: editing a wire attached there, or the elbow leg at its
+    /// far end that a slide would edit, could make the reconcile dot a
+    /// contact that was there before (see [`Self::edit_would_dot`]).
+    pub(in crate::transform::rubber_band) fn carried_point_bails(&self, at: Key) -> bool {
+        self.attached(at).into_iter().any(|(index, at_start)| {
+            let wire = &self.wires[index];
+            let far = key(if at_start { &wire.end } else { &wire.start });
+            self.edit_would_dot(index, far) || self.elbow_leg_would_dot(index, far)
+        })
+    }
+
+    /// Whether editing wire `index`, whose end `far` stays put, could make the
+    /// reconcile dot a T that had no dot (#107: no connection) and that the
+    /// plain move would not dot: `far` inside another unselected wire, or an
+    /// unselected wire's end inside this one. A selected wire's contacts are
+    /// the plain move's own (it reconciles the moved wire too), and its moved
+    /// ends are where the follow takes this wire.
+    fn edit_would_dot(&self, index: usize, far: Key) -> bool {
+        let undotted = |k: Key| self.probe(k, &[index]).junctions.is_empty();
+        let foreign = |other: usize, w: &Wire| other != index && !self.selected.contains(&w.uuid);
+        let far_inside = (self.wires_near(far, far).into_iter()).any(|(other, w)| {
+            let (a, b) = (key(&w.start), key(&w.end));
+            foreign(other, w) && far != a && far != b && signex_net::point_on_segment(far, a, b)
+        });
+        if far_inside && undotted(far) {
+            return true;
+        }
+        let wire = &self.wires[index];
+        let (a, b) = (key(&wire.start), key(&wire.end));
+        let inside = |k: Key| k != a && k != b && signex_net::point_on_segment(k, a, b);
+        (self.wires_near(a, b).into_iter())
+            .filter(|(other, w)| foreign(*other, w))
+            .flat_map(|(_, w)| [key(&w.start), key(&w.end)])
+            .any(|k| inside(k) && undotted(k))
+    }
+
+    /// Whether the plain two-wire elbow at `far`, which a slide of wire
+    /// `index` would also edit, could get such a dot.
+    fn elbow_leg_would_dot(&self, index: usize, far: Key) -> bool {
+        (self.wires_near(far, far).into_iter())
+            .filter(|(other, w)| *other != index && (key(&w.start) == far || key(&w.end) == far))
+            // A slide never edits a selected wire (`elbow_leg`).
+            .filter(|(_, w)| !self.selected.contains(&w.uuid))
+            .any(|(leg, w)| {
+                let other_end = if key(&w.start) == far {
+                    key(&w.end)
+                } else {
+                    key(&w.start)
+                };
+                self.edit_would_dot(leg, other_end)
+            })
     }
 
     /// A no-connect marks the pin: it moves with the tip.
@@ -162,11 +245,14 @@ impl Env {
         out: &mut Follow,
     ) {
         // New wires copy the attached wire's stroke and unknown columns, like
-        // the segments a bend adds.
-        let template = attached
+        // the segments a bend adds; with none attached, the dragged wire's.
+        let attached_wire = attached
             .first()
             .map(|(index, _)| self.wires[*index].clone());
-        let orientation = template.as_ref().map(|w| key(&w.start).1 == key(&w.end).1);
+        let orientation = attached_wire
+            .as_ref()
+            .map(|w| key(&w.start).1 == key(&w.end).1);
+        let template = attached_wire.or_else(|| self.carrier(group));
         let mut targets: Vec<Point> = Vec::new();
         for mv in group {
             if !targets.iter().any(|p| key(p) == key(&mv.new)) {
@@ -183,6 +269,12 @@ impl Env {
                 out,
             );
         }
+    }
+
+    /// The selected wire whose drag carries the points of `group`, if any.
+    fn carrier(&self, group: &[&Move]) -> Option<Wire> {
+        let id = group.iter().find_map(|m| m.wire)?.wire();
+        self.wires.iter().find(|w| w.uuid == id).cloned()
     }
 
     /// Add `old -> corner -> new` as fresh wires; the old tip stays wired.

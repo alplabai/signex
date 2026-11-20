@@ -121,6 +121,20 @@ impl Signex {
         }
         self.refresh_panel_ctx();
     }
+
+    /// After a person's edit run through `on_edit_target` on `path`: when
+    /// that sheet is the main window's active one, its selection overlay and
+    /// the Properties panel's selection fields follow the edit, as the
+    /// gateway's own refresh does for an edit of the active sheet.
+    pub(crate) fn refresh_selection_on(&mut self, path: &Path) {
+        if self.document_state.active_path.as_deref() != Some(path) {
+            return;
+        }
+        self.interaction_state
+            .active_canvas_mut()
+            .clear_overlay_cache();
+        self.update_selection_info();
+    }
 }
 
 impl Signex {
@@ -136,8 +150,9 @@ impl Signex {
     }
 
     /// What the person is in the middle of on the sheet at `path`, in the main
-    /// window or an undocked one, that an agent's `revert` must not cut under:
-    /// drawing, typing into an item of the sheet, or a move armed (#2178).
+    /// window or an undocked one, that an agent's `revert` and an operand
+    /// `undo` or `redo` must not cut under: drawing, typing into an item of
+    /// the sheet, or a move armed (#2178, #2548).
     pub(crate) fn person_busy_on(&self, path: &Path) -> Option<&'static str> {
         let windows = &self.ui_state.windows;
         let undocked = self.interaction_state.canvases.iter().filter(|(id, _)| {

@@ -74,6 +74,9 @@ pub struct PanelContext {
     /// Whether the canvas font picker popup is open.
     pub canvas_font_popup_open: bool,
     pub properties_tab: usize, // 0=General, 1=Parameters
+    /// Document Options view state: Parameters filter, zone drafts and the
+    /// illustration hover (#2531); kept across context rebuilds.
+    pub document_options: super::DocumentOptionsUi,
     /// Projects panel filter text and collapsed groups; view-only.
     pub projects_view: super::ProjectsView,
     /// Net Classes section of the General tab (#1042).
@@ -110,6 +113,9 @@ pub struct PanelContext {
     /// The active project's nets, for the Net Inspector panel; filled only
     /// while that panel is open.
     pub net_inspector: super::NetInspectorView,
+    /// The Object List's rows and picks; filled only while that panel is open
+    /// (#1259).
+    pub object_list: super::ObjectListView,
     /// The active PCB tab's board facts, for the Properties panel.
     pub pcb_board: Option<super::PcbBoardSummary>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
@@ -196,6 +202,11 @@ pub struct PanelContext {
     /// The parameters of the project that owns the active sheet (#1080): the
     /// values a field falls back to while the sheet leaves it empty.
     pub project_parameters: std::collections::BTreeMap<String, String>,
+    /// The active sheet's variables (#1987), as stored: name to source text.
+    pub sheet_variables: std::collections::BTreeMap<String, String>,
+    /// The active sheet's read-only Parameters rows with their values, as
+    /// `signex_output::resolve` gives them; empty with no active sheet.
+    pub builtin_parameters: Vec<(super::BuiltinParameter, String)>,
     /// The app's one store of half-typed title-block fields and custom
     /// paper edges (#2027): a handle the view reads, never a copy.
     pub drafts: super::PanelDrafts,
@@ -205,6 +216,8 @@ pub struct PanelContext {
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
+    /// The placed part's open ⋯ menu and illustration hover (mockup row 42).
+    pub part_panel: super::PartPanelState,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,
     /// Flattened ERC diagnostics from the most recent Run-ERC pass.
@@ -223,6 +236,9 @@ pub struct PanelContext {
     pub erc_results_stale: bool,
     /// An ERC run has checked the project; with no findings it was clean.
     pub erc_ran: bool,
+    /// What the ERC, DRC and Messages panels show, and the cached identity
+    /// a waiver's Author starts as (#85-#88).
+    pub validation: super::ValidationPanels,
     /// Current diagnostics level resolved from SIGNEX_LOG / RUST_LOG.
     pub diagnostics_level: String,
     /// Recent application diagnostics shown in the Messages panel.
@@ -269,6 +285,13 @@ pub struct PanelContext {
     /// each refresh; the panel reads it directly without holding a
     /// borrow into the document state.
     pub history: history::HistoryPanelState,
+    /// The editor the Filter panel follows, its per-kind counts and SCH
+    /// Filter's preset rename (Graphite mockup #55, Graphite mockup #56).
+    pub selection_filter: super::SelectionFilterFacts,
+    /// The field / callout hover of the Properties illustration (#2523).
+    pub illustration_hover: super::PanelIllustrationHover,
+    /// View state of the selection forms: kind chips, rule filter, hover (#1699).
+    pub selection_form: super::SelectionForm,
 }
 
 /// One drawing a placed symbol can show: its row's default or an alternate.

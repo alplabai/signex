@@ -555,7 +555,7 @@ pub struct LibraryState {
     pub recovery: Option<super::recovery::RecoveryDialog>,
     /// Library Missing dialogs queued behind `recovery` (#1897).
     pub missing: missing_queue::MissingLibraries,
-    /// "Library Options" modal state — `None` while closed. Opens
+    /// New Library dialog state — `None` while closed. Opens
     /// after the user picks a `.snxlib` save target in the New Library
     /// Save-As dialog (Stage 11 of `v0.9-snxlib-as-file-plan.md`). The
     /// modal lets the user opt into Git LFS for binary 3D models
@@ -667,6 +667,9 @@ pub struct LibraryState {
     pub owed_cascades: owed_cascades::OwedCascades,
     /// Libraries whose close waits for their writes to finish.
     pub closing: std::collections::HashSet<PathBuf>,
+    /// Libraries mounted read-only because their Git history is missing
+    /// (Skip for now on Git Repository Missing), until it is restored.
+    pub history_missing: std::collections::HashSet<PathBuf>,
     /// Libraries unmounted since the last `finish_update`, which drains
     /// this to close their Library Browser and Component Preview tabs.
     pub unmounted: Vec<PathBuf>,
@@ -801,9 +804,34 @@ impl ComponentsMountSource {
     ];
 }
 
+/// How the Components panel draws its part rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ComponentsRowStyle {
+    /// One line, the part name only; the description is a tooltip.
+    #[default]
+    Compact,
+    /// Taller rows with a symbol thumbnail and a one-line description.
+    Previews,
+}
+
+impl ComponentsRowStyle {
+    /// The style a saved "Previews" switch stands for.
+    pub fn from_previews(previews: bool) -> Self {
+        if previews {
+            Self::Previews
+        } else {
+            Self::Compact
+        }
+    }
+
+    /// Whether the "Previews" switch is on.
+    pub fn shows_previews(self) -> bool {
+        self == Self::Previews
+    }
+}
+
 /// Source filter, collapse and filter state for the Components Panel.
-/// Session-scoped (not persisted): the panel keeps no other preference on
-/// disk either.
+/// Session-scoped except [`Self::row_style`], which `prefs.json` keeps.
 #[derive(Debug, Clone)]
 pub struct ComponentsPanelState {
     /// The source chip selected under the search box; `None` is "All".
@@ -843,6 +871,12 @@ pub struct ComponentsPanelState {
     /// A row dropped on the canvas: the placement epoch its read runs under
     /// and the world point (mm) to commit the part at once it arrives.
     pub pending_drop: Option<(u64, (f64, f64))>,
+    /// Compact or Previews rows; the "Previews" switch next to Add.
+    pub row_style: ComponentsRowStyle,
+    /// Parts placed from this panel this session, most recent first.
+    pub recent: crate::panels::components_panel::recent::RecentlyPlaced,
+    /// Row symbol thumbnails read so far, by symbol reference.
+    pub thumbs: crate::panels::components_panel::thumbs::SymbolThumbs,
 }
 
 impl Default for ComponentsPanelState {
@@ -861,6 +895,9 @@ impl Default for ComponentsPanelState {
             row_menu: None,
             hovered: None,
             pending_drop: None,
+            row_style: ComponentsRowStyle::default(),
+            recent: Default::default(),
+            thumbs: Default::default(),
         }
     }
 }
@@ -918,7 +955,7 @@ pub struct DocumentOptionsModalState {
     pub draft: LibraryDisplaySettings,
 }
 
-/// State for the "Library Options" modal that pops up between the
+/// State for the New Library dialog that pops up between the
 /// Save-As dialog (where the user picked the `.snxlib` filename) and
 /// the actual `LocalGitAdapter::init` call. Carries the project the
 /// library should attach to + the chosen `.snxlib` path so the

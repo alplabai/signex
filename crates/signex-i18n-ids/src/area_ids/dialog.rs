@@ -28,6 +28,9 @@ define_ids! {
     DIALOG_PARAMETER_MANAGER_COLUMN_REFERENCE = "dialog-parameter-manager-column-reference";
     DIALOG_PARAMETER_MANAGER_COLUMN_VALUE = "dialog-parameter-manager-column-value";
     DIALOG_PARAMETER_MANAGER_COLUMN_FOOTPRINT = "dialog-parameter-manager-column-footprint";
+    DIALOG_PARAMETER_MANAGER_CLEAR_FILTER = "dialog-parameter-manager-clear-filter";
+    DIALOG_PARAMETER_MANAGER_REVERT = "dialog-parameter-manager-revert";
+    DIALOG_PARAMETER_MANAGER_DONE = "dialog-parameter-manager-done";
     DIALOG_DISK_CONFLICT_RELOAD = "dialog-disk-conflict-reload";
     DIALOG_DISK_CONFLICT_RECREATE = "dialog-disk-conflict-recreate";
     DIALOG_NETLIST_EXPORT_ANYWAY = "dialog-netlist-export-anyway";
@@ -98,4 +101,7 @@ define_ids! {
     DIALOG_TITLE_DELETE_COMPONENT = "dialog-title-delete-component";
     DIALOG_TITLE_LIBRARY_RECOVERY = "dialog-title-library-recovery";
     DIALOG_TITLE_NET_COLOR_CUSTOM = "dialog-title-net-color-custom";
+    DIALOG_ERC_SOURCE_PROJECT = "dialog-erc-source-project";
+    DIALOG_ERC_SOURCE_USER_DEFAULT = "dialog-erc-source-user-default";
+    DIALOG_ERC_PROFILE_MENU = "dialog-erc-profile-menu";
 }

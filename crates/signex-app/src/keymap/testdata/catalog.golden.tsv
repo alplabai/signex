@@ -65,6 +65,7 @@ open_datasheet	edit	Open datasheet	Open Datasheet	General	-	-	RequiresSelection	
 change_component	edit	Change the selected part's component	Change Component…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 open_parameter_manager	design	Open Parameter Manager	Parameter Manager...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,name:text,value:text?,document:document?
+set_sheet_variable	edit	Set a sheet variable	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	name:text,value:text?,remove:bool?,document:document?
 lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
 unlock_board_items	modify	Unlock the selected tracks and vias	Unlock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
 bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -108,7 +109,7 @@ place_symbol	place	Place symbol	-	Schematic	-	-	RequiresDocument(Schematic)	gui_
 place_power_symbol	place	Place power symbol	Power Port	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,net_name:text,lib_id:text,allow_merge:bool?,document:document?
 place_junction	place	Place junction	Junction	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,allow_merge:bool?,document:document?
 place_no_connect	place	Place no-connect flag	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,document:document?
-place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,document:document?
+place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,rules:text?,document:document?
 place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 place_design_block	place	Place design block	Design Block...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 place_reuse_block	place	Place reuse block	Reuse Block...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
@@ -166,8 +167,9 @@ draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 import_graphics	place	Import graphics	Import Graphics...	General	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 edit_blanket	place	Edit blanket parameters	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,start:point/mm?,end:point/mm?,class:text?,exclude:text?,document:document?
+edit_no_erc_rules	place	Edit No ERC rules	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rules:text?,document:document?
 place_board_arc	place	Draw an arc on the active layer	Arc	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
-place_board_string	place	Place a string on the active overlay, mechanical or documentation layer	String	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+place_board_string	place	Place a string on the active silkscreen, mechanical or documentation layer	String	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_dimension	place	Place a linear dimension on the board	Dimension	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_line	place	Draw lines on the active non-copper layer	Line	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_graphic_arc	place	Draw an arc by its centre, start and end on the active non-copper layer	Arc	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
@@ -194,6 +196,8 @@ place_sheet_entry	place	Place sheet entry	Sheet Entry	Schematic	-	-	RequiresDocu
 place_device_sheet_symbol	place	Place device sheet symbol	Device Sheet Symbol	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 create_sheet_from_sheet_symbol	design	Create a child sheet from the selected sheet symbol	Create Sheet From Sheet Symbol	Schematic	-	-	RequiresSelection	gui_only	-
 sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child sheet	Sync Sheet Pins	Schematic	-	-	RequiresSelection	mutates_doc,undoable	sheet:text,document:document?
+create_sheet_symbol_from_sheet	design	Create a sheet symbol from a sheet file, with an entry for every port	Create Sheet Symbol From Sheet...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm?,allow_merge:bool?,document:document?
+sync_sheet_entries	design	Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview	Synchronize Sheet Entries and Ports...	Schematic	-	-	RequiresSelection	mutates_doc,undoable	symbol:text,direction:text,document:document?
 number_schematic_sheets	design	Number schematic sheets	Number Schematic Sheets...	Schematic	-	-	Always	gui_only	-
 open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Child Sheet	Schematic	-	-	RequiresSelection	gui_only	-
 leave_sheet	navigation	Leave sheet / go to parent sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
@@ -212,12 +216,13 @@ back_annotate_schematics	pcb_sync	Back-annotate the board's designators and valu
 run_erc	validation	Run electrical rules check	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	runs_headless	-
 check_erc	validation	Check electrical rules	-	General	-	-	Always	-	document:document,baseline:text?
 open_erc_dialog	validation	Open electrical rules check dialog	Electrical Rules Check	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+repair_pin_junctions	validation	Add a junction where a pin end touches a wire	Repair Pin Junctions	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document?
 run_drc	pcb	Run the design rule check on the board	Design Rule Check	PCB	-	-	RequiresDocument(Pcb)	runs_headless	-
 check_drc	validation	Check design rules	-	General	-	-	Always	-	document:document,baseline:text?
 check_requirements	validation	Check project requirements	-	General	-	-	Always	-	document:document,baseline:text?
 open_drc_panel	pcb	Open the DRC results panel	DRC Results	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 show_drc_violation	pcb	Select a DRC violation and centre the view on it	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,id:text
-waive_drc_violation	pcb	Waive a DRC violation with a note	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,text:text?
+waive_drc_violation	pcb	Waive a DRC violation with a note	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text,text:text?,author:text?
 unwaive_drc_violation	pcb	Take back the waiver of a DRC violation	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,id:text
 filter_drc_results	pcb	Filter the DRC results by rule, layer and severity	-	PCB	-	-	RequiresDocument(Pcb)	-	document:document,rule:text?,layer:text?,severity:text?,waived:bool?
 open_rules	design	Open the design rules of the project	Rules...	PCB	-	-	Always	gui_only	-
@@ -232,9 +237,9 @@ rules_explain	validation	Explain the value a DRC finding asks for	-	PCB	-	-	Alwa
 rules_conflicts	validation	List shadowed and conflicting design rules	-	PCB	-	-	Always	-	document:document
 rules_matrix_get	validation	Read the class-to-class clearance matrix	-	PCB	-	-	Always	-	document:document
 rules_matrix_set	design	Set a cell of the class-to-class clearance matrix	-	PCB	-	-	Always	mutates_doc,undoable	document:document,class_a:text,class_b:text,object_pair:text?,layer:text?,value:text?
-rules_set_create	design	Create a named rule set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,name:text,values:text,severity:text?
-rules_set_edit	design	Change the limits of a named rule set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,values:text,severity:text?
-rules_set_apply	design	Apply a named rule set to a class or net	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,scope:text
+rules_set_create	design	Create a constraint set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,name:text,values:text,severity:text?
+rules_set_edit	design	Change the limits of a constraint set	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,values:text,severity:text?
+rules_set_apply	design	Apply a constraint set to a class or net	-	PCB	-	-	Always	mutates_doc,undoable	document:document,set:text,scope:text
 rules_preset_diff	validation	Show what a rules preset would change	-	PCB	-	-	Always	-	document:document,preset:text
 rules_preset_apply	design	Apply a rules preset	-	PCB	-	-	Always	mutates_doc,undoable	document:document,preset:text
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
@@ -280,7 +285,9 @@ set_layer_sizes	modify	Set the per-layer copper sizes of vias or pads	-	PCB	-	-	
 set_pad_shape	modify	Set the copper shape of pads, with a trapezoid's delta or a custom outline	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text,shape:text,delta:text?,corners:text?
 set_layer_visible	view	Show or hide one layer of the board view	Set Layer Visible	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,on:bool,document:document
 set_active_layer	view	Make one layer the active layer	Set Active Layer	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,document:document
-set_layer_color	view	Give one layer its own colour in the board view, or the palette colour again	Set Layer Color	PCB	-	-	RequiresDocument(Pcb)	-	layer:text,color:color?,document:document
+set_layer_color	view	Give one layer its own colour, saved with the board, or the palette colour again	Set Layer Color	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	layer:text,color:color?,document:document
+edit_layer_color	view	Open the colour picker of one layer in the Layers panel	Layer Colour...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+reset_layer_colors	view	Give every layer the board palette colour again	Reset All Layer Colours	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 show_used_layers_only	view	List only the layers the board uses in the Layers panel	Show Used Layers Only	PCB	-	-	RequiresDocument(Pcb)	-	on:bool,document:document
 set_object_visible	view	Show or hide one kind of object in the board view	Set Object Visible	PCB	-	-	RequiresDocument(Pcb)	-	kind:text,on:bool,document:document
 set_object_transparency	view	Set how transparent one kind of object is drawn	Set Object Transparency	PCB	-	-	RequiresDocument(Pcb)	-	kind:text,value:text,document:document
@@ -344,6 +351,9 @@ view_rotate_ccw	view	Rotate the board view 90° counter-clockwise	Rotate View 90
 view_rotate_180	view	Rotate the board view 180°	Rotate View 180°	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 view_rotate_reset	view	Reset the board view rotation to 0°	Reset View Rotation	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 toggle_origin_marker	view	Show or hide the board origin marker	Toggle Origin Marker	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
+set_board_origin	edit	Set the board origin at a clicked point	Set	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+reset_board_origin	edit	Move the board origin to the bottom-left of the board outline	Reset	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
+snap_board_origin_to_corner	edit	Move the board origin to the outline corner nearest the pointer	Snap to Outline Corner	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 measure_distance	view	Measure distance	-	General	-	-	Always	gui_only	-
 measure_board	search	Measure on a board	-	PCB	-	-	Always	-	document:document,start:point/mm?,end:point/mm?,ids:text?
 reset_local_coordinates	view	Reset local coordinates	-	General	-	-	Always	gui_only	-
@@ -382,4 +392,4 @@ untile_documents	window	Untile documents	Untile	General	-	-	Always	gui_only	-
 toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_only	-
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-
-toggle_schematic_list_panel	panels	Toggle schematic list panel	-	General	-	-	Always	gui_only	-
+toggle_schematic_list_panel	panels	Toggle Object List panel	-	General	-	-	Always	gui_only	-

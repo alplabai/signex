@@ -97,6 +97,7 @@ impl Signex {
             CanvasEvent::CursorAt { x, y, zoom_pct } => {
                 self.ui_state.cursor_x = x as f64;
                 self.ui_state.cursor_y = y as f64;
+                self.pre_placement_cursor_moved(x as f64, y as f64);
                 if self.ui_state.cursor_document.as_deref() != self.cursor_document_now() {
                     self.ui_state.cursor_document =
                         self.cursor_document_now().map(std::path::Path::to_path_buf);
@@ -211,6 +212,26 @@ impl Signex {
             }
             CanvasEvent::MovePicked { world_x, world_y } => {
                 self.handle_canvas_move_picked(world_x, world_y);
+            }
+            CanvasEvent::WireEndDragged {
+                wire,
+                start,
+                x,
+                y,
+                connections,
+            } => {
+                // The canvas already snapped the end; the engine keeps a
+                // straight wire on its line and brings the attached wires.
+                self.apply_engine_command(
+                    signex_engine::Command::MoveWireEnd {
+                        wire,
+                        start,
+                        to: signex_types::schematic::Point::new(x, y),
+                        keep_wires: connections.keeps_wires(self.ui_state.move_keeps_wires),
+                    },
+                    true,
+                    true,
+                );
             }
             CanvasEvent::DoubleClicked {
                 world_x,

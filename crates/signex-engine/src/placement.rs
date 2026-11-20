@@ -123,6 +123,9 @@ impl PlacementPayload {
         f.no_connects
             .iter_mut()
             .for_each(|n| shift(&mut n.position));
+        f.no_erc_directives
+            .iter_mut()
+            .for_each(|d| shift(&mut d.position));
         f.labels.iter_mut().for_each(|l| shift(&mut l.position));
         f.text_notes.iter_mut().for_each(|t| shift(&mut t.position));
         for d in &mut f.drawings {
@@ -200,6 +203,7 @@ impl PlacementPayload {
         f.bus_entries.iter().for_each(|e| add(&e.position));
         f.junctions.iter().for_each(|j| add(&j.position));
         f.no_connects.iter().for_each(|n| add(&n.position));
+        f.no_erc_directives.iter().for_each(|d| add(&d.position));
         f.labels.iter().for_each(|l| add(&l.position));
         f.text_notes.iter().for_each(|t| add(&t.position));
         f.drawings
@@ -239,6 +243,10 @@ impl PlacementPayload {
             uuids(
                 SelectedKind::NoConnect,
                 f.no_connects.iter().map(|s| s.uuid).collect(),
+            ),
+            uuids(
+                SelectedKind::NoErcDirective,
+                f.no_erc_directives.iter().map(|s| s.uuid).collect(),
             ),
             uuids(
                 SelectedKind::Label,
@@ -336,6 +344,10 @@ impl PlacementPayload {
         commands.extend(f.no_connects.iter().cloned().map(|mut no_connect| {
             no_connect.uuid = ids.next_id();
             Command::PlaceNoConnect { no_connect }
+        }));
+        commands.extend(f.no_erc_directives.iter().cloned().map(|mut directive| {
+            directive.uuid = ids.next_id();
+            Command::PlaceNoErcDirective { directive }
         }));
         commands.extend(f.labels.iter().cloned().map(|mut label| {
             label.uuid = ids.next_id();

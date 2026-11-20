@@ -436,6 +436,19 @@ them, so the rest is on the author.
 - **Decided behaviour** ([docs/DECISIONS.md](docs/DECISIONS.md)): golden tests
   pin the menus, command catalog and built-in shortcuts; changing one needs a
   maintainer decision that names it.
+- **Command parity table** ([ADR-0006](docs/architecture/adr-0006-application-core.md),
+  slice C): `crates/signex-app/src/app/command/parity/testdata/parity.golden.tsv`
+  lists every route by which a command id reaches its handler, with the
+  route's owner, the implicit inputs it reads, and whether those come from
+  reading the handler or only its gate (`basis`). It is generated from the
+  routing code and changes with every slice that moves a route, so it is not a
+  decided-behaviour golden: review the diff, then regenerate it with
+  `UPDATE_GOLDEN=1 cargo test -p signex-app golden_parity_table`. Hand
+  annotations of implicit inputs live in `parity/annotations.rs`, which a
+  regenerate keeps. The owner comes from what the route writes (#2551):
+  document state is `core`, session state or machine settings `gui`, a
+  router over what is in hand `split` with a `split_core_command` row; the
+  hand annotations of those writes live in `parity/owners.rs`.
 - **Deferred work**
   ([ADR-0003](docs/architecture/adr-0003-deferred-work-and-consistent-history.md)):
   owed work is explicit model state. Every boundary (save, undo, redo,

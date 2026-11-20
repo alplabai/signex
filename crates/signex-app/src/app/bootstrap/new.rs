@@ -163,6 +163,7 @@ impl Signex {
         let annotate_undo = crate::fonts::read_annotate_undo_pref_from(prefs);
         let move_keeps_wires = crate::fonts::read_move_keeps_wires_pref_from(prefs);
         let net_hover_enabled = crate::fonts::read_net_hover_pref_from(prefs);
+        let symbol_body_fill = crate::symbol_fill_prefs::SymbolBodyFill::from_prefs(prefs);
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
         let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
@@ -367,11 +368,20 @@ impl Signex {
                 preferences_draft_move_keeps_wires: move_keeps_wires,
                 net_hover_enabled,
                 preferences_draft_net_hover_enabled: net_hover_enabled,
+                symbol_body_fill,
+                preferences_draft_symbol_body_fill: symbol_body_fill,
+                preferences_body_fill_palette_open: false,
+                preferences_body_fill_picker_open: false,
                 trackpad_pan,
                 preferences_draft_trackpad_pan: trackpad_pan,
                 wheel_mode,
                 preferences_draft_wheel_mode: wheel_mode,
                 i18n: std::sync::Arc::clone(&i18n),
+                // Mockup row 144a — seeded again (with its preview and the system
+                // language name) each time Preferences opens.
+                preferences_pages: Box::new(crate::preferences::PreferencesPagesState::new(
+                    i18n.pref().clone(),
+                )),
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,
@@ -440,6 +450,8 @@ impl Signex {
                 update_pcb: None,
                 sheet_numbering: None,
                 sheet_numbering_reads: 0,
+                sheet_sync: None,
+                sheet_sync_reads: 0,
                 board_reannotate: None,
                 board_reannotate_options: Default::default(),
                 fab_outputs: None,
@@ -451,8 +463,10 @@ impl Signex {
                 assign_footprints: None,
                 assign_footprints_reads: 0,
                 net_inspector: Default::default(),
+                object_list: Default::default(),
                 paste_array: None,
                 paste_array_opens: 0,
+                text_edit_opens: 0,
                 selection_filter_custom: None,
                 erc_violations: Vec::new(),
                 erc_violations_by_path: std::collections::HashMap::new(),
@@ -461,6 +475,7 @@ impl Signex {
                 erc_lapsed_waivers: std::collections::BTreeSet::new(),
                 erc_page_frames: Default::default(),
                 erc_waive_draft: None,
+                validation_panels: Default::default(),
                 erc_focus_global_index: None,
                 erc_epoch: 0,
                 erc_run_epoch: 0,
@@ -484,7 +499,9 @@ impl Signex {
                 annotate_dialog_open: false,
                 annotate_order: crate::app::state::AnnotateOrder::default(),
                 erc_dialog_open: false,
+                erc_profile_menu_open: false,
                 annotate_reset_confirm: false,
+                annotate_session: Box::default(),
                 modal_offsets: std::collections::HashMap::new(),
                 modal_dragging: None,
                 tab_dragging: None,
@@ -500,11 +517,13 @@ impl Signex {
                 passive_calculator_open: false,
                 move_selection: crate::app::state::MoveSelectionState::default(),
                 net_color_palette_open: false,
+                net_color_palette: Default::default(),
                 parameter_manager_open: false,
                 parameter_table: crate::app::state::ParameterTableState::default(),
                 reorder_picker: None,
                 move_pick: None,
                 pin_matrix_overrides: std::collections::HashMap::new(),
+                erc_rule_list: Default::default(),
                 annotate_locked: std::collections::HashSet::new(),
                 annotate_preview: Default::default(),
                 annotate_runs: Default::default(),
@@ -545,6 +564,7 @@ impl Signex {
                 tabs: vec![],
                 active_tab: 0,
                 engines: std::collections::HashMap::new(),
+                times: crate::app::state::DocumentTimes::at(chrono::Local::now()),
                 symbol_editors: std::collections::HashMap::new(),
                 footprint_editors: std::collections::HashMap::new(),
                 pad_clipboard: None,
@@ -610,6 +630,7 @@ impl Signex {
                     canvas_font_popup_open: false,
 
                     properties_tab: 0,
+                    document_options: Default::default(),
                     projects_view: Default::default(),
                     net_classes: Default::default(),
                     pcb_layers: Default::default(),
@@ -622,6 +643,7 @@ impl Signex {
                     component_sheet: None,
                     pcb_nets: None,
                     net_inspector: Default::default(),
+                    object_list: Default::default(),
                     pcb_board: None,
                     layer_stack: None,
                     selection_count: 0,
@@ -651,10 +673,13 @@ impl Signex {
                     child_sheet_file_buf: None,
                     title_block: std::collections::BTreeMap::new(),
                     project_parameters: std::collections::BTreeMap::new(),
+                    sheet_variables: std::collections::BTreeMap::new(),
+                    builtin_parameters: Vec::new(),
                     drafts: drafts.clone(),
                     numeric_draft: None,
                     title_block_sheet: None,
                     collapsed_sections: std::collections::HashSet::new(),
+                    part_panel: Default::default(),
                     pre_placement: None,
                     erc_diagnostics: Vec::new(),
                     erc_waivers: Vec::new(),
@@ -664,6 +689,7 @@ impl Signex {
                     erc_running: false,
                     erc_results_stale: false,
                     erc_ran: false,
+                    validation: Default::default(),
                     diagnostics_level: crate::diagnostics::configured_level_label().to_string(),
                     diagnostics: crate::diagnostics::recent_entries(),
                     pcb_drc: None,
@@ -683,7 +709,10 @@ impl Signex {
                     symbol_editor: None,
                     footprint_editor: None,
                     history: crate::panels::history::HistoryPanelState::default(),
+                    illustration_hover: Default::default(),
                     document_font_family: None,
+                    selection_filter: Default::default(),
+                    selection_form: Default::default(),
                 },
                 history: crate::panels::history::HistoryPanelState::default(),
                 window_history: std::collections::HashMap::new(),
@@ -725,6 +754,7 @@ impl Signex {
                 pcb_tool: None,
                 pcb_tool_defaults: Default::default(),
                 pcb_guide_place: None,
+                pcb_origin_place: None,
                 pcb_query: Default::default(),
                 pcb_arrange_box: None,
                 pcb_ratsnest: Default::default(),
@@ -756,8 +786,10 @@ impl Signex {
                 context_menu: None,
                 project_tree_context_menu: None,
                 grid_picker: None,
+                zoom_presets_open: false,
                 tab_context_menu: None,
                 start_row_menu: None,
+                start_section: Default::default(),
                 context_submenu: None,
                 pending_submenu: None,
                 submenu_launcher_hovered: None,
@@ -778,11 +810,13 @@ impl Signex {
                     .collect(),
                 custom_filter_presets: crate::fonts::read_custom_filter_presets_from(prefs),
                 active_custom_filter_tab: 0,
+                filter_preset_rename: None,
                 footprint_filter_presets: crate::fonts::read_footprint_filter_presets_from(prefs),
                 selection_slots: std::array::from_fn(|_| Vec::new()),
                 last_tool: std::collections::HashMap::new(),
                 pending_power: None,
                 placement: None,
+                placement_pause: None,
                 last_placement: None,
                 paste_counters: None,
                 placement_epoch: 0,
@@ -801,6 +835,10 @@ impl Signex {
                     component_classes,
                 },
                 stock_copy_target: crate::fonts::read_stock_copy_target_pref_from(prefs),
+                components_panel: crate::library::state::ComponentsPanelState {
+                    row_style: crate::fonts::read_components_row_style_pref_from(prefs),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             native_menu: Default::default(),
@@ -812,6 +850,11 @@ impl Signex {
         app.interaction_state.pcb_canvas.set_grid(
             app.ui_state.grid_visible,
             app.ui_state.visible_grid_mm as f64,
+        );
+        // Read once here, not in `DistributorSettings::default` or a view.
+        app.library.settings.set_start_environment(
+            crate::library::settings::digikey_oauth::env_client_configured(),
+            crate::library::settings::persistence::config_path().as_deref(),
         );
         // v0.9 Stage 9: the globally-configured libraries and the bundled
         // stock library (#328) are mounted off the UI thread (#1470): the

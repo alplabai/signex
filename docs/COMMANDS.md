@@ -86,7 +86,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `close_active_document` | Close active document | file | `Ctrl+F4`, `Mod+W` (macOS) | — |
 | `close_all_documents` | Close all documents | window | — | — |
 | `copy` | Copy | edit | `Mod+C` | `Mod+C` |
-| `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert` | — |
+| `copy_attributes_or_add_vertex` | Copy attributes from object under cursor or add vertex while drawing | interactive | `Insert`, `Alt+I` (macOS) | — |
 | `cross_probe` | Cross probe the selection to the board or schematic | select | `T C` | `Shift+C` |
 | `cut` | Cut | edit | `Mod+X` | `Mod+X` |
 | `cycle_fast_grid` | Cycle fast grid | view | — | `Alt+4` |
@@ -95,7 +95,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cycle_snap_grid_forward` | Open the snap grid picker (footprint editor) | view | `G` | — |
 | `cycle_unit` | Cycle display unit | view | `Q`, `Ctrl+Q` | `Q`, `Ctrl+Q` |
 | `cycle_wire_bus_graphic_mode` | Cycle the wire/bus corner mode: 90 degrees, 45 degrees start, 45 degrees end, any angle | interactive | — | `Shift+Space` |
-| `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space` | — |
+| `cycle_wiring_mode` | Change wiring mode while dragging connected electrical objects | interactive | `Ctrl+Space`, `Shift+Tab` (macOS) | — |
 | `delete_selection` | Delete selection | edit | `Delete` | `Delete` |
 | `document_info` | Document info | file | — | — |
 | `drag_keep_connections` | Drag while keeping connections | modify | — | `G` |
@@ -192,7 +192,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_floating_panels` | Toggle floating panels | window | `F4` | — |
 | `toggle_properties_panel` | Toggle Properties panel | panels | `F11` | — |
 | `toggle_schematic_filter_panel` | Toggle schematic filter panel | panels | `F12` | — |
-| `toggle_schematic_list_panel` | Toggle schematic list panel | panels | `Shift+F12` | — |
+| `toggle_schematic_list_panel` | Toggle Object List panel | panels | `Shift+F12` | — |
 | `toggle_search_panel` | Show/hide search panel | search | — | `Ctrl+G` |
 | `toggle_selection` | Add/remove object from selection | select | `Shift+Click` | — |
 | `toggle_visible_grid` | Toggle visible grid | view | `Mod+Shift+G` | `Mod+Shift+G` |
@@ -231,6 +231,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
 | `color_net` | Color net | view | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
+| `create_sheet_symbol_from_sheet` | Create a sheet symbol from a sheet file, with an entry for every port | design | — | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |
 | `distribute_vertically` | Distribute vertically | modify | — | — |
 | `drag` | Drag | modify | — | — |
@@ -249,6 +250,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `draw_round_rectangle` | Draw round rectangle | place | — | — |
 | `draw_wire` | Draw wire | place | — | — |
 | `edit_blanket` | Edit blanket parameters | place | — | — |
+| `edit_no_erc_rules` | Edit No ERC rules | place | — | — |
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
 | `force_annotate_all_schematics` | Force annotate all schematics | design | `Shift+Alt+A` | `Shift+Alt+A` |
@@ -306,6 +308,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | — |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
+| `repair_pin_junctions` | Add a junction where a pin end touches a wire | validation | — | — |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
 | `rotate_selection` | Rotate selection counter-clockwise | modify | — | — |
 | `rotate_selection_cw` | Rotate selection clockwise | modify | — | — |
@@ -319,9 +322,11 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `set_object_rotation` | Set the rotation of a placed part or label | edit | — | — |
 | `set_selection_filters` | Set the schematic selection filter | select | — | — |
 | `set_sheet_symbol_size` | Set the size of a sheet symbol | edit | — | — |
+| `set_sheet_variable` | Set a sheet variable | edit | — | — |
 | `set_symbol_parameter` | Set a parameter of a placed part | edit | — | — |
 | `sheet_navigation_back` | Sheet navigation back | navigation | — | `Alt+Left` |
 | `sheet_navigation_forward` | Sheet navigation forward | navigation | — | `Alt+Right` |
+| `sync_sheet_entries` | Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview | design | — | — |
 | `sync_sheet_pins` | Sync the selected sheet symbol's pins with its child sheet | design | — | — |
 | `tool_select` | Tool select | select | — | — |
 | `update_pcb_from_schematic` | Update PCB from schematic | pcb_sync | — | — |
@@ -349,6 +354,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
 | `delete_net_class` | Delete a net class | design | — | — |
+| `edit_layer_color` | Open the colour picker of one layer in the Layers panel | view | — | — |
 | `export_assembly_svg` | Write the board's top and bottom assembly drawings as SVG files | reports | — | — |
 | `export_board_pdf` | Print the board's layers to a PDF file | reports | — | — |
 | `export_board_report` | Export a board report as a CSV file | reports | — | — |
@@ -392,7 +398,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_reuse_block` | Place a reuse block on the channel of the selected component | design | — | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
 | `place_board_slice_pour` | Slice the polygon pours on the active copper layer along a line | place | — | — |
-| `place_board_string` | Place a string on the active overlay, mechanical or documentation layer | place | — | — |
+| `place_board_string` | Place a string on the active silkscreen, mechanical or documentation layer | place | — | — |
 | `place_board_text_frame` | Place text wrapped in a box on the active non-copper layer | place | — | — |
 | `place_board_track` | Route a track on the active copper layer | place | `P T` | — |
 | `place_board_via` | Place a via on the board | place | `P V` | — |
@@ -404,6 +410,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rename_net_class` | Rename a net class | design | — | — |
 | `repour_all` | Fill every polygon pour of the board again and report their copper | pcb | — | — |
 | `repour_selected` | Fill the selected polygon pours again and report their copper | pcb | — | — |
+| `reset_board_origin` | Move the board origin to the bottom-left of the board outline | edit | — | — |
+| `reset_layer_colors` | Give every layer the board palette colour again | view | — | — |
 | `rules_add` | Add a design rule | design | — | — |
 | `rules_conflicts` | List shadowed and conflicting design rules | validation | — | — |
 | `rules_effective` | Show the rule value that governs a net | validation | — | — |
@@ -417,18 +425,19 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_preset_diff` | Show what a rules preset would change | validation | — | — |
 | `rules_remove` | Remove a design rule | design | — | — |
 | `rules_set` | Change a field of a design rule | design | — | — |
-| `rules_set_apply` | Apply a named rule set to a class or net | design | — | — |
-| `rules_set_create` | Create a named rule set | design | — | — |
-| `rules_set_edit` | Change the limits of a named rule set | design | — | — |
+| `rules_set_apply` | Apply a constraint set to a class or net | design | — | — |
+| `rules_set_create` | Create a constraint set | design | — | — |
+| `rules_set_edit` | Change the limits of a constraint set | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | `T D` | `F7` |
 | `save_board_reuse_block` | Save the selected placed and routed parts as a reuse block of the project | design | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
 | `select_board_net` | Select every track, via and pad of a board net | select | — | — |
 | `set_active_layer` | Make one layer the active layer | view | — | — |
 | `set_board_graphic` | Set one field of a board drawing | edit | — | — |
+| `set_board_origin` | Set the board origin at a clicked point | edit | `E O S` | `Shift+O` |
 | `set_board_panel` | Change a setting of the board's panel | pcb | — | — |
 | `set_footprint_text` | Set the place, angle, height or justification of a component's designator or comment | edit | — | — |
-| `set_layer_color` | Give one layer its own colour in the board view, or the palette colour again | view | — | — |
+| `set_layer_color` | Give one layer its own colour, saved with the board, or the palette colour again | view | — | — |
 | `set_layer_sizes` | Set the per-layer copper sizes of vias or pads | modify | — | — |
 | `set_layer_stack` | Replace the layer stack of a board | design | — | — |
 | `set_layer_tab_names` | Name the layer tabs short, medium or long | view | — | — |
@@ -443,6 +452,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `show_layer_group` | Show every layer of one kind | view | — | — |
 | `show_layer_set` | Show a layer set on the board view | view | — | — |
 | `show_used_layers_only` | List only the layers the board uses in the Layers panel | view | — | — |
+| `snap_board_origin_to_corner` | Move the board origin to the outline corner nearest the pointer | edit | — | — |
 | `stitch_vias` | Fill the selected areas, or every pour, with vias of their net on a grid, clear of other nets | pcb | — | — |
 | `swap_gates` | Swap two equivalent gates of a component, on the board and on its schematic | modify | — | — |
 | `swap_pins` | Swap the nets of two equivalent pins of a component, on the board and on its schematic | modify | — | — |
