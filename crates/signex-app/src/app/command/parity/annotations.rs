@@ -12,7 +12,7 @@
 
 use super::forms::Form::{self, ActiveBar, Bridge, BridgeContextMenu, HeadlessWithoutOperands};
 use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDocument};
-use super::forms::Form::{Operand, Query, StillRunsRefusal, StillRunsUnavailable};
+use super::forms::Form::{Operand, Query, SplitCore, StillRunsRefusal, StillRunsUnavailable};
 use super::inputs::Input::{self, *};
 
 /// `(ids, form, inputs)`: each id's row of `form` reads `inputs` too.
@@ -705,6 +705,98 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[],
     ),
     (&["open_project_options"], BridgeContextMenu, &[]),
+    // Board edits from the menu (#2551): the board in view, as their gate
+    // says, and its selection where the tool reads it.
+    (
+        &[
+            "panelize_board",
+            "remove_board_panel",
+            "repair_pin_junctions",
+            "repour_all",
+            "reset_board_origin",
+            "reset_layer_colors",
+        ],
+        Bridge,
+        &[],
+    ),
+    (
+        &[
+            "lock_board_items",
+            "unlock_board_items",
+            "repour_selected",
+            "save_board_reuse_block",
+            "swap_gates",
+            "swap_pins",
+            "remove_teardrops",
+        ],
+        Bridge,
+        &[Selection],
+    ),
+    // `handle_board_tools` and `handle_tune`: the selection's nets and
+    // tracks, the clearances from `board_design_rules` (machine rules
+    // without project rules).
+    (
+        &[
+            "add_teardrops",
+            "board_shape_from_selection",
+            "gloss_selected_routes",
+            "keepout_from_selection",
+            "stitch_vias",
+            "tune_diff_pair",
+            "tune_net_length",
+        ],
+        Bridge,
+        &[Selection, Settings],
+    ),
+    // The origin moves to the outline corner nearest the pointer.
+    (&["snap_board_origin_to_corner"], Bridge, &[Cursor]),
+    // The person's own step: no "person busy" refusal; an inline text edit
+    // closes, a reaction to the step (rule 4 on #2326).
+    (&["undo", "redo"], Bridge, &[]),
+    // As the operand row: owed work and drafts are core-bound.
+    (&["save_document"], Bridge, &[]),
+    // Every tab closes as `close_tab` does: its title-block drafts commit and
+    // a board sketch settles first.
+    (&["close_all_documents"], Bridge, &[InProgressEdit]),
+    // The core command after a split router (#2326 kill-check decisions 3
+    // and "homes"): the router resolves what is in hand; the targets, Move
+    // Keeps Wires and the grid reach the command as operands.
+    (
+        &[
+            "rotate_clockwise",
+            "rotate_counterclockwise",
+            "mirror_x",
+            "mirror_y",
+            "rotate_selection",
+            "rotate_selection_cw",
+            "flip_selected_x",
+            "flip_selected_y",
+        ],
+        SplitCore,
+        &[ActiveDocument, Selection, ToolState],
+    ),
+    (&["flip_selection"], SplitCore, &[ActiveDocument, Selection]),
+    // The GUI reads the clipboard and the landing point; the core places
+    // the fragment at a point, new ids as operands.
+    (
+        &["smart_paste", "paste_special"],
+        SplitCore,
+        &[ActiveDocument, Clipboard, ToolState],
+    ),
+    // Cut: the GUI copies, the core deletes the targets.
+    (&["cut"], SplitCore, &[ActiveDocument, Selection]),
+    // Duplicate on a board pastes the copy beside it.
+    (
+        &["duplicate"],
+        SplitCore,
+        &[ActiveDocument, Selection, ToolState],
+    ),
+    // Enter on a polyline: its points are the operand.
+    (
+        &["placement_accept"],
+        SplitCore,
+        &[ActiveDocument, ToolState],
+    ),
     // Planned Active Bar tools: they only say they are not built yet.
     (PLANNED, ActiveBar, &[]),
     (PLANNED, StillRunsUnavailable, &[]),
