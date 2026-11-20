@@ -288,6 +288,32 @@ fn beside<'t>(shown: &'t [LaidOutText], label: &str) -> &'t str {
         .map_or("", |t| t.text.as_str())
 }
 
+/// The colour a segment of `row`'s segmented switch is filled with: the
+/// pixel just inside the top-left of its `segment` label, above the glyphs.
+/// The segment drawn on has the active fill, the rest the track.
+fn segment_fill(ctx: &PanelContext, row: &str, segment: &str) -> [u8; 4] {
+    let shown = texts(ctx);
+    let middle = |t: &LaidOutText| t.bounds.y + t.bounds.height / 2.0;
+    // The row label with the segment on its own line (an illustration
+    // callout can carry the same word).
+    let cell = (shown.iter().filter(|t| t.text == row))
+        .find_map(|label| {
+            shown.iter().find(|t| {
+                t.text == segment
+                    && t.bounds.x > label.bounds.x
+                    && (middle(t) - middle(label)).abs() < 8.0
+            })
+        })
+        .unwrap_or_else(|| panic!("{segment:?} of {row:?} missing from {shown:#?}"));
+    let pixels = crate::layout_probe::draw_pixels(view_panel(PanelKind::Properties, ctx), WINDOW);
+    let (x, y) = (
+        (cell.bounds.x + 1.0) as usize,
+        (cell.bounds.y + 1.0) as usize,
+    );
+    let at = (y * WINDOW.width as usize + x) * 4;
+    [pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3]]
+}
+
 /// The clicked pin's rows pair each label with its own value; a hidden pin
 /// reads Yes.
 #[test]
@@ -438,10 +464,30 @@ fn each_pick_list_shows_the_stored_entry() {
     };
     let shown = texts(&ctx);
     check("Sheet Color", beside(&shown, "Sheet Color"), "Cream");
-    // #2531: Paper names its size at the sheet's orientation; Orientation
-    // and Origin are segmented switches (see the test below).
+    // #2531: Paper names its size at the sheet's orientation.
     check("Paper", beside(&shown, "Paper"), "A4 · 210 × 297 mm");
     check("Line", beside(&shown, "Line"), "Dashed");
+
+    // Orientation and Origin are segmented switches: the stored Portrait
+    // and Lower Left segments draw as on. A sheet storing the other two
+    // draws those as on instead, so each pair is compared both ways.
+    let mut flipped = ctx.clone();
+    flipped.paper_size = SheetSize::parse("A4").0.token(SheetOrientation::Landscape);
+    flipped.page_origin = PageOrigin::UpperLeft;
+    for (row, stored, other) in [
+        ("Orientation", "Portrait", "Landscape"),
+        ("Origin", "Lower Left", "Upper Left"),
+    ] {
+        let on_here = segment_fill(&ctx, row, stored);
+        let on_there = segment_fill(&flipped, row, other);
+        let off_here = segment_fill(&ctx, row, other);
+        let drawn_on = if on_here == on_there && on_here != off_here {
+            stored
+        } else {
+            "another segment"
+        };
+        check(row, drawn_on, stored);
+    }
 
     // Width is no pick list since #2523: a 2 x 2 grid of the four presets
     // (`selected::tests` checks the cell it marks).
@@ -449,11 +495,10 @@ fn each_pick_list_shows_the_stored_entry() {
     wire.selected_wire_style = Some((WireWidthPreset::Medium, None));
     let wire_texts = texts(&wire);
     for preset in WireWidthPreset::ALL {
-        let cell = wire_texts.iter().find(|t| t.text == preset.label());
-        check(
-            "Width",
-            cell.map_or("", |t| t.text.as_str()),
-            preset.label(),
+        assert!(
+            wire_texts.iter().any(|t| t.text == preset.label()),
+            "Width lacks {}",
+            preset.label()
         );
     }
 
