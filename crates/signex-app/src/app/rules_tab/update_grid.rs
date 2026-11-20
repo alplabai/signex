@@ -260,7 +260,7 @@ impl Signex {
     /// cell of its first limit on its Scoped row, else on its scope's row,
     /// so the drawing and "Which value wins" are the rule's. A rule with
     /// no such cell on the domain is named in the detail only.
-    pub(crate) fn select_rules_rule(&mut self, id: ProjectId, rule: String) {
+    pub(crate) fn select_rules_rule(&mut self, id: ProjectId, rule: String) -> Task<Message> {
         let table = self.rules_table(id);
         let grid = &self.rules_tab_mut(id).grid;
         let cell = table.row(&rule).and_then(|row| {
@@ -274,10 +274,14 @@ impl Signex {
         match cell {
             Some(cell) => {
                 // Selected, not opened for typing.
-                let _ = self.press_rules_cell(id, cell);
+                let task = self.press_rules_cell(id, cell);
                 self.update_grid_view(id, GridMessage::EditCancelled);
+                task
             }
-            None => self.rules_tab_mut(id).selected = Some(rule),
+            None => {
+                self.rules_tab_mut(id).selected = Some(rule);
+                Task::none()
+            }
         }
     }
 

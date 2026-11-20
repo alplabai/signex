@@ -171,10 +171,10 @@ impl Signex {
             project_id,
             domain,
         });
-        if let Some(rule) = rule {
-            self.select_rules_rule(project_id, rule);
+        match rule {
+            Some(rule) => Task::batch([task, self.select_rules_rule(project_id, rule)]),
+            None => task,
         }
-        task
     }
 
     /// A group's Rule link: the domain of what its rows break, and the rule
