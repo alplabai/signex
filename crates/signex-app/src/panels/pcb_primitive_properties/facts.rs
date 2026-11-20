@@ -331,7 +331,7 @@ pub struct ViaFacts {
     pub top: MaskSideFacts,
     pub bottom: MaskSideFacts,
     pub from_hole_edge: Option<bool>,
-    /// The board's via types (#96), derived from its vias until the Layer
+    /// The board's via types (mockup row 96), derived from its vias until the Layer
     /// Stack Manager stores them; through types first.
     pub types: Vec<ViaTypeChoice>,
     /// The type the vias share; `None` when they differ or match none.
@@ -340,7 +340,7 @@ pub struct ViaFacts {
     pub type_size: Option<(f64, f64)>,
     /// Whether the vias' diameter or drill differs from their type's.
     pub overridden: Option<bool>,
-    /// Override is on for these vias: Diameter and Drill take typed values.
+    /// Override was switched on in the panel for these vias.
     pub override_open: bool,
     /// The protection the vias share (IPC-4761); fill and cap read as none
     /// until the board stores them.
@@ -355,6 +355,14 @@ pub struct ViaFacts {
     pub reaches: (bool, bool),
     /// The copper layer the illustration's top view shows.
     pub view_layer: Option<CopperLayer>,
+}
+
+impl ViaFacts {
+    /// Override shows on: switched on in the panel, or the vias already
+    /// differ from their type. Diameter and Drill then take typed values.
+    pub fn override_on(&self) -> bool {
+        self.override_open || self.overridden == Some(true)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -539,7 +547,7 @@ pub fn shared<T: PartialEq>(mut values: impl Iterator<Item = T>) -> Option<T> {
     values.all(|v| v == first).then_some(first)
 }
 
-/// A via type in the Via Type dropdown (#96).
+/// A via type in the Via Type dropdown (mockup row 96).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViaTypeChoice {
     /// What picking it applies; also how the board's vias are matched to it.

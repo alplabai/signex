@@ -1,7 +1,8 @@
-//! The Via panel (#96): Net Information; Definition (net, the via type the
-//! via is, its name, span and drill pair, position); Via Stack (the
-//! illustration, Override, Diameter and Drill); Protection (IPC-4761);
-//! Solder Mask Expansion; and the rows the board does not store yet.
+//! The Via panel (mockup row 96): Net Information; Definition (net, the via
+//! type the via is, its name, span and drill pair, position); Via Stack
+//! (the illustration, Override, Diameter and Drill); Protection
+//! (IPC-4761); Solder Mask Expansion; and the rows the board does not store
+//! yet.
 //!
 //! A via picks a via type; span, drill pair, stack and protection come from
 //! it. Override lets one via take its own Diameter and Drill. The types are
@@ -34,7 +35,7 @@ use crate::panels::{PanelContext, PanelMsg};
 use crate::styles::ti;
 use crate::styles::tokens::{hover_overlay, resolve};
 
-/// An event of the Via panel's own rows (#96).
+/// An event of the Via panel's own rows (mockup row 96).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViaMsg {
     /// A via type was picked: the vias take its span, sizes and tenting.
@@ -68,10 +69,11 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a ViaFacts) -> Element<'a, Pa
     ])
 }
 
-/// Diameter and Drill take typed values: Override is on, or the panel
+/// Diameter, Drill and the stack tiles take typed values: Override is on
+/// (switched on, or the vias already differ from their type), or the panel
 /// shows the via the Via tool places next (#2393).
 fn sizes_live(f: &ViaFacts) -> bool {
-    f.override_open || f.common.target.is_placement()
+    f.override_on() || f.common.target.is_placement()
 }
 
 fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
@@ -229,7 +231,7 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
     }
     if !common.target.is_placement() {
         s.push(common, ids::PCB_PRIM_OVERRIDE, override_row(look, f));
-        if f.override_open {
+        if f.override_on() {
             s.push_row(caption(look, look.t(ids::PCB_PRIM_OVERRIDE_NOTE)));
         }
     }
@@ -293,14 +295,16 @@ fn size_row<'a>(
         (None, Some(_)) => true,
         _ => false,
     };
-    let mut value_row = row![greyed_unless(
-        look,
-        live,
+    let own = differs && live && !common.target.is_placement();
+    let input = if own && value.is_some() {
+        bold_mm_field(look, f, field, value)
+    } else {
         mm_field(common, field, value, look)
-    )]
-    .spacing(SP.s)
-    .align_y(iced::Alignment::Center);
-    if differs && live && !common.target.is_placement() {
+    };
+    let mut value_row = row![greyed_unless(look, live, input)]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center);
+    if own {
         let icon = iced::widget::svg(crate::icons::icon_undo(look.ctx.theme_id))
             .width(Length::Fixed(TS.label))
             .height(Length::Fixed(TS.label));
@@ -329,12 +333,29 @@ fn size_row<'a>(
     )
 }
 
+/// A via's own Diameter or Drill, overriding its type's: set in bold.
+fn bold_mm_field<'a>(
+    look: Look<'a>,
+    f: &'a ViaFacts,
+    field: F,
+    value: Option<f64>,
+) -> Element<'a, PanelMsg> {
+    let bold = iced::Font {
+        weight: iced::font::Weight::Semibold,
+        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+    };
+    super::rows::input(&f.common, field, value.map(format_number), look)
+        .style(crate::panels::form_look::text_input_style)
+        .font(bold)
+        .boxed()
+}
+
 /// Override: the switch and "for this via".
 fn override_row<'a>(look: Look<'a>, f: &'a ViaFacts) -> Element<'a, PanelMsg> {
     let common = &f.common;
     let r = resolve(look.tokens());
     let style = ToggleSwitchStyle::new(ti(look.tokens().accent), r.line_strong, r.primary_ink);
-    let on = f.override_open;
+    let on = f.override_on();
     let msg = common.is_editable().then(|| {
         via_msg(ViaMsg::OverrideToggled {
             target: common.target.clone(),
@@ -582,38 +603,71 @@ fn protection<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
     s.finish()
 }
 
-/// Thermal Relief, Tolerance, Testpoint and Propagation Delay: the board
-/// does not store them per via yet.
+/// Stacked or Staggered, for a microvia type: greyed, the board does not
+/// store it yet.
+fn microvia_row<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
+    let cells = [
+        ids::PCB_PRIM_MICROVIA_STACKED,
+        ids::PCB_PRIM_MICROVIA_STAGGERED,
+    ]
+    .into_iter()
+    .map(|id| Segment {
+        label: look.t(id),
+        is_on: false,
+        msg: None,
+    })
+    .collect();
+    labelled(
+        look,
+        ids::PCB_PRIM_MICROVIA,
+        with_tip(
+            look,
+            greyed_unless(look, false, segments(cells)),
+            ids::PCB_PRIM_MICROVIA_UNSTORED,
+        ),
+    )
+}
+
+/// Microvia (for a microvia type), Thermal Relief, Tolerance, Testpoint and
+/// Propagation Delay: the board does not store them per via yet.
 fn not_stored<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
     let dash = || look.t(ids::PCB_PRIM_NO_VALUE);
+    let micro = f
+        .via_type
+        .as_ref()
+        .is_some_and(|t| t.kind == signex_types::pcb::ViaType::Micro);
+    let microvia = micro.then(|| microvia_row(look));
     unstored(
         look,
         &f.common,
-        vec![
-            unstored_row(
-                look,
-                ids::PCB_PRIM_THERMAL_RELIEF,
-                look.t(ids::PCB_PRIM_DIRECT),
-                ids::PCB_PRIM_RELIEF_UNSUPPORTED,
-            ),
-            unstored_row(
-                look,
-                ids::PCB_PRIM_TOLERANCE,
-                dash(),
-                ids::PCB_PRIM_TOLERANCE_UNSUPPORTED,
-            ),
-            unstored_row(
-                look,
-                ids::PCB_PRIM_TESTPOINT,
-                look.t(ids::PCB_PRIM_TESTPOINT_SUMMARY),
-                ids::PCB_PRIM_TESTPOINT_UNSUPPORTED,
-            ),
-            unstored_row(
-                look,
-                ids::PCB_PRIM_PROPAGATION_DELAY,
-                dash(),
-                ids::PCB_PRIM_DELAY_UNKNOWN,
-            ),
-        ],
+        microvia
+            .into_iter()
+            .chain([
+                unstored_row(
+                    look,
+                    ids::PCB_PRIM_THERMAL_RELIEF,
+                    look.t(ids::PCB_PRIM_DIRECT),
+                    ids::PCB_PRIM_RELIEF_UNSUPPORTED,
+                ),
+                unstored_row(
+                    look,
+                    ids::PCB_PRIM_TOLERANCE,
+                    dash(),
+                    ids::PCB_PRIM_TOLERANCE_UNSUPPORTED,
+                ),
+                unstored_row(
+                    look,
+                    ids::PCB_PRIM_TESTPOINT,
+                    look.t(ids::PCB_PRIM_TESTPOINT_SUMMARY),
+                    ids::PCB_PRIM_TESTPOINT_UNSUPPORTED,
+                ),
+                unstored_row(
+                    look,
+                    ids::PCB_PRIM_PROPAGATION_DELAY,
+                    dash(),
+                    ids::PCB_PRIM_DELAY_UNKNOWN,
+                ),
+            ])
+            .collect(),
     )
 }

@@ -1,7 +1,8 @@
-//! #96, #97: the Via panel picks one of the board's via types (derived from
-//! its vias until the Layer Stack Manager stores them), Override lets one
-//! via keep its own Diameter and Drill, and a surface pad's stack is its one
-//! copper layer. Driven through `Signex::update` with the panel's messages.
+//! Mockup rows 96 and 97: the Via panel picks one of the board's via types
+//! (derived from its vias until the Layer Stack Manager stores them),
+//! Override lets one via keep its own Diameter and Drill, and a surface
+//! pad's stack is its one copper layer. Driven through `Signex::update`
+//! with the panel's messages.
 
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
@@ -318,7 +319,10 @@ fn override_unlocks_the_sizes_and_off_resets_them_in_one_step() {
         panic!("the via panel shows");
     };
     assert_eq!(via.overridden, Some(true), "V4 has its own diameter");
-    assert!(!via.override_open);
+    assert!(
+        via.override_on(),
+        "a via that differs from its type shows Override on"
+    );
     let before = snapshot(&f.app);
     send(
         &mut f.app,
@@ -347,6 +351,40 @@ fn override_unlocks_the_sizes_and_off_resets_them_in_one_step() {
     let v = via_on(&edited, V4);
     assert_eq!((v.diameter, v.drill), (0.6, 0.3), "back to the type's");
     assert_eq!(v.via_type, ViaType::Through);
+}
+
+#[test]
+fn a_via_overridden_on_its_type_shows_override_on_and_off_resets_it_in_one_step() {
+    let mut f = open_board();
+    select_via(&mut f, 40.0, V1);
+    let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
+        panic!("the via panel shows");
+    };
+    assert!(!via.override_on(), "V1 is its type: Override shows off");
+
+    let t = select_via(&mut f, 48.0, V4);
+    let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
+        panic!("the via panel shows");
+    };
+    assert!(!via.override_open, "nobody switched it on");
+    assert!(via.override_on(), "V4 differs from its type: Override on");
+    let edited = assert_one_step(&mut f, |f| {
+        send(
+            &mut f.app,
+            via_panel(ViaMsg::OverrideToggled {
+                target: t.clone(),
+                on: false,
+            }),
+        );
+    });
+    let v = via_on(&edited, V4);
+    assert_eq!((v.diameter, v.drill), (0.6, 0.3), "back to the type's");
+    send(&mut f.app, Message::Edit(EditMsg::Redo));
+    let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
+        panic!("the via panel shows");
+    };
+    assert_eq!(via.overridden, Some(false));
+    assert!(!via.override_on(), "Override off stays off");
 }
 
 #[test]

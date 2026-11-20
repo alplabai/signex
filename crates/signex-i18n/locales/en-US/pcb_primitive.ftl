@@ -282,7 +282,7 @@ pcb-prim-drawing-inner-layer = L{ $number }
 pcb-prim-drawing-next = { $net } · next
 pcb-prim-drawing-cursor = cursor
 
-## Via (#96): the via type a via picks, Override, protection after IPC-4761.
+## Via (mockup row 96): the via type a via picks, Override, protection after IPC-4761.
 ## The types are derived from the board's vias until the Layer Stack
 ## Manager stores them.
 pcb-prim-via-type = Via Type
@@ -318,6 +318,10 @@ pcb-prim-drill = Drill
 pcb-prim-reset-to-type = Reset to the via type's value
 pcb-prim-finished-hole = Finished Hole
 pcb-prim-finished-hole-tip = The drill less twice the hole plating.
+pcb-prim-microvia = Microvia
+pcb-prim-microvia-stacked = Stacked
+pcb-prim-microvia-staggered = Staggered
+pcb-prim-microvia-unstored = Not stored yet: the board does not store whether a microvia is stacked or staggered.
 pcb-prim-min-drill-warn = Drill { $drill } is below the board's minimum via drill { $min }.
 pcb-prim-protection = Protection
 pcb-prim-protection-type = Type
@@ -353,12 +357,12 @@ pcb-prim-protection-from-type = Protection comes from the via type.
 pcb-prim-edit-via-types = Edit it in Layer Stack ▸ Via Types.
 pcb-prim-testpoint-summary = Fabrication · Assembly
 
-## Mask rows of tracks and vias (#95, #96).
+## Mask rows of tracks and vias (mockup rows 95 and 96).
 pcb-prim-source = Source
 pcb-prim-tenting-moved = Tented Top/Bottom moved to Protection above; a tented side has no opening.
 pcb-prim-track-tent-unstored = Tracks do not store tenting yet.
 
-## Via and pad illustrations (#96, #97).
+## Via and pad illustrations (mockup rows 96 and 97).
 pcb-prim-top-view = Top view
 pcb-prim-side-view = Side view
 # A copper layer counted from the top: L1 is Top, the last is Bottom.
@@ -368,7 +372,7 @@ pcb-prim-via-section-header = { $pair } · { $class }
 pcb-prim-fill-summary = Fill: { $fill }
 pcb-prim-fill-capped-summary = Fill: { $fill } · capped
 
-## Pad (#97): the copper table, the hole and the mask switches.
+## Pad (mockup row 97): the copper table, the hole and the mask switches.
 pcb-prim-all-layers = All layers
 pcb-prim-shape-all-layers-tip = The board stores one shape per pad: a shape picked in any row sets every layer.
 pcb-prim-hole = Hole

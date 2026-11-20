@@ -199,7 +199,7 @@ define_ids! {
     PCB_PRIM_DRAWING_INNER_LAYER = "pcb-prim-drawing-inner-layer";
     PCB_PRIM_DRAWING_NEXT = "pcb-prim-drawing-next";
     PCB_PRIM_DRAWING_CURSOR = "pcb-prim-drawing-cursor";
-    // w2/via-pad (#2523, #96, #97): via types, Override, IPC-4761
+    // w2/via-pad (#2523, mockup rows 96 and 97): via types, Override, IPC-4761
     // protection, the shared mask rows, the pad's copper table and the via
     // and pad illustrations.
     PCB_PRIM_VIA_TYPE = "pcb-prim-via-type";
@@ -230,6 +230,10 @@ define_ids! {
     PCB_PRIM_RESET_TO_TYPE = "pcb-prim-reset-to-type";
     PCB_PRIM_FINISHED_HOLE = "pcb-prim-finished-hole";
     PCB_PRIM_FINISHED_HOLE_TIP = "pcb-prim-finished-hole-tip";
+    PCB_PRIM_MICROVIA = "pcb-prim-microvia";
+    PCB_PRIM_MICROVIA_STACKED = "pcb-prim-microvia-stacked";
+    PCB_PRIM_MICROVIA_STAGGERED = "pcb-prim-microvia-staggered";
+    PCB_PRIM_MICROVIA_UNSTORED = "pcb-prim-microvia-unstored";
     PCB_PRIM_MIN_DRILL_WARN = "pcb-prim-min-drill-warn";
     PCB_PRIM_PROTECTION = "pcb-prim-protection";
     PCB_PRIM_PROTECTION_TYPE = "pcb-prim-protection-type";
