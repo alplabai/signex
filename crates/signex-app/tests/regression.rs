@@ -747,3 +747,7 @@ mod board_sketch_checks;
 // centerline, and the pad link of Edit in Sketch.
 #[path = "regression/sketch_tools_padlink.rs"]
 mod sketch_tools_padlink;
+// #187 (decision 8): the footprint editor bar's Footprint / Sketch switch and
+// the 3D toggle that returns to the mode it came from.
+#[path = "regression/editor_mode_switch.rs"]
+mod editor_mode_switch;

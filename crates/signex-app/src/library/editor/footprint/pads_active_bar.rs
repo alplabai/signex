@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use iced::widget::{container, row};
 use iced::{Border, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{button, text};
 
 use crate::styles::{Spacing, TypeScale};
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
@@ -33,91 +33,168 @@ use crate::icons;
 use crate::library::editor::footprint::state::{EditorMode, PadsTool};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
-/// Standalone floating mode-switch widget rendered at the
-/// top-left of the canvas via `Stack` overlay (separate from the
-/// active bar's tools). Three connected segments in **Sketch /
-/// Pads / 3D** order; the active segment paints with the accent
-/// background.
+/// The footprint editor bar (Graphite mockup m187): the two-state
+/// Footprint / Sketch switch at its left, the 3D toggle beside it, then
+/// `trailing` (the sketch info caption and Parameters in Sketch mode). It
+/// floats at the canvas's top right, just under the Active Bar's band so the
+/// two never overlap at any width, clear of the DOF chips at the top left
+/// and ending above the parameters table card.
 pub fn mode_switcher_overlay<'a>(
     editor: &'a FootprintDocument,
     tokens: &'a ThemeTokens,
+    i18n: &signex_i18n::I18n,
+    trailing: Option<iced::Element<'a, LibraryMessage>>,
 ) -> iced::Element<'a, LibraryMessage> {
-    let ts = TypeScale::default();
+    use crate::library::editor::footprint::state::mode::ModeSwitch;
+    use crate::styles::Radii;
+    use iced::widget::{Space, button as button_style, container as container_style};
+    use iced::{Alignment, Background, Shadow, Vector};
+
+    // Height of one segment (m187 `.seg > span`: 22 px).
+    const SEGMENT_H: f32 = crate::styles::chrome_px(22.0 * 11.0 / 12.0);
+
+    // One segment: the lit one on the field fill with ink, a small shadow
+    // and medium weight, the other in ink3 on the sunken track.
+    fn segment<'b>(
+        mode: EditorMode,
+        on: bool,
+        msg: LibraryMessage,
+        tokens: &ThemeTokens,
+        i18n: &signex_i18n::I18n,
+    ) -> iced::Element<'b, LibraryMessage> {
+        let r = crate::styles::tokens::resolve(tokens);
+        let hover = crate::styles::tokens::hover_overlay(tokens);
+        let ink = if on {
+            theme_ext::text_primary(tokens)
+        } else {
+            r.ink3
+        };
+        let mut label = text(signex_i18n::t!(i18n, mode.switch_label()))
+            .size(TypeScale::default().body)
+            .color(ink);
+        if on {
+            label = label.font(iced::Font {
+                weight: iced::font::Weight::Medium,
+                ..iced::Font::DEFAULT
+            });
+        }
+        button(container(label).center_y(Length::Fixed(SEGMENT_H)))
+            .padding([0.0, Spacing::default().m])
+            .on_press(msg)
+            .style(move |_: &Theme, status| button_style::Style {
+                background: if on {
+                    Some(Background::Color(r.field))
+                } else if status == button_style::Status::Hovered {
+                    Some(Background::Color(hover))
+                } else {
+                    None
+                },
+                border: Border {
+                    radius: Radii::GRAPHITE.small.into(),
+                    ..Border::default()
+                },
+                shadow: if on {
+                    Shadow {
+                        color: r.shadow,
+                        offset: Vector::new(0.0, 1.0),
+                        blur_radius: 2.0,
+                    }
+                } else {
+                    Shadow::default()
+                },
+                ..button_style::Style::default()
+            })
+            .boxed()
+    }
+
+    // The 3D toggle, as tall as the segment track: accent while on.
+    fn toggle_3d<'b>(
+        on: bool,
+        msg: LibraryMessage,
+        tokens: &ThemeTokens,
+        i18n: &signex_i18n::I18n,
+    ) -> iced::Element<'b, LibraryMessage> {
+        let (ts, sp) = (TypeScale::default(), Spacing::default());
+        let r = crate::styles::tokens::resolve(tokens);
+        let ink = theme_ext::text_primary(tokens);
+        let label_ink = if on {
+            crate::styles::tokens::on_accent(tokens)
+        } else {
+            ink
+        };
+        let label = text(signex_i18n::t!(i18n, EditorMode::View3d.switch_label()))
+            .size(ts.body)
+            .color(label_ink);
+        let toggle = button(container(label).center_y(Length::Fixed(SEGMENT_H + 2.0 * sp.xs)))
+            .padding([0.0, sp.m])
+            .on_press(msg)
+            .style(chip_style(tokens, on))
+            .boxed();
+        let tip = text(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::EDITORS_MODE_3D_TOOLTIP
+        ))
+        .size(ts.caption)
+        .color(ink);
+        let tip = container(tip).padding([sp.xs, sp.s]).style(
+            signex_widgets::active_bar_dropdown::tooltip_style(r.raised, r.line_strong),
+        );
+        signex_widgets::tooltip(toggle, tip, signex_widgets::tooltip::Position::Bottom).boxed()
+    }
+
     let sp = Spacing::default();
-    let mode = editor.state.mode;
-    let path = editor.path.clone();
-    let text_c = theme_ext::text_primary(tokens);
-    let border = theme_ext::border_color(tokens);
-    let on_accent = crate::styles::tokens::on_accent(tokens);
-    let panel_bg = theme_ext::to_color(&tokens.panel_bg);
-
-    let segment = move |label: &'static str,
-                        target: EditorMode,
-                        active: bool,
-                        path: PathBuf|
-          -> iced::Element<'a, LibraryMessage> {
-        let label_color = if active { on_accent } else { text_c };
-        button(
-            container(
-                text(raw(label))
-                    .size(ts.body)
-                    .color(label_color)
-                    .align_x(iced::alignment::Horizontal::Center),
-            )
-            .height(Length::Fixed(22.0))
-            .center_y(Length::Fixed(22.0)),
-        )
-        .padding([0.0, sp.l])
-        .on_press(LibraryMessage::PrimitiveEditorEvent {
-            path,
-            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(target)),
-        })
-        .style(chip_style(tokens, active))
-        .boxed()
+    let switch = ModeSwitch::of(editor.state.mode, editor.state.mode_before_3d);
+    let send = |mode: EditorMode| LibraryMessage::PrimitiveEditorEvent {
+        path: editor.path.clone(),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetMode(mode)),
     };
+    let mut segments = row![].spacing(sp.xs).align_y(Alignment::Center);
+    for mode in ModeSwitch::SEGMENTS {
+        segments = segments.push(segment(mode, switch.is_lit(mode), send(mode), tokens, i18n));
+    }
+    let sunken = crate::styles::tokens::resolve(tokens).sunken;
+    let segments =
+        container(segments)
+            .padding(sp.xs)
+            .style(move |_: &Theme| container_style::Style {
+                background: Some(Background::Color(sunken)),
+                border: Border {
+                    radius: Radii::GRAPHITE.control.into(),
+                    ..Border::default()
+                },
+                ..container_style::Style::default()
+            });
+    // A click on the toggle goes back to the mode 3D was entered from.
+    let toggle = toggle_3d(switch.is_3d_on, send(switch.toggle_target), tokens, i18n);
 
-    // Sketch · Pads · 3D — per user spec.
-    let segments = row![
-        segment(
-            "Sketch",
-            EditorMode::Sketch,
-            matches!(mode, EditorMode::Sketch),
-            path.clone()
-        ),
-        segment(
-            "Pads",
-            EditorMode::Normal,
-            matches!(mode, EditorMode::Normal),
-            path.clone()
-        ),
-        segment(
-            "3D",
-            EditorMode::View3d,
-            matches!(mode, EditorMode::View3d),
-            path.clone()
-        ),
-    ]
-    .spacing(sp.xs)
-    .align_y(iced::Alignment::Center);
-
-    // Wrap in a panel-backed container so the chrome reads as a
-    // floating chip over the canvas (matches the active bar's
-    // visual rhythm).
-    iced::widget::container(iced::widget::container(segments).padding(sp.s).style(
-        move |_: &Theme| iced::widget::container::Style {
-            background: Some(iced::Background::Color(panel_bg)),
+    let mut bar = row![segments, toggle]
+        .spacing(sp.m)
+        .align_y(Alignment::Center);
+    if let Some(trailing) = trailing {
+        bar = bar.push(trailing);
+    }
+    let fill = theme_ext::to_color(&tokens.panel_bg);
+    let line = theme_ext::border_color(tokens);
+    let bar = container(bar)
+        .padding([sp.xs, sp.s])
+        .style(move |_: &Theme| container_style::Style {
+            background: Some(Background::Color(fill)),
             border: Border {
                 width: 1.0,
-                radius: 4.0.into(),
-                color: border,
+                radius: Radii::GRAPHITE.card.into(),
+                color: line,
                 ..Border::default()
             },
-            ..iced::widget::container::Style::default()
-        },
-    ))
-    .padding([sp.s, sp.m])
+            ..container_style::Style::default()
+        });
+    let below_active_bar = crate::active_bar::bar_top_margin()
+        + crate::active_bar::bar_height_for(&signex_widgets::active_bar::Metrics::GRAPHITE);
+    container(iced::widget::column![
+        Space::new().height(below_active_bar),
+        bar
+    ])
+    .padding([0.0, sp.m])
     .align_x(iced::alignment::Horizontal::Right)
-    .align_y(iced::alignment::Vertical::Top)
     .width(Length::Fill)
     .height(Length::Fill)
     .boxed()

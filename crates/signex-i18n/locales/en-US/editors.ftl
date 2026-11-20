@@ -479,3 +479,9 @@ editors-sketch-target-board-outline = Outline
 editors-sketch-target-mounting-holes = Holes
 # A count in the bake preview; $count is a whole number.
 editors-sketch-bake-count = { $count }
+# The footprint editor bar's mode switch (#187): a two-state segment and a
+# 3D toggle beside it.
+editors-mode-footprint = Footprint
+editors-mode-sketch = Sketch
+editors-mode-3d = 3D
+editors-mode-3d-tooltip = Show the 3D body; click again to go back

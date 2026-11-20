@@ -326,6 +326,8 @@ pub struct FootprintEditorState {
     pub sketch_overlay: SketchOverlay,
     /// The pad an Edit in Sketch came from (#192); read it through `live_pad_link`.
     pub pad_link: Option<PadLinkFocus>,
+    /// The mode the 3D toggle returns to (#187); set when 3D is entered.
+    pub mode_before_3d: EditorMode,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -445,6 +447,7 @@ impl FootprintEditorState {
             canvas_text: SketchCanvasText::default(),
             sketch_overlay: SketchOverlay::default(),
             pad_link: None,
+            mode_before_3d: EditorMode::Normal,
         }
     }
 

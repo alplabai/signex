@@ -148,4 +148,8 @@ define_ids! {
     EDITORS_SKETCH_TARGET_BOARD_OUTLINE = "editors-sketch-target-board-outline";
     EDITORS_SKETCH_TARGET_MOUNTING_HOLES = "editors-sketch-target-mounting-holes";
     EDITORS_SKETCH_BAKE_COUNT = "editors-sketch-bake-count";
+    EDITORS_MODE_FOOTPRINT = "editors-mode-footprint";
+    EDITORS_MODE_SKETCH = "editors-mode-sketch";
+    EDITORS_MODE_3D = "editors-mode-3d";
+    EDITORS_MODE_3D_TOOLTIP = "editors-mode-3d-tooltip";
 }
