@@ -727,3 +727,8 @@ mod sheet_tools_graphite;
 // #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
 #[path = "regression/board_sync_graphite.rs"]
 mod board_sync_graphite;
+
+// #187 / #191 / #192: Chamfer, Extend, Linear Pattern, Mirror about a
+// centerline, and the pad link of Edit in Sketch.
+#[path = "regression/sketch_tools_padlink.rs"]
+mod sketch_tools_padlink;

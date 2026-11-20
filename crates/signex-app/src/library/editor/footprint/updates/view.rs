@@ -100,6 +100,8 @@ fn set_mode(
     // a menu open — the dropdown's backstop eats the click —
     // but a keyboard shortcut can.)
     editor.state.active_bar_menu = None;
+    // #192 — a mode change ends the Edit in Sketch focus.
+    editor.state.pad_link = None;
     editor.state.mode = mode;
     // Run the dispatcher so the sketch is initialised + solved
     // on first switch into Sketch mode (or no-op otherwise).

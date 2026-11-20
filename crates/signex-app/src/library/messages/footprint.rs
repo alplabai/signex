@@ -595,4 +595,7 @@ pub enum FootprintEditorMsg {
     /// v0.13.3 — Inline numeric input for the Dimension tool /
     /// editable Distance value. Updates `state.dimension_input`.
     SketchDimensionInput(String),
+
+    /// #192 — the floating pad link on the sketch canvas.
+    PadLink(crate::library::editor::footprint::state::PadLinkMsg),
 }

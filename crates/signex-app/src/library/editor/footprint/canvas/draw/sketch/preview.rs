@@ -734,7 +734,8 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_prev
         // v0.27 — Fillet, first Line picked. The tool is waiting for
         // the user's second-line click; no shape preview to draw,
         // the cursor reticle is the sole visual cue.
-        ToolPending::FilletFirst { .. } => {}
+        // Chamfer's ghost lives in `tool_ghosts`.
+        ToolPending::FilletFirst { .. } | ToolPending::ChamferFirst { .. } => {}
     }
 
     // v0.24 Track D — modeless live numeric placement-input overlay.

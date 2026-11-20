@@ -31,6 +31,7 @@ mod courtyard;
 mod courtyard_tests;
 pub mod mode;
 pub mod pad;
+pub mod pad_link;
 pub mod placement;
 pub mod selection;
 pub mod selection_filter;
@@ -49,6 +50,7 @@ pub use pad::{
     AlignOp, CourtyardRect, DEFAULT_THROUGH_HOLE_DRILL_MM, EditorPad, NextPadDefaults,
     PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
+pub use pad_link::{PadLinkFocus, PadLinkMsg, PadLinkOffer};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
 pub use snap_options::{
@@ -305,6 +307,8 @@ pub struct FootprintEditorState {
     /// The sketch mode exit set: bake preview, discard confirmation and
     /// the footprint as sketch mode found it (#2518).
     pub sketch_exit: super::sketch_mode::SketchExit,
+    /// The pad an Edit in Sketch came from (#192); read it through `live_pad_link`.
+    pub pad_link: Option<PadLinkFocus>,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -420,6 +424,7 @@ impl FootprintEditorState {
             zoom_request: ZoomRequest::default(),
             board_backdrop: None,
             sketch_exit: Default::default(),
+            pad_link: None,
         }
     }
 

@@ -18,8 +18,10 @@ mod arrows;
 mod constraints;
 mod entities;
 mod fills;
+mod pad_link;
 mod preview;
 mod snap;
+mod tool_ghosts;
 
 // Entry points reached from the sibling `draw::overlays` layer methods
 // via `use super::sketch::{…}`. Re-exported at their original
@@ -27,8 +29,10 @@ mod snap;
 // unchanged.
 pub(super) use arrows::draw_dof_direction_arrows;
 pub(super) use entities::draw_sketch_overlay;
+pub(super) use pad_link::draw_pad_link_profile;
 pub(super) use preview::draw_sketch_tool_preview;
 pub(super) use snap::draw_sketch_snap_glyph;
+pub(super) use tool_ghosts::draw_sketch_tool_ghosts;
 
 // The closed-loop walker + record are reached from `canvas::input`
 // through the `draw::` re-export; keep them at their original

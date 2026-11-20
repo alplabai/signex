@@ -17,6 +17,7 @@
 mod board_sketch;
 mod dof_chip;
 mod footprint;
+mod pad_link;
 pub(crate) mod sketch_exit;
 pub(crate) mod symbol;
 

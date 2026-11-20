@@ -307,6 +307,9 @@ impl FootprintCanvas<'_> {
             | SketchTool::TangentArc
             | SketchTool::Fillet
             | SketchTool::Trim
+            | SketchTool::Chamfer
+            | SketchTool::Extend
+            | SketchTool::LinearPattern
             // #372 — Break Track routes its single click through the
             // same SketchToolClick path as Trim; the dispatcher's edit
             // arm hit-tests the Line and hands off to `split_line`.

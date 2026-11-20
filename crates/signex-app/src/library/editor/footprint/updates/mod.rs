@@ -510,6 +510,10 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::ActiveBarSelectAll
         | FootprintEditorMsg::ActiveBarClearSelection
         | FootprintEditorMsg::ActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
+        FootprintEditorMsg::PadLink(msg) => {
+            editor.state.apply_pad_link(msg);
+            editor.canvas_cache.clear();
+        }
     }
 }
 
@@ -682,7 +686,9 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarRotateSelection
         | ActiveBarFlipSelection
         | ActiveBarAlignSelectionToGrid
-        | ActiveBarMoveOriginToGrid => false,
+        | ActiveBarMoveOriginToGrid
+        // #192 — the pad link changes mode and selection only.
+        | PadLink(_) => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.
