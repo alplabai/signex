@@ -148,4 +148,8 @@ define_ids! {
     EDITORS_SKETCH_TARGET_BOARD_OUTLINE = "editors-sketch-target-board-outline";
     EDITORS_SKETCH_TARGET_MOUNTING_HOLES = "editors-sketch-target-mounting-holes";
     EDITORS_SKETCH_BAKE_COUNT = "editors-sketch-bake-count";
+    EDITORS_PAD_SCOPE_QUESTION = "editors-pad-scope-question";
+    EDITORS_PAD_SCOPE_THIS_PAD = "editors-pad-scope-this-pad";
+    EDITORS_PAD_SCOPE_ALL_PADS = "editors-pad-scope-all-pads";
+    EDITORS_PAD_SCOPE_CANCEL = "editors-pad-scope-cancel";
 }

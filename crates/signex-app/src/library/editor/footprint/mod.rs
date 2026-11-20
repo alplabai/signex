@@ -18,6 +18,7 @@ pub mod layers;
 pub mod layers_panel;
 pub(crate) mod legacy_silk;
 pub mod move_by_modal;
+pub(crate) mod pad_scope_prompt;
 pub(crate) mod pad_shape_warnings;
 pub mod pad_stack_check;
 pub mod pad_to_sketch;

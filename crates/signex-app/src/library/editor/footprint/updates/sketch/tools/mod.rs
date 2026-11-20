@@ -16,6 +16,7 @@
 mod chamfer_extend;
 mod draw;
 mod edit;
+mod mirror_pattern;
 mod pattern;
 mod transform;
 

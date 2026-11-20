@@ -747,3 +747,10 @@ mod board_sketch_checks;
 // centerline, and the pad link of Edit in Sketch.
 #[path = "regression/sketch_tools_padlink.rs"]
 mod sketch_tools_padlink;
+// #191: Mirror and the pattern tools with a pattern selected keep live
+// pattern links; a loop is refused.
+#[path = "regression/sketch_pattern_links.rs"]
+mod sketch_pattern_links;
+// #192 D1: an edit of a patterned pad asks This pad / All pads.
+#[path = "regression/sketch_pad_scope.rs"]
+mod sketch_pad_scope;

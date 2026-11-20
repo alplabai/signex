@@ -366,6 +366,15 @@ impl Signex {
     where
         F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
     {
+        // A patterned pad's edit waits for "This pad / All pads" (#192 D1).
+        let Some(f) = crate::library::editor::footprint::updates::hold_patterned_pad_edit(
+            self.active_footprint_editor_mut(),
+            idx,
+            f,
+        ) else {
+            self.refresh_panel_ctx();
+            return true;
+        };
         if let Some(editor) = self.active_footprint_editor_mut() {
             let key = field.map(|name| (name, idx as u128));
             editor.record_edit(key, |editor| {
