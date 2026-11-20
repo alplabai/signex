@@ -1,4 +1,4 @@
-//! Unions (#158): a named group of objects on one sheet that select, move
+//! Unions (mockup row 158): a named group of objects on one sheet that select, move
 //! and copy together. A union owns no geometry; it lists its members by
 //! uuid. File format: `docs/architecture/snxsch-refinement-objects.md`.
 

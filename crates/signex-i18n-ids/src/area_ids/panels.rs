@@ -206,7 +206,7 @@ define_ids! {
     PANELS_MESSAGES_PIN_DOT_REFUSED_ENTRY = "panels-messages-pin-dot-refused-entry";
     PANELS_MESSAGES_UNNAMED_NET = "panels-messages-unnamed-net";
     PANELS_MESSAGES_LIST_MORE = "panels-messages-list-more";
-    // c13 multi-channel-compiled
+    // Multi-channel sheets and the Compiled Design panel (#1279, #1308).
     PANELS_KIND_COMPILED_DESIGN = "panels-kind-compiled-design";
     PANELS_COMPILED_DESIGN_RECOMPILE = "panels-compiled-design-recompile";
     PANELS_COMPILED_DESIGN_MODE_SHEETS = "panels-compiled-design-mode-sheets";
@@ -235,7 +235,7 @@ define_ids! {
     PANELS_CHANNEL_VIEW_NOT_COMPILED = "panels-channel-view-not-compiled";
     PANELS_CHANNEL_READ_ONLY = "panels-channel-read-only";
     PANELS_COMPILED_DESIGN_FAILED = "panels-compiled-design-failed";
-    // c13 sch-harness (#1280)
+    // Signal harnesses (#1280).
     PANELS_HARNESS_CAPTION = "panels-harness-caption";
     PANELS_HARNESS_MISMATCH = "panels-harness-mismatch";
     PANELS_HARNESS_RENAME = "panels-harness-rename";
@@ -312,7 +312,7 @@ define_ids! {
     PANELS_BLANKET_HOVER_HINT = "panels-blanket-hover-hint";
     PANELS_BLANKET_CAUGHT_NOTE = "panels-blanket-caught-note";
     PANELS_NP_OFF_WIRE = "panels-np-off-wire";
-    // c13 unions-change-paste: the Unions panel and popover (#158).
+    // the Unions panel and popover (mockup row 158).
     PANELS_KIND_UNIONS = "panels-kind-unions";
     UNIONS_PANEL_EMPTY_TITLE = "panels-unions-empty-title";
     UNIONS_PANEL_EMPTY_BODY = "panels-unions-empty-body";
@@ -342,7 +342,7 @@ define_ids! {
     UNIONS_CREATE_LOCK = "panels-unions-create-lock";
     UNIONS_CREATE_CONFIRM = "panels-unions-create-confirm";
     UNIONS_TAG_REMOVE = "panels-unions-tag-remove";
-    // c13 review: Messages lines of the unions, harness and compile slices.
+    // Messages lines of the unions, harness and compile slices.
     UNIONS_MSG_NOT_A_SHEET = "panels-unions-msg-not-a-sheet";
     UNIONS_MSG_NO_SELECTION = "panels-unions-msg-no-selection";
     UNIONS_MSG_SHEET_CHANGED = "panels-unions-msg-sheet-changed";

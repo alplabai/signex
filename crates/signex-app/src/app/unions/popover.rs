@@ -1,4 +1,4 @@
-//! The Create Union popover (#158, mockup m158 "Create union"): a 300 px
+//! The Create Union popover (mockup row 158, "Create union"): a 300 px
 //! card near the selection with the object count, a Name field (focused on
 //! open), a Tags field of removable pills and an "add tag" input, the
 //! "Lock after creating" box, and Cancel / Create. A pure view.

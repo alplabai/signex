@@ -1,6 +1,7 @@
 //! The Bezier tool (#1267): click the start, C1, C2 and the end; the fourth
 //! click places one cubic curve. A new curve takes the sheet's drawing
-//! colour (no own colour; red only by an explicit pick, decision SCH-14).
+//! colour (no own colour; red only by an explicit pick; DECISIONS
+//! 2026-11-19).
 
 use signex_types::schematic::{Point, SchBezier, SchDrawing};
 

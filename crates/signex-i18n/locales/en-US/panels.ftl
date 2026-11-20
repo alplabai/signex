@@ -925,7 +925,7 @@ panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.
 panels-messages-list-more = { $names } and { $count } more
 
-## c13 multi-channel-compiled
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
 
 panels-kind-compiled-design = Compiled Design
 # Tooltip of the panel's title-row button and the out-of-date banner's button.
@@ -975,7 +975,7 @@ panels-channel-read-only = Channel { $channel } is a compiled view; switch to Ed
 # The compile result in Messages.
 panels-compiled-design-failed = Compile project: { $reason }
 
-## c13 sch-harness
+## Signal harnesses (#1280).
 
 # Caption under the Harness Connector header: the sheet file and how many entries the connector has.
 panels-harness-caption = { $sheet } · { $count ->
@@ -1028,7 +1028,6 @@ panels-harness-defs-nested-section = { $type } (nested)
 panels-harness-defs-new = New harness type
 panels-harness-defs-back = Back
 
-## c13 sch-net-directives
 ## Properties of a Net Parameters directive (#1281): a flag on one wire that
 ## sets its net's class, diff-pair class and routing rules.
 
@@ -1095,9 +1094,9 @@ panels-blanket-caught-note = accent = caught by the blanket
 # Messages line: the Net Parameters tool was clicked away from a wire.
 panels-np-off-wire = Net Parameters sit on a wire: click on a wire. Nothing was placed.
 
-## c13 unions-change-paste
+## Named unions (mockup row 158).
 
-# The Unions dock panel and the Create Union popover (#158).
+# The Unions dock panel and the Create Union popover (mockup row 158).
 panels-kind-unions = Unions
 panels-unions-empty-title = No schematic sheet in view
 panels-unions-empty-body = Open a sheet to list its unions.
@@ -1143,7 +1142,7 @@ panels-unions-create-confirm = Create
 # Removes a tag pill.
 panels-unions-tag-remove = ×
 
-## c13 review: Messages lines of the unions, harness and compile slices.
+## Messages lines of the unions, harness and compile slices.
 
 panels-unions-msg-not-a-sheet = Create Union works on a schematic sheet.
 panels-unions-msg-no-selection = Create Union: select the objects to group first.

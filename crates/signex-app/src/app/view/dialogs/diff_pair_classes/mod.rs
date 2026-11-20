@@ -431,8 +431,8 @@ fn class_form<'a>(
     .spacing(SP.s)
     .align_y(iced::Alignment::Center)
     .boxed();
-    // SCH-06: skew and uncoupled length are High Speed rules; no such rule
-    // exists yet, so both read "—" with a way to the Rules tab.
+    // Skew and uncoupled length are High Speed rules (DECISIONS 2026-11-19);
+    // no such rule exists yet, so both read "—" with a way to the Rules tab.
     let read_only = || {
         text(t!(i18n, ids::DIALOG_DPC_NOT_SET))
             .size(TS.body)

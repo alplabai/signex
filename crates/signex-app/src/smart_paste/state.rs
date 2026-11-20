@@ -1,4 +1,4 @@
-//! The Smart Paste dialog's state and messages (#155). The fields hold what
+//! The Smart Paste dialog's state and messages (mockup row 155). The fields hold what
 //! the user typed; `input` checks them. What the copies are called and the
 //! clipboard summary are worked out in `update` (they read the sheet and
 //! the project's designators) and kept here for the view.

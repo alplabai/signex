@@ -1,4 +1,4 @@
-//! The Unions dock panel (#158, mockup m158): a filter field, the This
+//! The Unions dock panel (mockup row 158): a filter field, the This
 //! sheet / Project scope switch and the tag chips over the list of unions
 //! (`rows`), and the picked union's members and actions at the foot
 //! (`foot`). A pure view over `UnionsPanelView`, which `update` builds
@@ -27,7 +27,7 @@ fn um(msg: UnionsMsg) -> PanelMsg {
     PanelMsg::Unions(msg)
 }
 
-/// Filter-chip colours of the Graphite tokens (BB4).
+/// Filter-chip colours of the Graphite tokens.
 pub(crate) fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
     let r = resolve(tokens);
     ChipStyle {
@@ -40,7 +40,7 @@ pub(crate) fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
     }
 }
 
-/// Segmented-switch colours of the Graphite tokens (BB4).
+/// Segmented-switch colours of the Graphite tokens.
 pub(crate) fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = resolve(tokens);
     SegmentedStyle::new(

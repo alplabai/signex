@@ -1,4 +1,4 @@
-//! The Unions panel's pure view builder and the hidden set (#158).
+//! The Unions panel's pure view builder and the hidden set (mockup row 158).
 
 use std::path::{Path, PathBuf};
 

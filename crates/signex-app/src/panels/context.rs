@@ -116,7 +116,7 @@ pub struct PanelContext {
     /// The Compiled Design panel, and the multi-channel rows of a sheet
     /// symbol and a channel tab in Properties (#1279, #1308).
     pub compiled_design: super::compiled_design::CompiledDesignView,
-    /// The Unions panel's rows and foot; filled only while it is open (#158).
+    /// The Unions panel's rows and foot; filled only while it is open (mockup row 158).
     pub unions: crate::app::unions::UnionsPanelView,
     /// The Object List's rows and picks; filled only while that panel is open
     /// (#1259).

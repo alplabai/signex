@@ -309,7 +309,7 @@ fn fixture() -> SchematicSheet {
         s.harness.wires.push(harness_wire(n));
     }
     connected_pins(&mut s);
-    // Deleting either member drops it from the union in the same step (#158).
+    // Deleting either member drops it from the union in the same step (mockup row 158).
     s.unions.push(signex_types::schematic::SchUnion {
         uuid: uid(UNION, 1),
         name: "Input filter".into(),

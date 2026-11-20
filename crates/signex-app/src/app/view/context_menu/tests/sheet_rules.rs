@@ -248,8 +248,9 @@ fn unbuilt_rows_are_greyed_and_say_why() {
     open_menu(&mut app);
     let i18n = signex_i18n::I18n::en_us_ref();
     let top = canvas_rows(&app);
-    // The planned rows sit in the "Planned (N)" flyout, not the menu (Graphite
-    // mockup #62); Unions is live (#158), `the_unions_row_opens_a_live_submenu`.
+    // The planned rows sit in the "Planned (N)" flyout, not the menu (mockup
+    // row 62); Unions is live (mockup row 158),
+    // `the_unions_row_opens_a_live_submenu`.
     for label in ["References", "Pin Mapping...", "Supplier Links..."] {
         assert!(
             !top.iter()
@@ -275,7 +276,7 @@ fn unbuilt_rows_are_greyed_and_say_why() {
     }
 }
 
-/// #158: Unions is a live launcher now (it was a planned stub), and its
+/// Mockup row 158: Unions is a live launcher now (it was a planned stub), and its
 /// flyout lists Create, Add, Remove and Break; Create is live with a
 /// selection and runs the command, which opens the Create Union popover.
 #[test]

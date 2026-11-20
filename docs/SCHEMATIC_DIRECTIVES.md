@@ -133,7 +133,7 @@ A class with pairs cannot be deleted; its row menu says how many. The
 Members table lists the classed pairs on the project's open sheets with the
 sheet each directive is on. Max skew and max uncoupled length are rules of
 the Rules tab (High Speed); the dialog shows them read-only, "—" while no
-such rule exists, with a link to the Rules tab (decisions SCH-06). The pairs
+such rule exists, with a link to the Rules tab (DECISIONS 2026-11-19). The pairs
 are shown in the PCB panel's Differential Pairs mode.
 
 ## Editing

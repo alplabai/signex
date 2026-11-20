@@ -133,7 +133,7 @@ impl Signex {
                     crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
                         .is_some()
                 }),
-            // #158: the selection holds a member of a union.
+            // Mockup row 158: the selection holds a member of a union.
             union_selected: self
                 .document_state
                 .engine_for_window(window_id, &self.ui_state)
@@ -289,7 +289,7 @@ pub(super) struct CanvasSelection {
     /// One non-power symbol: the placed-part actions apply (#1260).
     pub(super) placed_part_selected: bool,
     /// The selection holds a member of a union: Add / Remove / Break apply
-    /// (#158).
+    /// (mockup row 158).
     pub(super) union_selected: bool,
     /// The window's command facts: every command row is live exactly when
     /// its own enablement rule allows it here (#2419).
@@ -527,7 +527,7 @@ impl SheetRows<'_> {
                 ContextSubmenu::Arrange,
             ));
         }
-        // #158: right-click ▸ Unions ▸ Create Union… (it left the Planned flyout).
+        // Mockup row 158: right-click ▸ Unions ▸ Create Union… (it left the Planned flyout).
         v.push(self.launcher(
             ic::icon_dd_unions(tid),
             menu_ids::CTX_UNIONS,
@@ -623,7 +623,7 @@ impl SheetRows<'_> {
     }
 }
 
-/// Unions submenu (#158): Create Union… and Add Selection to Union (the
+/// Unions submenu (mockup row 158): Create Union… and Add Selection to Union (the
 /// union picked in the Unions panel) with a selection; Remove and Break
 /// while the selection holds a member of a union. Each row is also gated by
 /// its command's own rule.

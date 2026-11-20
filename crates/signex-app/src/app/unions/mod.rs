@@ -1,4 +1,4 @@
-//! Named unions in the app (#158): the slice's state and messages
+//! Named unions in the app (mockup row 158): the slice's state and messages
 //! (`state`), its update (`update`) and the Create Union popover
 //! (`popover`). The rules live in the engine (`signex_engine::unions`); the
 //! Unions panel is `panels/unions/`, the canvas outline

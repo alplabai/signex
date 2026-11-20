@@ -184,7 +184,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "sync_sheet_entries" => Message::from(crate::app::SheetSyncMsg::Requested),
         "change_component" => placed_part(PlacedPartAction::ChangeComponent),
-        // #158: named unions of the sheet in view.
+        // Mockup row 158: named unions of the sheet in view.
         "create_union" => unions(crate::app::unions::UnionsMsg::CreateRequested),
         "add_to_union" => unions(crate::app::unions::UnionsMsg::AddSelectionRequested),
         "remove_from_union" => unions(crate::app::unions::UnionsMsg::RemoveSelectionRequested),

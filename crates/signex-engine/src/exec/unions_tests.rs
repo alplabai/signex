@@ -1,4 +1,4 @@
-//! #158: creating, renaming, locking, re-membering and breaking a named
+//! Mockup row 158: creating, renaming, locking, re-membering and breaking a named
 //! union, the one-union-per-object rule, a delete dropping its member, the
 //! lock a locked union puts on its members, and the selection a click grows
 //! into.

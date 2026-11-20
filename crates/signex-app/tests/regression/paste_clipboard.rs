@@ -56,7 +56,7 @@ fn a_paste_request_asks_the_system_clipboard() {
     app.ui_state.paste_designators = PasteDesignators::Keep;
     let task = app.update(Message::Edit(EditMsg::Paste));
     assert!(reads_clipboard(task));
-    // #155: Smart Paste in a window offers Next free in its dialog, so it
+    // Mockup row 155: Smart Paste in a window offers Next free in its dialog, so it
     // reads the project's numbers first, then the clipboard.
     let seeding = app.update(Message::Edit(EditMsg::SmartPaste));
     let seeded = crate::library_place_symbol::run(seeding)
@@ -166,9 +166,9 @@ fn next_free_takes_the_next_number_and_units_still_share_one() {
     );
 }
 
-/// #155: a headless Smart Paste and Duplicate follow the preference; in a
-/// window Smart Paste numbers as its dialog says (Next free or Keep), and
-/// the copy lands at the click as one undo step.
+/// Mockup row 155: a headless Smart Paste and Duplicate follow the preference; in a
+/// window Smart Paste numbers as its dialog says (Next free or Keep unless
+/// taken), and the copy lands at the click as one undo step.
 #[test]
 fn smart_paste_and_duplicate_follow_the_preference() {
     for (mode, expected) in [

@@ -609,7 +609,7 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
 Opens (or reveals) the Unions panel (`PanelKind::Unions`, named unions),
 docked on the right. The row sits after Layers, among the panel rows, and
 behaves like them; the panel is also in the status bar's Panels list
-(decisions.html XF-07: every dock panel is listed in both). No key is bound
+(DECISIONS 2026-11-19: every dock panel is listed in both). No key is bound
 and there is no command id: the row sends `OpenUnionsPanel`, as the other
 panel rows do. Always available.
 
@@ -762,14 +762,14 @@ From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
 live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
 Number Schematic Sheets (#1276).
 
-Unions (#158) holds Create Union… (`create_union`, live with a selection,
+Unions (mockup row 158) holds Create Union… (`create_union`, live with a selection,
 `Ctrl+G` in the default profile), Add Selection to Union (`add_to_union`, the
 union picked in the Unions panel), Remove Selection from Union
 (`remove_from_union`) and Break Union (`break_union`), the last two live when
 the selection holds a member of a union. See
 [SCHEMATIC_UNIONS.md](SCHEMATIC_UNIONS.md).
 
-Paste Special (`smart_paste`, #155) opens the Smart Paste dialog in a window:
+Paste Special (`smart_paste`, mockup row 155) opens the Smart Paste dialog in a window:
 one copy at an offset or an array of copies, the designators Next free or
 kept, the net labels kept or rewritten with a pattern (power nets never). Its
 Paste puts every copy on the cursor and one click places them as one undo

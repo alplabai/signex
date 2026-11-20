@@ -1,4 +1,4 @@
-//! Properties of a selected harness connector (#1280), as the m152 mockup
+//! Properties of a selected harness connector (#1280), as mockup row 152
 //! draws it: a caption with the sheet and entry count; in the mismatch state
 //! a warn banner (with Rename and Go to buttons) and the Entries list right
 //! under the header, the mismatched row tinted; the Harness section (Type

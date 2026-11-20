@@ -676,7 +676,7 @@ cmd-category-uncategorized = Uncategorized
 # The placeholder label of a command row that has none (never shown for a catalog command).
 cmd-unnamed = Unnamed command
 
-## c13 sch-drawing-tables
+## Bezier, dimension and table drawings (#1267, #1300).
 cmd-place-table = Place table
 cmd-menu-place-table = Table
 cmd-place-linear-dimension = Place linear dimension
@@ -686,22 +686,22 @@ cmd-menu-place-aligned-dimension = Aligned
 cmd-add-table-of-contents = Add table of contents sheet
 cmd-menu-add-table-of-contents = Add Table of Contents Sheet
 
-## c13 multi-channel-compiled
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
 
 cmd-compile-project = Compile the project
 cmd-menu-compile-project = Compile Project
 cmd-open-compiled-design = Open Compiled Design panel
 cmd-menu-open-compiled-design = Compiled Design
 
-## c13 sch-harness
+## Signal harnesses (#1280).
 
 cmd-open-harness-definitions = Open the harness definitions
 
-## c13 sch-net-directives
+## Differential pair classes (#1489).
 cmd-open-diff-pair-classes = Open the project's differential pair classes
 cmd-menu-open-diff-pair-classes = Differential Pair Classes…
 
-## c13 unions-change-paste
+## Named unions (mockup row 158).
 cmd-create-union = Create a union from the selection
 cmd-menu-create-union = Create Union…
 cmd-add-to-union = Add the selection to the selected union

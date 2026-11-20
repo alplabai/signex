@@ -357,7 +357,7 @@ impl<'a> Rows<'a> {
             .boxed()
     }
 
-    /// A property illustration (BB2): hover is not tracked yet, so its
+    /// A property illustration: hover is not tracked yet, so its
     /// messages are dropped.
     pub fn illustration(
         &self,

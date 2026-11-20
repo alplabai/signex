@@ -1,4 +1,4 @@
-//! The Smart Paste dialog (#155, mockup m155 "Smart Paste · offset" and
+//! The Smart Paste dialog (mockup row 155, "Smart Paste · offset" and
 //! "Smart Paste · array"): the Place switch and its offset or array
 //! fields, the Designators and Net names choices with the After paste
 //! table on the left; the live drawing of the source and the ghost copies

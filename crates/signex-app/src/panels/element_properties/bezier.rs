@@ -1,6 +1,6 @@
 //! Properties of a Bezier (#1267): the four points as X/Y boxes, then the
 //! line's width, style, colour and arrowheads. The illustration names the
-//! control points C1 / C2 as the canvas does (decision SCH-14).
+//! control points C1 / C2 as the canvas does (DECISIONS 2026-11-19).
 
 use iced::widget::Column;
 use iced::{Element, Length, Point, Rectangle, Size, Widget as _};

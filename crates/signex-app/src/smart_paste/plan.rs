@@ -1,4 +1,4 @@
-//! What a Smart Paste places (#155), as pure functions of the dialog's
+//! What a Smart Paste places (mockup row 155), as pure functions of the dialog's
 //! choices: the copies and where each sits, the net names they carry, and
 //! the After paste table. Power nets are never rewritten.
 

@@ -1,4 +1,4 @@
-//! The Unions panel's foot for the picked union (mockup m158): its name as
+//! The Unions panel's foot for the picked union (mockup row 158): its name as
 //! an input (a rename is one undo step), the member count, member pills and
 //! the wire count, and Add selection / Remove selection / Break union, which
 //! wrap on a narrow dock. A hidden union shows that it is hidden, with Show,

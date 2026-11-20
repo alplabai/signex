@@ -731,7 +731,7 @@ pub enum PanelMsg {
     /// The Compiled Design panel and the multi-channel Properties rows
     /// (#1279, #1308).
     CompiledDesign(crate::app::CompiledDesignMsg),
-    /// The Unions panel (#158).
+    /// The Unions panel (mockup row 158).
     Unions(crate::app::unions::UnionsMsg),
     /// The Object List panel (#1259).
     ObjectList(super::ObjectListMsg),

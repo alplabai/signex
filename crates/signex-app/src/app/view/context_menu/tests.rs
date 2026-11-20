@@ -279,8 +279,8 @@ fn canvas_menu_grows_and_gates_on_selection() {
         assert!(has_row(&with, row), "{row} with a selection");
     }
     // Place and Sheet Actions on an empty spot; with a selection Align,
-    // Unions (#158), Part Actions and the Planned flyout join them (Graphite
-    // mockup #62).
+    // Unions (mockup row 158), Part Actions and the Planned flyout join them
+    // (mockup row 62).
     assert_eq!(launchers(&without), 2);
     assert_eq!(launchers(&with), 6);
 }
@@ -382,7 +382,7 @@ fn a_hit_and_a_net_highlight_add_their_rows_to_the_empty_spot_menu() {
 
 /// Graphite mockup #62: with a selection the menu opens on Properties (bold, the default
 /// row), keeps the drawn order, and ends with Undo and the greyed
-/// "Planned (5)" flyout launcher. Unions is live (#158) and sits with Align.
+/// "Planned (5)" flyout launcher. Unions is live (mockup row 158) and sits with Align.
 #[test]
 fn the_selection_menu_keeps_the_drawn_order_and_ends_with_planned() {
     let i18n = signex_i18n::I18n::en_us_ref();

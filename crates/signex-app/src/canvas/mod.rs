@@ -646,7 +646,7 @@ pub struct CanvasViewPrefs<'a> {
     /// treat the Component tool as a placing tool then, not only the one
     /// whose canvas holds the cursor ghost (#1776).
     pub power_port_pending: bool,
-    /// The unions hidden on the sheet in view and their inks (#158).
+    /// The unions hidden on the sheet in view and their inks (mockup row 158).
     pub unions: crate::schematic_runtime::unions::UnionView<'a>,
     /// Device pixels per logical pixel in the window this canvas draws in
     /// (`UiState::device_px_per_logical_px`): the stroke floor and the

@@ -311,7 +311,6 @@ dialog-title-net-color-custom = Custom Net Colour
 # $path is the parent sheet's file.
 dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused
 
-## c13 sch-net-directives
 ## Design ▸ Differential Pair Classes… (#1489).
 
 dialog-dpc-title = Differential Pair Classes
@@ -382,9 +381,9 @@ dialog-dpc-locked-by-closed-sheets = Some sheets of the project are not open, so
 # The name a new class starts with (a net-class style name, not a sentence).
 dialog-dpc-new-class-name = DIFF
 
-## c13 unions-change-paste
+## Smart Paste (mockup row 155).
 
-# The Smart Paste dialog (#155).
+# The Smart Paste dialog (mockup row 155).
 dialog-smart-paste-title = Smart Paste
 # $parts lists the copied designators; $wires and $labels count the rest.
 dialog-smart-paste-subtitle = Clipboard: { $parts } · { $wires ->

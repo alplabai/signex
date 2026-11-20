@@ -659,16 +659,16 @@ define_ids! {
         CMD_MENU_PLACE_ALIGNED_DIMENSION = "cmd-menu-place-aligned-dimension";
         CMD_ADD_TABLE_OF_CONTENTS = "cmd-add-table-of-contents";
         CMD_MENU_ADD_TABLE_OF_CONTENTS = "cmd-menu-add-table-of-contents";
-        // c13 multi-channel-compiled
+        // Multi-channel sheets and the Compiled Design panel (#1279, #1308).
         CMD_COMPILE_PROJECT = "cmd-compile-project";
         CMD_MENU_COMPILE_PROJECT = "cmd-menu-compile-project";
         CMD_OPEN_COMPILED_DESIGN = "cmd-open-compiled-design";
         CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
-        // c13 sch-harness (#1280)
+        // Signal harnesses (#1280) and differential pair classes (#1489).
         CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
         CMD_OPEN_DIFF_PAIR_CLASSES = "cmd-open-diff-pair-classes";
         CMD_MENU_OPEN_DIFF_PAIR_CLASSES = "cmd-menu-open-diff-pair-classes";
-        // c13 unions-change-paste (#158).
+        // Named unions (mockup row 158).
         CMD_CREATE_UNION = "cmd-create-union";
         CMD_MENU_CREATE_UNION = "cmd-menu-create-union";
         CMD_ADD_TO_UNION = "cmd-add-to-union";

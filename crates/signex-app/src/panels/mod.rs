@@ -279,7 +279,7 @@ pub enum PanelKind {
     /// The compiled hierarchy: repeated sheets expanded into channels, with
     /// part and net counts per sheet (#1308).
     CompiledDesign,
-    /// Named unions of the sheet in view or the project (#158).
+    /// Named unions of the sheet in view or the project (mockup row 158).
     Unions,
 }
 

@@ -286,7 +286,8 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Layers,
             MenuMessage::OpenLayersPanel,
         ),
-        // #158: the Unions panel (every dock panel is listed, XF-07).
+        // Mockup row 158: the Unions panel (every dock panel is listed,
+        // DECISIONS 2026-11-19).
         panel_item(
             ctx,
             ids::PANELS_KIND_UNIONS,

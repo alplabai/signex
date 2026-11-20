@@ -517,7 +517,7 @@ pub struct SchematicSheet {
     /// (#1280). Saved in `[extras.sheet]` only when not empty.
     #[serde(default, skip_serializing_if = "super::SheetHarness::is_empty")]
     pub harness: super::SheetHarness,
-    /// Unions of sheet objects (#158). Saved in `[extras.sheet]` only when
+    /// Unions of sheet objects (mockup row 158). Saved in `[extras.sheet]` only when
     /// not empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unions: Vec<super::SchUnion>,

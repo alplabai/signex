@@ -148,7 +148,7 @@ define_ids! {
     DIALOG_DPC_LOCKED_BY_PAIRS = "dialog-dpc-locked-by-pairs";
     DIALOG_DPC_LOCKED_BY_CLOSED_SHEETS = "dialog-dpc-locked-by-closed-sheets";
     DIALOG_DPC_NEW_CLASS_NAME = "dialog-dpc-new-class-name";
-    // c13 unions-change-paste: the Smart Paste dialog (#155).
+    // the Smart Paste dialog (mockup row 155).
     SMART_PASTE_TITLE = "dialog-smart-paste-title";
     SMART_PASTE_SUBTITLE = "dialog-smart-paste-subtitle";
     SMART_PASTE_CLOSE = "dialog-smart-paste-close";

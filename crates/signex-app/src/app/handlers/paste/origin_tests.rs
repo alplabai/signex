@@ -1,4 +1,4 @@
-//! #155 review: Paste Special opens the Smart Paste dialog only for a person
+//! Mockup row 155: Paste Special opens the Smart Paste dialog only for a person
 //! at a window; an agent's Paste Special, even in a windowed app, pastes at
 //! once, since nobody would answer the dialog.
 

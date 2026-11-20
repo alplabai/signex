@@ -269,7 +269,7 @@ fn paste_row_puts_the_copy_on_the_cursor() {
     assert_eq!(doc(&app).symbols.len(), 1, "a paste is placed by a click");
 }
 
-/// #155: the row opens the Smart Paste dialog (it used to place the copy at
+/// Mockup row 155: the row opens the Smart Paste dialog (it used to place the copy at
 /// once); its Paste puts the copy on the cursor and a click places it as one
 /// undo step.
 #[test]

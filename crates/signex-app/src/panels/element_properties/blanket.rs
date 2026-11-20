@@ -198,7 +198,7 @@ pub(super) fn push_sections<'a>(
     col.push(caption_row(t!(i18n, ids::PANELS_BLANKET_HOVER_HINT), ctx))
 }
 
-/// Normal / Keep short (BB4 segmented control).
+/// Normal / Keep short, a segmented control.
 fn pour_switch<'a>(
     ctx: &PanelContext,
     pour: BlanketPour,

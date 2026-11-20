@@ -568,7 +568,7 @@ the canvas strokes them in the line style (`LineSegment` dash and dot bits),
 SVG writes one cubic path when solid and the flattened dash marks otherwise.
 `arrow_heads` gives a filled head per end `ends` asks for, pointing along the
 end tangent (towards the control point). With no own colour the curve takes
-the sheet's drawing colour (decision SCH-14).
+the sheet's drawing colour (DECISIONS 2026-11-19).
 
 **Dimensions.** `SchDimension::geometry` holds the dimension line (offset from
 the measured points along the dimension's normal: `(0, 1)` horizontal, `(1, 0)`

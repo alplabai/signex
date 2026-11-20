@@ -97,7 +97,7 @@ impl Engine {
         for w in doc.harness.wires.iter().filter(|w| w.locked) {
             out.insert(w.uuid, format!("harness wire {}", at(&w.start)));
         }
-        // A locked union freezes its members the same way (#158).
+        // A locked union freezes its members the same way (mockup row 158).
         crate::unions::insert_locked_members(doc, &mut out);
         out
     }

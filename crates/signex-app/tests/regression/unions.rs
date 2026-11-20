@@ -1,4 +1,4 @@
-//! #158 - Named unions: Create Union (the menu row and Ctrl+G) opens a
+//! Mockup row 158 - Named unions: Create Union (the menu row and Ctrl+G) opens a
 //! popover whose Create is one undo step; the Unions panel locks, hides and
 //! breaks; hiding is a view setting, not an undo step; a locked union's
 //! members cannot be deleted.

@@ -1,7 +1,7 @@
 //! The multi-channel part of a sheet symbol's Properties (#1279): the
 //! caption and line-art illustration under the header, the Repeat section
 //! whose header is its switch, the Channel naming section and the Entries
-//! list. Layout: the m151 mockup; rules: `docs/MULTI_CHANNEL.md`.
+//! list. Layout: mockup row 151; rules: `docs/MULTI_CHANNEL.md`.
 
 use iced::Widget as _;
 use iced::widget::{Column, Space, column, container, mouse_area, row};

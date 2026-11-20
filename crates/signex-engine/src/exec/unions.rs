@@ -1,5 +1,5 @@
 //! `Command::CreateUnion`, `UpdateUnion`, `SetUnionMembers` and `BreakUnion`
-//! (#158), and the step every changed edit ends with: members the sheet no
+//! (mockup row 158), and the step every changed edit ends with: members the sheet no
 //! longer holds leave their union, and a union left empty goes, in the same
 //! undo step. Rules: `docs/SCHEMATIC_UNIONS.md`.
 

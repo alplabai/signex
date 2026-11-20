@@ -48,8 +48,8 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("VCC", "power-port family, awaiting place_power_port(style)"),
     ("+5", "power-port family, awaiting place_power_port(style)"),
     ("+12", "power-port family, awaiting place_power_port(style)"),
-    // Place flyout: the greyed row standing for the planned tools (Graphite
-    // mockup #62); Device Sheet Symbol is the one left.
+    // Place flyout: the greyed row standing for the planned tools (mockup row
+    // 62); Device Sheet Symbol is the one left.
     ("1 planned tool…", "planned tools, no behaviour"),
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
@@ -328,7 +328,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     "sheet actions",
                     sheet_actions_entries(i18n, TID, selection, &hint),
                 ),
-                // #158: the Unions flyout.
+                // Mockup row 158: the Unions flyout.
                 ("unions", unions_entries(i18n, selection, &hint)),
             ];
             for (name, rows) in flyouts {

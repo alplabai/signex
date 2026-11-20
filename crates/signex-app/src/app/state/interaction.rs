@@ -222,7 +222,7 @@ pub struct InteractionState {
     /// Designator numbers for pasted parts (Next free), seeded when a paste
     /// starts.
     pub paste_counters: Option<super::PasteCounters>,
-    /// The designator rule of the Smart Paste on the cursor (#155): its
+    /// The designator rule of the Smart Paste on the cursor (mockup row 155): its
     /// dialog's choice, used instead of the preference until the next paste
     /// starts.
     pub paste_designators_override: Option<crate::paste_prefs::PasteDesignators>,

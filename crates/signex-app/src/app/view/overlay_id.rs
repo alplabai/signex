@@ -85,9 +85,9 @@ pub(crate) enum OverlayId {
     FindReplace,
     FindSimilar,
     PasteArray,
-    /// The Create Union popover (#158).
+    /// The Create Union popover (mockup row 158).
     UnionPopover,
-    /// Edit ▸ Paste Special (#155).
+    /// Edit ▸ Paste Special (mockup row 155).
     SmartPaste,
     KeyboardShortcuts,
     About,

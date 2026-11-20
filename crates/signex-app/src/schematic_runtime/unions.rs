@@ -1,4 +1,4 @@
-//! Named unions on the sheet (#158): a dashed outline around the members, a
+//! Named unions on the sheet (mockup row 158): a dashed outline around the members, a
 //! name tab at its top-left with the tags beside it, a padlock on the tab.
 //! Drawn in the selection layer, so the outline follows the camera, is
 //! editor-only and never reaches a print or an export. A hidden union keeps

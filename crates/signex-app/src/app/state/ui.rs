@@ -530,10 +530,10 @@ pub struct UiState {
     /// The Compiled Design panel, channel tabs and Repeat rows (#1279, #1308).
     /// Boxed: the `UiState` size ceiling.
     pub compiled_design: Box<crate::app::compiled_design::CompiledDesignUi>,
-    /// Named unions: hidden per sheet, the panel and the popover (#158).
+    /// Named unions: hidden per sheet, the panel and the popover (mockup row 158).
     /// Boxed: the `UiState` size ceiling.
     pub unions: Box<crate::app::unions::UnionsState>,
-    /// The open Smart Paste dialog (#155).
+    /// The open Smart Paste dialog (mockup row 155).
     pub smart_paste: Option<Box<crate::smart_paste::SmartPasteState>>,
     /// The open Paste Array dialog (#1264); boxed as `find_similar`.
     pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,

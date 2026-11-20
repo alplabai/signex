@@ -61,7 +61,7 @@ impl DocumentPatch {
     /// Signal harness connectors, entries, wires and harness-typed sheet
     /// entries (#1280). Entries join nets by name, so it is electrical.
     pub const HARNESS: Self = Self(1 << 16);
-    /// The sheet's unions (unions-change-paste).
+    /// The sheet's named unions.
     pub const UNIONS: Self = Self(1 << 17);
     /// Every named bit and no other, so the OR of all of them is FULL.
     /// UNIONS is the top bit; a new bit moves this.

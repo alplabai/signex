@@ -135,7 +135,7 @@ impl Signex {
         )
     }
 
-    /// The Create Union popover (#158), laid at the point it opened: a
+    /// The Create Union popover (mockup row 158), laid at the point it opened: a
     /// click-outside layer that cancels it, then the card.
     pub(in crate::app::view) fn union_popover_overlay(&self) -> Vec<Element<'_, Message>> {
         let Some(popover) = self.ui_state.unions.popover.as_ref() else {
@@ -159,7 +159,7 @@ impl Signex {
         )
     }
 
-    /// The Smart Paste dialog (#155). In-window only.
+    /// The Smart Paste dialog (mockup row 155). In-window only.
     pub(in crate::app::view) fn smart_paste_overlay(&self) -> Option<Element<'_, Message>> {
         let state = self.ui_state.smart_paste.as_deref()?;
         let size = crate::app::view::dialogs::fit_modal_size(

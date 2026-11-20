@@ -29,9 +29,9 @@ struct OpenOverlays {
     find_replace_open: bool,
     find_similar_open: bool,
     paste_array_open: bool,
-    /// The Create Union popover (#158).
+    /// The Create Union popover (mockup row 158).
     union_popover_open: bool,
-    /// The Smart Paste dialog (#155).
+    /// The Smart Paste dialog (mockup row 155).
     smart_paste_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,

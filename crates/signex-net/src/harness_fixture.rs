@@ -1,17 +1,5 @@
-//! The signal harness fixture project (#1280), as drawn in the m152 mockup:
-//!
-//! - `mcu.snxsch` (root): U3's SPI pins go into an `SPI_BUS` connector whose
-//!   harness wire runs to the `sensor` sheet symbol's harness-typed entry
-//!   `SPI_BUS`. U3's SWD pins go into a `DEBUG` connector; its `UART` entry
-//!   nests a `UART` connector wired to U3's TX / RX; the `DEBUG` harness runs
-//!   to the `connectors` sheet symbol's typed entry `DEBUG`.
-//! - `sensor.snxsch`: a Hierarchical port `SPI_BUS` on a harness wire to an
-//!   `SPI_BUS` connector wired to U1.
-//! - `connectors.snxsch`: a port `DEBUG` on a harness wire to a `DEBUG`
-//!   connector wired to J2, with a nested `UART` connector wired to J2.
-//!
-//! Wires end exactly on the entry points and tips the model computes, so the
-//! fixture holds whatever the connector geometry is.
+//! The signal harness fixture project (#1280, mockup row 152); its sheets:
+//! `docs/SIGNAL_HARNESSES.md`, "Test fixture".
 
 use std::collections::HashMap;
 

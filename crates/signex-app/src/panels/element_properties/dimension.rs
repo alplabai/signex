@@ -139,7 +139,7 @@ pub(super) fn view_dimension_properties<'a>(
                 AnnotationEdit::Arrows,
             ),
         ),
-        // BB3: the Override text header switches its Text row.
+        // The Override text header switches its Text row.
         signex_widgets::enable_section::EnableSection::new(
             rows.t(ids::PROPERTIES_DIMENSION_OVERRIDE),
             override_on,

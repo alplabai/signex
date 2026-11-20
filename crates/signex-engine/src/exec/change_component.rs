@@ -35,7 +35,7 @@ impl ComponentReplacement {
     /// The parameters of the part `symbol_id` belongs to that the new part
     /// does not supply: the user's own and override parameters, which the
     /// swap may keep. Everything the new part supplies is library-owned and
-    /// always replaced (SCH-11). Sorted, each once.
+    /// always replaced (DECISIONS 2026-11-19). Sorted, each once.
     #[must_use]
     pub fn user_parameters(&self, doc: &SchematicSheet, symbol_id: Uuid) -> Vec<String> {
         let mut names: Vec<String> = placed_units(doc, symbol_id)

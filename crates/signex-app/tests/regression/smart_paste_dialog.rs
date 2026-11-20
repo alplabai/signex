@@ -1,4 +1,4 @@
-//! #155 - Smart Paste in a window: the dialog's offset or array, the
+//! Mockup row 155 - Smart Paste in a window: the dialog's offset or array, the
 //! designator choice and the net-name pattern decide what lands; power nets
 //! are never rewritten; Paste puts every copy on the cursor and one click
 //! places them as one undo step.

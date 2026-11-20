@@ -1,4 +1,4 @@
-//! The Unions slice's update (#158): the popover, the panel actions, the
+//! The Unions slice's update (mockup row 158): the popover, the panel actions, the
 //! selection that grows to whole unions, and the panel view rebuilt from the
 //! open sheets. Every edit is one engine command; hiding is not one.
 

@@ -3,7 +3,8 @@
 //! by suffix). It works on a copy: Cancel and Esc drop it, OK writes it to
 //! `ProjectData.schematic_design.diff_pair_classes` as one step of the
 //! project's General history. Max skew and max uncoupled length are rules
-//! of the Rules tab (High Speed), shown read-only here (SCH-06).
+//! of the Rules tab (High Speed), shown read-only here (DECISIONS
+//! 2026-11-19).
 //! Design note: `docs/SCHEMATIC_DIRECTIVES.md`, "Differential pairs".
 
 mod update;

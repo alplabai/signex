@@ -1,4 +1,4 @@
-//! The Unions slice's state (#158): which unions are hidden per sheet (a
+//! The Unions slice's state (mockup row 158): which unions are hidden per sheet (a
 //! view setting, never saved and never an undo step), the panel's filter,
 //! scope and tag chips, the union picked in the panel, and the Create Union
 //! popover. Plus the pure builder of what the panel shows.

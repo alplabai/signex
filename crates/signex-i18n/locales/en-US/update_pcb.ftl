@@ -146,7 +146,6 @@ new-pcb-check-failed = Could not check whether { $file } is already in the proje
 new-pcb-no-project = Open a project to add a PCB to it.
 new-pcb-created = Created { $board } in { $project }. It is written when you save it.
 
-## c13 sch-net-directives
 ## Update PCB: the rules the schematic's Net Parameters directives ask for (#1281).
 
 update-pcb-schematic-rules = Rules from the schematic

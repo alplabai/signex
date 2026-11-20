@@ -91,3 +91,21 @@ Harness objects are saved in a sheet's `[extras.sheet]` and need the
 reads only an older format opens a sheet with harnesses read-only, so it never
 drops them on save. See `docs/architecture/snxsch-refinement-objects.md` and
 `docs/FORMAT_VERSIONS.md`.
+
+## Test fixture
+
+`signex-net` `harness_fixture.rs` builds a three-sheet project as mockup row
+152 draws it, and its netlist is pinned by a golden netlist:
+
+- `mcu.snxsch` (root): U3's SPI pins go into an `SPI_BUS` connector whose
+  harness wire runs to the `sensor` sheet symbol's harness-typed entry
+  `SPI_BUS`. U3's SWD pins go into a `DEBUG` connector; its `UART` entry
+  nests a `UART` connector wired to U3's TX / RX; the `DEBUG` harness runs to
+  the `connectors` sheet symbol's typed entry `DEBUG`.
+- `sensor.snxsch`: a Hierarchical port `SPI_BUS` on a harness wire to an
+  `SPI_BUS` connector wired to U1.
+- `connectors.snxsch`: a port `DEBUG` on a harness wire to a `DEBUG`
+  connector wired to J2, with a nested `UART` connector wired to J2.
+
+Wires end exactly on the entry points and tips the model computes, so the
+fixture holds whatever the connector geometry is.

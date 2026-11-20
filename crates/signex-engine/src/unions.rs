@@ -1,4 +1,4 @@
-//! Named unions (#158): which union an object belongs to, the selection a
+//! Named unions (mockup row 158): which union an object belongs to, the selection a
 //! click on a member grows into, and the lock a locked union puts on its
 //! members. The commands are in `exec/unions.rs`; the rules are in
 //! `docs/SCHEMATIC_UNIONS.md`.

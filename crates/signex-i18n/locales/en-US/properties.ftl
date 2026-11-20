@@ -243,7 +243,6 @@ properties-value-shows = Shows { $value }
 # Why a part value's `=` expression does not evaluate. $error is the reason.
 properties-value-error = Error: { $error }
 
-## c13 sch-drawing-tables
 # Bezier and dimension tools (#1267): the hint bar at the canvas's bottom-left,
 # after the tool's name.
 properties-annotation-hint-bezier-start = click the start point
@@ -370,7 +369,7 @@ properties-table-refresh-failed = Table refresh failed on { $file }: { $reason }
 # A CSV import or cell edit answered after its table left the sheet. $file is the sheet.
 properties-table-csv-table-gone = Table import: the table is no longer on { $file }; nothing was changed
 
-## c13 multi-channel-compiled
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
 
 # The sheet symbol's designator row (it was "Name").
 properties-sheet-symbol-designator = Designator

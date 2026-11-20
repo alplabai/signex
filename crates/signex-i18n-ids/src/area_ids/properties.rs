@@ -157,7 +157,7 @@ define_ids! {
     PROPERTIES_TITLE_BLOCK_TODAY = "properties-title-block-today";
     PROPERTIES_VALUE_SHOWS = "properties-value-shows";
     PROPERTIES_VALUE_ERROR = "properties-value-error";
-    // c13 sch-drawing-tables: Bezier, dimension and table (#1267, #1300).
+    // Bezier, dimension and table (#1267, #1300).
     CANVAS_HINT_BEZIER_START = "properties-annotation-hint-bezier-start";
     CANVAS_HINT_BEZIER_C1 = "properties-annotation-hint-bezier-c1";
     CANVAS_HINT_BEZIER_C2 = "properties-annotation-hint-bezier-c2";
@@ -265,7 +265,7 @@ define_ids! {
     TABLE_TOC_HEADING = "properties-table-toc-heading";
     TABLE_REFRESH_FAILED = "properties-table-refresh-failed";
     TABLE_CSV_TABLE_GONE = "properties-table-csv-table-gone";
-    // c13 multi-channel-compiled
+    // Multi-channel sheets and the Compiled Design panel (#1279, #1308).
     PROPERTIES_SHEET_SYMBOL_DESIGNATOR = "properties-sheet-symbol-designator";
     PROPERTIES_SHEET_SYMBOL_TITLE = "properties-sheet-symbol-title";
     PROPERTIES_SHEET_SYMBOL_REPEATED = "properties-sheet-symbol-repeated";

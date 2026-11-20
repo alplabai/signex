@@ -38,7 +38,7 @@ impl Signex {
     /// the numbering needs them, then carry on.
     pub(crate) fn begin_paste(&mut self, intent: PasteIntent) -> Task<Message> {
         // A new paste numbers by the preference again: a Smart Paste's own
-        // rule held only for the copies it put on the cursor (#155).
+        // rule held only for the copies it put on the cursor (mockup row 155).
         self.interaction_state.paste_designators_override = None;
         let request = self.new_paste_request(intent);
         match self.paste_seed_task(&request) {
@@ -144,7 +144,7 @@ impl Signex {
         self.adopt_clipboard_text(text.as_deref());
         match request.intent {
             // A person's Paste Special in a window opens the Smart Paste
-            // dialog (#155); an agent and a headless run paste at once.
+            // dialog (mockup row 155); an agent and a headless run paste at once.
             PasteIntent::SmartPaste if self.smart_paste_opens_dialog(&request) => {
                 self.open_smart_paste()
             }

@@ -1,7 +1,7 @@
 //! The Bezier and dimension tools' live preview (#1267): the clicked points,
 //! the curve or the dimension through the cursor, the measured value in an
 //! accent tag set off above the dimension line (so it clears text beside
-//! the line, decision SCH-14), and the hint bar at the canvas's bottom-left.
+//! the line; DECISIONS 2026-11-19), and the hint bar at the canvas's bottom-left.
 
 use super::super::*;
 use signex_types::schematic::{

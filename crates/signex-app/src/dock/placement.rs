@@ -144,7 +144,7 @@ impl PanelPosition {
             | PanelKind::Components
             | PanelKind::Library
             | PanelKind::PcbNets
-            // A sibling tab of Projects (#1308, drawn option of the decide).
+            // A sibling tab of Projects (#1308, DECISIONS 2026-11-19).
             | PanelKind::CompiledDesign => PanelPosition::Left,
             PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
             PanelKind::Navigator

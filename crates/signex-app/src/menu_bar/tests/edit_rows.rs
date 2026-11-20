@@ -105,7 +105,7 @@ fn paste_puts_the_copy_on_the_cursor() {
     );
 }
 
-/// #155: Paste Special opens the Smart Paste dialog (it used to place the
+/// Mockup row 155: Paste Special opens the Smart Paste dialog (it used to place the
 /// copy at once). Its Paste puts the copy on the cursor; a click places it
 /// with the next free designator, and nothing else moves.
 #[test]

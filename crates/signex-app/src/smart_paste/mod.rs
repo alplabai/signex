@@ -1,4 +1,4 @@
-//! Smart Paste dialog (#155): state and messages (`state`), what the paste
+//! Smart Paste dialog (mockup row 155): state and messages (`state`), what the paste
 //! places (`plan`, pure) and the view (`view`). The handler that opens the
 //! dialog and puts the copies on the cursor lives in
 //! `app/handlers/clipboard_workflows.rs`; the copies are placed by the

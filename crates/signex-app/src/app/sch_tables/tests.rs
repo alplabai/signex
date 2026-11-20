@@ -39,7 +39,7 @@ fn four_bezier_clicks_place_one_curve_in_the_sheet_colour() {
     assert!((b.c1.y - 10.16).abs() < 1e-6);
     assert_eq!(
         b.stroke_color, None,
-        "red only by an explicit pick (SCH-14)"
+        "red only by an explicit pick (DECISIONS 2026-11-19)"
     );
     assert!(app.interaction_state.annotation_tool.points.is_empty());
     assert_eq!(

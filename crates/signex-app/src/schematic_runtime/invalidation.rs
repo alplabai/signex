@@ -28,7 +28,7 @@ impl RenderInvalidation {
     pub const DIRECTIVES: Self = Self(1 << 14);
     /// Signal harness connectors, wires and typed sheet entries (#1280).
     pub const HARNESS: Self = Self(1 << 15);
-    /// Named unions (#158): drawn in the selection layer only.
+    /// Named unions (mockup row 158): drawn in the selection layer only.
     pub const UNIONS: Self = Self(1 << 20);
     pub const FULL: Self = Self(u32::MAX);
 

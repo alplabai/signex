@@ -114,7 +114,7 @@ pub enum MenuMessage {
     OpenMessagesPanel,
     /// View ▸ Layers: show the Layers panel (#2223).
     OpenLayersPanel,
-    /// View ▸ Unions: show the Unions panel (#158).
+    /// View ▸ Unions: show the Unions panel (mockup row 158).
     OpenUnionsPanel,
     /// Place ▸ Text — the text-note tool.
     PlaceText,

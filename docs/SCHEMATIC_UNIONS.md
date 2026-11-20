@@ -1,6 +1,6 @@
 # Named unions on a schematic sheet
 
-A union (#158) is a named group of objects on one sheet, with tags. It selects
+A union (mockup row 158) is a named group of objects on one sheet, with tags. It selects
 as one, can be locked or hidden, and is listed in the Unions panel. This page
 is the reference for how unions behave; the code is in
 `signex_engine::unions`, `signex-engine/src/exec/unions.rs`,

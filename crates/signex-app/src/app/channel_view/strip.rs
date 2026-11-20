@@ -1,6 +1,6 @@
 //! The 28 px tab strip under a repeated sheet: Editor, then one tab per
 //! channel with its part count. Sizes come from the chip metrics of the
-//! count tabs (BB4); the chosen tab has the accent-soft fill and a 2 px
+//! count chips; the chosen tab has the accent-soft fill and a 2 px
 //! accent underline.
 
 use iced::widget::{Row, Space, column, container, row, svg};

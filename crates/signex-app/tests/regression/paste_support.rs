@@ -57,8 +57,8 @@ pub(crate) fn paste(app: &mut Signex) {
 }
 
 /// Smart Paste with nothing usable on the system clipboard, as a headless
-/// run makes it: placed at once beside the content (#155 keeps this for
-/// runs without a window; in a window it opens the dialog).
+/// run makes it: placed at once beside the content (kept for runs without a
+/// window; in a window it opens the Smart Paste dialog, mockup row 155).
 pub(crate) fn smart_paste(app: &mut Signex) {
     app.ui_state.io = signex_app::io_ports::IoPorts::headless(Default::default());
     let task = app.update(Message::Edit(EditMsg::SmartPaste));
@@ -67,7 +67,7 @@ pub(crate) fn smart_paste(app: &mut Signex) {
     answer(app, PasteIntent::SmartPaste, None);
 }
 
-/// Smart Paste in a window (#155): the request opens the dialog once the
+/// Smart Paste in a window (mockup row 155): the request opens the dialog once the
 /// numbers and the clipboard have answered; `setup` makes the dialog's
 /// choices, then Paste puts the copies on the cursor.
 pub(crate) fn smart_paste_dialog(app: &mut Signex, setup: impl FnOnce(&mut Signex)) {

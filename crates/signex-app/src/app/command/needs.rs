@@ -399,7 +399,7 @@ pub(crate) fn needs(command: &AppCommandId) -> Option<Needs> {
         | "place_table"
         | "place_linear_dimension"
         | "place_aligned_dimension"
-        // #158: the unions of the sheet in view; the handler says what to
+        // Mockup row 158: the unions of the sheet in view; the handler says what to
         // select when nothing fits.
         | "create_union"
         | "add_to_union"

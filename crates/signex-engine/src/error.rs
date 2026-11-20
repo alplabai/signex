@@ -116,7 +116,7 @@ pub enum EngineError {
     InvalidHarnessWire,
     #[error("a harness entry needs a name")]
     EmptyHarnessEntryName,
-    /// A named-union command refused (#158).
+    /// A named-union command refused (mockup row 158).
     #[error(transparent)]
     Union(#[from] crate::unions::UnionRefusal),
 }
