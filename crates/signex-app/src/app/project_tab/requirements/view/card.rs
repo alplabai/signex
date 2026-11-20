@@ -116,6 +116,28 @@ impl Card<'_> {
         verdict: Option<Verdict>,
         chevron: Option<bool>,
     ) -> Element<'a, Message> {
+        let mut line: Row<Element<'a, Message>> = row![
+            self.switch(requirement.enabled),
+            self.veiled(requirement.enabled, self.header_info(requirement, raw)),
+        ]
+        .spacing(HEADER_GAP)
+        .align_y(Alignment::Center);
+        if let Some(verdict) = verdict {
+            line = line.push(self.outcome_pill(verdict));
+        }
+        line = line.push(self.remove());
+        if let Some(open) = chevron {
+            line = line.push(self.expand_button(open));
+        }
+        container(line)
+            .padding([SP.m, SP.l])
+            .width(Length::Fill)
+            .boxed()
+    }
+
+    /// The kind, its id chip, the requirement id and the value summary,
+    /// filling the header between the switch and the outcome.
+    fn header_info<'a>(&self, requirement: &Requirement, raw: &Value) -> Element<'a, Message> {
         let r = resolve(self.tokens);
         let name = requirement.kind.name();
         let mut info: Row<Element<'a, Message>> = row![
@@ -141,38 +163,23 @@ impl Card<'_> {
         if let Some(words) = summary_words(requirement, raw, self.i18n) {
             info = info.push(text(words).size(TS.caption).color(r.ink3).boxed());
         }
-        let info = info.push(Space::new().width(Length::Fill).boxed());
-        let mut line: Row<Element<'a, Message>> = row![
-            self.switch(requirement.enabled),
-            self.veiled(requirement.enabled, info.width(Length::Fill).boxed()),
-        ]
-        .spacing(HEADER_GAP)
-        .align_y(Alignment::Center);
-        if let Some(verdict) = verdict {
-            line = line.push(self.outcome_pill(verdict));
-        }
-        line = line.push(self.remove());
-        if let Some(open) = chevron {
-            let (glyph, tip) = if open {
-                (Glyph::ChevronDown, ids::REQUIREMENTS_COLLAPSE)
-            } else {
-                (Glyph::ChevronRight, ids::REQUIREMENTS_EXPAND)
-            };
-            let flipped = message(
-                self.project_id,
-                RequirementsMsg::ExpandToggled { index: self.index },
-            );
-            line = line.push(icon_button(
-                glyph,
-                t!(self.i18n, tip),
-                Some(flipped),
-                self.tokens,
-            ));
-        }
-        container(line)
-            .padding([SP.m, SP.l])
+        info.push(Space::new().width(Length::Fill).boxed())
             .width(Length::Fill)
             .boxed()
+    }
+
+    /// The expand button: it flips the card, `open` or not.
+    fn expand_button<'a>(&self, open: bool) -> Element<'a, Message> {
+        let (glyph, tip) = if open {
+            (Glyph::ChevronDown, ids::REQUIREMENTS_COLLAPSE)
+        } else {
+            (Glyph::ChevronRight, ids::REQUIREMENTS_EXPAND)
+        };
+        let flipped = message(
+            self.project_id,
+            RequirementsMsg::ExpandToggled { index: self.index },
+        );
+        icon_button(glyph, t!(self.i18n, tip), Some(flipped), self.tokens)
     }
 
     /// An entry this build cannot read: its id or list place, the outcome

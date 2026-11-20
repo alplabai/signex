@@ -1,4 +1,4 @@
-//! Parameters section view (Graphite mockup m30): a filter, then one
+//! Parameters section view (mockup row 30): a filter, then one
 //! bordered list with a Title block and a Variables group. A value box is
 //! outlined only on hover or focus; a variable row shows its remove button
 //! on hover; an `=` expression value shows its result or error under its
@@ -200,25 +200,7 @@ impl Rows<'_> {
             shown.variables.len(),
         ));
         if variables_open {
-            let draft = tab.and_then(|tab| tab.parameter_rename.as_ref());
-            let refused = tab.is_some_and(|tab| tab.parameter_rename_refused);
-            let cells = shown.variables.iter().map(|name| {
-                let name: &str = name;
-                let value = parameters.get(name).map_or("", String::as_str);
-                let typed = draft
-                    .filter(|(from, _)| from.as_str() == name)
-                    .map(|(_, text)| text.as_str());
-                let note = typed.and_then(|text| {
-                    rename_note(parameters, name, text, refused)
-                        .map(|note| self.note_words(note, name, text))
-                });
-                let line = self.variable_row(name, typed, value, note);
-                self.evaluated(line, parameters, name)
-            });
-            list = push_separated(list, cells, look);
-            list = list.push(hairline(look.line_soft));
-            let typed = tab.map_or("", |tab| tab.new_parameter_name.as_str());
-            list = list.push(self.add_row(typed));
+            list = self.push_variables(list, parameters, tab, &shown.variables);
         }
 
         container(list)
@@ -234,6 +216,35 @@ impl Rows<'_> {
                 ..container::Style::default()
             })
             .boxed()
+    }
+
+    /// The Variables group's rows, each with its rename draft and note,
+    /// then the Name field and Add at its end.
+    fn push_variables<'a>(
+        &self,
+        mut list: Column<Element<'a, Message>>,
+        parameters: &BTreeMap<String, String>,
+        tab: Option<&ProjectTabState>,
+        variables: &[&str],
+    ) -> Column<Element<'a, Message>> {
+        let draft = tab.and_then(|tab| tab.parameter_rename.as_ref());
+        let refused = tab.is_some_and(|tab| tab.parameter_rename_refused);
+        let cells = variables.iter().map(|&name| {
+            let value = parameters.get(name).map_or("", String::as_str);
+            let typed = draft
+                .filter(|(from, _)| from.as_str() == name)
+                .map(|(_, text)| text.as_str());
+            let note = typed.and_then(|text| {
+                rename_note(parameters, name, text, refused)
+                    .map(|note| self.note_words(note, name, text))
+            });
+            let line = self.variable_row(name, typed, value, note);
+            self.evaluated(line, parameters, name)
+        });
+        list = push_separated(list, cells, self.look);
+        list = list.push(hairline(self.look.line_soft));
+        let typed = tab.map_or("", |tab| tab.new_parameter_name.as_str());
+        list.push(self.add_row(typed))
     }
 
     /// A group header: chevron, name, count and, for the title block, the

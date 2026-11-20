@@ -175,25 +175,13 @@ pub(in crate::app::project_tab::requirements) fn summary_words(
             min_trace_width_mm,
             min_clearance_mm,
         } => {
-            let mut limits: Vec<String> = Vec::new();
-            if let Some(class) = class.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
-                limits.push(
-                    t!(i18n, ids::REQUIREMENTS_SUMMARY_CLASS, "class" => class).into_string(),
-                );
-            }
-            if min_trace_width_mm.is_some() {
-                let width = value(RequirementField::MinTraceWidthMm);
-                limits.push(
-                    t!(i18n, ids::REQUIREMENTS_SUMMARY_MIN_TRACE, "width" => width).into_string(),
-                );
-            }
-            if min_clearance_mm.is_some() {
-                let clearance = value(RequirementField::MinClearanceMm);
-                limits.push(
-                    t!(i18n, ids::REQUIREMENTS_SUMMARY_MIN_CLEARANCE, "clearance" => clearance)
-                        .into_string(),
-                );
-            }
+            let limits = net_class_limits(
+                class.as_deref(),
+                min_trace_width_mm.is_some(),
+                min_clearance_mm.is_some(),
+                raw,
+                i18n,
+            );
             if limits.is_empty() {
                 return None;
             }
@@ -213,4 +201,31 @@ pub(in crate::app::project_tab::requirements) fn summary_words(
         ),
     };
     Some(words)
+}
+
+/// The limits a `net_class` asks, one phrase each: its class, then the
+/// minimum trace width and clearance it sets, as stored.
+fn net_class_limits(
+    class: Option<&str>,
+    has_min_trace: bool,
+    has_min_clearance: bool,
+    raw: &Value,
+    i18n: &I18n,
+) -> Vec<String> {
+    let mut limits: Vec<String> = Vec::new();
+    if let Some(class) = class.map(str::trim).filter(|c| !c.is_empty()) {
+        limits.push(t!(i18n, ids::REQUIREMENTS_SUMMARY_CLASS, "class" => class).into_string());
+    }
+    if has_min_trace {
+        let width = stored_text(RequirementField::MinTraceWidthMm, raw);
+        limits.push(t!(i18n, ids::REQUIREMENTS_SUMMARY_MIN_TRACE, "width" => width).into_string());
+    }
+    if has_min_clearance {
+        let clearance = stored_text(RequirementField::MinClearanceMm, raw);
+        limits.push(
+            t!(i18n, ids::REQUIREMENTS_SUMMARY_MIN_CLEARANCE, "clearance" => clearance)
+                .into_string(),
+        );
+    }
+    limits
 }

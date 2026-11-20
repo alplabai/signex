@@ -1,4 +1,4 @@
-//! The live preview under the cards (mockup m36): a small schematic in the
+//! The live preview under the cards (mockup row 36): a small schematic in the
 //! canvas colours drawn with the resolved defaults, each value written
 //! beside its item. A pure `canvas::Program`: nothing on the drawing is
 //! editable and it has no handles.
@@ -286,6 +286,13 @@ impl Preview {
             _ => [6.0 * unit, 4.0 * unit],
         };
         let wire = self.wire_stroke(unit, &dash);
+        self.draw_power(pen, wire);
+        self.draw_resistor(pen, wire);
+    }
+
+    /// The power port over the T-junction, its wires and the ground.
+    fn draw_power(&self, pen: &mut Pen<'_>, wire: Stroke<'_>) {
+        let unit = pen.unit;
         let port = stroke(self.ink.power, PORT_STROKE_PX, unit);
         let fs = self.text_px();
         let bold = Font {
@@ -318,6 +325,12 @@ impl Preview {
             bold,
             TextAlign::Left,
         );
+    }
+
+    /// The resistor on the wire and the net label after it.
+    fn draw_resistor(&self, pen: &mut Pen<'_>, wire: Stroke<'_>) {
+        let unit = pen.unit;
+        let fs = self.text_px();
         let symbol = stroke(
             self.ink.body,
             width_px(self.values.symbol_line_width_mm),
