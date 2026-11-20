@@ -290,21 +290,23 @@ fn a_solve_error_yields_no_checks_rather_than_a_panic() {
     let EntityKind::Line { start, end } = s.get(edges[0]).kind else {
         unreachable!()
     };
-    for point in [start, end] {
-        s.data.constraints.push(Constraint {
-            id: ConstraintId::new(),
-            kind: ConstraintKind::Fixed { point },
-        });
-    }
-    // 50 mm apart, held at 10: over-constrained.
     s.data.constraints.push(Constraint {
         id: ConstraintId::new(),
-        kind: ConstraintKind::DistancePtPt {
-            p1: start,
-            p2: end,
-            target: DimTarget::Literal(10.0),
-        },
+        kind: ConstraintKind::Fixed { point: start },
     });
+    // One edge held at 10 mm and at 50 mm: over-constrained. With both ends
+    // fixed nothing would be free, and such a solve converges with its
+    // conflict only flagged.
+    for mm in [10.0, 50.0] {
+        s.data.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::DistancePtPt {
+                p1: start,
+                p2: end,
+                target: DimTarget::Literal(mm),
+            },
+        });
+    }
     let params = resolve(&s.data.parameters).unwrap();
     let solve = Solver::default().solve(&s.data, &params);
     assert!(solve.is_err(), "the fixture is over-constrained");
