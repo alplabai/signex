@@ -381,6 +381,76 @@ fn save_as_from_the_card_onto_the_changed_file_leaves_their_version() {
         );
         assert_eq!(active_path(&app), conflicted, "{spelling}: no re-key");
     }
+
+    // A symbol's Save As comes back through the same check.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, _sheet, _other) = conflict_fixture(dir.path());
+    let symbol = dir.path().join("part.snxsym");
+    std::fs::write(&symbol, b"their version").expect("seed");
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("A"));
+    app.open_symbol_editor_tab(symbol.clone(), file);
+    app.document_state.mark_document_dirty(&symbol);
+    let card = ErrorNotice::disk_changed(symbol.clone(), DiskDrift::Changed);
+    app.document_state.error_notice = Some(card.clone());
+    answer_save_as(&mut app, &symbol);
+
+    crate::app::path_ops::settle(
+        &mut app,
+        Message::Overlay(OverlayMsg::DiskConflictSaveAsChosen),
+    );
+
+    assert_eq!(
+        std::fs::read(&symbol).expect("read"),
+        b"their version",
+        "symbol: their version stays"
+    );
+    assert_eq!(
+        app.document_state.error_notice.as_ref(),
+        Some(&card),
+        "symbol: the card is back"
+    );
+    assert!(app.document_state.is_document_dirty(&symbol));
+    assert_eq!(active_path(&app), symbol, "symbol: no re-key");
+}
+
+/// GG-08, data loss: Cancel on the card, then File ▸ Save As onto the sheet's
+/// own file. That is a plain save and is compared like Ctrl+S, so
+/// their version stays byte for byte and the card comes back.
+#[test]
+fn file_save_as_onto_the_changed_file_itself_asks_like_ctrl_s() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, conflicted, _other) = conflict_fixture(dir.path());
+    // The sheet was read as "our version"; another program wrote theirs since.
+    app.record_disk_baseline(&conflicted, crate::persist::ContentHash::of(b"our version"));
+    assert!(app.activate_tab_for_path(&conflicted));
+    assert!(
+        app.document_state.error_notice.is_none(),
+        "the card was cancelled"
+    );
+
+    crate::app::path_ops::settle(
+        &mut app,
+        Message::File(crate::app::FileMsg::SaveAs {
+            from_path: conflicted.clone(),
+            to_path: conflicted.clone(),
+        }),
+    );
+
+    assert_eq!(
+        std::fs::read(&conflicted).expect("read"),
+        b"their version",
+        "their version stays"
+    );
+    assert_eq!(
+        app.document_state.error_notice.as_ref(),
+        Some(&ErrorNotice::disk_changed(
+            conflicted.clone(),
+            DiskDrift::Changed
+        )),
+        "the card asks again"
+    );
+    assert!(app.document_state.is_document_dirty(&conflicted));
 }
 
 /// GG-08 to the end: after the card, Save As to a new file writes the

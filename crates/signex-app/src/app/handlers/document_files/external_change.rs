@@ -43,6 +43,16 @@ fn read_for_reload(path: &Path, is_pcb: bool) -> Result<Box<ReloadedFile>, Strin
     }))
 }
 
+/// The file a Save As dialog result names, if `picked` is one.
+fn save_as_target(picked: &FileMsg) -> Option<&Path> {
+    match picked {
+        FileMsg::SaveAs { to_path, .. } | FileMsg::SavePrimitiveAs { to_path, .. } => {
+            Some(to_path.as_path())
+        }
+        _ => None,
+    }
+}
+
 impl Signex {
     /// Record what a read of `path` learned: the fingerprint later saves
     /// compare with, and the real file behind the path.
@@ -269,12 +279,16 @@ impl Signex {
             file_label(&path)
         ));
         // The pick comes back through the conflict check, never straight to
-        // the write: the dialog may name the changed file itself.
+        // the write: the dialog may name the changed file itself. Links are
+        // resolved here, in the Task, so `update` reads no disk.
         task.map(move |message| match message {
-            Message::File(picked @ (FileMsg::SaveAs { .. } | FileMsg::SavePrimitiveAs { .. })) => {
+            Message::File(picked) if save_as_target(&picked).is_some() => {
+                let same_on_disk = save_as_target(&picked)
+                    .is_some_and(|to| crate::app::path_op_jobs::same_path(&path, to));
                 Message::File(FileMsg::DiskConflictSaveAsPicked {
                     conflicted: path.clone(),
                     picked: Box::new(picked),
+                    same_on_disk,
                 })
             }
             other => other,
@@ -289,13 +303,10 @@ impl Signex {
         &mut self,
         conflicted: PathBuf,
         picked: FileMsg,
+        same_on_disk: bool,
     ) -> Task<Message> {
-        let onto_conflicted = match &picked {
-            FileMsg::SaveAs { to_path, .. } | FileMsg::SavePrimitiveAs { to_path, .. } => {
-                self.names_one_file(&conflicted, to_path)
-            }
-            _ => false,
-        };
+        let onto_conflicted = same_on_disk
+            || save_as_target(&picked).is_some_and(|to| self.names_one_file(&conflicted, to));
         if !onto_conflicted {
             return Task::done(Message::File(picked));
         }
@@ -311,13 +322,13 @@ impl Signex {
         Task::none()
     }
 
-    /// Whether `a` and `b` name one file: under the identity rule open and
-    /// Ctrl+S use (case, NFC / NFD, `.` and `..`), or once links resolve.
+    /// Whether `a` and `b` name one file under the identity rule open and
+    /// Ctrl+S use (case, NFC / NFD, `.` and `..`). Links were resolved in the
+    /// dialog Task.
     fn names_one_file(&self, a: &Path, b: &Path) -> bool {
         use crate::app::state::scope::path_key_with;
         let fold = self.identity_fold_for(a);
         path_key_with(a, fold) == path_key_with(b, fold)
-            || crate::app::path_op_jobs::same_path(a, b)
     }
 
     /// The user chose Overwrite (or Re-create): save again without comparing.

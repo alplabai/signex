@@ -365,9 +365,10 @@ impl Signex {
             );
         }
         // Onto its own file it is a plain save: no new document, so the id
-        // stays (#2172).
+        // stays (#2172). It is compared with disk like Ctrl+S, so a file
+        // another program changed raises the card instead of being replaced.
         if path == from_path {
-            return self.begin_schematic_save_unchecked(path);
+            return self.begin_schematic_save(path, None);
         }
         // The tab keeps its old path and title until the write succeeds.
         self.begin_schematic_save(path, Some(from_path.to_path_buf()))

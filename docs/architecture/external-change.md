@@ -55,8 +55,12 @@ the save ledger (Save All lists it), and the notice card offers:
   A pick that names the changed file itself (in any spelling the volume treats
   as that file, or once links resolve) writes nothing: Messages says why and
   the card comes back, since replacing their version is what Overwrite is for.
-  When the Save As to a new file lands, the refused save's failure record goes
-  with the old file.
+  The links are followed in the dialog's Task, not in `update`. When the Save
+  As to a new file lands (a sheet, symbol or footprint), the refused save's
+  failure record goes with the old file. A File ▸ Save As of a sheet onto its
+  own file name, exactly as it is open, is a plain save compared like Ctrl+S:
+  after the card was cancelled, the changed file raises the card again instead
+  of being replaced.
 - **Overwrite** (Missing: Re-create): one save that is not compared; a failed
   write leaves the baseline, so the next save asks again.
 - **Reload from disk**: read and parse the file on a worker, then replace the
