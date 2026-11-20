@@ -504,6 +504,9 @@ fn rules_domain_of(kind: signex_drc::ViolationKind) -> crate::app::RulesDomain {
         K::HoleSize | K::AnnularRing | K::HoleToHole => D::Holes,
         K::MaskSliver | K::MaskExpansion | K::PasteExpansion => D::Mask,
         K::SilkToPad | K::SilkToSilk | K::CourtyardOverlap => D::Assembly,
+        // Keep parts inside is set on the room, not in the Rules tab (#2457);
+        // Assembly holds the nearest placement rules.
+        K::PartOutsideRoom => D::Assembly,
     }
 }
 
