@@ -1,0 +1,9 @@
+G04 Bottom legend, its file function lost on the way back*
+%FSLAX46Y46*%
+%MOMM*%
+%ADD10C,0.150000*%
+D10*
+X1000000Y1000000D02*
+G01*
+X5000000Y1000000D01*
+M02*

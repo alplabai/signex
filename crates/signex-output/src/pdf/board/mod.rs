@@ -12,8 +12,9 @@ mod frame;
 
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref};
 use serde::{Deserialize, Serialize};
+use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::PcbBoard;
-use signex_types::pcb_layer::{BoardSide, PcbLayer};
+use signex_types::pcb_layer::{BoardSide, PcbLayer, TechnicalLayer};
 use signex_types::schematic::SheetOrientation;
 use thiserror::Error;
 
@@ -187,6 +188,34 @@ impl BoardPrintOptions {
             }
             BoardPrintPages::PerSet => sets.into_iter().map(alone).collect(),
         }
+    }
+
+    /// Whether a bottom set (Bottom Side or the bottom assembly drawing) is
+    /// chosen: only then does Mirror the Bottom Side change a page.
+    pub fn has_bottom_set(&self) -> bool {
+        self.sets.iter().any(|set| set.is_bottom())
+    }
+
+    /// The layers of `board` a page of `sets` (one entry of
+    /// [`Self::page_plan`]) prints, in the board's layer order, for a page
+    /// plan that names them. The outline layer comes last when these options
+    /// draw the board outline on every page and no set holds it already.
+    pub fn page_layers(&self, board: &PcbBoard, sets: &[BoardLayerSet]) -> Vec<PcbLayer> {
+        let mut layers: Vec<PcbLayer> = Vec::new();
+        for layer in board
+            .layers
+            .iter()
+            .filter_map(|def| parse_pcb_layer(&def.name))
+        {
+            if sets.iter().any(|set| set.contains(layer)) && !layers.contains(&layer) {
+                layers.push(layer);
+            }
+        }
+        let outline = PcbLayer::Technical(TechnicalLayer::EdgeCuts);
+        if self.outline && !layers.contains(&outline) {
+            layers.push(outline);
+        }
+        layers
     }
 }
 
@@ -370,5 +399,7 @@ fn assemble(
 
 #[cfg(test)]
 mod assembly_tests;
+#[cfg(test)]
+mod plan_tests;
 #[cfg(test)]
 mod tests;

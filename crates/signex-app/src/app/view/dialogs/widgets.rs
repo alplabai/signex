@@ -1,18 +1,13 @@
 //! Shared modal-chrome primitives — backdrop wrapper, draggable / detached
-//! headers, the close-X button, and the common button / section builders
-//! every dialog family reaches for.
+//! headers, the close-X button, and the common button builders every
+//! dialog family reaches for.
 //!
 //! Extracted verbatim from `view/dialogs.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change.
 
 use super::*;
-use iced::widget::{Space, container, row};
+use iced::widget::{Space, container};
 use iced::{Background, Color, Element, Length, Theme};
-use signex_widgets::{raw, text};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Gap kept between a modal and the window edge, in logical px.
 pub(in crate::app::view) const MODAL_WINDOW_MARGIN: f32 = 24.0;
@@ -237,31 +232,6 @@ pub(crate) fn modal_title_header<'a, M: Clone + 'a>(
         super::header::DIALOG_HEADER_H,
         tokens,
     )
-}
-
-/// Subtle section divider used inside the BOM modal's properties
-/// sidebar. Rendered as a 1-line label on a slightly tinted strip
-/// so the panel reads as a stack of named sections.
-pub(super) fn section_header<'a>(
-    title: signex_i18n::Localized,
-    muted: Color,
-) -> Element<'a, Message> {
-    container(
-        row![
-            // raw: a disclosure glyph, not language.
-            text(raw("\u{25BE}")).size(TS.caption).color(muted),
-            Space::new().width(6),
-            text(title).size(TS.body).color(muted),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([6.0, SP.l])
-    .width(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.025))),
-        ..container::Style::default()
-    })
-    .boxed()
 }
 
 #[cfg(test)]
