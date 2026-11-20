@@ -31,7 +31,6 @@ mod search;
 mod selection;
 mod tool;
 mod transform;
-mod unions;
 mod view;
 mod wiring;
 mod workspace;
@@ -310,7 +309,6 @@ const TABLES: &[&[CommandMetadata]] = &[
     history::HISTORY,
     clipboard::CLIPBOARD,
     properties::PROPERTIES,
-    unions::UNIONS,
     arrange::ARRANGE,
     transform::TRANSFORM,
     placement::PLACEMENT,

@@ -265,7 +265,7 @@ draw_arc	active_bar	DrawArc	gui	active document	gate
 draw_arc	in_window_rewrite	document_window	gui	window	routing
 draw_arc	refusal_needs	Schematic	gui	active document	routing
 draw_arc	headless_refusal	headless_refusal	core	none	routing
-draw_bezier	active_bar	DrawBezier	gui	active document	handler
+draw_bezier	active_bar	DrawBezier	gui	active document	gate
 draw_bezier	in_window_rewrite	document_window	gui	window	routing
 draw_bezier	refusal_needs	Schematic	gui	active document	routing
 draw_bezier	headless_refusal	headless_refusal	core	none	routing
@@ -597,7 +597,7 @@ open_child_sheet	headless_refusal	headless_refusal	core	none	routing
 open_command_palette	bridge	CommandPalette(Open)	gui	none	handler
 open_command_palette	in_window_rewrite	document_window	gui	window	routing
 open_command_palette	headless_refusal	headless_refusal	core	none	routing
-open_compiled_design	bridge	Overlay(OpenPanel(CompiledDesign))	gui	none	gate
+open_compiled_design	bridge	Overlay(OpenPanel(CompiledDesign))	gui	none	handler
 open_compiled_design	in_window_rewrite	document_window	gui	window	routing
 open_compiled_design	headless_refusal	headless_refusal	core	none	routing
 open_components_panel	bridge	Library(OpenPicker)	gui	active document	gate
@@ -832,11 +832,11 @@ place_graphic	in_window_rewrite	document_window	gui	window	routing
 place_graphic	refusal_needs	Planned	gui	none	routing
 place_graphic	disabled_still_runs	explains_when_unavailable	gui	none	handler
 place_graphic	headless_refusal	headless_refusal	core	none	routing
-place_harness_connector	active_bar	PlaceHarnessConnector	gui	active document	handler
+place_harness_connector	active_bar	PlaceHarnessConnector	gui	active document	gate
 place_harness_connector	in_window_rewrite	document_window	gui	window	routing
 place_harness_connector	refusal_needs	Schematic	gui	active document	routing
 place_harness_connector	headless_refusal	headless_refusal	core	none	routing
-place_harness_entry	active_bar	PlaceHarnessEntry	gui	active document	handler
+place_harness_entry	active_bar	PlaceHarnessEntry	gui	active document	gate
 place_harness_entry	in_window_rewrite	document_window	gui	window	routing
 place_harness_entry	refusal_needs	Schematic	gui	active document	routing
 place_harness_entry	headless_refusal	headless_refusal	core	none	routing
@@ -882,8 +882,8 @@ place_off_sheet_connector	active_bar	PlaceOffSheetConnector	gui	active document	
 place_off_sheet_connector	in_window_rewrite	document_window	gui	window	routing
 place_off_sheet_connector	refusal_needs	Schematic	gui	active document	routing
 place_off_sheet_connector	headless_refusal	headless_refusal	core	none	routing
-place_parameter_set	active_bar	PlaceParameterSet	gui	active document	handler
-place_parameter_set	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,origin	gate
+place_parameter_set	active_bar	PlaceParameterSet	gui	active document	gate
+place_parameter_set	operand_handler	run_operands: active-tab gate unless a document is named	core	active document,tool state,origin	handler
 place_parameter_set	in_window_rewrite	document_window	gui	window	routing
 place_parameter_set	refusal_needs	Schematic	core	active document	routing
 place_parameter_set	headless_missing_operand	needs `at`	core	none	routing
@@ -911,7 +911,7 @@ place_sheet_symbol	operand_handler	run_operands: active-tab gate unless a docume
 place_sheet_symbol	in_window_rewrite	document_window	gui	window	routing
 place_sheet_symbol	refusal_needs	Schematic	core	active document	routing
 place_sheet_symbol	headless_missing_operand	needs `start`	core	none	routing
-place_signal_harness	active_bar	PlaceSignalHarness	gui	active document	handler
+place_signal_harness	active_bar	PlaceSignalHarness	gui	active document	gate
 place_signal_harness	in_window_rewrite	document_window	gui	window	routing
 place_signal_harness	refusal_needs	Schematic	gui	active document	routing
 place_signal_harness	headless_refusal	headless_refusal	core	none	routing

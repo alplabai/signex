@@ -175,7 +175,9 @@ fn a_plain_designator_is_one_occurrence() {
     let occs = project_occurrences(&p.graph());
     assert_eq!(occs.iter().filter(|o| o.key.as_str() == BUCK).count(), 1);
     let nl = build_project_netlist(&p.graph()).netlist;
-    assert!(refs_on(&nl, "VIN_12V").contains(&"U1".to_string()));
+    // Off a channel, the child's Hierarchical port takes its sheet chain and
+    // outranks the parent's local Net label.
+    assert!(refs_on(&nl, "buck/VIN_12V").contains(&"U1".to_string()));
 }
 
 #[test]

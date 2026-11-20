@@ -276,6 +276,8 @@ fn typing_a_repeat_as_the_designator_turns_the_switch_on() {
 #[test]
 fn compile_project_fills_the_panel_with_the_channels() {
     let mut f = fixture("Repeat(CH, 1, 2)", false);
+    // The fixture writes the state directly; one message refreshes the panel.
+    send(&mut f.app, CompiledDesignMsg::FindChanged(String::new()));
     assert_eq!(
         f.app.document_state.panel_ctx.compiled_design.panel.status,
         CompiledStatus::NotCompiled
@@ -385,6 +387,7 @@ fn a_channel_tab_refuses_an_edit_with_a_message() {
     assert!(still_there, "a channel tab never edits the sheet");
     let said = signex_app::diagnostics::recent_entries().iter().any(|e| {
         e.message
+            .replace(['\u{2068}', '\u{2069}'], "")
             .contains("Channel CH1 is a compiled view; switch to Editor to edit")
     });
     assert!(said, "the refusal is said in Messages");

@@ -501,6 +501,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "edit_blanket",
             "place_compile_mask",
             "place_diff_pair",
+            "place_parameter_set",
             "place_component",
             "place_sheet_symbol",
             "place_sheet_entry",
@@ -690,6 +691,7 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "find_text",
             "find_and_replace",
             "open_command_palette",
+            "open_compiled_design",
             "open_grid_properties",
             "open_net_color_palette",
             "open_net_inspector",
@@ -711,17 +713,12 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
 ];
 
 const PLANNED: &[&str] = &[
-    "draw_bezier",
     "draw_ellipse",
     "draw_elliptical_arc",
     "draw_round_rectangle",
     "place_device_sheet_symbol",
     "place_graphic",
-    "place_harness_connector",
-    "place_harness_entry",
-    "place_parameter_set",
     "place_reuse_block",
-    "place_signal_harness",
 ];
 
 /// The hand annotation of `(id, form)`, if any.

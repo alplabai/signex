@@ -10,7 +10,7 @@ use signex_types::schematic::{
 use uuid::Uuid;
 
 fn id(n: u128) -> Uuid {
-    Uuid::from_u128(n)
+    Uuid::from_u128(0xC1_0000 + n)
 }
 
 fn sheet_with_harness() -> Engine {
