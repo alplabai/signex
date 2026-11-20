@@ -1,4 +1,4 @@
-# Workspace layouts (#166): View ▸ Window ▸ Layouts, Save Layout and Manage
+# Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts, Save Layout and Manage
 # Layouts. Design: docs/WORKSPACE_LAYOUTS.md.
 
 # The built-in layouts.

@@ -538,7 +538,7 @@ pub struct UiState {
     pub assign_footprints_reads: u64,
     /// The Net Inspector panel's filter and expanded nets (#1269).
     pub net_inspector: crate::panels::NetInspectorState,
-    /// The Annotations panel's filters, expanded row and last scan (#165).
+    /// The Annotations panel's filters, expanded row and last scan (mockup row 165).
     /// Boxed: a pointer of the size budget (#2412).
     pub annotations: Box<crate::panels::AnnotationsState>,
     /// The open Paste Array dialog (#1264). Boxed: a closed dialog costs one
@@ -748,7 +748,7 @@ pub struct UiState {
     /// The Command Log (#2458): every command this session ran and what its
     /// panel shows. Session only; boxed, a pointer of the size budget (#2412).
     pub command_log: Box<crate::panels::CommandLogState>,
-    /// Workspace layouts (#166): the list, its store, and the Save Layout
+    /// Workspace layouts (mockup row 166): the list, its store, and the Save Layout
     /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
     pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
 }

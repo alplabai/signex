@@ -414,7 +414,7 @@ mod tests {
         );
     }
 
-    /// m164: on a board the Selected counter stands in for the selection
+    /// Mockup row 164: on a board the Selected counter stands in for the selection
     /// summary; the counters come before the angle and the zoom.
     #[test]
     fn on_a_board_the_counters_replace_the_selection_summary() {

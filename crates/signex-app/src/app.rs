@@ -174,7 +174,7 @@ impl Signex {
         tasks.push(self.sync_update_pcb());
         tasks.push(self.sync_back_annotate());
         // The Annotations panel reads the notebook when shown or when the
-        // project in view changes (#165).
+        // project in view changes (mockup row 165).
         tasks.push(self.sync_annotations_panel());
         tasks.push(self.sync_compare_board());
         // A Properties draft of a board no window shows any more goes (#1312).

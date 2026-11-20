@@ -1,4 +1,4 @@
-//! The board counters of the status bar and their popovers (m164, #2460).
+//! The board counters of the status bar and their popovers (mockup row 164, #2460).
 //!
 //! On a board tab the bar adds Routed, Unrouted, DRC and Selected before the
 //! zoom; the layer pill, the Grid read-out and every counter open a popover

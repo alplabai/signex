@@ -17,7 +17,7 @@ use super::{
 };
 use crate::styles::{self, HAIRLINE, ti, tokens::resolve};
 
-/// Width of the search field (mock m161).
+/// Width of the search field (mockup row 161).
 const SEARCH_WIDTH: f32 = 250.0;
 
 /// The filter bar. In an empty session every filter reads 0 and is greyed.

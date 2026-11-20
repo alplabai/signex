@@ -4,11 +4,11 @@
 //!
 //! A row pairs the Update PCB row and the Back Annotate row that change the
 //! same field of the same footprint, so a value that differs is one row
-//! with two possible directions (`rows.rs`). Directions start as REL-01
-//! decided: destructive or board-originated rows (Extra on board, Footprint
-//! mismatches) and rows Update PCB starts unticked are skipped; any other
-//! row takes the schematic's side when it can, else the board's. A blocked
-//! side keeps its reason and is never chosen.
+//! with two possible directions (`rows.rs`). Directions start as decided
+//! on 2026-11-19: destructive or board-originated rows (Extra on board,
+//! Footprint mismatches) and rows Update PCB starts unticked are skipped;
+//! any other row takes the schematic's side when it can, else the board's. A
+//! blocked side keeps its reason and is never chosen.
 //!
 //! The report keeps both lists with ticks that follow the directions:
 //! [`CompareReport::ticks`] hands them to Update PCB's Execute and Back

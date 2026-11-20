@@ -328,7 +328,7 @@ canonical_icon!(icon_dd_undock, "undock.svg");
 canonical_icon!(icon_dd_folder, "dropdown/folder.svg");
 // Tab strip overflow button and the detached panel window's Dock back (m5, m8).
 canonical_icon!(icon_chrome_chevron_down, "chrome/chevron_down.svg");
-// Manage Layouts and Save Layout (#166): currentColor strokes, tinted per use.
+// Manage Layouts and Save Layout (mockup row 166): currentColor strokes, tinted per use.
 canonical_icon!(icon_layouts_lock, "layouts/lock.svg");
 canonical_icon!(icon_layouts_grip, "layouts/grip.svg");
 canonical_icon!(icon_layouts_edit, "layouts/edit.svg");

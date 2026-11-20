@@ -1,6 +1,6 @@
 //! The pieces every board popover and counter is made of: the mock's sizes,
 //! the glyphs, the count badge, the card with its header, rows and footer,
-//! and the small buttons (m164, `.sb-*`).
+//! and the small buttons (mockup row 164, `.sb-*`).
 
 use iced::widget::{Column, Row, Space, Widget, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Font, Length, Padding, Theme};

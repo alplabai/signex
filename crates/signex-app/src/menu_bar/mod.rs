@@ -107,7 +107,7 @@ pub enum MenuMessage {
     OpenProjectsPanel,
     OpenComponentsPanel,
     OpenNavigatorPanel,
-    /// View ▸ Annotations: show the Annotations panel (#165).
+    /// View ▸ Annotations: show the Annotations panel (mockup row 165).
     OpenAnnotationsPanel,
     OpenPropertiesPanel,
     /// Open the active project's options tab.
@@ -157,7 +157,7 @@ pub enum MenuMessage {
     NextDocumentTab,
     PreviousDocumentTab,
     PreviousSheet,
-    /// View ▸ Window ▸ Layouts ▸ `<your layout>` (#166): apply the user
+    /// View ▸ Window ▸ Layouts ▸ `<your layout>` (mockup row 166): apply the user
     /// layout with this stored id.
     WorkspaceLayoutChosen(String),
 }
@@ -230,7 +230,7 @@ pub struct MenuContext<'a> {
     /// view updates, or the project a board imports from (#1312).
     pub(crate) pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
     /// What View ▸ Window ▸ Layouts lists: the active layout, your layouts
-    /// and the Reset row (#166).
+    /// and the Reset row (mockup row 166).
     pub(crate) layouts: crate::workspace_layouts::LayoutsMenu,
 }
 

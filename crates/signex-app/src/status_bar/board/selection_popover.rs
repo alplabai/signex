@@ -1,4 +1,4 @@
-//! The Selection popover (m164): what is selected on the board, a part by
+//! The Selection popover (mockup row 164): what is selected on the board, a part by
 //! its designator, value and footprint and anything else by its kind, each
 //! with a Zoom; then Properties, Select in schematic (greyed for a board in
 //! no project) and Clear. The card sits right-aligned to its segment, its

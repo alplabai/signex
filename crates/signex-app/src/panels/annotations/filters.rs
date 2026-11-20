@@ -113,7 +113,7 @@ fn bare_input(
 }
 
 /// One chip per kind, each with its colour dot and count; a chip that is
-/// on shows its kind. The shared chip (BB4) with its dot slot.
+/// on shows its kind. The shared `dot_chip` with its dot slot.
 fn kind_chips<'a>(ctx: &'a PanelContext, kinds: &[KindChip]) -> Element<'a, PanelMsg> {
     let metrics = ChipMetrics::from_text_size(TS.body);
     let style = chip_style(&ctx.tokens);

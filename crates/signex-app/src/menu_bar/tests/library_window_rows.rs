@@ -247,7 +247,7 @@ fn close_all_documents_parks_a_dirty_sheet_like_the_tab_menu() {
     assert!(menu.dirty, "the dirty sheet is kept as a parked draft");
 }
 
-// ─── View ▸ Window ▸ Layouts (#166) ────────────────────────────────────
+// ─── View ▸ Window ▸ Layouts (mockup row 166) ────────────────────────────────────
 
 /// The workspace-layout store of these tests: nothing reaches `prefs.json`.
 struct NoLayoutWrites;

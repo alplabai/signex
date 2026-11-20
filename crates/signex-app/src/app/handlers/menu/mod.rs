@@ -16,7 +16,7 @@ impl Signex {
         if let MenuMessage::Command(id) = &msg {
             return self.run_menu_command(id, None);
         }
-        // View ▸ Window ▸ Layouts ▸ one of your layouts (#166).
+        // View ▸ Window ▸ Layouts ▸ one of your layouts (mockup row 166).
         if let MenuMessage::WorkspaceLayoutChosen(id) = &msg {
             return self
                 .apply_workspace_layout(&crate::workspace_layouts::LayoutId::User(id.clone()));

@@ -1,4 +1,4 @@
-//! Room Properties' line-art (#2457, BB2): the room's shape in its colour,
+//! Room Properties' line-art (#2457, mockup row 163): the room's shape in its colour,
 //! its member parts (outside ones in the error ink), the margin outline
 //! while Keep parts inside is on, and the Width, Height, X, Y, Layer and
 //! Margin callouts linked to their fields both ways. No handles and no

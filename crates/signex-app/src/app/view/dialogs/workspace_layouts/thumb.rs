@@ -1,4 +1,4 @@
-//! The arrangement thumbnail of a workspace layout (#166): a sunken frame
+//! The arrangement thumbnail of a workspace layout (mockup row 166): a sunken frame
 //! with one block per dock region in proportion to its width, and the
 //! document area as a panel-coloured block with a border. A region's tabs
 //! share its block, as they share the dock.

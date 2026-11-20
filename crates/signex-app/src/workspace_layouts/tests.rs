@@ -1,4 +1,4 @@
-//! The layout list's rules and its `prefs.json` form (#166).
+//! The layout list's rules and its `prefs.json` form (mockup row 166).
 
 use super::builtins::{shipped, shipped_dock};
 use super::model::*;

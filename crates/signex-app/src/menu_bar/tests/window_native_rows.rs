@@ -311,7 +311,7 @@ fn net_label_from_a_windows_bar_ghosts_on_the_windows_canvas() {
     assert!(app.interaction_state.canvas.ghost_label.is_none());
 }
 
-/// #166: the system menu bar carries View ▸ Window ▸ Layouts, a third level,
+/// Mockup row 166: the system menu bar carries View ▸ Window ▸ Layouts, a third level,
 /// with the built-ins and your layouts, and its rows apply them.
 #[test]
 fn the_native_bar_applies_built_in_and_user_layouts() {

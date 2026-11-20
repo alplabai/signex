@@ -262,7 +262,7 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Navigator,
             MenuMessage::OpenNavigatorPanel,
         ),
-        // #165: docs/MENU_BAR.md#view-annotations
+        // Mockup row 165: docs/MENU_BAR.md#view-annotations
         panel_item(
             ctx,
             ids::PANELS_KIND_ANNOTATIONS,
@@ -644,13 +644,13 @@ fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
         cmd_item_gated(ctx, cmd("untile_documents", "")),
         SEP,
-        // #166: docs/MENU_BAR.md#window-layouts
+        // Mockup row 166: docs/MENU_BAR.md#window-layouts
         submenu(ctx, menu_ids::MENU_WINDOW_LAYOUTS, layouts(ctx)),
         cmd_item_gated(ctx, cmd("close_all_documents", "")),
     ]
 }
 
-/// View ▸ Window ▸ Layouts (#166): the built-ins (the active one checked),
+/// View ▸ Window ▸ Layouts (mockup row 166): the built-ins (the active one checked),
 /// your layouts, each group under its header caption, then Save Layout…,
 /// Manage Layouts… and, while the active built-in carries your edit, its
 /// Reset row.

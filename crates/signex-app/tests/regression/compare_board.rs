@@ -1,5 +1,5 @@
 //! #2462 — Compare Board with Schematic driven through UI messages on a
-//! project read from disk: both change lists as one report with REL-01
+//! project read from disk: both change lists as one report with their
 //! default directions, Apply as one board undo step and one schematic undo
 //! group, a stale board refused with nothing applied, the confirmation
 //! before a board deletion, and Export report… through the file port.

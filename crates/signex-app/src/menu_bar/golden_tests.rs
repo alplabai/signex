@@ -393,7 +393,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("tile_windows_vertically", "TileVertically"),
     // #2249: fixture name only.
     ("untile_documents", "UntileDocuments"),
-    // #166: View ▸ Window ▸ Layouts, fixture names only.
+    // Mockup row 166: View ▸ Window ▸ Layouts, fixture names only.
     ("apply_layout_schematic", "ApplyLayoutSchematic"),
     ("apply_layout_board", "ApplyLayoutBoard"),
     ("apply_layout_review", "ApplyLayoutReview"),
@@ -786,12 +786,12 @@ fn reports_and_window_are_submenus_of_tools_and_view() {
             "Tile Vertically",
             "Untile",
             "---",
-            // #166: the Layouts submenu joins the old Window rows.
+            // Mockup row 166: the Layouts submenu joins the old Window rows.
             "Layouts>",
             "Close All Documents",
         ]
     );
-    // #166: View ▸ Window ▸ Layouts with no layouts of your own and no
+    // Mockup row 166: View ▸ Window ▸ Layouts with no layouts of your own and no
     // edited built-in.
     let window = submenu(root("View"), "Window");
     assert_eq!(

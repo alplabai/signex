@@ -300,7 +300,7 @@ pub(super) struct Probe {
     pub find_similar: bool,
     /// View ▸ Selection Filter opens an Active Bar dropdown (#2416).
     pub active_bar_menu: bool,
-    /// View ▸ Window ▸ Layouts (#166): the two dialogs and the layout on
+    /// View ▸ Window ▸ Layouts (mockup row 166): the two dialogs and the layout on
     /// screen.
     pub save_layout: bool,
     pub manage_layouts: bool,

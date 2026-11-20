@@ -1,4 +1,4 @@
-//! Workspace layouts (#166): apply, Save Layout and Manage Layouts. The
+//! Workspace layouts (mockup row 166): apply, Save Layout and Manage Layouts. The
 //! rules live in `crate::workspace_layouts`; this file turns them into Model
 //! changes and `Task`s (the `prefs.json` write, the export and import files,
 //! the toast timer). Design: docs/WORKSPACE_LAYOUTS.md.

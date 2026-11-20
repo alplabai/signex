@@ -135,7 +135,7 @@ impl Signex {
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
-        // Workspace layouts (#166): a skipped entry is said in Messages once
+        // Workspace layouts (mockup row 166): a skipped entry is said in Messages once
         // the language is known.
         let (workspace_layouts, layout_problems) =
             crate::workspace_layouts::WorkspaceLayoutsState::boot(

@@ -128,9 +128,9 @@ pub(crate) enum OverlayId {
     UpdatePcb,
     /// New PCB / New Schematic setup (#2232).
     DocumentSetup,
-    /// View ▸ Window ▸ Layouts ▸ Manage Layouts (#166).
+    /// View ▸ Window ▸ Layouts ▸ Manage Layouts (mockup row 166).
     ManageLayouts,
-    /// View ▸ Window ▸ Layouts ▸ Save Layout (#166).
+    /// View ▸ Window ▸ Layouts ▸ Save Layout (mockup row 166).
     SaveLayout,
 
     // Library modals.

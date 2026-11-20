@@ -1,4 +1,4 @@
-//! Save Layout and Manage Layouts (#166), from the Graphite mock m166. The
+//! Save Layout and Manage Layouts (mockup row 166). The
 //! state and the rules are `crate::workspace_layouts`; the update half is
 //! `app/handlers/workspace_layouts.rs`. Design: docs/WORKSPACE_LAYOUTS.md.
 

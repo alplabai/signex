@@ -1,4 +1,4 @@
-//! The Annotations panel (#165): reading the project's notebook files off
+//! The Annotations panel (mockup row 165): reading the project's notebook files off
 //! the UI thread, reporting what could not be read in Messages, the filters,
 //! and a reference click going to its part or net. The rows the panel draws
 //! are built here, in `update`, into `PanelContext::annotations`; see

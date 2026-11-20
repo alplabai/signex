@@ -41,7 +41,7 @@ pub(crate) fn write_prefs_key(
 }
 
 // The dock codec: the `dock` key of `prefs.json` and the workspace layouts
-// (#166) read and write regions through these, so the two forms cannot drift.
+// (mockup row 166) read and write regions through these, so the two forms cannot drift.
 
 /// One dock region as `prefs.json` stores it.
 pub(crate) fn region_to_json(region: &crate::dock::RegionLayout) -> serde_json::Value {
@@ -408,7 +408,7 @@ mod tests {
         );
     }
 
-    /// #165: the Annotations panel is saved under the key `annotations` and
+    /// Mockup row 165: the Annotations panel is saved under the key `annotations` and
     /// loads back from it; every panel kind's key reads back as that kind.
     #[test]
     fn the_annotations_panel_round_trips_under_its_key() {

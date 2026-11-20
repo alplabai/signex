@@ -1,4 +1,4 @@
-//! Where a board popover opens: above the segment that opened it (m164).
+//! Where a board popover opens: above the segment that opened it (mockup row 164).
 //!
 //! The Grid read-out's place is fixed (`grid_readout_x`); the layer pill
 //! follows the Grid read-out and the Snap pill; the counters sit at the right

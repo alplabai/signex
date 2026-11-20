@@ -1,4 +1,4 @@
-//! #165 - View ▸ Annotations opens a dock panel that lists the annotation
+//! Mockup row 165 - View ▸ Annotations opens a dock panel that lists the annotation
 //! blocks of the project's Design Notebook files (`notebook/*.snxnbk`),
 //! grouped by file, newest first, filtered by kind, part, status, date and
 //! text; a part chip goes to the part on its sheet, a reference to a part

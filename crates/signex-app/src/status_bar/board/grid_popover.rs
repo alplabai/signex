@@ -1,8 +1,8 @@
-//! The board's Grid popover (m164, REL-05): the pitch presets with the
+//! The board's Grid popover (mockup row 164): the pitch presets with the
 //! current one checked, a Custom… row whose field takes any pitch in mm on
 //! Enter, and the footer's Snap to grid switch and Grids…. There is no
-//! drawing: decisions REL-05 keeps editable drawings to document tabs,
-//! dialogs and the Rules tab.
+//! drawing: editable drawings stay in document tabs, dialogs and the Rules
+//! tab.
 
 use iced::widget::{Space, Widget, row};
 use iced::{Background, Border, Color, Element, Length, Theme};

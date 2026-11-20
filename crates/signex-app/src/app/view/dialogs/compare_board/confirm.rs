@@ -1,5 +1,5 @@
 //! The confirmation before Apply when a chosen row deletes from the board
-//! (REL-01): "Apply N changes?", one line per deletion ("Removes TP3 from
+//! (mockup row 162): "Apply N changes?", one line per deletion ("Removes TP3 from
 //! the board"), Cancel / Apply. Cancel applies nothing.
 
 use iced::widget::{Column, Space, column, container};

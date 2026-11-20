@@ -1,5 +1,5 @@
 //! Ids of `locales/en-US/workspace_layouts.ftl`: View ▸ Window ▸ Layouts,
-//! Save Layout and Manage Layouts (#166).
+//! Save Layout and Manage Layouts (mockup row 166).
 
 define_ids! {
     WORKSPACE_LAYOUTS;

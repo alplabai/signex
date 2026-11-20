@@ -104,7 +104,7 @@ fn a_board_shows_four_counters_once_counted() {
     assert_eq!(BoardCounter::Grid.popover(), BoardPopoverKind::Grid);
 }
 
-/// REL-05: Custom… takes a pitch above 0 mm, nothing else.
+/// Custom… takes a pitch above 0 mm, nothing else.
 #[test]
 fn a_custom_pitch_must_be_a_number_above_zero() {
     assert_eq!(grid_popover::custom_pitch("0.15"), Some(0.15));

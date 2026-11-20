@@ -34,7 +34,7 @@ pub(crate) struct MenuInputs {
     cross_select: bool,
     /// What Design ▸ Update PCB Document names (#1312).
     pcb_sync: Option<crate::app::update_pcb::PcbSyncLabel>,
-    /// What View ▸ Window ▸ Layouts lists (#166).
+    /// What View ▸ Window ▸ Layouts lists (mockup row 166).
     layouts: crate::workspace_layouts::LayoutsMenu,
 }
 

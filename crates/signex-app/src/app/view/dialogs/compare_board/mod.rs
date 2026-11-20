@@ -1,4 +1,4 @@
-//! The Compare Board with Schematic dialog (#2462, mockup m162): header with
+//! The Compare Board with Schematic dialog (#2462, mockup row 162): header with
 //! Compare again, the kind chips and "Set shown rows", the table
 //! (`table.rs`), the in-sync card, and the Export report… / Close / Apply
 //! footer. The confirmation listing board deletions: `confirm.rs`. State
@@ -24,7 +24,7 @@ mod table;
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Design size of the dialog (m162).
+/// Design size of the dialog (mockup row 162).
 const SIZE: (f32, f32) = (1060.0, 640.0);
 /// Height of the header's small button (22 px at the 12 px body).
 const SMALL_BUTTON_H: f32 = TS.body * 22.0 / 12.0;
@@ -54,7 +54,7 @@ fn direction_id(direction: Direction) -> MessageId {
     }
 }
 
-/// The dialog's stroke glyphs (16 x 16, m162's sprite), drawn in the ink
+/// The dialog's stroke glyphs (16 x 16, mockup row 162's sprite), drawn in the ink
 /// they are given.
 #[derive(Debug, Clone, Copy)]
 enum Glyph {
@@ -349,7 +349,7 @@ fn header<'a>(
     )
 }
 
-/// The colours of a filter chip (m162 `.chip`).
+/// The colours of a filter chip (mockup row 162 `.chip`).
 fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
     let r = tokens::resolve(tokens);
     ChipStyle {

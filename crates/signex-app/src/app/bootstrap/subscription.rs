@@ -69,7 +69,7 @@ struct OpenOverlays {
     back_annotate_open: bool,
     compare_board_open: bool,
     compare_board_confirm_open: bool,
-    /// Workspace layouts (#166): Save Layout, Manage Layouts, and Manage's
+    /// Workspace layouts (mockup row 166): Save Layout, Manage Layouts, and Manage's
     /// inline Rename field, which Esc closes before the dialog.
     save_layout_open: bool,
     manage_layouts_open: bool,
@@ -1435,7 +1435,7 @@ mod tests {
             only(|o| o.net_color_custom_open = true),
             Some(Message::NetColor(NetColorMsg::CustomShow(false)))
         ));
-        // #166: Save Layout cancels; Manage Layouts closes its Rename field
+        // Mockup row 166: Save Layout cancels; Manage Layouts closes its Rename field
         // first, then itself.
         use crate::dock::DockLayoutMsg;
         use crate::workspace_layouts::{ManageLayoutsMsg, SaveLayoutMsg, WorkspaceLayoutMsg};

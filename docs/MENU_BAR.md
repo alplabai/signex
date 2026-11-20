@@ -116,7 +116,7 @@ PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 
 **View ▸ Window** (the last entry of View, after the panel rows and a
 separator): Tile Horizontally, Tile Vertically, Untile (see
-[below](#window-tile)), a separator, the Layouts submenu (#166, see
+[below](#window-tile)), a separator, the Layouts submenu (mockup row 166, see
 [below](#window-layouts)), and Close All Documents (see
 [below](#tools-library-editor)). Their built-in keys are unchanged.
 
@@ -305,7 +305,7 @@ opening the board first when it is not open; Esc closes it (or, while it is
 open, the confirmation before Apply).
 
 Each row picks Update PCB, Update schematic or Skip; Extra on board and
-Footprint mismatches start skipped (REL-01). Apply asks first when a chosen
+Footprint mismatches start skipped. Apply asks first when a chosen
 row deletes from the board, then runs the PCB side as one board undo step
 and the schematic side as one undo group. Rows, defaults and Apply:
 [UPDATE_PCB.md](UPDATE_PCB.md#compare-board-with-schematic).
@@ -599,7 +599,7 @@ by designator. The project's sheets are read off the UI thread when it opens.
 
 ## View ▸ Annotations {#view-annotations}
 
-A panel row (`MenuMessage::OpenAnnotationsPanel`, #165) right under
+A panel row (`MenuMessage::OpenAnnotationsPanel`, mockup row 165) right under
 Navigator: it opens (or reveals) the Annotations panel, docked on the right
 by default, and is checked while the panel is open anywhere. Always
 available, like the other panel rows; without a project in view the panel
@@ -756,7 +756,7 @@ documents or windows were arranged.
 
 ## View ▸ Window ▸ Layouts {#window-layouts}
 
-Workspace layouts (#166), between the tiling rows' separator and Close All
+Workspace layouts (mockup row 166), between the tiling rows' separator and Close All
 Documents: the [header](#header-entries) BUILT-IN, the four built-ins Schematic,
 Layout, Review and Notebook (`apply_layout_schematic`, `apply_layout_board`,
 `apply_layout_review`, `apply_layout_notebook`; check rows, the active

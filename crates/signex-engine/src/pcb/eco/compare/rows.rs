@@ -1,6 +1,6 @@
 //! The rows of a report: one per Update PCB row, its Back Annotate pair
 //! joined to it, then the Back Annotate rows nothing pairs with, each with
-//! its REL-01 default direction.
+//! its default direction.
 
 use signex_net::cross_probe::PartOccurrence;
 use signex_types::pcb::PadNet;
@@ -13,7 +13,7 @@ use crate::pcb::eco::back::{BackBlock, BackChange, BackChangeList, BackKey, Back
 use crate::pcb::eco::change::{EcoChange, EcoChangeList, EcoKey, EcoRow};
 
 /// The report of `eco` and `back`, read from the same board and design,
-/// with the REL-01 default directions.
+/// with the default directions.
 pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
     let mut rows: Vec<(CompareRow, bool)> = eco.rows.iter().map(eco_row).collect();
     for back_row in &back.rows {
@@ -40,7 +40,7 @@ pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
     report
 }
 
-/// REL-01: destructive and board-originated rows, and rows Update PCB starts
+/// Destructive and board-originated rows, and rows Update PCB starts
 /// unticked, are skipped; the schematic wins where it can, else the board.
 fn default_direction(row: &CompareRow, pcb_starts_on: bool) -> Direction {
     let skipped_kind = matches!(

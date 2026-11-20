@@ -1,4 +1,4 @@
-//! Annotations panel (#165): every annotation block of the project's Design
+//! Annotations panel (mockup row 165): every annotation block of the project's Design
 //! Notebook files (`notebook/*.snxnbk`), grouped by file, newest first,
 //! filtered by kind, part, status, date and text. A reference chip goes to
 //! its part or net. A pure view over [`AnnotationsView`], which

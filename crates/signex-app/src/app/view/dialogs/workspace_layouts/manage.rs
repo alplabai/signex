@@ -1,4 +1,4 @@
-//! Manage Layouts (#166): the built-ins and your layouts on the left (a user
+//! Manage Layouts (mockup row 166): the built-ins and your layouts on the left (a user
 //! row drags by its grip to reorder), the selected layout's detail on the
 //! right, the "Deleted layout" toast with Undo, and Import / Export.
 

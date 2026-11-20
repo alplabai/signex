@@ -1,4 +1,4 @@
-//! #166 — workspace layouts. Applying one rebuilds the dock and the dock's
+//! Mockup row 166 — workspace layouts. Applying one rebuilds the dock and the dock's
 //! own persistence writes it once; Save Layout names the arrangement on
 //! screen (and replaces one of yours of the same name, never a built-in);
 //! Manage Layouts deletes with Undo, reorders, renames and duplicates. Both

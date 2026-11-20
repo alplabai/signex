@@ -201,7 +201,7 @@ fn a_counter_opens_its_popover_over_its_own_window_and_esc_closes_it() {
     assert_eq!(open_popover(&rig.app), None, "Routed shares the popover");
 }
 
-/// m164: on a board a right-click on the Grid read-out opens the Grid
+/// Mockup row 164: on a board a right-click on the Grid read-out opens the Grid
 /// popover and leaves the grid shown; a preset and a Custom… pitch set it, a
 /// bad pitch is refused. A left click still shows and hides the grid.
 #[test]

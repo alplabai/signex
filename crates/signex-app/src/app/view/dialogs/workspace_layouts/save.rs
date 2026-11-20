@@ -1,4 +1,4 @@
-//! Save Layout (#166): the name (a free "Layout N" offered), what the layout
+//! Save Layout (mockup row 166): the name (a free "Layout N" offered), what the layout
 //! stores, and Save, which reads Replace when the name is one of your
 //! layouts. A built-in's name is refused.
 

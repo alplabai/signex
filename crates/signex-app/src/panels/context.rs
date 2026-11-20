@@ -113,7 +113,7 @@ pub struct PanelContext {
     /// The Command Log as `UiState::command_log` held it at its last change
     /// (#2458); shared, so a context rebuild copies a pointer.
     pub command_log: std::sync::Arc<super::CommandLogState>,
-    /// The Annotations panel's rows (#165); built in `update` whenever its
+    /// The Annotations panel's rows (mockup row 165); built in `update` whenever its
     /// scan or filters change.
     pub annotations: std::sync::Arc<super::AnnotationsView>,
     /// The active PCB tab's board facts, for the Properties panel.

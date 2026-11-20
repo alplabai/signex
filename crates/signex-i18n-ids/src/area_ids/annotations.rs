@@ -1,4 +1,4 @@
-//! Ids of `locales/en-US/annotations.ftl`: the Annotations panel (#165).
+//! Ids of `locales/en-US/annotations.ftl`: the Annotations panel (mockup row 165).
 
 define_ids! {
     ANNOTATIONS;

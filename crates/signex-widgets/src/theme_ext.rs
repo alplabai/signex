@@ -477,7 +477,7 @@ pub fn power_port(canvas: &CanvasColors) -> Color {
     to_color(&canvas.power)
 }
 
-/// The five kinds of a Design Notebook annotation (#165), named here for
+/// The five kinds of a Design Notebook annotation (mockup row 165), named here for
 /// their colours: this crate does not depend on `signex-notebook`, whose
 /// `AnnotationKind` the app maps onto these one to one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -673,7 +673,7 @@ mod scale_tests {
         assert_eq!(dark, Color::from_rgb8(0xE0, 0x6C, 0x5C));
     }
 
-    /// #165: the annotation kinds take the status tokens, Decision its own
+    /// Mockup row 165: the annotation kinds take the status tokens, Decision its own
     /// purple, and the icon-box glyph is white in Light and the app
     /// background in Dark.
     #[test]

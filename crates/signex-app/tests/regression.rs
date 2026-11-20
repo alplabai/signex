@@ -728,11 +728,11 @@ mod wire_tab_options;
 #[path = "regression/command_log.rs"]
 mod command_log;
 
-// #165 — the Annotations panel and its notebook scan.
+// Mockup row 165 — the Annotations panel and its notebook scan.
 #[path = "regression/annotations_panel.rs"]
 mod annotations_panel;
 
-// #166 — workspace layouts: apply, Save Layout and Manage Layouts.
+// Mockup row 166 — workspace layouts: apply, Save Layout and Manage Layouts.
 #[path = "regression/workspace_layouts.rs"]
 mod workspace_layouts;
 

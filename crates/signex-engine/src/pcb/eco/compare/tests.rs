@@ -1,5 +1,5 @@
 //! #2462 — Compare Board with Schematic: the kind of every Update PCB and
-//! Back Annotate row, pairing by footprint and field, the REL-01 default
+//! Back Annotate row, pairing by footprint and field, the default
 //! directions, blocked sides, the shown-rows choice, the ticks Apply hands
 //! on, the deletions the confirmation lists and choices kept on a refresh.
 
@@ -468,7 +468,7 @@ fn a_blocked_side_keeps_its_reason_and_is_never_chosen() {
     assert_eq!(report.rows[0].direction, Direction::Skip);
     assert!(!report.eco().rows[0].on);
 
-    // The footprint mismatch's board side waits for #2248.
+    // The footprint mismatch's board side is not wired yet (a follow-up issue).
     let report = sample();
     let footprint = by_pcb(&report, &EcoKey::ChangeFootprint(u(0xa2)));
     assert_eq!(

@@ -156,7 +156,7 @@ with no board or no root sheet is refused with a notice.
 | Missing on board | Add footprints, Links | Add to board, Link footprint | not available yet |
 | Extra on board | Remove footprints | Remove from board | not available yet |
 | Net differences | Nets, Pad nets | Add, remove or rename a net; move, connect or disconnect a pin | not available yet |
-| Footprint mismatches | Change footprints (+ Back Annotate's footprint row) | Swap footprint | blocked until #2248 |
+| Footprint mismatches | Change footprints (+ Back Annotate's footprint row) | Swap footprint | not available yet (a follow-up issue wires it through Assign Footprints) |
 | Value changes | Values, Designators (+ Back Annotate's rows) | Set value, Set designator | Take board value, Take board designator |
 
 An Update PCB row and the Back Annotate row that change the same field of
@@ -164,7 +164,7 @@ the same footprint are one row with two possible directions. A side that is
 blocked keeps its reason, shown as the tooltip of its greyed choice, and is
 never chosen. The notes of both lists are listed under the rows.
 
-### Directions (REL-01)
+### Directions
 
 Each row has a three-way choice: Update PCB (the schematic wins), Update
 schematic (the board wins) or Skip. The defaults:
@@ -205,4 +205,5 @@ through the file port.
 
 Update schematic is not available for Missing on board, Extra on board and
 net rows: placing a board-only part on a sheet and carrying a board net to
-the schematic need their own design. Footprint mismatches wait for #2248.
+the schematic need their own design. Taking a footprint mismatch into the
+schematic through Assign Footprints is a follow-up issue (Caner, 2026-11-20).

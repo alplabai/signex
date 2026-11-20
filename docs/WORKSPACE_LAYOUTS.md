@@ -4,7 +4,7 @@ A workspace layout is a named arrangement of the docked panels: which panels
 are open, in which dock (left, right, bottom) and in which tab order, whether
 a dock is collapsed, the side docks' widths, and the split of the document
 area (View ▸ Window ▸ Tile). Signex ships four built-in layouts; you can save
-your own. Graphite mock: m166 in `group-new-release.html` (#166).
+your own. Mockup row 166 (`group-new-release.html`).
 
 Code: `crates/signex-app/src/workspace_layouts/` (data, rules, store),
 `crates/signex-app/src/app/handlers/workspace_layouts.rs` (apply, the dialogs'

@@ -1,4 +1,4 @@
-//! The Compare Board with Schematic table (m162): the column headings, then
+//! The Compare Board with Schematic table (mockup row 162): the column headings, then
 //! per kind a sunken group row and its rows (kind glyph, Object, Schematic,
 //! Board, Jump, Action), then the notes. The Action cell is a three-way
 //! choice in one selected style; a choice the row does not allow is greyed
@@ -23,7 +23,7 @@ use crate::app::compare_board::{CompareBoardState, JumpSide};
 use crate::app::{CompareBoardMsg, Message};
 use crate::styles::{ti, tokens};
 
-/// Column widths (m162: 30 / 150 / 190 / 190 / 150 px at the 12 px body);
+/// Column widths (mockup row 162: 30 / 150 / 190 / 190 / 150 px at the 12 px body);
 /// Action takes the rest.
 const KIND_W: f32 = TS.body * 30.0 / 12.0;
 const OBJECT_W: f32 = TS.body * 150.0 / 12.0;
@@ -116,7 +116,7 @@ fn line_box<'a>(
         .boxed()
 }
 
-/// One cell `width` wide, padded like m162's `td`.
+/// One cell `width` wide, padded like mockup row 162's `td`.
 fn cell<'a>(content: Element<'a, Message>, width: Length) -> Element<'a, Message> {
     container(content)
         .padding([0.0, CELL_PAD])
@@ -456,7 +456,7 @@ fn action_cell<'a>(
 }
 
 /// Update PCB / Update schematic / Skip on a sunken track, the chosen one
-/// raised, every choice in the same selected style (CX pass 2026-11-19).
+/// raised, every choice in the same selected style (decided 2026-11-19).
 fn direction_control<'a>(
     row: &CompareRow,
     i18n: &I18n,

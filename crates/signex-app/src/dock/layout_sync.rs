@@ -81,7 +81,7 @@ pub enum DockLayoutMsg {
     /// A quit-flush write failed and was already logged (#1932): only the
     /// retry bookkeeping is left to do.
     SaveFailedLogged,
-    /// Workspace layouts (#166): apply, save and manage named arrangements.
+    /// Workspace layouts (mockup row 166): apply, save and manage named arrangements.
     Workspace(crate::workspace_layouts::WorkspaceLayoutMsg),
 }
 

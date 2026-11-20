@@ -1,6 +1,6 @@
 //! Compare Board with Schematic (#2462): every difference between the
 //! project's schematic and its board, both ways, in one modal report. Each
-//! row has its own direction (Update PCB, Update schematic or Skip, REL-01);
+//! row has its own direction (Update PCB, Update schematic or Skip);
 //! Apply runs the PCB side as one labelled board step through Update PCB's
 //! Execute path, then the schematic side as one Back Annotate undo group.
 //!

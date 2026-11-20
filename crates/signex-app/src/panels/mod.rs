@@ -260,7 +260,7 @@ pub enum PanelKind {
     /// sheets; a click goes to the member (#1269).
     NetInspector,
     /// Every annotation block of the project's Design Notebook files,
-    /// filterable; a reference chip goes to its part or net (#165).
+    /// filterable; a reference chip goes to its part or net (mockup row 165).
     Annotations,
 }
 

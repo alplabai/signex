@@ -145,7 +145,7 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
-    // Workspace layouts (#166): View ▸ Window ▸ Layouts. Unbound by default:
+    // Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts. Unbound by default:
     // docs/WORKSPACE_LAYOUTS.md, "Shortcuts".
     CommandMetadata {
         id: "apply_layout_schematic",

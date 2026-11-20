@@ -143,7 +143,7 @@ cmd-tile-windows-vertically = Tile windows side by side
 cmd-menu-tile-windows-vertically = Tile Vertically
 cmd-untile-documents = Untile documents
 cmd-menu-untile-documents = Untile
-# Workspace layouts (#166): View ▸ Window ▸ Layouts.
+# Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts.
 cmd-apply-layout-schematic = Workspace layout: Schematic
 cmd-menu-apply-layout-schematic = Schematic
 cmd-apply-layout-board = Workspace layout: Layout

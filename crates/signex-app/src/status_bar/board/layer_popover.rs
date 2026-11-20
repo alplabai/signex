@@ -1,4 +1,4 @@
-//! The Active layer popover (m164): the layers the next-layer key steps
+//! The Active layer popover (mockup row 164): the layers the next-layer key steps
 //! through, each with its swatch and name, the active one checked; a row
 //! makes that layer active. The footer opens the Layers panel.
 

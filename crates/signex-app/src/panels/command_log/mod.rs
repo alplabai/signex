@@ -1,4 +1,4 @@
-//! The Command Log panel (#2458, mock m161): every catalog command this
+//! The Command Log panel (#2458, mockup row 161): every catalog command this
 //! session ran, newest last, with its source, arguments, result and time.
 //! A pure view over [`CommandLogState`]; every action is a [`CommandLogMsg`]
 //! the app runs in `app::handlers::command_log`. Rules: `docs/COMMAND_LOG.md`.
@@ -31,7 +31,7 @@ const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 const CM: ChromeMetrics = ChromeMetrics::DEFAULT;
 
-/// Width of the detail pane (mock m161).
+/// Width of the detail pane (mockup row 161).
 const DETAIL_WIDTH: f32 = 320.0;
 /// Width of the empty-session hint (the mock's max width).
 const HINT_WIDTH: f32 = 440.0;

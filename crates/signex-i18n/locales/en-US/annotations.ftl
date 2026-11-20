@@ -1,4 +1,4 @@
-# Annotations panel (#165): the annotation blocks of the project's Design
+# Annotations panel (mockup row 165): the annotation blocks of the project's Design
 # Notebook files (notebook/*.snxnbk), and the Messages lines of their reading.
 
 ## Panel name (dock tab, title, View menu row and panel list)

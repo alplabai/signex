@@ -1,4 +1,4 @@
-//! The board segments of the bar (m164): Routed with its progress bar,
+//! The board segments of the bar (mockup row 164): Routed with its progress bar,
 //! Unrouted, DRC with the age of the last run, and Selected, each a button
 //! that opens its popover; the board's Grid read-out; and the layer pill's
 //! swatch and chevron. Each segment's width is computed from the same texts

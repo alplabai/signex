@@ -1,4 +1,4 @@
-//! The Unrouted connections popover (m164): one row per net with its
+//! The Unrouted connections popover (mockup row 164): one row per net with its
 //! unrouted connections, the pads each still has to join and, when a pour of
 //! the net is on the board, that the pour will connect them; Zoom frames the
 //! net's ratsnest lines. Route next frames the first unrouted connection and

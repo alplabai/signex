@@ -289,7 +289,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         // View ▸ Window ▸ Untile (#2249).
         "untile_documents" => Message::Window(WindowMsg::UntileRequested),
-        // View ▸ Window ▸ Layouts (#166).
+        // View ▸ Window ▸ Layouts (mockup row 166).
         "apply_layout_schematic"
         | "apply_layout_board"
         | "apply_layout_review"

@@ -1,4 +1,4 @@
-//! The DRC popover (m164): when the last batch run landed and how many edits
+//! The DRC popover (mockup row 164): when the last batch run landed and how many edits
 //! the board had since, its violations worded as the DRC panel words them
 //! with a Zoom each, then Run DRC and Open Messages.
 

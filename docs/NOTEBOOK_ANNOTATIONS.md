@@ -3,7 +3,7 @@
 A project's Design Notebook lives in its `notebook/` folder as `.snxnbk`
 files. A notebook file is Typst source with an optional TOML header. Inside
 it, **annotation blocks** record notes, calculations, measurements, issues
-and decisions next to the design. The **Annotations** panel (#165, View ▸
+and decisions next to the design. The **Annotations** panel (mockup row 165, View ▸
 Annotations) lists every annotation block of every notebook file of the
 project. The notebook tab that edits these files is not built yet; until it
 is, the files are written with any text editor.

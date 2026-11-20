@@ -1,4 +1,4 @@
-//! Workspace layouts (#166): a named arrangement of the docked panels, their
+//! Workspace layouts (mockup row 166): a named arrangement of the docked panels, their
 //! docks and sizes, and the split of the document area. Four built-ins
 //! (Schematic, Layout, Review, Notebook) plus the user's own, stored per user
 //! in `prefs.json`. View ▸ Window ▸ Layouts applies one; Save Layout and
