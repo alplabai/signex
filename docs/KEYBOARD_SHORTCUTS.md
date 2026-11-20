@@ -123,7 +123,9 @@ below.
 ## Built-in profiles
 
 Both built-in profiles spell the platform-standard set with `Mod`: `N O S P Z
-X C V A F ,` plus `D R E L 4` and `Shift+S/Z/P/V/G/X/E/F/A`. Windows and Linux
+X C V A F ,` plus `D R E L 4` and `Shift+S/Z/P/V/G/X/E/F/A`. Plain `G` is in
+the set only in the default profile, where `Mod+G` is Create Union (⌘G on
+macOS); Classic keeps `Ctrl+G` physical. Windows and Linux
 resolve every row exactly as before (`Mod` is Ctrl there), so the resolved
 golden `builtin_profiles_resolved.golden.tsv` does not change. Chords whose ⌘
 twin is a macOS system shortcut stay on the physical Control key (⌃ on macOS):

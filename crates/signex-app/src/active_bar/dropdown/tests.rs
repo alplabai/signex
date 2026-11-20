@@ -167,7 +167,8 @@ fn power_menu_has_subheads_short_labels_and_full_tooltips() {
 }
 
 /// No group holds only planned tools, so every group opens its menu: the
-/// Harness group's tools are live (#1280).
+/// Harness group's tools are live (#1280). The bar and its slot table have
+/// no greyed, menu-less group, so a group of only planned tools fails here.
 #[test]
 fn no_group_is_planned() {
     use ActiveBarMenu as M;

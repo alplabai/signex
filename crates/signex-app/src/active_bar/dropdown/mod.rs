@@ -143,9 +143,10 @@ fn menu_table(menu: ActiveBarMenu) -> Option<&'static [EntrySpec]> {
     })
 }
 
-/// Whether every row of `menu` is a planned tool: the bar greys its button
-/// and opens no menu whose rows would all say "planned".
-pub(super) fn is_planned_menu(menu: ActiveBarMenu) -> bool {
+/// Whether every row of `menu` is a planned tool. The bar has no greyed
+/// group (no `BarSlot::Planned`), so `no_group_is_planned` keeps this false.
+#[cfg(test)]
+fn is_planned_menu(menu: ActiveBarMenu) -> bool {
     menu_table(menu).is_some_and(|specs| {
         let mut actions = specs.iter().filter_map(EntrySpec::action).peekable();
         actions.peek().is_some() && actions.all(super::is_planned)
