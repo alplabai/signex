@@ -16,6 +16,7 @@ use crate::app::command::{CommandArgs, OperandValue};
 use crate::app::document::UndoTarget;
 use crate::app::document_ids::DocumentKind;
 use crate::app::state::ProjectId;
+use crate::app::state::rules_history::RuleState;
 use crate::app::{Message, Signex, TabKind};
 
 /// Why an undo, redo or a switch to the table waits: the text view holds
@@ -192,6 +193,18 @@ impl Signex {
         id: ProjectId,
         edit: impl FnOnce(&mut DrcRuleSet),
     ) -> Result<(), String> {
+        self.commit_fab_section(id, edit, None)
+    }
+
+    /// [`Self::commit_drc_section`] that also sets the project's router
+    /// tool to `router` mm when it is `Some`, in the same undo step: a fab
+    /// tier or profile preset. Unchanged rules and router record no step.
+    pub(crate) fn commit_fab_section(
+        &mut self,
+        id: ProjectId,
+        edit: impl FnOnce(&mut DrcRuleSet),
+        router: Option<f64>,
+    ) -> Result<(), String> {
         let project = self
             .document_state
             .project_by_id(id)
@@ -204,14 +217,20 @@ impl Signex {
             );
         }
         let before = project.data.rules.clone();
+        let router_before = project.data.router_tool_diameter();
+        let router_after = router.or(router_before);
         let mut after = before
             .clone()
             .unwrap_or_else(|| self.seeded_project_rules());
         edit(&mut after.drc);
-        if before.as_ref() == Some(&after) {
+        if before.as_ref() == Some(&after) && router_after == router_before {
             return Ok(());
         }
-        self.replace_rules_of(id, Some(after), true);
+        let state = RuleState {
+            rules: Some(after),
+            router_tool_diameter: router_after,
+        };
+        self.replace_rule_state_of(id, state, true);
         Ok(())
     }
 
