@@ -639,10 +639,6 @@ pub enum PanelMsg {
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.
     FocusErcViolation(usize),
-    /// Focus previous ERC diagnostic row in the global list.
-    FocusPrevErcDiagnostic,
-    /// Focus next ERC diagnostic row in the global list.
-    FocusNextErcDiagnostic,
     /// User clicked the Quick Fix chip on an ERC violation row. Routes
     /// to a per-rule handler — UnusedPin places a NoConnect at the
     /// pin, every other rule falls back to "zoom + select" (same as

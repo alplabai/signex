@@ -555,8 +555,8 @@ pub struct UiState {
     /// what the newest ERC run checked (#85, #86, AV-13); boxed so its
     /// growth stays off `UiState` (#2412).
     pub validation_panels: Box<crate::panels::ValidationPanels>,
-    /// Global cursor into the flattened ERC diagnostics list spanning all
-    /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
+    /// The selected ERC finding: its index into the flattened list spanning
+    /// all sheets in `erc_violations_by_path`.
     pub erc_focus_global_index: Option<usize>,
     /// Token of the newest ERC run; a finished run applies only if it still
     /// matches (#111).
