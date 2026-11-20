@@ -324,10 +324,8 @@ pub(super) fn handle_recovery_git_missing(
     choice: GitMissingChoice,
 ) -> Task<Message> {
     match choice {
-        GitMissingChoice::Cancel | GitMissingChoice::Skip => {
-            app.library.finish_recovery();
-            Task::none()
-        }
+        // The close (x, Esc) is Skip for now too (mockup row 138).
+        GitMissingChoice::Cancel | GitMissingChoice::Skip => open_without_history(app),
         GitMissingChoice::ReInit => {
             let path = match app.library.recovery.as_ref() {
                 Some(RecoveryDialog::GitMissing { path, .. }) => path.clone(),
@@ -375,9 +373,45 @@ pub(super) fn handle_recovery_git_missing(
         }
         GitMissingChoice::RestoreFromRemote => {
             // v0.9 leaves this disabled — the manifest doesn't carry a
-            // remote yet. Treat as Cancel.
+            // remote yet. Closes the dialog.
             app.library.finish_recovery();
             Task::none()
+        }
+    }
+}
+
+/// Skip for now on *Git missing*: close the dialog and open the library
+/// read-only until its history is restored (Caner, 2026-11-20; mockup row
+/// 138). The mount is prepared off the UI thread and lands as
+/// `MountFinished`, like any browser open.
+fn open_without_history(app: &mut Signex) -> Task<Message> {
+    use crate::library::mount::{MountIntent, MountRequest};
+    let path = match app.library.recovery.as_ref() {
+        Some(RecoveryDialog::GitMissing { path, .. }) => Some(path.clone()),
+        _ => None,
+    };
+    app.library.finish_recovery();
+    let Some(path) = path else {
+        return Task::none();
+    };
+    match app
+        .library
+        .request_mount(&path, MountIntent::OpenBrowserTab)
+    {
+        MountRequest::AlreadyMounted => app.finish_open_library_browser(path),
+        // An open of this path is already preparing; it lands on its own.
+        MountRequest::InFlight => Task::none(),
+        MountRequest::Spawn => {
+            let spawn_path = path.clone();
+            Task::perform(
+                crate::library::mount::prepare_mount_without_history_off_thread(spawn_path),
+                move |prepared| {
+                    Message::Library(LibraryMessage::MountFinished {
+                        path: path.clone(),
+                        prepared,
+                    })
+                },
+            )
         }
     }
 }

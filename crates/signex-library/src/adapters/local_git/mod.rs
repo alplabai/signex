@@ -259,7 +259,32 @@ impl LocalGitAdapter {
     /// parent directory must already host a `.git/` — recovery from
     /// a deleted git repo lives in [`Self::recover_init`].
     pub fn open(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
-        let file_path = file_path.as_ref().to_path_buf();
+        let adapter = Self::read_library(file_path.as_ref())?;
+        // Validate the repo opens — but treat a missing `.git/` as a
+        // clean "no version control" state rather than a hard error.
+        // Libraries created with `LibraryInitOptions::enable_git =
+        // false` ship as plain files; opening them must not require
+        // a repo. Other open failures (corrupt repo, partial init)
+        // still surface so the recovery dialog can route the user
+        // to `recover_init`.
+        if adapter.root_dir.join(".git").exists() {
+            git2::Repository::open(&adapter.root_dir)
+                .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
+        }
+        adapter.seed_uncommitted_from_working_tree();
+        Ok(adapter)
+    }
+
+    /// Open a library whose `.git/` does not open, without looking at its
+    /// history. Only for a read-only mount: nothing may be written through
+    /// this adapter, as its commits would land in a broken repository.
+    pub fn open_without_history(file_path: impl AsRef<Path>) -> Result<Self, LibraryError> {
+        Self::read_library(file_path.as_ref())
+    }
+
+    /// Parse the `.snxlib` at `file_path` into an adapter. Reads only.
+    fn read_library(file_path: &Path) -> Result<Self, LibraryError> {
+        let file_path = file_path.to_path_buf();
         Self::validate_file_path(&file_path)?;
         Self::require_library_file(&file_path)?;
         // Stamp first: a write racing the read then costs one extra reload.
@@ -268,19 +293,8 @@ impl LocalGitAdapter {
         let library_file =
             LibraryFile::parse_with(&text, &crate::tables::repair_short_component_row)?;
         let root_dir = parent_dir(&file_path)?;
-        // Validate the repo opens — but treat a missing `.git/` as a
-        // clean "no version control" state rather than a hard error.
-        // Libraries created with `LibraryInitOptions::enable_git =
-        // false` ship as plain files; opening them must not require
-        // a repo. Other open failures (corrupt repo, partial init)
-        // still surface so the recovery dialog can route the user
-        // to `recover_init`.
-        if root_dir.join(".git").exists() {
-            git2::Repository::open(&root_dir)
-                .map_err(|e| LibraryError::Backend(format!("git open: {e}")))?;
-        }
         let manifest_synth = synthesize_manifest(&library_file.manifest);
-        let adapter = Self {
+        Ok(Self {
             file_path,
             root_dir,
             library_file: RwLock::new(library_file),
@@ -296,9 +310,7 @@ impl LocalGitAdapter {
             row_lines: Mutex::default(),
             uncommitted: Mutex::default(),
             row_reads: Default::default(),
-        };
-        adapter.seed_uncommitted_from_working_tree();
-        Ok(adapter)
+        })
     }
 
     /// The commit of [`Self::recover_init`]: HEAD's tree plus the library's

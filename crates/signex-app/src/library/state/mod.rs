@@ -667,6 +667,9 @@ pub struct LibraryState {
     pub owed_cascades: owed_cascades::OwedCascades,
     /// Libraries whose close waits for their writes to finish.
     pub closing: std::collections::HashSet<PathBuf>,
+    /// Libraries mounted read-only because their Git history is missing
+    /// (Skip for now on Git Repository Missing), until it is restored.
+    pub history_missing: std::collections::HashSet<PathBuf>,
     /// Libraries unmounted since the last `finish_update`, which drains
     /// this to close their Library Browser and Component Preview tabs.
     pub unmounted: Vec<PathBuf>,

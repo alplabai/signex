@@ -107,7 +107,7 @@ pub(crate) fn library_with_rows(dir: &Path, name: &str, count: usize) -> (PathBu
     (snxlib, ids)
 }
 
-fn bytes_of(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+pub(crate) fn bytes_of(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(dir: &Path, root: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).expect("read_dir") {
             let path = entry.expect("entry").path();

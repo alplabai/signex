@@ -7,6 +7,9 @@
 //! itself is covered in `signex-library/tests/git_identity.rs`
 //! (`recover_init` returns the same `Err` this dialog displays). The success
 //! half uses a repo-local identity, so it passes with or without a global one.
+//!
+//! Skip for now opens the library read-only until its history is restored
+//! (Caner, 2026-11-20; mockup row 138).
 
 use signex_app::app::Signex;
 use signex_app::app::contracts::Message;
@@ -121,4 +124,75 @@ fn reinit_in_another_repo_is_refused_in_the_dialog_and_commits_nothing() {
         other => panic!("dialog must stay open with the reason, got {other:?}"),
     }
     assert_eq!(repo.head().unwrap().target().unwrap(), before);
+}
+
+/// Skip for now, and the dialog's close (x, Esc), on Git Repository Missing
+/// mount the library read-only: it is open, an edit is refused with the
+/// reason from the catalog, and no file of the library changes.
+#[test]
+fn skip_for_now_opens_the_library_read_only_and_refuses_an_edit() {
+    use crate::library_read_only_mount::{TABLE, bytes_of, library_with_rows};
+    use signex_i18n::RenderTranslatable;
+
+    for choice in [GitMissingChoice::Skip, GitMissingChoice::Cancel] {
+        let tmp = tempfile::tempdir().unwrap();
+        let (snxlib, _rows) = library_with_rows(tmp.path(), "Passives", 1);
+        // An empty `.git/` does not open: the library's history is missing.
+        std::fs::create_dir(tmp.path().join(".git")).unwrap();
+
+        let (mut app, _boot) = Signex::new();
+        let task = app.update(Message::Library(LibraryMessage::OpenLibraryAt(Some(
+            snxlib.clone(),
+        ))));
+        crate::drive::drive(&mut app, task);
+        assert!(
+            matches!(
+                app.library.recovery,
+                Some(RecoveryDialog::GitMissing { .. })
+            ),
+            "{choice:?}: the open raises Git Repository Missing, got {:?}",
+            app.library.recovery
+        );
+        assert!(app.library.library_at(&snxlib).is_none());
+        let before = bytes_of(tmp.path());
+
+        let task = app.update(Message::Library(LibraryMessage::RecoveryGitMissing(choice)));
+        crate::drive::drive(&mut app, task);
+        assert!(app.library.recovery.is_none(), "{choice:?}: dialog closes");
+        assert!(
+            app.library.library_at(&snxlib).is_some(),
+            "{choice:?}: the library is open"
+        );
+        assert!(
+            app.library.is_read_only(&snxlib),
+            "{choice:?}: the library is read-only"
+        );
+
+        app.document_state.error_notice = None;
+        let task = app.update(Message::Library(LibraryMessage::BrowserAddComponent {
+            library_path: snxlib.clone(),
+            table: Some(TABLE.to_string()),
+        }));
+        crate::drive::drive(&mut app, task);
+        let notice = app
+            .document_state
+            .error_notice
+            .as_ref()
+            .unwrap_or_else(|| panic!("{choice:?}: the refused edit must say why"));
+        let strip = |s: String| s.replace(['\u{2068}', '\u{2069}'], "");
+        assert_eq!(strip(notice.title.render_en_us()), "Library Is Read-Only");
+        let detail = strip(notice.detail.render_en_us());
+        assert!(
+            detail.contains("\"Passives\" is open read-only because its Git history is missing"),
+            "{choice:?}: {detail}"
+        );
+
+        assert_eq!(
+            before,
+            bytes_of(tmp.path()),
+            "{choice:?}: nothing of the library may be written"
+        );
+        let git_entries = std::fs::read_dir(tmp.path().join(".git")).unwrap().count();
+        assert_eq!(git_entries, 0, "{choice:?}: nothing written into .git/");
+    }
 }

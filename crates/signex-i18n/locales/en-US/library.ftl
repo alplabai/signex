@@ -241,7 +241,7 @@ library-order-help = Saved to <config_dir>/signex/distributors.toml. The first m
 # $error is the system's reason, in English.
 library-order-save-failed = Could not save the order: { $error }
 
-## Copy to Library (#134)
+## Copy to Library (mockup row 134)
 
 # Intro title. $label is the name of the stock symbol or footprint.
 library-stock-copy-intro-title = Copy { $label } to a library
@@ -250,7 +250,7 @@ library-stock-copy-intro-text = The stock library is read-only. The copy opens f
 # The chosen library can no longer take the copy. $path is its file.
 library-stock-copy-not-writable = { $path } is not open and writable; pick another library.
 
-## Close Library (#136)
+## Close Library (mockup row 136)
 
 # Intro title of the prompt shown when a library with unsaved drafts closes.
 library-close-intro-title = Save the drafts before closing?
@@ -264,9 +264,10 @@ library-close-kind-row = { $table } · row
 # Kind of a draft that is a file (a symbol or footprint).
 library-close-kind-file = file
 
-## Library recovery (#138)
+## Library recovery (mockup row 138)
 
-# Footer button: close the dialog and decide later.
+# Footer button: close the dialog and decide later (Git Repository Missing:
+# the library opens read-only).
 library-recovery-skip-for-now = Skip for now
 # Keys of the facts box.
 library-recovery-key-library = Library
@@ -287,7 +288,7 @@ library-recovery-git-intro-text = Version control is on for this library, but it
 # $error is the system's reason, in English.
 library-recovery-git-reinit-failed = Re-init failed: { $error }
 library-recovery-git-reinit-warning = Re-init starts a new history: all earlier commits are lost.
-library-recovery-git-caption = Skip for now leaves the library closed until its history is restored.
+library-recovery-git-caption = Skip for now opens the library read-only until its history is restored.
 # Broken binding: $kind is symbol, footprint, sim or other; $table is the
 # table that holds the row.
 library-recovery-binding-title = Broken { $kind ->
@@ -310,7 +311,7 @@ library-recovery-binding-intro-text = A row in '{ $table }' references a { $kind
     } that no longer exists on disk.
 library-recovery-binding-caption = Skip for now keeps the row as it is until it is re-bound.
 
-## Edit Component (#130)
+## Edit Component (mockup row 130)
 # Dialog title.
 library-edit-row-title = Edit Component
 # Header note: $pn is the row's part number, $library the library, $table the table.
@@ -406,7 +407,7 @@ library-edit-row-slot-problem = ✗ { $reason }
 # Tooltip of a unit this version does not know, which is kept unchanged.
 library-edit-row-unit-kept = Kept as written
 
-## Delete Component (#137)
+## Delete Component (mockup row 137)
 # Dialog title.
 library-delete-row-title = Delete Component?
 # Intro title; $pn is the row's part number.
@@ -414,7 +415,7 @@ library-delete-row-intro-title = Delete { $pn }?
 # Intro text; $pn is the row's part number, $table its table.
 library-delete-row-intro = Delete row { $pn } from { $table }? This cannot be undone from the UI.
 
-## Place Component picker (#129)
+## Place Component picker (mockup row 129)
 # Dialog title of the picker when it places a part.
 library-picker-title-place = Place Component
 # Dialog title of the picker when it swaps a placed part for another.
@@ -446,7 +447,7 @@ library-picker-hint-place = Enter to place
 # Footer hint, Change Component: Enter goes on to the change preview.
 library-picker-hint-next = Enter for Next
 
-## Primitive picker (#131)
+## Primitive picker (mockup row 131)
 # Dialog titles, by the kind of primitive picked.
 library-primitive-picker-title-symbol = Pick Symbol
 library-primitive-picker-title-footprint = Pick Footprint
@@ -492,7 +493,7 @@ library-primitive-picker-opening = Opening library…
 # is bound. $library is the library, $name the symbol.
 library-primitive-picker-not-listed = { $library } does not list { $name }; nothing was linked.
 
-## Document Options dialog of a library (#132)
+## Document Options dialog of a library (mockup row 132)
 # Header note: $name is the library's display name.
 library-document-options-note = Library: { $name }
 # Form label: the colour of the symbol and footprint editor sheets.
@@ -520,7 +521,7 @@ library-document-options-unit-inch = inch
 # Unit segment: micrometres.
 library-document-options-unit-um = µm
 
-## New Library dialog (#133)
+## New Library dialog (mockup row 133)
 # Option card title: put the new library under version control.
 library-create-options-git = Enable version control (Git)
 # Option card help under the version-control title.
@@ -535,7 +536,7 @@ library-create-options-relocate = Choose another location…
 # Tooltip of the disabled Create Library button while a refusal shows.
 library-create-options-refused-tip = Choose another location, or turn off version control.
 
-## Library Updates (#135)
+## Library Updates (mockup row 135)
 # Message over the drift table. $count is how many placed components differ
 # from their library rows (a whole number).
 library-updates-summary =

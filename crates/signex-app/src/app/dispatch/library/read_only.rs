@@ -3,9 +3,10 @@
 //! The adapter boundary already refuses every write with
 //! `LibraryError::ReadOnly` (`signex_library::ReadOnlyAdapter`). These
 //! helpers sit one step earlier in the dispatcher so a write attempt on
-//! a read-only mount (the stock library) stops before any draft state,
-//! modal, or buffer is created and the user is told in plain language
-//! why, instead of seeing a permission error or nothing at all.
+//! a read-only mount (the stock library, or a library opened without its
+//! Git history) stops before any draft state, modal, or buffer is created
+//! and the user is told in plain language why, instead of seeing a
+//! permission error or nothing at all.
 
 use super::*;
 
@@ -26,7 +27,12 @@ impl Signex {
         crate::diagnostics::log_warning(format!(
             "[library] write refused: {name} is mounted read-only"
         ));
-        self.document_state.error_notice = Some(crate::app::state::ErrorNotice::read_only(&name));
+        let notice = if self.library.is_history_missing(library_path) {
+            crate::app::state::ErrorNotice::history_missing(&name)
+        } else {
+            crate::app::state::ErrorNotice::read_only(&name)
+        };
+        self.document_state.error_notice = Some(notice);
         true
     }
 
@@ -35,6 +41,14 @@ impl Signex {
     /// into a read-only library, `None` when `path` is writable.
     pub(crate) fn read_only_write_error(&self, path: &std::path::Path) -> Option<anyhow::Error> {
         let name = self.library.read_only_library_name_containing(path)?;
+        if self.library.is_history_missing_target(path) {
+            let reason = signex_i18n::t!(
+                self.ui_state.i18n,
+                signex_i18n::ids::NOTICE_LIBRARY_HISTORY_MISSING_DETAIL,
+                "library" => name
+            );
+            return Some(anyhow::anyhow!(reason.into_string()));
+        }
         Some(anyhow::Error::new(signex_library::LibraryError::ReadOnly {
             library: name,
         }))
