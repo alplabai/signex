@@ -110,7 +110,49 @@ fn close_tabs_to_the_right_parks_a_dirty_tab_and_drops_a_clean_one() {
     );
 }
 
+/// An undocked tab lives in its own window, off the main strip: Close Tabs
+/// to the Right on the strip leaves it open, and with nothing else after
+/// the clicked tab the row has nothing to close.
+#[test]
+fn close_tabs_to_the_right_leaves_an_undocked_tab_open() {
+    let mut app = app_with_tabs(&["a.snxfpt", "b.snxfpt", "c.snxfpt"], 0);
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: PathBuf::from("c.snxfpt"),
+            title: "c".to_string(),
+        },
+    );
+    assert!(
+        app.strip_tabs_right_of(1).is_empty(),
+        "no strip tab after b: the row greys"
+    );
+    assert_eq!(app.strip_tabs_right_of(0), [1]);
+    let _ = tab_action(&mut app, TabContextAction::CloseToTheRight(1));
+    assert_eq!(tab_names(&app), ["a.snxfpt", "b.snxfpt", "c.snxfpt"]);
+    assert!(
+        app.ui_state.windows.contains_key(&window),
+        "c's window stays open"
+    );
+    let _ = tab_action(&mut app, TabContextAction::CloseToTheRight(0));
+    assert_eq!(tab_names(&app), ["a.snxfpt", "c.snxfpt"]);
+}
+
 // ─── Copy Path ────────────────────────────────────────────────────
+
+/// The clipboard text is the tab's file path as displayed.
+#[test]
+fn copy_path_text_is_the_tabs_file_path() {
+    let mut app = app_with_tabs(&["boards/main.snxfpt"], 0);
+    push_tab(&mut app, Path::new(""));
+    assert_eq!(
+        app.tab_copy_path_text(0).as_deref(),
+        Some("boards/main.snxfpt")
+    );
+    assert_eq!(app.tab_copy_path_text(1), None, "no file, no text");
+    assert_eq!(app.tab_copy_path_text(9), None, "out of range");
+}
 
 #[test]
 fn copy_path_writes_the_clipboard_for_a_file_tab_only() {

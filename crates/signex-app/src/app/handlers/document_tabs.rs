@@ -464,23 +464,50 @@ impl Signex {
             A::CloseToTheRight(idx) => {
                 // Descending, as Close All Other Documents: each close
                 // leaves the indices still to visit where they were.
-                let tasks: Vec<Task<Message>> = (idx + 1..self.document_state.tabs.len())
-                    .rev()
+                let mut indices = self.strip_tabs_right_of(idx);
+                indices.reverse();
+                let tasks: Vec<Task<Message>> = indices
+                    .into_iter()
                     .map(|i| self.close_tab_parking_dirty(i))
                     .collect();
                 Task::batch(tasks)
             }
-            A::CopyPath(idx) => match self
-                .document_state
-                .tabs
-                .get(idx)
-                .and_then(crate::tab_bar::tab_file_path)
-            {
-                Some(path) => iced::clipboard::write(path.display().to_string()).discard(),
+            A::CopyPath(idx) => match self.tab_copy_path_text(idx) {
+                Some(text) => iced::clipboard::write(text).discard(),
                 None => Task::none(),
             },
             A::RevealInProjects(idx) => self.reveal_tab_in_projects(idx),
         }
+    }
+
+    /// Whether the document at `path` lives in its own undocked window, and
+    /// so is not on the main window's tab strip.
+    pub(crate) fn tab_is_undocked(&self, path: &std::path::Path) -> bool {
+        use crate::app::state::WindowKind;
+        self.ui_state.windows.values().any(
+            |kind| matches!(kind, WindowKind::UndockedTab { path: shown, .. } if shown == path),
+        )
+    }
+
+    /// The indices, ascending, of the tabs after `idx` that the main tab
+    /// strip shows. An undocked tab has its own window and is never closed
+    /// from the strip's menu.
+    pub(crate) fn strip_tabs_right_of(&self, idx: usize) -> Vec<usize> {
+        self.document_state
+            .tabs
+            .iter()
+            .enumerate()
+            .skip(idx.saturating_add(1))
+            .filter(|(_, tab)| !self.tab_is_undocked(&tab.path))
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// The text Copy Path puts on the clipboard for tab `idx`: its file path
+    /// as displayed, or `None` for a tab with no file behind it.
+    pub(crate) fn tab_copy_path_text(&self, idx: usize) -> Option<String> {
+        let tab = self.document_state.tabs.get(idx)?;
+        crate::tab_bar::tab_file_path(tab).map(|path| path.display().to_string())
     }
 
     /// The tree key of the Projects panel row whose file is `path`, or `None`

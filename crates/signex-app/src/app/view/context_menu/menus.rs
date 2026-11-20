@@ -199,11 +199,7 @@ impl Signex {
         // A tab can be undocked iff it's not already living in its own OS
         // window. Single-tab workspaces still show the row: undocking a
         // sole tab leaves the main window empty.
-        use super::super::state::WindowKind;
-        let already_undocked =
-            self.ui_state.windows.values().any(
-                |kind| matches!(kind, WindowKind::UndockedTab { path, .. } if *path == tab.path),
-            );
+        let already_undocked = self.tab_is_undocked(&tab.path);
         let close_shortcut = self.keymap_shortcut_label("close_active_document");
         let entries = tab_menu_entries(
             &self.ui_state.i18n,
@@ -212,6 +208,7 @@ impl Signex {
                 title: &tab.title,
                 tab_idx: ctx.tab_idx,
                 total_tabs: self.document_state.tabs.len(),
+                strip_tabs_to_the_right: !self.strip_tabs_right_of(ctx.tab_idx).is_empty(),
                 // A Project tab stays docked (#1202): an undocked window
                 // would take the main window's shortcuts.
                 undock_unavailable: already_undocked || tab.kind.is_project_page(),
@@ -576,6 +573,9 @@ pub(super) struct TabMenuFacts<'a> {
     pub(super) title: &'a str,
     pub(super) tab_idx: usize,
     pub(super) total_tabs: usize,
+    /// A tab after this one is on the main tab strip; an undocked tab has
+    /// its own window and does not count.
+    pub(super) strip_tabs_to_the_right: bool,
     /// The tab already has its own OS window, or it is a Project tab.
     pub(super) undock_unavailable: bool,
     /// The tab names a file (a Component Preview tab does not).
@@ -622,7 +622,7 @@ pub(super) fn tab_menu_entries(
         gated(
             None,
             text(i18n, menu_ids::CTX_TAB_CLOSE_RIGHT),
-            idx + 1 < facts.total_tabs,
+            facts.strip_tabs_to_the_right,
             A::CloseToTheRight(idx),
         ),
         dd_msg(

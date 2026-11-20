@@ -362,12 +362,14 @@ fn sheet_actions_open_child_sheet_needs_a_sheet_symbol() {
 }
 
 /// The document tab menu for tab `tab_idx` of `total_tabs`, with the file in
-/// an open project and `Ctrl+W` bound to `close_active_document`.
+/// an open project, every tab on the main strip and `Ctrl+W` bound to
+/// `close_active_document`.
 fn tab_facts(title: &str, tab_idx: usize, total_tabs: usize) -> super::menus::TabMenuFacts<'_> {
     super::menus::TabMenuFacts {
         title,
         tab_idx,
         total_tabs,
+        strip_tabs_to_the_right: tab_idx + 1 < total_tabs,
         undock_unavailable: false,
         has_file: true,
         in_project: true,
@@ -457,6 +459,12 @@ fn close_tabs_to_the_right_greys_on_the_last_tab() {
             crate::app::TabContextAction::CloseToTheRight(1)
         )))
     ));
+    // Only undocked tabs after this one: nothing on the strip to close.
+    let only_undocked_after = tab_menu(&super::menus::TabMenuFacts {
+        strip_tabs_to_the_right: false,
+        ..tab_facts("b", 1, 3)
+    });
+    assert!(disabled_of(&only_undocked_after, "Close Tabs to the Right"));
 }
 
 /// Copy Path greys for a tab with no file; Reveal in Projects for a file
