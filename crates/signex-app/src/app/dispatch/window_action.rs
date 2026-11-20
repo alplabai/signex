@@ -128,13 +128,10 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
 }
 
 /// Whether the message a command resolved to edits the sheet an undocked
-/// window shows, so it runs in the window's swap. An explicit allow-list of
-/// variants (never a whole enum): sheet edits, selection, tools, in-place text
-/// edits, Active Bar actions, the view zoom and opening Find or Find Similar
-/// (the dialog then works on that window's sheet). Everything else (sheet
-/// stepping, project opens, net jumps, Find next / previous, Annotate, ERC, export, app-wide
-/// toggles, and any message added later) runs on the main window, where it
-/// cannot load one sheet into another's canvas.
+/// window shows. An explicit allow-list of variants (never a whole enum):
+/// sheet edits, selection, tools, in-place text edits, Active Bar actions,
+/// the view zoom and opening Find or Find Similar (the dialog then works on
+/// that window's sheet).
 fn command_edits_shown_sheet(message: &Message) -> bool {
     use crate::active_bar::ActiveBarMsg;
     use crate::app::selection_request::SelectionRequest as Sel;
@@ -202,6 +199,77 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
         Message::Input(InputMsg::EscapePressed { .. }) => true,
         Message::TextEdit(TextEditMsg::Requested(_)) => true,
         Message::Menu(menu) => matches!(menu, MenuMessage::ZoomIn | MenuMessage::ZoomOut),
+        _ => false,
+    }
+}
+
+/// Whether a command's message acts on the sheet or board an undocked
+/// window shows, so it runs in the window's swap: it edits that sheet, reads
+/// it, or edits that board. A canvas menu row picked in the window resolves
+/// to one of these (#2267), as do the window's keys and menu bar. Everything
+/// else (sheet stepping, project opens, net jumps, Find next / previous,
+/// Annotate, ERC, export, app-wide toggles, and any message added later)
+/// runs on the main window, where it cannot load one sheet into another's
+/// canvas.
+fn command_runs_in_shown_document(message: &Message) -> bool {
+    command_edits_shown_sheet(message)
+        || command_reads_shown_sheet(message)
+        || command_edits_shown_board(message)
+}
+
+/// Commands that start from what the shown sheet holds: its net at the menu
+/// point or the selection, the selection's cross probe, the selected sheet
+/// symbol's child sheet, and the sheet's project for Number Sheets.
+fn command_reads_shown_sheet(message: &Message) -> bool {
+    use crate::app::{
+        ContextAction, ContextMenuMsg, CrossProbeMsg, NetNavMsg, ProjectMsg, SheetNumberingMsg,
+        UiMsg,
+    };
+    match message {
+        Message::Ui(UiMsg::NetNav(nav)) => matches!(
+            nav,
+            NetNavMsg::NetHighlightAtRequested { .. } | NetNavMsg::NetHighlightRequested
+        ),
+        Message::CrossProbe(CrossProbeMsg::ProbeRequested) => true,
+        Message::ContextMenu(ContextMenuMsg::Action(action)) => matches!(
+            action,
+            ContextAction::OpenChildSheet
+                | ContextAction::CreateChildSheet
+                | ContextAction::SyncSheetPins
+        ),
+        Message::Project(ProjectMsg::SheetNumbering(SheetNumberingMsg::Requested)) => true,
+        _ => false,
+    }
+}
+
+/// The board menu's edits and net rows, on the board the window shows.
+fn command_edits_shown_board(message: &Message) -> bool {
+    use crate::app::{
+        BoardNetMsg, BoardSketchMsg, BoardToolsMsg, FootprintSwapMsg, PartSwapMsg, PcbMsg,
+        ReuseBlockMsg,
+    };
+    let Message::Pcb(pcb) = message else {
+        return false;
+    };
+    match pcb {
+        PcbMsg::Tools(tool) => matches!(
+            tool,
+            BoardToolsMsg::TeardropsAddRequested
+                | BoardToolsMsg::GlossRequested
+                | BoardToolsMsg::BoardShapeRequested
+                | BoardToolsMsg::KeepoutRequested
+                | BoardToolsMsg::ArrangeRequested
+        ),
+        PcbMsg::Net(net) => matches!(
+            net,
+            BoardNetMsg::SelectRequested(_) | BoardNetMsg::HighlightRequested(_)
+        ),
+        PcbMsg::PlaceToolPicked(_)
+        | PcbMsg::LockRequested { .. }
+        | PcbMsg::FootprintSwap(FootprintSwapMsg::Requested)
+        | PcbMsg::PartSwap(PartSwapMsg::Requested(_))
+        | PcbMsg::ReuseBlock(ReuseBlockMsg::SaveRequested)
+        | PcbMsg::Sketch(BoardSketchMsg::ModeToggled) => true,
         _ => false,
     }
 }
@@ -332,7 +400,7 @@ impl Signex {
         ) {
             return self.step_find_in_window(window, message);
         }
-        if !command_edits_shown_sheet(&message) {
+        if !command_runs_in_shown_document(&message) {
             return self.dispatch_update(message);
         }
         self.run_in_window_document(window, |app| app.dispatch_update(message))
