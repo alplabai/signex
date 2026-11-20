@@ -4,9 +4,9 @@
 
 use std::collections::BTreeMap;
 
+use signex_expr::ExprNode;
 use signex_sketch::SketchError;
 use signex_sketch::array::{Array, ArrayKind};
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::EvalContext;
 use signex_sketch::parameter::resolve_quantities;
 use signex_sketch::sketch::SketchData;

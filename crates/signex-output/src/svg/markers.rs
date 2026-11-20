@@ -72,7 +72,7 @@ pub(super) fn push_no_erc_diamond(
 mod tests {
     use std::path::PathBuf;
 
-    use signex_types::schematic::{NoConnect, SchematicSheet};
+    use signex_types::schematic::{NoConnect, NoErcDirective, SchematicSheet};
     use uuid::Uuid;
 
     use super::*;
@@ -90,7 +90,10 @@ mod tests {
         };
         if with_markers {
             schematic.no_connects.push(marker());
-            schematic.no_erc_directives.push(marker());
+            let directive = marker();
+            schematic
+                .no_erc_directives
+                .push(NoErcDirective::new(directive.uuid, directive.position));
         }
         SheetSnapshot {
             path: PathBuf::from("markers.snxsch"),

@@ -110,14 +110,26 @@ fn entity_rows<'a>(
     let key = |id: signex_i18n::MessageId| t!(i18n, id).into_string();
     col = props_kv_row(col, muted, input_bg, &key(ids::EDITORS_FP_PROPS_KIND), kind);
     if let Some(id) = fp.selected_sketch_entity_id {
-        col = col.push(super::rows::pick_row(
+        // The host's roles (#2518): a board offers its five bake targets, a
+        // footprint its fifteen roles.
+        let host = fp.sketch_host;
+        let labels = crate::library::editor::footprint::sketch_mode::roles::role_labels(host, i18n);
+        let label_of = move |r: &RoleTag| {
+            labels
+                .iter()
+                .find(|(role, _)| role == r)
+                .map(|(_, label)| label.clone())
+                .unwrap_or_default()
+        };
+        col = col.push(super::rows::pick_row_labelled(
             &key(ids::EDITORS_FP_PROPS_ROLE),
-            RoleTag::ALL,
+            host.roles(),
             fp.selected_sketch_role,
+            label_of,
             move |role| PanelMsg::FpEditorSetRole { id, role },
             muted,
         ));
-        if !fp.selected_sketch_is_point {
+        if !fp.selected_sketch_is_point && host.offers_role(RoleTag::Pad) {
             col = col.push(caption(
                 t!(i18n, ids::EDITORS_FOOTPRINT_ROLE_POINTS_ONLY),
                 tokens,

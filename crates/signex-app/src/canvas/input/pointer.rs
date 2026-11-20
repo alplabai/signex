@@ -106,6 +106,24 @@ impl SchematicCanvas<'_> {
             state.last_click_time = Some(now);
             state.last_click_screen = Some((cursor_pos.x, cursor_pos.y));
 
+            // A press on a selected wire's end grip arms a drag of that end
+            // alone (see `wire_grip`).
+            state.wire_grip = None;
+            if !self.drawing_mode
+                && !self.tool_places_on_click()
+                && !state.ctrl_held
+                && !state.shift_held
+                && let Some(grip) = self.grip_at(cursor_pos, bounds)
+            {
+                state.wire_grip = Some(grip);
+                state.click_on_selected = true;
+                state.move_origin = Some((wx, wy));
+                state.move_dragging = false;
+                state.move_current = None;
+                state.select_drag_start = None;
+                return Some(canvas::Action::capture());
+            }
+
             // A click-to-place tool owns the press: it must not select or
             // arm a drag, whose release would publish the click again (#1764).
             // Classify the click target:
@@ -122,7 +140,7 @@ impl SchematicCanvas<'_> {
                             &self.designators,
                             wx,
                             wy,
-                            self.prefs.wire_widths(),
+                            self.wire_widths(),
                         ) {
                             let sel = self.selected.iter().any(|s| s.uuid == hit.uuid);
                             (sel, !sel)
@@ -211,6 +229,28 @@ impl SchematicCanvas<'_> {
 
         // Case 1: Drag-to-move in progress → commit the move
         if state.move_dragging {
+            // A grip drag drops the one end it holds where its ghost showed it.
+            if let Some(grip) = state.held_grip() {
+                let end = (self.active_snapshot())
+                    .and_then(|sheet| super::super::wire_grip::grip_end(sheet, grip));
+                let target = self.drag_delta(state).zip(end);
+                let connections = state.move_connections();
+                state.clear_move();
+                if let Some(((dx, dy), end)) = target
+                    && (dx.abs() > 0.01 || dy.abs() > 0.01)
+                {
+                    return Some(canvas::Action::publish(Message::CanvasEvent(
+                        CanvasEvent::WireEndDragged {
+                            wire: grip.wire,
+                            start: grip.start,
+                            x: end.x + dx,
+                            y: end.y + dy,
+                            connections,
+                        },
+                    )));
+                }
+                return None;
+            }
             if let (Some(origin), Some(current)) = (state.move_origin, state.move_current) {
                 let dx = current.0 - origin.0;
                 let dy = current.1 - origin.1;
@@ -235,6 +275,7 @@ impl SchematicCanvas<'_> {
         // Case 2: Click was on selected item but didn't drag → deferred click
         if state.click_on_selected {
             state.click_on_selected = false;
+            state.wire_grip = None;
             if let Some(origin) = state.move_origin.take() {
                 return Some(canvas::Action::publish(Message::CanvasEvent(
                     CanvasEvent::Clicked {
@@ -285,6 +326,7 @@ impl SchematicCanvas<'_> {
             return Some(canvas::Action::capture());
         }
         if state.move_dragging || state.click_on_selected {
+            state.wire_grip = None;
             state.move_dragging = false;
             state.click_on_selected = false;
             state.move_origin = None;

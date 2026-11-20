@@ -108,10 +108,13 @@ impl DotVerdicts {
     }
 
     /// The verdict `junction` had, when it still holds: same id and position,
-    /// and outside every changed area.
+    /// and outside every changed area. Only a dot a wire meeting held is
+    /// kept: one held by a pin end inside a wire, or by nothing, is judged
+    /// again, since a move of a part changes no wire area (`pin_junctions`).
     pub(crate) fn kept(&self, junction: &Junction, changed: &[Area]) -> Option<bool> {
         let &(at, ok) = self.dots.get(&junction.uuid)?;
-        (at == junction.position && !changed.iter().any(|&area| inside(at, area))).then_some(ok)
+        (ok && at == junction.position && !changed.iter().any(|&area| inside(at, area)))
+            .then_some(true)
     }
 }
 

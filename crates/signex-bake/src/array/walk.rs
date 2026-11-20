@@ -6,11 +6,11 @@
 
 use std::collections::BTreeMap;
 
+use signex_expr::ExprNode;
+use signex_expr::parse;
 use signex_sketch::SketchError;
 use signex_sketch::array::{GridDepopulation, NumberingScheme};
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::id::SketchEntityId;
 
 use super::numbering::{derive_pad_number, derive_pad_number_2d};
@@ -254,7 +254,7 @@ impl Walk<'_> {
         }
         // The parser resolves `deg` to rad; anything but an angle refuses.
         let sweep_q = eval(&sweep_ast, &ctx).map_err(SketchError::Expr)?;
-        if sweep_q.unit.family() != signex_sketch::unit::UnitFamily::Angle {
+        if sweep_q.unit.family() != signex_expr::UnitFamily::Angle {
             warnings.push(format!(
                 "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
             ));

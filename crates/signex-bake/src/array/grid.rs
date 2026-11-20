@@ -5,10 +5,10 @@
 
 use std::collections::BTreeMap;
 
+use signex_expr::ExprNode;
 use signex_library::primitive::footprint::Pad as LibPad;
 use signex_sketch::SketchError;
 use signex_sketch::array::NumberingScheme;
-use signex_sketch::expr::ast::ExprNode;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;

@@ -651,6 +651,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         paste_disabled_smd_pads,
         selected_sketch_entity_id,
         selected_sketch_role,
+        sketch_host: editor.state.sketch_host(),
         selected_sketch_is_point,
         placement_active,
         placement_paused,

@@ -35,4 +35,13 @@ pub struct PcbTargets {
     /// The selection names one unlocked footprint: the anchor a reuse block
     /// is placed around (#2410).
     pub one_footprint: bool,
+    /// The selection holds a track or a via: what the route tools (Gloss
+    /// Selected Routes, Add Teardrops) act on in the board menu (2026-11-18).
+    pub routes: bool,
+    /// Something is under the pointer: the board menu offers what acts on
+    /// an object, not only the empty-area rows (2026-11-18).
+    pub hovered: bool,
+    /// The selection, else what is under the pointer, has a net: what
+    /// Select Net and Highlight Net act on (2026-11-18).
+    pub net: bool,
 }

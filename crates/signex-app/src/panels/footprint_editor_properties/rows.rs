@@ -171,10 +171,33 @@ pub(super) fn pick_row<'a, T>(
 where
     T: Clone + Eq + std::fmt::Display + 'static,
 {
+    pick_row_labelled(
+        key,
+        options,
+        selected,
+        |t: &T| t.to_string(),
+        on_change,
+        label_c,
+    )
+}
+
+/// [`pick_row`] with each option shown as `label_of` names it (a catalog
+/// label rather than the option's `Display`).
+pub(super) fn pick_row_labelled<'a, T>(
+    key: &str,
+    options: &'a [T],
+    selected: T,
+    label_of: impl Fn(&T) -> String + 'a,
+    on_change: impl Fn(T) -> PanelMsg + 'a,
+    label_c: Color,
+) -> Element<'a, PanelMsg>
+where
+    T: Clone + Eq + 'static,
+{
     container(
         row![
             label(key, label_c),
-            iced::widget::pick_list(Some(selected), options, |t: &T| t.to_string())
+            iced::widget::pick_list(Some(selected), options, label_of)
                 .graphite()
                 .on_select(on_change)
                 .padding(SP.s)

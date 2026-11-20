@@ -88,6 +88,9 @@ pub struct FootprintEditorPanelContext {
     /// (or `Unassigned` when no entity is selected). Inspected via
     /// `current_role_of` against the entity's `*Attr` slots.
     pub selected_sketch_role: crate::library::messages::RoleTag,
+    /// The document the sketch is edited for: it decides the roles the
+    /// Role picker offers (#2518).
+    pub sketch_host: signex_types::sketch::SketchHost,
     /// v0.16.2 — `true` when the primary selected sketch entity is a
     /// Point. Drives the "Pad role applies to Points only" hint on
     /// the Role pick_list.

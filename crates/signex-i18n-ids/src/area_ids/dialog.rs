@@ -124,4 +124,7 @@ define_ids! {
     DIALOG_ALIGN_BOTTOM = "dialog-align-bottom";
     DIALOG_ALIGN_SPACE = "dialog-align-space";
     DIALOG_ALIGN_NONE = "dialog-align-none";
+    DIALOG_ERC_SOURCE_PROJECT = "dialog-erc-source-project";
+    DIALOG_ERC_SOURCE_USER_DEFAULT = "dialog-erc-source-user-default";
+    DIALOG_ERC_PROFILE_MENU = "dialog-erc-profile-menu";
 }

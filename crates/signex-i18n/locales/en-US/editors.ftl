@@ -109,9 +109,9 @@ editors-layers-eye-hidden = ○
 editors-layer-top = Top Layer
 editors-layer-bottom = Bottom Layer
 # Silkscreen of the top side.
-editors-layer-top-overlay = Top Overlay
+editors-layer-top-overlay = Top Silkscreen
 # Silkscreen of the bottom side.
-editors-layer-bottom-overlay = Bottom Overlay
+editors-layer-bottom-overlay = Bottom Silkscreen
 # Assembly drawing of the top side.
 editors-layer-top-assembly = Top Assembly
 # Assembly drawing of the bottom side.
@@ -762,3 +762,95 @@ editors-symbol-bar-filter-kind = { $kind ->
         [Parameters] Parameters
        *[other] Other
     }
+
+## Sketch tools shared by the footprint and board sketch (#2518).
+
+# Role picker: what a selected sketch entity becomes when the sketch bakes.
+editors-sketch-role-unassigned = Unassigned
+editors-sketch-role-pad = Pad
+editors-sketch-role-silk-top = Silk · Top
+editors-sketch-role-silk-bottom = Silk · Bottom
+editors-sketch-role-courtyard = Courtyard
+editors-sketch-role-keepout = Keepout
+# A cutout through the board, drawn in a footprint.
+editors-sketch-role-board-cutout = Board Cutout
+# A cutout drawn on the board itself.
+editors-sketch-role-cutout = Cutout
+editors-sketch-role-mask-opening-top = Mask Opening · Top
+editors-sketch-role-mask-opening-bottom = Mask Opening · Bottom
+editors-sketch-role-mask-exclude-top = Mask Exclude · Top
+editors-sketch-role-mask-exclude-bottom = Mask Exclude · Bottom
+editors-sketch-role-pour-top = Pour · Top
+editors-sketch-role-pour-bottom = Pour · Bottom
+editors-sketch-role-paste-top = Paste · Top
+editors-sketch-role-paste-bottom = Paste · Bottom
+editors-sketch-role-board-outline = Board outline
+editors-sketch-role-mounting-hole = Mounting hole
+editors-sketch-role-v-score = V-score
+# Messages, when a board role is picked for a shape it cannot take.
+editors-sketch-role-does-not-fit = { $role } was not set: a board outline cannot be a point, a mounting hole needs a circle and a V-score a line.
+
+# Active Bar tooltips.
+editors-sketch-select = Select
+editors-sketch-create = Create: Line, Rectangle, Rounded Rectangle, Circle, Arc, Tangent Arc, Edge Arc, Point
+editors-sketch-modify = Modify: Fillet, Trim, Mirror, Offset, patterns, Make Pad from Profile
+editors-sketch-snap = Snap options (left or right click for menu)
+editors-sketch-linetype = Linetype of new entities: Normal, Construction or Centerline
+# The Linetype segments: a solid line, a dashed line, a dash-dot line.
+editors-sketch-linetype-normal = ━
+editors-sketch-linetype-construction = ┅
+editors-sketch-linetype-centerline = ━ · ━
+
+# Create and Modify menus.
+editors-sketch-menu-create = Create
+editors-sketch-menu-modify = Modify
+editors-sketch-menu-needs-selection = Needs a selection
+editors-sketch-tool-line = Line
+editors-sketch-tool-rectangle = Rectangle
+editors-sketch-tool-rounded-rectangle = Rounded Rectangle
+editors-sketch-tool-circle = Circle
+editors-sketch-tool-arc = Arc
+editors-sketch-tool-tangent-arc = Tangent Arc
+editors-sketch-tool-edge-arc = Edge Arc
+editors-sketch-tool-point = Point
+editors-sketch-tool-fillet = Fillet
+editors-sketch-tool-trim = Trim
+editors-sketch-tool-mirror = Mirror
+editors-sketch-tool-offset = Offset
+editors-sketch-tool-rect-pattern = Rectangular Pattern
+editors-sketch-tool-circular-pattern = Circular Pattern
+editors-sketch-make-pad = Make Pad from Profile
+# Why Make Pad from Profile is greyed in a board sketch.
+editors-sketch-footprint-only = footprint only
+editors-sketch-make-pad-board = A board has no pads: Make Pad from Profile works in the footprint editor.
+
+# The sketch mode bar: the one way out of sketch mode on both hosts.
+editors-sketch-mode-title = Sketch
+editors-sketch-bake-preview = Bake preview
+editors-sketch-back-to-sketch = Back to sketch
+editors-sketch-discard-changes = Discard changes
+editors-sketch-bake = Bake
+editors-sketch-bake-tooltip = Bake the sketch into the footprint and leave sketch mode
+# Asked by Discard changes when the sketch has edits.
+editors-sketch-discard-confirm = Discard the changes made in this sketch?
+editors-sketch-keep-editing = Keep editing
+# The bake preview card.
+editors-sketch-bake-result = Bake result
+editors-sketch-bake-never = Construction and centerline entities never bake.
+# The preview could not bake the sketch; $reason says why.
+editors-sketch-bake-refused = The sketch does not bake: { $reason }
+editors-sketch-target-pads = Pads
+editors-sketch-target-silk-top = Top silk
+editors-sketch-target-silk-bottom = Bottom silk
+editors-sketch-target-courtyard = Courtyard
+editors-sketch-target-mask-openings = Mask openings
+editors-sketch-target-mask-excludes = Mask excludes
+editors-sketch-target-paste-apertures = Paste apertures
+editors-sketch-target-pours = Pours
+editors-sketch-target-keepouts = Keepouts
+editors-sketch-target-cutouts = Cutouts
+editors-sketch-target-v-scores = V-scores
+editors-sketch-target-board-outline = Outline
+editors-sketch-target-mounting-holes = Holes
+# A count in the bake preview; $count is a whole number.
+editors-sketch-bake-count = { $count }

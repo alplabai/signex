@@ -118,12 +118,12 @@ fn eval_count(
     label: &str,
     field: &str,
     source: signex_sketch::id::SketchEntityId,
-    ast: &signex_sketch::expr::ast::ExprNode,
+    ast: &signex_expr::ExprNode,
     ctx: &signex_sketch::expr::eval::EvalContext,
     warnings: &mut Vec<String>,
 ) -> Result<Option<i64>, signex_sketch::SketchError> {
     let q = signex_sketch::expr::eval::eval(ast, ctx).map_err(signex_sketch::SketchError::Expr)?;
-    if q.unit.family() != signex_sketch::unit::UnitFamily::Count {
+    if q.unit.family() != signex_expr::UnitFamily::Count {
         warnings.push(format!(
             "{label} array source {source}: {field} did not resolve to a plain number — array skipped"
         ));
@@ -157,7 +157,7 @@ pub fn bake_arrays(
 /// Bake one array's instances into `out`.
 pub(crate) fn bake_one_array(
     array: &signex_sketch::array::Array,
-    params_ast: &std::collections::BTreeMap<String, signex_sketch::expr::ast::ExprNode>,
+    params_ast: &std::collections::BTreeMap<String, signex_expr::ExprNode>,
     sketch: &SketchData,
     solve: &FullSolveOutput,
     out: &mut Vec<LibPad>,

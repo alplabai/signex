@@ -104,8 +104,8 @@ fn rig(loaded: Option<SchematicSheet>) -> Rig {
         "p".into(),
     );
     state.show(Arc::new(read));
-    state.edit(0, "7".into());
-    state.edit(1, "8".into());
+    state.edit(0, "2".into());
+    state.edit(1, "1".into());
     app.ui_state.sheet_numbering = Some(state);
     Rig {
         app,
@@ -211,7 +211,7 @@ fn an_unchanged_closed_parent_is_renumbered_in_memory() {
         "Apply closed it"
     );
     let closed = &rig.app.document_state.engines[&rig.closed_parent];
-    assert_eq!(closed.document().child_sheets[0].instances[0].page, "8");
+    assert_eq!(closed.document().child_sheets[0].instances[0].page, "1");
     assert_eq!(
         std::fs::read_to_string(&rig.closed_parent).expect("file"),
         AS_READ,
