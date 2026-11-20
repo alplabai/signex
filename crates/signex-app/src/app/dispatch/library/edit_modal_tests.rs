@@ -660,8 +660,6 @@ fn a_pn_conflict_shows_under_the_field_and_in_the_footer_and_holds_save() {
 /// starts and the stored row is unchanged.
 #[test]
 fn save_with_a_conflicting_pn_through_update_writes_nothing() {
-    use signex_library::LibraryAdapter as _;
-
     let (mut app, root, row_id) = app_with_browser();
     cache_row(&mut app, &root, "C", "C-1");
     open_modal(&mut app, &root, row_id);
