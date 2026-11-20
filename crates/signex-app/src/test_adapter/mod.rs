@@ -13,6 +13,8 @@
 
 mod disk;
 mod gestures;
+#[cfg(test)]
+mod hostile_tests;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -187,13 +189,6 @@ impl TestAdapter {
                     ran => ran,
                 }
             })
-    }
-
-    /// The app, for a test in this crate that reads what the API does not
-    /// answer yet (the drag baseline's invalidation counters).
-    #[cfg(test)]
-    pub(crate) fn app(&self) -> &Signex {
-        &self.app
     }
 }
 
