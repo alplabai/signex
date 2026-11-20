@@ -21,6 +21,9 @@ pub struct RuleState {
     pub router_tool_diameter: Option<f64>,
 }
 
+/// Test-only: production records a full [`RuleState`]; a rule set alone
+/// would make its undo clear the project's router tool.
+#[cfg(test)]
 impl From<Option<ProjectRules>> for RuleState {
     /// A rule set alone, with no router tool.
     fn from(rules: Option<ProjectRules>) -> Self {

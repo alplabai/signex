@@ -295,11 +295,9 @@ badge names the target"; `canvas/draw/sketch/snap.rs`):
 The words come from the message catalog through the editor's canvas text,
 so they follow the app language. The pill takes the Graphite Dark chrome
 tokens (raised fill, strong line, text), since the board ground is Graphite
-Dark in both themes; the glyph keeps its cyan. Midpoint, Centre and the
-other snaps the mockup lists, and whether they land constraints, are not
-decided yet.
-Decided 2026-11-20: Midpoint and Centre are built and land constraints; see
-[Snap inference](#snap-inference).
+Dark in both themes; the glyph keeps its cyan. The Midpoint, Centre and
+Intersection snaps land a constraint on the click (Caner, 2026-11-20,
+decision 6); see [Snap inference](#snap-inference).
 
 ## Create tools {#create-tools}
 
