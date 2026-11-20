@@ -197,6 +197,9 @@ pub struct InteractionState {
     /// Clamped to `0..custom_filter_presets.len()` whenever the list
     /// changes; ignored entirely when the list is empty.
     pub active_custom_filter_tab: usize,
+    /// SCH Filter's inline preset rename: the preset and the name typed so
+    /// far. Mirrored into each panel context after every update.
+    pub filter_preset_rename: Option<(usize, String)>,
     /// User-defined footprint-editor filter presets (capped at
     /// `crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT`). Loaded from
     /// `~/.config/signex/prefs.json` on launch; parallel to
@@ -245,6 +248,9 @@ pub struct InteractionState {
     /// card tracks the cursor (offset to bottom-right by ~16 px so it
     /// doesn't obscure the symbol).
     pub hover_screen_pos: Option<(f32, f32)>,
+    /// The zoom pill's preset menu is up (Graphite mockup #64): opened by a click on the
+    /// pill's percentage, closed by a pick, Esc or a click outside it.
+    pub zoom_presets_open: bool,
 }
 
 impl InteractionState {

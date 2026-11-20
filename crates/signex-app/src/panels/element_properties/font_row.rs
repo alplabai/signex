@@ -3,6 +3,7 @@
 //! selection and by the sheet-wide default in Page Options (#510).
 
 use super::super::*;
+use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// The pick-list entry meaning "no family of its own".
 pub(in crate::panels) const DEFAULT_OPTION: &str = "Default";
@@ -86,9 +87,164 @@ pub(in crate::panels) fn font_family_row<'a>(
     )
 }
 
+/// The sizes the Font Size list offers, in points.
+pub(in crate::panels) const FONT_SIZES_PT: [u32; 13] =
+    [6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
+
+/// A Font Size choice: the size and how it reads (`10 pt`).
+fn size_choice(i18n: &signex_i18n::I18n, size_pt: u32) -> crate::choice::Choice<u32> {
+    crate::choice::Choice {
+        value: size_pt,
+        label: i18n.message_plain(
+            signex_i18n::ids::PROPERTIES_FONT_SIZE_PT,
+            &[("size", size_pt.to_string().into())],
+        ),
+    }
+}
+
+/// The B / I / U / T buttons beside the size, in one segmented frame. They
+/// keep today's behaviour: the text styles are not stored on placed text
+/// yet, so a press changes nothing (`PanelMsg::Noop`).
+fn text_style_buttons<'a>(i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
+    use signex_i18n::{ids, t};
+    let ts = crate::styles::TypeScale::DEFAULT;
+    let sp = crate::styles::Spacing::DEFAULT;
+    let style_button =
+        |glyph: signex_i18n::MessageId, tip: signex_i18n::MessageId, font: iced::Font| {
+            let face = button(
+                text(t!(i18n, glyph))
+                    .size(ts.caption)
+                    .font(font)
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .width(Length::Fill),
+            )
+            .width(Length::Fill)
+            .padding([sp.xs, sp.xs])
+            .on_press(PanelMsg::Noop)
+            .style(|theme: &Theme, status| {
+                let hovered = matches!(status, iced::widget::button::Status::Hovered);
+                crate::panels::form_look::segment_cell(theme, false, hovered)
+            });
+            signex_widgets::tooltip(
+                face,
+                container(text(t!(i18n, tip)).size(ts.caption)).padding([sp.xs, sp.s]),
+                iced::widget::tooltip::Position::Bottom,
+            )
+            .style(crate::panels::form_look::value_tip)
+            .boxed()
+        };
+    let bold = iced::Font {
+        weight: iced::font::Weight::Bold,
+        ..iced::Font::DEFAULT
+    };
+    let italic = iced::Font {
+        style: iced::font::Style::Italic,
+        ..iced::Font::DEFAULT
+    };
+    container(
+        iced::widget::row![
+            style_button(
+                ids::PROPERTIES_STYLE_BOLD_GLYPH,
+                ids::PROPERTIES_STYLE_BOLD,
+                bold
+            ),
+            style_button(
+                ids::PROPERTIES_STYLE_ITALIC_GLYPH,
+                ids::PROPERTIES_STYLE_ITALIC,
+                italic
+            ),
+            style_button(
+                ids::PROPERTIES_STYLE_UNDERLINE_GLYPH,
+                ids::PROPERTIES_STYLE_UNDERLINE,
+                iced::Font::DEFAULT
+            ),
+            style_button(
+                ids::PROPERTIES_STYLE_STRIKE_GLYPH,
+                ids::PROPERTIES_STYLE_STRIKE,
+                iced::Font::DEFAULT
+            ),
+        ]
+        .spacing(sp.xs)
+        .width(Length::Fill),
+    )
+    .padding(sp.xs)
+    .width(Length::Fill)
+    .style(crate::panels::form_look::segmented_frame)
+    .boxed()
+}
+
+/// The "Font Size  [10 pt ▾] [B I U T]" row: the size list and the text
+/// style buttons on one row. `on_pick` builds the message for a size.
+#[allow(
+    dead_code,
+    reason = "row kit of epic #2523; the label, power port and text note units adopt it"
+)]
+pub(in crate::panels) fn font_size_row<'a>(
+    i18n: &signex_i18n::I18n,
+    size_pt: u32,
+    on_pick: impl Fn(u32) -> PanelMsg + 'a,
+) -> Element<'a, PanelMsg> {
+    let choices: Vec<_> = FONT_SIZES_PT
+        .into_iter()
+        .map(|size| size_choice(i18n, size))
+        .collect();
+    let sp = crate::styles::Spacing::DEFAULT;
+    let size = iced::widget::pick_list(
+        Some(size_choice(i18n, size_pt)),
+        choices,
+        |c: &crate::choice::Choice<u32>| c.label.clone(),
+    )
+    .graphite()
+    .on_select(move |c: crate::choice::Choice<u32>| on_pick(c.value))
+    .padding([sp.xs, sp.s + sp.xs])
+    .width(Length::Fill);
+    super::rows::pair_row(
+        signex_i18n::t!(i18n, signex_i18n::ids::PROPERTIES_FONT_SIZE),
+        size.boxed(),
+        text_style_buttons(i18n),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A size reads with its unit, and the list hands back the points.
+    #[test]
+    fn a_font_size_reads_in_points_and_picks_its_value() {
+        let en = signex_i18n::I18n::en_us();
+        let choice = size_choice(&en, 12);
+        assert_eq!(choice.label, "12 pt");
+        assert_eq!(choice.value, 12);
+        assert!(FONT_SIZES_PT.contains(&10), "the 10 pt default is offered");
+    }
+
+    /// The row is labelled Font Size and shows the size and the four style
+    /// buttons; a style button keeps today's no-op.
+    #[test]
+    fn the_font_size_row_shows_the_size_and_the_style_buttons() {
+        let en = signex_i18n::I18n::en_us();
+        let size = iced::Size::new(320.0, 60.0);
+        let shown: Vec<String> = crate::layout_probe::lay_out_texts(
+            font_size_row(&en, 10, PanelMsg::SetPrePlacementFontSize),
+            size,
+        )
+        .into_iter()
+        .map(|t| t.text)
+        .collect();
+        for label in ["Font Size", "B", "I", "U", "T"] {
+            assert!(shown.iter().any(|t| t == label), "{label:?} in {shown:?}");
+        }
+        let pressed = crate::layout_probe::messages_on_click(
+            font_size_row(&en, 10, PanelMsg::SetPrePlacementFontSize),
+            size,
+            "B",
+        );
+        assert!(
+            matches!(pressed.as_slice(), [PanelMsg::Noop]),
+            "{pressed:?}"
+        );
+    }
 
     #[test]
     fn default_option_means_inherit_and_any_other_entry_is_the_family() {

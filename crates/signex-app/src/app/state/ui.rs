@@ -68,7 +68,7 @@ pub struct UiState {
     /// `component_classes` + persisted on Save.
     pub preferences_draft_component_classes: Vec<crate::fonts::ComponentClassEntry>,
     /// Preferences ▸ Rule Profiles (#1608).
-    pub profile_manager: crate::app::state::rule_profile_ui::ProfileManager,
+    pub profile_manager: Box<crate::app::state::rule_profile_ui::ProfileManager>,
     /// The boot task is still reading the `User Default` profile into
     /// `erc_severity_override` / `pin_matrix_overrides`. Edits of the machine's
     /// rules wait for it: writing the maps back before they hold the file's
@@ -519,8 +519,11 @@ pub struct UiState {
     /// Generation of the newest Assign Footprints read. Outside the dialog's
     /// state so a reopened dialog never takes an older read.
     pub assign_footprints_reads: u64,
-    /// The Net Inspector panel's filter and expanded nets (#1269).
-    pub net_inspector: crate::panels::NetInspectorState,
+    /// The Net Inspector panel's mode, filter and expanded rows (#1269);
+    /// boxed so its growth stays off `UiState` (#2412).
+    pub net_inspector: Box<crate::panels::NetInspectorState>,
+    /// The Object List panel's picks and rows (#1259); boxed as above.
+    pub object_list: Box<crate::panels::ObjectListState>,
     /// The open Paste Array dialog (#1264); boxed as `find_similar`.
     pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers
@@ -649,6 +652,8 @@ pub struct UiState {
     /// baseline in `pin_matrix_view`. Persisted alongside the ERC
     /// severity map.
     pub pin_matrix_overrides: std::collections::HashMap<(u8, u8), signex_erc::Severity>,
+    /// The ERC dialog rule editor's list filter (#1289).
+    pub erc_rule_list: Box<crate::app::core::rule_list_filter::RuleListFilter>,
     /// Symbols whose designator the user locked against reannotation.
     /// Exposed as per-row checkboxes in the Annotate dialog; the engine
     /// skips these uuids in `annotate_with_seed_and_locks`.
@@ -867,6 +872,8 @@ mod tests {
             ("annotate_session", field_size(|ui| &ui.annotate_session)),
             ("validation_panels", field_size(|ui| &ui.validation_panels)),
             ("sheet_sync", field_size(|ui| &ui.sheet_sync)),
+            ("profile_manager", field_size(|ui| &ui.profile_manager)),
+            ("erc_rule_list", field_size(|ui| &ui.erc_rule_list)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

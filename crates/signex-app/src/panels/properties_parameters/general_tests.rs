@@ -2,6 +2,7 @@
 //! text the types gave them before, and pick by value.
 
 use super::*;
+use crate::choice::chosen;
 use crate::panels::{SchematicSheetColor, SheetColor};
 use signex_types::schematic::PageOrigin;
 

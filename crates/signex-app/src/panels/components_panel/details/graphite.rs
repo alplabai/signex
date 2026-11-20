@@ -21,11 +21,14 @@ fn mono() -> Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
-/// The header card: mono part number with its lifecycle pill, then the
-/// class, the maker and the description.
+/// The header card: mono part number with its lifecycle pill and the
+/// primary Place, then "description · library" (`subtitle`, else the bare
+/// description), the class and the maker.
 pub(super) fn header_card<'a>(
     d: &'a ComponentDetails,
     maker: String,
+    subtitle: Option<signex_widgets::Label<'a>>,
+    place: Element<'a, LibraryMessage>,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
@@ -45,10 +48,25 @@ pub(super) fn header_card<'a>(
             lifecycle_tone(d.state),
             tokens
         ),
+        place,
     ]
     .spacing(8)
     .align_y(Alignment::Center);
     let mut card: Column<Element<'a, LibraryMessage>> = column![title].spacing(4);
+    match subtitle {
+        Some(line) => {
+            card = card.push(text(line).size(TS.caption).color(r.ink3).boxed());
+        }
+        None if !d.description.trim().is_empty() => {
+            card = card.push(
+                text(signex_i18n::UserText::new(d.description.as_str()))
+                    .size(TS.caption)
+                    .color(r.ink3)
+                    .boxed(),
+            );
+        }
+        None => {}
+    }
     if !d.class.is_empty() {
         card = card.push(
             text(signex_i18n::UserText::new(d.class.as_str()))
@@ -62,14 +80,6 @@ pub(super) fn header_card<'a>(
             text(signex_i18n::UserText::new(maker))
                 .size(TS.body)
                 .color(ink)
-                .boxed(),
-        );
-    }
-    if !d.description.trim().is_empty() {
-        card = card.push(
-            text(signex_i18n::UserText::new(d.description.as_str()))
-                .size(TS.caption)
-                .color(r.ink3)
                 .boxed(),
         );
     }

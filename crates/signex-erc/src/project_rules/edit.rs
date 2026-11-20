@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use signex_types::project::ErcRules;
 
 use super::{pin_matrix_key, resolve};
-use crate::pin_matrix::baseline_cell;
+use crate::pin_matrix::{baseline_cell, pair_cell};
 use crate::{RuleKind, Severity};
 
 impl Severity {
@@ -62,14 +62,10 @@ pub fn set_severity(rules: &mut ErcRules, rule: RuleKind, severity: Severity) {
 }
 
 /// Cycle one pin matrix cell and its mirror (a pair of pin types is
-/// unordered). A level equal to the factory matrix drops the entry.
+/// unordered), from the level the pair has now (either cell, as the check
+/// reads it). A level equal to the factory matrix drops the entry.
 pub fn cycle_pin_cell(rules: &mut ErcRules, row: u8, col: u8) {
-    let current = resolve(rules)
-        .pin_matrix
-        .get(&(row, col))
-        .copied()
-        .unwrap_or_else(|| baseline_cell(row, col));
-    let next = current.cycled();
+    let next = pair_cell(&resolve(rules).pin_matrix, row, col).cycled();
     for (r, c) in [(row, col), (col, row)] {
         let Some(key) = pin_matrix_key(r, c) else {
             continue;
@@ -127,5 +123,28 @@ mod tests {
             cycle_pin_cell(&mut rules, 0, 1);
         }
         assert!(rules.pin_matrix.is_empty(), "four steps are a full cycle");
+    }
+
+    /// A hand-edited file may hold only the mirror of a cell: the cycle
+    /// starts from that level, as the check reads it, and writes both.
+    #[test]
+    fn a_cell_set_only_on_its_mirror_cycles_from_that_level_on_both() {
+        let hand = baseline_cell(4, 1).cycled();
+        let mut rules = ErcRules::default();
+        let upper = pin_matrix_key(1, 4).expect("in the grid");
+        let lower = pin_matrix_key(4, 1).expect("in the grid");
+        rules
+            .pin_matrix
+            .insert(upper.clone(), hand.key().to_string());
+        cycle_pin_cell(&mut rules, 4, 1);
+        let next = hand.cycled();
+        for (key, (r, c)) in [(&lower, (4, 1)), (&upper, (1, 4))] {
+            let want = (next != baseline_cell(r, c)).then(|| next.key().to_string());
+            assert_eq!(rules.pin_matrix.get(key).cloned(), want, "{key}");
+        }
+        assert_eq!(
+            crate::pin_matrix::pair_cell(&resolve(&rules).pin_matrix, 4, 1),
+            next
+        );
     }
 }

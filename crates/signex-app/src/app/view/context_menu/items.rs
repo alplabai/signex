@@ -209,19 +209,6 @@ pub(super) fn dd_planned(
     }
 }
 
-/// A greyed launcher for a submenu that does not exist yet: a planned row
-/// with the chevron in the chevron column.
-pub(super) fn dd_planned_submenu(
-    i18n: &I18n,
-    icon: Option<Handle>,
-    label: &str,
-) -> DropdownEntry<Message> {
-    match dd_planned(i18n, icon, label, None) {
-        DropdownEntry::Item(item) => DropdownEntry::Item(item.submenu()),
-        other => other,
-    }
-}
-
 /// Save row for the project-root menu — active only when a schematic tab
 /// is open or the project metadata is dirty. Label and `shortcut` come from
 /// the `save_document` command like every other surface.

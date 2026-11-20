@@ -804,9 +804,34 @@ impl ComponentsMountSource {
     ];
 }
 
+/// How the Components panel draws its part rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ComponentsRowStyle {
+    /// One line, the part name only; the description is a tooltip.
+    #[default]
+    Compact,
+    /// Taller rows with a symbol thumbnail and a one-line description.
+    Previews,
+}
+
+impl ComponentsRowStyle {
+    /// The style a saved "Previews" switch stands for.
+    pub fn from_previews(previews: bool) -> Self {
+        if previews {
+            Self::Previews
+        } else {
+            Self::Compact
+        }
+    }
+
+    /// Whether the "Previews" switch is on.
+    pub fn shows_previews(self) -> bool {
+        self == Self::Previews
+    }
+}
+
 /// Source filter, collapse and filter state for the Components Panel.
-/// Session-scoped (not persisted): the panel keeps no other preference on
-/// disk either.
+/// Session-scoped except [`Self::row_style`], which `prefs.json` keeps.
 #[derive(Debug, Clone)]
 pub struct ComponentsPanelState {
     /// The source chip selected under the search box; `None` is "All".
@@ -846,6 +871,12 @@ pub struct ComponentsPanelState {
     /// A row dropped on the canvas: the placement epoch its read runs under
     /// and the world point (mm) to commit the part at once it arrives.
     pub pending_drop: Option<(u64, (f64, f64))>,
+    /// Compact or Previews rows; the "Previews" switch next to Add.
+    pub row_style: ComponentsRowStyle,
+    /// Parts placed from this panel this session, most recent first.
+    pub recent: crate::panels::components_panel::recent::RecentlyPlaced,
+    /// Row symbol thumbnails read so far, by symbol reference.
+    pub thumbs: crate::panels::components_panel::thumbs::SymbolThumbs,
 }
 
 impl Default for ComponentsPanelState {
@@ -864,6 +895,9 @@ impl Default for ComponentsPanelState {
             row_menu: None,
             hovered: None,
             pending_drop: None,
+            row_style: ComponentsRowStyle::default(),
+            recent: Default::default(),
+            thumbs: Default::default(),
         }
     }
 }

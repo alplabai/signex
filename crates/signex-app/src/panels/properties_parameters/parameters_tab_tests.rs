@@ -254,3 +254,49 @@ fn an_empty_date_shows_today_and_a_typed_one_round_trips() {
     let date = saved.title_block.get("date").map(String::as_str);
     assert_eq!(date, Some("2026-01-02"));
 }
+
+/// #2531: the chips count every row the filter text leaves: All is the
+/// parameters plus the rules, Parameters the three groups, Rules none.
+#[test]
+fn the_filter_chips_count_the_rows_the_filter_leaves() {
+    use super::super::document_options::ParametersFilter;
+    use super::ParameterListing;
+    let en = signex_i18n::I18n::en_us();
+    let variables = ["VIN".to_string(), "VOUT".to_string()];
+    let all = ParameterListing::filtered(&en, "", &variables, BuiltinParameter::ALL);
+    let rows = TitleBlockField::ALL.len() + 2 + BuiltinParameter::ALL.len();
+    assert_eq!(all.count(ParametersFilter::Parameters), rows);
+    assert_eq!(all.count(ParametersFilter::All), rows);
+    assert_eq!(all.count(ParametersFilter::Rules), 0);
+
+    let dates = ParameterListing::filtered(&en, " DATE ", &variables, BuiltinParameter::ALL);
+    assert_eq!(dates.title_block, [TitleBlockField::Date]);
+    assert!(dates.variables.is_empty());
+    assert_eq!(
+        dates.builtins,
+        [
+            BuiltinParameter::CurrentDate,
+            BuiltinParameter::ModifiedDate
+        ]
+    );
+    assert_eq!(dates.count(ParametersFilter::All), 3);
+
+    let vin = ParameterListing::filtered(&en, "vin", &variables, BuiltinParameter::ALL);
+    assert_eq!(vin.variables, ["VIN".to_string()]);
+    assert_eq!(vin.count(ParametersFilter::Parameters), 1);
+}
+
+/// #2531: the Built-in group lists the sheet's names and numbers first.
+#[test]
+fn the_built_in_group_opens_with_the_sheets_names_and_numbers() {
+    assert_eq!(
+        BuiltinParameter::ALL[..5],
+        [
+            BuiltinParameter::DocumentName,
+            BuiltinParameter::SheetName,
+            BuiltinParameter::SheetNumber,
+            BuiltinParameter::SheetCount,
+            BuiltinParameter::ProjectName,
+        ]
+    );
+}

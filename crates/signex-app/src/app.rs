@@ -53,7 +53,7 @@ pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
-pub use rules_tab::{RulesDomain, RulesFilter, RulesTabMsg, RulesTabState};
+pub use rules_tab::{RulesTabMsg, RulesTabState};
 pub(crate) mod design_read;
 pub(crate) mod designator_scan;
 #[cfg(test)]
@@ -167,6 +167,9 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let mut tasks = vec![self.dispatch_update(message)];
+        // Text typed into a note that is no longer selected (another pick, a
+        // tab switch) goes to its own sheet as one edit.
+        self.settle_owed_note_drafts();
         // Cross select follows whatever this message selected, and a Cross
         // Probe asked for runs once its target is open (#1312).
         tasks.push(self.sync_cross_select());

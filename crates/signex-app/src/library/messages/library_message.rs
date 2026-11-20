@@ -647,6 +647,19 @@ pub enum LibraryMessage {
     },
     /// The Copy to Library dialog, or the copy it started (#813).
     StockCopy(crate::library::stock_copy::StockCopyMsg),
+    /// The Components panel's "Previews" switch was flipped (#2535): the
+    /// row style picked, remembered as a preference.
+    ComponentsPanelRowStylePicked(super::super::state::ComponentsRowStyle),
+    /// The off-thread read of row symbol thumbnails finished (#2535); `None`
+    /// marks a symbol that could not be read, so it is not asked for again.
+    ComponentsPanelThumbnailsLoaded(
+        Vec<(
+            signex_library::primitive::PrimitiveRef,
+            Option<std::sync::Arc<signex_types::schematic::LibSymbol>>,
+        )>,
+    ),
+    /// The empty Components panel's "Open Project…" was pressed (#2535).
+    ComponentsPanelOpenProjectClicked,
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

@@ -139,6 +139,8 @@ impl Signex {
         // Main's History rows belong to main's file; the window lists its own
         // once its first load lands (see `refresh_window_histories`).
         ctx.history = Default::default();
+        // Main's typed boxes stay main's: a copy would apply them twice.
+        ctx.placed = Default::default();
         if !self.window_shares_main_navigator(window) {
             ctx.navigator = Default::default();
         }
@@ -320,12 +322,14 @@ impl Signex {
             .keys()
             .map(|w| (*w, self.window_shares_main_navigator(*w)))
             .collect();
+        let rename = self.filter_preset_rename();
         let document = &mut self.document_state;
         for (window, shares_navigator) in shares {
             let Some(ctx) = document.window_panel_ctx.get_mut(&window) else {
                 continue;
             };
             ctx.adopt_shared_from(&document.panel_ctx);
+            ctx.selection_filter.rename = rename.clone();
             if !shares_navigator {
                 if ctx.navigator.hierarchy.is_some() {
                     ctx.navigator = Default::default();

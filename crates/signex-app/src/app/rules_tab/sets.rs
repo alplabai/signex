@@ -1,7 +1,7 @@
-//! Named rule sets in the app (#2398): create, redefine and apply, each one
+//! Constraint sets in the app (#2398, #2530): create, redefine and apply, each one
 //! undo step that stores the set and the rules it writes together. The
 //! text edits are `signex_drc_dsl::table::sets`. Behaviour:
-//! `docs/DRC_RULES.md`, "Rule sets".
+//! `docs/DRC_RULES.md`, "Constraint sets".
 
 use std::collections::BTreeSet;
 
@@ -92,7 +92,7 @@ impl Signex {
             .rules_drc_of(id)
             .ok_or("the project is no longer open")?;
         if drc.sets.contains_key(name) {
-            return Err(format!("a rule set called '{name}' already exists"));
+            return Err(format!("a constraint set called '{name}' already exists"));
         }
         let set = sets::new_set(values, severity).map_err(|e| e.to_string())?;
         let text = drc.dsl.clone().unwrap_or_default();
@@ -114,7 +114,7 @@ impl Signex {
         let held = drc
             .sets
             .get(name)
-            .ok_or_else(|| format!("no rule set is called '{name}'"))?;
+            .ok_or_else(|| format!("no constraint set is called '{name}'"))?;
         let mut fresh = sets::new_set(values, severity).map_err(|e| e.to_string())?;
         // No severity given keeps the set's own.
         if severity.is_none_or(|s| s.trim().is_empty()) {
@@ -141,7 +141,7 @@ impl Signex {
         let held = drc
             .sets
             .get(name)
-            .ok_or_else(|| format!("no rule set is called '{name}'"))?;
+            .ok_or_else(|| format!("no constraint set is called '{name}'"))?;
         let src = drc.dsl.clone().unwrap_or_default();
         let (text, set) = sets::apply_set(&src, name, held, scope).map_err(|e| e.to_string())?;
         self.commit_set(id, name, Some(held), set.clone(), text)?;

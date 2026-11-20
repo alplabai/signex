@@ -192,7 +192,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `toggle_floating_panels` | Toggle floating panels | window | `F4` | — |
 | `toggle_properties_panel` | Toggle Properties panel | panels | `F11` | — |
 | `toggle_schematic_filter_panel` | Toggle schematic filter panel | panels | `F12` | — |
-| `toggle_schematic_list_panel` | Toggle schematic list panel | panels | `Shift+F12` | — |
+| `toggle_schematic_list_panel` | Toggle Object List panel | panels | `Shift+F12` | — |
 | `toggle_search_panel` | Show/hide search panel | search | — | `Ctrl+G` |
 | `toggle_selection` | Add/remove object from selection | select | `Shift+Click` | — |
 | `toggle_visible_grid` | Toggle visible grid | view | `Mod+Shift+G` | `Mod+Shift+G` |
@@ -425,9 +425,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rules_preset_diff` | Show what a rules preset would change | validation | — | — |
 | `rules_remove` | Remove a design rule | design | — | — |
 | `rules_set` | Change a field of a design rule | design | — | — |
-| `rules_set_apply` | Apply a named rule set to a class or net | design | — | — |
-| `rules_set_create` | Create a named rule set | design | — | — |
-| `rules_set_edit` | Change the limits of a named rule set | design | — | — |
+| `rules_set_apply` | Apply a constraint set to a class or net | design | — | — |
+| `rules_set_create` | Create a constraint set | design | — | — |
+| `rules_set_edit` | Change the limits of a constraint set | design | — | — |
 | `run_drc` | Run the design rule check on the board | pcb | `T D` | `F7` |
 | `save_board_reuse_block` | Save the selected placed and routed parts as a reuse block of the project | design | — | — |
 | `save_layer_set` | Save the shown layers as a layer set | view | — | — |
