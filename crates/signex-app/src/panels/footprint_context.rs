@@ -690,6 +690,9 @@ pub struct BoardSketchProps {
     pub outline: bool,
     /// Its mounting hole attributes, when it is one.
     pub hole: Option<MountingHoleProps>,
+    /// The Outline checks lines of the current solve (mockup 179d): Properties
+    /// lists them with nothing selected, the bake preview the failed ones.
+    pub outline_checks: Vec<crate::library::editor::footprint::state::CheckLine>,
 }
 
 /// A mounting hole's fields as the Properties panel edits them.

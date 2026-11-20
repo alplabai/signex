@@ -35,3 +35,35 @@ board-sketch-area = Area
 board-sketch-area-value = { $area } mm²
 board-sketch-entities = Sketch entities
 board-sketch-constraints = Constraints
+# The Outline checks section of Properties with nothing selected (mockup 179d),
+# live after every solve; the bake preview lists the failed ones.
+board-sketch-checks-section = Outline checks
+board-sketch-checks-caption = Live after every solve. A failing check warns; Bake still applies the sketch to the board.
+board-sketch-checks-unsolved = Not checked: the sketch is not solved.
+# A passed check.
+board-sketch-check-closed = Closed: one loop
+board-sketch-check-no-crossing = No self-intersection
+board-sketch-check-openings-inside = Holes, cutouts and keepouts inside the outline
+board-sketch-check-corners = Inside corners: the router can cut them
+# A check's name, as $check in a check that did not run.
+board-sketch-check-name-closed = Closed outline
+board-sketch-check-name-crossing = Self-intersection
+board-sketch-check-name-openings = Openings inside
+board-sketch-check-name-corners = Inside corners
+board-sketch-check-skipped-no-outline = { $check }: not checked, the sketch draws no outline (the board keeps its own)
+board-sketch-check-skipped-not-closed = { $check }: not checked until the outline is one closed loop
+board-sketch-check-skipped-unsolved = { $check }: not checked, the sketch is not solved
+board-sketch-check-skipped-router = { $check }: not checked, it needs the router tool diameter
+# A failed check and its place; $x and $y are millimetres, $gap the gap
+# between the two open ends in millimetres.
+board-sketch-check-open-gap = Outline open: { $gap } mm gap at ({ $x }, { $y })
+board-sketch-check-open-at = Outline open at ({ $x }, { $y })
+board-sketch-check-open = Outline open
+board-sketch-check-branching = The outline forks: a corner has more than two edges
+board-sketch-check-untraceable = The outline cannot be traced through this entity
+board-sketch-check-loops = The outline is { $count } loops; it must be one
+board-sketch-check-crossing = Self-intersection at ({ $x }, { $y })
+board-sketch-check-cutout-outside = Cutout outside the outline
+board-sketch-check-keepout-outside = Keepout outside the outline
+board-sketch-check-hole-outside = Mounting hole outside the outline
+board-sketch-check-opening-outside = Opening outside the outline

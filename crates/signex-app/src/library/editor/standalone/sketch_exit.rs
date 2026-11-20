@@ -2,7 +2,8 @@
 //! (#2518): Bake preview · Discard changes · Bake, with Discard changes
 //! asking first when there are edits. The footprint editor mounts
 //! [`footprint_overlay`]; the board sketch view builds the same bar with
-//! its own messages through [`mode_bar`].
+//! its own messages through [`mode_bar`]. The card lists why a sketch does
+//! not bake and what fails, with its place (mockup 190).
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Space, column, container, row};
@@ -14,6 +15,7 @@ use signex_widgets::{text, theme_ext};
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_mode::{BakePreview, SketchExit};
+use crate::library::editor::footprint::state::CheckStatus;
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::{DialogButtonKind, dialog_button};
 
@@ -168,21 +170,106 @@ pub fn target_label_id(kind: BakedKind) -> MessageId {
     }
 }
 
+/// One line of a check or error list: a status dot and its text. A line
+/// that names a place is a button that sends `select` (mockup 179d, mockup 190).
+/// Shared by the preview card and the Outline checks section.
+pub fn status_line<'a, M: Clone + 'a>(
+    status: CheckStatus,
+    label: Localized,
+    select: Option<M>,
+) -> Element<'a, M> {
+    let colour = move |theme: &iced::Theme| {
+        let palette = theme.palette();
+        match status {
+            CheckStatus::Passed => palette.success.base.color,
+            CheckStatus::Failed => palette.danger.base.color,
+            CheckStatus::NotChecked => palette.background.base.text.scale_alpha(MUTED_ALPHA),
+        }
+    };
+    let dot_size = TS.caption * 0.6;
+    let dot = container(Space::new())
+        .width(Length::Fixed(dot_size))
+        .height(Length::Fixed(dot_size))
+        .style(move |theme: &iced::Theme| iced::widget::container::Style {
+            background: Some(iced::Background::Color(colour(theme))),
+            border: Border {
+                radius: crate::styles::Radii::GRAPHITE.pill.into(),
+                ..Border::default()
+            },
+            ..Default::default()
+        });
+    let label = text(label)
+        .size(TS.caption)
+        .style(move |theme: &iced::Theme| iced::widget::text::Style {
+            color: Some(match status {
+                CheckStatus::Failed => colour(theme),
+                _ => theme.palette().background.base.text,
+            }),
+            selection: None,
+        });
+    let content = row![dot, label]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center);
+    match select {
+        Some(msg) => signex_widgets::button(content)
+            .padding([SP.xs, SP.s])
+            .width(Length::Fill)
+            .on_press(msg)
+            .style(|theme: &iced::Theme, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(
+                    theme
+                        .palette()
+                        .danger
+                        .base
+                        .color
+                        .scale_alpha(SELECTABLE_TINT),
+                )),
+                ..iced::widget::button::Style::default()
+            })
+            .boxed(),
+        None => container(content)
+            .padding([SP.xs, SP.s])
+            .width(Length::Fill)
+            .boxed(),
+    }
+}
+
+/// Alpha of a line that did not run, against the text colour.
+const MUTED_ALPHA: f32 = 0.55;
+/// Tint behind a line a click selects from.
+const SELECTABLE_TINT: f32 = 0.06;
+
+/// What the preview card lists besides its counts: why the sketch does not
+/// bake and what else fails, each with the message that selects its place.
+pub struct PreviewIssues<M> {
+    /// Selects the entity the bake's refusal names (a board).
+    pub refusal_select: Option<M>,
+    /// The heading of `lines`: Outline checks on a board, Bake warnings on
+    /// a footprint.
+    pub heading: MessageId,
+    pub lines: Vec<(CheckStatus, Localized, Option<M>)>,
+    /// Under `lines`.
+    pub caption: Option<MessageId>,
+}
+
 /// The bake preview card: a count per target of the host, or why the
-/// sketch does not bake.
-pub fn preview_card<'a, M: 'a>(
+/// sketch does not bake (a click selects the place it names), then the
+/// host's `issues`. The canvas draws the result meanwhile.
+pub fn preview_card<'a, M: Clone + 'a>(
     preview: &BakePreview,
+    issues: PreviewIssues<M>,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, M> {
     let primary = theme_ext::text_primary(tokens);
     let muted = theme_ext::text_secondary(tokens);
-    let mut card = column![
-        text(t!(i18n, ids::EDITORS_SKETCH_BAKE_RESULT))
-            .size(TS.body)
-            .color(primary),
-    ]
-    .spacing(SP.s);
+    let heading = |id: MessageId| -> Element<'a, M> {
+        text(t!(i18n, id)).size(TS.body).color(primary).boxed()
+    };
+    let caption = |id: MessageId| -> Element<'a, M> {
+        text(t!(i18n, id)).size(TS.caption).color(muted).boxed()
+    };
+    let mut card = column![heading(ids::EDITORS_SKETCH_BAKE_RESULT)].spacing(SP.s);
     match preview {
         BakePreview::Counts(counts) => {
             for &(kind, count) in counts {
@@ -200,22 +287,34 @@ pub fn preview_card<'a, M: 'a>(
                     .boxed(),
                 );
             }
+            card = card.push(caption(ids::SKETCH_BAKE_DRAWN));
         }
         BakePreview::Refused(reason) => {
-            card = card.push(
-                text(t!(i18n, ids::EDITORS_SKETCH_BAKE_REFUSED, "reason" => reason.as_str()))
-                    .size(TS.body)
-                    .color(theme_ext::error_color(tokens))
-                    .boxed(),
-            );
+            let refused = t!(i18n, ids::EDITORS_SKETCH_BAKE_REFUSED, "reason" => reason.as_str());
+            card = card
+                .push(heading(ids::SKETCH_BAKE_ERRORS))
+                .push(status_line(
+                    CheckStatus::Failed,
+                    refused,
+                    issues.refusal_select.clone(),
+                ));
         }
     }
-    card = card.push(
-        text(t!(i18n, ids::EDITORS_SKETCH_BAKE_NEVER))
-            .size(TS.caption)
-            .color(muted)
-            .boxed(),
-    );
+    let selectable = issues.refusal_select.is_some()
+        || issues.lines.iter().any(|(_, _, select)| select.is_some());
+    if !issues.lines.is_empty() {
+        card = card.push(heading(issues.heading));
+        for (status, label, select) in issues.lines {
+            card = card.push(status_line(status, label, select));
+        }
+        if let Some(id) = issues.caption {
+            card = card.push(caption(id));
+        }
+    }
+    if selectable {
+        card = card.push(caption(ids::SKETCH_BAKE_SELECT_HINT));
+    }
+    card = card.push(caption(ids::EDITORS_SKETCH_BAKE_NEVER));
     container(card)
         .padding([SP.s, SP.m])
         .style(crate::styles::modal_card(tokens))
@@ -249,7 +348,23 @@ pub fn footprint_overlay<'a>(
     let mut stack = column![].spacing(SP.m);
     if exit_state.preview {
         let preview = BakePreview::of_footprint(editor.primitive());
-        stack = stack.push(preview_card(&preview, tokens, i18n));
+        // A footprint bakes on every solve: what the last bake left out is
+        // in its warnings, which name no entity.
+        let issues = PreviewIssues {
+            refusal_select: None,
+            heading: ids::SKETCH_BAKE_WARNINGS,
+            lines: editor
+                .state
+                .solve_warnings
+                .iter()
+                .map(|warning| {
+                    let line = t!(i18n, ids::SKETCH_BAKE_WARNING, "warning" => warning.as_str());
+                    (CheckStatus::Failed, line, None)
+                })
+                .collect(),
+            caption: None,
+        };
+        stack = stack.push(preview_card(&preview, issues, tokens, i18n));
     }
     stack = stack.push(mode_bar(look, exit_state, msgs, tokens, i18n));
     container(stack)

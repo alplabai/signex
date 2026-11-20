@@ -727,3 +727,8 @@ mod sheet_tools_graphite;
 // #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
 #[path = "regression/board_sync_graphite.rs"]
 mod board_sync_graphite;
+
+// mockup 179d / mockup 190 - board sketch outline checks in Properties and the bake
+// preview drawn on the canvas.
+#[path = "regression/board_sketch_checks.rs"]
+mod board_sketch_checks;

@@ -6,9 +6,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use signex_bake::BoardBakeError;
 use signex_library::{Footprint, FootprintFile};
 use signex_sketch::SketchData;
 use signex_types::pcb::{NetDef, PcbBoard};
+use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::SketchHost;
 
 use crate::app::FootprintDocument;
@@ -30,6 +32,9 @@ pub struct BoardSketchSession {
     pub refusal: Option<signex_i18n::Translatable>,
     /// What a bake of the copy writes, while the bake preview is open.
     pub preview: Option<BakePreview>,
+    /// Why the open preview's bake refuses, with the entity it names: the
+    /// preview card selects it on a click (mockup 190).
+    pub preview_error: Option<BoardBakeError>,
     /// The sketch as the board last took it (or had it at entry).
     start: SketchData,
 }
@@ -67,6 +72,7 @@ impl BoardSketchSession {
             editor: Box::new(editor),
             refusal: None,
             preview: None,
+            preview_error: None,
             start,
         }
     }
@@ -84,13 +90,17 @@ impl BoardSketchSession {
 
     /// Bake the copy for the preview against the board's `nets`, when the
     /// preview is open; close it otherwise. Pure: the board is not touched.
+    /// The bake also goes to the canvas, which draws it (mockup 190).
     pub fn refresh_preview(&mut self, nets: &[NetDef]) {
-        self.preview = self
-            .editor
-            .state
-            .sketch_exit
-            .preview
-            .then(|| board_preview(&self.working_sketch(), nets));
+        let open = self.editor.state.sketch_exit.preview;
+        let bake = open.then(|| signex_bake::bake_board(&self.working_sketch(), nets));
+        let drawn = self.editor.state.sketch_exit.board_result.is_some();
+        self.preview = bake.as_ref().map(board_preview);
+        self.preview_error = bake.as_ref().and_then(|bake| bake.as_ref().err().cloned());
+        self.editor.state.sketch_exit.board_result = bake.and_then(Result::ok).map(Arc::new);
+        if open || drawn {
+            self.editor.canvas_cache.clear();
+        }
     }
 
     /// The board took the copy and stored it as `stored`, which also records
@@ -107,17 +117,15 @@ impl BoardSketchSession {
     }
 }
 
-/// What a board bake of `sketch` writes: a count per board target, or why
-/// the bake refuses.
-fn board_preview(sketch: &SketchData, nets: &[NetDef]) -> BakePreview {
-    match signex_bake::bake_board(sketch, nets) {
+/// What a board bake writes: a count per board target, or why the bake
+/// refuses.
+fn board_preview(bake: &Result<BakedBoard, BoardBakeError>) -> BakePreview {
+    match bake {
         Ok(baked) => BakePreview::Counts(
             SketchHost::Board
                 .bake_targets()
                 .iter()
-                .filter_map(|&kind| {
-                    signex_bake::board::baked_count(&baked, kind).map(|n| (kind, n))
-                })
+                .filter_map(|&kind| signex_bake::board::baked_count(baked, kind).map(|n| (kind, n)))
                 .collect(),
         ),
         Err(error) => BakePreview::Refused(error.to_string()),

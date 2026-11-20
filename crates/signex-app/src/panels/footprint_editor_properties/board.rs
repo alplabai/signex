@@ -22,10 +22,28 @@ use crate::styles::{Spacing, TypeScale};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
+// Declared here, not in the folder's `mod.rs`: the section ships with the
+// Board summary it follows.
+#[path = "outline_checks.rs"]
+mod outline_checks;
+
 /// The Board section with nothing selected (#2356): the board's name, its
 /// outline's size and area, and the sketch's counts. It stands where a
-/// footprint shows its own fields, none of which apply to a board.
+/// footprint shows its own fields, none of which apply to a board. The
+/// Outline checks section follows it (mockup 179d).
 pub(super) fn view_board_summary<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    fp: &'a FootprintEditorPanelContext,
+    board: &'a BoardSketchProps,
+    palette: PanelPalette,
+    collapsed_sections: &'a CollapsedSections,
+    i18n: &I18n,
+) -> Column<Element<'a, PanelMsg>> {
+    let col = view_board_facts(col, fp, board, palette, collapsed_sections, i18n);
+    outline_checks::view_outline_checks(col, board, palette, collapsed_sections, i18n)
+}
+
+fn view_board_facts<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     fp: &'a FootprintEditorPanelContext,
     board: &'a BoardSketchProps,

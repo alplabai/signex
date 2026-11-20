@@ -7,6 +7,7 @@ mod board_checks;
 mod board_output;
 mod board_panel;
 mod board_query;
+mod board_sketch;
 mod board_view;
 mod bom;
 mod chrome;
@@ -36,6 +37,7 @@ mod properties;
 mod requirements;
 mod rules;
 mod sheet_sync;
+mod sketch_bake;
 mod update_pcb;
 
 pub use assign_footprints::*;
@@ -43,6 +45,7 @@ pub use board_checks::*;
 pub use board_output::*;
 pub use board_panel::*;
 pub use board_query::*;
+pub use board_sketch::*;
 pub use board_view::*;
 pub use bom::*;
 pub use chrome::*;
@@ -72,6 +75,7 @@ pub use properties::*;
 pub use requirements::*;
 pub use rules::*;
 pub use sheet_sync::*;
+pub use sketch_bake::*;
 pub use update_pcb::*;
 
 /// Every id of every area list.
@@ -113,6 +117,8 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         rules::RULES,
         sheet_sync::SHEET_SYNC,
         update_pcb::UPDATE_PCB,
+        board_sketch::BOARD_SKETCH,
+        sketch_bake::SKETCH_BAKE,
     ]
     .concat()
 }

@@ -316,5 +316,7 @@ impl FootprintCanvas<'_> {
             // v0.22 Phase A6 — Inferred-constraint snap glyph on top.
             draw_sketch_snap_glyph(frame, cstate, self.state);
         }
+        // mockup 190 — the bake preview, over the sketch it faints.
+        self.draw_bake_preview(frame, cstate);
     }
 }
