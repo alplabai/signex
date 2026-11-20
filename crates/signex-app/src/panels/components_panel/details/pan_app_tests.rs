@@ -274,6 +274,9 @@ struct Live {
     /// Whether the window asked to be redrawn after each event of the last
     /// `drive_with`: without that the runtime shows no change.
     redraws: Vec<bool>,
+    /// The canvas the last `preview_point` measured: its left and right
+    /// edges on the press row, and the first row below the label that grabs.
+    measured: Option<(f32, f32, f32)>,
     _tmp: tempfile::TempDir,
 }
 
@@ -284,6 +287,7 @@ fn start(theme: ThemeId, side: PanelPosition) -> (Live, ComponentsPanelRowKey) {
             app,
             cache: Cache::default(),
             redraws: Vec::new(),
+            measured: None,
             _tmp: tmp,
         },
         key,
@@ -472,6 +476,7 @@ fn preview_point(app: &mut Live, label: Rectangle) -> Point {
     let right = grab_edge(app, x, y, 1.0);
     // The source pixels start DRAG.0 left of the band; both stay a margin
     // in from the edges.
+    app.measured = Some((left, right, points[first].y));
     let lowest = left + EDGE_MARGIN + DRAG.0 - BAND_OFFSET.0;
     let highest = right - EDGE_MARGIN - BAND.width - BAND_OFFSET.0;
     assert!(
@@ -524,17 +529,124 @@ fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
         Point::new(from.x + BAND_OFFSET.0, from.y + BAND_OFFSET.1),
         BAND,
     );
-    let (changed, total) = mismatched_pixels(&frames[0], &frames[3], area, (0, 0));
-    assert!(
-        changed > 20,
-        "{what}: the drawn preview did not move ({changed} of {total} pixels changed in {area:?})"
-    );
     let shift = (DRAG.0 as usize, DRAG.1 as usize);
+    let evidence = |found: &str| {
+        let canvas = match app.measured {
+            Some((left, right, top)) => {
+                format!(
+                    "canvas x {left}..{right} on row {}, first grab row {top}",
+                    from.y
+                )
+            }
+            None => "canvas not measured".to_string(),
+        };
+        let files = dump_frames(what, &frames[0], &frames[3], area, shift);
+        format!("{what}: {found} in band {area:?}; {canvas}; {files}")
+    };
+    let (changed, total) = mismatched_pixels(&frames[0], &frames[3], area, (0, 0));
+    if changed <= 20 {
+        panic!(
+            "{}",
+            evidence(&format!(
+                "the drawn preview did not move ({changed} of {total} pixels changed)"
+            ))
+        );
+    }
     let (off, total) = mismatched_pixels(&frames[0], &frames[3], area, shift);
-    assert!(
-        off <= total / 50,
-        "{what}: the drawing did not follow the pointer 1:1 ({off} of {total} pixels off in {area:?})"
+    if off > total / 50 {
+        panic!(
+            "{}",
+            evidence(&format!(
+                "the drawing did not follow the pointer 1:1 ({off} of {total} pixels off)"
+            ))
+        );
+    }
+}
+
+/// Write the frames before and after the drag, and a map of the band's off
+/// pixels, as PNGs for a failed check; returns where they went (or why not).
+/// The directory is `$CARGO_TARGET_TMPDIR`, else the system temp dir; the
+/// names are `signex-pan-<test>-<what>-{before,after,diff}.png`.
+fn dump_frames(
+    what: &str,
+    before: &[u8],
+    after: &[u8],
+    area: Rectangle,
+    shift: (usize, usize),
+) -> String {
+    let dir = std::env::var_os("CARGO_TARGET_TMPDIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let test = std::thread::current()
+        .name()
+        .unwrap_or("test")
+        .rsplit("::")
+        .next()
+        .unwrap_or("test")
+        .to_string();
+    let slug: String = format!("{test}-{what}")
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let diff = diff_image(before, after, area, shift);
+    let (w, h) = (WINDOW.width as u32, WINDOW.height as u32);
+    let mut written = Vec::new();
+    for (kind, pixels) in [("before", before), ("after", after), ("diff", &diff[..])] {
+        let path = dir.join(format!("signex-pan-{slug}-{kind}.png"));
+        match image::save_buffer(&path, pixels, w, h, image::ColorType::Rgba8) {
+            Ok(()) => written.push(path.display().to_string()),
+            Err(err) => written.push(format!("{} not written: {err}", path.display())),
+        }
+    }
+    format!("frames: {}", written.join(", "))
+}
+
+/// The frame after the drag, dimmed, with the band outlined in yellow, the
+/// source band (the band less the drag) outlined in blue, and every band
+/// pixel that does not match its source in red.
+fn diff_image(before: &[u8], after: &[u8], area: Rectangle, shift: (usize, usize)) -> Vec<u8> {
+    let width = WINDOW.width as usize;
+    let at = |x: usize, y: usize| (y * width + x) * 4;
+    let mut out: Vec<u8> = after
+        .chunks_exact(4)
+        .flat_map(|p| [p[0] / 4, p[1] / 4, p[2] / 4, 255])
+        .collect();
+    let (x0, y0) = (area.x as usize, area.y as usize);
+    let (x1, y1) = (x0 + area.width as usize, y0 + area.height as usize);
+    let mut paint = |x: usize, y: usize, rgb: [u8; 3]| {
+        let i = at(x, y);
+        if let Some(px) = out.get_mut(i..i + 3) {
+            px.copy_from_slice(&rgb);
+        }
+    };
+    let outline = |paint: &mut dyn FnMut(usize, usize, [u8; 3]),
+                   (ax, ay, bx, by): (usize, usize, usize, usize),
+                   rgb: [u8; 3]| {
+        let (ax, ay) = (ax.saturating_sub(1), ay.saturating_sub(1));
+        for x in ax..=bx {
+            paint(x, ay, rgb);
+            paint(x, by, rgb);
+        }
+        for y in ay..=by {
+            paint(ax, y, rgb);
+            paint(bx, y, rgb);
+        }
+    };
+    outline(
+        &mut paint,
+        (x0 - shift.0, y0 - shift.1, x1 - shift.0, y1 - shift.1),
+        [80, 140, 255],
     );
+    outline(&mut paint, (x0, y0, x1, y1), [255, 220, 0]);
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let (i, j) = (at(x, y), at(x - shift.0, y - shift.1));
+            if after[i..i + 3] != before[j..j + 3] {
+                paint(x, y, [255, 0, 0]);
+            }
+        }
+    }
+    out
 }
 
 fn panel_previews_pan(side: PanelPosition) {
