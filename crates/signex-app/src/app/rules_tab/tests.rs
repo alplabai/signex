@@ -1515,3 +1515,29 @@ rule cy on courtyard require spacing >= 0.2mm then error
         ]
     );
 }
+
+/// A mask rule's link opens Mask, where its expansion has a column but its
+/// sliver does not: the expansion cell is selected, not the first limit's.
+#[test]
+fn a_mask_rule_link_selects_its_expansion_cell_on_the_mask_grid() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    store(
+        &mut app,
+        "rule mk on mask require sliver >= 0.1mm and expansion >= 0.05mm then error\n",
+    );
+    open(&mut app);
+    pick(&mut app, id, Domain::Mask);
+    let task = app.select_rules_rule(id, "mk".into());
+    assert_eq!(task.units(), 0, "selected, not opened: nothing to focus");
+    let tab = rules_tab(&app, id);
+    assert_eq!(tab.grid.domain(), Domain::Mask);
+    let at = tab.grid.view.selected().expect("a cell is selected");
+    assert_eq!(tab.grid.row(at.row), Some(&RowRef::All));
+    assert_eq!(
+        tab.grid.column(at.column).and_then(|c| c.field),
+        Some(LimitField::MinMaskExpansion)
+    );
+    assert_eq!(tab.selected.as_deref(), Some("mk"));
+    assert!(tab.grid.view.edit().is_none());
+}

@@ -646,8 +646,9 @@ fn a_run_edited_during_its_check_logs_no_lapsed_waivers() {
     );
 }
 
-/// A Rules link opens the catalog domain of the limit its rule checks, for
-/// every violation kind and base rule; one with no limit opens Clearance.
+/// A Rules link opens the catalog domain holding most of the limits its
+/// rule checks (a tie goes to the first limit's), for every violation kind
+/// and base rule; one with no limit opens Clearance (Caner, 2026-11-20).
 #[test]
 fn rule_links_open_the_catalog_domain_of_the_limit_they_check() {
     use signex_drc::ViolationKind as K;
@@ -657,29 +658,47 @@ fn rule_links_open_the_catalog_domain_of_the_limit_they_check() {
     use super::pcb_drc_results::rules_domain_of;
     use crate::panels::BaseRule;
 
-    let domain_of = |kind: &signex_drc::LimitKind| {
+    // Most often first; the earliest of equals.
+    let majority = |domains: Vec<Domain>| {
+        let count = |d: &Domain| domains.iter().filter(|x| *x == d).count();
+        let mut best: Option<Domain> = None;
+        for d in &domains {
+            if best.is_none_or(|b| count(d) > count(&b)) {
+                best = Some(*d);
+            }
+        }
+        best.unwrap_or(Domain::Clearance)
+    };
+    let field_of = |kind: &signex_drc::LimitKind| {
         LimitField::ALL
             .into_iter()
             .find(|f| f.limit_kind() == *kind)
-            .and_then(group_of)
-            .map(|g| g.domain)
     };
     for kind in K::ALL {
-        let want = kind
+        let domains = kind
             .limits()
-            .first()
-            .and_then(domain_of)
-            .unwrap_or(Domain::Clearance);
-        assert_eq!(rules_domain_of(kind), want, "{kind:?}");
+            .iter()
+            .filter_map(field_of)
+            .filter_map(group_of)
+            .map(|g| g.domain)
+            .collect();
+        assert_eq!(rules_domain_of(kind), majority(domains), "{kind:?}");
     }
     for rule in BaseRule::ALL {
-        let want = rule
+        let domains = rule
             .fields()
-            .first()
-            .and_then(|f| group_of(*f))
-            .map_or(Domain::Clearance, |g| g.domain);
-        assert_eq!(rule.domain(), want, "{rule:?}");
+            .iter()
+            .filter_map(|f| group_of(*f))
+            .map(|g| g.domain)
+            .collect();
+        assert_eq!(rule.domain(), majority(domains), "{rule:?}");
     }
+    // The Mask base rule opens Mask, where two of its three limits are,
+    // as the mask expansion finding's link does.
+    assert_eq!(BaseRule::Mask.domain(), Domain::Mask);
+    assert_eq!(BaseRule::Paste.domain(), Domain::Mask);
+    assert_eq!(BaseRule::TrackWidth.domain(), Domain::Physical);
+    assert_eq!(BaseRule::HoleSize.domain(), Domain::Manufacturing);
     assert_eq!(rules_domain_of(K::TrackWidth), Domain::Physical);
     assert_eq!(rules_domain_of(K::EdgeClearance), Domain::Manufacturing);
     assert_eq!(rules_domain_of(K::MaskSliver), Domain::Manufacturing);

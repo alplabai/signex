@@ -257,14 +257,18 @@ impl Signex {
     }
 
     /// Select written rule `rule`, as the DRC panel's Rule link asks: the
-    /// cell of its first limit on its Scoped row, else on its scope's row,
-    /// so the drawing and "Which value wins" are the rule's. A rule with
-    /// no such cell on the domain is named in the detail only.
+    /// cell of the first of its limits with a column on this grid, on its
+    /// Scoped row, else on its scope's row, so the drawing and "Which value
+    /// wins" are the rule's. A rule with no such cell on the domain is
+    /// named in the detail only.
     pub(crate) fn select_rules_rule(&mut self, id: ProjectId, rule: String) -> Task<Message> {
         let table = self.rules_table(id);
         let grid = &self.rules_tab_mut(id).grid;
         let cell = table.row(&rule).and_then(|row| {
-            let column = column_of(grid, row.limits.first()?.field)?;
+            let column = row
+                .limits
+                .iter()
+                .find_map(|limit| column_of(grid, limit.field))?;
             let at = grid.row_of(&RowRef::Scoped(rule.clone())).or_else(|| {
                 cells::GridScope::of(&row.scope, row.layer.as_deref())
                     .and_then(|scope| grid.row_of_scope(&scope))
@@ -273,10 +277,10 @@ impl Signex {
         });
         match cell {
             Some(cell) => {
-                // Selected, not opened for typing.
-                let task = self.press_rules_cell(id, cell);
+                // Selected, not opened for typing: no editor to focus.
+                let _ = self.press_rules_cell(id, cell);
                 self.update_grid_view(id, GridMessage::EditCancelled);
-                task
+                Task::none()
             }
             None => {
                 self.rules_tab_mut(id).selected = Some(rule);

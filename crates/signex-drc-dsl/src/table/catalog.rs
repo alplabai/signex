@@ -433,16 +433,38 @@ pub fn catalog() -> &'static [CatalogGroup] {
     CATALOG
 }
 
-/// The domain of the first of `limits` (the check's limit kinds) that has a
-/// column: where a finding of those limits, or a rule checking them, is
-/// shown. `None` when none has one (a short, an unconnected link).
+/// Where a finding of `limits` (the check's limit kinds), or a rule
+/// checking them, is shown: [`domain_of_fields`] of their columns. `None`
+/// when none has one (a short, an unconnected link).
 pub fn domain_of_limits(limits: &[signex_drc::LimitKind]) -> Option<Domain> {
-    limits.iter().find_map(|kind| {
-        let field = LimitField::ALL
-            .into_iter()
-            .find(|f| f.limit_kind() == *kind)?;
-        group_of(field).map(|g| g.domain)
-    })
+    let fields: Vec<LimitField> = limits
+        .iter()
+        .filter_map(|kind| {
+            LimitField::ALL
+                .into_iter()
+                .find(|f| f.limit_kind() == *kind)
+        })
+        .collect();
+    domain_of_fields(&fields)
+}
+
+/// The domain holding most of `fields`' columns; a tie goes to the domain
+/// of the first. A mask rule (sliver, two expansions) is a Mask rule.
+/// `None` when no field has a column.
+pub fn domain_of_fields(fields: &[LimitField]) -> Option<Domain> {
+    let mut counts: Vec<(Domain, usize)> = Vec::new();
+    for domain in fields.iter().filter_map(|f| group_of(*f).map(|g| g.domain)) {
+        match counts.iter_mut().find(|(d, _)| *d == domain) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((domain, 1)),
+        }
+    }
+    // `max_by_key` keeps the last of equals; scanning reversed keeps the first.
+    counts
+        .into_iter()
+        .rev()
+        .max_by_key(|(_, n)| *n)
+        .map(|(d, _)| d)
 }
 
 /// The group whose column shows `field`.

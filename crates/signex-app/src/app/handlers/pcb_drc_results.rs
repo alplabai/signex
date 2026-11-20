@@ -484,8 +484,9 @@ fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
 }
 
 /// The Rules tab domain that holds the rule a violation kind breaks: the
-/// catalog domain of the limit it checks; Clearance for a kind no written
-/// limit sets (an unconnected link, a keepout).
+/// catalog domain holding most of the limits it checks (ties to the
+/// first's); Clearance for a kind no written limit sets (an unconnected
+/// link, a keepout).
 pub(crate) fn rules_domain_of(kind: signex_drc::ViolationKind) -> Domain {
     signex_drc_dsl::table::catalog::domain_of_limits(kind.limits()).unwrap_or(Domain::Clearance)
 }

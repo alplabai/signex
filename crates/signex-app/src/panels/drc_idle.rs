@@ -92,14 +92,12 @@ impl BaseRule {
             .any(|row| row.enabled && self.fields().iter().any(|f| row.limit(*f).is_some()))
     }
 
-    /// The Rules tab domain that holds it: the catalog domain of its first
-    /// limit, as `rules_list` names a rule's; Clearance for a rule always
-    /// checked (nothing to write).
+    /// The Rules tab domain that holds it: the catalog domain holding most
+    /// of its limits (ties to the first's), so Mask opens Mask where its
+    /// expansions are; Clearance for a rule always checked (nothing to
+    /// write).
     pub fn domain(self) -> Domain {
-        self.fields()
-            .first()
-            .and_then(|field| signex_drc_dsl::table::catalog::group_of(*field))
-            .map_or(Domain::Clearance, |group| group.domain)
+        signex_drc_dsl::table::catalog::domain_of_fields(self.fields()).unwrap_or(Domain::Clearance)
     }
 
     /// `(name, rule text, how to write it)`.
