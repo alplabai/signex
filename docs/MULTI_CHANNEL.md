@@ -148,13 +148,13 @@ list opens it, docked on the left as a tab beside Projects.
 
 - Per-channel variant state (a channel, or a part in one channel, not
   fitted) and its display in the channel cards and the panel: it is set in
-  the Variant Manager tab, which does not exist yet.
+  the Variant Manager tab, which does not exist yet (#2662).
 - The channel cards list the channel's designators; the miniature drawing of
   the sheet at card scale with the channel's designators and net names is not
-  drawn yet.
+  drawn yet (#2658).
 - Ctrl+click on a panel row (open in a new tab): a sheet has one tab, so a
-  row click focuses it.
+  row click focuses it (#2658).
 - The naming menu opens inline under its field, right-aligned to it, not as
   a floating layer over the dock.
 - Sheet entry sync does not yet treat `Repeat(<net>)` as matching the port
-  `<net>`; it offers to add `<net>` as a new entry.
+  `<net>`; it offers to add `<net>` as a new entry (#2659).

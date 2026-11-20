@@ -68,6 +68,6 @@ row's sheet.
   editor on the canvas is not there yet.
 - The contents sheet as page 1 of the numbering, and its tab's `auto` pill.
 - Rows of the contents table as links in the exported PDF (they build on the
-  PDF bookmarks work).
+  PDF bookmarks work; #2663).
 - Formulas in a typed table (the table is plain text, as drawn).
 - The Properties illustration does not light a field's callout on hover yet.
