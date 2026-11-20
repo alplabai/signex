@@ -738,5 +738,83 @@ fn a_pane_edit_keeps_a_change_made_to_the_file_behind_the_panes_back() {
     assert_eq!(after.severity["dangling_wire"], "off");
 }
 
+// ---- the rule editor's list and reset (#1289) ----
+
+#[test]
+fn the_rule_editor_sets_a_severity_and_resets_to_the_shipped_profile() {
+    let _serial = serial();
+    let _prefs = PrefsPathGuard::capture();
+    let _lib = ProfilesDirGuard::empty();
+    let (mut app, _t) = Signex::new();
+    open_profiles_pane(&mut app);
+    drive(&mut app, pane(ProfilesMsg::NameInputChanged("Acme".into())));
+    drive(&mut app, pane(ProfilesMsg::CreateRequested));
+    assert_eq!(
+        app.ui_state.profile_manager.selected.as_deref(),
+        Some("Acme")
+    );
+    let shipped = signex_erc::project_rules::profile::builtin_profile().erc;
+
+    // The Off segment of a rule's control, then a matrix cell.
+    drive(
+        &mut app,
+        pane(ProfilesMsg::SeverityChanged(
+            RuleKind::UnusedPin,
+            Severity::Off,
+        )),
+    );
+    drive(
+        &mut app,
+        pane(ProfilesMsg::PinCellCycled { row: 4, col: 4 }),
+    );
+    let edited = read_profile("acme.snxrules").erc;
+    assert_eq!(edited.severity["unused_pin"], "off");
+    assert_ne!(edited, shipped);
+
+    // The list filter is view state: it writes nothing.
+    drive(&mut app, pane(ProfilesMsg::ChangedOnlyToggled(true)));
+    drive(
+        &mut app,
+        pane(ProfilesMsg::RuleFilterChanged("unused".into())),
+    );
+    let list = &app.ui_state.profile_manager.rule_list;
+    assert!(list.changed_only);
+    assert_eq!(list.query, "unused");
+    assert_eq!(read_profile("acme.snxrules").erc, edited);
+
+    // Reset to the shipped profile asks first, then puts every rule back.
+    drive(&mut app, pane(ProfilesMsg::ResetRequested));
+    assert_eq!(
+        read_profile("acme.snxrules").erc,
+        edited,
+        "asking resets nothing"
+    );
+    drive(&mut app, pane(ProfilesMsg::ResetConfirmed));
+    assert_eq!(read_profile("acme.snxrules").erc, shipped);
+    assert!(!app.ui_state.preferences_dirty);
+
+    drive(&mut app, pane(ProfilesMsg::ChangedOnlyToggled(false)));
+    assert!(!app.ui_state.profile_manager.rule_list.changed_only);
+}
+
+#[test]
+fn the_erc_dialog_keeps_its_own_rule_list_filter() {
+    let _serial = serial();
+    let _prefs = PrefsPathGuard::capture();
+    let _lib = ProfilesDirGuard::empty();
+    let (mut app, _t) = Signex::new();
+    let machine = app.ui_state.erc_severity_override.clone();
+    drive(&mut app, erc(ErcMsg::RulesChangedOnlyToggled(true)));
+    drive(&mut app, erc(ErcMsg::RuleFilterChanged("bus".into())));
+    assert!(app.ui_state.erc_rule_list.changed_only);
+    assert_eq!(app.ui_state.erc_rule_list.query, "bus");
+    let pane_list = &app.ui_state.profile_manager.rule_list;
+    assert!(!pane_list.changed_only && pane_list.query.is_empty());
+    assert_eq!(
+        app.ui_state.erc_severity_override, machine,
+        "filtering edits no rule"
+    );
+}
+
 // The first-launch fold test lives in `tests/rule_profiles_first_launch.rs`:
 // it seeds the prefs file by hand, which other tests here write meanwhile.

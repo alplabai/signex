@@ -17,6 +17,7 @@ use signex_drc::UserRule;
 use signex_types::project::DrcRuleSet;
 
 pub use ast::Span;
+pub use compile::length_nm;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
