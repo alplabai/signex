@@ -406,6 +406,38 @@ mod tests {
         assert_eq!(free, 3, "only where the slot sits and which way it points");
     }
 
+    /// With its placement pinned (one centre Fixed, one side Horizontal) the
+    /// slot reads fully defined: the construction diameters leave no
+    /// freedom at the joins (maintainer answer 2026-11-20).
+    #[test]
+    fn a_slot_with_its_placement_pinned_reads_fully_defined() {
+        let (mut sketch, plane, centres) = sketch_with(&[(1.0, 2.0), (7.0, 2.0)]);
+        let parts = slot(plane, centres[0], centres[1], 1.5).expect("a slot");
+        let side = parts
+            .entities
+            .iter()
+            .find(|e| matches!(e.kind, EntityKind::Line { .. }) && !e.construction)
+            .map(|e| e.id)
+            .expect("an outline side");
+        add(&mut sketch, parts);
+        sketch.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::Fixed {
+                point: centres[0].id,
+            },
+        });
+        sketch.constraints.push(Constraint {
+            id: ConstraintId::new(),
+            kind: ConstraintKind::Horizontal { line: side },
+        });
+
+        let out = solve(&sketch);
+        assert!(out.over_constraints.is_empty(), "no conflict");
+        assert!(out.redundant_constraints.is_empty(), "nothing restated");
+        let free = out.result.state.len() - rank(&out.jacobian);
+        assert_eq!(free, 0, "fully defined");
+    }
+
     #[test]
     fn a_slot_joins_its_ends_tangentially_at_the_typed_width() {
         let (mut sketch, plane, centres) = sketch_with(&[(0.0, 0.0), (10.0, 0.0)]);
