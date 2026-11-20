@@ -68,7 +68,7 @@ fn the_footer_shows_totals_and_unpriced_lines_only_with_a_price_column() {
     );
 }
 
-/// m112: the status reads as drawn: lines shown of all lines, the parts the
+/// Mockup row 112: the status reads as drawn: lines shown of all lines, the parts the
 /// BOM lists, then the price note, with no "|" and no variant (the variant
 /// is shown once, in the toolbar).
 #[test]
@@ -96,7 +96,7 @@ fn the_status_line_counts_lines_and_parts_and_adds_the_price_note() {
     );
 }
 
-/// m112: the primary button names the format it writes.
+/// Mockup row 112: the primary button names the format it writes.
 #[test]
 fn the_export_button_names_its_format() {
     let shown = |format| en().message_plain(super::export_label(format), &[]);

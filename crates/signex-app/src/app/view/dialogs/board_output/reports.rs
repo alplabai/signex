@@ -1,4 +1,4 @@
-//! The Board Reports dialog (m117): the kind switch, the filter field and
+//! The Board Reports dialog (mockup row 117): the kind switch, the filter field and
 //! the row count over the table (`reports_table.rs`), then the unit caption
 //! with Cancel and Export CSV…. The filter and the sort are view only;
 //! Export CSV writes the report as the board makes it.

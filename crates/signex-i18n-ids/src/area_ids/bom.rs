@@ -1,4 +1,4 @@
-//! Ids of `locales/en-US/bom.ftl`: the BOM export dialog (#2058, #1988).
+//! Ids of `locales/en-US/bom.ftl`: the BOM export dialog (#2058).
 
 define_ids! {
     BOM;

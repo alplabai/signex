@@ -1,5 +1,5 @@
 //! The settings column of the Export PDF dialog, in the order of mockup
-//! m111 / m168, and its Output, Variant and Structure sections. Each
+//! mockup rows 111 and 168, and its Output, Variant and Structure sections. Each
 //! section reads and writes `preview.pdf_options` (or the dialog state) so
 //! the rasteriser and the exporter see what the column shows.
 

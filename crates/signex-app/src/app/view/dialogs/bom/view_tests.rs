@@ -1,4 +1,4 @@
-//! m112: the laid-out BOM dialog reads as drawn: one variant control, the
+//! Mockup row 112: the laid-out BOM dialog reads as drawn: one variant control, the
 //! one not-fitted option, an issue chip, a footer without the variant, and
 //! Cancel beside the format-named Export.
 
@@ -64,7 +64,7 @@ fn the_dialog_reads_as_drawn() {
         "Grouped",
         "Ungrouped",
         "Flat",
-        "Include not-fitted parts (DNP) for this variant",
+        "Include not-fitted (DNP), excluded-from-BOM and off-board parts",
         "CSV",
         "XLSX",
         "HTML",

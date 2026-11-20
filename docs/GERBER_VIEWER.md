@@ -177,7 +177,7 @@ or a pick of files) into a `Package`. Each image is one layer:
 ## Compare with board
 
 `signex_gerber::compare_with_board` compares a package with the board it
-should come from (#193d).
+should come from (mockup row 193d).
 
 - **The board side is the exporter's.** The board is not drawn from its
   model here. Signex's own Gerber and drill writer
@@ -229,7 +229,7 @@ should come from (#193d).
 ## Read problems in Messages
 
 `signex_app::app::gerber_read::report_read_problems` writes one Messages
-row per read problem (#193e), in the order given (`Package::problems`), so
+row per read problem (mockup row 193e), in the order given (`Package::problems`), so
 the rows outlive the viewer tab. Each row is a catalog sentence
 (`locales/en-US/gerber_viewer.ftl`, one message per kind of problem) that
 starts "Gerber Viewer:", names the file and the line, and says what was not

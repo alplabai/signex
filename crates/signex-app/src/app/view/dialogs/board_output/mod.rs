@@ -1,5 +1,5 @@
-//! Board Reports (#2404; laid out as m117) and Board Print / PDF (#2402;
-//! laid out as m116). State and rules: `app/board_output/`.
+//! Board Reports (#2404; laid out as mockup row 117) and Board Print / PDF (#2402;
+//! laid out as mockup row 116). State and rules: `app/board_output/`.
 
 pub(super) mod kit;
 mod print;

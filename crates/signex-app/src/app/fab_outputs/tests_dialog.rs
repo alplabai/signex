@@ -1,4 +1,4 @@
-//! m115: the grouped kinds and their counts, the ODB++ folder form that
+//! Mockup row 115: the grouped kinds and their counts, the ODB++ folder form that
 //! waits for ODB++, the time a run finished, Open folder, and the notes'
 //! severities.
 
@@ -12,7 +12,7 @@ use super::{
 };
 use crate::app::{Message, Signex};
 
-/// The kinds of the m115 mockup: three fabrication files, pick and place
+/// The kinds of mockup row 115: three fabrication files, pick and place
 /// and the assembly PDF.
 pub(super) fn mockup_kinds() -> FabOutputKinds {
     FabOutputKinds {

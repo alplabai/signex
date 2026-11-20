@@ -1,5 +1,5 @@
 //! The page list on the left of the Export PDF dialog: one thumbnail per
-//! sheet, an unticked sheet's dimmed rather than removed (mockup m111).
+//! sheet, an unticked sheet's dimmed rather than removed (mockup row 111).
 
 use iced::widget::{Space, column, container, image, scrollable};
 use iced::{Border, Widget as _};

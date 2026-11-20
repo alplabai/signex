@@ -1,4 +1,4 @@
-//! State of the BOM export dialog (m112, #1988): the rolled-up table, the
+//! State of the BOM export dialog (mockup row 112): the rolled-up table, the
 //! options that drive the next rollup, and the view-only table state (sort,
 //! filter, selection, column drag and resize, scroll).
 

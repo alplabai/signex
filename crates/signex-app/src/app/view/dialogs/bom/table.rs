@@ -20,7 +20,7 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Height of the header and of every line (rule included), as drawn: a
 /// field tall.
 const ROW_H: f32 = ChromeMetrics::DEFAULT.field;
-/// Width of the row-number gutter, a column width fixed by the m112 mockup.
+/// Width of the row-number gutter, a column width fixed by mockup row 112.
 const GUTTER_W: f32 = 34.0;
 /// Width of the flag edge at the left of a flagged line's gutter.
 const FLAG_EDGE: f32 = SP.xs;
@@ -184,7 +184,7 @@ fn flag_ink(tokens: &ThemeTokens, flag: Option<BomIssueSeverity>) -> Option<Colo
 
 /// Fill of a line at rest: the neutral selection fill when selected, else
 /// the soft tint of its flag, else none. Selection never borrows the warning
-/// amber (decisions F25).
+/// amber (docs/DECISIONS.md, 2026-11-19).
 fn line_fill(
     tokens: &ThemeTokens,
     flag: Option<BomIssueSeverity>,

@@ -1,4 +1,4 @@
-//! m115 on screen: the group counts and the footer count follow the ticks,
+//! Mockup row 115 on screen: the group counts and the footer count follow the ticks,
 //! the ODB++ folder form is deaf until ODB++ is ticked, and after a run the
 //! footer offers Generate again and Close over the notes.
 
@@ -16,7 +16,7 @@ use crate::layout_probe::{find, lay_out_texts, messages_on_click_at};
 
 const WINDOW: Size = Size::new(1400.0, 900.0);
 
-/// The kinds of the m115 mockup: five ticked.
+/// The kinds of mockup row 115: five ticked.
 fn mockup_kinds() -> FabOutputKinds {
     FabOutputKinds {
         gerber: true,

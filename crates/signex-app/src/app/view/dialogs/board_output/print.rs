@@ -1,4 +1,4 @@
-//! The Board Print / PDF dialog (m116): the options on the left (the layer
+//! The Board Print / PDF dialog (mockup row 116): the options on the left (the layer
 //! sets, the Layout group of segmented controls, what each page shows), the
 //! page plan on the right, then Export Assembly SVG… on the left of the
 //! footer and Cancel and Export PDF… on the right.

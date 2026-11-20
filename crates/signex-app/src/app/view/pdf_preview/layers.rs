@@ -1,4 +1,4 @@
-//! The PDF Layers section of the Export PDF dialog (#1298, mockup m168):
+//! The PDF Layers section of the Export PDF dialog (#1298, mockup row 168):
 //! "Write PDF layers" heads it; each group is a layer a reader can switch,
 //! its box says whether it is visible when the PDF opens.
 

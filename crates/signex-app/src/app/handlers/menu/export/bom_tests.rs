@@ -1,4 +1,4 @@
-//! m112: the BOM dialog's table state (filter, flags, issue lines) and the
+//! Mockup row 112: the BOM dialog's table state (filter, flags, issue lines) and the
 //! one not-fitted option.
 
 use std::path::PathBuf;
@@ -167,9 +167,8 @@ fn options(app: &Signex) -> signex_output::BomOptions {
         .clone()
 }
 
-/// Decisions F25: the one "Include not-fitted parts (DNP) for this variant"
-/// option sets both domain flags, on and off, and reads as ticked only
-/// while both are on.
+/// docs/DECISIONS.md, 2026-11-19: the one not-fitted option sets both
+/// domain flags, on and off, and reads as ticked only while both are on.
 #[test]
 fn the_not_fitted_option_sets_both_flags_together() {
     let mut app = app_with_sheet();

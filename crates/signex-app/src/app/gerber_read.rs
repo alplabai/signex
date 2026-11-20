@@ -1,5 +1,5 @@
 //! The Gerber Viewer's read problems in the app-wide Messages panel (#2539,
-//! #193e): one row per problem, with the file, the line, what was not read
+//! mockup row 193e): one row per problem, with the file, the line, what was not read
 //! and what is drawn instead, so nothing a reader passes over is silent.
 //! The rows outlive the viewer tab. See `docs/GERBER_VIEWER.md`, "Read
 //! problems in Messages".

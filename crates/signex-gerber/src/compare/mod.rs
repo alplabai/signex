@@ -1,4 +1,4 @@
-//! Compare with board (#2539, #193d): a package read back against the
+//! Compare with board (#2539, mockup row 193d): a package read back against the
 //! board it should come from. The board side is the Signex exporter's own
 //! output for the board, read through the same reader, so the frame, the
 //! shapes and the layer functions are decided once (`FabFrame`, the

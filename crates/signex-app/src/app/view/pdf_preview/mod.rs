@@ -1,4 +1,4 @@
-//! The one-screen Export PDF dialog (#2430, mockups m111 and m168): the
+//! The one-screen Export PDF dialog (#2430, mockup rows 111 and 168): the
 //! page list on the left, the page in the middle, the settings column on
 //! the right. The modal shell (header, footer) is in `print_preview.rs`.
 //! Rules: docs/MENU_BAR.md, "File ▸ Export ▸ PDF".

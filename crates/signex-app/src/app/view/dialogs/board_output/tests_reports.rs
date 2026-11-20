@@ -1,4 +1,4 @@
-//! m117 on screen: the catalog names, cells in the user's unit, numbers
+//! Mockup row 117 on screen: the catalog names, cells in the user's unit, numbers
 //! right-aligned in their own columns, one growing column a report, the
 //! rows in the shown order, and the count and caption.
 

@@ -1,4 +1,4 @@
-//! The Bookmarks section (#1298, mockup m168) and the folded Bookmarks and
+//! The Bookmarks section (#1298, mockup row 168) and the folded Bookmarks and
 //! Nets section of the Export PDF dialog. "One bookmark per net" is the
 //! nets-information setting, shown here only, so one setting has one
 //! control.

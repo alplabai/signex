@@ -1,4 +1,4 @@
-//! The package model (#193): layer names from X2, the job file or the file
+//! The package model (mockup row 193): layer names from X2, the job file or the file
 //! name, the default drawing order, top / bottom pairs, and every problem
 //! kept with its file and line.
 

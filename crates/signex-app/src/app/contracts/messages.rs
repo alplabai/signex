@@ -452,9 +452,9 @@ pub enum BomPreviewMsg {
     SetGrouping(signex_output::BomGrouping),
     /// User changed BOM output format (CSV / XLSX / HTML).
     SetFormat(signex_output::BomFormat),
-    /// User ticked or cleared "Include not-fitted parts (DNP) for this
-    /// variant". Sets `BomOptions.include_dnp` and `include_not_fitted`
-    /// together (decisions F25).
+    /// User ticked or cleared the one not-fitted option. Sets
+    /// `BomOptions.include_dnp` and `include_not_fitted` together
+    /// (docs/DECISIONS.md, 2026-11-19).
     NotFittedIncludedToggled(bool),
     /// User typed in the toolbar filter. View-only: it hides lines and never
     /// changes what Export writes.

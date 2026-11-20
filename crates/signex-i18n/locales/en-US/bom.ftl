@@ -1,4 +1,4 @@
-# Bill of Materials export dialog (#2058, #1988).
+# Bill of Materials export dialog (#2058).
 
 bom-properties = Properties
 bom-tab-general = General
@@ -16,9 +16,9 @@ bom-format = Format
 bom-format-csv = CSV
 bom-format-xlsx = XLSX
 bom-format-html = HTML
-# One option for parts the active variant does not fit (DNP): both the DNP
-# parts and the explicitly not-fitted ones are listed when it is ticked.
-bom-include-not-fitted = Include not-fitted parts (DNP) for this variant
+# One option for the parts a BOM leaves out: DNP and not-fitted parts of the
+# active variant, parts excluded from the BOM and parts not on the board.
+bom-include-not-fitted = Include not-fitted (DNP), excluded-from-BOM and off-board parts
 # Caption before the variant picker in the toolbar.
 bom-variant = Variant
 # The view with no variant applied.

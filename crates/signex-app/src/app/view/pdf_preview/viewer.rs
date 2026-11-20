@@ -341,7 +341,7 @@ mod tests {
             .replace(['\u{2068}', '\u{2069}'], "")
     }
 
-    /// m111: the caption names the paper in mm, not the raster in pixels.
+    /// Mockup row 111: the caption names the paper in mm, not the raster in pixels.
     #[test]
     fn the_caption_is_in_paper_units() {
         let i18n = I18n::en_us();

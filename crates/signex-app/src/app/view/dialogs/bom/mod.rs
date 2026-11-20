@@ -1,4 +1,4 @@
-//! The Bill of Materials export dialog (m112, #1988): header, toolbar,
+//! The Bill of Materials export dialog (mockup row 112): header, toolbar,
 //! the data grid (`table`) beside the Properties sidebar (`sidebar`,
 //! `rules`), and the footer (`footer`).
 

@@ -675,7 +675,8 @@ Both exports are under **File ▸ Export** and need a schematic open.
 
 **BOM (bill of materials)**
 
-1. Choose **Reports ▸ Bill of Materials…**.
+1. Choose **Reports ▸ Bill of Materials…** or **File ▸ Export ▸ Export
+   BOM…**.
 2. The Bill of Materials dialog opens on the table. The toolbar holds the
    **Filter lines** field, the **Variant** picker, the **Grouped** /
    **Ungrouped** / **Flat** switch and, when validation finds something, a
@@ -685,9 +686,10 @@ Both exports are under **File ▸ Export** and need a schematic open.
    heads to resize. Lines a validation rule flags are tinted, with a mark in
    the line-number column.
 3. The Properties side bar has three tabs. **General**: **Include not-fitted
-   parts (DNP) for this variant** lists the parts the variant does not fit
-   (DNP parts, parts marked not fitted, and parts left out of the BOM or the
-   board) instead of leaving them out, and **Format** picks CSV, XLSX or
+   (DNP), excluded-from-BOM and off-board parts** lists the parts a BOM
+   leaves out (DNP parts and parts the variant marks not fitted, parts
+   excluded from the BOM and parts not on the board) instead of leaving them
+   out, and **Format** picks CSV, XLSX or
    HTML. **Columns**: the ticked columns are exported, in the order shown;
    drag a ticked column by its grip to move it. **Rules**: the validation
    rules and the issues they found; click an issue to select its line.

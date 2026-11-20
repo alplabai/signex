@@ -1,4 +1,4 @@
-//! The Watermark section of the Export PDF dialog (#1298, mockup m168):
+//! The Watermark section of the Export PDF dialog (#1298, mockup row 168):
 //! "Print a watermark" heads it; switched off, its fields grey out and the
 //! preview drops the watermark, and the settings stay for when it is on
 //! again.

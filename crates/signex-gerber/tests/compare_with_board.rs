@@ -1,4 +1,4 @@
-//! Compare with board (#193d): a package Signex wrote for a board, read
+//! Compare with board (mockup row 193d): a package Signex wrote for a board, read
 //! back and compared with that board, then with edited copies of it.
 
 use pcb_geom::PointNm;

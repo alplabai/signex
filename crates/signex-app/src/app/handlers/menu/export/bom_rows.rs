@@ -39,9 +39,9 @@ impl BomPreviewState {
         }
     }
 
-    /// Whether "Include not-fitted parts (DNP) for this variant" reads as
-    /// ticked: only when both domain flags are on, so a part never enters the
-    /// export behind a box that looks clear (decisions F25).
+    /// Whether the one not-fitted option reads as ticked: only when both
+    /// domain flags are on, so a part never enters the export behind a box
+    /// that looks clear (docs/DECISIONS.md, 2026-11-19).
     pub(crate) fn includes_not_fitted(&self) -> bool {
         self.options.include_dnp && self.options.include_not_fitted
     }

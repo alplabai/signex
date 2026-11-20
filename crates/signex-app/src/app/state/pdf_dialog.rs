@@ -231,9 +231,8 @@ pub fn angle_text(angle_deg: f64) -> String {
 }
 
 /// The PDF Layers section. Off by default, so an export stays a flat PDF as
-/// before #1298 until the user ticks it (the m168 design draws it on; that
-/// default waits for the maintainer's OK). Every group visible when the PDF
-/// opens.
+/// before #1298 until the user ticks it (Caner, 2026-11-20). Every group
+/// visible when the PDF opens.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PdfLayersDraft {
     pub is_on: bool,

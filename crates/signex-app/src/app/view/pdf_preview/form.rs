@@ -1,7 +1,7 @@
 //! The settings column's building blocks: the folding section header with
 //! its summary, a label-and-control row, the segmented look, checkboxes,
 //! captions and the veil over dependents of a switched-off option. Sizes
-//! follow the Graphite settings column (mockup m111: 76 px labels, 22 px
+//! follow the Graphite settings column (mockup row 111: 76 px labels, 22 px
 //! dependent indent, 56 px numeric fields).
 
 use iced::widget::{Space, column, container, row};
@@ -25,7 +25,7 @@ pub(super) const KEY_GAP: f32 = SP.m + SP.xs;
 /// Indent of a dependent under its checkbox: the box plus its gap.
 pub(super) const SUB_INDENT: f32 = SP.xl + SP.s + SP.xs;
 /// Width of a numeric field (opacity, angle, scale percent), fixed by the
-/// m111 / m168 mockups.
+/// mockup rows 111 and 168.
 pub(super) const NUM_W: f32 = 56.0;
 /// Height of a section header.
 const SECTION_H: f32 = 26.0;

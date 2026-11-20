@@ -1,4 +1,4 @@
-//! The dialog's four groups of kinds (m115): what a board house, a
+//! The dialog's four groups of kinds (mockup row 115): what a board house, a
 //! single-file job, an assembler and a mechanical designer each take.
 
 use super::{FabOutput, FabOutputKinds};
