@@ -653,14 +653,14 @@ fn place_menu_greys_only_the_planned_tools() {
     for entry in &e {
         if let DropdownEntry::Item(it) = entry {
             assert!(!planned.contains(&it.label.as_str()), "{}", it.label);
-            let is_planned_row = it.label == "1 planned tools…";
+            let is_planned_row = it.label == "1 planned tool…";
             assert_eq!(it.disabled, is_planned_row, "{}", it.label);
         }
     }
     let DropdownEntry::Item(row) = e.last().expect("rows") else {
         panic!("the planned row ends the flyout");
     };
-    assert_eq!(row.label, "1 planned tools…");
+    assert_eq!(row.label, "1 planned tool…");
     assert!(row.on_press.is_none());
     let tip = row.tooltip.as_deref().expect("names the tools");
     for name in planned {
@@ -822,7 +822,7 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
             "Text String",
             "Text Frame",
             "Note",
-            "1 planned tools…",
+            "1 planned tool…",
         ]
     );
     assert_eq!(

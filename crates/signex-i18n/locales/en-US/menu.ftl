@@ -256,7 +256,10 @@ ctx-place-group-ports-power = Ports and power
 ctx-place-group-parts-sheets = Parts and sheets
 ctx-place-group-directives-text = Directives and text
 # Greyed row of the Place flyout standing for the planned tools.
-ctx-place-planned-tools = { $count } planned tools…
+ctx-place-planned-tools = { $count ->
+    [one] { $count } planned tool…
+   *[other] { $count } planned tools…
+}
 # { $names } lists the planned tools.
 ctx-place-planned-tools-tooltip = Planned: { $names }
 

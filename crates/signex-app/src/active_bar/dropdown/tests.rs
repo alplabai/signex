@@ -166,10 +166,10 @@ fn power_menu_has_subheads_short_labels_and_full_tooltips() {
     }
 }
 
-/// The Harness group holds only planned tools, so the bar greys it and
-/// opens no menu; every other group opens one.
+/// No group holds only planned tools, so every group opens its menu: the
+/// Harness group's tools are live (#1280).
 #[test]
-fn only_the_harness_group_is_planned() {
+fn no_group_is_planned() {
     use ActiveBarMenu as M;
     for menu in [
         M::Filter,
@@ -178,6 +178,7 @@ fn only_the_harness_group_is_planned() {
         M::Align,
         M::Wiring,
         M::Power,
+        M::Harness,
         M::SheetSymbol,
         M::Port,
         M::Directives,
@@ -187,7 +188,6 @@ fn only_the_harness_group_is_planned() {
     ] {
         assert!(!is_planned_menu(menu), "{menu:?}");
     }
-    assert!(is_planned_menu(M::Harness));
 }
 
 /// The table rows carry the active profile's key for their command.

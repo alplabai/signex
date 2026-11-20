@@ -6,7 +6,7 @@ add_board_graphic	headless_missing_operand	needs `document`	core	none	routing
 add_net_class	operand_handler	run_operands: named document	core	origin	handler
 add_net_class	refusal_needs_operands	needs_operands_reason	gui	none	routing
 add_net_class	headless_missing_operand	needs `document`	core	none	routing
-add_table_of_contents	bridge	Edit(Tables(TableOfContentsRequested))	core	active document	gate
+add_table_of_contents	bridge	Edit(Tables(TableOfContentsRequested))	core	active document	handler
 add_table_of_contents	in_window_rewrite	document_window	gui	window	routing
 add_table_of_contents	refusal_needs	Sheets	core	active document	routing
 add_table_of_contents	headless_refusal	headless_refusal	core	none	routing
@@ -15,7 +15,7 @@ add_teardrops	operand_handler	run_operands: named document	core	origin,settings	
 add_teardrops	in_window_rewrite	document_window	gui	window	routing
 add_teardrops	refusal_needs	Pcb	core	active document	routing
 add_teardrops	headless_missing_operand	needs `document`	core	none	routing
-add_to_union	bridge	Edit(Unions(AddSelectionRequested))	core	active document	gate
+add_to_union	bridge	Edit(Unions(AddSelectionRequested))	core	active document,selection	handler
 add_to_union	in_window_rewrite	document_window	gui	window	routing
 add_to_union	refusal_needs	Schematic	core	active document	routing
 add_to_union	headless_refusal	headless_refusal	core	none	routing
@@ -109,7 +109,7 @@ board_sketch	bridge	Pcb(Sketch(ModeToggled))	undecided	active document	gate
 board_sketch	in_window_rewrite	document_window	gui	window	routing
 board_sketch	refusal_needs	EditablePcb	undecided	active document	routing
 board_sketch	headless_refusal	headless_refusal	undecided	none	routing
-break_union	bridge	Edit(Unions(BreakRequested))	core	active document	gate
+break_union	bridge	Edit(Unions(BreakRequested))	core	active document,selection	handler
 break_union	in_window_rewrite	document_window	gui	window	routing
 break_union	refusal_needs	Schematic	core	active document	routing
 break_union	headless_refusal	headless_refusal	core	none	routing
@@ -174,7 +174,7 @@ color_net	active_bar	NetColorCustom	gui	selection	handler
 color_net	operand_handler	run_operands: named document	core	origin	handler
 color_net	in_window_rewrite	document_window	gui	window	routing
 color_net	headless_missing_operand	needs `at`	core	none	routing
-compile_project	bridge	Project(CompiledDesign(CompileRequested))	core	active document	gate
+compile_project	bridge	Project(CompiledDesign(CompileRequested))	core	active document	handler
 compile_project	in_window_rewrite	document_window	gui	window	routing
 compile_project	refusal_needs	ProjectSheet	core	active document	routing
 compile_project	headless_refusal	headless_refusal	core	none	routing
@@ -1051,7 +1051,7 @@ remove_board_panel	operand_handler	run_operands: named document	core	origin	hand
 remove_board_panel	in_window_rewrite	document_window	gui	window	routing
 remove_board_panel	refusal_needs	Pcb	core	active document	routing
 remove_board_panel	headless_missing_operand	needs `document`	core	none	routing
-remove_from_union	bridge	Edit(Unions(RemoveSelectionRequested))	core	active document	gate
+remove_from_union	bridge	Edit(Unions(RemoveSelectionRequested))	core	active document,selection	handler
 remove_from_union	in_window_rewrite	document_window	gui	window	routing
 remove_from_union	refusal_needs	Schematic	core	active document	routing
 remove_from_union	headless_refusal	headless_refusal	core	none	routing

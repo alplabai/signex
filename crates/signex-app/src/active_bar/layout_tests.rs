@@ -23,7 +23,8 @@ fn drawn_items(tool: Tool, tokens: &ThemeTokens, tid: ThemeId) -> Vec<ActiveBarI
 }
 
 /// The view's item list and the slot table must describe the same bar: a
-/// trigger opens its menu, a planned group is greyed and opens nothing.
+/// trigger opens its menu. No group is planned since the harness tools
+/// landed (#1280).
 #[test]
 fn bar_items_follow_the_slot_table() {
     for (tokens, tid) in themes() {
@@ -36,11 +37,6 @@ fn bar_items_follow_the_slot_table() {
                     matches!(b.on_right_press, Some(ActiveBarMsg::ToggleMenu(m)) if m == menu),
                     "{tid:?} slot {i} opens {menu:?}"
                 ),
-                (ActiveBarItem::Button(b), BarSlot::Planned(menu)) => {
-                    assert!(b.on_right_press.is_none(), "{menu:?} opens nothing");
-                    assert!(b.dropdown_indicator.is_none(), "{menu:?} has no triangle");
-                    assert!(!b.enabled, "{menu:?} is greyed");
-                }
                 _ => panic!("{tid:?} slot {i} is not {slot:?}"),
             }
         }

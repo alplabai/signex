@@ -145,6 +145,9 @@ mod tests {
             (RuleKind::LabelsOnlyNet, Nets),
             (RuleKind::SheetPinUnconnected, Hierarchy),
             (RuleKind::SheetPinDirectionConflict, Hierarchy),
+            (RuleKind::RepeatEntryNeedsBus, Hierarchy),
+            (RuleKind::HarnessEntryMismatch, Hierarchy),
+            (RuleKind::HarnessTypeConflict, Hierarchy),
         ];
         assert_eq!(expected.len(), RuleKind::ALL.len());
         for (rule, group) in expected {

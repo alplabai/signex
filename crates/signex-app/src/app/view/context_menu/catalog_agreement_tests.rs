@@ -48,8 +48,9 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("VCC", "power-port family, awaiting place_power_port(style)"),
     ("+5", "power-port family, awaiting place_power_port(style)"),
     ("+12", "power-port family, awaiting place_power_port(style)"),
-    // Place flyout: the greyed row standing for the planned tools (Graphite mockup #62).
-    ("5 planned tools…", "planned tools, no behaviour"),
+    // Place flyout: the greyed row standing for the planned tools (Graphite
+    // mockup #62); Device Sheet Symbol is the one left.
+    ("1 planned tool…", "planned tools, no behaviour"),
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
     ("Print...", "tree-addressed wording, no per-surface id"),

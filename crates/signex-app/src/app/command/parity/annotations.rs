@@ -21,6 +21,18 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     // A project without rules runs with the machine's ERC overrides
     // (`erc_rule_settings`).
     (&["run_erc"], Bridge, &[RenderCache, Settings]),
+    // The active document's project: its sheets to compile or to list.
+    (
+        &["compile_project", "add_table_of_contents"],
+        Bridge,
+        &[ActiveDocument],
+    ),
+    // The canvas selection and the union picked in the Unions panel (#158).
+    (
+        &["add_to_union", "remove_from_union", "break_union"],
+        Bridge,
+        &[ActiveDocument, Selection],
+    ),
     (
         &[
             "select_all",
