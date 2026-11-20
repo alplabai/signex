@@ -1,7 +1,7 @@
 //! Inferred-constraint snap glyph — the badge drawn at the cursor while
 //! a placement tool is active, hinting the auto-constraint the next
 //! click will land — and the words beside it naming the target
-//! (Graphite mockup #188).
+//! (Graphite mockup row 188).
 
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Size};
@@ -38,7 +38,7 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 ///   constraint will land on the new Line.
 /// - `◇` (cyan diamond) — `SnapKind::Angle` — angle-snapped to the
 ///   nearest 15° increment.
-/// - `◐` / `⊙` — `SnapKind::Midpoint` / `SnapKind::Centre` (#188): the
+/// - `◐` / `⊙` — `SnapKind::Midpoint` / `SnapKind::Centre` (mockup row 188): the
 ///   click lands a Midpoint, or a Coincident on the centre.
 /// - Guide / Grid / Raw — silent (Guide already paints its line;
 ///   Grid + Raw aren't actionable hints).
@@ -118,7 +118,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_snap_glyp
             frame.stroke(&path, stroke);
         }
         SnapKind::Midpoint(_) => {
-            // ◐: a ring with its left half filled (mockup #188).
+            // ◐: a ring with its left half filled (mockup row 188).
             let r = 6.0;
             let half = Path::new(|b| {
                 b.arc(canvas::path::Arc {
@@ -133,7 +133,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_snap_glyp
             frame.stroke(&Path::circle(Point::new(p.x, p.y), r), stroke);
         }
         SnapKind::Centre(_) => {
-            // ⊙: a ring around a dot (mockup #188).
+            // ⊙: a ring around a dot (mockup row 188).
             frame.stroke(&Path::circle(Point::new(p.x, p.y), 6.0), stroke);
             frame.fill(&Path::circle(Point::new(p.x, p.y), 2.0), c);
         }
@@ -198,7 +198,7 @@ impl<'a> SnapBadgeWords<'a> {
     }
 }
 
-/// The badge text of a snap, `<kind> · <target>` (Graphite mockup #188:
+/// The badge text of a snap, `<kind> · <target>` (Graphite mockup row 188:
 /// "the badge names the target"): "Coincident · pad 1", "Horizontal",
 /// "Angle 45°", "Pad · J1-1". `target` is what [`snap_badge_target`]
 /// found; a Point snap without one names a plain point. Grid and Raw say

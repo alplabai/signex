@@ -1,4 +1,4 @@
-//! The "This pad / All pads" card (#192 D1, decision 9, Caner 2026-11-20):
+//! The "This pad / All pads" card (mockup row 192 D1, decision 9, Caner 2026-11-20):
 //! shown over the footprint canvas while an edit of a patterned pad waits
 //! for where it goes. Pure view; the answer is
 //! `FootprintEditorMsg::PadScopeAnswered`.

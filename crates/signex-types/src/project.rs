@@ -323,7 +323,7 @@ pub struct ProjectData {
 /// The `.snxprj` key of the project's rule set.
 const RULES_KEY: &str = "rules";
 
-/// The `.snxprj` key of the router tool diameter (#179d).
+/// The `.snxprj` key of the router tool diameter (mockup row 179d).
 const ROUTER_TOOL_DIAMETER_KEY: &str = "router_tool_diameter";
 
 /// Interpret a `rules` section, or keep it for re-save when this build
@@ -344,7 +344,7 @@ impl ProjectData {
     }
 
     /// The router tool diameter of the project's fab tier or profile, in mm
-    /// (#179d): the top-level `router_tool_diameter` key, absent when none
+    /// (mockup row 179d): the top-level `router_tool_diameter` key, absent when none
     /// was applied. A value that is not a positive number reads as absent.
     /// Held with the keys this type does not declare, so an older build
     /// keeps it the same way (see `docs/FORMAT_VERSIONS.md`).

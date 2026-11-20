@@ -1,11 +1,13 @@
-//! "This pad / All pads" for an edit of a patterned pad (#192 D1, decision
-//! 9, Caner 2026-11-20). [`hold_patterned_pad_edit`] holds the edit at the
-//! Pads-mode commit point; [`apply`] carries out the answer as one undo
-//! step and re-bakes. The question comes back on every such edit.
+//! "This pad / All pads" for an edit of a patterned pad (mockup row 192 D1,
+//! decision 9, Caner 2026-11-20). [`hold_patterned_pad_edit`] holds the
+//! edit at the Pads-mode commit point; [`apply`] carries out the answer as
+//! one undo step and re-bakes. The question comes back on every such edit.
 //!
 //! This pad stores only the attributes the edit changed as an override of
 //! that instance; All pads writes them onto the pattern's source pad, so
-//! every instance changes. See docs/FOOTPRINT_SKETCH.md, "Per-pad overrides".
+//! every instance changes. The held value never enters the pad list, so no
+//! persist path can write it. See docs/FOOTPRINT_SKETCH.md, "Per-pad
+//! overrides".
 
 use signex_sketch::array::ArrayId;
 use signex_sketch::attr::PadAttr;
@@ -37,25 +39,26 @@ pub(crate) fn hold_patterned_pad_edit<'f>(
     let Some(editor) = editor else {
         return Some(Box::new(edit));
     };
-    // A question still open on another pad is answered Cancel first.
-    let prior = match editor.state.pad_scope.take() {
-        Some(prompt) if prompt.pad_idx == idx => Some(prompt),
-        Some(other) => {
-            restore(editor, &other);
-            None
-        }
-        None => None,
-    };
     let Some(current) = editor.state.pads.get(idx).cloned() else {
         return Some(Box::new(edit));
     };
-    let mut after = current.clone();
+    // A question still open on this pad, as it was held, gathers the next
+    // edit; one open on another pad, or on a pad that has moved on since,
+    // is answered Cancel (dropped: the pad list never held its value).
+    let prior = editor
+        .state
+        .pad_scope
+        .take()
+        .filter(|prompt| prompt.pad_idx == idx && prompt.before == current);
+    let mut after = prior
+        .as_ref()
+        .map_or_else(|| current.clone(), |p| p.after.clone());
     edit(&mut after);
     let instance = prior
         .as_ref()
         .map(|p| p.instance)
         .or_else(|| patterned_instance(editor, &current));
-    let before = prior.map_or(current, |p| p.before);
+    let before = current;
     let delta = instance.and_then(|key| attr_delta(editor, key, &before, &after));
     let (Some(instance), Some(delta)) = (instance, delta) else {
         return Some(Box::new(move |pad: &mut EditorPad| *pad = after));
@@ -64,7 +67,6 @@ pub(crate) fn hold_patterned_pad_edit<'f>(
         // A size or a position, or typed back to where it was: no question.
         return Some(Box::new(move |pad: &mut EditorPad| *pad = after));
     }
-    editor.state.pads[idx] = after.clone();
     editor.state.pad_scope = Some(Box::new(PadScopePrompt {
         pad_idx: idx,
         instance,
@@ -80,8 +82,6 @@ pub(super) fn apply(editor: &mut FootprintDocument, scope: PadScope) {
     let Some(prompt) = editor.state.pad_scope.take() else {
         return;
     };
-    // The panel showed the held value; the step starts from the pad as it was.
-    restore(editor, &prompt);
     let delta = attr_delta(editor, prompt.instance, &prompt.before, &prompt.after)
         .filter(|d| !d.is_empty());
     match (scope, delta) {
@@ -113,15 +113,6 @@ pub(super) fn apply(editor: &mut FootprintDocument, scope: PadScope) {
         }
     }
     editor.canvas_cache.clear();
-}
-
-/// Put the held pad back as it was, unless the pad list moved on.
-fn restore(editor: &mut FootprintDocument, prompt: &PadScopePrompt) {
-    if let Some(pad) = editor.state.pads.get_mut(prompt.pad_idx)
-        && *pad == prompt.after
-    {
-        *pad = prompt.before.clone();
-    }
 }
 
 /// The pattern instance `pad` is, when it is one other than a source pad.

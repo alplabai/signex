@@ -38,13 +38,13 @@ pub struct SketchData {
     /// ([`Self::needs_format_1_2`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub driven_dimensions: Vec<ConstraintId>,
-    /// Patterns that repeat another pattern (#191).
+    /// Patterns that repeat another pattern (mockup row 191).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pattern_sources: Vec<PatternSource>,
-    /// Live mirrors of patterns (#191).
+    /// Live mirrors of patterns (mockup row 191).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pattern_mirrors: Vec<PatternMirror>,
-    /// Per-instance pad overrides (#192 D1).
+    /// Per-instance pad overrides (mockup row 192 D1).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pad_overrides: Vec<InstanceOverride>,
 }

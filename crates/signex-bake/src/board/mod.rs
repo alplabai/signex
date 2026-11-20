@@ -105,6 +105,7 @@ impl BoardBakeError {
             | Self::HoleNotACircle { entity }
             | Self::HoleDrill { entity, .. }
             | Self::UnknownNet { entity, .. }
+            | Self::PourUnknownNet { entity, .. }
             | Self::NotASlot { entity }
             | Self::PourNotCopper { entity }
             | Self::AnchorNotAPoint { entity }

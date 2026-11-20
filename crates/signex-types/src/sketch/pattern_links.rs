@@ -1,4 +1,4 @@
-//! Live pattern links (#191): a pattern that repeats another pattern, and
+//! Live pattern links (mockup row 191): a pattern that repeats another pattern, and
 //! a mirror of a pattern kept as a pattern object of its own. Data and the
 //! cycle guard only; `signex-bake` expands them (`array::links`). See
 //! docs/FOOTPRINT_SKETCH.md, "Pattern links".

@@ -1,4 +1,4 @@
-//! Per-instance pad overrides (#192 D1): "This pad" on an edit of a
+//! Per-instance pad overrides (mockup row 192 D1): "This pad" on an edit of a
 //! patterned pad stores only the changed attributes, keyed by the instance
 //! `(pattern, i, j)`; the bake applies them to that one instance. See
 //! docs/FOOTPRINT_SKETCH.md, "Per-pad overrides".

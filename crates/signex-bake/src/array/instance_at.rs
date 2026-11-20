@@ -1,4 +1,4 @@
-//! Which pattern instance a baked pad is (#192 D1): the key a per-instance
+//! Which pattern instance a baked pad is (mockup row 192 D1): the key a per-instance
 //! override of that pad is stored under.
 
 use signex_sketch::array::ArrayId;

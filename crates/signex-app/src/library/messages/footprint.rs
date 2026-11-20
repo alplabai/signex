@@ -597,26 +597,26 @@ pub enum FootprintEditorMsg {
     SketchDimensionInput(String),
 
     /// The sketch parameters table and the info bar's Parameters button
-    /// (#189).
+    /// (mockup row 189).
     SketchParameters(crate::library::editor::footprint::parameters_table::SketchParametersMsg),
     /// Values on the sketch drawing, the constraint and pattern menus and
-    /// instance suppression (#187, #188, #191).
+    /// instance suppression (mockup row 187, mockup row 188, mockup row 191).
     SketchCanvas(crate::library::editor::footprint::sketch_mode::SketchCanvasMsg),
     /// A board-feature row of a board sketch's Snap ▾ (#2518).
     SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
-    /// #192 — the floating pad link on the sketch canvas.
+    /// mockup row 192 — the floating pad link on the sketch canvas.
     PadLink(crate::library::editor::footprint::state::PadLinkMsg),
-    /// #192 D1 — the answer to "This pad / All pads" after an edit of a
+    /// mockup row 192 D1 — the answer to "This pad / All pads" after an edit of a
     /// patterned pad.
     PadScopeAnswered(crate::library::editor::footprint::state::pad_scope::PadScope),
     /// Convert to reference, Make driving and Delete mirror, from the
     /// constraint and pattern menus and the Properties conflict rows
-    /// (#187, #188).
+    /// (mockup row 187, mockup row 188).
     SketchReference(
         crate::library::editor::footprint::sketch_mode::constraint_menu::SketchReferenceMsg,
     ),
     /// A drawing tool's click that took an inference snap or was made
-    /// with Ctrl held (#188): [`Self::SketchToolClick`] plus the
+    /// with Ctrl held (mockup row 188): [`Self::SketchToolClick`] plus the
     /// constraint it lands, in the same undo step.
     SketchToolClickInferred {
         x_mm: f64,
@@ -625,13 +625,13 @@ pub enum FootprintEditorMsg {
         inference: crate::library::editor::footprint::snap::SketchInference,
     },
     /// The Point tool's [`Self::SketchPlacePoint`] with the constraint its
-    /// snap lands (#188).
+    /// snap lands (mockup row 188).
     SketchPlacePointInferred {
         x_mm: f64,
         y_mm: f64,
         inference: crate::library::editor::footprint::snap::SketchInference,
     },
-    /// Close gap was pressed on an open profile (#190): join the open end
+    /// Close gap was pressed on an open profile (mockup row 190): join the open end
     /// `merge` into `keep`, one undo step, on either host.
     SketchCloseGapRequested {
         keep: signex_sketch::id::SketchEntityId,

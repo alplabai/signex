@@ -1,5 +1,5 @@
 //! Ids of `locales/en-US/sketch_tools.ftl`: the sketch Modify tools of
-//! #187 / #191 and the pad link of #192.
+//! mockup row 187 / mockup row 191 and the pad link of mockup row 192.
 
 define_ids! {
     SKETCH_TOOLS;

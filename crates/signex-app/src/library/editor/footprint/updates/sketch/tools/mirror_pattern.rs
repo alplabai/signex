@@ -1,4 +1,4 @@
-//! Mirror and the pattern tools with a pattern selected (#191, decision
+//! Mirror and the pattern tools with a pattern selected (mockup row 191, decision
 //! 10, Caner 2026-11-20). Mirror keeps a live mirror of the pattern, a
 //! pattern object of its own, rather than copies of geometry; a pattern
 //! tool makes the new array repeat every instance of the selected pattern.

@@ -80,10 +80,10 @@ board-sketch-anchor-component = Component
 board-sketch-anchor-pick = Pick a component
 # Messages, when Bake meets a locked component; $reference is its designator.
 board-sketch-anchor-locked = { $reference } is locked and stays where it is; unlock it to move it to its anchor
-# An inside corner tighter than the router tool cuts (#179d); $radius is the
+# An inside corner tighter than the router tool cuts (mockup row 179d); $radius is the
 # corner's radius and $tool the tool's radius, both in millimetres.
 board-sketch-check-corner-tight = Inside corner R { $radius } < R { $tool } at ({ $x }, { $y })
-# The Fab profile group of the board sketch Properties (#179d); $diameter
+# The Fab profile group of the board sketch Properties (mockup row 179d); $diameter
 # in millimetres.
 board-sketch-fab-section = Fab profile
 board-sketch-fab-router = Router tool Ø { $diameter } · from profile

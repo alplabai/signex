@@ -8,7 +8,7 @@
 //!    Then, on a board sketch only, the board under it
 //!    ([`super::snap_board`]).
 //! 2. **Midpoint / Centre** — a Line's midpoint or a Circle's / Arc's
-//!    centre within the same radius, while a drawing tool is armed (#188).
+//!    centre within the same radius, while a drawing tool is armed (mockup row 188).
 //! 3. **Guide**, then **Intersection** of two sketch curves.
 //! 4. **Horizontal / Vertical inference** — when a multi-click tool
 //!    is mid-gesture (line first endpoint, rect first corner, ...),
@@ -84,14 +84,14 @@ pub enum SnapKind {
     /// places the point only and lands no constraint. See
     /// [`super::snap_board`].
     BoardFeature(super::snap_board::BoardFeatureKind),
-    /// The midpoint of the sketch Line with this id (#188).
+    /// The midpoint of the sketch Line with this id (mockup row 188).
     Midpoint(SketchEntityId),
-    /// The centre of the sketch Circle or Arc with this id (#188).
+    /// The centre of the sketch Circle or Arc with this id (mockup row 188).
     Centre(SketchEntityId),
 }
 
 /// The constraint a drawing-tool click lands from the snap it took
-/// (#188), in the same undo step as the click.
+/// (mockup row 188), in the same undo step as the click.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SketchInference {
     /// Ctrl was held: no inferred constraint, the Line's auto H / V

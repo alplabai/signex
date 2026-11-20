@@ -51,7 +51,7 @@ impl FootprintCanvas<'_> {
         self.key_sketch_input(key, modifiers, typed_char)
     }
 
-    /// The sketch canvas's overlays take the keyboard first (#187, #188):
+    /// The sketch canvas's overlays take the keyboard first (mockup row 187, mockup row 188):
     /// a value edited on the drawing takes Enter (apply), Esc (cancel),
     /// Backspace and typed characters, and swallows other plain keys so a
     /// Delete or a tool letter does not act on the sketch underneath. An

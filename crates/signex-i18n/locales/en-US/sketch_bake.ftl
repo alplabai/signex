@@ -16,7 +16,7 @@ sketch-bake-checks-warn = A failing check warns only; Bake still applies the ske
 sketch-bake-select-hint = Click a row to select its place in the sketch.
 # Under the counts: the canvas shows the result.
 sketch-bake-drawn = The canvas draws the result in its layer colours, the sketch faint on top.
-# Close gap (#190), offered on an open profile on both hosts: the button,
+# Close gap (mockup row 190), offered on an open profile on both hosts: the button,
 # and why it is or is not offered. $gap and $tolerance are millimetres.
 sketch-bake-close-gap = Close gap
 sketch-bake-gap-closes = Gap { $gap } mm, closes under the { $tolerance } mm heal tolerance

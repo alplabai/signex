@@ -1,4 +1,4 @@
-//! What a dimension measures on the geometry (#187, #188).
+//! What a dimension measures on the geometry (mockup row 187, mockup row 188).
 //!
 //! A driven (reference) dimension never drives the solve; the drawing shows
 //! the value it measures instead. The value is the dimension's own residual

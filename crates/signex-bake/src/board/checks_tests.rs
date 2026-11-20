@@ -330,7 +330,7 @@ fn a_bake_refusal_names_the_entity_it_is_about() {
     assert_eq!(BoardBakeError::OutlineCount { count: 2 }.place(), None);
 }
 
-// ── Inside corners (#179d, decision 3) ──────────────────────────────────
+// ── Inside corners (mockup row 179d, decision 3) ──────────────────────────────────
 
 /// An L-shaped board, counter-clockwise: its one concave corner is at
 /// (10, 10).

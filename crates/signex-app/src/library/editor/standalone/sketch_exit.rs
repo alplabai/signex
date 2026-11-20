@@ -255,7 +255,7 @@ pub struct PreviewIssues<M> {
     pub lines: Vec<(CheckStatus, Localized, Option<M>)>,
     /// Under `lines`.
     pub caption: Option<MessageId>,
-    /// An open profile's gap (#190): whether it heals, and the message
+    /// An open profile's gap (mockup row 190): whether it heals, and the message
     /// Close gap sends when it does.
     pub gap: Option<GapLine<M>>,
 }

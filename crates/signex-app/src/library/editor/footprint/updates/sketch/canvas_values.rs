@@ -1,5 +1,5 @@
 //! Footprint sketch updates — values on the drawing, the constraint and
-//! pattern menus, and instance suppression (#187, #188, #191), on both
+//! pattern menus, and instance suppression (mockup row 187, mockup row 188, mockup row 191), on both
 //! hosts (a board sketch runs the same editor).
 //!
 //! The overlay messages (open, type, close) are UI state and record no

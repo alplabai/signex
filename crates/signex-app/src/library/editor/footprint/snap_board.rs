@@ -1,4 +1,4 @@
-//! Board-feature snaps of a board sketch (#2518, Graphite mockup #179): the
+//! Board-feature snaps of a board sketch (#2518, Graphite mockup row 179): the
 //! cursor reaches the board drawn under the sketch, its outline, pads,
 //! holes, vias, track ends and courtyards. Such a snap places the point
 //! only and lands no constraint: references to board features are not

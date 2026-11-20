@@ -1,4 +1,4 @@
-//! Footprint sketch updates — the parameters table (#189).
+//! Footprint sketch updates — the parameters table (mockup row 189).
 //!
 //! Typing an expression goes the Properties list's way (one undo step per
 //! keystroke, recorded by the router). Add, Rename, Delete and Make

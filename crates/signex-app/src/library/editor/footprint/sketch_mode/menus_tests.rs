@@ -1,4 +1,4 @@
-//! Modify ▾ rows of #187 / #191 on both sketch hosts.
+//! Modify ▾ rows of mockup row 187 / mockup row 191 on both sketch hosts.
 
 use super::*;
 use signex_library::Footprint;

@@ -1,6 +1,6 @@
 //! The board under a board sketch (#2234): its courtyards, pads, tracks,
 //! vias and outline, drawn faint below the sketch so the sketch reads over
-//! the board. Pads and courtyards (#2518, Graphite mockup #179) take the
+//! the board. Pads and courtyards (#2518, Graphite mockup row 179) take the
 //! board palette's colours, the same in both themes.
 
 use iced::widget::canvas::{self, Path, Stroke};

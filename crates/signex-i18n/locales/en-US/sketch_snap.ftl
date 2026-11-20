@@ -14,7 +14,7 @@ sketch-snap-board-vias = Via centres
 sketch-snap-board-track-ends = Track ends
 sketch-snap-board-courtyards = Courtyard corners
 
-# Snap ▾ in sketch mode, on both hosts (#188): snaps that land a
+# Snap ▾ in sketch mode, on both hosts (mockup row 188): snaps that land a
 # constraint when a drawing tool clicks there.
 sketch-snap-inference-header = Sketch snaps
 # A Line's midpoint; the click lands a Midpoint constraint.

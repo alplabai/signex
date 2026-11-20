@@ -1,14 +1,6 @@
 //! The board sketch with the board items it owns, as one board command
-//! (decision 2, Caner 2026-11-20).
-//!
-//! [`BoardCommand::SetBoardSketchBake`] does what `SetBoardSketch` does and,
-//! in the same step, replaces the sketch's own zones and drawings (those
-//! whose uuid is an entity of the board sketch before or after) and moves
-//! the anchored footprints. A locked footprint stays where it is
-//! ([`SketchBoardItems::locked_anchors`] names it for the caller's warning).
-//! The inverse, [`BoardCommand::RestoreBoardSketchBake`], puts back the
-//! whole zone and drawing lists and the old positions, so undo is exact.
-//! See `docs/PCB_SKETCH.md`, "Targets".
+//! (decision 2, Caner 2026-11-20): `SetBoardSketchBake` and its inverse
+//! `RestoreBoardSketchBake`. See `docs/PCB_SKETCH.md`, "Targets".
 
 use std::collections::HashSet;
 

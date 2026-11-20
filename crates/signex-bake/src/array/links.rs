@@ -1,4 +1,4 @@
-//! Pattern links (#191): every instance of a pattern as a placement of its
+//! Pattern links (mockup row 191): every instance of a pattern as a placement of its
 //! innermost source entity, so a pattern of a pattern repeats each instance
 //! of its source, and a live mirror reflects each instance of its pattern.
 //!

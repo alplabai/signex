@@ -205,7 +205,7 @@ fn a_footprint_preview_keeps_no_board_result() {
     assert!(editor.state.sketch_exit.board_result.is_none());
 }
 
-/// #179d: with the project's router tool, a sharp inside corner fails and
+/// mockup row 179d: with the project's router tool, a sharp inside corner fails and
 /// names its place; a convex board passes.
 #[test]
 fn with_a_router_tool_a_sharp_inside_corner_fails_and_names_its_point() {
@@ -243,7 +243,7 @@ fn with_a_router_tool_a_sharp_inside_corner_fails_and_names_its_point() {
     assert_eq!(lines[3].status, CheckStatus::Passed);
 }
 
-/// #190: the open-outline line carries the Close gap offer of its two ends.
+/// mockup row 190: the open-outline line carries the Close gap offer of its two ends.
 #[test]
 fn an_open_outline_line_offers_close_gap_within_the_tolerance() {
     let (mut sketch, edges) = outline_sketch(&BOARD);
@@ -277,7 +277,7 @@ fn an_open_outline_line_offers_close_gap_within_the_tolerance() {
     assert!(lines[1..].iter().all(|l| l.close_gap.is_none()));
 }
 
-/// #190: a footprint whose courtyard is open offers Close gap in its bake
+/// mockup row 190: a footprint whose courtyard is open offers Close gap in its bake
 /// preview; a closed one offers nothing.
 #[test]
 fn a_footprint_with_an_open_profile_offers_close_gap() {

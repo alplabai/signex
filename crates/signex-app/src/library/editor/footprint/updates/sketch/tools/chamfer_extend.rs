@@ -1,4 +1,4 @@
-//! Footprint sketch tools — Chamfer and Extend (#187), the Line edits that
+//! Footprint sketch tools — Chamfer and Extend (mockup row 187), the Line edits that
 //! pick a Line by its stroke. Their geometry is
 //! `signex_sketch::geom::line_edit`; see docs/FOOTPRINT_SKETCH.md,
 //! "Modify tools".

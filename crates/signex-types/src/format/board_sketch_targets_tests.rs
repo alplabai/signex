@@ -188,6 +188,33 @@ fn the_targets_token_is_read_and_current() {
     assert_eq!(SNXPCB_VERSION.current, SNXPCB_FORMAT_BOARD_SKETCH_TARGETS);
 }
 
+/// A board with the rooms token (`snxpcb/1.6`) opened read-only before 1.7
+/// was current, and still does: it is read, marked, and every save is
+/// refused, since this build would drop its rooms.
+#[test]
+fn a_rooms_board_opens_read_only_and_refuses_a_save() {
+    let text = write(&board_with(|e| e.board_outline = true));
+    let rooms = text.replacen(
+        &format!("format = \"{SNXPCB_FORMAT_V1}\""),
+        &format!("format = \"{SNXPCB_FORMAT_ROOMS}\""),
+        1,
+    );
+    assert_eq!(token_of(&rooms), "snxpcb/1.6");
+
+    let parsed = SnxPcb::parse(&rooms).expect("a rooms board opens");
+    assert!(parsed.is_from_newer_minor(), "it opens read-only");
+    assert_eq!(
+        parsed.board.unknown.newer_minor_source.as_deref(),
+        Some("snxpcb/1.6")
+    );
+    let err = parsed.write_string().unwrap_err();
+    assert!(err.to_string().contains("snxpcb/1.6"), "{err}");
+
+    for older in ["snxpcb/1.4", "snxpcb/1.5", "snxpcb/1.7"] {
+        assert!(!snxpcb_opens_read_only(older), "{older}");
+    }
+}
+
 /// A pour and a mechanical drawing bake to the board's own rows, under the
 /// uuid of the entity they came from; both read back unchanged.
 #[test]

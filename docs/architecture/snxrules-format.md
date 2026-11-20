@@ -31,7 +31,7 @@ change is a small git diff.
 | `name` | string | The profile's identity. Projects find a profile by this name. |
 | `version` | string | Content version chosen by the author; recorded in a project's provenance. |
 | `erc` | object, optional | Same shape as the project's `rules.erc`: `severity` (rule id to `error` / `warning` / `info` / `off`) and `pin_matrix` (`"<row axis>/<column axis>"` to severity, only cells that differ from the factory matrix). Omitted when empty. |
-| `fab` | object, optional | Whose limits a fab profile copies (#2311): `manufacturer`, `process`, `source`, `published` (free text), and `router_tool_diameter` (mm, #179d; present, the file is schema `2`). Omitted when absent. |
+| `fab` | object, optional | Whose limits a fab profile copies (#2311): `manufacturer`, `process`, `source`, `published` (free text), and `router_tool_diameter` (mm, mockup row 179d; present, the file is schema `2`). Omitted when absent. |
 | `drc` | object, optional | Same shape as the project's `rules.drc` (#2307): `severity` (DRC rule id such as `builtin::clearance` to `error` / `warning` / `info` / `off`) and `dsl` (DRC rule language text, [`DRC_RULES.md`](../DRC_RULES.md), read by each DRC run that uses this profile and written back as typed; a rule written `disabled rule ...` is kept and not applied, #2398) and `sets` (named rule sets, #2398: per name its `limits` (limit id to length as written), `severity` and `uses`, each a `scope` and the `rules` it wrote into `dsl`; omitted when empty). Omitted when empty. The Rules tab (#2398) edits the project's `rules.drc`, never a profile's: one rule's text at a time, a rule set with the rules it wrote, or a preset; a profile holding DRC rules is one of its presets, applied after a row-by-row diff as "Update from profile" applies it. A `sets` of another shape refuses the profile like any other `drc` value of the wrong shape. Enters the content hash when present ([What the hash covers](#what-the-hash-covers)). Rule ids and layers: [`pcb-drc.md`](pcb-drc.md#rule-ids-and-severities-2307-step-2a). |
 
 Every key is optional on load (`name` and `version` default to the empty
@@ -48,7 +48,7 @@ built-in layer.
 ## Schema token and newer files
 
 `schema` is the file-format version, independent of the project's
-`rules.schema`. It is content-driven (#179d): a profile whose `fab` block
+`rules.schema`. It is content-driven (mockup row 179d): a profile whose `fab` block
 names a `router_tool_diameter` is written at `2`, every other profile as
 read (`1`, or no key), so a file without the value re-saves byte-identical.
 `fab` keeps no unknown keys, so a build that predates the field would drop

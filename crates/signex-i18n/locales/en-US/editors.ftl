@@ -479,13 +479,13 @@ editors-sketch-target-board-outline = Outline
 editors-sketch-target-mounting-holes = Holes
 # A count in the bake preview; $count is a whole number.
 editors-sketch-bake-count = { $count }
-# The question after an edit of a patterned pad (#192 D1); $designator is
+# The question after an edit of a patterned pad (mockup row 192 D1); $designator is
 # the pad's number.
 editors-pad-scope-question = Pad { $designator } is one of a pattern's pads. Apply the change to:
 editors-pad-scope-this-pad = This pad
 editors-pad-scope-all-pads = All pads
 editors-pad-scope-cancel = Cancel
-# Sketch ▸ Create rows after Point (#187): two arcs joined by two lines,
+# Sketch ▸ Create rows after Point (mockup row 187): two arcs joined by two lines,
 # and a regular polygon.
 editors-sketch-tool-slot = Slot
 editors-sketch-tool-polygon = Polygon
@@ -497,7 +497,7 @@ editors-sketch-role-component-anchor = Component anchor
 # Bake preview rows of a board sketch.
 editors-sketch-target-mechanical = Mechanical
 editors-sketch-target-component-anchors = Anchors
-# The footprint editor bar's mode switch (#187): a two-state segment and a
+# The footprint editor bar's mode switch (mockup row 187): a two-state segment and a
 # 3D toggle beside it.
 editors-mode-footprint = Footprint
 editors-mode-sketch = Sketch

@@ -82,7 +82,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_dof_direction_ar
     const HEAD_LEN_PX: f32 = 3.0;
     // A cyan that reads on its ground without competing with the
     // under-constrained point underneath.
-    let colour = SketchInk::BOARD.dof_arrow;
+    let colour = SketchInk::board().dof_arrow;
     let stroke = Stroke::default().with_width(1.0).with_color(colour);
 
     let m_rows = solve.jacobian.len();

@@ -4,7 +4,7 @@
 //! edit, a Properties edit, undo, a solve landing from its task) shows them
 //! live. The inside-corner check uses the router tool diameter the board
 //! session copied from its project. An open profile offers Close gap on
-//! both hosts (#190). Rules: `docs/PCB_SKETCH.md`, "Outline checks".
+//! both hosts (mockup row 190). Rules: `docs/PCB_SKETCH.md`, "Outline checks".
 
 use signex_bake::board::{
     CheckState, Finding, NotChecked, OutlineCheck, OutlineChecks, outline_checks_with_router,
@@ -63,7 +63,7 @@ pub struct CheckLine {
     pub close_gap: Option<GapOffer>,
 }
 
-/// Two open profile ends Close gap can be asked to join (#190). Only a gap
+/// Two open profile ends Close gap can be asked to join (mockup row 190). Only a gap
 /// within the heal tolerance closes; a wider one is offered no button.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GapOffer {

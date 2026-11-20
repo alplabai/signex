@@ -29,7 +29,7 @@ impl EditorMode {
     }
 }
 
-/// The editor bar's mode switch as the view draws it (#187): a two-state
+/// The editor bar's mode switch as the view draws it (mockup row 187): a two-state
 /// Footprint / Sketch segment and a 3D toggle beside it. In 3D the segment
 /// of the mode the toggle returns to stays lit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

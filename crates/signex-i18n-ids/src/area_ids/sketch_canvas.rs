@@ -1,5 +1,5 @@
 //! Ids of `locales/en-US/sketch_canvas.ftl`: the sketch canvas's words on
-//! the drawing and its constraint and pattern menus (#187, #188, #191).
+//! the drawing and its constraint and pattern menus (mockup row 187, mockup row 188, mockup row 191).
 
 define_ids! {
     SKETCH_CANVAS;
@@ -69,7 +69,7 @@ define_ids! {
     SKETCH_CANVAS_MENU_EDIT_SPACING_Y = "sketch-canvas-menu-edit-spacing-y";
     SKETCH_CANVAS_MENU_EDIT_SWEEP = "sketch-canvas-menu-edit-sweep";
     SKETCH_CANVAS_MENU_DELETE_PATTERN = "sketch-canvas-menu-delete-pattern";
-    // Reference dimensions and pattern mirrors (#187, #188).
+    // Reference dimensions and pattern mirrors (mockup row 187, mockup row 188).
     SKETCH_CANVAS_MENU_MAKE_DRIVING = "sketch-canvas-menu-make-driving";
     SKETCH_CANVAS_MENU_REFERENCE_MEASURES = "sketch-canvas-menu-reference-measures";
     SKETCH_CANVAS_CONFLICT_CONVERT = "sketch-canvas-conflict-convert";

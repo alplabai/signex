@@ -96,7 +96,7 @@ impl Signex {
     }
 
     /// Copy the router tool diameter of the board's project into the sketch
-    /// session, for its inside-corner check (#179d): on entry, on every
+    /// session, for its inside-corner check (mockup row 179d): on entry, on every
     /// sketch edit and when a fab tier or profile sets it. Memory only.
     pub(crate) fn sync_board_sketch_router(&mut self) {
         let Some(path) = self

@@ -733,14 +733,14 @@ mod sheet_tools_graphite;
 #[path = "regression/board_sync_graphite.rs"]
 mod board_sync_graphite;
 
-// #189: the sketch parameters table, rename / delete with the in-use prompt
+// mockup row 189: the sketch parameters table, rename / delete with the in-use prompt
 // (fp-07) and Make parameter, each one undo step.
 #[path = "regression/sketch_parameters.rs"]
 mod sketch_parameters;
-// #187 / #191: the sketch canvas's pattern values and instance suppression.
+// mockup row 187 / mockup row 191: the sketch canvas's pattern values and instance suppression.
 #[path = "regression/sketch_canvas_values.rs"]
 mod sketch_canvas_values;
-// #2518 / Graphite #179: a board sketch snaps to the board under it; Snap ▾
+// #2518 / Graphite mockup row 179: a board sketch snaps to the board under it; Snap ▾
 // board rows turn that off without an undo step.
 #[path = "regression/sketch_snap_board.rs"]
 mod sketch_snap_board;
@@ -748,29 +748,29 @@ mod sketch_snap_board;
 // preview drawn on the canvas.
 #[path = "regression/board_sketch_checks.rs"]
 mod board_sketch_checks;
-// #187 / #191 / #192: Chamfer, Extend, Linear Pattern, Mirror about a
+// mockup row 187 / mockup row 191 / mockup row 192: Chamfer, Extend, Linear Pattern, Mirror about a
 // centerline, and the pad link of Edit in Sketch.
 #[path = "regression/sketch_tools_padlink.rs"]
 mod sketch_tools_padlink;
-// #191: Mirror and the pattern tools with a pattern selected keep live
+// mockup row 191: Mirror and the pattern tools with a pattern selected keep live
 // pattern links; a loop is refused.
 #[path = "regression/sketch_pattern_links.rs"]
 mod sketch_pattern_links;
-// #192 D1: an edit of a patterned pad asks This pad / All pads.
+// mockup row 192 D1: an edit of a patterned pad asks This pad / All pads.
 #[path = "regression/sketch_pad_scope.rs"]
 mod sketch_pad_scope;
-// #187 / #188 (decision 5): Convert to reference and Make driving.
+// mockup row 187 / mockup row 188 (decision 5): Convert to reference and Make driving.
 #[path = "regression/sketch_reference.rs"]
 mod sketch_reference;
 // Caner (2026-11-20) items 1 and 6: Create ▾ Slot and Polygon, and the
 // Midpoint / Centre / Intersection snaps that land their constraint.
 #[path = "regression/sketch_create_inference.rs"]
 mod sketch_create_inference;
-// Decisions 3 and 4 (#179d, #190): the router tool of the project's fab tier
+// Decisions 3 and 4 (mockup row 179d, mockup row 190): the router tool of the project's fab tier
 // and the inside-corner check, and Close gap on both hosts.
 #[path = "regression/board_sketch_router.rs"]
 mod board_sketch_router;
-// #187 (decision 8): the footprint editor bar's Footprint / Sketch switch and
+// mockup row 187 (decision 8): the footprint editor bar's Footprint / Sketch switch and
 // the 3D toggle that returns to the mode it came from.
 #[path = "regression/editor_mode_switch.rs"]
 mod editor_mode_switch;

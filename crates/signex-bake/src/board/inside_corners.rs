@@ -1,4 +1,4 @@
-//! The inside-corner check of a board sketch (#179d): the router bit that
+//! The inside-corner check of a board sketch (mockup row 179d): the router bit that
 //! cuts the outline and its cutouts cannot cut a corner tighter than its own
 //! radius. A corner matters where the router runs on its convex side:
 //! a concave corner of the outline (the router runs outside the board) and

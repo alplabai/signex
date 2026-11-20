@@ -1,4 +1,4 @@
-//! The link between a pad and the sketch geometry that drives it (#192,
+//! The link between a pad and the sketch geometry that drives it (mockup row 192,
 //! m192 D5 / D6). Edit in Sketch from a pad focuses its driving entity;
 //! the canvas highlights the driving profile and a floating link goes back
 //! to the pad. A selected pad entity offers Jump to pad. See

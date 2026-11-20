@@ -1,4 +1,4 @@
-//! Close gap (#190), on both hosts: join two open profile ends within the
+//! Close gap (mockup row 190), on both hosts: join two open profile ends within the
 //! heal tolerance, as one undo step, solved and baked like every sketch
 //! edit. The joining is `signex_sketch::heal::close_gap`; a gap it refuses
 //! (too wide, an end gone since the offer was drawn) changes nothing and is

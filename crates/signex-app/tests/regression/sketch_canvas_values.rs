@@ -1,4 +1,4 @@
-//! #187 / #191 (B5) - the sketch canvas's values and pattern instances:
+//! mockup row 187 / mockup row 191 (B5) - the sketch canvas's values and pattern instances:
 //! one suppression helper on the array type, used by the canvas instance
 //! click and the Properties pattern form, round-trips a grid and a polar
 //! array and leaves a linear one alone; a pattern value written on the

@@ -1,4 +1,4 @@
-//! The floating pad link on the footprint sketch canvas (#192, m192):
+//! The floating pad link on the footprint sketch canvas (mockup row 192, m192):
 //! "◂ Back to pad N" after Edit in Sketch from a pad, "Jump to pad ▸" while
 //! a pad's driving entity is selected. Both show that pad in Footprint
 //! mode. Nothing shows on a board sketch or without a pad to go to.

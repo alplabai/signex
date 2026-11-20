@@ -3,7 +3,7 @@
 //! One row per constraint, in the theme's danger colour. A click selects the
 //! row's focus entity; hovering isolates the constraint's glyph on the canvas.
 //! Each row has Remove; a dimension's row also has Convert to reference
-//! (#187 E4), which keeps it as a measurement that never drives.
+//! (mockup row 187 E4), which keeps it as a measurement that never drives.
 
 use iced::widget::{container, mouse_area};
 use iced::{Background, Element, Length, Theme, Widget};
@@ -131,7 +131,7 @@ fn remove_button<'a>(constraint: ConstraintId, i18n: &signex_i18n::I18n) -> Elem
     )
 }
 
-/// Convert to reference (#187 E4): the row's dimension measures from now
+/// Convert to reference (mockup row 187 E4): the row's dimension measures from now
 /// on, one undo step. A reference glyph in the text colour, named by its
 /// tooltip.
 fn convert_button<'a>(constraint: ConstraintId, i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {

@@ -1,4 +1,4 @@
-//! The open ends of a sketch profile, on either host (#179d, #190): the
+//! The open ends of a sketch profile, on either host (mockup row 179d, mockup row 190): the
 //! endpoints of profile edges that no other baking edge shares, where the
 //! profile walk stops. Each end is paired with the nearest other open end,
 //! so a gap names both its edges, both its points and its width. The board

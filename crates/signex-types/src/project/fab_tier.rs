@@ -25,7 +25,7 @@ pub struct FabCapabilities {
     /// Silkscreen to an exposed pad.
     pub silk_to_pad: f64,
     /// The router bit that cuts the board outline and its openings: an
-    /// inside corner tighter than half of it cannot be cut (#179d).
+    /// inside corner tighter than half of it cannot be cut (mockup row 179d).
     pub router_tool_diameter: f64,
 }
 

@@ -28,7 +28,7 @@ use super::{DrcRuleSet, ErcRules, UnknownJson};
 pub const RULE_PROFILE_SCHEMA_V1: u32 = 1;
 
 /// The schema of a profile whose `fab` section names a router tool
-/// diameter (#179d). `fab` keeps no unknown keys, so an older build would
+/// diameter (mockup row 179d). `fab` keeps no unknown keys, so an older build would
 /// drop the value on re-save; it refuses this schema by name instead.
 pub const RULE_PROFILE_SCHEMA_V2: u32 = 2;
 
@@ -79,7 +79,7 @@ pub struct FabProfileInfo {
     /// When the limits were published or last checked, `YYYY-MM-DD`.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub published: String,
-    /// The router bit that cuts the outline, in mm (#179d); absent when the
+    /// The router bit that cuts the outline, in mm (mockup row 179d); absent when the
     /// profile names none. Present, the file is written at
     /// [`RULE_PROFILE_SCHEMA_V2`].
     #[serde(default, skip_serializing_if = "Option::is_none")]

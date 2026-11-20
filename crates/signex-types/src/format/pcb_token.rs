@@ -1,7 +1,7 @@
 //! The `.snxpcb` format tokens and the one rule that picks the token a save
 //! writes. Policy: `docs/FORMAT_VERSIONS.md`.
 
-use crate::format_version::{FormatVersion, MissingToken, NewerMinor};
+use crate::format_version::{FormatVersion, FormatVersionError, MissingToken, NewerMinor};
 use crate::pcb::PcbBoard;
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
@@ -25,8 +25,8 @@ pub const SNXPCB_FORMAT_LAYER_COLORS: &str = "snxpcb/1.5";
 /// drawing or a component anchor (decision 2, 2026-11-20), or any of the
 /// `snxfpt/1.2` sketch lists (reference dimensions, pattern links and
 /// mirrors, pad overrides): an older build would drop those from
-/// `[board_sketch.sketch]` on save, so it opens 1.7 read-only. 1.6 is the
-/// rooms token of another change.
+/// `[board_sketch.sketch]` on save, so it opens 1.7 read-only. 1.6 is
+/// [`SNXPCB_FORMAT_ROOMS`].
 pub const SNXPCB_FORMAT_BOARD_SKETCH_TARGETS: &str = "snxpcb/1.7";
 
 /// The token a save of `board` writes, from its content: the board sketch
@@ -62,3 +62,37 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,
 };
+
+/// The rooms token of the rooms change, which merges before this one
+/// (format decision, 2026-11-20). This build has no rooms, so a board with
+/// this token opens read-only, as it did in every build before 1.7: its
+/// rooms would be lost on save. The rooms change replaces this with its
+/// own constant and orders [`snxpcb_token`] 1.7 > 1.6 > 1.5 > 1.4.
+pub const SNXPCB_FORMAT_ROOMS: &str = "snxpcb/1.6";
+
+/// [`FormatVersion::read`] for `.snxpcb`, which also takes
+/// [`SNXPCB_FORMAT_ROOMS`] (to open read-only).
+pub fn snxpcb_read(found: Option<&str>) -> Result<String, FormatVersionError> {
+    match found {
+        Some(SNXPCB_FORMAT_ROOMS) => Ok(SNXPCB_FORMAT_ROOMS.to_string()),
+        _ => SNXPCB_VERSION.read(found),
+    }
+}
+
+/// True when a board read as `token` opens read-only: a newer minor, or
+/// [`SNXPCB_FORMAT_ROOMS`].
+pub fn snxpcb_opens_read_only(token: &str) -> bool {
+    token == SNXPCB_FORMAT_ROOMS || SNXPCB_VERSION.is_newer_minor(token)
+}
+
+/// [`FormatVersion::refuse_save`] for `.snxpcb`: a board read as
+/// [`SNXPCB_FORMAT_ROOMS`] is refused as a newer minor is.
+pub fn snxpcb_refuse_save(source: &str) -> Result<(), FormatVersionError> {
+    if source == SNXPCB_FORMAT_ROOMS {
+        return Err(FormatVersionError::NewerReadOnly {
+            found: source.to_string(),
+            current: SNXPCB_VERSION.current,
+        });
+    }
+    SNXPCB_VERSION.refuse_save(source)
+}

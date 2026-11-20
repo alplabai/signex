@@ -1,4 +1,4 @@
-//! #187 / #188 (decision 5, Caner 2026-11-20) - Convert to reference: the
+//! mockup row 187 / mockup row 188 (decision 5, Caner 2026-11-20) - Convert to reference: the
 //! conflicting dimension of a rejected edit becomes a reference as one
 //! undo step and the conflict clears; the reference then follows the
 //! driving dimension and never moves geometry; Make driving that

@@ -1,4 +1,4 @@
-//! #187 / #191 / #192 — the Modify tools Chamfer, Extend and Linear
+//! mockup row 187 / mockup row 191 / mockup row 192 — the Modify tools Chamfer, Extend and Linear
 //! Pattern, Mirror about a centerline, and the pad link: Edit in Sketch
 //! focuses the pad's driving profile, Back to pad / Jump to pad return to
 //! it.
@@ -157,7 +157,7 @@ fn corner() -> (Sketch, SketchEntityId, SketchEntityId) {
     (s, along_x, along_y)
 }
 
-// ─── Chamfer (#187) ───────────────────────────────────────────────
+// ─── Chamfer (mockup row 187) ───────────────────────────────────────────────
 
 #[test]
 fn chamfer_cuts_both_lines_and_joins_the_cut_ends() {
@@ -237,7 +237,7 @@ fn chamfer_longer_than_a_line_is_refused() {
     );
 }
 
-// ─── Extend (#187) ────────────────────────────────────────────────
+// ─── Extend (mockup row 187) ────────────────────────────────────────────────
 
 #[test]
 fn extend_grows_a_free_end_to_the_line_ahead_and_keeps_it_there() {
@@ -292,7 +292,7 @@ fn extend_with_nothing_ahead_warns_and_changes_nothing() {
     );
 }
 
-// ─── Linear Pattern (#191) ────────────────────────────────────────
+// ─── Linear Pattern (mockup row 191) ────────────────────────────────────────
 
 #[test]
 fn linear_pattern_repeats_the_clicked_source_along_x() {
@@ -337,7 +337,7 @@ fn linear_pattern_takes_its_pitch_from_the_dimension_input() {
     );
 }
 
-// ─── Mirror about a centerline (#191) ─────────────────────────────
+// ─── Mirror about a centerline (mockup row 191) ─────────────────────────────
 
 #[test]
 fn mirror_takes_a_centerline_under_the_first_click_as_its_line() {
@@ -392,7 +392,7 @@ fn mirror_ignores_a_plain_line_under_the_first_click() {
     );
 }
 
-// ─── Pads and the sketch (#192) ───────────────────────────────────
+// ─── Pads and the sketch (mockup row 192) ───────────────────────────────────
 
 /// A footprint with pad "6" driven by a centre Point inside a 2 × 1 mm
 /// rectangle of Lines. Returns it with the centre and the four Lines.

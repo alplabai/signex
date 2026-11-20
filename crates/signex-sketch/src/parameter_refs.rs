@@ -1,5 +1,5 @@
 //! Where a sketch's parameters are read, and naming, renaming, deleting or
-//! minting one without leaving a dangling reference (#189).
+//! minting one without leaving a dangling reference (mockup row 189).
 //!
 //! One walker, [`visit_expressions`] / [`visit_expressions_mut`], reaches
 //! every expression string a [`SketchData`] holds: the parameter table, a

@@ -49,7 +49,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
     // surfacing while they're authoring sketch entities.
     let selected_pad = if mode_kind == FootprintModeKind::Pads {
         editor.state.selected_pad.and_then(|idx| {
-            editor.state.pads.get(idx).map(|pad| {
+            editor.state.shown_pad(idx).map(|pad| {
                 use crate::library::editor::footprint::state::PadSide;
                 // Side derived from the first layer's prefix. THT/NPT
                 // pads carry both copper sides → All. Otherwise Top
@@ -124,7 +124,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             editor
                 .state
                 .selected_pad
-                .and_then(|idx| editor.state.pads.get(idx))
+                .and_then(|idx| editor.state.shown_pad(idx))
                 .map(|pad| {
                     let parameters = editor.primitive().sketch.as_ref().map(|s| &s.parameters);
                     let mut entries: Vec<crate::panels::PadShapeParamSummary> = pad

@@ -113,7 +113,7 @@ pub enum SketchTool {
 
 impl SketchTool {
     /// The tools that place new geometry, from the Create menu. Holding
-    /// Ctrl while one is armed places without inference (#188).
+    /// Ctrl while one is armed places without inference (mockup row 188).
     pub fn is_drawing(self) -> bool {
         matches!(
             self,

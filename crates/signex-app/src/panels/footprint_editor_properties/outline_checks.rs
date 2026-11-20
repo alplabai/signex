@@ -2,7 +2,7 @@
 //! summary with nothing selected, one line per check of the current solve,
 //! a failing check one line per place. A click on a failing line selects
 //! its entity; an open outline says whether its gap heals and offers Close
-//! gap when it does (#190). Every check warns only; Bake still applies the
+//! gap when it does (mockup row 190). Every check warns only; Bake still applies the
 //! sketch (decision 3, `docs/DECISIONS.md`). The Fab profile group under it
 //! names the router tool the inside-corner check uses.
 

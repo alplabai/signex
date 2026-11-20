@@ -1,4 +1,4 @@
-//! Board-feature snaps of a board sketch (#2518, Graphite mockup #179):
+//! Board-feature snaps of a board sketch (#2518, Graphite mockup row 179):
 //! what the backdrop carries, what the cursor reaches, and that a
 //! footprint sketch never reaches anything of a board.
 

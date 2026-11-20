@@ -20,7 +20,7 @@ use super::super::{DragState, FootprintCanvas, FootprintCanvasState};
 
 impl FootprintCanvas<'_> {
     /// A right-click that did not pan, in sketch mode with the Select tool
-    /// (#188): on a constraint glyph or value it opens the constraint menu,
+    /// (mockup row 188): on a constraint glyph or value it opens the constraint menu,
     /// on a pattern glyph or value the pattern menu, at the click. `None`
     /// anywhere else, so the footprint context menu opens as before.
     pub(in crate::library::editor::footprint::canvas) fn released_secondary_on_glyph(
@@ -311,7 +311,7 @@ impl FootprintCanvas<'_> {
         if self.state.placement_paused && self.state.active_tool != SketchTool::Select {
             return None;
         }
-        // #188 — the constraint the press's snap infers, `Off` under Ctrl.
+        // mockup row 188 — the constraint the press's snap infers, `Off` under Ctrl.
         // An inferring click mints its own Point and the constraint ties it
         // to the curve, so it reuses no Point.
         let inference = snap::click_inference(

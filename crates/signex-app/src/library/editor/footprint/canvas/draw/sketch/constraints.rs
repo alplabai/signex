@@ -1,6 +1,6 @@
 //! Constraint-mark overlay: each relation's mark (H, V, ∥, ⊥, =, ◡, ⇔, ⌖
 //! …) in a small upright pill by the entities it touches, the coincident
-//! mark as a dot (#187, #188). A conflicting or over-constrained mark
+//! mark as a dot (mockup row 187, mockup row 188). A conflicting or over-constrained mark
 //! fills in the conflict colour. Dimensions draw their value instead
 //! (`dimension_labels`); both read their place from
 //! [`crate::library::editor::footprint::canvas::glyph_layout`].
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn a_mark_at_rest_is_a_pill_in_the_label_ink_and_a_conflict_fills_red() {
         let red = Color::from_rgb(1.0, 0.0, 0.0);
-        let ink = SketchInk::BOARD;
+        let ink = SketchInk::board();
         let rest = mark_paint(&ink, red, false, false);
         assert_eq!(rest.fill, ink.pill);
         assert_eq!(rest.border, ink.pill_border);

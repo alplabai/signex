@@ -57,7 +57,7 @@ pub fn view_footprint<'a>(
     // Active bar floats OVER the canvas via Stack so the canvas
     // drawing area extends edge-to-edge behind it instead of being
     // clipped under the bar's bottom. Mirrors Fusion 360 / Altium.
-    // The editor bar (#187): Footprint / Sketch switch, 3D toggle and, in
+    // The editor bar (mockup row 187): Footprint / Sketch switch, 3D toggle and, in
     // sketch mode, the sketch info caption and Parameters.
     let mode_switcher = crate::library::editor::footprint::pads_active_bar::mode_switcher_overlay(
         editor,
@@ -100,7 +100,7 @@ pub fn view_footprint<'a>(
                     editor, tokens, i18n,
                 ),
             )
-            // The constraint / pattern menu at the right-click (#188).
+            // The constraint / pattern menu at the right-click (mockup row 188).
             .push(
                 crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
                     editor, tokens, i18n, ui_family,

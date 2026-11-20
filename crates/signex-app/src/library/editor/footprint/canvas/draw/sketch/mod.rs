@@ -23,11 +23,11 @@ mod pad_link;
 mod preview;
 mod snap;
 mod tool_ghosts;
-// Values on the drawing, pattern glyphs and the conflict badge (#187).
+// Values on the drawing, pattern glyphs and the conflict badge (mockup row 187).
 mod conflict_badge;
 mod dimension_labels;
 mod pattern_glyphs;
-// The sketch palette on the board ground (#187, #188).
+// The sketch palette on the board ground (mockup row 187, mockup row 188).
 mod sketch_ink;
 
 /// The colour of selected sketch geometry, and of what draws as selected
@@ -56,5 +56,5 @@ pub(super) use tool_ghosts::draw_sketch_tool_ghosts;
 // canvas-wide reach.
 pub(in crate::library::editor::footprint::canvas) use fills::{ClosedLoop, find_closed_loops};
 
-// The snap badge's words beside the glyph (Graphite mockup #188).
+// The snap badge's words beside the glyph (Graphite mockup row 188).
 pub(super) use snap::draw_sketch_snap_badge;

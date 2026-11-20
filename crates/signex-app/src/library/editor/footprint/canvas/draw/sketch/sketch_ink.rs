@@ -1,4 +1,4 @@
-//! The sketch canvas ink (#187, #188): the colours sketch geometry,
+//! The sketch canvas ink (mockup row 187, mockup row 188): the colours sketch geometry,
 //! constraint marks and dimension labels draw in, as one palette.
 //!
 //! Sketch mode paints the dark board ground on every theme (decision 7,
@@ -10,6 +10,9 @@
 //! not change with the theme. A conflict keeps the theme's danger colour.
 
 use iced::Color;
+use signex_types::theme::{ThemeId, theme_tokens};
+
+use crate::render_config::to_iced;
 
 /// Colours of the sketch overlay.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,22 +56,29 @@ const fn hex(rgb: u32) -> Color {
 
 impl SketchInk {
     /// The mockup palette on the board ground (graphite mockups, the
-    /// shared sketcher block's `C` palette).
-    pub(super) const BOARD: Self = Self {
-        under: hex(0xA9C2FF),
-        full: hex(0x7FD1A0),
-        over: hex(0xF2A093),
-        unsolved: hex(0x8B8D93),
-        construction: hex(0x8B8D93),
-        centerline: hex(0xC9A13B),
-        selection: hex(0xE0865C),
-        dof_arrow: hex(0x1A99E6),
-        label: hex(0xCFD1D6),
-        pill: hex(0x1D1F23),
-        pill_border: hex(0x34363C),
-        dimension: hex(0x7C7F86),
-        reference: hex(0xC9A0FF),
-    };
+    /// shared sketcher block's `C` palette). The pills take the Graphite
+    /// Dark chrome tokens, the ground the board is painted in; the
+    /// constraint-state hues and the label ink are the mockup's own.
+    pub(super) fn board() -> Self {
+        let chrome = theme_tokens(ThemeId::GraphiteDark);
+        let token =
+            |slot: Option<signex_types::theme::Color>, fallback| to_iced(&slot.unwrap_or(fallback));
+        Self {
+            under: hex(0xA9C2FF),
+            full: hex(0x7FD1A0),
+            over: hex(0xF2A093),
+            unsolved: hex(0x8B8D93),
+            construction: hex(0x8B8D93),
+            centerline: hex(0xC9A13B),
+            selection: hex(0xE0865C),
+            dof_arrow: hex(0x1A99E6),
+            label: hex(0xCFD1D6),
+            pill: token(chrome.extended.raised, chrome.panel_bg),
+            pill_border: token(chrome.extended.line_strong, chrome.border),
+            dimension: hex(0x7C7F86),
+            reference: hex(0xC9A0FF),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -83,7 +93,7 @@ mod tests {
 
     #[test]
     fn the_sketch_takes_the_mockup_palette() {
-        let ink = SketchInk::BOARD;
+        let ink = SketchInk::board();
         assert_eq!(ink.full, hex(0x7FD1A0), "green when fully constrained");
         assert_eq!(ink.under, hex(0xA9C2FF));
         assert_eq!(ink.over, hex(0xF2A093));
@@ -93,7 +103,7 @@ mod tests {
 
     #[test]
     fn every_mark_reads_on_the_board_ground() {
-        let ink = SketchInk::BOARD;
+        let ink = SketchInk::board();
         let ground = board_look().bg;
         for c in [ink.under, ink.full, ink.label, ink.reference] {
             assert!(

@@ -35,7 +35,7 @@ pub struct SketchExit {
     pub board_result: Option<Arc<BakedBoard>>,
     /// The pours, mechanical drawings and anchors that bake writes.
     pub board_items: Option<Arc<SketchBoardItems>>,
-    /// The router tool diameter of the board's project, in mm (#179d), set
+    /// The router tool diameter of the board's project, in mm (mockup row 179d), set
     /// by the board session from the open project; the inside-corner check
     /// reads it. Always `None` on a footprint.
     pub router_tool_diameter: Option<f64>,

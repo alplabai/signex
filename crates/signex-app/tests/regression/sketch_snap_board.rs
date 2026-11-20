@@ -1,4 +1,4 @@
-//! #2518, Graphite mockup #179: a board sketch snaps to the board under it
+//! #2518, Graphite mockup row 179: a board sketch snaps to the board under it
 //! (point only), and its Snap ▾ board rows turn that off without an undo
 //! step or a dirty board sketch. Driven through `Signex::update`.
 

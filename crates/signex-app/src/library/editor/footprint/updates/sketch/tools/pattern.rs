@@ -29,7 +29,7 @@ pub(super) fn apply(
 
 /// Add `kind` to the sketch as a new array with sequential numbering and
 /// rebuild, so its instances bake. With a pattern selected the new array
-/// repeats every instance of it (#191, decision 10).
+/// repeats every instance of it (mockup row 191, decision 10).
 fn push_array(editor: &mut crate::app::FootprintDocument, kind: ArrayKind) {
     let array = Array {
         id: ArrayId::new(),

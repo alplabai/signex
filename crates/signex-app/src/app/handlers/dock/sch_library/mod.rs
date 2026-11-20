@@ -14,6 +14,7 @@
 //!   - [`footprint::grid`] — grid / guide managers + snap sub-tab / mode.
 //!   - [`footprint::silk`] — selected silk-graphic edits.
 //!   - [`footprint::sketch`] — sketch-entity jumps + parameter forwards.
+//!   - [`sketch_fixes`] — conflict Remove / Convert and Close gap.
 //!
 //! Mutations mark the tab dirty and clear the canvas cache; the actual
 //! save to disk happens through the existing Save flow
@@ -31,6 +32,7 @@ use crate::panels::PanelMsg;
 
 mod footprint;
 mod numeric_input;
+mod sketch_fixes;
 mod symbol;
 mod symbol_delete;
 
@@ -60,6 +62,9 @@ impl Signex {
         &mut self,
         panel_msg: &PanelMsg,
     ) -> Option<Task<Message>> {
+        if let Some(task) = self.handle_sketch_fix_message(panel_msg) {
+            return Some(task);
+        }
         let mut follow = Task::none();
         let handled = match panel_msg {
             PanelMsg::FpLibraryOpenSibling(sibling_path) => {
@@ -807,31 +812,6 @@ impl Signex {
                     Unit::Micrometer => Unit::Mm,
                 };
             }),
-            PanelMsg::FpEditorConflictRemoveClicked { constraint } => {
-                follow = self.fp_editor_remove_conflicting_constraint(*constraint);
-                true
-            }
-            PanelMsg::FpEditorConflictConvertClicked(constraint) => {
-                follow = self.fp_editor_convert_conflicting_constraint(*constraint);
-                true
-            }
-            // Close gap (#190): the editor in view, footprint or board sketch.
-            PanelMsg::FpEditorCloseGapClicked { keep, merge } => {
-                if let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) {
-                    follow = self.update(Message::Library(
-                        crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
-                            path,
-                            msg: crate::library::messages::PrimitiveEdit::Footprint(
-                                crate::library::messages::FootprintEditorMsg::SketchCloseGapRequested {
-                                    keep: *keep,
-                                    merge: *merge,
-                                },
-                            ),
-                        },
-                    ));
-                }
-                true
-            }
             _ => false,
         };
         if handled { Some(follow) } else { None }

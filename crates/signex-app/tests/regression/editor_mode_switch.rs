@@ -1,4 +1,4 @@
-//! #187 (Caner, 2026-11-20, decision 8): the footprint editor switches with
+//! mockup row 187 (Caner, 2026-11-20, decision 8): the footprint editor switches with
 //! a two-state Footprint / Sketch segment; 3D is a separate toggle beside it
 //! that returns to the mode it was entered from. Each click sends what the
 //! editor bar's `ModeSwitch` says that control sends.

@@ -1,4 +1,4 @@
-//! The sketch parameters table (#189), shared by the footprint sketch and
+//! The sketch parameters table (mockup row 189), shared by the footprint sketch and
 //! the board sketch: every parameter with its expression, value, unit and
 //! what reads it; Add parameter; typing re-solves; Rename… and Delete in a
 //! row menu, a used parameter's delete asking first (fp-07). Opened by the

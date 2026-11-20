@@ -18,7 +18,7 @@ impl Signex {
         &mut self,
         pad_idx: &usize,
     ) -> bool {
-        // #192 D5 — the driving entity is selected and focused: the canvas
+        // mockup row 192 D5 — the driving entity is selected and focused: the canvas
         // highlights its profile and offers Back to pad.
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.edit_pad_in_sketch(*pad_idx);
@@ -111,7 +111,7 @@ impl Signex {
         // v0.22 Phase D6 — mirror of FpEditorEditPadInSketch:
         // resolve the EditorPad whose `sketch_entity_id` ==
         // `id`, switch to Pads mode, and select that pad. The canvas
-        // link (#192) takes the same path.
+        // link (mockup row 192) takes the same path.
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.return_to_pad(*id);
             editor.canvas_cache.clear();

@@ -1,4 +1,4 @@
-//! #189 — the sketch parameters table: open and close, add, typing that
+//! mockup row 189 — the sketch parameters table: open and close, add, typing that
 //! re-solves and an error that keeps the last solve, rename, the in-use
 //! delete prompt, and Make parameter on a dimension, each one undo step.
 

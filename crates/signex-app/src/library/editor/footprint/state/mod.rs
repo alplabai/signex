@@ -318,18 +318,19 @@ pub struct FootprintEditorState {
     /// The sketch mode exit set: bake preview, discard confirmation and
     /// the footprint as sketch mode found it (#2518).
     pub sketch_exit: super::sketch_mode::SketchExit,
-    /// The sketch parameters table, when open (#189); boxed, it is rarely
+    /// The sketch parameters table, when open (mockup row 189); boxed, it is rarely
     /// open.
     pub parameters_table: Option<Box<super::parameters_table::ParametersTableState>>,
     /// The words the sketch canvas draws, rendered by the app per language.
     pub canvas_text: SketchCanvasText,
     /// Values edited on the drawing, the constraint menu, the selected pattern.
     pub sketch_overlay: SketchOverlay,
-    /// The pad an Edit in Sketch came from (#192); read it through `live_pad_link`.
+    /// The pad an Edit in Sketch came from (mockup row 192); read it through `live_pad_link`.
     pub pad_link: Option<PadLinkFocus>,
-    /// A patterned pad edit waiting for "This pad / All pads" (#192 D1).
+    /// A patterned pad edit waiting for "This pad / All pads" (mockup row 192
+    /// D1); the held value is read through `shown_pad`, never `pads`.
     pub pad_scope: Option<Box<pad_scope::PadScopePrompt>>,
-    /// The mode the 3D toggle returns to (#187); set when 3D is entered.
+    /// The mode the 3D toggle returns to (mockup row 187); set when 3D is entered.
     pub mode_before_3d: EditorMode,
 }
 

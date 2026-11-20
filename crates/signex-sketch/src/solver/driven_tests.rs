@@ -1,4 +1,4 @@
-//! Driven (reference) dimensions in the solve (#187, #188): no residual,
+//! Driven (reference) dimensions in the solve (mockup row 187, mockup row 188): no residual,
 //! no Jacobian row, no DOF, never a conflict or a redundancy.
 
 use std::collections::HashMap;

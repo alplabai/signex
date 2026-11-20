@@ -1,4 +1,4 @@
-//! One constraint menu (#188): a right-click on a constraint's glyph or
+//! One constraint menu (mockup row 188): a right-click on a constraint's glyph or
 //! value opens it at the click, on the footprint editor and the board
 //! sketch alike. Rows: Edit value, Make parameter and Convert to reference
 //! (dimensions only; a reference dimension shows Make driving instead and
@@ -29,7 +29,7 @@ use crate::library::editor::footprint::state::sketch_overlay::{
 };
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
-/// Convert to reference, Make driving and Delete mirror (#187, #188): each
+/// Convert to reference, Make driving and Delete mirror (mockup row 187, mockup row 188): each
 /// one undo step, solved like every sketch edit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SketchReferenceMsg {

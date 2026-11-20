@@ -1,4 +1,4 @@
-//! Decisions 3 and 4 (#179d, #190, Caner 2026-11-20): the router tool of the
+//! Decisions 3 and 4 (mockup row 179d, mockup row 190, Caner 2026-11-20): the router tool of the
 //! project's fab tier reaches the board sketch, whose inside-corner check
 //! warns at a corner tighter than the tool and never stops Bake; an open
 //! outline whose gap is within the 0.05 mm heal tolerance offers Close gap,

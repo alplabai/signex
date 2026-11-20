@@ -189,7 +189,7 @@ Bake**.
 - **Bake preview** opens a card with what Bake would write, a count per
   board target, or why the sketch does not bake; "Back to sketch" closes
   it. It writes nothing. While it is open the canvas draws the result
-  (Graphite mockup #190): a veil in the ground colour, then the baked outline over the
+  (Graphite mockup row 190): a veil in the ground colour, then the baked outline over the
   board area, cutouts and mounting holes as openings, keepouts outlined
   and faintly filled, V-scores dashed, all in the theme slots of
   [Drawing the board](#drawing-the-board), with the sketch faint on top.
@@ -230,7 +230,7 @@ table with its Close button.
 ## Outline checks {#outline-checks}
 
 With nothing selected, Properties shows an **Outline checks** section under
-the Board summary (Graphite mockup #179d). The checks run on the solve the editor already
+the Board summary (Graphite mockup row 179d). The checks run on the solve the editor already
 has (no second solve) and walk the outline with the bake's own profile walk
 (`signex_bake::board::outline_checks`), so they see what Bake would write.
 They are read each time the panel is built, so every edit, Properties edit,
@@ -336,7 +336,7 @@ conflict badge, on the same canvas and the same code
 ## Snapping to the board {#snapping-to-the-board}
 
 On a board sketch the cursor also snaps to the board drawn under the
-sketch (#2518, Graphite mockup #179): the outline's vertices and the
+sketch (#2518, Graphite mockup row 179): the outline's vertices and the
 nearest point on an outline edge, placed pads' centres, drilled pads'
 centres (plated and not), via centres, both ends of every track and the
 corners of component courtyards (`snap_board.rs`). The backdrop carries

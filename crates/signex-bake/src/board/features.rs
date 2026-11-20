@@ -92,11 +92,13 @@ fn is_slot(ctx: &Context<'_>, seed: &Entity) -> bool {
 }
 
 /// The board net `name` names, for the entity that names it; `None` for no
-/// name. A name the table lacks refuses the bake.
+/// name. A name the table lacks refuses the bake with `unknown`, which
+/// names the kind of entity.
 pub(super) fn named_net<'n>(
     entity: SketchEntityId,
     name: Option<&str>,
     nets: &'n [NetDef],
+    unknown: fn(SketchEntityId, String) -> BoardBakeError,
 ) -> Result<Option<&'n NetDef>, BoardBakeError> {
     match name.filter(|name| !name.is_empty()) {
         None => Ok(None),
@@ -104,10 +106,7 @@ pub(super) fn named_net<'n>(
             .iter()
             .find(|n| n.name == name)
             .map(Some)
-            .ok_or_else(|| BoardBakeError::UnknownNet {
-                entity,
-                net: name.to_string(),
-            }),
+            .ok_or_else(|| unknown(entity, name.to_string())),
     }
 }
 
@@ -135,7 +134,10 @@ pub(super) fn holes(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<PcbHole>, 
                 drill,
             });
         }
-        let net = named_net(entity.id, attr.net.as_deref(), nets)?.map(|n| n.number);
+        let net = named_net(entity.id, attr.net.as_deref(), nets, |entity, net| {
+            BoardBakeError::UnknownNet { entity, net }
+        })?
+        .map(|n| n.number);
         out.push(PcbHole {
             uuid: entity.id.0,
             position,

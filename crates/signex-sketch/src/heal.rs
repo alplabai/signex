@@ -1,4 +1,4 @@
-//! Close gap (#190): join two open profile ends that are nearly touching.
+//! Close gap (mockup row 190): join two open profile ends that are nearly touching.
 //!
 //! The bake walks a profile through shared endpoint points, so a gap is
 //! closed by joining the two end points into one: every edge, constraint

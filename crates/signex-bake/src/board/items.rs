@@ -76,7 +76,9 @@ fn pours(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<Zone>, BoardBakeError
         else {
             continue;
         };
-        let net = named_net(entity.id, attr.net.as_deref(), nets)?;
+        let net = named_net(entity.id, attr.net.as_deref(), nets, |entity, net| {
+            BoardBakeError::PourUnknownNet { entity, net }
+        })?;
         let length = |expr: &Option<String>, what| {
             opt_eval_mm(expr, &eval)
                 .and_then(|v| finite(v.unwrap_or(0.0)))
@@ -372,7 +374,7 @@ mod tests {
         let edges = s.rect(0.0, 0.0, 10.0, 5.0);
         s.get(edges[0]).pour = Some(pour(PcbLayer::Copper(CopperLayer::Top), Some("AGND")));
         match s.items() {
-            Err(BoardBakeError::UnknownNet { entity, net }) => {
+            Err(BoardBakeError::PourUnknownNet { entity, net }) => {
                 assert_eq!((entity, net.as_str()), (edges[0], "AGND"));
             }
             other => panic!("expected an unknown net, got {other:?}"),

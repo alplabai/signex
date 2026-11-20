@@ -1,4 +1,4 @@
-//! Pattern glyphs (#187, #191): each sketch array draws a small label by
+//! Pattern glyphs (mockup row 187, mockup row 191): each sketch array draws a small label by
 //! its source ("L×4", "G×3×4", "P×8") that a click selects and a
 //! right-click opens the pattern menu on. While a grid or polar pattern is
 //! selected, each of its instance slots draws a ring a click suppresses or

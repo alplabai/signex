@@ -23,11 +23,11 @@ pub(super) mod redundancy;
 pub(super) mod solved;
 pub(super) mod tools;
 pub(super) mod ui;
-// The parameters table (#189).
+// The parameters table (mockup row 189).
 pub(super) mod parameters;
-// Values on the drawing, constraint and pattern menus (#187, #188, #191).
+// Values on the drawing, constraint and pattern menus (mockup row 187, mockup row 188, mockup row 191).
 pub(super) mod canvas_values;
-// Reference (driven) dimensions and pattern mirrors (#187, #188).
+// Reference (driven) dimensions and pattern mirrors (mockup row 187, mockup row 188).
 pub(super) mod reference;
-// Close gap on an open profile (#190).
+// Close gap on an open profile (mockup row 190).
 pub(super) mod close_gap;

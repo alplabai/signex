@@ -1,4 +1,4 @@
-//! The Slot and Polygon Create tools (#187). Slot: click the first centre,
+//! The Slot and Polygon Create tools (mockup row 187). Slot: click the first centre,
 //! the second (a typed dimension input is the centre distance), then a
 //! click sets the half width. Polygon: click the centre, then the first
 //! vertex (the dimension input is the side count, empty is 6). The closing

@@ -169,7 +169,7 @@ impl Signex {
 
     /// Apply `preview` as one undo step, unless the rules moved since it
     /// was computed. A tier, or a fab profile naming a router tool, also
-    /// sets the project's router tool diameter (#179d); a profile naming
+    /// sets the project's router tool diameter (mockup row 179d); a profile naming
     /// none leaves it as it is.
     pub(crate) fn apply_preset(
         &mut self,

@@ -1,4 +1,4 @@
-//! Driven (reference) dimensions (#187, #188): a dimension the user
+//! Driven (reference) dimensions (mockup row 187, mockup row 188): a dimension the user
 //! converted to a reference measures the geometry and never drives it.
 //!
 //! The set is stored on the sketch as [`SketchData::driven_dimensions`], a

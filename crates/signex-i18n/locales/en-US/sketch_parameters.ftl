@@ -1,4 +1,4 @@
-# The sketch info bar and the sketch parameters table (#189), on the
+# The sketch info bar and the sketch parameters table (mockup row 189), on the
 # footprint sketch and the board sketch alike.
 
 # The info bar: what is being sketched, on which plane, at which grid step.

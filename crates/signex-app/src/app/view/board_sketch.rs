@@ -42,7 +42,7 @@ impl Signex {
             &self.ui_state.i18n,
         )
         .map(Message::Library);
-        // The constraint / pattern menu at the right-click (#188), measured
+        // The constraint / pattern menu at the right-click (mockup row 188), measured
         // in the UI font and kept inside the canvas, under the mode bar.
         let menu = crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
             &session.editor,
@@ -139,7 +139,7 @@ impl Signex {
     }
 }
 
-/// The gap of an open profile the bake refuses (#190): whether it heals
+/// The gap of an open profile the bake refuses (mockup row 190): whether it heals
 /// under the tolerance, and Close gap when it does.
 fn board_gap_line(
     session: &BoardSketchSession,

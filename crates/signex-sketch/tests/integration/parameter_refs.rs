@@ -1,4 +1,4 @@
-//! #189 — where parameters are used, and renaming, deleting and minting one
+//! mockup row 189 — where parameters are used, and renaming, deleting and minting one
 //! without leaving a dangling reference.
 
 use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};

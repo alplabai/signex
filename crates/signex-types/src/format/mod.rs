@@ -141,8 +141,9 @@ pub use pcb_rows::{
     PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow, parse_pcb_layer, pcb_layer_token,
 };
 pub use pcb_token::{
-    SNXPCB_FORMAT_BOARD_SKETCH_TARGETS, SNXPCB_FORMAT_LAYER_COLORS, SNXPCB_FORMAT_V1,
-    SNXPCB_VERSION, snxpcb_token,
+    SNXPCB_FORMAT_BOARD_SKETCH_TARGETS, SNXPCB_FORMAT_LAYER_COLORS, SNXPCB_FORMAT_ROOMS,
+    SNXPCB_FORMAT_V1, SNXPCB_VERSION, snxpcb_opens_read_only, snxpcb_read, snxpcb_refuse_save,
+    snxpcb_token,
 };
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
@@ -799,17 +800,18 @@ impl SnxPcb {
     }
 
     /// True when the file was written by a newer minor version than this
-    /// build knows: it loaded for viewing but `write_string` refuses to
-    /// save it (unknown content would be lost); the caller should warn.
+    /// build knows, or carries the rooms token: it loaded for viewing but
+    /// `write_string` refuses to save it (unknown content would be lost);
+    /// the caller should warn.
     pub fn is_from_newer_minor(&self) -> bool {
-        SNXPCB_VERSION.is_newer_minor(&self.format)
+        snxpcb_opens_read_only(&self.format)
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
     pub fn write_string(&self) -> Result<String, FormatError> {
-        SNXPCB_VERSION.refuse_save(&self.format)?;
+        snxpcb_refuse_save(&self.format)?;
         if let Some(src) = &self.board.unknown.newer_minor_source {
-            SNXPCB_VERSION.refuse_save(src)?;
+            snxpcb_refuse_save(src)?;
         }
         pcb_footprints::check_unique_footprint_uuids(&self.board.footprints)?;
         let mut out = String::new();
@@ -969,7 +971,7 @@ impl SnxPcb {
     pub fn parse(input: &str) -> Result<Self, FormatError> {
         let raw: PcbRaw = parse_finite(input)?;
 
-        let format = SNXPCB_VERSION.read(raw.format.as_deref())?;
+        let format = snxpcb_read(raw.format.as_deref())?;
 
         let footprint_rows = parse_optional_block::<PcbFootprintRow>("footprints", raw.footprints)?;
         let pad_rows = parse_optional_block::<PcbPadRow>("pads", raw.pads)?;
@@ -1040,9 +1042,7 @@ impl SnxPcb {
                 extras: board_extras.unknown,
                 extras_root: extras.unknown,
                 board_sketch: board_sketch_unknown,
-                newer_minor_source: SNXPCB_VERSION
-                    .is_newer_minor(&format)
-                    .then(|| format.clone()),
+                newer_minor_source: snxpcb_opens_read_only(&format).then(|| format.clone()),
                 load_repairs: Vec::new(),
             },
         };

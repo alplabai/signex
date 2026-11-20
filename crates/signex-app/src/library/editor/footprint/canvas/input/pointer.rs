@@ -210,7 +210,7 @@ impl FootprintCanvas<'_> {
     }
 
     /// Whether the cursor snap may infer: not while Ctrl is held with a
-    /// sketch drawing tool armed (#188, "Ctrl while drawing turns off the
+    /// sketch drawing tool armed (mockup row 188, "Ctrl while drawing turns off the
     /// ±5° snap"); point reuse, guides and grid still apply.
     fn snap_infers(&self, cstate: &FootprintCanvasState) -> bool {
         use crate::library::editor::footprint::state::EditorMode;
@@ -265,7 +265,7 @@ impl FootprintCanvas<'_> {
         }
     }
 
-    /// Select tool in sketch mode (#187, #191): a click on a value edits it
+    /// Select tool in sketch mode (mockup row 187, mockup row 191): a click on a value edits it
     /// in place, on a pattern glyph selects (or drops) the pattern, on an
     /// instance slot of the selected pattern suppresses it or brings it
     /// back. While a value is edited, a click anywhere else drops the edit.
@@ -346,7 +346,7 @@ impl FootprintCanvas<'_> {
             && let Some(cursor_pos) = cursor.position_in(bounds)
         {
             // A constraint glyph or value, or a pattern glyph, opens its own
-            // menu instead (#188).
+            // menu instead (mockup row 188).
             if let Some(a) = self.released_secondary_on_glyph(cstate, cursor_pos) {
                 return Some(a);
             }

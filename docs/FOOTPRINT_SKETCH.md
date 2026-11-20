@@ -99,7 +99,7 @@ over-constrained.
 ## Switching modes {#switching-modes}
 
 The footprint editor bar floats at the canvas's top right, just under the
-Active Bar (Graphite mockup #187). At its left a two-state segment reads
+Active Bar (Graphite mockup row 187). At its left a two-state segment reads
 **Footprint | Sketch**: Footprint is the pads view, Sketch opens the
 sketcher. Beside it the **3D** toggle shows the body in 3D; it is lit while
 3D is on, and a second click goes back to the mode 3D was entered from
@@ -132,7 +132,7 @@ reads **Bake preview · Discard changes · Bake**:
   leaves at once. It never writes to disk.
 - **Bake preview** shows a count per footprint target (pads, silk,
   courtyard, mask, paste, pours, keepouts, cutouts, V-scores); "Back to
-  sketch" closes it. While it is open the canvas draws the result (Graphite mockup #190):
+  sketch" closes it. While it is open the canvas draws the result (Graphite mockup row 190):
   a veil in the ground colour, then the baked pads, silk and courtyard as
   Pads mode draws them and the mask openings, paste apertures, pours,
   keepouts and cutouts in their layer colours (the board palette's
@@ -150,7 +150,7 @@ Centerline; it replaces the click-to-cycle pill.
 
 A sketch's parameters are named values its expressions read: dimensions,
 pattern counts and spacings, pad sizes and the other bake attributes
-(#189). They are kept per footprint (or per board sketch); there are no
+(mockup row 189). They are kept per footprint (or per board sketch); there are no
 family tables shared between footprints.
 
 **The sketch info bar** sits at the canvas's top right in sketch mode, on
@@ -277,7 +277,7 @@ Remove button that deletes that constraint in one undo step, then solves.
 ## Snap badges {#snap-badges}
 
 While a drawing tool is armed, the cyan glyph at the cursor shows what the
-next click lands, and a pill beside it names it (Graphite mockup #188, "the
+next click lands, and a pill beside it names it (Graphite mockup row 188, "the
 badge names the target"; `canvas/draw/sketch/snap.rs`):
 
 | Snap | Glyph | Badge |
@@ -479,6 +479,10 @@ attribute of a pad that is an instance of a pattern (not the pattern's
 source pad) asks, each time, **This pad / All pads / Cancel**; no answer is
 remembered. The edit shows in the Properties panel while the card waits; a
 change of size or position, which an override does not hold, does not ask.
+The held value lives only in the card (`PadScopePrompt`), never in the
+editor's pad list, so a Save, Save All or autosave while the card waits
+writes the pad as it was, and the card stays open. The canvas draws the pad
+as it was until the answer.
 
 - **This pad** stores only the attributes the edit changed, as an override
   of that instance: `SketchData::pad_overrides`, keyed by `(pattern, i, j)`
@@ -513,7 +517,7 @@ name instead of dropping them ([FORMAT_VERSIONS.md](FORMAT_VERSIONS.md)).
 
 A dimension (Distance, Distance to line, Distance to circle, Angle) can be
 a reference: it measures the geometry and never drives it (decision 5,
-Caner 2026-11-20, mockups #187 and #188). The constraint menu offers
+Caner 2026-11-20, mockup row 187 and mockup row 188). The constraint menu offers
 **Convert to reference** on a driving dimension and **Make driving** on a
 reference; a Properties conflict row of a dimension has a Convert to
 reference button beside Remove. Each is one undo step, then a solve.

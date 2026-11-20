@@ -348,7 +348,7 @@ fn seed_project_rules(
 
 /// The first content of a dialog-made `.snxprj`: the project as the folder
 /// shows it, with the chosen defaults and designator standard and its id,
-/// and the picked fab tier's router tool (#179d). Part of the creation: a
+/// and the picked fab tier's router tool (mockup row 179d). Part of the creation: a
 /// failure takes the project back.
 fn write_setup(project_path: &Path, setup: &signex_types::project::ProjectSetup) -> Result<()> {
     let mut data = signex_types::project::parse_project_bytes(project_path, b"")
@@ -779,7 +779,7 @@ mod tests {
         assert!(!dsl.contains("fab_"), "{dsl}");
     }
 
-    /// #179d: a fab tier picked in the setup stores its router tool in the
+    /// mockup row 179d: a fab tier picked in the setup stores its router tool in the
     /// project; no tier stores none.
     #[test]
     fn a_new_project_with_a_fab_tier_stores_its_router_tool() {

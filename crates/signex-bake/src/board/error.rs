@@ -45,9 +45,10 @@ pub enum BoardBakeError {
     HoleNotACircle { entity: SketchEntityId },
     #[error("mounting hole {entity} has a drill of {drill} mm; it must be above 0")]
     HoleDrill { entity: SketchEntityId, drill: f64 },
-    /// A mounting hole or a pour names a net the board's table lacks.
-    #[error("entity {entity} names net {net:?}, which the board does not have")]
+    #[error("mounting hole {entity} names net {net:?}, which the board does not have")]
     UnknownNet { entity: SketchEntityId, net: String },
+    #[error("pour {entity} names net {net:?}, which the board does not have")]
+    PourUnknownNet { entity: SketchEntityId, net: String },
     /// A Slot profile that is not two parallel lines joined by two tangent
     /// arcs of one radius.
     #[error("slot {entity} is not a slot: two parallel lines joined by two tangent arcs")]

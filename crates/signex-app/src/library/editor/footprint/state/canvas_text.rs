@@ -30,7 +30,7 @@ pub struct SketchCanvasText {
     pub snap_board_via: String,
     pub snap_board_track: String,
     pub snap_board_courtyard: String,
-    /// Midpoint and Centre snaps (#188) and the curve they name when it is
+    /// Midpoint and Centre snaps (mockup row 188) and the curve they name when it is
     /// no pad's.
     pub snap_midpoint: String,
     pub snap_centre: String,

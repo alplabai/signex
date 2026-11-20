@@ -1,4 +1,4 @@
-//! The router tool diameter of a fab profile (#179d): a `.snxrules` field
+//! The router tool diameter of a fab profile (mockup row 179d): a `.snxrules` field
 //! that round-trips, written at schema 2 only while it is present.
 
 use super::*;
@@ -89,7 +89,7 @@ fn each_tier_names_its_router_tool() {
     }
 }
 
-/// The project's copy (#179d): a top-level `.snxprj` key, absent until a
+/// The project's copy (mockup row 179d): a top-level `.snxprj` key, absent until a
 /// tier or profile sets it, read back as written.
 #[test]
 fn the_project_router_diameter_round_trips_and_is_absent_by_default() {

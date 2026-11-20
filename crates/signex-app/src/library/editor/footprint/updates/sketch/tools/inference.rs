@@ -1,4 +1,4 @@
-//! The constraints a sketch click infers (#188): a Midpoint, Centre or
+//! The constraints a sketch click infers (mockup row 188): a Midpoint, Centre or
 //! Intersection snap lands its constraint on the click's Point, and a Line
 //! within ±5° of an axis gets its Horizontal or Vertical. Ctrl (an `Off`
 //! inference) lands none of them. Each lands in the click's undo step.

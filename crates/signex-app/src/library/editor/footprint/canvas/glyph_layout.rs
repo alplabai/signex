@@ -1,7 +1,7 @@
 //! Where the sketch canvas puts each constraint mark, dimension value,
 //! pattern glyph, mirror glyph and pattern instance. One pure layout, read
 //! by the draw pass and by the hit test, so a click lands on what is drawn.
-//! The marks are the mockups' (#187, #188): H, V, ∥, ⊥, =, ◡, ⇔, ⌖, a dot
+//! The marks are the mockups' (mockup row 187, mockup row 188): H, V, ∥, ⊥, =, ◡, ⇔, ⌖, a dot
 //! for coincident; a dimension shows its value instead, and a reference
 //! (driven) dimension the value it measures.
 

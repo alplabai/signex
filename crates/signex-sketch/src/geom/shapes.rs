@@ -1,4 +1,4 @@
-//! The whole shapes the sketch Create tools place in one go (#187): a slot
+//! The whole shapes the sketch Create tools place in one go (mockup row 187): a slot
 //! and a regular polygon. Pure builders return the entities and constraints
 //! to add, so the tool adds them as one edit, and the outline helpers give
 //! the canvas ghost the same geometry. Why the slot holds its tangency with

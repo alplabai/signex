@@ -1,4 +1,4 @@
-//! Caner (2026-11-20), items 1 and 6 (#187, #179, #188): Sketch Create ▾
+//! Caner (2026-11-20), items 1 and 6 (mockup row 187, mockup row 179, mockup row 188): Sketch Create ▾
 //! offers Slot and Polygon after Point on both hosts, each placed as one
 //! undo step; the Midpoint, Centre and Intersection snaps land their
 //! constraint, and Ctrl places without inference, the Line's auto H / V

@@ -100,12 +100,12 @@ fn set_mode(
     // a menu open — the dropdown's backstop eats the click —
     // but a keyboard shortcut can.)
     editor.state.active_bar_menu = None;
-    // #192 — a mode change ends the Edit in Sketch focus.
+    // mockup row 192 — a mode change ends the Edit in Sketch focus.
     editor.state.pad_link = None;
     // and closes the sketch canvas overlays, so a hidden value edit
     // cannot keep the keyboard in another mode.
     editor.state.sketch_overlay = Default::default();
-    // The 3D toggle returns to the mode 3D was entered from (#187).
+    // The 3D toggle returns to the mode 3D was entered from (mockup row 187).
     if mode == EditorMode::View3d && editor.state.mode != EditorMode::View3d {
         editor.state.mode_before_3d = editor.state.mode;
     }
@@ -227,12 +227,12 @@ fn tool_escape(editor: &mut crate::app::FootprintDocument) {
         return;
     }
     // The sketch canvas's constraint menu, value edit, then selected
-    // pattern close next, one per Esc (#188).
+    // pattern close next, one per Esc (mockup row 188).
     if editor.state.sketch_overlay.close_innermost() {
         editor.canvas_cache.clear();
         return;
     }
-    // The parameters table (#189): its prompt, rename or row menu first,
+    // The parameters table (mockup row 189): its prompt, rename or row menu first,
     // then the table itself; the tool and selection stay. It shows in
     // Sketch mode only.
     if editor.state.mode == crate::library::editor::footprint::state::EditorMode::Sketch

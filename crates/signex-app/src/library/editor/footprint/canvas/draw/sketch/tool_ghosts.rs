@@ -1,5 +1,5 @@
 //! Ghost previews of the Modify tools that work on existing geometry
-//! (#187 / #191): the Line a Chamfer or Extend click would take, where an
+//! (mockup row 187 / mockup row 191): the Line a Chamfer or Extend click would take, where an
 //! extended Line stops, the mirror image of the cursor, and the instances
 //! of a Linear Pattern; and the rubber band of the Slot and Polygon Create
 //! tools, from the geometry they will place. Drawn like the drawing tools'

@@ -59,7 +59,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     // under, red over, grey before any solve. Entities named by the
     // constraints of a rejected edit take the theme's error colour until
     // the next edit or successful solve.
-    let ink = SketchInk::BOARD;
+    let ink = SketchInk::board();
     let conflict_entities = state.conflict.entities(sketch);
     let dof_colour = |id: SketchEntityId| -> Color {
         use signex_sketch::solver::dof::DofColor;

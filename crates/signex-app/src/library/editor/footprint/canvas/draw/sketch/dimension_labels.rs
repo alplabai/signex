@@ -1,8 +1,8 @@
-//! Values on the drawing (#187): each dimension shows `name · value` in a
+//! Values on the drawing (mockup row 187): each dimension shows `name · value` in a
 //! small label on its dimension line, a value being edited shows the typed
 //! text with a caret, and a selected pattern shows its count and spacing
 //! the same way. A reference (driven) dimension shows the value it measures
-//! and draws its label and line dashed in the reference ink (#188).
+//! and draws its label and line dashed in the reference ink (mockup row 188).
 //! Pattern glyphs, instance slots and the conflict badge draw from here
 //! too, on top of the geometry, all from one layout (`canvas::glyph_layout`).
 
@@ -52,7 +52,7 @@ pub(super) struct LabelInk {
 
 impl LabelInk {
     pub(super) fn new(danger: Color) -> Self {
-        let ink = SketchInk::BOARD;
+        let ink = SketchInk::board();
         Self {
             fill: ink.pill,
             border: ink.pill_border,
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn a_reference_value_draws_dashed_in_the_reference_ink() {
         let ink = LabelInk::new(Color::from_rgb(1.0, 0.0, 0.0));
-        assert_eq!(ink.reference, SketchInk::BOARD.reference);
+        assert_eq!(ink.reference, SketchInk::board().reference);
         let look = value_look(&ink, false, false, false, true);
         assert!(look.dashed);
         assert_eq!(look.paint.border, ink.reference);
@@ -297,9 +297,9 @@ mod tests {
     #[test]
     fn the_board_ground_labels_take_the_mockup_pill() {
         let ink = LabelInk::new(Color::from_rgb(1.0, 0.0, 0.0));
-        assert_eq!(ink.fill, SketchInk::BOARD.pill);
-        assert_eq!(ink.text, SketchInk::BOARD.label);
-        assert_eq!(ink.border, SketchInk::BOARD.pill_border);
-        assert_eq!(ink.dimension, SketchInk::BOARD.dimension);
+        assert_eq!(ink.fill, SketchInk::board().pill);
+        assert_eq!(ink.text, SketchInk::board().label);
+        assert_eq!(ink.border, SketchInk::board().pill_border);
+        assert_eq!(ink.dimension, SketchInk::board().dimension);
     }
 }

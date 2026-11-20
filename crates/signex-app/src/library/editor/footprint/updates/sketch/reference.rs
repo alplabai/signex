@@ -1,4 +1,4 @@
-//! Reference dimensions and pattern mirrors (#187, #188): Convert to
+//! Reference dimensions and pattern mirrors (mockup row 187, mockup row 188): Convert to
 //! reference and Make driving from the constraint menu or a Properties
 //! conflict row, and Delete mirror from a mirror glyph's menu.
 //!

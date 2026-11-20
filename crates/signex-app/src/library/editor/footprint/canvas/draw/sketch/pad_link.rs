@@ -1,4 +1,4 @@
-//! The driving-profile highlight of an Edit in Sketch from a pad (#192):
+//! The driving-profile highlight of an Edit in Sketch from a pad (mockup row 192):
 //! the pad's entity and its profile in the selection colour, with a soft
 //! halo so it reads over the selection stroke itself.
 

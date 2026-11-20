@@ -1,5 +1,5 @@
 //! Ids of `locales/en-US/sketch_parameters.ftl`: the sketch info bar and the
-//! sketch parameters table (#189).
+//! sketch parameters table (mockup row 189).
 
 define_ids! {
     SKETCH_PARAMETERS;

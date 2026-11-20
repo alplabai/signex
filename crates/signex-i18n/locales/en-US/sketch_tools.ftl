@@ -1,4 +1,4 @@
-# Sketch Modify tools added by #187 / #191 and the pad link of #192, in the
+# Sketch Modify tools added by mockup row 187 / mockup row 191 and the pad link of mockup row 192, in the
 # footprint editor's sketch mode.
 
 # Modify ▾ rows.

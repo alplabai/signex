@@ -1,12 +1,12 @@
-//! #192 D1 (decision 9, Caner 2026-11-20) — editing an attribute of a
+//! mockup row 192 D1 (decision 9, Caner 2026-11-20) — editing an attribute of a
 //! patterned pad asks "This pad / All pads" every time. This pad stores one
 //! per-instance override and only that pad changes, through a save and a
 //! reload; All pads changes every instance; Cancel changes nothing.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
+use signex_app::app::{FileMsg, FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
 use signex_app::library::editor::footprint::state::pad_scope::PadScope;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -19,6 +19,7 @@ use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::solver::Solver;
+use tempfile::TempDir;
 
 /// A 4-pad row: the source pad "1" at the origin, a linear pattern of it at
 /// a 1 mm pitch, its pads baked into the footprint.
@@ -70,20 +71,25 @@ fn row() -> (Footprint, ArrayId) {
 fn open(stem: &str) -> (Signex, PathBuf, ArrayId) {
     let (fp, array) = row();
     let path = PathBuf::from(format!("{stem}.snxfpt"));
-    let editor = FootprintDocument::new(path.clone(), FootprintFile::from_footprint(fp));
+    let app = open_at(&path, FootprintFile::from_footprint(fp));
+    (app, path, array)
+}
+
+fn open_at(path: &Path, file: FootprintFile) -> Signex {
+    let editor = FootprintDocument::new(path.to_path_buf(), file);
     let (mut app, _initial_task) = Signex::new();
     app.document_state
         .footprint_editors
-        .insert(path.clone(), editor);
+        .insert(path.to_path_buf(), editor);
     app.document_state.tabs.push(TabInfo {
-        title: stem.into(),
-        path: path.clone(),
+        title: "row".into(),
+        path: path.to_path_buf(),
         cached_document: None,
         project_id: None,
-        kind: TabKind::FootprintEditor(path.clone()),
+        kind: TabKind::FootprintEditor(path.to_path_buf()),
     });
     app.document_state.active_tab = 0;
-    (app, path, array)
+    app
 }
 
 fn editor<'a>(app: &'a Signex, path: &PathBuf) -> &'a FootprintDocument {
@@ -159,6 +165,52 @@ fn editing_the_net_of_a_patterned_pad_asks_first() {
         "nothing written yet"
     );
     assert_eq!(editor(&app, &path).history.undo_len(), undo_before);
+    let idx = idx_of(&app, &path, "3");
+    let state = &editor(&app, &path).state;
+    assert_eq!(
+        state.pads[idx].net, "",
+        "the pad list keeps the pad as it was"
+    );
+    assert_eq!(
+        state.shown_pad(idx).map(|p| p.net.as_str()),
+        Some("GND"),
+        "the panel shows the held value"
+    );
+}
+
+/// A Save while the question waits writes the pad as it was, and a Cancel
+/// after the save leaves the editor clean and equal to the file on disk.
+#[test]
+fn a_save_while_the_question_waits_never_writes_the_held_value() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join("scope-save.snxfpt");
+    let (fp, _) = row();
+    let file = FootprintFile::from_footprint(fp);
+    std::fs::write(&path, file.to_toml_string().expect("serialise")).expect("write");
+    let read = FootprintFile::from_bytes(&std::fs::read(&path).unwrap()).expect("parse");
+    let mut app = open_at(&path, read);
+    drop(app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::FpEditorSetFootprintDescription("edited".into()),
+    ))));
+    set_net(&mut app, &path, "3", "GND");
+    assert!(editor(&app, &path).state.pad_scope.is_some());
+
+    crate::settle_support::settle(&mut app, Message::File(FileMsg::Save));
+
+    let written = FootprintFile::from_bytes(&std::fs::read(&path).unwrap()).expect("reads back");
+    let fp = &written.footprints[0];
+    assert_eq!(fp.description, "edited", "the save ran");
+    assert_eq!(nets(fp), expected(&[]), "the held net is not on disk");
+    assert!(fp.sketch.as_ref().unwrap().pad_overrides.is_empty());
+
+    answer(&mut app, &path, PadScope::Cancel);
+    let doc = editor(&app, &path);
+    assert!(doc.state.pad_scope.is_none());
+    assert!(
+        !doc.is_dirty(),
+        "Cancel after the save leaves nothing unsaved"
+    );
+    assert_eq!(nets(doc.primitive()), expected(&[]));
 }
 
 #[test]

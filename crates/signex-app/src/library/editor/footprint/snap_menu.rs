@@ -1,9 +1,9 @@
-//! The board rows of Snap ▾ (#2518, Graphite mockup #179): on a board
+//! The board rows of Snap ▾ (#2518, Graphite mockup row 179): on a board
 //! sketch the menu gains a Board features group, one switch for all of
 //! them and one per kind, over [`SnapOptions::board_features`]. A
 //! footprint sketch has no board and shows the menu unchanged. In sketch
 //! mode, on both hosts, a Sketch snaps group switches the Midpoint and
-//! Centre snaps that land a constraint (#188).
+//! Centre snaps that land a constraint (mockup row 188).
 //!
 //! [`SnapOptions::board_features`]: super::state::SnapOptions::board_features
 

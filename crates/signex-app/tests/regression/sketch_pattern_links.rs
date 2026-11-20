@@ -1,4 +1,4 @@
-//! #191 (decision 10, Caner 2026-11-20) — Mirror with a pattern selected
+//! mockup row 191 (decision 10, Caner 2026-11-20) — Mirror with a pattern selected
 //! keeps a live mirror of it; a pattern tool with a pattern selected makes
 //! a pattern of that pattern; a link that would loop is refused with a
 //! warning and leaves no undo step.

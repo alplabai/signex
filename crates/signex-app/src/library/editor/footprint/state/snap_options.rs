@@ -44,10 +44,10 @@ pub struct SnapOptions {
     /// footprint sketch has no board, so it never reads these.
     pub board_features: BoardFeatureSnaps,
     /// A sketch drawing tool snaps to a Line's midpoint and lands a
-    /// Midpoint constraint (#188).
+    /// Midpoint constraint (mockup row 188).
     pub snap_midpoints: bool,
     /// A sketch drawing tool snaps to a Circle's or an Arc's centre and
-    /// lands a Coincident on it (#188).
+    /// lands a Coincident on it (mockup row 188).
     pub snap_centres: bool,
 }
 

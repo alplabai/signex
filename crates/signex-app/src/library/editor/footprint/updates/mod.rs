@@ -386,7 +386,7 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             use crate::library::editor::footprint::sketch_mode::exit;
             exit::apply(editor, &FootprintEditorMsg::SketchDiscardCancelled);
         }
-        // Esc answers an open "This pad / All pads" with Cancel (#192 D1).
+        // Esc answers an open "This pad / All pads" with Cancel (mockup row 192 D1).
         FootprintEditorMsg::ToolEscape if editor.state.pad_scope.is_some() => {
             use crate::library::editor::footprint::state::pad_scope::PadScope;
             pad_scope::apply(editor, PadScope::Cancel);
@@ -706,7 +706,7 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarFlipSelection
         | ActiveBarAlignSelectionToGrid
         | ActiveBarMoveOriginToGrid
-        // #192 — the pad link changes mode and selection only.
+        // mockup row 192 — the pad link changes mode and selection only.
         | PadLink(_) => false,
         // The parameters table: typing records here; its other edits record
         // their own step, only when they change something.

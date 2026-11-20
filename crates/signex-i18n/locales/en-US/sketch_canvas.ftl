@@ -1,6 +1,6 @@
 # The footprint and board sketch canvas: words drawn on the drawing (snap
 # badges, values, pattern glyphs, the conflict badge) and the menu a
-# right-click on a constraint or pattern opens (#187, #188, #191).
+# right-click on a constraint or pattern opens (mockup row 187, mockup row 188, mockup row 191).
 
 ## Snap badges at the cursor.
 sketch-canvas-snap-coincident = Coincident
@@ -82,7 +82,7 @@ sketch-canvas-menu-edit-spacing-y = Edit Y spacing…
 sketch-canvas-menu-edit-sweep = Edit sweep angle…
 sketch-canvas-menu-delete-pattern = Delete pattern
 
-## Reference dimensions and pattern mirrors (#187, #188).
+## Reference dimensions and pattern mirrors (mockup row 187, mockup row 188).
 sketch-canvas-menu-make-driving = Make driving
 sketch-canvas-menu-reference-measures = A reference dimension measures; make it driving to edit it.
 # Tooltip of the Convert to reference button on a Properties conflict row.
@@ -93,7 +93,7 @@ sketch-canvas-menu-delete-mirror = Delete mirror
 sketch-canvas-pattern-mirror = ⇔
 # Joins a pattern's glyph to the pattern it repeats ("P×4 of L×4").
 sketch-canvas-pattern-of = of
-# Snap badges of the Midpoint and Centre snaps (#188), "Midpoint · line",
+# Snap badges of the Midpoint and Centre snaps (mockup row 188), "Midpoint · line",
 # "Centre · circle"; the curve is named by its pad when it has one.
 sketch-canvas-snap-midpoint = Midpoint
 sketch-canvas-snap-centre = Centre
