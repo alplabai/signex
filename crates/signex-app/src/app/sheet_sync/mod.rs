@@ -41,8 +41,13 @@ pub enum SheetSyncMsg {
     /// The menu row, palette or a key asked to create a sheet symbol from a
     /// sheet file.
     CreateSymbolRequested,
-    /// The file dialog answered; `None` when it was cancelled.
-    CreateSymbolPicked(Option<PathBuf>),
+    /// The file dialog answered for the sheet `target` it was opened on (in
+    /// an undocked window, that window's sheet); `file` is `None` when the
+    /// dialog was cancelled.
+    CreateSymbolPicked {
+        target: PathBuf,
+        file: Option<PathBuf>,
+    },
     /// What placing the picked sheet needs was read off the UI thread.
     CreateSymbolRead(SymbolSheetReads),
     /// The menu row, palette or a key asked for the sync dialog.
@@ -69,7 +74,9 @@ impl Signex {
     pub(crate) fn dispatch_sheet_sync(&mut self, msg: SheetSyncMsg) -> Task<Message> {
         let task = match msg {
             SheetSyncMsg::CreateSymbolRequested => self.create_symbol_dialog(),
-            SheetSyncMsg::CreateSymbolPicked(path) => self.read_symbol_sheet(path),
+            SheetSyncMsg::CreateSymbolPicked { target, file } => {
+                self.read_symbol_sheet(target, file)
+            }
             SheetSyncMsg::CreateSymbolRead(read) => {
                 self.symbol_sheet_read(read);
                 Task::none()
