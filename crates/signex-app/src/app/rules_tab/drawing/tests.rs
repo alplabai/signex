@@ -52,22 +52,38 @@ fn every_kind_labels_each_of_its_values_with_its_column() {
 }
 
 #[test]
-fn an_unset_or_zero_value_has_no_label() {
+fn an_unset_value_has_no_label() {
     for kind in RuleKind::ALL {
         for dropped in kind.fields() {
             let unset: Vec<_> = full(kind)
                 .into_iter()
                 .filter(|(f, _)| *f != dropped)
                 .collect();
-            let zero: Vec<_> = full(kind)
+            let fields = fields_of(&rule(kind, unset));
+            assert!(!fields.contains(&Some(dropped)), "{kind:?} {dropped:?}");
+            assert_eq!(fields.len(), kind.fields().len() - 1, "{kind:?}");
+        }
+    }
+}
+
+/// A 0 is a value (a mask expansion of 0, a sliver of 0): it keeps its
+/// label at 0, so it can be changed on the drawing.
+#[test]
+fn a_zero_value_keeps_its_label() {
+    for kind in RuleKind::ALL {
+        for zeroed in kind.fields() {
+            let values: Vec<_> = full(kind)
                 .into_iter()
-                .map(|(f, v)| (f, if f == dropped { 0.0 } else { v }))
+                .map(|(f, v)| (f, if f == zeroed { 0.0 } else { v }))
                 .collect();
-            for values in [unset, zero] {
-                let fields = fields_of(&rule(kind, values));
-                assert!(!fields.contains(&Some(dropped)), "{kind:?} {dropped:?}");
-                assert_eq!(fields.len(), kind.fields().len() - 1, "{kind:?}");
-            }
+            let scene = scene_of(&rule(kind, values), BoardInk::new());
+            let label = scene
+                .labels
+                .iter()
+                .find(|l| l.field == Some(zeroed))
+                .unwrap_or_else(|| panic!("{kind:?} {zeroed:?} keeps its label"));
+            assert_eq!(label.value_mm, 0.0, "{kind:?} {zeroed:?}");
+            assert_eq!(scene.labels.len(), kind.fields().len(), "{kind:?}");
         }
     }
 }

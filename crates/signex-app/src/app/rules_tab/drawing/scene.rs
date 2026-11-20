@@ -282,7 +282,8 @@ impl Scene {
     }
 
     /// The value of `field` (or of a pair gap) as an editable label.
-    /// Nothing is added for a value that is unset, not finite or zero.
+    /// Nothing is added for a value that is unset or not finite; a 0 keeps
+    /// its label, so it can be changed on the drawing.
     pub fn value(
         &mut self,
         field: Option<LimitField>,
@@ -292,7 +293,7 @@ impl Scene {
         anchor: LabelAnchor,
         handle: Option<Handle>,
     ) {
-        let Some(value_mm) = value.filter(|v| v.is_finite() && *v != 0.0) else {
+        let Some(value_mm) = value.filter(|v| v.is_finite()) else {
             return;
         };
         self.labels.push(ValueLabel {
