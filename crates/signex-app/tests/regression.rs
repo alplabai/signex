@@ -727,3 +727,8 @@ mod sheet_tools_graphite;
 // #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
 #[path = "regression/board_sync_graphite.rs"]
 mod board_sync_graphite;
+
+// #2518 / Graphite #179: a board sketch snaps to the board under it; Snap ▾
+// board rows turn that off without an undo step.
+#[path = "regression/sketch_snap_board.rs"]
+mod sketch_snap_board;
