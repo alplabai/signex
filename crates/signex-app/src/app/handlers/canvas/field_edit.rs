@@ -133,6 +133,8 @@ impl Signex {
             return false;
         };
         self.interaction_state.editing_text = Some(opened);
+        // The editor's key hint counts its first uses.
+        self.ui_state.text_edit_opens = self.ui_state.text_edit_opens.saturating_add(1);
         // A hover card left on screen would cover the editor (#1770).
         self.clear_canvas_hover();
         true

@@ -1,18 +1,21 @@
 //! The pure hit scanner.
 
-use super::{DesignatorScope, FindHit, FindKind};
+use super::{DesignatorScope, FindHit, FindKind, FindQuery};
 use crate::TextTarget;
 use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind};
 
-/// Every occurrence, ignoring case under the rule in `fold`, of `needle` in `sheet`'s labels, notes,
-/// designators (at `scope`'s placements) and values, in that order. An empty
-/// needle finds nothing.
-pub fn scan_sheet(sheet: &SchematicSheet, needle: &str, scope: &DesignatorScope) -> Vec<FindHit> {
-    let needle = super::fold::folded(needle.trim());
-    if needle.is_empty() {
+/// Every item of `sheet` whose text `query` matches under its options:
+/// labels, notes, designators (at `scope`'s placements) and values, in that
+/// order. An empty query finds nothing.
+pub fn scan_sheet(
+    sheet: &SchematicSheet,
+    query: &FindQuery,
+    scope: &DesignatorScope,
+) -> Vec<FindHit> {
+    if query.is_empty() {
         return Vec::new();
     }
-    let contains = |text: &str| super::fold::contains_folded(text, &needle);
+    let contains = |text: &str| query.is_match(text);
     let mut hits = Vec::new();
 
     for label in sheet.labels.iter().filter(|l| contains(&l.text)) {

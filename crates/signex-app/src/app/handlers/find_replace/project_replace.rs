@@ -95,8 +95,11 @@ impl Signex {
             );
             return Task::none();
         }
-        let query = self.ui_state.find_replace.query.trim().to_string();
-        let Some(inputs) = self.capture_scan_inputs(&query) else {
+        // An invalid regex lists nothing, so there is nothing to replace.
+        let Ok(query) = self.ui_state.find_replace.find_query() else {
+            return Task::none();
+        };
+        let Some(inputs) = self.capture_scan_inputs(query.clone()) else {
             crate::diagnostics::log_warning("Replace: there is no project to replace in.");
             return Task::none();
         };
@@ -114,7 +117,7 @@ impl Signex {
             generation,
             epoch,
             child_sheets,
-            query,
+            find: query,
             replacement: find.replacement.clone(),
             matches: matches.clone(),
         });
@@ -174,7 +177,7 @@ impl Signex {
     ) -> Option<(u64, ReplacePrep)> {
         let _ = self.start_project_replace(matches);
         let job = self.ui_state.find_replace.replace_job.clone()?;
-        let inputs = self.capture_scan_inputs(&job.query)?;
+        let inputs = self.capture_scan_inputs(job.find.clone())?;
         Some((job.generation, prepare(&inputs, &sheets_of(&job.matches))))
     }
 
@@ -491,7 +494,7 @@ pub(super) fn live_replacement(
     let mut hits = 0;
     let mut locked = Vec::new();
     let mut still_there: HashSet<HitKey> = HashSet::new();
-    for hit in signex_engine::scan_sheet(document, &job.query, &scope) {
+    for hit in signex_engine::scan_sheet(document, &job.find, &scope) {
         let key = hit_key(&hit);
         if !shown.contains(&key) {
             continue;
@@ -499,7 +502,7 @@ pub(super) fn live_replacement(
         // A hit whose rewrite is a no-op (already the replacement's
         // spelling) is done, not stale.
         still_there.insert(key);
-        let mine = signex_engine::replace_commands(document, &hit, &job.query, &job.replacement);
+        let mine = signex_engine::replace_commands(document, &hit, &job.find, &job.replacement);
         // A hit on a locked label or note is skipped and named, and not
         // counted as replaced.
         let (mine, skipped) = Signex::without_locked_items(engine, mine);
