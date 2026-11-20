@@ -30,6 +30,7 @@ Contents:
 12. [File types](#12-file-types)
 13. [Keyboard shortcuts](#13-keyboard-shortcuts)
 14. [Where to get help](#14-where-to-get-help)
+15. [Preferences](#15-preferences)
 
 For the whole flow in one pass, see the
 [walkthrough](#walkthrough-a-saved-schematic-with-a-wired-symbol).
@@ -168,6 +169,23 @@ cycle it on a schematic. The menu item runs `next_grid`, so it works on a
 schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
 zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 `F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
+
+**Fast grids.** The Fast grid 1 and Fast grid 2 commands snap to two grids
+you choose in **Tools ▸ Preferences… ▸ Editing ▸ Grid** (1.27 mm and 2.54 mm
+out of the box). Each field shows the grid in mil as you type, and a value
+that cannot be a grid (not a number above zero, or finer than 1 nm) is marked
+on its row with the reason; Save refuses it until you fix it. The snap preview
+under the fields draws Fast grid 1 as dots and Fast grid 2 as rings. Click a
+pitch on the drawing to type it (Enter commits, Tab moves to the other pitch,
+Esc cancels), or drag its handle; the field follows, and the other way round.
+
+**How the canvas looks.** **Tools ▸ Preferences… ▸ Appearance** holds the
+theme (Graphite Light or Graphite Dark), the UI font, the interface scale,
+the grid style of the schematic and of the symbol editor (dots, lines or
+small crosses, shown side by side in the grid preview), the symbol editor's
+default grid, pin selection, the GPU render and anti-aliasing, the mouse
+wheel (Zoom or Scroll), two-finger scroll panning and zoom speed. A setting
+marked **Restart** applies the next time Signex starts.
 
 ## 5. Place a symbol
 
@@ -399,7 +417,7 @@ or sheet entry and run **Go to net partner on another sheet** from the command
 palette; run it again to cycle through the other ends. The highlight commands
 keep a net bright on every sheet while the rest fades, and step through its pins
 and labels. Resting the pointer on a wire, pin or label shows its net, class and
-pins (Preferences ▸ Schematic ▸ Editing turns it off). See
+pins (Preferences ▸ Editing ▸ Show net info on hover turns it off). See
 [NET_NAVIGATION.md](NET_NAVIGATION.md).
 
 1. Choose **Place ▸ Net Label**, or press `P` then `N` in the default profile
@@ -1112,6 +1130,17 @@ Other view rows: **View ▸ Toggle Ratsnest** (`N`), **View ▸ Single Layer
 Mode** (`Shift+S`), **View ▸ Flip Board View** to look from below, and
 **View ▸ 3D View** (`3`) to see the board in 3D.
 
+In 3D, drag to turn the board, right-drag to slide it, use the wheel to
+zoom and click a part to select it. The toolbar at the top of the view
+switches back with **2D**, looks from **Top**, **Iso**, **Front**,
+**Left**, **Right** or **Back**, resets the camera
+and fits the board. **Flip** turns the board over to show its bottom side;
+**Explode** opens a slider that moves the copper, mask and parts apart. The
+lighting button steps through four lighting presets (Studio, Workshop,
+Outdoor, Dark), which also set the backdrop. The camera button copies a
+screenshot of the view to the clipboard; its arrow opens **Save PNG…**.
+None of this changes the board file.
+
 More detail: [PCB_SKETCH.md](PCB_SKETCH.md) and
 [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md).
 
@@ -1383,3 +1412,109 @@ label. The complete lists are in the
 - Report a bug or request a feature in the
   [issue tracker](https://github.com/alplabai/signex/issues). **Help ▸ Report
   an Issue** opens it from inside the application.
+
+## 15. Preferences
+
+<!-- Preferences: the dialog (shell), Language and Annotation pages. -->
+
+**Tools ▸ Preferences…** (`Ctrl+,`) opens the Preferences dialog in its own
+window. The pages are listed on the left in four groups: **System**
+(Appearance, Language, Keyboard shortcuts), **Schematic** (Annotation,
+Editing), **Validation** (Rule Profiles) and **Library** (Distributor APIs,
+Component Classes). The search field above the list filters it by page or group
+name; the former names Theme and Graphical editing still find their pages.
+
+A change is not kept until you press **Apply** (the dialog stays open) or
+**OK** (it closes). **Cancel** drops every change. While a change is not
+applied, the footer shows **Unsaved changes** and the page it is on gets a dot
+in the list. Rule Profiles is the exception: its edits are saved to the profile
+file at once.
+
+If your preferences file cannot be read, a red banner under the title names the
+file and the reason. Until it is fixed, appearance, ERC severities, component
+classes and panel layout show their defaults and are not saved; the file itself
+is not changed. **Start a fresh preferences file** moves the unreadable file
+aside and starts a new one; **Open folder** shows the folder that holds it, so
+you can repair it by hand.
+
+**Language** sets the language of menus, panels, dialogs and messages. **Follow
+the system** uses your operating system's language and names the one it
+picks. The preview under the list shows the menu titles, three buttons and a
+message in the language you chose. The language changes in every window when
+you press Apply or OK; there is no restart. Text on the canvas (designators,
+values, net names) is your own and is never translated, and numbers always use a
+point. Developer builds also list the pseudo-locale (en-XA), which brackets and
+lengthens every string to show text that cannot be translated yet or that is cut
+off.
+
+**Annotation** sets how many undo steps one annotate run is: **One step for the
+whole project** (one Undo reverts every sheet the run changed) or **Per sheet**
+(each sheet is undone on its own). It applies to the next annotate run. What a
+pasted part is called is set on Editing (Designators on paste); the Annotation
+page links to it.
+
+<!-- Preferences: Keyboard shortcuts page (mockup row 145); belongs with section 13. -->
+### Editing keyboard shortcuts
+
+**Tools ▸ Preferences… ▸ Keyboard shortcuts** shows the active profile's
+bindings in one table sorted by command. Pick a profile in the Profile list
+(each entry says how many bindings it has); **Create** makes an editable copy
+of it, **Delete** removes a custom profile, and **Import…** / **Export…** read
+and write a profile file.
+
+When two commands share the same keys, a warning banner names them; **Show**
+lists only the clashing rows. The chips next to the search field narrow the
+table to one context (Global, Schematic, PCB, Footprint, Library) or to the
+conflicts.
+
+In a custom profile, point at a row and press **Edit**. Press the keys you want
+(Esc counts as a key), then **OK**; **Clear** starts over, **Stop** ends the
+recording and **Cancel** closes without a change. The new keys are saved when
+you press **Apply** or **OK** in Preferences.
+
+<!-- Preferences: Distributor APIs and Component Classes pages -->
+## Preferences: Distributor APIs
+
+**Preferences ▸ Library ▸ Distributor APIs** holds the accounts Signex uses to
+fetch prices, stock and part data. Keys and tokens are kept in the OS keyring,
+never in a project file. Each distributor has a card with its state:
+
+- **DigiKey** shows *Connected as …* once connected. **Connect via OAuth**
+  opens your browser to sign in and stores the refresh token in the keyring;
+  **Cancel** stops a sign-in that is still waiting. **Disconnect** removes the
+  stored token and forgets the account; if the keyring refuses, the card says
+  why and the message is also in the Messages panel. When Signex was started
+  without `SIGNEX_DIGIKEY_CLIENT_ID` the card shows *Not configured* and
+  Connect stays off until Signex is started with that variable (and
+  `SIGNEX_DIGIKEY_CLIENT_SECRET`) set.
+- **Mouser** takes an API key. **Test** checks it with one lookup and, if it
+  works, saves it in the keyring; the card then shows *Key verified*. Editing
+  the key makes it *Not tested* again.
+- **LCSC, JLCPCB** need no key.
+
+**Order of Preference**, beside the cards, decides which distributor's adapter
+is tried first when you paste a distributor URL into the Supply tab. Drag a
+row by its handle to move it; the order is saved at once to the
+`distributors.toml` file named under the list.
+
+## Preferences: Component Classes
+
+**Preferences ▸ Library ▸ Component Classes** lists the classes a new library
+starts with. They appear in the class picker of New Component and Edit
+Component; a library's own list is edited in that library.
+
+- The **Key** is what a part stores; the **Label** is what pickers show. Click
+  a cell to edit it.
+- **+ Add Class** adds a row at the bottom, marked *new*, with its key ready
+  to type.
+- Drag a row by its handle to change the order the picker shows. The filter
+  field only hides rows; it does not change the order.
+- Point at a row and press **×** to remove it.
+- A key that is empty or used by another row is marked in red with the
+  reason. Save keeps one class per key: when two rows share a key, the lower
+  row's label is kept.
+- **Reset to Defaults…** asks before it replaces the list with the default
+  classes.
+
+Nothing on this page is kept until you save Preferences; discarding drops the
+changes.

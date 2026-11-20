@@ -67,7 +67,7 @@ pub fn key_cap(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 's
         border: Border {
             width: 1.0,
             color: line,
-            radius: 4.0.into(),
+            radius: Radii::GRAPHITE.key.into(),
             ..Border::default()
         },
         ..container::Style::default()

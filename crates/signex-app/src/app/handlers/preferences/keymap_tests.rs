@@ -98,6 +98,47 @@ fn a_stale_slot_is_refused_not_applied_to_another_binding() {
     );
 }
 
+// Mockup row 145 — the page's chips and the banner's Show are view state only.
+mod view_state {
+    use super::*;
+    use crate::preferences::{KeymapViewMsg, KeymapViewState};
+
+    #[test]
+    fn show_turns_on_the_conflicts_chip_without_dirtying_the_dialog() {
+        let (mut app, _boot) = Signex::new();
+        let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+        assert!(!app.ui_state.preferences_dirty);
+
+        let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ConflictsShown);
+
+        assert!(app.ui_state.preferences_pages.keymap_view.shows_conflicts());
+        assert!(!app.ui_state.preferences_dirty);
+        assert!(app.ui_state.preferences_keymap_status.is_empty());
+    }
+
+    #[test]
+    fn picking_a_chip_leaves_the_working_copy_and_the_recorder_alone() {
+        let mut app = app_recording_a_custom_profile_row();
+        let before = app.ui_state.preferences_keymap_editor.clone();
+        let recorder = app.ui_state.preferences_keymap_recorder.clone();
+
+        let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ConflictsShown);
+        let mut expected = KeymapViewState::default();
+        expected.apply(KeymapViewMsg::ConflictsShown);
+        assert_eq!(app.ui_state.preferences_pages.keymap_view, expected);
+
+        let _ = app.handle_preferences_keymap_view(KeymapViewMsg::ContextFilterPicked(
+            KeymapViewState::default().context_filter,
+        ));
+        assert_eq!(
+            app.ui_state.preferences_pages.keymap_view,
+            KeymapViewState::default()
+        );
+        assert_eq!(app.ui_state.preferences_keymap_editor, before);
+        assert_eq!(app.ui_state.preferences_keymap_recorder, recorder);
+    }
+}
+
 // Restore and Discard act on the backup the Preferences row shows, never on
 // a fresh scan: a scan after Apply finds the `.bak.N` Apply just wrote, the
 // only copy of the file it overwrote.

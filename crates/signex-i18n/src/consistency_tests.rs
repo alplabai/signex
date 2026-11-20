@@ -415,14 +415,6 @@ fn moved_graphite_strings_of_the_third_wave_keep_their_english() {
         (ids::EDITORS_COMPONENT_PARTS_EMPTY, "No alternates yet."),
         (ids::OVERLAY_SYMBOL_CARD_DESIGNATOR, "Designator"),
         (ids::OVERLAY_SYMBOL_CARD_LIBRARY, "Library"),
-        (
-            ids::PREFERENCES_SECTION_ANNOTATION,
-            "Schematic \u{2014} Annotation",
-        ),
-        (
-            ids::PREFERENCES_SECTION_DISTRIBUTORS,
-            "Library \u{2014} Distributor APIs",
-        ),
         (ids::LIBRARY_ROW_NO_SYMBOL, "No symbol bound"),
         (
             ids::LIBRARY_ROW_SYMBOL_ABSENT,
@@ -522,7 +514,6 @@ fn moved_dialog_button_labels_keep_their_english() {
         ),
         (ids::DIALOG_PRINT_PREVIEW_EXPORT_PDF, "Export PDF"),
         (ids::OVERLAY_PLACEMENT_PAUSED_RESUME, "Resume Placement"),
-        (ids::PREFERENCES_RESTORE_DEFAULTS, "Restore defaults"),
         (ids::LIBRARY_CREATE_OPTIONS_CREATE, "Create Library"),
         (ids::LIBRARY_EDIT_ROW_RELOAD, "Reload"),
         (ids::LIBRARY_EDIT_ROW_KEEP_EDITING, "Keep editing"),

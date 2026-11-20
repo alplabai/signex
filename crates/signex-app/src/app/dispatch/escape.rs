@@ -139,6 +139,7 @@ impl Signex {
                 if let Some(dismiss) = self
                     .components_row_menu_escape()
                     .or_else(|| self.layer_tab_menu_escape())
+                    .or_else(|| self.board_3d_popover_escape())
                 {
                     return self.update(dismiss);
                 }

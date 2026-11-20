@@ -1,17 +1,14 @@
-//! Schematic ▸ Display — "Fill symbol bodies" and its colour.
+//! Schematic ▸ Display — "Fill symbol bodies" and its colour, on the
+//! `setting_row` grid every Preferences page draws on.
 
+use super::pages_view::controls::toggle;
+use super::setting_row::{SettingRow, help_text, page, section_header, setting_row};
 use super::*;
 use crate::panels::{ColorFieldProps, color_field};
 use crate::symbol_fill_prefs::SymbolBodyFill;
-use iced::widget::{column, row};
-use iced::{Element, Length, Widget};
-use signex_i18n::{I18n, MessageId, ids, t};
-use signex_widgets::{checkbox, text};
+use iced::Element;
+use signex_i18n::{I18n, ids, t};
 use std::rc::Rc;
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// What the "Fill symbol bodies" rows changed. Drafts; persisted on Save.
 #[derive(Debug, Clone)]
@@ -42,7 +39,7 @@ pub(super) struct DisplayPage<'a> {
     pub(super) i18n: &'a I18n,
 }
 
-pub(super) fn content_schematic_display<'a>(page: DisplayPage<'a>) -> Element<'a, PrefMsg> {
+pub(super) fn content_schematic_display<'a>(page_in: DisplayPage<'a>) -> Element<'a, PrefMsg> {
     let DisplayPage {
         draft,
         theme_tint,
@@ -50,39 +47,35 @@ pub(super) fn content_schematic_display<'a>(page: DisplayPage<'a>) -> Element<'a
         picker_open,
         tokens,
         i18n,
-    } = page;
-    let described = |label: MessageId, help: MessageId| {
-        column![
-            text(t!(i18n, label)).size(TS.label).style(text_primary),
-            text(t!(i18n, help)).size(TS.caption).style(text_muted),
-        ]
-        .spacing(SP.xs)
-        .width(Length::Fill)
-    };
-    let switch = row![
-        described(
-            ids::PREFERENCES_SYMBOL_BODY_FILL,
-            ids::PREFERENCES_SYMBOL_BODY_FILL_HELP
+    } = page_in;
+    let mut items = vec![
+        section_header(
+            t!(i18n, ids::PREFERENCES_SECTION_SCHEMATIC_DISPLAY),
+            None,
+            tokens,
         ),
-        checkbox(draft.enabled)
-            .size(TS.heading)
-            .on_toggle(|on| PrefMsg::SymbolBodyFill(BodyFillMsg::Toggled(on))),
-    ]
-    .spacing(SP.xl)
-    .align_y(iced::Alignment::Center);
-
-    let mut content = column![
-        section_title(t!(i18n, ids::PREFERENCES_SECTION_SCHEMATIC_DISPLAY)),
-        switch,
-    ]
-    .spacing(SP.l)
-    .width(Length::Fill);
+        setting_row(
+            SettingRow {
+                label: t!(i18n, ids::PREFERENCES_SYMBOL_BODY_FILL),
+                pills: Vec::new(),
+                help: Some(help_text(
+                    t!(i18n, ids::PREFERENCES_SYMBOL_BODY_FILL_HELP),
+                    tokens,
+                )),
+                control: toggle(draft.enabled, tokens, |on| {
+                    PrefMsg::SymbolBodyFill(BodyFillMsg::Toggled(on))
+                }),
+                error: None,
+            },
+            tokens,
+        ),
+    ];
     if draft.enabled {
         let fill = PrefMsg::SymbolBodyFill;
         let rgba = |c: signex_types::theme::Color| [c.r, c.g, c.b, c.a];
         let on_pick: Rc<dyn Fn([u8; 4]) -> PrefMsg + 'static> =
             Rc::new(|rgba: [u8; 4]| PrefMsg::SymbolBodyFill(BodyFillMsg::ColorPicked(rgba)));
-        content = content.push(color_field(
+        items.push(color_field(
             ColorFieldProps {
                 label: t!(i18n, ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR).into(),
                 current: draft.color.or(theme_tint).map(rgba),
@@ -102,12 +95,10 @@ pub(super) fn content_schematic_display<'a>(page: DisplayPage<'a>) -> Element<'a
             },
             i18n,
         ));
-        content = content.push(
-            text(t!(i18n, ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP))
-                .size(TS.caption)
-                .style(text_muted)
-                .boxed(),
-        );
+        items.push(help_text(
+            t!(i18n, ids::PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP),
+            tokens,
+        ));
     }
-    content.padding(SP.xl).boxed()
+    page(items)
 }

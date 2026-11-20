@@ -928,9 +928,12 @@ the menu, the layer set button or a command with operands
 
 3D View (`view_board_3d`, #2390) follows Flip Board View: it shows the board
 in view in 3D in the main window, or flat again. It is greyed without a board
-and bound to `3` on a board in both built-in profiles. In 3D a bar at the foot
-of the view holds 2D, the viewpoints (Top, Bottom, Front, Left, Right, Angled)
-and Fit; View ▸ Fit All frames the 3D view too. See `docs/RENDERING_RULES.md`,
+and bound to `3` on a board in both built-in profiles. In 3D a floating
+toolbar at the top centre of the view holds the "3D View" title, the 2D | 3D
+switch (2D shows the board flat again), the viewpoints Top, Iso, Front, Left,
+Right and Back, Reset camera and Fit, Flip and Explode, the lighting
+preset and the screenshot button with its menu (Copy to clipboard, Save
+PNG…). View ▸ Fit All frames the 3D view too. See `docs/RENDERING_RULES.md`,
 "board-3d".
 
 ## Native macOS menu {#native-macos-menu}
