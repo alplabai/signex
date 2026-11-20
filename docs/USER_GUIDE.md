@@ -208,7 +208,9 @@ zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 - **Document tabs:** right-click a tab for Close, Close All Other Documents,
   Close Tabs to the Right, Close All Documents, Open In New Window, Copy Path
   (the file's path on the clipboard) and Reveal in Projects (selects the file
-  in the Projects panel). When the tabs no longer fit, the strip ends in a
+  in the Projects panel). Close Tabs to the Right closes only the tabs after
+  it on the strip; a tab open in its own window stays open. When the tabs no
+  longer fit, the strip ends in a
   **+N** button; it lists the hidden tabs, and picking one brings it to the
   front.
 - **Panel tabs:** right-click a panel's tab to float it (**Undock / Float**),
