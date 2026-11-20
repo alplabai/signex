@@ -177,12 +177,12 @@ impl Signex {
                 self.ui_state.net_color_palette_open = true;
                 // Each open starts unfiltered with no chooser, also after the
                 // window was closed by its title bar.
-                self.ui_state.net_color_palette = Default::default();
+                self.ui_state.net_color_palette = Box::default();
                 self.handle_detach_modal(crate::app::state::ModalId::NetColorPalette)
             }
             NetColorMsg::Close => {
                 self.ui_state.net_color_palette_open = false;
-                self.ui_state.net_color_palette = Default::default();
+                self.ui_state.net_color_palette = Box::default();
                 self.close_detached_modal(crate::app::state::ModalId::NetColorPalette)
             }
             NetColorMsg::Set { net, color } => {
