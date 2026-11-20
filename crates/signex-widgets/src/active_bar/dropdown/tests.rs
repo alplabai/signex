@@ -174,20 +174,22 @@ fn a_lead_check_row_takes_the_icon_column_not_the_trailing_check() {
         metrics::has_icons(&off),
         "an empty column is still a column"
     );
-    let on = DropdownItem::new("Signal Layers", ()).lead_check(true);
+    // Wide enough to clear the 200 px floor, narrow enough for 320 px, so
+    // the widths compare unclamped.
+    const WIDE: &str = "Assembly Drawings as SVG Files";
+    let on = DropdownItem::new(WIDE, ()).lead_check(true);
     assert_eq!(on.lead_check, Some(true));
     let plain = m.fitted_width(&[DropdownEntry::Item(on)], f32::MAX, "");
     let checked = m.fitted_width(
         &[DropdownEntry::Item(
-            DropdownItem::new("Signal Layers", ())
-                .lead_check(true)
-                .checked(true),
+            DropdownItem::new(WIDE, ()).lead_check(true).checked(true),
         )],
         f32::MAX,
         "",
     );
     assert_eq!(plain, checked, "no trailing check beside a leading one");
-    let iconless = m.fitted_width(&labelled("Signal Layers"), f32::MAX, "");
+    let iconless = m.fitted_width(&labelled(WIDE), f32::MAX, "");
+    assert!(iconless > m.min_width, "{iconless} clears the floor");
     assert!(plain > iconless, "{plain} {iconless}");
 }
 
