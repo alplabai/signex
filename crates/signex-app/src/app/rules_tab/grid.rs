@@ -524,7 +524,7 @@ impl CellShow {
     /// The value as the rule text writes it: a cell shows `8mil` as typed.
     pub fn written(&self) -> Option<&str> {
         match self {
-            CellShow::Value { written, .. } => Some(written),
+            CellShow::Value { written, .. } => Some(written.as_str()),
             _ => None,
         }
     }
