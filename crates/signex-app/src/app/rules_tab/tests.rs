@@ -1240,3 +1240,64 @@ fn the_findings_line_says_why_it_has_no_count() {
     );
     let _ = app.view_rules_tab(id);
 }
+
+fn tab_key() -> iced::keyboard::Event {
+    let key = iced::keyboard::Key::Named(iced::keyboard::key::Named::Tab);
+    iced::keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers: iced::keyboard::Modifiers::default(),
+        text: None,
+        repeat: false,
+    }
+}
+
+fn is_drawing_key(message: Option<&Message>) -> bool {
+    matches!(
+        message,
+        Some(Message::Project(ProjectMsg::Rules(
+            RulesTabMsg::PreviewActed { .. }
+        )))
+    )
+}
+
+/// A drawing key goes to the drawing of the Rules tab the window shows:
+/// the main window's, never from a key typed in another window.
+#[test]
+fn a_drawing_key_follows_the_window_that_shows_the_rules_tab() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    select_sig_b(&mut app, id);
+    assert!(rules_tab(&app, id).drawing_target.is_some(), "a drawing");
+    send(
+        &mut app,
+        RulesTabMsg::PreviewActed {
+            project_id: id,
+            msg: super::drawing::PreviewMsg::Labels(
+                signex_widgets::dimension_label::DimensionLabelMessage::LabelPressed(0),
+            ),
+        },
+    );
+    let main = app.ui_state.main_window_id.expect("the main window");
+    assert!(is_drawing_key(
+        app.route_key_for_test(main, &tab_key()).as_ref()
+    ));
+
+    let undocked = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        undocked,
+        crate::app::state::WindowKind::UndockedTab {
+            path: dir.path().join("top.snxsch"),
+            title: "top".to_string(),
+        },
+    );
+    assert!(
+        !is_drawing_key(app.route_key_for_test(undocked, &tab_key()).as_ref()),
+        "a key typed in a schematic window is not the main window's drawing's"
+    );
+}

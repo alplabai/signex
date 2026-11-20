@@ -437,13 +437,19 @@ impl Signex {
     }
 
     /// The drawing's key (Tab, Shift+Tab, Esc on a label being typed or a
-    /// handle held), while a Rules tab is in view.
-    pub(crate) fn rules_drawing_key(&self, event: &iced::keyboard::Event) -> Option<Message> {
+    /// handle held), while `window` shows a Rules tab: the main window's
+    /// active tab, or the tab an undocked window carries.
+    pub(crate) fn rules_drawing_key(
+        &self,
+        window: iced::window::Id,
+        event: &iced::keyboard::Event,
+    ) -> Option<Message> {
         let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
             return None;
         };
         let docs = &self.document_state;
-        let TabKind::Rules(id) = docs.tabs.get(docs.active_tab)?.kind.clone() else {
+        let shown = docs.tab_shown_in_window(window, &self.ui_state)?;
+        let TabKind::Rules(id) = shown.kind.clone() else {
             return None;
         };
         let tab = docs.project_tabs.get(&id)?;

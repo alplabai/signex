@@ -358,8 +358,10 @@ impl Signex {
         match consumer {
             InputConsumer::KeymapRecorder => self.claim_keymap_recorder(target, event),
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
-            InputConsumer::RulePreview => match (target, self.rules_drawing_key(event)) {
-                (InputTarget::Main, Some(message)) => Claim::consume(message),
+            InputConsumer::RulePreview => match (target, self.rules_drawing_key(window, event)) {
+                (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
+                    Claim::consume(message)
+                }
                 _ => Claim::Pass,
             },
             InputConsumer::Escape => Self::claim_escape(window, event),
