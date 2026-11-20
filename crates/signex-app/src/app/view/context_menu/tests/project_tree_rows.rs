@@ -1,4 +1,4 @@
-//! #20 — the Projects tree's right-click menus: the exact rows per node
+//! Mockup row 20: the Projects tree's right-click menus: the exact rows per node
 //! role, the Planned flyout, the library's Add New flyout, the Add New to
 //! Project flyout, and the strong / danger / planned row looks.
 

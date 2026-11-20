@@ -349,7 +349,7 @@ impl Signex {
         }
     }
 
-    /// What using the existing file at `path` would make of the symbol (F10):
+    /// What using the existing file at `path` would make of the symbol (mockup row 27):
     /// a copy of a sheet the project already has. Read from the Model only:
     /// the project's sheet list (`page` is the file's position in it, from 1)
     /// and the sheet symbols of the other open sheets. `None` when neither

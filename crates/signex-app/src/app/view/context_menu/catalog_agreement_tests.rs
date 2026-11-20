@@ -91,7 +91,7 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Project Releaser...", "planned, tree-addressed"),
     ("Share...", "planned, tree-addressed"),
     ("Enable Version Control...", "tree-addressed"),
-    // The library node's Add New flyout (#20).
+    // The library node's Add New flyout (mockup row 20).
     ("Component", "library-node action"),
     ("Symbol Library", "library-node or project action"),
     ("Footprint Library", "library-node action"),
@@ -379,7 +379,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
             &flyout_ctx,
             &mut walk,
         );
-        // The project tree's flyouts (#20).
+        // The project tree's flyouts (mockup row 20).
         let i18n = signex_i18n::I18n::en_us_ref();
         let tree_flyouts = [
             (

@@ -1,4 +1,4 @@
-//! The project root's Planned › flyout (#20): the project features that are
+//! The project root's Planned › flyout (mockup row 20): the project features that are
 //! not built yet, each a greyed row with the "planned" pill, so every row at
 //! the top level of the menu does something.
 

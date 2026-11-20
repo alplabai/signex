@@ -1035,7 +1035,7 @@ fn a_descent_parked_on_a_deferred_open_that_fails_to_reopen_does_not_strand() {
     );
 }
 
-// ---- Mockup row #27 (F10): the "File exists" state and the copy warning.
+// ---- Mockup row 27: the "File exists" state and the copy warning.
 
 /// `text` without the isolation marks the catalog puts around its values.
 fn plain(text: &str) -> String {

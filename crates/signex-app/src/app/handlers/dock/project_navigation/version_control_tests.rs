@@ -349,7 +349,7 @@ fn sibling_projects_in_the_folder_are_refused_before_git_init() {
     assert!(error.contains("more than this project"), "{error}");
 }
 
-/// #26 — the dialog opens with the catalog's first commit message for the
+/// Mockup row 26: the dialog opens with the catalog's first commit message for the
 /// project, plain text (no isolation marks), and Commit every save on.
 #[test]
 fn the_dialog_opens_with_a_first_commit_message_and_commit_every_save_on() {
@@ -370,7 +370,7 @@ fn the_dialog_opens_with_a_first_commit_message_and_commit_every_save_on() {
     );
 }
 
-/// #26 — the edited first commit message is the subject of the repository's
+/// Mockup row 26: the edited first commit message is the subject of the repository's
 /// first commit.
 #[test]
 fn the_first_commit_carries_the_dialog_message() {
@@ -398,7 +398,7 @@ fn the_first_commit_carries_the_dialog_message() {
     );
 }
 
-/// #26 — a blank first commit message withholds Enable: Confirm starts
+/// Mockup row 26: a blank first commit message withholds Enable: Confirm starts
 /// nothing until the message has text again.
 #[test]
 fn a_blank_commit_message_refuses_confirm() {
@@ -414,7 +414,7 @@ fn a_blank_commit_message_refuses_confirm() {
     assert!(!tmp.path().join(".git").exists());
 }
 
-/// #26 — Select all ticks every row; edits wait while a run is in flight.
+/// Mockup row 26: Select all ticks every row; edits wait while a run is in flight.
 #[test]
 fn select_all_ticks_every_row() {
     use crate::app::contracts::TrackKind;
@@ -459,7 +459,7 @@ fn created() -> crate::app::EnableVersionControlOutcome {
     }
 }
 
-/// #26 — with Commit every save turned off the repository is recorded but
+/// Mockup row 26: with Commit every save turned off the repository is recorded but
 /// `enable_git` stays off: no General step, nothing dirty.
 #[test]
 fn commit_every_save_off_leaves_enable_git_off() {
@@ -490,7 +490,7 @@ fn commit_every_save_off_leaves_enable_git_off() {
     );
 }
 
-/// #26 — with Commit every save on (as the dialog opens) a success turns
+/// Mockup row 26: with Commit every save on (as the dialog opens) a success turns
 /// `enable_git` on, as before the switch existed.
 #[test]
 fn commit_every_save_on_turns_enable_git_on() {

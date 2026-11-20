@@ -117,7 +117,7 @@ fn note_block(lines: usize, padded: bool) -> f32 {
 }
 
 /// What the Rename dialog adds over the layout its base height was measured
-/// on (#23): the path under the title, the "New name" label, the wider gap
+/// on (mockup row 23): the path under the title, the "New name" label, the wider gap
 /// above the field, then the placing-symbol note, the name clash and the
 /// handler's error when they show.
 fn rename_growth(d: &crate::app::RenameDialogState) -> f32 {
@@ -135,7 +135,7 @@ fn rename_growth(d: &crate::app::RenameDialogState) -> f32 {
     grow
 }
 
-/// Window height of Enable Version Control (#26): the body padding, the
+/// Window height of Enable Version Control (mockup row 26): the body padding, the
 /// intro (title, mono path line, three-line sentence), the commit message field, the LFS option, Commit every
 /// save (project scope) and the legacy footer the Graphite extra replaces,
 /// then the file list (capped at [`TRACK_LIST_MAX_HEIGHT`]) or the scanning

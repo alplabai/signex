@@ -1,4 +1,4 @@
-//! The netlist-incomplete prompt's list (#431, mockup row #28): one row per
+//! The netlist-incomplete prompt's list (#431, mockup row 28): one row per
 //! page the netlist leaves out, built from the same issues as the warning
 //! "Export anyway" logs.
 

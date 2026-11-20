@@ -1,4 +1,4 @@
-//! The Rename dialog (#23): the sheet symbols it names, the name clash it
+//! The Rename dialog (mockup row 23): the sheet symbols it names, the name clash it
 //! shows at once and the focused field it opens with.
 
 use signex_widgets::tree_view::TreeKey;

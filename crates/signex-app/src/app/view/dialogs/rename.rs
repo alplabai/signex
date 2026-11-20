@@ -1,4 +1,4 @@
-//! The Rename dialog (#23): one name field for a project file or the project
+//! The Rename dialog (mockup row 23): one name field for a project file or the project
 //! itself. A file keeps its extension as a fixed suffix, the sheet symbols
 //! that place a sheet are named, and a name another known file has is shown
 //! at once.

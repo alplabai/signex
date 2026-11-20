@@ -1,6 +1,6 @@
 //! #2059: the Projects tree names its branches and file marks from the
 //! catalog in the view, while the cached tree, and so navigation, keeps its
-//! keys whatever the language. m19: missing files read as their plain name
+//! keys whatever the language. Mockup row 19: missing files read as their plain name
 //! with a pill, the filter says when it matches nothing, the card's gear
 //! opens Project Options… and the empty panel offers New Project…, Open…
 //! and the recent projects.
@@ -101,7 +101,7 @@ fn the_tree_reads_as_before_in_en_us() {
     }
 }
 
-/// m19: a missing or unreadable file shows its plain name, no kind tag
+/// Mockup row 19: a missing or unreadable file shows its plain name, no kind tag
 /// ahead of it and a pill after it, never the old text suffix.
 #[test]
 fn a_missing_file_reads_as_its_name_and_a_pill() {
@@ -232,7 +232,7 @@ fn messages_down(ctx: &PanelContext, x: f32, reach: f32) -> Vec<PanelMsg> {
     out
 }
 
-/// m19 refinement: a filter that matches nothing says so, with the text that
+/// Mockup row 19: a filter that matches nothing says so, with the text that
 /// was typed, instead of a bare caption; the field's clear button empties
 /// the filter.
 #[test]
@@ -311,7 +311,7 @@ fn add_project(app: &mut crate::app::Signex, name: &str) -> crate::app::ProjectI
     id
 }
 
-/// m19 item 1: the gear at the right end of each project card asks for that
+/// Mockup row 19: the gear at the right end of each project card asks for that
 /// card's project's options.
 #[test]
 fn each_card_gear_asks_for_its_projects_options() {
@@ -368,7 +368,7 @@ fn empty_context() -> PanelContext {
     ctx
 }
 
-/// m19 proposal (approved mock): no project open keeps the two lines and
+/// Mockup row 19: no project open keeps the two lines and
 /// adds New Project…, Open… and the recent projects by name.
 #[test]
 fn the_empty_panel_offers_new_open_and_the_recent_projects() {

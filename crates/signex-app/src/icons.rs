@@ -393,7 +393,7 @@ canonical_icon!(icon_justify_t, "justify/t.svg");
 canonical_icon!(icon_justify_tl, "justify/tl.svg");
 canonical_icon!(icon_justify_tr, "justify/tr.svg");
 
-// ─── Menu glyphs (project tree menu, #20) ──────────────────────────
+// ─── Menu glyphs (project tree menu, mockup row 20) ──────────────────────────
 //
 // 24×24 single-ink strokes (2 px, round caps); the menu card tints them, so
 // they carry no accent sentinel.
@@ -498,7 +498,7 @@ mod tests {
         assert_eq!(a, b);
     }
 
-    /// #20: the menu glyphs are 24×24 single-ink strokes, each its own
+    /// Mockup row 20: the menu glyphs are 24×24 single-ink strokes, each its own
     /// drawing.
     #[test]
     fn menu_glyphs_are_distinct_24px_strokes() {

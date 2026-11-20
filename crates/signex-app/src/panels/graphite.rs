@@ -21,7 +21,7 @@ pub const PROPERTY_FIELD_RADIUS: f32 = 7.0;
 /// Row look of the Projects tree: the neutral selection, 24 px rows, kind
 /// tags ahead of the file names and no folder icons (#2262); uppercase
 /// group headers with a plain count, an accent edge on the open document
-/// and missing files in the error tone (m19).
+/// and missing files in the error tone (mockup row 19).
 pub fn tree_style(tokens: &ThemeTokens) -> TreeStyle {
     let tone = |t: PillTone| pill_colors(tokens, t);
     let r = resolve(tokens);
@@ -338,7 +338,7 @@ mod selection_tests {
         );
     }
 
-    /// m19: a missing file's row keeps the problem badge the panel gave it:
+    /// Mockup row 19: a missing file's row keeps the problem badge the panel gave it:
     /// no kind tag ahead of the name, the "missing" pill after it.
     #[test]
     fn a_problem_row_trails_its_pill_and_has_no_kind_tag() {
@@ -360,7 +360,7 @@ mod selection_tests {
         );
     }
 
-    /// m19: the open document's row takes the full selection fill and a 2 px
+    /// Mockup row 19: the open document's row takes the full selection fill and a 2 px
     /// accent edge left of the fill; another row has no edge.
     #[test]
     fn the_active_row_has_the_accent_edge_and_the_selection_fill() {

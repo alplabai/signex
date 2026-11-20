@@ -1,4 +1,4 @@
-//! The project root's rows (#20), grouped by intent: add (Add New ›, Add
+//! The project root's rows (mockup row 20), grouped by intent: add (Add New ›, Add
 //! Existing...), check and sync (Validate, Update PCB Document), file (Save,
 //! Rename..., Explore), settings (Project Options..., Enable Version
 //! Control...), close, then the Planned › launcher.

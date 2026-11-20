@@ -1,4 +1,4 @@
-//! The Enable Version Control dialog (#26): which files the first commit
+//! The Enable Version Control dialog (mockup row 26): which files the first commit
 //! takes, its message, Git LFS for 3D models and, for a project, whether
 //! every save is committed.
 

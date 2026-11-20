@@ -1,4 +1,4 @@
-//! A library node's rows (#20) and its Add New › flyout: Add New ›, then
+//! A library node's rows (mockup row 20) and its Add New › flyout: Add New ›, then
 //! Enable Version Control... and Refresh All Pricing, then Collapse/Expand
 //! and Refresh, then Remove from Project... last, in the danger ink.
 

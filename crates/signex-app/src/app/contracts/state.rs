@@ -52,10 +52,10 @@ pub enum ContextSubmenu {
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
     /// Project-tree root → "Planned ›": the project features that are not
-    /// built yet, as greyed rows (#20).
+    /// built yet, as greyed rows (mockup row 20).
     ProjectPlanned,
     /// Project-tree library node → "Add New ›": a component, symbol library
-    /// or footprint library in that library (#20).
+    /// or footprint library in that library (mockup row 20).
     AddNewToLibrary,
 }
 
@@ -227,7 +227,7 @@ pub struct CreateChildSheetConfirmState {
     pub exists: bool,
     /// What using that existing file would make of this symbol, when the
     /// Model shows the file is already a page of the project or placed by a
-    /// sheet symbol of another open sheet (F10); `None` otherwise.
+    /// sheet symbol of another open sheet (mockup row 27); `None` otherwise.
     pub reuse_warning: Option<signex_i18n::Translatable>,
 }
 

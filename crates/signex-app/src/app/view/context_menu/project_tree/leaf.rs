@@ -1,4 +1,4 @@
-//! A document leaf's rows (#20): Open (the double-click row, strong),
+//! A document leaf's rows (mockup row 20): Open (the double-click row, strong),
 //! Explore, Rename..., then Print... and Show Differences..., then Remove
 //! from Project... last, in the danger ink.
 
