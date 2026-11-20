@@ -107,6 +107,19 @@ is refused at the mutation gateway with the Messages line "Channel CH1 is a
 compiled view; switch to Editor to edit". Properties show the channel and its
 designator map (logical designator, value, channel designator).
 
+## Bound tables
+
+A table bound to a part's pins or to the project's sheets (`refresh` On
+compile) is rebuilt after each successful compile of its project, never on
+every edit (`app/sch_tables/refresh.rs`). The refresh is a normal edit: it
+runs through the mutation gateway with each sheet as the edit target, one
+undo step per sheet whose tables changed, nothing when none did. So the
+gateway's refusals hold: a sheet showing a channel tab (a compiled view) or a
+read-only sheet keeps its rows, and Messages says "Table refresh failed on
+<file>" with the reason. The refreshed tables are the compile's own output,
+so they do not mark that compile out of date. Decided by Caner (2026-11-20),
+see `docs/DECISIONS.md`.
+
 ## Compiled Design panel
 
 View ▸ Compiled Design (`open_compiled_design`) or the status bar's Panels

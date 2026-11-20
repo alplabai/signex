@@ -365,8 +365,8 @@ properties-table-toc-not-serialised = Add Table of Contents Sheet: the contents 
 # ("dcdc-buck · Contents"). No placeable: the heading is sheet text, so it
 # must not carry the bidi isolation marks a placeable gets.
 properties-table-toc-heading = Contents
-# $file is the sheet the bound tables are on.
-properties-table-refresh-failed = Table refresh failed on { $file }
+# $file is the sheet the bound tables are on; $reason is why the edit was refused.
+properties-table-refresh-failed = Table refresh failed on { $file }: { $reason }
 # A CSV import or cell edit answered after its table left the sheet. $file is the sheet.
 properties-table-csv-table-gone = Table import: the table is no longer on { $file }; nothing was changed
 

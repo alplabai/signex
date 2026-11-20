@@ -322,6 +322,23 @@ fn the_refresh_rebuilds_a_pin_table_as_one_undo_step_and_only_when_stale() {
     );
 }
 
+/// The refresh is an edit through the gateway: a sheet showing a channel tab
+/// (a compiled view) and a read-only sheet refuse it.
+#[test]
+fn a_channel_view_or_a_read_only_sheet_refuses_the_refresh() {
+    let mut app = app_with_sheet(sheet_with_pin_table());
+    let path = app.document_state.active_path.clone().expect("active");
+    app.ui_state.compiled_design.channel_tabs.insert(path, 1);
+    app.refresh_bound_tables(None);
+    assert_eq!(pin_table(&app).cell(0, 1), "OLD", "a channel tab");
+
+    let mut sheet = sheet_with_pin_table();
+    sheet.unknown.newer_minor_source = Some("snxsch/1.9".into());
+    let mut app = app_with_sheet(sheet);
+    app.refresh_bound_tables(None);
+    assert_eq!(pin_table(&app).cell(0, 1), "OLD", "a read-only sheet");
+}
+
 #[test]
 fn a_table_whose_part_is_gone_keeps_its_rows() {
     let mut sheet = sheet_with_pin_table();

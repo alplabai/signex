@@ -329,6 +329,18 @@ fn a_compile_refreshes_only_its_own_projects_contents_tables() {
         !f.app.document_state.engines[&b_path].can_undo(),
         "and gets no undo step"
     );
+    // The refresh is an edit through the gateway (one undo step), but it is
+    // the compile's own output, so the compile is not out of date.
+    assert!(f.app.document_state.engines[&f.root].can_undo());
+    assert!(
+        f.app
+            .document_state
+            .compiled_design
+            .results
+            .values()
+            .all(|result| result.stale.is_empty()),
+        "the table refresh marks no sheet out of date"
+    );
 }
 
 #[test]

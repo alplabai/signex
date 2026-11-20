@@ -8,6 +8,7 @@ use signex_types::schematic::{SchDrawing, SchTable, SchematicSheet, TableRefresh
 
 use super::rows::{ContentsEntry, contents_table_rows, pin_table_rows};
 use crate::app::Signex;
+use crate::app::mutation_gateway::MutationOutcome;
 use crate::app::state::ProjectId;
 
 /// The pages a contents table lists, from the last compile.
@@ -66,6 +67,11 @@ impl Signex {
     /// that project's own last compile. Called after each successful compile
     /// with the compiled project, so another project's sheets are never
     /// touched.
+    ///
+    /// Each sheet goes through the normal edit path (the mutation gateway on
+    /// that sheet as the edit target), so a read-only sheet and a sheet
+    /// showing a channel tab (a compiled view) refuse the refresh and say so
+    /// in Messages. See `docs/MULTI_CHANNEL.md`, "Bound tables".
     pub(crate) fn refresh_bound_tables(&mut self, project: Option<ProjectId>) {
         let contents = project.and_then(|id| self.compiled_contents_of(id));
         let pages = |per_channel: bool| contents.as_ref().map(|c| c.pages(per_channel));
@@ -77,47 +83,42 @@ impl Signex {
             .cloned()
             .collect();
         paths.sort();
-        let active = self.document_state.active_path.clone();
-        let mut changed_any = false;
-        for path in paths {
-            let Some(engine) = self.document_state.engines.get_mut(&path) else {
-                continue;
-            };
-            if engine.document().unknown.newer_minor_source.is_some() {
-                continue;
-            }
-            let commands = refresh_commands(engine.document(), &pages);
-            if commands.is_empty() {
-                continue;
-            }
-            let outcome = engine.execute_batch(commands);
-            Self::report_engine_warnings(engine);
+        let edits: Vec<(PathBuf, Vec<signex_engine::Command>)> = paths
+            .into_iter()
+            .filter_map(|path| {
+                let engine = self.document_state.engines.get(&path)?;
+                let commands = refresh_commands(engine.document(), &pages);
+                (!commands.is_empty()).then_some((path, commands))
+            })
+            .collect();
+        // The tables are the compile's own output: refreshing them does not
+        // mark the compile they follow out of date.
+        let stale = project.and_then(|id| {
+            let result = self.document_state.compiled_design.results.get(&id)?;
+            Some((id, result.stale.clone()))
+        });
+        for (path, commands) in edits {
+            let (outcome, reason) = self.on_edit_target(&path, |app| {
+                app.apply_engine_commands_reporting(commands, true, false)
+            });
             match outcome {
-                Ok(result) if result.changed => {
-                    changed_any = true;
-                    if active.as_deref() == Some(path.as_path()) {
-                        let patch = result
-                            .patch_pair
-                            .map_or(signex_engine::DocumentPatch::NONE, |p| p.document);
-                        self.finish_schematic_mutation(patch, true, true);
-                    } else {
-                        self.document_state.mark_history_edit_dirty(&path);
-                    }
-                }
-                Ok(_) => {}
-                Err(error) => crate::diagnostics::log_error(
-                    &signex_i18n::t!(
+                MutationOutcome::Changed => self.refresh_selection_on(&path),
+                MutationOutcome::Unchanged => {}
+                MutationOutcome::Failed => crate::diagnostics::log_warning(
+                    signex_i18n::t!(
                         self.ui_state.i18n,
                         signex_i18n::ids::TABLE_REFRESH_FAILED,
-                        "file" => path.display().to_string()
+                        "file" => path.display().to_string(),
+                        "reason" => reason.unwrap_or_default()
                     )
                     .into_string(),
-                    &anyhow::Error::new(error),
                 ),
             }
         }
-        if changed_any {
-            self.refresh_panel_ctx();
+        if let Some((id, stale)) = stale
+            && let Some(result) = self.document_state.compiled_design.results.get_mut(&id)
+        {
+            result.stale = stale;
         }
     }
 
