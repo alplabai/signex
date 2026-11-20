@@ -152,7 +152,8 @@ impl DocumentOptionsUi {
 
 /// A typed zone count, capped at the most zones a border has; `None` for
 /// text that is not a whole number.
-pub fn typed_zone_count(text: &str) -> Option<u8> {
+#[cfg(test)]
+fn typed_zone_count(text: &str) -> Option<u8> {
     read_zone_count(text).map(|(used, _)| used)
 }
 
