@@ -236,7 +236,7 @@ impl Signex {
         + 'static,
     ) -> Task<Message> {
         let name = self.ui_state.profile_manager.name_input.trim().to_string();
-        let manager = self.ui_state.profile_manager.clone();
+        let manager = (*self.ui_state.profile_manager).clone();
         self.library_action(move |dir| work(dir, &manager, &name))
     }
 
