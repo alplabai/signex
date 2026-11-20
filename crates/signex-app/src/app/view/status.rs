@@ -77,6 +77,15 @@ impl Signex {
             .filter(|tab| matches!(tab.kind, crate::app::TabKind::Schematic))
     }
 
+    /// Whether the Grid & Snap popover paints: it is open and its window
+    /// shows a sheet. The Esc ladder reads this, not the bare `Option`.
+    pub(crate) fn grid_snap_popover_shown(&self) -> bool {
+        self.ui_state
+            .grid_snap_popover
+            .as_deref()
+            .is_some_and(|popover| self.status_sheet_tab(popover.window).is_some())
+    }
+
     /// The Grid & Snap popover of `window_id`'s status bar, above its Grid
     /// read-out. It shows the Document Options grid settings and sends the
     /// messages those rows send. Pushes the dismiss layer then the card.
@@ -262,5 +271,66 @@ mod tests {
         } else {
             assert!(!app.grid_snap_popover_overlay(window).is_empty());
         }
+    }
+
+    fn next_document_tab(app: &mut Signex) {
+        let command = crate::keymap::AppCommandId::new("next_document_tab").expect("id");
+        let message = crate::app::command::bridge::core_to_message(
+            &command,
+            &crate::app::command::CommandArgs::none(),
+        )
+        .expect("the command resolves");
+        let _ = app.update(message);
+    }
+
+    /// Ctrl+Tab from the sheet to a board closes the popover: the next Esc
+    /// resets the board's tool instead of closing a popover that no longer
+    /// paints, and going back to the sheet does not bring it back.
+    #[test]
+    fn switching_to_a_board_closes_the_popover_and_esc_resets_the_tool() {
+        let (mut app, window) = app_with_window();
+        for (name, kind) in [
+            ("a.snxsch", crate::app::TabKind::Schematic),
+            ("b.snxpcb", crate::app::TabKind::Pcb),
+        ] {
+            app.document_state.tabs.push(crate::app::TabInfo {
+                title: name.into(),
+                path: name.into(),
+                cached_document: None,
+                project_id: None,
+                kind,
+            });
+        }
+        app.document_state.active_tab = 0;
+        let _ = app.update(right_click(window));
+        assert!(app.grid_snap_popover_shown(), "open over the sheet");
+        assert!(
+            app.escape_overlay_message().is_some(),
+            "Esc closes it first"
+        );
+
+        next_document_tab(&mut app);
+        assert_eq!(app.document_state.active_tab, 1);
+        assert!(app.ui_state.grid_snap_popover.is_none());
+        app.interaction_state.current_tool = crate::app::Tool::Wire;
+        let _ = app.update(Message::Input(crate::app::InputMsg::EscapePressed {
+            window: Some(window),
+        }));
+        assert_eq!(app.interaction_state.current_tool, crate::app::Tool::Select);
+
+        next_document_tab(&mut app);
+        assert_eq!(app.document_state.active_tab, 0);
+        assert!(app.ui_state.grid_snap_popover.is_none(), "it stays closed");
+    }
+
+    /// A popover whose window no longer shows a sheet claims no Esc, however
+    /// it got there.
+    #[test]
+    fn a_popover_that_does_not_paint_claims_no_escape() {
+        let (mut app, window) = app_with_window();
+        let _ = app.update(right_click(window));
+        assert!(app.ui_state.grid_snap_popover.is_some());
+        assert!(!app.grid_snap_popover_shown(), "no sheet in the window");
+        assert!(app.escape_overlay_message().is_none());
     }
 }

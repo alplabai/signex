@@ -59,8 +59,6 @@ impl Signex {
             .find(|text| !text.is_empty())
             .map(str::to_owned);
         self.ui_state.paste_array = Some(Box::new(dialog));
-        // The dialog takes over: the Grid & Snap popover goes.
-        self.ui_state.grid_snap_popover = None;
     }
 
     pub(crate) fn handle_paste_array_message(&mut self, msg: PasteArrayMsg) -> Task<Message> {

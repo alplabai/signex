@@ -163,7 +163,10 @@ impl Signex {
             self.document_state.project_fs.invalidate();
         }
         let before = self.active_tab_path();
+        let popover = self.watch_grid_snap_popover();
         let mut tasks = vec![self.dispatch_update(message)];
+        // The Grid & Snap popover goes with its sheet or under a new dialog.
+        self.sync_grid_snap_popover(popover);
         // Cross select follows whatever this message selected, and a Cross
         // Probe asked for runs once its target is open (#1312).
         tasks.push(self.sync_cross_select());

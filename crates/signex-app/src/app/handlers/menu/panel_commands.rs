@@ -58,14 +58,12 @@ impl Signex {
                 self.ui_state.refresh_shortcut_sections();
                 self.interaction_state.context_menu = None;
                 self.ui_state.panel_list_open = false;
-                self.ui_state.grid_snap_popover = None;
                 Some(Task::none())
             }
             MenuMessage::OpenAbout => {
                 self.ui_state.about_open = true;
                 self.interaction_state.context_menu = None;
                 self.ui_state.panel_list_open = false;
-                self.ui_state.grid_snap_popover = None;
                 Some(Task::none())
             }
             MenuMessage::OpenDocumentation => Some(crate::about::open_link(

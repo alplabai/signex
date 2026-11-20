@@ -185,7 +185,9 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   Grid, Snap Grid and Snap to Hotspots, each with its switch, and a Pitch for
   the two grids. These are the settings of **Properties ▸ Document Options ▸
   General**, so a change in one place shows in the other. The small drawing at
-  the top shows what the settings do and redraws as you change them.
+  the top shows what the settings do and redraws as you change them. It
+  closes when you press Esc, click outside it, switch to another document or
+  open a dialog.
 - **Status bar:** at the left, the cursor's X and Y followed by the unit
   (click the unit to step through mm, mil, in and um), then the grid and snap,
   then the active tool and what it is doing. At the right, the selection

@@ -623,13 +623,35 @@ impl Signex {
         //
         // Unless the Esc came from that very window, which is the one
         // case where the user IS looking at the card (#547).
-        let modal_detached = |modal: crate::app::state::ModalId| -> bool {
+        self.open_overlays_where(|modal: crate::app::state::ModalId| -> bool {
             esc_from_detached != Some(modal)
                 && self.ui_state.windows.values().any(|kind| {
                     matches!(kind, crate::app::state::WindowKind::DetachedModal(m) if *m == modal)
                 })
-        };
+        })
+    }
 
+    /// How many dialogs that paint above the Grid & Snap popover are open,
+    /// in the main window or a window of their own (the Parameter Manager,
+    /// which only opens in its own, included). The popover closes when this
+    /// grows, so every dialog closes it, trunk's new ones too, with no
+    /// per-dialog line (`handlers/grid_snap_popover.rs`).
+    pub(crate) fn dialogs_open_above_grid_snap_popover(&self) -> usize {
+        let open = self.open_overlays_where(|_| false);
+        let above = crate::app::view::overlay_id::PAINT_ORDER
+            .iter()
+            .skip_while(|id| **id != OverlayId::GridSnapPopover)
+            .skip(1);
+        above.filter(|id| open.rung(**id).is_some()).count()
+            + usize::from(self.ui_state.parameter_manager_open)
+    }
+
+    /// The snapshot, with `modal_detached` saying which modals show in a
+    /// window of their own (their in-window flag then reads closed).
+    fn open_overlays_where(
+        &self,
+        modal_detached: impl Fn(crate::app::state::ModalId) -> bool,
+    ) -> OpenOverlays {
         OpenOverlays {
             find_replace_open: self.ui_state.find_replace.open
                 && !modal_detached(crate::app::state::ModalId::FindReplace),
@@ -751,7 +773,8 @@ impl Signex {
                 .project_tree_context_menu
                 .is_some(),
             grid_picker_open: self.interaction_state.grid_picker.is_some(),
-            grid_snap_popover_open: self.ui_state.grid_snap_popover.is_some(),
+            // Open is not enough: it must paint, or Esc is swallowed for it.
+            grid_snap_popover_open: self.grid_snap_popover_shown(),
         }
     }
 

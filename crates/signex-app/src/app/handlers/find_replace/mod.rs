@@ -33,7 +33,6 @@ impl Signex {
         find.replace_mode = replace_mode;
         self.interaction_state.context_menu = None;
         self.ui_state.panel_list_open = false;
-        self.ui_state.grid_snap_popover = None;
         self.ui_state.find_replace.skips_reported.clear();
         self.refresh_find_matches()
     }

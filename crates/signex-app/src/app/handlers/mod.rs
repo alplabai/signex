@@ -34,6 +34,7 @@ pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;
 pub mod find_similar;
+pub(crate) mod grid_snap_popover;
 mod intro_wrap;
 pub(in crate::app) mod keymap_mod_prompt;
 pub mod library_drift;

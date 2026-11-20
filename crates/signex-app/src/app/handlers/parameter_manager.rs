@@ -35,8 +35,6 @@ impl Signex {
                     self.ui_state.parameter_table = Default::default();
                 }
                 self.ui_state.parameter_manager_open = true;
-                // The dialog takes over: the Grid & Snap popover goes.
-                self.ui_state.grid_snap_popover = None;
                 self.handle_detach_modal(ModalId::ParameterManager)
             }
             ParameterManagerMsg::Close => self.close_parameter_manager(),
