@@ -7,10 +7,12 @@ use signex_types::pcb_panel::BoardPanel;
 use signex_types::pcb_sketch::BoardSketch;
 use signex_types::pcb_stack::LayerStack;
 use signex_types::property::PcbProperty;
+use signex_types::sketch::board_attr::SketchBoardItems;
 use uuid::Uuid;
 
 use super::batch;
 use super::board_sketch;
+use super::board_sketch::items::SketchBakeSnapshot;
 use super::error::BoardCommandError;
 use super::footprint::{self, FootprintFace};
 use super::footprint_content::{self, FootprintText};
@@ -55,6 +57,21 @@ pub enum BoardCommand {
         sketch: Option<Box<BoardSketch>>,
         outline: Option<Vec<Point>>,
     },
+    /// [`BoardCommand::SetBoardSketch`] that also replaces the zones and
+    /// drawings the sketch owns (uuid of an entity of the old or new sketch)
+    /// with `items` and moves the anchored footprints, a locked one
+    /// excepted (decision 2, 2026-11-20). Build it with
+    /// [`BoardCommand::set_board_sketch_with_items`]. Refused for a number
+    /// that is not finite or an anchor naming a footprint that is gone. The
+    /// inverse is a [`BoardCommand::RestoreBoardSketchBake`].
+    SetBoardSketchBake {
+        sketch: Option<Box<BoardSketch>>,
+        outline: Option<Vec<Point>>,
+        items: Box<SketchBoardItems>,
+    },
+    /// Put back what a [`BoardCommand::SetBoardSketchBake`] replaced; the
+    /// inverse of it and of itself.
+    RestoreBoardSketchBake(Box<SketchBakeSnapshot>),
     /// Remove the named items.
     DeleteItems { items: Vec<BoardItemId> },
     /// Put removed items back at their recorded list indices; the inverse
@@ -283,6 +300,14 @@ impl BoardCommand {
             } => footprint::restore_face(board, id, face),
             Self::SetBoardOutline { outline } => set_outline(board, outline),
             Self::SetBoardSketch { sketch, outline } => board_sketch::set(board, sketch, outline),
+            Self::SetBoardSketchBake {
+                sketch,
+                outline,
+                items,
+            } => board_sketch::items::set(board, sketch, outline, *items),
+            Self::RestoreBoardSketchBake(snapshot) => {
+                board_sketch::items::restore(board, *snapshot)
+            }
             Self::DeleteItems { items: ids } => items::delete(board, &ids),
             Self::RestoreItems { items: removed } => items::restore(board, removed),
             Self::AddItems { items: added } => items::add(board, added),
