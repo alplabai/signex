@@ -15,7 +15,7 @@ use signex_types::project::NamedRuleSet;
 use signex_widgets::LengthFormat;
 use signex_widgets::constraint_grid::{
     CellRef, CellValue, CellValues, ColumnGroup, ColumnId, ColumnKind, ConstraintGrid, GridColumn,
-    GridRow, GroupId, Resolved, RowId, RowKind, ValueSource,
+    GridMessage, GridRow, GroupId, Resolved, RowId, RowKind, ValueSource,
 };
 
 pub(crate) use super::search::FindState;
@@ -233,8 +233,19 @@ impl RulesGrid {
 
     /// Lay out the rows from `source` and the domain's `scoped` rules. Rows
     /// that were collapsed stay collapsed; a class starts collapsed unless
-    /// one of its nets has a rule of its own.
+    /// one of its nets has a rule of its own. The selected cell stays
+    /// selected on its row (by `RowRef`, ids move), with what was typed in
+    /// it, so its drawing and a value set on it are kept.
     pub(crate) fn build_rows(&mut self, source: RowSource, scoped: Vec<String>, i18n: &I18n) {
+        let selected = self
+            .view
+            .selected()
+            .and_then(|at| Some((self.row(at.row)?.clone(), at.column)));
+        let typed = self
+            .view
+            .edit()
+            .filter(|edit| edit.text != edit.opened)
+            .map(|edit| edit.text.clone());
         let was_closed: BTreeSet<RowRef> = self
             .rows
             .iter()
@@ -285,6 +296,16 @@ impl RulesGrid {
                     mm_format(i18n),
                 );
             }
+        }
+        if let Some((row, column)) = selected
+            && let Some(at) = self.row_of(&row).map(|id| CellRef::new(id, column))
+        {
+            let _ = view.update(GridMessage::CellPressed(at), &NoCells, mm_format(i18n));
+            let after = match typed {
+                Some(text) => GridMessage::EditTextChanged(text),
+                None => GridMessage::EditCancelled,
+            };
+            let _ = view.update(after, &NoCells, mm_format(i18n));
         }
         self.view = view;
         self.built_from = Some((source, scoped));

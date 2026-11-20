@@ -1301,3 +1301,52 @@ fn a_drawing_key_follows_the_window_that_shows_the_rules_tab() {
         "a key typed in a schematic window is not the main window's drawing's"
     );
 }
+
+/// A rebuild of the rows keeps the selected cell on its row, so its
+/// drawing stays and a value set on the drawing is still written.
+#[test]
+fn a_row_rebuild_keeps_the_selected_cell_and_its_drawing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    select_sig_b(&mut app, id);
+    let sig = RowRef::Net("SIG".into());
+    let before = grid(&app, id).view.selected().expect("selected");
+    // A class rule adds the HV row ahead of SIG: the rows are laid out
+    // again and SIG's row id moves.
+    answer(
+        &mut app,
+        "rules_add",
+        &["kind=clearance", "values=0.5mm", "scope=class == \"HV\""],
+    );
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    let grid_now = grid(&app, id);
+    assert!(grid_now.rows().contains(&RowRef::Class("HV".into())));
+    let after = grid_now.view.selected().expect("still selected");
+    assert_eq!(grid_now.row(after.row), Some(&sig), "the same row");
+    assert_eq!(after.column, before.column, "the same column");
+    assert_ne!(after.row, before.row, "the row moved");
+    assert!(
+        rules_tab(&app, id).drawing_target.is_some(),
+        "the drawing stays"
+    );
+
+    for step in [
+        signex_widgets::dimension_label::DimensionLabelMessage::LabelPressed(0),
+        signex_widgets::dimension_label::DimensionLabelMessage::DraftEdited("0.45".into()),
+        signex_widgets::dimension_label::DimensionLabelMessage::DraftSubmitted,
+    ] {
+        send(
+            &mut app,
+            RulesTabMsg::PreviewActed {
+                project_id: id,
+                msg: super::drawing::PreviewMsg::Labels(step),
+            },
+        );
+    }
+    let text = dsl(&app).expect("stored");
+    assert!(
+        text.contains("rule sig_b on clearance when net == \"SIG\" require clearance >= 0.45mm"),
+        "the drawing's value reached sig_b: {text}"
+    );
+}
