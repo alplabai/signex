@@ -93,9 +93,15 @@ impl ComponentReport {
         !needs_annotation(&self.designator)
     }
 
-    /// Every pin of the part, wired or not.
+    /// Every pin of the part, wired or not, each pin number once: a pin
+    /// every unit carries, wired on two units, counts as one pin.
     pub fn pin_count(&self) -> usize {
-        self.pins.len() + self.unconnected.len()
+        self.pins
+            .iter()
+            .map(|p| p.pin.as_str())
+            .chain(self.unconnected.iter().map(|p| p.pin.as_str()))
+            .collect::<HashSet<&str>>()
+            .len()
     }
 }
 
@@ -157,15 +163,22 @@ impl NetIndex {
                     .map(move |p| ((key, p.pin.as_str()), p.name.as_str()))
             })
             .collect();
-        let seen = self.add_connected_pins(&mut reports, &of_symbol, &names);
+        self.add_connected_pins(&mut reports, &of_symbol, &names);
+        // A pin is on no net only when no unit of its part wires it: a pin
+        // every unit carries, wired on one unit and open on another, is
+        // listed once, as wired.
+        let mut listed: HashSet<(usize, String)> = reports
+            .iter()
+            .enumerate()
+            .flat_map(|(at, report)| report.pins.iter().map(move |p| (at, p.pin.clone())))
+            .collect();
         for placed in self.placed_symbols() {
             let key = (&placed.sheet, &placed.occurrence, placed.id);
             let Some(&at) = of_symbol.get(&key) else {
                 continue;
             };
-            let mut listed: HashSet<&str> = HashSet::new();
             for p in &placed.pins {
-                if seen.contains(&(key, p.pin.as_str())) || !listed.insert(p.pin.as_str()) {
+                if !listed.insert((at, p.pin.clone())) {
                     continue;
                 }
                 reports[at].unconnected.push(UnconnectedPin {
@@ -238,13 +251,13 @@ impl NetIndex {
     }
 
     /// Add each pin on a net to its part, once per placed pin, named from
-    /// `names`; returns the pins added.
+    /// `names`.
     fn add_connected_pins<'a>(
         &'a self,
         reports: &mut [ComponentReport],
         of_symbol: &HashMap<PlacementKey<'a>, usize>,
         names: &HashMap<PinKey<'a>, &str>,
-    ) -> HashSet<PinKey<'a>> {
+    ) {
         let mut seen: HashSet<PinKey<'a>> = HashSet::new();
         for net in 0..self.net_count() {
             let Some(listed) = self.net(net) else {
@@ -276,6 +289,5 @@ impl NetIndex {
                 });
             }
         }
-        seen
     }
 }
