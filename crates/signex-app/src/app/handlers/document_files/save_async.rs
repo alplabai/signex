@@ -16,6 +16,17 @@ use iced::Task;
 use crate::app::{FileMsg, Message, Signex, TabKind};
 use crate::persist::{DocumentSaveDone, SaveOutcome};
 
+/// How a schematic write is compared with its file before it lands.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DiskCheck {
+    /// Refuse when the file changed or is gone (Ctrl+S).
+    Compare,
+    /// Refuse when the file changed; write it when it is gone.
+    CompareWritingMissing,
+    /// Write without comparing.
+    Skip,
+}
+
 impl Signex {
     /// Snapshot the engine behind `save_as_from` (or `target` for a plain
     /// save) and return the task that writes it to `target`.
@@ -24,7 +35,7 @@ impl Signex {
         target: PathBuf,
         save_as_from: Option<PathBuf>,
     ) -> Result<Task<Message>> {
-        self.begin_schematic_save_checked(target, save_as_from, true)
+        self.begin_schematic_save_checked(target, save_as_from, DiskCheck::Compare)
     }
 
     /// A plain save the user chose to run over a changed file: this one write
@@ -33,14 +44,24 @@ impl Signex {
         &mut self,
         target: PathBuf,
     ) -> Result<Task<Message>> {
-        self.begin_schematic_save_checked(target, None, false)
+        self.begin_schematic_save_checked(target, None, DiskCheck::Skip)
+    }
+
+    /// File ▸ Save As onto the sheet's own file: a plain save compared with
+    /// disk like Ctrl+S, except that a file deleted or moved away is written,
+    /// as Save As always did.
+    pub(crate) fn begin_schematic_save_onto_own_file(
+        &mut self,
+        target: PathBuf,
+    ) -> Result<Task<Message>> {
+        self.begin_schematic_save_checked(target, None, DiskCheck::CompareWritingMissing)
     }
 
     fn begin_schematic_save_checked(
         &mut self,
         target: PathBuf,
         save_as_from: Option<PathBuf>,
-        compare_with_disk: bool,
+        check: DiskCheck,
     ) -> Result<Task<Message>> {
         let source = save_as_from.clone().unwrap_or_else(|| target.clone());
         // A rename or delete still moving either file would recreate it or
@@ -78,14 +99,17 @@ impl Signex {
             .into_bytes();
         // A plain save is compared with what the file held when the sheet was
         // loaded or last saved; a Save As target was confirmed by the dialog.
-        let expected = (compare_with_disk && save_as_from.is_none())
+        let expected = (check != DiskCheck::Skip && save_as_from.is_none())
             .then(|| self.document_state.document_saves.baseline(&target))
             .flatten();
-        let job = self
+        let mut job = self
             .document_state
             .document_saves
             .begin(target.clone(), bytes)
             .expecting(expected);
+        if check == DiskCheck::CompareWritingMissing {
+            job = job.writing_a_missing_file();
+        }
         let hold = self.document_state.autosave.hold_for_save();
         Ok(Self::spawn_document_write(
             job,

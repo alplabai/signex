@@ -1,6 +1,6 @@
 //! #2058: the error notice keeps catalog ids and arguments, and the text is
 //! rendered with the language in force, so an open card follows a switch.
-//! Graphite mockup row 11 / GG-08: the severity of each heading, the system block, the
+//! Graphite mockup row 11: the severity of each heading, the system block, the
 //! Copy text and the Save As… choice of File Changed on Disk.
 
 use signex_i18n::RenderTranslatable;
@@ -60,7 +60,7 @@ fn a_verbatim_detail_is_shown_as_it_is_in_every_language() {
 
 /// The disk-changed card's English is what the code built before the
 /// catalog. Since mockup row 11 the first paragraph is the sentence and the second is
-/// the choice list (choice, effect), the same words; Save As… is new (GG-08).
+/// the choice list (choice, effect), the same words; Save As… is new.
 #[test]
 fn the_disk_changed_cards_keep_their_english() {
     let path = PathBuf::from("/w/proj/top.snxsch");
@@ -218,7 +218,7 @@ fn a_failed_save_puts_the_error_chain_in_the_system_block() {
     );
 }
 
-/// GG-08: File Changed on Disk offers Save As… for a sheet, which has one,
+/// File Changed on Disk offers Save As… for a sheet, which has one,
 /// and not for a board, nor on the other disk cards or a plain card.
 #[test]
 fn save_as_is_offered_for_a_changed_sheet_and_not_for_a_board() {
@@ -266,7 +266,7 @@ fn active_path(app: &Signex) -> PathBuf {
         .clone()
 }
 
-/// GG-08: Save As… brings the conflicted sheet to the front, closes the
+/// Save As… on the card brings the conflicted sheet to the front, closes the
 /// card and opens the Save As dialog for it. Nothing is written and the
 /// sheet stays modified until that Save As lands.
 #[test]
@@ -343,7 +343,7 @@ fn answer_save_as(app: &mut Signex, path: &std::path::Path) {
     app.ui_state.io = crate::io_ports::IoPorts::headless(answers);
 }
 
-/// GG-08, data loss: Save As from the card onto the changed file itself, in
+/// Data loss: Save As from the card onto the changed file itself, in
 /// any spelling, writes nothing. Their version stays on disk byte for byte,
 /// the sheet stays modified and the card comes back.
 #[test]
@@ -413,7 +413,7 @@ fn save_as_from_the_card_onto_the_changed_file_leaves_their_version() {
     assert_eq!(active_path(&app), symbol, "symbol: no re-key");
 }
 
-/// GG-08, data loss: Cancel on the card, then File ▸ Save As onto the sheet's
+/// Data loss: Cancel on the card, then File ▸ Save As onto the sheet's
 /// own file. That is a plain save and is compared like Ctrl+S, so
 /// their version stays byte for byte and the card comes back.
 #[test]
@@ -453,10 +453,36 @@ fn file_save_as_onto_the_changed_file_itself_asks_like_ctrl_s() {
     assert!(app.document_state.is_document_dirty(&conflicted));
 }
 
-/// GG-08 to the end: after the card, Save As to a new file writes the
+/// File ▸ Save As onto the sheet's own file after that file was deleted
+/// writes it, as before: no Missing on Disk card (Caner, 2026-11-20).
+#[test]
+fn file_save_as_onto_its_deleted_own_file_writes_it() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, sheet, _other) = conflict_fixture(dir.path());
+    app.record_disk_baseline(&sheet, crate::persist::ContentHash::of(b"our version"));
+    std::fs::remove_file(&sheet).expect("delete");
+    assert!(app.activate_tab_for_path(&sheet));
+
+    crate::app::path_ops::settle(
+        &mut app,
+        Message::File(crate::app::FileMsg::SaveAs {
+            from_path: sheet.clone(),
+            to_path: sheet.clone(),
+        }),
+    );
+
+    let written = std::fs::read(&sheet).expect("the file is written again");
+    assert!(!written.is_empty());
+    assert_eq!(app.document_state.error_notice, None, "no card");
+    assert!(!app.document_state.is_document_dirty(&sheet));
+    assert_eq!(active_path(&app), sheet, "no re-key");
+}
+
+/// Save As from the card, to the end: Save As to a new file writes the
 /// document there and nothing else. Their version stays, the tab names the
 /// new file, the refused save's failure record is gone and the tab shows
-/// no dirty dot, as the document on it is saved.
+/// no dirty dot, as the document on it is saved. A symbol does the same.
 #[test]
 fn save_as_from_the_card_to_a_new_file_moves_the_document_there() {
     let _ = crate::diagnostics::init_logging();
@@ -499,4 +525,52 @@ fn save_as_from_the_card_to_a_new_file_moves_the_document_there() {
         "the saved tab shows no dirty dot"
     );
     assert!(!app.document_state.is_document_dirty(&conflicted));
+
+    // A symbol's Save As lands the same way and clears the failure recorded
+    // under the file it left.
+    let symbol = dir.path().join("part.snxsym");
+    std::fs::write(&symbol, b"their version").expect("seed");
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("A"));
+    app.open_symbol_editor_tab(symbol.clone(), file);
+    app.document_state.mark_document_dirty(&symbol);
+    app.handle_save_found_disk_drift(symbol.clone(), DiskDrift::Changed);
+    let saves = &app.document_state.document_saves;
+    assert!(saves.failure(&symbol).is_some(), "symbol: the refused save");
+    assert_eq!(
+        app.document_state.error_notice,
+        Some(ErrorNotice::disk_changed(
+            symbol.clone(),
+            DiskDrift::Changed
+        )),
+        "symbol: the card"
+    );
+    let symbol_copy = dir.path().join("copy.snxsym");
+    answer_save_as(&mut app, &symbol_copy);
+
+    crate::app::path_ops::settle(
+        &mut app,
+        Message::Overlay(OverlayMsg::DiskConflictSaveAsChosen),
+    );
+
+    assert_eq!(
+        std::fs::read(&symbol).expect("read"),
+        b"their version",
+        "symbol: the changed file is untouched"
+    );
+    let written = std::fs::read(&symbol_copy).expect("symbol: the new file is written");
+    assert_ne!(written, b"their version");
+    assert_eq!(
+        active_path(&app),
+        symbol_copy,
+        "symbol: the tab names the new file"
+    );
+    let saves = &app.document_state.document_saves;
+    assert_eq!(
+        saves.failure(&symbol),
+        None,
+        "symbol: the old failure is gone"
+    );
+    assert_eq!(saves.failure(&symbol_copy), None);
+    assert!(!app.document_state.is_document_dirty(&symbol_copy));
+    assert!(!app.document_state.is_document_dirty(&symbol));
 }

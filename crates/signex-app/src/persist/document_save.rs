@@ -224,6 +224,8 @@ pub struct DocumentSaveJob {
     /// What the file held when the document was loaded or last saved. `None`
     /// writes without comparing (Save As, an explicit overwrite).
     expected: Option<super::ContentHash>,
+    /// A compared file that is gone is written instead of refused.
+    writes_a_missing_file: bool,
     _in_flight: InFlight,
 }
 
@@ -232,6 +234,14 @@ impl DocumentSaveJob {
     /// still holds `expected` or an earlier write of this process.
     pub fn expecting(mut self, expected: Option<super::ContentHash>) -> Self {
         self.expected = expected;
+        self
+    }
+
+    /// With [`Self::expecting`]: a file that was deleted or moved away is
+    /// written, a changed one is still refused (File ▸ Save As onto a sheet's
+    /// own file).
+    pub fn writing_a_missing_file(mut self) -> Self {
+        self.writes_a_missing_file = true;
         self
     }
 
@@ -293,7 +303,9 @@ impl DocumentSaveJob {
             );
             let drift = super::drift_from(&self.path, &known)
                 .map_err(|error| format!("read {} before saving: {error}", self.path.display()))?;
-            if let Some(drift) = drift {
+            let written_anyway =
+                self.writes_a_missing_file && drift == Some(super::DiskDrift::Missing);
+            if let Some(drift) = drift.filter(|_| !written_anyway) {
                 return Ok(SaveOutcome::DiskChanged(drift));
             }
         }
@@ -531,6 +543,7 @@ impl DocumentSaves {
             sequence: self.next_sequence,
             ledger: Arc::clone(&self.ledger),
             expected: None,
+            writes_a_missing_file: false,
             _in_flight: in_flight,
         }
     }
@@ -931,6 +944,42 @@ mod tests {
             .expecting(baseline);
         assert_eq!(
             job.run().unwrap(),
+            SaveOutcome::DiskChanged(super::super::DiskDrift::Changed)
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"theirs");
+    }
+
+    /// A job told to write a missing file writes one that is gone and still
+    /// refuses one that changed; without it a gone file is refused.
+    #[test]
+    fn writing_a_missing_file_writes_a_gone_file_and_refuses_a_changed_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.snxsch");
+        let baseline = Some(super::super::ContentHash::of(b"disk"));
+        let mut saves = DocumentSaves::default();
+        let plain = saves
+            .begin(path.clone(), b"mine".to_vec())
+            .expecting(baseline);
+        assert_eq!(
+            plain.run().unwrap(),
+            SaveOutcome::DiskChanged(super::super::DiskDrift::Missing)
+        );
+        assert!(!path.exists());
+
+        let gone = saves
+            .begin(path.clone(), b"mine".to_vec())
+            .expecting(baseline)
+            .writing_a_missing_file();
+        assert_eq!(gone.run().unwrap(), SaveOutcome::Written);
+        assert_eq!(std::fs::read(&path).unwrap(), b"mine");
+
+        std::fs::write(&path, b"theirs").unwrap();
+        let changed = saves
+            .begin(path.clone(), b"again".to_vec())
+            .expecting(baseline)
+            .writing_a_missing_file();
+        assert_eq!(
+            changed.run().unwrap(),
             SaveOutcome::DiskChanged(super::super::DiskDrift::Changed)
         );
         assert_eq!(std::fs::read(&path).unwrap(), b"theirs");
