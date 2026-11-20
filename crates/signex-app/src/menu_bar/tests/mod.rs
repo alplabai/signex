@@ -299,6 +299,8 @@ pub(super) struct Probe {
     pub find_similar: bool,
     /// View ▸ Selection Filter opens an Active Bar dropdown (#2416).
     pub active_bar_menu: bool,
+    /// Design ▸ Differential Pair Classes... opens its dialog.
+    pub diff_pair_classes: bool,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -381,6 +383,7 @@ pub(super) fn probe(app: &Signex) -> Probe {
         document_setup: app.ui_state.document_setup.is_some(),
         find_similar: app.ui_state.find_similar.is_some(),
         active_bar_menu: app.interaction_state.active_bar_menu.is_some(),
+        diff_pair_classes: app.ui_state.diff_pair_classes.is_some(),
     }
 }
 

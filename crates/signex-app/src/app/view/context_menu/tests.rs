@@ -269,7 +269,7 @@ fn canvas_menu_grows_and_gates_on_selection() {
     // Place, Part Actions and Sheet Actions launchers always (#2419); the
     // Align launcher joins them on selection.
     assert_eq!(launchers(&without), 3);
-    assert_eq!(launchers(&with), 4);
+    assert_eq!(launchers(&with), 5);
 }
 
 fn project_options_row(entries: &[DropdownEntry<Message>]) -> &DropdownItem<Message> {
