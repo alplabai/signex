@@ -13,7 +13,7 @@ use super::graphite::{
     self, DIRTY_DOT, NAME_PAD_X, PILL_PAD_X, TAB_GAP, TAB_PAD_LEFT, TAB_PAD_RIGHT,
 };
 use super::{TabMarks, TabMessage};
-use crate::app::TabInfo;
+use crate::app::{LoadedProject, TabInfo, page_tab};
 use crate::dock::measure::text_width_in;
 use crate::styles::tokens::resolve;
 use crate::styles::{Radii, TypeScale, ti};
@@ -67,13 +67,18 @@ pub(crate) fn split(widths: &[f32], active: Option<usize>, room: f32, button: f3
     out
 }
 
-/// The text a tab shows: its title, or the catalog title of a Rules tab in
-/// the current language, ellipsized like the strip draws it.
-pub(crate) fn tab_label(tab: &TabInfo, i18n: &signex_i18n::I18n) -> String {
-    let catalog_title = matches!(tab.kind, crate::app::TabKind::Rules(_))
-        .then(|| signex_i18n::t!(i18n, signex_i18n::ids::RULES_TAB_TITLE).into_string());
+/// The text a tab shows: its title, or for a page tab "<project> — <page>"
+/// from the project's current name among `projects`, read in the current
+/// language rather than the one it was opened in; ellipsized like the strip
+/// draws it.
+pub(crate) fn tab_label(
+    tab: &TabInfo,
+    projects: &[LoadedProject],
+    i18n: &signex_i18n::I18n,
+) -> String {
+    let page_title = page_tab::tab_title(&tab.kind, projects, i18n);
     super::ellipsize_title(
-        catalog_title.as_deref().unwrap_or(&tab.title),
+        page_title.as_deref().unwrap_or(&tab.title),
         super::MAX_TAB_TITLE_CHARS,
     )
 }
@@ -86,7 +91,11 @@ fn tab_width(tab: &TabInfo, marks: &TabMarks<'_>) -> f32 {
     let mut w = TAB_PAD_LEFT
         + text_width_in(&code, TS.caption, graphite::mono())
         + TAB_GAP
-        + text_width_in(&tab_label(tab, i18n), TS.body, marks.ui_font);
+        + text_width_in(
+            &tab_label(tab, marks.projects, i18n),
+            TS.body,
+            marks.ui_font,
+        );
     if super::tab_is_dirty(tab, marks.dirty_paths) {
         w += TAB_GAP + DIRTY_DOT;
     }
@@ -263,10 +272,10 @@ fn hidden_row<M: Clone + 'static>(
 }
 
 /// The menu of the "+N" button: the "Hidden tabs" caption, then one row
-/// per tab in `hidden` (indices into `tabs`); picking a row sends
-/// `on_pick(index)`.
+/// per tab in `hidden` (indices into `tabs`, page tabs titled from
+/// `projects`); picking a row sends `on_pick(index)`.
 pub(crate) fn hidden_tab_entries<M: Clone + 'static>(
-    tabs: &[TabInfo],
+    (tabs, projects): (&[TabInfo], &[LoadedProject]),
     hidden: &[usize],
     i18n: &signex_i18n::I18n,
     tokens: &ThemeTokens,
@@ -280,7 +289,7 @@ pub(crate) fn hidden_tab_entries<M: Clone + 'static>(
             let code = signex_i18n::t!(i18n, graphite::kind_glyph(&tab.kind));
             Some(DropdownEntry::Custom(hidden_row(
                 code,
-                tab_label(tab, i18n),
+                tab_label(tab, projects, i18n),
                 on_pick(i),
                 tokens,
             )))
@@ -291,7 +300,7 @@ pub(crate) fn hidden_tab_entries<M: Clone + 'static>(
 /// Width of the menu card for the tabs `hidden`: the widest key cap and
 /// label, inside the Graphite card's bounds.
 pub(crate) fn hidden_menu_width(
-    tabs: &[TabInfo],
+    (tabs, projects): (&[TabInfo], &[LoadedProject]),
     hidden: &[usize],
     i18n: &signex_i18n::I18n,
     ui_font: iced::Font,
@@ -306,7 +315,7 @@ pub(crate) fn hidden_menu_width(
                 + 2.0 * KEY_CAP_PAD_X
                 + 2.0
                 + metrics.row_spacing
-                + text_width_in(&tab_label(tab, i18n), metrics.label_size, ui_font)
+                + text_width_in(&tab_label(tab, projects, i18n), metrics.label_size, ui_font)
         })
         .fold(0.0, f32::max);
     (widest + 2.0 * metrics.row_pad_x + 2.0 * metrics.panel_pad)
@@ -377,6 +386,7 @@ mod tests {
             tooltips_enabled: true,
             project_name: None,
             i18n,
+            projects: &[],
             ui_font: iced::Font::DEFAULT,
             theme_id: ThemeId::GraphiteLight,
             strip_width,
@@ -413,7 +423,7 @@ mod tests {
         ];
         let i18n = signex_i18n::I18n::en_us();
         let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteDark);
-        let rows = hidden_tab_entries(&tabs, &[1, 2], &i18n, &tokens, |i| i);
+        let rows = hidden_tab_entries((&tabs, &[]), &[1, 2], &i18n, &tokens, |i| i);
         assert_eq!(rows.len(), 3);
         assert!(matches!(&rows[0], DropdownEntry::Header(h) if h == "Hidden tabs"));
         assert!(
@@ -421,7 +431,7 @@ mod tests {
                 .iter()
                 .all(|r| matches!(r, DropdownEntry::Custom(_)))
         );
-        let width = hidden_menu_width(&tabs, &[1, 2], &i18n, iced::Font::DEFAULT);
+        let width = hidden_menu_width((&tabs, &[]), &[1, 2], &i18n, iced::Font::DEFAULT);
         let metrics = MenuMetrics::GRAPHITE;
         assert!((metrics.min_width..=metrics.max_width).contains(&width));
     }

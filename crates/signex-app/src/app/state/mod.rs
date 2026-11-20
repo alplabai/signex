@@ -63,6 +63,7 @@ mod window_sizes;
 mod window_tab;
 
 pub use crate::app::core::case_fold::CaseFold;
+pub use crate::app::core::document_times::DocumentTimes;
 pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
@@ -416,6 +417,8 @@ pub struct DocumentState {
     /// `engine_for_window`. Save-as rekeys an entry via
     /// `rekey_engine(old, new)`.
     pub engines: std::collections::HashMap<PathBuf, signex_engine::Engine>,
+    /// The clock and the file times the computed special strings show.
+    pub times: DocumentTimes,
     /// Per-tab state for open `.snxsym` document tabs. Keyed by the
     /// file path stored on `TabInfo.path` for matching
     /// `TabKind::SymbolEditor(path)` tabs. Insert on
@@ -970,6 +973,15 @@ impl DocumentState {
             return self.active_loaded_project();
         };
         self.document_project(path)
+    }
+
+    /// The designator standard of the project that owns `sheet` (#1416).
+    pub fn designator_standard_for(
+        &self,
+        sheet: &std::path::Path,
+    ) -> Option<signex_types::designator::DesignatorStandard> {
+        self.document_project(sheet)
+            .and_then(|p| p.data.designator_standard())
     }
 
     /// The resolved schematic defaults (#2026) of the project that owns

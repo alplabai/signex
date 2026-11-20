@@ -68,4 +68,10 @@ define_ids! {
     PREFERENCES_PASTE_DESIGNATORS_NEXT_FREE = "preferences-paste-designators-next-free";
     PREFERENCES_ANNOTATE_UNDO_PROJECT = "preferences-annotate-undo-project";
     PREFERENCES_ANNOTATE_UNDO_PER_SHEET = "preferences-annotate-undo-per-sheet";
+    PREFERENCES_PAGE_SCHEMATIC_DISPLAY = "preferences-page-schematic-display";
+    PREFERENCES_SECTION_SCHEMATIC_DISPLAY = "preferences-section-schematic-display";
+    PREFERENCES_SYMBOL_BODY_FILL = "preferences-symbol-body-fill";
+    PREFERENCES_SYMBOL_BODY_FILL_HELP = "preferences-symbol-body-fill-help";
+    PREFERENCES_SYMBOL_BODY_FILL_COLOUR = "preferences-symbol-body-fill-colour";
+    PREFERENCES_SYMBOL_BODY_FILL_COLOUR_HELP = "preferences-symbol-body-fill-colour-help";
 }

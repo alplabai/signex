@@ -217,6 +217,7 @@ fn random_turns_never_change_the_netlist_beyond_the_plain_turn() {
                 engine.document(),
                 &warned_items(&sheet, &unkept),
                 &moved_pin_items(&tips),
+                &[],
             ) {
                 panic!(
                     "seed {seed:#x} case {index} kind {kind}: {why}\nBEFORE {}\nAFTER {}",

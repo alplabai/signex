@@ -99,7 +99,10 @@ separator): Tile Horizontally, Tile Vertically, Untile (see
 [Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
 Parameter Manager..., Net Classes (see
 [below](#find-similar-filter-net-classes)) and Rules... (the project's design rules as a document tab,
-greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
+greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398),
+then, after a separator, Create Sheet Symbol From Sheet... and Synchronize
+Sheet Entries and Ports..., greyed with no sheet in view (see
+[Bottom-up hierarchy](#bottom-up-hierarchy), #1276). **File ▸ New** has Schematic (`new_schematic_sheet`) and PCB
 (`new_pcb_document`), each opening its setup dialog (#2232). **File ▸
 Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
 Outline... (`import_dxf_outline`), greyed without a board in view; each asks
@@ -494,13 +497,27 @@ by designator. The project's sheets are read off the UI thread when it opens.
 
 - A part chooses only among the footprints its own library row offers: the
   row's default and its alternates, the same list the Properties panel shows
-  (`footprint_choices_for`). Its link to the row does not change. A part with
-  no open library row, or whose row offers one footprint, shows its footprint
-  read-only and why.
-- Tick boxes select several parts; "Tick all from this row" ticks every part
-  of the same library row. "Set ticked parts to" lists the footprints every
-  ticked part's row offers, so a bulk pick never gives a part a footprint its
-  row does not offer.
+  (`footprint_choices_for`). Its link to the row does not change. A part that
+  cannot change shows its footprint as text with a reason pill: Sheet not
+  open, Read-only sheet, Library row not open (it links to a library that is
+  not open), No library link, or No alternates. A changed footprint shows the
+  old name struck through and the new one in accent, with a dot on the row.
+- A filter field (designator, value or library row) and All / Changed / No
+  alternates chips with their counts narrow the table (Graphite #80).
+- Tick boxes select several parts; the header box ticks the listed parts.
+  "Tick all from this row" is a link at the end of the Library row cell of
+  the hovered or previewed row and ticks every part of the same library row.
+  While parts are ticked a bar shows their count, "Set ticked parts to" with
+  the footprints every ticked part's row offers (so a bulk pick never gives a
+  part a footprint its row does not offer, and the bar says so when they share
+  none) and Clear ticks.
+- A Footprint preview column draws the clicked row's footprint read-only on
+  the board canvas colours, with a Top copper / Silkscreen / Courtyard legend
+  and its pad count, pad 1 size and courtyard. A changed row draws the current
+  and the new footprint side by side, each given room in proportion to its
+  width so both come out near one scale, with the pin map: every current pad
+  number must be on the new footprint. The footprints are read off the UI
+  thread through the library adapters.
 - Apply checks each change again against the part's live document and its row
   (the Properties path, `footprint_binding_commands`), then changes every open
   sheet in one `update` as one undo group (`UndoGroupKind::Footprints`): one
@@ -524,6 +541,21 @@ by designator. The project's sheets are read off the UI thread when it opens.
   and no closed file can drift between the read and Apply. A sheet written by
   a newer Signex is listed read-only too.
 
+## Tools ▸ Repair Pin Junctions {#tools-repair-pin-junctions}
+
+Right after Assign Footprints, Tools ▸ Repair Pin Junctions runs
+`repair_pin_junctions` (maintainer decision 2026-11-19, `DECISIONS.md`):
+greyed without a schematic in view, it adds an automatic junction dot at every
+pin end of the sheet in view that touches a wire mid-span with no dot, as one
+undo step, and says in Messages how many it added, or that there were none. A
+touch where a dot would short the pin's own part, or where wires of two nets
+meet (overlapping, crossing, or a bare T), is left alone. Opening a sheet that
+holds such touches never changes it: Messages says "N pins touch a wire without
+a junction", and that row has a Repair Pin Junctions link. The link carries the
+sheet the row names (`diagnostics::MessageLink`): it brings that sheet's tab to
+the front and repairs it, whatever sheet is in view; a sheet closed since is
+refused with a notice (`panels::messages_row::row_action`).
+
 ## View ▸ Net Inspector {#view-net-inspector}
 
 Runs `open_net_inspector` (#1269), which opens (or reveals) the Net Inspector
@@ -545,6 +577,16 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   each with its sheet. Clicking a member highlights the net on every sheet and
   goes to the member through net navigation (`go_to_member`), opening its
   sheet when needed.
+- Two tabs at the top (#1274): By Net, the list above, and By Component.
+  By Component lists every part of the project by designator, with its value,
+  footprint and connected pin count, from `NetIndex::components` (the same
+  index). The units of one designator are one part; a part not annotated yet
+  is listed per symbol. Clicking a part expands it to its connected pins, each
+  with its net and sheet; a pin wired to nothing is on no net and is not
+  listed. Clicking a pin goes to it and highlights its net, as a member click
+  does. The filter matches the designator, value or footprint. The tab is
+  panel state in the Model and is not saved. With a board in view there are
+  no tabs.
 - With a board in view (#2403) the panel lists the board's nets instead,
   from `pcb_geom::net_reports`: routed length, vias, pads and whether the
   net is routed (or how many connections are still open). Each row's Select
@@ -583,10 +625,13 @@ with its file and its number.
 
 - A page placed by a sheet symbol has a number field. A top-level page has no
   symbol to hold a number and keeps its position; it is shown read-only.
-- Auto-number puts every page back at its position and clears the hand
-  numbers. A number that is not a whole number from 1 turns its field red and
-  greys Apply; a clash, a gap or a number above the page count is a warning
-  only, as it is for an export.
+- Auto-number (footer left, and as the fix in the error banner) puts every
+  page back at its position and clears the hand numbers. A number that is not
+  a whole number from 1, a clash, a gap or a number above the page count greys
+  Apply (Graphite #78): the clashing rows take the error fill and a red field,
+  and an error banner names the clash, gap or high number. An automatic number
+  (one that follows the hierarchy order) is drawn in faint ink, a typed one in
+  full ink. Export still only warns.
 - Apply writes each changed number into the `ChildSheet.instances` entry of
   the parent sheet's sheet symbol (`Command::SetChildSheetInstances`), scoped
   to the project name. A number equal to the page's position clears the entry
@@ -651,8 +696,38 @@ Part Actions holds Open Datasheet, Edit Symbol and Change Component, then
 Autoplace Fields and Copy Attributes (#1667), live with one placed part
 selected. Copy Attributes copies the object at the point the menu was opened
 over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
-From Sheet Symbol and Sync Sheet Pins, live with a sheet symbol selected, and
-Number Schematic Sheets.
+From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
+live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
+Number Schematic Sheets (#1276).
+
+## Bottom-up hierarchy {#bottom-up-hierarchy}
+
+Design ▸ Create Sheet Symbol From Sheet... (`create_sheet_symbol_from_sheet`,
+#1276) asks for a `.snxsch` file, reads it off the UI thread and places a sheet
+symbol for it on the sheet in view as one undo step: named after the file
+(`name_2`, ... when taken), referring to the file relative to this sheet, at
+the cursor's last point on this sheet (else under the sheet's content), with an
+auto-generated entry for every port of the file (outputs on the right edge,
+every other direction on the left). It refuses the sheet itself, a file that
+places this sheet, a sheet above this one at any depth, and a file this sheet
+already places. Both commands also run from operands; see
+[CLI.md](CLI.md#bottom-up-hierarchy).
+
+Design ▸ Synchronize Sheet Entries and Ports... (`sync_sheet_entries`) opens a
+dialog for the selected sheet symbol. Choose the side that wins: **Sheet to
+sheet symbol** changes the symbol's entries, **Sheet symbol to sheet** changes
+the sheet's hierarchical ports. The dialog lists the names that would be added,
+removed and renamed, and Apply makes exactly those changes as one undo step.
+Esc and Cancel close it without a change. A rename is read only when, for one
+direction (input, output, ...), exactly one name is gone and one is new; it
+keeps the entry's place and wires, or the port label's place. Sheet to sheet
+symbol renames and removes auto-generated entries only, as Sync Sheet Pins
+does, and renames on the selected sheet symbol only: a hand-placed entry, or
+an entry of another symbol of the same file, keeps its name; Sheet
+symbol to sheet removes and renames Hierarchical labels only and never touches
+a Global label. A sheet that is not open is changed in memory, left unsaved,
+and refused if its file changed on disk after the dialog read it. The rules:
+`signex_engine::sheet_sync`; decisions: `DECISIONS.md` (#1276).
 
 Assign Net Class... is greyed: `assign_net_class` takes the net and the class
 as operands, which the menu cannot supply yet; its tooltip points at the Net
@@ -726,22 +801,44 @@ Edit ▸ Arrange orders schematic drawings, so it is not in the Edit menu while
 a board is in view (#2405); the golden fixture marks its rows `-` in the
 `pcb` column.
 
+## Edit ▸ Origin {#edit-origin}
+
+Edit ▸ Origin (decided 2026-11-18) follows Move and Arrange: **Set**
+(`set_board_origin`) arms a click on the board that becomes the origin, on
+the non-component grid; Esc cancels it. **Reset** (`reset_board_origin`)
+moves the origin to the bottom-left of the board outline, or of the board
+area without one. **Snap to Outline Corner** (`snap_board_origin_to_corner`)
+moves it to the outline corner nearest the pointer; before the pointer was
+on the board, Messages says to point at it first. Each is one undo step on
+the board's options and marks the board changed. The rows are shown on a
+sheet too, greyed, and are greyed on a read-only board. Set is `E O S` in
+the chord profile and `Shift+O` in Classic. The board's right-click menu
+does not list them.
+
 ## The board's right-click menu {#board-context-menu}
 
-The board canvas menu (#2240, #2405) lists, in order: Find Similar Objects
-and Find; the Place ▸ flyout (the board's tools as Place on a board lists
-them, then Board Sketch) and, with a selection, Align ▸ (the Align rows of
-the PCB Active Bar, live for unlocked footprints); Undo and Redo; Cut, Copy,
-Paste, Paste Special, Duplicate and Select All; Move Selection; Rotate,
-Rotate Clockwise, Flip Selection, Mirror X, Mirror Y and Change Footprint;
-Delete; Board Sketch; Select Net (`select_board_net`) and Highlight Net
-(`highlight_board_net`), which act on the net of the selection or of what is
-under the cursor; Cross Probe and Properties; then Toggle Ratsnest. Each row
-runs its catalog command and is live exactly when that command is enabled in
-the window's `CommandContext`, so the menu greys what the keys and the menu
-bar grey. A board written by a newer Signex is read-only
-(`PcbTargets::read_only`): every row that edits it, the Place tools and
-Board Sketch included, is greyed, and the rows that only read it stay live.
+The board canvas menu (#2240, #2405) follows what is under the pointer
+(maintainer request 2026-11-18, `app/view/context_menu/board_menu.rs`), as
+the sheet menu shows its selection rows only with a selection. On an empty
+area with nothing selected it lists, in order: Find; the Place ▸ flyout (the
+board's tools as Place on a board lists them, then Board Sketch); Undo and
+Redo; Paste, Paste Special and Select All; Board Sketch and the reuse block
+Place rows; then Toggle Ratsnest. On an object or with a selection, Find
+Similar Objects comes first and, with a selection, Align ▸ (the Align rows of
+the PCB Active Bar, live for unlocked footprints), Cut, Copy and Duplicate,
+Move Selection, Rotate, Rotate Clockwise, Flip Selection, Mirror X and
+Mirror Y, Save as Reuse Block, Delete, Board Shape and Keepout from
+Selection follow. Change Footprint, Swap Pins, Swap Gates and Arrange in Box
+show only with a footprint selected; Lock, Unlock, Gloss Selected Routes and
+Add Teardrops only with a track or via selected; Select Net
+(`select_board_net`) and Highlight Net (`highlight_board_net`) only when the
+selection or the object under the pointer has a net; Cross Probe and
+Properties with an object. Each row runs its catalog command and is live
+exactly when that command is enabled in the window's `CommandContext`, so
+the menu greys what the keys and the menu bar grey. A board written by a
+newer Signex is read-only (`PcbTargets::read_only`): every row that edits
+it, the Place tools and Board Sketch included, is greyed, and the rows that
+only read it stay live.
 
 ## Edit clipboard on a board {#edit-clipboard-board}
 
@@ -779,7 +876,7 @@ Ratsnest: it shows or hides the circle-and-X marker at the board origin,
 which is shown by default. It is greyed without a board, has no default key,
 and like the rows above it changes only the board view.
 
-The board canvas menu ends with a View group holding the same Toggle
+Every board canvas menu ends with a View group holding the same Toggle
 Ratsnest row (#2240, #2223); the menu opens only on a board, so the row is
 always live there.
 

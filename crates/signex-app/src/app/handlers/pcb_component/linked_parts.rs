@@ -130,9 +130,7 @@ impl Signex {
                 continue;
             };
             let outcome = engine.execute_batch_grouped(commands, Some(group));
-            for warning in engine.take_warnings() {
-                crate::diagnostics::log_warning(warning);
-            }
+            crate::app::Signex::report_engine_warnings(engine);
             match outcome {
                 Ok(result) if result.changed => changed.push(ChangedSheet {
                     path,

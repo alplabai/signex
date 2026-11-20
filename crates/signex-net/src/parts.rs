@@ -17,6 +17,12 @@ pub struct DesignPart {
     pub needs_annotation: bool,
 }
 
+/// Whether a trimmed `designator` is not annotated yet: empty, or still
+/// holding `?`. Such a designator names no one part.
+pub(crate) fn needs_annotation(designator: &str) -> bool {
+    designator.is_empty() || designator.contains('?')
+}
+
 /// Every non-power part of `sheets` (placed sheets with their occurrence
 /// paths), in sheet order then placement order. Units are grouped by
 /// `group_into_parts`: a designator plus library symbol, one instance per
@@ -38,7 +44,7 @@ pub fn design_parts(sheets: &[(InstancePath, &SchematicSheet)]) -> Vec<DesignPar
                 sheet: path.clone(),
                 designator: designator.to_string(),
                 units: group.iter().map(|&i| placed[i].uuid).collect(),
-                needs_annotation: designator.is_empty() || designator.contains('?'),
+                needs_annotation: needs_annotation(designator),
             });
         }
     }

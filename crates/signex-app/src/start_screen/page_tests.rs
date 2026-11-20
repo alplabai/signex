@@ -377,3 +377,57 @@ fn the_start_screen_clock_lives_in_the_model() {
         "back on screen: stamped again"
     );
 }
+
+/// The Home, Projects and Libraries rows send their messages (they sent
+/// nothing after #2270), on either page; the row of the page on screen
+/// sends none (m1).
+#[test]
+fn the_page_rows_send_their_messages() {
+    let rows = [
+        ("Home", StartPage::Home),
+        ("Projects", StartPage::Projects),
+        ("Libraries", StartPage::Libraries),
+    ];
+    for on in [StartPage::Home, StartPage::Projects] {
+        let fx = Fixture::new(&[]).on(on);
+        for (label, page) in rows {
+            let messages = fx.click(MOCK_WINDOW, label);
+            if page == on {
+                assert!(messages.is_empty(), "{label} on {on:?}: {messages:?}");
+            } else {
+                assert!(
+                    sent(&messages, &StartScreenMsg::PageSelected(page)),
+                    "{label} on {on:?}: {messages:?}"
+                );
+            }
+        }
+    }
+    assert!(
+        Fixture::new(&[])
+            .click(MOCK_WINDOW, "Parts search")
+            .is_empty()
+    );
+}
+
+/// The picked page's row is the one highlighted: its row is filled and
+/// sends nothing, every other page row is not filled and sends its page.
+#[test]
+fn the_picked_page_row_is_highlighted() {
+    let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteDark);
+    let status = signex_widgets::button::Status::Active;
+    let filled = |active: bool| {
+        let style = graphite::nav_row_style(&tokens, active);
+        style(&iced::Theme::Dark, status).background
+    };
+    assert!(filled(true).is_some());
+    assert!(filled(false).is_none());
+    for on in [StartPage::Home, StartPage::Projects, StartPage::Libraries] {
+        for page in [StartPage::Home, StartPage::Projects, StartPage::Libraries] {
+            assert_eq!(
+                graphite::page_action(on, page).is_none(),
+                page == on,
+                "{page:?} on {on:?}"
+            );
+        }
+    }
+}

@@ -169,6 +169,7 @@ impl Signex {
         let class_styles = &self.ui_state.net_class_styles;
         let prefs = crate::canvas::CanvasViewPrefs {
             schematic_defaults: self.document_state.schematic_defaults_for(path),
+            designator_standard: self.document_state.designator_standard_for(path),
             wire_color_overrides: self
                 .document_state
                 .engines

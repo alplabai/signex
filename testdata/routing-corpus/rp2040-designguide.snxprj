@@ -1,0 +1,42 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "rp2040-designguide",
+  "net_classes": [
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Power",
+      "nets": [
+        "+1V1",
+        "+3V3",
+        "+5V",
+        "GND",
+        "VBUS"
+      ],
+      "trace_width": 0.381,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    },
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.254,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.2,
+      "via_diameter": 0.6,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "rp2040-designguide.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

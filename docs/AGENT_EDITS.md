@@ -157,7 +157,9 @@ Two commands, both with capability `edit` in `signex-cli`:
   - the group is not one an agent made in this session.
   A reverted step does not land on the redo stack.
 - The headless `undo document=..` of #2172 still exists; on an agent's step it
-  now says to use `revert`.
+  now says to use `revert`. It and `redo document=..` wait on the same
+  `Signex::person_busy_on` check as `revert` (#2548); the person's own Ctrl+Z
+  does not.
 
 ## Origin (#2253)
 

@@ -25,7 +25,7 @@ const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
 /// Tallest the card grows.
 const CARD_MAX_H: f32 = 360.0;
 /// Gap between the card and the window edges it is clamped to.
-const CARD_EDGE: f32 = SP.xl;
+const PALETTE_EDGE_GAP: f32 = SP.xl;
 
 impl Signex {
     /// The palette card: an optional input row, the grouped result list and
@@ -231,9 +231,12 @@ fn card_input<'a>(
 /// field (or button) at `field_x`, `field_w` wide, clamped to stay inside
 /// the window.
 fn chrome_palette_card(field_x: f32, field_w: f32, window_w: f32) -> (f32, f32) {
-    let w = GRAPHITE_PALETTE_WIDTH.min((window_w - 2.0 * CARD_EDGE).max(WINDOW_PALETTE_WIDTH));
+    let w =
+        GRAPHITE_PALETTE_WIDTH.min((window_w - 2.0 * PALETTE_EDGE_GAP).max(WINDOW_PALETTE_WIDTH));
     let centred = field_x + field_w / 2.0 - w / 2.0;
-    let x = centred.min(window_w - w - CARD_EDGE).max(CARD_EDGE);
+    let x = centred
+        .min(window_w - w - PALETTE_EDGE_GAP)
+        .max(PALETTE_EDGE_GAP);
     (x, w)
 }
 
@@ -244,7 +247,24 @@ mod palette_width_tests {
     /// The palette card is 640 px wide (maintainer, 2026-11-10).
     #[test]
     fn the_chrome_palette_card_is_640_px_wide() {
-        assert_eq!(chrome_palette_card(600.0, 400.0, 1600.0).1, 640.0);
+        assert_eq!(super::chrome_palette_card(700.0, 380.0, 1600.0).1, 640.0);
+    }
+
+    /// The card is centred on the search field when the window has room.
+    #[test]
+    fn the_chrome_palette_card_centres_on_the_search_field() {
+        let (x, w) = super::chrome_palette_card(600.0, 380.0, 1600.0);
+        assert_eq!(x + w / 2.0, 600.0 + 380.0 / 2.0);
+    }
+
+    /// Near either window edge the card is clamped inside the window.
+    #[test]
+    fn the_chrome_palette_card_stays_inside_the_window() {
+        let gap = super::PALETTE_EDGE_GAP;
+        let (x, _) = super::chrome_palette_card(100.0, 380.0, 900.0);
+        assert_eq!(x, gap);
+        let (x, w) = super::chrome_palette_card(1150.0, 380.0, 1560.0);
+        assert_eq!(x + w, 1560.0 - gap);
     }
 
     /// Mock #9: the card's centre is the field's centre.
@@ -258,7 +278,10 @@ mod palette_width_tests {
     #[test]
     fn the_card_is_clamped_to_the_right_window_edge() {
         let (x, w) = chrome_palette_card(1100.0, 400.0, 1440.0);
-        assert!((x + w - (1440.0 - CARD_EDGE)).abs() < 0.01, "x={x} w={w}");
+        assert!(
+            (x + w - (1440.0 - PALETTE_EDGE_GAP)).abs() < 0.01,
+            "x={x} w={w}"
+        );
     }
 
     /// A field near the left edge (or a narrow window's search button far
@@ -266,7 +289,7 @@ mod palette_width_tests {
     #[test]
     fn the_card_is_clamped_to_the_left_window_edge() {
         let (x, _) = chrome_palette_card(0.0, 160.0, 1440.0);
-        assert_eq!(x, CARD_EDGE);
+        assert_eq!(x, PALETTE_EDGE_GAP);
     }
 
     /// The search button on a narrow window: the card stays inside the
@@ -275,7 +298,7 @@ mod palette_width_tests {
     fn the_card_under_the_search_button_stays_inside_a_narrow_window() {
         let (button_x, button_w) = (500.0, 26.0);
         let (x, w) = chrome_palette_card(button_x, button_w, 700.0);
-        assert!(x >= CARD_EDGE && x + w <= 700.0 - CARD_EDGE + 0.01);
+        assert!(x >= PALETTE_EDGE_GAP && x + w <= 700.0 - PALETTE_EDGE_GAP + 0.01);
         assert!(x <= button_x + button_w / 2.0 && button_x + button_w / 2.0 <= x + w);
     }
 

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use signex_erc::{ProjectNetNames, RuleKind, Violation, project_net_multiple_names};
 use signex_net::{ProjectGraph, ProjectRoot, SheetKey};
 use signex_types::schematic::{
-    ChildSheet, FillType, Label, LabelType, LibPin, LibSymbol, NoConnect, Pin, PinDirection,
+    ChildSheet, FillType, Label, LabelType, LibPin, LibSymbol, NoErcDirective, Pin, PinDirection,
     PinShapeStyle, Point, SchematicSheet, SelectedKind, SheetPin, Symbol, Wire,
 };
 use uuid::Uuid;
@@ -320,11 +320,24 @@ fn a_no_erc_directive_on_the_winning_name_suppresses_the_finding() {
         ],
     );
     assert_eq!(project(&root, &[]).len(), 1);
-    root.no_erc_directives.push(NoConnect {
-        uuid: Uuid::now_v7(),
-        position: pt(10.0, 0.0),
-    });
+    root.no_erc_directives.push(no_erc(pt(10.0, 0.0)));
     assert!(project(&root, &[]).is_empty());
+}
+
+/// #1699: a directive for another rule leaves the project finding.
+#[test]
+fn a_no_erc_directive_for_another_rule_keeps_the_finding() {
+    let mut root = sheet(
+        "R1",
+        &[
+            ("SDA", LabelType::Hierarchical, 0.0),
+            ("I2C_SDA", LabelType::Hierarchical, 10.0),
+        ],
+    );
+    let mut marker = no_erc(pt(10.0, 0.0));
+    marker.rules = vec![signex_erc::RuleId::builtin(RuleKind::OrphanLabel).0];
+    root.no_erc_directives.push(marker);
+    assert_eq!(project(&root, &[]).len(), 1);
 }
 
 #[test]
@@ -342,11 +355,8 @@ fn a_child_placed_twice_gives_one_row_at_one_marker() {
     assert_eq!(found.len(), 1, "{found:?}");
 }
 
-fn no_erc(at: Point) -> NoConnect {
-    NoConnect {
-        uuid: Uuid::now_v7(),
-        position: at,
-    }
+fn no_erc(at: Point) -> NoErcDirective {
+    NoErcDirective::new(Uuid::now_v7(), at)
 }
 
 fn covers(found: &ProjectNetNames, sheet: &str, x: f64) -> bool {

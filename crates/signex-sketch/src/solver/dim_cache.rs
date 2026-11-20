@@ -72,7 +72,10 @@ pub(crate) fn build_context(
             let quantity = match families.get(name) {
                 Some(UnitFamily::Angle) => Quantity::angle(value),
                 Some(UnitFamily::Count) => Quantity::count(value),
-                Some(UnitFamily::Length) | None => Quantity::length(value),
+                // A resolved sketch parameter is never derived (the sketch
+                // boundary refuses it); read one as a length like a
+                // parameter with no recorded family.
+                Some(UnitFamily::Length | UnitFamily::Derived) | None => Quantity::length(value),
             };
             (name.clone(), ExprNode::Literal(quantity))
         })

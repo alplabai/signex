@@ -39,21 +39,45 @@ pub use board_net_classes::{
     BoardNetClassDraft, BoardNetClassField, BoardNetClassMsg, BoardNetClassView,
 };
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
-pub use drc_results::{DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcWaiveDraft};
+mod drc_idle;
+pub use drc_idle::BaseRule;
+mod drc_rows;
+pub use drc_results::{
+    DrcCategory, DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcView, DrcWaiveDraft,
+};
 pub(crate) use empty_state::empty_state_card;
+mod erc_panel;
+mod erc_rows;
+pub(super) use erc_panel::view_erc;
+pub use erc_panel::{
+    ErcChecked, ErcDiagnosticEntry, ErcPanelMsg, ErcPanelView, ErcSeverityLite, ErcWaiverEntry,
+};
 mod erc_waivers;
+mod messages_view;
+pub use messages_row::MessageSource;
+pub(super) use messages_view::view_messages;
+pub use messages_view::{MessageLevel, MessagesPanelMsg, MessagesView};
+pub(crate) use messages_view::{
+    copy_text as messages_copy_text, is_verbose, shown as messages_shown,
+};
+mod validation_kit;
+mod validation_state;
+pub use validation_state::ValidationPanels;
+mod waiver_form;
+pub use waiver_form::{UserIdentity, WaiverReason};
 mod footprint_context;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
 mod library;
 mod messages;
-mod messages_row;
+pub(crate) mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;
 mod net_class_table;
 pub mod net_inspector;
 mod numeric_draft;
+pub mod paired;
 mod palette;
 pub mod panel_groups;
 mod paper;
@@ -66,7 +90,6 @@ mod projects_graphite;
 mod properties;
 mod sch_filter;
 pub use sch_filter::SchFilterMsg;
-mod status;
 mod symbol_context;
 mod widgets;
 mod wire_style_rows;
@@ -81,7 +104,7 @@ pub(crate) use element_properties::{
 };
 pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
-    FootprintCards,
+    FootprintCards, NoErcRuleEdit,
 };
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
@@ -96,7 +119,8 @@ pub use numeric_draft::{
     shown_text as numeric_shown_text,
 };
 pub use properties_parameters::{
-    PaperEdge, PaperEdgeDraft, TitleBlockDraft, TitleBlockField, typed_mm,
+    BuiltinParameter, PaperEdge, PaperEdgeDraft, SheetVariableMsg, TitleBlockDraft,
+    TitleBlockField, shown_title_block_value, typed_mm,
 };
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
@@ -162,8 +186,6 @@ pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,
     PROPERTY_ROW_PAD_X, view_properties,
 };
-pub use status::{ErcDiagnosticEntry, ErcSeverityLite, ErcWaiverEntry};
-pub(super) use status::{view_erc, view_messages};
 pub use symbol_context::{
     GraphicFieldId, GraphicKindSummary, GraphicSummary, SymbolDeleteWarning, SymbolDisplayOptions,
     SymbolEditorPanelContext, SymbolEditorSelection, SymbolFileEntry, SymbolPinDetails,
@@ -350,6 +372,40 @@ impl PanelKind {
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
         }
+    }
+}
+
+/// An icon action a panel puts in its dock title bar.
+pub struct TitleAction {
+    pub icon: svg::Handle,
+    pub tip: signex_i18n::Localized,
+    pub on_press: PanelMsg,
+}
+
+/// The title-bar actions of `kind`: Clear of the ERC panel (#85) while it
+/// holds results, Copy and Clear of the Messages panel (#86).
+pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
+    use signex_i18n::{ids, t};
+    let tid = ctx.theme_id;
+    match kind {
+        PanelKind::Erc if ctx.erc_ran || !ctx.erc_diagnostics.is_empty() => vec![TitleAction {
+            icon: crate::icons::icon_dd_delete(tid),
+            tip: t!(ctx.i18n, ids::PANELS_ERC_CLEAR_TOOLTIP),
+            on_press: PanelMsg::ClearErc,
+        }],
+        PanelKind::Messages => vec![
+            TitleAction {
+                icon: crate::icons::icon_dd_copy(tid),
+                tip: t!(ctx.i18n, ids::PANELS_MESSAGES_COPY_TOOLTIP),
+                on_press: PanelMsg::MessagesView(MessagesPanelMsg::Copied),
+            },
+            TitleAction {
+                icon: crate::icons::icon_dd_delete(tid),
+                tip: t!(ctx.i18n, ids::PANELS_MESSAGES_CLEAR_TOOLTIP),
+                on_press: PanelMsg::MessagesView(MessagesPanelMsg::Cleared),
+            },
+        ],
+        _ => Vec::new(),
     }
 }
 

@@ -171,5 +171,6 @@ define_ids! {
     PCB_PRIM_REMOVE_DEAD_ISLANDS = "pcb-prim-remove-dead-islands";
     PCB_PRIM_POUR_COPPER = "pcb-prim-pour-copper";
     PCB_PRIM_POUR_COPPER_VALUE = "pcb-prim-pour-copper-value";
+    PCB_PRIM_POUR_UNFILLED = "pcb-prim-pour-unfilled";
     PCB_PRIM_POUR_COPPER_TIP = "pcb-prim-pour-copper-tip";
 }

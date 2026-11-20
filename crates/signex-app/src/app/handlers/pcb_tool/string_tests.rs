@@ -23,6 +23,7 @@ fn arm_string(app: &mut Signex, path: &Path) {
         route: None,
         router: None,
         paused: None,
+        note: None,
     });
 }
 
