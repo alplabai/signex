@@ -681,6 +681,6 @@ pub enum StatusBarRequest {
     /// Enter in the angle field.
     ViewAngleSubmitted,
     /// Right-click on a sheet's Grid read-out: opens or closes the Grid &
-    /// Snap popover above it (m6).
+    /// Snap popover above it (mockup row 6).
     GridReadoutRightClicked,
 }

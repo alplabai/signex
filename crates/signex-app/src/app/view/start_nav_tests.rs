@@ -25,7 +25,7 @@ fn the_home_navigation_is_a_strip_when_narrow_and_full_when_wide() {
     let wide = lay_out_texts(app.view(window), WIDE);
     assert!(wide.iter().any(|t| t.text == "Parts search"), "{wide:#?}");
 
-    // GG-10: the navigation has no Open Sample Project row in either form.
+    // Decided 2026-11-19: the navigation has no Open Sample Project row in either form.
     assert!(
         wide.iter().all(|t| t.text != "Open Sample Project"),
         "{wide:#?}"
@@ -68,7 +68,7 @@ fn a_strip_row_opens_keyboard_shortcuts_through_update() {
     assert!(app.ui_state.keyboard_shortcuts_open);
 }
 
-/// m1: the Projects row drives `Signex::update` to the Projects page, whose
+/// Mockup row 1: the Projects row drives `Signex::update` to the Projects page, whose
 /// filter and switch are kept in the model; Home's hero is gone meanwhile.
 #[test]
 fn the_projects_row_opens_the_projects_page_through_update() {

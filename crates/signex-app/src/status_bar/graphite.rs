@@ -453,7 +453,7 @@ mod tests {
     }
 
     /// The unit sits after Y, not by the grid, so the Grid read-out always
-    /// names its own unit (m6, review of 2026-11-19).
+    /// names its own unit (mockup row 6, accepted by Caner).
     #[test]
     fn the_grid_read_out_carries_its_unit_in_every_unit() {
         let i18n = I18n::en_us();

@@ -91,13 +91,13 @@ fn a_recent_entry_opens_its_project_through_real_update() {
         app.document_state.projects.iter().any(|p| p.path == prj),
         "the recent entry must open the project"
     );
-    // m1: the open is stamped for the Start screen's time column.
+    // Mockup row 1: the open is stamped for the Start screen's time column.
     let recent = &app.ui_state.recent_projects;
     let first = recent.entries().first().expect("the project is recorded");
     assert!(recent.opened_at(first).is_some(), "no last-opened time");
 }
 
-/// m1: the Start screen's page and filters go back to Home, unfiltered,
+/// Mockup row 1: the Start screen's page and filters go back to Home, unfiltered,
 /// once a project opens, so the next visit starts on Home.
 #[test]
 fn opening_a_project_sends_the_start_screen_back_home() {
@@ -177,7 +177,7 @@ fn shortcuts_modal_cache_is_built_on_open_and_rebuilt_on_keymap_change() {
 }
 
 /// The Projects row moves the Start screen to the Projects page and Home
-/// moves it back (#2270 left both rows without a message; m1 pages).
+/// moves it back (#2270 left both rows without a message; mockup row 1 pages).
 #[test]
 fn projects_and_home_rows_pick_their_section() {
     let (mut app, _t) = Signex::new();
@@ -193,7 +193,7 @@ fn projects_and_home_rows_pick_their_section() {
 }
 
 /// With no library open, the Libraries row opens the Libraries page, which
-/// offers Add library… and Open Library Browser (m1).
+/// offers Add library… and Open Library Browser (mockup row 1).
 #[test]
 fn libraries_row_without_an_open_library_opens_the_libraries_page() {
     let (mut app, _t) = Signex::new();

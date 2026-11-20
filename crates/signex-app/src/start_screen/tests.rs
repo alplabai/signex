@@ -178,7 +178,7 @@ fn recent_is_hidden_when_every_recent_project_is_pinned() {
 
 /// #2305: Pinned Projects sits above Recent Projects, only when a
 /// project is pinned; a pinned project missing on disk says so beside its
-/// name (m1) and offers Remove in its own column.
+/// name (mockup row 1) and offers Remove in its own column.
 #[test]
 fn the_pinned_section_shows_above_recent_only_when_something_is_pinned() {
     let recent = paths(3);
@@ -310,7 +310,7 @@ fn assert_labels_fit(fx: &Fixture, window: iced::Size, labels: &[&str]) {
         // The primary button's label fills the button's height, so its
         // box is the button's, not a line's; wrapping shows as a
         // narrower-than-natural box, which the width check below catches.
-        // Project names are drawn in Inter Medium (mockup m1): measure them
+        // Project names are drawn in Inter Medium (mockup row 1): measure them
         // in the font they are drawn in.
         let mut probe = text(raw(label.to_string())).size(label_size(label));
         if label.ends_with(".snxprj") {
@@ -367,7 +367,7 @@ fn hero_lines_use_the_mock_sizes() {
     );
 }
 
-/// #2262, GG-10: Keyboard Shortcuts sits under a divider after the page
+/// #2262: Keyboard Shortcuts sits under a divider after the page
 /// rows, without "(F1)" in its label and with the bound key at its right,
 /// and still opens the shortcut list. The navigation has no Open Sample
 /// Project row any more; the reference card on Home opens the sample.
@@ -439,7 +439,7 @@ fn every_button_label_fits_at_small_window_sizes() {
         let texts = fx.texts(window);
         for (label, size) in &labels {
             let bounds = find(&texts, label).bounds;
-            // The project list is drawn in Inter Medium (mockup m1).
+            // The project list is drawn in Inter Medium (mockup row 1).
             let mut probe = text(raw(label.clone())).size(*size);
             if list_labels.iter().any(|(listed, _)| listed == label) {
                 probe = probe.font(super::kit::weighted(iced::font::Weight::Medium));
@@ -545,7 +545,7 @@ fn strip_messages(fx: &Fixture) -> Vec<String> {
 
 /// #2346: every strip row sends the message of its full row; the
 /// current page and the planned Parts search send none, and there is no
-/// Open Sample Project row (GG-10).
+/// Open Sample Project row (decided 2026-11-19).
 #[test]
 fn the_icon_strip_rows_send_their_full_rows_messages() {
     let sent = strip_messages(&Fixture::new(&[]));

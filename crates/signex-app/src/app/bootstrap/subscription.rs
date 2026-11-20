@@ -743,7 +743,7 @@ impl Signex {
                 .find(|(_, browser)| browser.edit_modal.is_some())
                 .map(|(path, _)| path.clone()),
             canvas_context_menu_open: self.interaction_state.context_menu.is_some(),
-            // The tab strip's "+N" menu paints in the same slot (m5).
+            // The tab strip's "+N" menu paints in the same slot (mockup row 5).
             tab_context_menu_open: self.interaction_state.tab_context_menu.is_some()
                 || self.ui_state.tab_overflow_menu_open,
             project_tree_context_menu_open: self

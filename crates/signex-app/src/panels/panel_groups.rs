@@ -1,4 +1,4 @@
-//! The groups of the status bar's panel list (m7): Project, Inspect, Verify,
+//! The groups of the status bar's panel list (mockup row 7): Project, Inspect, Verify,
 //! Library and PCB, each under its own caption.
 
 use signex_i18n::{MessageId, ids};
@@ -111,7 +111,7 @@ mod tests {
         }
     }
 
-    /// The groups and their members as the m7 mock-up lists them; inside a
+    /// The groups and their members as mockup row 7 lists them; inside a
     /// group the panels keep the list's order.
     #[test]
     fn the_groups_hold_the_mapped_panels_in_list_order() {

@@ -407,11 +407,11 @@ fn tab_menu_gates_bulk_close_and_undock() {
     });
     assert!(!disabled_of(&multi, "Open In New Window"));
     assert!(disabled_of(&undocked, "Open In New Window"));
-    // m5: the Open In New Window group, then Copy Path / Reveal in Projects.
+    // Mockup row 5: the Open In New Window group, then Copy Path / Reveal in Projects.
     assert_eq!(seps(&single), 2);
 }
 
-/// m5: the rows in order, the Close row's shortcut, and the icon column.
+/// Mockup row 5: the rows in order, the Close row's shortcut, and the icon column.
 #[test]
 fn tab_menu_rows_follow_the_mock_with_icons_and_the_close_shortcut() {
     let rows = tab_menu(&tab_facts("power.snxsch", 1, 3));
@@ -499,7 +499,7 @@ fn copy_path_and_reveal_grey_without_a_file_or_a_project() {
     ));
 }
 
-/// m5: Undock / Float first, the Dock rows without the current region,
+/// Mockup row 5: Undock / Float first, the Dock rows without the current region,
 /// Close last after a separator (was: Close, Undock / Float, separator, Dock
 /// rows).
 #[test]

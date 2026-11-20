@@ -1,4 +1,4 @@
-//! Start screen project thumbnails (review #1): a small line-art render of
+//! Start screen project thumbnails (mockup row 1): a small line-art render of
 //! the project's board, or of its root sheet when it has no board, cached on
 //! save and shown on the project rows.
 //!

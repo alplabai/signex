@@ -13,7 +13,7 @@ use signex_widgets::active_bar_dropdown::DropdownEntry;
 
 /// Pure row data for the menu of a tab docked in `from`: Undock / Float
 /// first, the Dock rows (the region it is already in is left out), and
-/// Close last, after a separator, so it is not hit by accident (m5).
+/// Close last, after a separator, so it is not hit by accident (mockup row 5).
 pub(super) fn dock_tab_menu_entries(
     i18n: &I18n,
     tid: ThemeId,

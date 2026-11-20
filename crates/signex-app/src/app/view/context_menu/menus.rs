@@ -250,7 +250,7 @@ impl Signex {
         }
     }
 
-    /// The tab strip's "+N" menu (m5): the click-outside layer, then the
+    /// The tab strip's "+N" menu (mockup row 5): the click-outside layer, then the
     /// card under the button listing the hidden tabs. Only the main window's
     /// strip has the button; empty when the menu is closed or nothing hides.
     pub(in crate::app::view) fn tab_overflow_menu_overlay(
@@ -586,7 +586,7 @@ pub(super) struct TabMenuFacts<'a> {
     pub(super) close_shortcut: &'a str,
 }
 
-/// Pure tab-menu data builder (m5). The per-tab "Close [title]" row carries
+/// Pure tab-menu data builder (mockup row 5). The per-tab "Close [title]" row carries
 /// the live tab title and the Close shortcut; a bulk-close row greys when it
 /// would close nothing; "Open In New Window" greys when the tab cannot be
 /// undocked; Copy Path greys for a tab with no file, Reveal in Projects for

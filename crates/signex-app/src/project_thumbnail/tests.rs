@@ -1,4 +1,4 @@
-//! Project thumbnails (review #1): the snapshot of a board and of a root
+//! Project thumbnails (mockup row 1): the snapshot of a board and of a root
 //! sheet, the primitive cap, the cache file, the slot a tile shows, the ink
 //! colours and the save that rebuilds a preview.
 

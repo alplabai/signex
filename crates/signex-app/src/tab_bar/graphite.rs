@@ -1,4 +1,4 @@
-//! Graphite look of the document tab strip (m5): square tabs with a mono
+//! Graphite look of the document tab strip (mockup row 5): square tabs with a mono
 //! kind code, an accent dirty dot, a read-only pill, an 18 px close button
 //! and the project name on the right. Legacy themes never reach these
 //! helpers.
@@ -18,13 +18,13 @@ const TS: TypeScale = TypeScale::DEFAULT;
 
 /// Side of the close button (18 px at the default base).
 pub const CLOSE_SIZE: f32 = chrome_px(18.0 * 11.0 / 12.0);
-/// Side of the cross drawn inside the close button (12 of 18 px, m5).
+/// Side of the cross drawn inside the close button (12 of 18 px, mockup row 5).
 const CLOSE_CROSS: f32 = CLOSE_SIZE * 2.0 / 3.0;
 /// Dirty dot diameter.
 pub(super) const DIRTY_DOT: f32 = TS.body * 0.6;
 /// Space between the parts of a tab.
 pub(super) const TAB_GAP: f32 = TS.body * 0.5;
-/// Padding before the kind code and after the close button (m5: 12 and 6).
+/// Padding before the kind code and after the close button (mockup row 5: 12 and 6).
 pub(super) const TAB_PAD_LEFT: f32 = 12.0;
 pub(super) const TAB_PAD_RIGHT: f32 = 6.0;
 /// Space around the project name at the strip's right end.
@@ -177,7 +177,7 @@ pub struct TabFace<'t> {
     pub read_only: bool,
 }
 
-/// The inks of a tab (m5): the title in `ink2`, `ink` when active; the kind
+/// The inks of a tab (mockup row 5): the title in `ink2`, `ink` when active; the kind
 /// code and the close cross in `ink4`.
 pub(super) fn tab_inks(tokens: &ThemeTokens, is_active: bool) -> (Color, Color) {
     let title = if is_active {
@@ -309,7 +309,7 @@ mod tests {
         assert_eq!(strip_height(), 34.0);
     }
 
-    /// m5: an idle title in `ink2`, the active one in `ink`; the kind code
+    /// Mockup row 5: an idle title in `ink2`, the active one in `ink`; the kind code
     /// stays `ink4` on both, in Graphite Light and Dark.
     #[test]
     fn tab_inks_follow_the_mock() {

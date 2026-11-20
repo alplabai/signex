@@ -49,7 +49,7 @@ fn the_palette_backdrop_is_the_theme_scrim() {
     }
 }
 
-/// Mock #9: the title-bar field is the open palette's query input, so the
+/// Mockup row 9: the title-bar field is the open palette's query input, so the
 /// backdrop leaves it undimmed; the rest of the strip is dimmed.
 #[test]
 fn the_backdrop_leaves_the_title_bar_field_undimmed() {

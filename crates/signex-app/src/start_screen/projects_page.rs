@@ -1,4 +1,4 @@
-//! The Projects page (mock m1, "Projects page"): every pinned and recent
+//! The Projects page (mockup row 1, "Projects page"): every pinned and recent
 //! project, pinned first in the user's order and then the recent ones
 //! newest first, with no cap. A filter matches the name or folder, and the
 //! All / Pinned / Missing switch picks which projects show. A filter that

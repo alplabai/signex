@@ -1,4 +1,4 @@
-//! Right-click menu of a Start screen project row (#2305, mock m3): open
+//! Right-click menu of a Start screen project row (#2305, mockup row 3): open
 //! the project, and pin or unpin it; a pinned project missing on disk
 //! offers Remove instead. Every row has its glyph in the icon column (Open
 //! a folder, Pin and Unpin a pin, Remove a cross in the neutral ink).
@@ -170,7 +170,7 @@ mod tests {
         ));
     }
 
-    /// m3: every row has its glyph in the icon column, so the labels line
+    /// Mockup row 3: every row has its glyph in the icon column, so the labels line
     /// up: Open a folder, Pin and Unpin a pin, Remove a cross.
     #[test]
     fn every_menu_row_has_its_glyph() {

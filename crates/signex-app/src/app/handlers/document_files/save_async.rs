@@ -285,7 +285,7 @@ impl Signex {
     }
 
     /// The Start screen preview of the project that owns the document just
-    /// saved at `saved` (review #1): the project's board when it has one and
+    /// saved at `saved` (mockup row 1): the project's board when it has one and
     /// that board was saved, else its root sheet when that is loaded. The
     /// render is kept at once and written to the cache in a task; any other
     /// save leaves the preview as it is.
@@ -544,7 +544,7 @@ pub(crate) fn is_pcb_path(path: &std::path::Path) -> bool {
     has_extension(path, "snxpcb") || has_extension(path, "standard_pcb")
 }
 
-/// The project preview a save rebuilds (review #1).
+/// The project preview a save rebuilds (mockup row 1).
 #[cfg(test)]
 mod thumbnail_tests {
     use std::path::PathBuf;

@@ -648,7 +648,7 @@ mod tests {
         assert_eq!(labels(&rows), ["c1", "c2", "n1", "s1"]);
     }
 
-    /// Mock #9: for a typed query whose best hit is a net, NETS is the first
+    /// Mockup row 9: for a typed query whose best hit is a net, NETS is the first
     /// group, then the groups follow their best row; rows inside a group stay
     /// in score order. This is the order the arrow keys walk.
     #[test]

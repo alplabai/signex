@@ -429,7 +429,7 @@ mod tests {
         assert!(rows.iter().all(|row| row.label != before), "{rows:?}");
     }
 
-    /// Mock #9: the title-bar field is the query input, so a click on it
+    /// Mockup row 9: the title-bar field is the query input, so a click on it
     /// while the palette is open keeps the palette and the query.
     #[test]
     fn a_click_on_the_title_bar_field_keeps_the_open_palette() {

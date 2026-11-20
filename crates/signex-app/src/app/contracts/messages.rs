@@ -134,7 +134,7 @@ pub enum WindowMsg {
     /// shows: that document becomes the active one (#2249).
     TilePanePressed(usize),
     /// Dock back was pressed in the title strip of the detached panel
-    /// window: the window closes, which re-docks the panel (m8).
+    /// window: the window closes, which re-docks the panel (mockup row 8).
     DetachedPanelDockBackPressed(iced::window::Id),
 }
 

@@ -143,7 +143,7 @@ pub struct UiState {
     pub undocked_window_sizes: std::collections::HashMap<iced::window::Id, (f32, f32)>,
     pub panel_list_open: bool,
     /// The Grid & Snap popover a right-click on a sheet's Grid read-out
-    /// opens (m6), with the window it belongs to; `None` while closed. Boxed
+    /// opens (mockup row 6), with the window it belongs to; `None` while closed. Boxed
     /// to keep `UiState` under its size ceiling.
     pub grid_snap_popover: Option<Box<crate::status_bar::GridSnapPopover>>,
     pub preferences_open: bool,
@@ -166,7 +166,7 @@ pub struct UiState {
     /// The Start screen's pinned projects (#2305), loaded from `prefs.json`
     /// at boot and saved on every pin and unpin.
     pub pinned_projects: crate::pinned_projects::PinnedProjects,
-    /// The Start screen project thumbnails (review #1): read from the cache
+    /// The Start screen project thumbnails (mockup row 1): read from the cache
     /// at boot, rebuilt after a save. Boxed: a pointer of the size budget
     /// (#2412).
     pub project_thumbnails: Box<crate::project_thumbnail::ProjectThumbnails>,
@@ -728,7 +728,7 @@ pub struct UiState {
     /// The Start screen's page and its filters, back to Home once the
     /// screen goes away. Boxed: a pointer of the size budget (#2412).
     pub start_screen: Box<crate::start_screen::StartScreenState>,
-    /// The tab strip's "+N" overflow menu is open (m5); it lists the tabs
+    /// The tab strip's "+N" overflow menu is open (mockup row 5); it lists the tabs
     /// the main window's strip has no room for.
     pub tab_overflow_menu_open: bool,
 }

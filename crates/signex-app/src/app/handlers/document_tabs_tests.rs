@@ -1,4 +1,4 @@
-//! The document tab menu's new rows (m5) and the "+N" overflow menu, driven
+//! The document tab menu's new rows (mockup row 5) and the "+N" overflow menu, driven
 //! through `Signex::update`: Close Tabs to the Right, Copy Path, Reveal in
 //! Projects and a pick from the hidden-tabs menu.
 

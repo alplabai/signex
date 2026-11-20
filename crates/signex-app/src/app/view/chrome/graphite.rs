@@ -22,7 +22,7 @@ use crate::styles::{self, ChromeMetrics, Radii, ti, tokens::resolve};
 const THEME_W: f32 = 28.0;
 /// Padding after the theme toggle.
 const CLUSTER_PAD: f32 = 6.0;
-/// Widest the search field gets (mock #4: 400 px with eight menu roots).
+/// Widest the search field gets (mockup row 4: 400 px with eight menu roots).
 const SEARCH_MAX_W: f32 = 400.0;
 /// Height of the "Ctrl K" key cap.
 const KEY_CAP_H: f32 = 18.0;
@@ -439,7 +439,7 @@ mod tests {
         assert!(x >= 440.0);
     }
 
-    /// Mock #4, narrow window: below the field's minimum the title bar shows
+    /// Mockup row 4, narrow window: below the field's minimum the title bar shows
     /// the square search button first in the right cluster, left of the
     /// theme toggle, and draws no field.
     #[test]

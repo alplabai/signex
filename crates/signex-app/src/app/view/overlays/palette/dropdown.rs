@@ -24,7 +24,8 @@ const WINDOW_PALETTE_WIDTH: f32 = 480.0;
 const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
 /// Tallest the card grows.
 const CARD_MAX_H: f32 = 360.0;
-/// Gap between the card and the window edges it is clamped to.
+/// Gap between the card and the window edges it is clamped to (mockup row 9,
+/// accepted by Caner).
 const PALETTE_EDGE_GAP: f32 = SP.xl;
 
 impl Signex {
@@ -105,8 +106,9 @@ impl Signex {
                 .boxed()
         };
 
-        // The footer's right side: how many rows matched, or, when rows are
-        // cut, how many more there are.
+        // The footer's right side: how many rows matched ("N results",
+        // mockup row 9, accepted by Caner), or, when rows are cut, how many
+        // more there are.
         let footer: Element<'_, Message> = if total > 0 {
             let note = if total > MAX_RESULTS {
                 t!(i18n, ids::OVERLAY_PALETTE_MORE_RESULTS, "count" => (total - MAX_RESULTS) as i64)
@@ -267,7 +269,7 @@ mod palette_width_tests {
         assert_eq!(x + w, 1560.0 - gap);
     }
 
-    /// Mock #9: the card's centre is the field's centre.
+    /// Mockup row 9: the card's centre is the field's centre.
     #[test]
     fn the_card_centres_under_the_field() {
         let (x, w) = chrome_palette_card(600.0, 400.0, 1600.0);

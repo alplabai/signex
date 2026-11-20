@@ -74,7 +74,7 @@ pub(crate) enum OverlayId {
     LayerTabContextMenu,
     GridPicker,
     PanelList,
-    /// The status bar's Grid & Snap popover (m6).
+    /// The status bar's Grid & Snap popover (mockup row 6).
     GridSnapPopover,
     ComponentsRowDragLabel,
 

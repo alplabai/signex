@@ -1,4 +1,4 @@
-//! A dock panel in its own OS window (m8). The window is borderless where the
+//! A dock panel in its own OS window (mockup row 8). The window is borderless where the
 //! dialog windows are: the Graphite title strip (panel name, the main
 //! window's active document in `ink4`, Dock back and the close) moves it,
 //! and its edges resize it. The

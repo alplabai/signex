@@ -1,4 +1,4 @@
-//! The Grid & Snap popover (m6, GG-05): a right-click on the Grid read-out of
+//! The Grid & Snap popover (mockup row 6): a right-click on the Grid read-out of
 //! a schematic opens the Document Options grid settings above it.
 //!
 //! The card holds a modest line-art drawing (visible-grid dots, snap crosses,

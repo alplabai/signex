@@ -1,4 +1,4 @@
-//! Graphite start screen (mock m1): a navigation column and a main column
+//! Graphite start screen (mockup row 1): a navigation column and a main column
 //! showing the selected page. Home has the "What are you building?" hero,
 //! the bundled sample project and the project lists (`projects.rs`); the
 //! Projects and Libraries pages live in `projects_page.rs` and

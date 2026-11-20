@@ -157,7 +157,7 @@ pub fn view<'a>(
     let mut bar = Row::new().spacing(0.0);
 
     // The tabs that render in this window, and of those the ones that fit
-    // the strip; the rest go behind the "+N" button (m5). The last shown
+    // the strip; the rest go behind the "+N" button (mockup row 5). The last shown
     // tab draws the right edge; the others share their L/R divider as a
     // single 1 px line.
     let visible_indices = visible_tab_indices(tabs, visible_paths);

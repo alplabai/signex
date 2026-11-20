@@ -186,7 +186,7 @@ impl Signex {
     /// Remove the floating panel at `idx` and open an OS window that
     /// renders that panel's content. Where the dialog windows are borderless
     /// so is this one, and it draws the Graphite title strip with Dock back
-    /// (m8, `view/detached_panel.rs`). Closing the OS window re-docks the
+    /// (mockup row 8, `view/detached_panel.rs`). Closing the OS window re-docks the
     /// panel in its home region — see `SecondaryWindowClosed` in
     /// dispatch/mod.rs.
     pub(crate) fn handle_detach_floating_panel(&mut self, idx: usize) -> Task<Message> {
@@ -608,7 +608,7 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
 
 /// Window settings for a detached panel at `position`: resizable, and
 /// without the OS decorations when `borderless` (the window then draws its
-/// own title strip, m8). The close request reaches `WindowCloseRequested`.
+/// own title strip, mockup row 8). The close request reaches `WindowCloseRequested`.
 pub(crate) fn detached_panel_window_settings(
     size: iced::Size,
     position: iced::window::Position,
@@ -628,7 +628,7 @@ pub(crate) fn detached_panel_window_settings(
 mod tests {
     use super::{detached_modal_settings, detached_panel_window_settings, move_offset};
 
-    /// m8: a detached panel window drops the OS decorations where it draws
+    /// Mockup row 8: a detached panel window drops the OS decorations where it draws
     /// the Graphite title strip, and keeps them where the OS draws the
     /// controls.
     #[test]

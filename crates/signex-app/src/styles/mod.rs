@@ -335,7 +335,7 @@ fn card_style(
 }
 
 /// The dock region a dragged floating panel would dock into if released now
-/// (m8): `accent-soft` fill, a 2 px accent border, card corners.
+/// (mockup row 8): `accent-soft` fill, a 2 px accent border, card corners.
 pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let accent = ti(tokens.accent);
     let soft = tokens::resolve(tokens).accent_soft;
@@ -362,7 +362,7 @@ pub struct DashedOutline {
 }
 
 /// The faint outline of a dock region a dragged floating panel could dock
-/// into but would not now (m8): 1.5 px dashed `line-strong`, card corners.
+/// into but would not now (mockup row 8): 1.5 px dashed `line-strong`, card corners.
 pub fn dock_zone_outline(tokens: &ThemeTokens) -> DashedOutline {
     DashedOutline {
         color: tokens::resolve(tokens).line_strong,

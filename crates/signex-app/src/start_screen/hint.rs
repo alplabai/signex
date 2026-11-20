@@ -1,5 +1,5 @@
 //! The centre region of a loaded project with no document on screen
-//! (#331, mock m2): a heading, a line under it, and New sheet / New PCB /
+//! (#331, mockup row 2): a heading, a line under it, and New sheet / New PCB /
 //! Project Options…, the commands the Projects panel's menu runs. A project
 //! with no sheet and no board says so instead. The column is at most
 //! [`MAX_W`] wide and never wider than the window minus [`EDGE`] on each

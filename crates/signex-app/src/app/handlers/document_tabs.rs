@@ -100,7 +100,7 @@ impl Signex {
                 self.ui_state.tab_dragging = Some((idx, mx, my));
                 Task::none()
             }
-            // The "+N" menu belongs to the main window's strip (m5).
+            // The "+N" menu belongs to the main window's strip (mockup row 5).
             TabMessage::OverflowMenuToggled => {
                 let open = is_main && !self.ui_state.tab_overflow_menu_open;
                 if open {

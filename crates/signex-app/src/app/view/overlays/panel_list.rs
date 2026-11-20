@@ -1,4 +1,4 @@
-//! The status bar's panel list (m7): the panels grouped under Project,
+//! The status bar's panel list (mockup row 7): the panels grouped under Project,
 //! Inspect, Verify, Library and PCB captions, an open panel marked with a
 //! check and the place it is open in. Panels that need a schematic or a
 //! board nobody opened are left out, and so is a group left empty.

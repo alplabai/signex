@@ -1,4 +1,4 @@
-//! The Libraries page (mock m1, "Libraries page"): the libraries loaded for
+//! The Libraries page (mockup row 1, "Libraries page"): the libraries loaded for
 //! every project, Stock first, in a table of name and path, scope and
 //! component count, each with Open (the library's Library Browser tab;
 //! Stock opens read-only, as it is mounted). The toolbar filters the table

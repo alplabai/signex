@@ -678,7 +678,7 @@ pub enum ProjectMsg {
     /// row menu (#2305); routed to `dispatch_start_screen_message`.
     StartScreen(crate::start_screen::StartScreenMsg),
     /// Start screen project thumbnails: the start-up cache read and the
-    /// cache writes after a save (review #1); routed to
+    /// cache writes after a save (mockup row 1); routed to
     /// `dispatch_project_thumbnail_message`.
     Thumbnail(crate::project_thumbnail::ProjectThumbnailMsg),
     /// The Number Schematic Sheets dialog (#2247); routed to

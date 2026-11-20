@@ -1,4 +1,4 @@
-//! Tab strip overflow (m5): when the tabs no longer fit, the strip keeps the
+//! Tab strip overflow (mockup row 5): when the tabs no longer fit, the strip keeps the
 //! tabs that fit at their full width (a tab never shrinks below its name)
 //! and ends in a "+N" button whose menu lists the rest. The fit is computed
 //! from measured text widths, the way the dock strip's is (`dock::tab_fit`).

@@ -1,5 +1,5 @@
-//! The Start screen's pages (mock m1), its time column and the project
-//! hint (m2), on the fixture of `tests.rs`.
+//! The Start screen's pages (mockup row 1), its time column and the project
+//! hint (mockup row 2), on the fixture of `tests.rs`.
 
 use std::path::PathBuf;
 
@@ -10,7 +10,7 @@ use super::*;
 use crate::layout_probe::{find, lay_out_texts};
 use crate::library::state::ComponentsMountSource;
 
-/// m1: the Projects and Libraries rows and the Libraries card open their
+/// Mockup row 1: the Projects and Libraries rows and the Libraries card open their
 /// pages; the page on screen is lit and its row sends nothing; each page
 /// draws its own title and line.
 #[test]
@@ -55,7 +55,7 @@ fn the_page_rows_and_the_libraries_card_switch_pages() {
     assert!(texts.iter().any(|t| t.text == body));
 }
 
-/// m1: Home lists at most five recent projects; "Show all N ›" shows only
+/// Mockup row 1: Home lists at most five recent projects; "Show all N ›" shows only
 /// when there are more, names how many the Projects page lists and opens it.
 #[test]
 fn show_all_appears_only_when_recent_has_more_than_five() {
@@ -92,7 +92,7 @@ fn show_all_appears_only_when_recent_has_more_than_five() {
     ));
 }
 
-/// m1: the Projects page lists pinned projects first, then every recent
+/// Mockup row 1: the Projects page lists pinned projects first, then every recent
 /// one; the filter matches name or folder, case-insensitively; the switch
 /// picks All, Pinned or Missing.
 #[test]
@@ -137,7 +137,7 @@ fn the_projects_page_filters_by_text_and_scope() {
     assert_eq!((counts.all, counts.pinned, counts.missing), (4, 2, 1));
 }
 
-/// m1: the Projects page draws its switch with the counts, lists every
+/// Mockup row 1: the Projects page draws its switch with the counts, lists every
 /// project (no cap of five), and a filter matching nothing shows the empty
 /// state whose Clear filter clears it.
 #[test]
@@ -184,7 +184,7 @@ fn the_projects_page_lists_everything_and_says_when_nothing_matches() {
     assert!(texts.iter().all(|t| t.text != "Clear filter"));
 }
 
-/// m1, GG-10: the Libraries page lists Stock with its read-only caption and
+/// Mockup row 1: the Libraries page lists Stock with its read-only caption and
 /// every library's scope and count; Open opens that library's browser, the
 /// toolbar adds a global library or opens the browser; a filter matching
 /// nothing says so.
@@ -256,7 +256,7 @@ fn the_libraries_page_lists_the_loaded_libraries() {
     ));
 }
 
-/// m1: the last-opened column reads "today HH:MM", "yesterday", an
+/// Mockup row 1: the last-opened column reads "today HH:MM", "yesterday", an
 /// earlier day in the locale's date, and "—" when the time is unknown.
 #[test]
 fn the_last_opened_time_reads_today_yesterday_a_date_or_a_dash() {
@@ -296,7 +296,7 @@ fn the_last_opened_time_reads_today_yesterday_a_date_or_a_dash() {
     assert!(when.bounds.x >= path.x + path.width - 0.5);
 }
 
-/// m2: the hint names the state (a project with documents, or an empty
+/// Mockup row 2: the hint names the state (a project with documents, or an empty
 /// one) and offers New sheet, New PCB and Project Options… through the
 /// command catalog.
 #[test]
@@ -416,7 +416,7 @@ fn closing_the_last_tab_from_the_tab_menu_stamps_the_clock() {
 
 /// The Home, Projects and Libraries rows send their messages (they sent
 /// nothing after #2270), on either page; the row of the page on screen
-/// sends none (m1).
+/// sends none (mockup row 1).
 #[test]
 fn the_page_rows_send_their_messages() {
     let rows = [

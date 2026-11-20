@@ -1,4 +1,4 @@
-//! Dock drop zones (m8). While a floating panel is dragged, the three dock
+//! Dock drop zones (mockup row 8). While a floating panel is dragged, the three dock
 //! targets show as faint dashed outlines with their names; the one a release
 //! would dock into (`DockArea::drop_preview`) fills with `accent-soft`, gets
 //! a 2 px accent border and its name in `accent-text` semibold.
@@ -124,7 +124,7 @@ impl Signex {
         Some(drop_zones(&geometry, top, bottom, dock.drop_preview))
     }
 
-    /// Dock drop preview (m8): every dock target outlined and named, the
+    /// Dock drop preview (mockup row 8): every dock target outlined and named, the
     /// one a release would dock into filled.
     pub(in crate::app::view) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
         let zones = self.dock_drag_zones()?;

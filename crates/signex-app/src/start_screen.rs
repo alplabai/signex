@@ -68,7 +68,7 @@ pub enum Action {
     NewProject,
     OpenProject,
     /// The Home page's reference-design card (and Help ▸ Open Sample
-    /// Project); the navigation has no row for it (GG-10).
+    /// Project); the navigation has no row for it (decided 2026-11-19).
     OpenSampleProject,
     KeyboardShortcuts,
 }
