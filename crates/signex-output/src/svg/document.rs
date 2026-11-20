@@ -298,7 +298,7 @@ impl SvgRenderContext {
             let outline = (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
                 * xform.mm_to_unit) as f32;
             // A repeated sheet prints as a stack with a ×N pill (#1279).
-            super::repeat_stack::push_repeat_stack(&mut elements, child, &xform, &palette, outline);
+            super::repeat_stack::push_repeat_stack(&mut elements, child, &xform, palette, outline);
             elements.push(rect_path(
                 x,
                 y,
