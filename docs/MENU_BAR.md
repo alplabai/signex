@@ -488,13 +488,27 @@ by designator. The project's sheets are read off the UI thread when it opens.
 
 - A part chooses only among the footprints its own library row offers: the
   row's default and its alternates, the same list the Properties panel shows
-  (`footprint_choices_for`). Its link to the row does not change. A part with
-  no open library row, or whose row offers one footprint, shows its footprint
-  read-only and why.
-- Tick boxes select several parts; "Tick all from this row" ticks every part
-  of the same library row. "Set ticked parts to" lists the footprints every
-  ticked part's row offers, so a bulk pick never gives a part a footprint its
-  row does not offer.
+  (`footprint_choices_for`). Its link to the row does not change. A part that
+  cannot change shows its footprint as text with a reason pill: Sheet not
+  open, Read-only sheet, Library row not open (it links to a library that is
+  not open), No library link, or No alternates. A changed footprint shows the
+  old name struck through and the new one in accent, with a dot on the row.
+- A filter field (designator, value or library row) and All / Changed / No
+  alternates chips with their counts narrow the table (Graphite #80).
+- Tick boxes select several parts; the header box ticks the listed parts.
+  "Tick all from this row" is a link at the end of the Library row cell of
+  the hovered or previewed row and ticks every part of the same library row.
+  While parts are ticked a bar shows their count, "Set ticked parts to" with
+  the footprints every ticked part's row offers (so a bulk pick never gives a
+  part a footprint its row does not offer, and the bar says so when they share
+  none) and Clear ticks.
+- A Footprint preview column draws the clicked row's footprint read-only on
+  the board canvas colours, with a Top copper / Silkscreen / Courtyard legend
+  and its pad count, pad 1 size and courtyard. A changed row draws the current
+  and the new footprint side by side, each given room in proportion to its
+  width so both come out near one scale, with the pin map: every current pad
+  number must be on the new footprint. The footprints are read off the UI
+  thread through the library adapters.
 - Apply checks each change again against the part's live document and its row
   (the Properties path, `footprint_binding_commands`), then changes every open
   sheet in one `update` as one undo group (`UndoGroupKind::Footprints`): one
@@ -602,10 +616,13 @@ with its file and its number.
 
 - A page placed by a sheet symbol has a number field. A top-level page has no
   symbol to hold a number and keeps its position; it is shown read-only.
-- Auto-number puts every page back at its position and clears the hand
-  numbers. A number that is not a whole number from 1 turns its field red and
-  greys Apply; a clash, a gap or a number above the page count is a warning
-  only, as it is for an export.
+- Auto-number (footer left, and as the fix in the error banner) puts every
+  page back at its position and clears the hand numbers. A number that is not
+  a whole number from 1, a clash, a gap or a number above the page count greys
+  Apply (Graphite #78): the clashing rows take the error fill and a red field,
+  and an error banner names the clash, gap or high number. An automatic number
+  (one that follows the hierarchy order) is drawn in faint ink, a typed one in
+  full ink. Export still only warns.
 - Apply writes each changed number into the `ChildSheet.instances` entry of
   the parent sheet's sheet symbol (`Command::SetChildSheetInstances`), scoped
   to the project name. A number equal to the page's position clears the entry

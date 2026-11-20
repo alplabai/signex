@@ -57,6 +57,8 @@ pub struct ErcRunOutcome {
     /// Each checked sheet's page frame, closed sheets included, so a
     /// finding's Y shows from that sheet's page origin (#2034).
     pub page_frames: PageFrames,
+    /// How many sheets, symbols and nets the run checked, in that order (#85).
+    pub checked: [usize; 3],
 }
 
 /// Per sheet: the page origin and the paper height shown Y counts from.
@@ -257,6 +259,7 @@ fn run_job(
         "ERC: {total} total violations across {} sheet(s)",
         by_path.len()
     ));
+    let checked = checked_counts(&snapshots, &graph, &roots);
     let outcome = ErcRunOutcome {
         by_path,
         warnings,
@@ -266,8 +269,37 @@ fn run_job(
         waived_findings,
         lapsed_waivers,
         page_frames,
+        checked,
     };
     (outcome, net_waived)
+}
+
+/// What a run checked, for the ERC panel's clean-run line (#85): its sheets,
+/// their symbols, and the nets of the project netlist (of each sheet on its
+/// own when the run has no project root).
+fn checked_counts(
+    snapshots: &HashMap<PathBuf, SchematicRenderSnapshot>,
+    graph: &project_sheets::AssembledGraph,
+    roots: &[signex_net::ProjectRoot],
+) -> [usize; 3] {
+    let nets = if roots.is_empty() {
+        snapshots
+            .values()
+            .map(|sheet| signex_net::build_netlist(sheet).nets.len())
+            .sum()
+    } else {
+        let project = signex_net::ProjectGraph {
+            sheets: &graph.sheets,
+            resolved: &graph.resolved,
+            roots,
+        };
+        signex_net::build_project_netlist(&project)
+            .netlist
+            .nets
+            .len()
+    };
+    let symbols = snapshots.values().map(|sheet| sheet.symbols.len()).sum();
+    [snapshots.len(), symbols, nets]
 }
 
 /// Take out of each sheet's list, in sheet path order, the findings a net

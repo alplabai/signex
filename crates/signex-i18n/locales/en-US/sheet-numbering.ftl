@@ -11,7 +11,7 @@ dialog-sheet-numbering-subtitle =
        *[other] { $count } pages in { $project }
     }
 
-dialog-sheet-numbering-intro = Pages are numbered in hierarchy order. Type a number to give a page its own, or Auto-number to put every page back in order. Apply changes the open sheets; save them to keep the numbers.
+dialog-sheet-numbering-intro = Pages are numbered in hierarchy order. Type a number to give a page its own. Apply changes the open sheets; save them to keep the numbers.
 
 # Column headings of the page table.
 dialog-sheet-numbering-col-sheet = Sheet
@@ -32,13 +32,14 @@ dialog-sheet-numbering-no-pages = This project has no sheets to number.
 # A typed number that is not a whole number from 1.
 dialog-sheet-numbering-invalid = A sheet number is a whole number from 1.
 
-# Two or more pages share $number. Warning only; Apply still works.
+# Two or more pages share $number. Holds Apply back until fixed.
 dialog-sheet-numbering-clash = More than one page is numbered { $number }.
 
 # Numbers from 1 to the page count that no page has; $numbers is a list.
+# Holds Apply back until fixed.
 dialog-sheet-numbering-gap = No page is numbered { $numbers }.
 
-# A page numbered above the page count $count.
+# A page numbered above the page count $count. Holds Apply back until fixed.
 dialog-sheet-numbering-out-of-range = Page { $page } is numbered { $number }, above the page count { $count }.
 
 # The project's root sheet is absent or does not parse; $path is its file.

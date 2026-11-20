@@ -54,4 +54,10 @@ impl Signex {
             self.sync_active_tab();
         }
     }
+
+    /// Show written rule `rule` in `id`'s Rules tab detail, as the DRC
+    /// panel's Rule link asks.
+    pub(crate) fn select_rules_rule(&mut self, id: ProjectId, rule: String) {
+        self.rules_tab_mut(id).selected = Some(rule);
+    }
 }

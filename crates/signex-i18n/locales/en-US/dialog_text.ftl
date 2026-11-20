@@ -102,10 +102,19 @@ dialog-recovery-hint = Restore loads the copy as unsaved edits; nothing is writt
 
 ## Reset All Annotations confirm
 dialog-annotate-reset-question = Reset every designator?
-# $undo is the Undo shortcut, such as "Ctrl+Z".
+# $sheets and $symbols are whole numbers; $renumber is "yes" (Reset & Renumber)
+# or "no" (Reset All).
 dialog-annotate-reset-detail =
-    Every reference designator will be reset to '?', then the sheet will be renumbered from 1.
-    This cannot be undone through { $undo } alone — consider saving first.
+    Every reference designator on { $sheets ->
+        [one] the ticked sheet
+       *[other] the { $sheets } ticked sheets
+    } ({ $symbols ->
+        [one] { $symbols } symbol
+       *[other] { $symbols } symbols
+    }) is reset to '?'{ $renumber ->
+        [yes] , then renumbered from 1.
+       *[no] .
+    }
 
 ## Re-prefix confirm
 dialog-reprefix-question = Change designator prefixes?
@@ -183,3 +192,106 @@ dialog-rules-legend-off = No report
 dialog-rules-legend-changed = Changed
 dialog-rules-legend-changed-rule = Changed rule
 dialog-rules-matrix-caption = Pin type conflict is on/off only: its findings take their severity from this matrix.
+
+## Annotate Schematics (#75)
+dialog-annotate-order-up-then-across-help = Columns bottom to top, then the next column to the right.
+dialog-annotate-order-across-then-down-help = Rows left to right, then the next row down.
+dialog-annotate-order-down-then-across-help = Columns top to bottom, then the next column to the right.
+dialog-annotate-order-across-then-up-help = Rows left to right, then the next row up.
+# Count beside the sheets heading. Both are whole numbers.
+dialog-annotate-sheets-ticked = { $ticked } of { $total }
+# Pill on the sheet the active tab shows.
+dialog-annotate-sheet-current = current
+# A sheet placed more than once: $n is the placement's ordinal (a whole number).
+dialog-annotate-sheet-placement = placement { $n }
+dialog-annotate-fixed-options = Fixed options
+dialog-annotate-fixed-read-only = read-only
+# The folded Fixed options group in one line.
+dialog-annotate-fixed-digest = Designator · Sub-parts Off · Packages None · Matching not available yet
+# Banner text after the bold count. $sheets is how many sheets are ticked (a
+# whole number) and $sheet the name of the one; $undo is "project" or "sheet".
+dialog-annotate-banner-scope =
+    { $sheets ->
+        [one] on { $sheet }.
+       *[other] on { $sheets } sheets.
+    } The list updates live; Accept Changes applies it as { $undo ->
+        [sheet] one undo step per sheet.
+       *[project] one undo step.
+    }
+# Change-list switch. $count is a whole number.
+dialog-annotate-view-changes = Changes { $count }
+dialog-annotate-view-all = All { $count }
+dialog-annotate-filter-placeholder = Filter designators
+dialog-annotate-col-sheet = Sheet
+dialog-annotate-kept-locked = Kept (locked)
+dialog-annotate-no-match = No row matches the filter.
+dialog-annotate-no-changes = No designator changes. Pick All to see every row.
+dialog-annotate-reset-all-ellipsis = Reset All…
+dialog-annotate-reset-renumber-ellipsis = Reset & Renumber…
+# Footer caption. $undo is the Undo shortcut, such as "Ctrl+Z".
+dialog-annotate-undo-caption = { $undo } undoes it on every sheet
+dialog-annotate-undo-caption-per-sheet = { $undo } undoes it one sheet at a time
+
+## Reset confirm (#76)
+# The scope before the preview has counted it. $renumber is "yes" or "no".
+dialog-annotate-reset-detail-loading =
+    Every reference designator on the ticked sheets is reset to '?'{ $renumber ->
+        [yes] , then renumbered from 1.
+       *[no] .
+    }
+# $undo is the Undo shortcut, such as "Ctrl+Z".
+dialog-annotate-reset-one-step = One undo step: { $undo } restores every sheet.
+dialog-annotate-reset-per-sheet = { $undo } undoes it one sheet at a time, as the Annotate undo setting asks.
+
+## Re-prefix confirm (#77)
+# Stat tile captions under a count (a whole number).
+dialog-reprefix-tile-parts =
+    { $count ->
+        [one] part changes
+       *[other] parts change
+    }
+dialog-reprefix-tile-sheets =
+    { $count ->
+        [one] sheet
+       *[other] sheets
+    }
+dialog-reprefix-tile-standard = standard
+# $undo is the Undo shortcut, such as "Ctrl+Z".
+dialog-reprefix-bullet-undo = One undo step: { $undo } on any changed sheet undoes it on all of them.
+dialog-reprefix-bullet-unsaved = Sheets stay unsaved until you save. PCB references are not updated.
+# $count is a whole number.
+dialog-reprefix-bullet-by-symbol =
+    { $count ->
+        [one] { $count } part has no stored library row and was matched through its symbol.
+       *[other] { $count } parts have no stored library row and were matched through their symbol.
+    }
+# Caption over a list the last row of which counts the rest. Both are whole numbers.
+dialog-reprefix-caption-named = { $named } named changes of { $total }; the last row counts the rest.
+# Caption over a list that names every change. $count is a whole number.
+dialog-reprefix-caption-all =
+    { $count ->
+        [one] { $count } change.
+       *[other] { $count } changes.
+    }
+dialog-reprefix-scroll = Scroll ↓
+dialog-reprefix-col-part = Part
+dialog-reprefix-col-prefix = Prefix
+dialog-reprefix-col-new = New
+dialog-reprefix-col-note = Note
+dialog-reprefix-note-by-symbol = matched by symbol
+dialog-reprefix-left-unchanged = Left unchanged
+dialog-reprefix-listed-in-messages = listed in Messages
+# Skip pills: $count is how many parts the reason leaves unchanged.
+dialog-reprefix-skip-read-only = { $count } on a read-only sheet
+dialog-reprefix-skip-locked = { $count } locked
+dialog-reprefix-skip-no-link = { $count } without a library link
+dialog-reprefix-skip-not-mounted = { $count } from a library not mounted
+dialog-reprefix-skip-row-missing = { $count } with a deleted library row
+dialog-reprefix-skip-ambiguous = { $count } whose library rows disagree
+dialog-reprefix-skip-per-placement = { $count } with a per-placement designator
+dialog-reprefix-skip-mixed-versions = { $count } with mixed symbol versions
+dialog-reprefix-skip-hand-edited =
+    { $count ->
+        [one] { $count } hand-edited prefix
+       *[other] { $count } hand-edited prefixes
+    }
