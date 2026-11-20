@@ -70,7 +70,9 @@ Force Annotate All Schematics (Shift+Alt+A), Back Annotate Schematics... (see
 **Reports** (outputs of the open schematic, all greyed without one):
 
 - Bill of Materials... (the one BOM dialog; the old Design ▸ Generate BOM row
-  was a second row for the same message and is folded in)
+  was a second row for the same message and is folded in). File ▸ Export ▸
+  Export BOM… opens the same dialog. This row keeps its name until BOM Studio
+  (mockup row 113) takes the Reports row.
 - Netlist (Protel .NET)...
 - ERC Report...
 
@@ -99,7 +101,9 @@ Import** adds DXF to Current Layer... (`import_dxf`) and DXF as Board
 Outline... (`import_dxf_outline`), greyed without a board in view; each asks
 for the file and imports it as one undo step (#2410, see
 [BOARD_IMPORT_AND_REUSE.md](BOARD_IMPORT_AND_REUSE.md)). **File ▸
-Export** keeps PDF only.
+Export** has PDF…, Export BOM… (the BOM export dialog, named by its result,
+greyed without a schematic; mockup row 112, Caner 2026-11-20) and STEP 3D
+Model….
 Project tree actions with no menu message or command id (add or remove a
 document, Enable Version Control, History, Validate Project) stay in the tree's
 context menu; the menu gets no stub for them.
