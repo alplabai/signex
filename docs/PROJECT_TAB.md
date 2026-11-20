@@ -64,7 +64,8 @@ message. The chrome catalog draws a sample of it.
   read-only here. Its parts are read off the UI thread from every sheet of
   the project, open ones with their unsaved edits, each child sheet once per
   placement as the BOM counts it, with the BOM's own fit rule
-  (`signex_output::variant_fit`); after a sheet edit the status line offers
+  (`signex_output::variant_fit`) and the value the BOM lists (an `=` value
+  evaluated on its sheet, #1986); after a sheet edit the status line offers
   Read again. Names are trimmed, at most 64 characters, no control
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
   shows its reason and changes nothing. Changing a cell, Duplicate, Set as
