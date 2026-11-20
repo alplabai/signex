@@ -125,6 +125,42 @@ fn showing_the_section_reads_the_parts_matrix_off_the_ui_thread() {
     let _ = app.view_project_tab(id);
 }
 
+/// Maintainer decision 2026-11-20 (Caner): the Value column shows the value
+/// the BOM lists, an `=` value evaluated on its sheet with the project's
+/// parameters, and the parts filter matches that value.
+#[test]
+fn the_value_column_shows_an_expression_value_evaluated_as_the_bom_lists_it() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["a.snxsch"]);
+    app.ui_state.erc_severity_override.clear();
+    app.ui_state.pin_matrix_overrides.clear();
+    let sheet = SchematicSheet {
+        symbols: vec![
+            part("R1", "= VCC / 10mA", &[]),
+            part("R2", "= Rbase * 2", &[("Rbase", "10kΩ")]),
+        ],
+        ..Default::default()
+    };
+    open_with(&mut app.document_state, &dir.path().join("a.snxsch"), sheet);
+    app.document_state.projects[0]
+        .data
+        .parameters
+        .insert("VCC".to_string(), "5V".to_string());
+    app.open_project_tab(0);
+    let id = app.document_state.projects[0].id;
+    show_variants(&mut app, id);
+    let values: Vec<(&str, &str)> = matrix(&app, id)
+        .rows
+        .iter()
+        .map(|row| (row.designator.as_str(), row.value.as_str()))
+        .collect();
+    assert_eq!(values, [("R1", "500Ω"), ("R2", "20kΩ")]);
+    let shown = super::matrix::shown_rows(matrix(&app, id), "20k", false);
+    let names: Vec<&str> = shown.iter().map(|row| row.designator.as_str()).collect();
+    assert_eq!(names, ["R2"]);
+    let _ = app.view_project_tab(id);
+}
+
 #[test]
 fn only_rows_that_differ_hides_the_parts_every_variant_fits_as_base_does() {
     let (mut app, id, _dir) = app();

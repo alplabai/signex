@@ -1,7 +1,8 @@
 //! The parts by variants matrix of the Variants section (#1293): one row per
 //! part, a column for Base and one per variant definition. The parts are the
 //! BOM's: every placement of every sheet, power ports left out, the units of
-//! one part grouped once.
+//! one part grouped once, each showing the value the BOM lists (an `=` value
+//! evaluated on its sheet, #1986).
 
 use signex_types::designator::compare_references;
 use signex_types::project::is_base_variant;
@@ -9,7 +10,7 @@ use signex_types::schematic::{PartKey, Symbol, group_into_parts, normalized_lib_
 
 use super::part_is_fitted;
 use crate::ExportContext;
-use crate::bom::{bom_sheets, is_part_symbol};
+use crate::bom::shown_parts;
 
 /// Which parts each variant fits, read from a project's sheets.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -113,12 +114,11 @@ impl VariantMatrix {
 
 /// The matrix of the parts `ctx` places, for Base and each of `variants`.
 pub fn variant_matrix(ctx: &ExportContext, variants: &[String]) -> VariantMatrix {
-    let mut placed: Vec<(&Symbol, &str)> = Vec::new();
-    for (sheet, path) in bom_sheets(ctx) {
-        for sym in sheet.symbols.iter().filter(|sym| is_part_symbol(sym)) {
-            placed.push((sym, sym.designator_in(&path).trim()));
-        }
-    }
+    let shown = shown_parts(ctx);
+    let placed: Vec<(&Symbol, &str)> = shown
+        .iter()
+        .map(|part| (&part.symbol, part.designator.as_str()))
+        .collect();
     let parts = group_into_parts(placed.iter().map(|(sym, designator)| PartKey {
         reference: designator,
         lib_id: normalized_lib_id(&sym.lib_id),
