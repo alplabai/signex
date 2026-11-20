@@ -534,8 +534,7 @@ fn view_sized<'a>(
         container(main)
             .padding([40.0, MAIN_PAD_X])
             .center_x(Length::Fill),
-    )
-    .id(super::MAIN_SCROLL_ID);
+    );
     let navigation = if nav_collapsed(width) {
         nav_strip::view(tokens, i18n, data)
     } else {

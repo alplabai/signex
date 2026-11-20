@@ -249,12 +249,6 @@ pub enum StartScreenMsg {
     /// The minute tick fired while the screen shows; carries the time the
     /// last-opened column is read against.
     ClockTicked(DateTime<Utc>),
-    /// Home or Projects was picked as a section of Home (#2262): Projects
-    /// scrolls Home's project lists into view.
-    SectionPicked(StartSection),
-    /// Libraries was picked as an action (#2262): an open library's Library
-    /// Browser tab opens, else the Library panel with its library list.
-    LibrariesPicked,
 }
 
 /// How often the last-opened column ("today 14:05", "yesterday") is
@@ -269,32 +263,6 @@ pub fn clock_subscription(shown: bool) -> iced::Subscription<Message> {
     } else {
         iced::Subscription::none()
     }
-}
-
-/// The section of Home last picked by [`StartScreenMsg::SectionPicked`]:
-/// Home holds the project lists, so Projects scrolls them into view.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum StartSection {
-    #[default]
-    Home,
-    Projects,
-}
-
-/// Id of the Start screen's scrolling main column.
-const MAIN_SCROLL_ID: &str = "start-screen-main";
-
-/// The Task that brings `section` into view: the top of the main column for
-/// Home, its end (the Pinned and Recent Projects lists) for Projects.
-pub fn reveal_section<M: Send + 'static>(section: StartSection) -> iced::Task<M> {
-    let offset = match section {
-        StartSection::Home => iced::widget::scrollable::RelativeOffset::START,
-        StartSection::Projects => iced::widget::scrollable::RelativeOffset::END,
-    };
-    iced::widget::operation::scrollable::snap_to(
-        MAIN_SCROLL_ID,
-        offset,
-        iced::widget::operation::Animation::Instant,
-    )
 }
 
 /// The open right-click menu of a Start screen project row.

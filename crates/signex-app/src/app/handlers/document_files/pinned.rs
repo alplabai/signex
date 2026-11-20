@@ -95,24 +95,6 @@ impl Signex {
                 }
                 iced::Task::none()
             }
-            StartScreenMsg::SectionPicked(section) => {
-                self.interaction_state.start_section = section;
-                crate::start_screen::reveal_section(section)
-            }
-            StartScreenMsg::LibrariesPicked => self.open_start_screen_libraries(),
-        }
-    }
-
-    /// The Start screen's Libraries row: the Library Browser tab Tools ▸
-    /// Library Editor opens when a library is open, else the Library panel,
-    /// whose list offers Open Library.
-    fn open_start_screen_libraries(&mut self) -> iced::Task<Message> {
-        match self.library_editor_target() {
-            Some(path) => self.handle_open_library_browser(path),
-            None => {
-                let shown = self.show_panel(crate::panels::PanelKind::Library);
-                iced::Task::batch([shown, self.finish_update()])
-            }
         }
     }
 
@@ -165,8 +147,8 @@ impl Signex {
 
     /// Clear a row menu left open after the Start screen went away (a
     /// project or tab opened by any route), so it never comes back or takes
-    /// an Esc, and send the screen back to Home, unfiltered and on the Home
-    /// section, for the next time it shows. Run from `finish_update`. It
+    /// an Esc, and send the screen back to Home, unfiltered, for the next
+    /// time it shows. Run from `finish_update`. It
     /// also stamps the screen's clock when the screen comes back (and drops
     /// it while the screen is off), so `view` reads the time from the Model.
     pub(crate) fn drop_start_row_menu_off_screen(&mut self) {
@@ -178,7 +160,6 @@ impl Signex {
         }
         self.ui_state.start_screen.now = None;
         self.interaction_state.start_row_menu = None;
-        self.interaction_state.start_section = crate::start_screen::StartSection::Home;
         if !self.ui_state.start_screen.is_home() {
             self.ui_state.start_screen.go_home();
         }

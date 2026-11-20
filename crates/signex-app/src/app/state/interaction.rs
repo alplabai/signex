@@ -137,9 +137,6 @@ pub struct InteractionState {
     /// Right-click menu of a Start screen project row (#2305): which
     /// project, anchored where the click landed.
     pub start_row_menu: Option<crate::start_screen::StartRowMenu>,
-    /// The Start screen navigation row last picked; back to Home once the
-    /// Start screen goes away.
-    pub start_section: crate::start_screen::StartSection,
     /// Currently-expanded submenu inside the right-click context menu
     /// (None when no submenu is shown). Always cleared when
     /// `context_menu` becomes None.
