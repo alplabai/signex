@@ -357,6 +357,8 @@ fn an_edit_after_a_compile_marks_its_sheet_out_of_date() {
 
 #[test]
 fn a_channel_tab_refuses_an_edit_with_a_message() {
+    // Messages reads the diagnostics ring, which fills once the logger is in.
+    let _ = signex_app::diagnostics::init_logging();
     let mut f = fixture("Repeat(CH, 1, 2)", true);
     let child = f.child.clone();
     send(
