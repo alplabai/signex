@@ -100,8 +100,8 @@ fn assert_listed_once(needle: &str, before: usize, full: &str) {
     assert_eq!(row, shown);
 }
 
-/// T3: the open refreshes the panel before it marks a repaired sheet dirty,
-/// so the project tree first shows the sheet clean.
+/// T3: inside `open_schematic_tab`, panel_ctx is built before the dirty mark
+/// of a repaired sheet.
 #[test]
 fn a_panel_refresh_on_open_runs_before_the_repair_dirty_mark_today() {
     let repaired = crate::app::sheet_repairs::tests::repaired_sheet(false);

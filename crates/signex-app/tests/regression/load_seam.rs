@@ -114,9 +114,10 @@ fn a_restore_delivered_after_a_tab_switch_installs_the_sheet_behind_its_tab() {
 }
 
 /// T9: Save As moves the engine and the tab to the new file; the saved copy
-/// is clean there and the old path names no open document.
+/// is clean there and the old path names no open document. The old path's
+/// dirty mark is pinned by the in-crate half (`src/app/load_seam_tests.rs`).
 #[test]
-fn save_as_rekeys_the_engine_the_tab_and_the_dirty_mark() {
+fn save_as_rekeys_the_engine_and_the_tab() {
     let mut adapter = TestAdapter::new();
     let [from] = open_project(&mut adapter, &["a.snxsch"])
         .try_into()
