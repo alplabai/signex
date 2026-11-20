@@ -292,6 +292,10 @@ macro_rules! expression_walker {
                 v_score,
                 board_outline: _,
                 mounting_hole,
+                // The board targets carry no expressions.
+                board_slot: _,
+                mechanical: _,
+                component_anchor: _,
             } in entities
             {
                 let entity = *id;
