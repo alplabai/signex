@@ -377,6 +377,11 @@ impl Signex {
                 wheel_mode,
                 preferences_draft_wheel_mode: wheel_mode,
                 i18n: std::sync::Arc::clone(&i18n),
+                // Mockup row 144a — seeded again (with its preview and the system
+                // language name) each time Preferences opens.
+                preferences_pages: Box::new(crate::preferences::PreferencesPagesState::new(
+                    i18n.pref().clone(),
+                )),
                 remember_window_geometry,
                 preferences_draft_remember_window_geometry: remember_window_geometry,
                 drag_direction_select,
@@ -845,6 +850,11 @@ impl Signex {
         app.interaction_state.pcb_canvas.set_grid(
             app.ui_state.grid_visible,
             app.ui_state.visible_grid_mm as f64,
+        );
+        // Read once here, not in `DistributorSettings::default` or a view.
+        app.library.settings.set_start_environment(
+            crate::library::settings::digikey_oauth::env_client_configured(),
+            crate::library::settings::persistence::config_path().as_deref(),
         );
         // v0.9 Stage 9: the globally-configured libraries and the bundled
         // stock library (#328) are mounted off the UI thread (#1470): the

@@ -1,18 +1,15 @@
 //! Shared style / text / button helpers for the Preferences modal.
 //!
 //! Theme-token-resolved `text::Style` / `button::Style` closures plus
-//! the section-title and horizontal-separator builders. Reached by the
+//! the horizontal-separator builder. Reached by the
 //! shell (`mod.rs`) and every section submodule via `use super::*` —
 //! re-exported from `mod.rs` at `pub(in crate::preferences)`. Pure code
 //! motion out of the former single-file `preferences` module.
 
 use super::*;
-use iced::widget::{Space, column, container};
+use iced::widget::{Space, container};
 use iced::{Background, Border, Element, Length, Theme, Widget};
 use signex_widgets::{button, text};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 
 // ─── Theme-aware text styles ──────────────────────────────────
 // The whole modal shell + text now follow the active theme via
@@ -51,25 +48,6 @@ pub(super) fn text_warning(theme: &Theme) -> text::Style {
     }
 }
 
-/// Primary action button (Import / Export / Add / Reset-ERC) — theme accent
-/// fill with its guaranteed-contrast text colour.
-pub(super) fn primary_button_style(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.palette();
-    let bg = match status {
-        button::Status::Hovered | button::Status::Pressed => palette.primary.strong.color,
-        _ => palette.primary.base.color,
-    };
-    button::Style {
-        background: Some(Background::Color(bg)),
-        text_color: palette.primary.base.text,
-        border: Border {
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    }
-}
-
 /// Destructive button (Discard / Delete / Remove / Stop) — theme danger
 /// fill with its guaranteed-contrast text colour.
 pub(super) fn danger_button_style(theme: &Theme, status: button::Status) -> button::Style {
@@ -87,21 +65,6 @@ pub(super) fn danger_button_style(theme: &Theme, status: button::Status) -> butt
         },
         ..button::Style::default()
     }
-}
-
-/// A section heading: semibold title, no rule under it (the Graphite pages
-/// separate sections with space and one neutral hairline, #2262).
-pub(super) fn section_title<'a>(title: signex_i18n::Localized) -> Element<'a, PrefMsg> {
-    column![
-        text(title)
-            .size(TS.title)
-            .font(iced::Font {
-                weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
-            })
-            .style(text_primary),
-    ]
-    .boxed()
 }
 
 pub(super) fn h_sep<'a>() -> Element<'a, PrefMsg> {

@@ -418,14 +418,32 @@ pub struct DistributorSettings {
     /// call, so a test can observe the request without touching the OS
     /// credential store.
     pub digikey_token_remover: fn() -> Result<(), String>,
+    /// Whether `SIGNEX_DIGIKEY_CLIENT_ID` was set at start. Bootstrap reads
+    /// it once ([`Self::set_start_environment`]), never `Default` or the
+    /// view; `false` draws the DigiKey card's error state.
+    pub digikey_client_configured: bool,
+    /// Why the last Disconnect could not remove the stored token; `None`
+    /// once a Disconnect succeeded or a new one started.
+    pub digikey_disconnect_error: Option<String>,
     pub mouser_api_key_buf: String,
     pub mouser_status: Option<String>,
     pub mouser_in_flight: bool,
+    /// Outcome of the last Mouser key test: `None` until one finished or
+    /// after the key was edited, `Some(true)` when it passed.
+    pub mouser_key_verified: Option<bool>,
     pub preferred_order: Vec<DistributorSource>,
     /// Inline error from the last preferred-order save, `None` when the
     /// last save succeeded. Without this a failed write was invisible
     /// until the user found the order reverted on next launch.
     pub preferred_order_error: Option<String>,
+    /// Where the order is saved (`distributors.toml`), resolved at start by
+    /// bootstrap so the view shows the real path; `None` without a config
+    /// directory.
+    pub preferred_order_path: Option<String>,
+    /// The distributor whose grip is being dragged in the order list.
+    pub preferred_order_drag: Option<DistributorSource>,
+    /// The row under the pointer while that drag is on.
+    pub preferred_order_drop_target: Option<DistributorSource>,
 }
 
 impl Default for DistributorSettings {
@@ -438,9 +456,12 @@ impl Default for DistributorSettings {
             digikey_cancel: None,
             digikey_flow_generation: 0,
             digikey_token_remover: crate::library::settings::digikey_oauth::remove_stored_token,
+            digikey_client_configured: false,
+            digikey_disconnect_error: None,
             mouser_api_key_buf: String::new(),
             mouser_status: None,
             mouser_in_flight: false,
+            mouser_key_verified: None,
             preferred_order: vec![
                 DistributorSource::DigiKey,
                 DistributorSource::Mouser,
@@ -448,6 +469,24 @@ impl Default for DistributorSettings {
                 DistributorSource::Jlcpcb,
             ],
             preferred_order_error: None,
+            preferred_order_path: None,
+            preferred_order_drag: None,
+            preferred_order_drop_target: None,
         }
+    }
+}
+
+impl DistributorSettings {
+    /// What the settings learn from the process, passed in once by
+    /// bootstrap so `Default` stays free of environment and file-system
+    /// reads: whether a DigiKey client id is set, and where
+    /// `distributors.toml` lives.
+    pub fn set_start_environment(
+        &mut self,
+        client_configured: bool,
+        order_path: Option<&std::path::Path>,
+    ) {
+        self.digikey_client_configured = client_configured;
+        self.preferred_order_path = order_path.map(|path| path.display().to_string());
     }
 }

@@ -104,6 +104,7 @@ pub use board_output::{
 pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use board_reuse::ReuseBlockMsg;
+pub use contracts::Board3dShot;
 pub use contracts::ErcProfileAction;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,

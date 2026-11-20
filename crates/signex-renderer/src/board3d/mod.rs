@@ -2,7 +2,9 @@
 //! 3D view. The board outline is extruded to its thickness with the drill
 //! holes, cutouts and mounting holes through it; the copper the flat view
 //! shows lies on the two faces; each component is its attached model, or a
-//! plain body extruded from its 3D Body outline. Rules and frames:
+//! plain body extruded from its 3D Body outline. Every vertex knows its
+//! slice of the board (core, mask, copper, part), so the view can draw the
+//! layers apart ([`BoardScene3d::exploded`]). Rules and frames:
 //! `docs/RENDERING_RULES.md`, "Board 3D view".
 //!
 //! The copper and the board's own geometry come from the same
@@ -24,10 +26,12 @@ use uuid::Uuid;
 use crate::pcb::{PcbLayerView, PcbSnapshot};
 
 mod copper;
+mod explode;
 mod model_file;
 mod parts;
 mod step;
 
+pub use explode::{Explode, Layer3d};
 pub use model_file::read_model_file;
 pub use signex_mcad::{McadError, StepHeader, StepSchema};
 pub use step::{BoardStep, BoardStepInput, board_step};
@@ -128,6 +132,10 @@ pub struct BoardScene3d {
     /// Holes left out of the slab because they meet a hole cut before
     /// them (`signex_gfx::ring_fill::disjoint_holes`).
     pub dropped_holes: usize,
+    /// The slice of the board each of `scene.vertices` belongs to, in the
+    /// same order, for [`Self::exploded`]. A vertex with no entry is core
+    /// and never moves.
+    pub vertex_layers: Vec<Layer3d>,
 }
 
 /// Height of the copper above its face, mm (1 oz copper). Keeps the copper
@@ -174,6 +182,13 @@ impl BoardScene3d {
     pub fn bounds(&self) -> Option<([f32; 3], [f32; 3])> {
         self.scene.bounds()
     }
+
+    /// The board body's x and y extent and its thickness, mm; `None` when
+    /// the scene has no board body.
+    pub fn board_size_mm(&self) -> Option<[f32; 3]> {
+        let (lo, hi) = self.scene.bounds_of(self.board.clone())?;
+        Some([hi[0] - lo[0], hi[1] - lo[1], self.thickness_mm])
+    }
 }
 
 /// Build the 3D scene of `input.board` as `input.view` shows it.
@@ -191,11 +206,25 @@ pub fn build_board_scene(input: &Board3dInput<'_>) -> BoardScene3d {
     };
     (out.board, out.dropped_holes) =
         copper::append_board_slab(&mut out.scene, &every, thickness, &input.colors);
+    // Each append makes its own vertices, so every vertex is tagged with
+    // the one slice it belongs to as it lands.
+    explode::tag_slab(
+        &mut out.vertex_layers,
+        &out.scene,
+        out.board.clone(),
+        thickness,
+    );
     copper::append_copper(&mut out.scene, &shown, thickness, &input.colors);
+    explode::tag_new(&mut out.vertex_layers, &out.scene, |vertex| {
+        Layer3d::Copper(explode::face_of(vertex.position[2], thickness))
+    });
     for footprint in &board.footprints {
-        if let Some(part) = parts::append_part(&mut out.scene, footprint, input, thickness) {
-            out.parts.push(part);
-        }
+        let part = parts::append_part(&mut out.scene, footprint, input, thickness);
+        let layer = part
+            .as_ref()
+            .map_or(Layer3d::Core, |part| Layer3d::Part(part.face));
+        explode::tag_new(&mut out.vertex_layers, &out.scene, |_| layer);
+        out.parts.extend(part);
     }
     out
 }
