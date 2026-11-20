@@ -28,7 +28,8 @@ cargo test -p signex-app --release --lib render_bench -- --ignored --nocapture -
 
 The harness is `crates/signex-app/src/canvas/render_bench_tests.rs` (an
 `#[ignore]`d test; `pan_bench_tests.rs` is the older #2102 pan bench). Release
-needs `library/editor/inert.rs`'s tests gated on `debug_assertions`, because
+needs the headless-renderer tests (`signex-widgets/src/inert.rs`,
+`signex-widgets/src/enable_section.rs`) gated on `debug_assertions`, because
 iced's `()` renderer only exists in debug builds.
 
 ## Method

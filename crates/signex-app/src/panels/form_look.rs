@@ -24,8 +24,6 @@ const SEGMENT_FRAME_RADIUS: f32 = 8.0;
 const SEGMENT_HOVER_ALPHA: f32 = 0.08;
 /// Corner radius of a checkbox box.
 const CHECKBOX_RADIUS: f32 = 4.0;
-/// Width of the themed scrollbar.
-const SCROLLER_RADIUS: f32 = 4.0;
 
 /// The colours a Graphite form control draws with.
 #[derive(Debug, Clone, Copy)]
@@ -48,12 +46,7 @@ impl FormLook {
     /// The look of `theme`: Light for the Graphite Light theme, Dark for
     /// every other.
     pub fn of(theme: &Theme) -> Self {
-        let id = if theme.to_string().starts_with("Graphite Light") {
-            ThemeId::GraphiteLight
-        } else {
-            ThemeId::GraphiteDark
-        };
-        let tokens = theme_tokens(id);
+        let tokens = theme_tokens(Self::theme_id(theme));
         let r = resolve(&tokens);
         Self {
             field: r.field,
@@ -68,6 +61,16 @@ impl FormLook {
             accent_soft: r.accent_soft,
             primary: r.primary,
             primary_ink: r.primary_ink,
+        }
+    }
+
+    /// The Graphite theme `theme` stands for: Light for the Graphite Light
+    /// theme, Dark for every other.
+    fn theme_id(theme: &Theme) -> ThemeId {
+        if theme.to_string().starts_with("Graphite Light") {
+            ThemeId::GraphiteLight
+        } else {
+            ThemeId::GraphiteDark
         }
     }
 }
@@ -158,27 +161,14 @@ pub(crate) fn mixed_checkbox_style(theme: &Theme, status: checkbox::Status) -> c
     }
 }
 
-/// `scrollable` style of a dock panel: a thin neutral scroller.
+/// `scrollable` style of a dock panel: the thin Graphite scrollbar
+/// ([`crate::styles::scrollbar_style`]) in the colours of `theme`.
 pub(in crate::panels) fn scrollbar_style(
     theme: &Theme,
     status: scrollable::Status,
 ) -> scrollable::Style {
-    let mut style = scrollable::default(theme, status);
-    let l = FormLook::of(theme);
-    let idle = matches!(status, scrollable::Status::Active { .. });
-    let scroller = || scrollable::Scroller {
-        background: Background::Color(if idle { l.line_strong } else { l.ink4 }),
-        border: Border {
-            radius: SCROLLER_RADIUS.into(),
-            ..Border::default()
-        },
-    };
-    for rail in [&mut style.vertical_rail, &mut style.horizontal_rail] {
-        rail.background = None;
-        rail.border = Border::default();
-        rail.scroller = scroller();
-    }
-    style
+    let tokens = theme_tokens(FormLook::theme_id(theme));
+    crate::styles::scrollbar_style(&tokens)(theme, status)
 }
 
 /// Frame of a segmented control: sunken fill, radius 8, 2 px inset.

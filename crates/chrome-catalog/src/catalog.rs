@@ -60,6 +60,7 @@ impl Catalog {
     fn view(&self) -> Element<'_, Message> {
         let tokens = &self.tokens;
         let body = column![
+            crate::graphite_tokens::section(self.theme, tokens),
             section::view(
                 "Document tabs (3 visible, middle is active)",
                 tokens,
@@ -77,14 +78,31 @@ impl Catalog {
             ),
             section::view("Modal card chrome", tokens, modal_card::view(tokens)),
             section::view(
+                "Enable-header subsections (on, off)",
+                tokens,
+                crate::enable_section::view(tokens)
+            ),
+            section::view(
                 "Project tree leaf indicators",
                 tokens,
                 project_tree::view(tokens),
             ),
+            section::view("Chips and mode switch", tokens, crate::chips::view(tokens)),
             section::view(
                 "BOM modal — Altium-style layout (table + properties sidebar)",
                 tokens,
                 bom_modal::view(tokens),
+            ),
+            section::view("Flow progress", tokens, crate::flow_progress::view(tokens)),
+            section::view(
+                "Board palette and line-art inks",
+                tokens,
+                crate::board_palette::view(tokens)
+            ),
+            section::view(
+                "Constraint grid and class matrix",
+                tokens,
+                crate::constraint_grid::view_samples(tokens)
             ),
             section::view(
                 "Passive network calculator control",
@@ -93,6 +111,16 @@ impl Catalog {
                     .view(tokens)
                     .map(Message::PassiveCalculator)
                     .boxed(),
+            ),
+            section::view(
+                "Property illustrations",
+                tokens,
+                crate::illustration::view(tokens)
+            ),
+            section::view(
+                "Dimension labels",
+                tokens,
+                crate::dimension_label::view(tokens)
             ),
         ]
         .spacing(20)

@@ -5,13 +5,21 @@
 
 pub mod active_bar;
 pub mod chevron;
+pub mod chips;
+pub mod constraint_grid;
+pub mod dimension_label;
 pub mod dropdown_style;
+pub mod enable_section;
+pub mod flow_progress;
 pub mod history_pane;
 mod house;
 mod house_extra;
 pub mod icon_button;
+pub mod inert;
 mod label;
+pub mod length_format;
 pub mod passive_calculator;
+pub mod property_illustration;
 pub mod segmented;
 pub mod status_bar;
 pub mod tab_pill;
@@ -32,6 +40,7 @@ pub use house_extra::{
     toggler,
 };
 pub use label::{Label, raw};
+pub use length_format::LengthFormat;
 pub use segmented::{SegmentedStyle, segmented};
 pub use tab_pill::{AccentPosition, TabPill, TabPillStyle};
 pub use toggle_switch::{ToggleSwitchStyle, toggle_switch};
