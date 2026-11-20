@@ -197,7 +197,9 @@ fn properties_in_an_undocked_window_shows_that_windows_sheet() {
     let main = f.app.panel_ctx_for(f.main);
     assert_eq!(main.paper_size, "A4");
     assert_eq!(main.selection_count, 0);
-    assert!(has(&f.app, f.main, "Width: 297mm  Height: 210mm"));
+    // The Paper list names the size (#2531); no separate Width / Height line.
+    assert!(has(&f.app, f.main, "A4 · 297 × 210 mm"));
+    assert!(!has(&f.app, f.main, "A3 · 420 × 297 mm"));
     assert!(has(&f.app, f.main, "Nothing selected"));
 }
 

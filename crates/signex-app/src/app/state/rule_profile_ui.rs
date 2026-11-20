@@ -39,10 +39,14 @@ impl SaveProfileDialog {
     }
 }
 
+pub use crate::app::core::rule_list_filter::RuleListFilter;
+
 /// Preferences ▸ Rule Profiles. Edits apply at once, like the ERC dialog's:
 /// each one is written to the profile's file, not held as a draft.
 #[derive(Debug, Clone, Default)]
 pub struct ProfileManager {
+    /// The rule editor's list filter.
+    pub rule_list: RuleListFilter,
     /// Last listing read from disk, edited in place as the user edits.
     pub listing: ProfileListing,
     /// A listing has been requested at least once since Preferences opened.

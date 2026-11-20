@@ -119,6 +119,16 @@ impl UserRule {
             + u8::from(matches!(self.nets, NetScope::ClassPair(..)));
         (scope, narrowing)
     }
+
+    /// Whether its `value` of `kind` takes over from a value `held` at
+    /// `(rank, value)` by another rule covering the same object: more
+    /// specific wins, the stricter between equals, the first written
+    /// between identical ones. The one precedence order: the check and
+    /// the rules grid (`signex-drc-dsl`, `table::grid`) both read it.
+    pub fn wins_over(&self, kind: LimitKind, value: i64, held: Option<((u8, u8), i64)>) -> bool {
+        let rank = self.rank();
+        held.is_none_or(|(r, v)| rank > r || (rank == r && kind.stricter(value, v)))
+    }
 }
 
 /// A rule with the board's nets it covers.
@@ -276,9 +286,10 @@ pub(crate) fn pick_between(
             if k != kind {
                 continue;
             }
-            let better =
-                best.is_none_or(|(r, v, _)| rank > r || (rank == r && kind.stricter(value, v)));
-            if better {
+            if scoped
+                .rule
+                .wins_over(kind, value, best.map(|(r, v, _)| (r, v)))
+            {
                 best = Some((rank, value, scoped));
             }
         }

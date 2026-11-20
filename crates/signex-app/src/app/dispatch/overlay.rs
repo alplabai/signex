@@ -678,6 +678,14 @@ impl Signex {
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)
             }
+            ErcMsg::RulesChangedOnlyToggled(on) => {
+                self.ui_state.erc_rule_list.changed_only = on;
+                Task::none()
+            }
+            ErcMsg::RuleFilterChanged(query) => {
+                self.ui_state.erc_rule_list.query = query;
+                Task::none()
+            }
             ErcMsg::ProfileMenuToggled => self.handle_erc_profile_menu_toggled(),
             ErcMsg::ProfileMenuRowChosen(action) => {
                 self.ui_state.erc_profile_menu_open = false;

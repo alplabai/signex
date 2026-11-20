@@ -47,8 +47,8 @@ pub(super) fn tile_look(severity: Severity) -> (MessageId, Tone) {
     }
 }
 
-/// The four severity tiles over `counts`. Read-only: the shared rule
-/// editor has no row filter yet, so a tile does not filter the list.
+/// The four severity tiles over `counts`. Read-only: the rule list filters
+/// by name and Changed only, not by severity, so a tile does not filter it.
 fn severity_tiles<'a>(
     counts: [(Severity, usize); 4],
     tokens: &ThemeTokens,

@@ -11,10 +11,14 @@ mod library_browser;
 mod multi_edit;
 mod navigator;
 mod net_classes;
+#[cfg(test)]
+mod note_draft_persist_tests;
 mod panel_controls;
 mod panel_open;
+mod part_actions;
 mod part_field_issues;
 mod placed_edit;
+mod pre_placement_position;
 pub(crate) mod project_navigation;
 mod property_editor;
 mod sch_library;
@@ -70,6 +74,13 @@ impl Signex {
             }
             if let crate::panels::PanelMsg::ObjectList(list_msg) = panel_msg {
                 let task = self.handle_object_list_message(list_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::Part(part_msg) = panel_msg {
+                let task = self.handle_dock_part_message(part_msg);
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let Some(task) = self.handle_dock_selection_form_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {

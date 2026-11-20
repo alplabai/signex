@@ -377,3 +377,22 @@ fn a_minimum_above_its_maximum_is_reported_as_not_applied() {
         ]
     );
 }
+
+/// #2530: the grid reads a written length with the compiler's units.
+#[test]
+fn a_length_reads_every_unit_the_compiler_takes() {
+    for (text, nm) in [
+        ("0.2mm", 200_000),
+        ("8mil", 203_200),
+        ("8 mil", 203_200),
+        ("50um", 50_000),
+        ("50\u{b5}m", 50_000),
+        ("50\u{3bc}m", 50_000),
+        ("1500nm", 1_500),
+    ] {
+        assert_eq!(crate::length_nm(text), Some(nm), "{text}");
+    }
+    for text in ["", "0.2", "wide", "0.2xx", "mm"] {
+        assert_eq!(crate::length_nm(text), None, "{text}");
+    }
+}

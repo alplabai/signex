@@ -1,9 +1,7 @@
 //! Panel implementations — uses signex-widgets for proper Altium-style content.
 
-use iced::mouse;
-use iced::widget::canvas;
 use iced::widget::{Column, Space, container, row, scrollable, svg};
-use iced::{Background, Border, Color, Element, Length, Point, Rectangle, Renderer, Theme, Widget};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use iced_aw::{NumberInput, Wrap};
 use signex_types::coord::Unit;
 use signex_types::theme::ThemeTokens;
@@ -18,6 +16,7 @@ pub mod history;
 pub mod layer_stack;
 mod pcb_layers;
 mod placed_edit;
+pub mod pre_placement;
 mod scroll;
 pub(crate) use scroll::panel_scrollable;
 mod properties_parameters;
@@ -69,6 +68,7 @@ pub use waiver_form::{UserIdentity, WaiverReason};
 mod footprint_context;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
+pub(crate) mod illustration;
 mod library;
 mod messages;
 pub(crate) mod messages_row;
@@ -93,6 +93,7 @@ mod selection_filter;
 pub use selection_filter::{
     FilterEditor, KindCounts, SchFilterMsg, SelectionFilterFacts, board_counts,
 };
+pub(crate) mod rotation_steps;
 mod symbol_context;
 mod widgets;
 mod wire_style_rows;
@@ -107,7 +108,7 @@ pub(crate) use element_properties::{
 };
 pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
-    FootprintCards, NoErcRuleEdit,
+    FootprintCards, FootprintThumb, NoErcRuleEdit, PartPanelEffect, PartPanelMsg, PartPanelState,
 };
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
@@ -122,15 +123,15 @@ pub use numeric_draft::{
     shown_text as numeric_shown_text,
 };
 pub use properties_parameters::{
-    BuiltinParameter, PaperEdge, PaperEdgeDraft, SheetVariableMsg, TitleBlockDraft,
-    TitleBlockField, shown_title_block_value, typed_mm,
+    BuiltinParameter, DocumentOptionsMsg, DocumentOptionsUi, PaperEdge, PaperEdgeDraft,
+    SheetVariableMsg, TitleBlockDraft, TitleBlockField, TitleBlockSource, shown_title_block_value,
+    title_block_source, typed_mm,
 };
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
-    form_choice_row, form_edit_row, form_font_link_row, form_grid_row, form_input_row,
-    form_input_row_untipped, form_label, form_mm_edit_row, form_pick_row, form_rotation_row,
-    justification_grid, net_numeric_row, net_params_add_bar, net_params_header, net_params_tabs,
-    preplacement_justification_grid, props_tab_btn, section_hdr, seg_btn, thin_sep,
+    form_choice_row, form_edit_row, form_font_link_row, form_input_row, form_input_row_untipped,
+    form_label, form_pick_row, justification_grid, label_anchor, net_params_add_bar,
+    net_params_tabs, props_tab_btn, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
@@ -148,13 +149,17 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
+pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library::{ComponentSheet, LibraryRowDetail};
 pub(super) use library::{
     view_component_sheet, view_footprint_library, view_library_row_properties, view_sch_library,
 };
 pub use messages::{PanelMsg, SheetFrameEdit};
-pub use multi_selection::{MultiEditMsg, MultiField, edit_from_text as multi_edit_from_text};
+pub use multi_selection::{
+    MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
+    edit_from_text_in as multi_edit_from_text,
+};
 pub use navigator::{NavigatorModel, NavigatorMsg, NavigatorRow, SheetNumbers};
 pub use net_class_panel::{
     LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
@@ -181,14 +186,18 @@ pub use pcb_component::{
 pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
-pub use placed_edit::{PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel};
+pub use placed_edit::{
+    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
+};
+pub use pre_placement::{
+    PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
+    PrePlacementStyle,
+};
 pub(super) use projects::view_projects;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
-#[cfg(test)]
-pub(crate) use properties::pre_placement_readout;
-pub use properties::{DrawingFieldId, PrePlacementData, PrePlacementKind, PrePlacementStyle};
+pub use properties::DrawingFieldId;
 pub(super) use properties::{
     PROPERTY_CONTROL_PORTION, PROPERTY_LABEL_COLUMN, PROPERTY_LABEL_WIDTH, PROPERTY_ROW_GAP,
     PROPERTY_ROW_PAD_X, view_properties,

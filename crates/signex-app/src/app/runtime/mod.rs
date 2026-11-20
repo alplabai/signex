@@ -267,6 +267,7 @@ impl Signex {
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
         self.sync_focused_pin(clicked_pin.clone());
+        self.sync_pin_focus_sections(clicked_pin.is_some());
         self.sync_placed_panel();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
