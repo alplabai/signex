@@ -7,12 +7,17 @@
 use std::path::PathBuf;
 
 use serde_json::Value;
+use signex_drc_dsl::table::catalog::Domain;
 use signex_drc_dsl::table::{LimitField, RuleField, RuleKind};
 use signex_types::pcb::{NetDef, PcbBoard, Point, Segment};
 use signex_types::project::{DrcRuleSet, ProjectRules};
 use uuid::Uuid;
 
-use super::{RulesDomain, RulesTabMsg};
+use signex_drc_dsl::table::grid::CellSource;
+use signex_widgets::constraint_grid::{CellRef, GridMessage};
+
+use super::RulesTabMsg;
+use super::grid::{CellShow, Cells, RowRef};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::state::ProjectId;
@@ -37,9 +42,11 @@ fn track(n: u128, net: u32, a: (f64, f64), b: (f64, f64)) -> Segment {
     }
 }
 
-/// GND and SIG 0.35 mm apart centre to centre (0.1 mm gap).
+/// GND and SIG 0.35 mm apart centre to centre (0.1 mm gap), on a 2-layer
+/// board: `Custom` takes the layer count (Standard is 4 layers) and the
+/// standard values.
 fn board() -> PcbBoard {
-    let mut board = signex_types::project::SetupProfile::Standard
+    let mut board = signex_types::project::SetupProfile::Custom
         .pcb(2)
         .new_board();
     board.nets = [(1, "GND"), (2, "SIG")]
@@ -245,7 +252,7 @@ fn a_project_without_rules_stores_them_with_its_first_rule() {
         &mut app,
         RulesTabMsg::DomainPicked {
             project_id: id,
-            domain: RulesDomain::Routing,
+            domain: Domain::Physical,
         },
     );
     send(
@@ -456,13 +463,7 @@ fn the_tab_shows_flags_and_results_from_the_last_run() {
             .any(|f| f.rule == "sig_a" && f.flag.as_str() == "shadowed")
     );
     assert_eq!(analysis.scope.get("sig_b"), Some(&1));
-    send(
-        &mut app,
-        RulesTabMsg::RowSelected {
-            project_id: id,
-            rule: "sig_b".into(),
-        },
-    );
+    select_sig_b(&mut app, id);
     let _ = app.view_rules_tab(id);
     send(
         &mut app,
@@ -705,13 +706,7 @@ fn update_keeps_the_selected_rules_why_and_the_text_view_follows_stored_rules() 
         .settle(&mut app, task)
         .expect("the run lands");
     open(&mut app);
-    send(
-        &mut app,
-        RulesTabMsg::RowSelected {
-            project_id: id,
-            rule: "sig_b".into(),
-        },
-    );
+    select_sig_b(&mut app, id);
     let analysis = rules_tab(&app, id).analysis.clone().expect("analysed");
     let (effective, net) = analysis.why.expect("why for the selected rule");
     assert_eq!(net, "SIG");
@@ -734,15 +729,815 @@ fn update_keeps_the_selected_rules_why_and_the_text_view_follows_stored_rules() 
         "rules_set",
         &["id=sig_b", "field=min_clearance", "value=0.5mm"],
     );
-    send(
-        &mut app,
-        RulesTabMsg::SearchEdited {
-            project_id: id,
-            text: String::new(),
-        },
-    );
+    // Any message runs `update`, which refreshes the text view.
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
     assert!(
         text_view(&app, id).contains("clearance >= 0.5mm"),
         "a text view nobody typed in shows the stored rules"
     );
+}
+
+// #2530 - the constraint grid: domains, find, cell edits, reset, the
+// filter chips and constraint sets on rows.
+
+fn grid(app: &Signex, id: ProjectId) -> &super::RulesGrid {
+    &rules_tab(app, id).grid
+}
+
+fn grid_msg(app: &mut Signex, id: ProjectId, msg: GridMessage) {
+    send(
+        app,
+        RulesTabMsg::GridActed {
+            project_id: id,
+            msg,
+        },
+    );
+}
+
+fn pick(app: &mut Signex, id: ProjectId, domain: Domain) {
+    send(
+        app,
+        RulesTabMsg::DomainPicked {
+            project_id: id,
+            domain,
+        },
+    );
+}
+
+/// The cell of row `row` in the column with catalog id `column`.
+fn cell(app: &Signex, id: ProjectId, row: &RowRef, column: &str) -> CellRef {
+    let grid = grid(app, id);
+    CellRef::new(
+        grid.row_of(row).expect("the row is listed"),
+        grid.column_named(column)
+            .expect("the column is on the domain"),
+    )
+}
+
+/// Select the SIG row's clearance cell, which `sig_b` (the stricter of
+/// the two SIG rules) governs, and close its editor.
+fn select_sig_b(app: &mut Signex, id: ProjectId) {
+    let at = cell(app, id, &RowRef::Net("SIG".into()), "clearance_min");
+    grid_msg(app, id, GridMessage::CellPressed(at));
+    grid_msg(app, id, GridMessage::EditCancelled);
+    assert_eq!(rules_tab(app, id).selected.as_deref(), Some("sig_b"));
+}
+
+/// Type `value` in `at` and press Enter.
+fn type_in(app: &mut Signex, id: ProjectId, at: CellRef, value: &str) {
+    grid_msg(app, id, GridMessage::CellPressed(at));
+    grid_msg(app, id, GridMessage::EditTextChanged(value.into()));
+    grid_msg(app, id, GridMessage::EditSubmitted);
+}
+
+#[test]
+fn a_domain_pick_lays_out_its_catalog_columns_and_hierarchy_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    assert_eq!(grid(&app, id).domain(), Domain::Clearance, "the first tab");
+    pick(&mut app, id, Domain::Physical);
+    let shown = grid(&app, id);
+    assert_eq!(shown.domain(), Domain::Physical);
+    let groups: Vec<&str> = shown.groups().iter().map(|g| g.id).collect();
+    let catalog: Vec<&str> = Domain::Physical.groups().map(|g| g.id).collect();
+    assert_eq!(groups, catalog, "the groups are the catalog's, in order");
+    let rows = shown.rows();
+    assert_eq!(rows[0], RowRef::All);
+    assert!(
+        rows.contains(&RowRef::Net("SIG".into())),
+        "a net with rules of its own is listed: {rows:?}"
+    );
+    let layers: Vec<(usize, usize)> = rows
+        .iter()
+        .filter_map(|r| match r {
+            RowRef::Layer { number, count, .. } => Some((*number, *count)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(layers, vec![(1, 2), (2, 2)], "L1 is Top, L2 is Bottom");
+    // Placement has no net or layer rows.
+    pick(&mut app, id, Domain::Placement);
+    assert!(
+        grid(&app, id)
+            .rows()
+            .iter()
+            .all(|r| !matches!(r, RowRef::Net(_) | RowRef::Layer { .. })),
+        "{:?}",
+        grid(&app, id).rows()
+    );
+}
+
+#[test]
+fn find_jumps_to_the_matching_column_and_enter_steps_to_the_next() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    grid_msg(
+        &mut app,
+        id,
+        GridMessage::ColumnQueryChanged("annular".into()),
+    );
+    let shown = grid(&app, id);
+    assert_eq!(shown.domain(), Domain::Manufacturing, "the column's domain");
+    let column = shown
+        .column_named("annular_ring_min")
+        .expect("on the domain");
+    assert_eq!(shown.view.selected().map(|c| c.column), Some(column));
+    assert_eq!(
+        shown.view.selected().map(|c| c.row),
+        shown.row_of(&RowRef::All),
+        "no row was selected, so All"
+    );
+    // Two letters only list; the grid stays.
+    grid_msg(&mut app, id, GridMessage::ColumnQueryChanged("wi".into()));
+    assert_eq!(grid(&app, id).domain(), Domain::Manufacturing);
+    assert!(rules_tab(&app, id).find.is_listing());
+    grid_msg(
+        &mut app,
+        id,
+        GridMessage::ColumnQueryChanged("width".into()),
+    );
+    let shown = grid(&app, id);
+    assert_eq!(shown.domain(), Domain::Physical);
+    assert_eq!(
+        shown.view.selected().map(|c| c.column),
+        shown.column_named("width_min")
+    );
+    grid_msg(&mut app, id, GridMessage::ColumnQuerySubmitted);
+    let shown = grid(&app, id);
+    assert_eq!(
+        shown.view.selected().map(|c| c.column),
+        shown.column_named("width_preferred"),
+        "Enter steps to the next match"
+    );
+}
+
+#[test]
+fn a_cell_commit_writes_one_rule_and_one_undo_step_and_reset_removes_only_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    let before = undo_steps(&app, id);
+    let at = cell(&app, id, &RowRef::All, "clearance_min");
+    type_in(&mut app, id, at, "0.25");
+    let text = dsl(&app).expect("stored");
+    assert!(
+        text.starts_with(TEXT),
+        "the written rules stay as typed: {text}"
+    );
+    assert!(
+        text.contains("rule all_clearance on clearance require clearance >= 0.25mm then error"),
+        "{text}"
+    );
+    assert_eq!(undo_steps(&app, id), before + 1, "one undo step");
+    assert!(grid(&app, id).view.edit().is_none(), "the editor closed");
+    // A bare number is millimetres; the cell shows the row's own value.
+    let tab = rules_tab(&app, id);
+    let sets = std::collections::BTreeMap::new();
+    let table = signex_drc_dsl::table::table(&text);
+    let cells = Cells {
+        grid: &tab.grid,
+        table: &table,
+        sets: &sets,
+    };
+    assert!(cells.show(at).is_own());
+
+    grid_msg(&mut app, id, GridMessage::CellReset(at));
+    assert_eq!(
+        dsl(&app).as_deref(),
+        Some(TEXT),
+        "reset drops that rule only"
+    );
+    assert_eq!(undo_steps(&app, id), before + 2);
+    command(&mut app, "undo");
+    assert!(dsl(&app).expect("stored").contains("all_clearance"));
+    command(&mut app, "undo");
+    assert_eq!(dsl(&app).as_deref(), Some(TEXT));
+}
+
+#[test]
+fn overridden_rows_only_lists_the_rows_with_values_of_their_own() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    let has_layers = |app: &Signex| {
+        grid(app, id)
+            .rows()
+            .iter()
+            .any(|r| matches!(r, RowRef::Layer { .. }))
+    };
+    assert!(has_layers(&app));
+    send(
+        &mut app,
+        RulesTabMsg::OverriddenOnlyToggled { project_id: id },
+    );
+    let rows = grid(&app, id).rows().to_vec();
+    assert!(rows.contains(&RowRef::All), "All always stays");
+    assert!(rows.contains(&RowRef::Net("SIG".into())), "{rows:?}");
+    assert!(!has_layers(&app), "no layer sets a clearance: {rows:?}");
+    send(
+        &mut app,
+        RulesTabMsg::OverriddenOnlyToggled { project_id: id },
+    );
+    assert!(has_layers(&app));
+    // Show inherited values starts on.
+    assert!(!rules_tab(&app, id).hide_inherited);
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    assert!(rules_tab(&app, id).hide_inherited);
+}
+
+#[test]
+fn a_row_using_a_constraint_set_carries_its_chip_and_resolves_from_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    answer(
+        &mut app,
+        "rules_set_create",
+        &["name=hv", "values=min_clearance=0.8mm"],
+    );
+    answer(
+        &mut app,
+        "rules_set_apply",
+        &["set=hv", "scope=net == \"GND\""],
+    );
+    // The next `update` lays the rows out again.
+    pick(&mut app, id, Domain::Clearance);
+    let gnd = RowRef::Net("GND".into());
+    let drc = app.rules_drc_of(id).expect("rules");
+    assert_eq!(
+        super::grid::sets_on(&gnd, &drc.sets),
+        vec!["hv".to_string()]
+    );
+    assert!(super::grid::sets_on(&RowRef::Net("SIG".into()), &drc.sets).is_empty());
+    let at = cell(&app, id, &gnd, "clearance_min");
+    let table = signex_drc_dsl::table::table(drc.dsl.as_deref().unwrap_or_default());
+    let cells = Cells {
+        grid: grid(&app, id),
+        table: &table,
+        sets: &drc.sets,
+    };
+    match cells.show(at) {
+        CellShow::Value { source, .. } => assert!(
+            matches!(&source, CellSource::Set { set, .. } if set == "hv"),
+            "{source:?}"
+        ),
+        other => panic!("the set's value: {other:?}"),
+    }
+}
+
+/// The project's stored rules replaced with `text`, before the tab opens.
+fn store(app: &mut Signex, text: &str) {
+    app.document_state.projects[0].data.rules = Some(stored(text));
+}
+
+fn layer_rows(app: &Signex, id: ProjectId) -> Vec<RowRef> {
+    grid(app, id)
+        .rows()
+        .iter()
+        .filter(|r| matches!(r, RowRef::Layer { .. }))
+        .cloned()
+        .collect()
+}
+
+#[test]
+fn a_layer_rule_for_a_layer_the_board_lacks_keeps_its_row() {
+    let outer = "rule outer_w on track when layer == outer require width >= 0.25mm then error\n";
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    store(&mut app, outer);
+    open(&mut app);
+    pick(&mut app, id, Domain::Physical);
+    let rows = layer_rows(&app, id);
+    assert_eq!(
+        rows.len(),
+        3,
+        "the two board layers and the written one: {rows:?}"
+    );
+    assert_eq!(
+        rows[2],
+        RowRef::Layer {
+            token: "outer".into(),
+            number: 0,
+            count: 2,
+        }
+    );
+    let _ = app.view_rules_tab(id);
+
+    // With no board open, the written layer is still listed.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
+    store(&mut app, outer);
+    let id = app.document_state.projects[0].id;
+    send(&mut app, RulesTabMsg::OpenRequested { project: Some(id) });
+    pick(&mut app, id, Domain::Physical);
+    assert_eq!(
+        layer_rows(&app, id),
+        [RowRef::Layer {
+            token: "outer".into(),
+            number: 0,
+            count: 0,
+        }]
+    );
+    let _ = app.view_rules_tab(id);
+}
+
+#[test]
+fn a_board_wide_rule_no_cell_shows_is_a_scoped_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    store(
+        &mut app,
+        "rule wide_a on clearance require clearance >= 0.2mm then error\n\
+         rule wide_b on clearance require clearance >= 0.3mm then error\n",
+    );
+    open(&mut app);
+    let rows = grid(&app, id).rows();
+    assert!(rows.contains(&RowRef::Scoped("wide_a".into())), "{rows:?}");
+    assert!(!rows.contains(&RowRef::Scoped("wide_b".into())), "{rows:?}");
+    let _ = app.view_rules_tab(id);
+}
+
+#[test]
+fn a_cell_shows_its_length_as_written_in_any_unit_the_rules_take() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    let at = cell(&app, id, &RowRef::All, "clearance_min");
+    for (typed, mm) in [("8mil", 0.2032), ("50\u{b5}m", 0.05), ("50\u{3bc}m", 0.05)] {
+        type_in(&mut app, id, at, typed);
+        let text = dsl(&app).expect("stored");
+        assert!(
+            text.contains(&format!("clearance >= {typed} then")),
+            "{text}"
+        );
+        let tab = rules_tab(&app, id);
+        let sets = std::collections::BTreeMap::new();
+        let table = signex_drc_dsl::table::table(&text);
+        let cells = Cells {
+            grid: &tab.grid,
+            table: &table,
+            sets: &sets,
+        };
+        let show = cells.show(at);
+        assert_eq!(
+            show.written(),
+            Some(typed),
+            "the cell shows {typed}, not mm"
+        );
+        assert!(
+            matches!(show, CellShow::Value { mm: Some(v), .. } if (v - mm).abs() < 1e-9),
+            "{typed} reads as {mm} mm: {show:?}"
+        );
+        let _ = app.view_rules_tab(id);
+    }
+}
+
+/// The Clearance tab's and the clearance group's findings badges, as the
+/// view reads them.
+fn clearance_badges(app: &Signex, id: ProjectId) -> (Option<usize>, Option<usize>) {
+    let state = rules_tab(app, id);
+    let (src, origin) = app.rules_text_of(id).expect("rules");
+    let frame = app.rules_frame(
+        id,
+        &app.ui_state.i18n,
+        &app.document_state.panel_ctx.tokens,
+        state,
+        src,
+        origin,
+    );
+    let group = signex_drc_dsl::table::catalog::group_of(LimitField::MinClearance)
+        .expect("the clearance group");
+    (
+        frame.domain_findings(Domain::Clearance),
+        frame.group_findings(group),
+    )
+}
+
+#[test]
+fn a_findings_badge_drops_a_rule_changed_since_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    let task = app.handle_pcb_drc_requested();
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    open(&mut app);
+    let sig_b = match &rules_tab(&app, id)
+        .analysis
+        .as_ref()
+        .expect("analysed")
+        .checked
+    {
+        super::analysis::Checked::Ran { results, .. } => {
+            results.get("user::sig_b").map_or(0, |r| r.violations)
+        }
+        other => panic!("a run: {other:?}"),
+    };
+    assert!(sig_b > 0, "sig_b asks 0.4 mm of a 0.1 mm gap");
+    let (domain, group) = clearance_badges(&app, id);
+    let domain = domain.expect("a current run");
+    assert_eq!(group, Some(domain), "every clearance rule is in the group");
+
+    answer(
+        &mut app,
+        "rules_set",
+        &["id=sig_b", "field=min_clearance", "value=0.5mm"],
+    );
+    // Any message runs `update`, which analyses the rules again.
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    let (domain_after, group_after) = clearance_badges(&app, id);
+    assert_eq!(
+        domain_after,
+        Some(domain - sig_b),
+        "sig_b changed since the run"
+    );
+    assert_eq!(group_after, Some(domain - sig_b));
+}
+
+/// Why rule `rule`'s findings line has no count, as the detail strip reads it.
+fn findings_reason(app: &Signex, id: ProjectId, rule: &str) -> Option<signex_i18n::MessageId> {
+    let state = rules_tab(app, id);
+    let (src, origin) = app.rules_text_of(id).expect("rules");
+    let frame = app.rules_frame(
+        id,
+        &app.ui_state.i18n,
+        &app.document_state.panel_ctx.tokens,
+        state,
+        src,
+        origin,
+    );
+    let row = frame.table.row(rule).cloned().expect("the rule");
+    frame.findings_reason(&row)
+}
+
+#[test]
+fn the_findings_line_says_why_it_has_no_count() {
+    use signex_i18n::ids;
+    // No board open.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
+    store(&mut app, TEXT);
+    let id = app.document_state.projects[0].id;
+    send(&mut app, RulesTabMsg::OpenRequested { project: Some(id) });
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        Some(ids::RULES_BLANK_NO_BOARD)
+    );
+
+    // The board is open and has not been checked.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, path) = app_with_board(&dir);
+    open(&mut app);
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        Some(ids::RULES_BLANK_NOT_CHECKED)
+    );
+    // The tab's own Run DRC: with the Rules tab in view there is no active
+    // board for `handle_pcb_drc_requested` to run.
+    let task = app.update(Message::Project(ProjectMsg::Rules(
+        RulesTabMsg::DrcRequested { project_id: id },
+    )));
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        None,
+        "the run counts it"
+    );
+
+    // The rule changed since the run.
+    answer(
+        &mut app,
+        "rules_set",
+        &["id=sig_b", "field=min_clearance", "value=0.5mm"],
+    );
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        Some(ids::RULES_BLANK_CHANGED)
+    );
+
+    // Off.
+    send(
+        &mut app,
+        RulesTabMsg::EnabledToggled {
+            project_id: id,
+            rule: "sig_b".into(),
+            on: false,
+        },
+    );
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        Some(ids::RULES_BLANK_OFF)
+    );
+
+    // The board changed since the run: stale, not "not checked yet".
+    *app.document_state.pcb_revisions.entry(path).or_default() += 1;
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    assert_eq!(
+        findings_reason(&app, id, "sig_a"),
+        Some(ids::RULES_BLANK_STALE)
+    );
+    let _ = app.view_rules_tab(id);
+}
+
+fn tab_key() -> iced::keyboard::Event {
+    let key = iced::keyboard::Key::Named(iced::keyboard::key::Named::Tab);
+    iced::keyboard::Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+        location: iced::keyboard::Location::Standard,
+        modifiers: iced::keyboard::Modifiers::default(),
+        text: None,
+        repeat: false,
+    }
+}
+
+fn is_drawing_key(message: Option<&Message>) -> bool {
+    matches!(
+        message,
+        Some(Message::Project(ProjectMsg::Rules(
+            RulesTabMsg::PreviewActed { .. }
+        )))
+    )
+}
+
+/// A drawing key goes to the drawing of the Rules tab the window shows:
+/// the main window's, never from a key typed in another window.
+#[test]
+fn a_drawing_key_follows_the_window_that_shows_the_rules_tab() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    select_sig_b(&mut app, id);
+    assert!(rules_tab(&app, id).drawing_target.is_some(), "a drawing");
+    send(
+        &mut app,
+        RulesTabMsg::PreviewActed {
+            project_id: id,
+            msg: super::drawing::PreviewMsg::Labels(
+                signex_widgets::dimension_label::DimensionLabelMessage::LabelPressed(0),
+            ),
+        },
+    );
+    let main = app.ui_state.main_window_id.expect("the main window");
+    assert!(is_drawing_key(
+        app.route_key_for_test(main, &tab_key()).as_ref()
+    ));
+
+    let undocked = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        undocked,
+        crate::app::state::WindowKind::UndockedTab {
+            path: dir.path().join("top.snxsch"),
+            title: "top".to_string(),
+        },
+    );
+    assert!(
+        !is_drawing_key(app.route_key_for_test(undocked, &tab_key()).as_ref()),
+        "a key typed in a schematic window is not the main window's drawing's"
+    );
+}
+
+/// A rebuild of the rows keeps the selected cell on its row, so its
+/// drawing stays and a value set on the drawing is still written.
+#[test]
+fn a_row_rebuild_keeps_the_selected_cell_and_its_drawing() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    select_sig_b(&mut app, id);
+    let sig = RowRef::Net("SIG".into());
+    let before = grid(&app, id).view.selected().expect("selected");
+    // A class rule adds the HV row ahead of SIG: the rows are laid out
+    // again and SIG's row id moves.
+    answer(
+        &mut app,
+        "rules_add",
+        &["kind=clearance", "values=0.5mm", "scope=class == \"HV\""],
+    );
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    let grid_now = grid(&app, id);
+    assert!(grid_now.rows().contains(&RowRef::Class("HV".into())));
+    let after = grid_now.view.selected().expect("still selected");
+    assert_eq!(grid_now.row(after.row), Some(&sig), "the same row");
+    assert_eq!(after.column, before.column, "the same column");
+    assert_ne!(after.row, before.row, "the row moved");
+    assert!(
+        rules_tab(&app, id).drawing_target.is_some(),
+        "the drawing stays"
+    );
+
+    for step in [
+        signex_widgets::dimension_label::DimensionLabelMessage::LabelPressed(0),
+        signex_widgets::dimension_label::DimensionLabelMessage::DraftEdited("0.45".into()),
+        signex_widgets::dimension_label::DimensionLabelMessage::DraftSubmitted,
+    ] {
+        send(
+            &mut app,
+            RulesTabMsg::PreviewActed {
+                project_id: id,
+                msg: super::drawing::PreviewMsg::Labels(step),
+            },
+        );
+    }
+    let text = dsl(&app).expect("stored");
+    assert!(
+        text.contains("rule sig_b on clearance when net == \"SIG\" require clearance >= 0.45mm"),
+        "the drawing's value reached sig_b: {text}"
+    );
+}
+
+/// A cell press names the cell's own rule in the detail, or none: never
+/// the rule of the cell selected before.
+#[test]
+fn a_cell_with_no_rule_clears_the_detail_rule() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    select_sig_b(&mut app, id);
+    let empty = cell(&app, id, &RowRef::All, "clearance_min");
+    grid_msg(&mut app, id, GridMessage::CellPressed(empty));
+    assert_eq!(rules_tab(&app, id).selected, None, "All sets no clearance");
+}
+
+/// A value set on the drawing for a column this grid does not show is
+/// not written into the selected column.
+#[test]
+fn a_drawing_value_of_a_column_off_this_grid_writes_nothing() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as L;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    select_sig_b(&mut app, id);
+    let before = undo_steps(&app, id);
+    // A hole drawing on the Clearance grid, which has no hole column.
+    app.rules_tab_mut(id).drawing_target = Some(super::drawing::PreviewTarget::Rule {
+        kind: RuleKind::Hole,
+        values: vec![(LimitField::MinHole, 0.3)],
+        caption: String::new(),
+    });
+    for step in [
+        L::LabelPressed(0),
+        L::DraftEdited("0.5".into()),
+        L::DraftSubmitted,
+    ] {
+        let _ = app.act_on_rules_drawing(id, super::drawing::PreviewMsg::Labels(step));
+    }
+    assert_eq!(dsl(&app).as_deref(), Some(TEXT), "nothing written");
+    assert_eq!(undo_steps(&app, id), before);
+}
+
+/// A hand-edited set use with extra spaces still names its row.
+#[test]
+fn a_set_use_with_extra_spaces_still_names_its_row() {
+    let set = signex_drc_dsl::table::sets::new_set("min_clearance=0.8mm", None).unwrap();
+    let (_, mut set) =
+        signex_drc_dsl::table::sets::apply_set("", "hv", &set, "class == \"HV\"").unwrap();
+    set.uses[0].scope = "  class  ==   \"HV\" ".into();
+    let sets = std::collections::BTreeMap::from([("hv".to_string(), set)]);
+    assert_eq!(
+        super::grid::sets_on(&RowRef::Class("HV".into()), &sets),
+        ["hv".to_string()]
+    );
+    assert!(super::grid::sets_on(&RowRef::Class("LV".into()), &sets).is_empty());
+}
+
+/// After the rows are laid out again, the reopened editor holds the
+/// cell's own text, so clearing it and pressing Enter resets the cell.
+#[test]
+fn a_rebuild_keeps_the_editor_opening_text_so_a_clear_resets() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    let sig = cell(&app, id, &RowRef::Net("SIG".into()), "clearance_min");
+    grid_msg(&mut app, id, GridMessage::CellPressed(sig));
+    grid_msg(&mut app, id, GridMessage::EditTextChanged("0.5".into()));
+    answer(
+        &mut app,
+        "rules_add",
+        &["kind=clearance", "values=0.5mm", "scope=class == \"HV\""],
+    );
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    let edit = grid(&app, id).view.edit().cloned().expect("still typing");
+    assert_eq!(edit.text, "0.5", "the typed text is kept");
+    assert!(!edit.opened.is_empty(), "opened with the cell's own value");
+    grid_msg(&mut app, id, GridMessage::EditTextChanged(String::new()));
+    grid_msg(&mut app, id, GridMessage::EditSubmitted);
+    let text = dsl(&app).expect("stored");
+    assert!(!text.contains("rule sig_b"), "the cell was reset: {text}");
+    assert!(
+        !text.contains("rule sig_a"),
+        "both SIG clearance rules: {text}"
+    );
+}
+
+/// The DRC panel's Rule link opens the Rules tab on the rule's domain with
+/// its cell selected; a base rule link opens the domain of its limit.
+#[test]
+fn the_drc_rule_link_lands_on_the_rule_and_its_domain() {
+    use crate::dock::DockMessage;
+    use crate::panels::{BaseRule, DrcPanelMsg, PanelMsg};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    let task = app.handle_pcb_drc_requested();
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    let rule = app
+        .pcb_drc_panel()
+        .expect("the board in view")
+        .rows
+        .into_iter()
+        .find(|row| row.rule.ends_with("sig_b"))
+        .expect("sig_b has findings")
+        .rule;
+    let drc = |app: &mut Signex, msg| {
+        let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::Drc(msg))));
+    };
+    drc(&mut app, DrcPanelMsg::RuleOpened(rule));
+    assert_eq!(app.rules_tab_in_window(true), Some(id));
+    let tab = rules_tab(&app, id);
+    assert_eq!(tab.grid.domain(), Domain::Clearance);
+    assert_eq!(tab.selected.as_deref(), Some("sig_b"));
+    let at = tab.grid.view.selected().expect("its cell is selected");
+    assert_eq!(tab.grid.row(at.row), Some(&RowRef::Net("SIG".into())));
+    assert_eq!(Some(at.column), tab.grid.column_named("clearance_min"));
+    assert!(tab.grid.view.edit().is_none(), "selected, not typed in");
+    assert!(tab.drawing_target.is_some(), "the rule's drawing");
+
+    drc(&mut app, DrcPanelMsg::BaseRuleOpened(BaseRule::TrackWidth));
+    assert_eq!(rules_tab(&app, id).grid.domain(), Domain::Physical);
+}
+
+/// `rules_list` names each rule's domain by its first limit's grid domain.
+#[test]
+fn rules_list_names_the_grid_domain_of_each_rule() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _id, _) = app_with_board(&dir);
+    store(
+        &mut app,
+        "rule gap on clearance require clearance >= 0.2mm then error
+rule tr on track require width >= 0.15mm then error
+rule ed on edge require clearance >= 0.3mm then error
+rule ho on hole require diameter >= 0.2mm then error
+rule sk on silk require pad_clearance >= 0.1mm then error
+rule sl on mask require sliver >= 0.1mm then error
+rule mx on mask require expansion >= 0.05mm then error
+rule cy on courtyard require spacing >= 0.2mm then error
+",
+    );
+    let list = answer(&mut app, "rules_list", &[]);
+    let domains: Vec<(&str, &str)> = list["rules"]
+        .as_array()
+        .expect("rules")
+        .iter()
+        .map(|r| (r["name"].as_str().unwrap(), r["domain"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        domains,
+        [
+            ("gap", "clearance"),
+            ("tr", "physical"),
+            ("ed", "manufacturing"),
+            ("ho", "manufacturing"),
+            ("sk", "manufacturing"),
+            ("sl", "manufacturing"),
+            ("mx", "mask"),
+            ("cy", "placement"),
+        ]
+    );
+}
+
+/// A mask rule's link opens Mask, where its expansion has a column but its
+/// sliver does not: the expansion cell is selected, not the first limit's.
+#[test]
+fn a_mask_rule_link_selects_its_expansion_cell_on_the_mask_grid() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    store(
+        &mut app,
+        "rule mk on mask require sliver >= 0.1mm and expansion >= 0.05mm then error\n",
+    );
+    open(&mut app);
+    pick(&mut app, id, Domain::Mask);
+    let task = app.select_rules_rule(id, "mk".into());
+    assert_eq!(task.units(), 0, "selected, not opened: nothing to focus");
+    let tab = rules_tab(&app, id);
+    assert_eq!(tab.grid.domain(), Domain::Mask);
+    let at = tab.grid.view.selected().expect("a cell is selected");
+    assert_eq!(tab.grid.row(at.row), Some(&RowRef::All));
+    assert_eq!(
+        tab.grid.column(at.column).and_then(|c| c.field),
+        Some(LimitField::MinMaskExpansion)
+    );
+    assert_eq!(tab.selected.as_deref(), Some("mk"));
+    assert!(tab.grid.view.edit().is_none());
 }

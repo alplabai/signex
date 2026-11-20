@@ -3,13 +3,16 @@
 //! Draws the header, dispatches to the per-kind builder (`symbol`,
 //! `symbol_field`, `label`, `text_note`, `power_port`, `placed_kinds`, plus the
 //! `drawing` and `child_sheet` surfaces), then the shared wire Style and
-//! Lock sections and the status bar.
+//! State sections and the status bar. Every placed object keeps one section
+//! order: Location, Properties, (Net, Net Parameters), Style, State last.
 
 use super::super::*;
 use super::rows::PanelStyle;
+use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use signex_i18n::{ids, t};
+use signex_i18n::{MessageId, ids, t};
+use signex_types::schematic::{SelectedItem, SelectedKind, WireWidthPreset};
 
 #[cfg(test)]
 use super::rows::{h_align_from_row, justify_h_row, justify_v_row, rotation_degrees};
@@ -25,7 +28,6 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     border_c: Color,
 ) -> Element<'a, PanelMsg> {
     let palette = PanelPalette::from_tokens(&ctx.tokens);
-    let PanelPalette { panel_bg, .. } = palette;
     let st = PanelStyle {
         muted,
         primary,
@@ -52,59 +54,69 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     };
 
     // ── Editable properties based on element type ──
-    // Power ports get their own Altium-style panel; regular symbols keep the
-    // existing designator/value/footprint layout.
+    // Power ports get their own panel; regular symbols keep the existing
+    // designator/value/footprint layout.
     let is_power_port = elem_type == "Power Port";
-    let is_placed_part =
-        !is_power_port && selected_kind == Some(signex_types::schematic::SelectedKind::Symbol);
+    let is_placed_part = !is_power_port && selected_kind == Some(SelectedKind::Symbol);
 
     // ── Header ──
-    col = col.push(super::header::selection_header(
-        ctx,
-        elem_type,
-        is_placed_part,
-        &get("Description"),
-        primary,
-    ));
+    let header = match kind_title(elem_type, selected_kind, is_power_port) {
+        Some(title) => {
+            let line = match selected_kind {
+                _ if is_power_port => get("Value"),
+                Some(SelectedKind::Label) => get("Text"),
+                _ => String::new(),
+            };
+            titled_header(ctx, title, line, primary)
+        }
+        None => super::header::selection_header(
+            ctx,
+            elem_type,
+            is_placed_part,
+            &get("Description"),
+            primary,
+        ),
+    };
+    col = col.push(header);
     col = col.push(thin_sep(border_c));
 
     if is_power_port && let Some(id) = uuid {
         col = super::power_port::push_power_port_sections(col, ctx, id, st);
+        col = push_status_bar(col, ctx, muted, border_c);
         return scrollable(col).width(Length::Fill).boxed();
     }
 
     match selected_kind {
-        Some(signex_types::schematic::SelectedKind::Symbol) => {
+        Some(SelectedKind::Symbol) => {
             col = super::symbol::push_symbol_sections(col, ctx, uuid, st);
         }
-        Some(signex_types::schematic::SelectedKind::SymbolRefField)
-        | Some(signex_types::schematic::SelectedKind::SymbolValField) => {
+        Some(SelectedKind::SymbolRefField) | Some(SelectedKind::SymbolValField) => {
             col = super::symbol_field::push_symbol_field_sections(col, ctx, uuid, st);
         }
-        Some(signex_types::schematic::SelectedKind::Label) => {
+        Some(SelectedKind::Label) => {
             col = super::label::push_label_sections(col, ctx, uuid, st);
         }
-        Some(signex_types::schematic::SelectedKind::TextNote) => {
+        Some(SelectedKind::TextNote) => {
             col = super::text_note::push_text_note_sections(col, ctx, uuid, st);
         }
-        Some(signex_types::schematic::SelectedKind::Drawing) => {
+        Some(SelectedKind::Drawing) => {
             col = col.push(view_drawing_properties(ctx, muted, primary, border_c));
         }
-        Some(signex_types::schematic::SelectedKind::ChildSheet) => {
+        Some(SelectedKind::ChildSheet) => {
             col = col.push(view_child_sheet_properties(ctx, muted, primary, border_c));
         }
         Some(
-            signex_types::schematic::SelectedKind::Wire
-            | signex_types::schematic::SelectedKind::Bus
-            | signex_types::schematic::SelectedKind::BusEntry
-            | signex_types::schematic::SelectedKind::Junction
-            | signex_types::schematic::SelectedKind::NoConnect
-            | signex_types::schematic::SelectedKind::SheetPin,
+            SelectedKind::Wire
+            | SelectedKind::Bus
+            | SelectedKind::BusEntry
+            | SelectedKind::Junction
+            | SelectedKind::NoConnect
+            | SelectedKind::SheetPin,
         )
         | None => {
             col = super::placed_kinds::push_placed_kind_sections(col, ctx, st);
         }
-        Some(signex_types::schematic::SelectedKind::Directive) => {
+        Some(SelectedKind::Directive) => {
             col = super::directive::push_directive_sections(col, ctx, uuid, st);
         }
         Some(signex_types::schematic::SelectedKind::NoErcDirective) => {
@@ -112,7 +124,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         }
     }
 
-    // ── Wire style ──: width preset and own colour, undoable.
+    // ── Style ──: width preset and own colour, undoable.
     if let (Some(id), Some((width, color))) = (uuid, ctx.selected_wire_style) {
         let picker = ctx.wire_color_picker;
         col = col.push(
@@ -124,12 +136,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     Column::new()
                         .spacing(0)
                         .width(Length::Fill)
-                        .push(crate::panels::wire_width_row(
-                            width,
-                            move |preset| PanelMsg::EditWireWidth(id, preset),
-                            muted,
-                            &ctx.i18n,
-                        ))
+                        .push(wire_width_grid(id, width, st, &ctx.i18n))
                         .push(crate::panels::wire_color_row(
                             color,
                             picker,
@@ -144,57 +151,187 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
         );
     }
 
-    // ── Lock ── (#1573): wires, labels, text notes and drawings.
+    // ── State ── (#1573): wires, labels, text notes and drawings. A bus has
+    // no lock in the model.
     if let (Some(id), Some(kind)) = (uuid, selected_kind)
         && matches!(
             kind,
-            signex_types::schematic::SelectedKind::Wire
-                | signex_types::schematic::SelectedKind::Label
-                | signex_types::schematic::SelectedKind::TextNote
-                | signex_types::schematic::SelectedKind::Drawing
+            SelectedKind::Wire
+                | SelectedKind::Label
+                | SelectedKind::TextNote
+                | SelectedKind::Drawing
         )
     {
         let locked = get("Locked") == "Yes";
-        let item = signex_types::schematic::SelectedItem::new(id, kind);
-        col = col.push(
-            ctx.collapsible(
-                "sel_state",
-                ids::PROPERTIES_SECTION_STATE,
-                &ctx.collapsed_sections,
-                move || {
-                    Column::new()
-                        .spacing(0)
-                        .width(Length::Fill)
-                        .push(form_check_row(
-                            t!(ctx.i18n, ids::PROPERTIES_LOCKED),
-                            locked,
-                            PanelMsg::ToggleItemLocked(item),
-                            muted,
-                            panel_bg,
-                        ))
-                },
-            )
-            .boxed(),
-        );
+        let item = SelectedItem::new(id, kind);
+        col = push_state_section(col, ctx, locked, PanelMsg::ToggleItemLocked(item), muted);
     }
 
-    // ── Status bar ──
-    col = col.push(Space::new().height(8.0).boxed());
+    col = push_status_bar(col, ctx, muted, border_c);
+    scrollable(col).width(Length::Fill).boxed()
+}
+
+/// The header title of the kinds that name themselves from the catalog: a
+/// wire, a bus, a label or port, a power port and a text note. `None` keeps
+/// the shared header (a part, a drawing, a sheet symbol, …).
+fn kind_title(
+    elem_type: &str,
+    kind: Option<SelectedKind>,
+    is_power_port: bool,
+) -> Option<MessageId> {
+    if is_power_port {
+        return Some(ids::PROPERTIES_KIND_POWER_PORT);
+    }
+    match kind? {
+        SelectedKind::Wire => Some(ids::PROPERTIES_KIND_WIRE),
+        SelectedKind::Bus => Some(ids::PROPERTIES_KIND_BUS),
+        SelectedKind::TextNote => Some(ids::PROPERTIES_KIND_TEXT_NOTE),
+        // The engine names a label by its type (`Global Label`, …).
+        SelectedKind::Label => Some(match elem_type {
+            "Global Label" => ids::PROPERTIES_KIND_GLOBAL_PORT,
+            "Hierarchical Label" => ids::PROPERTIES_KIND_HIERARCHICAL_PORT,
+            _ => ids::PROPERTIES_KIND_NET_LABEL,
+        }),
+        _ => None,
+    }
+}
+
+/// The header row: the kind's title and, muted beside it, what names this
+/// one (a label's net, a power port's name).
+fn titled_header<'a>(
+    ctx: &PanelContext,
+    title: MessageId,
+    line: String,
+    primary: Color,
+) -> Element<'a, PanelMsg> {
+    let ink3 = resolve(&ctx.tokens).ink3;
+    let mut header = iced::widget::Row::<Element<'a, PanelMsg>>::new()
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center)
+        .push(
+            text(t!(ctx.i18n, title))
+                .size(TS.body)
+                .color(primary)
+                .font(iced::Font {
+                    weight: iced::font::Weight::Semibold,
+                    ..iced::Font::DEFAULT
+                })
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        );
+    if !line.trim().is_empty() {
+        header = header.push(
+            text(signex_i18n::UserText::new(line))
+                .size(TS.dense)
+                .color(ink3)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .ellipsis(iced::widget::text::Ellipsis::End)
+                .width(Length::Fill)
+                .boxed(),
+        );
+    }
+    container(header)
+        .padding([SP.m, SP.l])
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The State section, last of every placed object: the Locked check.
+pub(super) fn push_state_section<'a>(
+    col: Column<Element<'a, PanelMsg>>,
+    ctx: &'a PanelContext,
+    locked: bool,
+    toggled: PanelMsg,
+    muted: Color,
+) -> Column<Element<'a, PanelMsg>> {
+    let panel_bg = PanelPalette::from_tokens(&ctx.tokens).panel_bg;
+    col.push(
+        ctx.collapsible(
+            "sel_state",
+            ids::PROPERTIES_SECTION_STATE,
+            &ctx.collapsed_sections,
+            move || {
+                Column::new()
+                    .spacing(0)
+                    .width(Length::Fill)
+                    .push(form_check_row(
+                        t!(ctx.i18n, ids::PROPERTIES_LOCKED),
+                        locked,
+                        toggled,
+                        muted,
+                        panel_bg,
+                    ))
+            },
+        )
+        .boxed(),
+    )
+}
+
+/// The footer: "1 object selected".
+fn push_status_bar<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    ctx: &'a PanelContext,
+    muted: Color,
+    border_c: Color,
+) -> Column<Element<'a, PanelMsg>> {
+    col = col.push(Space::new().height(SP.m).boxed());
     col = col.push(thin_sep(border_c));
-    col = col.push(
+    col.push(
         container(
-            text(signex_i18n::t!(
-                ctx.i18n,
-                signex_i18n::ids::PANELS_PROPERTIES_ONE_OBJECT_SELECTED
-            ))
-            .size(TS.caption)
-            .color(muted),
+            text(t!(ctx.i18n, ids::PANELS_PROPERTIES_ONE_OBJECT_SELECTED))
+                .size(TS.caption)
+                .color(muted),
         )
         .padding([SP.s, SP.m])
         .boxed(),
-    );
+    )
+}
 
-    scrollable(col).width(Length::Fill).boxed()
+/// The Width presets in their 2 x 2 order, each with whether it is the
+/// wire's: the data the segmented grid draws.
+pub(super) fn wire_width_cells(current: WireWidthPreset) -> [[(WireWidthPreset, bool); 2]; 2] {
+    let [a, b, c, d] = WireWidthPreset::ALL;
+    let cell = |preset| (preset, preset == current);
+    [[cell(a), cell(b)], [cell(c), cell(d)]]
+}
+
+/// The Width row of a selected wire: the four presets as a 2 x 2 segmented
+/// control, so no label is cut off.
+fn wire_width_grid<'a>(
+    id: uuid::Uuid,
+    current: WireWidthPreset,
+    st: PanelStyle,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, PanelMsg> {
+    let mut grid = Column::new().spacing(SP.xs).width(Length::Fill);
+    for pair in wire_width_cells(current) {
+        let mut line = iced::widget::Row::new().spacing(SP.xs).width(Length::Fill);
+        for (preset, active) in pair {
+            line = line.push(seg_btn(
+                t!(i18n, super::super::wire_style_rows::preset_label(preset)),
+                active,
+                PanelMsg::EditWireWidth(id, preset),
+                st.palette.input_bg,
+                st.primary,
+                st.muted,
+            ));
+        }
+        grid = grid.push(line);
+    }
+    container(
+        row![
+            property_label(t!(i18n, ids::PROPERTIES_WIRE_WIDTH), st.muted),
+            container(grid)
+                .padding(SP.xs)
+                .style(crate::panels::form_look::segmented_frame)
+                .width(Length::FillPortion(PROPERTY_CONTROL_PORTION)),
+        ]
+        .spacing(SP.m)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .boxed()
 }
 
 #[cfg(test)]
@@ -428,16 +565,60 @@ mod tests {
         ]
     }
 
-    /// #2024 - the symbol-field and text-note views show the justification
-    /// rows under the keys the engine writes.
+    /// #2024 - the symbol-field view shows the justification rows under the
+    /// keys the engine writes. A text note picks its justification on
+    /// segmented rows instead (mockup row 47); `text_note::tests` reads them.
     #[test]
-    fn the_field_and_note_views_show_the_justification_rows() {
+    fn the_field_view_shows_the_justification_rows() {
         use signex_types::schematic::SelectedKind;
-        for kind in [SelectedKind::SymbolRefField, SelectedKind::TextNote] {
-            let texts = shown_texts(kind, justify_info());
-            for want in ["Lefty", "Topsy"] {
-                assert!(texts.iter().any(|t| t == want), "{kind:?} lacks {want}");
-            }
+        let texts = shown_texts(SelectedKind::SymbolRefField, justify_info());
+        for want in ["Lefty", "Topsy"] {
+            assert!(texts.iter().any(|t| t == want), "lacks {want}");
         }
+    }
+
+    /// The Width grid marks exactly the wire's preset, in the 2 x 2 order.
+    #[test]
+    fn the_width_grid_marks_the_wires_preset() {
+        use signex_types::schematic::WireWidthPreset;
+        let cells = super::wire_width_cells(WireWidthPreset::Medium);
+        let order: Vec<WireWidthPreset> = cells.iter().flatten().map(|(p, _)| *p).collect();
+        assert_eq!(order, WireWidthPreset::ALL);
+        let active: Vec<WireWidthPreset> = (cells.iter().flatten())
+            .filter(|(_, on)| *on)
+            .map(|(p, _)| *p)
+            .collect();
+        assert_eq!(active, [WireWidthPreset::Medium]);
+    }
+
+    /// The single-object views end in the "1 object selected" footer, a
+    /// power port too, and a power port shows the State ▸ Locked row.
+    #[test]
+    fn a_power_port_ends_in_state_and_the_footer() {
+        use signex_types::schematic::SelectedKind;
+        let texts = shown_texts(
+            SelectedKind::Symbol,
+            vec![
+                ("Type".to_string(), "Power Port".to_string()),
+                ("Value".to_string(), "+3V3".to_string()),
+                ("Library ID".to_string(), "power:bar".to_string()),
+                ("Locked".to_string(), "No".to_string()),
+            ],
+        );
+        let texts: Vec<String> = (texts.into_iter())
+            .map(|t| t.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        let at = |want: &str| texts.iter().position(|t| t == want);
+        assert!(
+            at("Power Port").is_some() && at("+3V3").is_some(),
+            "{texts:?}"
+        );
+        let (state, locked, footer) = (at("STATE"), at("Locked"), at("1 object selected"));
+        assert!(
+            state.is_some() && state < locked && locked < footer,
+            "{texts:?}"
+        );
+        let net_parameters = at("NET PARAMETERS");
+        assert!(net_parameters.is_some_and(|n| Some(n) < state), "{texts:?}");
     }
 }

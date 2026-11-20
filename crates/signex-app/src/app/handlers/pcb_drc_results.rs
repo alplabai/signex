@@ -8,6 +8,7 @@ use std::path::Path;
 
 use iced::Task;
 use serde_json::{Value, json};
+use signex_drc_dsl::table::catalog::Domain;
 use signex_engine::pcb::BoardCommand;
 use signex_i18n::{ids, t};
 use signex_types::format::pcb_layer_token;
@@ -160,32 +161,20 @@ impl Signex {
 
     /// Open the Rules tab of the board's project on `domain`, with `rule`
     /// (a written rule's name) selected.
-    fn open_rules_at(
-        &mut self,
-        domain: crate::app::RulesDomain,
-        rule: Option<String>,
-    ) -> Task<Message> {
+    fn open_rules_at(&mut self, domain: Domain, rule: Option<String>) -> Task<Message> {
         let Some(project_id) = self.rules_project_for(None) else {
             crate::diagnostics::log_info("Rules: no project is open");
             return Task::none();
         };
         self.open_rules_tab(project_id);
-        let mut tasks =
-            vec![
-                self.dispatch_rules_tab_message(crate::app::RulesTabMsg::DomainPicked {
-                    project_id,
-                    domain,
-                }),
-            ];
-        if let Some(rule) = rule {
-            tasks.push(
-                self.dispatch_rules_tab_message(crate::app::RulesTabMsg::RowSelected {
-                    project_id,
-                    rule,
-                }),
-            );
+        let task = self.dispatch_rules_tab_message(crate::app::RulesTabMsg::DomainPicked {
+            project_id,
+            domain,
+        });
+        match rule {
+            Some(rule) => Task::batch([task, self.select_rules_rule(project_id, rule)]),
+            None => task,
         }
-        Task::batch(tasks)
     }
 
     /// A group's Rule link: the domain of what its rows break, and the rule
@@ -195,7 +184,7 @@ impl Signex {
             .pcb_drc_panel()
             .and_then(|panel| panel.rows.into_iter().find(|row| row.rule == rule))
             .map(|row| row.kind);
-        let domain = kind.map_or(crate::app::RulesDomain::Clearance, rules_domain_of);
+        let domain = kind.map_or(Domain::Clearance, rules_domain_of);
         let name = rule
             .strip_prefix(signex_drc_dsl::table::RULE_ID_PREFIX)
             .map(str::to_string);
@@ -494,17 +483,12 @@ fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
     }
 }
 
-/// The Rules tab domain that holds the rule a violation kind breaks.
-fn rules_domain_of(kind: signex_drc::ViolationKind) -> crate::app::RulesDomain {
-    use crate::app::RulesDomain as D;
-    use signex_drc::ViolationKind as K;
-    match kind {
-        K::Clearance | K::Short | K::Unconnected | K::Keepout | K::EdgeClearance => D::Clearance,
-        K::TrackWidth | K::ViaDiameter | K::ViaDrill | K::ViaInPad => D::Routing,
-        K::HoleSize | K::AnnularRing | K::HoleToHole => D::Holes,
-        K::MaskSliver | K::MaskExpansion | K::PasteExpansion => D::Mask,
-        K::SilkToPad | K::SilkToSilk | K::CourtyardOverlap => D::Assembly,
-    }
+/// The Rules tab domain that holds the rule a violation kind breaks: the
+/// catalog domain holding most of the limits it checks (ties to the
+/// first's); Clearance for a kind no written limit sets (an unconnected
+/// link, a keepout).
+pub(crate) fn rules_domain_of(kind: signex_drc::ViolationKind) -> Domain {
+    signex_drc_dsl::table::catalog::domain_of_limits(kind.limits()).unwrap_or(Domain::Clearance)
 }
 
 /// One shown row: its key, rule, severity, nets, place, layers and waiver.

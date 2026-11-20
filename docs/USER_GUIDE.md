@@ -243,9 +243,19 @@ attached:
 - **Rotate and mirror** it with the keys that rotate and mirror a selection
   (section 13: `Space` rotates in the default profile; `X` and `Y` mirror). They
   turn the part on the cursor, not whatever is selected on the sheet.
-- Press `Tab` to open the pre-placement properties in the Properties panel:
-  the value, the designator and the rotation. Placement pauses until you press
-  **Resume**.
+- Press `Tab` to pause placement and open the pre-placement properties in the
+  Properties panel: the value, the designator and the rotation. **Resume**,
+  `Enter` or the form's **OK** goes on placing with your edits. `Esc` goes on
+  placing without them: the part keeps the values it had when you pressed
+  `Tab`, and stays on the cursor. A second `Esc` lets go of it.
+- The Position X and Y in that form follow the cursor. Type a position (in
+  the panel's unit; Y counts from the sheet's page origin) and press **OK** or
+  `Enter`: the next object is placed there without a click. A field that is
+  not a number is outlined and **OK** places nothing until it is fixed or
+  cleared. `Esc` drops a typed position with the other edits and places
+  nothing. The wire tool takes a Start and an End and places one straight
+  wire between them. A typed position is used once; the object after it
+  starts from the cursor again. Every placement tool has this form.
 - Click to place it. One click is one **Undo** step. The part stays on the
   cursor, and each further click places another copy with the next free
   designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
@@ -312,6 +322,16 @@ version. A group of more than 60 items follows the cursor as an outline.
 **Edit ▸ Paste Special** skips the cursor and places the copy at once, to the
 right of the sheet's content. A sheet written by a newer Signex is read-only in
 this build, so nothing is pasted into it.
+
+**Paste array** (from the command palette, `Ctrl+Shift+P`) places many copies
+of what you copied in a row or grid. Set **Copies** (up to 1000) and the X and
+Y **Spacing**, typed in the display unit; copy *k* sits *k* spacings from the
+copied original. Under **Numbering**, **Count up label numbers** moves the
+numbers in labels by the **Text increment step** per copy, and **Designators**
+chooses what the copies' parts are numbered, as the **Designators on paste**
+preference does. The preview draws the first copies on the sheet grid, with the
+spacing marked. **OK** places every copy as one **Undo** step. The dialog closes
+if you switch to another sheet.
 
 ## 6. Wire
 
@@ -381,6 +401,24 @@ Classic profile has `U` for the designator, `V` for the value and `F` for the
 footprint. A part's footprint has no text on the sheet, so its editor opens at
 the part. A command with nothing to act on says so in the Messages panel.
 
+### Editing a wire or a text note in Properties
+
+Select one wire or bus and its **Location** shows **Start** and **End**, each
+an X / Y row in the panel's unit (Y counts from the sheet's page origin), and
+the **Length** they make. Type a value and press `Enter`: Start moves only the
+start point and End moves only the end point. The other end stays where it is,
+wires attached at the moved end do not follow, and a straight wire may turn.
+Each value is one undo step, and Length follows. A new end on another wire
+gets a junction, as a drawn wire does.
+
+Select one text note and its **Text** box takes several lines (`Enter` starts
+a new line). What you type is applied as one undo step when the box loses
+focus (`Esc`, or a click outside it), on `Ctrl+Enter`, or when you select
+something else. Moving the pointer out of the box applies nothing. Typed text
+is never lost: a save, a tab switch or closing the tab applies it to its own
+sheet first. **Rotation** (0°, 90°, 180°, 270°) and **Justify H** / **Justify
+V** are switches; a click sets the value at once, one undo step each.
+
 ### Editing several objects at once
 
 With more than one object selected, Properties lists the fields they share, a
@@ -388,7 +426,9 @@ group each for parts, labels and wires. A value the objects disagree on reads
 `<mixed>`. Type a new value and press `Enter` (or flip a checkbox) to set it on
 every object of that group in one undo step. Parts offer value, footprint, DNP,
 In BOM, On board and their custom parameters; labels size, justification and
-rotation (0, 90, 180 or 270); wires width. Label text is not edited in bulk,
+rotation (0, 90, 180 or 270); wires width, picked from the Smallest, Small,
+Medium and Large presets or typed as an Exact Width in the panel's unit. Label
+text is not edited in bulk,
 because giving labels one name would merge their nets. Value, footprint and
 parameter edits skip locked parts and the Messages panel says which; DNP, In BOM
 and On board apply to locked parts too. An empty parameter value removes that
@@ -439,6 +479,21 @@ A signal joins through the net label on its bus-entry wire, so each side needs
 its entry wires labelled. A group (`{SDA SCL}`) joins only a group with the same
 content. Still to come: a bus joined to another bus by geometry across sheets,
 and bus-aware rendering of the pin (see #1049).
+
+### Net colours
+
+The net colour palette (`F5` in the default profile, or **Net Color...** in the
+sheet's right-click menu) lists every net label name on the active sheet,
+coloured nets first, then by name. Type in **Filter nets** to narrow the list.
+Click a row to open its chooser: a swatch colours the wires and junctions of
+that net, **Clear** takes the colour off, and **Custom…** opens the colour
+picker (swatches, R / G / B, **Hex**, and the old and new colour side by side).
+**Use Color** colours the net on the sheet the picker was opened from; if
+another sheet is active by then, nothing changes and the Messages panel says
+so. **Clear all colours** at the foot of the palette clears the active sheet
+only. Each colour change is one **Undo** step and is saved with the sheet. A
+sheet written by a newer Signex is read-only in this build and keeps its
+colours.
 
 ## 8. Annotate
 
@@ -530,23 +585,43 @@ multi-sheet columns and the parameter-matching checkboxes).
 
 **Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Altium
 profile) search the text of labels, text notes, designators and values. The
-**Scope** row chooses how far the search reaches:
+**Find / Replace** switch in the dialog's header changes between the two in
+place. The pill inside the Find field counts the matches. The three toggles
+beside it choose how the text matches:
+
+- **Match case** (`Aa`): upper and lower case differ. Off, case is ignored.
+- **Whole word** (`ab`), on by default: a match may not touch a letter, digit
+  or `_` on either side, so `VOUT` does not find `VOUT_3V3` or `VOUT_SENSE`.
+  Turn it off to find text inside longer names.
+- **Regular expression** (`.*`): the Find text is a regular expression, and
+  the replacement may use its groups (`$1`, `${name}`). An invalid expression
+  marks the field and finds nothing. An expression is used as typed, spaces
+  included; plain Find text drops the spaces at its ends.
+
+The **Scope** switch chooses how far the search reaches:
 
 - **Sheet** searches the active sheet only.
 - **Project** searches every sheet of the project, including sheets you have
-  not opened. Results are grouped under the sheet they are on. A sheet that
-  cannot be read, or that was written by a newer Signex and is read-only in
-  this build, is not searched; the dialog says so and the Messages panel names
-  it.
+  not opened. A sheet that cannot be read, or that was written by a newer
+  Signex and is read-only in this build, is not searched; a warning line under
+  the results says so and the Messages panel names it.
 
-Click a result to open its sheet and zoom to the item. `F3` steps to the next
-result and `Shift+F3` to the previous one (in both profiles), wrapping at the
-ends. A sheet placed more than once shows one designator result per placement,
-labelled "placement 2 of 3".
+Results are grouped by kind (Net Label, Text Note, Designator, Value), each
+with its matches highlighted and its sheet in the right-hand column. Click a
+result to open its sheet and zoom to the item; the footer reads "Match 2 of 5".
+`F3` steps to the next result and `Shift+F3` to the previous one (in both
+profiles), wrapping at the ends. A sheet placed more than once shows one
+designator result per placement, labelled "placement 2 of 3".
+
+In Replace mode every result has an include box, all set at first, and shows
+what it becomes (`VOUT → VOUT_3V3`). The primary button counts the included
+results ("Replace 1 of 5") and replaces only those; a cleared row stays as it
+is. Changing the Find text, a toggle or the scope sets every box again.
+**Replace Current** replaces the selected result.
 
 **Replace Current** and **Replace All** replace only the matched text, not the
-whole field, and match without regard to case. In **Project** scope a Replace
-All is one undo step: `Ctrl+Z` on any of the changed sheets reverts every one of
+whole field. A Replace All is one undo step; in **Project** scope `Ctrl+Z` on
+any of the changed sheets reverts every one of
 them together. If one of those sheets was edited afterwards, the undo is
 refused and the Messages panel names the sheet; undo the newer edit first.
 
@@ -558,6 +633,18 @@ press Replace, never from the search results, so an edit made after the search
 is not overwritten with stale text. If you open, save or close a document, or close the
 project, while a project Replace is still reading the sheets, it is cancelled with a
 Messages line and changes nothing; run it again.
+
+### Find Similar Objects
+
+**Edit ▸ Find Similar Objects...** (`Shift+F`, or the right-click menu) starts
+from the object under the cursor, or the one selected object. The dialog lists
+its properties with the object's value for each, and a **Same** / **Any**
+choice: **Kind** starts at Same and the rest at Any, so at first every object
+of the same kind matches. A placed part reads as **Part**. **Current sheet**
+counts the matches on the sheet; **Whole project** also counts them on the
+project's other sheets, including closed ones. **Select N** selects the matches
+on the dialog's own sheet; matches elsewhere are only counted. Opened on a
+board, it searches that board.
 
 ### Search everywhere
 
@@ -720,26 +807,29 @@ saved to the `.snxprj` with `Ctrl+S`.
 
 A sheet's own parameters are in one list: click an empty spot of the sheet so
 the **Properties** panel shows **Document Options**, and open its
-**Parameters** tab. Each row shows its current value.
+**Parameters** tab. Each row shows its current value. Type in **Filter
+parameters** to show only the rows whose name holds that text; the **All**,
+**Parameters** and **Rules** chips carry their counts (a sheet has no rules
+yet, so **Rules** shows an empty card). Click a group's header to fold it.
 
-- **Title**, **Document No.**, **Revision**, **Date**, **Company**, **Drawn
-  By**, **Checked By**, **Approved By**, **Author**, **Engineer**,
-  **Organization** and **Address 1** to **Address 4** are the sheet's
-  title-block fields. Type a value and press `Enter` to apply it; each
-  applied field is one undo step, and the title block on the sheet shows it.
-  A field you leave empty is not saved. The name shows `(project)` while
-  the field is empty and takes the project's value (shown greyed in the
-  field), and `(overrides project)` while the sheet has its own. Clear the
-  field to fall back to the project's value.
+- The **Title block** group: **Title**, **Document No.**, **Revision**,
+  **Date**, **Company**, **Drawn By**, **Checked By**, **Approved By**,
+  **Author**, **Engineer**, **Organization** and **Address 1** to
+  **Address 4**. Type a value and press `Enter` to apply it; each applied
+  field is one undo step, and the title block on the sheet shows it. A field
+  you leave empty is not saved and reads *Not set*. While the sheet leaves a
+  field empty and the project has a value, the row shows the project's value
+  greyed with a **project** pill; typing a value overrides it for this sheet.
+  Clear the field to fall back to the project's value.
 - An empty **Date** with no project value shows today's date, greyed, and
   its name says `(today)`; nothing is saved for it, so it always shows the
   current day. Type a date to store it.
-- **Current Time**, **Current Date**, **Time**, **Document Full Path**,
-  **Document Name**, **Modified Date**, **Sheet Name**, **Sheet Number**,
-  **Sheet Count** and **Project Name** are read-only. The clock rows show
-  the time the panel was last refreshed, to the minute; **Modified Date** is
-  the date the sheet's file was last read from disk or saved. A row with no
-  value is empty.
+- The **Built-in** group is read-only: **Document Name**, **Sheet Name**,
+  **Sheet Number**, **Sheet Count**, **Project Name**, **Current Time**,
+  **Current Date**, **Time**, **Document Full Path** and **Modified Date**.
+  The clock rows show the time the panel was last refreshed, to the minute;
+  **Modified Date** is the date the sheet's file was last read from disk or
+  saved. A row with no value is empty.
 
 Every row name is also a special string you can type in any text, note or
 title block: `${Title}`, `${CompanyName}`, `${DrawnBy}`, `${Author}`,
@@ -747,18 +837,20 @@ title block: `${Title}`, `${CompanyName}`, `${DrawnBy}`, `${Author}`,
 `${ModifiedDate}`, `${DocumentFullPathAndName}`, `${DocumentName}` and
 so on. The names are matched exactly, before any variable of the same name.
 
-A sheet has its own variables too, under **Sheet Variables** in the same
-tab. Type a name, press **Add**, type the value and press `Enter`; **Remove**
-deletes a variable. A sheet variable replaces the project variable of the
-same name on that sheet only; it is saved in the `.snxsch`.
+A sheet has its own variables too, in the **Sheet variables** group of the
+same tab. Type a name, press **Add variable**, type the value and press
+`Enter`; the ✕ button deletes a variable. A sheet variable replaces the
+project variable of the same name on that sheet only; it is saved in the
+`.snxsch`.
 
 A value that starts with `=` is an expression: `= VCC / 2` with `VCC` set to
 `3.3V` shows `1.65V`. An expression may use other variables, units and the
 functions of the footprint parameters. The value you typed is what is saved;
-the result is what is drawn. A value that does not evaluate (an unknown name,
-or two variables that refer to each other) is drawn as typed, shows its error
-under the field, and is reported in the **Messages** panel when you press
-`Enter`. To start a plain value with `=`, type `==`.
+the result is what is drawn; in the Parameters list it shows in a pill beside
+the field. A value that does not evaluate (an unknown name, or two variables
+that refer to each other) is drawn as typed, shows `?` in the pill and its
+error under the field, and is reported in the **Messages** panel when you
+press `Enter`. To start a plain value with `=`, type `==`.
 
 A part's value and its fields take expressions too. A bare name is the
 part's own field first (`= Rbase * 2`), then a variable; `R1.Value` is the

@@ -26,6 +26,7 @@
 
 use super::input::InputTarget;
 use super::*;
+use crate::app::state::SheetPlacementPause;
 
 impl Signex {
     /// Resolve one Esc against the window it was typed in.
@@ -243,11 +244,15 @@ impl Signex {
             // falling through to `ToolEscape`, which would also clear the
             // selected pad. Any other footprint Esc keeps the tool-reset
             // behaviour.
-            let align_open = self
-                .document_state
-                .footprint_editors
-                .get(&path)
-                .is_some_and(|ed| ed.state.align_modal.is_some());
+            let editor = self.document_state.footprint_editors.get(&path);
+            let align_open = editor.is_some_and(|ed| ed.state.align_modal.is_some());
+            // A paused placement goes back to placing, after an open menu
+            // has closed (#2529).
+            let paused = editor
+                .is_some_and(|ed| ed.state.placement_paused && ed.state.context_menu.is_none());
+            if !align_open && paused {
+                return self.resume_placement_without_edits();
+            }
             let esc_msg = if align_open {
                 crate::library::messages::FootprintEditorMsg::AlignCancel
             } else {
@@ -304,12 +309,98 @@ impl Signex {
     /// window the Esc came from. Only the *visuals* are per-window, and
     /// `clear_transient_schematic_tool_state` sweeps all of them.
     fn escape_tool_reset(&mut self) -> Task<Message> {
+        // The first Esc of a paused placement resumes it; the next one
+        // leaves the tool (#2529).
+        if self.interaction_state.active_canvas().placement_paused {
+            return self.resume_placement_without_edits();
+        }
         if self.has_active_pcb() {
             self.clear_pcb_selection();
         }
         self.update(Message::Tool(crate::app::ToolMessage::SelectTool(
             crate::app::Tool::Select,
         )))
+    }
+
+    /// Tab pausing the footprint editor at `path`: keep the pad values it
+    /// paused with. Tab while paused resumes with the edits, so nothing is kept.
+    pub(super) fn note_footprint_pause(&mut self, path: &std::path::Path) {
+        let Some(editor) = self.document_state.footprint_editors.get(path) else {
+            return;
+        };
+        self.interaction_state.placement_pause =
+            (!editor.state.placement_paused).then(|| SheetPlacementPause::Footprint {
+                path: path.to_path_buf(),
+                pad_defaults: Box::new(editor.state.next_pad_defaults.clone()),
+            });
+    }
+
+    /// Esc while placement is paused: go on placing with the values the
+    /// pause began with. The panel edits made while paused are dropped, the
+    /// tool stays armed (#2529).
+    fn resume_placement_without_edits(&mut self) -> Task<Message> {
+        let undone = match self.interaction_state.placement_pause.take() {
+            Some(SheetPlacementPause::Sheet {
+                before,
+                at_pause,
+                reference_override,
+            }) => {
+                let undone = self.undo_pause_mirrors(at_pause.as_deref());
+                if let Some(session) = self.interaction_state.placement.as_mut() {
+                    session.reference_override = reference_override;
+                }
+                self.refresh_placement_reference();
+                self.document_state.panel_ctx.pre_placement = before.map(|form| *form);
+                undone
+            }
+            Some(SheetPlacementPause::Footprint { path, pad_defaults }) => {
+                if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
+                    editor.state.next_pad_defaults = *pad_defaults;
+                }
+                Task::none()
+            }
+            None => Task::none(),
+        };
+        let resumed = self.update(Message::Tool(crate::app::ToolMessage::ResumePlacement));
+        Task::batch([undone, resumed])
+    }
+
+    /// Put back what the paused form's edits mirrored onto the ghosts and
+    /// the part on the cursor: each field edited since `at_pause` is set
+    /// again to its value at the pause, through the form's own handler.
+    fn undo_pause_mirrors(
+        &mut self,
+        at_pause: Option<&crate::panels::PrePlacementData>,
+    ) -> Task<Message> {
+        use crate::panels::PanelMsg;
+        let (Some(base), Some(now)) = (at_pause, &self.document_state.panel_ctx.pre_placement)
+        else {
+            return Task::none();
+        };
+        let mut edits = Vec::new();
+        if now.label_text != base.label_text {
+            edits.push(PanelMsg::SetPrePlacementText(base.label_text.clone()));
+        }
+        if now.rotation != base.rotation {
+            edits.push(PanelMsg::SetPrePlacementRotation(base.rotation));
+        }
+        if now.font_size_pt != base.font_size_pt {
+            edits.push(PanelMsg::SetPrePlacementFontSize(base.font_size_pt));
+        }
+        // The justification grid's pick moves the ghost's anchor back too.
+        if now.justify_h != base.justify_h || now.justify_v != base.justify_v {
+            edits.push(PanelMsg::PrePlacementPosition(
+                crate::panels::PrePlacementPositionMsg::AnchorPicked(
+                    base.justify_h,
+                    base.justify_v,
+                ),
+            ));
+        }
+        let tasks: Vec<Task<Message>> = edits
+            .into_iter()
+            .map(|edit| self.update(Message::Dock(crate::dock::DockMessage::Panel(edit))))
+            .collect();
+        Task::batch(tasks)
     }
 }
 
@@ -817,6 +908,216 @@ mod tests {
             app.document_state.symbol_editors[&path].tool,
             SymbolTool::AddPin,
             "the modal rung claims the key; the editor behind it must not change"
+        );
+    }
+
+    // ── #2529: Esc while placement is paused ────────────────────────
+
+    fn esc(app: &mut Signex) {
+        let _task = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
+    }
+
+    fn panel(app: &mut Signex, msg: crate::panels::PanelMsg) {
+        let _task = app.update(Message::Dock(crate::dock::DockMessage::Panel(msg)));
+    }
+
+    fn tool(app: &mut Signex, msg: crate::app::ToolMessage) {
+        let _task = app.update(Message::Tool(msg));
+    }
+
+    fn wire_width(app: &Signex) -> Option<signex_types::schematic::WireWidthPreset> {
+        app.document_state
+            .panel_ctx
+            .pre_placement
+            .as_ref()
+            .map(|pp| pp.wire_width)
+    }
+
+    #[test]
+    fn esc_while_paused_resumes_placing_without_the_panel_edits() {
+        use crate::app::ToolMessage;
+        use crate::panels::PanelMsg;
+        use signex_types::schematic::WireWidthPreset;
+        let mut app = quiet_app();
+        app.interaction_state.current_tool = Tool::Wire;
+        // A first pause applied with Resume: its value is the one to keep.
+        tool(&mut app, ToolMessage::PrePlacementTab);
+        panel(
+            &mut app,
+            PanelMsg::SetPrePlacementWireWidth(WireWidthPreset::Large),
+        );
+        tool(&mut app, ToolMessage::ResumePlacement);
+        assert_eq!(wire_width(&app), Some(WireWidthPreset::Large));
+
+        // A second pause, edited and left with Esc.
+        tool(&mut app, ToolMessage::PrePlacementTab);
+        assert!(app.interaction_state.active_canvas().placement_paused);
+        panel(
+            &mut app,
+            PanelMsg::SetPrePlacementWireWidth(WireWidthPreset::Medium),
+        );
+        esc(&mut app);
+
+        assert!(
+            !app.interaction_state.active_canvas().placement_paused,
+            "the first Esc ends the pause"
+        );
+        assert_eq!(
+            app.interaction_state.current_tool,
+            Tool::Wire,
+            "and keeps the tool"
+        );
+        assert_eq!(
+            wire_width(&app),
+            Some(WireWidthPreset::Large),
+            "the edit made while paused is dropped"
+        );
+        assert!(app.interaction_state.placement_pause.is_none());
+
+        esc(&mut app);
+        assert_eq!(
+            app.interaction_state.current_tool,
+            Tool::Select,
+            "the second Esc leaves the tool"
+        );
+    }
+
+    #[test]
+    fn esc_after_a_first_pause_puts_back_no_form_at_all() {
+        use crate::app::ToolMessage;
+        use crate::panels::PanelMsg;
+        let mut app = quiet_app();
+        app.interaction_state.current_tool = Tool::Wire;
+        tool(&mut app, ToolMessage::PrePlacementTab);
+        panel(
+            &mut app,
+            PanelMsg::SetPrePlacementWireColor(Some(signex_types::theme::Color::new(
+                255, 0, 0, 255,
+            ))),
+        );
+        esc(&mut app);
+        assert!(
+            app.document_state.panel_ctx.pre_placement.is_none(),
+            "no form before the Tab, so none after the Esc: the tool defaults place"
+        );
+        assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    }
+
+    #[test]
+    fn resume_keeps_the_panel_edits() {
+        use crate::app::ToolMessage;
+        use crate::panels::PanelMsg;
+        use signex_types::schematic::WireWidthPreset;
+        let mut app = quiet_app();
+        app.interaction_state.current_tool = Tool::Wire;
+        tool(&mut app, ToolMessage::PrePlacementTab);
+        panel(
+            &mut app,
+            PanelMsg::SetPrePlacementWireWidth(WireWidthPreset::Large),
+        );
+        tool(&mut app, ToolMessage::ResumePlacement);
+        assert_eq!(wire_width(&app), Some(WireWidthPreset::Large));
+        assert!(app.interaction_state.placement_pause.is_none());
+    }
+
+    /// The form's OK ends the pause with the edits, like Resume: nothing is
+    /// left for a later Esc to put back.
+    #[test]
+    fn ok_on_the_form_ends_the_pause_record() {
+        use crate::app::ToolMessage;
+        use crate::panels::PanelMsg;
+        use signex_types::schematic::WireWidthPreset;
+        let mut app = quiet_app();
+        app.interaction_state.current_tool = Tool::Wire;
+        tool(&mut app, ToolMessage::PrePlacementTab);
+        panel(
+            &mut app,
+            PanelMsg::SetPrePlacementWireWidth(WireWidthPreset::Large),
+        );
+        panel(&mut app, PanelMsg::ConfirmPrePlacement);
+        assert!(!app.interaction_state.active_canvas().placement_paused);
+        assert!(app.interaction_state.placement_pause.is_none());
+        assert_eq!(wire_width(&app), Some(WireWidthPreset::Large));
+    }
+
+    /// Clearing the tool state while paused ends the pause record too.
+    #[test]
+    fn a_tool_clear_ends_the_pause_record() {
+        use crate::app::ToolMessage;
+        let mut app = quiet_app();
+        app.interaction_state.current_tool = Tool::Wire;
+        tool(&mut app, ToolMessage::PrePlacementTab);
+        assert!(app.interaction_state.placement_pause.is_some());
+        app.clear_transient_schematic_tool_state();
+        assert!(!app.interaction_state.active_canvas().placement_paused);
+        assert!(app.interaction_state.placement_pause.is_none());
+    }
+
+    fn app_with_footprint_editor() -> (Signex, std::path::PathBuf) {
+        let mut app = quiet_app();
+        let path = std::path::PathBuf::from("/tmp/part.snxfpt");
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("fp"));
+        let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
+        editor.state.pads_tool = crate::library::editor::footprint::PadsTool::PlacePad;
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), editor);
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "part".to_string(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::FootprintEditor(path.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        (app, path)
+    }
+
+    #[test]
+    fn esc_in_a_paused_footprint_editor_resumes_with_the_pad_values_it_paused_with() {
+        use crate::library::editor::footprint::PadsTool;
+        let (mut app, path) = app_with_footprint_editor();
+        let size_before = app.document_state.footprint_editors[&path]
+            .state
+            .next_pad_defaults
+            .size_x_mm;
+        tool(&mut app, crate::app::ToolMessage::PrePlacementTab);
+        assert!(
+            app.document_state.footprint_editors[&path]
+                .state
+                .placement_paused
+        );
+        // An edit in the pad form while paused.
+        app.document_state
+            .footprint_editors
+            .get_mut(&path)
+            .unwrap()
+            .state
+            .next_pad_defaults
+            .size_x_mm = size_before + 1.0;
+
+        esc(&mut app);
+        let editor = &app.document_state.footprint_editors[&path];
+        assert!(
+            !editor.state.placement_paused,
+            "the first Esc ends the pause"
+        );
+        assert_eq!(
+            editor.state.pads_tool,
+            PadsTool::PlacePad,
+            "and keeps the tool"
+        );
+        assert_eq!(
+            editor.state.next_pad_defaults.size_x_mm, size_before,
+            "the edit made while paused is dropped"
+        );
+
+        esc(&mut app);
+        assert_eq!(
+            app.document_state.footprint_editors[&path].state.pads_tool,
+            PadsTool::Select,
+            "the second Esc leaves the tool"
         );
     }
 }

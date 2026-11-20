@@ -34,6 +34,7 @@ fn arm_label(app: &mut Signex, text: &str) {
         wire_width: Default::default(),
         wire_color: None,
         shape_fill: signex_types::schematic::FillType::None,
+        position: Default::default(),
     });
 }
 
@@ -131,6 +132,7 @@ fn repeat_last_item_repeats_a_text_note_with_the_next_value() {
         wire_width: Default::default(),
         wire_color: None,
         shape_fill: signex_types::schematic::FillType::None,
+        position: Default::default(),
     });
     click_n(&mut app, 1);
     let _ = app.update(Message::Edit(EditMsg::RepeatLastItem));

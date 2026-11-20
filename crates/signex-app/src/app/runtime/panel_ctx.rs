@@ -528,6 +528,7 @@ impl Signex {
 
         let canvas_font_popup_open = self.document_state.panel_ctx.canvas_font_popup_open;
         let properties_tab = self.document_state.panel_ctx.properties_tab;
+        let document_options = self.document_state.panel_ctx.document_options.clone();
         let projects_view = self.document_state.panel_ctx.projects_view.clone();
         let pcb_layers_ui = self.document_state.panel_ctx.pcb_layers_ui.clone();
         let selection_count = self.document_state.panel_ctx.selection_count;
@@ -618,6 +619,7 @@ impl Signex {
             .filter(|draft| draft.is_live(self.numeric_field_state(draft.key)));
         let title_block_sheet = self.document_state.active_path.clone();
         let collapsed_sections = self.document_state.panel_ctx.collapsed_sections.clone();
+        let part_panel = self.document_state.panel_ctx.part_panel.clone();
         let pre_placement = self.document_state.panel_ctx.pre_placement.clone();
         let page_format_mode = self.document_state.panel_ctx.page_format_mode;
         let erc_diagnostics = self.build_erc_diagnostic_entries();
@@ -690,6 +692,7 @@ impl Signex {
             canvas_font_italic: self.ui_state.canvas_font_italic,
             canvas_font_popup_open,
             properties_tab,
+            document_options,
             projects_view,
             net_classes,
             pcb_layers,
@@ -740,6 +743,7 @@ impl Signex {
             numeric_draft,
             title_block_sheet,
             collapsed_sections,
+            part_panel,
             pre_placement,
             erc_diagnostics,
             erc_waivers,
@@ -770,6 +774,13 @@ impl Signex {
             symbol_editor: build_symbol_editor_panel_ctx(self),
             footprint_editor: build_footprint_editor_panel_ctx(self),
             history: self.document_state.history.clone(),
+            illustration_hover: self.document_state.panel_ctx.illustration_hover.clone(),
+            selection_form: crate::panels::SelectionForm {
+                kinds: crate::panels::SelectionKinds::of(
+                    &self.interaction_state.active_canvas().selected,
+                ),
+                ..self.document_state.panel_ctx.selection_form.clone()
+            },
         };
         self.fill_symbol_lists(kept_symbol_lists);
         if !tree_unchanged {

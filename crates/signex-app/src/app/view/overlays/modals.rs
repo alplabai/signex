@@ -56,7 +56,7 @@ impl Signex {
     /// Find Similar Objects dialog (#1257). In-window only: it has no
     /// detached form.
     pub(in crate::app::view) fn find_similar_overlay(&self) -> Option<Element<'_, Message>> {
-        let state = self.ui_state.find_similar.as_ref()?;
+        let state = self.ui_state.find_similar.as_deref()?;
         Some(
             crate::find_similar::view(
                 state,
@@ -74,7 +74,7 @@ impl Signex {
 
     /// Paste Array dialog (#1264). In-window only: it has no detached form.
     pub(in crate::app::view) fn paste_array_overlay(&self) -> Option<Element<'_, Message>> {
-        let state = self.ui_state.paste_array.as_ref()?;
+        let state = self.ui_state.paste_array.as_deref()?;
         Some(
             crate::paste_array::view(
                 state,

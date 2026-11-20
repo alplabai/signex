@@ -29,6 +29,7 @@ pub mod engine;
 #[cfg(test)]
 #[cfg(test)]
 mod fixtures;
+mod group;
 mod hierarchy;
 mod net_finding;
 mod overrides;
@@ -42,6 +43,7 @@ pub mod waivers;
 
 pub use context::ErcContext;
 pub use diagnostic::{Diagnostic, LocationSpace};
+pub use group::RuleGroup;
 pub use hierarchy::HierarchyMemo;
 pub use net_finding::{NetFinding, NetFindingPin};
 pub use overrides::apply_overrides;

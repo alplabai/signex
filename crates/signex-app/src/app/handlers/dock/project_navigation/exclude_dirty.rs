@@ -66,10 +66,13 @@ impl Signex {
             .dirty_document_paths()
             .into_iter()
             .chain(
-                // A sheet whose only change is a pending title-block draft is
-                // unsaved too: the draft is what Save would write (#2027).
+                // A sheet whose only change is a pending title-block draft, a
+                // sheet-variable value or text typed into a note is unsaved
+                // too: the draft is what Save would write (#2027).
                 doc.drafts.title_block_sheets(),
             )
+            .chain(doc.drafts.sheet_variable_sheets())
+            .chain(self.typed_note_sheets())
             .filter(|p| path_is_under(p, target, fold))
             // A project file's own dirty marker is metadata, not a document
             // the user can lose by excluding a row.
@@ -306,6 +309,9 @@ impl Signex {
                 self.document_state
                     .drafts
                     .retain_sheets(|sheet| !path_is_under(sheet, &state.target_path, fold));
+                self.drop_note_drafts_where(&|sheet| {
+                    path_is_under(sheet, &state.target_path, fold)
+                });
                 let mut tasks: Vec<iced::Task<Message>> = docs
                     .iter()
                     .flat_map(|p| self.close_tabs_of_removed(p, false, fold))

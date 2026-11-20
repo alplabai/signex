@@ -55,32 +55,17 @@ panels-erc-waiver-status-incomplete = ignored: no reason or author
 panels-multi-title = Multi-Selection
 # $count is a whole number. The English keeps "objects" for every count.
 panels-multi-objects-selected = { $count } objects selected
-# Group headings; $count is how many objects of the kind are selected.
-panels-multi-symbols = Symbols ({ $count })
-panels-multi-labels = Labels ({ $count })
-panels-multi-wires = Wires ({ $count })
 panels-multi-value = Value
 panels-multi-footprint = Footprint
 # Do not place: the part is left off the board.
 panels-multi-dnp = DNP
 panels-multi-in-bom = In BOM
 panels-multi-on-board = On board
-# Label text size, in points.
-panels-multi-size-pt = Size (pt)
-panels-multi-width-mm = Width (mm)
-# The state of a flag every selected object shares.
-panels-multi-on = On
-panels-multi-off = Off
 panels-multi-justify = Justify
-# The selected labels are justified differently.
-panels-multi-justify-mixed = Justify <mixed>
 panels-multi-justify-left = Left
 panels-multi-justify-center = Center
 panels-multi-justify-right = Right
 panels-multi-rotation = Rotation
-# The selected labels are turned differently.
-panels-multi-rotation-mixed = Rotation <mixed>
-panels-multi-nothing-shared = Nothing in this selection has fields shared for editing
 
 ## Projects and Navigator panels
 panels-projects-none-open = No project open

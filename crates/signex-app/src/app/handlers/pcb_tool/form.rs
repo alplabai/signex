@@ -127,7 +127,8 @@ impl BoardToolDefaults {
 }
 
 /// A pause for editing: the values and active layer it began with, which
-/// Esc puts back.
+/// Esc puts back. The sheet and footprint twin is
+/// `state::SheetPlacementPause`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlacementPause {
     pub defaults: BoardToolDefaults,
