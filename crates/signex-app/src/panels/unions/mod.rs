@@ -87,12 +87,13 @@ pub fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     }
     let header = container(head(ctx)).padding(SP.m).width(Length::Fill);
     let mut col: Column<Element<'_, PanelMsg>> = Column::new().width(Length::Fill);
-    col = col.push(header);
+    col = col.push(header.boxed());
     col = col.push(rule(tokens));
     col = col.push(
         scrollable(rows::list(ctx))
             .height(Length::Fill)
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .boxed(),
     );
     if let Some(foot) = foot::view(ctx) {
         col = col.push(rule(tokens));

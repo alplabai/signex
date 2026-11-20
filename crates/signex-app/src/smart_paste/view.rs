@@ -103,7 +103,7 @@ fn mm_field<'a>(
     }
     let mut line = row![input].spacing(SP.xs).align_y(Alignment::Center);
     if let Some(unit) = unit {
-        line = line.push(text(unit).size(TS.caption));
+        line = line.push(text(unit).size(TS.caption).boxed());
     }
     line.boxed()
 }
@@ -214,16 +214,19 @@ fn after_table<'a>(
             .align_y(iced::alignment::Vertical::Center)
     };
     let mut table: Column<Element<'a, SmartPasteMsg>> = Column::new().width(Length::Fill);
-    table = table.push(row![
-        cell(
-            caption(t!(i18n, ids::SMART_PASTE_NET), theme_tokens),
-            Length::FillPortion(2)
-        ),
-        cell(
-            caption(t!(i18n, ids::SMART_PASTE_AFTER), theme_tokens),
-            Length::FillPortion(3)
-        ),
-    ]);
+    table = table.push(
+        row![
+            cell(
+                caption(t!(i18n, ids::SMART_PASTE_NET), theme_tokens),
+                Length::FillPortion(2)
+            ),
+            cell(
+                caption(t!(i18n, ids::SMART_PASTE_AFTER), theme_tokens),
+                Length::FillPortion(3)
+            ),
+        ]
+        .boxed(),
+    );
     for (net, after) in state.after_rows() {
         let power = matches!(after, NetAfter::Power);
         let name = text(UserText::new(net.clone()))
@@ -252,10 +255,13 @@ fn after_table<'a>(
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
         };
-        table = table.push(row![
-            cell(name, Length::FillPortion(2)),
-            cell(after, Length::FillPortion(3)),
-        ]);
+        table = table.push(
+            row![
+                cell(name, Length::FillPortion(2)),
+                cell(after, Length::FillPortion(3)),
+            ]
+            .boxed(),
+        );
     }
     let line = r.line_soft;
     container(table)

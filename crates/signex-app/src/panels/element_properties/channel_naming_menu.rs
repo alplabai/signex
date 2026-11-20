@@ -67,7 +67,8 @@ pub(super) fn naming_section<'a>(
                 .size(TS.caption)
                 .color(resolve(&ctx.tokens).ink3),
         )
-        .padding([SP.xs, SP.m]),
+        .padding([SP.xs, SP.m])
+        .boxed(),
     );
     ctx.collapsible(
         "sel_child_sheet_channel_naming",
@@ -200,7 +201,8 @@ fn menu<'a>(
                 target,
                 format: preset.to_string(),
             }))
-            .style(crate::styles::menu_item(tokens)),
+            .style(crate::styles::menu_item(tokens))
+            .boxed(),
         );
     }
     rows = rows.push(rule(res.line_soft));
@@ -213,13 +215,15 @@ fn menu<'a>(
         .padding([SP.xs, SP.s])
         .on_input(|s| msg(CompiledDesignMsg::NamingCustomTyped(s)))
         .on_submit(msg(CompiledDesignMsg::NamingCustomSubmitted))
-        .style(super::super::form_look::text_input_style),
+        .style(super::super::form_look::text_input_style)
+        .boxed(),
     );
     if let Some(error) = &view.menu.error {
         rows = rows.push(
             text(format_error(ctx, error))
                 .size(TS.caption)
-                .color(ti(tokens.error)),
+                .color(ti(tokens.error))
+                .boxed(),
         );
     }
     rows = rows.push(
@@ -236,7 +240,8 @@ fn menu<'a>(
             }
         ))
         .size(TS.caption)
-        .color(res.ink3),
+        .color(res.ink3)
+        .boxed(),
     );
     let (fill, edge, shadow) = (res.raised, res.line_soft, res.shadow);
     let card = container(rows)

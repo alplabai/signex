@@ -126,7 +126,8 @@ fn sheet_row<'a>(
                     .wrapping(iced::widget::text::Wrapping::None),
             )
             .width(Length::Fill)
-            .clip(true),
+            .clip(true)
+            .boxed(),
         );
     }
 

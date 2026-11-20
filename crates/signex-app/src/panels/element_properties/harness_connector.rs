@@ -359,10 +359,11 @@ fn entries_list<'a>(
                     .size(TS.caption),
                 )
                 .padding([1.0, SP.s])
-                .style(pill(&ctx.tokens, PillTone::Warn)),
+                .style(pill(&ctx.tokens, PillTone::Warn))
+                .boxed(),
             );
         }
-        line = line.push(text(UserText::new(net)).size(TS.body));
+        line = line.push(text(UserText::new(net)).size(TS.body).boxed());
         let cell = container(line).padding([SP.xs, SP.m]).width(Length::Fill);
         list = list.push(match bad {
             Some(_) => cell.style(pill(&ctx.tokens, PillTone::Warn)).boxed(),

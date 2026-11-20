@@ -373,7 +373,8 @@ fn entries<'a>(ctx: &'a PanelContext, view: &'a SheetSymbolRepeatView) -> Elemen
                     .width(Length::Fill),
                 tag,
             ]
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .boxed(),
         );
     }
     ctx.collapsible(

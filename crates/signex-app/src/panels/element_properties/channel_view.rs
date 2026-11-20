@@ -78,7 +78,8 @@ pub(in crate::panels) fn channel_view_properties<'a>(
                     .size(TS.body)
                     .font(mono),
             ]
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .boxed(),
         );
     }
     let section = ctx.collapsible(

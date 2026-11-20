@@ -54,7 +54,8 @@ pub(super) fn list(ctx: &PanelContext) -> Element<'_, PanelMsg> {
                         .size(TS.caption)
                         .color(r.ink3),
                 )
-                .padding([SP.s, SP.m]),
+                .padding([SP.s, SP.m])
+                .boxed(),
             );
         }
         for union in &group.rows {
@@ -69,7 +70,8 @@ pub(super) fn list(ctx: &PanelContext) -> Element<'_, PanelMsg> {
                     .size(TS.body)
                     .color(r.ink3),
             )
-            .padding(SP.m),
+            .padding(SP.m)
+            .boxed(),
         );
     }
     col.boxed()

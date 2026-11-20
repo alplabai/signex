@@ -82,7 +82,8 @@ pub(super) fn view<'a>(
             .spacing(SP.s)
             .height(ROW_H)
             .padding([0.0, SP.l])
-            .align_y(Alignment::Center),
+            .align_y(Alignment::Center)
+            .boxed(),
         );
     }
     scrollable(list)
