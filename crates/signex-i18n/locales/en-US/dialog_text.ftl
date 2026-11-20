@@ -120,14 +120,8 @@ dialog-erc-chip-info = Info
 dialog-erc-chip-off = Off
 
 ## Rule editor (ERC dialog and Preferences ▸ Rule Profiles)
-dialog-rules-col-rule = Rule
-dialog-rules-col-severity = Severity
-# A rule that is only switched on or off; $rule is its name, in English.
-dialog-rules-on-off = { $rule } (on/off; severity per matrix cell)
 dialog-rules-severity-heading = Severity per rule
-dialog-rules-severity-hint = Click a cell to change.
 dialog-rules-matrix-heading = Pin Connection Matrix
-dialog-rules-matrix-hint = Click a cell to cycle severity.
 dialog-rules-on = On
 dialog-rules-off = Off
 # One-letter severities on the rule buttons and the matrix cells.

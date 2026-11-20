@@ -44,13 +44,8 @@ define_ids! {
     DIALOG_ERC_CHIP_WARNINGS = "dialog-erc-chip-warnings";
     DIALOG_ERC_CHIP_INFO = "dialog-erc-chip-info";
     DIALOG_ERC_CHIP_OFF = "dialog-erc-chip-off";
-    DIALOG_RULES_COL_RULE = "dialog-rules-col-rule";
-    DIALOG_RULES_COL_SEVERITY = "dialog-rules-col-severity";
-    DIALOG_RULES_ON_OFF = "dialog-rules-on-off";
     DIALOG_RULES_SEVERITY_HEADING = "dialog-rules-severity-heading";
-    DIALOG_RULES_SEVERITY_HINT = "dialog-rules-severity-hint";
     DIALOG_RULES_MATRIX_HEADING = "dialog-rules-matrix-heading";
-    DIALOG_RULES_MATRIX_HINT = "dialog-rules-matrix-hint";
     DIALOG_RULES_ON = "dialog-rules-on";
     DIALOG_RULES_OFF = "dialog-rules-off";
     DIALOG_RULES_ERROR_SHORT = "dialog-rules-error-short";

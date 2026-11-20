@@ -58,13 +58,11 @@ define_ids! {
     RULES_TEXT_PROBLEM = "rules-text-problem";
     RULES_TEXT_CLEAN = "rules-text-clean";
     RULES_VIEW_MATRIX = "rules-view-matrix";
-    RULES_MATRIX_HINT = "rules-matrix-hint";
     RULES_MATRIX_NO_CLASSES = "rules-matrix-no-classes";
     RULES_MATRIX_DEFAULT = "rules-matrix-default";
     RULES_MATRIX_NO_DEFAULT = "rules-matrix-no-default";
     RULES_MATRIX_OBJECTS_TITLE = "rules-matrix-objects-title";
     RULES_MATRIX_ALL_OBJECTS = "rules-matrix-all-objects";
-    RULES_MATRIX_CLEAR = "rules-matrix-clear";
     RULES_MATRIX_COLLAPSE = "rules-matrix-collapse";
     RULES_PANEL_SETS = "rules-panel-sets";
     RULES_SETS_HINT = "rules-sets-hint";
@@ -87,9 +85,6 @@ define_ids! {
     RULES_PRESETS_NO_PROFILES = "rules-presets-no-profiles";
     RULES_PRESET_PREVIEW = "rules-preset-preview";
     RULES_PRESET_NO_CHANGE = "rules-preset-no-change";
-    RULES_PRESET_ADDED = "rules-preset-added";
-    RULES_PRESET_CHANGED = "rules-preset-changed";
-    RULES_PRESET_REMOVED = "rules-preset-removed";
     RULES_PRESET_APPLY = "rules-preset-apply";
     RULES_PRESET_CANCEL = "rules-preset-cancel";
     RULES_PREVIEW_HEADING = "rules-preview-heading";

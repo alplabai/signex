@@ -81,13 +81,11 @@ rules-text-clean = No problems in the text.
 
 # The class-to-class clearance matrix (Clearance domain).
 rules-view-matrix = Matrix
-rules-matrix-hint = One clearance per pair of net classes. A grey value is what the pair needs without a cell of its own; click a cell to set it, or to open its object pairs.
 rules-matrix-no-classes = This project has no net classes yet, so the matrix is empty.
 rules-matrix-default = ({ $value } mm)
 rules-matrix-no-default = (board setup)
 rules-matrix-objects-title = Objects between { $a } and { $b }
 rules-matrix-all-objects = All objects
-rules-matrix-clear = Clear
 rules-matrix-collapse = Close
 
 # Constraint sets.
@@ -114,9 +112,6 @@ rules-presets-load = Show rule profiles
 rules-presets-no-profiles = No rule profile holds DRC rules.
 rules-preset-preview = Applying { $preset } changes:
 rules-preset-no-change = Nothing changes.
-rules-preset-added = Added { $rule }
-rules-preset-changed = Changed { $rule }
-rules-preset-removed = Removed { $rule }
 rules-preset-apply = Apply
 rules-preset-cancel = Cancel
 
