@@ -174,12 +174,6 @@ impl ClassClearances<'_> {
         let b = self.classes.get(pair.col)?;
         Some(CellKey::new(a.clone(), b.clone()))
     }
-
-    /// The pair of the cell of classes `a` and `b`, either order.
-    pub fn pair_of(&self, a: &str, b: &str) -> Option<ClassPair> {
-        let at = |name: &str| self.classes.iter().position(|c| c == name);
-        Some(ClassPair::new(at(a)?, at(b)?))
-    }
 }
 
 impl PairValues for ClassClearances<'_> {

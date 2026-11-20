@@ -62,9 +62,6 @@ impl Signex {
             RulesTabMsg::OverriddenOnlyToggled { project_id } => {
                 self.toggle_rules_overridden_only(project_id);
             }
-            RulesTabMsg::RowSelected { project_id, rule } => {
-                self.rules_tab_mut(project_id).selected = Some(rule);
-            }
             RulesTabMsg::CellOpened {
                 project_id,
                 rule,
@@ -135,10 +132,7 @@ impl Signex {
             }
             RulesTabMsg::TextApplied { project_id } => self.apply_rules_text(project_id),
             msg @ (RulesTabMsg::ClearanceViewPicked { .. }
-            | RulesTabMsg::MatrixCellOpened { .. }
-            | RulesTabMsg::MatrixCellEdited { .. }
             | RulesTabMsg::MatrixCellCommitted { .. }
-            | RulesTabMsg::MatrixCellCancelled { .. }
             | RulesTabMsg::MatrixCellCleared { .. }
             | RulesTabMsg::MatrixCollapsed { .. }
             | RulesTabMsg::PanelPicked { .. }

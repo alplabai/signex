@@ -4,7 +4,6 @@
 
 use iced::Task;
 use signex_drc_dsl::table::RuleTable;
-use signex_drc_dsl::table::matrix::CellKey;
 use signex_types::coord::Unit;
 use signex_widgets::LengthFormat;
 use signex_widgets::constraint_grid::{ClassPair, MatrixChange, MatrixMessage};
@@ -65,14 +64,6 @@ impl Signex {
                     tab.matrix_pin = None;
                 }
             }
-            RulesTabMsg::MatrixCellOpened { project_id, key } => {
-                self.open_matrix_cell(project_id, key);
-            }
-            RulesTabMsg::MatrixCellEdited { project_id, text } => {
-                if let Some(edit) = self.rules_tab_mut(project_id).matrix_edit.as_mut() {
-                    edit.text = text;
-                }
-            }
             RulesTabMsg::MatrixCellCommitted { project_id } => {
                 let Some(edit) = self.rules_tab_mut(project_id).matrix_edit.clone() else {
                     return;
@@ -82,9 +73,6 @@ impl Signex {
                 if self.note_rules_result(project_id, result).is_some() {
                     self.rules_tab_mut(project_id).matrix_edit = None;
                 }
-            }
-            RulesTabMsg::MatrixCellCancelled { project_id } => {
-                self.rules_tab_mut(project_id).matrix_edit = None;
             }
             RulesTabMsg::MatrixCellCleared { project_id, key } => {
                 let result = self.set_matrix_cell(project_id, &key, "");
@@ -186,7 +174,6 @@ impl Signex {
             | RulesTabMsg::SetsToggled { .. }
             | RulesTabMsg::InheritedToggled { .. }
             | RulesTabMsg::OverriddenOnlyToggled { .. }
-            | RulesTabMsg::RowSelected { .. }
             | RulesTabMsg::CellOpened { .. }
             | RulesTabMsg::CellEdited { .. }
             | RulesTabMsg::CellCommitted { .. }
@@ -202,24 +189,6 @@ impl Signex {
             | RulesTabMsg::DrcRequested { .. }
             | RulesTabMsg::PresetsListRequested { .. } => {}
         }
-    }
-
-    /// Type in the cell or object-pair row at `key`, seeded with what is
-    /// written there; its class pair is pinned and its object pairs shown.
-    fn open_matrix_cell(&mut self, id: ProjectId, key: CellKey) {
-        let src = self.rules_text_of(id).map(|(text, _)| text);
-        let rows = signex_drc_dsl::table::table(&src.unwrap_or_default());
-        let text = signex_drc_dsl::table::matrix::cell(&rows, &key)
-            .and_then(|row| {
-                row.limit(signex_drc_dsl::table::LimitField::MinClearance)
-                    .map(|l| l.value.clone())
-            })
-            .unwrap_or_default();
-        self.pin_matrix_cell(id, &key);
-        let tab = self.rules_tab_mut(id);
-        tab.matrix_open = Some((key.a.clone(), key.b.clone()));
-        tab.matrix_pin = Some(key.clone());
-        tab.matrix_edit = Some(MatrixEdit { key, text });
     }
 
     /// The class names, rule rows and fallbacks the matrix reads.
@@ -247,16 +216,6 @@ impl Signex {
             .or_default()
             .rules;
         tab.matrix.update(msg, &book.values(), format)
-    }
-
-    /// Pin the matrix cell of `key`'s classes without typing in it.
-    fn pin_matrix_cell(&mut self, id: ProjectId, key: &CellKey) {
-        let book = self.matrix_book(id);
-        let Some(pair) = book.values().pair_of(&key.a, &key.b) else {
-            return;
-        };
-        self.matrix_widget_update(id, MatrixMessage::CellPressed(pair));
-        self.matrix_widget_update(id, MatrixMessage::EditCancelled);
     }
 
     /// A message of the matrix widget. Only the lower triangle is live: a

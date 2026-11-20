@@ -463,13 +463,7 @@ fn the_tab_shows_flags_and_results_from_the_last_run() {
             .any(|f| f.rule == "sig_a" && f.flag.as_str() == "shadowed")
     );
     assert_eq!(analysis.scope.get("sig_b"), Some(&1));
-    send(
-        &mut app,
-        RulesTabMsg::RowSelected {
-            project_id: id,
-            rule: "sig_b".into(),
-        },
-    );
+    select_sig_b(&mut app, id);
     let _ = app.view_rules_tab(id);
     send(
         &mut app,
@@ -712,13 +706,7 @@ fn update_keeps_the_selected_rules_why_and_the_text_view_follows_stored_rules() 
         .settle(&mut app, task)
         .expect("the run lands");
     open(&mut app);
-    send(
-        &mut app,
-        RulesTabMsg::RowSelected {
-            project_id: id,
-            rule: "sig_b".into(),
-        },
-    );
+    select_sig_b(&mut app, id);
     let analysis = rules_tab(&app, id).analysis.clone().expect("analysed");
     let (effective, net) = analysis.why.expect("why for the selected rule");
     assert_eq!(net, "SIG");
@@ -784,6 +772,15 @@ fn cell(app: &Signex, id: ProjectId, row: &RowRef, column: &str) -> CellRef {
         grid.column_named(column)
             .expect("the column is on the domain"),
     )
+}
+
+/// Select the SIG row's clearance cell, which `sig_b` (the stricter of
+/// the two SIG rules) governs, and close its editor.
+fn select_sig_b(app: &mut Signex, id: ProjectId) {
+    let at = cell(app, id, &RowRef::Net("SIG".into()), "clearance_min");
+    grid_msg(app, id, GridMessage::CellPressed(at));
+    grid_msg(app, id, GridMessage::EditCancelled);
+    assert_eq!(rules_tab(app, id).selected.as_deref(), Some("sig_b"));
 }
 
 /// Type `value` in `at` and press Enter.

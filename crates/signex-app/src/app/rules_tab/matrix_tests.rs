@@ -177,25 +177,15 @@ fn a_matrix_cell_typed_in_writes_one_rule_as_one_undo_step() {
         .copied();
     assert_eq!(fallback, Some(200_000));
 
-    send(
+    // LV is class 1 and HV class 0: (1, 0) is the live LV-HV cell.
+    act(
         &mut app,
-        RulesTabMsg::MatrixCellOpened {
-            project_id: id,
-            key: CellKey::new("LV", "HV"),
-        },
+        id,
+        MatrixMessage::CellPressed(ClassPair { row: 1, col: 0 }),
     );
     let _ = app.view_rules_tab(id);
-    send(
-        &mut app,
-        RulesTabMsg::MatrixCellEdited {
-            project_id: id,
-            text: "0.8mm".into(),
-        },
-    );
-    send(
-        &mut app,
-        RulesTabMsg::MatrixCellCommitted { project_id: id },
-    );
+    act(&mut app, id, MatrixMessage::EditTextChanged("0.8mm".into()));
+    act(&mut app, id, MatrixMessage::EditSubmitted);
     let text = dsl(&app);
     assert!(text.starts_with(TEXT), "the other rule is as typed: {text}");
     assert!(text.contains(
@@ -204,6 +194,7 @@ fn a_matrix_cell_typed_in_writes_one_rule_as_one_undo_step() {
     assert_eq!(undo_steps(&app, id), 1);
     let tab = &app.document_state.project_tabs[&id].rules;
     assert!(tab.matrix_edit.is_none());
+    assert!(tab.matrix.edit().is_none(), "the cell closed");
     assert_eq!(tab.matrix_open, Some(("LV".into(), "HV".into())));
     let _ = app.view_rules_tab(id);
 
@@ -221,15 +212,9 @@ fn a_sub_grid_cell_narrows_to_an_object_pair_and_clear_drops_it() {
     let key = CellKey::new("HV", "LV").with_pair("track-pad").unwrap();
     send(
         &mut app,
-        RulesTabMsg::MatrixCellOpened {
+        RulesTabMsg::MatrixPairTyped {
             project_id: id,
             key: key.clone(),
-        },
-    );
-    send(
-        &mut app,
-        RulesTabMsg::MatrixCellEdited {
-            project_id: id,
             text: "1mm".into(),
         },
     );
@@ -260,15 +245,9 @@ fn a_bad_matrix_value_is_refused_and_changes_nothing() {
     open(&mut app);
     send(
         &mut app,
-        RulesTabMsg::MatrixCellOpened {
+        RulesTabMsg::MatrixPairTyped {
             project_id: id,
             key: CellKey::new("HV", "LV"),
-        },
-    );
-    send(
-        &mut app,
-        RulesTabMsg::MatrixCellEdited {
-            project_id: id,
             text: "wide".into(),
         },
     );

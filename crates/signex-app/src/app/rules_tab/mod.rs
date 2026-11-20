@@ -266,10 +266,6 @@ pub enum RulesTabMsg {
     OverriddenOnlyToggled {
         project_id: ProjectId,
     },
-    RowSelected {
-        project_id: ProjectId,
-        rule: String,
-    },
     CellOpened {
         project_id: ProjectId,
         rule: String,
@@ -327,19 +323,8 @@ pub enum RulesTabMsg {
         project_id: ProjectId,
         view: ClearanceView,
     },
-    /// A matrix cell was clicked: type in it and show its object sub-grid.
-    MatrixCellOpened {
-        project_id: ProjectId,
-        key: CellKey,
-    },
-    MatrixCellEdited {
-        project_id: ProjectId,
-        text: String,
-    },
+    /// Enter in the object-pair row being typed in.
     MatrixCellCommitted {
-        project_id: ProjectId,
-    },
-    MatrixCellCancelled {
         project_id: ProjectId,
     },
     /// Clear a cell back to what its two classes ask without it.
