@@ -4,8 +4,8 @@
 //! array and leaves a linear one alone; a pattern value written on the
 //! drawing lands in the right expression; the conflict badge counts.
 
-use signex_app::library::editor::footprint::state::canvas_text::SketchCanvasText;
-use signex_app::library::editor::footprint::state::sketch_overlay::PatternField;
+use signex_app::library::editor::footprint::PatternField;
+use signex_app::library::editor::footprint::SketchCanvasText;
 use signex_sketch::array::{ArrayKind, ArrayLayout, GridDepopulation};
 use signex_sketch::id::SketchEntityId;
 

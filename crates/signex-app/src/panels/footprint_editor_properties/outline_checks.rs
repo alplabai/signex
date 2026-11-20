@@ -11,7 +11,7 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, RenderTranslatable as _, ids, t};
 use signex_widgets::{button, text};
 
-use crate::library::editor::footprint::state::board_checks::{GapOffer, mm};
+use crate::library::editor::footprint::{GapOffer, format_check_mm};
 use crate::library::editor::standalone::sketch_exit::status_line;
 use crate::panels::{BoardSketchProps, CollapsedSections, PanelMsg, PanelPalette};
 use crate::panels::{collapsible_section_header, is_section_collapsed};
@@ -123,7 +123,7 @@ fn view_fab_profile<'a>(
     }
     let router = match board.router_tool_diameter {
         Some(diameter) => {
-            t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER, "diameter" => mm(diameter, 2))
+            t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER, "diameter" => format_check_mm(diameter, 2))
         }
         None => t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER_NONE),
     };

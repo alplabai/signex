@@ -69,5 +69,20 @@ pub(crate) use canvas::graphite_look_for;
 pub use state::{BoardBackdrop, EditorMode, SketchTool, ToolPending};
 pub(crate) use updates::apply_footprint_primitive_edit;
 
+// What the board sketch host, the Properties panel and the regression tests
+// read from the sketch tool, named here so they do not reach into `state` or
+// `updates` (layer ratchet, docs/architecture/layer-ratchet.md).
+pub use state::board_checks::GapOffer;
+pub(crate) use state::board_checks::mm as format_check_mm;
+pub use state::mode::ModeSwitch;
+pub use state::pad_link::driving_profile;
+pub use state::pad_scope::PadScope;
+pub use state::sketch_overlay::{CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget};
+pub use state::{
+    CheckLine, CheckStatus, FootprintEditorState, PadLinkMsg, PadLinkOffer, SketchCanvasText,
+    SketchOverlay, check_lines,
+};
+pub(crate) use updates::hold_patterned_pad_edit;
+
 #[cfg(test)]
 mod tests;

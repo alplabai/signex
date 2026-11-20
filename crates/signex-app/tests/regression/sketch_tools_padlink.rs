@@ -5,8 +5,8 @@
 
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
-use signex_app::library::editor::footprint::state::pad_link::driving_profile;
-use signex_app::library::editor::footprint::state::{
+use signex_app::library::editor::footprint::driving_profile;
+use signex_app::library::editor::footprint::{
     EditorMode, PadLinkMsg, PadLinkOffer, SketchTool, ToolPending,
 };
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
@@ -536,7 +536,7 @@ fn the_focus_ends_when_the_selection_moves_and_a_pad_entity_offers_jump_to_pad()
 /// A value edit open on the drawing, a menu and a selected pattern: what a
 /// mode change must not carry into Footprint mode.
 fn open_overlays(app: &mut Signex, path: &PathBuf) {
-    use signex_app::library::editor::footprint::state::sketch_overlay::{
+    use signex_app::library::editor::footprint::{
         CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget,
     };
     use signex_sketch::array::ArrayId;
@@ -557,7 +557,7 @@ fn open_overlays(app: &mut Signex, path: &PathBuf) {
 
 #[test]
 fn leaving_sketch_mode_closes_the_canvas_overlays() {
-    use signex_app::library::editor::footprint::state::SketchOverlay;
+    use signex_app::library::editor::footprint::SketchOverlay;
     let (mut app, path, centre, _) = open_pad("overlay");
 
     edit_in_sketch(&mut app);

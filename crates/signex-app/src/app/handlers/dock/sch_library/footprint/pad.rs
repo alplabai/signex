@@ -367,7 +367,7 @@ impl Signex {
         F: FnOnce(&mut crate::library::editor::footprint::state::EditorPad),
     {
         // A patterned pad's edit waits for "This pad / All pads" (mockup row 192 D1).
-        let Some(f) = crate::library::editor::footprint::updates::hold_patterned_pad_edit(
+        let Some(f) = crate::library::editor::footprint::hold_patterned_pad_edit(
             self.active_footprint_editor_mut(),
             idx,
             f,

@@ -9,7 +9,7 @@
 use signex_app::app::{
     BoardSketchMsg, EditMsg, FootprintDocument, LoadedProject, Message, PcbMsg, TabInfo, TabKind,
 };
-use signex_app::library::editor::footprint::state::{CheckLine, CheckStatus};
+use signex_app::library::editor::footprint::{CheckLine, CheckStatus};
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_app::panels::{BoardSketchAttrMsg, BoardSketchProps, PanelMsg};
 use signex_i18n::{RenderTranslatable, Translatable, ids};

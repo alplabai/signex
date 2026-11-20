@@ -13,7 +13,7 @@ use signex_app::library::editor::footprint::sketch_mode::menus::create_entries;
 use signex_app::library::editor::footprint::snap::{
     SketchInference, SnapKind, SnapResult, click_inference, snap_cursor_with,
 };
-use signex_app::library::editor::footprint::state::{
+use signex_app::library::editor::footprint::{
     EditorMode, FootprintEditorState, SketchTool, ToolPending,
 };
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};

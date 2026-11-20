@@ -9,7 +9,7 @@ use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::library::editor::footprint::sketch_dispatch::apply_sketch_edit;
 use signex_app::library::editor::footprint::sketch_mode::SketchEdit;
 use signex_app::library::editor::footprint::sketch_mode::value_edit::SketchCanvasMsg;
-use signex_app::library::editor::footprint::state::{EditorMode, SketchTool};
+use signex_app::library::editor::footprint::{EditorMode, SketchTool};
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_library::{Footprint, FootprintFile, Pad};
 use signex_sketch::SketchData;

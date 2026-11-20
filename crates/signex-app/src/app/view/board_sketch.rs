@@ -12,7 +12,7 @@ use signex_widgets::{text, theme_ext};
 use crate::app::state::BoardSketchSession;
 use crate::app::{BoardSketchMsg, Message, PcbMsg, Signex};
 use crate::dock::DockMessage;
-use crate::library::editor::footprint::state::CheckStatus;
+use crate::library::editor::footprint::CheckStatus;
 use crate::library::editor::standalone::sketch_exit::{
     GapLine, ModeBarLook, ModeBarMessages, PreviewIssues, mode_bar, preview_card,
 };

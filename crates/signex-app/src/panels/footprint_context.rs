@@ -692,7 +692,7 @@ pub struct BoardSketchProps {
     pub hole: Option<MountingHoleProps>,
     /// The Outline checks lines of the current solve (mockup 179d): Properties
     /// lists them with nothing selected, the bake preview the failed ones.
-    pub outline_checks: Vec<crate::library::editor::footprint::state::CheckLine>,
+    pub outline_checks: Vec<crate::library::editor::footprint::CheckLine>,
     /// The selected entity's Slot, Pour, Mechanical layer or Component
     /// anchor rows (decision 2, 2026-11-20).
     pub target: crate::panels::BoardTargetProps,

@@ -6,7 +6,7 @@
 use signex_sketch::entity::EntityKind;
 
 use crate::app::FootprintDocument;
-use crate::library::editor::footprint::state::check_lines;
+use crate::library::editor::footprint::check_lines;
 use crate::panels::{BoardSketchProps, MountingHoleProps};
 
 /// The Board sections' values for `editor`, or `None` when it edits a

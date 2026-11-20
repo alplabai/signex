@@ -5,7 +5,7 @@
 //! `Signex::update`.
 
 use signex_app::app::{BoardSketchMsg, Message, PcbMsg};
-use signex_app::library::editor::footprint::state::{CheckLine, CheckStatus};
+use signex_app::library::editor::footprint::{CheckLine, CheckStatus};
 use signex_app::library::messages::RoleTag;
 use signex_app::panels::PanelMsg;
 use signex_i18n::RenderTranslatable;

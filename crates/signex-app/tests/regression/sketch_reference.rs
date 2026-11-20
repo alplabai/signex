@@ -7,10 +7,10 @@
 
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
+use signex_app::library::editor::footprint::EditorMode;
+use signex_app::library::editor::footprint::ValueTarget;
 use signex_app::library::editor::footprint::sketch_mode::SketchCanvasMsg;
 use signex_app::library::editor::footprint::sketch_mode::constraint_menu::SketchReferenceMsg;
-use signex_app::library::editor::footprint::state::EditorMode;
-use signex_app::library::editor::footprint::state::sketch_overlay::ValueTarget;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_app::panels::PanelMsg;
 use signex_library::{Footprint, FootprintFile};

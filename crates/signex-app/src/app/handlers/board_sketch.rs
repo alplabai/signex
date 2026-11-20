@@ -16,9 +16,9 @@ use signex_i18n::{Translatable, ids, t};
 
 use crate::app::state::{BoardSketchSession, ErrorNotice};
 use crate::app::{BoardSketchMsg, FootprintDocument, Message, PcbMsg, Signex};
+use crate::library::editor::footprint::SketchOverlay;
 use crate::library::editor::footprint::sketch_redundancy_task::dispatch_redundancy;
 use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
-use crate::library::editor::footprint::state::SketchOverlay;
 use crate::library::editor::footprint::{SketchTool, ToolPending, apply_footprint_primitive_edit};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 

@@ -4,8 +4,8 @@
 //! editor bar's `ModeSwitch` says that control sends.
 
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
-use signex_app::library::editor::footprint::state::EditorMode;
-use signex_app::library::editor::footprint::state::mode::ModeSwitch;
+use signex_app::library::editor::footprint::EditorMode;
+use signex_app::library::editor::footprint::ModeSwitch;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_i18n::t;
 use signex_library::{Footprint, FootprintFile};

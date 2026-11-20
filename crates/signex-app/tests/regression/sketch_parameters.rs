@@ -3,8 +3,8 @@
 //! delete prompt, and Make parameter on a dimension, each one undo step.
 
 use signex_app::app::{FootprintDocument, Message, Signex, TabInfo, TabKind};
+use signex_app::library::editor::footprint::EditorMode;
 use signex_app::library::editor::footprint::parameters_table::SketchParametersMsg;
-use signex_app::library::editor::footprint::state::EditorMode;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_library::{Footprint, FootprintFile};
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};

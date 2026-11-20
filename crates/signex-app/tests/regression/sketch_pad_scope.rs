@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use signex_app::app::{FileMsg, FootprintDocument, Message, Signex, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
-use signex_app::library::editor::footprint::state::pad_scope::PadScope;
+use signex_app::library::editor::footprint::PadScope;
 use signex_app::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use signex_app::panels::PanelMsg;
 use signex_library::{Footprint, FootprintFile};
