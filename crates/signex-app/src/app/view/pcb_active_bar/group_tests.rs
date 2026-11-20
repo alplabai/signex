@@ -268,6 +268,7 @@ fn the_copper_areas_group_lists_the_pour_rows() {
             Some("place_board_region"),
             Some("place_board_fill"),
             Some("place_board_keepout"),
+            Some("place_board_room"),
             Some("repour_selected"),
             Some("repour_all"),
         ]
