@@ -35,7 +35,7 @@ one palette. The sheet art follows the theme.
 
 A project names one board (`pcb_file`), so "the first board in project
 order" is that board. Projects with several boards, and a way to choose the
-board, are an open question on the mockup.
+board, stay open in #2590 (Caner, 2026-11-20).
 
 The art keeps at most 3000 line segments; a circle counts as 8. When a
 board or sheet has more, the smallest primitives are dropped first.
@@ -48,6 +48,10 @@ The preview is made from the document in memory after a save succeeds:
 - Saving any sheet of a project that has no board makes the preview from
   the root sheet, if the root sheet is open.
 - Any other save leaves the preview as it is.
+
+A change made to the project's files outside Signex does not redraw the
+preview; the next save in Signex does. Refreshing on outside changes stays
+open in #2590 (Caner, 2026-11-20).
 
 The preview shows on the Start screen at once. The cache file is written on
 a background worker. If the write fails, a warning goes to the Messages
