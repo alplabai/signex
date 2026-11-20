@@ -1,7 +1,8 @@
 //! Editor-surface overlay builders — the blocking-modal gate, the
 //! export/preview/net-colour top-of-stack overlays, the schematic /
-//! footprint / symbol active bars and the in-canvas text-edit input. The
-//! status-bar panel list lives in `panel_list.rs`.
+//! footprint / symbol active bars. The in-canvas text-edit input lives in
+//! `text_edit.rs`, the Placement Paused card in `placement_paused.rs` and
+//! the status-bar panel list in `panel_list.rs`.
 //!
 //! Extracted from the former 1223-line `collect_overlays` god-function
 //! in `view/mod.rs` (behaviour-preserving decomposition). Each builder
@@ -10,21 +11,7 @@
 //! the same `Signex` view impl, split across sibling files.
 
 use super::*;
-use iced::widget::{column, container, row};
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
-const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
-
-/// Pause glyph (two bars) of the Placement Paused card, tinted at draw time.
-static PAUSE_GLYPH: std::sync::LazyLock<iced::widget::svg::Handle> = std::sync::LazyLock::new(
-    || {
-        iced::widget::svg::Handle::from_memory(
-        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>"##
-            .as_slice(),
-    )
-    },
-);
+use iced::widget::{column, container};
 
 impl Signex {
     /// True when a modal that must own the entire overlay stack is up —
@@ -138,92 +125,8 @@ impl Signex {
         )
     }
 
-    /// Altium-style pause overlay: big centered "Placement Paused" card
-    /// with a Resume button. Clicking Resume clears `pre_placement`,
-    /// un-pauses the canvas, and drops back to the active placement tool
-    /// so the user can keep dropping objects with the edited properties.
-    /// v0.13 — Also fires when a footprint editor's placement is paused
-    /// so TAB during pad/via/string placement surfaces the same overlay.
-    pub(in crate::app::view) fn placement_paused_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let interaction = &self.interaction_state;
-        let footprint_paused = self
-            .footprint_editor_in_window(window_id)
-            .is_some_and(|(_, ed)| ed.state.placement_paused);
-        if !(interaction.canvas_for_window(window_id).placement_paused || footprint_paused) {
-            return None;
-        }
-        let tokens = &document.panel_ctx.tokens;
-        let ink = crate::styles::ti(tokens.text);
-        let muted = crate::styles::ti(tokens.text_secondary);
-        let title_font = iced::Font {
-            weight: iced::font::Weight::Semibold,
-            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-        };
-        let glyph = iced::widget::svg(PAUSE_GLYPH.clone())
-            .width(Length::Fixed(TS.title))
-            .height(Length::Fixed(TS.title))
-            .style(move |_: &iced::Theme, _| iced::widget::svg::Style {
-                color: Some(muted),
-                ..Default::default()
-            });
-        let card = container(
-            column![
-                row![
-                    glyph,
-                    signex_widgets::text(signex_i18n::t!(
-                        self.ui_state.i18n,
-                        signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_TITLE
-                    ))
-                    .size(TS.title)
-                    .font(title_font)
-                    .color(ink),
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center),
-                signex_widgets::text(signex_i18n::t!(
-                    self.ui_state.i18n,
-                    signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_BODY
-                ))
-                .size(TS.body)
-                .color(muted),
-                signex_widgets::text(signex_i18n::t!(
-                    self.ui_state.i18n,
-                    signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_ESC_HINT
-                ))
-                .size(TS.caption)
-                .color(muted),
-                iced::widget::Space::new().height(SP.xs),
-                crate::styles::dialog_button(
-                    signex_i18n::t!(
-                        self.ui_state.i18n,
-                        signex_i18n::ids::OVERLAY_PLACEMENT_PAUSED_RESUME
-                    ),
-                    crate::styles::DialogButtonKind::Primary,
-                    Some(Message::Tool(ToolMessage::ResumePlacement)),
-                    tokens,
-                ),
-            ]
-            .spacing(SP.s)
-            .align_x(iced::Alignment::Start),
-        )
-        .padding(SP.l + SP.s)
-        .style(crate::styles::modal_card(tokens));
-        Some(
-            container(card)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill)
-                .boxed(),
-        )
-    }
-
     /// The footprint editor `window_id` shows, with its path.
-    fn footprint_editor_in_window(
+    pub(super) fn footprint_editor_in_window(
         &self,
         window_id: iced::window::Id,
     ) -> Option<(&std::path::Path, &crate::app::FootprintDocument)> {
@@ -530,85 +433,6 @@ impl Signex {
         // An expanded Place ▸ grows the card in place (accordion, not a
         // flyout); the placement measures the card it really lays out.
         Self::menu_overlay(close_msg, card_msg, (menu_state.x, menu_state.y))
-    }
-
-    /// In-canvas text-edit input — the floating `text_input` anchored on
-    /// top of the label being edited. Converts the object's world
-    /// position through the live camera into a window-absolute screen
-    /// position each frame.
-    pub(in crate::app::view) fn text_edit_overlay(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
-        let document = &self.document_state;
-        let interaction = &self.interaction_state;
-        document.engine_for_window(window_id, &self.ui_state)?;
-        let edit_state = interaction.editing_text.as_ref()?;
-        let text = edit_state.text.clone();
-        let placeholder: signex_widgets::Label<'static> =
-            match crate::app::handlers::canvas::editor_placeholder(edit_state.kind) {
-                Some(id) => self.ui_state.i18n.message(id, &[]).into(),
-                None => signex_i18n::UserText::new(String::new()).into(),
-            };
-        // Object world position -> window position through the live camera
-        // and the canvas rectangle, so the editor opens on the label.
-        let camera = interaction.canvas_for_window(window_id).live_camera();
-        let (abs_x, abs_y) = canvas_region::world_to_window(
-            (edit_state.world_x, edit_state.world_y),
-            camera,
-            self.canvas_bounds(),
-        );
-        // Font size in pixels matches the rendered label (10 pt ≈ 1.8 mm).
-        let font_px = (camera.2 * 1.8).clamp(10.0, 64.0);
-        // Estimate width from the text in the canvas face to keep the input
-        // snug, with two characters of room to type into.
-        let canvas_font_name = document.panel_ctx.canvas_font_name.as_str();
-        let canvas_family = signex_types::font::nonblank_family(canvas_font_name);
-        let approx_w =
-            (signex_types::font::estimate_text_width_px(&edit_state.text, font_px, canvas_family)
-                + 2.0 * font_px * signex_types::font::ESTIMATE_FALLBACK_ADVANCE_EM)
-                .max(60.0);
-        // Sit the input's baseline on the label text.
-        let abs_x = abs_x - 2.0;
-        let abs_y = abs_y - font_px - 2.0;
-        let paper_c = crate::styles::ti(document.panel_ctx.tokens.paper);
-        let text_c = crate::styles::ti(document.panel_ctx.tokens.text);
-        let accent_c = crate::styles::ti(document.panel_ctx.tokens.accent);
-        Some(
-            column![
-                iced::widget::Space::new().height(abs_y.max(0.0)).boxed(),
-                row![
-                    iced::widget::Space::new().width(abs_x.max(0.0)).boxed(),
-                    container(
-                        signex_widgets::text_input(placeholder, text)
-                            .id(crate::app::contracts::TEXT_EDIT_INPUT_ID.clone())
-                            .on_input(|t| Message::TextEdit(TextEditMsg::Changed(t)))
-                            .on_submit(Message::TextEdit(TextEditMsg::Submit))
-                            .font(crate::fonts::canvas_iced_font(canvas_font_name))
-                            .size(font_px)
-                            .padding([1.0, SP.xs])
-                            .width(approx_w)
-                            .style(move |_: &iced::Theme, _status: iced::widget::text_input::Status| {
-                                iced::widget::text_input::Style {
-                                    background: iced::Background::Color(paper_c),
-                                    border: iced::Border {
-                                        color: accent_c,
-                                        width: 1.0,
-                                        radius: 0.0.into(),
-                                        ..iced::Border::default()
-                                    },
-                                    placeholder: text_c,
-                                    value: text_c,
-                                    selection: accent_c,
-                                }
-                            }),
-                    )
-                    .boxed(),
-                ]
-                .boxed(),
-            ]
-            .boxed(),
-        )
     }
 }
 

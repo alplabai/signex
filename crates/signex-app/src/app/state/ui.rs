@@ -514,8 +514,9 @@ pub struct UiState {
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
     pub back_annotate: Option<Box<crate::app::BackAnnotateState>>,
-    /// The Find Similar Objects dialog, while open (#1257).
-    pub find_similar: Option<crate::find_similar::FindSimilarState>,
+    /// The Find Similar Objects dialog, while open (#1257); boxed so the
+    /// closed dialog costs one pointer (#2412).
+    pub find_similar: Option<Box<crate::find_similar::FindSimilarState>>,
     /// Token of the newest Find Similar project search. Lives outside the
     /// dialog state so a reopened dialog never reuses an old token.
     pub find_similar_generation: u64,
@@ -528,15 +529,19 @@ pub struct UiState {
     pub assign_footprints_reads: u64,
     /// The Net Inspector panel's filter and expanded nets (#1269).
     pub net_inspector: crate::panels::NetInspectorState,
-    /// The open Paste Array dialog (#1264).
-    pub paste_array: Option<crate::paste_array::PasteArrayState>,
+    /// The open Paste Array dialog (#1264); boxed as `find_similar`.
+    pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers
     /// read answers only the dialog that asked for it.
     pub paste_array_opens: u64,
+    /// In-place text editors opened this session; the key hint above the
+    /// editor shows for the first few. Not persisted: no preference stores
+    /// such counters.
+    pub text_edit_opens: u32,
     /// v0.18.14.1 — Custom Selection Filter modal draft. `Some`
     /// while the dialog is visible; the eight-bool draft mirror
-    /// commits on Apply, discards on Cancel.
-    pub selection_filter_custom: Option<crate::app::SelectionFilterCustomState>,
+    /// commits on Apply, discards on Cancel. Boxed as `find_similar`.
+    pub selection_filter_custom: Option<Box<crate::app::SelectionFilterCustomState>>,
     /// ERC results for the currently-visible sheet. Driven by the
     /// per-sheet cache below — switching tabs repoints this at the
     /// cached violations for that sheet, so markers and the Messages
@@ -631,6 +636,9 @@ pub struct UiState {
     pub move_selection: MoveSelectionState,
     /// F5 Net Color palette state — open flag and transient edit buffer.
     pub net_color_palette_open: bool,
+    /// F5 Net Color palette: filter text and the open row chooser; boxed so
+    /// its growth stays off `UiState` (#2412).
+    pub net_color_palette: Box<crate::app::state::NetColorPaletteState>,
     /// Parameter Manager dialog state.
     pub parameter_manager_open: bool,
     /// Parameter Manager table: the new-column name, the row filter and the
@@ -863,6 +871,12 @@ mod tests {
                 field_size(|ui| &ui.pending_profile_update),
             ),
             ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
+            ("find_similar", field_size(|ui| &ui.find_similar)),
+            ("paste_array", field_size(|ui| &ui.paste_array)),
+            (
+                "selection_filter_custom",
+                field_size(|ui| &ui.selection_filter_custom),
+            ),
             ("assign_footprints", field_size(|ui| &ui.assign_footprints)),
             ("annotate_session", field_size(|ui| &ui.annotate_session)),
             ("validation_panels", field_size(|ui| &ui.validation_panels)),

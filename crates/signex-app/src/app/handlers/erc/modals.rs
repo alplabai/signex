@@ -408,13 +408,12 @@ impl Signex {
             );
             return Task::none();
         }
-        // Classify both axes before acting: a refused axis (`nan` / `inf` /
-        // overflow) must not be read as "0 on that axis" while the other
-        // axis still moves the selection. `move_offset` has already logged
-        // the refusal, naming the axis; the dialog stays open so the user
-        // can fix it.
-        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx);
-        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy);
+        // Classify both axes before acting: a refused axis must not be read
+        // as "0 on that axis" while the other still moves the selection.
+        // The dialog stays open so the user can fix the named box.
+        let unit = self.ui_state.unit;
+        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx, unit);
+        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy, unit);
         let (Some(dx), Some(dy)) = (dx, dy) else {
             return Task::none();
         };
@@ -449,18 +448,14 @@ impl Signex {
     }
 }
 
-/// A Move Selection offset typed in the dialog. `None` means refused
-/// (`nan` / `inf` / overflow: an `inf` offset would send every selected item
-/// to infinity) and the whole apply is abandoned. Text that is not a number
-/// at all (empty, `-`) is the user mid-edit and moves by nothing. `field`
-/// names the box in the refusal line.
-fn move_offset(field: &str, text: &str) -> Option<f64> {
-    use crate::numeric_field::{FieldNumber, parse_named_field_number};
-    match parse_named_field_number(field, text) {
-        FieldNumber::Number(v) => Some(v),
-        FieldNumber::NotANumber => Some(0.0),
-        FieldNumber::Refused => None,
-    }
+/// A Move Selection offset in mm, read as the preview reads it
+/// (`move_selection_dialog::offset_mm`). `None` means refused, and the
+/// refusal is logged naming the box (`field`).
+fn move_offset(field: &str, text: &str, unit: signex_types::coord::Unit) -> Option<f64> {
+    use crate::app::handlers::editing_commands::move_selection_dialog::offset_mm;
+    offset_mm(text, unit)
+        .map_err(|reason| crate::diagnostics::log_warning(format!("{field} refused: {reason}")))
+        .ok()
 }
 
 /// The initial window size of `modal`: its in-window dimensions, so the user
@@ -471,8 +466,15 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::ErcDialog => iced::Size::new(1000.0, 600.0),
         ModalId::AnnotateResetConfirm => iced::Size::new(440.0, 261.0),
         ModalId::ReprefixConfirm => iced::Size::new(560.0, 500.0),
-        ModalId::MoveSelection => iced::Size::new(420.0, 240.0),
-        ModalId::NetColorPalette => iced::Size::new(520.0, 480.0),
+        // Content-fit (#66, #71): heights from the type scale.
+        ModalId::MoveSelection => iced::Size::new(
+            360.0,
+            crate::app::handlers::editing_commands::move_selection_dialog::window_height(),
+        ),
+        ModalId::NetColorPalette => iced::Size::new(
+            360.0,
+            crate::app::handlers::editing_commands::net_color_palette::palette_window_height(0),
+        ),
         ModalId::ParameterManager => iced::Size::new(900.0, 560.0),
         ModalId::Preferences => iced::Size::new(900.0, 620.0),
         ModalId::NewProject => iced::Size::new(860.0, 700.0),
@@ -504,8 +506,9 @@ pub(crate) fn modal_size(modal: ModalId) -> iced::Size {
         ModalId::LibraryCloseConfirm => iced::Size::new(560.0, 234.0),
         ModalId::LibraryDeleteConfirm => iced::Size::new(520.0, 100.0),
         ModalId::LibraryRecovery => iced::Size::new(600.0, 280.0),
-        // Height follows the type scale (authored at the 11 px base).
-        ModalId::NetColorCustom => iced::Size::new(600.0, crate::styles::chrome_px(390.0)),
+        // Height follows the type scale (authored at the 11 px base). The
+        // 8 x 6 quick pick (#72) leaves the right column the tallest.
+        ModalId::NetColorCustom => iced::Size::new(600.0, crate::styles::chrome_px(300.0)),
     }
 }
 
@@ -627,6 +630,7 @@ pub(crate) fn detached_panel_window_settings(
 #[cfg(test)]
 mod tests {
     use super::{detached_modal_settings, detached_panel_window_settings, move_offset};
+    use signex_types::coord::Unit::Mm;
 
     /// Mockup row 8: a detached panel window drops the OS decorations where it draws
     /// the Graphite title strip, and keeps them where the OS draws the
@@ -645,15 +649,15 @@ mod tests {
     #[test]
     fn move_offset_refuses_non_finite_text() {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
-            assert_eq!(move_offset("Move Selection X", bad), None, "{bad:?}");
+            assert_eq!(move_offset("Move Selection X", bad, Mm), None, "{bad:?}");
         }
     }
 
     #[test]
     fn move_offset_reads_ordinary_text() {
-        assert_eq!(move_offset("Move Selection X", " 2.5 "), Some(2.5));
-        assert_eq!(move_offset("Move Selection X", "-1"), Some(-1.0));
-        assert_eq!(move_offset("Move Selection X", ""), Some(0.0));
+        assert_eq!(move_offset("Move Selection X", " 2.5 ", Mm), Some(2.5));
+        assert_eq!(move_offset("Move Selection X", "-1", Mm), Some(-1.0));
+        assert_eq!(move_offset("Move Selection X", "", Mm), Some(0.0));
     }
 
     #[test]

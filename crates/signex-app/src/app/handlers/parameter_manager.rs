@@ -1,16 +1,82 @@
-//! Parameter Manager table edits: cell writes, column add and remove.
+//! Parameter Manager: the message router and the table edits (cell writes,
+//! column add and remove, Revert changes).
 //!
 //! Every write goes through the mutation gateway, so each committed edit is
 //! exactly one engine history entry and dirty-flagging stays correct.
 
 use iced::Task;
+use iced::widget::operation::{Animation, scrollable::scroll_to};
+use iced::widget::scrollable::AbsoluteOffset;
 use signex_engine::Command;
 use uuid::Uuid;
 
-use crate::app::Message;
-use crate::app::state::{ModalId, Signex};
+use crate::app::contracts::ParameterTablePane;
+use crate::app::state::{ModalId, ParameterCell, Signex};
+use crate::app::{Message, ParameterManagerMsg};
+
+/// Widget id of the scrollable parameter cells.
+pub(crate) const BODY_SCROLL_ID: &str = "parameter-manager-body";
+/// Widget id of the header row right of Reference.
+pub(crate) const HEADER_SCROLL_ID: &str = "parameter-manager-header";
+/// Widget id of the Reference column.
+pub(crate) const REFERENCE_SCROLL_ID: &str = "parameter-manager-references";
 
 impl Signex {
+    /// Parameter Manager dialog handler (namespaced family, ADR-0001 D3).
+    pub(crate) fn dispatch_parameter_manager_message(
+        &mut self,
+        msg: ParameterManagerMsg,
+    ) -> Task<Message> {
+        match msg {
+            ParameterManagerMsg::Open => {
+                // Already open: keep the filter, the half-typed column name
+                // and the session.
+                if !self.ui_state.parameter_manager_open {
+                    self.ui_state.parameter_table = Default::default();
+                }
+                self.ui_state.parameter_manager_open = true;
+                // The dialog takes over: the Grid & Snap popover goes.
+                self.ui_state.grid_snap_popover = None;
+                self.handle_detach_modal(ModalId::ParameterManager)
+            }
+            ParameterManagerMsg::Close => self.close_parameter_manager(),
+            ParameterManagerMsg::Edit {
+                symbol_uuid,
+                key,
+                value,
+            } => self.handle_parameter_manager_edit(symbol_uuid, key, value),
+            ParameterManagerMsg::CellSubmitted => {
+                self.end_parameter_edit_runs();
+                Task::none()
+            }
+            ParameterManagerMsg::ParameterRemoved { key } => self.handle_parameter_removed(&key),
+            ParameterManagerMsg::NewKeyChanged(key) => {
+                self.ui_state.parameter_table.new_key = key;
+                Task::none()
+            }
+            ParameterManagerMsg::ColumnAdded => self.handle_parameter_column_added(),
+            ParameterManagerMsg::FilterChanged(filter) => {
+                self.ui_state.parameter_table.filter = filter;
+                Task::none()
+            }
+            ParameterManagerMsg::FilterCleared => {
+                self.ui_state.parameter_table.filter.clear();
+                Task::none()
+            }
+            ParameterManagerMsg::SessionReverted => self.handle_parameter_session_reverted(),
+            ParameterManagerMsg::ColumnHeaderHovered { key, is_hovered } => {
+                let hovered = &mut self.ui_state.parameter_table.hovered_column;
+                if is_hovered {
+                    *hovered = Some(key);
+                } else if hovered.as_deref() == Some(key.as_str()) {
+                    *hovered = None;
+                }
+                Task::none()
+            }
+            ParameterManagerMsg::TableScrolled { pane, x, y } => follow_table_scroll(pane, x, y),
+        }
+    }
+
     /// Write one parameter value now. An empty value empties the parameter,
     /// it does not delete it. Keystrokes in one cell are one undo step.
     pub(crate) fn handle_parameter_manager_edit(
@@ -24,7 +90,28 @@ impl Signex {
         let path = self.document_state.active_path.clone();
         if self.ui_state.parameter_table.run_path != path {
             self.end_parameter_edit_runs();
-            self.ui_state.parameter_table.run_path = path;
+            self.ui_state.parameter_table.run_path = path.clone();
+        }
+        // The value before the session's first edit of this cell, for the
+        // changed mark and Revert changes. A symbol the sheet lacks is not
+        // a cell; the edit below changes nothing either.
+        let before = self.document_state.active_engine().and_then(|engine| {
+            engine
+                .document()
+                .symbols
+                .iter()
+                .find(|s| s.uuid == symbol_uuid)
+                .map(|s| s.fields.get(&key).cloned())
+        });
+        if let Some(before) = before {
+            self.ui_state.parameter_table.session.record(
+                ParameterCell {
+                    sheet: path,
+                    symbol: symbol_uuid,
+                    key: key.clone(),
+                },
+                before,
+            );
         }
         // Same reasoning as `handle_move_selection_apply` (#585). The
         // gateway clears the content cache, syncs the canvas and refreshes
@@ -55,6 +142,53 @@ impl Signex {
         }
     }
 
+    /// The cells of the active sheet edited since the dialog opened whose
+    /// value now differs from before, each with that earlier value. It
+    /// reads the document, so Undo and Redo move the count too.
+    pub(crate) fn parameter_session_changes(&self) -> Vec<(ParameterCell, Option<String>)> {
+        let Some(engine) = self.document_state.active_engine() else {
+            return Vec::new();
+        };
+        let symbols = &engine.document().symbols;
+        let sheet = self.document_state.active_path.as_deref();
+        self.ui_state
+            .parameter_table
+            .session
+            .cells_on(sheet)
+            .filter(|(cell, before)| {
+                symbols
+                    .iter()
+                    .find(|s| s.uuid == cell.symbol)
+                    .is_some_and(|s| s.fields.get(&cell.key) != before.as_ref())
+            })
+            .map(|(cell, before)| (cell.clone(), before.clone()))
+            .collect()
+    }
+
+    /// Put every changed cell of the session back, as one undo step: one
+    /// engine batch through the gateway, so one Undo brings the edits back.
+    pub(crate) fn handle_parameter_session_reverted(&mut self) -> Task<Message> {
+        let commands: Vec<Command> = self
+            .parameter_session_changes()
+            .into_iter()
+            .map(|(cell, before)| match before {
+                Some(value) => Command::SetSymbolField {
+                    symbol_id: cell.symbol,
+                    key: cell.key,
+                    value,
+                },
+                None => Command::RemoveSymbolField {
+                    symbol_id: cell.symbol,
+                    key: cell.key,
+                },
+            })
+            .collect();
+        // An open typing run would fold the revert into the last cell's step.
+        self.end_parameter_edit_runs();
+        self.apply_engine_commands(commands, false, false);
+        Task::none()
+    }
+
     /// Delete parameter `key` from every non-power symbol that carries it
     /// (the table hides power symbols), as one undo step.
     pub(crate) fn handle_parameter_removed(&mut self, key: &str) -> Task<Message> {
@@ -72,6 +206,9 @@ impl Signex {
             })
             .collect();
         self.apply_engine_commands(commands, false, false);
+        if self.ui_state.parameter_table.hovered_column.as_deref() == Some(key) {
+            self.ui_state.parameter_table.hovered_column = None;
+        }
         Task::none()
     }
 
@@ -103,11 +240,233 @@ impl Signex {
         Task::none()
     }
 
-    /// Close the manager's window and mark it closed.
+    /// Close the manager's window and mark it closed; the session ends.
     pub(crate) fn close_parameter_manager(&mut self) -> Task<Message> {
         self.end_parameter_edit_runs();
         self.ui_state.parameter_manager_open = false;
         self.ui_state.parameter_table = Default::default();
         self.close_detached_modal(ModalId::ParameterManager)
+    }
+}
+
+/// Scroll the other panes to where `pane` went: the header row follows the
+/// body sideways, the Reference column follows it up and down, and either
+/// of them moves the body.
+fn follow_table_scroll(pane: ParameterTablePane, x: f32, y: f32) -> Task<Message> {
+    let to = |id: &'static str, x: Option<f32>, y: Option<f32>| -> Task<Message> {
+        scroll_to(id, AbsoluteOffset { x, y }, Animation::Instant)
+    };
+    match pane {
+        ParameterTablePane::Body => Task::batch([
+            to(HEADER_SCROLL_ID, Some(x), None),
+            to(REFERENCE_SCROLL_ID, None, Some(y)),
+        ]),
+        ParameterTablePane::Header => to(BODY_SCROLL_ID, Some(x), None),
+        ParameterTablePane::References => to(BODY_SCROLL_ID, None, Some(y)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::{EditMsg, ParameterManagerMsg as Pm};
+    use crate::app::{TabInfo, TabKind};
+    use signex_types::schematic::{SchematicSheet, Symbol};
+
+    const SHEET: &str = "/w/parameters.snxsch";
+
+    fn part(n: u128, reference: &str, tolerance: &str) -> Symbol {
+        let mut sym = Symbol {
+            uuid: Uuid::from_u128(n),
+            lib_id: "Device:R".to_string(),
+            reference: reference.to_string(),
+            value: "10k".to_string(),
+            footprint: "R_0603".to_string(),
+            ..Default::default()
+        };
+        sym.fields
+            .insert("Tolerance".to_string(), tolerance.to_string());
+        sym
+    }
+
+    /// An app with one sheet of three resistors, each with a Tolerance.
+    fn app() -> Signex {
+        let (mut app, _task) = Signex::new();
+        app.ui_state.first_run_tour_open = false;
+        let sheet = SchematicSheet {
+            uuid: Uuid::now_v7(),
+            paper_size: "A4".to_string(),
+            symbols: vec![part(1, "R1", "1%"), part(2, "R2", "5%"), part(3, "R3", "")],
+            ..Default::default()
+        };
+        let path = std::path::PathBuf::from(SHEET);
+        app.document_state.engines.insert(
+            path.clone(),
+            signex_engine::Engine::new(sheet).expect("engine"),
+        );
+        app.document_state.tabs.push(TabInfo {
+            title: "parameters".to_string(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        app.document_state.active_path = Some(path);
+        let _ = app.update(Message::ParameterManager(Pm::Open));
+        app
+    }
+
+    fn tolerance(app: &Signex, n: u128) -> Option<String> {
+        app.document_state
+            .active_engine()
+            .expect("engine")
+            .document()
+            .symbols
+            .iter()
+            .find(|s| s.uuid == Uuid::from_u128(n))
+            .and_then(|s| s.fields.get("Tolerance").cloned())
+    }
+
+    fn edit(app: &mut Signex, n: u128, value: &str) {
+        let _ = app.update(Message::ParameterManager(Pm::Edit {
+            symbol_uuid: Uuid::from_u128(n),
+            key: "Tolerance".to_string(),
+            value: value.to_string(),
+        }));
+        let _ = app.update(Message::ParameterManager(Pm::CellSubmitted));
+    }
+
+    fn edit_three(app: &mut Signex) {
+        edit(app, 1, "2%");
+        edit(app, 2, "10%");
+        edit(app, 3, "0.1%");
+    }
+
+    #[test]
+    fn revert_restores_three_cells_and_one_undo_takes_the_revert_back() {
+        let mut app = app();
+        edit_three(&mut app);
+        assert_eq!(app.parameter_session_changes().len(), 3);
+
+        let _ = app.update(Message::ParameterManager(Pm::SessionReverted));
+        assert_eq!(tolerance(&app, 1).as_deref(), Some("1%"));
+        assert_eq!(tolerance(&app, 2).as_deref(), Some("5%"));
+        assert_eq!(tolerance(&app, 3).as_deref(), Some(""));
+        assert!(app.parameter_session_changes().is_empty());
+
+        let _ = app.update(Message::Edit(EditMsg::Undo));
+        assert_eq!(tolerance(&app, 1).as_deref(), Some("2%"));
+        assert_eq!(tolerance(&app, 2).as_deref(), Some("10%"));
+        assert_eq!(
+            tolerance(&app, 3).as_deref(),
+            Some("0.1%"),
+            "one Undo must take the whole revert back"
+        );
+        assert_eq!(app.parameter_session_changes().len(), 3);
+    }
+
+    #[test]
+    fn revert_removes_a_parameter_the_session_created() {
+        let mut app = app();
+        let _ = app.update(Message::ParameterManager(Pm::Edit {
+            symbol_uuid: Uuid::from_u128(1),
+            key: "MPN".to_string(),
+            value: "GRM31CR71E106KA12".to_string(),
+        }));
+        let _ = app.update(Message::ParameterManager(Pm::SessionReverted));
+        let doc = app.document_state.active_engine().unwrap().document();
+        assert!(!doc.symbols[0].fields.contains_key("MPN"));
+    }
+
+    #[test]
+    fn a_cell_typed_back_to_its_old_value_is_not_counted() {
+        let mut app = app();
+        edit(&mut app, 1, "2%");
+        edit(&mut app, 1, "1%");
+        assert!(app.parameter_session_changes().is_empty());
+    }
+
+    #[test]
+    fn the_changed_count_is_cleared_on_reopen() {
+        let mut app = app();
+        edit_three(&mut app);
+        let _ = app.update(Message::ParameterManager(Pm::Close));
+        assert!(app.parameter_session_changes().is_empty());
+
+        let _ = app.update(Message::ParameterManager(Pm::Open));
+        assert!(
+            app.parameter_session_changes().is_empty(),
+            "a new opening starts a new session"
+        );
+        assert_eq!(
+            tolerance(&app, 1).as_deref(),
+            Some("2%"),
+            "closing keeps the edits"
+        );
+    }
+
+    #[test]
+    fn opening_again_while_open_keeps_the_session() {
+        let mut app = app();
+        edit(&mut app, 1, "2%");
+        let _ = app.update(Message::ParameterManager(Pm::Open));
+        assert_eq!(app.parameter_session_changes().len(), 1);
+    }
+
+    #[test]
+    fn a_filter_with_no_match_shows_the_card_and_clear_filter_brings_the_rows_back() {
+        use crate::app::view::parameter_manager::{TableBody, table_body};
+        let mut app = app();
+        let _ = app.update(Message::ParameterManager(Pm::FilterChanged(
+            "QFN-32".to_string(),
+        )));
+        let doc = app.document_state.active_engine().unwrap().document();
+        let filter = &app.ui_state.parameter_table.filter;
+        assert!(matches!(
+            table_body(&app.ui_state.i18n, filter, doc),
+            TableBody::NoMatch
+        ));
+
+        let _ = app.update(Message::ParameterManager(Pm::FilterCleared));
+        assert!(app.ui_state.parameter_table.filter.is_empty());
+        let doc = app.document_state.active_engine().unwrap().document();
+        let TableBody::Rows(rows) = table_body(&app.ui_state.i18n, "", doc) else {
+            panic!("every row must show again");
+        };
+        assert_eq!(rows.len(), 3);
+    }
+
+    #[test]
+    fn removing_a_hovered_column_forgets_the_hover() {
+        let mut app = app();
+        let _ = app.update(Message::ParameterManager(Pm::ColumnHeaderHovered {
+            key: "Tolerance".to_string(),
+            is_hovered: true,
+        }));
+        let _ = app.update(Message::ParameterManager(Pm::ParameterRemoved {
+            key: "Tolerance".to_string(),
+        }));
+        assert_eq!(app.ui_state.parameter_table.hovered_column, None);
+    }
+
+    #[test]
+    fn leaving_a_header_keeps_the_hover_of_the_header_entered_first() {
+        let mut app = app();
+        let hover = |key: &str, is_hovered: bool| {
+            Message::ParameterManager(Pm::ColumnHeaderHovered {
+                key: key.to_string(),
+                is_hovered,
+            })
+        };
+        let _ = app.update(hover("MPN", true));
+        let _ = app.update(hover("Tolerance", true));
+        let _ = app.update(hover("MPN", false));
+        assert_eq!(
+            app.ui_state.parameter_table.hovered_column.as_deref(),
+            Some("Tolerance")
+        );
+        let _ = app.update(hover("Tolerance", false));
+        assert_eq!(app.ui_state.parameter_table.hovered_column, None);
     }
 }

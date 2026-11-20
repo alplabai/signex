@@ -5824,6 +5824,7 @@ version = "26.11.0"
 dependencies = [
  "anyhow",
  "pcb-geom",
+ "regex",
  "serde",
  "serde_json",
  "signex-drc",

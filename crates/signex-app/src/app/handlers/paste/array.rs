@@ -44,18 +44,37 @@ impl Signex {
             self.document_state.active_path.clone(),
         );
         dialog.id = self.ui_state.paste_array_opens;
-        self.ui_state.paste_array = Some(dialog);
+        // The preview draws the copy's extent on the sheet grid and its
+        // first label counted up.
+        dialog.copy_size_mm = copied
+            .bounds
+            .map(|b| (b.max_x - b.min_x, b.max_y - b.min_y));
+        dialog.grid_mm = grid;
+        dialog.sample_label = copied
+            .payload
+            .fragment()
+            .labels
+            .iter()
+            .map(|l| l.text.trim())
+            .find(|text| !text.is_empty())
+            .map(str::to_owned);
+        self.ui_state.paste_array = Some(Box::new(dialog));
+        // The dialog takes over: the Grid & Snap popover goes.
+        self.ui_state.grid_snap_popover = None;
     }
 
     pub(crate) fn handle_paste_array_message(&mut self, msg: PasteArrayMsg) -> Task<Message> {
         self.close_paste_array_if_sheet_changed();
         let mut seeding = Task::none();
+        let preferred_step = self.ui_state.increment_step;
         if let Some(state) = self.ui_state.paste_array.as_mut() {
             match msg {
                 PasteArrayMsg::CountChanged(text) => state.count = text,
                 PasteArrayMsg::XSpacingChanged(text) => state.x_spacing = text,
                 PasteArrayMsg::YSpacingChanged(text) => state.y_spacing = text,
                 PasteArrayMsg::StepChanged(text) => state.step = text,
+                PasteArrayMsg::CountUpToggled(on) => state.set_count_up(on, preferred_step),
+                PasteArrayMsg::PreviewHovered(hover) => state.hover.update(hover),
                 PasteArrayMsg::DesignatorsChosen(mode) => {
                     state.designators = mode;
                     if mode.reads_project() {
