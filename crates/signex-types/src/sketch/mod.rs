@@ -9,6 +9,7 @@
 pub mod array;
 pub mod attr;
 pub mod baked_kinds;
+pub mod board_attr;
 pub mod constraint;
 pub mod data;
 pub mod entity;
@@ -20,7 +21,7 @@ pub mod plane;
 
 pub use attr::LinkedRadius;
 pub use data::SketchData;
-pub use host::{SketchAction, SketchHost, SketchRole};
+pub use host::{RoleShape, SketchAction, SketchHost, SketchRole};
 
 #[cfg(test)]
 mod board_tests;

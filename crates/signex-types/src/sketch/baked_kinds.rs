@@ -33,6 +33,13 @@ pub enum BakedKind {
     BoardOutline,
     /// Board mounting holes (#2234).
     MountingHoles,
+    /// Board copper pours (decision 2, 2026-11-20): the board's own zones,
+    /// not [`Self::Pours`], which a footprint bakes into its own fields.
+    BoardPours,
+    /// Drawings on the board's mechanical layers.
+    Mechanical,
+    /// Placed components moved to a sketch point.
+    ComponentAnchors,
 }
 
 impl BakedKind {
@@ -53,6 +60,9 @@ impl BakedKind {
             Self::VScores => "v_scores",
             Self::BoardOutline => "board_outline",
             Self::MountingHoles => "mounting_holes",
+            Self::BoardPours => "board_pours",
+            Self::Mechanical => "mechanical",
+            Self::ComponentAnchors => "component_anchors",
         }
     }
 
@@ -72,6 +82,9 @@ impl BakedKind {
             Self::VScores => "V-scores",
             Self::BoardOutline => "board outline",
             Self::MountingHoles => "mounting holes",
+            Self::BoardPours => "pours",
+            Self::Mechanical => "mechanical layer",
+            Self::ComponentAnchors => "component anchors",
         }
     }
 }
@@ -96,6 +109,10 @@ impl SketchData {
             BakedKind::VScores => e.v_score.is_some(),
             BakedKind::BoardOutline => e.board_outline,
             BakedKind::MountingHoles => e.mounting_hole.is_some(),
+            // A board pour is a pour on a board sketch: the host picks the kind.
+            BakedKind::BoardPours => e.pour.is_some(),
+            BakedKind::Mechanical => e.mechanical.is_some(),
+            BakedKind::ComponentAnchors => e.component_anchor.is_some(),
         })
     }
 
