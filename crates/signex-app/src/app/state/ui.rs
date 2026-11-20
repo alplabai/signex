@@ -497,8 +497,9 @@ pub struct UiState {
     /// dialog state so a reopened dialog never reuses an old token.
     pub find_similar_generation: u64,
     /// The Tools ▸ Assign Footprints dialog, while open (#2248). Apply
-    /// changes the open sheets in memory; the user saves.
-    pub assign_footprints: Option<crate::app::AssignFootprintsState>,
+    /// changes the open sheets in memory; the user saves. Boxed: a closed
+    /// dialog costs one pointer (#2412).
+    pub assign_footprints: Option<Box<crate::app::AssignFootprintsState>>,
     /// Generation of the newest Assign Footprints read. Outside the dialog's
     /// state so a reopened dialog never takes an older read.
     pub assign_footprints_reads: u64,
@@ -536,8 +537,9 @@ pub struct UiState {
     /// The waiver being written in the ERC panel, if any (#1285).
     pub erc_waive_draft: Option<crate::panels::ErcWaiveDraft>,
     /// What the ERC and Messages panels show, the cached user identity and
-    /// what the newest ERC run checked (#85, #86, AV-13).
-    pub validation_panels: crate::panels::ValidationPanels,
+    /// what the newest ERC run checked (#85, #86, AV-13); boxed so its
+    /// growth stays off `UiState` (#2412).
+    pub validation_panels: Box<crate::panels::ValidationPanels>,
     /// Global cursor into the flattened ERC diagnostics list spanning all
     /// sheets in `erc_violations_by_path`. Used by next/prev navigation.
     pub erc_focus_global_index: Option<usize>,
@@ -831,6 +833,9 @@ mod tests {
                 field_size(|ui| &ui.pending_profile_update),
             ),
             ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
+            ("assign_footprints", field_size(|ui| &ui.assign_footprints)),
+            ("annotate_session", field_size(|ui| &ui.annotate_session)),
+            ("validation_panels", field_size(|ui| &ui.validation_panels)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

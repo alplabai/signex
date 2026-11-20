@@ -125,10 +125,10 @@ impl Signex {
         self.interaction_state.context_menu = None;
         self.ui_state.assign_footprints_reads += 1;
         let generation = self.ui_state.assign_footprints_reads;
-        self.ui_state.assign_footprints = Some(AssignFootprintsState::reading(
+        self.ui_state.assign_footprints = Some(Box::new(AssignFootprintsState::reading(
             generation,
             self.document_state.documents_epoch,
-        ));
+        )));
         Task::perform(
             crate::app::path_op_jobs::run_blocking(move || read_parts(&inputs)),
             move |result| {

@@ -13,7 +13,7 @@ impl Signex {
     /// The panels' view state as the panel context shows it, with the Run
     /// ERC key of the active keymap.
     pub(crate) fn validation_panels_view(&self) -> ValidationPanels {
-        let mut view = self.ui_state.validation_panels.clone();
+        let mut view = (*self.ui_state.validation_panels).clone();
         view.run_erc_key = self.ui_state.active_keymap.shortcut_label_for_id("run_erc");
         view
     }
