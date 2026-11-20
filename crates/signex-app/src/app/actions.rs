@@ -150,6 +150,7 @@ impl Signex {
         self.ui_state.move_pick = None;
         self.ui_state.lasso_polygon = None;
         self.clear_drawing_buffers();
+        self.interaction_state.end_sheet_placement_pause();
 
         // ── Every window's leftovers ─────────────────────────────────
         //

@@ -575,11 +575,13 @@ impl Signex {
                 // next click uses the values the user just edited; a typed
                 // position places the next object there at once (#2532). A
                 // Location field that does not read refuses OK: the form
-                // stays up with the field marked.
+                // stays up with the field marked, and the pause (what Esc
+                // restores) stays too.
                 let refused = (self.document_state.panel_ctx.pre_placement.as_ref())
                     .is_some_and(|pp| pp.position.has_invalid());
                 if !refused {
                     self.interaction_state.active_canvas_mut().placement_paused = false;
+                    self.interaction_state.end_sheet_placement_pause();
                 }
                 follow = self.place_at_typed_position();
             }

@@ -18,6 +18,7 @@ impl Signex {
                     && let Some(path) = active_tab.kind.as_footprint_editor()
                 {
                     let path = path.clone();
+                    self.note_footprint_pause(&path);
                     return self.update(crate::app::contracts::Message::Library(
                         crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                             path,
@@ -240,6 +241,9 @@ impl Signex {
                         } else {
                             self.snap_to_grid(self.ui_state.cursor_x, self.ui_state.cursor_y)
                         };
+                    // The form as it stood before this Tab: what Esc while
+                    // paused restores (the typed position included).
+                    let before = self.document_state.panel_ctx.pre_placement.clone();
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
                             tool_name,
@@ -272,17 +276,28 @@ impl Signex {
                     // does NOT place the object — it pauses placement and
                     // the pre-placement form edits the properties used by
                     // the next click. Placement resumes when the user hits
-                    // Resume or Enter.
+                    // Resume or Enter; Esc resumes without the edits.
                     self.interaction_state.active_canvas_mut().placement_paused = true;
+                    self.interaction_state.placement_pause =
+                        Some(crate::app::state::SheetPlacementPause::Sheet {
+                            before,
+                            at_pause: self.document_state.panel_ctx.pre_placement.clone(),
+                            reference_override: self
+                                .interaction_state
+                                .placement
+                                .as_ref()
+                                .and_then(|s| s.reference_override.clone()),
+                        });
                     return Task::batch([show_properties, self.finish_update()]);
                 }
                 self.finish_update()
             }
             ToolMessage::ResumePlacement => {
-                // Big on-canvas "Resume" button (Altium-style pause overlay).
-                // Keep `pre_placement` alive so the next click consumes the
+                // The Resume button of the Placement Paused banner. Keep
+                // `pre_placement` alive so the next click consumes the
                 // values the user just edited — only un-pause the canvas and
                 // close any transient selection the dock picked up.
+                self.interaction_state.placement_pause = None;
                 self.interaction_state.active_canvas_mut().placement_paused = false;
                 if self.is_board_tool_paused() {
                     self.resume_board_tool();

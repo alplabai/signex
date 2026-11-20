@@ -225,17 +225,19 @@ attached:
 - **Rotate and mirror** it with the keys that rotate and mirror a selection
   (section 13: `Space` rotates in the default profile; `X` and `Y` mirror). They
   turn the part on the cursor, not whatever is selected on the sheet.
-- Press `Tab` to open the pre-placement properties in the Properties panel:
-  the value, the designator and the rotation. Placement pauses until you press
-  **Resume** or **OK**.
+- Press `Tab` to pause placement and open the pre-placement properties in the
+  Properties panel: the value, the designator and the rotation. **Resume**,
+  `Enter` or the form's **OK** goes on placing with your edits. `Esc` goes on
+  placing without them: the part keeps the values it had when you pressed
+  `Tab`, and stays on the cursor. A second `Esc` lets go of it.
 - The Position X and Y in that form follow the cursor. Type a position (in
   the panel's unit; Y counts from the sheet's page origin) and press **OK** or
   `Enter`: the next object is placed there without a click. A field that is
   not a number is outlined and **OK** places nothing until it is fixed or
-  cleared. The wire tool takes a Start and an
-  End and places one straight wire between them. A typed position is used
-  once; the object after it starts from the cursor again. Every placement
-  tool has this form.
+  cleared. `Esc` drops a typed position with the other edits and places
+  nothing. The wire tool takes a Start and an End and places one straight
+  wire between them. A typed position is used once; the object after it
+  starts from the cursor again. Every placement tool has this form.
 - Click to place it. One click is one **Undo** step. The part stays on the
   cursor, and each further click places another copy with the next free
   designator (R1, R2, R3...). A designator typed in the `Tab` form is used for
@@ -302,6 +304,16 @@ version. A group of more than 60 items follows the cursor as an outline.
 **Edit ▸ Paste Special** skips the cursor and places the copy at once, to the
 right of the sheet's content. A sheet written by a newer Signex is read-only in
 this build, so nothing is pasted into it.
+
+**Paste array** (from the command palette, `Ctrl+Shift+P`) places many copies
+of what you copied in a row or grid. Set **Copies** (up to 1000) and the X and
+Y **Spacing**, typed in the display unit; copy *k* sits *k* spacings from the
+copied original. Under **Numbering**, **Count up label numbers** moves the
+numbers in labels by the **Text increment step** per copy, and **Designators**
+chooses what the copies' parts are numbered, as the **Designators on paste**
+preference does. The preview draws the first copies on the sheet grid, with the
+spacing marked. **OK** places every copy as one **Undo** step. The dialog closes
+if you switch to another sheet.
 
 ## 6. Wire
 
@@ -450,6 +462,21 @@ its entry wires labelled. A group (`{SDA SCL}`) joins only a group with the same
 content. Still to come: a bus joined to another bus by geometry across sheets,
 and bus-aware rendering of the pin (see #1049).
 
+### Net colours
+
+The net colour palette (`F5` in the default profile, or **Net Color...** in the
+sheet's right-click menu) lists every net label name on the active sheet,
+coloured nets first, then by name. Type in **Filter nets** to narrow the list.
+Click a row to open its chooser: a swatch colours the wires and junctions of
+that net, **Clear** takes the colour off, and **Custom…** opens the colour
+picker (swatches, R / G / B, **Hex**, and the old and new colour side by side).
+**Use Color** colours the net on the sheet the picker was opened from; if
+another sheet is active by then, nothing changes and the Messages panel says
+so. **Clear all colours** at the foot of the palette clears the active sheet
+only. Each colour change is one **Undo** step and is saved with the sheet. A
+sheet written by a newer Signex is read-only in this build and keeps its
+colours.
+
 ## 8. Annotate
 
 Annotation gives every symbol a unique reference designator such as `R1`, `R2`.
@@ -540,23 +567,43 @@ multi-sheet columns and the parameter-matching checkboxes).
 
 **Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Altium
 profile) search the text of labels, text notes, designators and values. The
-**Scope** row chooses how far the search reaches:
+**Find / Replace** switch in the dialog's header changes between the two in
+place. The pill inside the Find field counts the matches. The three toggles
+beside it choose how the text matches:
+
+- **Match case** (`Aa`): upper and lower case differ. Off, case is ignored.
+- **Whole word** (`ab`), on by default: a match may not touch a letter, digit
+  or `_` on either side, so `VOUT` does not find `VOUT_3V3` or `VOUT_SENSE`.
+  Turn it off to find text inside longer names.
+- **Regular expression** (`.*`): the Find text is a regular expression, and
+  the replacement may use its groups (`$1`, `${name}`). An invalid expression
+  marks the field and finds nothing. An expression is used as typed, spaces
+  included; plain Find text drops the spaces at its ends.
+
+The **Scope** switch chooses how far the search reaches:
 
 - **Sheet** searches the active sheet only.
 - **Project** searches every sheet of the project, including sheets you have
-  not opened. Results are grouped under the sheet they are on. A sheet that
-  cannot be read, or that was written by a newer Signex and is read-only in
-  this build, is not searched; the dialog says so and the Messages panel names
-  it.
+  not opened. A sheet that cannot be read, or that was written by a newer
+  Signex and is read-only in this build, is not searched; a warning line under
+  the results says so and the Messages panel names it.
 
-Click a result to open its sheet and zoom to the item. `F3` steps to the next
-result and `Shift+F3` to the previous one (in both profiles), wrapping at the
-ends. A sheet placed more than once shows one designator result per placement,
-labelled "placement 2 of 3".
+Results are grouped by kind (Net Label, Text Note, Designator, Value), each
+with its matches highlighted and its sheet in the right-hand column. Click a
+result to open its sheet and zoom to the item; the footer reads "Match 2 of 5".
+`F3` steps to the next result and `Shift+F3` to the previous one (in both
+profiles), wrapping at the ends. A sheet placed more than once shows one
+designator result per placement, labelled "placement 2 of 3".
+
+In Replace mode every result has an include box, all set at first, and shows
+what it becomes (`VOUT → VOUT_3V3`). The primary button counts the included
+results ("Replace 1 of 5") and replaces only those; a cleared row stays as it
+is. Changing the Find text, a toggle or the scope sets every box again.
+**Replace Current** replaces the selected result.
 
 **Replace Current** and **Replace All** replace only the matched text, not the
-whole field, and match without regard to case. In **Project** scope a Replace
-All is one undo step: `Ctrl+Z` on any of the changed sheets reverts every one of
+whole field. A Replace All is one undo step; in **Project** scope `Ctrl+Z` on
+any of the changed sheets reverts every one of
 them together. If one of those sheets was edited afterwards, the undo is
 refused and the Messages panel names the sheet; undo the newer edit first.
 
@@ -568,6 +615,18 @@ press Replace, never from the search results, so an edit made after the search
 is not overwritten with stale text. If you open, save or close a document, or close the
 project, while a project Replace is still reading the sheets, it is cancelled with a
 Messages line and changes nothing; run it again.
+
+### Find Similar Objects
+
+**Edit ▸ Find Similar Objects...** (`Shift+F`, or the right-click menu) starts
+from the object under the cursor, or the one selected object. The dialog lists
+its properties with the object's value for each, and a **Same** / **Any**
+choice: **Kind** starts at Same and the rest at Any, so at first every object
+of the same kind matches. A placed part reads as **Part**. **Current sheet**
+counts the matches on the sheet; **Whole project** also counts them on the
+project's other sheets, including closed ones. **Select N** selects the matches
+on the dialog's own sheet; matches elsewhere are only counted. Opened on a
+board, it searches that board.
 
 ### Search everywhere
 
