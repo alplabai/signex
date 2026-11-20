@@ -287,6 +287,9 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
   hosts ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#modify-tools)); a board
   bake still bakes one instance of a pattern, and patterns bake their
   instances with #2517.
+  Since 2026-11-20 the Create rows Slot and Polygon are offered on a board
+  as on a footprint, and bake as any closed profile
+  ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#create-tools)).
 - Drawing V-scores. (Exporting them is done: through cutouts go to the
   Gerber profile, mounting holes to the drill files and V-scores to their own
   Gerber image; see [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).)
