@@ -228,6 +228,21 @@ impl Signex {
                     let prev_shape_fill = prev.map_or(defaults.shape_fill, |pp| pp.shape_fill);
                     let prev_wire_width = prev.map_or(defaults.wire_width, |pp| pp.wire_width);
                     let prev_wire_color = prev.map_or(defaults.wire_color, |pp| pp.wire_color);
+                    // A position typed before this Tab still waits for OK.
+                    let mut prev_position = prev.map(|pp| pp.position.clone()).unwrap_or_default();
+                    prev_position.wire_anchor = self.wire_anchor();
+                    let (cursor_x_mm, cursor_y_mm) =
+                        if self.interaction_state.current_tool == Tool::Wire {
+                            self.snap_wire_point(
+                                self.active_render_snapshot(),
+                                self.ui_state.cursor_x,
+                                self.ui_state.cursor_y,
+                            )
+                        } else {
+                            self.snap_to_grid(self.ui_state.cursor_x, self.ui_state.cursor_y)
+                        };
+                    // The form as it stood before this Tab: what Esc while
+                    // paused restores (the typed position included).
                     let before = self.document_state.panel_ctx.pre_placement.clone();
                     self.document_state.panel_ctx.pre_placement =
                         Some(crate::panels::PrePlacementData {
@@ -243,12 +258,13 @@ impl Signex {
                             bold: false,
                             italic: false,
                             underline: false,
-                            cursor_x_mm: self.ui_state.cursor_x,
-                            cursor_y_mm: self.ui_state.cursor_y,
+                            cursor_x_mm,
+                            cursor_y_mm,
                             shape_width_mm: prev_shape_width,
                             shape_fill: prev_shape_fill,
                             wire_width: prev_wire_width,
                             wire_color: prev_wire_color,
+                            position: prev_position,
                         });
                     // TAB opens the pre-placement form in Properties, so
                     // the panel has to end up in front. `add_panel`
@@ -264,8 +280,13 @@ impl Signex {
                     self.interaction_state.active_canvas_mut().placement_paused = true;
                     self.interaction_state.placement_pause =
                         Some(crate::app::state::SheetPlacementPause::Sheet {
-                            before,
-                            at_pause: self.document_state.panel_ctx.pre_placement.clone(),
+                            before: before.map(Box::new),
+                            at_pause: self
+                                .document_state
+                                .panel_ctx
+                                .pre_placement
+                                .clone()
+                                .map(Box::new),
                             reference_override: self
                                 .interaction_state
                                 .placement

@@ -195,6 +195,11 @@ pub enum ErcMsg {
     /// Click on a pin-connection matrix cell: cycle its severity
     /// Error → Warning → Info → Off → (back to baseline default).
     PinMatrixCellCycled { row: u8, col: u8 },
+    /// The rule editor's "Changed only" chip was switched; carries the new
+    /// state.
+    RulesChangedOnlyToggled(bool),
+    /// The rule editor's "Filter rules" field changed.
+    RuleFilterChanged(String),
     /// Copy this machine's ERC preferences into the active project's
     /// `.snxprj` rule set (written on the next explicit save, #1085).
     StoreRulesInProject,

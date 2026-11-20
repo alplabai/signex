@@ -15,6 +15,9 @@ pub enum PanelMsg {
     /// A Messages row's command link was pressed: the command and the
     /// document it acts on (`messages_row::row_action`).
     MessageLinkPressed(crate::diagnostics::MessageLink),
+    /// A Properties action button was pressed: the catalog command it runs
+    /// (a sheet symbol's Open Sheet, Create Sheet…).
+    CommandButtonPressed(&'static str),
     /// v0.14.2 — Properties panel toggle for the active footprint
     /// editor's Auto-fit Courtyard setting. Routes through
     /// `handle_dock_sch_library_message` (same dispatcher every other
@@ -753,8 +756,6 @@ pub enum PanelMsg {
     EditLabelDirection(uuid::Uuid, f64, signex_types::schematic::HAlign),
     /// Edit a label's font size in Altium pt (10 = 2.54 mm).
     EditLabelFontSizePt(uuid::Uuid, u32),
-    /// Edit a text note's text (committed on submit).
-    EditTextNoteText(uuid::Uuid, String),
     /// Edit a Blanket's net class or ERC exclusions (#2420).
     EditBlanket(uuid::Uuid, super::BlanketEdit),
     /// Edit the rules a No-ERC directive silences (#1699).
@@ -774,10 +775,6 @@ pub enum PanelMsg {
     SetPrePlacementFont(String),
     /// Pre-placement: update font size (pt).
     SetPrePlacementFontSize(u32),
-    /// Pre-placement: set horizontal justification.
-    SetPrePlacementJustifyH(signex_types::schematic::HAlign),
-    /// Pre-placement: set vertical justification.
-    SetPrePlacementJustifyV(signex_types::schematic::VAlign),
     /// Pre-placement: toggle bold / italic / underline.
     TogglePrePlacementBold,
     TogglePrePlacementItalic,
@@ -1035,6 +1032,9 @@ pub enum PanelMsg {
     ResetChildSheetStyle(uuid::Uuid),
     /// Pre-placement: confirm and close.
     ConfirmPrePlacement,
+    /// Pre-placement: a typed Position X / Y (a wire's Start / End) or a
+    /// picked justification anchor (#2532).
+    PrePlacementPosition(super::PrePlacementPositionMsg),
     /// Set snap grid size (mm).
     SetGridSize(f32),
     /// Set visible grid size (mm) — independent of snap grid.
@@ -1101,9 +1101,19 @@ pub enum PanelMsg {
     Noop,
     /// The multi-selection form of the Properties panel (#1258).
     MultiEdit(super::MultiEditMsg),
+    /// The view state of the selection forms: kind chips, the rule filter,
+    /// the illustration hover and the sheet File browse (#1699).
+    SelectionForm(super::SelectionFormMsg),
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    Illustration(signex_widgets::property_illustration::IllustrationMsg),
+    /// Document Options view events: Parameters filter, zone counts and the
+    /// illustration hover (#2531).
+    DocumentOptions(super::DocumentOptionsMsg),
+    /// The placed part's ⋯ menu, its focused pin and its illustration
+    /// hover (mockup rows 42, 50).
+    Part(super::PartPanelMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

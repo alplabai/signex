@@ -150,12 +150,6 @@ panels-filter-other = Other
 panels-properties-document-options = Document Options
 # Subsection label: the measurement units.
 panels-properties-units = Units
-# Subsection label of Page Options: paper size and format.
-panels-properties-formatting = Formatting and Size
-# Subsection label of Page Options: the sheet border and its zone grid.
-panels-properties-border-zones = Border and Zones
-# Subsection label of Page Options: the document font.
-panels-properties-text = Text
 # Subsection label: the 3 × 3 text anchor picker.
 panels-properties-justification = Justification
 
@@ -515,7 +509,6 @@ panels-properties-needs-schematic = Properties are available when a schematic is
 panels-properties-open-project = Open a project
 panels-properties-nothing-selected = Nothing selected
 panels-properties-one-object-selected = 1 object selected
-panels-properties-no-placement-options = Click to place. No per-instance options.
 panels-properties-tab-general = General
 panels-properties-tab-parameters = Parameters
 panels-properties-template-defaults = Template: using A-series defaults
@@ -557,7 +550,6 @@ panels-net-classes-nets = Nets
 panels-net-classes-patterns = Patterns
 panels-child-sheet-name = Name
 panels-child-sheet-file = File
-panels-child-sheet-line-width = Line Width (mm)
 
 ## ERC panel counts and waivers. $count is a whole number.
 panels-erc-count-errors = { $count } errors
@@ -628,25 +620,8 @@ panels-drawing-color = Color
 panels-drawing-placement = Placement
 panels-drawing-placement-behind = Behind circuit
 panels-drawing-placement-above = Above circuit
-# Number rows. X and Y are the sheet axes.
-panels-drawing-start-x = Start X
-panels-drawing-start-y = Start Y
-panels-drawing-end-x = End X
-panels-drawing-end-y = End Y
-panels-drawing-position-x = Position X
-panels-drawing-position-y = Position Y
-panels-drawing-center-x = Center X
-panels-drawing-center-y = Center Y
-# Stroke width of an arc.
-panels-drawing-width = Width
-# Stroke width of a line, or the width of a rectangle.
-panels-drawing-width-mm = Width (mm)
-panels-drawing-height-mm = Height (mm)
 # Stroke width of a closed shape.
 panels-drawing-border = Border
-panels-drawing-radius = Radius
-panels-drawing-start-angle = Start Angle
-panels-drawing-end-angle = End Angle
 # Colour tile: the theme's own colour.
 panels-drawing-color-auto = Auto
 
@@ -669,15 +644,7 @@ panels-sch-filter-hint = Kinds a click, a box and the hover pick can select. Pre
 # Properties of a placed object (#2418). $unit is the panel's length unit (mm, mil, in, um).
 panels-placed-location = Location
 panels-placed-properties = Properties
-panels-placed-x = X ({ $unit })
-panels-placed-y = Y ({ $unit })
-panels-placed-start-x = Start X ({ $unit })
-panels-placed-start-y = Start Y ({ $unit })
-panels-placed-width = Width ({ $unit })
-panels-placed-height = Height ({ $unit })
 panels-placed-rotation = Rotation
-# A rotation choice; $degrees is a whole number of degrees (0, 90, 180 or 270 in a list, any value for the current one).
-panels-placed-degrees = { $degrees } Degrees
 # Shown above the disabled rows of a locked object; $reason is the lock's own words.
 panels-placed-locked = Locked: { $reason }
 panels-placed-parameters = Parameters ({ $count })
@@ -694,10 +661,6 @@ panels-placed-sheet-file = Sheet File
 # parameters apply to every net inside it.
 panels-directive-blanket = Blanket
 panels-directive-net-class = Net Class
-# Section title: the ERC rules a Blanket does not report inside its region.
-panels-directive-erc-exclusions = ERC Exclusions
-# Checkbox: the Blanket reports no ERC rule at all inside its region.
-panels-directive-all-rules = All Rules
 
 ## ERC panel (#85): Run ERC, the count tiles, findings grouped by rule and
 ## the Waived group. The Run ERC key cap comes from the keymap.
@@ -771,11 +734,6 @@ panels-compact-group-all-in-band = all in band
 panels-compact-group-pair = pair { $pair }
 # Member caption: the member is an xSignal (a net path through series parts).
 panels-compact-group-xsignal = xSignal
-# Section title: the ERC rules a selected No-ERC directive silences at its
-# point (#1699).
-panels-no-erc-rules = Suppressed Rules
-# Checkbox: the No-ERC directive silences every ERC rule at its point.
-panels-no-erc-all-rules = All Rules
 
 ## Messages lines for the notices an edit raises (signex_engine::EngineNotice).
 ## Pin names ("R7 pin 1") and net names are passed in as they are.

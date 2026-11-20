@@ -45,7 +45,7 @@ pub fn view_footprint<'a>(
     // Symbol (schematic) canvas stays theme-driven — Altium's
     // schematic editor uses a different (cream-ish) palette.
     // The paper / charcoal ground is painted instead.
-    let graphite = crate::library::editor::footprint::canvas::graphite_look_for(tokens);
+    let graphite = crate::library::editor::footprint::graphite_look_for(tokens);
     let (bg, grid) = (graphite.bg, graphite.dot);
 
     // The canvas fills the tab: layer visibility lives in the Layers dock

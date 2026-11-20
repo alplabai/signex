@@ -119,16 +119,16 @@ pub enum SheetPlacementPause {
     /// A sheet tool or a part on the cursor.
     Sheet {
         /// The Tab form before this Tab built it; Esc puts it back.
-        before: Option<crate::panels::PrePlacementData>,
+        before: Option<Box<crate::panels::PrePlacementData>>,
         /// The form as Tab built it: the base the panel edits are diffed
         /// against, to undo what they mirrored onto the ghosts.
-        at_pause: Option<crate::panels::PrePlacementData>,
+        at_pause: Option<Box<crate::panels::PrePlacementData>>,
         /// The designator typed for the part on the cursor.
         reference_override: Option<String>,
     },
     /// A pad placement in the footprint editor at `path`.
     Footprint {
         path: PathBuf,
-        pad_defaults: crate::library::editor::footprint::NextPadDefaults,
+        pad_defaults: Box<crate::library::editor::footprint::NextPadDefaults>,
     },
 }

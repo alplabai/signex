@@ -13,8 +13,8 @@ use super::validation_kit::{
     Tone, banner, hint_card, link, link_ink, notice, run_button, status_pill,
 };
 use super::*;
-use crate::app::RulesDomain;
 use crate::styles::{DialogButtonKind, PillTone, Spacing, TypeScale, dialog_button};
+use signex_drc_dsl::table::catalog::Domain;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -92,21 +92,12 @@ impl BaseRule {
             .any(|row| row.enabled && self.fields().iter().any(|f| row.limit(*f).is_some()))
     }
 
-    /// The Rules tab domain that holds it.
-    pub fn domain(self) -> RulesDomain {
-        match self {
-            BaseRule::Clearance
-            | BaseRule::Edge
-            | BaseRule::Keepout
-            | BaseRule::Unrouted
-            | BaseRule::Short => RulesDomain::Clearance,
-            BaseRule::TrackWidth | BaseRule::ViaInPad => RulesDomain::Routing,
-            BaseRule::AnnularRing | BaseRule::HoleSize | BaseRule::HoleToHole => RulesDomain::Holes,
-            BaseRule::Mask | BaseRule::Paste => RulesDomain::Mask,
-            BaseRule::SilkToPad | BaseRule::SilkToSilk | BaseRule::Courtyard => {
-                RulesDomain::Assembly
-            }
-        }
+    /// The Rules tab domain that holds it: the catalog domain holding most
+    /// of its limits (ties to the first's), so Mask opens Mask where its
+    /// expansions are; Clearance for a rule always checked (nothing to
+    /// write).
+    pub fn domain(self) -> Domain {
+        signex_drc_dsl::table::catalog::domain_of_fields(self.fields()).unwrap_or(Domain::Clearance)
     }
 
     /// `(name, rule text, how to write it)`.

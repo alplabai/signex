@@ -645,3 +645,66 @@ fn a_run_edited_during_its_check_logs_no_lapsed_waivers() {
         "{said:?}"
     );
 }
+
+/// A Rules link opens the catalog domain holding most of the limits its
+/// rule checks (a tie goes to the first limit's), for every violation kind
+/// and base rule; one with no limit opens Clearance (Caner, 2026-11-20).
+#[test]
+fn rule_links_open_the_catalog_domain_of_the_limit_they_check() {
+    use signex_drc::ViolationKind as K;
+    use signex_drc_dsl::table::LimitField;
+    use signex_drc_dsl::table::catalog::{Domain, group_of};
+
+    use super::pcb_drc_results::rules_domain_of;
+    use crate::panels::BaseRule;
+
+    // Most often first; the earliest of equals.
+    let majority = |domains: Vec<Domain>| {
+        let count = |d: &Domain| domains.iter().filter(|x| *x == d).count();
+        let mut best: Option<Domain> = None;
+        for d in &domains {
+            if best.is_none_or(|b| count(d) > count(&b)) {
+                best = Some(*d);
+            }
+        }
+        best.unwrap_or(Domain::Clearance)
+    };
+    let field_of = |kind: &signex_drc::LimitKind| {
+        LimitField::ALL
+            .into_iter()
+            .find(|f| f.limit_kind() == *kind)
+    };
+    for kind in K::ALL {
+        let domains = kind
+            .limits()
+            .iter()
+            .filter_map(field_of)
+            .filter_map(group_of)
+            .map(|g| g.domain)
+            .collect();
+        assert_eq!(rules_domain_of(kind), majority(domains), "{kind:?}");
+    }
+    for rule in BaseRule::ALL {
+        let domains = rule
+            .fields()
+            .iter()
+            .filter_map(|f| group_of(*f))
+            .map(|g| g.domain)
+            .collect();
+        assert_eq!(rule.domain(), majority(domains), "{rule:?}");
+    }
+    // The Mask base rule opens Mask, where two of its three limits are,
+    // as the mask expansion finding's link does.
+    assert_eq!(BaseRule::Mask.domain(), Domain::Mask);
+    assert_eq!(BaseRule::Paste.domain(), Domain::Mask);
+    assert_eq!(BaseRule::TrackWidth.domain(), Domain::Physical);
+    assert_eq!(BaseRule::HoleSize.domain(), Domain::Manufacturing);
+    assert_eq!(rules_domain_of(K::TrackWidth), Domain::Physical);
+    assert_eq!(rules_domain_of(K::EdgeClearance), Domain::Manufacturing);
+    assert_eq!(rules_domain_of(K::MaskSliver), Domain::Manufacturing);
+    assert_eq!(rules_domain_of(K::MaskExpansion), Domain::Mask);
+    assert_eq!(rules_domain_of(K::CourtyardOverlap), Domain::Placement);
+    assert_eq!(rules_domain_of(K::Unconnected), Domain::Clearance);
+    assert_eq!(BaseRule::Edge.domain(), Domain::Manufacturing);
+    assert_eq!(BaseRule::Courtyard.domain(), Domain::Placement);
+}

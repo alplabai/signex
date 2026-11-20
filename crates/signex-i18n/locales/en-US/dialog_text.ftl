@@ -129,14 +129,8 @@ dialog-erc-chip-info = Info
 dialog-erc-chip-off = Off
 
 ## Rule editor (ERC dialog and Preferences ▸ Rule Profiles)
-dialog-rules-col-rule = Rule
-dialog-rules-col-severity = Severity
-# A rule that is only switched on or off; $rule is its name, in English.
-dialog-rules-on-off = { $rule } (on/off; severity per matrix cell)
 dialog-rules-severity-heading = Severity per rule
-dialog-rules-severity-hint = Click a cell to change.
 dialog-rules-matrix-heading = Pin Connection Matrix
-dialog-rules-matrix-hint = Click a cell to cycle severity.
 dialog-rules-on = On
 dialog-rules-off = Off
 # One-letter severities on the rule buttons and the matrix cells.
@@ -193,6 +187,27 @@ dialog-net-color-channel-r = R
 dialog-net-color-channel-g = G
 dialog-net-color-channel-b = B
 dialog-net-color-quick-pick = Quick Pick
+
+## Rule editor, grouped list and matrix legend (#1289)
+# Filter chip: show only the rules that differ from the shipped profile.
+dialog-rules-changed-only = Changed only
+dialog-rules-filter-placeholder = Filter rules
+dialog-rules-no-match = No rule matches the filter.
+# Subheads of the rule list.
+dialog-rules-group-pins = Pins
+dialog-rules-group-nets = Nets
+dialog-rules-group-labels = Labels
+dialog-rules-group-buses = Buses
+dialog-rules-group-hierarchy = Hierarchy
+dialog-rules-group-parts = Parts
+# Pin connection matrix legend.
+dialog-rules-legend-error = Error
+dialog-rules-legend-warning = Warning
+dialog-rules-legend-info = Info
+dialog-rules-legend-off = No report
+dialog-rules-legend-changed = Changed
+dialog-rules-legend-changed-rule = Changed rule
+dialog-rules-matrix-caption = Pin type conflict is on/off only: its findings take their severity from this matrix.
 
 ## Parameter Manager
 # Window subtitle: the active sheet's file, its parts and parameter columns.
