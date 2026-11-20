@@ -724,7 +724,7 @@ mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
 
-// Mockup rows 143 and 144a — Preferences shell (nav, dirty dots, Open folder, footer)
+// Mockup rows 143 and 144a — Preferences shell (nav, dirty dots, Open folder)
 // and the Language page (a draft applied on Apply or OK).
 #[path = "regression/preferences_language.rs"]
 mod preferences_language;

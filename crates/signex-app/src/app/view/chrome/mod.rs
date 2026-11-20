@@ -478,6 +478,35 @@ mod layout_tests {
         );
     }
 
+    /// Restore defaults has no backend, so no Preferences page draws it
+    /// (mockup row 143): the footer's buttons are Cancel, Apply and OK.
+    #[test]
+    fn no_preferences_page_draws_restore_defaults() {
+        let (mut app, _task) = Signex::new();
+        for nav in crate::preferences::PrefNav::ALL {
+            app.ui_state.preferences_nav = nav;
+
+            let texts: Vec<String> =
+                lay_out_texts(app.view_preferences_body(), iced::Size::new(900.0, 620.0))
+                    .into_iter()
+                    .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+                    .collect();
+
+            for button in ["Cancel", "Apply", "OK"] {
+                assert!(
+                    texts.iter().any(|t| t == button),
+                    "{nav:?}: no {button} in the footer"
+                );
+            }
+            assert!(
+                !texts
+                    .iter()
+                    .any(|t| t.to_lowercase().contains("restore default")),
+                "{nav:?} draws Restore defaults"
+            );
+        }
+    }
+
     fn main_window_app() -> (Signex, iced::window::Id) {
         let window = iced::window::Id::unique();
         let (mut app, _task) = Signex::new();

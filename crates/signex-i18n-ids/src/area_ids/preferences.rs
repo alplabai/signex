@@ -2,9 +2,6 @@
 
 define_ids! {
     PREFERENCES;
-    PREFERENCES_SECTION_ANNOTATION = "preferences-section-annotation";
-    PREFERENCES_SECTION_DISTRIBUTORS = "preferences-section-distributors";
-    PREFERENCES_RESTORE_DEFAULTS = "preferences-restore-defaults";
     PREFERENCES_MOVE_KEEPS_WIRES = "preferences-move-keeps-wires";
     PREFERENCES_MOVE_KEEPS_WIRES_HELP = "preferences-move-keeps-wires-help";
     PREFERENCES_NET_HOVER = "preferences-net-hover";

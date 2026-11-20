@@ -1,5 +1,6 @@
 //! Mockup row 143 — the Preferences shell: the page list, the unsaved-changes dots,
-//! the broken-file banner's Open folder, and the footer.
+//! the broken-file banner's Open folder and the Related link. The footer's
+//! buttons are pinned on the rendered dialog in `app::view::chrome`.
 
 use signex_app::annotate_undo::AnnotateUndo;
 use signex_app::app::{Message, PreferencesMsg, Signex};
@@ -95,15 +96,4 @@ fn the_related_link_opens_editing() {
     let _ = app.update(inner(PrefMsg::Nav(PrefNav::Editing)));
 
     assert_eq!(app.ui_state.preferences_nav, PrefNav::Editing);
-}
-
-/// Restore defaults has no backend, so the footer does not draw it (mockup row 143);
-/// it returns with its backend.
-#[test]
-fn the_footer_has_no_restore_defaults() {
-    let shell = include_str!("../../src/preferences/shell.rs");
-    assert!(
-        !shell.contains("PREFERENCES_RESTORE_DEFAULTS"),
-        "the footer draws Restore defaults again"
-    );
 }

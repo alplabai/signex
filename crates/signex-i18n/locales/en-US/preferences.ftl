@@ -188,11 +188,6 @@ pref-keymap-claimed = { $display } is claimed by { $action } and will never reac
 # Value beside the zoom speed slider. $percent is a whole number.
 preferences-appearance-zoom-step-value = { $percent }% per notch
 
-## Section titles of the pages
-preferences-section-annotation = Schematic — Annotation
-preferences-section-distributors = Library — Distributor APIs
-preferences-restore-defaults = Restore defaults
-
 ## Schematic ▸ Editing (#2058)
 preferences-move-keeps-wires = Keep wires connected when moving
 preferences-move-keeps-wires-help = When on, moving, rotating or mirroring symbols, child sheets or sheet pins (drag, Move, Move By, align, rotate, mirror) drags the wires on their pins along, adding a bend where needed to keep them horizontal or vertical. A net check afterwards keeps this from changing connectivity beyond what a plain move, rotate or mirror would do; a pin that cannot be kept connected moves alone and is reported in the Messages panel. When off, only the selected items move or turn and attached wires stay where they were. Hold Alt through one drag to do the opposite for that drag only; the Drag with connections command (G in the Classic profile) drags the picked object with its wires whatever this says.
