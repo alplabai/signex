@@ -353,6 +353,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `board_shape_from_selection` | Make the selected closed lines the board outline | design | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | `1` | `1` |
 | `change_footprint` | Change the footprint of the selected components | modify | `F` | `F` |
+| `create_rooms_from_sheets` | Make a room for each sheet of the project and move its parts into it | design | — | — |
 | `cycle_arc_mode` | Switch the Arc tool between by centre, by edge and any angle | pcb | — | — |
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
@@ -398,6 +399,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_rectangle` | Draw a rectangle by two corners on the active non-copper layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_reuse_block` | Place a reuse block on the channel of the selected component | design | — | — |
+| `place_board_room` | Draw a room by two corners: an area for the parts of one sheet | place | — | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
 | `place_board_slice_pour` | Slice the polygon pours on the active copper layer along a line | place | — | — |
 | `place_board_string` | Place a string on the active overlay, mechanical or documentation layer | place | — | — |

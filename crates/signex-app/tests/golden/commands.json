@@ -275,6 +275,11 @@
     "category": "interactive"
   },
   {
+    "id": "create_rooms_from_sheets",
+    "group": "Pcb",
+    "category": "design"
+  },
+  {
     "id": "create_sheet_from_sheet_symbol",
     "group": "Schematic",
     "category": "design"
@@ -1008,6 +1013,11 @@
     "id": "place_board_reuse_block",
     "group": "Pcb",
     "category": "design"
+  },
+  {
+    "id": "place_board_room",
+    "group": "Pcb",
+    "category": "place"
   },
   {
     "id": "place_board_route",
