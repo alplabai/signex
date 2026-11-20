@@ -296,8 +296,7 @@ fn a_compile_refreshes_only_its_own_projects_contents_tables() {
     let mut f = fixture("Repeat(CH, 1, 2)", false);
     // Project A's root gets a contents table.
     let mut root = f.app.document_state.engines[&f.root].document().clone();
-    root.drawings
-        .extend(sheet_with_contents_table().drawings.into_iter());
+    root.drawings.extend(sheet_with_contents_table().drawings);
     let engine = signex_engine::Engine::new_with_path(root, Some(f.root.clone())).expect("engine");
     f.app.document_state.engines.insert(f.root.clone(), engine);
     // Project B, open alongside, with its own contents sheet.
