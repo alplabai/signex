@@ -12,7 +12,7 @@ use signex_sketch::geom::{Point2, point_in_polygon, signed_area};
 use signex_sketch::id::SketchEntityId;
 use signex_types::sketch::SketchHost;
 
-use super::{EditorMode, FootprintEditorState};
+use super::{EditorMode, FootprintEditorState, SketchOverlay};
 
 /// The pad an Edit in Sketch came from and the entity that drives it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +97,7 @@ impl FootprintEditorState {
         self.selected_pad = None;
         self.selected_sketch = entity;
         self.pad_link = entity.map(|entity| PadLinkFocus { pad_idx, entity });
+        self.sketch_overlay = SketchOverlay::default();
     }
 
     /// Back to pad / Jump to pad (D6): Footprint mode with the pad `entity`
@@ -108,6 +109,7 @@ impl FootprintEditorState {
         self.selected_sketch_secondary = None;
         self.selected_pad = pad_idx;
         self.pad_link = None;
+        self.sketch_overlay = SketchOverlay::default();
     }
 
     pub fn apply_pad_link(&mut self, msg: PadLinkMsg) {

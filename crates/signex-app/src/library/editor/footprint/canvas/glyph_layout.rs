@@ -21,6 +21,12 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 
 /// Text size of every glyph and value on the drawing.
 pub(crate) const GLYPH_TEXT: f32 = TS.body;
+/// Text size of a constraint letter (H, V, // …): the 11 px it has always
+/// drawn at, a step under the values beside it.
+pub(crate) const LETTER_TEXT: f32 = TS.section;
+/// How far an upright letter sits right of and above its anchor: the
+/// 6 px it has always had, half a value's text height.
+const LETTER_NUDGE: f32 = GLYPH_TEXT * 0.5;
 /// Average advance of a glyph character, in ems; sizes a label before it
 /// is drawn (the canvas cannot measure text).
 const ADVANCE_EM: f32 = 0.62;
@@ -369,12 +375,11 @@ fn constraint_glyph(
     } else {
         // An upright letter is drawn from a small nudge right of and above
         // its anchor.
-        let nudge = GLYPH_TEXT * 0.55;
         Rectangle::new(
-            Point::new(anchor.x + nudge, anchor.y - nudge),
+            Point::new(anchor.x + LETTER_NUDGE, anchor.y - LETTER_NUDGE),
             Size::new(
-                letter.chars().count() as f32 * GLYPH_TEXT * ADVANCE_EM + 2.0,
-                GLYPH_TEXT * 1.3,
+                letter.chars().count() as f32 * LETTER_TEXT * ADVANCE_EM + 2.0,
+                LETTER_TEXT * 1.3,
             ),
         )
     };

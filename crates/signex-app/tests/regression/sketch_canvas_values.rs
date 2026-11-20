@@ -4,7 +4,7 @@
 //! array and leaves a linear one alone; a pattern value written on the
 //! drawing lands in the right expression; the conflict badge counts.
 
-use signex_app::library::editor::footprint::state::canvas_text::{COUNT_SLOT, SketchCanvasText};
+use signex_app::library::editor::footprint::state::canvas_text::SketchCanvasText;
 use signex_app::library::editor::footprint::state::sketch_overlay::PatternField;
 use signex_sketch::array::{ArrayKind, ArrayLayout, GridDepopulation};
 use signex_sketch::id::SketchEntityId;
@@ -140,11 +140,17 @@ fn a_pattern_value_written_on_the_drawing_lands_in_its_expression() {
 
 #[test]
 fn the_conflict_badge_counts_its_conflicts() {
-    let text = SketchCanvasText {
-        conflict_badge_one: "1 conflict · see Properties".into(),
-        conflict_badge_many: format!("{COUNT_SLOT} conflicts · see Properties"),
-        ..SketchCanvasText::default()
-    };
-    assert_eq!(text.conflict_badge(1), "1 conflict · see Properties");
-    assert_eq!(text.conflict_badge(4), "4 conflicts · see Properties");
+    // The count reaches the catalog as a number, so it picks the plural form.
+    let i18n = signex_i18n::I18n::new(&signex_i18n::LanguagePref::Locale("en-US".into()));
+    let mut text = SketchCanvasText::default();
+    assert!(text.set_conflict_count(&i18n, 1));
+    assert_eq!(text.conflict_badge, "1 conflict · see Properties");
+    assert!(text.set_conflict_count(&i18n, 4));
+    assert_eq!(text.conflict_badge, "4 conflicts · see Properties");
+    assert!(
+        !text.set_conflict_count(&i18n, 4),
+        "the same count renders once"
+    );
+    assert!(text.set_conflict_count(&i18n, 0));
+    assert!(text.conflict_badge.is_empty(), "no conflict, no badge");
 }

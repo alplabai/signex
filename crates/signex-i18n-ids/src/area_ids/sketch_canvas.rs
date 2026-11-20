@@ -18,6 +18,7 @@ define_ids! {
     SKETCH_CANVAS_SNAP_BOARD_TRACK = "sketch-canvas-snap-board-track";
     SKETCH_CANVAS_SNAP_BOARD_COURTYARD = "sketch-canvas-snap-board-courtyard";
     SKETCH_CANVAS_CONFLICT_BADGE = "sketch-canvas-conflict-badge";
+    SKETCH_CANVAS_CONFLICT_REMOVE = "sketch-canvas-conflict-remove";
     SKETCH_CANVAS_UNIT_MM = "sketch-canvas-unit-mm";
     SKETCH_CANVAS_UNIT_DEG = "sketch-canvas-unit-deg";
     SKETCH_CANVAS_VALUE_UNRESOLVED = "sketch-canvas-value-unresolved";

@@ -34,6 +34,7 @@ pub fn view_footprint<'a>(
     _theme_id: signex_types::theme::ThemeId,
     i18n: &signex_i18n::I18n,
     show_layer_strip: bool,
+    ui_family: &str,
 ) -> Element<'a, LibraryMessage> {
     use crate::library::editor::footprint::state::EditorMode;
     // v0.16.2.2 — footprint canvas uses Altium PCB-editor colours
@@ -99,7 +100,7 @@ pub fn view_footprint<'a>(
             // The constraint / pattern menu at the right-click (#188).
             .push(
                 crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
-                    editor, tokens, i18n,
+                    editor, tokens, i18n, ui_family,
                 ),
             )
             .boxed(),

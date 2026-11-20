@@ -85,7 +85,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_overlay(
     // saturated orange instead of the DOF palette, so the user
     // can see which entities the rubber-band picked. Mirrors the
     // colour Altium / Fusion use for selected sketch geometry.
-    let selection_colour = Color::from_rgba(1.00, 0.45, 0.05, 1.00);
+    let selection_colour = super::SELECTION;
     let is_selected = |id: SketchEntityId| -> bool {
         state.selected_sketch == Some(id)
             || state.selected_sketch_secondary == Some(id)

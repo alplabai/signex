@@ -2,13 +2,14 @@
 //! board sketch session, in the app's language. A canvas cannot read the
 //! `I18n`, so the words travel as plain strings in the editor state
 //! (`state/canvas_text.rs`). Each editor is re-rendered only when its words
-//! are missing or in another language, so the per-update refresh is a
-//! string comparison.
+//! are missing or in another language, and its conflict badge only when the
+//! conflict count changes, so the per-update refresh is a comparison.
 
-use signex_i18n::{Arg, I18n, MessageId, ids};
+use signex_i18n::{I18n, MessageId, ids};
 
 use super::super::*;
-use crate::library::editor::footprint::state::canvas_text::{COUNT_SLOT, SketchCanvasText};
+use crate::library::editor::footprint::sketch_mode::value_edit::conflicting_constraints;
+use crate::library::editor::footprint::state::canvas_text::SketchCanvasText;
 
 /// `id` as plain canvas text: no bidi isolation marks.
 fn word(i18n: &I18n, id: MessageId) -> String {
@@ -34,14 +35,8 @@ pub(crate) fn render_sketch_canvas_text(i18n: &I18n) -> SketchCanvasText {
         snap_board_via: w(ids::SKETCH_CANVAS_SNAP_BOARD_VIA),
         snap_board_track: w(ids::SKETCH_CANVAS_SNAP_BOARD_TRACK),
         snap_board_courtyard: w(ids::SKETCH_CANVAS_SNAP_BOARD_COURTYARD),
-        conflict_badge_one: i18n.message_plain(
-            ids::SKETCH_CANVAS_CONFLICT_BADGE,
-            &[("count", Arg::from(1_u32))],
-        ),
-        conflict_badge_many: i18n.message_plain(
-            ids::SKETCH_CANVAS_CONFLICT_BADGE,
-            &[("count", Arg::from(COUNT_SLOT.to_string()))],
-        ),
+        conflict_badge: String::new(),
+        conflict_count: 0,
         unit_mm: w(ids::SKETCH_CANVAS_UNIT_MM),
         unit_deg: w(ids::SKETCH_CANVAS_UNIT_DEG),
         value_unresolved: w(ids::SKETCH_CANVAS_VALUE_UNRESOLVED),
@@ -58,14 +53,20 @@ pub(crate) fn render_sketch_canvas_text(i18n: &I18n) -> SketchCanvasText {
 }
 
 /// Put the words in `i18n`'s language into `editor`, unless they already
-/// are. Returns whether they changed.
+/// are, and the conflict badge for its current conflict count. Returns
+/// whether they changed.
 pub(crate) fn refresh_canvas_text(editor: &mut FootprintDocument, i18n: &I18n) -> bool {
-    if editor.state.canvas_text.is_rendered_for(i18n.locale()) {
-        return false;
+    let relanguaged = !editor.state.canvas_text.is_rendered_for(i18n.locale());
+    if relanguaged {
+        editor.state.canvas_text = render_sketch_canvas_text(i18n);
     }
-    editor.state.canvas_text = render_sketch_canvas_text(i18n);
-    editor.canvas_cache.clear();
-    true
+    let count = conflicting_constraints(&editor.state).len();
+    let recounted = editor.state.canvas_text.set_conflict_count(i18n, count);
+    let changed = relanguaged || recounted;
+    if changed {
+        editor.canvas_cache.clear();
+    }
+    changed
 }
 
 impl Signex {
@@ -101,17 +102,21 @@ mod tests {
     fn canvas_text_strips_isolation_marks() {
         let text = render_sketch_canvas_text(&en_us());
         for word in [
-            &text.conflict_badge_one,
-            &text.conflict_badge_many,
             &text.snap_coincident,
             &text.snap_board_courtyard,
             &text.unit_mm,
         ] {
             assert!(!has_isolation_marks(word), "{word:?}");
         }
-        assert_eq!(text.conflict_badge(1), "1 conflict · see Properties");
-        assert_eq!(text.conflict_badge(3), "3 conflicts · see Properties");
-        assert!(!has_isolation_marks(&text.conflict_badge(3)));
+        let mut text = text;
+        for (count, badge) in [
+            (1, "1 conflict · see Properties"),
+            (3, "3 conflicts · see Properties"),
+        ] {
+            assert!(text.set_conflict_count(&en_us(), count));
+            assert_eq!(text.conflict_badge, badge);
+            assert!(!has_isolation_marks(&text.conflict_badge));
+        }
     }
 
     #[test]

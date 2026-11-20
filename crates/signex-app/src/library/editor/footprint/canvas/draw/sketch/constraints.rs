@@ -7,7 +7,7 @@
 use iced::widget::canvas;
 use iced::{Color, Point, Radians, Vector};
 
-use crate::library::editor::footprint::canvas::glyph_layout::{GLYPH_TEXT, Glyph, GlyphFace};
+use crate::library::editor::footprint::canvas::glyph_layout::{Glyph, GlyphFace, LETTER_TEXT};
 use crate::library::editor::footprint::state::FootprintEditorState;
 
 /// v0.13.2 Phase 6.6 — render the constraint letters laid out in
@@ -64,7 +64,7 @@ pub(super) fn draw_constraint_icons(
                 Point::new(glyph.rect.x, glyph.rect.y)
             },
             color: colour,
-            size: iced::Pixels(GLYPH_TEXT),
+            size: iced::Pixels(LETTER_TEXT),
             ..canvas::Text::default()
         };
         // v0.27 — the glyph follows its line through a full turn while

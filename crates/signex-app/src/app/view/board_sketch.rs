@@ -41,7 +41,16 @@ impl Signex {
             &self.ui_state.i18n,
         )
         .map(Message::Library);
-        Some(stack![canvas, self.board_sketch_bar(session)].boxed())
+        // The constraint / pattern menu at the right-click (#188), measured
+        // in the UI font and kept inside the canvas, under the mode bar.
+        let menu = crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
+            &session.editor,
+            tokens,
+            &self.ui_state.i18n,
+            &self.document_state.panel_ctx.ui_font_name,
+        )
+        .map(Message::Library);
+        Some(stack![canvas, menu, self.board_sketch_bar(session)].boxed())
     }
 
     /// The mode bar, with the bake preview card above it while open: the

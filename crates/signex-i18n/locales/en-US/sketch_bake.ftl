@@ -3,9 +3,10 @@
 
 # Heading of the rows that say why the sketch does not bake.
 sketch-bake-errors = Why it does not bake
-# Heading of a footprint's bake warnings: features the last bake left out.
-sketch-bake-warnings = Bake warnings
-# One bake warning; $warning is the bake's own text.
+# Heading of a footprint sketch's warnings: what the last bake left out,
+# tool clicks that were refused and solver notes.
+sketch-bake-warnings = Sketch warnings
+# One sketch warning; $warning is the warning's own text.
 sketch-bake-warning = { $warning }
 # Heading of the failed outline checks of a board sketch (mockup 179d).
 sketch-bake-checks = Outline checks

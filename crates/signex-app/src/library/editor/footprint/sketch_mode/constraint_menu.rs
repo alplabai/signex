@@ -283,12 +283,15 @@ pub fn entries(
 }
 
 /// The open menu over `editor`'s canvas, at the click, with the layer that
-/// closes it on a click outside. An empty layer when no menu is open, so
-/// the stack it is pushed on keeps its shape.
+/// closes it on a click outside. Its width is measured in `ui_family`, the
+/// configured UI font, and it moves only as far as needed to stay inside
+/// the canvas. An empty layer when no menu is open, so the stack it is
+/// pushed on keeps its shape.
 pub fn overlay<'a>(
     editor: &FootprintDocument,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
+    ui_family: &str,
 ) -> Element<'a, LibraryMessage> {
     let open = editor
         .state
@@ -301,8 +304,7 @@ pub fn overlay<'a>(
     let Some((menu, entries)) = open else {
         return Space::new().boxed();
     };
-    let width =
-        MenuMetrics::GRAPHITE.fitted_width(&entries, f32::MAX, crate::fonts::DEFAULT_UI_FONT);
+    let width = MenuMetrics::GRAPHITE.fitted_width(&entries, f32::MAX, ui_family);
     let card = active_bar_dropdown::view(entries, tokens, Some(width));
     let close = fp(editor.path.clone(), SketchCanvasMsg::MenuClosed);
     let backstop = mouse_area(
@@ -312,8 +314,8 @@ pub fn overlay<'a>(
     )
     .on_press(close.clone())
     .on_right_press(close);
-    let anchored = signex_widgets::Translate::new(card, (menu.x, menu.y));
-    stack![backstop, anchored].boxed()
+    let anchored = crate::app::view::AnchoredMenu::new(card, (menu.x, menu.y));
+    stack![backstop, anchored.boxed()].boxed()
 }
 
 #[cfg(test)]

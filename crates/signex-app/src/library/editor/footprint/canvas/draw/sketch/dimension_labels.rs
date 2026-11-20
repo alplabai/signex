@@ -48,7 +48,6 @@ impl LabelInk {
         } else {
             Color::WHITE
         };
-        let selection = crate::styles::board_canvas_colors().selection;
         Self {
             fill: ground,
             border: Color {
@@ -56,7 +55,7 @@ impl LabelInk {
                 ..ink.mark
             },
             text: ink.mark,
-            accent: crate::render_config::to_iced(&selection),
+            accent: super::SELECTION,
             danger,
         }
     }

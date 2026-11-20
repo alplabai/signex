@@ -28,6 +28,15 @@ mod conflict_badge;
 mod dimension_labels;
 mod pattern_glyphs;
 
+/// The colour of selected sketch geometry, and of what draws as selected
+/// with it: the pad-link profile and the accent of a value on the drawing.
+const SELECTION: iced::Color = iced::Color {
+    r: 1.00,
+    g: 0.45,
+    b: 0.05,
+    a: 1.00,
+};
+
 // Entry points reached from the sibling `draw::overlays` layer methods
 // via `use super::sketch::{…}`. Re-exported at their original
 // `pub(super)` reach so the `draw::sketch::<entry>` paths keep resolving

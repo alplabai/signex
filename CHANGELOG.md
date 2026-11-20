@@ -18,31 +18,6 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
-### Added — footprint & board sketch: parameters
-
-- **Sketch info bar** — in sketch mode, the footprint and board sketch show what is sketched, the plane and the grid step, with a **Parameters** button, at the canvas's top right (#189).
-- **Parameters table** — Name, Expression, Value, Unit and Used by for every sketch parameter; Add parameter; typing re-solves on each keystroke, and a row in error keeps the last good solve and shows its message; typing a letter offers the parameter names with their values (#189).
-- **Rename and delete parameters** — a row's ⋯ menu has Rename…, which renames every reference (whole names only), and Delete; deleting a used parameter asks first, naming its uses, and Replace with value puts its value in each use, as one undo step (#189).
-- **Make parameter** — a dimension's value becomes a named parameter the dimension reads, as one undo step, and the table opens on it (#189).
-
-### Added — footprint and board sketch: values on the drawing
-
-- Dimensions show `name · value` on the drawing instead of a letter; click one to edit it in place, Enter applies and re-solves, Esc cancels (#187).
-- One constraint menu on a right-click of a constraint glyph or value: Edit value, Make parameter, Convert to reference and Suppress (greyed, with the reason), Select constrained entities, Show conflicts, Delete (#188).
-- Patterns draw a glyph (`L×4`, `G×3×4`, `P×8`) that selects the pattern and opens its menu; count and spacing edit on the drawing, and a click on an instance of a selected rectangular or circular pattern suppresses it (#187, #191).
-- Conflicts show as a small red badge by the conflicting dimension; each Properties conflict row has a Remove button (#187).
-
-### Added — board sketch: outline checks and bake preview
-
-- Board sketch Properties, with nothing selected, show **Outline checks**: one closed loop, no self-intersection, and every hole, cutout and keepout inside the outline, live after every edit. A failing check names its place (the open ends and the gap, the crossing point, the opening outside) and a click selects it. It warns only: Bake still applies the sketch. The inside-corner check waits for a router tool diameter.
-- **Bake preview** draws the result on the canvas, on a board and on a footprint: what Bake writes in its layer colours, with the sketch faint on top. The preview card lists why a sketch does not bake (a click selects the place the reason names), a board's failed outline checks, and a footprint's bake warnings.
-
-### Added — footprint sketch: Modify tools and the pad link
-
-- **Chamfer, Extend and Linear Pattern** in Sketch ▸ Modify on both hosts. Chamfer cuts a corner of two Lines by the dimension input; Extend grows a Line's free end to the nearest Line, Circle or Arc ahead of it; Linear Pattern repeats the clicked source along X. Each shows a ghost while armed.
-- **Mirror about a centerline**: with no Line selected, Mirror's first click takes a centerline under it as the mirror line.
-- **Pads and the sketch**: Edit in Sketch on a pad highlights its driving profile and shows a **◂ Back to pad** link on the canvas; a selected pad entity shows **Jump to pad ▸**.
-
 ## [26.11.0] — 2026-11-17
 
 _The Community Preview release: the schematic and PCB editors are supported, the whole app moves to the Graphite light and dark interface, and Signex is now licensed under FSL-1.1-ALv2. The footprint, symbol and library editors and the board 3D view ship at an earlier stage._

@@ -5,6 +5,7 @@
 
 use iced::widget::{container, mouse_area};
 use iced::{Background, Element, Length, Theme, Widget};
+use signex_i18n::{ids, t};
 use signex_widgets::{button, raw, text};
 
 use super::super::{OverConstraintSummary, PanelMsg, RejectedConflictSummary};
@@ -64,7 +65,10 @@ fn danger_text(label: String) -> iced::widget::Text<'static, Theme> {
 }
 
 /// One clickable (when it has a focus entity) conflict row.
-pub(super) fn conflict_row<'a>(row: &ConflictRowView) -> Element<'a, PanelMsg> {
+pub(super) fn conflict_row<'a>(
+    row: &ConflictRowView,
+    i18n: &signex_i18n::I18n,
+) -> Element<'a, PanelMsg> {
     let inner: Element<'a, PanelMsg> = match row.focus {
         Some(id) => button(danger_text(row.label.clone()))
             .padding([SP.xs, SP.m])
@@ -83,7 +87,7 @@ pub(super) fn conflict_row<'a>(row: &ConflictRowView) -> Element<'a, PanelMsg> {
             .boxed(),
     };
     let constraint = row.constraint;
-    let line = iced::widget::row![inner, remove_button(constraint)]
+    let line = iced::widget::row![inner, remove_button(constraint, i18n)]
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
     mouse_area(line)
@@ -95,9 +99,8 @@ pub(super) fn conflict_row<'a>(row: &ConflictRowView) -> Element<'a, PanelMsg> {
 }
 
 /// Remove (decision fp-15): deletes the row's constraint as one undo step.
-/// A delete glyph in the danger colour; the row carries no text of its own
-/// because the panel builds it without the app's language.
-fn remove_button<'a>(constraint: ConstraintId) -> Element<'a, PanelMsg> {
+/// A delete glyph in the danger colour, named by its tooltip.
+fn remove_button<'a>(constraint: ConstraintId, i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
     use iced::widget::svg;
     let glyph = svg(crate::icons::icon_dd_delete(
         signex_types::theme::ThemeId::DEFAULT,
@@ -108,10 +111,15 @@ fn remove_button<'a>(constraint: ConstraintId) -> Element<'a, PanelMsg> {
         color: Some(theme.palette().danger.base.color),
         ..Default::default()
     });
-    button(glyph)
+    let remove = button(glyph)
         .padding([SP.xs, SP.s])
         .on_press(PanelMsg::FpEditorConflictRemoveClicked { constraint })
-        .style(|_: &Theme, _| iced::widget::button::Style::default())
+        .style(|_: &Theme, _| iced::widget::button::Style::default());
+    let tip = container(text(t!(i18n, ids::SKETCH_CANVAS_CONFLICT_REMOVE)).size(TS.caption))
+        .padding([SP.xs, SP.s])
+        .style(crate::panels::form_look::value_tip);
+    signex_widgets::tooltip(remove, tip, iced::widget::tooltip::Position::Left)
+        .gap(SP.xs)
         .boxed()
 }
 

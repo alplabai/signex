@@ -54,7 +54,11 @@ pub(super) fn draw_conflict_badge(
     let Some(by) = badge_anchor(glyphs, conflicts) else {
         return;
     };
-    let text = state.canvas_text.conflict_badge(conflicts.len());
+    // Rendered by the app from the conflict count (`refresh_canvas_text`).
+    let text = state.canvas_text.conflict_badge.as_str();
+    if text.is_empty() {
+        return;
+    }
     let width = text.chars().count() as f32 * GLYPH_TEXT * ADVANCE_EM + 2.0 * GLYPH_TEXT * PAD_EM;
     let height = GLYPH_TEXT * HEIGHT_EM;
     let left = by.rect.x + by.rect.width + GLYPH_TEXT * GAP_EM;
@@ -67,5 +71,5 @@ pub(super) fn draw_conflict_badge(
         text: ink.fill,
         caret: false,
     };
-    draw_label(frame, rect, &text, paint);
+    draw_label(frame, rect, text, paint);
 }

@@ -11,13 +11,8 @@ use crate::library::editor::footprint::canvas::FootprintCanvasState;
 use crate::library::editor::footprint::state::FootprintEditorState;
 use crate::library::editor::footprint::state::pad_link::driving_profile;
 
-/// The selected-entity colour of `entities::draw_sketch_overlay`.
-const SELECTION: Color = Color {
-    r: 1.00,
-    g: 0.45,
-    b: 0.05,
-    a: 1.00,
-};
+use super::SELECTION;
+
 const HALO: Color = Color {
     a: 0.30,
     ..SELECTION

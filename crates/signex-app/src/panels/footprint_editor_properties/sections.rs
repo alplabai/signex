@@ -428,7 +428,7 @@ pub(super) fn view_sections<'a>(
                     .boxed(),
                 );
                 for row in conflicts.iter().take(conflicts::MAX_ROWS) {
-                    col = col.push(conflicts::conflict_row(row));
+                    col = col.push(conflicts::conflict_row(row, i18n));
                 }
                 if conflicts.len() > conflicts::MAX_ROWS {
                     col = col.push(

@@ -23,6 +23,8 @@ sketch-canvas-conflict-badge = { $count ->
     [one] { $count } conflict · see Properties
    *[other] { $count } conflicts · see Properties
 }
+# Tooltip of the Remove button on a Properties conflict row.
+sketch-canvas-conflict-remove = Remove this constraint
 sketch-canvas-unit-mm = mm
 sketch-canvas-unit-deg = °
 sketch-canvas-value-unresolved = ?

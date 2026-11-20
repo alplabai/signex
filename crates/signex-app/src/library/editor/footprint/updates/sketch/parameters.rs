@@ -175,9 +175,11 @@ fn current_sketch(editor: &FootprintDocument) -> SketchData {
     editor.primitive().sketch.clone().unwrap_or_default()
 }
 
-/// Put `sketch` in as one undo step and re-solve it.
+/// Put `sketch` in as one undo step and re-solve it. A rejected solve
+/// reverts it and records nothing.
 fn commit(editor: &mut FootprintDocument, sketch: SketchData) {
     editor.record_edit(None, |ed| {
+        let before = ed.primitive().sketch.clone();
         ed.with_parts(|state, primitive| {
             let result = mutate_solve_or_revert(state, primitive, |fp| fp.sketch = Some(sketch));
             if let Err(error) = result {
@@ -185,8 +187,11 @@ fn commit(editor: &mut FootprintDocument, sketch: SketchData) {
             }
         });
         ed.canvas_cache.clear();
-        ed.mark_dirty();
-        true
+        let changed = ed.primitive().sketch != before;
+        if changed {
+            ed.mark_dirty();
+        }
+        changed
     });
 }
 

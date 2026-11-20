@@ -369,3 +369,33 @@ fn make_parameter_on_a_dimension_that_reads_one_keeps_it_and_records_nothing() {
         .expect("opened");
     assert_eq!(table.focus.as_deref(), Some("w"));
 }
+
+/// On a board, Esc with the table open closes the table and stays in
+/// sketch mode: it does not reach Discard changes first.
+#[test]
+fn on_a_board_esc_closes_the_table_before_discard() {
+    use crate::board_sketch::{edit as board_edit, in_sketch, open_board, send};
+    use crate::menu_support::menu_row;
+    use signex_app::app::InputMsg;
+
+    let mut f = open_board();
+    send(&mut f, menu_row("board_sketch"));
+    board_edit(
+        &mut f,
+        FootprintEditorMsg::SketchParameters(SketchParametersMsg::TableToggled),
+    );
+    let table_open = |f: &crate::board_sketch::Fixture| {
+        f.app
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .is_some_and(|s| s.editor.state.parameters_table.is_some())
+    };
+    assert!(table_open(&f));
+    send(
+        &mut f,
+        Message::Input(InputMsg::EscapePressed { window: None }),
+    );
+    assert!(in_sketch(&f), "Esc closed the table, not sketch mode");
+    assert!(!table_open(&f), "the table closed");
+}

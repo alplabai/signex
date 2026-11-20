@@ -6,9 +6,7 @@
 //! stripped when they are rendered: canvas text is drawn and measured by
 //! character, never shaped as mixed-script text.
 
-/// Stands for the count in [`SketchCanvasText::conflict_badge_many`]; a
-/// private-use character no translation contains.
-pub const COUNT_SLOT: char = '\u{E000}';
+use signex_i18n::{Arg, I18n, ids};
 
 /// The rendered canvas words. Empty until the app first renders them.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -33,11 +31,11 @@ pub struct SketchCanvasText {
     pub snap_board_track: String,
     pub snap_board_courtyard: String,
 
-    /// The conflict badge for one conflict.
-    pub conflict_badge_one: String,
-    /// The conflict badge for several, with [`COUNT_SLOT`] where the count
-    /// goes.
-    pub conflict_badge_many: String,
+    /// The conflict badge, rendered from the real count so the catalog picks
+    /// the plural form; empty when nothing is in conflict.
+    pub conflict_badge: String,
+    /// The conflict count `conflict_badge` was rendered for.
+    pub conflict_count: usize,
 
     /// Unit after a length on the drawing ("mm").
     pub unit_mm: String,
@@ -65,13 +63,22 @@ impl SketchCanvasText {
         self.locale == Some(locale)
     }
 
-    /// The badge naming `count` conflicts.
-    pub fn conflict_badge(&self, count: usize) -> String {
-        if count == 1 {
-            self.conflict_badge_one.clone()
-        } else {
-            self.conflict_badge_many
-                .replace(COUNT_SLOT, &count.to_string())
+    /// Render the badge for `count` conflicts in `i18n`'s language, unless
+    /// it already names that count. Returns whether it changed.
+    pub fn set_conflict_count(&mut self, i18n: &I18n, count: usize) -> bool {
+        if self.conflict_count == count && (count == 0) == self.conflict_badge.is_empty() {
+            return false;
         }
+        self.conflict_count = count;
+        self.conflict_badge = if count == 0 {
+            String::new()
+        } else {
+            let count = u32::try_from(count).unwrap_or(u32::MAX);
+            i18n.message_plain(
+                ids::SKETCH_CANVAS_CONFLICT_BADGE,
+                &[("count", Arg::from(count))],
+            )
+        };
+        true
     }
 }

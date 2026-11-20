@@ -29,11 +29,5 @@ pub fn view_board_sketch<'a>(
                 editor, tokens, i18n,
             ),
         )
-        // The constraint / pattern menu at the right-click (#188).
-        .push(
-            crate::library::editor::footprint::sketch_mode::constraint_menu::overlay(
-                editor, tokens, i18n,
-            ),
-        )
         .boxed()
 }

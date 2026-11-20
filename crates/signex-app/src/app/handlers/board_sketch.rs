@@ -18,6 +18,7 @@ use crate::app::state::{BoardSketchSession, ErrorNotice};
 use crate::app::{BoardSketchMsg, FootprintDocument, Message, PcbMsg, Signex};
 use crate::library::editor::footprint::sketch_redundancy_task::dispatch_redundancy;
 use crate::library::editor::footprint::sketch_solve_task::dispatch_pending;
+use crate::library::editor::footprint::state::SketchOverlay;
 use crate::library::editor::footprint::{SketchTool, ToolPending, apply_footprint_primitive_edit};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 
@@ -391,9 +392,10 @@ impl Signex {
     }
 
     /// What Esc does on a board in sketch mode: answer an open discard
-    /// question with Keep editing, cancel the tool, gesture or menu in
-    /// flight, then Discard changes, which asks first when there are
-    /// changes. Esc never applies the sketch to the board (#2518).
+    /// question with Keep editing, cancel the tool, gesture, menu, canvas
+    /// overlay or parameters table in flight, then Discard changes, which
+    /// asks first when there are changes. Esc never applies the sketch to
+    /// the board (#2518).
     pub(crate) fn board_sketch_escape(&self) -> Option<Message> {
         let session = self.board_sketch_in_view()?;
         let state = &session.editor.state;
@@ -404,7 +406,9 @@ impl Signex {
         let busy = state.active_tool != SketchTool::Select
             || !matches!(state.tool_pending, ToolPending::Idle)
             || state.context_menu.is_some()
-            || state.active_bar_menu.is_some();
+            || state.active_bar_menu.is_some()
+            || state.parameters_table.is_some()
+            || state.sketch_overlay != SketchOverlay::default();
         if busy {
             return Some(Message::Library(LibraryMessage::PrimitiveEditorEvent {
                 path: session.board_path.clone(),

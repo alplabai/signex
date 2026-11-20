@@ -532,3 +532,68 @@ fn the_focus_ends_when_the_selection_moves_and_a_pad_entity_offers_jump_to_pad()
         Some(PadLinkOffer::JumpToPad { entity: centre })
     );
 }
+
+/// A value edit open on the drawing, a menu and a selected pattern: what a
+/// mode change must not carry into Footprint mode.
+fn open_overlays(app: &mut Signex, path: &PathBuf) {
+    use signex_app::library::editor::footprint::state::sketch_overlay::{
+        CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget,
+    };
+    use signex_sketch::array::ArrayId;
+    let array = ArrayId::new();
+    let overlay = &mut editor_mut(app, path).state.sketch_overlay;
+    overlay.value_edit = Some(ValueEdit {
+        target: ValueTarget::Pattern(array, PatternField::Count),
+        buffer: "4".into(),
+        invalid: false,
+    });
+    overlay.menu = Some(CanvasMenu {
+        target: MenuTarget::Pattern(array),
+        x: 10.0,
+        y: 10.0,
+    });
+    overlay.selected_pattern = Some(array);
+}
+
+#[test]
+fn leaving_sketch_mode_closes_the_canvas_overlays() {
+    use signex_app::library::editor::footprint::state::SketchOverlay;
+    let (mut app, path, centre, _) = open_pad("overlay");
+
+    edit_in_sketch(&mut app);
+    open_overlays(&mut app, &path);
+    edit(
+        &mut app,
+        &path,
+        FootprintEditorMsg::SetMode(EditorMode::Normal),
+    );
+    assert_eq!(
+        editor(&app, &path).state.sketch_overlay,
+        SketchOverlay::default(),
+        "the mode switcher"
+    );
+
+    edit_in_sketch(&mut app);
+    open_overlays(&mut app, &path);
+    edit(
+        &mut app,
+        &path,
+        FootprintEditorMsg::PadLink(PadLinkMsg::PadLinkPressed { entity: centre }),
+    );
+    let state = &editor(&app, &path).state;
+    assert_eq!(state.mode, EditorMode::Normal);
+    assert_eq!(state.selected_pad, Some(0), "the pad is selected to act on");
+    assert_eq!(
+        state.sketch_overlay,
+        SketchOverlay::default(),
+        "Back to pad"
+    );
+
+    open_overlays(&mut app, &path);
+    edit_in_sketch(&mut app);
+    assert_eq!(
+        editor(&app, &path).state.sketch_overlay,
+        SketchOverlay::default(),
+        "Edit in Sketch starts clean"
+    );
+}

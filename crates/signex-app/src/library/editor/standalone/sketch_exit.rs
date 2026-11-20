@@ -244,8 +244,8 @@ const SELECTABLE_TINT: f32 = 0.06;
 pub struct PreviewIssues<M> {
     /// Selects the entity the bake's refusal names (a board).
     pub refusal_select: Option<M>,
-    /// The heading of `lines`: Outline checks on a board, Bake warnings on
-    /// a footprint.
+    /// The heading of `lines`: Outline checks on a board, Sketch warnings
+    /// on a footprint.
     pub heading: MessageId,
     pub lines: Vec<(CheckStatus, Localized, Option<M>)>,
     /// Under `lines`.
@@ -349,7 +349,8 @@ pub fn footprint_overlay<'a>(
     if exit_state.preview {
         let preview = BakePreview::of_footprint(editor.primitive());
         // A footprint bakes on every solve: what the last bake left out is
-        // in its warnings, which name no entity.
+        // in the sketch warnings, with refused tool clicks and solver notes;
+        // they name no entity.
         let issues = PreviewIssues {
             refusal_select: None,
             heading: ids::SKETCH_BAKE_WARNINGS,

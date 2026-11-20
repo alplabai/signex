@@ -56,7 +56,7 @@ impl FootprintCanvas<'_> {
     /// Backspace and typed characters, and swallows other plain keys so a
     /// Delete or a tool letter does not act on the sketch underneath. An
     /// open menu, else a selected pattern, closes on Esc. Keys with Ctrl,
-    /// Alt or the logo key pass through.
+    /// Alt or the logo key, and every key outside Sketch mode, pass through.
     fn key_canvas_overlay(
         &self,
         key: &keyboard::Key,
@@ -64,9 +64,14 @@ impl FootprintCanvas<'_> {
         typed_char: Option<char>,
     ) -> Option<canvas::Action<LibraryMessage>> {
         use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+        use crate::library::editor::footprint::state::EditorMode;
         use keyboard::key::Named;
         let overlay = &self.state.sketch_overlay;
-        if modifiers.command() || modifiers.alt() || modifiers.logo() {
+        if self.state.mode != EditorMode::Sketch
+            || modifiers.command()
+            || modifiers.alt()
+            || modifiers.logo()
+        {
             return None;
         }
         let escape = matches!(key, keyboard::Key::Named(Named::Escape));

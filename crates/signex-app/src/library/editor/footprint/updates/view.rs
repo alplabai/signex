@@ -102,6 +102,9 @@ fn set_mode(
     editor.state.active_bar_menu = None;
     // #192 — a mode change ends the Edit in Sketch focus.
     editor.state.pad_link = None;
+    // and closes the sketch canvas overlays, so a hidden value edit
+    // cannot keep the keyboard in another mode.
+    editor.state.sketch_overlay = Default::default();
     editor.state.mode = mode;
     // Run the dispatcher so the sketch is initialised + solved
     // on first switch into Sketch mode (or no-op otherwise).
