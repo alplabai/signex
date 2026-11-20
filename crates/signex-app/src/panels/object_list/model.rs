@@ -416,6 +416,9 @@ pub struct ObjectRowsSource {
     pub generation: u64,
     /// A project read is on its way; the last rows stay listed meanwhile.
     pub reading: bool,
+    /// The last project read failed. Its stamp is kept, so it is read again
+    /// only when the documents or the scope change, not on every update.
+    pub failed: bool,
     /// Stamp of everything the panel view was last built from.
     pub view_stamp: Option<u64>,
 }

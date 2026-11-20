@@ -98,10 +98,15 @@ impl Signex {
                 }
                 state.source.reading = false;
                 match rows {
-                    Ok(rows) => state.source.rows = rows,
+                    Ok(rows) => {
+                        state.source.rows = rows;
+                        state.source.failed = false;
+                    }
                     Err(why) => {
-                        // Read again at the next change rather than never.
-                        state.source.stamp = None;
+                        // The stamp stays: a read that fails every time is
+                        // tried again when its source changes, not on every
+                        // update.
+                        state.source.failed = true;
                         crate::diagnostics::log_warning(why);
                     }
                 }
@@ -238,6 +243,7 @@ impl Signex {
             source.generation += 1;
             source.rows = Arc::new(rows);
             source.reading = false;
+            source.failed = false;
             return Task::none();
         }
         let Some(root) = root else {
@@ -348,5 +354,48 @@ mod tests {
         let this_sheet = model::sheet_rows(&sheet(2, "R2"), &b, &|_: Uuid| None);
         assert_eq!(this_sheet.len(), 1);
         assert_eq!(this_sheet[0].sheet, "b");
+    }
+
+    fn with_engine(app: &mut Signex, path: &Path) {
+        let engine = signex_engine::Engine::new(SchematicSheet::default()).expect("engine");
+        app.document_state
+            .engines
+            .insert(path.to_path_buf(), engine);
+    }
+
+    /// A read that fails keeps its stamp and is marked failed, so a read
+    /// that fails every time is not started again on every update; it is
+    /// read again once its source changes.
+    #[test]
+    fn a_failed_read_is_tried_again_only_when_its_source_changes() {
+        let (mut app, _boot) = Signex::new();
+        let a = PathBuf::from("a.snxsch");
+        with_engine(&mut app, &a);
+        let stamp = app.object_rows_stamp(&a, ObjectScope::ThisSheet);
+        let source = &mut app.ui_state.object_list.source;
+        source.stamp = Some(stamp);
+        source.generation = 4;
+        source.reading = true;
+
+        let _ = app.handle_object_list_message(ObjectListMsg::ProjectRowsRead {
+            generation: 4,
+            rows: Err("the read panicked".to_string()),
+        });
+        let source = &app.ui_state.object_list.source;
+        assert_eq!(source.stamp, Some(stamp), "the stamp is kept");
+        assert!(source.failed && !source.reading);
+
+        let _ = app.refresh_object_rows(&a);
+        assert_eq!(
+            app.ui_state.object_list.source.generation, 4,
+            "nothing changed: no read again"
+        );
+
+        let b = PathBuf::from("b.snxsch");
+        with_engine(&mut app, &b);
+        let _ = app.refresh_object_rows(&b);
+        let source = &app.ui_state.object_list.source;
+        assert_eq!(source.generation, 5, "the source changed: read again");
+        assert!(!source.failed);
     }
 }
