@@ -750,8 +750,6 @@ pub enum PanelMsg {
     EditLabelDirection(uuid::Uuid, f64, signex_types::schematic::HAlign),
     /// Edit a label's font size in Altium pt (10 = 2.54 mm).
     EditLabelFontSizePt(uuid::Uuid, u32),
-    /// Edit a text note's text (committed on submit).
-    EditTextNoteText(uuid::Uuid, String),
     /// Edit a Blanket's net class or ERC exclusions (#2420).
     EditBlanket(uuid::Uuid, super::BlanketEdit),
     /// Edit the rules a No-ERC directive silences (#1699).
@@ -771,10 +769,6 @@ pub enum PanelMsg {
     SetPrePlacementFont(String),
     /// Pre-placement: update font size (pt).
     SetPrePlacementFontSize(u32),
-    /// Pre-placement: set horizontal justification.
-    SetPrePlacementJustifyH(signex_types::schematic::HAlign),
-    /// Pre-placement: set vertical justification.
-    SetPrePlacementJustifyV(signex_types::schematic::VAlign),
     /// Pre-placement: toggle bold / italic / underline.
     TogglePrePlacementBold,
     TogglePrePlacementItalic,
@@ -1112,7 +1106,7 @@ pub enum PanelMsg {
     /// illustration hover (#2531).
     DocumentOptions(super::DocumentOptionsMsg),
     /// The placed part's ⋯ menu, its focused pin and its illustration
-    /// hover (#42, #50).
+    /// hover (mockup rows 42, 50).
     Part(super::PartPanelMsg),
 }
 

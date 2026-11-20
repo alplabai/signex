@@ -1,4 +1,4 @@
-//! Properties of a drawing shape (#48): the line-art illustration at the
+//! Properties of a drawing shape (mockup row 48): the line-art illustration at the
 //! top, then Location (Position and Size; Center for an arc or a circle;
 //! Start and End for a line) → Properties (Border; Radius, Angles, Width)
 //! → Appearance (Color, Fill, Placement). The State ▸ Locked section is
@@ -658,7 +658,7 @@ mod tests {
             .collect()
     }
 
-    /// #48: Location → Properties → Appearance, paired rows, the Fill
+    /// Mockup row 48: Location → Properties → Appearance, paired rows, the Fill
     /// segment reads Solid.
     #[test]
     fn a_rectangle_shows_its_sections_in_order() {
@@ -687,7 +687,7 @@ mod tests {
         assert!(at.windows(2).all(|w| w[0] < w[1]), "{shown:?}");
     }
 
-    /// #48: an arc keeps Center, Radius, Angles (Start / End on one row)
+    /// Mockup row 48: an arc keeps Center, Radius, Angles (Start / End on one row)
     /// and Width, and has no Fill.
     #[test]
     fn an_arc_keeps_its_own_fields() {

@@ -213,7 +213,7 @@ pub struct PanelContext {
     pub title_block_sheet: Option<std::path::PathBuf>,
     /// Which sections are collapsed (by section name key).
     pub collapsed_sections: CollapsedSections,
-    /// The placed part's open ⋯ menu and illustration hover (#42).
+    /// The placed part's open ⋯ menu and illustration hover (mockup row 42).
     pub part_panel: super::PartPanelState,
     /// Pre-placement configuration (shown when Tab pressed during placement tool).
     pub pre_placement: Option<PrePlacementData>,

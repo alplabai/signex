@@ -101,7 +101,8 @@ pub(super) fn unless_off<'a>(
 }
 
 /// One typed number of a pair: its short axis name, the field and an
-/// optional unit.
+/// optional unit. An `invalid` field (its text is not a number) is outlined
+/// in the error colour.
 pub(super) fn axis_field<'a>(
     axis: impl Into<Label<'a>>,
     value: String,
@@ -109,15 +110,23 @@ pub(super) fn axis_field<'a>(
     tokens: &ThemeTokens,
     on_input: impl Fn(String) -> PanelMsg + 'a,
     on_submit: PanelMsg,
+    invalid: bool,
 ) -> Element<'a, PanelMsg> {
     let muted = crate::styles::tokens::resolve(tokens).ink3;
+    let error = ti(tokens.error);
     let input = signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value)
         .on_input(on_input)
         .on_submit(on_submit)
         .size(TS.body)
         .padding([3, 6])
         .width(Length::Fill)
-        .style(form_look::text_input_style);
+        .style(move |theme: &Theme, status| {
+            let mut style = form_look::text_input_style(theme, status);
+            if invalid {
+                style.border.color = error;
+            }
+            style
+        });
     let mut cells = row![text(axis).size(TS.caption).color(muted), input]
         .spacing(SP.xs)
         .align_y(iced::Alignment::Center);

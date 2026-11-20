@@ -1,4 +1,4 @@
-//! "Part on the sheet" (#42): the placed part as line art above General. The
+//! "Part on the sheet" (mockup row 42): the placed part as line art above General. The
 //! symbol is drawn as a body with its pins, pin numbers, net stubs,
 //! designator and value; mirror is drawn, rotation is not. DNP draws a cross
 //! and Locked a lock mark. Designator, Value and Position are callouts linked

@@ -1,4 +1,4 @@
-//! Properties of a selected No-ERC directive (#1699, #49): its Location
+//! Properties of a selected No-ERC directive (#1699, mockup row 49): its Location
 //! section, then the Suppressed rules section it shares with a Blanket. A
 //! directive that names no rule silences every rule, so All rules reads as
 //! on. Unticking it opens the list for picking (view state; the document is
@@ -122,7 +122,7 @@ mod tests {
             .to_string()
     }
 
-    /// #49: while All rules is on, the per-rule boxes take no click. The
+    /// Mockup row 49: while All rules is on, the per-rule boxes take no click. The
     /// veiled list reports no text to the probe, so the box is found in the
     /// open list and moved down by the All rules caption, read off the
     /// footer below the section.

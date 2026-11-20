@@ -1,4 +1,4 @@
-//! The placed part's own panel state (#42, #50): the open ⋯ menu and the
+//! The placed part's own panel state (mockup rows 42, 50): the open ⋯ menu and the
 //! hover link of its illustrations, with the messages that change them.
 //! The menu holds the three part actions plus "Copy Library ID".
 
@@ -25,7 +25,7 @@ pub struct PartPanelState {
 }
 
 /// The part sections that fold away while a pin is focused, so the pin
-/// facts and the Pins table fit without scrolling (#50).
+/// facts and the Pins table fit without scrolling (mockup row 50).
 pub(crate) const PART_SECTION_KEYS: [&str; 5] = [
     "sel_general",
     "sel_location",

@@ -1,4 +1,4 @@
-//! A placed part's Properties messages (#42, #50): the ⋯ menu, Copy Library
+//! A placed part's Properties messages (mockup rows 42, 50): the ⋯ menu, Copy Library
 //! ID, Show net of a focused pin, the illustration hover, and the part
 //! sections that fold while a pin is focused.
 

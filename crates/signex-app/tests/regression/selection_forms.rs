@@ -1,4 +1,4 @@
-//! #1699 (#46, #48, #49, #51): the schematic Properties forms. A sheet
+//! #1699 (mockup rows 46, 48, 49, 51): the schematic Properties forms. A sheet
 //! symbol's size is one undo step and an emptied Line Width sets the
 //! default back; the multi-selection kind chips only choose the sections
 //! shown, and a wire width preset reaches every wire in one undo step.

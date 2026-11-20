@@ -1,4 +1,4 @@
-//! Properties of a selected net label or port (#44): the illustration, then
+//! Properties of a selected net label or port (mockup row 44): the illustration, then
 //! Location, then Properties (the name, its Net Class, Font, Font Size with
 //! B / I / U / T, and a net label's justification grid naming its anchor).
 //! State ▸ Locked follows from the shared router.

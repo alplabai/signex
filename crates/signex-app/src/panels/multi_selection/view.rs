@@ -1,4 +1,4 @@
-//! The multi-selection Properties body (#51): the header, the kind chips,
+//! The multi-selection Properties body (mockup row 51): the header, the kind chips,
 //! one section per kind with its count pill, the footer, and the empty card
 //! when nothing is shared.
 

@@ -84,6 +84,7 @@ fn custom_size_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             &ctx.tokens,
             move |s| PanelMsg::CustomPaperEdgeTyping(edge, s),
             PanelMsg::CommitCustomPaperEdge(edge),
+            false,
         )
     };
     let width = hover_row(
@@ -104,7 +105,8 @@ fn custom_size_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     )
 }
 
-/// Zones V / H as typed numbers on one row.
+/// Zones V / H as typed numbers on one row. A count that is not a number is
+/// outlined; one over the limit says the count it was clamped to.
 fn zones_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let i18n = &ctx.i18n;
     let ui = &ctx.document_options;
@@ -118,6 +120,7 @@ fn zones_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             &ctx.tokens,
             move |s| msg(DocumentOptionsMsg::ZoneCountTyped(axis, s)),
             msg(DocumentOptionsMsg::ZoneCountSubmitted(axis)),
+            ui.zone_invalid(sheet, axis),
         )
     };
     let fields = pair(
@@ -136,7 +139,22 @@ fn zones_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         row_label(t!(i18n, ids::PROPERTIES_ZONES), &ctx.tokens),
         fields,
     );
-    hover_row(ZONES, &ui.hover, &ctx.tokens, zones)
+    let mut col = Column::new().width(Length::Fill).push(zones);
+    if let Some(used) = ui.zone_clamped_to(sheet) {
+        let max = signex_types::schematic::MAX_ZONES;
+        let note = t!(
+            i18n,
+            ids::PROPERTIES_ZONES_CLAMPED,
+            "max" => i64::from(max),
+            "used" => i64::from(used)
+        );
+        let muted = crate::styles::ti(ctx.tokens.text_secondary);
+        col = col.push(label_row(
+            Space::new().boxed(),
+            text(note).size(TS.caption).color(muted).boxed(),
+        ));
+    }
+    hover_row(ZONES, &ui.hover, &ctx.tokens, col.boxed())
 }
 
 /// A check row with its box first: Show Title Block.

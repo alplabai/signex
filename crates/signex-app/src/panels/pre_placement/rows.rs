@@ -8,6 +8,7 @@ use iced::widget::text::Wrapping;
 use iced::widget::{Column, Row, Space, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Shadow, Theme, Vector, Widget};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
+use signex_types::coord::Unit;
 use signex_types::schematic::{HAlign, VAlign, WireWidthPreset};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, text, text_input};
@@ -35,6 +36,7 @@ pub(super) struct Look {
     pub r: ResolvedTokens,
     pub ink: Color,
     pub accent: Color,
+    pub error: Color,
 }
 
 impl Look {
@@ -43,6 +45,7 @@ impl Look {
             r: resolve(tokens),
             ink: ti(tokens.text),
             accent: ti(tokens.accent),
+            error: ti(tokens.error),
         }
     }
 }
@@ -159,15 +162,35 @@ fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
+/// The unit a length field shows beside its number: the panel's unit.
+fn unit_label(i18n: &I18n, unit: Unit) -> Localized {
+    t!(i18n, ids::PROPERTIES_UNIT_SUFFIX, "unit" => unit.to_string())
+}
+
+/// One coordinate as the form shows it: its field, its text and whether
+/// that text does not read as a length (the field is then marked).
+pub(super) struct Coordinate {
+    pub field: PositionField,
+    pub text: String,
+    pub invalid: bool,
+}
+
 /// One editable coordinate: the axis letter, the number and its unit.
-/// Typing reports the text; Enter is OK.
+/// Typing reports the text; Enter is OK. Text that does not read is marked
+/// with the error colour.
 fn coordinate<'a>(
     look: Look,
     i18n: &I18n,
+    unit: Unit,
     axis: Localized,
-    field: PositionField,
-    value: String,
+    shown: Coordinate,
 ) -> Element<'a, PanelMsg> {
+    let Coordinate {
+        field,
+        text: value,
+        invalid,
+    } = shown;
+    let error = look.error;
     let input = text_input(signex_i18n::UserText::new(String::new()), value)
         .on_input(move |typed| {
             PanelMsg::PrePlacementPosition(PrePlacementPositionMsg::FieldTyped(field, typed))
@@ -176,12 +199,18 @@ fn coordinate<'a>(
         .size(TS.body)
         .font(mono())
         .padding([SP.xs, SP.xs])
-        .style(form_look::text_input_style)
+        .style(move |theme: &Theme, status| {
+            let mut style = form_look::text_input_style(theme, status);
+            if invalid {
+                style.border.color = error;
+            }
+            style
+        })
         .width(Length::Fill);
     row![
         text(axis).size(TS.caption).color(look.r.ink4),
         input,
-        text(t!(i18n, ids::PROPERTIES_UNIT_MM))
+        text(unit_label(i18n, unit))
             .size(TS.caption)
             .color(look.r.ink4),
     ]
@@ -191,27 +220,28 @@ fn coordinate<'a>(
     .boxed()
 }
 
-/// An X / Y pair of editable coordinates, `x` and `y` the shown texts.
+/// An X / Y pair of editable coordinates in the panel's `unit`.
 pub(super) fn coordinate_pair<'a>(
     look: Look,
     i18n: &I18n,
-    fields: (PositionField, PositionField),
-    (x, y): (String, String),
+    unit: Unit,
+    (x, y): (Coordinate, Coordinate),
 ) -> Element<'a, PanelMsg> {
     row![
-        coordinate(look, i18n, t!(i18n, ids::PROPERTIES_AXIS_X), fields.0, x),
-        coordinate(look, i18n, t!(i18n, ids::PROPERTIES_AXIS_Y), fields.1, y),
+        coordinate(look, i18n, unit, t!(i18n, ids::PROPERTIES_AXIS_X), x),
+        coordinate(look, i18n, unit, t!(i18n, ids::PROPERTIES_AXIS_Y), y),
     ]
     .spacing(SP.s)
     .width(Length::Fill)
     .boxed()
 }
 
-/// A derived, read-only value: sunken, the unit on the right.
-pub(super) fn read_only_mm<'a>(
+/// A derived, read-only length: sunken, the panel's unit on the right.
+pub(super) fn read_only_length<'a>(
     look: Look,
     tokens: &ThemeTokens,
     i18n: &I18n,
+    unit: Unit,
     value: impl Into<Label<'a>>,
 ) -> Element<'a, PanelMsg> {
     container(
@@ -221,7 +251,7 @@ pub(super) fn read_only_mm<'a>(
                 .font(mono())
                 .color(look.r.ink3)
                 .width(Length::Fill),
-            text(t!(i18n, ids::PROPERTIES_UNIT_MM))
+            text(unit_label(i18n, unit))
                 .size(TS.caption)
                 .color(look.r.ink4),
         ]

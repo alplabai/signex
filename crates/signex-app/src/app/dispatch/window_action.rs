@@ -64,7 +64,6 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::EditLabelJustifyH(..)
                 | P::EditLabelDirection(..)
                 | P::EditLabelFontSizePt(..)
-                | P::EditTextNoteText(..)
                 | P::EditBlanket(..)
                 | P::EditNoErcRules(..)
                 | P::EditTextFontFamily(..)
@@ -90,6 +89,13 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::UpdateSymbolFromLibrary(_)
                 | P::UpdateSymbolFromLibraryOnly(_)
                 | P::PlacedPartAction(_)
+                // The part's ⋯ menu and a sheet symbol's Browse… act on the
+                // window's own sheet; the browsed file comes back scoped.
+                | P::Part(crate::panels::PartPanelMsg::MenuActionPicked(_))
+                | P::SelectionForm(
+                    crate::panels::SelectionFormMsg::SheetFileBrowseClicked(_)
+                        | crate::panels::SelectionFormMsg::SheetFileBrowsed(..)
+                )
                 | P::HistoryRestoreClicked { .. }
                 | P::HistoryRestoreCancelled
                 | P::ToggleChildSheetBorderPicker(_)
@@ -110,8 +116,6 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::SetPrePlacementRotation(_)
                 | P::SetPrePlacementFont(_)
                 | P::SetPrePlacementFontSize(_)
-                | P::SetPrePlacementJustifyH(_)
-                | P::SetPrePlacementJustifyV(_)
                 | P::TogglePrePlacementBold
                 | P::TogglePrePlacementItalic
                 | P::TogglePrePlacementUnderline

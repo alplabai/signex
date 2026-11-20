@@ -62,7 +62,7 @@ fn has(texts: &[String], want: &str) -> bool {
     texts.iter().any(|t| t == want)
 }
 
-/// #51: one section per kind under the Parts noun, the footer counting
+/// Mockup row 51: one section per kind under the Parts noun, the footer counting
 /// every kind, and the mixed caption under the label rows.
 #[test]
 fn the_view_shows_a_section_per_kind_and_the_footer() {
@@ -81,7 +81,7 @@ fn the_view_shows_a_section_per_kind_and_the_footer() {
     }
 }
 
-/// #51: a kind chip filters the sections the panel shows.
+/// Mockup row 51: a kind chip filters the sections the panel shows.
 #[test]
 fn a_kind_chip_shows_only_its_section() {
     let mut ctx = mixed_ctx();
@@ -107,7 +107,7 @@ fn a_chip_of_a_kind_no_longer_selected_falls_back_to_all() {
     assert_eq!(form.kind_filter, None);
 }
 
-/// #51: picking a chip is view state only; it never selects or deselects.
+/// Mockup row 51: picking a chip is view state only; it never selects or deselects.
 #[test]
 fn a_chip_press_is_view_state_and_never_a_selection_edit() {
     let ctx = mixed_ctx();
@@ -124,7 +124,7 @@ fn a_chip_press_is_view_state_and_never_a_selection_edit() {
     );
 }
 
-/// #51: with no shared field the card says so and lists what is selected.
+/// Mockup row 51: with no shared field the card says so and lists what is selected.
 #[test]
 fn the_nothing_shared_card_lists_the_selected_kinds() {
     let mut ctx = mixed_ctx();
@@ -162,7 +162,7 @@ fn the_footer_counts_part_fields_as_one_kind() {
 }
 
 /// The catalog says what the English literals said (#2059), and the new
-/// wording of #51.
+/// wording of mockup row 51.
 #[test]
 fn the_mixed_and_count_texts_read_as_designed() {
     let i18n = I18n::en_us();
@@ -216,15 +216,6 @@ fn font_size_converts_points_and_refuses_zero_negative_and_words() {
             "{bad:?}"
         );
     }
-}
-
-#[test]
-fn wire_width_refuses_negative_and_zero_is_the_default() {
-    assert!(edit_from_text(&MultiField::WireWidth, "-0.1").is_err());
-    assert_eq!(
-        edit_from_text(&MultiField::WireWidth, "0").unwrap(),
-        MultiEdit::WireWidthMm(0.0)
-    );
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! Properties surface of a sheet symbol (#46): the line-art illustration,
+//! Properties surface of a sheet symbol (mockup row 46): the line-art illustration,
 //! then Location (Position, Size) → Properties (Name, File with Browse…,
 //! Open Sheet) → Style (Border, Fill, Line Width, Reset to Default) →
 //! Entries (read-only, name and direction). A symbol whose file is not in
@@ -557,7 +557,7 @@ mod tests {
         vec![root]
     }
 
-    /// #46: the banner shows only for a child reference the probe found
+    /// Mockup row 46: the banner shows only for a child reference the probe found
     /// absent, matched by its file name.
     #[test]
     fn the_missing_banner_shows_only_when_the_file_is_absent() {

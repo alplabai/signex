@@ -1,4 +1,4 @@
-//! Line-art illustrations under the Properties header (epic #2523, #40-#51):
+//! Line-art illustrations under the Properties header (epic #2523, mockup rows 40 to 51):
 //! a part, a pin, a footprint thumbnail, a wire or bus, a net label, a port,
 //! a power port, a text note, a sheet symbol and a drawing shape. Each
 //! builder turns the selected object into plain `Illustration` data, with

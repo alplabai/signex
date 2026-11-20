@@ -16,7 +16,6 @@ pub use position::{PlacementPosition, PositionField, PrePlacementPositionMsg, wi
 use iced::widget::{Column, container, row, scrollable};
 use iced::{Element, Length, Widget};
 use signex_i18n::{I18n, ids, t};
-use signex_types::coord::Unit;
 use signex_types::schematic::Point;
 use signex_widgets::LengthFormat;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
@@ -64,8 +63,8 @@ pub(crate) fn has_no_options(kind: PrePlacementKind) -> bool {
     text_label(kind).is_none() && !is_shape(kind) && kind != PrePlacementKind::Wire
 }
 
-/// What a coordinate field shows: the text being typed, else `mm` (Y from
-/// the page origin).
+/// What a coordinate field shows: the text being typed, else `mm` in the
+/// panel's unit (Y from the page origin).
 fn shown(
     pp: &PrePlacementData,
     ctx: &PanelContext,
@@ -81,9 +80,10 @@ fn shown(
 
 /// The Location fields as the form shows them, in [`PositionField`] order
 /// (X, Y, End X, End Y), and the derived Length. Untyped fields show the
-/// cursor (a wire's Start its anchor); Y counts from the page origin.
+/// cursor (a wire's Start its anchor); Y counts from the page origin. Every
+/// length is in the panel's unit.
 pub(crate) fn location_texts(pp: &PrePlacementData, ctx: &PanelContext) -> ([String; 4], String) {
-    let fmt = LengthFormat::new(&ctx.i18n, Unit::Mm);
+    let fmt = LengthFormat::new(&ctx.i18n, ctx.unit);
     let here = cursor(pp);
     let start = if pp.kind == PrePlacementKind::Wire {
         pp.position.live_start(here)
@@ -190,7 +190,20 @@ fn location<'a>(
     let i18n: &'a I18n = &ctx.i18n;
     let is_wire = pp.kind == PrePlacementKind::Wire;
     let ([x, y, end_x, end_y], length) = location_texts(pp, ctx);
-    let (start_text, end_text) = ((x, y), (end_x, end_y));
+    let coordinate = |field: PositionField, text: String| rows::Coordinate {
+        field,
+        text,
+        invalid: pp.position.is_invalid(field),
+    };
+    let start = (
+        coordinate(PositionField::X, x),
+        coordinate(PositionField::Y, y),
+    );
+    let end = (
+        coordinate(PositionField::EndX, end_x),
+        coordinate(PositionField::EndY, end_y),
+    );
+    let unit = ctx.unit;
     let rotation = pp.rotation;
     let with_rotation = !has_no_options(pp.kind);
     ctx.collapsible(
@@ -199,27 +212,26 @@ fn location<'a>(
         &ctx.collapsed_sections,
         move || {
             let mut c = Column::new().spacing(0).width(Length::Fill);
-            let xy = (PositionField::X, PositionField::Y);
             if is_wire {
-                let ends = (PositionField::EndX, PositionField::EndY);
                 c = c
                     .push(rows::field(
                         look,
                         t!(i18n, ids::PROPERTIES_PRE_PLACEMENT_START),
-                        rows::coordinate_pair(look, i18n, xy, start_text),
+                        rows::coordinate_pair(look, i18n, unit, start),
                     ))
                     .push(rows::field(
                         look,
                         t!(i18n, ids::PANELS_PLACED_END),
-                        rows::coordinate_pair(look, i18n, ends, end_text),
+                        rows::coordinate_pair(look, i18n, unit, end),
                     ))
                     .push(rows::field(
                         look,
                         t!(i18n, ids::PANELS_PLACED_LENGTH),
-                        rows::read_only_mm(
+                        rows::read_only_length(
                             look,
                             &ctx.tokens,
                             i18n,
+                            unit,
                             signex_i18n::UserText::new(length),
                         ),
                     ));
@@ -227,7 +239,7 @@ fn location<'a>(
                 c = c.push(rows::field(
                     look,
                     t!(i18n, ids::PROPERTIES_POSITION),
-                    rows::coordinate_pair(look, i18n, xy, start_text),
+                    rows::coordinate_pair(look, i18n, unit, start),
                 ));
             }
             if with_rotation {

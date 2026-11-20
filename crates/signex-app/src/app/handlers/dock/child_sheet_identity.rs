@@ -63,11 +63,12 @@ impl Signex {
     }
 
     /// Browse… beside File: pick a sheet file off the update thread, starting
-    /// in the active sheet's folder.
+    /// in the folder of the sheet the edit acts on. Pressed in an undocked
+    /// window, the picked file comes back scoped to that window.
     pub(super) fn browse_child_sheet_file(&mut self, id: uuid::Uuid) -> iced::Task<Message> {
-        let dir = self
-            .active_tab_path()
+        let dir = (self.document_state.active_path.as_deref())
             .and_then(|path| path.parent().map(std::path::Path::to_path_buf));
+        let window = self.interaction_state.acting_window;
         let picker = self.ui_state.io.picker.clone();
         let i18n = self.ui_state.i18n.clone();
         iced::Task::perform(
@@ -82,11 +83,16 @@ impl Signex {
                 dialog.pick_file().await
             },
             move |picked| {
-                Message::Dock(crate::dock::DockMessage::Panel(
-                    crate::panels::PanelMsg::SelectionForm(
+                let browsed =
+                    crate::dock::DockMessage::Panel(crate::panels::PanelMsg::SelectionForm(
                         crate::panels::SelectionFormMsg::SheetFileBrowsed(id, picked),
-                    ),
-                ))
+                    ));
+                Message::Dock(match window {
+                    Some(window) => {
+                        crate::dock::DockMessage::ScopedToWindow(window, Box::new(browsed))
+                    }
+                    None => browsed,
+                })
             },
         )
     }
@@ -102,8 +108,7 @@ impl Signex {
         let Some(picked) = picked else {
             return;
         };
-        let reference = self
-            .active_tab_path()
+        let reference = (self.document_state.active_path.as_deref())
             .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
             .and_then(|dir| {
                 picked

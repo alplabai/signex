@@ -3,7 +3,6 @@
 //! placing the next object at the typed point.
 
 use iced::Task;
-use signex_types::coord::Unit;
 use signex_types::schematic::Point;
 use signex_widgets::LengthFormat;
 
@@ -12,13 +11,14 @@ use crate::panels::{PrePlacementKind, PrePlacementPositionMsg};
 use super::super::super::*;
 
 impl Signex {
-    /// A typed coordinate (Y read from the sheet's page origin, #2034) or a
-    /// picked justification anchor.
+    /// A typed coordinate, read in the panel's unit (Y from the sheet's page
+    /// origin, #2034), or a picked justification anchor, which the ghost of
+    /// a label or text follows.
     pub(super) fn handle_pre_placement_position(&mut self, msg: &PrePlacementPositionMsg) {
         let ctx = &self.document_state.panel_ctx;
         match msg {
             PrePlacementPositionMsg::FieldTyped(field, text) => {
-                let stored = LengthFormat::new(&ctx.i18n, Unit::Mm)
+                let stored = LengthFormat::new(&ctx.i18n, ctx.unit)
                     .parse(text)
                     .map(|mm| if field.is_y() { ctx.shown_y(mm) } else { mm });
                 if let Some(pp) = self.document_state.panel_ctx.pre_placement.as_mut() {
@@ -29,6 +29,13 @@ impl Signex {
                 if let Some(pp) = self.document_state.panel_ctx.pre_placement.as_mut() {
                     pp.justify_h = *h;
                     pp.justify_v = *v;
+                }
+                let canvas = self.interaction_state.active_canvas_mut();
+                if let Some(g) = &mut canvas.ghost_label {
+                    g.justify = *h;
+                }
+                if let Some(g) = &mut canvas.ghost_text {
+                    g.justify_h = *h;
                 }
             }
         }
@@ -79,6 +86,14 @@ impl Signex {
             return Task::none();
         };
         if !pp.position.is_typed() {
+            return Task::none();
+        }
+        // A field that does not read would place at a point it does not
+        // show: OK is refused, the field stays marked and the draft kept.
+        if pp.position.has_invalid() {
+            crate::diagnostics::log_warning(
+                "Properties: a Location field is not a length; fix it or clear it to place",
+            );
             return Task::none();
         }
         let cursor = Point::new(pp.cursor_x_mm, pp.cursor_y_mm);

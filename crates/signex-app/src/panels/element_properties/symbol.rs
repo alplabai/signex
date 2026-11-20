@@ -1,4 +1,4 @@
-//! Properties of a selected placed part (#42): the ⋯ menu, the clicked
+//! Properties of a selected placed part (mockup row 42): the ⋯ menu, the clicked
 //! pin's section, the library banner, the "Part on the sheet" drawing, then
 //! General, Location, Graphical, Parameters, Footprint and Pins.
 

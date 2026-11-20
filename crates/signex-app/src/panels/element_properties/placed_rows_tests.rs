@@ -202,7 +202,7 @@ fn each_position_axis_heads_its_own_value() {
     assert_eq!(after("Y", 1), Some("200.000"), "{texts:?}");
 }
 
-/// A wire's position is its start: the pair reads Start (#43).
+/// A wire's position is its start: the pair reads Start (mockup row 43).
 #[test]
 fn a_wire_position_reads_start() {
     let (_dir, mut app) = app(false);

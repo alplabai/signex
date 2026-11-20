@@ -63,6 +63,7 @@ pub mod pcb_primitive_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
+pub(crate) mod rotation_steps;
 mod sch_filter;
 pub use sch_filter::SchFilterMsg;
 mod status;

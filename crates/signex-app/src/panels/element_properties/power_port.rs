@@ -1,4 +1,4 @@
-//! Properties of a selected power port (#45), in the order every placed
+//! Properties of a selected power port (mockup row 45), in the order every placed
 //! object keeps: the illustration, Location, Properties (Name, the Style
 //! tiles, the library rows, Font, Font Size with B / I / U / T), Net, Net
 //! Parameters and State ▸ Locked. High Speed and Differential Pair are

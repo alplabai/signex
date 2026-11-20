@@ -1,4 +1,4 @@
-//! The footprint thumbnail of a placed part's Footprint card (#42), as
+//! The footprint thumbnail of a placed part's Footprint card (mockup row 42), as
 //! transparent line art: theme-ink pad outlines with a low-alpha fill, a
 //! dashed courtyard and a pin-1 dot. No board ground and no layer colours.
 

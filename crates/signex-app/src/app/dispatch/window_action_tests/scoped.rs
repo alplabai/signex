@@ -84,6 +84,12 @@ fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped
         P::ResetChildSheetStyle(id),
         P::UpdateSymbolFromLibrary(id),
         P::PlacedPartAction(PlacedPartAction::EditSymbol),
+        // The part's ⋯ menu and Browse… act on the window's own sheet.
+        P::Part(crate::panels::PartPanelMsg::MenuActionPicked(
+            PlacedPartAction::EditSymbol,
+        )),
+        P::SelectionForm(crate::panels::SelectionFormMsg::SheetFileBrowseClicked(id)),
+        P::SelectionForm(crate::panels::SelectionFormMsg::SheetFileBrowsed(id, None)),
         P::SetPrePlacementText(String::new()),
         P::SetPrePlacementDesignator(String::new()),
         P::SetPrePlacementRotation(0.0),

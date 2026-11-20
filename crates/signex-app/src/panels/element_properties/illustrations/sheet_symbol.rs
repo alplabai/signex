@@ -1,4 +1,4 @@
-//! Line-art illustration of a sheet symbol (#46): the box at its size with
+//! Line-art illustration of a sheet symbol (mockup row 46): the box at its size with
 //! its fill and line width, the name above and the file below, the entries
 //! on the edges with their direction shapes, the W / H dimensions and a
 //! Line Width callout. Data only; `property_illustration` draws it.

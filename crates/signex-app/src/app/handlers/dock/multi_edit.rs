@@ -67,7 +67,7 @@ impl Signex {
         panel_msg: &crate::panels::PanelMsg,
     ) -> Option<Task<Message>> {
         use crate::panels::{NoErcRuleEdit, PanelMsg, SelectionFormMsg};
-        // An emptied Line Width box sets the default width back (#46).
+        // An emptied Line Width box sets the default width back (mockup row 46).
         if let PanelMsg::CommitChildSheetStrokeWidth(_) = panel_msg {
             let buf = &mut self.document_state.panel_ctx.child_sheet_stroke_width_buf;
             if buf.as_deref().is_some_and(|text| text.trim().is_empty()) {

@@ -90,20 +90,9 @@ const PILL_PAD_EM: f32 = 6.0 / 12.0;
 const SECTION_PAD_EM: f32 = 1.0;
 const SECTION_PAD_BOTTOM_EM: f32 = 6.0 / 12.0;
 
-/// The quarter turns the Rotation control offers, in degrees.
-pub(in crate::panels) const ROTATION_STEPS: [f64; 4] = [0.0, 90.0, 180.0, 270.0];
-
-/// The step the Rotation control shows for a stored angle: the nearest
-/// quarter turn (a non-finite angle reads as 0).
-pub(in crate::panels) fn rotation_step(degrees: f64) -> f64 {
-    let turns = (degrees.rem_euclid(360.0) / 90.0).round();
-    let index = if turns.is_finite() {
-        turns as usize % 4
-    } else {
-        0
-    };
-    ROTATION_STEPS[index]
-}
+pub(in crate::panels) use crate::panels::rotation_steps::{
+    ROTATION_STEPS, nearest_rotation_step as rotation_step,
+};
 
 /// How a rotation step reads: `90°`.
 pub(in crate::panels) fn rotation_step_label(i18n: &I18n, degrees: f64) -> Localized {

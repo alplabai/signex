@@ -1,5 +1,5 @@
 //! The pins of a placed symbol's Properties view: the clicked pin's own
-//! section (#50) and the compact Pins table. Read-only: pin fields change in
+//! section (mockup row 50) and the compact Pins table. Read-only: pin fields change in
 //! the symbol editor, not on a placed part.
 
 use super::super::*;
@@ -128,7 +128,7 @@ fn pin_sketch(rows: &[PinRow], index: usize) -> PinSketch {
     }
 }
 
-/// The clicked pin's own section, ahead of the part's (#2086, #50): its
+/// The clicked pin's own section, ahead of the part's (#2086, mockup row 50): its
 /// drawing, its facts as read-only rows and the two ways out, to the symbol
 /// editor and to the pin's net.
 pub(super) fn push_focused_pin_section<'a>(

@@ -1,4 +1,4 @@
-//! The placed-pin illustration (#50): the body edge, the focused pin with its
+//! The placed-pin illustration (mockup row 50): the body edge, the focused pin with its
 //! length, number, name, electrical-type glyph, hotspot and net, and the
 //! neighbour pins drawn faint. Read-only: pin fields change in the symbol
 //! editor.

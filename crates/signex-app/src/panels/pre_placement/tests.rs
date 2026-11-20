@@ -83,6 +83,21 @@ fn the_wire_form_has_start_end_and_a_read_only_length() {
     assert!(!has(&shown, "Position"), "{shown:#?}");
 }
 
+/// The Location fields and the Length show the panel's unit, as the placed
+/// rows do: a panel in mils shows the cursor in mils with "mil" beside it.
+#[test]
+fn the_location_fields_show_the_panels_unit() {
+    use signex_types::coord::Unit;
+    let mut ctx = form(PrePlacementKind::Wire, "Wire");
+    ctx.unit = Unit::Mil;
+    let pp = ctx.pre_placement.clone().expect("form");
+    let ([x, ..], _) = location_texts(&pp, &ctx);
+    assert_eq!(x, LengthFormat::new(&ctx.i18n, Unit::Mil).field_text(101.6));
+    let shown = texts(&ctx);
+    let mils = shown.iter().filter(|t| *t == "mil").count();
+    assert!(mils >= 5, "four coordinates and the Length: {shown:#?}");
+}
+
 #[test]
 fn a_tool_without_options_shows_the_card_and_no_rotation() {
     let shown = texts(&form(PrePlacementKind::Other, "Junction"));

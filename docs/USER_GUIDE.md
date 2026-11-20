@@ -226,9 +226,11 @@ attached:
 - Press `Tab` to open the pre-placement properties in the Properties panel:
   the value, the designator and the rotation. Placement pauses until you press
   **Resume** or **OK**.
-- The Position X and Y in that form follow the cursor. Type a position (Y
-  counts from the sheet's page origin) and press **OK** or `Enter`: the next
-  object is placed there without a click. The wire tool takes a Start and an
+- The Position X and Y in that form follow the cursor. Type a position (in
+  the panel's unit; Y counts from the sheet's page origin) and press **OK** or
+  `Enter`: the next object is placed there without a click. A field that is
+  not a number is outlined and **OK** places nothing until it is fixed or
+  cleared. The wire tool takes a Start and an
   End and places one straight wire between them. A typed position is used
   once; the object after it starts from the cursor again. Every placement
   tool has this form.
@@ -367,6 +369,24 @@ Classic profile has `U` for the designator, `V` for the value and `F` for the
 footprint. A part's footprint has no text on the sheet, so its editor opens at
 the part. A command with nothing to act on says so in the Messages panel.
 
+### Editing a wire or a text note in Properties
+
+Select one wire or bus and its **Location** shows **Start** and **End**, each
+an X / Y row in the panel's unit (Y counts from the sheet's page origin), and
+the **Length** they make. Type a value and press `Enter`: Start moves only the
+start point and End moves only the end point. The other end stays where it is,
+wires attached at the moved end do not follow, and a straight wire may turn.
+Each value is one undo step, and Length follows. A new end on another wire
+gets a junction, as a drawn wire does.
+
+Select one text note and its **Text** box takes several lines (`Enter` starts
+a new line). What you type is applied as one undo step when the box loses
+focus (`Esc`, or a click outside it), on `Ctrl+Enter`, or when you select
+something else. Moving the pointer out of the box applies nothing. Typed text
+is never lost: a save, a tab switch or closing the tab applies it to its own
+sheet first. **Rotation** (0°, 90°, 180°, 270°) and **Justify H** / **Justify
+V** are switches; a click sets the value at once, one undo step each.
+
 ### Editing several objects at once
 
 With more than one object selected, Properties lists the fields they share, a
@@ -374,7 +394,8 @@ group each for parts, labels and wires. A value the objects disagree on reads
 `<mixed>`. Type a new value and press `Enter` (or flip a checkbox) to set it on
 every object of that group in one undo step. Parts offer value, footprint, DNP,
 In BOM, On board and their custom parameters; labels size, justification and
-rotation (0, 90, 180 or 270); wires width. Label text is not edited in bulk,
+rotation (0, 90, 180 or 270); wires width, picked from Smallest, Small, Medium
+and Large. Label text is not edited in bulk,
 because giving labels one name would merge their nets. Value, footprint and
 parameter edits skip locked parts and the Messages panel says which; DNP, In BOM
 and On board apply to locked parts too. An empty parameter value removes that

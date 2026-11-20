@@ -36,9 +36,9 @@ pub(super) fn justification(info: &[(String, String)]) -> (HAlign, VAlign) {
     (h_align_from_row(&justify_h_row(info)), v)
 }
 
-/// The quarter turn nearest `degrees`.
+/// The quarter turn nearest `degrees`, as every Rotation control marks it.
 fn nearest_quarter_turn(degrees: f64) -> u32 {
-    QUARTER_TURNS[((degrees.rem_euclid(360.0) / 90.0).round() as usize) % 4]
+    crate::panels::rotation_steps::nearest_rotation_step(degrees) as u32
 }
 
 pub(super) fn push_text_note_sections<'a>(

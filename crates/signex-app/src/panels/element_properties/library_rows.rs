@@ -326,7 +326,7 @@ fn out_of_date_row<'a>(
 
 /// The tone of the library banner at the top of a placed part's Properties:
 /// warn while the sheet copy differs from the library, err when the library
-/// symbol is gone, no banner otherwise (#42).
+/// symbol is gone, no banner otherwise (mockup row 42).
 pub(super) fn banner_tone(status: &LibraryStatus<'_>) -> Option<crate::styles::PillTone> {
     if status.missing {
         Some(crate::styles::PillTone::Err)

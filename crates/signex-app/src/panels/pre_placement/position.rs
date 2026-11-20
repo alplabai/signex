@@ -38,6 +38,9 @@ impl PositionField {
 pub struct PlacementPosition {
     values: [Option<f64>; 4],
     drafts: [Option<String>; 4],
+    /// Fields whose text does not read as a length: OK is refused while
+    /// one is, so nothing is placed at a coordinate the field does not show.
+    invalid: [bool; 4],
     /// The anchor of the wire being drawn, when one is; the Start fields
     /// show it until a Start coordinate is typed.
     pub wire_anchor: Option<Point>,
@@ -54,21 +57,34 @@ impl PlacementPosition {
         self.drafts[field.index()].as_deref()
     }
 
-    /// Whether any coordinate is typed: OK then places at the typed point.
+    /// Whether any coordinate is typed: OK then places at the typed point,
+    /// or is refused while a field does not read.
     pub fn is_typed(&self) -> bool {
-        self.values.iter().any(Option::is_some)
+        self.values.iter().any(Option::is_some) || self.has_invalid()
+    }
+
+    /// Whether the text of `field` does not read as a length.
+    pub fn is_invalid(&self, field: PositionField) -> bool {
+        self.invalid[field.index()]
+    }
+
+    /// Whether any field's text does not read as a length.
+    pub fn has_invalid(&self) -> bool {
+        self.invalid.iter().any(|bad| *bad)
     }
 
     /// `text` typed into `field`, `stored` its sheet value when it reads as
     /// a number. An emptied field follows the cursor again; text that does
-    /// not read keeps the last typed value.
+    /// not read keeps the last typed value but marks the field invalid.
     pub fn typed(&mut self, field: PositionField, text: String, stored: Option<f64>) {
         let i = field.index();
-        if text.trim().is_empty() {
+        let empty = text.trim().is_empty();
+        if empty {
             self.values[i] = None;
         } else if let Some(value) = stored {
             self.values[i] = Some(value);
         }
+        self.invalid[i] = !empty && stored.is_none();
         self.drafts[i] = Some(text);
     }
 
@@ -76,6 +92,7 @@ impl PlacementPosition {
     pub fn clear_typed(&mut self) {
         self.values = [None; 4];
         self.drafts = Default::default();
+        self.invalid = [false; 4];
     }
 
     /// The point the object (or a wire's Start) is placed at: the typed
@@ -135,15 +152,7 @@ pub fn anchor_name(h: HAlign, v: VAlign) -> MessageId {
     }
 }
 
-/// The quarter turns the Rotation control offers, in degrees.
-pub const ROTATION_STEPS: [f64; 4] = [0.0, 90.0, 180.0, 270.0];
-
-/// The step the Rotation control marks for `current`: the one whose whole
-/// degrees it rounds to (89.9999 marks 90), `None` off the quarter turns.
-pub fn rotation_step(current: f64) -> Option<f64> {
-    let whole = current.round().rem_euclid(360.0);
-    ROTATION_STEPS.into_iter().find(|step| *step == whole)
-}
+pub use crate::panels::rotation_steps::{ROTATION_STEPS, exact_rotation_step as rotation_step};
 
 #[cfg(test)]
 mod tests {
@@ -175,6 +184,22 @@ mod tests {
         pos.typed(PositionField::EndY, " ".into(), None);
         assert_eq!(pos.value(PositionField::EndY), None);
         assert!(!pos.is_typed());
+    }
+
+    /// "12a" marks its field invalid (OK is refused) until it reads again,
+    /// even with no earlier value to keep.
+    #[test]
+    fn text_that_does_not_read_marks_the_field_invalid() {
+        let mut pos = PlacementPosition::default();
+        pos.typed(PositionField::X, "12a".into(), None);
+        assert!(pos.is_invalid(PositionField::X) && pos.has_invalid());
+        assert!(pos.is_typed(), "OK must answer, not place at the cursor");
+        assert_eq!(pos.value(PositionField::X), None);
+        pos.typed(PositionField::X, "12".into(), Some(12.0));
+        assert!(!pos.has_invalid());
+        pos.typed(PositionField::Y, "x".into(), None);
+        pos.clear_typed();
+        assert!(!pos.has_invalid());
     }
 
     #[test]

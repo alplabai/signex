@@ -167,3 +167,64 @@ fn ok_with_nothing_typed_only_resumes_placing() {
     assert!(!app.interaction_state.active_canvas().placement_paused);
     assert!(doc(&app).junctions.is_empty());
 }
+
+/// Location reads the panel's unit, as the placed rows do: 1000 mil typed
+/// is 25.4 mm stored, and OK places there.
+#[test]
+fn a_typed_position_is_read_in_the_panels_unit() {
+    use signex_types::coord::Unit;
+    let mut app = app_with_empty_sheet();
+    app.ui_state.unit = Unit::Mil;
+    app.document_state.panel_ctx.unit = Unit::Mil;
+    tab_in(&mut app, Tool::Junction);
+    type_field(&mut app, PositionField::X, "1000");
+    let x = typed(&app, PositionField::X).expect("typed");
+    assert!((x - 25.4).abs() < 1e-9, "{x}");
+    type_field(&mut app, PositionField::Y, "3000");
+    panel(&mut app, PanelMsg::ConfirmPrePlacement);
+    let junctions = &doc(&app).junctions;
+    assert_eq!(junctions.len(), 1);
+    let want = Point::new(25.4, stored_y(&app, 76.2));
+    assert!(
+        near(junctions[0].position, want),
+        "{:?}",
+        junctions[0].position
+    );
+}
+
+/// "12a" in a field refuses OK with the field marked: nothing is placed at
+/// a coordinate the field does not show.
+#[test]
+fn ok_with_a_field_that_does_not_read_places_nothing() {
+    let mut app = app_with_empty_sheet();
+    tab_in(&mut app, Tool::Junction);
+    type_field(&mut app, PositionField::X, "50");
+    type_field(&mut app, PositionField::X, "12a");
+    panel(&mut app, PanelMsg::ConfirmPrePlacement);
+    assert!(doc(&app).junctions.is_empty(), "nothing placed at 50");
+    let pp = app
+        .document_state
+        .panel_ctx
+        .pre_placement
+        .as_ref()
+        .expect("form");
+    assert!(pp.position.is_invalid(PositionField::X));
+    assert!(app.interaction_state.active_canvas().placement_paused);
+    type_field(&mut app, PositionField::X, "12");
+    panel(&mut app, PanelMsg::ConfirmPrePlacement);
+    assert_eq!(doc(&app).junctions.len(), 1, "a field that reads places");
+}
+
+/// A typed wire whose Start and End are the same point (under 1 µm apart,
+/// `signex_net::pt_key`) is not placed.
+#[test]
+fn a_typed_wire_with_meeting_ends_is_not_placed() {
+    let mut app = app_with_empty_sheet();
+    tab_in(&mut app, Tool::Wire);
+    type_field(&mut app, PositionField::X, "88.9");
+    type_field(&mut app, PositionField::Y, "63.5");
+    type_field(&mut app, PositionField::EndX, "88.9000001");
+    type_field(&mut app, PositionField::EndY, "63.5");
+    panel(&mut app, PanelMsg::ConfirmPrePlacement);
+    assert!(doc(&app).wires.is_empty(), "{:?}", doc(&app).wires);
+}

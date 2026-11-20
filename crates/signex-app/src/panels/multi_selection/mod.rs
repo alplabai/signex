@@ -34,7 +34,6 @@ pub enum MultiField {
     SymbolFootprint,
     SymbolParameter(String),
     LabelFontPt,
-    WireWidth,
 }
 
 impl MultiField {
@@ -45,7 +44,6 @@ impl MultiField {
             Self::SymbolFootprint => "Footprint".into(),
             Self::SymbolParameter(key) => format!("Parameter {key}"),
             Self::LabelFontPt => "Label font size".into(),
-            Self::WireWidth => "Wire width".into(),
         }
     }
 }
@@ -91,7 +89,6 @@ pub fn edit_from_text(field: &MultiField, typed: &str) -> Result<MultiEdit, Stri
             }
             MultiEdit::LabelFontSizeMm(pt * SCHEMATIC_PT_TO_MM)
         }
-        MultiField::WireWidth => MultiEdit::WireWidthMm(non_negative("Wire width")?),
     })
 }
 

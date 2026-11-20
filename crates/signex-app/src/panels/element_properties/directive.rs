@@ -1,4 +1,4 @@
-//! Properties of a selected directive (#2420, #49). Every directive starts
+//! Properties of a selected directive (#2420, mockup row 49). Every directive starts
 //! with its Location; a Blanket then edits its net class and, one checkbox
 //! per ERC rule, the rules it does not report. Typing in the class field is
 //! one undo step (the engine's typing run); each checkbox is one step.

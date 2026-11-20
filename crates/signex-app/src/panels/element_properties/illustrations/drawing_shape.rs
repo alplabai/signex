@@ -1,4 +1,4 @@
-//! Line-art illustration of a drawing shape (#48). A rectangle shows its
+//! Line-art illustration of a drawing shape (mockup row 48). A rectangle shows its
 //! W / H dimensions, a Border callout, its fill (None / Outline / Solid) and
 //! a sample wire drawn behind or above it as Placement says. An arc shows its
 //! centre mark, a Radius dimension, Start / End callouts at its two ends (no

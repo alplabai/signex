@@ -372,22 +372,6 @@ impl Signex {
                     g.font_size = fs_mm;
                 }
             }
-            crate::panels::PanelMsg::SetPrePlacementJustifyH(h) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
-                    pp.justify_h = *h;
-                }
-                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_label {
-                    g.justify = *h;
-                }
-                if let Some(g) = &mut self.interaction_state.active_canvas_mut().ghost_text {
-                    g.justify_h = *h;
-                }
-            }
-            crate::panels::PanelMsg::SetPrePlacementJustifyV(v) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
-                    pp.justify_v = *v;
-                }
-            }
             crate::panels::PanelMsg::TogglePrePlacementBold => {
                 if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
                     pp.bold = !pp.bold;
@@ -577,8 +561,14 @@ impl Signex {
             crate::panels::PanelMsg::ConfirmPrePlacement => {
                 // OK / Enter: resume placement and keep pre_placement so the
                 // next click uses the values the user just edited; a typed
-                // position places the next object there at once (#2532).
-                self.interaction_state.active_canvas_mut().placement_paused = false;
+                // position places the next object there at once (#2532). A
+                // Location field that does not read refuses OK: the form
+                // stays up with the field marked.
+                let refused = (self.document_state.panel_ctx.pre_placement.as_ref())
+                    .is_some_and(|pp| pp.position.has_invalid());
+                if !refused {
+                    self.interaction_state.active_canvas_mut().placement_paused = false;
+                }
                 follow = self.place_at_typed_position();
             }
             crate::panels::PanelMsg::PrePlacementPosition(msg) => {

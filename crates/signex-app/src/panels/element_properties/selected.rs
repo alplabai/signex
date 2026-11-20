@@ -567,7 +567,7 @@ mod tests {
 
     /// #2024 - the symbol-field view shows the justification rows under the
     /// keys the engine writes. A text note picks its justification on
-    /// segmented rows instead (#47); `text_note::tests` reads them.
+    /// segmented rows instead (mockup row 47); `text_note::tests` reads them.
     #[test]
     fn the_field_view_shows_the_justification_rows() {
         use signex_types::schematic::SelectedKind;
