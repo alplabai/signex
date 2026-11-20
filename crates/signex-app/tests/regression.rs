@@ -150,6 +150,10 @@ mod parameter_manager_open;
 #[path = "regression/parameter_manager_table.rs"]
 mod parameter_manager_table;
 
+// #1784 - Revert changes undoes the Parameter Manager session as one step.
+#[path = "regression/parameter_manager_revert.rs"]
+mod parameter_manager_revert;
+
 #[path = "regression/preferences_dirty_guard.rs"]
 mod preferences_dirty_guard;
 
@@ -702,6 +706,15 @@ mod sheet_variables;
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
 
+#[path = "regression/paste_array_count_up.rs"]
+mod paste_array_count_up;
+
+#[path = "regression/net_color_palette_clear_all.rs"]
+mod net_color_palette_clear_all;
+
+#[path = "regression/placement_pause_esc.rs"]
+mod placement_pause_esc;
+
 #[path = "regression/annotate_graphite.rs"]
 mod annotate_graphite;
 #[path = "regression/erc_dialog_graphite.rs"]
@@ -718,6 +731,14 @@ mod stroke_zoom_law;
 mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
+
+// #2525 — Find and Replace: Whole word renames only the exact net.
+#[path = "regression/find_replace_whole_word.rs"]
+mod find_replace_whole_word;
+
+// Move Selection offsets are typed in the display unit.
+#[path = "regression/move_selection_unit.rs"]
+mod move_selection_unit;
 
 // Graphite #78 / #80 - Number Schematic Sheets greys Apply on a clash, gap
 // or high number; Assign Footprints filter chips, ticked bar and reason pills.

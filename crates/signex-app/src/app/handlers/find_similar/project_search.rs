@@ -87,27 +87,30 @@ impl Signex {
         ))
     }
 
-    /// A finished search: applied unless the dialog was closed or searched
-    /// again in the meantime.
+    /// Whether the active document is in a project a search can reach.
+    pub(super) fn in_a_project(&self) -> bool {
+        let ds = &self.document_state;
+        project_sheets::resolve_netlist_root(ds).is_some() && ds.active_document_project().is_some()
+    }
+
+    /// A finished count: shown in the dialog unless the dialog was closed,
+    /// or its criteria changed, in the meantime. Select N reports it.
     pub(super) fn apply_project_search(
         &mut self,
         generation: u64,
         result: &Result<ProjectMatches, String>,
     ) {
         self.close_find_similar_if_sheet_changed();
-        let current = generation == self.ui_state.find_similar_generation
-            && self.ui_state.find_similar.is_some();
-        if !current {
+        if generation != self.ui_state.find_similar_generation {
             return;
         }
+        let Some(state) = self.ui_state.find_similar.as_mut() else {
+            return;
+        };
+        state.running = false;
         match result {
-            Ok(found) => self.select_similar_on_this_sheet(Some(found)),
-            Err(why) => {
-                crate::diagnostics::log_warning(why);
-                if let Some(state) = self.ui_state.find_similar.as_mut() {
-                    state.running = false;
-                }
-            }
+            Ok(found) => state.other_sheets = Some(found.clone()),
+            Err(why) => crate::diagnostics::log_warning(why),
         }
     }
 

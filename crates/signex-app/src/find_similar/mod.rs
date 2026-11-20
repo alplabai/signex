@@ -5,5 +5,5 @@
 mod state;
 mod view;
 
-pub use state::{FindSimilarMsg, FindSimilarState, ProjectMatches, SimilarScope};
+pub use state::{FindSimilarMsg, FindSimilarState, ProjectMatches, SimilarScope, shown_seed};
 pub use view::view;
