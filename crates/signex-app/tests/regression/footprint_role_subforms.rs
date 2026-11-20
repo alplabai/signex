@@ -1,4 +1,4 @@
-//! #126 — the role sub-form edits with no flat `FpEditor*` message: the
+//! Mockup row 126: the role sub-form edits with no flat `FpEditor*` message: the
 //! keepout layer and a sketch pad's paste and mask expansions. Each writes
 //! the sketch attribute, dirties the tab and is one undo step.
 

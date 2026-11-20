@@ -152,7 +152,7 @@ dialog-grid-lines = Lines
 dialog-grid-dots = Dots
 dialog-grid-hidden = Hidden
 dialog-grid-multiplier = Multiplier
-# Grid Properties (#142): the note beside the title, the step's scope and the footer.
+# Grid Properties (mockup row 142): the note beside the title, the step's scope and the footer.
 dialog-grid-note = Cartesian · mm
 dialog-grid-both-axes = both axes
 dialog-grid-footer = One grid per footprint editor

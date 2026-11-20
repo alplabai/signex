@@ -1,4 +1,4 @@
-//! Events of the footprint role sub-forms (#126) that have no flat
+//! Events of the footprint role sub-forms (mockup row 126) that have no flat
 //! `FpEditor*` message of their own: the keepout layer and the sketch pad's
 //! paste and mask expansions. Handled in
 //! `app/handlers/dock/sch_library/footprint/role.rs`.

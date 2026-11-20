@@ -1,4 +1,4 @@
-//! The pad's property illustration (#125): copper, hole, paste and solder
+//! The pad's property illustration (mockup row 125): copper, hole, paste and solder
 //! mask outlines of the current state on the panel ground, with callouts
 //! named after the fields. No rotation is drawn. A switched-off paste or
 //! mask drops out through `Part::requires`. The layer chips of a

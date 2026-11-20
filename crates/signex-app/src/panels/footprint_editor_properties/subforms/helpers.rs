@@ -1,4 +1,4 @@
-//! The form chrome every role sub-form shares (#126): the header with its
+//! The form chrome every role sub-form shares (mockup row 126): the header with its
 //! caption line, the collapsible section, label/field rows, the segmented
 //! control, checkbox grids and enable sections. Sizes come from the type and
 //! spacing scales, colours from the theme tokens.

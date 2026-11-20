@@ -1,4 +1,4 @@
-//! The pad's Properties section (#125): Designator with Locked, Layer,
+//! The pad's Properties section (mockup row 125): Designator with Locked, Layer,
 //! Electrical Type (not for a hole), Net, the read-only position, Rotation
 //! and the template with its library.
 

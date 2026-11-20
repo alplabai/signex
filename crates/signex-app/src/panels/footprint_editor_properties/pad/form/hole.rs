@@ -1,7 +1,8 @@
-//! Hole Details of a through-hole pad, a slot or a non-plated hole (#125):
-//! the hole shape the model stores (Round or Slot), its size with Plated,
-//! the tolerance, the rotation of a slot, and the thermal relief of a
-//! plated pad as an enable header over its rule values (lib-17).
+//! Hole Details of a through-hole pad, a slot or a non-plated hole (mockup
+//! row 125): the hole shape the model stores (Round or Slot), its size with
+//! Plated, the tolerance, the rotation of a slot, and the thermal relief of
+//! a plated pad as an enable header over its rule values (Caner,
+//! 2026-11-19).
 
 use iced::alignment::Horizontal;
 use iced::widget::{Column, Space, container, stack};
@@ -175,7 +176,7 @@ pub(super) fn push<'a>(
 
 /// Thermal relief: the shipped switch as the enable header ("off · direct
 /// connect" while off), over Air gap, Spoke width and Spokes, which the
-/// board's rule decides for a library pad (lib-17).
+/// board's rule decides for a library pad (Caner, 2026-11-19).
 fn thermal_relief<'a>(form: &Form<'_>) -> Element<'a, PanelMsg> {
     let (target, i18n, tokens, palette) = (form.target, form.i18n, form.tokens, form.palette);
     let is_on = form.values.stack.thermal_relief;

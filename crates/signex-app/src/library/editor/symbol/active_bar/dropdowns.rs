@@ -527,7 +527,7 @@ mod tests {
         }
     }
 
-    /// m141: the Shapes menu opens under a "Shapes" header and highlights
+    /// Mockup row 141: the Shapes menu opens under a "Shapes" header and highlights
     /// the armed tool's row (and only it).
     #[test]
     fn shapes_menu_has_a_header_and_highlights_the_armed_tool() {

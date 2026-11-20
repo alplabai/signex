@@ -1,4 +1,4 @@
-//! The role sub-forms (#126): which form a selection gets, and the rules
+//! The role sub-forms (mockup row 126): which form a selection gets, and the rules
 //! the forms follow (SMD pads show one side, BGA-only rows grey, the
 //! pocket and mask switches send the inverse of the stored flag).
 

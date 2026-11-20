@@ -1,4 +1,4 @@
-//! Role sub-forms of a selected sketch entity (#126): Pour, Keepout,
+//! Role sub-forms of a selected sketch entity (mockup row 126): Pour, Keepout,
 //! Cutout, Sketch pad and Pattern. Each opens with its own header and a
 //! line-art illustration, then its sections; the entity's attributes decide
 //! which apply (an entity can carry several, a pattern source is also a

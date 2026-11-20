@@ -1,4 +1,4 @@
-//! The pad header (#125): "Pad 3" with its kind pill, then "3 of 8 pads ·
+//! The pad header (mockup row 125): "Pad 3" with its kind pill, then "3 of 8 pads ·
 //! Edit in Sketch ▸". While a pad is being placed: "Next pad" and the TAB
 //! pause hint.
 

@@ -1,4 +1,4 @@
-//! The pattern illustration (#126): every instance with its number, the
+//! The pattern illustration (mockup row 126): every instance with its number, the
 //! dX / dY spacing, the source pad outlined and skipped instances dashed.
 
 use iced::{Point, Rectangle};

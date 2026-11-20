@@ -1,4 +1,4 @@
-//! The pad form under the pad header (#125): the property illustration,
+//! The pad form under the pad header (mockup row 125): the property illustration,
 //! the layer chips of a through-hole pad, then the sections.
 
 use iced::Element;

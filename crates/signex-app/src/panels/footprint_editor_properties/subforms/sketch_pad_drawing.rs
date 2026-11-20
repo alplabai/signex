@@ -1,4 +1,4 @@
-//! The sketch pad illustration (#126): the copper profile from the sketch,
+//! The sketch pad illustration (mockup row 126): the copper profile from the sketch,
 //! the solder mask band around it and the paste outline inside it, on the
 //! top side.
 

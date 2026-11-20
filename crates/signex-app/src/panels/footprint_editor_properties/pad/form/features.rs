@@ -1,4 +1,4 @@
-//! Pad Features (#125): closed until opened. The surface finish of each
+//! Pad Features (mockup row 125): closed until opened. The surface finish of each
 //! side, then the testpoint flags as a two-column checkbox grid.
 
 use iced::widget::{Column, container, row};

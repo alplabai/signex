@@ -1,4 +1,4 @@
-//! Pour role sub-form (#126): header, the pour illustration (region, fill
+//! Pour role sub-form (mockup row 126): header, the pour illustration (region, fill
 //! style, net, priority) and the Pour properties section.
 
 use iced::{Element, Point};

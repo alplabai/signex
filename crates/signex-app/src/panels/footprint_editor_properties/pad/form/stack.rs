@@ -1,5 +1,5 @@
-//! The copper section of the pad form (#125). An SMD pad has one layer and
-//! no pad stack (R12): "Pad · Top Layer" with its shape, size, corner
+//! The copper section of the pad form (mockup row 125). An SMD pad has one
+//! layer and no pad stack (Caner, 2026-11-18): "Pad · Top Layer" with its shape, size, corner
 //! radius and copper offset. A through-hole pad gets "Pad Stack" with the
 //! Simple / Top-Middle-Bottom / Full Stack mode; the per-layer modes show
 //! the copper table. A non-plated hole has no copper, so no section.

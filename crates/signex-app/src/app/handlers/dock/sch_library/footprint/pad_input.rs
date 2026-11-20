@@ -1,5 +1,5 @@
-//! Typed pad-form text the pad does not take (CX review 2026-11-19, mockup
-//! row 125): the text stays in `numeric_buffers` so the field shows it with
+//! Typed pad-form text the pad does not take (mockup row 125, Caner,
+//! 2026-11-19): the text stays in `numeric_buffers` so the field shows it with
 //! a red outline and the reason, while the pad and the illustration keep
 //! the last good value. A value that is taken drops the entry; undo and
 //! redo drop them all (`FootprintDocument::restore`).

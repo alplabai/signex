@@ -1,4 +1,4 @@
-//! Cutout role sub-form (#126): header, the hole in the board with its edge
+//! Cutout role sub-form (mockup row 126): header, the hole in the board with its edge
 //! radius, the Edge radius field and the "Limit depth (pocket)" switch.
 
 use iced::widget::Column;

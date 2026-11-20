@@ -1,4 +1,4 @@
-//! Keepout role sub-form (#126): header, the hatched keepout region naming
+//! Keepout role sub-form (mockup row 126): header, the hatched keepout region naming
 //! each blocked kind, the Layer dropdown and the kinds as a 2×3 grid.
 
 use iced::widget::pick_list;

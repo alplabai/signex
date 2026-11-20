@@ -313,7 +313,7 @@ mod tests {
         ));
     }
 
-    /// m141: the bar has two groups split by one divider, selection
+    /// Mockup row 141: the bar has two groups split by one divider, selection
     /// (five triggers and the Select tool) then placement (Pin, Shapes,
     /// Text and the Place Pin tool); every trigger carries the dropdown
     /// indicator and no tool button does.

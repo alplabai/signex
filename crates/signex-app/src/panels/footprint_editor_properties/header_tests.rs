@@ -1,4 +1,4 @@
-//! The Pad Properties header and form (#2262, #125): the selected pad, its
+//! The Pad Properties header and form (#2262, mockup row 125): the selected pad, its
 //! kind and its place among the footprint's pads; what each pad kind shows
 //! and how its enable headers write the pad.
 
@@ -225,7 +225,7 @@ fn selected_pad_3(app: &Signex) -> &crate::library::editor::footprint::EditorPad
         .pads[2]
 }
 
-/// R12 (#97 / #125): an SMD pad shows only its own layer. No pad stack
+/// Mockup rows 97 and 125: an SMD pad shows only its own layer. No pad stack
 /// mode, no inner or bottom rows; that layer's paste and mask as enable
 /// headers over their expansion; the read-only position as one X / Y row.
 #[test]

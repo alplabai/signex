@@ -1,6 +1,6 @@
 //! Row chrome of the Graphite pad form: a labelled row, a pair of fields,
 //! the segmented control and a number field that shows refused text with a
-//! red outline and a one-line reason (CX review 2026-11-19).
+//! red outline and a one-line reason (mockup row 125, Caner, 2026-11-19).
 
 use iced::widget::{Column, container, row};
 use iced::{Color, Element, Length, Theme, Widget as _};

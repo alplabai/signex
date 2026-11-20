@@ -1,4 +1,4 @@
-//! Paste & Solder (#125). Each paste and solder mask layer is an enable
+//! Paste & Solder (mockup row 125). Each paste and solder mask layer is an enable
 //! header over its Rule | Manual expansion. An SMD pad shows its own
 //! layer's paste and mask; a through-hole pad or a hole shows both mask
 //! layers and no paste (the stored paste values are kept). The mask header

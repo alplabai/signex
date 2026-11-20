@@ -52,7 +52,7 @@ fn notes(prims: &[Primitive]) -> usize {
         .count()
 }
 
-/// m142: the dialog is "Grid Properties" with the "Cartesian · mm" note.
+/// Mockup row 142: the dialog is "Grid Properties" with the "Cartesian · mm" note.
 #[test]
 fn the_title_is_grid_properties_with_the_cartesian_note() {
     assert_eq!(
@@ -69,7 +69,7 @@ fn the_title_is_grid_properties_with_the_cartesian_note() {
     );
 }
 
-/// m142: OK sends the shipped Apply; Cancel closes.
+/// Mockup row 142: OK sends the shipped Apply; Cancel closes.
 #[test]
 fn ok_sends_apply_and_cancel_closes() {
     let [cancel, ok] = footer_buttons();

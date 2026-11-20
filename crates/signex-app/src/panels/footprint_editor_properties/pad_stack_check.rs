@@ -1,4 +1,4 @@
-//! The "Pad stack check" card (#1073, look of #125): the one-time offer to
+//! The "Pad stack check" card (#1073, look of mockup row 125): the one-time offer to
 //! restore paste and thermal relief on sketch pads that older builds wrote
 //! with neither, and the standing warning listing SMD pads that have no
 //! paste opening. An inline card on the theme's warning tone; its actions

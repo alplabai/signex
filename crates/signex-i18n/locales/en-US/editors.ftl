@@ -553,7 +553,7 @@ editors-wire-corner-diagonal-first = Corner: 45°, diagonal first
 editors-wire-corner-diagonal-last = Corner: 45°, diagonal last
 editors-wire-corner-any-angle = Corner: any angle
 
-## Footprint Pad Properties (Graphite, #125)
+## Footprint Pad Properties (mockup row 125)
 # Header, first line: the selected pad's number.
 editors-fp-pad-title = Pad { $number }
 # Header, second line: the pad's place among the footprint's pads. $index and $pads are whole numbers.
@@ -638,7 +638,7 @@ editors-fp-pad-auto = (auto)
 # Placeholder of a pad net that is not set.
 editors-fp-pad-unassigned = (unassigned)
 ## Footprint Properties role sub-forms: Pour, Keepout, Cutout, Pattern and
-## Sketch pad (#126). Lower-case words are captions and drawing labels.
+## Sketch pad (mockup row 126). Lower-case words are captions and drawing labels.
 # Header caption of a pour or keepout; $layer is a board layer name.
 editors-role-region-caption = Region · { $layer }
 editors-role-pour-title = Pour

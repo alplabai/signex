@@ -1,5 +1,5 @@
 //! Drawing pieces the sub-form illustrations share: the view box, labels,
-//! notes and the 45° hatch of a region (#126).
+//! notes and the 45° hatch of a region (mockup row 126).
 
 use iced::{Point, Rectangle};
 use signex_widgets::property_illustration::{

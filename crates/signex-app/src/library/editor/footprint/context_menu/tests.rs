@@ -157,7 +157,7 @@ fn pick_of(row: &(String, Option<FootprintEditorMsg>)) -> Option<SelectionAction
     }
 }
 
-/// m140: with a pad selected the menu starts with Move Selection By,
+/// Mockup row 140: with a pad selected the menu starts with Move Selection By,
 /// Align ▸, Rotate Selection and Flip Selection, keeps the shipped rows,
 /// and ends with Delete.
 #[test]

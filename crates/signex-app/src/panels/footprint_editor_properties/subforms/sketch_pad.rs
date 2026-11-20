@@ -1,4 +1,4 @@
-//! Sketch pad sub-form (#126): a pad whose copper is a sketch profile. The
+//! Sketch pad sub-form (mockup row 126): a pad whose copper is a sketch profile. The
 //! header names the pad and jumps to it in Pads mode; Pad Attributes, the
 //! paste and mask of the pad's own side as enable sections with Rule /
 //! Manual expansions (both sides and the hole for a drilled pad), and the

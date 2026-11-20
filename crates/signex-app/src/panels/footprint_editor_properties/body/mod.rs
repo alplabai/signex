@@ -1,5 +1,5 @@
 //! The footprint Properties body for every state but a selected pad in Pads
-//! mode and pad placement (#124): its own object header, then the body.
+//! mode and pad placement (mockup row 124): its own object header, then the body.
 //!
 //! - Nothing selected: the pad stack check, then the Footprint, Snap & Grid
 //!   and sketch sections in one scroll.
@@ -7,7 +7,7 @@
 //!   Snap Options and the sketch sections as before.
 //! - A silk graphic: the silk form, then Snap Options.
 //! - A board sketch with nothing selected: the board summary and the
-//!   sections the board showed before (#2234; its redesign is #110).
+//!   sections the board showed before (#2234; its redesign is mockup row 110).
 //!
 //! Un-scrolled: the parent wraps the column in the scrollable.
 

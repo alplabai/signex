@@ -1,5 +1,5 @@
 //! Ids of the footprint Properties body in `locales/en-US/editors.ftl`
-//! (#124): the header, the Footprint / Snap & Grid / Sketch sections and the
+//! (mockup row 124): the header, the Footprint / Snap & Grid / Sketch sections and the
 //! selection forms.
 
 define_ids! {

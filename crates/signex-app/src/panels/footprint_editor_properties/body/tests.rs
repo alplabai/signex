@@ -1,4 +1,4 @@
-//! The footprint Properties body (#124): every section in one scroll with
+//! The footprint Properties body (mockup row 124): every section in one scroll with
 //! nothing selected and the pad stack check above them, the snap fields
 //! greyed while snapping is Off, the sketch solve statistics, and a role
 //! sub-form above the Entity section.

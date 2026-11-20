@@ -1,4 +1,5 @@
-//! The Rule | Manual row of an expansion (CX review 2026-11-19): Rule
+//! The Rule | Manual row of an expansion (mockup row 125, Caner,
+//! 2026-11-19): Rule
 //! shows a read-only cell tagged "rule" with no number (a library footprint
 //! has no board rule to resolve), Manual an editable mm field. Picking Rule
 //! clears the value (`""`), picking Manual while the rule decides stores 0.
@@ -67,7 +68,7 @@ pub(in crate::panels::footprint_editor_properties) fn rule_or_manual_row<'a>(
 }
 
 /// A value the board's rule always decides for a library pad: `label` and
-/// the read-only rule tag (lib-17: per-pad values need a model field).
+/// the read-only rule tag (per-pad values need a model field).
 pub(super) fn rule_only_row<'a>(
     label: Localized,
     palette: PanelPalette,

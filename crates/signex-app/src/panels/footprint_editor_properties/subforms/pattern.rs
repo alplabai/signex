@@ -1,4 +1,4 @@
-//! Pattern (array) role sub-form (#126): header with the instance count,
+//! Pattern (array) role sub-form (mockup row 126): header with the instance count,
 //! the numbered illustration, the kind, the Layout and Numbering sections
 //! and Delete pattern. Every field edits the array through the shipped
 //! `FpEditor*Array*` messages.

@@ -1,5 +1,5 @@
 //! Pad-form types, message-helper macro, row primitives and the pad form
-//! of the Properties panel (#125): the sections live one per file.
+//! of the Properties panel (mockup row 125): the sections live one per file.
 //!
 //! Cross-module surface:
 //! - `PadEditTarget` / `PadFormValues` are shared with the pad table so
@@ -299,7 +299,7 @@ where
 }
 
 /// What the pad is, for the form: what applies is shown, nothing else
-/// (m125 "show only what applies"). Through-hole follows the Layer
+/// (mockup row 125, "show only what applies"). Through-hole follows the Layer
 /// picker (Multi-Layer gives the pad a drill); a non-plated hole is its
 /// kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

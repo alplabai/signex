@@ -103,7 +103,7 @@ impl SymbolMenuRow {
 /// list regardless of selection state; the renderer greys out /
 /// disables clicks on a `enabled: false` row.
 ///
-/// Order (m141): Place ▸, the transforms (Rotate Selection, Align ▸), a
+/// Order (mockup row 141): Place ▸, the transforms (Rotate Selection, Align ▸), a
 /// divider, Join into Polygon, Select All, Deselect All, Fit to Window,
 /// and Delete last.
 pub fn build_symbol_context_menu_rows(
@@ -243,7 +243,7 @@ mod tests {
     }
 
     /// The top-level id list is stable regardless of selection state, in
-    /// the m141 order: Place ▸ first, the transforms, a divider, the kept
+    /// the mockup row 141 order: Place ▸ first, the transforms, a divider, the kept
     /// rows, Delete last.
     #[test]
     fn top_level_ids_are_stable() {

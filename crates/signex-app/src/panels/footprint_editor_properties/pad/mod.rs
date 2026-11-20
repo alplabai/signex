@@ -1,4 +1,4 @@
-//! Pads-mode Properties-panel surface (#125): the pad header, the property
+//! Pads-mode Properties-panel surface (mockup row 125): the pad header, the property
 //! illustration, the pad form sections, the Rule / Manual expansion row,
 //! the shape and hole choices and the per-layer pad stack table.
 //!

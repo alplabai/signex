@@ -1,4 +1,4 @@
-//! The role sub-form edits that have no flat `FpEditor*` message (#126):
+//! The role sub-form edits that have no flat `FpEditor*` message (mockup row 126):
 //! the keepout layer and the sketch pad's paste and mask expansions. Each
 //! edit goes through the editor's undo history, re-solves and re-bakes the
 //! sketch, and marks the tab dirty, like the keepout kinds in `shape.rs`.
