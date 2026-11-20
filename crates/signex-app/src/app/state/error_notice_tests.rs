@@ -1,6 +1,6 @@
 //! #2058: the error notice keeps catalog ids and arguments, and the text is
 //! rendered with the language in force, so an open card follows a switch.
-//! Graphite m11 / GG-08: the severity of each heading, the system block, the
+//! Graphite mockup row 11 / GG-08: the severity of each heading, the system block, the
 //! Copy text and the Save As… choice of File Changed on Disk.
 
 use signex_i18n::RenderTranslatable;
@@ -59,7 +59,7 @@ fn a_verbatim_detail_is_shown_as_it_is_in_every_language() {
 }
 
 /// The disk-changed card's English is what the code built before the
-/// catalog. Since m11 the first paragraph is the sentence and the second is
+/// catalog. Since mockup row 11 the first paragraph is the sentence and the second is
 /// the choice list (choice, effect), the same words; Save As… is new (GG-08).
 #[test]
 fn the_disk_changed_cards_keep_their_english() {
@@ -134,7 +134,7 @@ fn the_disk_changed_cards_keep_their_english() {
     );
 }
 
-/// m11: red for a failure or refusal, amber for the cards that ask or warn.
+/// Mockup row 11: red for a failure or refusal, amber for the cards that ask or warn.
 #[test]
 fn the_heading_decides_the_severity() {
     let sheet = || PathBuf::from("/w/proj/top.snxsch");
@@ -211,7 +211,7 @@ fn a_failed_save_puts_the_error_chain_in_the_system_block() {
         Some("writing /w/a.snxsch: Access is denied. (os error 5)")
     );
     // What leaves the screen (a signex-cli reason) is the one line the card
-    // read before m11.
+    // read before mockup row 11.
     assert_eq!(
         notice.detail_line_en_us(),
         "Failed to save active document: writing /w/a.snxsch: Access is denied. (os error 5)"
@@ -333,4 +333,100 @@ fn copy_on_the_card_writes_the_clipboard_through_a_task() {
     app.document_state.error_notice = None;
     let task = app.update(Message::Overlay(OverlayMsg::ErrorNoticeCopyPressed));
     assert_eq!(task.units(), 0, "no card, no work");
+}
+
+/// Answer the next Save As dialog with `path`, replacing a file that is there.
+fn answer_save_as(app: &mut Signex, path: &std::path::Path) {
+    let answers = crate::io_ports::HeadlessAnswers::default();
+    answers.set("path", path.to_string_lossy().into_owned());
+    answers.set("overwrite", "true");
+    app.ui_state.io = crate::io_ports::IoPorts::headless(answers);
+}
+
+/// GG-08, data loss: Save As from the card onto the changed file itself, in
+/// any spelling, writes nothing. Their version stays on disk byte for byte,
+/// the sheet stays modified and the card comes back.
+#[test]
+fn save_as_from_the_card_onto_the_changed_file_leaves_their_version() {
+    let _ = crate::diagnostics::init_logging();
+    for spelling in [
+        "conflict.snxsch",
+        "./conflict.snxsch",
+        "gone/../conflict.snxsch",
+    ] {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let (mut app, conflicted, _other) = conflict_fixture(dir.path());
+        let card = ErrorNotice::disk_changed(conflicted.clone(), DiskDrift::Changed);
+        app.document_state.error_notice = Some(card.clone());
+        answer_save_as(&mut app, &dir.path().join(spelling));
+
+        crate::app::path_ops::settle(
+            &mut app,
+            Message::Overlay(OverlayMsg::DiskConflictSaveAsChosen),
+        );
+
+        assert_eq!(
+            std::fs::read(&conflicted).expect("read"),
+            b"their version",
+            "{spelling}: their version stays"
+        );
+        assert_eq!(
+            app.document_state.error_notice.as_ref(),
+            Some(&card),
+            "{spelling}: the card is back"
+        );
+        assert!(
+            app.document_state.is_document_dirty(&conflicted),
+            "{spelling}: the sheet stays modified"
+        );
+        assert_eq!(active_path(&app), conflicted, "{spelling}: no re-key");
+    }
+}
+
+/// GG-08 to the end: after the card, Save As to a new file writes the
+/// document there and nothing else. Their version stays, the tab names the
+/// new file, the refused save's failure record is gone and the tab shows
+/// no dirty dot, as the document on it is saved.
+#[test]
+fn save_as_from_the_card_to_a_new_file_moves_the_document_there() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (mut app, conflicted, _other) = conflict_fixture(dir.path());
+    // A save that found the file changed records the failure and raises the card.
+    app.handle_save_found_disk_drift(conflicted.clone(), DiskDrift::Changed);
+    let saves = &app.document_state.document_saves;
+    assert!(saves.failure(&conflicted).is_some(), "the refused save");
+    assert!(app.document_state.error_notice.is_some(), "the card");
+    let copy = dir.path().join("copy.snxsch");
+    answer_save_as(&mut app, &copy);
+
+    crate::app::path_ops::settle(
+        &mut app,
+        Message::Overlay(OverlayMsg::DiskConflictSaveAsChosen),
+    );
+
+    assert_eq!(
+        std::fs::read(&conflicted).expect("read"),
+        b"their version",
+        "the changed file is untouched"
+    );
+    let written = std::fs::read(&copy).expect("the new file is written");
+    assert_ne!(written, b"their version");
+    assert_eq!(active_path(&app), copy, "the tab names the new file");
+    assert!(
+        app.document_state.tabs.iter().all(|t| t.path != conflicted),
+        "no tab is left on the changed file"
+    );
+    let saves = &app.document_state.document_saves;
+    assert_eq!(saves.failure(&conflicted), None, "the old failure is gone");
+    assert_eq!(
+        saves.failure(&copy),
+        None,
+        "and did not follow the document"
+    );
+    assert!(
+        !app.document_state.is_document_dirty(&copy),
+        "the saved tab shows no dirty dot"
+    );
+    assert!(!app.document_state.is_document_dirty(&conflicted));
 }

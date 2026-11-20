@@ -52,6 +52,11 @@ the save ledger (Save All lists it), and the notice card offers:
   changed file is left as it is. The document stays modified until that Save
   As lands; when the document is not a tab of the main window the card stays
   and Messages says why, and the card also stays when Save As does not start.
+  A pick that names the changed file itself (in any spelling the volume treats
+  as that file, or once links resolve) writes nothing: Messages says why and
+  the card comes back, since replacing their version is what Overwrite is for.
+  When the Save As to a new file lands, the refused save's failure record goes
+  with the old file.
 - **Overwrite** (Missing: Re-create): one save that is not compared; a failed
   write leaves the baseline, so the next save asks again.
 - **Reload from disk**: read and parse the file on a worker, then replace the

@@ -268,6 +268,9 @@ impl Signex {
                 let rekeyed = self.document_state.engines.contains_key(&path)
                     && !self.document_state.engines.contains_key(&from);
                 if rekeyed {
+                    // The document left `from`; a failure recorded for it
+                    // (a save refused over a changed file) is not its own now.
+                    self.document_state.document_saves.clear_failure(&from);
                     self.adopt_saved_copy_id(&path, &saved, owner);
                 }
             }

@@ -268,7 +268,56 @@ impl Signex {
             "[save] Saving {} under a new name as the user chose; the changed file is kept",
             file_label(&path)
         ));
-        task
+        // The pick comes back through the conflict check, never straight to
+        // the write: the dialog may name the changed file itself.
+        task.map(move |message| match message {
+            Message::File(picked @ (FileMsg::SaveAs { .. } | FileMsg::SavePrimitiveAs { .. })) => {
+                Message::File(FileMsg::DiskConflictSaveAsPicked {
+                    conflicted: path.clone(),
+                    picked: Box::new(picked),
+                })
+            }
+            other => other,
+        })
+    }
+
+    /// The Save As dialog the conflict card opened returned `picked`. A pick
+    /// that names the changed file itself, in any spelling, would replace the
+    /// other program's version without the Overwrite choice: nothing is
+    /// written, the reason goes to Messages and the card comes back.
+    pub(crate) fn handle_disk_conflict_save_as_picked(
+        &mut self,
+        conflicted: PathBuf,
+        picked: FileMsg,
+    ) -> Task<Message> {
+        let onto_conflicted = match &picked {
+            FileMsg::SaveAs { to_path, .. } | FileMsg::SavePrimitiveAs { to_path, .. } => {
+                self.names_one_file(&conflicted, to_path)
+            }
+            _ => false,
+        };
+        if !onto_conflicted {
+            return Task::done(Message::File(picked));
+        }
+        crate::diagnostics::log_warning(format!(
+            "[save] Save As picked {} itself, which another program changed; nothing was \
+             written. Pick a new name, or choose Overwrite to replace their version",
+            file_label(&conflicted)
+        ));
+        if self.document_state.error_notice.is_none() {
+            self.document_state.error_notice =
+                Some(ErrorNotice::disk_changed(conflicted, DiskDrift::Changed));
+        }
+        Task::none()
+    }
+
+    /// Whether `a` and `b` name one file: under the identity rule open and
+    /// Ctrl+S use (case, NFC / NFD, `.` and `..`), or once links resolve.
+    fn names_one_file(&self, a: &Path, b: &Path) -> bool {
+        use crate::app::state::scope::path_key_with;
+        let fold = self.identity_fold_for(a);
+        path_key_with(a, fold) == path_key_with(b, fold)
+            || crate::app::path_op_jobs::same_path(a, b)
     }
 
     /// The user chose Overwrite (or Re-create): save again without comparing.
