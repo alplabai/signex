@@ -10,12 +10,22 @@ const MAX_CLOSE_IDS: usize = 3;
 /// command.
 const MAX_DISTANCE: usize = 3;
 
-/// Up to [`MAX_CLOSE_IDS`] catalog ids within [`MAX_DISTANCE`] edits of
+/// An id longer than this is answered with nothing, before any distance is
+/// computed: no catalog id comes near, and an agent may send up to 1 MiB.
+const MAX_UNKNOWN_CHARS: usize = 64;
+
+/// Up to [`MAX_CLOSE_IDS`] catalog ids within [`max_distance`] edits of
 /// `unknown`, nearest first, ties by id.
 pub fn closest_command_ids(unknown: &str) -> Vec<&'static str> {
+    let len = unknown.chars().take(MAX_UNKNOWN_CHARS + 1).count();
+    if len > MAX_UNKNOWN_CHARS {
+        return Vec::new();
+    }
+    let limit = max_distance(len);
     let mut close: Vec<(usize, &'static str)> = all_command_ids()
+        .filter(|id| id.chars().count().abs_diff(len) <= limit)
         .map(|id| (edit_distance(unknown, id), id))
-        .filter(|(distance, _)| *distance <= MAX_DISTANCE)
+        .filter(|(distance, _)| *distance <= limit)
         .collect();
     close.sort_unstable();
     close
@@ -23,6 +33,12 @@ pub fn closest_command_ids(unknown: &str) -> Vec<&'static str> {
         .take(MAX_CLOSE_IDS)
         .map(|(_, id)| id)
         .collect()
+}
+
+/// The edits allowed for an id of `len` characters: half of it, at most
+/// [`MAX_DISTANCE`], so `x` or an empty id is not "close" to `cut`.
+fn max_distance(len: usize) -> usize {
+    (len / 2).min(MAX_DISTANCE)
 }
 
 /// The Levenshtein distance between `a` and `b`, by characters.
@@ -66,5 +82,29 @@ mod tests {
     #[test]
     fn an_id_far_from_every_command_gets_no_suggestion() {
         assert!(closest_command_ids("zzzzzzzzzzzzzzzz").is_empty());
+    }
+
+    /// `x` is three edits from `cut`; a short id may only miss by half of
+    /// itself.
+    #[test]
+    fn a_short_id_gets_no_unrelated_suggestion() {
+        for short in ["", "x", "zz", "abc"] {
+            assert!(closest_command_ids(short).is_empty(), "{short:?}");
+        }
+        assert_eq!(closest_command_ids("redo_"), ["redo"]);
+    }
+
+    /// An agent may send an id of up to 1 MiB: it is answered at once, with
+    /// nothing, instead of a distance to every catalog id.
+    #[test]
+    fn a_huge_id_is_answered_at_once_with_nothing() {
+        let huge = "a".repeat(1 << 20);
+        let started = std::time::Instant::now();
+        assert!(closest_command_ids(&huge).is_empty());
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(100),
+            "{:?}",
+            started.elapsed()
+        );
     }
 }

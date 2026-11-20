@@ -251,8 +251,5 @@ fn outcome_of(outcome: CommandOutcome) -> Outcome {
             RefusalKind::Disabled,
             signex_i18n::RenderTranslatable::render_en_us(&reason),
         ),
-        // `CommandOutcome` is `#[non_exhaustive]` since it moved to
-        // signex-commands; a new variant is named here, never taken as run.
-        other => refused(RefusalKind::NoRoute, format!("{other:?}")),
     }
 }

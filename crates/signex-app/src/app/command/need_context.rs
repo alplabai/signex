@@ -1,8 +1,15 @@
 //! The two halves of a [`CommandContext`] the enablement gates read (ADR-0006
 //! slice 7): [`CoreContext`], the document, engine and project state a core
 //! command's gate reads, and [`UiContext`], the window, canvas, selection,
-//! tool and clipboard state only a GUI gate reads. A core-bound
+//! tool, clipboard and panel state only a GUI gate reads. A core-bound
 //! [`super::needs::Needs`] is met from a `CoreContext` alone.
+//!
+//! A `CoreContext` fact is read from document, engine, project or library
+//! state. The window state (`ui_state`) only resolves which document the
+//! window a command came from shows, as a front end fills in an implicit
+//! target (ADR-0006, "Driving ports"); a fact read from a panel, the canvas
+//! or the interaction state belongs in `UiContext`
+//! (`core_facts_ignore_panel_and_interaction_state` checks it).
 
 use super::CommandContext;
 use signex_commands::PcbTargets;
@@ -25,7 +32,6 @@ pub(crate) struct CoreContext {
     pub project_dirty: bool,
     pub has_document: bool,
     pub has_open_project: bool,
-    pub has_parent_sheet: bool,
     pub has_active_path: bool,
     pub has_open_library: bool,
     pub has_project_sheet: bool,
@@ -41,8 +47,9 @@ pub(crate) struct CoreBoard {
 }
 
 /// The facts of the window a command came from: its view, canvas, selection,
-/// tool and the clipboard. Each field is the [`CommandContext`] field of the
-/// same name; `pcb` leaves `shown` and `read_only` to [`CoreContext::pcb`].
+/// tool, the clipboard and the panels. Each field is the [`CommandContext`]
+/// field of the same name; `pcb` leaves `shown` and `read_only` to
+/// [`CoreContext::pcb`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct UiContext {
     pub pcb_view_turned: bool,
@@ -51,6 +58,8 @@ pub(crate) struct UiContext {
     pub selection_all_locked: bool,
     pub has_drawing_selection: bool,
     pub drawing: bool,
+    /// Read from the Navigator panel's hierarchy cache, not the project.
+    pub has_parent_sheet: bool,
     pub can_tile_windows: bool,
     pub is_tiled: bool,
     pub turn_in_hand: bool,
@@ -75,7 +84,6 @@ impl CommandContext {
             project_dirty: self.project_dirty,
             has_document: self.has_document,
             has_open_project: self.has_open_project,
-            has_parent_sheet: self.has_parent_sheet,
             has_active_path: self.has_active_path,
             has_open_library: self.has_open_library,
             has_project_sheet: self.has_project_sheet,
@@ -95,6 +103,7 @@ impl CommandContext {
             selection_all_locked: self.selection_all_locked,
             has_drawing_selection: self.has_drawing_selection,
             drawing: self.drawing,
+            has_parent_sheet: self.has_parent_sheet,
             can_tile_windows: self.can_tile_windows,
             is_tiled: self.is_tiled,
             turn_in_hand: self.turn_in_hand,

@@ -7,7 +7,6 @@ use signex_i18n_ids::Translatable;
 /// A click, a key or the palette ignores it; a CLI or an agent (#1923) reads
 /// it to tell "ran" from "ignored".
 #[derive(Debug, Clone, PartialEq)]
-#[non_exhaustive]
 pub enum CommandOutcome {
     /// The command resolved to its handler and the handler was run. The
     /// handler may still report that it had nothing to do in the Messages

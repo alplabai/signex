@@ -154,9 +154,6 @@ impl Needs {
             Self::Redo => ctx.can_redo,
             Self::SelectAllTarget => ctx.has_schematic || ctx.pcb.shown,
             Self::Schematic => ctx.has_schematic,
-            // Up Hierarchy opens the sheet whose symbol places the active
-            // one; a top-level page has none (#1772).
-            Self::ParentSheet => ctx.has_parent_sheet,
             // These assemble the project's sheets, not only the active tab's.
             Self::Sheets => ctx.has_schematic || ctx.has_sheets,
             // Annotate acts from the active document's path; with none open it
@@ -194,6 +191,7 @@ impl Needs {
             | Self::DeleteTarget
             | Self::VertexTarget
             | Self::DrawInProgress
+            | Self::ParentSheet
             | Self::FitTarget
             | Self::TurnedPcbView
             | Self::Turn
@@ -240,6 +238,10 @@ impl Needs {
             Self::DeleteTarget => editable_selection(ctx) || core.has_footprint_editor,
             Self::VertexTarget => ctx.has_selection || core.has_footprint_editor || ctx.drawing,
             Self::DrawInProgress => ctx.drawing,
+            // Up Hierarchy opens the sheet whose symbol places the active
+            // one; a top-level page has none (#1772). Read from the
+            // Navigator panel's hierarchy cache, so it is a UI fact.
+            Self::ParentSheet => ctx.has_parent_sheet,
             Self::FitTarget => core.has_schematic || core.has_pcb || ctx.undocked_has_canvas,
             Self::TurnedPcbView => core.has_pcb && ctx.pcb_view_turned,
             // On a sheet, rotate also turns a part on the cursor with
@@ -278,7 +280,6 @@ impl Needs {
             | Self::Redo
             | Self::SelectAllTarget
             | Self::Schematic
-            | Self::ParentSheet
             | Self::Sheets
             | Self::ActiveSheet
             | Self::Canvas

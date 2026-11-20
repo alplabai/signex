@@ -1226,6 +1226,30 @@ mod tests {
         }
     }
 
+    /// ADR-0006 slice 7: no `CoreContext` fact is read from a panel or from
+    /// the interaction state; resetting both leaves the core half as it was.
+    #[test]
+    fn core_facts_ignore_panel_and_interaction_state() {
+        let fixtures: [fn() -> Signex; 4] = [
+            || with_hierarchy(true),
+            with_schematic,
+            with_board,
+            || with_footprint_editor().0,
+        ];
+        for build in fixtures {
+            let mut app = Box::new(build());
+            let before = app.command_context(None);
+            let fresh = Box::new(Signex::new().0);
+            app.document_state.panel_ctx = fresh.document_state.panel_ctx;
+            app.interaction_state = fresh.interaction_state;
+            assert_eq!(app.command_context(None).core(), before.core());
+        }
+        assert!(
+            with_hierarchy(true).command_context(None).has_parent_sheet,
+            "the hierarchy fixture reads a panel fact, so the check has teeth"
+        );
+    }
+
     #[test]
     fn up_hierarchy_is_off_without_a_hierarchy() {
         let app = with_schematic();

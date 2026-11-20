@@ -99,7 +99,8 @@ mod tests {
 
     #[test]
     fn an_unknown_id_is_answered_with_its_closest_catalog_ids() {
-        assert_eq!(did_you_mean("redo_"), "; did you mean `redo` or `undo`?");
+        assert_eq!(did_you_mean("redo_"), "; did you mean `redo`?");
+        assert_eq!(did_you_mean("redo"), "; did you mean `redo` or `undo`?");
         assert_eq!(did_you_mean("zzzzzzzzzzzzzzzz"), "");
         let tail = did_you_mean("plce_wire");
         assert!(tail.starts_with("; did you mean `place_wire`"), "{tail}");
