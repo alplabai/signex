@@ -6,6 +6,7 @@
 
 mod anchored;
 mod backdrop;
+mod board_menu;
 mod board_part_rows;
 mod components_row;
 mod dock_tab;

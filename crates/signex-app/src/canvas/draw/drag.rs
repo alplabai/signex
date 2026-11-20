@@ -18,6 +18,20 @@ fn connection_x_size(scale: f32) -> (f32, f32) {
     )
 }
 
+/// Where the end a grip holds lands for `delta`, as the one marker of a grip
+/// drag.
+fn grip_mark(
+    lifted: &signex_types::schematic::SchematicSheet,
+    grip: super::super::wire_grip::WireGrip,
+    delta: Option<(f64, f64)>,
+) -> Vec<(f64, f64)> {
+    let (Some(end), Some((dx, dy))) = (super::super::wire_grip::grip_end(lifted, grip), delta)
+    else {
+        return Vec::new();
+    };
+    vec![(end.x + dx, end.y + dy)]
+}
+
 impl SchematicCanvas<'_> {
     /// Drag-to-move guide line + connection-point X markers.
     pub(in crate::canvas) fn draw_move_guides(
@@ -111,12 +125,27 @@ impl SchematicCanvas<'_> {
                         x_stroke,
                     );
                 };
-                let dragged = super::drag_points::dragged_connection_points(
-                    snap,
-                    &self.selected,
-                    dx as f64,
-                    dy as f64,
-                );
+                let dragged = match state.held_grip() {
+                    // A grip moves only the end it holds.
+                    Some(grip) => grip_mark(snap, grip, self.drag_delta(state)),
+                    None => {
+                        let mut points = super::drag_points::dragged_connection_points(
+                            snap,
+                            &self.selected,
+                            dx as f64,
+                            dy as f64,
+                        );
+                        // A dragged wire carries its mid-span joins too (dots,
+                        // sheet pins): each is a connection the drag keeps.
+                        points.extend(
+                            layers
+                                .contacts()
+                                .iter()
+                                .map(|p| (p.x + dx as f64, p.y + dy as f64)),
+                        );
+                        points
+                    }
+                };
                 for (wx, wy) in dragged {
                     let s = cam.world_to_screen(iced::Point::new(wx as f32, wy as f32), bounds);
                     draw_x(&mut *frame, s);

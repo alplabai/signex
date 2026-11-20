@@ -111,7 +111,7 @@ fn step_both_ways(
     floors.full_checks += counts.full_checks;
     floors.blamed += usize::from(counts.blames > 0 && counts.local_checks > 0);
     floors.nets_changed += usize::from(changed && counts.local_checks > 0);
-    floors.warned += usize::from(!a.warnings.is_empty());
+    floors.warned += usize::from(!a.unkept_pins.is_empty());
     floors.rewired += usize::from(rewired && counts.local_checks > 0);
     floors.rewinds += counts.rewinds;
     floors.fallbacks += counts.fallbacks;

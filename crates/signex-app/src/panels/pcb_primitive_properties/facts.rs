@@ -369,6 +369,8 @@ pub struct ZoneFacts {
     /// The copper the selected pours' fills hold: area in mm² and pieces;
     /// `None` while the fills of the board are not computed.
     pub copper: Option<(f64, usize)>,
+    /// Why a selected pour has no fill, when one has none.
+    pub unfilled: Option<pcb_geom::Unfilled>,
 }
 
 /// Free arcs (#2373). Positions and angles are read from the board origin

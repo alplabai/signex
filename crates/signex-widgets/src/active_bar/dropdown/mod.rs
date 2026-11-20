@@ -54,7 +54,7 @@ mod metrics;
 pub use metrics::{MENU_LABEL_SIZE, MENU_SHORTCUT_SIZE, MONO_FAMILY, MenuMetrics};
 
 /// Hover wash and corner radius of a menu row. Public so a `Custom` row
-/// built by the app (the net-colour swatches) hovers like an item row.
+/// built by the app hovers like an item row.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RowPaint {
     pub hover: Color,
@@ -103,6 +103,9 @@ where
     pub label: String,
     /// Leading icon. `None` for items without a glyph.
     pub icon: Option<svg::Handle>,
+    /// Leading colour swatch, drawn in the icon column in place of an
+    /// icon (the net-colour menu). An `icon` wins when both are set.
+    pub swatch: Option<Color>,
     /// `true` paints a small "✓" to the right of the label so the
     /// user sees which row is currently active (toggle items).
     pub checked: bool,
@@ -130,8 +133,6 @@ where
     /// Ink of the row icon in place of the menu's icon ink (a power port
     /// drawn in the power colour). A disabled row still draws it muted.
     pub icon_tint: Option<Color>,
-    /// A colour chip drawn in the icon column in place of an icon.
-    pub swatch: Option<Color>,
     /// Right-aligned caption (a grid step's mm value), drawn like a
     /// shortcut hint but not one.
     pub caption: Option<String>,
@@ -153,6 +154,7 @@ impl<M: 'static + Clone> DropdownItem<M> {
         Self {
             label: label.into(),
             icon: None,
+            swatch: None,
             checked: false,
             shortcut: None,
             disabled: false,
@@ -163,7 +165,6 @@ impl<M: 'static + Clone> DropdownItem<M> {
             on_hover: None,
             active: false,
             icon_tint: None,
-            swatch: None,
             caption: None,
             selected: false,
             strong: false,
@@ -173,12 +174,6 @@ impl<M: 'static + Clone> DropdownItem<M> {
     /// Builder: draw the icon in `ink` (still muted when disabled).
     pub fn icon_tint(mut self, ink: Color) -> Self {
         self.icon_tint = Some(ink);
-        self
-    }
-
-    /// Builder: a colour chip in the icon column.
-    pub fn swatch(mut self, color: Color) -> Self {
-        self.swatch = Some(color);
         self
     }
 
@@ -227,6 +222,12 @@ impl<M: 'static + Clone> DropdownItem<M> {
     /// Builder: attach a leading SVG icon.
     pub fn icon(mut self, handle: svg::Handle) -> Self {
         self.icon = Some(handle);
+        self
+    }
+
+    /// Builder: attach a leading colour swatch in the icon column.
+    pub fn swatch(mut self, color: Color) -> Self {
+        self.swatch = Some(color);
         self
     }
 
@@ -344,10 +345,6 @@ impl Look {
     }
 }
 
-/// Edge and corner radius of a colour swatch in the icon column.
-const SWATCH_SIZE: f32 = 12.0;
-const SWATCH_RADIUS: f32 = 3.0;
-
 /// Render the dropdown panel as an `Element<M>`. `width_hint`
 /// specifies a fixed panel width in px (e.g. 220) when the menu is
 /// list-style; `None` lets the panel auto-size (used for the Filter
@@ -459,6 +456,7 @@ where
     let DropdownItem {
         label,
         icon,
+        swatch,
         checked,
         shortcut,
         disabled,
@@ -469,7 +467,6 @@ where
         on_hover,
         active,
         icon_tint,
-        swatch,
         caption,
         selected,
         strong,
@@ -485,10 +482,8 @@ where
         .spacing(m.row_spacing)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
-    if let Some(cell) = icon_cell(icon, swatch, icon_tint, disabled, m, look) {
-        cells = cells.push(cell);
-    } else if shape.has_icons {
-        cells = cells.push(Space::new().width(Length::Fixed(m.icon_size)).boxed());
+    if shape.has_icons {
+        cells = cells.push(lead_cell(icon, swatch, icon_tint, disabled, m, look));
     }
     // Menu rows never wrap: a too-narrow card clips rather than reflowing a
     // label onto two lines.
@@ -598,49 +593,54 @@ where
     }
 }
 
-/// The icon column cell of a row: its SVG icon (in `tint` when set) or its
-/// colour swatch centred in the column; `None` for a row with neither.
-fn icon_cell<'a, M: 'a>(
+/// The icon column of one row: an icon (in `tint` when set), a colour
+/// swatch or nothing, always in one `icon_size` square with its content
+/// centred, so every label of a card starts at the same x.
+fn lead_cell<'a, M>(
     icon: Option<svg::Handle>,
     swatch: Option<Color>,
     tint: Option<Color>,
     disabled: bool,
     m: &MenuMetrics,
     look: Look,
-) -> Option<Element<'a, M>> {
-    if let Some(handle) = icon {
-        let (muted, ink) = (look.muted, tint.unwrap_or(look.icon_ink));
-        return Some(
+) -> Element<'a, M>
+where
+    M: 'static + Clone,
+{
+    let content: Element<'a, M> = match (icon, swatch) {
+        (Some(handle), _) => {
+            let (muted, ink) = (look.muted, tint.unwrap_or(look.icon_ink));
             svg(handle)
                 .width(m.icon_size)
                 .height(m.icon_size)
                 .style(move |_: &Theme, _| icon_style(disabled, muted, ink))
-                .boxed(),
-        );
-    }
-    let color = swatch?;
-    let edge = look.swatch_edge;
-    let chip = container(Space::new())
-        .width(SWATCH_SIZE)
-        .height(SWATCH_SIZE)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(color)),
-            border: Border {
-                width: 1.0,
-                radius: SWATCH_RADIUS.into(),
-                color: edge,
-                ..Border::default()
-            },
-            ..container::Style::default()
-        });
-    Some(
-        container(chip)
-            .width(m.icon_size)
-            .height(m.icon_size)
-            .align_x(iced::alignment::Horizontal::Center)
-            .align_y(iced::alignment::Vertical::Center)
-            .boxed(),
-    )
+                .boxed()
+        }
+        (None, Some(color)) => {
+            let (edge, side) = (look.swatch_edge, m.swatch_size());
+            container(Space::new())
+                .width(side)
+                .height(side)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(color)),
+                    border: Border {
+                        width: 1.0,
+                        radius: (side / 4.0).into(),
+                        color: edge,
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                })
+                .boxed()
+        }
+        (None, None) => Space::new().boxed(),
+    };
+    container(content)
+        .width(Length::Fixed(m.icon_size))
+        .height(Length::Fixed(m.icon_size))
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center)
+        .boxed()
 }
 
 /// Altium-style toggle chip — used inside `DropdownEntry::Custom`

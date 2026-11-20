@@ -23,6 +23,7 @@
 //!   - `ActiveBarAction::PlacePowerCircle`
 //!   - `ActiveBarAction::PlacePowerSignalGND`
 //!   - `ActiveBarAction::PlacePowerEarth`
+//!   - `ActiveBarAction::PlacePowerChassis`
 //!   - `ActiveBarAction::NetColorBlue`
 //!   - `ActiveBarAction::NetColorLightGreen`
 //!   - `ActiveBarAction::NetColorLightBlue`
@@ -255,6 +256,7 @@ mod tests {
         ActiveBarAction::PlacePowerCircle,
         ActiveBarAction::PlacePowerSignalGND,
         ActiveBarAction::PlacePowerEarth,
+        ActiveBarAction::PlacePowerChassis,
         ActiveBarAction::NetColorBlue,
         ActiveBarAction::NetColorLightGreen,
         ActiveBarAction::NetColorLightBlue,
@@ -458,8 +460,8 @@ mod tests {
         let accounted = ACTIVE_BAR_COMMANDS.len() + PARAMETERISED.len() + MAPPED_ELSEWHERE.len();
         assert_eq!(
             accounted,
-            86,
-            "ActiveBarAction accounted for {accounted} actions but held 86 \
+            87,
+            "ActiveBarAction accounted for {accounted} actions but held 87 \
              when this table was written ({} with ids, {} parameterised, {} \
              mapped elsewhere) — a new variant needs an id here, a slot in \
              PARAMETERISED, or a slot in MAPPED_ELSEWHERE",

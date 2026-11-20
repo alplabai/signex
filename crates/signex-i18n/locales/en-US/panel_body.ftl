@@ -23,6 +23,22 @@ panels-history-ago-hours = { $count }h ago
 panels-history-ago-days = { $count }d ago
 panels-history-ago-months = { $count }mo ago
 panels-history-ago-years = { $count }y ago
+# History graph rows. $author is the commit author's name; $age is one of the
+# panels-history-ago-* texts.
+panels-history-byline = { $author } · { $age }
+# Caption of the working-tree row above the commits.
+panels-history-working-tree-caption = Working tree · now
+panels-history-commit = Commit…
+# Pill on the commit the working tree is checked out at (the git term).
+panels-history-head = HEAD
+# Status letter of a changed file in the commit detail strip.
+panels-history-file-modified = M
+panels-history-file-added = A
+panels-history-file-deleted = D
+# Commit detail strip actions.
+panels-history-show-differences = Show differences…
+panels-history-show-on-board = Show on board / sheet
+panels-history-more = More: new branch here, tag, copy SHA
 
 ## ERC panel: per-finding waivers
 panels-erc-waive = Waive

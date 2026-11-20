@@ -181,3 +181,16 @@ fn the_new_builders_set_their_fields() {
     assert_eq!(item.caption.as_deref(), Some("1.27 mm"));
     assert!(item.selected && item.strong);
 }
+
+/// A swatch row reserves the icon column like an icon row, so a card mixing
+/// the two starts every label at one x, and the swatch fits inside it.
+#[test]
+fn a_swatch_row_takes_the_icon_column() {
+    let swatch_only = vec![DropdownEntry::Item(
+        DropdownItem::new("Blue", ()).swatch(Color::from_rgb(0.4, 0.4, 0.93)),
+    )];
+    assert!(metrics::has_icons(&swatch_only));
+    assert!(!metrics::has_icons(&labelled("Blue")));
+    let m = MenuMetrics::GRAPHITE;
+    assert!(m.swatch_size() > 0.0 && m.swatch_size() < m.icon_size);
+}

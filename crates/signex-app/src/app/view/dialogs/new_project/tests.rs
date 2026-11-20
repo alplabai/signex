@@ -17,27 +17,92 @@ fn the_selected_card_has_the_accent_border_and_the_soft_fill() {
         let off = card_style(&t, false, Status::Active);
         assert_eq!(on.border.width, SELECTED_BORDER, "{id:?}");
         assert_eq!(on.border.color, ti(t.accent), "{id:?}");
+        // Picked: the soft accent at 40 % over the panel (#2537 mockup).
+        let soft = iced::Color {
+            a: r.accent_soft.a * 0.4,
+            ..r.accent_soft
+        };
         assert_eq!(
             on.background,
-            Some(Background::Color(r.accent_soft)),
+            Some(Background::Color(tokens::composite_over(
+                soft,
+                ti(t.panel_bg)
+            ))),
             "{id:?}"
         );
         assert_eq!(off.border.width, 1.0, "{id:?}");
         assert_eq!(off.border.color, ti(t.border), "{id:?}");
-        assert_eq!(off.background, Some(Background::Color(r.raised)), "{id:?}");
+        assert_eq!(
+            off.background,
+            Some(Background::Color(ti(t.panel_bg))),
+            "{id:?}"
+        );
         assert_ne!(on.background, off.background, "{id:?}");
     }
 }
 
 #[test]
-fn a_hovered_unselected_card_strengthens_its_hairline_and_a_selected_one_keeps_the_accent() {
-    let t = theme_tokens(ThemeId::GraphiteLight);
-    let rest = card_style(&t, false, Status::Active);
-    let hover = card_style(&t, false, Status::Hovered);
-    assert_ne!(rest.border.color, hover.border.color);
+fn a_hovered_unselected_card_takes_the_hover_fill_and_a_selected_one_keeps_the_accent() {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let t = theme_tokens(id);
+        let rest = card_style(&t, false, Status::Active);
+        let hover = card_style(&t, false, Status::Hovered);
+        assert_eq!(
+            hover.background,
+            Some(Background::Color(tokens::composite_over(
+                ti(t.hover),
+                ti(t.panel_bg)
+            ))),
+            "{id:?}"
+        );
+        assert_eq!(rest.border.color, hover.border.color, "{id:?}");
+        assert_eq!(
+            card_style(&t, true, Status::Hovered).border.color,
+            ti(t.accent)
+        );
+    }
+}
+
+/// #2537: the layer glyph draws one copper bar per layer up to ten, with
+/// thinner bars and a tighter gap above six layers.
+#[test]
+fn the_layer_glyph_thins_and_caps_its_bars() {
+    use super::card_parts::{glyph_bars, glyph_metrics};
+    assert_eq!(glyph_metrics(4), (3.0, 2.0, 2.0));
+    assert_eq!(glyph_metrics(6), (3.0, 2.0, 1.0));
+    assert_eq!(glyph_metrics(8), (2.0, 1.0, 0.0));
+    assert_eq!(glyph_bars(2), 2);
+    assert_eq!(glyph_bars(8), 8);
+    assert_eq!(glyph_bars(32), 10);
+}
+
+/// #2538: the summary lines read like the design.
+#[test]
+fn the_summary_lines_name_the_tier_layers_and_rules() {
+    use crate::app::SetupKind;
+    use signex_types::project::{ProjectSetup, SetupProfile};
+    let (app, _t) = crate::app::Signex::new();
+    let i18n = &app.ui_state.i18n;
+    let setup = ProjectSetup::from_profile(SetupProfile::Standard);
     assert_eq!(
-        card_style(&t, true, Status::Hovered).border.color,
-        ti(t.accent)
+        plain(super::summary::summary_line(
+            &setup,
+            SetupKind::Pcb,
+            &[],
+            i18n
+        )),
+        "Standard · 4 layers · 0.15 mm clearance · 0.2 mm tracks"
+    );
+    let mut sheet = setup.clone();
+    sheet.sheet.paper_size = "A4".into();
+    assert_eq!(
+        plain(super::summary::summary_line(
+            &sheet,
+            SetupKind::Sheet,
+            &[],
+            i18n
+        )),
+        "A4 landscape · Signex default title block · IEEE 315"
     );
 }
 

@@ -1,51 +1,71 @@
 //! Graphite look of the Parameters table: a hairline card, a muted sunken
-//! name column and mono values.
+//! name column and the value cells beside it.
 
 use super::super::*;
 use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale, ti};
 use iced::Widget;
+use signex_widgets::Label;
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Width of the name column.
-const NAME_COLUMN_WIDTH: f32 = 110.0;
+/// Width of the name column in `dense` font sizes, so it follows the font.
+const NAME_COLUMN_EMS: f32 = 10.0;
+/// Width of the name column. A longer name wraps inside it, by word and
+/// then by glyph, and never reaches the value cell.
+const NAME_COLUMN_WIDTH: f32 = TS.dense * NAME_COLUMN_EMS;
 /// Corner radius of the table card.
 const TABLE_RADIUS: f32 = 8.0;
 
-/// The name / value rows in a rounded hairline card.
-pub fn parameter_table<'a>(tokens: &ThemeTokens, rows: &[(&str, &str)]) -> Element<'a, PanelMsg> {
-    let r = resolve(tokens);
-    let (line, line_soft, sunken) = (ti(tokens.border), r.line_soft, r.sunken);
-    let (ink, ink3) = (ti(tokens.text), r.ink3);
+/// One row of the Parameters table: its name and its value cell.
+pub(super) struct ParameterRow<'a> {
+    pub(super) name: Label<'a>,
+    pub(super) value: Element<'a, PanelMsg>,
+}
+
+/// A value cell that cannot be edited: mono text, wrapped rather than cut.
+pub(super) fn read_only_value<'a>(tokens: &ThemeTokens, value: String) -> Element<'a, PanelMsg> {
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
+    container(
+        text(signex_i18n::UserText::new(value))
+            .size(TS.dense)
+            .color(ti(tokens.text))
+            .font(mono)
+            .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+    )
+    .padding([5.0, 8.0])
+    .width(Length::Fill)
+    .clip(true)
+    .boxed()
+}
+
+/// The name / value rows in a rounded hairline card.
+pub(super) fn parameter_table<'a>(
+    tokens: &ThemeTokens,
+    rows: Vec<ParameterRow<'a>>,
+) -> Element<'a, PanelMsg> {
+    let r = resolve(tokens);
+    let (line, line_soft, sunken, ink3) = (ti(tokens.border), r.line_soft, r.sunken, r.ink3);
     let mut table: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
-    for (name, value) in rows {
+    for ParameterRow { name, value } in rows {
         let name_cell = container(
-            text(signex_i18n::UserText::new(name.to_string()))
+            text(name)
                 .size(TS.dense)
-                .color(ink3),
+                .color(ink3)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         )
         .padding([5.0, 8.0])
         .width(NAME_COLUMN_WIDTH)
+        .clip(true)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(sunken)),
             ..container::Style::default()
         });
-        let value_cell = container(
-            text(signex_i18n::UserText::new(*value))
-                .size(TS.dense)
-                .color(ink)
-                .font(mono)
-                .wrapping(iced::widget::text::Wrapping::None),
-        )
-        .padding([5.0, 8.0])
-        .width(Length::Fill)
-        .clip(true);
         table = table.push(
-            row![name_cell.boxed(), value_cell.boxed()]
+            row![name_cell.boxed(), value]
                 .width(Length::Fill)
+                .align_y(iced::Alignment::Center)
                 .boxed(),
         );
         table = table.push(

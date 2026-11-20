@@ -47,6 +47,9 @@ pub struct InteractionState {
     /// A guide armed by the board panel's Place, waiting for the click on
     /// the main window's board that sets it (#2374): the board and the kind.
     pub pcb_guide_place: Option<(std::path::PathBuf, signex_types::pcb_options::GuideKind)>,
+    /// Edit ▸ Origin ▸ Set armed (2026-11-18): the board whose next click on
+    /// the main window sets its origin.
+    pub pcb_origin_place: Option<std::path::PathBuf>,
     /// The board Measure tool and the highlighted board net (#2403).
     pub pcb_query: super::pcb_query::PcbQueryState,
     /// Arrange in Box armed on a board (#2409): the components it moves
@@ -134,6 +137,9 @@ pub struct InteractionState {
     /// Right-click menu of a Start screen project row (#2305): which
     /// project, anchored where the click landed.
     pub start_row_menu: Option<crate::start_screen::StartRowMenu>,
+    /// The Start screen navigation row last picked; back to Home once the
+    /// Start screen goes away.
+    pub start_section: crate::start_screen::StartSection,
     /// Currently-expanded submenu inside the right-click context menu
     /// (None when no submenu is shown). Always cleared when
     /// `context_menu` becomes None.

@@ -44,6 +44,7 @@ pub use facts::{
     PrimitiveField, PrimitiveFlag, PrimitiveTarget, ShapeChoice, TextFacts, TrackFacts, ViaFacts,
     ZoneFacts, ZoneKind, shared,
 };
+pub(crate) use zone::unfilled_reason;
 
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};

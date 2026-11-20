@@ -420,7 +420,10 @@ pub(super) fn sheet_actions_entries(
         ),
         row(None, "create_sheet_from_sheet_symbol", child),
         row(None, "sync_sheet_pins", child),
+        // #1276: the sync with a preview, then a new symbol from a sheet file.
+        row(None, "sync_sheet_entries", child),
         DropdownEntry::Separator,
+        row(None, "create_sheet_symbol_from_sheet", true),
         row(None, "number_schematic_sheets", true),
     ]
 }

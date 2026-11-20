@@ -1127,7 +1127,7 @@ fn canvas_cross_probe_row_runs_the_command_with_a_selection() {
     assert!(!has_row(&without, "Cross Probe"));
 }
 
-/// #1312: the board menu ends with Cross Probe, live with anything selected.
+/// #1312: the board menu has Cross Probe, live with anything selected.
 #[test]
 fn board_cross_probe_row_runs_the_command_with_a_selection() {
     use crate::app::handlers::pcb_placement::PcbTargets;
@@ -1156,7 +1156,12 @@ fn board_cross_probe_row_runs_the_command_with_a_selection() {
         None,
         &sc,
     );
-    assert!(row_message(&rows, "Cross Probe").is_none());
+    // 2026-11-18: the empty-area menu has no object rows.
+    assert!(
+        !rows
+            .iter()
+            .any(|row| matches!(row, DropdownEntry::Item(it) if it.label == "Cross Probe"))
+    );
 }
 
 /// #2234: the board menu's Board Sketch row runs `board_sketch`, with or

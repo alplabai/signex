@@ -5,11 +5,11 @@ use iced::widget::{Space, column, container, pick_list, row};
 use iced::{Alignment, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::designator::DesignatorStandard;
-use signex_types::project::{FabTemplate, PcbField, PcbValueError, SHEET_SIZES};
+use signex_types::project::{FabTemplate, PcbField, PcbValueError, SHEET_SIZES, SetupProfile};
 use signex_types::schematic::{SheetOrientation, SheetSize};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{button, text, text_input};
+use signex_widgets::{PickListPlaceholder as _, button, text, text_input};
 
 use super::{SP, TS, labelled_row};
 use crate::app::new_project::{NewProjectMsg, NewProjectState, RULE_FIELDS};
@@ -56,7 +56,7 @@ pub(super) fn section<'a>(
         };
         body = body.push(divider().boxed()).push(
             row![
-                container(pcb_rules(state, i18n, tokens)).width(Length::FillPortion(1)),
+                container(pcb_rules(state, true, i18n, tokens)).width(Length::FillPortion(1)),
                 container(schematic(state, i18n, tokens)).width(Length::FillPortion(1)),
             ]
             .spacing(SP.xl)
@@ -84,24 +84,6 @@ fn heading<'a>(id: MessageId, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, 
     text(t!(i18n, id))
         .size(TS.section)
         .color(tokens::resolve(tokens).ink4)
-        .boxed()
-}
-
-fn fab_chip<'a>(
-    caption: Localized,
-    selected: bool,
-    on_press: NewProjectMsg,
-    tokens: &ThemeTokens,
-) -> Element<'a, NewProjectMsg> {
-    let tokens = *tokens;
-    button(text(caption).size(TS.body))
-        .padding([SP.s, SP.l])
-        .on_press(on_press)
-        .style(move |_: &Theme, status| {
-            let mut style = super::cards::card_style(&tokens, selected, status);
-            style.border.radius = Radii::GRAPHITE.pill.into();
-            style
-        })
         .boxed()
 }
 
@@ -192,7 +174,9 @@ fn stepper<'a>(state: &NewProjectState, tokens: &ThemeTokens) -> Element<'a, New
     .width(Length::Fixed(VALUE_W / 2.0))
     .center_x(Length::Fixed(VALUE_W / 2.0))
     .style(crate::styles::field(tokens, false));
-    row![step("\u{2212}", -1), value, step("+", 1)]
+    // The card steppers' step: even layer counts (#2537).
+    let by = signex_types::project::LAYER_STEP as i8;
+    row![step("\u{2212}", -by), value, step("+", by)]
         .spacing(SP.s)
         .align_y(Alignment::Center)
         .boxed()
@@ -242,49 +226,81 @@ fn rule_row<'a>(
     col.boxed()
 }
 
-pub(crate) fn pcb_rules<'a>(
+/// The Fab tier field (#2537): it mirrors the picked card (Custom and a
+/// saved profile show the Custom name), and a pick takes that tier with its
+/// `fab_*` rules.
+fn fab_tier<'a>(
     state: &NewProjectState,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, NewProjectMsg> {
+    let options: Vec<Opt<FabTemplate>> = FabTemplate::ALL
+        .into_iter()
+        .map(|fab| Opt {
+            value: fab,
+            label: t!(
+                i18n,
+                crate::app::new_project::profile_name_id(SetupProfile::from_fab(fab))
+            )
+            .into_string(),
+        })
+        .collect();
+    let shown = state
+        .setup
+        .user_profile
+        .is_none()
+        .then(|| state.setup.profile.fab_template())
+        .flatten();
+    let current = options.iter().find(|o| Some(o.value) == shown).cloned();
+    let picker = pick_list(current, options, |o: &Opt<FabTemplate>| o.label.clone())
+        .graphite()
+        .placeholder_label(t!(i18n, ids::DIALOG_NEW_PROJECT_PROFILE_CUSTOM_NAME))
+        .on_select(|o: Opt<FabTemplate>| NewProjectMsg::FabPicked(o.value))
+        .on_open(NewProjectMsg::DropdownToggled(true))
+        .on_close(NewProjectMsg::DropdownToggled(false))
+        .width(Length::Fixed(VALUE_W * 2.2));
+    labelled_row(
+        t!(i18n, ids::DIALOG_NEW_PROJECT_FAB_LABEL),
+        picker.boxed(),
+        tokens,
+    )
+}
+
+/// The board rules column. `with_fab_tier`: the Fab tier field shows; New
+/// PCB leaves it out while the project-setup summary row stands for the
+/// tier (#2538, F06).
+pub(crate) fn pcb_rules<'a>(
+    state: &NewProjectState,
+    with_fab_tier: bool,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
     let setup = &state.setup;
-    let chip = |fab: FabTemplate, id: MessageId| {
-        fab_chip(
-            t!(i18n, id),
-            setup.fab == Some(fab),
-            NewProjectMsg::FabPicked(fab),
-            tokens,
-        )
-    };
-    let chips = row![
-        chip(FabTemplate::Standard, ids::DIALOG_NEW_PROJECT_FAB_STANDARD),
-        chip(FabTemplate::Advanced, ids::DIALOG_NEW_PROJECT_FAB_ADVANCED),
-        chip(FabTemplate::Hdi, ids::DIALOG_NEW_PROJECT_FAB_HDI),
-        fab_chip(
-            t!(i18n, ids::DIALOG_NEW_PROJECT_FAB_IMPORT),
-            setup.imported,
-            NewProjectMsg::ImportRequested,
-            tokens,
-        ),
-    ]
-    .spacing(SP.m)
-    .wrap();
+    let import = button(text(t!(i18n, ids::DIALOG_NEW_PROJECT_FAB_IMPORT)).size(TS.body))
+        .padding([SP.s, SP.l])
+        .on_press(NewProjectMsg::ImportRequested)
+        .style(crate::styles::outline_button(tokens));
     let note_id = if setup.imported {
         ids::DIALOG_NEW_PROJECT_FAB_NOTE_IMPORTED
     } else {
         ids::DIALOG_NEW_PROJECT_FAB_NOTE
     };
-    let mut col = column![
-        heading(ids::DIALOG_NEW_PROJECT_PCB_HEADING, i18n, tokens),
-        text(t!(i18n, ids::DIALOG_NEW_PROJECT_FAB_LABEL))
-            .size(TS.body)
-            .color(ti(tokens.text_secondary)),
-        chips,
-        text(t!(i18n, note_id))
-            .size(TS.caption)
-            .color(tokens::muted_text(tokens)),
-    ]
-    .spacing(SP.m);
+    let mut col = column![heading(ids::DIALOG_NEW_PROJECT_PCB_HEADING, i18n, tokens)].spacing(SP.m);
+    if with_fab_tier {
+        col = col.push(fab_tier(state, i18n, tokens));
+    }
+    col = col.push(
+        row![
+            text(t!(i18n, note_id))
+                .size(TS.caption)
+                .color(tokens::muted_text(tokens))
+                .width(Length::Fill),
+            import,
+        ]
+        .spacing(SP.m)
+        .align_y(Alignment::Center)
+        .boxed(),
+    );
     if let Some(why) = &state.import_error {
         col = col.push(
             text(t!(

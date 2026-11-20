@@ -166,6 +166,7 @@ then warning \"hit\"
         let mut ctx = sample_context();
         ctx.no_erc_directives = vec![signex_erc::context::ErcNoErcDirective {
             position: Point::new(0.0, 0.0),
+            rules: Vec::new(),
         }];
         let diagnostics = signex_erc::engine::run_all_with_dsl(&ctx, &eval_fns);
         assert!(diagnostics.iter().any(|d| d.message == "Driver net"));
@@ -193,7 +194,10 @@ then warning \"hit\"
             is_power_flag: false,
         }];
         let pin = sym.pins[0].world_pos;
-        ctx.no_erc_directives = vec![signex_erc::context::ErcNoErcDirective { position: pin }];
+        ctx.no_erc_directives = vec![signex_erc::context::ErcNoErcDirective {
+            position: pin,
+            rules: Vec::new(),
+        }];
         let diagnostics = signex_erc::engine::run_all_with_dsl(&ctx, &eval_fns);
         let d = diagnostics
             .iter()

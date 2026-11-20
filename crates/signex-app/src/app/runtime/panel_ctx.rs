@@ -288,6 +288,10 @@ impl Signex {
 
     /// Rebuild the context in the main slot from the active document.
     pub(crate) fn refresh_main_panel_ctx(&mut self) {
+        // The clock is read here, in the runtime layer, and kept in state:
+        // `${CurrentTime}` shows the time the panel was last built, to the
+        // minute, and `view` never reads the clock.
+        self.document_state.times.now = Some(chrono::Local::now());
         // The app-wide requests (project probe, row summaries, Navigator
         // assembly, a pending profile update) belong to the main window. A
         // window's refresh runs with its sheet swapped in and must not
@@ -576,12 +580,29 @@ impl Signex {
                     .collect()
             })
             .unwrap_or_default();
+        let sheet_variables = active_schematic_snapshot
+            .map(|snapshot| snapshot.variables.clone())
+            .unwrap_or_default();
         let project_parameters = self
             .document_state
             .active_path
             .as_deref()
             .and_then(|path| self.document_state.document_project(path))
             .map(|project| project.data.parameters.clone())
+            .unwrap_or_default();
+        // The read-only Parameters rows, resolved by the special strings the
+        // canvas and the PDF use.
+        let builtin_parameters: Vec<(crate::panels::BuiltinParameter, String)> = self
+            .document_state
+            .active_path
+            .as_deref()
+            .and_then(|path| self.special_strings_for_path(path))
+            .map(|special| {
+                crate::panels::BuiltinParameter::ALL
+                    .into_iter()
+                    .map(|parameter| (parameter, special.resolve(parameter.token())))
+                    .collect()
+            })
             .unwrap_or_default();
         // Drafts stay with the sheet they were typed on (shown and committed
         // only there); a closed sheet's drafts are dropped.
@@ -715,6 +736,8 @@ impl Signex {
             child_sheet_file_buf,
             title_block,
             project_parameters,
+            sheet_variables,
+            builtin_parameters,
             drafts,
             numeric_draft,
             title_block_sheet,

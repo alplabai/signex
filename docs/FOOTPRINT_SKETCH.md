@@ -95,3 +95,26 @@ closures), so the verdict depends on constraint order and names the later
 duplicate. They are listed under "Redundant" in the footprint editor's
 DOF / Last solve section. Conflicts are reported separately as
 over-constrained.
+
+## Leaving sketch mode {#leaving-sketch-mode}
+
+The footprint editor shares the board sketch's tools and its way out
+(#2518; the board side and the host lists are in
+[PCB_SKETCH.md](PCB_SKETCH.md#hosts)). In sketch mode the Active Bar is the
+sketch bar alone, Select | Create ▾ | Modify ▾ | constraints | dimension
+input | Linetype | Snap ▾, and the mode bar at the canvas's bottom left
+reads **Bake preview · Discard changes · Bake**:
+
+- **Bake** keeps the edits and goes back to the pads view. The footprint
+  bakes on every solve, so nothing more is written.
+- **Discard changes** goes back to the pads view without the edits. Sketch
+  mode keeps the footprint as it found it (`sketch_mode::exit`); when the
+  footprint differs from that, Discard changes asks first, then restores
+  it in one undo step, so Undo brings the edits back. Without edits it
+  leaves at once. It never writes to disk.
+- **Bake preview** shows a count per footprint target (pads, silk,
+  courtyard, mask, paste, pours, keepouts, cutouts, V-scores); "Back to
+  sketch" closes it.
+
+The Linetype control is a three-way segment, Normal / Construction /
+Centerline; it replaces the click-to-cycle pill.

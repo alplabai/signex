@@ -13,8 +13,8 @@ use signex_types::schematic::{InstancePath, Point};
 use uuid::Uuid;
 
 use super::SheetKey;
+use super::components::PlacedSymbol;
 use super::members::{NetMember, NetMemberKind, NetMembers};
-use super::part_pins::PartPins;
 
 /// The element a navigation or highlight started from: stable across a
 /// rebuild of the index, unlike a net's position in it.
@@ -81,41 +81,16 @@ pub struct NetIndex {
     /// The placements the walk reaches each sheet through.
     placements: HashMap<SheetKey, Vec<InstancePath>>,
     by_name: HashMap<String, usize>,
-    /// Every part with all of its pins, wired or not.
-    parts: Vec<PartPins>,
+    /// Every non-power symbol per placement, for the parts view (#1274).
+    symbols: Vec<PlacedSymbol>,
 }
 
 impl NetIndex {
-    pub(super) fn with_parts(mut self, parts: Vec<PartPins>) -> Self {
-        self.parts = parts;
-        self
-    }
-
-    /// Every part of the project with all of its pins, in walk order.
-    pub fn parts(&self) -> &[PartPins] {
-        &self.parts
-    }
-
-    /// The net pin `pin` of unit `symbol` on placement `occurrence` of
-    /// `sheet` is on; `None` for an unconnected pin.
-    pub fn net_of_pin(
-        &self,
-        sheet: &SheetKey,
-        symbol: Uuid,
-        occurrence: &InstancePath,
-        pin: &str,
-    ) -> Option<usize> {
-        self.nets_of(sheet, symbol).iter().copied().find(|&net| {
-            self.nets[net].members.iter().any(|m| {
-                m.id == symbol
-                    && &m.sheet == sheet
-                    && &m.occurrence == occurrence
-                    && matches!(&m.kind, NetMemberKind::Pin { pin: p, .. } if p == pin)
-            })
-        })
-    }
-
-    pub(super) fn from_members(nets: Vec<NetMembers>, walk: Vec<(SheetKey, InstancePath)>) -> Self {
+    pub(super) fn from_members(
+        nets: Vec<NetMembers>,
+        walk: Vec<(SheetKey, InstancePath)>,
+        symbols: Vec<PlacedSymbol>,
+    ) -> Self {
         let mut by_element: HashMap<ElementKey, Vec<usize>> = HashMap::new();
         let mut placements: HashMap<SheetKey, Vec<InstancePath>> = HashMap::new();
         for (sheet, placement) in walk {
@@ -138,12 +113,18 @@ impl NetIndex {
             by_element,
             placements,
             by_name,
-            parts: Vec::new(),
+            symbols,
         }
     }
 
     pub fn net_count(&self) -> usize {
         self.nets.len()
+    }
+
+    /// Every non-power symbol of the walk, once per placement, in walk then
+    /// document order.
+    pub fn placed_symbols(&self) -> &[PlacedSymbol] {
+        &self.symbols
     }
 
     pub fn net(&self, index: usize) -> Option<&NetMembers> {

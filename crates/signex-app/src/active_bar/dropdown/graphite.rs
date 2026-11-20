@@ -241,7 +241,7 @@ mod tests {
                 .collect();
             let entry = super::super::custom::filter_entry(i18n, &t, &filters, &[]);
             assert!(matches!(entry, DropdownEntry::Custom(_)));
-            let rows = super::super::custom::net_color_entries(i18n, &t, id, false, true);
+            let rows = super::super::custom::net_color_entries(i18n, id, false, true);
             let swatches = rows
                 .iter()
                 .filter(|e| matches!(e, DropdownEntry::Item(item) if item.swatch.is_some()))

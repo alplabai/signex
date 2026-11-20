@@ -1,7 +1,7 @@
 //! The Net Inspector panel (#1269): its list, kept in step with the cached
 //! project net index, and a member click, which goes to the member through
 //! the same path a net step uses and highlights its net. The By Component
-//! rows are built in `parts.rs` from the same index.
+//! rows (#1274) are built in `component_rows.rs` from the same index.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,15 +10,15 @@ use iced::Task;
 use signex_net::{NetAnchor, NetMemberKind};
 
 use super::super::super::*;
+use super::component_rows::{component_rows, pin_names};
 use super::highlight::bright_elements;
 use super::messages;
 use super::navigate::describe_member;
-use super::parts::{part_rows, pin_names};
 use crate::app::runtime::net_class_styles::plan_projects;
 use crate::app::state::ProjectId;
 use crate::app::state::net_nav::{NetHighlight, ProjectNetData};
 use crate::panels::net_inspector::{
-    NetInspectorMode, NetInspectorView, NetListStatus, NetMemberRow, NetMemberRowKind, NetRow,
+    NetInspectorTab, NetInspectorView, NetListStatus, NetMemberRow, NetMemberRowKind, NetRow,
     preview,
 };
 use crate::panels::{NetInspectorMsg, NetInspectorState, PanelKind};
@@ -120,9 +120,11 @@ impl Signex {
         match msg {
             NetInspectorMsg::FilterChanged(filter) => state.filter = filter,
             NetInspectorMsg::FilterCleared => state.filter.clear(),
-            NetInspectorMsg::ModePicked(mode) => state.mode = mode,
-            NetInspectorMsg::NetToggled(name) => state.toggle(NetInspectorMode::ByNet, name),
-            NetInspectorMsg::PartToggled(name) => state.toggle(NetInspectorMode::ByComponent, name),
+            NetInspectorMsg::TabSelected(tab) => state.tab = tab,
+            NetInspectorMsg::NetToggled(name) => state.toggle(NetInspectorTab::ByNet, name),
+            NetInspectorMsg::ComponentToggled(key) => {
+                state.toggle(NetInspectorTab::ByComponent, key)
+            }
             NetInspectorMsg::MoreMembersShown(name) => state.show_all(name),
             NetInspectorMsg::MemberClicked { net, anchor } => {
                 return self.inspect_member(&net, &anchor);
@@ -236,35 +238,45 @@ impl Signex {
         if same_source && self.document_state.panel_ctx.net_inspector.status == status {
             return warm;
         }
-        // Each mode lists its own rows; the other's count still shows on its
-        // segment.
-        let (nets, total, parts, part_total) = match &data {
-            Some(data) => {
-                let (nets, parts) = match state.mode {
-                    NetInspectorMode::ByNet => (net_rows(data, &state), Vec::new()),
-                    NetInspectorMode::ByComponent => (Vec::new(), part_rows(data, &state)),
-                };
-                (
-                    nets,
-                    data.index.net_count(),
-                    parts,
-                    data.index.parts().len(),
-                )
-            }
-            None => (Vec::new(), 0, Vec::new(), 0),
-        };
-        self.document_state.panel_ctx.net_inspector = NetInspectorView {
-            mode: state.mode,
-            filter: state.filter.clone(),
-            status,
-            nets,
-            total,
-            parts,
-            part_total,
-            board: None,
-        };
+        self.document_state.panel_ctx.net_inspector =
+            self.schematic_view(data.as_deref(), &state, status);
         self.document_state.net_nav.inspector_source = data.map(|data| (data, state));
         warm
+    }
+
+    /// The panel's view of a project: only the tab shown lists its rows
+    /// (a project's parts or its nets); both counts show on the tab strip.
+    fn schematic_view(
+        &self,
+        data: Option<&ProjectNetData>,
+        state: &NetInspectorState,
+        status: NetListStatus,
+    ) -> NetInspectorView {
+        let mut view = NetInspectorView {
+            tab: state.tab,
+            filter: state.filter.clone(),
+            status,
+            ..NetInspectorView::default()
+        };
+        let Some(data) = data else {
+            return view;
+        };
+        view.total = data.index.net_count();
+        match state.tab {
+            NetInspectorTab::ByNet => {
+                view.nets = net_rows(data, state);
+                view.component_total = data.index.component_count();
+            }
+            NetInspectorTab::ByComponent => {
+                // Designators as the project's standard shows them (#1416).
+                let standard = self
+                    .inspected_project()
+                    .and_then(|id| self.document_state.project_by_id(id))
+                    .and_then(|project| project.data.designator_standard());
+                (view.components, view.component_total) = component_rows(data, state, standard);
+            }
+        }
+        view
     }
 
     /// A member row was clicked: highlight its net on every sheet and go to

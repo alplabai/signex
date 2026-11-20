@@ -41,6 +41,8 @@ menu-file-export-pdf = PDF…
 # Submenu titles of the Edit menu.
 menu-edit-move = Move
 menu-edit-arrange = Arrange
+# Edit ▸ Origin: where the board counts its coordinates from.
+menu-edit-origin = Origin
 
 ## Place menu (#2057)
 # Rows of the Place menu that are not commands.
@@ -230,6 +232,7 @@ ctx-power-bar = Bar
 ctx-power-circle = Circle
 ctx-power-signal-ground = Signal Ground
 ctx-power-earth = Earth
+ctx-power-chassis = Chassis
 
 ## Sheet right-click menu (#62)
 

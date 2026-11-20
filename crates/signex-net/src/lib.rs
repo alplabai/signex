@@ -41,8 +41,8 @@ pub use build::{
     NetExtent, PlacementIntent, RunEnd, SegmentIndex, SheetConnectivity, SheetPinContacts,
     WireIntent, best_net_name_of, build_netlist, connected_net_items, connected_points,
     flood_net_elements, has_connection_anchor, is_connection_kind, is_power_flag,
-    name_carrying_ports, net_extent_at, net_reaches_other_sheets, placement_contacts,
-    placement_intent, point_on_segment, pt_key, wire_intent,
+    logical_connectivity, name_carrying_ports, net_extent_at, net_reaches_other_sheets,
+    placement_contacts, placement_intent, point_on_segment, pt_key, wire_intent,
 };
 pub use bus::{BusAnalysis, BusGeometry, BusGroup, BusLabelName, EntryAttachment, analyse_buses};
 
@@ -54,10 +54,11 @@ pub use signature::{NetSignature, net_members, net_signatures, net_signatures_at
 
 mod project;
 pub use project::{
-    HoverPin, MultiNamedNet, NetAnchor, NetHover, NetIndex, NetMember, NetMemberKind, NetMembers,
-    NetNameSource, NumberingIssue, PagePlacement, PartPin, PartPins, ProjectGraph,
-    ProjectNetChange, ProjectNetlist, ProjectRoot, SheetKey, SheetNumbering, SheetOccurrence,
-    SheetPage, StitchIssue, build_project_netlist, build_project_netlist_indexed,
-    instance_entry_designators, is_auto_name, multi_named_nets, number_issues, parse_page_number,
-    project_name_changes, project_occurrences, sheet_numbering, with_page_number,
+    ComponentPin, ComponentReport, HoverPin, MultiNamedNet, NetAnchor, NetHover, NetIndex,
+    NetMember, NetMemberKind, NetMembers, NetNameSource, NumberingIssue, PagePlacement, PlacedPin,
+    PlacedSymbol, ProjectGraph, ProjectNetChange, ProjectNetlist, ProjectRoot, SheetKey,
+    SheetNumbering, SheetOccurrence, SheetPage, StitchIssue, UnconnectedPin, build_project_netlist,
+    build_project_netlist_indexed, instance_entry_designators, is_auto_name, multi_named_nets,
+    number_issues, parse_page_number, project_name_changes, project_occurrences, sheet_numbering,
+    with_page_number,
 };

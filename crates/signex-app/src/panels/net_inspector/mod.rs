@@ -20,8 +20,8 @@ use signex_widgets::{text, text_input};
 
 pub(crate) use model::preview;
 pub use model::{
-    BoardNetRow, BoardNetView, MEMBER_PREVIEW, NetInspectorMode, NetInspectorState,
-    NetInspectorView, NetListStatus, NetMemberRow, NetMemberRowKind, NetRow, PartPinRow, PartRow,
+    BoardNetRow, BoardNetView, ComponentPinRow, ComponentRow, MEMBER_PREVIEW, NetInspectorState,
+    NetInspectorTab, NetInspectorView, NetListStatus, NetMemberRow, NetMemberRowKind, NetRow,
 };
 
 use super::{EmptyStateAction, PanelContext, PanelMsg, empty_state_card_with_actions};
@@ -36,14 +36,14 @@ pub enum NetInspectorMsg {
     FilterChanged(String),
     /// The no-match card's Clear filter was pressed.
     FilterCleared,
-    /// The By Net / By Component control picked a mode.
-    ModePicked(NetInspectorMode),
+    /// The By Net / By Component control picked a tab.
+    TabSelected(NetInspectorTab),
     /// A net row was clicked: expand or fold it.
     NetToggled(String),
-    /// A part row was clicked: expand or fold it.
-    PartToggled(String),
-    /// The "+ N more" row of an expanded net or part (by name, in the
-    /// current mode) was clicked: list every member.
+    /// A part row was clicked: expand or fold it. Carries the row's key.
+    ComponentToggled(String),
+    /// The "+ N more" row of an expanded net or part (by net name or part
+    /// key, in the current tab) was clicked: list every member.
     MoreMembersShown(String),
     /// A member row or a wired pin row was clicked: go to it and highlight
     /// its net. `net` is the name it was listed under; `anchor` finds it
@@ -107,11 +107,11 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     }
 }
 
-/// The mode control, the filter, the list of the mode and the footer.
+/// The tab strip, the filter, the list of the tab and the footer.
 fn ready<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
-    let (list, shown, summary) = match view.mode {
-        NetInspectorMode::ByNet => (
+    let (list, shown, summary) = match view.tab {
+        NetInspectorTab::ByNet => (
             by_net::list(ctx, view),
             view.nets.len(),
             t!(
@@ -121,26 +121,26 @@ fn ready<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Element<'a, P
                 "total" => view.total
             ),
         ),
-        NetInspectorMode::ByComponent => (
+        NetInspectorTab::ByComponent => (
             by_component::list(ctx, view),
-            view.parts.len(),
+            view.components.len(),
             t!(
                 i18n,
                 ids::PANELS_NET_INSPECTOR_PARTS_SUMMARY,
-                "shown" => view.parts.len(),
-                "total" => view.part_total
+                "shown" => view.components.len(),
+                "total" => view.component_total
             ),
         ),
     };
-    let placeholder = match view.mode {
-        NetInspectorMode::ByNet => ids::PANELS_NET_INSPECTOR_FILTER,
-        NetInspectorMode::ByComponent => ids::PANELS_NET_INSPECTOR_FILTER_PARTS,
+    let placeholder = match view.tab {
+        NetInspectorTab::ByNet => ids::PANELS_NET_INSPECTOR_FILTER,
+        NetInspectorTab::ByComponent => ids::PANELS_NET_INSPECTOR_FILTER_PARTS,
     };
     // The "Click a row" hint fits the net list, where every row leads somewhere.
-    let hint = (view.mode == NetInspectorMode::ByNet && shown > 0)
+    let hint = (view.tab == NetInspectorTab::ByNet && shown > 0)
         .then(|| t!(i18n, ids::PANELS_NET_INSPECTOR_FOOTER_HINT));
     column![
-        container(mode_control(ctx, view))
+        container(tab_strip(ctx, view))
             .padding(iced::Padding {
                 top: SP.m,
                 right: SP.l,
@@ -159,7 +159,7 @@ fn ready<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Element<'a, P
 }
 
 /// By Net / By Component, each with the count of its list.
-fn mode_control<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Element<'a, PanelMsg> {
+fn tab_strip<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let tokens = &ctx.tokens;
     let r = resolve(tokens);
@@ -175,15 +175,15 @@ fn mode_control<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Elemen
     let by_net: signex_widgets::Label<'a> =
         t!(i18n, ids::PANELS_NET_INSPECTOR_BY_NET, "count" => view.total).into();
     let by_component: signex_widgets::Label<'a> =
-        t!(i18n, ids::PANELS_NET_INSPECTOR_BY_COMPONENT, "count" => view.part_total).into();
+        t!(i18n, ids::PANELS_NET_INSPECTOR_BY_COMPONENT, "count" => view.component_total).into();
     segmented(
         [
-            (NetInspectorMode::ByNet, by_net),
-            (NetInspectorMode::ByComponent, by_component),
+            (NetInspectorTab::ByNet, by_net),
+            (NetInspectorTab::ByComponent, by_component),
         ],
-        view.mode,
+        view.tab,
         style,
-        |mode| msg(NetInspectorMsg::ModePicked(mode)),
+        |tab| msg(NetInspectorMsg::TabSelected(tab)),
     )
 }
 

@@ -1,7 +1,7 @@
-//! What the Net Inspector shows: its own state (mode, filter, expanded rows)
+//! What the Net Inspector shows: its own state (tab, filter, expanded rows)
 //! and the rows the panel context copies from the project net index. Plain
 //! data; the rows are built in `handlers/net_nav/inspector.rs` and
-//! `handlers/net_nav/parts.rs`.
+//! `handlers/net_nav/component_rows.rs`.
 
 use std::collections::BTreeSet;
 
@@ -11,21 +11,22 @@ use signex_net::NetAnchor;
 /// a "+ N more" row; a click on that row lists the rest.
 pub const MEMBER_PREVIEW: usize = 6;
 
-/// The schematic list the panel shows.
+/// Which list the panel shows for a schematic project.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub enum NetInspectorMode {
+pub enum NetInspectorTab {
     /// Every net with its members.
     #[default]
     ByNet,
-    /// Every part with its pins and the net of each.
+    /// Every part with its pins and the net of each (#1274).
     ByComponent,
 }
 
 /// The panel's own state, kept in `UiState`; the panel context carries a
-/// copy. Rows are remembered by name (net name, part designator).
+/// copy. Rows are remembered by net name and by part key
+/// ([`ComponentRow::key`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct NetInspectorState {
-    pub mode: NetInspectorMode,
+    pub tab: NetInspectorTab,
     pub filter: String,
     /// Nets shown expanded.
     pub expanded: BTreeSet<String>,
@@ -38,11 +39,11 @@ pub struct NetInspectorState {
 }
 
 impl NetInspectorState {
-    /// Expand or fold row `name` of `mode`; a folded row also stops listing in full.
-    pub(crate) fn toggle(&mut self, mode: NetInspectorMode, name: String) {
-        let (expanded, full) = match mode {
-            NetInspectorMode::ByNet => (&mut self.expanded, &mut self.full_nets),
-            NetInspectorMode::ByComponent => (&mut self.expanded_parts, &mut self.full_parts),
+    /// Expand or fold row `name` of `tab`; a folded row also stops listing in full.
+    pub(crate) fn toggle(&mut self, tab: NetInspectorTab, name: String) {
+        let (expanded, full) = match tab {
+            NetInspectorTab::ByNet => (&mut self.expanded, &mut self.full_nets),
+            NetInspectorTab::ByComponent => (&mut self.expanded_parts, &mut self.full_parts),
         };
         if expanded.remove(&name) {
             full.remove(&name);
@@ -51,11 +52,11 @@ impl NetInspectorState {
         }
     }
 
-    /// List every member of `name` in the current mode.
+    /// List every member of `name` in the current tab.
     pub(crate) fn show_all(&mut self, name: String) {
-        match self.mode {
-            NetInspectorMode::ByNet => self.full_nets.insert(name),
-            NetInspectorMode::ByComponent => self.full_parts.insert(name),
+        match self.tab {
+            NetInspectorTab::ByNet => self.full_nets.insert(name),
+            NetInspectorTab::ByComponent => self.full_parts.insert(name),
         };
     }
 }
@@ -133,20 +134,24 @@ pub struct NetRow {
 
 /// One pin of an expanded part.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PartPinRow {
+pub struct ComponentPinRow {
     /// The pin number (else its name), as By Net writes it after the dot.
-    pub number: String,
+    pub pin: String,
     /// The pin's name; empty when the library gives none.
     pub name: String,
     /// The net the pin is on; `None` for an unconnected pin.
     pub net: Option<String>,
+    /// The sheet the pin's unit sits on, as the project names it.
+    pub sheet: String,
     /// Where a click goes: the pin on its sheet.
     pub anchor: NetAnchor,
 }
 
 /// One part row.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PartRow {
+pub struct ComponentRow {
+    /// What the expanded set knows the part by.
+    pub key: String,
     pub designator: String,
     pub value: String,
     pub footprint: String,
@@ -154,7 +159,7 @@ pub struct PartRow {
     pub pins: usize,
     pub expanded: bool,
     /// Filled only while expanded, in pin-number order.
-    pub pin_rows: Vec<PartPinRow>,
+    pub pin_rows: Vec<ComponentPinRow>,
     /// Pins of an expanded part not listed in `pin_rows`.
     pub more: usize,
 }
@@ -162,17 +167,19 @@ pub struct PartRow {
 /// What the panel shows.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NetInspectorView {
-    pub mode: NetInspectorMode,
+    pub tab: NetInspectorTab,
     pub filter: String,
     pub status: NetListStatus,
-    /// The nets the filter keeps, named nets first, then by name.
+    /// The nets the filter keeps, named nets first, then by name. Filled
+    /// only on the By Net tab.
     pub nets: Vec<NetRow>,
     /// Every net of the project.
     pub total: usize,
-    /// The parts the filter keeps, by designator.
-    pub parts: Vec<PartRow>,
-    /// Every part of the project.
-    pub part_total: usize,
+    /// The parts the filter keeps, by designator. Filled only on the By
+    /// Component tab.
+    pub components: Vec<ComponentRow>,
+    /// Every part of the project, counted on both tabs for the tab label.
+    pub component_total: usize,
     /// With a board in view, its nets instead of the project's (#2403).
     pub board: Option<BoardNetView>,
 }
@@ -207,16 +214,16 @@ mod tests {
     #[test]
     fn folding_a_row_forgets_that_it_was_listed_in_full() {
         let mut state = NetInspectorState::default();
-        state.toggle(NetInspectorMode::ByNet, "GND".into());
+        state.toggle(NetInspectorTab::ByNet, "GND".into());
         state.show_all("GND".into());
         assert!(state.full_nets.contains("GND"));
-        state.toggle(NetInspectorMode::ByNet, "GND".into());
+        state.toggle(NetInspectorTab::ByNet, "GND".into());
         assert!(!state.expanded.contains("GND") && state.full_nets.is_empty());
 
-        state.mode = NetInspectorMode::ByComponent;
-        state.toggle(NetInspectorMode::ByComponent, "U1".into());
+        state.tab = NetInspectorTab::ByComponent;
+        state.toggle(NetInspectorTab::ByComponent, "U1".into());
         state.show_all("U1".into());
         assert!(state.expanded_parts.contains("U1") && state.full_parts.contains("U1"));
-        assert!(state.expanded.is_empty(), "the modes keep their own rows");
+        assert!(state.expanded.is_empty(), "the tabs keep their own rows");
     }
 }

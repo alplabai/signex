@@ -324,6 +324,12 @@ pub(super) const POWER: &[EntrySpec] = &[
         "Place Earth power port",
         ActiveBarAction::PlacePowerEarth,
     ),
+    EntrySpec::power(
+        ic::icon_dd_pwr_chassis,
+        menu_ids::CTX_POWER_CHASSIS,
+        "Place Chassis power port",
+        ActiveBarAction::PlacePowerChassis,
+    ),
 ];
 
 pub(super) const HARNESS: &[EntrySpec] = &[

@@ -278,7 +278,7 @@ fn a_member_that_left_its_net_is_said_and_nothing_moves() {
 /// and pin 2 `EN` left open.
 #[test]
 fn switching_to_by_component_and_expanding_a_part_lists_its_pins() {
-    use signex_app::panels::net_inspector::NetInspectorMode;
+    use signex_app::panels::net_inspector::NetInspectorTab;
     use signex_types::schematic::{
         LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point, Symbol,
     };
@@ -339,14 +339,14 @@ fn switching_to_by_component_and_expanding_a_part_lists_its_pins() {
     settle(&mut app, crate::menu_support::menu_row(COMMAND));
     inspector(
         &mut app,
-        NetInspectorMsg::ModePicked(NetInspectorMode::ByComponent),
+        NetInspectorMsg::TabSelected(NetInspectorTab::ByComponent),
     );
-    inspector(&mut app, NetInspectorMsg::PartToggled("U1".into()));
+    inspector(&mut app, NetInspectorMsg::ComponentToggled("U1".into()));
 
     let view = &app.document_state.panel_ctx.net_inspector;
-    assert_eq!(view.mode, NetInspectorMode::ByComponent);
-    assert_eq!(view.part_total, 1);
-    let u1 = &view.parts[0];
+    assert_eq!(view.tab, NetInspectorTab::ByComponent);
+    assert_eq!(view.component_total, 1);
+    let u1 = &view.components[0];
     assert_eq!(
         (
             u1.designator.as_str(),
@@ -360,7 +360,7 @@ fn switching_to_by_component_and_expanding_a_part_lists_its_pins() {
     let pins: Vec<(&str, Option<&str>, &str)> = u1
         .pin_rows
         .iter()
-        .map(|p| (p.number.as_str(), p.net.as_deref(), p.name.as_str()))
+        .map(|p| (p.pin.as_str(), p.net.as_deref(), p.name.as_str()))
         .collect();
     assert_eq!(pins, [("1", Some("VCC"), "VIN"), ("2", None, "EN")]);
 }

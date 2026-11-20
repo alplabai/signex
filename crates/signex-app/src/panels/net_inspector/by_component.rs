@@ -8,7 +8,7 @@ use signex_i18n::{UserText, ids, t};
 use signex_widgets::text;
 
 use super::by_net::{PINS_W, expanded_fill, heading, more_row};
-use super::{NetInspectorMsg, NetInspectorView, PartPinRow, PartRow, SP, TS, msg};
+use super::{ComponentPinRow, ComponentRow, NetInspectorMsg, NetInspectorView, SP, TS, msg};
 use crate::panels::{PanelContext, PanelMsg};
 use crate::styles::{ChromeMetrics, ti, tokens::resolve};
 
@@ -20,13 +20,13 @@ const PIN_NAME_W: f32 = TS.body * 6.0;
 
 /// The heading row and the parts, or the no-match card.
 pub(super) fn list<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Element<'a, PanelMsg> {
-    if view.parts.is_empty() {
+    if view.components.is_empty() {
         return column![
             super::no_match(
                 ctx,
                 ids::PANELS_NET_INSPECTOR_EMPTY_PARTS,
                 ids::PANELS_NET_INSPECTOR_EMPTY_PARTS_BODY,
-                view.part_total,
+                view.component_total,
             ),
             Space::new().width(Length::Fill).height(Length::Fill),
         ]
@@ -50,14 +50,14 @@ pub(super) fn list<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Ele
         super::rule(ctx),
     ]
     .width(Length::Fill);
-    for part in &view.parts {
+    for part in &view.components {
         list = list.push(part_block(ctx, part));
     }
     super::scrolled(list.boxed())
 }
 
 /// A part row and, when expanded, its pin heading and pins.
-fn part_block<'a>(ctx: &'a PanelContext, part: &'a PartRow) -> Element<'a, PanelMsg> {
+fn part_block<'a>(ctx: &'a PanelContext, part: &'a ComponentRow) -> Element<'a, PanelMsg> {
     let mut block: Column<Element<'a, PanelMsg>> = column![part_row(ctx, part)];
     if part.expanded {
         block = block.push(pin_heading(ctx));
@@ -68,7 +68,7 @@ fn part_block<'a>(ctx: &'a PanelContext, part: &'a PartRow) -> Element<'a, Panel
             block = block.push(more_row(
                 ctx,
                 t!(ctx.i18n, ids::PANELS_NET_INSPECTOR_MORE_PINS, "count" => part.more),
-                part.designator.clone(),
+                part.key.clone(),
             ));
         }
     }
@@ -77,7 +77,7 @@ fn part_block<'a>(ctx: &'a PanelContext, part: &'a PartRow) -> Element<'a, Panel
 
 /// A part: chevron and designator, value and footprint, pin count.
 /// Clicking folds or unfolds it.
-fn part_row<'a>(ctx: &'a PanelContext, part: &'a PartRow) -> Element<'a, PanelMsg> {
+fn part_row<'a>(ctx: &'a PanelContext, part: &'a ComponentRow) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let tokens = &ctx.tokens;
     let (ink, muted) = (ti(tokens.text), resolve(tokens).ink3);
@@ -136,7 +136,7 @@ fn part_row<'a>(ctx: &'a PanelContext, part: &'a PartRow) -> Element<'a, PanelMs
     signex_widgets::button(line)
         .width(Length::Fill)
         .padding([0.0, SP.l])
-        .on_press(msg(NetInspectorMsg::PartToggled(part.designator.clone())))
+        .on_press(msg(NetInspectorMsg::ComponentToggled(part.key.clone())))
         .style(crate::styles::menu_item(tokens))
         .boxed()
 }
@@ -169,7 +169,7 @@ fn pin_heading<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
 
 /// A pin: its number, its net (or "— unconnected"), its name. A wired pin
 /// goes to the pin on its sheet when clicked.
-fn pin_row<'a>(ctx: &'a PanelContext, pin: &'a PartPinRow) -> Element<'a, PanelMsg> {
+fn pin_row<'a>(ctx: &'a PanelContext, pin: &'a ComponentPinRow) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let (ink, muted) = (ti(tokens.text), resolve(tokens).ink3);
     let mono = crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT);
@@ -189,7 +189,7 @@ fn pin_row<'a>(ctx: &'a PanelContext, pin: &'a PartPinRow) -> Element<'a, PanelM
     let line = row![
         Space::new().width(SP.xl).height(Length::Shrink),
         container(
-            text(UserText::new(pin.number.as_str()))
+            text(UserText::new(pin.pin.as_str()))
                 .size(TS.caption)
                 .font(mono)
                 .color(muted),

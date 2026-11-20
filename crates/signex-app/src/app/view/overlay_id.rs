@@ -104,6 +104,8 @@ pub(crate) enum OverlayId {
     AssignFootprints,
     /// Tools ▸ Annotation ▸ Number Schematic Sheets (#2247).
     SheetNumbering,
+    /// Design ▸ Synchronize Sheet Entries and Ports (#1276).
+    SheetSync,
     /// Tools ▸ Re-Annotate Board (#1312).
     BoardReannotate,
     /// File ▸ Fabrication Outputs (#2388).
@@ -205,6 +207,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 70] = [
     OverlayId::SelectionFilterCustom,
     OverlayId::AssignFootprints,
     OverlayId::SheetNumbering,
+    OverlayId::SheetSync,
     OverlayId::BoardReannotate,
     OverlayId::FabOutputs,
     OverlayId::BoardOutput,
@@ -333,6 +336,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::NewProject
         | OverlayId::AssignFootprints
         | OverlayId::SheetNumbering
+        | OverlayId::SheetSync
         | OverlayId::BoardReannotate
         | OverlayId::FabOutputs
         | OverlayId::BoardOutput
@@ -559,6 +563,7 @@ impl Signex {
             OverlayId::NewProject => layers.extend(self.new_project_overlay()),
             OverlayId::AssignFootprints => layers.extend(self.assign_footprints_overlay()),
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
+            OverlayId::SheetSync => layers.extend(self.sheet_sync_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),

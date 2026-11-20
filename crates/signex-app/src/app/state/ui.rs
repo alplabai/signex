@@ -190,6 +190,16 @@ pub struct UiState {
     pub net_hover_enabled: bool,
     /// Draft mirror of [`Self::net_hover_enabled`] for the Preferences dialog.
     pub preferences_draft_net_hover_enabled: bool,
+    /// Saved "Fill symbol bodies" preference: the body shapes a symbol
+    /// leaves unfilled draw filled, in the theme tint unless the user chose
+    /// a colour. On by default.
+    pub symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// Draft mirror of [`Self::symbol_body_fill`] for the Preferences dialog.
+    pub preferences_draft_symbol_body_fill: crate::symbol_fill_prefs::SymbolBodyFill,
+    /// The fill colour field's preset palette is open (view state only).
+    pub preferences_body_fill_palette_open: bool,
+    /// The fill colour field's custom colour picker is open (view state only).
+    pub preferences_body_fill_picker_open: bool,
     /// Saved "Two-finger scroll pans" preference: a trackpad scroll (pixel
     /// deltas) pans the canvas instead of zooming. Pinch and Ctrl/Cmd+scroll
     /// still zoom. Off by default.
@@ -473,6 +483,11 @@ pub struct UiState {
     /// Generation of the newest Number Schematic Sheets read. Outside the
     /// dialog's state so a reopened dialog never takes an older read.
     pub sheet_numbering_reads: u64,
+    /// The Synchronize Sheet Entries and Ports dialog, while open (#1276);
+    /// boxed so the closed dialog costs one pointer (#2412).
+    pub sheet_sync: Option<Box<crate::app::SheetSyncState>>,
+    /// Generation of the newest sync dialog read, as `sheet_numbering_reads`.
+    pub sheet_sync_reads: u64,
     /// Tools ▸ Re-Annotate Board (#1312), while open. Execute is one board
     /// undo step; nothing is written to disk.
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
@@ -750,6 +765,7 @@ impl UiState {
             || self.preferences_draft_annotate_undo != self.annotate_undo
             || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
             || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
+            || self.preferences_draft_symbol_body_fill != self.symbol_body_fill
             || self.preferences_draft_trackpad_pan != self.trackpad_pan
             || self.preferences_draft_wheel_mode != self.wheel_mode
             || self.preferences_draft_remember_window_geometry != self.remember_window_geometry
@@ -824,6 +840,7 @@ mod tests {
                 field_size(|ui| &ui.pending_profile_update),
             ),
             ("fab_outputs", field_size(|ui| &ui.fab_outputs)),
+            ("sheet_sync", field_size(|ui| &ui.sheet_sync)),
             (
                 "board_output.dialog",
                 field_size(|ui| &ui.board_output.dialog),

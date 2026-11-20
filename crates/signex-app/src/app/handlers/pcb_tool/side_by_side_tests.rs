@@ -204,3 +204,37 @@ fn quick_route_goes_straight_to_the_target_in_one_step() {
     undo(&mut app);
     assert_eq!(live(&app, &path), before, "one undo removes it");
 }
+
+/// Maintainer 2026-11-18: with an inner layer active, a pair whose copper
+/// is on Top starts each net with a via and runs on the inner layer, as
+/// one undo step.
+#[test]
+fn a_pair_from_top_copper_on_an_inner_layer_starts_with_a_via_per_net() {
+    use crate::app::{Message, PcbMsg, PcbViewMsg};
+    use signex_types::pcb_layer::{CopperLayer, InnerCopper, PcbLayer};
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), ["USB_P", "USB_N"]);
+    let before = live(&app, &path);
+    let inner = CopperLayer::Inner(InnerCopper::new(1).expect("inner 1"));
+    let picked = PcbViewMsg::ActiveLayerPicked(PcbLayer::Copper(inner));
+    let _ = app.update(Message::Pcb(PcbMsg::View(picked)));
+    run(&mut app, "place_board_diff_pair");
+    click(&mut app, 1.0, 0.5);
+    click(&mut app, 11.0, 0.0);
+    escape(&mut app);
+
+    let board = board_of(&app, &path);
+    let mut nets: Vec<u32> = board.vias.iter().map(|v| v.net).collect();
+    nets.sort_unstable();
+    assert_eq!(nets, vec![1, 2], "one via per net: {:?}", board.vias);
+    // The two stubs come first; the pair's tracks follow them.
+    let routed = &board.segments[2..];
+    assert!(!routed.is_empty());
+    assert!(
+        routed.iter().all(|s| s.layer == "Inner1Copper"),
+        "{routed:?}"
+    );
+    undo(&mut app);
+    assert_eq!(live(&app, &path), before, "vias and tracks are one step");
+}

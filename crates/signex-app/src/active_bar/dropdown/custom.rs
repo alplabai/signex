@@ -6,13 +6,13 @@
 use iced::widget::{Space, column, container, row};
 use iced::{Color, Element, Length, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
+use signex_widgets::active_bar_dropdown::DropdownEntry;
 use signex_widgets::text;
 
 use crate::active_bar::{ActiveBarAction, ActiveBarMsg, CustomFilterPreset, SelectionFilter};
 use crate::icons as ic;
 
-use super::{dd_item, graphite};
+use super::{dd_item, dd_swatch, graphite};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -56,24 +56,19 @@ pub(super) const NET_COLORS: [(&str, Color, ActiveBarAction); 7] = [
     ),
 ];
 
-/// NetColor menu: seven colour rows, each with its swatch in the 16 px icon
-/// column, then Custom Color… and the two Clear rows, every label at the
-/// menu body size. The Clear rows grey out when no net carries a custom
-/// colour (`requires_net_color`).
+/// NetColor menu: seven colour rows, each an ordinary item with its swatch
+/// in the shared icon column, then Custom Color… and the two Clear rows, so
+/// every label starts at the same x. The Clear rows grey out when no net
+/// carries a custom colour (`requires_net_color`).
 pub(super) fn net_color_entries(
     i18n: &signex_i18n::I18n,
-    _tokens: &ThemeTokens,
     tid: ThemeId,
     sel: bool,
     nc: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
     let mut rows: Vec<DropdownEntry<ActiveBarMsg>> = NET_COLORS
         .iter()
-        .map(|(label, color, action)| {
-            DropdownEntry::Item(
-                DropdownItem::new(*label, ActiveBarMsg::Action(action.clone())).swatch(*color),
-            )
-        })
+        .map(|(label, color, action)| dd_swatch(i18n, *color, *label, action.clone(), sel, nc))
         .collect();
     rows.extend([
         DropdownEntry::Separator,

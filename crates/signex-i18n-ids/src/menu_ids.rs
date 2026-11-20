@@ -26,6 +26,7 @@ define_ids! {
         MENU_FILE_EXPORT_PDF = "menu-file-export-pdf";
         MENU_EDIT_MOVE = "menu-edit-move";
         MENU_EDIT_ARRANGE = "menu-edit-arrange";
+        MENU_EDIT_ORIGIN = "menu-edit-origin";
         MENU_PLACE_TEXT = "menu-place-text";
         MENU_PLACE_NO_CONNECT = "menu-place-no-connect";
         MENU_PLACE_PORTS = "menu-place-ports";
@@ -165,6 +166,7 @@ define_ids! {
         CTX_POWER_CIRCLE = "ctx-power-circle";
         CTX_POWER_SIGNAL_GROUND = "ctx-power-signal-ground";
         CTX_POWER_EARTH = "ctx-power-earth";
+        CTX_POWER_CHASSIS = "ctx-power-chassis";
         CTX_SHEET_CONTEXT = "ctx-sheet-context";
         CTX_SELECTION_COUNT = "ctx-selection-count";
         CTX_SELECTION_PART = "ctx-selection-part";
