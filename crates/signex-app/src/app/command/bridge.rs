@@ -555,7 +555,8 @@ fn log_unmapped(command: &AppCommandId) {
     } else {
         crate::diagnostics::log_warning(format!(
             "command '{id}' is not in the command catalog — check the id in \
-             your keyboard-shortcuts profile"
+             your keyboard-shortcuts profile{}",
+            crate::keymap::did_you_mean(id)
         ));
     }
 }
@@ -1339,6 +1340,26 @@ mod tests {
                     .message
                     .contains("Reset local coordinates is not available yet")
         }));
+    }
+
+    /// ADR-0006 slice 7: a keymap-profile typo is warned about with the
+    /// catalog ids close to it.
+    #[test]
+    fn an_unknown_id_warns_with_the_close_catalog_ids() {
+        let _guard = serial();
+        let _ = crate::diagnostics::init_logging();
+        let command = AppCommandId::new("plce_wire").unwrap();
+
+        assert!(core_to_message(&command, &CommandArgs::none()).is_none());
+
+        let want = "command 'plce_wire' is not in the command catalog — check the id in \
+                    your keyboard-shortcuts profile; did you mean `place_wire`";
+        assert!(
+            crate::diagnostics::recent_entries()
+                .iter()
+                .any(|entry| entry.message.starts_with(want)),
+            "no warning starting {want:?}"
+        );
     }
 
     /// The other half: dispatching an unmapped command still reports, so

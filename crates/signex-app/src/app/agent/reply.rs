@@ -53,7 +53,10 @@ pub fn outcome_verdict(
         },
         CommandOutcome::UnknownId => (
             Status::Refused,
-            Some(format!("unknown command `{id}`")),
+            Some(format!(
+                "unknown command `{id}`{}",
+                crate::keymap::did_you_mean(id)
+            )),
             None,
         ),
         CommandOutcome::NoBridgeArm => (
@@ -191,5 +194,20 @@ mod tests {
         assert_eq!(answered, (Status::Answered, None, Some(answer)));
         let not_headless = outcome_verdict("x", CommandOutcome::NotHeadless, None);
         assert_eq!(not_headless.0, Status::Failed);
+    }
+
+    /// ADR-0006 slice 7: an unknown id is answered with the close catalog
+    /// ids; one with none close keeps the old text.
+    #[test]
+    fn an_unknown_command_says_which_ids_are_close() {
+        let (status, why, _) = outcome_verdict("plce_wire", CommandOutcome::UnknownId, None);
+        assert_eq!(status, Status::Refused);
+        let why = why.expect("a reason");
+        assert!(
+            why.starts_with("unknown command `plce_wire`; did you mean `place_wire`"),
+            "{why}"
+        );
+        let far = outcome_verdict("zzzzzzzzzzzzzzzz", CommandOutcome::UnknownId, None);
+        assert_eq!(far.1.as_deref(), Some("unknown command `zzzzzzzzzzzzzzzz`"));
     }
 }
