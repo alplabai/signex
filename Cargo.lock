@@ -5813,7 +5813,9 @@ version = "26.11.0"
 dependencies = [
  "chumsky",
  "pcb-geom",
+ "serde_json",
  "signex-drc",
+ "signex-net",
  "signex-types",
  "uuid",
 ]
