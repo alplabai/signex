@@ -1,4 +1,4 @@
-//! The New sheets preview (mockup m31, maintainer refinement 2026-11-18): the
+//! The New sheets preview (mockup row 31, refined by Caner 2026-11-18): the
 //! sheet a new page starts as, at the size and orientation the defaults
 //! column shows, in the schematic canvas colours. The outline, zone border
 //! and title block are the canvas's own lowering

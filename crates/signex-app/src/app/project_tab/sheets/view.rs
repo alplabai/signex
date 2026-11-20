@@ -1,4 +1,4 @@
-//! The Sheets section view (mockup m31): the page table with its root and
+//! The Sheets section view (mockup row 31): the page table with its root and
 //! missing pills and the move buttons on row hover, or the empty-state line
 //! with Add New ▸ Schematic, then the New sheets card (the defaults column
 //! beside the preview).

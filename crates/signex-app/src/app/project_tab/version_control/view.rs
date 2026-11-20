@@ -1,4 +1,4 @@
-//! The Version control section's view (Graphite mockup m35): a Repository
+//! The Version control section's view (mockup row 35): a Repository
 //! card with its state pill, then the Commit every save switch with its
 //! notes. Pure: the project and its facts in, widgets out.
 

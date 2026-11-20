@@ -1,4 +1,4 @@
-//! The Graphite look of the Project tab pages (mockups m30-m38): the card,
+//! The Graphite look of the Project tab pages (mockup rows 30-38): the card,
 //! pills, status lines, label rows, buttons and glyphs every section builds
 //! from. Pure view helpers; sizes from the type and spacing scale, colours
 //! from the theme tokens.

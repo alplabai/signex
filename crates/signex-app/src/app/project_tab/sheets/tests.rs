@@ -1,4 +1,4 @@
-//! #31 (mockup m31): the Sheets rows' root and missing marks, Add New ▸
+//! Mockup row 31: the Sheets rows' root and missing marks, Add New ▸
 //! Schematic from the empty state, and the New sheets preview's fit.
 
 use iced::Size;

@@ -1,4 +1,4 @@
-//! The Parameters section (Graphite mockup m30): the filter, the folded
+//! The Parameters section (mockup row 30): the filter, the folded
 //! groups and renaming a variable in place, driven through `Signex::update`.
 
 use std::collections::BTreeMap;

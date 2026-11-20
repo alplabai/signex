@@ -25,7 +25,7 @@ project-section-setup = Project setup
 project-move-up = Move up
 project-move-down = Move down
 
-# Parameters section (#30): the filter, the Title block and Variables groups,
+# Parameters section (mockup row 30): the filter, the Title block and Variables groups,
 # and renaming a variable in place.
 project-parameters-hint = Every sheet inherits these; a sheet's own Title Block value or sheet variable overrides one. A value starting with = is an expression, such as = VCC / 2. Press Enter in a value to check it.
 project-parameters-filter = Filter parameters
@@ -138,7 +138,7 @@ project-vcs-auto-commit-help = Each save of a project file is committed to the p
 project-vcs-auto-commit-needs-repo = Enable version control first: the project folder has no Git repository.
 project-vcs-pending = Commits in progress: { $count }
 
-# Graphite look (#31, #33).
+# Graphite look (mockup rows 31 and 33).
 project-sheets-root = root
 project-sheets-missing = missing
 project-sheets-add-schematic = Add New ▸ Schematic
@@ -149,7 +149,7 @@ project-sheets-preview-portrait = { $size } portrait
 project-sheets-preview-mm = { $width } × { $height } mm
 project-libraries-where = Add, remove and rename libraries in the project tree: right-click the project, then Add New to Project ▸ Component Library.
 
-# ERC, version control look (#34, #35).
+# ERC, version control look (mockup rows 34 and 35).
 project-erc-source-machine = User Default
 project-erc-source-project = Stored in project
 project-erc-source-unreadable = Newer version
@@ -166,7 +166,7 @@ project-vcs-state-checking = Checking…
 project-vcs-status = Status
 project-vcs-open-history = Open History panel
 
-# Schematic defaults (#36).
+# Schematic defaults (mockup row 36).
 project-defaults-help = Unset widths and sizes on every sheet of this project follow these. Leave a field empty for the built-in value.
 project-defaults-lines = Lines
 project-defaults-text-markers = Text and markers

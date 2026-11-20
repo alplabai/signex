@@ -1,4 +1,4 @@
-//! Schematic defaults section view (mockup m36): the Lines and Text and
+//! Schematic defaults section view (mockup row 36): the Lines and Text and
 //! markers cards side by side, a caption, then the live preview. Pure:
 //! reads the project, emits `ProjectTabMsg`s.
 

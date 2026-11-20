@@ -1,7 +1,7 @@
 //! Libraries section of the Project tab (#1691): the libraries the project
 //! mounts, in list order, with where each lives, its kind and whether it is
 //! mounted (and read-only) now, and Move up / Move down on row hover
-//! (Graphite mockup m33). A move is one step of the General history. Adding,
+//! (mockup row 33). A move is one step of the General history. Adding,
 //! removing and renaming stay in the project tree, which owns the mount and
 //! the file work; a line under the table says so.
 

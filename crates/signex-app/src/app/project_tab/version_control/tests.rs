@@ -1,4 +1,4 @@
-//! #35 (Graphite mockup m35): the Version control section's repository pill,
+//! Mockup row 35: the Version control section's repository pill,
 //! the Commit every save switch rule and Open History panel.
 
 use signex_i18n::ids;

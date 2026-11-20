@@ -1,4 +1,4 @@
-//! Renaming a variable in place (Graphite mockup m30). The typed name is a
+//! Renaming a variable in place (mockup row 30). The typed name is a
 //! draft until Enter; the name is checked here, before the engine sees it,
 //! and a refused one stays in its box with the reason under the row.
 

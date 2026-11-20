@@ -16,7 +16,7 @@ define_ids! {
     PROJECT_SECTION_SETUP = "project-section-setup";
     PROJECT_MOVE_UP = "project-move-up";
     PROJECT_MOVE_DOWN = "project-move-down";
-    // Parameters (#30)
+    // Parameters (mockup row 30)
     PROJECT_PARAMETERS_HINT = "project-parameters-hint";
     PROJECT_PARAMETERS_FILTER = "project-parameters-filter";
     PROJECT_PARAMETERS_TOTALS = "project-parameters-totals";
@@ -110,7 +110,7 @@ define_ids! {
     PROJECT_VCS_AUTO_COMMIT_HELP = "project-vcs-auto-commit-help";
     PROJECT_VCS_AUTO_COMMIT_NEEDS_REPO = "project-vcs-auto-commit-needs-repo";
     PROJECT_VCS_PENDING = "project-vcs-pending";
-    // Graphite look (#31, #33).
+    // Graphite look (mockup rows 31 and 33).
     PROJECT_SHEETS_ROOT = "project-sheets-root";
     PROJECT_SHEETS_MISSING = "project-sheets-missing";
     PROJECT_SHEETS_ADD_SCHEMATIC = "project-sheets-add-schematic";
@@ -119,7 +119,7 @@ define_ids! {
     PROJECT_SHEETS_PREVIEW_PORTRAIT = "project-sheets-preview-portrait";
     PROJECT_SHEETS_PREVIEW_MM = "project-sheets-preview-mm";
     PROJECT_LIBRARIES_WHERE = "project-libraries-where";
-    // ERC, version control look (#34, #35).
+    // ERC, version control look (mockup rows 34 and 35).
     PROJECT_ERC_SOURCE_MACHINE = "project-erc-source-machine";
     PROJECT_ERC_SOURCE_PROJECT = "project-erc-source-project";
     PROJECT_ERC_SOURCE_UNREADABLE = "project-erc-source-unreadable";
@@ -135,7 +135,7 @@ define_ids! {
     PROJECT_VCS_STATE_CHECKING = "project-vcs-state-checking";
     PROJECT_VCS_STATUS = "project-vcs-status";
     PROJECT_VCS_OPEN_HISTORY = "project-vcs-open-history";
-    // Schematic defaults (#36).
+    // Schematic defaults (mockup row 36).
     PROJECT_DEFAULTS_HELP = "project-defaults-help";
     PROJECT_DEFAULTS_LINES = "project-defaults-lines";
     PROJECT_DEFAULTS_TEXT_MARKERS = "project-defaults-text-markers";

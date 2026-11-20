@@ -3,7 +3,7 @@
 //! down on row hover, the root and missing sheets marked, then what a new
 //! sheet starts from (size, orientation, title block), edited with the New
 //! Project dialog's own fields through the Project setup flow, beside a
-//! preview of that sheet (Graphite mockup m31). A move is one step of the
+//! preview of that sheet (mockup row 31). A move is one step of the
 //! General history.
 
 mod preview;

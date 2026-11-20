@@ -1,4 +1,4 @@
-//! The Libraries section view (mockup m33): the libraries in list order with
+//! The Libraries section view (mockup row 33): the libraries in list order with
 //! their location, kind and state pill, the move buttons on row hover, and
 //! the line that says where libraries are added and removed.
 

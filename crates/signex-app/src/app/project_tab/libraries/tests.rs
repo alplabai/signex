@@ -1,4 +1,4 @@
-//! #33 (mockup m33): the Libraries location is cut from the start so the
+//! Mockup row 33: the Libraries location is cut from the start so the
 //! file name stays, and each mount state has its pill tone.
 
 use super::view::LOCATION_CHARS;

@@ -2,7 +2,7 @@
 //! catalog. Each edit dirties the `.snxprj`, writes nothing until Save, and
 //! is one undo step; a refused one changes nothing and says why; Run checks
 //! lands its report in the tab; a save writes the list and reads back the
-//! same. The card look (Graphite mockup m38): outcome counts, which cards
+//! same. The card look (mockup row 38): outcome counts, which cards
 //! open, the value summaries and where a refusal shows.
 
 use std::sync::Arc;

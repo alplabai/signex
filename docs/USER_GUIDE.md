@@ -695,7 +695,8 @@ known), and the extension you choose sets the format: `.html`, `.pdf`, `.json`, 
 The title block of every sheet is filled from **project parameters**. Open the
 project's **Project** tab (project tree, **Project Options**) and choose
 **Parameters**: the **Title block** group (title, document number, revision,
-date, company, drawn by, checked by and approved by) applies to every sheet, and
+date, company, drawn by, checked by, approved by, author, engineer,
+organization and address 1 to 4) applies to every sheet, and
 the **Variables** group holds your own name/value pairs (the project
 variables). A name is letters, digits and `_`, not starting with a digit. Add
 one with the Name field and **Add** at the end of the list, remove one with ×

@@ -38,8 +38,10 @@ message. The chrome catalog draws a sample of it.
 ## Sections (#1689-#1693)
 
 - **Parameters** (#1080) — the values every sheet inherits, in one list
-  with two groups, each folded shut by its header: Title block (the eight
-  title-block fields; a sheet's own Title Block value overrides one) and
+  with two groups, each folded shut by its header: Title block (the fifteen
+  title-block fields: title, document number, revision, date, company,
+  drawn by, checked by, approved by, author, engineer, organization and
+  address 1 to 4; a sheet's own Title Block value overrides one) and
   Variables (every other parameter). The filter above keeps the rows whose
   shown name or value holds the typed text, ignoring case; the caption
   beside it counts all of them. A value box shows its outline on hover or
@@ -102,7 +104,7 @@ message. The chrome catalog draws a sample of it.
   repository, and a note says so when it cannot be turned on. "Commits in
   progress" shows only while commits run. The branch, the last commit, the
   commit author and remotes are not shown yet.
-- **Schematic defaults** (#2026, Graphite mockup m36) — two cards side by
+- **Schematic defaults** (#2026, mockup row 36) — two cards side by
   side. **Lines**: Wire width, Bus width, Symbol line and pin width, Shape
   stroke (mm), then Wire line style. **Text and markers**: Text size (pt),
   Font, Junction diameter (mm), then New shape fill. A number box carries
@@ -121,8 +123,9 @@ message. The chrome catalog draws a sample of it.
   value on the drawing and the junction and bus drag handles (follow-up
   issue "Project tab previews: edit values on the drawing", to be filed).
 
-Each section shows its title and help line over its content in a column
-that scrolls inside the tab.
+Each section but Variants shows its title and help line over its content in
+a column that scrolls inside the tab. Variants keeps its earlier frame
+until its own restyle (mockup row 32).
 
 ## Requirements (#2339)
 

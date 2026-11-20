@@ -1,6 +1,6 @@
 //! The pieces the Project tab's table sections share (#1689-#1693): the
 //! section frame (title, help), the plain heading and table rows, a muted
-//! note, and the Graphite grid table of mockups m31-m38 with its icon move
+//! note, and the Graphite grid table of mockup rows 31-38 with its icon move
 //! buttons. Pure view helpers in the Graphite look.
 
 use iced::alignment::{Horizontal, Vertical};

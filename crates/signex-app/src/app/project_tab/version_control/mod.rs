@@ -3,7 +3,7 @@
 //! Version Control… (the project tree's dialog: `git init`, the first
 //! commit), and the "Commit every save" switch, which is the `.snxprj`
 //! `enable_git` flag and a General step. Turning it off keeps the repository.
-//! The look (Graphite mockup m35) is in `view`.
+//! The look (mockup row 35) is in `view`.
 
 mod view;
 

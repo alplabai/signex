@@ -2,7 +2,7 @@
 //! sizes unset schematic items draw, export and are placed at, saved in the
 //! `.snxprj` `schematic_defaults` key. An empty field is the built-in value.
 //! The look (two cards, unit suffixes, field states, live preview) is the
-//! Graphite mockup m36; see docs/PROJECT_TAB.md.
+//! mockup row 36; see docs/PROJECT_TAB.md.
 
 mod field;
 mod preview;

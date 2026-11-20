@@ -4,7 +4,7 @@
 //! `${NAME}` special strings. A sheet overrides a value in its own Title
 //! Block; see `docs/USER_GUIDE.md`.
 //!
-//! The section is one bordered list (Graphite mockup m30) with a Title block
+//! The section is one bordered list (mockup row 30) with a Title block
 //! and a Variables group, each folded shut by its header, and a filter over
 //! both. A variable is renamed in place: Enter applies the typed name as one
 //! General undo step, or shows why it is refused (`rename`).

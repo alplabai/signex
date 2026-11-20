@@ -1,4 +1,4 @@
-//! One default field of the section (mockup m36): a fixed box holding the
+//! One default field of the section (mockup row 36): a fixed box holding the
 //! text input and its unit suffix, drawn in its [`FieldState`], the reset
 //! button beside an edited box, and the clamp note under it. Pure.
 

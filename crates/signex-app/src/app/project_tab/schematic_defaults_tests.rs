@@ -422,7 +422,7 @@ fn a_rectangle_placed_on_a_project_sheet_stores_the_project_shape_stroke() {
     assert_eq!(*width, 0.4);
 }
 
-/// Mockup m36: a field box is built-in while empty, edited while it holds
+/// Mockup row 36: a field box is built-in while empty, edited while it holds
 /// an override, and invalid when its typed text is not a usable number or
 /// was clamped.
 #[test]
@@ -466,7 +466,7 @@ fn a_default_field_reads_built_in_edited_or_invalid() {
     );
 }
 
-/// Mockup m36: the reset button sends the empty-field edit, so it clears
+/// Mockup row 36: the reset button sends the empty-field edit, so it clears
 /// the override and empties the box.
 #[test]
 fn the_reset_button_clears_the_override_like_an_empty_field() {
@@ -498,7 +498,7 @@ fn the_reset_button_clears_the_override_like_an_empty_field() {
     assert_eq!(state(&app), (FieldState::BuiltIn, None, None));
 }
 
-/// Mockup m36: the preview writes each value beside its item, grey while
+/// Mockup row 36: the preview writes each value beside its item, grey while
 /// the field is empty and with the typed number when it was clamped.
 #[test]
 fn the_preview_labels_read_built_in_set_or_clamped() {
