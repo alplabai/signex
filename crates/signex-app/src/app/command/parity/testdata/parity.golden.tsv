@@ -1380,7 +1380,7 @@ toggle_ratsnest	headless_refusal	headless_refusal	gui	none	routing
 toggle_schematic_filter_panel	bridge	Overlay(PanelToggled(SchFilter))	gui	window	handler
 toggle_schematic_filter_panel	in_window_rewrite	document_window	gui	window	routing
 toggle_schematic_filter_panel	headless_refusal	headless_refusal	gui	none	routing
-toggle_schematic_list_panel	bridge	Overlay(PanelToggled(SchList))	gui	window	handler
+toggle_schematic_list_panel	bridge	Overlay(PanelToggled(ObjectList))	gui	window	handler
 toggle_schematic_list_panel	in_window_rewrite	document_window	gui	window	routing
 toggle_schematic_list_panel	headless_refusal	headless_refusal	gui	none	routing
 toggle_search_panel	bridge	Overlay(FindToggled)	gui	window	handler

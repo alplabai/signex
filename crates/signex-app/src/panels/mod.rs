@@ -45,6 +45,7 @@ pub use drc_results::{
     DrcCategory, DrcFilter, DrcFilterChoice, DrcPanelMsg, DrcView, DrcWaiveDraft,
 };
 pub(crate) use empty_state::empty_state_card;
+pub(crate) use empty_state::{EmptyStateAction, empty_state_card_with_actions};
 mod erc_panel;
 mod erc_rows;
 pub(super) use erc_panel::view_erc;
@@ -77,6 +78,7 @@ mod net_class_panel;
 mod net_class_table;
 pub mod net_inspector;
 mod numeric_draft;
+pub mod object_list;
 pub mod paired;
 mod palette;
 mod paper;
@@ -87,9 +89,11 @@ pub mod pcb_primitive_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
+mod selection_filter;
+pub use selection_filter::{
+    FilterEditor, KindCounts, SchFilterMsg, SelectionFilterFacts, board_counts,
+};
 pub(crate) mod rotation_steps;
-mod sch_filter;
-pub use sch_filter::SchFilterMsg;
 mod symbol_context;
 mod widgets;
 mod wire_style_rows;
@@ -156,12 +160,16 @@ pub use multi_selection::{
     MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
     edit_from_text_in as multi_edit_from_text,
 };
-pub use navigator::NavigatorModel;
+pub use navigator::{NavigatorModel, NavigatorMsg, NavigatorRow, SheetNumbers};
 pub use net_class_panel::{
     LabelClassPick, NetClassChoice, NetClassDraft, NetClassField, NetClassMsg, NetClassPanel,
     net_class_choice, net_class_choices, view_net_classes_section,
 };
 pub use net_inspector::{NetInspectorMsg, NetInspectorState, NetInspectorView};
+pub use object_list::{
+    KindChip, ObjectKind, ObjectListMsg, ObjectListState, ObjectListStatus, ObjectListView,
+    ObjectRef, ObjectRow, ObjectScope,
+};
 pub use palette::PanelPalette;
 pub use paper::{
     PageFormatMode, PageOrigin, SchematicSheetColor, SheetColor, paper_dimensions,
@@ -185,9 +193,9 @@ pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
     PrePlacementStyle,
 };
+pub(super) use projects::view_projects;
 pub use projects::{LibraryNodeInfo, ProjectPanelInfo, SheetInfo, build_project_tree};
 pub(crate) use projects::{MISSING_MARK, UNREADABLE_MARK};
-pub(super) use projects::{view_navigator, view_projects};
 pub use projects_graphite::{ProjectsMsg, ProjectsView};
 pub use properties::DrawingFieldId;
 pub(super) use properties::{
@@ -201,8 +209,7 @@ pub use symbol_context::{
 };
 pub(super) use widgets::{
     collapsible_section_header, form_edit_row_f64, is_section_collapsed, part_tree_row,
-    prop_kv_row, property_label, section_title, separator, shape_fill_row, shape_icon_handle,
-    view_stub,
+    prop_kv_row, property_label, shape_fill_row, shape_icon_handle, view_stub,
 };
 pub use wire_style_rows::{WireColorPicker, wire_color_row, wire_width_row};
 
@@ -225,7 +232,9 @@ pub enum PanelKind {
     OutputJobs,
     // Additional Altium schematic panels
     SchFilter,
-    SchList,
+    /// Every object of the sheet or the project, listed and selectable
+    /// (#1259).
+    ObjectList,
     BomStudio,
     Favorites,
     Snippets,
@@ -269,7 +278,7 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Properties,
     PanelKind::Filter,
     PanelKind::SchFilter,
-    PanelKind::SchList,
+    PanelKind::ObjectList,
     PanelKind::Erc,
     PanelKind::Messages,
     PanelKind::Drc,
@@ -292,16 +301,16 @@ pub const ALL_PANELS: &[PanelKind] = &[
 ];
 
 impl PanelKind {
-    /// Whether this panel requires a schematic document to be open.
+    /// Whether this panel requires a schematic document to be open. Filter
+    /// follows the active editor, a schematic's or a board's (Graphite mockup #55).
     pub fn needs_schematic(self) -> bool {
         matches!(
             self,
             PanelKind::Navigator
                 | PanelKind::Properties
-                | PanelKind::Filter
                 | PanelKind::Erc
                 | PanelKind::SchFilter
-                | PanelKind::SchList
+                | PanelKind::ObjectList
                 | PanelKind::BomStudio
                 | PanelKind::Snippets
                 | PanelKind::Variants
@@ -333,7 +342,7 @@ impl PanelKind {
             PanelKind::NetClasses => ids::PANELS_KIND_NET_CLASSES,
             PanelKind::Variants => ids::PANELS_KIND_VARIANTS,
             PanelKind::SchFilter => ids::PANELS_KIND_SCH_FILTER,
-            PanelKind::SchList => ids::PANELS_KIND_SCH_LIST,
+            PanelKind::ObjectList => ids::PANELS_KIND_OBJECT_LIST,
             PanelKind::BomStudio => ids::PANELS_KIND_BOM_STUDIO,
             PanelKind::Favorites => ids::PANELS_KIND_FAVORITES,
             PanelKind::Snippets => ids::PANELS_KIND_SNIPPETS,
@@ -365,7 +374,7 @@ impl PanelKind {
             PanelKind::NetClasses => "Net Classes",
             PanelKind::Variants => "Variants",
             PanelKind::SchFilter => "SCH Filter",
-            PanelKind::SchList => "SCH List",
+            PanelKind::ObjectList => "Object List",
             PanelKind::BomStudio => "BOM Studio",
             PanelKind::Favorites => "Favorites",
             PanelKind::Snippets => "Snippets",
@@ -428,14 +437,11 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         // detached window both route it there); nothing to show here.
         PanelKind::Components => iced::widget::Space::new().boxed(),
         PanelKind::Projects => view_projects(ctx),
-        PanelKind::Navigator => view_navigator(ctx),
+        PanelKind::Navigator => navigator::view(ctx),
         PanelKind::Properties => view_properties(ctx),
-        PanelKind::Filter => empty_state_card(
-            &ctx.tokens,
-            signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_SELECTION_FILTER_TITLE),
-            signex_i18n::t!(ctx.i18n, signex_i18n::ids::PANELS_SELECTION_FILTER_BODY),
-            None,
-        ),
+        // The active editor's selection filter (Graphite mockup #55): a schematic's or a
+        // board's kinds, else the empty card.
+        PanelKind::Filter => selection_filter::filter_view(ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
         PanelKind::Drc => drc_results::view(ctx),
@@ -457,8 +463,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
             ids::PANELS_STUB_OUTPUT_JOBS,
             ctx,
         ),
-        PanelKind::SchFilter => sch_filter::view(ctx),
-        PanelKind::SchList => view_stub(ids::PANELS_KIND_SCH_LIST, ids::PANELS_STUB_SCH_LIST, ctx),
+        PanelKind::SchFilter => selection_filter::sch_view(ctx),
+        PanelKind::ObjectList => return object_list::view(ctx),
         PanelKind::BomStudio => view_stub(
             ids::PANELS_KIND_BOM_STUDIO,
             ids::PANELS_STUB_BOM_STUDIO,

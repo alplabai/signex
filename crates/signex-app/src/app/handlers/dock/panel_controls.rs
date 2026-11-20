@@ -755,7 +755,7 @@ impl Signex {
                 follow = self.handle_select_custom_filter_tab(*idx);
             }
             crate::panels::PanelMsg::SchFilter(msg) => {
-                follow = self.handle_sch_filter(*msg);
+                follow = self.handle_sch_filter(msg.clone());
             }
             _ => return None,
         }

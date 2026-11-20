@@ -162,6 +162,8 @@ enum InputConsumer {
     UpdatePcb,
     /// Enter creates the board or sheet while New PCB / New Schematic is open.
     DocumentSetup,
+    /// Enter picks Place while a Components row menu is open (#2535).
+    ComponentsRowMenu,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
     /// Ctrl/Alt+1-8 — the digit is data the keymap profile cannot
@@ -177,7 +179,7 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 10] = [
+const CLAIM_ORDER: [InputConsumer; 11] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::RulePreview,
@@ -185,6 +187,7 @@ const CLAIM_ORDER: [InputConsumer; 10] = [
     InputConsumer::NewProject,
     InputConsumer::UpdatePcb,
     InputConsumer::DocumentSetup,
+    InputConsumer::ComponentsRowMenu,
     InputConsumer::ShortcutsSheet,
     InputConsumer::SelectionSlots,
     InputConsumer::Keymap,
@@ -368,6 +371,9 @@ impl Signex {
             InputConsumer::NewProject => self.claim_new_project(target, event),
             InputConsumer::UpdatePcb => self.claim_update_pcb(target, event),
             InputConsumer::DocumentSetup => self.claim_document_setup(target, event),
+            InputConsumer::ComponentsRowMenu => {
+                self.claim_components_row_menu(target, window, event)
+            }
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
             InputConsumer::Keymap => self.claim_keymap(target, window, event),
@@ -568,6 +574,44 @@ impl Signex {
             }
             _ => Claim::Pass,
         }
+    }
+
+    /// Enter picks Place, the menu's first row, while a Components row menu
+    /// is open in this window (#2535).
+    fn claim_components_row_menu(
+        &self,
+        target: InputTarget,
+        window: iced::window::Id,
+        event: &keyboard::Event,
+    ) -> Claim {
+        let Some(menu) = self.library.components_panel.row_menu.as_ref() else {
+            return Claim::Pass;
+        };
+        let here = match menu.window {
+            None => target == InputTarget::Main,
+            Some(owner) => owner == window,
+        };
+        let keyboard::Event::KeyPressed { key, modifiers, .. } = event else {
+            return Claim::Pass;
+        };
+        let enter = matches!(
+            key.as_ref(),
+            keyboard::Key::Named(keyboard::key::Named::Enter)
+        );
+        if !here || !enter || !modifiers.is_empty() {
+            return Claim::Pass;
+        }
+        let place = Message::Library(
+            crate::library::LibraryMessage::ComponentsPanelRowMenuPicked(
+                crate::library::state::ComponentsRowAction::Place,
+            ),
+        );
+        Claim::consume(match menu.window {
+            None => place,
+            Some(owner) => {
+                crate::app::dispatch::window_action::scope_row_menu_message(owner, place)
+            }
+        })
     }
 
     /// Enter in the New PCB / New Schematic dialog (main window only): an
@@ -901,6 +945,7 @@ mod tests {
             InputConsumer::NewProject,
             InputConsumer::UpdatePcb,
             InputConsumer::DocumentSetup,
+            InputConsumer::ComponentsRowMenu,
             InputConsumer::ShortcutsSheet,
             InputConsumer::SelectionSlots,
             InputConsumer::Keymap,
@@ -911,6 +956,47 @@ mod tests {
                 "{consumer:?} must appear in CLAIM_ORDER exactly once"
             );
         }
+    }
+
+    /// Enter places the row while its menu is open, and is the keymap's
+    /// again once the menu has closed (#2535).
+    #[test]
+    fn enter_places_the_row_whose_menu_is_open() {
+        let mut app = quiet_app();
+        let main = main_window(&app);
+        app.library.components_panel.row_menu = Some(crate::library::state::ComponentsRowMenu {
+            key: crate::library::state::ComponentsPanelRowKey {
+                library_path: "lib.snxlib".into(),
+                table: "t".into(),
+                row_id: signex_library::RowId::from_uuid(uuid::Uuid::from_u128(1)),
+            },
+            x: 0.0,
+            y: 0.0,
+            window: None,
+        });
+        let routed = app.route_key(main, &named(keyboard::key::Named::Enter));
+        assert!(
+            matches!(
+                routed,
+                Some(Message::Library(
+                    crate::library::LibraryMessage::ComponentsPanelRowMenuPicked(
+                        crate::library::state::ComponentsRowAction::Place
+                    )
+                ))
+            ),
+            "{routed:?}"
+        );
+        app.library.components_panel.row_menu = None;
+        let routed = app.route_key(main, &named(keyboard::key::Named::Enter));
+        assert!(
+            !matches!(
+                routed,
+                Some(Message::Library(
+                    crate::library::LibraryMessage::ComponentsPanelRowMenuPicked(_)
+                ))
+            ),
+            "{routed:?}"
+        );
     }
 
     #[test]

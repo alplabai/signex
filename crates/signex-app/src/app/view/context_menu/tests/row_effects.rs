@@ -256,6 +256,8 @@ fn app_that_copied() -> (Signex, String) {
 #[test]
 fn paste_row_puts_the_copy_on_the_cursor() {
     let (mut app, text) = app_that_copied();
+    // Paste is a row of the empty-spot menu (Graphite mockup #62).
+    select(&mut app, Vec::new());
     let task = press(&mut app, "paste");
     assert_menu_closed(&app, "paste");
     settle_answering_clipboard(&mut app, task, &text);
@@ -270,6 +272,7 @@ fn paste_row_puts_the_copy_on_the_cursor() {
 #[test]
 fn smart_paste_row_places_the_copy_at_once() {
     let (mut app, text) = app_that_copied();
+    select(&mut app, Vec::new());
     let task = press(&mut app, "smart_paste");
     assert_menu_closed(&app, "smart paste");
     settle_answering_clipboard(&mut app, task, &text);
@@ -536,19 +539,24 @@ fn net_label_row_arms_the_net_ghost_and_ends_a_pending_port() {
 
 #[test]
 fn power_port_rows_arm_what_the_active_bar_arms() {
+    // A power row shows the short port name, the full name as its tooltip (Graphite mockup #62).
     let cases = [
-        ("GND Power Port", A::PlacePowerGND),
-        ("VCC Power Port", A::PlacePowerVCC),
-        ("+5 Power Port", A::PlacePowerPlus5),
-        ("+12 Power Port", A::PlacePowerPlus12),
+        ("GND", "GND Power Port", A::PlacePowerGND),
+        ("VCC", "VCC Power Port", A::PlacePowerVCC),
+        ("+5", "+5 Power Port", A::PlacePowerPlus5),
+        ("+12", "+12 Power Port", A::PlacePowerPlus12),
     ];
-    for (label, action) in cases {
+    for (short, label, action) in cases {
         let mut app = one_symbol();
         open_menu(&mut app);
         let message = place_rows(&app)
             .iter()
             .find_map(|entry| match entry {
-                DropdownEntry::Item(item) if item.label == label => item.on_press.clone(),
+                DropdownEntry::Item(item)
+                    if item.label == short && item.tooltip.as_deref() == Some(label) =>
+                {
+                    item.on_press.clone()
+                }
                 _ => None,
             })
             .unwrap_or_else(|| panic!("no live row {label}"));
@@ -659,6 +667,8 @@ fn canvas_project_options_row_opens_the_active_projects_tab() {
     let id = app.document_state.projects[idx].id;
     app.document_state.active_project = Some(id);
     app.document_state.tabs[0].project_id = Some(id);
+    // Project Options is a row of the empty-spot menu (Graphite mockup #62).
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "open_project_options");
     assert!(
         app.document_state
@@ -873,6 +883,8 @@ fn open_and_create_child_sheet_rows_start_the_descent_through_the_symbol() {
 #[test]
 fn find_row_opens_the_find_dialog() {
     let mut app = one_symbol();
+    // Find and Preferences are rows of the empty-spot menu (Graphite mockup #62).
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "find");
     assert!(app.ui_state.find_replace.open);
     assert_menu_closed(&app, "find");
@@ -881,6 +893,7 @@ fn find_row_opens_the_find_dialog() {
 #[test]
 fn preferences_row_opens_preferences() {
     let mut app = one_symbol();
+    select(&mut app, Vec::new());
     let _ = press(&mut app, "open_preferences");
     assert!(app.ui_state.preferences_open);
     assert_menu_closed(&app, "preferences");
