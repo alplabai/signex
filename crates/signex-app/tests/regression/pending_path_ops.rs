@@ -132,7 +132,7 @@ fn complete(app: &mut Signex, task: iced::Task<Message>) {
 }
 
 fn open_rename_dialog(app: &mut Signex, target: &Path, buffer: &str) {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
@@ -141,7 +141,7 @@ fn open_rename_dialog(app: &mut Signex, target: &Path, buffer: &str) {
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
 }
 
 /// Submit the rename and return the not-yet-run worker task.

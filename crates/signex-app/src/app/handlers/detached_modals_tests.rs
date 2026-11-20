@@ -31,7 +31,7 @@ fn open(app: &mut Signex, modal: ModalId) {
         }
         ModalId::FindReplace => ui.find_replace.open = true,
         ModalId::RenameDialog => {
-            ui.rename_dialog = Some(RenameDialogState {
+            ui.rename_dialog = Some(Box::new(RenameDialogState {
                 target_path: "p.snxsch".into(),
                 tree_path: vec![0],
                 project_id: None,
@@ -40,7 +40,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 is_project_rename: false,
                 placing_symbols: Vec::new(),
                 name_clash: None,
-            })
+            }))
         }
         ModalId::RemoveDialog => {
             ui.remove_dialog = Some(RemoveDialogState {

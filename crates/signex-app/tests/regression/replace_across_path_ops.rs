@@ -152,7 +152,7 @@ fn prepare_replace(app: &mut Signex) -> Vec<Message> {
 }
 
 fn start_rename(app: &mut Signex, target: &Path) -> iced::Task<Message> {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 1],
@@ -161,7 +161,7 @@ fn start_rename(app: &mut Signex, target: &Path) -> iced::Task<Message> {
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
     app.update(Message::Rename(RenameMsg::Submit))
 }
 

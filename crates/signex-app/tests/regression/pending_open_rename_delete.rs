@@ -260,7 +260,7 @@ fn renaming_a_project_folder_with_a_restore_still_running_is_refused() {
     std::fs::create_dir(&folder).expect("project folder");
     let (mut app, sheet) = project_with_sheet(&folder);
     app.document_state.pending_restores.begin(sheet.clone());
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: folder.join("P.snxprj"),
         tree_path: vec![0],
@@ -269,7 +269,7 @@ fn renaming_a_project_folder_with_a_restore_still_running_is_refused() {
         is_project_rename: true,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
 
     let _ = app.update(Message::Rename(RenameMsg::Submit));
 

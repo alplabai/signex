@@ -342,7 +342,7 @@ fn a_renamed_board_keeps_its_sketch() {
     let mut f = open_board();
     sketch_an_outline(&mut f);
     let renamed = f.path.with_file_name("renamed.snxpcb");
-    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+    f.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: f.path.clone(),
         tree_path: vec![0],
@@ -351,7 +351,7 @@ fn a_renamed_board_keeps_its_sketch() {
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
     crate::settle_support::settle(&mut f.app, Message::Rename(RenameMsg::Submit));
     assert!(renamed.exists(), "the file moved");
     let session = f

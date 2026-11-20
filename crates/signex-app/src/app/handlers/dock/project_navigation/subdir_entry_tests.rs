@@ -30,7 +30,7 @@ fn app_with_subdir_entries() -> (Signex, tempfile::TempDir, PathBuf, PathBuf) {
 
 fn submit_rename(app: &mut Signex, target: PathBuf, new_name: &str) {
     let project_id = Some(app.document_state.projects[0].id);
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         target_path: target,
         tree_path: vec![0],
         project_id,
@@ -39,7 +39,7 @@ fn submit_rename(app: &mut Signex, target: PathBuf, new_name: &str) {
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
     // The move runs on a worker (#859); settle drives its completion.
     crate::app::path_ops::settle(app, Message::Rename(RenameMsg::Submit));
 }

@@ -183,7 +183,7 @@ fn settle_task(app: &mut Signex, task: iced::Task<Message>) {
 }
 
 fn submit_rename_task(app: &mut Signex, target: &Path, new_name: &str) -> iced::Task<Message> {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0, 0],
@@ -192,7 +192,7 @@ fn submit_rename_task(app: &mut Signex, target: &Path, new_name: &str) -> iced::
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
     app.update(Message::Rename(RenameMsg::Submit))
 }
 
@@ -1446,7 +1446,7 @@ fn a_project_rename_during_a_library_rename_is_refused() {
     let mut f = fixture();
     let task = submit_rename_task(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 
-    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+    f.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: f.prj.clone(),
         tree_path: vec![0],
@@ -1455,7 +1455,7 @@ fn a_project_rename_during_a_library_rename_is_refused() {
         is_project_rename: true,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
     let second = f.app.update(Message::Rename(RenameMsg::Submit));
     assert!(run_task_messages(second).is_empty());
     let error = f

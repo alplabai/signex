@@ -155,7 +155,7 @@ fn renaming_a_sheet_waits_for_its_in_flight_save_and_does_not_resurrect_the_old_
     let (mut app, entered, proceed) = app_with_gated_sheet(tmp.path(), &old);
 
     let driver = start_save_released_later(&mut app, &entered, proceed);
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
@@ -164,7 +164,7 @@ fn renaming_a_sheet_waits_for_its_in_flight_save_and_does_not_resurrect_the_old_
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
     for message in driver.join().unwrap() {
         let _ = app.update(message);

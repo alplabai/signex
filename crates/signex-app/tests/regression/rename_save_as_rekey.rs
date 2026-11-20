@@ -105,7 +105,7 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
     open_sheet(&mut app, &old, true);
     activate(&mut app, 0);
 
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
@@ -114,7 +114,7 @@ fn renaming_a_dirty_sheet_moves_its_dirty_marker_and_dirties_the_project() {
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     let dirty = &app.document_state;
@@ -192,7 +192,7 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
     });
     app.document_state.active_project = Some(id);
 
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: old.clone(),
         tree_path: vec![0],
@@ -201,7 +201,7 @@ fn renaming_a_non_sheet_file_does_not_dirty_the_project() {
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
     crate::settle_support::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
     assert!(

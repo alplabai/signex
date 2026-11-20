@@ -95,7 +95,7 @@ fn fixture_project_with_companions(stem: &str) -> (Signex, TempDir, PathBuf) {
 
 /// Open the rename modal targeting a project root.
 fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: target.to_path_buf(),
         tree_path: vec![0],
@@ -104,7 +104,7 @@ fn arm_project_rename(app: &mut Signex, target: &Path, new_stem: &str) {
         is_project_rename: true,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
 }
 
 /// Open the remove modal for a tree leaf.

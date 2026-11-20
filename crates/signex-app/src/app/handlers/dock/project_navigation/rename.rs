@@ -29,7 +29,7 @@ impl Signex {
             .to_string();
         let project_id = self.project_id_at_tree_path(&tree_path);
         let placing_symbols = self.own_project_placing_symbols(&target_path, project_id);
-        self.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        self.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
             target_path,
             tree_path,
             project_id,
@@ -38,7 +38,7 @@ impl Signex {
             is_project_rename: false,
             placing_symbols,
             name_clash: None,
-        });
+        }));
     }
 
     /// The Rename field has focus and its text selected once the dialog's
@@ -166,7 +166,7 @@ impl Signex {
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_string();
-        self.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+        self.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
             target_path,
             tree_path,
             project_id: Some(project.id),
@@ -175,7 +175,7 @@ impl Signex {
             is_project_rename: true,
             placing_symbols: Vec::new(),
             name_clash: None,
-        });
+        }));
     }
 
     pub(crate) fn handle_rename_submit(&mut self) -> iced::Task<Message> {

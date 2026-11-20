@@ -54,7 +54,7 @@ fn file_rename_dialog_for(fx: &Fixture, new_name: &str) -> RenameDialogState {
 fn a_file_rename_is_refused_while_a_project_folder_move_is_in_flight() {
     let root = tempfile::tempdir().expect("tempdir");
     let mut fx = folder_move_in_flight(root.path());
-    fx.app.ui_state.rename_dialog = Some(file_rename_dialog_for(&fx, "other.snxsch"));
+    fx.app.ui_state.rename_dialog = Some(Box::new(file_rename_dialog_for(&fx, "other.snxsch")));
 
     drop(fx.app.update(Message::Rename(RenameMsg::Submit)));
 
@@ -134,7 +134,7 @@ fn a_file_whose_delete_is_in_flight_cannot_be_opened_renamed_or_saved() {
         "the file was not opened"
     );
 
-    fx.app.ui_state.rename_dialog = Some(file_rename_dialog_for(&fx, "other.snxsch"));
+    fx.app.ui_state.rename_dialog = Some(Box::new(file_rename_dialog_for(&fx, "other.snxsch")));
     drop(fx.app.update(Message::Rename(RenameMsg::Submit)));
     assert!(rename_error(&fx).contains("A delete of main.snxsch is still running"));
 

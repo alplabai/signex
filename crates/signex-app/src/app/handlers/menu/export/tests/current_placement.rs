@@ -331,7 +331,7 @@ fn renaming_the_child_file_drops_its_placement_without_a_warning() {
     let checks = app.start_due_recovery_checks();
     crate::app::handlers::menu::export::write::settle(&mut app, checks);
     let renamed = dir.path().join("renamed.snxsch");
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: child.clone(),
         tree_path: vec![0],
@@ -340,7 +340,7 @@ fn renaming_the_child_file_drops_its_placement_without_a_warning() {
         is_project_rename: false,
         placing_symbols: Vec::new(),
         name_clash: None,
-    });
+    }));
 
     crate::app::path_ops::settle(&mut app, Message::Rename(RenameMsg::Submit));
 
