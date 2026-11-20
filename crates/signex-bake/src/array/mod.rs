@@ -42,6 +42,8 @@ mod links_tests;
 mod numbering;
 mod overrides;
 mod polar;
+#[cfg(test)]
+mod polar_tests;
 
 pub use instance_at::instance_at;
 
