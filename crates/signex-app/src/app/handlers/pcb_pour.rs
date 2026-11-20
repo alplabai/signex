@@ -66,21 +66,27 @@ impl Signex {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return;
         };
+        self.repour_board(&path, selected);
+    }
+
+    /// Repour the board at `path` (the board in view is drawn again) and
+    /// say in Messages what its pours, or the selected ones, came to.
+    pub(crate) fn repour_board(&mut self, path: &Path, selected: bool) {
         self.interaction_state.pcb_ratsnest.invalidate();
         self.sync_pcb_canvas_from_visible_board();
-        let only = selected.then(|| self.selected_pours(&path));
+        let only = selected.then(|| self.selected_pours(path));
         let i18n = &self.ui_state.i18n;
         if only.as_ref().is_some_and(BTreeSet::is_empty) {
             let line = t!(i18n, ids::PCB_POUR_NONE_SELECTED).into_string();
             crate::diagnostics::log_warning(line);
             return;
         }
-        let Some(board) = self.document_state.pcb_board(&path) else {
+        let Some(board) = self.document_state.pcb_board(path) else {
             return;
         };
         // A board with no revision is not cached: fill it here.
         let computed;
-        let fills = match self.current_pour_fills(&path) {
+        let fills = match self.current_pour_fills(path) {
             Some(fills) => fills,
             None => {
                 computed = pcb_geom::zone_fills(board);

@@ -5,6 +5,8 @@
 //! the fill draws no spokes and stores no corners), and the Copper card with
 //! what the fill holds, Repour, Shelve or Unshelve and the board-wide menu.
 
+use std::path::PathBuf;
+
 use iced::widget::{Space, column, container, row};
 use iced::{Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{MessageId, UserText, ids, t};
@@ -46,9 +48,17 @@ pub enum PourMsg {
     },
     /// The ⋯ button opened or closed the board-wide menu.
     MenuToggled,
-    RepourAllPressed,
-    ShelveAllPressed,
-    UnshelveAllPressed,
+    /// The menu's Repour all, Shelve all and Unshelve all: on `board`, the
+    /// board the panel shows, which need not be the tab in view.
+    RepourAllPressed {
+        board: PathBuf,
+    },
+    ShelveAllPressed {
+        board: PathBuf,
+    },
+    UnshelveAllPressed {
+        board: PathBuf,
+    },
 }
 
 fn pour_msg(msg: PourMsg) -> PanelMsg {
@@ -397,7 +407,7 @@ fn copper_card<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Element<'a, PanelMsg> {
     let headline = with_tip(look, headline.boxed(), ids::PCB_PRIM_POUR_COPPER_TIP);
     let mut card = column![headline, card_actions(look, f)].spacing(SP.s);
     if f.menu_open {
-        card = card.push(pour_menu(look, f.common.is_editable()));
+        card = card.push(pour_menu(look, &f.common));
     }
     container(
         container(card)
@@ -459,8 +469,11 @@ fn shelve_message(f: &ZoneFacts) -> Option<PourMsg> {
     })
 }
 
-/// The ⋯ menu: Repour all, Shelve all, Unshelve all.
-fn pour_menu<'a>(look: Look<'a>, editable: bool) -> Element<'a, PanelMsg> {
+/// The ⋯ menu: Repour all, Shelve all, Unshelve all, on the board the panel
+/// shows.
+fn pour_menu<'a>(look: Look<'a>, common: &PrimitiveCommon) -> Element<'a, PanelMsg> {
+    let editable = common.is_editable();
+    let board = || common.target.board.clone();
     let item = |id: MessageId, msg: Option<PourMsg>| {
         button(
             text(look.t(id))
@@ -476,15 +489,15 @@ fn pour_menu<'a>(look: Look<'a>, editable: bool) -> Element<'a, PanelMsg> {
     let items = column![
         item(
             ids::PCB_PRIM_POUR_REPOUR_ALL,
-            Some(PourMsg::RepourAllPressed)
+            Some(PourMsg::RepourAllPressed { board: board() })
         ),
         item(
             ids::PCB_PRIM_POUR_SHELVE_ALL,
-            editable.then_some(PourMsg::ShelveAllPressed)
+            editable.then(|| PourMsg::ShelveAllPressed { board: board() })
         ),
         item(
             ids::PCB_PRIM_POUR_UNSHELVE_ALL,
-            editable.then_some(PourMsg::UnshelveAllPressed)
+            editable.then(|| PourMsg::UnshelveAllPressed { board: board() })
         ),
     ]
     .spacing(SP.xs);

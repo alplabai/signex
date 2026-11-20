@@ -59,8 +59,8 @@ pub struct PcbPrimitivePanel {
     pub hover: IllustrationHover,
     /// The "Not stored yet" group is open.
     pub unstored_open: bool,
-    /// The vias Override is on for (#96): their Diameter and Drill take
-    /// typed values.
+    /// The vias Override was switched on for (mockup row 96): their
+    /// Diameter and Drill take typed values.
     pub via_override: Option<PrimitiveTarget>,
     /// The copper layer the via illustration's top view shows.
     pub via_view_layer: Option<CopperLayer>,
@@ -345,7 +345,24 @@ impl Signex {
             self.edit_board_tool_value(&edit, what);
             return;
         }
-        let Some(engine) = self.document_state.board_engine(&target.board) else {
+        self.run_guarded_board_step(&target.board, what, |board| {
+            Ok(primitive_command(board, &target.items, &edit)?
+                .into_iter()
+                .collect())
+        });
+    }
+
+    /// Run the commands `build` makes from the board at `path` as one undo
+    /// step labelled `what`, or say why not: the board is gone (logged), it
+    /// is read-only, `build` refuses, or the board moved on meanwhile. No
+    /// command is no step.
+    pub(crate) fn run_guarded_board_step(
+        &mut self,
+        path: &Path,
+        what: MessageId,
+        build: impl FnOnce(&PcbBoard) -> Result<Vec<BoardCommand>, PrimitiveEditRefusal>,
+    ) {
+        let Some(engine) = self.document_state.board_engine(path) else {
             let name = t!(self.ui_state.i18n, what).into_string();
             let line = t!(self.ui_state.i18n, ids::PCB_PRIM_BOARD_GONE, "what" => name);
             crate::diagnostics::log_warning(line.into_string());
@@ -357,9 +374,9 @@ impl Signex {
             return;
         }
         let revision = engine.revision();
-        let command = match primitive_command(engine.board(), &target.items, &edit) {
-            Ok(Some(command)) => command,
-            Ok(None) => return,
+        let commands = match build(engine.board()) {
+            Ok(commands) if commands.is_empty() => return,
+            Ok(commands) => commands,
             Err(refusal) => {
                 self.refuse_primitive_edit(what, refusal.to_string());
                 return;
@@ -370,7 +387,7 @@ impl Signex {
             label: &label,
             expected_revision: revision,
         };
-        if let Err(error) = self.execute_board_commands(&target.board, vec![command], Some(step)) {
+        if let Err(error) = self.execute_board_commands(path, commands, Some(step)) {
             self.refuse_primitive_edit(what, error.to_string());
         }
     }

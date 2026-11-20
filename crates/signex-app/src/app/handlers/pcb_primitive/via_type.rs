@@ -1,7 +1,8 @@
-//! The Via panel's own events (#96): picking a via type, Override, a reset
-//! arrow and the shown layer. A pick or a reset is one board undo step
-//! built by `signex_engine::pcb::via_types` from the board's derived via
-//! types; Override on and the shown layer are panel state only.
+//! The Via panel's own events (mockup row 96): picking a via type,
+//! Override, a reset arrow and the shown layer. A pick or a reset is one
+//! board undo step built by `signex_engine::pcb::via_types` from the
+//! board's derived via types; Override on and the shown layer are panel
+//! state only.
 
 use pcb_geom::ItemRef;
 use signex_engine::pcb::BoardCommand;
@@ -9,12 +10,11 @@ use signex_engine::pcb::primitive_edit::{PrimitiveEditRefusal, ViaEdit, via_edit
 use signex_engine::pcb::via_types::{
     ViaTypeDef, apply_type_commands, reset_override_commands, type_of, via_types,
 };
-use signex_i18n::{MessageId, ids, t};
+use signex_i18n::{MessageId, ids};
 use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
 use crate::app::Signex;
-use crate::app::state::pcb_edit::CheckedStep;
 use crate::panels::pcb_primitive_properties::{PrimitiveField, PrimitiveTarget, ViaMsg};
 
 impl Signex {
@@ -75,34 +75,7 @@ impl Signex {
         if target.is_placement() {
             return;
         }
-        let Some(engine) = self.document_state.board_engine(&target.board) else {
-            let name = t!(self.ui_state.i18n, what).into_string();
-            let line = t!(self.ui_state.i18n, ids::PCB_PRIM_BOARD_GONE, "what" => name);
-            crate::diagnostics::log_warning(line.into_string());
-            return;
-        };
-        if engine.board().unknown.newer_minor_source.is_some() {
-            let why = t!(self.ui_state.i18n, ids::PCB_PRIM_READ_ONLY).into_string();
-            self.refuse_primitive_edit(what, why);
-            return;
-        }
-        let revision = engine.revision();
-        let commands = match build(engine.board(), &target.items) {
-            Ok(commands) if commands.is_empty() => return,
-            Ok(commands) => commands,
-            Err(refusal) => {
-                self.refuse_primitive_edit(what, refusal.to_string());
-                return;
-            }
-        };
-        let label = t!(self.ui_state.i18n, what).into_string();
-        let step = CheckedStep {
-            label: &label,
-            expected_revision: revision,
-        };
-        if let Err(error) = self.execute_board_commands(&target.board, commands, Some(step)) {
-            self.refuse_primitive_edit(what, error.to_string());
-        }
+        self.run_guarded_board_step(&target.board, what, |board| build(board, &target.items));
     }
 }
 

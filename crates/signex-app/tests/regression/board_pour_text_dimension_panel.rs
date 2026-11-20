@@ -237,13 +237,79 @@ fn shelve_all_and_unshelve_all_are_one_step_each_and_close_the_menu() {
     send(&mut f, pour(PourMsg::MenuToggled));
     assert!(area_panel(&f).menu_open);
 
-    let edited = assert_one_step(&mut f, |f| send(f, pour(PourMsg::ShelveAllPressed)));
+    let board = f.path.clone();
+    let shelve_all = PourMsg::ShelveAllPressed {
+        board: board.clone(),
+    };
+    let edited = assert_one_step(&mut f, |f| send(f, pour(shelve_all.clone())));
     assert!(edited.zones.iter().all(|z| z.shelved), "every pour");
     assert!(!area_panel(&f).menu_open, "a pick closes the menu");
 
-    send(&mut f, pour(PourMsg::ShelveAllPressed));
-    let edited = assert_one_step(&mut f, |f| send(f, pour(PourMsg::UnshelveAllPressed)));
+    send(&mut f, pour(shelve_all));
+    let unshelve_all = PourMsg::UnshelveAllPressed { board };
+    let edited = assert_one_step(&mut f, |f| send(f, pour(unshelve_all)));
     assert!(edited.zones.iter().all(|z| !z.shelved));
+}
+
+/// The board of the open tab at `path`, active or not.
+fn board_at(f: &Fixture, path: &std::path::Path) -> PcbBoard {
+    f.app
+        .document_state
+        .tabs
+        .iter()
+        .find(|tab| tab.path == path)
+        .and_then(|tab| tab.cached_document.as_ref())
+        .and_then(TabDocument::as_pcb)
+        .expect("the board is open")
+        .clone()
+}
+
+#[test]
+fn the_pour_menu_acts_on_the_board_the_panel_shows_not_the_tab_in_view() {
+    let mut f = open_board();
+    picked_pour(&mut f);
+    send(&mut f, pour(PourMsg::MenuToggled));
+    let shown = f.path.clone();
+    let other = f._tmp.path().join("other.snxpcb");
+    let mut second = board();
+    second.uuid = Uuid::from_u128(2);
+    std::fs::write(&other, SnxPcb::new(second).write_string().unwrap()).unwrap();
+    send(&mut f, Message::File(FileMsg::Opened(Some(other.clone()))));
+    let docs = &f.app.document_state;
+    assert_eq!(
+        docs.tabs[docs.active_tab].path, other,
+        "the other board is the tab in view"
+    );
+
+    let before = serde_json::to_string(&board_at(&f, &other)).unwrap();
+    let repour = PourMsg::RepourAllPressed {
+        board: shown.clone(),
+    };
+    send(&mut f, pour(repour));
+    send(
+        &mut f,
+        pour(PourMsg::ShelveAllPressed {
+            board: shown.clone(),
+        }),
+    );
+    assert!(
+        board_at(&f, &shown).zones.iter().all(|z| z.shelved),
+        "the panel's board is shelved"
+    );
+    let after = serde_json::to_string(&board_at(&f, &other)).unwrap();
+    assert_eq!(after, before, "the tab in view is left as it was");
+
+    send(
+        &mut f,
+        pour(PourMsg::UnshelveAllPressed {
+            board: shown.clone(),
+        }),
+    );
+    assert!(board_at(&f, &shown).zones.iter().all(|z| !z.shelved));
+    assert_eq!(
+        serde_json::to_string(&board_at(&f, &other)).unwrap(),
+        before
+    );
 }
 
 #[test]

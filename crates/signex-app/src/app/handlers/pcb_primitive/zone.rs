@@ -11,7 +11,7 @@ use pcb_geom::{ItemRef, PickKind, ZoneFills};
 use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::pour_edit::shelve_all_pours;
 use signex_engine::pcb::primitive_edit::{PrimitiveEditRefusal, ZoneEdit, zone_edit_command};
-use signex_i18n::{I18n, MessageId, ids, t};
+use signex_i18n::{I18n, ids};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PcbBoard, Zone};
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
@@ -19,7 +19,6 @@ use signex_types::zone_keepout::KEEPOUT_FILL;
 
 use super::PrimitiveEdit;
 use crate::app::Signex;
-use crate::app::state::pcb_edit::CheckedStep;
 use crate::panels::pcb_primitive_properties::{
     AreaLayerChoice, PourMsg, PrimitiveCommon, PrimitiveField, PrimitiveTarget, ZoneFacts,
     ZoneKind, shared,
@@ -37,9 +36,9 @@ impl Signex {
             }
             PourMsg::RepourPressed => self.repour_board_in_view(true),
             PourMsg::ShelveToggled { target, shelved } => self.shelve_pours(target, *shelved),
-            PourMsg::RepourAllPressed => self.repour_board_in_view(false),
-            PourMsg::ShelveAllPressed => self.shelve_all_pours_in_view(true),
-            PourMsg::UnshelveAllPressed => self.shelve_all_pours_in_view(false),
+            PourMsg::RepourAllPressed { board } => self.repour_board(board, false),
+            PourMsg::ShelveAllPressed { board } => self.shelve_board_pours(board, true),
+            PourMsg::UnshelveAllPressed { board } => self.shelve_board_pours(board, false),
         }
         // A pick closes the menu.
         self.interaction_state.pcb_primitive.pour_menu_open = false;
@@ -63,61 +62,26 @@ impl Signex {
         } else {
             ids::PCB_PRIM_POUR_UNSHELVE
         };
-        self.run_pour_command(&target.board, what, |board| {
-            zone_edit_command(board, &zones, ZoneEdit::Shelved(shelved))
+        self.run_guarded_board_step(&target.board, what, |board| {
+            Ok(
+                zone_edit_command(board, &zones, ZoneEdit::Shelved(shelved))?
+                    .into_iter()
+                    .collect(),
+            )
         });
     }
 
-    /// Shelve or unshelve every pour of the board in view as one undo step.
-    fn shelve_all_pours_in_view(&mut self, shelved: bool) {
-        let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
-            return;
-        };
+    /// Shelve or unshelve every pour of the board at `path` (the board the
+    /// panel shows, which need not be the tab in view) as one undo step.
+    fn shelve_board_pours(&mut self, path: &Path, shelved: bool) {
         let what = if shelved {
             ids::PCB_PRIM_POUR_SHELVE_ALL
         } else {
             ids::PCB_PRIM_POUR_UNSHELVE_ALL
         };
-        self.run_pour_command(&path, what, |board| Ok(shelve_all_pours(board, shelved)));
-    }
-
-    /// Run the command `command` builds on the board at `path` as one
-    /// labelled undo step, or say in Messages why not. Nothing to change is
-    /// no step.
-    fn run_pour_command(
-        &mut self,
-        path: &Path,
-        what: MessageId,
-        command: impl FnOnce(&PcbBoard) -> Result<Option<BoardCommand>, PrimitiveEditRefusal>,
-    ) {
-        let Some(engine) = self.document_state.board_engine(path) else {
-            let name = t!(self.ui_state.i18n, what).into_string();
-            let line = t!(self.ui_state.i18n, ids::PCB_PRIM_BOARD_GONE, "what" => name);
-            crate::diagnostics::log_warning(line.into_string());
-            return;
-        };
-        if engine.board().unknown.newer_minor_source.is_some() {
-            let why = t!(self.ui_state.i18n, ids::PCB_PRIM_READ_ONLY).into_string();
-            self.refuse_primitive_edit(what, why);
-            return;
-        }
-        let revision = engine.revision();
-        let command = match command(engine.board()) {
-            Ok(Some(command)) => command,
-            Ok(None) => return,
-            Err(refusal) => {
-                self.refuse_primitive_edit(what, refusal.to_string());
-                return;
-            }
-        };
-        let label = t!(self.ui_state.i18n, what).into_string();
-        let step = CheckedStep {
-            label: &label,
-            expected_revision: revision,
-        };
-        if let Err(error) = self.execute_board_commands(path, vec![command], Some(step)) {
-            self.refuse_primitive_edit(what, error.to_string());
-        }
+        self.run_guarded_board_step(path, what, |board| {
+            Ok(shelve_all_pours(board, shelved).into_iter().collect())
+        });
     }
 }
 
