@@ -238,12 +238,16 @@ of the DRC section in Messages) opens the project's rules as a document tab
 named **Rules**. One tab per project; Save writes the `.snxprj`.
 
 The constraint grid and the rule text are two views of one rule list. A
-cell is a limit of one row of the object hierarchy; editing it rewrites that
-row's own rule of the kind, or adds one (`all_clearance`, `class_HV_track`,
-`net_GND_via`, `layer_L1_track`), and every other rule stays exactly as typed.
-A rule the hierarchy cannot express (a pattern, an object pair, a layer on a
-class, a condition or limit the grid has no column for) is a row of the
-Scoped rules group and is edited there or in the text view. Every edit (a
+cell is a limit of one row of the object hierarchy; editing it rewrites the
+row's own rule that the cell shows (the stricter of two equal rules), or adds
+one (`all_clearance`, `class_HV_track`, `net_GND_via`, `layer_L1_track`), and
+every other rule stays exactly as typed. A value the cell would still not
+show, because another rule of the row or the fab floor is stricter, is
+refused and the tab names that rule. A rule the hierarchy cannot express (a
+pattern, an object pair, a layer on a class, a condition or limit the grid
+has no column for), and a board-wide rule no cell shows (another rule of its
+row is stricter on every limit it sets), is a row of the Scoped rules group
+and is edited there or in the text view. Every edit (a
 cell, ↺, a value on the drawing, On, Add, Remove, Apply in the text view) is
 one undo step on the project's rule history, the same history the ERC dialog
 steps; Ctrl+Z and Ctrl+Y in the tab step it, and ERC runs again when it has
@@ -258,7 +262,8 @@ same undo step.
 
 - **Domains.** The tabs over the grid: Clearance, Physical, High speed,
   Manufacturing, SMT, Mask, Plane, Testpoint, Placement and Signal
-  integrity, each with the findings of its rules in the last run. Each rule
+  integrity, each with the findings of its rules in the last run (a rule
+  changed since the run is not counted). Each rule
   type is a column group of its domain, with its own findings badge; a click
   on a group header collapses it. Every rule type has its columns; a column
   Run DRC does not check yet is inert and says "Not checked yet". Signal
@@ -266,7 +271,10 @@ same undo step.
 - **Rows.** All, then Net Classes (each project class with its board nets
   under it, and the nets of no class that have rules of their own), Layers
   (the board's copper layers by position: L1 is Top, the last is Bottom, the
-  ones between are L2, L3, ...) and Scoped rules. A row group shows only on
+  ones between are L2, L3, ...; then, by the name the rules use, a layer the
+  rules write for that the board lacks, or every written layer with no board
+  open) and Scoped rules. When the rows are laid out again (the rules or the
+  board changed), the selected cell stays selected. A row group shows only on
   the domains whose columns apply to it: Placement has no net rows, and
   layers carry copper limits only. A column that does not apply to a row is
   hatched; a board-wide kind (silkscreen, mask, paste, courtyard) is set on
@@ -278,7 +286,8 @@ same undo step.
   a constraint set wrote has a blue edge, and the row carries a ⧉ chip
   naming the set. The tooltip names where the value comes from. Show
   inherited values (on by default) and Overridden rows only (rows with a
-  value of their own in the domain, and All) filter the view. A bare
+  value of their own in the domain, and All) filter the view. A length is
+  written as typed (`0.2mm`, `8mil`, `50µm`) and the cell shows it so. A bare
   number typed in a cell is in mm; an empty cell resets it.
 - **Find a constraint.** Typing a rule type or column name (two letters list
   the matches, three jump) switches to its domain, opens its group, selects
@@ -291,9 +300,13 @@ same undo step.
 - **Detail strip.** Under the grid, in three columns: the selected cell's
   live drawing with its row's resolved values, each value editable on the
   drawing (Enter or a dragged handle writes the cell, as one undo step; Tab
-  and Shift+Tab move between values); the rule that governs the cell, with
-  its text, problems, flags and violations (Jump opens the board and selects
-  the objects it covers); and **Which value wins, and why**, walking the row,
+  and Shift+Tab move between values; a value of 0 keeps its label); the rule
+  that governs the cell, with its text, problems, flags and its findings in
+  the last run, or why it has no count: stale since the last edit (the board
+  changed after the run), changed since the run (the rule), off, no objects in
+  scope, open the board to check, not checked yet, or passes (Jump opens the
+  board and selects the objects it covers); and **Which value wins, and
+  why**, walking the row,
   its constraint set, its parents and the default, the winner marked, then
   the board's resolution for the first net the rule takes in.
 - **Flags.** A rule that never applies on the board (another rule always
@@ -353,8 +366,8 @@ is applied and flagged as lowering that class, as any rule is.
 
 Only the lower triangle is live; the mirror half is inert, and a pair named
 in either order is the same cell. Clicking a cell types in it (Enter stores
-it; a bare number is in mm; an empty value removes the rule, so the cell
-falls back), keeps the accent ring and opens its object pairs in a card
+the length as typed, `8mil` too; a bare number is in mm; an empty value
+removes the rule, so the cell falls back), keeps the accent ring and opens its object pairs in a card
 beside the matrix: All objects (the whole cell), then one row per object
 pair (track-track, track-pad, track-via, pad-pad, pad-via, via-via), each
 the same rule narrowed with `between`. An empty object-pair row shows the
