@@ -36,7 +36,8 @@ const SENTINEL: &str = "edit-tail-seam-sentinel.snxsch";
 fn quit_prompt_lists(app: &mut Signex, path: &Path) -> bool {
     app.document_state
         .mark_document_dirty(&std::env::temp_dir().join(SENTINEL));
-    let _ = app.handle_app_quit_requested();
+    // The prompt is state; its Task (the window effect) is not run here.
+    let _quit = app.handle_app_quit_requested();
     app.ui_state
         .app_quit_confirm
         .take()
