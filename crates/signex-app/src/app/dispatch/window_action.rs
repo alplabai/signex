@@ -89,9 +89,11 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::UpdateSymbolFromLibrary(_)
                 | P::UpdateSymbolFromLibraryOnly(_)
                 | P::PlacedPartAction(_)
-                // The part's ⋯ menu and a sheet symbol's Browse… act on the
-                // window's own sheet; the browsed file comes back scoped.
-                | P::Part(crate::panels::PartPanelMsg::MenuActionPicked(_))
+                // The part's ⋯ menu, its picks and hover, the illustration
+                // hover and a sheet symbol's Browse… act on the window's own
+                // sheet and panel state; the browsed file comes back scoped.
+                | P::Part(_)
+                | P::Illustration(_)
                 | P::SelectionForm(
                     crate::panels::SelectionFormMsg::SheetFileBrowseClicked(_)
                         | crate::panels::SelectionFormMsg::SheetFileBrowsed(..)
