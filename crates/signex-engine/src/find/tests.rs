@@ -327,3 +327,22 @@ fn a_hit_on_text_with_a_longer_word_too_rewrites_only_the_whole_word() {
     let out = apply(sheet.clone(), replace_commands(&sheet, &hit, &query, "V"));
     assert_eq!(out.labels[0].text, "VOUT_SENSE V");
 }
+
+#[test]
+fn a_literal_needle_is_trimmed_and_a_regex_is_kept_as_typed() {
+    let literal = with(" VOUT ", MatchOptions::SUBSTRING);
+    assert!(
+        literal.is_match("VOUT"),
+        "the spaces around a word are dropped"
+    );
+    let options = MatchOptions {
+        regex: true,
+        ..MatchOptions::SUBSTRING
+    };
+    let pattern = with(" VOUT", options);
+    assert!(
+        !pattern.is_match("VOUT"),
+        "the space is part of the pattern"
+    );
+    assert_eq!(pattern.ranges("Keep VOUT short"), [4..9]);
+}

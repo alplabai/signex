@@ -81,10 +81,12 @@ fn is_whole_word(text: &str, at: &Range<usize>) -> bool {
 }
 
 impl FindQuery {
-    /// Compile `needle` (trimmed) under `options`. An empty needle compiles
-    /// to a query that matches nothing; only a regex can fail.
+    /// Compile `needle` under `options`. A literal needle is trimmed; a
+    /// regex is kept as typed, since its spaces are part of the pattern. An
+    /// empty needle compiles to a query that matches nothing; only a regex
+    /// can fail.
     pub fn new(needle: &str, options: MatchOptions) -> Result<Self, PatternError> {
-        let needle = needle.trim();
+        let needle = if options.regex { needle } else { needle.trim() };
         let matcher = if needle.is_empty() {
             Matcher::Nothing
         } else if options.regex {
