@@ -62,9 +62,10 @@ fn sketch() -> SketchData {
     anchor.component_anchor = Some(ComponentAnchorAttr {
         footprint: Some(id(FP_A)),
     });
-    let mut data = SketchData::default();
-    data.entities = vec![anchor, pour, drawing];
-    data
+    SketchData {
+        entities: vec![anchor, pour, drawing],
+        ..SketchData::default()
+    }
 }
 
 fn zone(uuid: Uuid, at: f64) -> Zone {
