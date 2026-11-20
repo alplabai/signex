@@ -11,11 +11,12 @@ use crate::app::restore_job::{
     EditStamp, RestoreFailure, RestoreJob, RestoreJobDocument, RestoreKind, RestoredFile,
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-prefs-redirect"))]
 impl Signex {
     /// Test seam: show the active tab's history as a finished load leaves it,
     /// then click Restore, so a test of the restore itself need not load a
-    /// repository first. The guard has its own tests.
+    /// repository first. The guard has its own tests. The test adapter's
+    /// `restore` gesture clicks through it (`crate::test_adapter`).
     pub(crate) fn click_restore_on_listed_history(&mut self, sha: &str) -> Task<Message> {
         let target = self.history_target_path();
         self.document_state.history.active_path = target;
