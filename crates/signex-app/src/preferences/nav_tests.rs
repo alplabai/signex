@@ -45,6 +45,7 @@ fn the_sidebar_follows_the_mock_groups() {
             ("System", "Keyboard Shortcuts"),
             ("Schematic", "Annotation"),
             ("Schematic", "Editing"),
+            ("Schematic", "Display"),
             ("Validation", "Rule Profiles"),
             ("Library", "Distributor APIs"),
             ("Library", "Component Classes"),

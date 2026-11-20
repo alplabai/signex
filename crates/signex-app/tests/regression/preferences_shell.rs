@@ -22,6 +22,7 @@ fn the_nav_lists_the_pages_in_the_mock_order() {
             PrefNav::Keyboard,
             PrefNav::Annotation,
             PrefNav::Editing,
+            PrefNav::SchematicDisplay,
             PrefNav::RuleProfiles,
             PrefNav::LibraryDistributors,
             PrefNav::ComponentClasses,
