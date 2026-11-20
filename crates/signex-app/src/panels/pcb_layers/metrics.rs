@@ -1,5 +1,5 @@
 //! Sizes of the Layers panel, as the Graphite mockup draws them at the 12 px
-//! base (panels.html, section A), scaled with the base through `chrome_px`.
+//! base (mockup row 103), scaled with the base through `chrome_px`.
 
 use crate::styles::{ChromeMetrics, chrome_px};
 

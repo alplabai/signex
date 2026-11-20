@@ -325,8 +325,8 @@ fn a_row_without_a_layer_is_not_listed() {
     }
 }
 
-/// #2363: an open dot shows the colour card; a set colour is the layer's
-/// colour in this view, and its dot shows it. mockup row 103: the card lists the
+/// #2363: an open dot shows the colour card; a set colour is saved with the
+/// board, and its dot shows it. mockup row 103: the card lists the
 /// palette and a hex field holding the typed text.
 #[test]
 fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
