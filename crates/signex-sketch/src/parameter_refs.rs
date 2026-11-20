@@ -173,6 +173,12 @@ macro_rules! expression_walker {
                 arrays,
                 parameters,
                 baked_kinds: _,
+                // Links name ids only. Overrides hold what a Pads-mode edit
+                // wrote (literals); a parameter rename does not reach them.
+                driven_dimensions: _,
+                pattern_sources: _,
+                pattern_mirrors: _,
+                pad_overrides: _,
             } = sketch;
             let ParameterTable(table) = parameters;
             for (name, source) in table {
