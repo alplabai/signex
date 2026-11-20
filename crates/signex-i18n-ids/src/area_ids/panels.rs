@@ -94,6 +94,7 @@ define_ids! {
     PANELS_NET_INSPECTOR_COLUMN_PIN = "panels-net-inspector-column-pin";
     PANELS_NET_INSPECTOR_COLUMN_PIN_NET = "panels-net-inspector-column-pin-net";
     PANELS_NET_INSPECTOR_COLUMN_PIN_NAME = "panels-net-inspector-column-pin-name";
+    PANELS_NET_INSPECTOR_COLUMN_PIN_SHEET = "panels-net-inspector-column-pin-sheet";
     PANELS_NET_INSPECTOR_UNCONNECTED = "panels-net-inspector-unconnected";
     PANELS_NET_INSPECTOR_MORE_PINS = "panels-net-inspector-more-pins";
     PANELS_NET_INSPECTOR_PARTS_SUMMARY = "panels-net-inspector-parts-summary";

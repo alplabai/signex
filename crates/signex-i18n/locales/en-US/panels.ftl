@@ -696,6 +696,7 @@ panels-net-inspector-footprint-suffix = · { $footprint }
 panels-net-inspector-column-pin = Pin
 panels-net-inspector-column-pin-net = Net
 panels-net-inspector-column-pin-name = Pin name
+panels-net-inspector-column-pin-sheet = Sheet
 # Net cell of a pin on no net.
 panels-net-inspector-unconnected = — unconnected
 # The row under a long expanded list; clicking it lists the rest. $count is a whole number.

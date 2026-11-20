@@ -573,8 +573,9 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   by designator, with its value, footprint and pin count, from
   `NetIndex::components` (the same index). The units of one designator are
   one part; a part not annotated yet is listed per symbol. Clicking a part
-  expands it to every pin in pin-number order, each with its net and pin
-  name; a pin wired to nothing reads "— unconnected". A long list shows six
+  expands it to every pin in pin-number order, each with its net, pin name
+  and the sheet its unit is on; a pin wired to nothing reads
+  "— unconnected". A long list shows six
   rows, then "+ N more pins". Clicking a wired pin goes to it and highlights
   its net, as a member click does. The filter matches the designator, value
   or footprint. The tab is panel state in the Model and is not saved. With a

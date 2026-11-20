@@ -1,6 +1,6 @@
 //! The By Component list: one row per part (designator, value and
-//! footprint, pin count); an expanded part lists every pin with its net and
-//! pin name under a muted Pin · Net · Pin name heading.
+//! footprint, pin count); an expanded part lists every pin with its net, pin
+//! name and sheet under a muted Pin · Net · Pin name · Sheet heading.
 
 use iced::widget::{Column, Space, column, container, row};
 use iced::{Alignment, Element, Length, Widget as _};
@@ -17,6 +17,9 @@ const CM: ChromeMetrics = ChromeMetrics::DEFAULT;
 const PIN_W: f32 = TS.body * 3.0;
 /// Width of an expanded part's Pin name column.
 const PIN_NAME_W: f32 = TS.body * 6.0;
+/// The Net and Sheet columns share what is left, three parts to two.
+const NET_W: Length = Length::FillPortion(3);
+const SHEET_W: Length = Length::FillPortion(2);
 
 /// The heading row and the parts, or the no-match card.
 pub(super) fn list<'a>(ctx: &'a PanelContext, view: &'a NetInspectorView) -> Element<'a, PanelMsg> {
@@ -141,7 +144,7 @@ fn part_row<'a>(ctx: &'a PanelContext, part: &'a ComponentRow) -> Element<'a, Pa
         .boxed()
 }
 
-/// The muted Pin · Net · Pin name heading of an expanded part.
+/// The muted Pin · Net · Pin name · Sheet heading of an expanded part.
 fn pin_heading<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let muted = resolve(&ctx.tokens).ink3;
     let cell = |id: signex_i18n::MessageId, width: Length| -> Element<'a, PanelMsg> {
@@ -153,11 +156,12 @@ fn pin_heading<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         row![
             Space::new().width(SP.xl).height(Length::Shrink),
             cell(ids::PANELS_NET_INSPECTOR_COLUMN_PIN, Length::Fixed(PIN_W)),
-            cell(ids::PANELS_NET_INSPECTOR_COLUMN_PIN_NET, Length::Fill),
+            cell(ids::PANELS_NET_INSPECTOR_COLUMN_PIN_NET, NET_W),
             cell(
                 ids::PANELS_NET_INSPECTOR_COLUMN_PIN_NAME,
                 Length::Fixed(PIN_NAME_W)
             ),
+            cell(ids::PANELS_NET_INSPECTOR_COLUMN_PIN_SHEET, SHEET_W),
         ]
         .spacing(SP.s)
         .align_y(Alignment::Center),
@@ -167,8 +171,8 @@ fn pin_heading<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     .boxed()
 }
 
-/// A pin: its number, its net (or "— unconnected"), its name. A wired pin
-/// goes to the pin on its sheet when clicked.
+/// A pin: its number, its net (or "— unconnected"), its name and the sheet
+/// its unit is on. A wired pin goes to the pin on its sheet when clicked.
 fn pin_row<'a>(ctx: &'a PanelContext, pin: &'a ComponentPinRow) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let (ink, muted) = (ti(tokens.text), resolve(tokens).ink3);
@@ -196,7 +200,7 @@ fn pin_row<'a>(ctx: &'a PanelContext, pin: &'a ComponentPinRow) -> Element<'a, P
         )
         .width(PIN_W)
         .clip(true),
-        container(net).width(Length::Fill).clip(true),
+        container(net).width(NET_W).clip(true),
         container(
             text(UserText::new(pin.name.as_str()))
                 .size(TS.caption)
@@ -205,6 +209,14 @@ fn pin_row<'a>(ctx: &'a PanelContext, pin: &'a ComponentPinRow) -> Element<'a, P
                 .wrapping(iced::widget::text::Wrapping::None),
         )
         .width(PIN_NAME_W)
+        .clip(true),
+        container(
+            text(UserText::new(pin.sheet.as_str()))
+                .size(TS.caption)
+                .color(muted)
+                .wrapping(iced::widget::text::Wrapping::None),
+        )
+        .width(SHEET_W)
         .clip(true),
     ]
     .spacing(SP.s)
@@ -225,3 +237,7 @@ fn pin_row<'a>(ctx: &'a PanelContext, pin: &'a ComponentPinRow) -> Element<'a, P
         .style(crate::styles::menu_item(tokens))
         .boxed()
 }
+
+#[cfg(test)]
+#[path = "by_component_tests.rs"]
+mod tests;
