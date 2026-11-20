@@ -7,6 +7,8 @@
 
 use super::super::super::*;
 use crate::app::handlers::canvas::net_color_click::{net_elements_in, wire_at};
+use crate::app::mutation_gateway::MutationOutcome;
+use signex_i18n::{ids, t};
 use signex_types::schematic::{Label, LabelType, SchematicSheet};
 use signex_types::theme::Color;
 
@@ -194,6 +196,7 @@ impl Signex {
                 custom.show = show;
                 if !show {
                     custom.net = None;
+                    custom.sheet = None;
                     custom.hex = None;
                 }
                 Task::none()
@@ -229,11 +232,13 @@ impl Signex {
                 let seed = self
                     .palette_net_color(&net)
                     .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b));
+                let sheet = self.document_state.active_path.clone();
                 let custom = &mut self.ui_state.net_color_custom;
                 if let Some(seed) = seed {
                     custom.draft = seed;
                 }
                 custom.net = Some(net);
+                custom.sheet = sheet;
                 custom.hex = None;
                 custom.show = true;
                 Task::none()
@@ -259,6 +264,22 @@ impl Signex {
     /// and close the row's chooser.
     fn set_palette_net_color(&mut self, net: &str, color: Option<Color>) {
         self.ui_state.net_color_palette.chooser = None;
+        let elements = self
+            .document_state
+            .active_engine()
+            .map(|engine| net_label_elements(engine.document(), net))
+            .unwrap_or_default();
+        if elements.is_empty() {
+            return;
+        }
+        // An alpha of 0 clears. A refusal (a read-only sheet) is already
+        // said in Messages by the commit.
+        let paint = color.unwrap_or(Color::new(0, 0, 0, 0));
+        let (outcome, _why) = self.commit_net_colors(&elements, paint);
+        // The per-name record follows the sheet: a refused commit leaves it.
+        if outcome == MutationOutcome::Failed {
+            return;
+        }
         match color {
             Some(c) => {
                 self.ui_state.net_colors.insert(net.to_owned(), c);
@@ -267,31 +288,30 @@ impl Signex {
                 self.ui_state.net_colors.remove(net);
             }
         }
-        let elements = self
-            .document_state
-            .active_engine()
-            .map(|engine| net_label_elements(engine.document(), net))
-            .unwrap_or_default();
-        if !elements.is_empty() {
-            // An alpha of 0 clears. A refusal (a read-only sheet) is
-            // already said in Messages by the commit.
-            let paint = color.unwrap_or(Color::new(0, 0, 0, 0));
-            let (_outcome, _why) = self.commit_net_colors(&elements, paint);
-        }
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
             canvas.clear_content_cache();
         }
     }
 
     /// The custom picker's Use Color: colour the picker's net when it came
-    /// from a palette row, else arm the net-colour pen with the colour.
+    /// from a palette row, else arm the net-colour pen with the colour. A
+    /// row's net is coloured only on the sheet it was opened on.
     fn submit_custom_net_color(&mut self, c: iced::Color) {
         let custom = &mut self.ui_state.net_color_custom;
         custom.show = false;
         custom.draft = c;
         custom.hex = None;
         let color = theme_color_of(c);
+        let sheet = custom.sheet.take();
         if let Some(net) = custom.net.take() {
+            if sheet != self.document_state.active_path {
+                let i18n = &self.ui_state.i18n;
+                crate::diagnostics::log_warning(
+                    t!(i18n, ids::DIALOG_NET_COLOR_SHEET_CHANGED, "net" => net.as_str())
+                        .into_string(),
+                );
+                return;
+            }
             self.set_palette_net_color(&net, Some(color));
             return;
         }

@@ -176,6 +176,7 @@ impl Signex {
                 self.ui_state.net_color_custom.draft = seed;
                 // The pen, not a palette row's net.
                 self.ui_state.net_color_custom.net = None;
+                self.ui_state.net_color_custom.sheet = None;
                 self.ui_state.net_color_custom.hex = None;
                 self.ui_state.net_color_custom.show = true;
             }

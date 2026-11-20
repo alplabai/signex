@@ -61,3 +61,31 @@ fn clear_all_on_a_clean_sheet_is_no_step() {
     clear_all(&mut app);
     assert!(!is_dirty(&app, &path));
 }
+
+/// The per-name record spans every sheet: a clear of one sheet keeps it
+/// while another sheet still shows a colour; the clear of all drops it.
+#[test]
+fn a_one_sheet_clear_keeps_the_record_while_another_sheet_is_coloured() {
+    let (mut app, a) = app_with_sheet("record-a.snxsch");
+    let a_wire = wire_of(&app, &a);
+    paint(&mut app, &[a_wire], color(30));
+    let b = PathBuf::from("record-b.snxsch");
+    add_sheet(&mut app, &b);
+    let b_wire = wire_of(&app, &b);
+    paint(&mut app, &[b_wire], color(40));
+    app.ui_state.net_colors.insert("N1".to_string(), color(30));
+
+    clear_all(&mut app);
+    assert_eq!(colour_of(&app, b_wire), None);
+    assert!(
+        !app.ui_state.net_colors.is_empty(),
+        "sheet a is still coloured"
+    );
+
+    app.run_clear_all_net_colors(None);
+    assert_eq!(colour_of(&app, a_wire), None);
+    assert!(
+        app.ui_state.net_colors.is_empty(),
+        "every sheet was cleared"
+    );
+}

@@ -104,4 +104,5 @@ define_ids! {
     DIALOG_NET_COLOR_HEX = "dialog-net-color-hex";
     DIALOG_NET_COLOR_OLD = "dialog-net-color-old";
     DIALOG_NET_COLOR_NEW = "dialog-net-color-new";
+    DIALOG_NET_COLOR_SHEET_CHANGED = "dialog-net-color-sheet-changed";
 }

@@ -157,6 +157,9 @@ pub struct NetColorCustomState {
     /// The net the picker colours when it was opened from a palette row;
     /// `None` arms the net-colour pen, as the Active Bar entry does.
     pub net: Option<String>,
+    /// The sheet `net` was read on. Use Color refuses when another sheet
+    /// is active, so a same-named net elsewhere is never coloured.
+    pub sheet: Option<PathBuf>,
     /// The Hex field while the user types in it; `None` shows the draft.
     /// Text that does not parse stays here and the field shows an error.
     pub hex: Option<String>,
@@ -168,6 +171,7 @@ impl Default for NetColorCustomState {
             show: false,
             draft: iced::Color::from_rgb(0.40, 0.40, 0.93),
             net: None,
+            sheet: None,
             hex: None,
         }
     }

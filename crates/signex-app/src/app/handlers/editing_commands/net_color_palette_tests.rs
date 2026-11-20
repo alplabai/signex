@@ -1,7 +1,7 @@
 //! #2528 — the F5 palette's rows (coloured first, filtered) and the custom
 //! picker's Hex field.
 
-use super::net_color_driver::{add_sheet_with, color, colour_of};
+use super::net_color_driver::{activate, add_sheet_with, color, colour_of};
 use super::net_color_palette::{hex_of, net_label_names, palette_rows, parse_hex};
 use crate::app::{Message, NetColorMsg, Signex};
 use signex_types::schematic::{Label, LabelType, Point, SchematicSheet, Wire};
@@ -185,4 +185,69 @@ fn custom_from_a_row_colours_that_net() {
         "the pen stays unarmed"
     );
     assert_eq!(app.ui_state.net_color_custom.net, None);
+}
+
+/// Custom… opened on one sheet, Use Color pressed on another that has a net
+/// of the same name: refused, and neither sheet changes.
+#[test]
+fn custom_refuses_when_the_active_sheet_changed() {
+    let (mut app, first) = app_with_nets(&["A"]);
+    let first_wire = app.document_state.engines[&first].document().wires[0].uuid;
+    let _ = app.update(Message::NetColor(NetColorMsg::CustomOpenedFor("A".into())));
+    assert_eq!(app.ui_state.net_color_custom.sheet.as_ref(), Some(&first));
+
+    let second = PathBuf::from("second.snxsch");
+    add_sheet_with(&mut app, &second, sheet_with_nets(&["A"]));
+    let second_wire = app.document_state.engines[&second].document().wires[0].uuid;
+    activate(&mut app, &second);
+
+    let pick = iced::Color::from_rgb8(0x14, 0xB8, 0xA6);
+    let _ = app.update(Message::NetColor(NetColorMsg::CustomSubmit(pick)));
+    assert_eq!(colour_of(&app, second_wire), None, "the other sheet's A");
+    activate(&mut app, &first);
+    assert_eq!(colour_of(&app, first_wire), None, "nothing applied late");
+    assert!(app.ui_state.net_colors.is_empty());
+    assert_eq!(app.ui_state.net_color_custom.net, None);
+    assert_eq!(app.ui_state.net_color_custom.sheet, None);
+}
+
+/// A palette colour refused by a read-only sheet leaves the per-name
+/// record alone, so the Active Bar offers no clear for it.
+#[test]
+fn a_refused_palette_colour_is_not_recorded() {
+    let (mut app, _task) = Signex::new();
+    let path = PathBuf::from("read-only.snxsch");
+    let mut sheet = sheet_with_nets(&["A"]);
+    sheet.unknown.newer_minor_source = Some("snxsch/9.9".into());
+    add_sheet_with(&mut app, &path, sheet);
+    let wire = app.document_state.engines[&path].document().wires[0].uuid;
+
+    let _ = app.update(Message::NetColor(NetColorMsg::Set {
+        net: "A".into(),
+        color: Some(color(120)),
+    }));
+    assert_eq!(colour_of(&app, wire), None, "the sheet refused");
+    assert!(app.ui_state.net_colors.is_empty(), "nothing recorded");
+}
+
+/// A net with no wire under its label is no edit and is not recorded.
+#[test]
+fn an_empty_palette_colour_is_not_recorded() {
+    let (mut app, _path) = app_with_nets(&["A"]);
+    let _ = app.update(Message::NetColor(NetColorMsg::Set {
+        net: "FLOATING".into(),
+        color: Some(color(120)),
+    }));
+    assert!(app.ui_state.net_colors.is_empty());
+}
+
+/// An applied palette colour is recorded under its net name.
+#[test]
+fn an_applied_palette_colour_is_recorded() {
+    let (mut app, _path) = app_with_nets(&["A"]);
+    let _ = app.update(Message::NetColor(NetColorMsg::Set {
+        net: "A".into(),
+        color: Some(color(120)),
+    }));
+    assert_eq!(app.ui_state.net_colors.get("A"), Some(&color(120)));
 }

@@ -55,9 +55,19 @@ impl Signex {
     ) -> ColorsCleared {
         // #1005: each sheet keeps its own undo step for what this removes.
         let cleared = self.clear_net_colors(only);
-        // The palette's per-name record goes too, so the Active Bar's Clear
-        // entries no longer offer a clear with nothing left to clear.
-        self.ui_state.net_colors.clear();
+        // The palette's per-name record spans every sheet: it goes when all
+        // sheets were cleared, or one sheet's clear left none coloured, so
+        // the Active Bar's Clear entries offer no clear with nothing left.
+        let none_left = || {
+            !self
+                .document_state
+                .engines
+                .values()
+                .any(|engine| has_painted_element(engine.document()))
+        };
+        if only.is_none() || none_left() {
+            self.ui_state.net_colors.clear();
+        }
         self.ui_state.pending_net_color = None;
         self.interaction_state.active_canvas_mut().pending_net_color = None;
         self.interaction_state

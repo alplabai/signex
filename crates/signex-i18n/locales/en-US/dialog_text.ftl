@@ -240,3 +240,5 @@ dialog-net-color-hex = Hex
 # Custom picker preview: the net's colour now, and the pick.
 dialog-net-color-old = Old
 dialog-net-color-new = New
+# Messages: Use Color was pressed after the active sheet changed. $net is the net name.
+dialog-net-color-sheet-changed = Net colour not changed: the picker was opened for { $net } on another sheet.
