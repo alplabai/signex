@@ -1,5 +1,5 @@
 //! Round 9 of #2262: a PCB tab's Properties show the board, not a schematic
-//! hint; #2353: the board panel's sections; #2523 (m93): the size row, the
+//! hint; #2353: the board panel's sections; #2523 (mockup row 93): the size row, the
 //! stat tiles, the sections closed by default and the Health Check cards.
 
 use super::*;
@@ -342,7 +342,7 @@ fn laid_out(ctx: &PanelContext, width: f32) -> Vec<crate::layout_probe::LaidOutT
         .collect()
 }
 
-/// The width of the mockup's dock (#2523, m93).
+/// The width of the mockup's dock (#2523, mockup row 93).
 const MOCKUP_DOCK: f32 = 300.0;
 
 /// The texts from Board Information's title to the next section's.
@@ -629,7 +629,7 @@ fn the_snapping_choices_do_not_overlap_in_a_narrow_dock() {
     }
 }
 
-/// #2523 (m93): Selection Filter, Snap Options, Guide Manager and Panel
+/// #2523 (mockup row 93): Selection Filter, Snap Options, Guide Manager and Panel
 /// start closed with a summary in their header, and the fold of layer and
 /// primitive counts too; a click on a header opens it.
 #[test]
@@ -788,7 +788,7 @@ fn hovering_the_width_tile_reports_its_field() {
     );
 }
 
-/// #2523 (m93): the Health Check tab is one card per check, with Run DRC
+/// #2523 (mockup row 93): the Health Check tab is one card per check, with Run DRC
 /// and Show results on the design rules card; neither check has run here.
 #[test]
 fn the_health_check_tab_has_a_card_per_check() {

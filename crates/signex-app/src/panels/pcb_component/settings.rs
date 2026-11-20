@@ -1,4 +1,4 @@
-//! The rows of the component settings (#2365, Graphite m94): the Type
+//! The rows of the component settings (#2365, Graphite mockup row 94): the Type
 //! dropdown, Height, the 3D Opacity slider and value box, the Lock row with
 //! its two checkboxes, the swapping checkboxes, and the typed Description
 //! and Channel Offset rows. Each edit is one board undo step.

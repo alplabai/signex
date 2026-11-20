@@ -1,4 +1,4 @@
-//! The Track panel (#2523, m95): the illustration, Net Information,
+//! The Track panel (#2523, mockup row 95): the illustration, Net Information,
 //! Properties (net, layer, width, ends, position, the two ends, length,
 //! Tune Net To),
 //! then the paste and solder mask expansion sections. The lock is the

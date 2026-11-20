@@ -1,5 +1,5 @@
 //! The Footprint, Swapping Options and Schematic Reference Information
-//! sections of the General tab (Graphite m94). Swapping Options starts
+//! sections of the General tab (Graphite mockup row 94). Swapping Options starts
 //! closed and says "off" in its header while both switches are off.
 
 use iced::widget::{Column, Row};

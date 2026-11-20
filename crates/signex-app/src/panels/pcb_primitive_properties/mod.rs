@@ -221,7 +221,7 @@ pub fn view<'a>(ctx: &'a PanelContext, facts: &'a PcbPrimitiveFacts) -> Element<
     .boxed()
 }
 
-/// The header (m95-m102 `.phd`): the kind, its count pill (a pad's
+/// The header (mockup rows 95-102): the kind, its count pill (a pad's
 /// "{component}-{pad}", "Next to place" while placing), a Shelved pill for
 /// a shelved pour, the lock icon; under it the search, or while placing the
 /// placing callout; and for a locked item the warn callout with Unlock.
@@ -363,7 +363,7 @@ fn pill<'a>(look: rows::Look<'a>, label: Localized, tone: PillTone) -> Element<'
     .boxed()
 }
 
-/// The lock icon at the header's right (m95, m96): live for tracks and
+/// The lock icon at the header's right (mockup rows 95, 96): live for tracks and
 /// vias (filled while locked, a dash for a selection partly locked);
 /// a pad's lock is its footprint's; the other kinds store no lock and grey
 /// it with the reason.
@@ -491,7 +491,7 @@ fn search<'a>(look: rows::Look<'a>, common: &'a PrimitiveCommon) -> Element<'a, 
         .boxed()
 }
 
-/// A callout band under the header (`.callout`): the accent one says
+/// A callout band under the header: the accent one says
 /// placing is paused, the warn one that the item is locked.
 fn callout<'a>(
     look: rows::Look<'a>,

@@ -1,4 +1,4 @@
-//! The dimension illustration (#2523, m101): the two points it measures,
+//! The dimension illustration (#2523, mockup row 101): the two points it measures,
 //! the extension lines out to the dimension line, the Offset, and the
 //! measured value on the line. A selection whose points differ, or a
 //! dimension not placed yet, is drawn as a 10 mm one.

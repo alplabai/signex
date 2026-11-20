@@ -1,4 +1,4 @@
-//! The Net Information section (#2523, m95-m99): the net and class as
+//! The Net Information section (#2523, mockup rows 95-99): the net and class as
 //! links, a Selected / Total table of Length and Delay, and Show More with
 //! what else is on the net as one caption line. A track opens with it; a
 //! via, pad, arc or area keeps it closed, its header naming the net and its

@@ -1,4 +1,4 @@
-//! The Health Check tab (#2353, #2523 m93): one card per check, each with a
+//! The Health Check tab (#2353, #2523, mockup row 93): one card per check, each with a
 //! status icon. Design rules: the board's finding count as a link to the
 //! results, Run DRC (the panel's only Run DRC) and Show results. Electrical
 //! rules: the project's schematic check. The app does not record when a

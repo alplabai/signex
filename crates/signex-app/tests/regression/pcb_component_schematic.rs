@@ -368,7 +368,7 @@ fn a_renamed_board_designator_shows_the_mismatch() {
     assert_eq!(shown.designator_mismatches, 1);
 }
 
-/// The mismatch note's Update PCB button (Graphite m94) runs Design ▸
+/// The mismatch note's Update PCB button (Graphite mockup row 94) runs Design ▸
 /// Update PCB Document: the Update PCB dialog opens for the project, and
 /// nothing changes on the board until it is executed.
 #[test]

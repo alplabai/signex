@@ -37,7 +37,7 @@ pub(super) fn section<'a>(
         let add = form.t(ids::PCB_BOARD_GUIDE_ADD);
         rows.push(form.row(&[&title, &add], add_menu(form, board)));
     }
-    // Closed by default, with the guide count in its header (#2523, m93).
+    // Closed by default, with the guide count in its header (#2523, mockup row 93).
     let count = t!(form.i18n, ids::PCB_BOARD_COUNT, "count" => board.options.guides.len());
     form.section_with(
         "pcb_board_guides",

@@ -1,4 +1,4 @@
-//! Board Information (#2353, #2523 m93): sizes and counts read from the
+//! Board Information (#2353, #2523, mockup row 93): sizes and counts read from the
 //! board as a grid of stat tiles, three to a row (two in a narrow dock).
 //! Width and Height come from the board shape and light up with their
 //! callouts; the component counts select those components; Unrouted and

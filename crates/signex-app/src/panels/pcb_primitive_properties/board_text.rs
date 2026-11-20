@@ -1,4 +1,4 @@
-//! The String panel (#2373, #2523 m100): under the illustration, the text
+//! The String panel (#2373, #2523, mockup row 100): under the illustration, the text
 //! across the full width, its layer, position, height and rotation, and
 //! quick rotation steps.
 

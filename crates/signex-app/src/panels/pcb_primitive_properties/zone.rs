@@ -1,4 +1,4 @@
-//! The area panel (#2393, #2523 m99): fills, solid regions, polygon pours
+//! The area panel (#2393, #2523, mockup row 99): fills, solid regions, polygon pours
 //! and keepouts. Under the illustration: Net Information and the net of a
 //! copper area, the layer, a keepout's kinds; a pour's Pour section with its
 //! fill rules, the thermal relief and corners it cannot use yet (greyed:
@@ -513,7 +513,7 @@ fn pour_menu<'a>(look: Look<'a>, common: &PrimitiveCommon) -> Element<'a, PanelM
         .boxed()
 }
 
-/// A small card button (`.btn.sm`): caption text on the field fill with a
+/// A small card button: caption text on the field fill with a
 /// hairline; greyed and deaf without a message.
 fn small_button<'a>(
     look: Look<'a>,
@@ -552,7 +552,7 @@ fn small_button<'a>(
     .boxed()
 }
 
-/// The ⋯ icon button (`.ib`): no frame at rest, the hover fill, and the
+/// The ⋯ icon button: no frame at rest, the hover fill, and the
 /// accent-soft fill while its menu is open.
 fn menu_button_style(
     tokens: &ThemeTokens,
@@ -582,7 +582,7 @@ fn menu_button_style(
     }
 }
 
-/// A menu row (`.pv-mi`): ink text, the hover fill; greyed when disabled.
+/// A menu row: ink text, the hover fill; greyed when disabled.
 fn menu_item_style(
     tokens: &ThemeTokens,
 ) -> impl Fn(&Theme, button::Status) -> button::Style + 'static {
@@ -604,7 +604,7 @@ fn menu_item_style(
     }
 }
 
-/// The card frame (`.gcard`): the panel fill, a hairline, card corners.
+/// The card frame: the panel fill, a hairline, card corners.
 pub(super) fn card_style(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let (bg, line) = (ti(tokens.panel_bg), ti(tokens.border));
     move |_: &Theme| container::Style {

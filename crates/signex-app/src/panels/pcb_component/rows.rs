@@ -1,4 +1,4 @@
-//! The row builders of the Component view (Graphite m94): collapsible
+//! The row builders of the Component view (Graphite mockup row 94): collapsible
 //! sections with an optional control in the header, a label column on the
 //! Graphite grid, then an input, a field-look value, a sunken read-only
 //! value, a unit, a checkbox, an eye or a warning note. Every row carries its

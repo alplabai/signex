@@ -1,4 +1,4 @@
-//! The Location and Properties sections of the General tab (Graphite m94):
+//! The Location and Properties sections of the General tab (Graphite mockup row 94):
 //! Location carries the lock in its header, then Position (X and Y on one
 //! row) and Rotation; Properties holds the side as a Top / Bottom segmented
 //! control, Designator, Comment, Description (the Description parameter)

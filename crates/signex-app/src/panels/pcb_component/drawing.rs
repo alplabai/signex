@@ -1,4 +1,4 @@
-//! The footprint illustration of the Component view (Graphite m94): the pads
+//! The footprint illustration of the Component view (Graphite mockup row 94): the pads
 //! in a light tint of the side's copper colour, the dashed courtyard, the
 //! body outline, pin 1 and the designator, and a note naming the side. No
 //! rotation is shown (review 2026-11-18). The geometry is footprint-local and
@@ -32,7 +32,7 @@ pub const LAYER_FIELD: FieldId = FieldId::new("pcb_component.layer");
 /// Pin 1's leader; no row shows it.
 pub const PIN_ONE_FIELD: FieldId = FieldId::new("pcb_component.pin_one");
 
-// The view box and the label places of the approved m94 drawing, in view
+// The view box and the label places of the approved mockup row 94 drawing, in view
 // units; the widget fits the box uniformly into its bounds.
 const VIEW_W: f32 = 264.0;
 const VIEW_H: f32 = 132.0;

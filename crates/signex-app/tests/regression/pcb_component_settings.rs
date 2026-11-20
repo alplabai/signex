@@ -1,7 +1,7 @@
 //! #2365 and #2369: the board Component view's stored settings and its
 //! parameter and Comment edits, driven through `Signex::update` with the
 //! messages the panel sends (the 3D Opacity slider and the Lock row's
-//! checkboxes of Graphite m94 send the same edits). Every edit is one board
+//! checkboxes of Graphite mockup row 94 send the same edits). Every edit is one board
 //! undo step; Lock Primitives stops a pad edit.
 
 use pcb_geom::{ClickMode, ItemRef};
@@ -333,7 +333,7 @@ fn every_typed_setting_is_one_step() {
     assert_eq!(fp(&edited, R2).component.description, "Thick film");
 }
 
-/// The 3D Opacity slider (Graphite m94): each drag step is the field's draft
+/// The 3D Opacity slider (Graphite mockup row 94): each drag step is the field's draft
 /// in two decimals and changes nothing; letting go applies the last one as
 /// one step, the edit the typed field made.
 #[test]

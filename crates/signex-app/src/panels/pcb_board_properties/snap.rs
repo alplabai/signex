@@ -1,7 +1,7 @@
 //! Snap Options (#2353, #2374): grid, guide and axis snapping, which
 //! layers' objects pull the pointer, which object points do, and how far.
 //! Closed by default, with the Snapping scope in its header; the objects
-//! are a two-column checkbox grid (#2523, m93).
+//! are a two-column checkbox grid (#2523, mockup row 93).
 
 use iced::widget::{Column, Row, Space, container, responsive};
 use iced::{Element, Length, Size, Widget as _};

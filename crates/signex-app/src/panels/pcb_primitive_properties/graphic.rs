@@ -1,4 +1,4 @@
-//! The drawing panel (#2424, #2523 m102): a board line, arc, circle,
+//! The drawing panel (#2424, #2523, mockup row 102): a board line, arc, circle,
 //! rectangle or text frame. The illustration, then the layer, line width
 //! and (a line's) ends of any drawing; Location: the corners of a line,
 //! rectangle or text frame, the centre and radius of an arc or circle; a

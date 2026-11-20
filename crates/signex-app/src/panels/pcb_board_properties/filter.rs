@@ -1,7 +1,7 @@
 //! Selection Filter (#2353): one chip per object kind. It decides what a
 //! click, a box and the hover pick on the board; the header menu shows the
 //! same chips. Under them `All - On` and the saved presets (#2383). Closed by
-//! default, with the count of kinds on in its header (#2523, m93).
+//! default, with the count of kinds on in its header (#2523, mockup row 93).
 
 use iced::widget::{Column, container, row};
 use iced::{Alignment, Element, Length, Widget as _};

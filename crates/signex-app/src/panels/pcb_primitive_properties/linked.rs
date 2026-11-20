@@ -1,6 +1,6 @@
 //! The illustration of a primitive panel and the rows linked to it (#2523):
 //! hovering a row lights its callouts and a hovered callout lights its row
-//! (`.fr.pv-hot` in the mockup: the label in the accent text ink, a 1 px
+//! (as drawn in the mockup: the label in the accent text ink, a 1 px
 //! accent ring round the value). Also the small controls the illustrated
 //! rows share: a collapsible section header, a segmented row, the Ends row
 //! and a field with an X / Y / Start / End prefix.

@@ -1,4 +1,4 @@
-//! Properties of the components selected on a board (#2354, Graphite m94):
+//! Properties of the components selected on a board (#2354, Graphite mockup row 94):
 //! the header block (title, selection pill, footprint name, General /
 //! Parameters tabs, row search, then the footprint's line-art illustration);
 //! then Location, Properties, Footprint, Swapping Options and Schematic

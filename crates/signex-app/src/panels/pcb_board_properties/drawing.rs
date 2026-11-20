@@ -1,4 +1,4 @@
-//! The board illustration under Search (#2523, m93): line art of the board
+//! The board illustration under Search (#2523, mockup row 93): line art of the board
 //! outline from the board shape (its bounding box when the shape is not a
 //! rectangle), the origin, the extra grids' origins in their colours, the
 //! snap grid with its step and, while Visible Grid is on, the grid lines.

@@ -1,4 +1,4 @@
-//! #2523 (m93) - the board Properties panel with nothing selected: Edit
+//! #2523 (mockup row 93) - the board Properties panel with nothing selected: Edit
 //! board shape runs Board sketch, the board materials link opens the Layer
 //! Stack, the size row reads 'Bounding box' for an outline that is not a
 //! rectangle, and a hovered tile and its callout light each other.

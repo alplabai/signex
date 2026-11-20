@@ -1,4 +1,4 @@
-//! The Dimension panel (#2373, #2523 m101): the illustration, the measured
+//! The Dimension panel (#2373, #2523, mockup row 101): the illustration, the measured
 //! Value on a card under it, then where it stands (Start, End, Offset) and
 //! its Style: line width, text height, decimals and layer.
 

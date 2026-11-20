@@ -36,7 +36,7 @@ pub(super) struct Segment {
 }
 
 /// A section's header extras: a summary at its right end (a count pill, a
-/// caption, a button) and whether it starts closed (#2523, m93).
+/// caption, a button) and whether it starts closed (#2523, mockup row 93).
 pub(super) struct Head<'a> {
     summary: Option<Element<'a, PanelMsg>>,
     closed_by_default: bool,

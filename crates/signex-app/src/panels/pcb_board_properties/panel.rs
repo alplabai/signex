@@ -133,7 +133,7 @@ pub(super) fn section<'a>(
     let remove = form.t(ids::BOARD_PANEL_REMOVE);
     let button = form.action(remove.clone(), live(PcbBoardMsg::PanelRemoveClicked), why);
     rows.push(form.row(&[&title, &remove], button));
-    // Closed by default (#2523, m93), as without a panel.
+    // Closed by default (#2523, mockup row 93), as without a panel.
     form.section_with(
         "pcb_board_panel",
         ids::BOARD_PANEL_SECTION,

@@ -744,7 +744,7 @@ mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
 
-// #2523 (m93) - the board Properties panel: Edit board shape, the materials
+// #2523 (mockup row 93) - the board Properties panel: Edit board shape, the materials
 // link, the bounding-box size row and the tile-callout hover.
 #[path = "regression/board_options_panel.rs"]
 mod board_options_panel;

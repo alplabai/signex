@@ -1,4 +1,4 @@
-//! The Arc panel (#2373, #2523 m98): the illustration, Net Information
+//! The Arc panel (#2373, #2523, mockup row 98): the illustration, Net Information
 //! (closed, copper arcs only), then Properties: while the Arc tool is armed
 //! how the next arc is drawn, the net of a copper arc, layer, width, ends,
 //! and for a placed arc its centre, radius, angles and length.

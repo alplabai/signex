@@ -1,5 +1,5 @@
-//! The Component view (#2354, Graphite m94): the header names the
-//! selection, the search leaves rows out, the sections hold the m94 rows,
+//! The Component view (#2354, Graphite mockup row 94): the header names the
+//! selection, the search leaves rows out, the sections hold the mockup row 94 rows,
 //! the Parameters tab lists the shared parameters, the mismatch note offers
 //! Update PCB, and the illustration draws pin 1 and the courtyard and links
 //! its parts to their fields.

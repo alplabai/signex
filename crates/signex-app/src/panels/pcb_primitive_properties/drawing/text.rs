@@ -1,4 +1,4 @@
-//! The string illustration (#2523, m100): the text in its box, the Text
+//! The string illustration (#2523, mockup row 100): the text in its box, the Text
 //! Height and the Position X/Y origin. The rotation is not shown.
 
 use iced::{Point, Rectangle, Size};

@@ -1,4 +1,4 @@
-//! The drawing illustrations (m102, `R.graphic`): a line with its Width and
+//! The drawing illustrations (mockup row 102): a line with its Width and
 //! ends, a circle or arc with its Radius and Width, a rectangle or text
 //! frame with its Width and Height (and a frame's Text Height).
 

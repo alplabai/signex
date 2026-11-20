@@ -1,4 +1,4 @@
-//! The Track illustration (m95, `R.track`): a track run with its Width
+//! The Track illustration (mockup row 95): a track run with its Width
 //! callout, its net and the "layer · round ends" note. While placing, a
 //! dashed run to the pointer and a cursor cross.
 

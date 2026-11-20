@@ -1,4 +1,4 @@
-//! The line-art illustrations of the primitive panels (#2523, m95-m102):
+//! The line-art illustrations of the primitive panels (#2523, mockup rows 95-102):
 //! each kind's drawing as `property_illustration` data, on the mockup's
 //! 264 x 140 view box. Strokes and labels take the theme's ink tokens and a
 //! layer colour tints the object; callouts carry the keys of the fields

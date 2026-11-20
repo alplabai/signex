@@ -1,4 +1,4 @@
-//! #2523 (m95, m98, m102): the track, arc and drawing panels, driven through
+//! #2523 (mockup rows 95, 98, 102): the track, arc and drawing panels, driven through
 //! `Signex::update` with the messages the panels send. A hovered row lights
 //! its illustration callout and a hovered callout its row; the Ends row
 //! keeps Round with Square and Flat greyed; the Arc form's Placement pick

@@ -1,4 +1,4 @@
-//! The area illustration (#2523, m99): a corner of the pour around a pad of
+//! The area illustration (#2523, mockup row 99): a corner of the pour around a pad of
 //! its net, joined directly, and a pad of another net cleared by the
 //! Clearance; a shelved pour as its dashed outline alone; a keepout as its
 //! outline and what it keeps out. Thermal relief spokes are not drawn: the

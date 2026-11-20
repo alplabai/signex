@@ -2,7 +2,7 @@
 //! Reference Information: the schematic designator, Design Item ID and
 //! Source, read-only. When the board designator differs from the
 //! schematic's, a warning note leads the section with an Update PCB button
-//! (Graphite m94) that runs Update PCB as the Design menu does.
+//! (Graphite mockup row 94) that runs Update PCB as the Design menu does.
 
 use iced::Element;
 use signex_i18n::{MessageId, ids, t};
