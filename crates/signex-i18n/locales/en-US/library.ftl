@@ -239,6 +239,8 @@ library-digikey-disconnect = Disconnect
 library-digikey-disconnect-failed = Could not disconnect: { $error }. The token is still stored.
 # The Messages line for the same failure; $why is the system's reason, in English.
 library-digikey-disconnect-failed-log = DigiKey: disconnecting the account failed, so its token is still stored: { $why }
+# Status or Messages reason when a distributor settings worker (sign-in, keyring, key test) stopped on a panic; $error is the runtime's own text, in English.
+library-worker-panicked = worker thread panicked: { $error }
 # Status pill when no DigiKey client id was set when Signex started.
 library-digikey-not-configured = Not configured
 # Keep the two environment variable names exactly as written.

@@ -56,6 +56,7 @@ impl Signex {
                 let auth_url = DIGIKEY_AUTH_URL.to_string();
                 let token_url = DIGIKEY_TOKEN_URL.to_string();
                 let opener = self.ui_state.io.opener;
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                 return Task::perform(
                     async move {
                         let cancel = digikey_oauth::CancelHandle::from_flag(cancel_flag);
@@ -70,8 +71,10 @@ impl Signex {
                             )
                         })
                         .await
-                        .unwrap_or(digikey_oauth::Outcome::Failed {
-                            reason: "worker thread panicked".into(),
+                        .unwrap_or_else(|e| {
+                            digikey_oauth::Outcome::Failed {
+                                reason: worker_panicked(&i18n, &e),
+                            }
                         })
                     },
                     move |outcome| {
@@ -129,11 +132,12 @@ impl Signex {
                     } else {
                         // Stays busy until `DigiKeyStaleTokenRemoved`.
                         let remove = self.library.settings.digikey_token_remover;
+                        let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                         return Task::perform(
                             async move {
                                 tokio::task::spawn_blocking(remove)
                                     .await
-                                    .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                                    .unwrap_or_else(|e| Err(worker_panicked(&i18n, &e)))
                             },
                             |result| {
                                 Message::Library(LibraryMessage::Settings(
@@ -205,6 +209,7 @@ impl Signex {
                 self.library.settings.mouser_in_flight = true;
                 self.library.settings.mouser_status = Some("Testing…".to_string());
                 let key_for_writeback = key.clone();
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                 return Task::perform(
                     async move {
                         let key_for_test = key.clone();
@@ -221,7 +226,7 @@ impl Signex {
                                 .map_err(|e| e.to_string())
                         })
                         .await
-                        .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                        .unwrap_or_else(|e| Err(worker_panicked(&i18n, &e)))
                     },
                     move |result| {
                         let result = match result {
@@ -301,11 +306,12 @@ impl Signex {
         settings.digikey_worker_busy = true;
         settings.digikey_disconnect_error = None;
         let remove = settings.digikey_token_remover;
+        let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
         Task::perform(
             async move {
                 tokio::task::spawn_blocking(remove)
                     .await
-                    .unwrap_or_else(|e| Err(format!("worker thread panicked: {e}")))
+                    .unwrap_or_else(|e| Err(worker_panicked(&i18n, &e)))
             },
             |result| {
                 Message::Library(LibraryMessage::Settings(SettingsMsg::DigiKeyDisconnected(
@@ -409,6 +415,17 @@ fn persist_mouser_key(
     save(key).map_err(|e| format!("API key valid, but it could not be saved: {e}"))
 }
 
+/// The reason a distributor settings worker gives when its thread panicked,
+/// from the catalog; `error` is the runtime's own text, in English.
+fn worker_panicked(i18n: &signex_i18n::I18n, error: impl std::fmt::Display) -> String {
+    signex_i18n::t!(
+        i18n,
+        signex_i18n::ids::LIBRARY_WORKER_PANICKED,
+        "error" => error.to_string()
+    )
+    .into_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::persist_mouser_key;
@@ -464,5 +481,15 @@ mod failure_message_tests {
         assert!(d.starts_with("DigiKey:") && d.ends_with("redirect timed out"));
         let m = mouser_failure_message("HTTP 401");
         assert!(m.starts_with("Mouser:") && m.ends_with("HTTP 401"));
+    }
+
+    #[test]
+    fn a_panicked_worker_reads_its_reason_from_the_catalog() {
+        let (app, _task) = crate::app::Signex::new();
+
+        let reason = worker_panicked(&app.ui_state.i18n, "task 7 panicked")
+            .replace(['\u{2068}', '\u{2069}'], "");
+
+        assert_eq!(reason, "worker thread panicked: task 7 panicked");
     }
 }
