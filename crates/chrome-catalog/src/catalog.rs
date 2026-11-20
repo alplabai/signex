@@ -19,6 +19,10 @@ struct Catalog {
     theme: ThemeId,
     tokens: ThemeTokens,
     passive_calculator: CalculatorControl,
+    compact_group: crate::compact_group::CompactGroupSample,
+    history_commits: Vec<signex_widgets::history_graph::GraphCommit>,
+    /// SHA of the selected history-graph sample row.
+    history_selected: String,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +31,12 @@ pub(crate) enum Message {
     PassiveCalculator(CalculatorMessage),
     /// A project-tree sample row was interacted with; the samples are static.
     TreeInteracted,
+    /// A compact group sample header or row was clicked.
+    CompactGroup(crate::compact_group::SampleMsg),
+    /// A history-graph sample row was clicked; carries its SHA.
+    HistoryCommitSelected(String),
+    /// A history-graph sample button was pressed; the samples are static.
+    HistorySampleCommitPressed,
 }
 
 impl Catalog {
@@ -35,6 +45,9 @@ impl Catalog {
             theme: ThemeId::DEFAULT,
             tokens: theme_tokens(ThemeId::DEFAULT),
             passive_calculator: CalculatorControl::default(),
+            compact_group: Default::default(),
+            history_commits: crate::history_graph::sample_commits(),
+            history_selected: "9e01f4d".into(),
         }
     }
 
@@ -46,6 +59,9 @@ impl Catalog {
             }
             Message::PassiveCalculator(message) => self.passive_calculator.update(message),
             Message::TreeInteracted => {}
+            Message::CompactGroup(message) => self.compact_group.update(message),
+            Message::HistoryCommitSelected(sha) => self.history_selected = sha,
+            Message::HistorySampleCommitPressed => {}
         }
     }
 
@@ -100,6 +116,11 @@ impl Catalog {
                 crate::stat_tiles::view(tokens)
             ),
             section::view(
+                "Document-tab shell (toolbar, sub-tabs, body, footer)",
+                tokens,
+                crate::doc_tab_shell::view(tokens)
+            ),
+            section::view(
                 "Board palette and line-art inks",
                 tokens,
                 crate::board_palette::view(tokens)
@@ -126,6 +147,21 @@ impl Catalog {
                 "Dimension labels",
                 tokens,
                 crate::dimension_label::view(tokens)
+            ),
+            section::view(
+                "Target band (in band, out of band, small) on Graphite Light and Dark",
+                tokens,
+                crate::target_band::view()
+            ),
+            section::view(
+                "Compact group (open with a selection, collapsed) on Graphite Light and Dark",
+                tokens,
+                self.compact_group.view()
+            ),
+            section::view(
+                "History graph (Graphite Light and Dark)",
+                tokens,
+                crate::history_graph::view(&self.history_commits, &self.history_selected),
             ),
         ]
         .spacing(20)

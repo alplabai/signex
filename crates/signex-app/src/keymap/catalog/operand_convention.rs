@@ -28,6 +28,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("dry_run", OperandKind::Bool),
     ("designator", OperandKind::Text),
     ("value", OperandKind::Text),
+    // Delete what the command names instead of setting it.
+    ("remove", OperandKind::Bool),
     ("net", OperandKind::Text),
     ("ids", OperandKind::Text),
     ("kinds", OperandKind::Text),
@@ -53,6 +55,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("size", OperandKind::Point),
     ("file", OperandKind::Text),
     ("direction", OperandKind::Text),
+    // #1276: a sheet symbol by id or name.
+    ("symbol", OperandKind::Text),
     ("apply", OperandKind::Bool),
     ("baseline", OperandKind::Text),
     ("layer", OperandKind::Text),
@@ -103,6 +107,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("corners", OperandKind::Text),
     // The shared waiver form's Author (#2449).
     ("author", OperandKind::Text),
+    // #1699: the ERC rule ids a No-ERC directive silences, comma separated.
+    ("rules", OperandKind::Text),
 ];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma

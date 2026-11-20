@@ -128,8 +128,8 @@ fn seed_margin(slot: &mut Option<f64>, expr: &Option<String>) {
 }
 
 fn literal_mm(expr: &str) -> Option<f64> {
+    use signex_expr::parse;
     use signex_sketch::expr::eval::{EvalContext, eval};
-    use signex_sketch::expr::parse::parse;
     if !is_numeric_literal(expr) {
         return None;
     }

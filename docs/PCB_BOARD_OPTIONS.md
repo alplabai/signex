@@ -19,6 +19,8 @@ The board origin (#2384), `BoardOptions::origin` (`signex_types::pcb_origin::Boa
 
 A new board (`PcbDefaults::new_board`, the New PCB setup dialog included) has no outline yet, so its board area is `EMPTY_BOARD_AREA` (100 × 80 mm) and its origin is that area's bottom-left corner (`board_area_bottom_left`). A board saved without an origin keeps counting from the model's zero. The origin marker is drawn at the origin, and the board's own grid (drawn and snapped) counts from it.
 
+Edit ▸ Origin moves it (2026-11-18): **Set** (`set_board_origin`) takes the next click on the board, on the non-component grid; **Reset** (`reset_board_origin`) puts it at the bottom-left of the outline, or of the board area without one; **Snap to Outline Corner** (`snap_board_origin_to_corner`) puts it at the outline or board-area corner nearest the pointer. Each is one `SetBoardOptions` undo step, marks the board changed and is written on Save; all three are greyed on a read-only board. This is how a board saved without an origin is given one.
+
 Update PCB stages new parts to the right of the board; on a board with no outline and no parts it stages them inside the board area from its bottom-left corner, rows going up (`pcb_geom::stage_up`).
 
 ## Which grid snaps what
@@ -98,6 +100,14 @@ non_components = false
 ```
 
 The origin is `[board_options.origin]` with `x` and `y` in nm, written only when it is not the model's zero.
+
+Layer colours (2026-11-18) are `[board_options.layer_colors]`: one key per
+layer the user gave a colour, its `.snxpcb` token, to `#rrggbbaa`, sorted by
+token and written only when some layer has one. A board with layer colours
+is written as `snxpcb/1.5` (`docs/FORMAT_VERSIONS.md`); a token or colour
+this build cannot read refuses the file. Layer colour... and the reset rows
+of a layer tab, the Layers panel's colour chips and `set_layer_color` /
+`reset_layer_colors` set them, each as one `SetBoardOptions` undo step.
 
 Waived design-rule findings (#2399) are `[[board_options.drc_waivers]]`, one
 table per waiver with `key` (`signex_drc::waiver_key`), `rule`, `note` and

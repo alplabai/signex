@@ -77,7 +77,8 @@ impl Signex {
             | ActiveBarAction::PlacePowerBar
             | ActiveBarAction::PlacePowerCircle
             | ActiveBarAction::PlacePowerSignalGND
-            | ActiveBarAction::PlacePowerEarth => Some("power"),
+            | ActiveBarAction::PlacePowerEarth
+            | ActiveBarAction::PlacePowerChassis => Some("power"),
             ActiveBarAction::PlaceTextString
             | ActiveBarAction::PlaceTextFrame
             | ActiveBarAction::PlaceNote => Some("text"),

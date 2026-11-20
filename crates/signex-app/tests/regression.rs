@@ -684,6 +684,8 @@ mod sheet_frame_canvas;
 mod planned_tools;
 
 // #1202 — the Project document tab replaces the Project Options modal.
+#[path = "regression/page_tab_titles.rs"]
+mod page_tab_titles;
 #[path = "regression/project_parameters.rs"]
 mod project_parameters;
 #[path = "regression/project_tab.rs"]
@@ -694,6 +696,8 @@ mod project_tab_rename;
 mod project_tab_saves;
 #[path = "regression/project_tab_support.rs"]
 mod project_tab_support;
+#[path = "regression/sheet_variables.rs"]
+mod sheet_variables;
 
 #[path = "regression/navigator_async.rs"]
 mod navigator_async;
@@ -702,6 +706,10 @@ mod navigator_async;
 mod annotate_graphite;
 #[path = "regression/erc_dialog_graphite.rs"]
 mod erc_dialog_graphite;
+#[path = "regression/setup_profile_cards.rs"]
+mod setup_profile_cards;
+#[path = "regression/sketch_host.rs"]
+mod sketch_host;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]

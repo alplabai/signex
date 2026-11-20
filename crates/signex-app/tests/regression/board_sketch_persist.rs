@@ -306,19 +306,32 @@ fn undock_applies_the_sketch_and_ctrl_z_there_steps_the_board() {
 }
 
 /// Undo and Redo in the mode step the sketch's own history and leave the
-/// board alone, also after an Apply gave the board a step of its own.
+/// board alone, also after a Bake gave the board a step of its own and the
+/// mode was entered again (#2518: Bake leaves the mode).
 #[test]
 fn undo_and_redo_in_sketch_mode_step_the_sketch_not_the_board() {
+    use signex_app::app::{BoardSketchMsg, PcbMsg};
     let mut f = open_board();
     sketch_an_outline(&mut f);
     send(
         &mut f,
-        Message::Pcb(signex_app::app::PcbMsg::Sketch(
-            signex_app::app::BoardSketchMsg::ApplyRequested,
-        )),
+        Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::BakeRequested)),
+    );
+    assert!(
+        f.app.interaction_state.board_sketch.is_none(),
+        "Bake leaves"
     );
     let applied = snapshot(&f);
     assert_eq!(live(&f).outline.len(), 4);
+    send(
+        &mut f,
+        Message::Pcb(PcbMsg::Sketch(BoardSketchMsg::ModeToggled)),
+    );
+    assert_eq!(
+        ids_of(&f, is_line).len(),
+        4,
+        "the copy starts from the bake"
+    );
     rectangle(&mut f, (50.0, 0.0), (60.0, 10.0));
     assert_eq!(ids_of(&f, is_line).len(), 8);
 

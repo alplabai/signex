@@ -129,8 +129,10 @@ pub(crate) fn place_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> R
         .document_state
         .pcb_board(&board)
         .ok_or_else(|| "the board is not open".to_string())
-        .and_then(|pcb| placement::by_designator(pcb, text(args, "designator")))
-    {
+        .and_then(|pcb| {
+            let typed = text(args, "designator");
+            placement::by_designator(pcb, app.document_state.stored_reference_for(&board, typed))
+        }) {
         Ok(anchor) => anchor,
         Err(reason) => return refused(reason),
     };

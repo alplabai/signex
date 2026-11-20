@@ -352,6 +352,32 @@ fn cell<'a>(content: Element<'a, PanelMsg>, width: Length) -> Element<'a, PanelM
         .boxed()
 }
 
+/// The Message cell of a Messages row: the text, then the link to the command
+/// the row offers, if any (`messages_row::row_action`).
+fn message_text<'a>(
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+    entry: &'a DiagnosticEntry,
+    ink: iced::Color,
+) -> Element<'a, PanelMsg> {
+    let line = text(UserText::new(entry.message.as_str()))
+        .size(TS.body)
+        .color(ink);
+    let Some((link, label)) = super::messages_row::row_action(entry) else {
+        return line.boxed();
+    };
+    row![
+        line,
+        Space::new().width(6).height(Length::Shrink),
+        signex_widgets::button(text(t!(i18n, label)).size(TS.body).color(ink))
+            .padding([SP.xs, SP.m])
+            .on_press(PanelMsg::MessageLinkPressed(link))
+            .style(crate::styles::menu_item(tokens)),
+    ]
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
 /// The empty state: centred title, the hint, and the variables in mono.
 fn empty_state<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
@@ -483,13 +509,7 @@ pub fn view_messages<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
                             .boxed(),
                         Length::Fixed(source_w),
                     ),
-                    cell(
-                        text(UserText::new(entry.message.as_str()))
-                            .size(TS.body)
-                            .color(ink)
-                            .boxed(),
-                        Length::Fill,
-                    ),
+                    cell(message_text(tokens, i18n, entry, ink), Length::Fill),
                     cell(
                         text(UserText::new(clock_time(entry.at)))
                             .size(TS.body)

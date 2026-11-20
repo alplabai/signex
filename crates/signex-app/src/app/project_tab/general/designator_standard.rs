@@ -24,11 +24,12 @@ use crate::styles::{Spacing, TypeScale};
 struct StandardChoice(Option<DesignatorStandard>);
 
 impl StandardChoice {
-    const ALL: [Self; 4] = [
+    const ALL: [Self; 5] = [
         Self(None),
         Self(Some(DesignatorStandard::Ieee315)),
         Self(Some(DesignatorStandard::Din40719_2)),
         Self(Some(DesignatorStandard::Iec81346_2)),
+        Self(Some(DesignatorStandard::Iec81346_2Full)),
     ];
 }
 
@@ -73,4 +74,22 @@ pub(super) fn row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Eleme
         picker
     };
     labelled("Designator standard", field, tokens)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The picker offers "Library designator" and every standard once, in
+    /// the standards' own order, so a new standard cannot be left out.
+    #[test]
+    fn the_picker_offers_every_standard_once() {
+        let mut expected = vec![StandardChoice(None)];
+        expected.extend(DesignatorStandard::ALL.map(|s| StandardChoice(Some(s))));
+        assert_eq!(StandardChoice::ALL.to_vec(), expected);
+        assert_eq!(
+            StandardChoice(Some(DesignatorStandard::Iec81346_2Full)).to_string(),
+            "EN IEC 81346-2 (full codes)"
+        );
+    }
 }

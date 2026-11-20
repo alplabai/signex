@@ -1,0 +1,105 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "orangecrab-r0-2-1",
+  "net_classes": [
+    {
+      "clearance": 0.0889,
+      "name": "DDR3_CTRL_LM1.0",
+      "nets": [
+        "RAM_A0",
+        "RAM_A1",
+        "RAM_A10",
+        "RAM_A11",
+        "RAM_A12",
+        "RAM_A13",
+        "RAM_A14",
+        "RAM_A15",
+        "RAM_A2",
+        "RAM_A3",
+        "RAM_A4",
+        "RAM_A5",
+        "RAM_A6",
+        "RAM_A7",
+        "RAM_A8",
+        "RAM_A9",
+        "RAM_BA0",
+        "RAM_BA1",
+        "RAM_BA2",
+        "RAM_CAS#",
+        "RAM_CKE",
+        "RAM_CS#",
+        "RAM_ODT",
+        "RAM_RAS#",
+        "RAM_WE#"
+      ],
+      "trace_width": 0.121,
+      "via_diameter": 0.28,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.089,
+      "name": "DDR3_DQS0_LM1.0",
+      "nets": [
+        "RAM_D0",
+        "RAM_D1",
+        "RAM_D2",
+        "RAM_D3",
+        "RAM_D4",
+        "RAM_D5",
+        "RAM_D6",
+        "RAM_D7",
+        "RAM_LDM",
+        "RAM_LDQS+",
+        "RAM_LDQS-"
+      ],
+      "trace_width": 0.089,
+      "via_diameter": 0.6,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.089,
+      "name": "DDR3_DQS1_LM1.0",
+      "nets": [
+        "RAM_D10",
+        "RAM_D11",
+        "RAM_D12",
+        "RAM_D13",
+        "RAM_D14",
+        "RAM_D15",
+        "RAM_D8",
+        "RAM_D9",
+        "RAM_UDM",
+        "RAM_UDQS+",
+        "RAM_UDQS-"
+      ],
+      "trace_width": 0.089,
+      "via_diameter": 0.6,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.089,
+      "name": "DDR_CLK_LM1.0",
+      "trace_width": 0.089,
+      "via_diameter": 0.6,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.0889,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.0889,
+      "via_diameter": 0.6,
+      "via_drill": 0.4
+    }
+  ],
+  "pcb_file": "orangecrab-r0-2-1.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

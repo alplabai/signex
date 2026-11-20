@@ -124,25 +124,21 @@ impl SchematicCanvas<'_> {
             return None;
         }
         let cam = self.camera();
-        let widths = self.prefs.wire_widths();
+        let widths = self.wire_widths();
         let class_revision = self.prefs.wire_class_revision;
         let now = selection_boxes(moving, &self.selected, &self.designators, widths);
 
         let mut halos = self.halo_cache.borrow_mut();
         let base_is_current = halos.base.as_ref().is_some_and(|b| {
             b.selected == self.selected
-                && b.sheet.matches(
-                    revision,
-                    class_revision,
-                    &widths.defaults,
-                    &self.designators,
-                )
+                && b.sheet
+                    .matches(revision, class_revision, &widths, &self.designators)
         });
         if !base_is_current {
             halos.generations += 1;
             halos.base = Some(BaseBoxes {
                 generation: halos.generations,
-                sheet: SheetKey::new(revision, class_revision, widths.defaults, &self.designators),
+                sheet: SheetKey::new(revision, class_revision, &widths, &self.designators),
                 selected: self.selected.clone(),
                 boxes: selection_boxes(base_sheet, &self.selected, &self.designators, widths),
             });

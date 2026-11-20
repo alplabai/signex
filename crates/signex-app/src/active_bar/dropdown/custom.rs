@@ -1,105 +1,86 @@
-//! The two irregular dropdowns that ride the widget's `Custom` escape
-//! hatch: the NetColor swatches and the Selection Filter chip grid, the
-//! latter shared by the schematic and board Active Bars (#2383).
-//! Graphite themes paint both through `super::graphite`.
+//! The net-colour menu and the Selection Filter chip grid. The chip grid
+//! rides the widget's `Custom` escape hatch and is shared by the schematic
+//! and board Active Bars (#2383); Graphite themes paint it through
+//! `super::graphite`.
 
-use iced::widget::{Space, column, container, row};
+use iced::widget::{column, container};
 use iced::{Color, Element, Widget};
 use signex_types::theme::{ThemeId, ThemeTokens};
-use signex_widgets::active_bar_dropdown::{DropdownEntry, RowPaint};
-use signex_widgets::{button, raw, text};
+use signex_widgets::active_bar_dropdown::DropdownEntry;
 
-use crate::active_bar::{
-    AbColors, ActiveBarAction, ActiveBarMsg, CustomFilterPreset, SelectionFilter,
-};
+use crate::active_bar::{ActiveBarAction, ActiveBarMsg, CustomFilterPreset, SelectionFilter};
 use crate::icons as ic;
 
-use super::{dd_btn_style_f, dd_item, graphite};
+use super::{dd_item, dd_swatch, graphite};
 
-const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// NetColor menu: seven colour swatches (each an irregular `Custom` row —
-/// a colour chip in place of an SVG icon), then the Custom / Clear rows
-/// as ordinary items. The Clear rows grey out when no net carries a
-/// custom colour (`requires_net_color`).
+/// One preset net colour of the menu.
+struct Swatch {
+    label: &'static str,
+    rgb: [f32; 3],
+    action: ActiveBarAction,
+}
+
+/// The seven preset net colours, in menu order.
+const NET_COLOR_SWATCHES: [Swatch; 7] = [
+    Swatch {
+        label: "Blue",
+        rgb: [0.40, 0.40, 0.93],
+        action: ActiveBarAction::NetColorBlue,
+    },
+    Swatch {
+        label: "Light Green",
+        rgb: [0.40, 0.93, 0.40],
+        action: ActiveBarAction::NetColorLightGreen,
+    },
+    Swatch {
+        label: "Light Blue",
+        rgb: [0.40, 0.80, 0.93],
+        action: ActiveBarAction::NetColorLightBlue,
+    },
+    Swatch {
+        label: "Red",
+        rgb: [0.93, 0.30, 0.30],
+        action: ActiveBarAction::NetColorRed,
+    },
+    Swatch {
+        label: "Fuchsia",
+        rgb: [0.80, 0.30, 0.80],
+        action: ActiveBarAction::NetColorFuchsia,
+    },
+    Swatch {
+        label: "Yellow",
+        rgb: [0.93, 0.80, 0.20],
+        action: ActiveBarAction::NetColorYellow,
+    },
+    Swatch {
+        label: "Dark Green",
+        rgb: [0.13, 0.55, 0.13],
+        action: ActiveBarAction::NetColorDarkGreen,
+    },
+];
+
+fn rgb([r, g, b]: [f32; 3]) -> Color {
+    Color::from_rgb(r, g, b)
+}
+
+/// NetColor menu: seven colour swatch rows, then the Custom / Clear rows.
+/// Every row is an ordinary item, so the swatches and the icons share the
+/// widget's one icon column and every label starts at the same x. The
+/// Clear rows grey out when no net carries a custom colour
+/// (`requires_net_color`).
 pub(super) fn net_color_entries(
     i18n: &signex_i18n::I18n,
-    tokens: &ThemeTokens,
     tid: ThemeId,
     sel: bool,
     nc: bool,
 ) -> Vec<DropdownEntry<ActiveBarMsg>> {
-    let ac = AbColors::from_tokens(tokens);
-    // The row hovers like the widget's own item rows (ink wash, rounded).
-    let row_paint = RowPaint::of(tokens);
-    let color_item =
-        |label: &str, color: Color, action: ActiveBarAction| -> Element<'static, ActiveBarMsg> {
-            // The swatch sits inside a 20×20 slot so the label column
-            // lines up with the SVG-icon rows below (the shared dropdown
-            // widget uses a 20-px icon column).
-            let swatch = container(Space::new())
-                .width(graphite::SWATCH_SIZE)
-                .height(graphite::SWATCH_SIZE)
-                .style(graphite::swatch_style(tokens, color));
-            let swatch_slot = container(swatch)
-                .width(20)
-                .height(20)
-                .align_x(iced::alignment::Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center);
-            button(
-                row![
-                    swatch_slot,
-                    text(raw(label.to_string()))
-                        .size(TS.title)
-                        .color(ac.text)
-                        .wrapping(iced::widget::text::Wrapping::None),
-                ]
-                .spacing(SP.m)
-                .align_y(iced::Alignment::Center),
-            )
-            .width(iced::Length::Fill)
-            .padding([5.0, SP.l])
-            .on_press(ActiveBarMsg::Action(action))
-            .style(dd_btn_style_f(ac.text, row_paint))
-            .boxed()
-        };
-    vec![
-        DropdownEntry::Custom(color_item(
-            "Blue",
-            Color::from_rgb(0.40, 0.40, 0.93),
-            ActiveBarAction::NetColorBlue,
-        )),
-        DropdownEntry::Custom(color_item(
-            "Light Green",
-            Color::from_rgb(0.40, 0.93, 0.40),
-            ActiveBarAction::NetColorLightGreen,
-        )),
-        DropdownEntry::Custom(color_item(
-            "Light Blue",
-            Color::from_rgb(0.40, 0.80, 0.93),
-            ActiveBarAction::NetColorLightBlue,
-        )),
-        DropdownEntry::Custom(color_item(
-            "Red",
-            Color::from_rgb(0.93, 0.30, 0.30),
-            ActiveBarAction::NetColorRed,
-        )),
-        DropdownEntry::Custom(color_item(
-            "Fuchsia",
-            Color::from_rgb(0.80, 0.30, 0.80),
-            ActiveBarAction::NetColorFuchsia,
-        )),
-        DropdownEntry::Custom(color_item(
-            "Yellow",
-            Color::from_rgb(0.93, 0.80, 0.20),
-            ActiveBarAction::NetColorYellow,
-        )),
-        DropdownEntry::Custom(color_item(
-            "Dark Green",
-            Color::from_rgb(0.13, 0.55, 0.13),
-            ActiveBarAction::NetColorDarkGreen,
-        )),
+    let mut entries: Vec<DropdownEntry<ActiveBarMsg>> = NET_COLOR_SWATCHES
+        .into_iter()
+        .map(|s| dd_swatch(i18n, rgb(s.rgb), s.label, s.action, sel, nc))
+        .collect();
+    entries.extend([
         DropdownEntry::Separator,
         dd_item(
             i18n,
@@ -126,7 +107,8 @@ pub(super) fn net_color_entries(
             sel,
             nc,
         ),
-    ]
+    ]);
+    entries
 }
 
 /// One category chip of a Selection Filter dropdown. `msg: None` draws it

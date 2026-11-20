@@ -70,13 +70,14 @@ pub(crate) mod form_look;
 pub(crate) mod graphite;
 mod library;
 mod messages;
-mod messages_row;
+pub(crate) mod messages_row;
 mod multi_selection;
 mod navigator;
 mod net_class_panel;
 mod net_class_table;
 pub mod net_inspector;
 mod numeric_draft;
+pub mod paired;
 mod palette;
 mod paper;
 pub mod pcb_board_properties;
@@ -102,7 +103,7 @@ pub(crate) use element_properties::{
 };
 pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
-    FootprintCards,
+    FootprintCards, NoErcRuleEdit,
 };
 use element_properties::{
     view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
@@ -117,7 +118,8 @@ pub use numeric_draft::{
     shown_text as numeric_shown_text,
 };
 pub use properties_parameters::{
-    PaperEdge, PaperEdgeDraft, TitleBlockDraft, TitleBlockField, typed_mm,
+    BuiltinParameter, PaperEdge, PaperEdgeDraft, SheetVariableMsg, TitleBlockDraft,
+    TitleBlockField, shown_title_block_value, typed_mm,
 };
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,

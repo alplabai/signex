@@ -58,7 +58,13 @@ fn macos_moves_exactly_the_approved_standard_set() {
         (
             "altium",
             18,
-            vec!["\u{2325}\u{2318}F", "\u{21e7}\u{2318}Z", "\u{2318}W"],
+            vec![
+                "\u{2325}I",
+                "\u{2325}\u{2318}F",
+                "\u{21e7}\u{2318}Z",
+                "\u{2318}W",
+                "\u{21e7}TAB",
+            ],
         ),
         ("classic", 22, vec!["\u{21e7}\u{2318}Z"]),
     ] {
@@ -193,4 +199,59 @@ fn multi_binding_hints_keep_the_order_they_had_on_trunk() {
         // `Q` on a board gave cycle_unit its second (#2406).
         assert_eq!(multi.len(), 5, "{id}: {multi:?}");
     }
+}
+
+/// A Mac keyboard has no Insert key: on macOS the Altium profile also binds
+/// ⌥I to add vertex, after Insert, so the menu hint there is ⌥I. Windows and
+/// Linux keep Insert alone (`docs/DECISIONS.md`, the 2026-11-19 row on the
+/// Altium profile's macOS bindings).
+#[test]
+fn altium_on_macos_adds_a_vertex_on_option_i() {
+    let option_i = [KeyStroke::from_str("Alt+I").unwrap()];
+    let insert = [KeyStroke::from_str("INS").unwrap()];
+    let command = |platform, strokes: &[KeyStroke]| {
+        compiled(platform, "altium")
+            .lookup(strokes, &[ShortcutContext::Global])
+            .command
+            .map(|c| c.as_str().to_string())
+    };
+    let add_vertex = Some("copy_attributes_or_add_vertex".to_string());
+    assert_eq!(command(Platform::MacOs, &option_i), add_vertex);
+    assert_eq!(command(Platform::MacOs, &insert), add_vertex);
+    for platform in [Platform::Windows, Platform::Linux] {
+        assert_eq!(command(platform, &option_i), None, "{platform:?}");
+        assert_eq!(command(platform, &insert), add_vertex, "{platform:?}");
+    }
+    assert_eq!(
+        compiled(Platform::MacOs, "altium").shortcut_label_for_id("copy_attributes_or_add_vertex"),
+        "\u{2325}I"
+    );
+}
+
+/// macOS takes ⌃Space for the input source once two exist, so on macOS the
+/// Altium profile also cycles the drag wiring mode on ⇧Tab, after ⌃Space, so
+/// the menu hint there is ⇧Tab. Windows and Linux keep Ctrl+Space alone
+/// (`docs/DECISIONS.md`, the 2026-11-19 row on the Altium profile's macOS
+/// bindings).
+#[test]
+fn altium_on_macos_cycles_the_wiring_mode_on_shift_tab() {
+    let shift_tab = [KeyStroke::from_str("Shift+TAB").unwrap()];
+    let ctrl_space = [KeyStroke::from_str("Ctrl+SPACE").unwrap()];
+    let command = |platform, strokes: &[KeyStroke]| {
+        compiled(platform, "altium")
+            .lookup(strokes, &[ShortcutContext::Global])
+            .command
+            .map(|c| c.as_str().to_string())
+    };
+    let cycle = Some("cycle_wiring_mode".to_string());
+    assert_eq!(command(Platform::MacOs, &shift_tab), cycle);
+    assert_eq!(command(Platform::MacOs, &ctrl_space), cycle);
+    for platform in [Platform::Windows, Platform::Linux] {
+        assert_eq!(command(platform, &shift_tab), None, "{platform:?}");
+        assert_eq!(command(platform, &ctrl_space), cycle, "{platform:?}");
+    }
+    assert_eq!(
+        compiled(Platform::MacOs, "altium").shortcut_label_for_id("cycle_wiring_mode"),
+        shift_tab[0].display_for(Platform::MacOs)
+    );
 }

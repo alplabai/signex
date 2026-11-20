@@ -1,0 +1,108 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "h616-ddr3",
+  "net_classes": [
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "DDR3_ADDR",
+      "patterns": [
+        "/DRAM/SA*"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.08,
+      "diff_pair_width": 0.08,
+      "name": "DDR3_DATA_HB",
+      "patterns": [
+        "/DRAM/DQ[1]|[0-9]",
+        "/DRAM/DQ[8-9]"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "DDR3_DATA_LB",
+      "patterns": [
+        "/DRAM/DQ[0-7]"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.2,
+      "diff_pair_width": 0.093,
+      "name": "DDR3_DIFF",
+      "patterns": [
+        "/DRAM/SCK?",
+        "/DRAM/SDQS*"
+      ],
+      "trace_width": 0.25,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.08,
+      "diff_pair_width": 0.08,
+      "name": "DDR3_OTHER",
+      "patterns": [
+        "/DRAM/SBA*",
+        "/DRAM/SCKE*",
+        "/DRAM/SR*",
+        "/DRAM/SCAS",
+        "/DRAM/SCS*",
+        "/DRAM/SWE",
+        "/DRAM/SODT*",
+        "/DRAM/SDQM*"
+      ],
+      "trace_width": 0.0975,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.08,
+      "diff_pair_width": 0.08,
+      "name": "USB",
+      "patterns": [
+        "*D+*",
+        "*D-*"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.08,
+      "diff_pair_width": 0.08,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.35,
+      "via_drill": 0.15
+    }
+  ],
+  "pcb_file": "h616-ddr3.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

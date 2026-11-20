@@ -45,6 +45,19 @@ mod tests {
 }'
 run_case test_file pass place_tests.rs 'fn t() { Uuid::now_v7(); }'
 run_case clean pass lib.rs 'fn f(ids: &mut dyn IdSource) { ids.next_id(); }'
+# A listed helper mints for whoever calls it: a new caller grows its count.
+run_case helper_new_caller fail transform/autoplace.rs 'fn junction_at() { Uuid::now_v7(); }
+fn other() { junction_at(); }' 'transform/autoplace.rs:junction_at'
+run_case helper_counted_caller pass transform/autoplace.rs 'fn junction_at() { Uuid::now_v7(); }
+fn other() { junction_at(); }' 'transform/autoplace.rs:junction_at 1'
+run_case helper_fn_pointer fail transform/autoplace.rs 'fn junction_at() { Uuid::now_v7(); }
+fn other() { xs.map(super::autoplace::junction_at) }' 'transform/autoplace.rs:junction_at'
+run_case helper_count_stale fail transform/autoplace.rs 'fn junction_at() { Uuid::now_v7(); }' 'transform/autoplace.rs:junction_at 1'
+run_case helper_caller_in_test pass transform/autoplace.rs 'fn junction_at() { Uuid::now_v7(); }
+#[cfg(test)]
+mod tests {
+    fn t() { junction_at(); }
+}' 'transform/autoplace.rs:junction_at'
 
 # A tree without the engine crate is an error, never a pass.
 mkdir -p "$TMP/no_engine"

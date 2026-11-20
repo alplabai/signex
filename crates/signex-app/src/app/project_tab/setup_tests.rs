@@ -40,14 +40,17 @@ fn a_profile_and_a_clearance_are_stored_as_a_project_edit() {
     let on_disk = std::fs::read(&project_path).ok();
     assert!(!project_dirty(&app));
 
-    edit(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hobby));
+    edit(
+        &mut app,
+        NewProjectMsg::ProfilePicked(SetupProfile::Advanced),
+    );
     edit(
         &mut app,
         NewProjectMsg::RuleEdited(PcbField::Clearance, "0.12".into()),
     );
 
     let stored = &app.document_state.projects[0].data.project_defaults;
-    assert_eq!(stored.pcb.as_ref().map(|p| p.copper_layers), Some(2));
+    assert_eq!(stored.pcb.as_ref().map(|p| p.copper_layers), Some(6));
     assert_eq!(stored.pcb.as_ref().map(|p| p.clearance_mm), Some(0.12));
     assert!(project_dirty(&app), "the .snxprj is dirty");
     assert_eq!(
@@ -62,7 +65,7 @@ fn undo_and_a_bad_value_leave_the_stored_defaults_unchanged() {
     let mut app = app();
     edit(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
     let after_pick = app.document_state.projects[0].data.project_defaults.clone();
-    assert_eq!(after_pick.pcb.as_ref().map(|p| p.copper_layers), Some(6));
+    assert_eq!(after_pick.pcb.as_ref().map(|p| p.copper_layers), Some(8));
 
     // A value that does not parse stays a draft with its reason.
     edit(
@@ -96,7 +99,10 @@ fn the_section_builds_from_the_stored_values() {
 #[test]
 fn each_pick_is_its_own_undo_step() {
     let mut app = app();
-    edit(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hobby));
+    edit(
+        &mut app,
+        NewProjectMsg::ProfilePicked(SetupProfile::Advanced),
+    );
     edit(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hdi));
     let id = app.document_state.projects[0].id;
     assert!(app.step_project_tab_history(id, true));
@@ -107,8 +113,8 @@ fn each_pick_is_its_own_undo_step() {
         .clone();
     assert_eq!(
         pcb.map(|p| p.copper_layers),
-        Some(2),
-        "Ctrl+Z returns Hobby"
+        Some(6),
+        "Ctrl+Z returns Advanced"
     );
 }
 
@@ -172,17 +178,20 @@ fn a_pick_is_stored_while_a_rule_field_holds_a_bad_value() {
 #[test]
 fn rules_the_loader_would_refuse_are_not_stored() {
     let mut app = app();
-    edit(&mut app, NewProjectMsg::ProfilePicked(SetupProfile::Hobby));
+    edit(
+        &mut app,
+        NewProjectMsg::ProfilePicked(SetupProfile::Advanced),
+    );
     let good = app.document_state.projects[0]
         .data
         .project_defaults
         .pcb
         .clone();
-    // Each value is in range alone; together the drill (0.3) is not smaller
+    // Each value is in range alone; together the drill (0.2) is not smaller
     // than the via.
     edit(
         &mut app,
-        NewProjectMsg::RuleEdited(PcbField::ViaSize, "0.25".into()),
+        NewProjectMsg::RuleEdited(PcbField::ViaSize, "0.2".into()),
     );
     assert_eq!(
         app.document_state.projects[0].data.project_defaults.pcb, good,
@@ -320,4 +329,87 @@ fn re_picking_the_same_tier_restores_an_edited_fab_rule() {
         .dsl = Some(edited);
     edit(&mut app, NewProjectMsg::FabPicked(FabTemplate::Advanced));
     assert_eq!(rule_text(&app), seeded);
+}
+
+fn setup_draft_open(app: &Signex) -> bool {
+    let id = app.document_state.projects[0].id;
+    app.document_state
+        .project_tabs
+        .get(&id)
+        .is_some_and(|tab| tab.setup_draft.is_some())
+}
+
+/// #2536: Edit profile... in the Project tab edits the profile only. Opening
+/// it, typing in a field and Cancel leave the project as it was: same
+/// defaults, not dirty, and the section shows the project's values again.
+#[test]
+fn a_cancelled_profile_edit_leaves_the_project_unchanged() {
+    use crate::app::new_project::ProfileTarget;
+    let mut app = app();
+    let before = app.document_state.projects[0].data.project_defaults.clone();
+    for target in [
+        ProfileTarget::BuiltIn(SetupProfile::Advanced),
+        ProfileTarget::Saved(saved_profile(&mut app)),
+    ] {
+        edit(
+            &mut app,
+            NewProjectMsg::ProfileEditRequested(target.clone()),
+        );
+        edit(
+            &mut app,
+            NewProjectMsg::RuleEdited(PcbField::Clearance, "0.12".into()),
+        );
+        assert_eq!(
+            app.document_state.projects[0].data.project_defaults, before,
+            "{target:?}: opening and typing store nothing"
+        );
+        edit(&mut app, NewProjectMsg::ProfileEditCancelled);
+        assert_eq!(
+            app.document_state.projects[0].data.project_defaults, before,
+            "{target:?}"
+        );
+        assert!(!project_dirty(&app), "{target:?}: the project is not dirty");
+        assert!(
+            !setup_draft_open(&app),
+            "{target:?}: the project's values show"
+        );
+    }
+}
+
+/// #2536: Save of a profile edit changes the profile, not the project.
+#[test]
+fn a_saved_profile_edit_changes_the_profile_only() {
+    use crate::app::new_project::ProfileTarget;
+    let mut app = app();
+    let before = app.document_state.projects[0].data.project_defaults.clone();
+    edit(
+        &mut app,
+        NewProjectMsg::ProfileEditRequested(ProfileTarget::BuiltIn(SetupProfile::Advanced)),
+    );
+    edit(
+        &mut app,
+        NewProjectMsg::RuleEdited(PcbField::Clearance, "0.12".into()),
+    );
+    edit(&mut app, NewProjectMsg::ProfileEditSaved);
+    assert!(
+        app.ui_state
+            .setup_profiles
+            .iter()
+            .any(|p| p.edited && p.id == "advanced" && p.pcb.clearance_mm == 0.12),
+        "the built-in's override holds the edit"
+    );
+    assert_eq!(app.document_state.projects[0].data.project_defaults, before);
+    assert!(!project_dirty(&app), "the project is not dirty");
+    assert!(!setup_draft_open(&app), "the project's values show again");
+}
+
+fn saved_profile(app: &mut Signex) -> String {
+    let setup = signex_types::project::ProjectSetup::default();
+    signex_types::project::save_user_profile(
+        &mut app.ui_state.setup_profiles,
+        "Mine",
+        setup.pcb,
+        setup.sheet,
+        setup.designators,
+    )
 }

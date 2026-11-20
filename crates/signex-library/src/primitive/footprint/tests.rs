@@ -399,8 +399,8 @@ updated = "2026-05-04T00:00:00Z"
 footprints = []
 "#;
     match FootprintFile::from_toml_str(bad) {
-        Err(FootprintFileError::UnsupportedFormat { got }) => {
-            assert_eq!(got, "snxfpt/99");
+        Err(FootprintFileError::UnsupportedFormat(reason)) => {
+            assert_eq!(reason.found(), Some("snxfpt/99"));
         }
         other => panic!("expected UnsupportedFormat, got {other:?}"),
     }
