@@ -175,3 +175,34 @@ fn a_label_commit_writes_the_draft() {
     assert_eq!(st.multiplier, 10);
     assert!(st.preview_labels.editing_index().is_none());
 }
+
+/// Enter on a label holding text that is not a length is refused: the
+/// label stays open, the draft keeps its step, and the preview's note
+/// says why instead of the density note.
+#[test]
+fn a_label_holding_text_that_is_not_a_length_stays_open_with_a_note() {
+    let mut st = draft("0.001", 1, GridDisplay::Lines, GridDisplay::Hidden);
+    let send = |st: &mut GridPropertiesState, m| st.label_edited(m, en());
+    send(&mut st, DimensionLabelMessage::LabelPressed(0));
+    send(&mut st, DimensionLabelMessage::DraftEdited("abc".into()));
+    assert!(st.open_label_refused(en()));
+    send(&mut st, DimensionLabelMessage::DraftSubmitted);
+    assert_eq!(st.preview_labels.editing_index(), Some(0));
+    assert_eq!(st.preview_labels.draft(), Some("abc"));
+    assert_eq!(st.step_mm, "0.001");
+    let refused = en().message_plain(ids::DIALOG_GRID_LABEL_REFUSED, &[]);
+    let texts: Vec<String> = primitives(&st)
+        .into_iter()
+        .filter_map(|p| match p {
+            Primitive::Label(label) => Some(label.text.as_str().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, [refused]);
+
+    send(&mut st, DimensionLabelMessage::DraftEdited("0.2".into()));
+    assert!(!st.open_label_refused(en()));
+    send(&mut st, DimensionLabelMessage::DraftSubmitted);
+    assert!(st.preview_labels.editing_index().is_none());
+    assert_eq!(st.step_mm.parse::<f64>().ok(), Some(0.2));
+}

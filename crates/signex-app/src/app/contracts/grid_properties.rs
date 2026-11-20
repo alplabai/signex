@@ -70,17 +70,36 @@ impl GridPropertiesState {
         }
     }
 
-    /// Routes a preview label event: an Enter commits the typed value into
-    /// the draft. Returns whether a label field opened, so the caller
-    /// focuses it.
-    pub(crate) fn label_edited(&mut self, event: DimensionLabelMessage, i18n: &I18n) -> bool {
-        // The update reads each label's value and unit, not where it sits.
+    /// The preview labels as the label update reads them: each label's
+    /// value and unit, not where it sits.
+    fn update_labels<'a>(&self, i18n: &'a I18n) -> (Vec<PreviewLabel>, Vec<DimensionLabel<'a>>) {
         let format = LengthFormat::new(i18n, Unit::Mm);
-        let (kinds, labels): (Vec<_>, Vec<_>) = self
-            .preview_label_values()
+        self.preview_label_values()
             .into_iter()
             .map(|(kind, value)| (kind, DimensionLabel::new(value, format, Point::ORIGIN)))
-            .unzip();
+            .unzip()
+    }
+
+    /// Whether the open preview label holds text that is not a length.
+    /// OK, Enter and Tab are refused then: the label stays open, outlined
+    /// red, until its text is a length or Esc closes it.
+    pub(crate) fn open_label_refused(&self, i18n: &I18n) -> bool {
+        let (_, labels) = self.update_labels(i18n);
+        self.preview_labels.draft_refused(&labels)
+    }
+
+    /// Routes a preview label event: an Enter commits the typed value into
+    /// the draft, and is refused while the text is not a length. Returns
+    /// whether a label field opened, so the caller focuses it.
+    pub(crate) fn label_edited(&mut self, event: DimensionLabelMessage, i18n: &I18n) -> bool {
+        let (kinds, labels) = self.update_labels(i18n);
+        let commits = matches!(
+            event,
+            DimensionLabelMessage::DraftSubmitted | DimensionLabelMessage::TabPressed { .. }
+        );
+        if commits && self.preview_labels.draft_refused(&labels) {
+            return false;
+        }
         let outcome = self.preview_labels.update(event, &labels);
         if let Some(done) = outcome.committed
             && let Some(&kind) = kinds.get(done.index)

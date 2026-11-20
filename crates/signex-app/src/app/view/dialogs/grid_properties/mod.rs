@@ -5,7 +5,9 @@
 //! preview across the full dialog width ([`preview`]): the grids as they
 //! will draw and a pad for scale, with the step and the coarse spacing as
 //! labels the user can edit on the drawing (Enter commits, Esc closes the
-//! label) and an expand button for a taller drawing. Below it the form:
+//! label; text that is not a length is outlined red with a note, and Enter
+//! and OK wait until it is fixed) and an expand button for a taller
+//! drawing. Below it the form:
 //! Step, Multiplier (with the coarse spacing), Fine display and Coarse
 //! display. OK sends the shipped `GridPropertiesMsg::Apply`.
 
@@ -135,7 +137,7 @@ fn grid_preview<'a>(
     .map(|_| Message::noop());
     let labels: Vec<_> = preview::labels(st, size, i18n)
         .into_iter()
-        .map(|(_, label)| label)
+        .map(|(_, label)| label.refused_ink(ti(tokens.error)))
         .collect();
     let r = crate::styles::tokens::resolve(tokens);
     let style = DimensionLabelStyle {

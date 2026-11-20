@@ -163,6 +163,7 @@ dialog-grid-coarse-value = coarse = { $value }
 # Notes on the grid preview.
 dialog-grid-too-dense = Fine grid too dense to draw at this size
 dialog-grid-no-step = No grid: the step is not a number above zero
+dialog-grid-label-refused = Not a length: type a number in mm, or press Esc
 # Labels on the grid preview, before the value. $multiplier is 1, 2, 5 or 10.
 dialog-grid-preview-step = step
 dialog-grid-preview-coarse = { $multiplier }× =

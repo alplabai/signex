@@ -443,11 +443,16 @@ impl Signex {
             }
             GridPropertiesMsg::Apply => {
                 // A preview label still open commits its draft first, as
-                // Enter would, so OK never drops a typed value.
+                // Enter would, so OK never drops a typed value. Text that
+                // is not a length refuses OK: the dialog stays open with
+                // the label outlined red until it is fixed or Esc closes it.
                 let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                 if let Some(state) = self.ui_state.grid_properties.as_mut()
                     && state.preview_labels.editing_index().is_some()
                 {
+                    if state.open_label_refused(&i18n) {
+                        return self.finish_update();
+                    }
                     let _ = state.label_edited(
                         signex_widgets::dimension_label::DimensionLabelMessage::DraftSubmitted,
                         &i18n,

@@ -107,6 +107,7 @@ define_ids! {
     DIALOG_GRID_COARSE_VALUE = "dialog-grid-coarse-value";
     DIALOG_GRID_FOOTER = "dialog-grid-footer";
     DIALOG_GRID_TOO_DENSE = "dialog-grid-too-dense";
+    DIALOG_GRID_LABEL_REFUSED = "dialog-grid-label-refused";
     DIALOG_GRID_NO_STEP = "dialog-grid-no-step";
     DIALOG_GRID_PREVIEW_STEP = "dialog-grid-preview-step";
     DIALOG_GRID_PREVIEW_COARSE = "dialog-grid-preview-coarse";

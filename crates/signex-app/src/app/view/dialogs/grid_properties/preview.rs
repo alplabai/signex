@@ -221,7 +221,10 @@ pub(crate) fn illustration(
             Point::new(to, y),
         )));
     }
-    if s.fine_too_dense {
+    // One note: the refused label's reason outranks the density note.
+    if state.open_label_refused(i18n) {
+        parts.push(note(size, t!(i18n, ids::DIALOG_GRID_LABEL_REFUSED).into()));
+    } else if s.fine_too_dense {
         parts.push(note(size, t!(i18n, ids::DIALOG_GRID_TOO_DENSE).into()));
     }
     drawing.parts(parts)

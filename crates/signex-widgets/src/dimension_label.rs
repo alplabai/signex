@@ -150,6 +150,10 @@ pub struct DimensionLabel<'a> {
     pub anchor: LabelAnchor,
     pub handle: Option<DragHandle>,
     pub limits: ValueLimits,
+    /// Outline of the open field while its text is not a length in
+    /// `format` (see [`DimensionLabels::draft_refused`]); `None` keeps the
+    /// ink outline.
+    pub refused_ink: Option<Color>,
 }
 
 impl<'a> DimensionLabel<'a> {
@@ -165,7 +169,13 @@ impl<'a> DimensionLabel<'a> {
             anchor: LabelAnchor::Middle,
             handle: None,
             limits: ValueLimits::default(),
+            refused_ink: None,
         }
+    }
+
+    pub fn refused_ink(mut self, color: Color) -> Self {
+        self.refused_ink = Some(color);
+        self
     }
 
     pub fn caption(mut self, caption: impl Into<Label<'a>>) -> Self {
@@ -276,6 +286,13 @@ struct Editing {
     opened: String,
 }
 
+impl Editing {
+    /// The draft was changed into text `label` does not read as a length.
+    fn refused_by(&self, label: &DimensionLabel<'_>) -> bool {
+        self.draft.trim() != self.opened.trim() && label.format.parse(&self.draft).is_none()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Drag {
     index: usize,
@@ -312,6 +329,16 @@ impl DimensionLabels {
     /// The text in the open field.
     pub fn draft(&self) -> Option<&str> {
         self.editing.as_ref().map(|e| e.draft.as_str())
+    }
+
+    /// Whether the open field holds text its label does not read as a
+    /// length. The text the field opened with is never refused.
+    pub fn draft_refused(&self, labels: &[DimensionLabel<'_>]) -> bool {
+        self.editing.as_ref().is_some_and(|editing| {
+            labels
+                .get(editing.index)
+                .is_some_and(|label| editing.refused_by(label))
+        })
     }
 
     /// Index of the label whose handle is held.
@@ -500,9 +527,7 @@ impl DimensionLabels {
         }
         for (index, label) in labels.iter().enumerate() {
             let body = match &self.editing {
-                Some(editing) if editing.index == index => {
-                    self.field_view(index, label, &editing.draft, style)
-                }
+                Some(editing) if editing.index == index => self.field_view(editing, label, style),
                 _ => tag_view(index, label, style),
             };
             layers.push(body);
@@ -521,11 +546,15 @@ impl DimensionLabels {
 
     fn field_view<'a>(
         &'a self,
-        index: usize,
+        editing: &'a Editing,
         label: &DimensionLabel<'a>,
-        draft: &'a str,
         style: DimensionLabelStyle,
     ) -> Element<'a, DimensionLabelMessage> {
+        let index = editing.index;
+        let outline = label
+            .refused_ink
+            .filter(|_| editing.refused_by(label))
+            .unwrap_or(style.ink);
         let size = style.text_size;
         let tag = label.bounds(size);
         let width = tag.width.max(FIELD_MIN_EM * size);
@@ -535,7 +564,7 @@ impl DimensionLabels {
             LabelAnchor::End => tag.x + tag.width - width,
         };
         let s = style;
-        let field = text_input(UserText::new(String::new()), draft)
+        let field = text_input(UserText::new(String::new()), &editing.draft)
             .id(self.input_id.clone())
             .on_input(DimensionLabelMessage::DraftEdited)
             .on_submit(DimensionLabelMessage::DraftSubmitted)
@@ -547,7 +576,7 @@ impl DimensionLabels {
             .style(move |_: &Theme, _| text_input::Style {
                 background: Background::Color(s.field),
                 border: Border {
-                    color: s.ink,
+                    color: outline,
                     width: 1.0,
                     radius: (RADIUS_EM * s.text_size).into(),
                     ..Border::default()
@@ -754,6 +783,23 @@ mod tests {
         assert_eq!(typed(1, "abc"), None);
         assert_eq!(typed(1, "inf"), None);
         assert_eq!(typed(1, ""), None);
+    }
+
+    /// Text that is not a length is refused while the field is open; the
+    /// text it opened with and a number are not.
+    #[test]
+    fn a_draft_that_is_not_a_length_is_refused() {
+        let items = labels();
+        let mut s = DimensionLabels::default();
+        assert!(!s.draft_refused(&items), "no field open");
+        s.update(DimensionLabelMessage::LabelPressed(1), &items);
+        assert!(!s.draft_refused(&items), "the opening text");
+        for junk in ["abc", "", "inf"] {
+            s.update(DimensionLabelMessage::DraftEdited(junk.into()), &items);
+            assert!(s.draft_refused(&items), "{junk:?}");
+        }
+        s.update(DimensionLabelMessage::DraftEdited("0.25".into()), &items);
+        assert!(!s.draft_refused(&items));
     }
 
     #[test]
