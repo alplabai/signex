@@ -197,7 +197,7 @@ fn the_picker_filter_matches_a_row_description() {
 }
 
 /// The header's scope note counts every listed part and the libraries they
-/// come from, whatever the query (#129).
+/// come from, whatever the query (mockup row 129).
 #[test]
 fn the_scope_counts_follow_the_component_set_not_the_query() {
     let mut state = state_with_picker();

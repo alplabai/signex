@@ -51,7 +51,7 @@ fn the_dialog_draws_in_every_theme_from_tokens_alone() {
     }
 }
 
-/// #134: the library list is as tall as its rows, then scrolls.
+/// Mockup row 134: the library list is as tall as its rows, then scrolls.
 #[test]
 fn the_library_list_follows_its_rows_up_to_the_cap() {
     assert!(list_height(1) < list_height(2));
@@ -62,8 +62,9 @@ fn the_library_list_follows_its_rows_up_to_the_cap() {
     );
 }
 
-/// #134: a click on a library row copies into it at once; there is no
-/// separate select step (one-click copy is kept until m134 is decided).
+/// Mockup row 134: a click on a library row copies into it at once; there
+/// is no separate select step (one-click copy is kept until mockup row 134
+/// is decided).
 #[test]
 fn a_library_row_click_copies_into_that_library_at_once() {
     let root = Path::new("/libs/mine/Mine.snxlib");
@@ -75,7 +76,7 @@ fn a_library_row_click_copies_into_that_library_at_once() {
     }
 }
 
-/// #134: the intro reads as the dialog's mockup words it.
+/// Mockup row 134: the intro reads as the dialog's mockup words it.
 #[test]
 fn the_intro_names_the_primitive_and_says_the_stock_stays() {
     let i18n = signex_i18n::I18n::en_us();

@@ -1,4 +1,4 @@
-//! Delete Component confirm (#137): launched from the Library Browser
+//! Delete Component confirm (mockup row 137): launched from the Library Browser
 //! action row's Delete Selected button. The header's close runs the same
 //! Cancel as the footer.
 

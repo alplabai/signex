@@ -1,8 +1,8 @@
-//! The Parameters column of the Edit Component modal (#130): the section
-//! header with "+ Add Parameter", the missing-template-slot offer, and a
-//! boxed dense table Key | Value | Unit | ✕. Template rows carry a
+//! The Parameters column of the Edit Component modal (mockup row 130): the
+//! section header with "+ Add Parameter", the missing-template-slot offer,
+//! and a boxed dense table Key | Value | Unit | ✕. Template rows carry a
 //! "template" pill and no ✕; a measurement's number and its prefix picker
-//! are one measurement slot (#139).
+//! are one measurement slot (mockup row 139).
 
 use iced::widget::{Column, Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};

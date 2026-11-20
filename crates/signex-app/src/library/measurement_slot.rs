@@ -1,4 +1,4 @@
-//! The measurement slot (#139): a mono number field and its prefix / unit
+//! The measurement slot (mockup row 139): a mono number field and its prefix / unit
 //! picker drawn as one control. The two share one border; the picker is
 //! the right segment behind a hairline divider, and only the outer corners
 //! are rounded. Without a picker the field keeps all four corners.

@@ -133,7 +133,7 @@ fn a_short_name_leaves_the_close_and_delete_windows_at_their_base_height() {
         dirty_paths: vec!["l.snxlib".into()],
     };
     // Written out on its own, not through the sizing code: the fixed window
-    // with its longest list swapped for a one-draft list (#136), the note
+    // with its longest list swapped for a one-draft list (mockup row 136), the note
     // line naming the library, and what Graphite adds (the intro title and
     // the dense footer). A short name wraps nothing, so nothing more.
     let fixed = crate::app::handlers::erc::modal_size(ModalId::LibraryCloseConfirm).height;
@@ -169,7 +169,7 @@ fn a_long_component_label_keeps_the_copy_to_library_footer_in_its_window() {
     }
 }
 
-/// #136: the Close Library list is as tall as its drafts until it scrolls,
+/// Mockup row 136: the Close Library list is as tall as its drafts until it scrolls,
 /// so the window grows with the draft count up to the cap, and the footer
 /// stays in the window.
 #[test]
@@ -211,7 +211,7 @@ fn the_close_library_window_follows_its_drafts_up_to_the_list_cap() {
     }
 }
 
-/// #138: every recovery case (a failed re-init and a known remote included)
+/// Mockup row 138: every recovery case (a failed re-init and a known remote included)
 /// keeps its footer in its window.
 #[test]
 fn every_recovery_case_keeps_its_footer_in_its_window() {

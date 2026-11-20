@@ -48,16 +48,16 @@ define_ids! {
     LIBRARY_DISTRIBUTOR_OTHER = "library-distributor-other";
     LIBRARY_ORDER_HELP = "library-order-help";
     LIBRARY_ORDER_SAVE_FAILED = "library-order-save-failed";
-    // Copy to Library (#134)
+    // Copy to Library (mockup row 134)
     LIBRARY_STOCK_COPY_INTRO_TITLE = "library-stock-copy-intro-title";
     LIBRARY_STOCK_COPY_INTRO_TEXT = "library-stock-copy-intro-text";
     LIBRARY_STOCK_COPY_NOT_WRITABLE = "library-stock-copy-not-writable";
-    // Close Library (#136)
+    // Close Library (mockup row 136)
     LIBRARY_CLOSE_INTRO_TITLE = "library-close-intro-title";
     LIBRARY_CLOSE_INTRO_TEXT = "library-close-intro-text";
     LIBRARY_CLOSE_KIND_ROW = "library-close-kind-row";
     LIBRARY_CLOSE_KIND_FILE = "library-close-kind-file";
-    // Library recovery (#138)
+    // Library recovery (mockup row 138)
     LIBRARY_RECOVERY_SKIP_FOR_NOW = "library-recovery-skip-for-now";
     LIBRARY_RECOVERY_KEY_LIBRARY = "library-recovery-key-library";
     LIBRARY_RECOVERY_KEY_EXPECTED = "library-recovery-key-expected";
@@ -78,7 +78,7 @@ define_ids! {
     LIBRARY_RECOVERY_BINDING_INTRO_TITLE = "library-recovery-binding-intro-title";
     LIBRARY_RECOVERY_BINDING_INTRO_TEXT = "library-recovery-binding-intro-text";
     LIBRARY_RECOVERY_BINDING_CAPTION = "library-recovery-binding-caption";
-    // Edit Component (#130)
+    // Edit Component (mockup row 130)
     LIBRARY_EDIT_ROW_TITLE = "library-edit-row-title";
     LIBRARY_EDIT_ROW_NOTE = "library-edit-row-note";
     LIBRARY_EDIT_ROW_IDENTITY = "library-edit-row-identity";
@@ -126,7 +126,7 @@ define_ids! {
     LIBRARY_EDIT_ROW_ADD_SLOT_UNIT = "library-edit-row-add-slot-unit";
     LIBRARY_EDIT_ROW_SLOT_PROBLEM = "library-edit-row-slot-problem";
     LIBRARY_EDIT_ROW_UNIT_KEPT = "library-edit-row-unit-kept";
-    // Delete Component (#137)
+    // Delete Component (mockup row 137)
     LIBRARY_DELETE_ROW_TITLE = "library-delete-row-title";
     LIBRARY_DELETE_ROW_INTRO_TITLE = "library-delete-row-intro-title";
     LIBRARY_DELETE_ROW_INTRO = "library-delete-row-intro";
@@ -182,7 +182,7 @@ define_ids! {
     LIBRARY_CREATE_OPTIONS_LFS_HELP = "library-create-options-lfs-help";
     LIBRARY_CREATE_OPTIONS_RELOCATE = "library-create-options-relocate";
     LIBRARY_CREATE_OPTIONS_REFUSED_TIP = "library-create-options-refused-tip";
-    // Library Updates (#135)
+    // Library Updates (mockup row 135)
     LIBRARY_UPDATES_SUMMARY = "library-updates-summary";
     LIBRARY_UPDATES_COUNT_MAJOR = "library-updates-count-major";
     LIBRARY_UPDATES_COUNT_MINOR = "library-updates-count-minor";

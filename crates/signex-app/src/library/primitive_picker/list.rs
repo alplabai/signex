@@ -1,5 +1,5 @@
-//! The primitive picker's list (#131): every group and row, flattened for the
-//! virtualised view. Data only, no widgets, so it is cheap enough to build on
+//! The primitive picker's list (mockup row 131): every group and row,
+//! flattened for the virtualised view. Data only, no widgets, so it is cheap enough to build on
 //! every view; the view formats the labels of the rows in sight.
 
 use signex_library::{PrimitiveKind, PrimitiveRef, PrimitiveSummary};

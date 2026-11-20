@@ -1197,7 +1197,7 @@ fn apply_after_the_sheet_closed_keeps_the_pending_record() {
     assert!(app.library.skipped_updates_for.contains(&sheet));
 }
 
-/// #135: the scan shows each part's Internal PN, read with its row, and the
+/// Mockup row 135: the scan shows each part's Internal PN, read with its row, and the
 /// table's header checkbox ticks every row, then clears every row.
 #[test]
 fn the_header_checkbox_ticks_then_clears_every_update() {
