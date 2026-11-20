@@ -534,7 +534,7 @@ fn a_slot_the_row_holds_or_the_template_lacks_is_not_added() {
     );
 }
 
-// ─── #130: the Internal PN conflict (lib-07) ─────────────────────────
+// ─── mockup row 130: the Internal PN conflict (lib-07) ───────────────
 
 /// A second row holding `pn`, cached in `table` of the library at `root`.
 fn cache_row(app: &mut Signex, root: &Path, table: &str, pn: &str) {
@@ -655,6 +655,37 @@ fn a_pn_conflict_shows_under_the_field_and_in_the_footer_and_holds_save() {
     assert!(clicked.is_empty(), "Save waits: {clicked:?}");
 }
 
+/// Save sent through update while another row holds the draft's Internal
+/// PN is refused there too, not only by the disabled button: no save
+/// starts and the stored row is unchanged.
+#[test]
+fn save_with_a_conflicting_pn_through_update_writes_nothing() {
+    use signex_library::LibraryAdapter as _;
+
+    let (mut app, root, row_id) = app_with_browser();
+    cache_row(&mut app, &root, "C", "C-1");
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(&root, BrowserEditMsg::SetInternalPn("C-1".into())));
+    let task = app.update(edit(&root, BrowserEditMsg::Save));
+    run_write(&mut app, task);
+
+    let modal = app.library.library_browsers[&root]
+        .edit_modal
+        .as_ref()
+        .expect("the modal stays open");
+    assert!(modal.saving.is_none(), "no save started");
+    assert_eq!(modal.draft.internal_pn.as_str(), "C-1", "the draft is kept");
+    let library_id = app.library.library_at(&root).expect("library").library_id;
+    let written = app
+        .library
+        .set
+        .get(library_id)
+        .expect("adapter")
+        .read_row(TABLE, row_id)
+        .expect("the row");
+    assert_eq!(written.internal_pn.as_str(), "R-1500", "nothing is written");
+}
+
 #[test]
 fn a_failed_save_shows_in_the_footer_summary() {
     let (mut app, root, row_id) = app_with_browser();
@@ -703,7 +734,7 @@ fn template_rows_have_a_pill_and_no_remove_and_custom_rows_keep_it() {
     );
 }
 
-// ─── #137: the delete-row confirm ────────────────────────────────────
+// ─── mockup row 137: the delete-row confirm ──────────────────────────
 
 #[test]
 fn the_delete_confirm_names_the_row_and_its_close_cancels() {

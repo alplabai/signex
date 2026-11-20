@@ -1,9 +1,9 @@
-//! Edit Component modal (#130): the row editor the Library Browser's "Edit
-//! Details" opens. Identity and bindings on the left, the parameters on the
-//! right; Save waits while the draft has a problem (lib-07: an inline field
-//! error plus a footer summary).
+//! Edit Component modal (mockup row 130): the row editor the Library
+//! Browser's "Edit Details" opens. Identity and bindings on the left, the
+//! parameters on the right; Save waits while the draft has a problem (lib-07:
+//! an inline field error plus a footer summary). Update refuses that Save too.
 //!
-//! The delete-row confirm (#137) lives here too, in `delete_confirm`.
+//! The delete-row confirm (mockup row 137) lives here too, in `delete_confirm`.
 
 mod bindings;
 mod checks;
