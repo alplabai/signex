@@ -100,7 +100,12 @@ impl Signex {
                 None
             }
             DrcPanelMsg::Unwaived(key) => self.set_drc_waiver(&path, &key, None).err(),
-            view_event => {
+            view_event @ (DrcPanelMsg::TileToggled(_)
+            | DrcPanelMsg::TileCleared
+            | DrcPanelMsg::GroupToggled(_)
+            | DrcPanelMsg::BaseRulesToggled
+            | DrcPanelMsg::RowEntered(_)
+            | DrcPanelMsg::RowLeft(_)) => {
                 apply_drc_view(&mut self.ui_state.validation_panels.drc, view_event);
                 None
             }
@@ -468,10 +473,24 @@ fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
         }
         DrcPanelMsg::BaseRulesToggled => view.base_rules_closed = !view.base_rules_closed,
         DrcPanelMsg::RowEntered(key) => view.hovered = Some(key),
-        DrcPanelMsg::RowLeft(key) if view.hovered.as_deref() == Some(key.as_str()) => {
-            view.hovered = None;
+        DrcPanelMsg::RowLeft(key) => {
+            if view.hovered.as_deref() == Some(key.as_str()) {
+                view.hovered = None;
+            }
         }
-        _ => {}
+        // Not view state: `handle_drc_panel` routes these itself.
+        DrcPanelMsg::RowPicked(_)
+        | DrcPanelMsg::FilterPicked(_)
+        | DrcPanelMsg::WaivedShownToggled(_)
+        | DrcPanelMsg::RuleOpened(_)
+        | DrcPanelMsg::BaseRuleOpened(_)
+        | DrcPanelMsg::MessagesShown
+        | DrcPanelMsg::WaiveStarted(_)
+        | DrcPanelMsg::ReasonActed(_)
+        | DrcPanelMsg::AuthorEdited(_)
+        | DrcPanelMsg::WaiveConfirmed
+        | DrcPanelMsg::WaiveCancelled
+        | DrcPanelMsg::Unwaived(_) => {}
     }
 }
 
