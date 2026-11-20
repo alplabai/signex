@@ -69,6 +69,7 @@ pub fn overlay_link<'a>(
                     radius: crate::styles::Radii::GRAPHITE.small.into(),
                     width: 1.0,
                     color: rim,
+                    ..Border::default()
                 },
                 ..button_widget::Style::default()
             }

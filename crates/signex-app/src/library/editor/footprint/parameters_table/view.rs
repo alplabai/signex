@@ -522,12 +522,14 @@ fn autocomplete<'a>(
             line = line.push(
                 text(t!(i18n, ids::SKETCH_PARAMETERS_VALUE, "value" => value))
                     .size(TS.caption)
-                    .color(look.muted),
+                    .color(look.muted)
+                    .boxed(),
             );
             line = line.push(
                 text(t!(i18n, unit_id(unit)))
                     .size(TS.caption)
-                    .color(look.muted),
+                    .color(look.muted)
+                    .boxed(),
             );
         }
         list = list.push(
@@ -538,10 +540,11 @@ fn autocomplete<'a>(
                 .on_press(send.msg(SketchParametersMsg::ExpressionEdited {
                     name: row.name.clone(),
                     expr: suggestion.completed.clone(),
-                })),
+                }))
+                .boxed(),
         );
     }
-    popup(list, tokens)
+    popup(list.boxed(), tokens)
 }
 
 fn unit_id(unit: DisplayUnit) -> signex_i18n::MessageId {
@@ -578,7 +581,7 @@ fn row_menu<'a>(
         ),
     ]
     .spacing(SP.s);
-    container(popup(menu, tokens))
+    container(popup(menu.boxed(), tokens))
         .width(Length::Fill)
         .align_x(iced::alignment::Horizontal::Right)
         .boxed()
@@ -618,7 +621,7 @@ fn delete_prompt<'a>(
         .spacing(SP.s),
     ]
     .spacing(SP.s);
-    popup(prompt, tokens)
+    popup(prompt.boxed(), tokens)
 }
 
 fn footer<'a>(
@@ -647,7 +650,7 @@ fn caption<'a>(label: impl Into<Label<'a>>, color: Color) -> Element<'a, Library
 
 /// A raised card inside the table: the autocomplete, row menu or prompt.
 fn popup<'a>(
-    content: impl Into<Element<'a, LibraryMessage>>,
+    content: Element<'a, LibraryMessage>,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let r = crate::styles::tokens::resolve(tokens);
