@@ -24,10 +24,11 @@ use signex_widgets::{Label, LengthFormat, SegmentedStyle, segmented, text, text_
 
 use super::*;
 use crate::app::GridPropertiesState;
+use crate::app::contracts::grid_properties::MULTIPLIERS;
 use crate::app::state::ModalId;
 use crate::library::editor::footprint::GridDisplay;
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split, ti};
-use preview::{MULTIPLIERS, PreviewSize};
+use preview::PreviewSize;
 
 /// Default type / spacing scales.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -348,7 +349,7 @@ pub(crate) fn coarse_caption(
     st: &GridPropertiesState,
     i18n: &I18n,
 ) -> Option<signex_i18n::Localized> {
-    let step = preview::draft_step(st)?;
+    let step = st.draft_step()?;
     let coarse = step * f64::from(st.multiplier.max(1));
     let value = LengthFormat::new(i18n, Unit::Mm).number(coarse);
     Some(t!(i18n, ids::DIALOG_GRID_COARSE_VALUE, "value" => value))

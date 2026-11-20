@@ -148,11 +148,12 @@ fn the_labels_follow_the_grids() {
 
 #[test]
 fn the_nearest_multiplier_keeps_the_smaller_on_a_tie() {
-    assert_eq!(preview::nearest_multiplier(0.2), 1);
-    assert_eq!(preview::nearest_multiplier(4.0), 5);
-    assert_eq!(preview::nearest_multiplier(3.5), 2);
-    assert_eq!(preview::nearest_multiplier(7.5), 5);
-    assert_eq!(preview::nearest_multiplier(100.0), 10);
+    use crate::app::contracts::grid_properties::nearest_multiplier;
+    assert_eq!(nearest_multiplier(0.2), 1);
+    assert_eq!(nearest_multiplier(4.0), 5);
+    assert_eq!(nearest_multiplier(3.5), 2);
+    assert_eq!(nearest_multiplier(7.5), 5);
+    assert_eq!(nearest_multiplier(100.0), 10);
 }
 
 /// Enter on the step label writes the step field; on the coarse label it
@@ -160,7 +161,7 @@ fn the_nearest_multiplier_keeps_the_smaller_on_a_tie() {
 #[test]
 fn a_label_commit_writes_the_draft() {
     let mut st = draft("0.127", 5, GridDisplay::Dots, GridDisplay::Lines);
-    let send = |st: &mut GridPropertiesState, m| preview::label_edited(st, m, en());
+    let send = |st: &mut GridPropertiesState, m| st.label_edited(m, en());
     assert!(send(&mut st, DimensionLabelMessage::LabelPressed(0)));
     send(&mut st, DimensionLabelMessage::DraftEdited("0.2".into()));
     send(&mut st, DimensionLabelMessage::DraftSubmitted);

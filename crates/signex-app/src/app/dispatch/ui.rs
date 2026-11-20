@@ -406,11 +406,10 @@ impl Signex {
                 self.finish_update()
             }
             GridPropertiesMsg::PreviewLabelEdited(event) => {
-                use crate::app::view::dialogs::grid_properties::preview;
                 let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
                 let focus = match self.ui_state.grid_properties.as_mut() {
                     Some(state) => {
-                        if preview::label_edited(state, event, &i18n) {
+                        if state.label_edited(event, &i18n) {
                             state.preview_labels.focus_input()
                         } else {
                             Task::none()
@@ -433,9 +432,7 @@ impl Signex {
                 if let Some(state) = self.ui_state.grid_properties.as_mut()
                     && state.preview_labels.editing_index().is_some()
                 {
-                    use crate::app::view::dialogs::grid_properties::preview;
-                    let _ = preview::label_edited(
-                        state,
+                    let _ = state.label_edited(
                         signex_widgets::dimension_label::DimensionLabelMessage::DraftSubmitted,
                         &i18n,
                     );

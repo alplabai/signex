@@ -10,19 +10,16 @@
 use iced::{Point, Rectangle, Size};
 use signex_i18n::{I18n, ids, t};
 use signex_types::coord::Unit;
-use signex_types::measure::length_field_text;
 use signex_widgets::LengthFormat;
-use signex_widgets::dimension_label::{DimensionLabel, DimensionLabelMessage, LabelAnchor};
+use signex_widgets::dimension_label::{DimensionLabel, LabelAnchor};
 use signex_widgets::property_illustration::{
     Anchor, Callout, Illustration, Ink, Paint, Part, Primitive, Style, TextLabel, TextRole, Tint,
     Weight,
 };
 
 use crate::app::GridPropertiesState;
+pub(crate) use crate::app::contracts::grid_properties::PreviewLabel;
 use crate::library::editor::footprint::GridDisplay;
-
-/// The multipliers the dialog offers, smallest first.
-pub(crate) const MULTIPLIERS: [u32; 4] = [1, 2, 5, 10];
 
 /// Preview height in body ems: about 200 px folded, taller expanded.
 pub(crate) const HEIGHT_EM: f32 = 16.5;
@@ -95,18 +92,6 @@ pub(crate) struct Scale {
     pub coarse_drawn: bool,
 }
 
-/// Which value a preview label edits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PreviewLabel {
-    Step,
-    Coarse,
-}
-
-/// The draft's step, when it is a number above zero.
-pub(crate) fn draft_step(state: &GridPropertiesState) -> Option<f64> {
-    crate::numeric_field::validated_grid_step(&state.step_mm).ok()
-}
-
 pub(crate) fn scale(state: &GridPropertiesState, step_mm: f64, size: PreviewSize) -> Scale {
     let multiplier = state.multiplier.max(1) as f32;
     let coarse_mm = step_mm as f32 * multiplier;
@@ -126,51 +111,6 @@ pub(crate) fn scale(state: &GridPropertiesState, step_mm: f64, size: PreviewSize
     }
 }
 
-/// The multiplier closest to `ratio` (coarse over step); a tie keeps the
-/// smaller one.
-pub(crate) fn nearest_multiplier(ratio: f64) -> u32 {
-    let mut best = MULTIPLIERS[0];
-    for m in MULTIPLIERS {
-        if (f64::from(m) - ratio).abs() < (f64::from(best) - ratio).abs() {
-            best = m;
-        }
-    }
-    best
-}
-
-/// Write a value the user set on a preview label into the draft: the step
-/// text, or the multiplier closest to the coarse spacing typed. The step
-/// is validated on OK, as one typed in the Step field.
-pub(crate) fn apply_label(state: &mut GridPropertiesState, label: PreviewLabel, value_mm: f64) {
-    match label {
-        PreviewLabel::Step => state.step_mm = length_field_text(value_mm, Unit::Mm),
-        PreviewLabel::Coarse => {
-            if let Some(step) = draft_step(state) {
-                state.multiplier = nearest_multiplier(value_mm / step);
-            }
-        }
-    }
-}
-
-/// Route a label event: an Enter commits the typed value into the draft.
-/// Returns whether a label field opened, so the caller focuses it.
-pub(crate) fn label_edited(
-    state: &mut GridPropertiesState,
-    event: DimensionLabelMessage,
-    i18n: &I18n,
-) -> bool {
-    // Positions do not matter to the update; the values and order do.
-    let size = PreviewSize::new(0.0, state.preview_expanded, 1.0);
-    let (kinds, labels): (Vec<_>, Vec<_>) = labels(state, size, i18n).into_iter().unzip();
-    let outcome = state.preview_labels.update(event, &labels);
-    if let Some(done) = outcome.committed
-        && let Some(&kind) = kinds.get(done.index)
-    {
-        apply_label(state, kind, done.value);
-    }
-    outcome.focus_input
-}
-
 /// The labels the preview shows, in order, placed for `size`. None while
 /// the step is not a number above zero; no coarse label while the coarse
 /// grid is hidden.
@@ -179,7 +119,7 @@ pub(crate) fn labels<'a>(
     size: PreviewSize,
     i18n: &'a I18n,
 ) -> Vec<(PreviewLabel, DimensionLabel<'a>)> {
-    let Some(step) = draft_step(state) else {
+    let Some(step) = state.draft_step() else {
         return Vec::new();
     };
     let s = scale(state, step, size);
@@ -257,7 +197,7 @@ pub(crate) fn illustration(
 ) -> Illustration {
     let drawing =
         Illustration::new(size.width, size.height).height_em(size.height / size.text_size);
-    let Some(step) = draft_step(state) else {
+    let Some(step) = state.draft_step() else {
         return drawing.part(note(size, t!(i18n, ids::DIALOG_GRID_NO_STEP).into()));
     };
     let s = scale(state, step, size);
