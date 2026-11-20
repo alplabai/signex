@@ -155,19 +155,35 @@ dialog-rename-file-prompt = Rename "{ $name }"
 dialog-version-control-project = Project: { $name }
 # $name is the library's name.
 dialog-version-control-library = Library: { $name }
-dialog-selection-filter-title = Selection Filter — Customize
+dialog-selection-filter-title = Selection Filter
 dialog-selection-filter-intro = Selectable kinds
+# Subtitle beside the title of the Custom Selection Filter dialog.
+dialog-selection-filter-subtitle = Customize
+# Buttons that turn every kind on or off.
+dialog-selection-filter-all = All
+dialog-selection-filter-none = None
+# Pill on a kind the canvas does not filter by yet.
+dialog-selection-filter-not-wired = not wired
+# Name the filter is saved under as a preset.
+dialog-selection-filter-preset-name = Preset name
+# Footer count. $count and $total are whole numbers.
+dialog-selection-filter-selectable = { $count } of { $total } selectable
+# Messages: Apply at the preset limit. $name is the typed preset name, $limit a whole number.
+dialog-selection-filter-preset-full = Filter applied; preset { $name } was not saved: the { $limit } preset slots are full.
+# Messages: Apply with the kinds of a preset that already exists. $name is that preset.
+dialog-selection-filter-preset-exists = Filter applied; no preset added: { $name } already holds these kinds.
 
 ## Move Selection
-# $count is how many objects are selected, a whole number. The English keeps
-# "item(s)" for every count.
-dialog-move-selection-count = { $count } item(s) selected
-# The offset along X and Y, in millimetres.
-dialog-move-selection-dx = ΔX (mm)
-dialog-move-selection-dy = ΔY (mm)
+# Header subtitle. $count is how many objects are selected, a whole number.
+dialog-move-selection-count = { $count ->
+    [one] { $count } item selected
+   *[other] { $count } items selected
+}
+# The offset along X and Y; the field shows the unit as a suffix.
+dialog-move-selection-dx = ΔX
+dialog-move-selection-dy = ΔY
 
 ## Net colours
-dialog-net-color-pick-title = Pick Net Color
 dialog-net-color-no-nets = No net labels on the active sheet.
 dialog-net-color-custom-rgb = Custom RGB
 # One letter per colour channel: red, green, blue.
@@ -175,6 +191,68 @@ dialog-net-color-channel-r = R
 dialog-net-color-channel-g = G
 dialog-net-color-channel-b = B
 dialog-net-color-quick-pick = Quick Pick
+
+## Parameter Manager
+# Window subtitle: the active sheet's file, its parts and parameter columns.
+dialog-parameter-manager-subtitle = { $sheet } · { $parts ->
+    [one] 1 part
+   *[other] { $parts } parts
+} · { $parameters ->
+    [one] 1 parameter
+   *[other] { $parameters } parameters
+}
+# Beside the filter box: the fields the filter searches.
+dialog-parameter-manager-filter-hint = Reference, value or footprint
+# An empty parameter cell.
+dialog-parameter-manager-not-set = Not set
+dialog-parameter-manager-remove-column = Remove column
+dialog-parameter-manager-no-match-title = No part matches the filter
+# $sheet is the sheet's file name, $query the typed filter.
+dialog-parameter-manager-no-match-body = No reference, value or footprint on { $sheet } contains { $query }.
+dialog-parameter-manager-no-schematic-title = No active schematic
+dialog-parameter-manager-no-schematic-body = The Parameter Manager edits the parts of the active sheet. Open a schematic sheet, then open it again from Tools ▸ Parameter Manager.
+dialog-parameter-manager-footer-hint = Edits apply as you type · each cell is one undo step (Ctrl+Z)
+# Cells edited since the dialog opened whose value differs from before.
+dialog-parameter-manager-changed = { $count ->
+    [one] 1 cell changed
+   *[other] { $count } cells changed
+}
+# Tooltip of Revert changes.
+dialog-parameter-manager-revert-tip = { $count ->
+    [one] Undo the cell edit as one step
+   *[other] Undo all { $count } cell edits as one step
+}
+
+## Move Selection (#66)
+# The primary button: moves the selection by the offsets.
+dialog-move-selection-move = Move
+# Under the preview. $grid is the grid step and $unit its unit; $x and $y
+# are how many whole grid steps the offsets span. Stored Y counts down.
+dialog-move-selection-help = Positive X moves right, positive Y moves down. Grid { $grid } { $unit }: { $x } × { $y } steps.
+# The same line when an offset is not a whole number of grid steps.
+dialog-move-selection-help-off-grid = Positive X moves right, positive Y moves down. Grid { $grid } { $unit }: off grid.
+
+## Net colour palette (#2528)
+# Header subtitle. $count is how many nets the active sheet labels.
+dialog-net-color-count = { $count ->
+    [one] { $count } net on this sheet
+   *[other] { $count } nets on this sheet
+}
+dialog-net-color-filter = Filter nets
+# Footer link: removes every net colour of the active sheet in one undo step.
+dialog-net-color-clear-all = Clear all colours
+dialog-net-color-row-hint = Click a row to choose
+# Row chooser: opens the custom colour picker for the row's net.
+dialog-net-color-custom = Custom…
+# Row chooser: removes the row's net colour.
+dialog-net-color-clear = Clear
+# Custom picker: the hex code field.
+dialog-net-color-hex = Hex
+# Custom picker preview: the net's colour now, and the pick.
+dialog-net-color-old = Old
+dialog-net-color-new = New
+# Messages: Use Color was pressed after the active sheet changed. $net is the net name.
+dialog-net-color-sheet-changed = Net colour not changed: the picker was opened for { $net } on another sheet.
 
 ## Annotate Schematics (#75)
 dialog-annotate-order-up-then-across-help = Columns bottom to top, then the next column to the right.

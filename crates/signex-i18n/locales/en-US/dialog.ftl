@@ -185,7 +185,7 @@ dialog-align-top = Top
 dialog-align-bottom = Bottom
 dialog-align-space = Space
 dialog-align-none = None
-dialog-selection-filter-help = Toggle which kinds the canvas hit-test will accept. Pads is the only kind functionally wired today; the rest store flags for forward compatibility.
+dialog-selection-filter-help = Only Pads filters the canvas today. The other kinds are stored for later.
 dialog-selection-filter-pads = Pads
 dialog-selection-filter-tracks = Tracks
 dialog-selection-filter-arcs = Arcs
@@ -249,6 +249,11 @@ dialog-parameter-manager-add-column = Add column
 dialog-parameter-manager-column-reference = Reference
 dialog-parameter-manager-column-value = Value
 dialog-parameter-manager-column-footprint = Footprint
+# The Parameter Manager footer and its no-match card.
+dialog-parameter-manager-clear-filter = Clear filter
+# Undoes every cell edit since the dialog opened; $count is how many.
+dialog-parameter-manager-revert = Revert changes ({ $count })
+dialog-parameter-manager-done = Done
 # The file changed or vanished on disk since it was opened.
 dialog-disk-conflict-reload = Reload from disk
 dialog-disk-conflict-recreate = Re-create

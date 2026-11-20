@@ -37,7 +37,8 @@ pub(crate) use rule_editor::{RuleEditor, rule_editor};
 pub(crate) use title_bar::DIALOG_TITLE_BAR_H;
 mod widgets;
 pub(crate) use header::{
-    PREFERENCES_HEADER_H, dialog_scrim, graphite_header, graphite_header_closing, scrim_style,
+    PREFERENCES_HEADER_H, dialog_scrim, graphite_header, graphite_header_closing,
+    neutral_close_button, scrim_style,
 };
 pub(in crate::app::view) use widgets::{draggable_header, fit_modal_size};
 pub(crate) use widgets::{modal_title_header, os_title_bar_slot};

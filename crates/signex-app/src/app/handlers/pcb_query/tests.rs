@@ -260,7 +260,11 @@ fn find_similar_on_a_board_selects_the_footprints_of_the_same_value() {
         .as_ref()
         .expect("the dialog opened");
     assert!(state.board);
-    assert_eq!(state.seed_label, "Footprint R1");
+    let en = signex_i18n::I18n::en_us();
+    assert_eq!(
+        crate::find_similar::shown_seed(&state.seed_label, &en),
+        "Footprint R1"
+    );
     let similar = |msg| Message::Selection(SelectionRequest::FindSimilar(msg));
     let _ = app.update(similar(FindSimilarMsg::PropertySet(
         signex_engine::SimilarProperty::Value,

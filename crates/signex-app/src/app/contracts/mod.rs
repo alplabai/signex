@@ -180,6 +180,7 @@ mod messages;
 mod net_nav;
 mod pcb;
 mod placement_extras;
+mod project;
 mod state;
 
 pub use cross_probe::CrossProbeMsg;
@@ -196,6 +197,7 @@ pub use pcb::{
     PcbBarMsg, PcbMsg, PcbViewMsg, TuneMsg, ViewAngleEntry, ViewRotationMsg,
 };
 pub use placement_extras::PlacementExtrasMsg;
+pub use project::*;
 pub use state::*;
 
 #[cfg(test)]
