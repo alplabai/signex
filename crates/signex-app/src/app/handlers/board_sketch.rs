@@ -74,17 +74,24 @@ impl Signex {
     }
 
     /// Re-bake the open bake preview of the board sketch against its
-    /// board's nets; a closed preview drops its result.
+    /// board's nets and components; a closed preview drops its result.
     fn refresh_board_sketch_preview(&mut self) {
         let Some(session) = self.interaction_state.board_sketch.as_mut() else {
             return;
         };
-        let nets = self
-            .document_state
-            .pcb_board(&session.board_path)
-            .map(|board| board.nets.as_slice())
-            .unwrap_or_default();
-        session.refresh_preview(nets);
+        let board = self.document_state.pcb_board(&session.board_path);
+        session.refresh_preview(board);
+    }
+
+    /// The board target rows of the selected entity of the board sketch in
+    /// view (decision 2); none without one.
+    pub(crate) fn board_sketch_target(&self) -> crate::panels::BoardTargetProps {
+        self.board_sketch_in_view()
+            .and_then(|session| {
+                let board = self.document_state.pcb_board(&session.board_path)?;
+                Some(session.target_props(board))
+            })
+            .unwrap_or_default()
     }
 
     /// The sketch mode of the board the main window shows, if it is on.
@@ -321,14 +328,19 @@ impl Signex {
             self.refuse_board_sketch(reason);
             return false;
         };
-        let baked = match signex_bake::bake_board(&sketch, &board.nets) {
-            Ok(baked) => baked,
+        let (command, locked) = match board_sketch_command(sketch, board) {
+            Ok(made) => made,
             Err(error) => {
                 self.refuse_board_sketch(error.to_string());
                 return false;
             }
         };
-        let command = BoardCommand::set_board_sketch(sketch, baked);
+        // Messages stays en-US whatever the UI language.
+        for reference in locked {
+            let locked = Translatable::new(ids::BOARD_SKETCH_ANCHOR_LOCKED)
+                .arg("reference", reference.as_str());
+            crate::diagnostics::log_warning(locked.render_en_us());
+        }
         if let Err(error) = self.execute_board_commands(&path, vec![command], None) {
             self.refuse_board_sketch(error.to_string());
             return false;
@@ -447,6 +459,32 @@ impl Signex {
         }
         Some(moved)
     }
+}
+
+/// The board command that commits `sketch` to `board`, with the designators
+/// of the locked components an anchor leaves in place. A sketch that has
+/// owned no pour, mechanical drawing or anchor, before or now, takes the
+/// plain sketch command as it always did (decision 2, 2026-11-20).
+fn board_sketch_command(
+    sketch: signex_sketch::SketchData,
+    board: &signex_types::pcb::PcbBoard,
+) -> Result<(BoardCommand, Vec<String>), signex_bake::BoardBakeError> {
+    let owned_before = board
+        .sketch
+        .as_ref()
+        .is_some_and(|stored| stored.sketch.owns_board_items());
+    if !(sketch.owns_board_items() || owned_before) {
+        let baked = signex_bake::bake_board(&sketch, &board.nets)?;
+        return Ok((BoardCommand::set_board_sketch(sketch, baked), Vec::new()));
+    }
+    let (baked, items) = signex_bake::board::bake_board_with_items(&sketch, board)?;
+    let locked = items
+        .locked_anchors(&board.footprints)
+        .into_iter()
+        .map(|anchor| anchor.reference.clone())
+        .collect();
+    let command = BoardCommand::set_board_sketch_with_items(sketch, baked, items);
+    Ok((command, locked))
 }
 
 #[cfg(test)]

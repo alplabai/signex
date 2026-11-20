@@ -39,8 +39,12 @@ fn a_board_offers_the_five_targets_its_bake_produces() {
             R::Unassigned,
             R::BoardOutline,
             R::Cutout,
+            R::Slot,
             R::Keepout,
+            R::BoardPour,
             R::VScore,
+            R::MechanicalLayer,
+            R::ComponentAnchor,
             R::MountingHole,
         ]
     );
@@ -58,7 +62,10 @@ fn the_bake_targets_of_each_host() {
             K::BoardOutline,
             K::Cutouts,
             K::Keepouts,
+            K::BoardPours,
             K::VScores,
+            K::Mechanical,
+            K::ComponentAnchors,
             K::MountingHoles
         ]
     );

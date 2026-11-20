@@ -32,6 +32,7 @@ format declares only its own table row below.
 |---|---|---|---|---|
 | `.snxsch` | `snxsch/1.1`, or `1.2` with a No-ERC rule list | `snxsch/1`, `1.1`, `1.2` | opens read-only | refused |
 | `.snxpcb` | `snxpcb/1.4`, or `1.5` with layer colours | `snxpcb/1` to `snxpcb/1.5` | opens read-only | refused |
+| `.snxpcb`, board sketch targets | `snxpcb/1.7` while the board sketch carries a slot, pour, mechanical drawing or component anchor (decision 2, 2026-11-20), or a reference dimension, pattern link, pattern mirror or pad override (decisions 5, 9, 10); else the token above, byte for byte | adds `snxpcb/1.7` (`1.6` is the rooms token, added by c14) | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1`, or `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides) | `snxfpt/1`, `1.1`, `1.2` | refused | refused |

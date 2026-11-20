@@ -47,6 +47,7 @@ mod pcb_cells;
 mod pcb_footprints;
 mod pcb_row_columns;
 mod pcb_rows;
+mod pcb_token;
 mod pcb_uuid_repair;
 mod sch_rows;
 mod stackup;
@@ -63,6 +64,8 @@ mod wire_color_repair;
 mod board_free_tests;
 #[cfg(test)]
 mod board_options_tests;
+#[cfg(test)]
+mod board_sketch_targets_tests;
 #[cfg(test)]
 mod board_sketch_tests;
 #[cfg(test)]
@@ -137,6 +140,10 @@ pub use load_repair::{RepairedObject, SheetLoadRepair};
 pub use pcb_rows::{
     PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow, parse_pcb_layer, pcb_layer_token,
 };
+pub use pcb_token::{
+    SNXPCB_FORMAT_BOARD_SKETCH_TARGETS, SNXPCB_FORMAT_LAYER_COLORS, SNXPCB_FORMAT_V1,
+    SNXPCB_VERSION, snxpcb_token,
+};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};
@@ -176,17 +183,6 @@ pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
 /// A sheet without lists stays 1.1, byte for byte.
 pub const SNXSCH_FORMAT_NO_ERC_RULES: &str = "snxsch/1.2";
 
-/// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
-/// by uuid (1.0 keyed by reference designator) and the stackup carries
-/// `layer_types`. 1.2: the stackup carries `layer_ids`. 1.3: pads may
-/// carry a `rotation` column (their own turn), `trapezoid` and `custom` pad
-/// shapes are gone, and an unknown shape token or a roundrect ratio outside
-/// `0..=0.5` is a load error. 1.4: the `trapezoid` and `custom` pad shapes
-/// return with their parameters in the optional `trapezoid_delta` and
-/// `custom_outline` pad columns, and a parameter that cannot make copper is
-/// a load error. The policy is [`SNXPCB_VERSION`].
-pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.4";
-
 /// `.snxsch` version policy: a newer minor opens read-only. A save writes the
 /// lowest token its content needs ([`snxsch_token`]).
 pub const SNXSCH_VERSION: FormatVersion = FormatVersion {
@@ -211,39 +207,6 @@ pub fn snxsch_token(sheet: &SchematicSheet) -> &'static str {
         SNXSCH_FORMAT_V1
     }
 }
-
-/// Written instead of [`SNXPCB_FORMAT_V1`] when the board carries layer
-/// colours (`[board_options.layer_colors]`, 2026-11-18): a build that knows
-/// only 1.4 would drop them on save, so it opens 1.5 read-only. A board
-/// without layer colours stays 1.4, byte for byte.
-pub const SNXPCB_FORMAT_LAYER_COLORS: &str = "snxpcb/1.5";
-
-/// The token a save of `board` writes: [`SNXPCB_FORMAT_LAYER_COLORS`] when
-/// a layer has a colour of its own, else [`SNXPCB_FORMAT_V1`]. From content,
-/// so a board whose last colour is reset goes back to 1.4.
-pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
-    if board.options.layer_colors.is_empty() {
-        SNXPCB_FORMAT_V1
-    } else {
-        SNXPCB_FORMAT_LAYER_COLORS
-    }
-}
-
-/// `.snxpcb` version policy: a newer minor opens read-only. A save writes
-/// the lowest token its content needs ([`snxpcb_token`]).
-pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_LAYER_COLORS,
-    readable: &[
-        "snxpcb/1",
-        "snxpcb/1.1",
-        "snxpcb/1.2",
-        "snxpcb/1.3",
-        SNXPCB_FORMAT_V1,
-        SNXPCB_FORMAT_LAYER_COLORS,
-    ],
-    newer_minor: NewerMinor::ReadOnly,
-    missing: MissingToken::Refused,
-};
 
 // ---------------------------------------------------------------------------
 // Error type

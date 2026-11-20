@@ -45,8 +45,25 @@ pub enum BoardBakeError {
     HoleNotACircle { entity: SketchEntityId },
     #[error("mounting hole {entity} has a drill of {drill} mm; it must be above 0")]
     HoleDrill { entity: SketchEntityId, drill: f64 },
-    #[error("mounting hole {entity} names net {net:?}, which the board does not have")]
+    /// A mounting hole or a pour names a net the board's table lacks.
+    #[error("entity {entity} names net {net:?}, which the board does not have")]
     UnknownNet { entity: SketchEntityId, net: String },
+    /// A Slot profile that is not two parallel lines joined by two tangent
+    /// arcs of one radius.
+    #[error("slot {entity} is not a slot: two parallel lines joined by two tangent arcs")]
+    NotASlot { entity: SketchEntityId },
+    #[error("pour {entity} is not on a copper layer")]
+    PourNotCopper { entity: SketchEntityId },
+    #[error("component anchor {entity} is not a point")]
+    AnchorNotAPoint { entity: SketchEntityId },
+    #[error("component anchor {entity} names no component; pick one in Properties")]
+    AnchorWithoutComponent { entity: SketchEntityId },
+    /// A component anchor names a footprint the board does not hold.
+    #[error("component anchor {entity} names a component the board does not have")]
+    UnknownComponent {
+        entity: SketchEntityId,
+        footprint: uuid::Uuid,
+    },
     #[error("V-score {entity} is not a line")]
     VScoreNotALine { entity: SketchEntityId },
     #[error("the {what} of entity {entity} does not evaluate: {message}")]

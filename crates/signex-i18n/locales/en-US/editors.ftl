@@ -489,3 +489,11 @@ editors-pad-scope-cancel = Cancel
 # and a regular polygon.
 editors-sketch-tool-slot = Slot
 editors-sketch-tool-polygon = Polygon
+# The board roles of decision 2 (2026-11-20), in the board's role picker.
+editors-sketch-role-slot = Slot
+editors-sketch-role-board-pour = Pour
+editors-sketch-role-mechanical-layer = Mechanical layer
+editors-sketch-role-component-anchor = Component anchor
+# Bake preview rows of a board sketch.
+editors-sketch-target-mechanical = Mechanical
+editors-sketch-target-component-anchors = Anchors

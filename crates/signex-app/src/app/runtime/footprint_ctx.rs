@@ -312,7 +312,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 .and_then(|s| s.entities.iter().find(|e| e.id == id))
                 .map(|e| {
                     (
-                        current_role_of(e),
+                        current_role_of(e).on_host(editor.state.sketch_host()),
                         matches!(e.kind, EntityKind::Point { .. }),
                     )
                 })
@@ -652,7 +652,12 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_keepout,
         selected_cutout,
         selected_sketch_pad,
-        board: super::board_sketch_ctx::board_sketch_props(editor),
+        board: super::board_sketch_ctx::board_sketch_props(editor).map(|board| {
+            crate::panels::BoardSketchProps {
+                target: app.board_sketch_target(),
+                ..board
+            }
+        }),
         snap_options: editor.state.snap_options,
         selection_filter: editor.state.selection_filter,
         snap_subtab: editor.state.snap_subtab,

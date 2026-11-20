@@ -11,6 +11,7 @@ use std::sync::Arc;
 use signex_library::Footprint;
 use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::baked_kinds::BakedKind;
+use signex_types::sketch::board_attr::SketchBoardItems;
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::state::EditorPad;
@@ -32,6 +33,8 @@ pub struct SketchExit {
     /// and the sketch bakes: the canvas draws it (mockup 190). Always `None` on
     /// a footprint, whose own fields are the bake result.
     pub board_result: Option<Arc<BakedBoard>>,
+    /// The pours, mechanical drawings and anchors that bake writes.
+    pub board_items: Option<Arc<SketchBoardItems>>,
 }
 
 #[derive(Debug, Clone)]
@@ -163,7 +166,11 @@ pub fn footprint_count(fp: &Footprint, kind: BakedKind) -> Option<usize> {
         BakedKind::Keepouts => fp.keepouts.len(),
         BakedKind::Cutouts => fp.cutouts.len(),
         BakedKind::VScores => fp.v_scores.len(),
-        BakedKind::BoardOutline | BakedKind::MountingHoles => return None,
+        BakedKind::BoardOutline
+        | BakedKind::MountingHoles
+        | BakedKind::BoardPours
+        | BakedKind::Mechanical
+        | BakedKind::ComponentAnchors => return None,
     })
 }
 

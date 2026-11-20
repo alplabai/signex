@@ -154,4 +154,10 @@ define_ids! {
     EDITORS_PAD_SCOPE_CANCEL = "editors-pad-scope-cancel";
     EDITORS_SKETCH_TOOL_SLOT = "editors-sketch-tool-slot";
     EDITORS_SKETCH_TOOL_POLYGON = "editors-sketch-tool-polygon";
+    EDITORS_SKETCH_ROLE_SLOT = "editors-sketch-role-slot";
+    EDITORS_SKETCH_ROLE_BOARD_POUR = "editors-sketch-role-board-pour";
+    EDITORS_SKETCH_ROLE_MECHANICAL_LAYER = "editors-sketch-role-mechanical-layer";
+    EDITORS_SKETCH_ROLE_COMPONENT_ANCHOR = "editors-sketch-role-component-anchor";
+    EDITORS_SKETCH_TARGET_MECHANICAL = "editors-sketch-target-mechanical";
+    EDITORS_SKETCH_TARGET_COMPONENT_ANCHORS = "editors-sketch-target-component-anchors";
 }
