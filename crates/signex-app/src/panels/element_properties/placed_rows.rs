@@ -185,6 +185,30 @@ pub(super) fn push_position_rows<'a>(
     ))
 }
 
+/// The End row of a wire or bus: X and Y in one row, as Start is. Each
+/// stretches the end only.
+pub(super) fn push_run_end_row<'a>(
+    c: Column<Element<'a, PanelMsg>>,
+    ctx: &'a PanelContext,
+    end: signex_types::schematic::Point,
+) -> Column<Element<'a, PanelMsg>> {
+    let Some(item) = ctx.placed.item else {
+        return c;
+    };
+    let unit = ctx.unit;
+    let x = length_field_text(end.x, unit);
+    let y = length_field_text(ctx.shown_y(end.y), unit);
+    c.push(length_pair_row(
+        ctx,
+        ids::PROPERTIES_END,
+        item,
+        [
+            (ids::PROPERTIES_AXIS_X, PlacedField::EndX, x),
+            (ids::PROPERTIES_AXIS_Y, PlacedField::EndY, y),
+        ],
+    ))
+}
+
 /// The Size row of a sheet symbol: W and H in one row.
 pub(super) fn push_size_rows<'a>(
     c: Column<Element<'a, PanelMsg>>,

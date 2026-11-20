@@ -4,15 +4,18 @@
 //! undo step; the commit runs the same app method as the `set_object_*`
 //! commands (`app/command/placed_operands.rs`).
 
+use std::path::{Path, PathBuf};
+
 use iced::widget::text_editor;
-use signex_types::schematic::{HAlign, Point, SelectedItem, TextNote, VAlign};
+use signex_types::schematic::{HAlign, Point, SelectedItem, VAlign};
 
 /// One editable box of a placed object.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PlacedField {
-    /// The position's X, in the panel's unit.
+    /// The position's X, in the panel's unit; a wire's or bus's start X.
     X,
-    /// The position's Y, in the panel's unit, counted from the page origin.
+    /// The position's Y, in the panel's unit, counted from the page origin;
+    /// a wire's or bus's start Y.
     Y,
     /// A wire's or bus's end X, in the panel's unit.
     EndX,
@@ -50,8 +53,8 @@ pub enum PlacedEditMsg {
         item: SelectedItem,
         action: text_editor::Action,
     },
-    /// Ctrl+Enter in a text note's Text box, or the pointer left it: the
-    /// draft becomes one edit.
+    /// The Text box lost focus or Ctrl+Enter was pressed in it: Escape, or
+    /// a press outside the box. The draft becomes one edit.
     NoteSubmitted { item: SelectedItem },
     /// A pick in a text note's Rotation or Justify rows.
     NoteLayoutPicked {
@@ -70,12 +73,22 @@ pub enum NoteLayout {
 }
 
 impl NoteLayout {
-    /// Set this on `note`.
-    pub fn apply(self, note: &mut TextNote) {
+    /// The engine's note properties this pick sets.
+    pub fn props(self) -> signex_engine::TextNoteProps {
+        let none = signex_engine::TextNoteProps::default();
         match self {
-            Self::JustifyH(h) => note.justify_h = h,
-            Self::JustifyV(v) => note.justify_v = v,
-            Self::Rotation(degrees) => note.rotation = degrees.rem_euclid(360.0),
+            Self::JustifyH(h) => signex_engine::TextNoteProps {
+                justify_h: Some(h),
+                ..none
+            },
+            Self::JustifyV(v) => signex_engine::TextNoteProps {
+                justify_v: Some(v),
+                ..none
+            },
+            Self::Rotation(degrees) => signex_engine::TextNoteProps {
+                rotation_degrees: Some(degrees),
+                ..none
+            },
         }
     }
 }
@@ -88,10 +101,13 @@ pub struct PlacedDraft {
     pub text: String,
 }
 
-/// The multi-line Text box of the selected text note: its content and
-/// whether it was typed in since the note's text was last applied.
+/// The multi-line Text box of a text note: the sheet and note it belongs to,
+/// its content, and whether it was typed in since the note's text was last
+/// applied. A copied sheet can carry the same note id, so the sheet is part
+/// of what the draft belongs to.
 #[derive(Debug, Clone)]
 pub struct NoteDraft {
+    pub sheet: PathBuf,
     pub item: SelectedItem,
     pub content: text_editor::Content,
     pub edited: bool,
@@ -101,12 +117,18 @@ impl NoteDraft {
     /// Lines the box grows to before it scrolls.
     pub const MAX_VISIBLE_LINES: usize = 6;
 
-    pub fn new(item: SelectedItem, text: &str) -> Self {
+    pub fn new(sheet: &Path, item: SelectedItem, text: &str) -> Self {
         Self {
+            sheet: sheet.to_path_buf(),
             item,
             content: text_editor::Content::with_text(text),
             edited: false,
         }
+    }
+
+    /// Whether this is the box of the note `item` on `sheet`.
+    pub fn is_of(&self, sheet: &Path, item: SelectedItem) -> bool {
+        self.item == item && self.sheet == sheet
     }
 
     /// The lines the box shows: one per line of text, at most
@@ -118,11 +140,16 @@ impl NoteDraft {
 
 impl PartialEq for NoteDraft {
     fn eq(&self, other: &Self) -> bool {
-        self.item == other.item
+        self.sheet == other.sheet
+            && self.item == other.item
             && self.edited == other.edited
             && self.content.text() == other.content.text()
     }
 }
+
+/// The selected text note as the box is synced to it: its sheet, the note
+/// and its stored text.
+pub type SelectedNote<'a> = (&'a Path, SelectedItem, &'a str);
 
 /// What the Properties rows of the single selected object read.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -139,6 +166,9 @@ pub struct PlacedPanel {
     pub draft: Option<PlacedDraft>,
     /// The Text box of the selected text note.
     pub note: Option<NoteDraft>,
+    /// Typed note boxes whose note is no longer selected: owed to their own
+    /// sheets, applied by the update loop (`Signex::settle_owed_note_drafts`).
+    pub notes_owed: Vec<NoteDraft>,
     /// The text size of the selected text note, in stored mm.
     pub note_size_mm: Option<f64>,
 }
@@ -152,24 +182,41 @@ impl PlacedPanel {
         }
     }
 
-    /// Keep the note box in step with `selected`, the selected text note and
-    /// its stored text. The box is seeded again when another note is
-    /// selected, or when the stored text changed (an undo) while nothing was
-    /// typed. Returns a draft typed into a note that is no longer selected,
-    /// for the caller to apply, so leaving the box never drops typed text.
-    pub fn sync_note(&mut self, selected: Option<(SelectedItem, &str)>) -> Option<NoteDraft> {
+    /// Keep the note box in step with `selected`. The box is seeded again
+    /// when another note (or the same id on another sheet) is selected, or
+    /// when the stored text changed (an undo) while nothing was typed. A
+    /// typed box whose note is left is kept in [`Self::notes_owed`], never
+    /// dropped and never written here.
+    pub fn sync_note(&mut self, selected: Option<SelectedNote<'_>>) {
         let keeps = match (&self.note, selected) {
-            (Some(draft), Some((item, text))) if draft.item == item => {
+            (Some(draft), Some((sheet, item, text))) if draft.is_of(sheet, item) => {
                 draft.edited || draft.content.text() == text
             }
             _ => false,
         };
         if keeps {
-            return None;
+            return;
         }
         let previous = self.note.take();
-        self.note = selected.map(|(item, text)| NoteDraft::new(item, text));
-        previous.filter(|draft| draft.edited && selected.is_none_or(|(item, _)| item != draft.item))
+        self.note = selected.map(|(sheet, item, text)| NoteDraft::new(sheet, item, text));
+        let left = previous.filter(|draft| {
+            draft.edited && selected.is_none_or(|(sheet, item, _)| !draft.is_of(sheet, item))
+        });
+        self.notes_owed.extend(left);
+    }
+
+    /// Take the typed note boxes of the sheets `matches` picks: the owed
+    /// ones, and the selected note's box when it was typed in (it stays,
+    /// marked applied). Each comes back once.
+    pub fn take_typed_notes(&mut self, matches: &dyn Fn(&Path) -> bool) -> Vec<NoteDraft> {
+        let owed = std::mem::take(&mut self.notes_owed);
+        let (mut taken, kept): (Vec<_>, Vec<_>) = owed.into_iter().partition(|d| matches(&d.sheet));
+        self.notes_owed = kept;
+        if let Some(draft) = self.note.as_mut().filter(|d| d.edited && matches(&d.sheet)) {
+            draft.edited = false;
+            taken.push(draft.clone());
+        }
+        taken
     }
 }
 
@@ -180,6 +227,10 @@ mod tests {
 
     fn note(n: u128) -> SelectedItem {
         SelectedItem::new(uuid::Uuid::from_u128(n), SelectedKind::TextNote)
+    }
+
+    fn a() -> &'static Path {
+        Path::new("a.snxsch")
     }
 
     fn typed(panel: &mut PlacedPanel, c: char) {
@@ -193,7 +244,8 @@ mod tests {
     #[test]
     fn selecting_a_note_seeds_its_box_with_the_stored_text() {
         let mut panel = PlacedPanel::default();
-        assert!(panel.sync_note(Some((note(1), "a\nb"))).is_none());
+        panel.sync_note(Some((a(), note(1), "a\nb")));
+        assert!(panel.notes_owed.is_empty());
         let draft = panel.note.as_ref().expect("a note box");
         assert_eq!(draft.content.text(), "a\nb");
         assert!(!draft.edited);
@@ -202,38 +254,68 @@ mod tests {
     #[test]
     fn a_typed_box_survives_a_refresh_of_the_same_note() {
         let mut panel = PlacedPanel::default();
-        let _ = panel.sync_note(Some((note(1), "a")));
+        panel.sync_note(Some((a(), note(1), "a")));
         typed(&mut panel, 'x');
-        assert!(panel.sync_note(Some((note(1), "a"))).is_none());
+        panel.sync_note(Some((a(), note(1), "a")));
+        assert!(panel.notes_owed.is_empty());
         assert!(panel.note.as_ref().is_some_and(|d| d.edited));
     }
 
     #[test]
-    fn leaving_a_typed_note_hands_its_draft_back_once() {
+    fn leaving_a_typed_note_owes_its_draft_once() {
         let mut panel = PlacedPanel::default();
-        let _ = panel.sync_note(Some((note(1), "a")));
+        panel.sync_note(Some((a(), note(1), "a")));
         typed(&mut panel, 'x');
-        let left = panel.sync_note(Some((note(2), "other")));
-        assert_eq!(left.map(|d| d.item), Some(note(1)));
+        panel.sync_note(Some((a(), note(2), "other")));
+        let owed: Vec<_> = panel.notes_owed.iter().map(|d| d.item).collect();
+        assert_eq!(owed, vec![note(1)]);
         assert_eq!(panel.note.as_ref().map(|d| d.item), Some(note(2)));
-        assert!(panel.sync_note(None).is_none(), "note 2 was not typed in");
+        panel.sync_note(None);
+        assert_eq!(panel.notes_owed.len(), 1, "note 2 was not typed in");
         assert!(panel.note.is_none());
+    }
+
+    /// The same note id on another sheet (a copied sheet) is another note.
+    #[test]
+    fn the_same_id_on_another_sheet_is_another_box() {
+        let mut panel = PlacedPanel::default();
+        panel.sync_note(Some((a(), note(1), "a")));
+        typed(&mut panel, 'x');
+        let b = Path::new("b.snxsch");
+        panel.sync_note(Some((b, note(1), "a")));
+        let owed = panel.notes_owed.first().expect("owed to a");
+        assert_eq!(owed.sheet, a());
+        let shown = panel.note.as_ref().expect("b's box");
+        assert_eq!((shown.sheet.as_path(), shown.edited), (b, false));
+    }
+
+    #[test]
+    fn taking_the_typed_notes_marks_the_selected_box_applied() {
+        let mut panel = PlacedPanel::default();
+        panel.sync_note(Some((a(), note(1), "a")));
+        typed(&mut panel, 'x');
+        let other = Path::new("b.snxsch");
+        assert!(panel.take_typed_notes(&|s| s == other).is_empty());
+        let taken = panel.take_typed_notes(&|s| s == a());
+        assert_eq!(taken.len(), 1);
+        assert!(panel.note.as_ref().is_some_and(|d| !d.edited));
+        assert!(panel.take_typed_notes(&|_| true).is_empty(), "once");
     }
 
     #[test]
     fn an_undo_reseeds_an_untouched_box() {
         let mut panel = PlacedPanel::default();
-        let _ = panel.sync_note(Some((note(1), "new")));
-        assert!(panel.sync_note(Some((note(1), "old"))).is_none());
+        panel.sync_note(Some((a(), note(1), "new")));
+        panel.sync_note(Some((a(), note(1), "old")));
         let shown = panel.note.as_ref().map(|d| d.content.text());
         assert_eq!(shown.as_deref(), Some("old"));
     }
 
     #[test]
     fn the_box_grows_to_six_lines_then_scrolls() {
-        let one = NoteDraft::new(note(1), "a");
+        let one = NoteDraft::new(a(), note(1), "a");
         assert_eq!(one.visible_lines(), 1);
-        let many = NoteDraft::new(note(1), "1\n2\n3\n4\n5\n6\n7\n8");
+        let many = NoteDraft::new(a(), note(1), "1\n2\n3\n4\n5\n6\n7\n8");
         assert_eq!(many.visible_lines(), NoteDraft::MAX_VISIBLE_LINES);
     }
 }

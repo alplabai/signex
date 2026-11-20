@@ -1,10 +1,11 @@
-//! Properties of a selected text note (#47): the illustration, Location
-//! (Position, Rotation in four steps), Basic Properties (the Text as a
-//! multi-line box that grows to six lines, then scrolls) and Text Properties
-//! (Justify H and V as segmented rows, Text Size, Font). State ▸ Locked
-//! follows from the shared router. The Text box keeps a draft in the model
-//! and applies it as one edit: Ctrl+Enter, the pointer leaving the box, or
-//! another selection (`PlacedPanel::sync_note`).
+//! Properties of a selected text note (mockup row 47): the illustration,
+//! Location (Position, Rotation in four steps), Basic Properties (the Text
+//! as a multi-line box that grows to six lines, then scrolls) and Text
+//! Properties (Justify H and V as segmented rows, Text Size, Font). State ▸
+//! Locked follows from the shared router. The Text box keeps a draft in the
+//! model and applies it as one edit when it loses focus (Escape, a press
+//! outside it), on Ctrl+Enter, or when the note is no longer selected
+//! (`PlacedPanel::sync_note`); the pointer leaving it commits nothing.
 
 use super::super::*;
 use super::font_row::font_family_row;
@@ -189,7 +190,8 @@ pub(super) fn push_text_note_sections<'a>(
 }
 
 /// The Text box: grows with its lines up to `NoteDraft::MAX_VISIBLE_LINES`,
-/// then scrolls. Ctrl+Enter or the pointer leaving it applies the draft.
+/// then scrolls. Ctrl+Enter, Escape or a press outside it applies a typed
+/// draft.
 fn text_box<'a>(
     i18n: &signex_i18n::I18n,
     draft: &'a crate::panels::NoteDraft,
@@ -209,8 +211,10 @@ fn text_box<'a>(
             PanelMsg::PlacedEdit(PlacedEditMsg::NoteActed { item, action })
         });
     }
+    // A press outside takes the editor's focus: the draft is applied then.
     let submitted = PanelMsg::PlacedEdit(PlacedEditMsg::NoteSubmitted { item });
-    let boxed = iced::widget::mouse_area(editor).on_exit(submitted);
+    let boxed =
+        signex_widgets::press_outside::PressOutside::new(editor, draft.edited.then_some(submitted));
     container(
         row![
             property_label(t!(i18n, ids::PROPERTIES_TEXT), muted),
@@ -224,17 +228,19 @@ fn text_box<'a>(
     .boxed()
 }
 
-/// Ctrl+Enter applies the draft; every other key keeps the editor's own
-/// binding (Enter breaks the line).
+/// Ctrl+Enter applies the draft and Escape applies it as it unfocuses the
+/// box; every other key keeps the editor's own binding (Enter breaks the
+/// line).
 fn note_binding(key: KeyPress, item: SelectedItem) -> Option<Binding<PanelMsg>> {
-    let enter = matches!(
-        key.key.as_ref(),
-        iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter)
-    );
+    use iced::keyboard::{Key, key::Named};
+    let named = |name: Named| matches!(key.key.as_ref(), Key::Named(n) if n == name);
+    let (enter, escape) = (named(Named::Enter), named(Named::Escape));
+    let submitted = Binding::Custom(PanelMsg::PlacedEdit(PlacedEditMsg::NoteSubmitted { item }));
     if key.is_focused && enter && key.modifiers.command() {
-        return Some(Binding::Custom(PanelMsg::PlacedEdit(
-            PlacedEditMsg::NoteSubmitted { item },
-        )));
+        return Some(submitted);
+    }
+    if key.is_focused && escape {
+        return Some(Binding::Sequence(vec![Binding::Unfocus, submitted]));
     }
     Binding::from_key_press(key)
 }

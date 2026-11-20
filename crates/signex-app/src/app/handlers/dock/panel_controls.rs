@@ -108,6 +108,8 @@ impl Signex {
         }
         // Sheet-variable values typed but not entered commit with them (#1987).
         self.commit_sheet_variable_drafts_where(&matches);
+        // So is text typed into a note's Text box.
+        self.commit_note_drafts_where(&matches);
     }
 
     /// Commit the pending title-block drafts of the document `anchor` and of

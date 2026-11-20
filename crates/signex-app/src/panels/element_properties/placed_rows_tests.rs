@@ -215,20 +215,20 @@ fn a_wire_position_reads_start() {
     assert!(!texts.iter().any(|t| t == "Position"), "{texts:?}");
 }
 
-// ── #43 / #45 / #47 (g1): wire End, power-port State, note Text box ──
+// ── mockup rows 43, 45, 47: wire Start / End, power-port State, note Text ──
 
-const G1_WIRE: u128 = 11;
+const RUN_WIRE: u128 = 11;
 const PORT: u128 = 12;
 const NOTE: u128 = 13;
 
 /// A sheet with a 10 mm wire from (10, 10) to (20, 10), a +3V3 power port and
 /// a text note.
-fn g1_sheet() -> SchematicSheet {
+fn wire_port_note_sheet() -> SchematicSheet {
     use signex_types::schematic::{HAlign, TextNote, VAlign, Wire};
     SchematicSheet {
         paper_size: "A4".into(),
         wires: vec![Wire {
-            uuid: Uuid::from_u128(G1_WIRE),
+            uuid: Uuid::from_u128(RUN_WIRE),
             start: Point::new(10.0, 10.0),
             end: Point::new(20.0, 10.0),
             stroke_width: 0.0,
@@ -259,86 +259,133 @@ fn g1_sheet() -> SchematicSheet {
     }
 }
 
-fn g1_app() -> (tempfile::TempDir, Signex) {
+fn wire_port_note_app() -> (tempfile::TempDir, Signex) {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _task) = Signex::new();
-    add_sheet_with(&mut app, &dir.path().join("g1.snxsch"), g1_sheet());
+    add_sheet_with(
+        &mut app,
+        &dir.path().join("wire_port_note.snxsch"),
+        wire_port_note_sheet(),
+    );
     (dir, app)
 }
 
-fn g1_doc(app: &Signex) -> &SchematicSheet {
+fn active_doc(app: &Signex) -> &SchematicSheet {
     app.document_state
         .active_engine()
         .expect("engine")
         .document()
 }
 
-fn g1_select(app: &mut Signex, item: SelectedItem) {
+/// Select `item` as a click does: inside one pass of the update loop.
+fn select(app: &mut Signex, item: SelectedItem) {
     app.interaction_state.active_canvas_mut().selected = vec![item];
     app.update_selection_info();
+    let _ = app.update(crate::app::Message::Ui(crate::app::UiMsg::Noop));
 }
 
-fn g1_panel(app: &mut Signex, msg: crate::panels::PanelMsg) {
+fn panel_msg(app: &mut Signex, msg: crate::panels::PanelMsg) {
     let _ = app.update(crate::app::Message::Dock(crate::dock::DockMessage::Panel(
         msg,
     )));
 }
 
-fn g1_undo(app: &mut Signex) {
+fn undo(app: &mut Signex) {
     let _ = app.update(crate::app::Message::Edit(crate::app::EditMsg::Undo));
 }
 
-/// #43: Start is one X / Y row (the shared Position row, #2523); End X is
-/// an edit box; Enter moves the wire's end, keeps its start, is one undo
-/// step, and the read-only Length follows.
-#[test]
-fn a_wires_end_is_editable_and_its_length_follows() {
-    use crate::panels::{PanelMsg, PlacedEditMsg, PlacedField};
-    let (_dir, mut app) = g1_app();
-    let wire = SelectedItem::new(Uuid::from_u128(G1_WIRE), SelectedKind::Wire);
-    let before = shown(&mut app, wire, Unit::Mm);
-    for label in ["Start", "End X (mm)", "End Y (mm)", "Length"] {
-        assert!(
-            before.iter().any(|t| t == label),
-            "lacks {label}: {before:?}"
-        );
-    }
-    assert!(before.iter().any(|t| t == "10.000 mm"), "{before:?}");
-    g1_panel(
-        &mut app,
+/// Type `text` into `field` of `item` and press Enter.
+fn type_field(app: &mut Signex, item: SelectedItem, field: crate::panels::PlacedField, text: &str) {
+    use crate::panels::{PanelMsg, PlacedEditMsg};
+    panel_msg(
+        app,
         PanelMsg::PlacedEdit(PlacedEditMsg::Typed {
-            item: wire,
-            field: PlacedField::EndX,
-            text: "30".into(),
+            item,
+            field: field.clone(),
+            text: text.into(),
         }),
     );
-    g1_panel(
-        &mut app,
-        PanelMsg::PlacedEdit(PlacedEditMsg::Submitted {
-            item: wire,
-            field: PlacedField::EndX,
-        }),
+    panel_msg(
+        app,
+        PanelMsg::PlacedEdit(PlacedEditMsg::Submitted { item, field }),
     );
-    let moved = &g1_doc(&app).wires[0];
+}
+
+/// Mockup row 43: Start and End are one X / Y pair row each, both
+/// editable, and the read-only Length follows.
+#[test]
+fn a_wires_start_and_end_are_pair_rows() {
+    let (_dir, mut app) = wire_port_note_app();
+    let wire = SelectedItem::new(Uuid::from_u128(RUN_WIRE), SelectedKind::Wire);
+    let texts = shown(&mut app, wire, Unit::Mm);
+    for label in ["Start", "End", "Length"] {
+        assert!(texts.iter().any(|t| t == label), "lacks {label}: {texts:?}");
+    }
+    let axes = texts.iter().filter(|t| *t == "X" || *t == "Y").count();
+    assert_eq!(axes, 4, "two X / Y pairs: {texts:?}");
+    assert!(
+        !texts.iter().any(|t| t.starts_with("End X")),
+        "End is one pair row, not two boxes: {texts:?}"
+    );
+    assert!(texts.iter().any(|t| t == "10.000 mm"), "{texts:?}");
+}
+
+/// Maintainer decision 2026-11-20: a typed End X stretches the end only,
+/// in one undo step, and Length follows.
+#[test]
+fn a_typed_end_stretches_only_the_end() {
+    use crate::panels::PlacedField;
+    let (_dir, mut app) = wire_port_note_app();
+    let wire = SelectedItem::new(Uuid::from_u128(RUN_WIRE), SelectedKind::Wire);
+    select(&mut app, wire);
+    type_field(&mut app, wire, PlacedField::EndX, "30");
+    let moved = &active_doc(&app).wires[0];
     assert_eq!(moved.start, Point::new(10.0, 10.0), "the start stays");
     assert_eq!(moved.end, Point::new(30.0, 10.0));
     let after = shown(&mut app, wire, Unit::Mm);
     assert!(after.iter().any(|t| t == "20.000 mm"), "{after:?}");
-    g1_undo(&mut app);
-    assert_eq!(
-        g1_doc(&app).wires[0].end,
-        Point::new(20.0, 10.0),
-        "one undo step"
-    );
+    undo(&mut app);
+    let back = &active_doc(&app).wires[0];
+    let ends = (back.start, back.end);
+    assert_eq!(ends, (Point::new(10.0, 10.0), Point::new(20.0, 10.0)));
 }
 
-/// #45: a power port ends in State ▸ Locked; its checkbox locks the port.
+/// Maintainer decision 2026-11-20: a typed Start X stretches the start only
+/// (the wire does not move), in one undo step, and Length follows.
+#[test]
+fn a_typed_start_stretches_only_the_start() {
+    use crate::panels::PlacedField;
+    let (_dir, mut app) = wire_port_note_app();
+    let wire = SelectedItem::new(Uuid::from_u128(RUN_WIRE), SelectedKind::Wire);
+    select(&mut app, wire);
+    type_field(&mut app, wire, PlacedField::X, "5");
+    let moved = &active_doc(&app).wires[0];
+    assert_eq!(moved.start, Point::new(5.0, 10.0));
+    assert_eq!(moved.end, Point::new(20.0, 10.0), "the end stays");
+    let after = shown(&mut app, wire, Unit::Mm);
+    assert!(after.iter().any(|t| t == "15.000 mm"), "{after:?}");
+    // Start Y (A4, Lower Left origin: 190 shown is 20 stored) turns it.
+    type_field(&mut app, wire, PlacedField::Y, "190");
+    let turned = &active_doc(&app).wires[0];
+    assert_eq!(turned.start, Point::new(5.0, 20.0));
+    assert_eq!(turned.end, Point::new(20.0, 10.0), "the end stays");
+    undo(&mut app);
+    let start = active_doc(&app).wires[0].start;
+    assert_eq!(start, Point::new(5.0, 10.0), "one undo step each");
+    undo(&mut app);
+    let back = &active_doc(&app).wires[0];
+    let ends = (back.start, back.end);
+    assert_eq!(ends, (Point::new(10.0, 10.0), Point::new(20.0, 10.0)));
+}
+
+/// Mockup row 45: a power port ends in State ▸ Locked; its checkbox locks
+/// the port.
 #[test]
 fn a_power_ports_locked_row_locks_it() {
     use crate::panels::PanelMsg;
-    let (_dir, mut app) = g1_app();
+    let (_dir, mut app) = wire_port_note_app();
     let port = SelectedItem::new(Uuid::from_u128(PORT), SelectedKind::Symbol);
-    g1_select(&mut app, port);
+    select(&mut app, port);
     let ctx = app.document_state.panel_ctx.clone();
     let view = super::view_selected_element_properties(
         &ctx,
@@ -367,63 +414,113 @@ fn a_power_ports_locked_row_locks_it() {
         .into_iter()
         .find(|m| matches!(m, PanelMsg::ToggleSymbolLocked(id) if *id == port.uuid))
         .expect("the Locked checkbox toggles the port");
-    g1_panel(&mut app, toggle);
-    assert!(g1_doc(&app).symbols[0].locked, "the port is locked");
+    panel_msg(&mut app, toggle);
+    assert!(active_doc(&app).symbols[0].locked, "the port is locked");
 }
 
-/// #47: typing into the note's Text box keeps a draft (the sheet unchanged);
-/// Ctrl+Enter applies the whole multi-line text as one undo step.
+/// Send `action` to the Text box of `note`.
+fn note_act(app: &mut Signex, note: SelectedItem, action: iced::widget::text_editor::Action) {
+    use crate::panels::{PanelMsg, PlacedEditMsg};
+    panel_msg(
+        app,
+        PanelMsg::PlacedEdit(PlacedEditMsg::NoteActed { item: note, action }),
+    );
+}
+
+/// Mockup row 47: typing into the note's Text box keeps a draft (the sheet
+/// unchanged); Ctrl+Enter applies the whole multi-line text as one undo
+/// step.
 #[test]
 fn a_notes_multi_line_edit_commits_once() {
     use crate::panels::{PanelMsg, PlacedEditMsg};
     use iced::widget::text_editor::{Action, Edit, Motion};
-    let (_dir, mut app) = g1_app();
+    let (_dir, mut app) = wire_port_note_app();
     let note = SelectedItem::new(Uuid::from_u128(NOTE), SelectedKind::TextNote);
-    g1_select(&mut app, note);
-    let act = |app: &mut Signex, action: Action| {
-        g1_panel(
-            app,
-            PanelMsg::PlacedEdit(PlacedEditMsg::NoteActed { item: note, action }),
-        );
-    };
-    act(&mut app, Action::Move(Motion::DocumentEnd));
-    act(&mut app, Action::Edit(Edit::Enter));
+    select(&mut app, note);
+    note_act(&mut app, note, Action::Move(Motion::DocumentEnd));
+    note_act(&mut app, note, Action::Edit(Edit::Enter));
     for c in "two".chars() {
-        act(&mut app, Action::Edit(Edit::Insert(c)));
+        note_act(&mut app, note, Action::Edit(Edit::Insert(c)));
     }
     assert_eq!(
-        g1_doc(&app).text_notes[0].text,
+        active_doc(&app).text_notes[0].text,
         "note",
         "typing keeps a draft"
     );
-    g1_panel(
+    panel_msg(
         &mut app,
         PanelMsg::PlacedEdit(PlacedEditMsg::NoteSubmitted { item: note }),
     );
-    assert_eq!(g1_doc(&app).text_notes[0].text, "note\ntwo");
-    g1_undo(&mut app);
-    assert_eq!(g1_doc(&app).text_notes[0].text, "note", "one undo step");
+    assert_eq!(active_doc(&app).text_notes[0].text, "note\ntwo");
+    undo(&mut app);
+    assert_eq!(active_doc(&app).text_notes[0].text, "note", "one undo step");
 }
 
-/// #47: text typed into a note and left by selecting another object is
-/// applied, not dropped.
+/// Mockup row 47: text typed into a note and left by selecting another
+/// object is applied, not dropped.
 #[test]
 fn leaving_a_typed_note_applies_its_text() {
+    use iced::widget::text_editor::{Action, Edit, Motion};
+    let (_dir, mut app) = wire_port_note_app();
+    let note = SelectedItem::new(Uuid::from_u128(NOTE), SelectedKind::TextNote);
+    select(&mut app, note);
+    note_act(&mut app, note, Action::Move(Motion::DocumentEnd));
+    note_act(&mut app, note, Action::Edit(Edit::Insert('!')));
+    let wire = SelectedItem::new(Uuid::from_u128(RUN_WIRE), SelectedKind::Wire);
+    select(&mut app, wire);
+    assert_eq!(active_doc(&app).text_notes[0].text, "note!");
+}
+
+/// The messages the note's Properties view sends while the pointer moves
+/// into the Text box and out of the panel, twice.
+fn messages_moving_over_the_text_box(app: &Signex) -> Vec<crate::panels::PanelMsg> {
+    let ctx = app.document_state.panel_ctx.clone();
+    let view = || {
+        super::view_selected_element_properties(
+            &ctx,
+            iced::Color::WHITE,
+            iced::Color::WHITE,
+            iced::Color::BLACK,
+        )
+    };
+    let window = iced::Size::new(400.0, 4000.0);
+    let laid = crate::layout_probe::lay_out_texts(view(), window);
+    let label = laid.iter().rfind(|t| t.text == "Text").expect("Text row");
+    let inside = iced::Point::new(
+        label.bounds.x + crate::panels::PROPERTY_LABEL_WIDTH + 30.0,
+        label.bounds.center_y(),
+    );
+    let outside = iced::Point::new(395.0, 3990.0);
+    let path = [inside, outside, inside, outside];
+    crate::layout_probe::messages_for_moves(view(), window, &path)
+}
+
+/// The pointer leaving the Text box commits nothing: typing, moving in and
+/// out, typing more and then Ctrl+Enter is one edit and one undo step.
+#[test]
+fn moving_the_pointer_in_and_out_while_typing_is_one_undo_step() {
     use crate::panels::{PanelMsg, PlacedEditMsg};
     use iced::widget::text_editor::{Action, Edit, Motion};
-    let (_dir, mut app) = g1_app();
+    let (_dir, mut app) = wire_port_note_app();
     let note = SelectedItem::new(Uuid::from_u128(NOTE), SelectedKind::TextNote);
-    g1_select(&mut app, note);
-    for action in [
-        Action::Move(Motion::DocumentEnd),
-        Action::Edit(Edit::Insert('!')),
-    ] {
-        g1_panel(
-            &mut app,
-            PanelMsg::PlacedEdit(PlacedEditMsg::NoteActed { item: note, action }),
-        );
+    select(&mut app, note);
+    note_act(&mut app, note, Action::Move(Motion::DocumentEnd));
+    note_act(&mut app, note, Action::Edit(Edit::Insert('a')));
+    for msg in messages_moving_over_the_text_box(&app) {
+        panel_msg(&mut app, msg);
     }
-    let wire = SelectedItem::new(Uuid::from_u128(G1_WIRE), SelectedKind::Wire);
-    g1_select(&mut app, wire);
-    assert_eq!(g1_doc(&app).text_notes[0].text, "note!");
+    assert_eq!(active_doc(&app).text_notes[0].text, "note", "nothing yet");
+    note_act(&mut app, note, Action::Edit(Edit::Insert('b')));
+    for msg in messages_moving_over_the_text_box(&app) {
+        panel_msg(&mut app, msg);
+    }
+    panel_msg(
+        &mut app,
+        PanelMsg::PlacedEdit(PlacedEditMsg::NoteSubmitted { item: note }),
+    );
+    assert_eq!(active_doc(&app).text_notes[0].text, "noteab");
+    undo(&mut app);
+    assert_eq!(active_doc(&app).text_notes[0].text, "note");
+    let engine = app.document_state.active_engine().expect("engine");
+    assert!(!engine.can_undo(), "the whole edit was one undo step");
 }

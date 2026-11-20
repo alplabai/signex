@@ -1,8 +1,9 @@
 //! The Properties state of the single selected placed object (#2418): its
 //! editable geometry and, when a lock holds it, the reason its rows are
 //! disabled. A draft survives a refresh only while its object stays selected.
-//! A text note's Text box is seeded from the note; text typed into a note
-//! that is no longer selected is applied, not dropped.
+//! A text note's Text box is seeded from the note; a typed box whose note is
+//! left is kept as owed to its sheet, and the update loop applies it
+//! (`Signex::settle_owed_note_drafts`). Nothing here writes a document.
 
 use super::super::*;
 
@@ -30,6 +31,7 @@ impl Signex {
                 }
                 _ => (None, None, None, None, None),
             };
+        let sheet_path = self.document_state.active_path.clone();
         let placed = &mut self.document_state.panel_ctx.placed;
         if placed.draft.as_ref().is_some_and(|d| Some(d.item) != item) {
             placed.draft = None;
@@ -39,9 +41,10 @@ impl Signex {
         placed.end = end;
         placed.locked = locked;
         placed.note_size_mm = note.as_ref().map(|(_, _, size)| *size);
-        let left = placed.sync_note(note.as_ref().map(|(item, text, _)| (*item, text.as_str())));
-        if let Some(draft) = left {
-            self.apply_note_handoff(draft);
-        }
+        let selected_note = match (&note, sheet_path.as_deref()) {
+            (Some((item, text, _)), Some(sheet)) => Some((sheet, *item, text.as_str())),
+            _ => None,
+        };
+        placed.sync_note(selected_note);
     }
 }

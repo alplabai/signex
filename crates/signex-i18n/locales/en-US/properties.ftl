@@ -435,8 +435,8 @@ properties-kind-power-port = Power Port
 properties-kind-text-note = Text Note
 # Caption under a wire's or bus's header: Length is read-only.
 properties-length-derived = Length is derived from Start and End
-properties-end-x = End X ({ $unit })
-properties-end-y = End Y ({ $unit })
+# A wire's or bus's end point: an X / Y pair row, as Start is.
+properties-end = End
 # Illustration callout at a wire's or bus's start point.
 properties-callout-start = Start
 # Short power-port style names under the glyph tiles; the tooltip has the full name.

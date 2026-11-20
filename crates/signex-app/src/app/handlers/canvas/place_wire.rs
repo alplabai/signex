@@ -61,9 +61,10 @@ impl Signex {
 
     /// Place one straight wire from `start` to `end` as typed in the Tab
     /// form (#2532): one undo step. Whether the document changed; a wire
-    /// whose ends meet is not placed.
+    /// whose ends meet (the same 1 µm point, `signex_net::pt_key`) is not
+    /// placed.
     pub(crate) fn place_wire_segment(&mut self, start: Point, end: Point) -> bool {
-        if start == end {
+        if signex_net::pt_key(&start) == signex_net::pt_key(&end) {
             return false;
         }
         let commands = wire_commands(&[(start, end)], self.wire_placement_style());

@@ -278,8 +278,7 @@ define_ids! {
     PROPERTIES_KIND_POWER_PORT = "properties-kind-power-port";
     PROPERTIES_KIND_TEXT_NOTE = "properties-kind-text-note";
     PROPERTIES_LENGTH_DERIVED = "properties-length-derived";
-    PROPERTIES_END_X = "properties-end-x";
-    PROPERTIES_END_Y = "properties-end-y";
+    PROPERTIES_END = "properties-end";
     PROPERTIES_CALLOUT_START = "properties-callout-start";
     PROPERTIES_POWER_STYLE_SHORT_POWER_GROUND = "properties-power-style-short-power-ground";
     PROPERTIES_POWER_STYLE_SHORT_SIGNAL_GROUND = "properties-power-style-short-signal-ground";

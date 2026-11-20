@@ -132,6 +132,8 @@ impl Signex {
         // Main's History rows belong to main's file; the window lists its own
         // once its first load lands (see `refresh_window_histories`).
         ctx.history = Default::default();
+        // Main's typed boxes stay main's: a copy would apply them twice.
+        ctx.placed = Default::default();
         if !self.window_shares_main_navigator(window) {
             ctx.navigator = Default::default();
         }

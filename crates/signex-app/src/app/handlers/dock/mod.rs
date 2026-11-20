@@ -11,6 +11,8 @@ mod library_browser;
 mod multi_edit;
 mod navigator;
 mod net_classes;
+#[cfg(test)]
+mod note_draft_persist_tests;
 mod panel_controls;
 mod panel_open;
 mod part_actions;

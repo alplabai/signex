@@ -2,16 +2,16 @@
 //! (#2418): wire, bus, bus entry, junction, no-connect, No-ERC directive and
 //! sheet entry. Each shows the shared Location section (editable Position,
 //! the lock note) and the facts that kind has, read-only. A wire or bus
-//! (#43) holds its whole segment in Location: Start and End, both editable,
-//! and the Length derived from them.
+//! (mockup row 43) holds its whole segment in Location: Start and End, one
+//! X / Y pair row each, each stretching its own end, and the Length derived
+//! from them.
 
 use super::super::*;
 use super::illustrations::{RunShape, run, show};
 use super::placed_rows::{
-    RowLook, edit_box, push_location_section, push_lock_note, push_position_rows,
+    RowLook, push_location_section, push_lock_note, push_position_rows, push_run_end_row,
 };
 use super::rows::PanelStyle;
-use crate::panels::PlacedField;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use signex_i18n::{MessageId, ids, t};
@@ -90,9 +90,9 @@ pub(super) fn push_placed_kind_sections<'a>(
     )
 }
 
-/// A wire or bus: the caption, the illustration, then Location with Start
-/// X / Y, End X / Y (both editable, one undo step each) and the read-only
-/// Length derived from them.
+/// A wire or bus: the caption, the illustration, then Location with the
+/// Start and End pair rows (each stretches its own end, one undo step per
+/// box) and the read-only Length derived from them.
 fn push_run_sections<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
@@ -100,7 +100,7 @@ fn push_run_sections<'a>(
     look: RowLook,
 ) -> Column<Element<'a, PanelMsg>> {
     let placed = &ctx.placed;
-    let (Some(item), Some(geometry), Some(end)) = (placed.item, placed.geometry, placed.end) else {
+    let (Some(_), Some(geometry), Some(end)) = (placed.item, placed.geometry, placed.end) else {
         return push_location_section(col, ctx, look);
     };
     let i18n: &'a signex_i18n::I18n = &ctx.i18n;
@@ -131,26 +131,7 @@ fn push_run_sections<'a>(
                 let mut c = Column::new().spacing(0).width(Length::Fill);
                 c = push_lock_note(c, ctx, look);
                 c = push_position_rows(c, ctx, look);
-                let end_x = t!(i18n, ids::PROPERTIES_END_X, "unit" => unit_name.as_str());
-                let end_y = t!(i18n, ids::PROPERTIES_END_Y, "unit" => unit_name.as_str());
-                let x = length_field_text(end.x, unit);
-                let y = length_field_text(ctx.shown_y(end.y), unit);
-                c = c.push(edit_box(
-                    end_x.into(),
-                    item,
-                    PlacedField::EndX,
-                    x,
-                    placed,
-                    look,
-                ));
-                c = c.push(edit_box(
-                    end_y.into(),
-                    item,
-                    PlacedField::EndY,
-                    y,
-                    placed,
-                    look,
-                ));
+                c = push_run_end_row(c, ctx, end);
                 c.push(form_input_row(
                     t!(i18n, ids::PANELS_PLACED_LENGTH),
                     &length,
