@@ -1,6 +1,10 @@
 //! The BOM and PDF preview modals' state.
 
-use super::*;
+use std::path::PathBuf;
+
+use super::PageKey;
+use super::pdf_page_setup::PageSetupInputs;
+use super::pdf_preview_raster::{PreviewSlot, RasterSource};
 
 /// Which sidebar tab is currently shown inside the BOM preview's
 /// Properties panel — Altium-style General / Columns / Rules split.
