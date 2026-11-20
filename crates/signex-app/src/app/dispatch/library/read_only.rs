@@ -42,15 +42,21 @@ impl Signex {
     pub(crate) fn read_only_write_error(&self, path: &std::path::Path) -> Option<anyhow::Error> {
         let name = self.library.read_only_library_name_containing(path)?;
         if self.library.is_history_missing_target(path) {
-            let reason = signex_i18n::t!(
-                self.ui_state.i18n,
-                signex_i18n::ids::NOTICE_LIBRARY_HISTORY_MISSING_DETAIL,
-                "library" => name
-            );
-            return Some(anyhow::anyhow!(reason.into_string()));
+            return Some(anyhow::anyhow!(self.history_missing_reason(&name)));
         }
         Some(anyhow::Error::new(signex_library::LibraryError::ReadOnly {
             library: name,
         }))
+    }
+
+    /// Why a write is refused into `library`, open read-only because its
+    /// Git history is missing, in the UI language.
+    pub(crate) fn history_missing_reason(&self, library: &str) -> String {
+        signex_i18n::t!(
+            self.ui_state.i18n,
+            signex_i18n::ids::NOTICE_LIBRARY_HISTORY_MISSING_DETAIL,
+            "library" => library
+        )
+        .into_string()
     }
 }

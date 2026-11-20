@@ -403,6 +403,11 @@ impl Signex {
                     .to_string(),
             );
         }
+        // No writes while it is open read-only for want of its Git history
+        // (mockup row 138): moving its files is one.
+        if let Some(library) = self.library.history_missing_library_under(old_path) {
+            return Some(self.history_missing_reason(&library));
+        }
         if self.library.writes.pending(old_path) > 0 {
             return Some(
                 "A library edit is still being written; rename the library once it has finished."

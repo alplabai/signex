@@ -415,6 +415,19 @@ impl LibraryState {
         })
     }
 
+    /// Display name of a library mounted read-only because its Git history
+    /// is missing whose `.snxlib` is `path` or lies under the folder `path`,
+    /// so deleting `path` would remove it.
+    pub fn history_missing_library_under(&self, path: &Path) -> Option<String> {
+        let path = resolved_path(path);
+        self.open_libraries
+            .iter()
+            .find(|lib| {
+                self.is_history_missing(&lib.root) && resolved_path(&lib.root).starts_with(&path)
+            })
+            .map(|lib| lib.display_name.clone())
+    }
+
     /// Display name of the read-only library whose directory contains
     /// `path`, or `None` when `path` is outside every read-only mount.
     pub fn read_only_library_name_containing(&self, path: &Path) -> Option<String> {

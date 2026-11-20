@@ -521,6 +521,100 @@ fn a_library_rename_waits_for_a_library_copy_in_flight() {
     );
 }
 
+/// Remount `alpha` the way Skip for now on Git Repository Missing does:
+/// read-only, without its Git history (mockup row 138).
+fn open_alpha_without_history(f: &mut Fixture) {
+    f.app.library.close_library(&f.alpha);
+    let prepared = signex_app::library::mount::prepare_mount_without_history(&f.alpha)
+        .expect("prepare without history");
+    f.app.library.mount_prepared(prepared).expect("mount");
+    assert!(f.app.library.is_history_missing(&f.alpha));
+}
+
+/// Every file under `dir`, sorted.
+fn files_under(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for entry in fs::read_dir(dir).expect("read_dir") {
+        let path = entry.expect("entry").path();
+        if path.is_dir() {
+            out.extend(files_under(&path));
+        } else {
+            out.push(path);
+        }
+    }
+    out.sort();
+    out
+}
+
+/// A library open read-only for want of its Git history takes no writes,
+/// and moving its files is one: the rename is refused with why.
+#[test]
+fn a_library_open_without_its_history_is_not_renamed() {
+    let mut f = fixture();
+    open_alpha_without_history(&mut f);
+
+    submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
+
+    assert_refused(&f, "its Git history is missing");
+    let error = f
+        .app
+        .ui_state
+        .rename_dialog
+        .as_ref()
+        .and_then(|d| d.error.clone())
+        .unwrap_or_default()
+        .replace(['\u{2068}', '\u{2069}'], "");
+    assert!(
+        error.contains("is open read-only because its Git history is missing"),
+        "got: {error}"
+    );
+}
+
+/// Delete File on a library open read-only for want of its Git history is
+/// refused with why, and none of its files go.
+#[test]
+fn a_library_open_without_its_history_is_not_deleted() {
+    use signex_app::app::{RemoveChoice, RemoveDialogState, RemoveMsg};
+    use signex_i18n::RenderTranslatable;
+
+    let mut f = fixture();
+    open_alpha_without_history(&mut f);
+    let folder = f.alpha.parent().expect("library folder").to_path_buf();
+    let before = files_under(&folder);
+    f.app.document_state.error_notice = None;
+
+    f.app.ui_state.remove_dialog = Some(RemoveDialogState {
+        project_id: Some(f.project_id),
+        target_path: f.alpha.clone(),
+        tree_path: vec![0],
+        display_name: "alpha.snxlib".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+        is_directory_package: false,
+    });
+    send(
+        &mut f.app,
+        Message::Remove(RemoveMsg::Confirm(RemoveChoice::DeleteFile)),
+    );
+
+    let notice = f
+        .app
+        .document_state
+        .error_notice
+        .as_ref()
+        .expect("the refusal says why");
+    let strip = |s: String| s.replace(['\u{2068}', '\u{2069}'], "");
+    assert_eq!(strip(notice.title.render_en_us()), "Library Is Read-Only");
+    assert!(
+        strip(notice.detail.render_en_us())
+            .contains("\"alpha\" is open read-only because its Git history is missing"),
+        "got: {}",
+        strip(notice.detail.render_en_us())
+    );
+    assert_eq!(before, files_under(&folder), "no file of the library goes");
+    assert_eq!(entry_paths(&f.app)[0], PathBuf::from("alpha/alpha.snxlib"));
+}
+
 /// The project's volume folds case, so `ALPHA.snxlib` is the library.
 fn fold_case(f: &mut Fixture) {
     f.app.document_state.projects[0].case_fold = signex_app::app::CaseFold {
