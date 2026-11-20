@@ -58,13 +58,14 @@ pub(super) fn channel_scopes(cs: &ChildSheet) -> Option<Vec<ChannelScope>> {
 pub fn channel_uuid(sheet_symbol: Uuid, number: u32) -> Uuid {
     const SEEDS: [u64; 2] = [0xcbf2_9ce4_8422_2325, 0x84222325_cbf29ce4];
     const PRIME: u64 = 0x0000_0100_0000_01b3;
+    let number_bytes = number.to_le_bytes();
     let mut bytes = [0u8; 16];
     for (half, seed) in SEEDS.iter().enumerate() {
         let mut h = *seed;
         let input = sheet_symbol
             .as_bytes()
             .iter()
-            .chain(number.to_le_bytes().iter())
+            .chain(number_bytes.iter())
             .chain(b"signex-channel".iter());
         for b in input {
             h ^= u64::from(*b);
