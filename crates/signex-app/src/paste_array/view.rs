@@ -472,7 +472,7 @@ mod tests {
         let texts = crate::layout_probe::lay_out_texts(view(&s, &tokens, &en), window);
         let button = texts
             .iter()
-            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Paste 1000 copies")
+            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Paste 1,000 copies")
             .expect("the paste button is drawn");
         let sent = crate::layout_probe::messages_on_click_at(
             view(&s, &tokens, &en),
@@ -492,7 +492,7 @@ mod tests {
         let texts = crate::layout_probe::lay_out_texts(view(&s, &tokens, &en), window);
         let button = texts
             .iter()
-            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Paste 1000 copies")
+            .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == "Paste 1,000 copies")
             .expect("the paste button is drawn");
         let sent = crate::layout_probe::messages_on_click_at(
             view(&s, &tokens, &en),
