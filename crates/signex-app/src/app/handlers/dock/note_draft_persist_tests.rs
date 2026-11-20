@@ -247,3 +247,72 @@ fn an_export_while_typing_a_note_reads_the_typed_text() {
     let _ = app.handle_bom_preview_open();
     assert_eq!(note_text(&app, &sheet), "note!");
 }
+
+/// A project in a temp directory, its sheet (the note on it) open and
+/// active with "!" typed into the note's box, and the Remove dialog open
+/// on that sheet.
+fn remove_dialog_on_typed_note() -> (Signex, PathBuf, tempfile::TempDir) {
+    use crate::app::RemoveDialogState;
+    use crate::app::handlers::menu::export::tests as fx;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = fx::app_workspace(dir.path().to_str().expect("utf8"), &["top.snxsch"]);
+    let id = app.document_state.projects[0].id;
+    let sheet = dir.path().join("top.snxsch");
+    let engine = signex_engine::Engine::new_with_path(sheet_with_note(), Some(sheet.clone()))
+        .expect("engine");
+    app.document_state.engines.insert(sheet.clone(), engine);
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "top".to_string(),
+        path: sheet.clone(),
+        cached_document: None,
+        project_id: Some(id),
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(sheet.clone());
+    let recorder = Arc::new(Recorder::default());
+    app.document_state.document_saves = DocumentSaves::new(recorder);
+    type_into_note(&mut app, '!');
+    app.ui_state.remove_dialog = Some(RemoveDialogState {
+        target_path: sheet.clone(),
+        tree_path: vec![0],
+        project_id: Some(id),
+        display_name: "top".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: false,
+        is_directory_package: false,
+    });
+    (app, sheet, dir)
+}
+
+/// Exclude from Project on a sheet whose only change is a typed note asks
+/// first; the sheet stays open and the text is still in the box.
+#[test]
+fn exclude_on_a_sheet_with_only_a_typed_note_asks_first() {
+    let (mut app, sheet, _dir) = remove_dialog_on_typed_note();
+    let _ = app.handle_remove_confirm(crate::app::RemoveChoice::ExcludeFromProject);
+    let dialog = app.ui_state.remove_dialog.as_ref().expect("dialog stays");
+    assert!(dialog.unsaved_prompt, "the typed note is an unsaved edit");
+    assert!(
+        app.document_state.engines.contains_key(&sheet),
+        "still open"
+    );
+    let draft = app.document_state.panel_ctx.placed.note.as_ref();
+    assert!(draft.is_some_and(|d| d.edited), "the text waits in the box");
+}
+
+/// Save on that prompt writes the typed text.
+#[test]
+fn save_on_the_exclude_prompt_writes_the_typed_note() {
+    use crate::app::{ExcludeDirtyChoice, RemoveChoice, RemoveMsg};
+    let (mut app, sheet, _dir) = remove_dialog_on_typed_note();
+    let _ = app.handle_remove_confirm(RemoveChoice::ExcludeFromProject);
+    let save = Message::Remove(RemoveMsg::ExcludeDirty(ExcludeDirtyChoice::Save));
+    let task = app.update(save);
+    settle(&mut app, task);
+    let on_disk = std::fs::read_to_string(&sheet).expect("the sheet was written");
+    let saved = signex_types::format::SnxSchematic::parse(&on_disk)
+        .expect("parses")
+        .sheet;
+    assert_eq!(saved.text_notes[0].text, "note!");
+}

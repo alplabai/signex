@@ -95,6 +95,12 @@ impl Signex {
         }
     }
 
+    /// Drop the typed note boxes of the sheets `matches` picks, unapplied:
+    /// a discard throws their text away with the sheet's other edits.
+    pub(crate) fn drop_note_drafts_where(&mut self, matches: &dyn Fn(&Path) -> bool) {
+        drop(self.take_note_drafts(matches, true));
+    }
+
     /// The sheets with a typed note box not applied yet, the owed and the
     /// selected ones, in the main window's Properties and every undocked
     /// window's: a scope (a project, an export) adds them to the sheets it
