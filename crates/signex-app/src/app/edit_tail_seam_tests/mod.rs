@@ -37,14 +37,12 @@ fn quit_prompt_lists(app: &mut Signex, path: &Path) -> bool {
     app.document_state
         .mark_document_dirty(&std::env::temp_dir().join(SENTINEL));
     let _ = app.handle_app_quit_requested();
-    let listed = app
-        .ui_state
+    app.ui_state
         .app_quit_confirm
         .take()
         .expect("the quit prompt opens while the sentinel is unsaved")
         .dirty_paths
-        .contains(&path.to_path_buf());
-    listed
+        .contains(&path.to_path_buf())
 }
 
 /// A project-scope Replace All of `query` by `replacement`, run to the end.
