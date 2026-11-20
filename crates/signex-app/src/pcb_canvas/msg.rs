@@ -18,6 +18,10 @@ pub enum PcbCanvasMsg {
         tolerance_mm: f64,
         mode: ClickMode,
     },
+    /// A plain click soon after another nearby: a click, after which a
+    /// Solid Region, Polygon Pour, Keepout or Pour Cutout with three
+    /// corners closes.
+    DoubleClicked { at: Point, tolerance_mm: f64 },
     /// The left button was released after dragging a box. Left to right
     /// is a window, right to left a crossing. The box runs along the screen,
     /// so on a view turned `view_rotation_deg` clockwise (#2316) its sides are

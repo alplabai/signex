@@ -21,7 +21,8 @@ impl LibraryFile {
         // TSV strings to [`parse_tsv`] and merge the type sidecar.
         #[derive(Deserialize)]
         struct Raw {
-            format: String,
+            #[serde(default)]
+            format: Option<String>,
             library_id: Uuid,
             library: LibrarySection,
             #[serde(default)]
@@ -45,9 +46,7 @@ impl LibraryFile {
         }
 
         let raw: Raw = toml::from_str(text)?;
-        if raw.format != FORMAT_TOKEN {
-            return Err(LibraryFileError::UnsupportedFormat { got: raw.format });
-        }
+        let format = FORMAT_VERSION.read(raw.format.as_deref())?;
         // Second, untyped read: tells whether the text holds keys the typed
         // structs do not model (#1435).
         let untyped: toml::Table = toml::from_str(text)?;
@@ -78,7 +77,7 @@ impl LibraryFile {
         }
         let mut file = LibraryFile {
             manifest: SnxlibManifest {
-                format: raw.format,
+                format,
                 library_id: raw.library_id,
                 library: raw.library,
                 mode: raw.mode,

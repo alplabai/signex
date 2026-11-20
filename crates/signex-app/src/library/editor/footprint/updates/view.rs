@@ -108,6 +108,14 @@ fn set_mode(
     editor.with_parts(|state, primitive| {
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::SetMode(mode));
     });
+    // The exit set's Discard changes restores the footprint as sketch
+    // mode found it, after the first solve (#2518).
+    use crate::library::editor::footprint::sketch_mode::exit;
+    if entering_sketch {
+        exit::begin(editor);
+    } else if mode != EditorMode::Sketch {
+        editor.state.sketch_exit = Default::default();
+    }
     editor.canvas_cache.clear();
     editor.mark_dirty();
 }

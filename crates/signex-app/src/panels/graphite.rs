@@ -15,8 +15,6 @@ use crate::styles::{PillTone, Radii, Spacing, TypeScale, pill_colors, ti};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Table row height of the Messages and ERC tables.
-pub const TABLE_ROW_HEIGHT: f32 = 28.0;
 /// Corner radius of a Properties field.
 pub const PROPERTY_FIELD_RADIUS: f32 = 7.0;
 

@@ -354,8 +354,6 @@ fn erc_focus_and_library_rows_from_an_undocked_window_run_on_the_main_window() {
     let f = fixture();
     for message in [
         crate::panels::PanelMsg::FocusErcViolation(0),
-        crate::panels::PanelMsg::FocusNextErcDiagnostic,
-        crate::panels::PanelMsg::FocusPrevErcDiagnostic,
         crate::panels::PanelMsg::FpLibraryOpenSibling(PathBuf::from("x.snxfpt")),
         crate::panels::PanelMsg::SchLibrarySelectSymbol(0),
     ] {

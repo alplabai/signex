@@ -120,4 +120,10 @@ define_ids! {
     PROJECT_VCS_AUTO_COMMIT_HELP = "project-vcs-auto-commit-help";
     PROJECT_VCS_AUTO_COMMIT_NEEDS_REPO = "project-vcs-auto-commit-needs-repo";
     PROJECT_VCS_PENDING = "project-vcs-pending";
+    PROJECT_PARAMETERS_HINT = "project-parameters-hint";
+    PROJECT_PARAMETERS_VARIABLES = "project-parameters-variables";
+    PROJECT_PARAMETERS_ADD = "project-parameters-add";
+    PROJECT_PARAMETERS_REMOVE = "project-parameters-remove";
+    PROJECT_PARAMETER_SHOWS = "project-parameter-shows";
+    PROJECT_PARAMETER_ERROR = "project-parameter-error";
 }

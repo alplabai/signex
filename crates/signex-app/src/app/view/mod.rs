@@ -358,6 +358,7 @@ impl Signex {
                             .active_document_project()
                             .map(|p| p.data.name.as_str()),
                         i18n: &ui.i18n,
+                        projects: &document.projects,
                     },
                     &document.panel_ctx.tokens,
                 )
@@ -651,6 +652,7 @@ impl Signex {
                         self.ui_state.recent_projects.entries(),
                         &self.ui_state.pinned_projects,
                         &libraries,
+                        self.interaction_state.start_section,
                     )
                 }
             }

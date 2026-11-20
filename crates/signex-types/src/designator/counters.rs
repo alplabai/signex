@@ -82,6 +82,19 @@ mod tests {
         assert_eq!(take_next("R", &mut counters).as_deref(), Some("R8"));
     }
 
+    /// Each EN IEC 81346-2 class code counts on its own (#1416): `QAC` does
+    /// not share a counter with `Q`, nor `RAA` with `RAC`.
+    #[test]
+    fn each_class_code_has_its_own_counter() {
+        let mut counters = seed_counters(["Q9", "QAC2", "RAC4", "RAA1"]);
+        assert_eq!(take_next("QAC", &mut counters).as_deref(), Some("QAC3"));
+        assert_eq!(take_next("Q", &mut counters).as_deref(), Some("Q10"));
+        assert_eq!(take_next("RAA", &mut counters).as_deref(), Some("RAA2"));
+        assert_eq!(take_next("RAC", &mut counters).as_deref(), Some("RAC5"));
+        assert_eq!(next_reference("QAC", ["Q9", "QAC2"]), "QAC3");
+        assert_eq!(next_reference("Q", ["Q9", "QAC12"]), "Q10");
+    }
+
     #[test]
     fn merging_keeps_the_higher_number_per_prefix() {
         let mut a = seed_counters(["R3", "C9"]);

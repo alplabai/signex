@@ -188,3 +188,76 @@ fn a_bad_field_or_text_is_refused_with_the_reason() {
     );
     assert!(matches!(locked, CommandOutcome::Disabled { .. }));
 }
+
+/// #1416: under EN IEC 81346-2 full class codes `designator=-R1`, the
+/// designator as it is shown, names the stored `R1`; under no standard it
+/// names no footprint.
+#[test]
+fn a_shown_designator_names_the_stored_one_under_the_full_codes() {
+    use signex_types::designator::DesignatorStandard;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let document = format!("document={}", path.display());
+    let operands = [
+        document.as_str(),
+        "designator=-R1",
+        "text=designator",
+        "field=justify",
+        "value=left",
+    ];
+    let outcome = headless(&mut app, "set_footprint_text", &operands);
+    assert!(
+        !matches!(outcome, CommandOutcome::Answered(_)),
+        "no footprint is -R1 without the standard"
+    );
+    app.document_state.projects[0]
+        .data
+        .set_designator_standard(Some(DesignatorStandard::Iec81346_2Full));
+    let CommandOutcome::Answered(answer) = headless(&mut app, "set_footprint_text", &operands)
+    else {
+        panic!("not answered");
+    };
+    assert_eq!(answer["designator"], "R1");
+    assert_eq!(answer["justify"], "left");
+}
+
+/// #1416: a board designator typed in Properties as it is shown under the
+/// full class codes, `-QAC3`, is stored as `QAC3`.
+#[test]
+fn a_typed_board_designator_is_stored_without_the_sign() {
+    use crate::panels::PcbFootprintTextMsg;
+    use pcb_geom::ItemRef;
+    use signex_engine::pcb::designators::FootprintTextField;
+    use signex_types::designator::DesignatorStandard;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    app.document_state.projects[0]
+        .data
+        .set_designator_standard(Some(DesignatorStandard::Iec81346_2Full));
+    // Properties edits the one footprint selected, as in the UI: the panel
+    // refresh after `Typed` drops a draft for a footprint it does not show.
+    let selected = app
+        .with_pcb_selection(|sel, board| sel.select_items(board, &[ItemRef::Footprint(R1)]))
+        .expect("the board is in view");
+    assert!(selected.changed, "R1 is selected");
+    app.sync_pcb_board_summary();
+    let field = FootprintTextField::Designator;
+    app.handle_pcb_footprint_text(&PcbFootprintTextMsg::Typed {
+        board: path.clone(),
+        footprint: R1,
+        field,
+        text: "-QAC3".into(),
+    });
+    assert!(
+        app.interaction_state.pcb_footprint_draft.is_some(),
+        "the typed text is kept as a draft"
+    );
+    app.handle_pcb_footprint_text(&PcbFootprintTextMsg::Submitted {
+        board: path.clone(),
+        footprint: R1,
+        field,
+    });
+    let board = app.document_state.pcb_board(&path).expect("board");
+    let fp = board.footprints.iter().find(|f| f.uuid == R1).unwrap();
+    assert_eq!(fp.reference, "QAC3");
+}

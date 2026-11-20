@@ -440,16 +440,21 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
         "draw_rectangle",
         "place_blanket",
         "edit_blanket",
+        "edit_no_erc_rules",
         "place_compile_mask",
         "place_diff_pair",
         "place_component",
         "place_sheet_symbol",
         "place_sheet_entry",
         "sync_sheet_pins",
+        "create_sheet_symbol_from_sheet",
+        "sync_sheet_entries",
         "set_object_position",
         "set_object_rotation",
         "set_sheet_symbol_size",
         "set_symbol_parameter",
+        "set_sheet_variable",
+        "repair_pin_junctions",
         "place_design_block",
         "import_graphics",
     ];
@@ -556,6 +561,9 @@ fn the_catalog_declares_the_document_operand_where_a_command_acts_on_one() {
                     "set_layer_visible",
                     "set_active_layer",
                     "set_layer_color",
+                    // Headless forms of the Reset rows, on the named board.
+                    "reset_layer_colors",
+                    "reset_board_origin",
                     "show_used_layers_only",
                     "set_object_visible",
                     "set_object_transparency",
@@ -666,9 +674,77 @@ fn undo_by_id_is_refused_while_the_person_draws_on_that_sheet() {
         &["at=5,0", "color=#336699", &by_id(A)],
     );
     assert_eq!(run(&mut app, "undo", &[&by_id(A)]), CommandOutcome::Ran);
-    // Done drawing: the sheet takes its step.
+    // Done drawing: the sheet takes its step. The canvas's own wire in
+    // progress (`app_at_work`) ends too; the busy check reads it (#2548).
     app.interaction_state.wire_drawing = false;
     app.interaction_state.wire_points.clear();
+    let canvas = app.interaction_state.active_canvas_mut();
+    canvas.drawing_mode = false;
+    canvas.wire_preview.clear();
     assert_eq!(run(&mut app, "undo", &[&by_id(B)]), CommandOutcome::Ran);
     assert_eq!(colours(&app, "b.snxsch"), 0);
+}
+
+/// #2548: operand undo and redo use the person-busy check `revert` uses, so
+/// they wait while the person draws on the sheet in an undocked window (the
+/// global drawing flag is off) and while they type into an item of it.
+#[test]
+fn undo_and_redo_by_id_wait_while_the_person_draws_undocked_or_types_on_that_sheet() {
+    let mut app = app_at_work();
+    let a = path("a.snxsch");
+    run(
+        &mut app,
+        "color_net",
+        &["at=5,0", "color=#336699", &by_id(A)],
+    );
+    run(
+        &mut app,
+        "color_net",
+        &["at=5,0", "color=#112233", &by_id(A)],
+    );
+    assert_eq!(run(&mut app, "undo", &[&by_id(A)]), CommandOutcome::Ran);
+    let before = app.document_state.engines[&a].document().net_colors.clone();
+
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        crate::app::state::WindowKind::UndockedTab {
+            path: a.clone(),
+            title: "a".into(),
+        },
+    );
+    let mut slot = crate::canvas::CanvasSlot::new();
+    slot.drawing_mode = true;
+    slot.wire_preview = vec![signex_types::schematic::Point::new(20.0, 20.0)];
+    app.interaction_state.canvases.insert(window, slot);
+    assert!(!app.interaction_state.wire_drawing);
+    for step in ["undo", "redo"] {
+        let reason = refusal(&mut app, step, &[&by_id(A)]);
+        assert!(reason.contains("the person is drawing"), "{step}: {reason}");
+    }
+    app.interaction_state.canvases.remove(&window);
+    app.ui_state.windows.remove(&window);
+
+    let symbol = app.document_state.engines[&a].document().symbols[0].uuid;
+    app.interaction_state.editing_text = Some(crate::app::TextEditState {
+        uuid: symbol,
+        kind: signex_types::schematic::SelectedKind::SymbolRefField,
+        text: "PERSON".into(),
+        original_text: "U1".into(),
+        world_x: 0.0,
+        world_y: 0.0,
+        sheet: Some(a.clone()),
+        placement: None,
+    });
+    for step in ["undo", "redo"] {
+        let reason = refusal(&mut app, step, &[&by_id(A)]);
+        assert!(reason.contains("typing"), "{step}: {reason}");
+    }
+    assert_eq!(
+        app.document_state.engines[&a].document().net_colors,
+        before,
+        "nothing was stepped"
+    );
+    app.interaction_state.editing_text = None;
+    assert_eq!(run(&mut app, "redo", &[&by_id(A)]), CommandOutcome::Ran);
 }

@@ -106,7 +106,6 @@ const SWEPT: &[&str] = &[
     "library/editor/standalone/symbol.rs",
     "library/editor/footprint/body3d.rs",
     "library/editor/footprint/context_menu.rs",
-    "library/editor/footprint/sketch_mode/inspector.rs",
     "library/editor/footprint/sketch_mode/active_bar.rs",
 ];
 

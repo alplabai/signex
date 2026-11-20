@@ -105,10 +105,16 @@ fn align_and_shapes_have_expected_shape() {
 
 #[test]
 fn net_color_swatches_and_gated_clear_rows() {
-    let tokens = signex_types::theme::theme_tokens(TID);
-    let with = net_color_entries(signex_i18n::I18n::en_us_ref(), &tokens, TID, false, true);
-    let without = net_color_entries(signex_i18n::I18n::en_us_ref(), &tokens, TID, false, false);
-    assert_eq!(customs(&with), 7); // seven colour swatches
+    let with = net_color_entries(signex_i18n::I18n::en_us_ref(), TID, false, true);
+    let without = net_color_entries(signex_i18n::I18n::en_us_ref(), TID, false, false);
+    // Seven colour swatches, each an ordinary item row so its label shares
+    // the icon rows' left edge.
+    assert_eq!(customs(&with), 0);
+    let swatches = with
+        .iter()
+        .filter(|e| matches!(e, DropdownEntry::Item(it) if it.swatch.is_some()))
+        .count();
+    assert_eq!(swatches, 7);
     assert_eq!(seps(&with), 2);
     // Clear rows grey out when no net carries a custom colour
     assert!(!disabled_of(&with, "Clear Net Color"));
@@ -137,6 +143,9 @@ fn describe(entries: &[DropdownEntry<ActiveBarMsg>]) -> Vec<String> {
             DropdownEntry::Separator => "SEP".to_string(),
             DropdownEntry::Header(label) => format!("HEADER:{label}"),
             DropdownEntry::Custom(_) => "CUSTOM".to_string(),
+            DropdownEntry::Item(it) if it.swatch.is_some() => {
+                format!("SWATCH:{}|disabled={}", it.label, it.disabled)
+            }
             DropdownEntry::Item(it) => format!(
                 "ITEM:{}|disabled={}|icon={}|checked={}|shortcut={:?}",
                 it.label,
@@ -456,6 +465,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "SEP",
             "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -476,6 +486,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "SEP",
             "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -496,6 +507,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "SEP",
             "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -516,6 +528,7 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
             "SEP",
             "ITEM:Place Signal Ground power port|disabled=false|icon=true|checked=false|shortcut=None",
             "ITEM:Place Earth power port|disabled=false|icon=true|checked=false|shortcut=None",
+            "ITEM:Place Chassis power port|disabled=false|icon=true|checked=false|shortcut=None",
         ],
     ),
     (
@@ -807,13 +820,13 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         false,
         &[
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
+            "SWATCH:Blue|disabled=false",
+            "SWATCH:Light Green|disabled=false",
+            "SWATCH:Light Blue|disabled=false",
+            "SWATCH:Red|disabled=false",
+            "SWATCH:Fuchsia|disabled=false",
+            "SWATCH:Yellow|disabled=false",
+            "SWATCH:Dark Green|disabled=false",
             "SEP",
             "ITEM:Custom Color...|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
@@ -826,13 +839,13 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         false,
         true,
         &[
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
+            "SWATCH:Blue|disabled=false",
+            "SWATCH:Light Green|disabled=false",
+            "SWATCH:Light Blue|disabled=false",
+            "SWATCH:Red|disabled=false",
+            "SWATCH:Fuchsia|disabled=false",
+            "SWATCH:Yellow|disabled=false",
+            "SWATCH:Dark Green|disabled=false",
             "SEP",
             "ITEM:Custom Color...|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
@@ -845,13 +858,13 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         false,
         &[
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
+            "SWATCH:Blue|disabled=false",
+            "SWATCH:Light Green|disabled=false",
+            "SWATCH:Light Blue|disabled=false",
+            "SWATCH:Red|disabled=false",
+            "SWATCH:Fuchsia|disabled=false",
+            "SWATCH:Yellow|disabled=false",
+            "SWATCH:Dark Green|disabled=false",
             "SEP",
             "ITEM:Custom Color...|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",
@@ -864,13 +877,13 @@ const GOLDEN: &[(ActiveBarMenu, bool, bool, &[&str])] = &[
         true,
         true,
         &[
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
-            "CUSTOM",
+            "SWATCH:Blue|disabled=false",
+            "SWATCH:Light Green|disabled=false",
+            "SWATCH:Light Blue|disabled=false",
+            "SWATCH:Red|disabled=false",
+            "SWATCH:Fuchsia|disabled=false",
+            "SWATCH:Yellow|disabled=false",
+            "SWATCH:Dark Green|disabled=false",
             "SEP",
             "ITEM:Custom Color...|disabled=false|icon=true|checked=false|shortcut=None",
             "SEP",

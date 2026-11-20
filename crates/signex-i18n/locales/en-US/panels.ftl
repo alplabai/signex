@@ -24,9 +24,9 @@ panels-messages-column-time = TIME
 # Shown when nothing has been logged.
 panels-messages-empty = No runtime messages yet
 
-# Hint beside the empty state: the environment variables that turn on
-# verbose logging. Keep the variable names as they are.
-panels-messages-verbose-hint = Set RUST_LOG=debug or SIGNEX_LOG=debug for verbose output
+# Hint under the empty state; the environment variables that turn on verbose
+# logging follow it on their own line, in mono.
+panels-messages-verbose-hint = Set one of these for verbose output:
 
 # A cell with no value (messages carry no document or time yet).
 panels-messages-no-value = —
@@ -413,6 +413,26 @@ panels-net-inspector-summary =
         [one] { $total } net
        *[other] { $total } nets
     }
+# The two tabs (#1274): the project's nets, or its parts with the net on each pin.
+panels-net-inspector-tab-nets = By Net
+panels-net-inspector-tab-components = By Component
+# Placeholder of the box that filters the parts by designator, value or footprint.
+panels-net-inspector-filter-parts = Filter parts
+# Shown when no part matches the filter.
+panels-net-inspector-empty-parts = No part matches the filter.
+# The part's designator.
+panels-net-inspector-column-part = PART
+panels-net-inspector-column-value = VALUE
+panels-net-inspector-column-footprint = FOOTPRINT
+# A part's designator, value or footprint cell when it is blank.
+panels-net-inspector-blank = —
+# Footer of the By Component tab: how many parts the filter shows of the
+# project's total. Whole numbers.
+panels-net-inspector-parts-summary =
+    { $shown } of { $total ->
+        [one] { $total } part
+       *[other] { $total } parts
+    }
 
 ## Messages panel: short source names
 panels-messages-source-app = App
@@ -483,16 +503,10 @@ panels-status-bar-move-without-wires = Moving without wires ({ $key }: drag with
 # Measure tool prompts.
 panels-status-bar-measure-first = Click the first point
 panels-status-bar-measure-second = Click the second point
-panels-erc-run = Run ERC (F8)
-panels-erc-clear = Clear
 panels-erc-running = Running…
-panels-erc-stale = Results may be out of date: the sheet changed since the last run. Run ERC again.
 panels-erc-no-findings-left = No findings left since the last run
-panels-erc-no-diagnostics = No ERC diagnostics yet
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
-panels-erc-results-title = ERC Diagnostic Results
 panels-erc-add-no-connect = Add No-Connect
-panels-erc-show-on-canvas = Show on Canvas
 panels-erc-waive-net = Waive net
 panels-erc-restore = Restore
 panels-properties-needs-schematic = Properties are available when a schematic is active
@@ -545,9 +559,6 @@ panels-child-sheet-line-width = Line Width (mm)
 
 ## ERC panel counts and waivers. $count is a whole number.
 panels-erc-count-errors = { $count } errors
-panels-erc-count-warnings = { $count } warnings
-panels-erc-count-info = { $count } info
-panels-erc-waived = { $count } waived
 # A net waiver: the rule id, the net name and how many findings it hid in the
 # newest run.
 panels-erc-waiver-row = { $rule }  net { $net }  ({ $hidden ->
@@ -693,3 +704,106 @@ panels-directive-net-class = Net Class
 panels-directive-erc-exclusions = ERC Exclusions
 # Checkbox: the Blanket reports no ERC rule at all inside its region.
 panels-directive-all-rules = All Rules
+
+## ERC panel (#85): Run ERC, the count tiles, findings grouped by rule and
+## the Waived group. The Run ERC key cap comes from the keymap.
+panels-erc-run-button = Run ERC
+panels-erc-clear-tooltip = Clear the ERC results
+panels-erc-stale-banner = Results may be out of date: the sheet changed since the last run.
+# Captions under the count tiles; $count is a whole number.
+panels-erc-tile-errors =
+    { $count ->
+        [one] error
+       *[other] errors
+    }
+panels-erc-tile-warnings =
+    { $count ->
+        [one] warning
+       *[other] warnings
+    }
+panels-erc-tile-info = info
+panels-erc-clean = No problems found.
+# A clean run: what it checked and when. $time is the clock time, HH:MM.
+panels-erc-clean-detail = { $sheets ->
+        [one] 1 sheet
+       *[other] { $sheets } sheets
+    }, { $symbols ->
+        [one] 1 symbol
+       *[other] { $symbols } symbols
+    } and { $nets ->
+        [one] 1 net
+       *[other] { $nets } nets
+    } checked at { $time }.
+# The second line of a finding: its sheet and position.
+panels-erc-finding-place = { $sheet } · { $x }, { $y }
+# The one row action that selects and frames a finding (AV-13).
+panels-erc-show = Show
+panels-erc-waived-group = Waived
+# A net waiver in the Waived group: the rule id and the net.
+panels-erc-net-waiver-title = { $rule } · net { $net }
+# Who waived a finding and when, as they wrote it.
+panels-erc-waived-by = by { $author } · { $date }
+
+## The waiver form ERC and DRC share (AV-13).
+panels-waiver-needs-both = Write a reason and an author to waive it.
+
+## Messages panel (#86): level chips, source and document filters.
+panels-messages-level-all = All
+panels-messages-all-sources = All sources
+panels-messages-all-documents = All documents
+panels-messages-filter-hint = Filter messages
+panels-messages-copy-tooltip = Copy the shown messages
+panels-messages-clear-tooltip = Clear the messages
+panels-messages-none-match = No messages match the filters.
+# Tab + compact dock panel pair (#2523): the panel header's link that opens
+# the same view as a document tab.
+panels-paired-open-as-tab = Open as tab
+# Title of the length-matching tab and its compact dock panel.
+panels-paired-length-matching = Length Matching
+# Compact group header caption: the group's member count, a whole number.
+panels-compact-group-members =
+    { $count ->
+        [one] { $count } member
+       *[other] { $count } members
+    }
+# Compact group header caption: the target length and its tolerance, both
+# already formatted in the display unit.
+panels-compact-group-band = { $target } ± { $tolerance }
+# Status pill: how many members are outside the target band (whole number).
+panels-compact-group-out-of-band = { $count } out of band
+# Status pill: every member is inside the target band.
+panels-compact-group-all-in-band = all in band
+# Member caption: the member is one half of the differential pair $pair.
+panels-compact-group-pair = pair { $pair }
+# Member caption: the member is an xSignal (a net path through series parts).
+panels-compact-group-xsignal = xSignal
+# Section title: the ERC rules a selected No-ERC directive silences at its
+# point (#1699).
+panels-no-erc-rules = Suppressed Rules
+# Checkbox: the No-ERC directive silences every ERC rule at its point.
+panels-no-erc-all-rules = All Rules
+
+## Messages lines for the notices an edit raises (signex_engine::EngineNotice).
+## Pin names ("R7 pin 1") and net names are passed in as they are.
+
+# A dragged wire could not keep what joined it at one point.
+panels-messages-dragged-wire-left-one = could not keep { $name } on the dragged wire
+# The same at several points; $names lists the first few.
+panels-messages-dragged-wire-left-many = could not keep { $count } connections on the dragged wire: { $names }
+# A grip drag of a wire end could not keep the wires attached at the end,
+# which was at ($x, $y) mm.
+panels-messages-grip-end-left = could not keep the wires at ({ $x }, { $y }) on the dragged end
+# "Keep wires" held a pin on its net instead of joining it to the wire of
+# another net its end now lies in.
+panels-messages-held-pins-one = { $name } kept its net and was not joined to the wire it now ends on
+panels-messages-held-pins-many = { $count } pins kept their nets and were not joined to the wires they end on: { $names }
+# A pin end got no junction dot because the dot would merge two nets.
+panels-messages-pin-dot-refused-one = could not join { $pin } to the wires it ends on: they carry two nets, { $through } and { $other }
+# The same for several pins; each entry of $names is "R1 pin 2 (A, B)".
+panels-messages-pin-dot-refused-many = could not join { $count } pins to wires of two nets they end on: { $names }
+# One entry of that list: a pin and the two nets.
+panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
+# Stands for a net nothing names.
+panels-messages-unnamed-net = an unnamed net
+# The end of a list cut after its first few entries.
+panels-messages-list-more = { $names } and { $count } more

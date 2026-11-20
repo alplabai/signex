@@ -170,3 +170,13 @@ project-vcs-auto-commit = Commit every save
 project-vcs-auto-commit-help = Each save of a project file is committed to the project's repository. Turned off, saves are not committed and the repository stays.
 project-vcs-auto-commit-needs-repo = Enable version control first: the project folder has no Git repository.
 project-vcs-pending = Commits in progress: { $count }
+project-parameters-hint = Every sheet inherits these; a sheet's own Title Block value or sheet variable overrides one. A value starting with = is an expression, such as = VCC / 2. Press Enter in a value to check it.
+project-parameters-variables = Variables
+project-parameters-add = Add
+project-parameters-remove = Remove
+# What a project variable's `=` expression evaluates to. $value is the
+# result, such as 1.65V.
+project-parameter-shows = Shows { $value }
+# Why a project variable's `=` expression does not evaluate. $error is the
+# reason.
+project-parameter-error = Error: { $error }

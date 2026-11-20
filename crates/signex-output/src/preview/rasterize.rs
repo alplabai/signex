@@ -46,7 +46,7 @@ pub fn rasterize_page(
     }
 
     let cell = sheet_cell_value(sheet);
-    let sheet_metadata = ctx.metadata.for_sheet(&sheet.schematic.title_block);
+    let sheet_metadata = ctx.metadata.for_schematic(&sheet.schematic);
     let special = crate::pdf::frame::sheet_substitution(sheet, &opts.pdf, &sheet_metadata);
     let eval_inputs = SvgEvaluatorInputs {
         special_strings: Some(&special),

@@ -1,5 +1,6 @@
-//! Tools ▸ Assign Footprints (#2248): a project-wide table of the placed
-//! parts and their footprints, like a footprint manager.
+//! Tools ▸ Assign Footprints (#2248, Graphite #80): a project-wide table of
+//! the placed parts and their footprints, like a footprint manager, with a
+//! read-only footprint preview.
 //!
 //! Each part chooses only among the footprints its own library row offers
 //! (the default and the alternates, the list Properties shows); its link to
@@ -11,13 +12,19 @@
 use std::sync::Arc;
 
 mod apply;
+mod filter;
+mod preview;
 mod read;
 mod state;
 mod update;
 
 #[cfg(test)]
+mod filter_tests;
+#[cfg(test)]
 mod tests;
 
+pub use filter::{AssignFilter, TickedBar};
+pub use preview::{FootprintFacts, PadSize, PinMap, PreviewLoad, pin_map};
 pub use read::FootprintRead;
 pub use state::{AssignFootprintsState, AssignProblem, FootprintOffer, FootprintPart, PartAccess};
 
@@ -46,10 +53,30 @@ pub enum AssignFootprintsMsg {
     TickedPicked(String),
     /// A part's tick box was clicked.
     RowToggled(usize),
-    /// The header tick box: tick every part, or none.
+    /// The header tick box: tick every listed part, or none (also Clear
+    /// ticks).
     AllToggled(bool),
     /// Tick every part of the same library row as this one.
     SameRowTicked(usize),
+    /// A filter chip was pressed.
+    FilterPicked(AssignFilter),
+    /// The filter field was typed in.
+    FilterEdited(String),
+    /// The pointer entered (`inside`) or left row `row`.
+    RowHovered {
+        row: usize,
+        inside: bool,
+    },
+    /// A row was clicked: the preview draws its footprint.
+    RowPreviewed(usize),
+    /// The preview's expand button was pressed.
+    PreviewWidthToggled,
+    /// A footprint read for the preview of dialog `generation` finished.
+    PreviewLoaded {
+        generation: u64,
+        binding: String,
+        result: Result<Arc<FootprintFacts>, String>,
+    },
     ApplyRequested,
     CancelRequested,
 }

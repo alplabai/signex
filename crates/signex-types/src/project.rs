@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::agent_journal::AgentJournalSettings;
 use crate::document_id::DocumentId;
+use crate::format_version::{FormatVersion, FormatVersionError, MissingToken, NewerMinor};
 
 mod annotate_undo;
 mod annotation;
@@ -16,6 +17,7 @@ mod erc_waiver;
 mod fab_outputs;
 mod fab_tier;
 mod order;
+mod profile_override;
 mod requirements;
 mod rule_file;
 mod rule_profile;
@@ -38,6 +40,10 @@ pub use erc_waiver::ErcWaiver;
 pub use fab_outputs::FabOutputKinds;
 pub use fab_tier::FabCapabilities;
 pub use order::ListMove;
+pub use profile_override::{
+    ProfileChange, builtin_override, duplicate_profile, override_builtin, rename_user_profile,
+    reset_builtin, saved_profiles, unique_profile_name,
+};
 pub use requirements::{
     DEFAULT_PART_STATES, LIFECYCLE_STATES, MAX_REQUIREMENT_ID_CHARS, REQUIREMENT_KINDS,
     REQUIREMENTS_KEY, Requirement, RequirementEntry, RequirementField, RequirementKind,
@@ -59,12 +65,15 @@ pub use setup::{
     COPPER_LAYERS, DEFAULT_DESIGNATORS, NEW_BOARD_GRID_MM, PcbDefaults, PcbField, PcbValueError,
     ProjectDefaults, SHEET_SIZES, SheetDefaults, copper_layers,
 };
-pub use setup_profile::{FabTemplate, ProjectSetup, ResolvedSetup, SetupProfile, designator_token};
+pub use setup_profile::{
+    FabTemplate, LAYER_STEP, MIN_STEPPED_LAYERS, ProjectSetup, ResolvedSetup, SetupProfile,
+    designator_token, stepped_layers,
+};
 pub use unknown::UnknownJson;
 pub use user_profile::{
     MAX_PROFILE_NAME_CHARS, PROJECT_PROFILE_TOKEN, ProfileNameProblem, ProfileRef,
-    USER_PROFILE_ID_PREFIX, UserProfile, check_profile_name, find_user_profile, new_profile_id,
-    resolve_profile, save_user_profile, user_profiles_from_value,
+    USER_PROFILE_ID_PREFIX, UserProfile, add_user_profile, check_profile_name, find_user_profile,
+    new_profile_id, resolve_profile, save_user_profile, user_profiles_from_value,
 };
 pub use variants::{BASE_VARIANT, MAX_VARIANT_NAME_CHARS, VariantProblem, is_base_variant};
 
@@ -81,9 +90,17 @@ where
         .and_then(|text| text.parse().ok()))
 }
 
-/// Format token written into every saved `.snxprj` (`"format"` key). Files
-/// without it predate the token and are read as version 1.
+/// Format token written into every saved `.snxprj` (`"format"` key).
 pub const SNXPRJ_FORMAT_V1: &str = "snxprj/1";
+
+/// `.snxprj` version policy. A file without the token predates it and is
+/// read as version 1; a newer token is refused on load.
+pub const SNXPRJ_VERSION: FormatVersion = FormatVersion {
+    current: SNXPRJ_FORMAT_V1,
+    readable: &[SNXPRJ_FORMAT_V1],
+    newer_minor: NewerMinor::Refused,
+    missing: MissingToken::ReadAs(SNXPRJ_FORMAT_V1),
+};
 
 const FORMAT_KEY: &str = "format";
 
@@ -618,31 +635,31 @@ pub enum ProjectError {
     )]
     Corrupt { path: String, reason: String },
     #[error(
-        "project file {path} uses format \"{found}\", which this Signex ({supported}) cannot read; \
-         it was not opened so a save cannot drop data written by another version. \
-         Update Signex to open it"
+        "project file {path}: {source}; it was not opened so a save cannot drop data \
+         written by another version"
     )]
     UnsupportedFormat {
         path: String,
-        found: String,
-        supported: &'static str,
+        #[source]
+        source: FormatVersionError,
     },
 }
 
-/// Accept a missing token (pre-#788 file) or [`SNXPRJ_FORMAT_V1`]; refuse
-/// anything else, newer versions and garbage alike.
+/// Check the token through [`SNXPRJ_VERSION`]; a token that is not a string
+/// is refused as garbled.
 fn check_format_token(path: &Path, token: Option<&Value>) -> Result<(), ProjectError> {
-    let unsupported = |found: String| ProjectError::UnsupportedFormat {
-        path: path.display().to_string(),
-        found,
-        supported: SNXPRJ_FORMAT_V1,
+    let found = match token {
+        None => None,
+        Some(Value::String(s)) => Some(s.clone()),
+        Some(other) => Some(other.to_string()),
     };
-    match token {
-        None => Ok(()),
-        Some(Value::String(s)) if s == SNXPRJ_FORMAT_V1 => Ok(()),
-        Some(Value::String(s)) => Err(unsupported(s.clone())),
-        Some(other) => Err(unsupported(other.to_string())),
-    }
+    SNXPRJ_VERSION
+        .read(found.as_deref())
+        .map(drop)
+        .map_err(|source| ProjectError::UnsupportedFormat {
+            path: path.display().to_string(),
+            source,
+        })
 }
 
 /// Parse a `.snxprj` project file. Two paths:

@@ -52,6 +52,24 @@ fn icon_button(
     icon_button_of(svg_icon(handle), tokens)
 }
 
+/// The icon actions the active panel puts in its title bar (ERC Clear,
+/// Messages Copy and Clear), each with its tooltip.
+fn title_actions<'a>(kind: PanelKind, ctx: &panels::PanelContext) -> Vec<Element<'a, DockMessage>> {
+    panels::title_actions(kind, ctx)
+        .into_iter()
+        .map(|action| {
+            let tip = container(text(action.tip).size(TS.caption)).padding([SP.xs, SP.s]);
+            signex_widgets::tooltip(
+                icon_button(action.icon, &ctx.tokens).on_press(DockMessage::Panel(action.on_press)),
+                tip,
+                iced::widget::tooltip::Position::Bottom,
+            )
+            .style(styles::context_menu(&ctx.tokens))
+            .boxed()
+        })
+        .collect()
+}
+
 /// Boxed button style of a rail tab.
 type TabStyleFn = Box<dyn Fn(&Theme, button::Status) -> button::Style>;
 
@@ -247,18 +265,21 @@ impl DockArea {
         let mut title_bar = row![
             container(title_text).padding([0, 10]),
             Space::new().width(Length::Fill),
-        ]
-        .spacing(0)
-        .align_y(iced::Alignment::Center)
-        .width(Length::Fill);
-        if let Some(open) = region
-            .panels
-            .get(region.active)
-            .and_then(|panel| open_library_button(*panel, ctx))
-        {
-            title_bar = title_bar.push(open);
+        ];
+        if let Some(panel) = region.panels.get(region.active) {
+            if let Some(open) = open_library_button(*panel, ctx) {
+                title_bar = title_bar.push(open);
+            }
+            for action in title_actions(*panel, ctx) {
+                title_bar = title_bar.push(action);
+            }
         }
-        let title_bar = title_bar.push(collapse_btn).push(close_btn);
+        let title_bar = title_bar
+            .push(collapse_btn)
+            .push(close_btn)
+            .spacing(0)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill);
 
         // The tab strip (built above) holds just the tab buttons. Collapse /
         // close moved up to the title bar so they're always visible
@@ -462,24 +483,30 @@ impl DockArea {
         };
 
         // One radius-10 card: title bar, body, themed shadow.
-        let bar = container(
-            row![
-                container(
-                    text(label)
-                        .size(graphite::TITLE_SIZE)
-                        .font(graphite::title_font())
-                        .color(styles::ti(ctx.tokens.text)),
-                )
-                .padding([0, 10])
-                .width(Length::Fill),
-            ]
-            .extend(open_library_button(kind, ctx))
-            .push(
-                icon_button(icons::icon_close(ctx.theme_id), &ctx.tokens)
-                    .on_press(DockMessage::DockFloating(idx))
-                    .boxed(),
+        let mut bar_row = row![
+            container(
+                text(label)
+                    .size(graphite::TITLE_SIZE)
+                    .font(graphite::title_font())
+                    .color(styles::ti(ctx.tokens.text)),
             )
-            .align_y(iced::Alignment::Center),
+            .padding([0, 10])
+            .width(Length::Fill),
+        ];
+        if let Some(open) = open_library_button(kind, ctx) {
+            bar_row = bar_row.push(open);
+        }
+        for action in title_actions(kind, ctx) {
+            bar_row = bar_row.push(action);
+        }
+        let bar = container(
+            bar_row
+                .push(
+                    icon_button(icons::icon_close(ctx.theme_id), &ctx.tokens)
+                        .on_press(DockMessage::DockFloating(idx))
+                        .boxed(),
+                )
+                .align_y(iced::Alignment::Center),
         )
         .width(Length::Fill)
         .center_y(graphite::TITLE_H)

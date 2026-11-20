@@ -52,6 +52,56 @@ impl Signex {
         self.active_profile_ref().is_some()
     }
 
+    /// The rows the ERC dialog's "Profile" menu offers now (#2413), in menu
+    /// order. Empty: the button is drawn disabled.
+    pub fn erc_profile_actions(&self) -> Vec<ErcProfileAction> {
+        profile_actions(ProfileMenuFacts {
+            has_project: self.document_state.active_document_project().is_some(),
+            stores_rules: self.active_project_stores_rules(),
+            unreadable_rules: self.active_project_has_unreadable_rules(),
+            has_profile: self.active_project_has_profile(),
+        })
+    }
+
+    /// The "Profile" button was pressed: open the menu, or close it. A menu
+    /// with no rows never opens.
+    pub(crate) fn handle_erc_profile_menu_toggled(&mut self) -> Task<Message> {
+        let open = !self.ui_state.erc_profile_menu_open && !self.erc_profile_actions().is_empty();
+        self.ui_state.erc_profile_menu_open = open;
+        Task::none()
+    }
+}
+
+/// What decides the "Profile" menu rows.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ProfileMenuFacts {
+    pub has_project: bool,
+    pub stores_rules: bool,
+    /// The `.snxprj` keeps a rule set from a newer Signex.
+    pub unreadable_rules: bool,
+    /// The stored rules record the profile they came from.
+    pub has_profile: bool,
+}
+
+/// The "Profile" menu rows for `facts`, the same conditions the footer
+/// buttons had: Store only for a project without rules whose file holds no
+/// newer set (storing would replace it on save); Save as for stored rules;
+/// Update for stored rules that record their profile.
+pub(crate) fn profile_actions(facts: ProfileMenuFacts) -> Vec<ErcProfileAction> {
+    let mut rows = Vec::new();
+    if facts.has_project && !facts.stores_rules && !facts.unreadable_rules {
+        rows.push(ErcProfileAction::StoreInProject);
+    }
+    if facts.stores_rules {
+        rows.push(ErcProfileAction::SaveAsProfile);
+        if facts.has_profile {
+            rows.push(ErcProfileAction::UpdateFromProfile);
+        }
+    }
+    rows
+}
+
+impl Signex {
     /// Default name offered by "Save as profile".
     pub(crate) fn default_profile_name(&self) -> String {
         let project = self

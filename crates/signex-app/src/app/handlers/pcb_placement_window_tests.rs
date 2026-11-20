@@ -42,18 +42,18 @@ fn board() -> PcbBoard {
     .unwrap()
 }
 
-struct Rig {
-    app: Signex,
+pub(super) struct Rig {
+    pub(super) app: Signex,
     /// Shown by the undocked window.
-    a: PathBuf,
+    pub(super) a: PathBuf,
     /// Shown by the main window unless a test switches it to `a`.
-    b: PathBuf,
-    window: iced::window::Id,
+    pub(super) b: PathBuf,
+    pub(super) window: iced::window::Id,
     _dir: tempfile::TempDir,
 }
 
 /// Board A undocked in `window`, board B active in the main window.
-fn rig() -> Rig {
+pub(super) fn rig() -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     // A fresh process opens the first-run tour, and its rung takes every Esc.
@@ -104,7 +104,7 @@ fn live(app: &Signex, path: &Path) -> String {
     serde_json::to_string(app.document_state.pcb_board(path).expect("board")).unwrap()
 }
 
-fn click(x: f64, y: f64) -> PcbCanvasMsg {
+pub(super) fn click(x: f64, y: f64) -> PcbCanvasMsg {
     PcbCanvasMsg::Clicked {
         at: Point::new(x, y),
         tolerance_mm: 0.05,
@@ -124,11 +124,11 @@ fn dropped(from: Point, to: Point) -> PcbCanvasMsg {
     PcbCanvasMsg::FootprintDropped { from, to }
 }
 
-fn in_window(app: &mut Signex, window: iced::window::Id, msg: PcbCanvasMsg) {
+pub(super) fn in_window(app: &mut Signex, window: iced::window::Id, msg: PcbCanvasMsg) {
     let _ = app.update(Message::Pcb(PcbMsg::CanvasInWindow { window, msg }));
 }
 
-fn in_main(app: &mut Signex, msg: PcbCanvasMsg) {
+pub(super) fn in_main(app: &mut Signex, msg: PcbCanvasMsg) {
     let _ = app.update(Message::PcbCanvas(msg));
 }
 
@@ -136,7 +136,7 @@ fn escape(app: &mut Signex, window: Option<iced::window::Id>) {
     let _ = app.update(Message::Input(InputMsg::EscapePressed { window }));
 }
 
-fn menu_in_window(app: &mut Signex, window: iced::window::Id, id: &str) {
+pub(super) fn menu_in_window(app: &mut Signex, window: iced::window::Id, id: &str) {
     let msg = MenuMessage::Command(AppCommandId::new(id).expect("a catalog id"));
     let _ = app.update(Message::Ui(UiMsg::MenuInWindow { window, msg }));
 }
