@@ -66,13 +66,13 @@ fn open(app: &mut Signex, modal: ModalId) {
             })
         }
         ModalId::GridProperties => {
-            ui.grid_properties = Some(GridPropertiesState {
+            ui.grid_properties = Some(Box::new(GridPropertiesState {
                 step_mm: "1".into(),
                 fine_display: Default::default(),
                 coarse_display: Default::default(),
                 multiplier: 5,
                 ..GridPropertiesState::default()
-            })
+            }))
         }
         ModalId::SelectionFilterCustom => {
             ui.selection_filter_custom = Some(SelectionFilterCustomState {

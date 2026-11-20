@@ -356,13 +356,14 @@ impl Signex {
                 );
                 if let Some(opts) = editor_snap {
                     let step = opts.grid_step_mm;
-                    self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
-                        step_mm: format!("{step:.4}"),
-                        fine_display: opts.fine_grid_display,
-                        coarse_display: opts.coarse_grid_display,
-                        multiplier: opts.coarse_multiplier,
-                        ..crate::app::GridPropertiesState::default()
-                    });
+                    self.ui_state.grid_properties =
+                        Some(Box::new(crate::app::GridPropertiesState {
+                            step_mm: format!("{step:.4}"),
+                            fine_display: opts.fine_grid_display,
+                            coarse_display: opts.coarse_grid_display,
+                            multiplier: opts.coarse_multiplier,
+                            ..crate::app::GridPropertiesState::default()
+                        }));
                 }
                 self.finish_update()
             }
