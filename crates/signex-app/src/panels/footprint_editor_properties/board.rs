@@ -27,6 +27,10 @@ const SP: Spacing = Spacing::DEFAULT;
 #[path = "outline_checks.rs"]
 mod outline_checks;
 
+// The Slot, Pour, Mechanical layer and Component anchor rows (decision 2).
+#[path = "board_targets.rs"]
+mod board_targets;
+
 /// The Board section with nothing selected (#2356): the board's name, its
 /// outline's size and area, and the sketch's counts. It stands where a
 /// footprint shows its own fields, none of which apply to a board. The
@@ -162,6 +166,7 @@ pub(super) fn view_board_section<'a>(
             move |value| PanelMsg::BoardSketch(M::HoleNetEdited { id, value }),
         ));
     }
+    col = board_targets::view_board_targets(col, id, &board.target, palette, i18n);
     col.push(
         container(
             text(t!(i18n, ids::BOARD_SKETCH_ROLES_HINT))

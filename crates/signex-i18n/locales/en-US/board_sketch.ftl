@@ -67,3 +67,16 @@ board-sketch-check-cutout-outside = Cutout outside the outline
 board-sketch-check-keepout-outside = Keepout outside the outline
 board-sketch-check-hole-outside = Mounting hole outside the outline
 board-sketch-check-opening-outside = Opening outside the outline
+# Properties rows of the board targets of decision 2 (2026-11-20). A slot's
+# size: $length end to end and $width across, in mm with two decimals.
+board-sketch-slot = Slot
+board-sketch-slot-size = { $length } × { $width } · routed
+board-sketch-slot-not-yet = Not a slot yet: two parallel lines joined by two tangent arcs
+board-sketch-pour-layer = Layer
+board-sketch-mechanical-layer = Layer
+# A mechanical layer by its number, 1 to 32.
+board-sketch-mechanical-n = Mechanical { $n }
+board-sketch-anchor-component = Component
+board-sketch-anchor-pick = Pick a component
+# Messages, when Bake meets a locked component; $reference is its designator.
+board-sketch-anchor-locked = { $reference } is locked and stays where it is; unlock it to move it to its anchor

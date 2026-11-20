@@ -167,6 +167,9 @@ pub fn target_label_id(kind: BakedKind) -> MessageId {
         BakedKind::VScores => ids::EDITORS_SKETCH_TARGET_V_SCORES,
         BakedKind::BoardOutline => ids::EDITORS_SKETCH_TARGET_BOARD_OUTLINE,
         BakedKind::MountingHoles => ids::EDITORS_SKETCH_TARGET_MOUNTING_HOLES,
+        BakedKind::BoardPours => ids::EDITORS_SKETCH_TARGET_POURS,
+        BakedKind::Mechanical => ids::EDITORS_SKETCH_TARGET_MECHANICAL,
+        BakedKind::ComponentAnchors => ids::EDITORS_SKETCH_TARGET_COMPONENT_ANCHORS,
     }
 }
 

@@ -17,9 +17,12 @@ use signex_sketch::SketchData;
 use signex_sketch::entity::EntityKind;
 use signex_sketch::id::SketchEntityId;
 use signex_sketch::solver::state::{circle_radius, point_xy};
+use signex_types::pcb::BoardGraphic;
+use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::SketchHost;
+use signex_types::sketch::board_attr::SketchBoardItems;
 
 use super::super::super::{FootprintCanvas, FootprintCanvasState};
 use super::super::cursor_ink::CursorInk;
@@ -28,6 +31,7 @@ use super::super::pad::PadLabels;
 use crate::library::editor::footprint::layers::LayerPalette;
 use crate::library::editor::footprint::state::{EditorMode, FootprintEditorState};
 use crate::pcb_canvas::layer_style::board_layer_colour;
+use crate::styles::TypeScale;
 
 /// How much of the ground colour the veil lays over the canvas.
 const VEIL_ALPHA: f32 = 0.6;
@@ -45,6 +49,9 @@ const FAINT_WIDTH: f32 = 1.0;
 const ARC_STEPS: usize = 24;
 /// Dashes of a V-score and of construction geometry, in pixels.
 const DASHES: &[f32] = &[6.0, 4.0];
+/// Radius of a component anchor's ring and reach of its cross, in pixels.
+const ANCHOR_RING: f32 = 5.0;
+const ANCHOR_ARM: f32 = 9.0;
 
 impl FootprintCanvas<'_> {
     /// The bake preview, over everything else; nothing while it is closed.
@@ -70,8 +77,12 @@ impl FootprintCanvas<'_> {
         match self.state.sketch_host() {
             // A refused board bake draws nothing; the card says why.
             SketchHost::Board => {
-                if let Some(baked) = self.state.sketch_exit.board_result.as_deref() {
+                let exit = &self.state.sketch_exit;
+                if let Some(baked) = exit.board_result.as_deref() {
                     draw_board_bake(frame, cstate, baked);
+                }
+                if let Some(items) = exit.board_items.as_deref() {
+                    draw_board_items(frame, cstate, items);
                 }
             }
             SketchHost::Footprint => self.draw_footprint_bake(frame, cstate, sketch),
@@ -242,6 +253,89 @@ fn draw_board_bake(frame: &mut canvas::Frame, cstate: &FootprintCanvasState, bak
             cstate.world_to_screen((score.to.x, score.to.y)),
         );
         frame.stroke(&path, dashed(edge));
+    }
+}
+
+/// The pours, mechanical drawings and component anchors of a board bake
+/// (decision 2): pours filled in their copper colour, drawings in their
+/// mechanical layer's colour, an anchor as a cross in a ring with the
+/// component's designator (mockup 179). A slot is a cutout and is drawn
+/// with them.
+fn draw_board_items(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    items: &SketchBoardItems,
+) {
+    for zone in &items.zones {
+        let Some(layer) = zone.pcb_layer() else {
+            continue;
+        };
+        let points = zone.outline.iter().map(|p| (p.x, p.y));
+        let colour = board_layer_colour(layer);
+        draw_region(frame, cstate, points, colour, REGION_FILL_ALPHA);
+    }
+    for drawing in &items.graphics {
+        let Some(layer) = drawing.pcb_layer() else {
+            continue;
+        };
+        let stroke = Stroke::default()
+            .with_width(EDGE_WIDTH)
+            .with_color(board_layer_colour(layer));
+        if let Some(path) = graphic_path(cstate, drawing) {
+            frame.stroke(&path, stroke);
+        }
+    }
+    let theme = ResolvedTheme::from_canvas_colors(crate::styles::board_canvas_colors());
+    let [r, g, b, a] = theme.color(ColorSlot::Selection);
+    let mark = Color { r, g, b, a };
+    for anchor in &items.anchors {
+        let at = cstate.world_to_screen((anchor.position.x, anchor.position.y));
+        let ring = Stroke::default().with_width(EDGE_WIDTH).with_color(mark);
+        frame.stroke(&Path::circle(at, ANCHOR_RING), ring);
+        frame.stroke(
+            &Path::new(|cross| {
+                cross.move_to(Point::new(at.x - ANCHOR_ARM, at.y));
+                cross.line_to(Point::new(at.x + ANCHOR_ARM, at.y));
+                cross.move_to(Point::new(at.x, at.y - ANCHOR_ARM));
+                cross.line_to(Point::new(at.x, at.y + ANCHOR_ARM));
+            }),
+            ring,
+        );
+        frame.fill_text(canvas::Text {
+            content: anchor.reference.clone(),
+            position: Point::new(at.x - ANCHOR_ARM, at.y - ANCHOR_ARM),
+            color: mark,
+            size: iced::Pixels(TypeScale::DEFAULT.caption),
+            align_x: iced::alignment::Horizontal::Right.into(),
+            align_y: iced::alignment::Vertical::Bottom,
+            ..canvas::Text::default()
+        });
+    }
+}
+
+/// A mechanical drawing's line, arc or circle on screen.
+fn graphic_path(cstate: &FootprintCanvasState, drawing: &BoardGraphic) -> Option<Path> {
+    let at = |p: signex_types::pcb::Point| (p.x, p.y);
+    match drawing.kind()? {
+        BoardGraphicKind::Line => {
+            let (from, to) = (drawing.start?, drawing.end?);
+            Some(Path::line(
+                cstate.world_to_screen(at(from)),
+                cstate.world_to_screen(at(to)),
+            ))
+        }
+        BoardGraphicKind::Arc => Some(arc_path(
+            cstate,
+            at(drawing.center?),
+            at(drawing.start?),
+            at(drawing.end?),
+            true,
+        )),
+        BoardGraphicKind::Circle => Some(Path::circle(
+            cstate.world_to_screen(at(drawing.center?)),
+            drawing.radius as f32 * cstate.scale,
+        )),
+        BoardGraphicKind::Rectangle | BoardGraphicKind::TextFrame => None,
     }
 }
 

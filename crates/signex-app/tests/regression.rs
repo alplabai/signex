@@ -128,6 +128,11 @@ mod pcb_board_menu_view;
 #[path = "regression/pcb_hidden_layer_select.rs"]
 mod pcb_hidden_layer_select;
 
+// Decision 2 (2026-11-20) - board sketch targets Slot, Pour, Mechanical
+// layer and Component anchor.
+#[path = "regression/board_sketch_targets.rs"]
+mod board_sketch_targets;
+
 // #2234 - board sketch mode: entry points, commit, refused bake, Esc.
 #[path = "regression/board_sketch.rs"]
 mod board_sketch;

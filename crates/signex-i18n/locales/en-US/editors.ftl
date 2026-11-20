@@ -479,3 +479,11 @@ editors-sketch-target-board-outline = Outline
 editors-sketch-target-mounting-holes = Holes
 # A count in the bake preview; $count is a whole number.
 editors-sketch-bake-count = { $count }
+# The board roles of decision 2 (2026-11-20), in the board's role picker.
+editors-sketch-role-slot = Slot
+editors-sketch-role-board-pour = Pour
+editors-sketch-role-mechanical-layer = Mechanical layer
+editors-sketch-role-component-anchor = Component anchor
+# Bake preview rows of a board sketch.
+editors-sketch-target-mechanical = Mechanical
+editors-sketch-target-component-anchors = Anchors

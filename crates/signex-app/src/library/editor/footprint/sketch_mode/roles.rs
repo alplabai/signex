@@ -29,6 +29,10 @@ pub fn role_label_id(role: SketchRole, host: SketchHost) -> MessageId {
         R::BoardOutline => ids::EDITORS_SKETCH_ROLE_BOARD_OUTLINE,
         R::MountingHole => ids::EDITORS_SKETCH_ROLE_MOUNTING_HOLE,
         R::VScore => ids::EDITORS_SKETCH_ROLE_V_SCORE,
+        R::Slot => ids::EDITORS_SKETCH_ROLE_SLOT,
+        R::BoardPour => ids::EDITORS_SKETCH_ROLE_BOARD_POUR,
+        R::MechanicalLayer => ids::EDITORS_SKETCH_ROLE_MECHANICAL_LAYER,
+        R::ComponentAnchor => ids::EDITORS_SKETCH_ROLE_COMPONENT_ANCHOR,
     }
 }
 

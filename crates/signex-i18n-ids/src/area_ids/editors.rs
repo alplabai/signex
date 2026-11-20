@@ -148,4 +148,10 @@ define_ids! {
     EDITORS_SKETCH_TARGET_BOARD_OUTLINE = "editors-sketch-target-board-outline";
     EDITORS_SKETCH_TARGET_MOUNTING_HOLES = "editors-sketch-target-mounting-holes";
     EDITORS_SKETCH_BAKE_COUNT = "editors-sketch-bake-count";
+    EDITORS_SKETCH_ROLE_SLOT = "editors-sketch-role-slot";
+    EDITORS_SKETCH_ROLE_BOARD_POUR = "editors-sketch-role-board-pour";
+    EDITORS_SKETCH_ROLE_MECHANICAL_LAYER = "editors-sketch-role-mechanical-layer";
+    EDITORS_SKETCH_ROLE_COMPONENT_ANCHOR = "editors-sketch-role-component-anchor";
+    EDITORS_SKETCH_TARGET_MECHANICAL = "editors-sketch-target-mechanical";
+    EDITORS_SKETCH_TARGET_COMPONENT_ANCHORS = "editors-sketch-target-component-anchors";
 }

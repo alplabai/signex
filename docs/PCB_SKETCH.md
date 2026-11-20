@@ -341,3 +341,51 @@ circle is not carried yet.
 The backdrop also draws placed pads (top, bottom or Multi-Layer copper)
 and component courtyards faint, in the board palette's colours, which are
 the same in both Graphite themes.
+
+## Targets {#targets}
+
+Decision 2 (Caner, 2026-11-20) adds four board targets to the role picker,
+in the order of mockup 179 without Room (rooms wait for c14): Board outline,
+Cutout, Slot, Keepout, Pour, V-score, Mechanical layer, Component anchor,
+Mounting hole (`SketchHost::Board.roles()`). The picker refuses a shape a
+role cannot take (`SketchRole::fits`; `SketchRole::misfit` names the shape:
+lines only, points only, circles only, edges).
+
+| Role | Entity attribute | Entity | Bakes to |
+|---|---|---|---|
+| Slot | `board_cutout` + `board_slot` (`BoardSlotAttr`) | a closed loop | a `PcbCutout` with the stadium boundary, `edge_radius` = width / 2 |
+| Pour | `pour` (`PourAttr`: copper layer, net name, priority, thermals) | a loop or a circle | a board `Zone`, `fill_type = "pour"` (`BakedKind::BoardPours`) |
+| Mechanical layer | `mechanical` (`MechanicalAttr`: `MechanicalLayer`, 1-based) | a line, arc or circle | a `BoardGraphic` on `Mechanical<n>` |
+| Component anchor | `component_anchor` (`ComponentAnchorAttr`: footprint uuid) | a point | the footprint's `position` |
+
+A Slot profile is checked by `signex_bake::board::slot`: exactly four edges,
+lines and arcs alternating, the lines parallel, of one length and twice the
+arc radius apart, the arcs of one radius, tangent to both lines and bulging
+outward. Anything else is `BoardBakeError::NotASlot` naming the seed edge. A
+plain Cutout on the same loop is not checked.
+
+The board pour is its own `BakedKind::BoardPours` (token `board_pours`), not
+the footprint's `Pours`: a board bake answers for exactly
+`SketchHost::Board.bake_targets()`, and `Pours` is a footprint field. A
+pour's net is a name the board's net table must hold (`UnknownNet`), an
+anchor's component a footprint the board holds (`UnknownComponent`; no
+component picked is `AnchorWithoutComponent`).
+
+Pours, mechanical drawings and anchors are not kept in `[board_sketch]`:
+they are the board's own rows, baked by `signex_bake::board::bake_board_items`
+(or `bake_board_with_items`, one solve for both). A zone takes the uuid of
+its seed edge and a drawing that of its edge. The board command
+`SetBoardSketchBake` (`BoardCommand::set_board_sketch_with_items`) does what
+`SetBoardSketch` does and, in the same step, replaces every zone and drawing
+whose uuid is an entity of the board sketch before or after, and moves each
+anchored footprint that is not locked (Messages names a locked one). Its
+inverse `RestoreBoardSketchBake` puts back the zone and drawing lists and the
+old positions bit for bit. The app uses it only when the sketch owns one of
+the three kinds now or did before (`SketchData::owns_board_items`), so a
+sketch without them commits through `SetBoardSketch` as before.
+
+The `.snxpcb` token is `snxpcb/1.7` while the board sketch carries any of
+`board_slot`, `pour`, `mechanical` or `component_anchor`
+(`SketchData::carries_board_targets`), else what it was (1.4, or 1.5 with
+layer colours), byte for byte. Still to do: the drill and route output emits a
+Slot cutout as a stadium cutout, not a routed slot.

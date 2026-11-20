@@ -30,4 +30,13 @@ define_ids! {
     BOARD_SKETCH_CHECK_KEEPOUT_OUTSIDE = "board-sketch-check-keepout-outside";
     BOARD_SKETCH_CHECK_HOLE_OUTSIDE = "board-sketch-check-hole-outside";
     BOARD_SKETCH_CHECK_OPENING_OUTSIDE = "board-sketch-check-opening-outside";
+    BOARD_SKETCH_SLOT = "board-sketch-slot";
+    BOARD_SKETCH_SLOT_SIZE = "board-sketch-slot-size";
+    BOARD_SKETCH_SLOT_NOT_YET = "board-sketch-slot-not-yet";
+    BOARD_SKETCH_POUR_LAYER = "board-sketch-pour-layer";
+    BOARD_SKETCH_MECHANICAL_LAYER = "board-sketch-mechanical-layer";
+    BOARD_SKETCH_MECHANICAL_N = "board-sketch-mechanical-n";
+    BOARD_SKETCH_ANCHOR_COMPONENT = "board-sketch-anchor-component";
+    BOARD_SKETCH_ANCHOR_PICK = "board-sketch-anchor-pick";
+    BOARD_SKETCH_ANCHOR_LOCKED = "board-sketch-anchor-locked";
 }

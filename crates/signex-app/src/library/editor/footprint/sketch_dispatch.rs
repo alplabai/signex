@@ -279,6 +279,9 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
     entity.v_score = None;
     entity.board_outline = false;
     entity.mounting_hole = None;
+    entity.board_slot = None;
+    entity.mechanical = None;
+    entity.component_anchor = None;
 
     let is_point = matches!(entity.kind, EntityKind::Point { .. });
 
@@ -393,6 +396,29 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
         RoleTag::VScore => {
             entity.v_score = Some(signex_sketch::attr::VScoreHintAttr::default());
         }
+        // Decision 2 (2026-11-20): a slot is a cutout the bake checks; a
+        // pour starts on top copper, a drawing on Mechanical 1 and an anchor
+        // with no component, each picked in Properties.
+        RoleTag::Slot => {
+            entity.board_cutout = Some(BoardCutoutAttr {
+                edge_radius_expr: None,
+                through: true,
+            });
+            entity.board_slot = Some(Default::default());
+        }
+        RoleTag::BoardPour => {
+            entity.pour = Some(PourAttr {
+                layer: PcbLayer::Copper(CopperLayer::Top),
+                net: None,
+                fill_type: Default::default(),
+                thermal_relief: ThermalRelief::default(),
+                clearance_expr: None,
+                min_thickness_expr: None,
+                priority: 0,
+            });
+        }
+        RoleTag::MechanicalLayer => entity.mechanical = Some(Default::default()),
+        RoleTag::ComponentAnchor => entity.component_anchor = Some(Default::default()),
     }
 }
 
@@ -418,6 +444,16 @@ pub fn current_role_of(entity: &signex_sketch::entity::Entity) -> RoleTag {
     }
     if entity.keepout.is_some() {
         return RoleTag::Keepout;
+    }
+    // A slot is a cutout too; it reads as the role that set it.
+    if entity.board_slot.is_some() {
+        return RoleTag::Slot;
+    }
+    if entity.mechanical.is_some() {
+        return RoleTag::MechanicalLayer;
+    }
+    if entity.component_anchor.is_some() {
+        return RoleTag::ComponentAnchor;
     }
     if entity.board_cutout.is_some() {
         return RoleTag::Cutout;
