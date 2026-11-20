@@ -146,10 +146,10 @@ fn apply_custom(app: &mut Signex, name: &str, pads_only: bool) {
     let _ = app.update(Message::SelectionFilter(SelectionFilterMsg::ApplyCustom));
 }
 
-fn logged(fragment: &str) -> bool {
-    crate::diagnostics::recent_entries()
-        .iter()
-        .any(|entry| entry.message.contains(fragment))
+/// Messages lines holding `needle`; installs the logger first, since each
+/// test may run in its own process.
+fn logged(needle: &str) -> usize {
+    crate::diagnostics::logged_count(needle)
 }
 
 #[test]
@@ -181,10 +181,15 @@ fn a_typed_name_at_the_preset_limit_is_said_in_messages() {
             kinds: Vec::new(),
         })
         .collect();
+    let before = logged("Dropped at the limit");
     apply_custom(&mut app, "Dropped at the limit", true);
     assert_eq!(
         app.interaction_state.footprint_filter_presets.len(),
         crate::active_bar::CUSTOM_FILTER_PRESET_LIMIT
     );
-    assert!(logged("Dropped at the limit"), "the dropped name is named");
+    assert_eq!(
+        logged("Dropped at the limit"),
+        before + 1,
+        "the dropped name is named"
+    );
 }

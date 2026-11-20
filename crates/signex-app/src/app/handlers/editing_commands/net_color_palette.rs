@@ -269,25 +269,24 @@ impl Signex {
             .active_engine()
             .map(|engine| net_label_elements(engine.document(), net))
             .unwrap_or_default();
-        if elements.is_empty() {
-            return;
-        }
         // An alpha of 0 clears. A refusal (a read-only sheet) is already
         // said in Messages by the commit.
-        let paint = color.unwrap_or(Color::new(0, 0, 0, 0));
-        let (outcome, _why) = self.commit_net_colors(&elements, paint);
-        // The per-name record follows the sheet: a refused commit leaves it.
-        if outcome == MutationOutcome::Failed {
-            return;
-        }
+        let applied = !elements.is_empty() && {
+            let paint = color.unwrap_or(Color::new(0, 0, 0, 0));
+            self.commit_net_colors(&elements, paint).0 != MutationOutcome::Failed
+        };
+        // The per-name record follows the sheet: an empty or refused commit
+        // leaves it.
         match color {
-            Some(c) => {
+            Some(c) if applied => {
                 self.ui_state.net_colors.insert(net.to_owned(), c);
             }
-            None => {
+            None if applied => {
                 self.ui_state.net_colors.remove(net);
             }
+            _ => {}
         }
+        // Every window showing a sheet repaints, the undocked ones too (#1350).
         for canvas in self.interaction_state.all_schematic_canvases_mut() {
             canvas.clear_content_cache();
         }
