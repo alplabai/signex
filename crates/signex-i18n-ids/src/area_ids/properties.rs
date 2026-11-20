@@ -88,6 +88,7 @@ define_ids! {
     PROPERTIES_NET_PARAMS_ADD = "properties-net-params-add";
     PROPERTIES_NET_NO_PARAMETERS = "properties-net-no-parameters";
     PROPERTIES_WIRE_WIDTH = "properties-wire-width";
+    PROPERTIES_WIRE_WIDTH_EXACT = "properties-wire-width-exact";
     PROPERTIES_WIRE_WIDTH_SMALLEST = "properties-wire-width-smallest";
     PROPERTIES_WIRE_WIDTH_SMALL = "properties-wire-width-small";
     PROPERTIES_WIRE_WIDTH_MEDIUM = "properties-wire-width-medium";

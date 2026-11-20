@@ -151,6 +151,8 @@ properties-net-no-parameters = No Parameters
 ## Wire style and colours
 
 properties-wire-width = Width
+# Under a multi-selection's width presets: any width, typed in the panel's unit.
+properties-wire-width-exact = Exact Width
 properties-wire-width-smallest = Smallest
 properties-wire-width-small = Small
 properties-wire-width-medium = Medium

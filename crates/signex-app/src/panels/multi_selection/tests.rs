@@ -219,6 +219,36 @@ fn font_size_converts_points_and_refuses_zero_negative_and_words() {
 }
 
 #[test]
+fn wire_width_refuses_negative_and_zero_is_the_default() {
+    assert!(edit_from_text(&MultiField::WireWidth, "-0.1").is_err());
+    assert_eq!(
+        edit_from_text(&MultiField::WireWidth, "0").unwrap(),
+        MultiEdit::WireWidthMm(0.0)
+    );
+}
+
+/// A typed wire width is read in the panel's unit: 10 mil is 0.254 mm.
+#[test]
+fn wire_width_is_read_in_the_panels_unit() {
+    let edit =
+        super::edit_from_text_in(&MultiField::WireWidth, "10", signex_types::coord::Unit::Mil);
+    let Ok(MultiEdit::WireWidthMm(mm)) = edit else {
+        panic!("a width edit: {edit:?}");
+    };
+    assert!((mm - 0.254).abs() < 1e-9, "{mm}");
+}
+
+/// The Wires section keeps the four presets and adds the typed width box
+/// under them.
+#[test]
+fn the_wires_section_shows_presets_and_a_typed_width() {
+    let shown = shown_texts(&mixed_ctx());
+    for label in ["Smallest", "Small", "Medium", "Large", "Exact Width", "mm"] {
+        assert!(shown.iter().any(|t| t == label), "{label}: {shown:?}");
+    }
+}
+
+#[test]
 fn the_rule_filter_ignores_case_and_blanks() {
     let i18n = I18n::en_us();
     assert!(rule_matches(&i18n, "Unused pin", ""));

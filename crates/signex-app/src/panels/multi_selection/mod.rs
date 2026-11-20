@@ -20,6 +20,7 @@ pub use view::view_multi_selection;
 
 use crate::numeric_field::{FieldNumber, parse_field_number};
 use signex_engine::{MultiEdit, Shared};
+use signex_types::coord::Unit;
 use signex_types::schematic::SCHEMATIC_PT_TO_MM;
 
 /// Shown in place of a value the selection disagrees on. The view reads
@@ -34,6 +35,8 @@ pub enum MultiField {
     SymbolFootprint,
     SymbolParameter(String),
     LabelFontPt,
+    /// The typed width of every selected wire, in the panel's unit.
+    WireWidth,
 }
 
 impl MultiField {
@@ -44,6 +47,7 @@ impl MultiField {
             Self::SymbolFootprint => "Footprint".into(),
             Self::SymbolParameter(key) => format!("Parameter {key}"),
             Self::LabelFontPt => "Label font size".into(),
+            Self::WireWidth => "Wire width".into(),
         }
     }
 }
@@ -60,8 +64,15 @@ pub enum MultiEditMsg {
     Picked(MultiEdit),
 }
 
-/// The edit the text `typed` in `field` asks for, or why it cannot apply.
+/// The edit the text `typed` in `field` asks for, a length read in mm, or
+/// why it cannot apply.
+#[cfg(test)]
 pub fn edit_from_text(field: &MultiField, typed: &str) -> Result<MultiEdit, String> {
+    edit_from_text_in(field, typed, Unit::Mm)
+}
+
+/// [`edit_from_text`] with a length read in `unit`, the panel's unit.
+pub fn edit_from_text_in(field: &MultiField, typed: &str, unit: Unit) -> Result<MultiEdit, String> {
     let number = || match parse_field_number(typed) {
         FieldNumber::Number(v) => Ok(v),
         FieldNumber::NotANumber | FieldNumber::Refused => {
@@ -89,6 +100,9 @@ pub fn edit_from_text(field: &MultiField, typed: &str) -> Result<MultiEdit, Stri
             }
             MultiEdit::LabelFontSizeMm(pt * SCHEMATIC_PT_TO_MM)
         }
+        MultiField::WireWidth => MultiEdit::WireWidthMm(
+            non_negative("Wire width")? * signex_types::measure::mm_per(unit),
+        ),
     })
 }
 

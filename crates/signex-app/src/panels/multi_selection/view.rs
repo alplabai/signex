@@ -153,7 +153,7 @@ fn text_box<'a>(
     field: MultiField,
     stored: String,
     mixed: bool,
-    unit: Option<MessageId>,
+    unit: Option<Label<'a>>,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
     let drafted = ctx
@@ -176,13 +176,10 @@ fn text_box<'a>(
         .width(Length::Fill)
         .style(mixed_input_style(mixed));
     let control = match unit {
-        Some(unit) => row![
-            input,
-            text(t!(ctx.i18n, unit)).size(TS.caption).color(muted)
-        ]
-        .spacing(SP.xs)
-        .align_y(iced::Alignment::Center)
-        .boxed(),
+        Some(unit) => row![input, text(unit).size(TS.caption).color(muted)]
+            .spacing(SP.xs)
+            .align_y(iced::Alignment::Center)
+            .boxed(),
         None => input.boxed(),
     };
     control_row(label, control, muted)
@@ -353,7 +350,7 @@ fn labels_section<'a>(ctx: &'a PanelContext, muted: Color) -> Element<'a, PanelM
                 MultiField::LabelFontPt,
                 shared_number(&g.font_size_mm, SCHEMATIC_PT_TO_MM),
                 matches!(g.font_size_mm, Shared::Mixed),
-                Some(ids::PROPERTIES_UNIT_PT),
+                Some(t!(i18n, ids::PROPERTIES_UNIT_PT).into()),
                 muted,
             ));
             c = c.push(control_row(
@@ -416,6 +413,17 @@ fn wires_section<'a>(ctx: &'a PanelContext, muted: Color) -> Element<'a, PanelMs
                     preset.stroke_mm(),
                 )))
             });
+            // Under the presets, any width typed in the panel's unit.
+            let unit = ctx.unit;
+            let typed = text_box(
+                ctx,
+                t!(i18n, ids::PROPERTIES_WIRE_WIDTH_EXACT).into(),
+                MultiField::WireWidth,
+                shared_number(&g.width_mm, signex_types::measure::mm_per(unit)),
+                matches!(g.width_mm, Shared::Mixed),
+                Some(t!(i18n, ids::PROPERTIES_UNIT_SUFFIX, "unit" => unit.to_string()).into()),
+                muted,
+            );
             Column::new()
                 .spacing(0)
                 .width(Length::Fill)
@@ -424,6 +432,7 @@ fn wires_section<'a>(ctx: &'a PanelContext, muted: Color) -> Element<'a, PanelMs
                     presets,
                     muted,
                 ))
+                .push(typed)
         },
     )
 }

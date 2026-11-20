@@ -132,7 +132,7 @@ pub(super) use library::{
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use multi_selection::{
     MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
-    edit_from_text as multi_edit_from_text,
+    edit_from_text_in as multi_edit_from_text,
 };
 pub use navigator::NavigatorModel;
 pub use net_class_panel::{

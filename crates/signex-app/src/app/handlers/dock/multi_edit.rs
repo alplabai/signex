@@ -27,7 +27,8 @@ impl Signex {
                 else {
                     return true;
                 };
-                match multi_edit_from_text(field, &typed) {
+                // A typed length is in the panel's unit.
+                match multi_edit_from_text(field, &typed, self.ui_state.unit) {
                     Ok(edit) => self.apply_multi_edit(&edit),
                     // The draft stays, so the user can fix the text.
                     Err(why) => crate::diagnostics::log_warning(why),
