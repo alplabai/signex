@@ -20,6 +20,7 @@ use signex_sketch::id::{ConstraintId, SketchEntityId};
 use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::measure::measured_value;
+use signex_sketch::solver::state::point_xy;
 use std::path::PathBuf;
 
 struct Rig {
@@ -180,13 +181,13 @@ impl Rig {
         measured_value(self.sketch(), solve, c)
     }
 
-    /// How far `b` is from the origin.
+    /// How far the drawing puts `b` from the origin: where the last applied
+    /// solve put it. A solve never writes into the point as authored.
     fn b_distance(&self) -> f64 {
-        let b = self.sketch().entities.iter().find(|e| e.id == self.b);
-        match b.map(|e| &e.kind) {
-            Some(EntityKind::Point { x, y }) => x.hypot(*y),
-            other => panic!("b is a point: {other:?}"),
-        }
+        let solve = self.editor().state.last_solve.as_ref().expect("solved");
+        let (state, index) = (&solve.result.state, &solve.result.index);
+        let (x, y) = point_xy(self.b, state, index, self.sketch()).expect("b");
+        x.hypot(y)
     }
 }
 
