@@ -1,5 +1,5 @@
 //! Tools ▸ Document Options modal for a library's symbol and footprint
-//! sheets (the m132 mock).
+//! sheets (mockup row 132).
 //!
 //! Per-`.snxlib` view settings: sheet color, grid visibility, grid
 //! spacing, coordinate display unit. Edits go to a working

@@ -791,7 +791,7 @@ fn the_preview_open_editor_button_opens_a_writable_symbol() {
 
 /// Mockup row 134: one click copies. With two writable libraries listed, a click on
 /// the second copies into it at once and the first stays untouched (the
-/// select-then-confirm flow of m134 is undecided, so one-click is kept).
+/// select-then-confirm flow of mockup row 134 is undecided, so one-click is kept).
 #[test]
 fn a_click_on_a_library_copies_into_it_at_once() {
     let mut w = world();

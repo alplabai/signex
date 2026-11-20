@@ -2,7 +2,7 @@
 //! open libraries' names; every colour comes from theme tokens.
 //!
 //! The writable libraries are rows; a click on one copies into it at once
-//! (one-click copy is kept: m134 leaves select-then-confirm undecided). With
+//! (one-click copy is kept: mockup row 134 leaves select-then-confirm undecided). With
 //! no writable library a card says so. New Library… is the primary.
 
 use std::path::{Path, PathBuf};

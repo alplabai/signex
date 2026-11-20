@@ -761,7 +761,7 @@ fn the_delete_confirm_names_the_row_and_its_close_cancels() {
     ] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted}: {texts:?}");
     }
-    // The m137 caption is only a proposal: it is not drawn until accepted.
+    // The mockup row 137 caption is only a proposal: it is not drawn until accepted.
     assert!(
         !texts.iter().any(|t| t.contains("embedded copy")),
         "{texts:?}"

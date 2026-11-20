@@ -42,7 +42,7 @@ case-insensitively; the uuid is not shown.
 │ PASSIVES (3)                                             │
 │   resistor.snxsym · R                                    │
 │ IN LIBRARY POWER-ICS (NOT OPEN) (1)                      │
-│   sense.snxsym · R_Shunt                  Open library   │
+│   sense.snxsym · R_Shunt                                 │
 │ NOT IN A LIBRARY (1)                                     │
 │   C:\work\old\res_trim.snxsym                            │
 ├──────────────────────────────────────────────────────────┤
@@ -51,7 +51,8 @@ case-insensitively; the uuid is not shown.
 ```
 
 A row click picks at once. A symbol outside the row's library opens the copy
-confirm (below) in place of the list.
+confirm (below) in place of the list. A row of a library that is not open has
+no button of its own: Link without copying and Copy into are on that confirm.
 
 ### Copy into library confirm
 
@@ -68,8 +69,7 @@ Cancel goes back to the picker and changes nothing.
 
 ## Library Updates dialog
 
-`crates/signex-app/src/library/updates_dialog/mod.rs` (Stage 16 of
-`v0.9-snxlib-as-file-plan.md` §3.5; mockup row 135).
+`crates/signex-app/src/library/updates_dialog/mod.rs` (mockup row 135).
 
 It surfaces drift between a freshly opened schematic's placed `Symbol`s and
 their source library rows. Each placed Symbol that went through the `.snxlib`
