@@ -27,8 +27,9 @@ pub enum DesignatorChoice {
     /// The next free number of each prefix in the project.
     #[default]
     NextFree,
-    /// As copied; annotate later.
-    Keep,
+    /// As copied unless the project already uses the designator; a taken one
+    /// takes the next free number of its prefix (DECISIONS 2026-10-31, #1768).
+    KeepIfFree,
 }
 
 /// What the pasted net labels are called.

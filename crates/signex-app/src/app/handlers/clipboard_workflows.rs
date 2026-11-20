@@ -246,7 +246,9 @@ fn designator_rule(
         crate::smart_paste::DesignatorChoice::NextFree => {
             crate::paste_prefs::PasteDesignators::NextFree
         }
-        crate::smart_paste::DesignatorChoice::Keep => crate::paste_prefs::PasteDesignators::Keep,
+        crate::smart_paste::DesignatorChoice::KeepIfFree => {
+            crate::paste_prefs::PasteDesignators::KeepIfFree
+        }
     }
 }
 

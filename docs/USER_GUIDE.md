@@ -303,7 +303,8 @@ Signex says so in the Messages panel and the pasted parts use the sheet's
 version. A group of more than 60 items follows the cursor as an outline.
 **Edit ▸ Paste Special** (`Ctrl+Shift+V`) opens the **Smart Paste** dialog:
 place one copy at an offset (in mm) or an array of copies with a step, give the
-parts the next free designators or keep them to annotate later, and keep the
+parts the next free designators or keep theirs unless the project already
+uses one (a taken designator takes the next free number), and keep the
 net labels (the pasted nets join the originals) or rewrite them with a pattern
 such as `${Net}_${n}`; power nets are never rewritten. The drawing on the right
 shows where the copies land, and you can drag the first copy to set the

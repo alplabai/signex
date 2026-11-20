@@ -308,7 +308,7 @@ fn left<'a>(
         .size(TS.heading),
         radio(
             t!(i18n, ids::SMART_PASTE_KEEP_DESIGNATORS),
-            DesignatorChoice::Keep,
+            DesignatorChoice::KeepIfFree,
             Some(state.designators),
             SmartPasteMsg::DesignatorsPicked
         )

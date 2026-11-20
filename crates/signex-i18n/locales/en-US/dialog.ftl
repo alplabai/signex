@@ -406,7 +406,7 @@ dialog-smart-paste-designators = Designators
 # $mapping is "R4 → R6, R5 → R7" (one copy) or "R4 → R6, R8; R5 → R7, R9" (several).
 dialog-smart-paste-next-free = Next free ({ $mapping })
 dialog-smart-paste-next-free-plain = Next free
-dialog-smart-paste-keep-designators = Keep, annotate later
+dialog-smart-paste-keep-designators = Keep unless taken
 dialog-smart-paste-net-names = Net names
 dialog-smart-paste-keep-nets = Keep (pasted nets join the originals)
 dialog-smart-paste-rewrite-nets = Rewrite with a pattern

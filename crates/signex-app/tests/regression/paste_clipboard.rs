@@ -190,9 +190,11 @@ fn smart_paste_and_duplicate_follow_the_preference() {
             signex_app::smart_paste::DesignatorChoice::NextFree,
             ["R4", "U2", "U2"],
         ),
+        // Keep is Keep unless taken (DECISIONS 2026-10-31, #1768): the
+        // originals still hold R2 and U1, so the copies take the next free.
         (
-            signex_app::smart_paste::DesignatorChoice::Keep,
-            ["R2", "U1", "U1"],
+            signex_app::smart_paste::DesignatorChoice::KeepIfFree,
+            ["R4", "U2", "U2"],
         ),
     ] {
         let (mut app, _text) = app_with_copied_parts();
@@ -217,4 +219,22 @@ fn smart_paste_and_duplicate_follow_the_preference() {
             "a paste is single-shot"
         );
     }
+}
+
+/// The dialog's Keep keeps a designator the project no longer uses: R2 was
+/// cut, so its copy is R2 again.
+#[test]
+fn the_dialogs_keep_keeps_a_free_designator() {
+    let mut app = app_with_sheet(populated_sheet());
+    select(&mut app, &[("R2", 1)], false);
+    let _ = app.update(Message::Edit(EditMsg::Cut));
+    smart_paste_dialog(&mut app, |app| {
+        let _ = app.update(Message::Edit(EditMsg::SmartPasteDialog(
+            signex_app::smart_paste::SmartPasteMsg::DesignatorsPicked(
+                signex_app::smart_paste::DesignatorChoice::KeepIfFree,
+            ),
+        )));
+    });
+    click(&mut app, (80.0, 80.0));
+    assert_eq!(references(&app), ["R1", "R3", "U1", "U1", "R2"]);
 }
