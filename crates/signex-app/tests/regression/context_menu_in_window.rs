@@ -8,9 +8,12 @@
 use std::path::{Path, PathBuf};
 
 use signex_app::app::{
-    ContextAction, ContextMenuMsg, Message, SheetSyncMsg, Signex, TabInfo, TabKind, Tool, WindowMsg,
+    ContextAction, ContextMenuMsg, Message, SheetSyncMsg, Signex, TabInfo, TabKind, Tool, UiMsg,
+    WindowMsg,
 };
 use signex_app::io_ports::{HeadlessAnswers, IoPorts};
+use signex_app::keymap::AppCommandId;
+use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::{
     ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind,
 };
@@ -143,12 +146,17 @@ fn sync_sheet_entries_apply_from_an_undocked_sheet_lands_on_that_sheet() {
         app.document_state.active_path, None,
         "the main window still shows the board"
     );
-    app.document_state
-        .engines
-        .get_mut(&parent)
-        .expect("the window's sheet")
-        .undo()
-        .expect("undo");
+    assert!(
+        app.document_state.dirty_document_paths().contains(&parent),
+        "the window's sheet is unsaved"
+    );
+
+    // Edit ▸ Undo in the window's own menu bar.
+    let task = app.update(Message::Ui(UiMsg::MenuInWindow {
+        window,
+        msg: MenuMessage::Command(AppCommandId::new("undo").expect("catalog id")),
+    }));
+    settle_task(&mut app, task);
     assert!(entries(&app).is_empty(), "one undo step reverts the sync");
 }
 

@@ -121,7 +121,7 @@ impl Signex {
     /// Whether the dialog's parent sheet is still open. When it was closed,
     /// the Messages panel says so and the dialog shows it stale.
     fn sync_parent_open(&mut self) -> bool {
-        let Some(state) = self.ui_state.sheet_sync.as_mut() else {
+        let Some(state) = self.ui_state.sheet_sync.as_ref() else {
             return false;
         };
         if self.document_state.engines.contains_key(&state.parent) {
@@ -131,8 +131,7 @@ impl Signex {
             "{LABEL}: {} is no longer open; nothing was changed.",
             state.parent.display()
         ));
-        state.checking = false;
-        state.problem = Some(SheetSyncProblem::Stale);
+        self.show_sheet_sync_problem(SheetSyncProblem::Stale);
         false
     }
 
@@ -175,6 +174,9 @@ impl Signex {
             self.note_sheet_sync_problem(SheetSyncProblem::NotChanged(parent_path));
             return;
         }
+        // The edit target owed the repaint, so the selection refresh the
+        // gateway skips is done here.
+        self.refresh_selection_on(&parent_path);
         crate::diagnostics::log_info(format!(
             "{LABEL}: updated the entries of sheet symbol '{}'{}",
             symbol.name,
@@ -245,6 +247,12 @@ impl Signex {
             "{LABEL}: nothing was changed: {}",
             english(&problem)
         ));
+        self.show_sheet_sync_problem(problem);
+    }
+
+    /// The dialog stops waiting and shows `problem`; the caller has said why
+    /// in the Messages panel.
+    fn show_sheet_sync_problem(&mut self, problem: SheetSyncProblem) {
         if let Some(state) = self.ui_state.sheet_sync.as_mut() {
             state.checking = false;
             state.problem = Some(problem);

@@ -164,6 +164,19 @@ fn parent_pins(app: &Signex) -> Vec<String> {
     names
 }
 
+/// The entries of the sheet symbol the Properties panel shows as selected.
+fn properties_pins(app: &Signex) -> Vec<String> {
+    let symbol = app
+        .document_state
+        .panel_ctx
+        .selected_child_sheet
+        .as_ref()
+        .expect("Properties shows the selected sheet symbol");
+    let mut names: Vec<String> = symbol.pins.iter().map(|p| p.name.clone()).collect();
+    names.sort_unstable();
+    names
+}
+
 #[test]
 fn the_previews_list_each_directions_changes() {
     let symbol = sheet_symbol(vec![
@@ -202,6 +215,8 @@ fn sheet_to_symbol_previews_then_applies_as_one_undo_step() {
         vec![pin("GONE", "passive", 2.54, true)],
         vec![hierarchical("SDA", "input", 10.0)],
     );
+    rig.app.update_selection_info();
+    assert_eq!(properties_pins(&rig.app), ["GONE"]);
     send(&mut rig.app, SheetSyncMsg::Requested);
     let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
     let preview = state.preview().expect("the child was read");
@@ -216,6 +231,11 @@ fn sheet_to_symbol_previews_then_applies_as_one_undo_step() {
         "Apply closes the dialog"
     );
     assert_eq!(parent_pins(&rig.app), ["SDA"]);
+    assert_eq!(
+        properties_pins(&rig.app),
+        ["SDA"],
+        "Properties shows the selected sheet symbol's new entries"
+    );
     rig.app
         .document_state
         .active_engine_mut()
@@ -449,7 +469,14 @@ fn apply_after_the_parent_sheet_closed_is_refused_with_a_messages_line() {
         .expect("dialog open")
         .parent
         .clone();
-    rig.app.document_state.engines.remove(&parent);
+    // The close path moves the documents epoch too: the closed parent is
+    // named before the epoch makes the dialog stale.
+    let epoch = rig.app.document_state.documents_epoch;
+    rig.app
+        .document_state
+        .remove_engine(&parent)
+        .expect("the parent was open");
+    assert_ne!(rig.app.document_state.documents_epoch, epoch);
     let _ = crate::diagnostics::init_logging();
     let mark = crate::diagnostics::newest_entry_id();
 

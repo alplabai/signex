@@ -744,8 +744,11 @@ does, and renames on the selected sheet symbol only: a hand-placed entry, or
 an entry of another symbol of the same file, keeps its name; Sheet
 symbol to sheet removes and renames Hierarchical labels only and never touches
 a Global label. A sheet that is not open is changed in memory, left unsaved,
-and refused if its file changed on disk after the dialog read it. The rules:
-`signex_engine::sheet_sync`; decisions: `DECISIONS.md` (#1276).
+and refused if its file changed on disk after the dialog read it. The sheet
+symbol's sheet is the one the command was asked on (an undocked window's sheet
+when picked there, #2618): Apply edits it whichever tab is active, and nothing
+is changed, with a line in Messages, when that sheet was closed meanwhile. The
+rules: `signex_engine::sheet_sync`; decisions: `DECISIONS.md` (#1276).
 
 Assign Net Class... is greyed: `assign_net_class` takes the net and the class
 as operands, which the menu cannot supply yet; its tooltip points at the Net
