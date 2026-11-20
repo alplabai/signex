@@ -1,5 +1,5 @@
-//! #122, #123 — the symbol editor's Pins dock panel became the Pins tab of
-//! Properties. These drive the real handlers through `Signex::update`: the
+//! Mockup rows 122 and 123 — the symbol editor's Pins dock panel became the
+//! Pins tab of Properties. These drive the real handlers through `Signex::update`: the
 //! tab and filter are panel state of the editor, a row press selects the
 //! pin (Properties then shows Pin properties), `‹ Pins` clears the selection
 //! and shows the list again, `+ Pin` arms the Add Pin tool, and the Parts

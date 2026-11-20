@@ -1,6 +1,6 @@
-//! The Library dock panel (#119): one panel for the symbols, footprints
-//! and parts of the open libraries, replacing the SCH Library (#120) and
-//! Footprint Library (#121) panels.
+//! The Library dock panel (mockup row 119): one panel for the symbols,
+//! footprints and parts of the open libraries, replacing the SCH Library
+//! (mockup row 120) and Footprint Library (mockup row 121) panels.
 //!
 //! Top to bottom, the same in every kind: the kind chips with their
 //! counts, the breadcrumb, the filter, the toolbar (Place, Add, Edit, and

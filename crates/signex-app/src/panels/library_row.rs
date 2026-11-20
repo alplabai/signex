@@ -1,4 +1,5 @@
-//! Properties of a library row (#127): the row selected in a Library
+//! Properties of a library row (mockup row 127): the row selected in a
+//! Library
 //! Browser tab (header, pills, Component, Bindings with the Pick buttons,
 //! Storage), and the row of the active Component editor tab (Component and
 //! Storage). Every field here is read-only; editing a row stays in the

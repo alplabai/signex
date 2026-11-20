@@ -1,5 +1,5 @@
-//! Library Browser — the header line (#118): library icon, the library name
-//! over its "N components · N tables" caption, the search field, "Show"
+//! Library Browser — the header line (mockup row 118): library icon, the
+//! library name over its "N components · N tables" caption, the search field, "Show"
 //! with the lifecycle filter select, and the primary Add Component at the
 //! right end.
 

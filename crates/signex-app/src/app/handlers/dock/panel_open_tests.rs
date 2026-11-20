@@ -1,5 +1,5 @@
-//! #119-#121 (XF-07): the SCH Library and Footprint Library rows of the
-//! panel list and the command palette are aliases that open the Library
+//! Mockup rows 119-121 (alias rows kept by Caner, 2026-11-20): the SCH
+//! Library and Footprint Library rows of the panel list and the command palette are aliases that open the Library
 //! panel in their kind; neither is ever docked itself.
 
 use crate::app::Signex;

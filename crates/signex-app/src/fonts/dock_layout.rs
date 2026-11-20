@@ -115,7 +115,7 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         Layers => "layers",
         NetClasses => "net_classes",
         // The alias rows are never docked; should one be, it saves as the
-        // Library panel it stands for (#119).
+        // Library panel it stands for (mockup row 119).
         Library | SchLibrary | FootprintLibrary => "library",
         PcbNets => "pcb_nets",
         History => "history",
@@ -148,11 +148,12 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "net_classes" => NetClasses,
         "library" => Library,
         // The SCH Library and Footprint Library panels, merged into the
-        // Library panel (#120, #121); a region holding both keeps one.
+        // Library panel (mockup rows 120 and 121); a region holding both
+        // keeps one.
         "sch_library" | "footprint_library" => Library,
         // The footprint editor's own Layers panel, merged into Layers (#2359).
         "footprint_layers" => Layers,
-        // The symbol editor's Pins panel, folded into Properties (#122).
+        // The symbol editor's Pins panel, folded into Properties (mockup row 122).
         "symbol_pins" => return None,
         "pcb_nets" => PcbNets,
         "history" => History,
@@ -248,7 +249,7 @@ mod tests {
         );
     }
 
-    /// #119-#122: a layout saved with the SCH Library, Footprint Library and
+    /// Mockup rows 119-122: a layout saved with the SCH Library, Footprint Library and
     /// Pins panels loads with one Library panel where the first of them sat,
     /// and without Pins; saving it again writes no alias name.
     #[test]

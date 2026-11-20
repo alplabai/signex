@@ -101,7 +101,7 @@ impl Signex {
     }
 
     /// The saved state of the row `key` names, for the staleness check
-    /// (also the Library Browser preview's, #2260).
+    /// (also the Library Browser preview's, mockup row 118).
     pub(super) fn components_row_stamp(
         &self,
         key: &crate::library::state::ComponentsPanelRowKey,

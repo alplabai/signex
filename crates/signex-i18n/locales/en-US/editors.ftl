@@ -386,7 +386,7 @@ editors-wire-corner-diagonal-first = Corner: 45°, diagonal first
 editors-wire-corner-diagonal-last = Corner: 45°, diagonal last
 editors-wire-corner-any-angle = Corner: any angle
 
-## Symbol editor Properties panel (#122, #123): the Symbol and Pins tabs with
+## Symbol editor Properties panel (mockup rows 122 and 123): the Symbol and Pins tabs with
 ## nothing selected, Pin properties and graphic properties. Section titles are
 ## shown in capitals by the panel.
 
@@ -549,7 +549,7 @@ editors-symprops-callout-height = Height
 editors-symprops-callout-start = Start
 editors-symprops-callout-end = End
 editors-symprops-callout-stroke = Stroke
-## Component editor window, Graphite (#128)
+## Component editor window, Graphite (mockup row 128)
 
 # Tooltip of the header's close button.
 editors-component-close = Close

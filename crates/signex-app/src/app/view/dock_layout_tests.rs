@@ -110,7 +110,7 @@ fn a_crowded_side_dock_shows_every_tab_inside_the_dock() {
     }
 }
 
-/// #119: the Library panel in the left dock draws its kind chips inside the
+/// Mockup row 119: the Library panel in the left dock draws its kind chips inside the
 /// dock; Open Library… is the title bar's folder button, not a footer row.
 #[test]
 fn the_library_panel_draws_its_chips_and_no_open_library_footer() {

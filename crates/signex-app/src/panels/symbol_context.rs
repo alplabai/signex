@@ -76,7 +76,7 @@ pub struct SymbolEditorPanelContext {
     /// Symbol tab's illustration.
     pub part_drawing: PartDrawing,
     /// The Properties panel's own state for this editor: tab, Pins filter,
-    /// part chip and illustration hover (#122, #123).
+    /// part chip and illustration hover (mockup rows 122 and 123).
     pub props: crate::library::editor::symbol::SymbolPropsUi,
     /// Per-`.snxlib` display settings (sheet color, grid, unit),
     /// resolved by `runtime.rs` from the

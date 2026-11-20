@@ -1,5 +1,5 @@
-//! Library Browser — the grid toolbar row (#118): the range filters and
-//! "Add range filter…" at the left, "N of M shown · sorted by <column>" at
+//! Library Browser — the grid toolbar row (mockup row 118): the range
+//! filters and "Add range filter…" at the left, "N of M shown · sorted by <column>" at
 //! the right.
 
 use super::*;

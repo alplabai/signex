@@ -203,7 +203,7 @@ impl Signex {
         crate::library::preview_reads::tab_resolve_task(&mut self.library, address, tab)
     }
 
-    /// The header's parse pill (lib-06): switch to the Parameters tab, where
+    /// The header's parse pill (mockup row 128): switch to the Parameters tab, where
     /// every field that can fail to parse lives, and focus the first one.
     fn show_first_unparsed_field(&mut self, address: &EditorAddress) -> Task<Message> {
         let Some(name) = self

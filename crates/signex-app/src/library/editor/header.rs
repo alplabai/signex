@@ -1,7 +1,7 @@
-//! Graphite header of the component editor (#128): the internal PN in mono,
-//! a `v<version>` pill, the accent "• unsaved" pill while dirty and the
-//! "N fields do not parse" pill, a button that shows the first bad field
-//! (lib-06); the library / table caption under them; the close button at
+//! Graphite header of the component editor (mockup row 128): the internal
+//! PN in mono, a `v<version>` pill, the accent "• unsaved" pill while dirty
+//! and the "N fields do not parse" pill, a button that shows the first bad
+//! field; the library / table caption under them; the close button at
 //! the right. The save actions live in the footer (`footer.rs`).
 
 use iced::widget::{Space, Widget, column, container, row};

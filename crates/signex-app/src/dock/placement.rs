@@ -174,7 +174,7 @@ impl DockArea {
     /// Give a fresh Graphite layout the panels an editor tab needs: the
     /// footprint editor gets Layers and the Library panel (in front) on the
     /// left, the symbol editor the Library panel in front on the left (it
-    /// opens on that editor's kind, #119), the board editor its Nets on the
+    /// opens on that editor's kind, mockup row 119), the board editor its Nets on the
     /// left and a DRC tab on the right, the component editor folds the left
     /// dock to its rail. Runs once per context and only for a layout
     /// `graphite_first_run` built; a saved layout (the user's own
@@ -367,7 +367,7 @@ mod tests {
             dock.locate(PanelKind::Layers),
             Some(crate::dock::PanelSite::Docked(PanelPosition::Left, _))
         ));
-        // #119: the footprint editor opens with the Library panel in front.
+        // Mockup row 119: the footprint editor opens with the Library panel in front.
         assert!(matches!(
             dock.locate(PanelKind::Library),
             Some(crate::dock::PanelSite::Docked(PanelPosition::Left, _))
@@ -376,8 +376,9 @@ mod tests {
         // The user brings Layers to the front, then opens a symbol tab.
         dock.show_panel(PanelKind::Layers);
         dock.seed_for_editor(EditorContext::Symbol);
-        // #2262, #119: the symbol editor opens with the Library panel as the
-        // left tab, and docks nothing at the bottom (#122: no Pins panel).
+        // #2262, mockup row 119: the symbol editor opens with the Library
+        // panel as the left tab, and docks nothing at the bottom (mockup row
+        // 122: no Pins panel).
         assert!(dock.is_frontmost(PanelKind::Library));
         assert_eq!(dock.panel_kinds(PanelPosition::Bottom), bottom.as_slice());
         // The aliases are never docked.

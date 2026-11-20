@@ -1,4 +1,4 @@
-//! #127: the Properties of a selected library row.
+//! Mockup row 127: the Properties of a selected library row.
 
 use super::*;
 use crate::layout_probe::{lay_out_texts, messages_on_click};

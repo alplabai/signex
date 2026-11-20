@@ -1,5 +1,5 @@
 //! Library Browser tab — the main-window surface for working with
-//! library rows (#118, #2260).
+//! library rows (mockup row 118).
 //!
 //! Layout: the header line (library, search, lifecycle filter, Add
 //! Component) and the uncommitted banner across the top; under them the

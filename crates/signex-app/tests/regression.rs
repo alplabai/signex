@@ -608,7 +608,8 @@ mod click_click_move;
 mod rubber_band_move;
 #[path = "regression/symbol_drag_entry_points.rs"]
 mod symbol_drag_entry_points;
-// #122, #123 - the Pins tab of the symbol editor's Properties panel.
+// Mockup rows 122 and 123 - the Pins tab of the symbol editor's Properties
+// panel.
 #[path = "regression/symbol_properties_pins_tab.rs"]
 mod symbol_properties_pins_tab;
 

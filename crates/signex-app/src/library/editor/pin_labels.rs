@@ -164,7 +164,7 @@ mod tests {
         }
     }
 
-    // Moved with the Pins panel's labels (#122).
+    // Moved with the Pins panel's labels (mockup row 122).
     #[test]
     fn every_pin_direction_has_a_catalog_label() {
         for d in DIRECTIONS {

@@ -1,4 +1,5 @@
-//! Library Browser — the 300 px preview pane of the selected row (#118).
+//! Library Browser — the 300 px preview pane of the selected row (mockup
+//! row 118).
 //!
 //! The internal PN and description; the row actions (Edit Details, Pick
 //! Symbol…, Pick Footprint…, and ⋯ holding Delete Selected); the symbol and
@@ -580,7 +581,7 @@ mod tests {
         assert!(edit_details_message(path, "R", Some(row_id), true).is_none());
     }
 
-    /// #118: Delete Selected moved from the action row and the per-row
+    /// Mockup row 118: Delete Selected moved from the action row and the per-row
     /// gutter into the ⋯ menu; it still asks first (`DeleteRowRequest`).
     /// Pick Symbol… and Pick Footprint… open the primitive picker for the
     /// row. A read-only library leaves every action off.

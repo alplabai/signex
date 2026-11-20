@@ -1,4 +1,5 @@
-//! The Library panel's Parts kind (#119): every open library as a row that
+//! The Library panel's Parts kind (mockup row 119): every open library as
+//! a row that
 //! expands to its tables and their component rows (#1895). The filter
 //! matches the rows (part number, MPN, manufacturer) and keeps a library
 //! while any of its rows match; a match on the library name keeps all of

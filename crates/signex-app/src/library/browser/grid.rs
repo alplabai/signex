@@ -310,7 +310,7 @@ pub(super) fn view_grid<'a>(
                     continue;
                 }
 
-                // Sym and Fpt are narrow status columns (#118): an amber
+                // Sym and Fpt are narrow status columns (mockup row 118): an amber
                 // dot for an unbound side (it still opens the primitive
                 // picker for the row), a red one for a binding that
                 // resolves to nothing (#968), nothing when bound.
@@ -444,7 +444,7 @@ pub(super) fn view_grid<'a>(
             }
 
             // No per-row delete: Delete Selected is in the preview's ⋯
-            // menu (#118).
+            // menu (mockup row 118).
             let library_for_msg = lib_pb.clone();
             let table_for_msg = table.to_string();
             let row_border = look::row_border(tokens);
@@ -611,7 +611,7 @@ fn status_dot<'a>(
 mod tests {
     use super::*;
 
-    /// #118: a status cell is empty when bound, amber when nothing is
+    /// Mockup row 118: a status cell is empty when bound, amber when nothing is
     /// bound, red when the binding resolves to nothing.
     #[test]
     fn the_status_columns_mark_unbound_and_missing_bindings() {
@@ -637,7 +637,7 @@ mod tests {
         );
     }
 
-    /// #118: the grid has no per-row delete any more; Delete Selected is
+    /// Mockup row 118: the grid has no per-row delete any more; Delete Selected is
     /// in the preview pane's ⋯ menu.
     #[test]
     fn the_grid_has_no_per_row_delete() {

@@ -1,4 +1,5 @@
-//! Which kind the one Library panel shows (#119): symbols, footprints or
+//! Which kind the one Library panel shows (mockup row 119): symbols,
+//! footprints or
 //! parts. It opens on the kind of the active editor tab; a chip pick holds
 //! while the tab it was made on stays active, so no tab-switch hook is
 //! needed and `view` stays a function of the state.

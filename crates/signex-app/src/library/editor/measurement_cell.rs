@@ -82,7 +82,7 @@ pub(super) fn view<'a>(
 
     let input_slot = slot.cloned();
     let (input_address, input_name) = (address.clone(), name.to_string());
-    // A pending edit that does not parse gets the error outline (lib-06):
+    // A pending edit that does not parse gets the error outline:
     // the header pill focuses this field by its id.
     let refused = state.params_error.contains_key(name);
     let error_c = theme_ext::error_color(tokens);

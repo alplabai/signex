@@ -17,8 +17,8 @@ pub(crate) mod updates;
 /// when it opens a symbol.
 pub(crate) use updates::fit_to_viewport;
 
-/// The Properties panel's state and messages for a symbol editor (#122,
-/// #123), and the rectangle Width / Height rule its form and the graphic
+/// The Properties panel's state and messages for a symbol editor (mockup
+/// rows 122 and 123), and the rectangle Width / Height rule its form and the graphic
 /// edit share: the slice's surface for the panel and the dock handler.
 pub use state::{
     PartChip, PartStep, SymbolPropsMsg, SymbolPropsTab, SymbolPropsUi, rect_end_for_extent,

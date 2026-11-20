@@ -1,5 +1,5 @@
-//! Library Browser — the 210 px sidebar (#118): the LIBRARIES group (see
-//! `tree.rs`) over the TABLES group, whose header carries the add-table
+//! Library Browser — the 210 px sidebar (mockup row 118): the LIBRARIES
+//! group (see `tree.rs`) over the TABLES group, whose header carries the add-table
 //! action as a small ghost button. One row per table with its row count,
 //! the active one in the neutral selection, and the inline rename / delete
 //! / add-table forms.
@@ -423,7 +423,7 @@ fn rename_form<'a>(
 mod tests {
     use super::*;
 
-    /// #118: the TABLES header's add button opens the existing add-table
+    /// Mockup row 118: the TABLES header's add button opens the existing add-table
     /// form, and is off on a read-only library.
     #[test]
     fn the_tables_header_adds_a_table_unless_read_only() {

@@ -1,5 +1,5 @@
-//! The General tab of the component editor (#128): three columns, Symbol
-//! and Footprint (1fr each) and the PIN TO PAD table (1.25fr), with the
+//! The General tab of the component editor (mockup row 128): three columns,
+//! Symbol and Footprint (1fr each) and the PIN TO PAD table (1.25fr), with the
 //! where-used line under the two drawings. A pad cell opens the existing
 //! pin-map override editor under its row; the Pin Map tab keeps the full
 //! table with its own actions.
@@ -562,7 +562,7 @@ mod tests {
         assert!(!missing.contains("uuid"));
     }
 
-    /// #128: the three columns keep the mock's 1fr / 1fr / 1.25fr widths.
+    /// Mockup row 128: the three columns keep the mock's 1fr / 1fr / 1.25fr widths.
     #[test]
     fn the_columns_follow_one_one_and_a_quarter() {
         let ratio = f32::from(PIN_TO_PAD_PORTION) / (f32::from(DRAWINGS_PORTION) / 2.0);

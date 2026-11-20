@@ -1,5 +1,5 @@
 //! The property illustrations of the symbol editor's Properties panel
-//! (#123): transparent line art at the panel width and 140 px tall, built
+//! (mockup row 123): transparent line art at the panel width and 140 px tall, built
 //! from the selected object, with callouts linked to the field rows.
 
 use iced::widget::container;

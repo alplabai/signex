@@ -206,7 +206,7 @@ fn parts_shown(state: &LibraryState) -> Vec<(String, usize)> {
         .collect()
 }
 
-/// #119: the Library panel's filter matches part rows, not only library
+/// Mockup row 119: the Library panel's filter matches part rows, not only library
 /// names, and is separate from the Components panel's filter.
 #[test]
 fn the_library_panel_filter_matches_part_rows() {

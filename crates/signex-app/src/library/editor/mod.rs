@@ -1,5 +1,6 @@
 //! Component editor — a library row opened as a document (a main-window
-//! tab or its own `WindowKind::ComponentEditor` window), Graphite #128.
+//! tab or its own `WindowKind::ComponentEditor` window), Graphite mockup
+//! row 128.
 //!
 //! In the DBLib model, components are TSV rows addressed by
 //! [`crate::library::state::EditorAddress`] (`library_path + table +
@@ -54,7 +55,7 @@ const READ_ONLY_VEIL_ALPHA: f32 = 0.55;
 const MIN_EDITOR_W: f32 = 980.0;
 
 /// The widget id of a parameter's field, so the header's parse pill can
-/// focus it (lib-06). Keyed by the row too: two editors can be open.
+/// focus it. Keyed by the row too: two editors can be open.
 pub(crate) fn unparsed_field_id(address: &EditorAddress, name: &str) -> iced::widget::Id {
     iced::widget::Id::from(format!(
         "component-editor-param:{}:{}:{}:{name}",
@@ -380,7 +381,7 @@ mod tests {
         }
     }
 
-    /// #128: the tab strip reads General, Parameters, Supply, Datasheet,
+    /// Mockup row 128: the tab strip reads General, Parameters, Supply, Datasheet,
     /// Simulation, Pin Map, Alternates.
     #[test]
     fn the_tab_strip_follows_the_mock_order() {
@@ -476,7 +477,7 @@ mod tests {
         .collect()
     }
 
-    /// #128: the header shows the part number once, its version pill and the
+    /// Mockup row 128: the header shows the part number once, its version pill and the
     /// library / table under it; lifecycle, class, description and the
     /// manufacturer part are not in the header any more.
     #[test]

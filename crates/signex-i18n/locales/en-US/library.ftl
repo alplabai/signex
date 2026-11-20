@@ -167,7 +167,7 @@ library-panel-open-library = + Open Library…
 library-panel-no-tables = No tables in this library.
 # Row-count pill of a library. $count is a whole number.
 library-panel-rows = { $count } rows
-# Kind chips at the top of the Library panel (#119), with their tooltips.
+# Kind chips at the top of the Library panel (mockup row 119), with their tooltips.
 library-panel-kind-symbols = Symbols
 library-panel-kind-footprints = Footprints
 library-panel-kind-parts = Parts
@@ -297,7 +297,7 @@ library-order-help = Saved to <config_dir>/signex/distributors.toml. The first m
 # $error is the system's reason, in English.
 library-order-save-failed = Could not save the order: { $error }
 
-## Library Browser tab, Graphite (#118, #2260)
+## Library Browser tab, Graphite (mockup row 118)
 
 # Shown in place of the tab when its library is not mounted. $path is the
 # library folder.

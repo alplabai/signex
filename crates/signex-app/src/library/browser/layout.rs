@@ -32,7 +32,8 @@ impl Slot<'_> {
     }
 }
 
-/// Position of a column in the Graphite order (#118): Internal PN, the Sym
+/// Position of a column in the Graphite order (mockup row 118): Internal
+/// PN, the Sym
 /// and Fpt status columns, Value, MPN, Manufacturer, Description, Lifecycle,
 /// Price, Updated, then the other parameters and Tags.
 fn graphite_rank(kind: &ColumnKind) -> u8 {
@@ -63,7 +64,7 @@ pub(super) const STATUS_COL_W: f32 = 40.0;
 pub(super) const DESCRIPTION_MAX_W: f32 = 200.0;
 
 /// The mock's column set and widths: Rev shows in the preview pane instead
-/// (as before #118; hiding Rev and Tags by default is an open decision),
+/// (as before mockup row 118; hiding Rev and Tags by default is an open decision),
 /// Symbol and Footprint are narrow status columns, and the rest are compact
 /// so the pill and Updated are in view.
 pub(super) fn graphite_columns(columns: &[GridColumn]) -> Vec<GridColumn> {
@@ -194,7 +195,7 @@ mod tests {
         assert!(LIFECYCLE_RANK < graphite_rank(&ColumnKind::Updated));
     }
 
-    /// #118: Internal PN, then the narrow Sym and Fpt status columns, then
+    /// Mockup row 118: Internal PN, then the narrow Sym and Fpt status columns, then
     /// Value, MPN, Manufacturer, Description, Lifecycle and Updated; Rev
     /// stays out of the Graphite grid (the preview pane shows it).
     #[test]

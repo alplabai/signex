@@ -169,7 +169,7 @@ pub(crate) fn card<'a, M: 'a>(content: Element<'a, M>, tokens: &ThemeTokens) -> 
 
 /// A surface that keeps at least `min_width`: on a narrower window it
 /// scrolls sideways inside its own frame instead of squeezing or clipping
-/// (#118, #128). `build` is called per layout.
+/// (mockup rows 118 and 128). `build` is called per layout.
 pub(crate) fn sideways_frame<'a, M: 'a>(
     min_width: f32,
     tokens: &ThemeTokens,

@@ -1,4 +1,5 @@
-//! Rows and controls the symbol editor's Properties forms share (#123): the
+//! Rows and controls the symbol editor's Properties forms share (mockup
+//! row 123): the
 //! header block, collapsible sections, a label column that wraps, inputs,
 //! paired inputs, read-only boxes, dropdowns, segmented controls, and the
 //! hover link between a field row and its callout in the illustration.

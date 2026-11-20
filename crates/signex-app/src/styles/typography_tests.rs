@@ -290,7 +290,8 @@ fn line_height_is_the_frameworks_default() {
 #[test]
 fn no_expand_collapse_header_draws_a_text_chevron() {
     const PINNED: &[&str] = &[
-        // The Library panel became a folder (#119); every view file in it.
+        // The Library panel became a folder (mockup row 119); every view
+        // file in it.
         "library/panel/mod.rs",
         "library/panel/empty.rs",
         "library/panel/footprints.rs",

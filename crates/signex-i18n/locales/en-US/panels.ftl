@@ -620,7 +620,7 @@ panels-library-row-symbol = Symbol
 panels-library-row-footprint = Footprint
 panels-library-row-pick-symbol = Pick Symbol…
 panels-library-row-pick-footprint = Pick Footprint…
-# Caption under the row's part number (#127). $table is the table name; $row
+# Caption under the row's part number (mockup row 127). $table is the table name; $row
 # is the row's place in its table, or a short row id.
 panels-library-row-heading = Library Row · { $table } · row { $row }
 # After the lifecycle in the row's pill line. $version is the row's version.

@@ -122,7 +122,7 @@ impl Signex {
         };
 
         // An unbound, unresolved or unreadable binding turns its card amber
-        // (#127); one still being read does not.
+        // (mockup row 127); one still being read does not.
         let symbol_warn = row.is_symbol_unbound()
             || matches!(
                 summaries.and_then(|s| s.symbol.as_ref()),

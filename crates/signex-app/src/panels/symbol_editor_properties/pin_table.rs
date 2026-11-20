@@ -4,7 +4,7 @@
 //! cell toggles it, through the same messages as the Pin properties
 //! (`SymEditorSelectPin`, `SymEditorSetPinName`, `SymEditorTogglePinHidden`).
 //! It keeps the old Pins panel's bulk edit reachable until the Pin table
-//! document tab (#122b) lands.
+//! document tab (mockup row 122b) lands.
 
 use iced::widget::{Column, Row, container, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};

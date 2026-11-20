@@ -106,7 +106,7 @@ impl Signex {
                 };
                 let (library, i18n) = (&self.library, &self.ui_state.i18n);
                 // A narrow window scrolls the tab sideways inside its frame,
-                // so the header, grid and preview stay whole (#118).
+                // so the header, grid and preview stay whole (mockup row 118).
                 crate::library::editor::kit::sideways_frame(
                     crate::library::browser::MIN_BROWSER_W,
                     tokens,

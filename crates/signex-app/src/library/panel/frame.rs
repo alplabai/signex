@@ -1,4 +1,5 @@
-//! The parts of the Library panel that are the same in every kind (#119):
+//! The parts of the Library panel that are the same in every kind (mockup
+//! row 119):
 //! kind chips, breadcrumb, filter field, toolbar, list rows and glyphs.
 
 use iced::widget::text::{Ellipsis, Wrapping};

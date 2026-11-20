@@ -949,7 +949,7 @@ mod arc_field_edit_tests {
         assert_eq!((start_deg, end_deg), (30.0, 300.0));
     }
 
-    /// #123: a rectangle's Width and Height are written as its End corner,
+    /// Mockup row 123: a rectangle's Width and Height are written as its End corner,
     /// on the side the corner is on, so End X / Y follow.
     #[test]
     fn rectangle_width_and_height_move_the_end_corner() {

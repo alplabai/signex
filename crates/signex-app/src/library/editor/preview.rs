@@ -21,7 +21,7 @@ use super::super::messages::{EditorMsg, LibraryMessage};
 use super::super::state::{ComponentPreviewState, EditorAddress, LibraryState};
 use super::kit::{self, SP, TS};
 
-/// The General tab (#128): see [`super::general::view`].
+/// The General tab (mockup row 128): see [`super::general::view`].
 #[expect(
     clippy::too_many_arguments,
     reason = "the editor views take the language handle beside their existing seven inputs (#2225)"

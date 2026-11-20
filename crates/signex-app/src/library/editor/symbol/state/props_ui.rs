@@ -1,6 +1,6 @@
 //! What the symbol editor's Properties panel shows besides the symbol: its
 //! tab, the Pins tab filter and part chip, and the illustration hover
-//! (#122, #123). Session state of one editor; never saved, never undone.
+//! (mockup rows 122 and 123). Session state of one editor; never saved, never undone.
 
 use signex_types::schematic::BodyStyle;
 use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};

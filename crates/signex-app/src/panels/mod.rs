@@ -219,14 +219,14 @@ pub enum PanelKind {
     Snippets,
     Todo,
     Wiki,
-    /// The one Library panel (#119): the symbols of the open `.snxsym`,
+    /// The one Library panel (mockup row 119): the symbols of the open `.snxsym`,
     /// the footprints of the open `.snxfpt` or the parts of every open
     /// library, picked with its kind chips.
     Library,
-    /// Panel-list alias of [`Self::Library`] in its Symbols kind (#120).
+    /// Panel-list alias of [`Self::Library`] in its Symbols kind (mockup row 120).
     /// Opening it opens the Library panel; it is never docked itself.
     SchLibrary,
-    /// Panel-list alias of [`Self::Library`] in its Footprints kind (#121).
+    /// Panel-list alias of [`Self::Library`] in its Footprints kind (mockup row 121).
     /// Opening it opens the Library panel; it is never docked itself.
     FootprintLibrary,
     /// PCB editor net table: nets with pad counts and routed length.
@@ -296,7 +296,8 @@ impl PanelKind {
         matches!(self, PanelKind::Drc | PanelKind::LayerStack)
     }
 
-    /// The Library panel kind an alias row opens it in (XF-07): SCH
+    /// The Library panel kind an alias row opens it in (alias rows kept by
+    /// Caner, 2026-11-20): SCH
     /// Library opens Symbols and Footprint Library opens Footprints.
     pub fn library_alias(self) -> Option<crate::library::state::LibraryPanelKind> {
         use crate::library::state::LibraryPanelKind;

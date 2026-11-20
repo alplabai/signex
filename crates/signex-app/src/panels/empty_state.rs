@@ -165,7 +165,7 @@ mod tests {
     use super::super::widgets::view_stub;
     use crate::layout_probe::lay_out_texts;
 
-    /// #1283 (m60): a planned panel draws one card: its name once, the
+    /// Mockup row 60: a planned panel draws one card: its name once, the
     /// planned pill and what it will do. No upper-case section title and no
     /// rule of box-drawing glyphs above it: the dock title is the only title.
     #[test]

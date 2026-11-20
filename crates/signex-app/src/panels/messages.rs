@@ -1105,7 +1105,7 @@ pub enum PanelMsg {
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
     /// The symbol editor's Properties panel: its tabs, the Pins tab and the
-    /// illustration hover (#122, #123).
+    /// illustration hover (mockup rows 122 and 123).
     SymbolProps(crate::library::editor::symbol::SymbolPropsMsg),
 }
 

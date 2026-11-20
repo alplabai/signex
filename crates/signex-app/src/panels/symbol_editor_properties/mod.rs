@@ -1,8 +1,8 @@
-//! Properties panel for the active `.snxsym` editor tab (#123).
+//! Properties panel for the active `.snxsym` editor tab (mockup row 123).
 //!
 //! Nothing selected: the symbol, with a Symbol tab (illustration, General,
 //! Parts, Graphical, Fields) and a Pins tab (the pin list that replaced the
-//! Pins dock panel, #122). A selected pin, graphic or field shows its own
+//! Pins dock panel, mockup row 122). A selected pin, graphic or field shows its own
 //! form under a property illustration. Pure view code: the tab, the Pins
 //! filter, the part chip and the illustration hover are editor state
 //! (`SymbolPropsUi`), routed through `PanelMsg::SymbolProps`.

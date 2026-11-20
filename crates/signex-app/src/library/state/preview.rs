@@ -61,7 +61,8 @@ pub enum PreviewTab {
 }
 
 impl PreviewTab {
-    /// The Graphite tab strip, in display order (#128: General, Parameters,
+    /// The Graphite tab strip, in display order (mockup row 128: General,
+    /// Parameters,
     /// Supply, Datasheet, Simulation, Pin Map, Alternates).
     pub const GRAPHITE_ORDER: &'static [PreviewTab] = &[
         PreviewTab::Preview,
@@ -318,7 +319,7 @@ impl ComponentPreviewState {
     }
 
     /// The first parameter (by name) whose pending edit does not parse, with
-    /// why. Save stays disabled while there is one (lib-06).
+    /// why. Save stays disabled while there is one.
     pub fn first_unparsed_field(&self) -> Option<(&str, &str)> {
         self.params_error
             .iter()

@@ -212,7 +212,7 @@ fn an_edit_typed_before_an_outside_write_reload_lands_cannot_undo_clean() {
     assert!(preview.dirty, "the library was written behind this editor");
 }
 
-/// #128, lib-06: the header's "N fields do not parse" pill shows the
+/// Mockup row 128: the header's "N fields do not parse" pill shows the
 /// Parameters tab, where the field that does not parse lives; with no such
 /// field it does nothing.
 #[test]

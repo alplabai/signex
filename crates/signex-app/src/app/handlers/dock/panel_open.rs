@@ -22,8 +22,9 @@ impl Signex {
     /// status-bar panel list, an ERC run surfacing its results, TAB
     /// during placement surfacing Properties.
     ///
-    /// The SCH Library and Footprint Library rows are aliases (XF-07): they
-    /// open the Library panel in their kind (#120, #121).
+    /// The SCH Library and Footprint Library rows are aliases (kept by
+    /// Caner, 2026-11-20): they open the Library panel in their kind (mockup
+    /// rows 120 and 121).
     pub(crate) fn show_panel(&mut self, kind: PanelKind) -> Task<Message> {
         if let Some(alias_kind) = kind.library_alias() {
             self.pick_library_panel_kind(alias_kind);

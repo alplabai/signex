@@ -1,10 +1,10 @@
-//! Graphite footer of the component editor (#128): a quiet "Reload saved
-//! version" (the old header Discard, and the stale-row reload) with its
-//! confirm, the summary of the fields that do not parse (lib-07), then the
-//! Ctrl+S hint, Release…, Save & Close, Cancel and the primary Save, which
-//! stays disabled while a field does not parse and names it in a tooltip
-//! (lib-06). A read-only library shows its note and a disabled Copy to
-//! Library… instead.
+//! Graphite footer of the component editor (mockup row 128): a quiet
+//! "Reload saved version" (the old header Discard, and the stale-row
+//! reload) with its confirm, the summary of the fields that do not parse,
+//! then the Ctrl+S hint, Release… (disabled), Save & Close, Cancel and the
+//! primary Save, which stays disabled while a field does not parse and
+//! names it in a tooltip. A read-only library shows its note and a disabled
+//! Copy to Library… instead (Caner, 2026-11-20).
 
 use iced::widget::{Space, Widget, container, row};
 use iced::{Element, Length, Theme};
@@ -131,7 +131,7 @@ fn editable_line<'a>(
     } else {
         line = line.push(reload_button(acts.reload.clone(), tokens, i18n));
     }
-    // lib-07: the inline error sits under the field; this is the one-line
+    // The inline error sits under the field; this is the one-line
     // summary.
     if let Some((field, why)) = state.first_unparsed_field() {
         line = line.push(
@@ -250,7 +250,7 @@ mod tests {
         matches!(msg, Some(LibraryMessage::EditorEvent { msg, .. }) if want(msg))
     }
 
-    /// lib-06: Save and Save & Close are disabled while a field does not
+    /// Mockup row 128: Save and Save & Close are disabled while a field does not
     /// parse, and come back once it does.
     #[test]
     fn save_is_disabled_while_a_field_does_not_parse() {

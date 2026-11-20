@@ -2,7 +2,7 @@
 //!
 //! Shown while the library holds changes that were written to disk but that
 //! no git commit records, with the cause and a "Commit now" retry. Graphite
-//! (#118): a full-width warn banner under the header.
+//! (mockup row 118): a full-width warn banner under the header.
 
 use super::*;
 

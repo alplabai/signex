@@ -530,7 +530,7 @@ impl DockArea {
 }
 
 /// The Library panel's folder button in its title bar: Open Library…
-/// (#119). `None` for every other panel.
+/// (mockup row 119). `None` for every other panel.
 fn open_library_button<'a>(
     panel: PanelKind,
     ctx: &panels::PanelContext,

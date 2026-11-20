@@ -204,7 +204,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         ..
     } = palette;
 
-    // A Component editor tab or a Library Browser row (#127) takes
+    // A Component editor tab or a Library Browser row (mockup row 127) takes
     // precedence over the schematic / pre-placement / symbol-editor
     // branches, so the panel stays on the library row while its tab is
     // active.

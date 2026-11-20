@@ -1,4 +1,5 @@
-//! The Pins tab (#122): the open symbol's pins as a compact list, with a
+//! The Pins tab (mockup row 122): the open symbol's pins as a compact
+//! list, with a
 //! filter by number or name, part chips and `+ Pin`. A row press selects
 //! the pin, so Properties shows the Pin properties and the canvas the pin.
 //! A duplicate number marks both rows, an empty name is flagged.
@@ -144,7 +145,8 @@ pub(super) fn view<'a>(
         Some(props(SymbolPropsMsg::AddPinPressed)),
         Some(t!(i18n, ids::EDITORS_SYMPROPS_ADD_PIN_TIP)),
     );
-    // Until the Pin table document tab (#122b) lands, the table shows here.
+    // Until the Pin table document tab (mockup row 122b) lands, the table
+    // shows here.
     let table_toggle = form.ghost(
         t!(
             i18n,

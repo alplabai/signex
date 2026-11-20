@@ -1,6 +1,6 @@
 //! The searchable row lists of the Components panel and the Library
 //! panel's Parts kind, built once per change instead of once per frame
-//! (#1353, #119).
+//! (#1353; the Library panel: mockup row 119).
 //!
 //! `view` must stay cheap and pure, so it only reads this cache. `update`
 //! keeps it current through [`LibraryState::sync_view_caches_in`]: the
@@ -149,7 +149,8 @@ impl LibraryState {
             version,
             &self.components_panel.filter,
         );
-        // The Library panel's Parts filter matches rows the same way (#119).
+        // The Library panel's Parts filter matches rows the same way
+        // (mockup row 119).
         self.library_panel
             .rows
             .sync(i18n, &self.open_libraries, version, &self.panel_search);

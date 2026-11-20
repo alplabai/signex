@@ -1,4 +1,5 @@
-//! The symbol editor's Properties panel (#122, #123): the UUID row, the
+//! The symbol editor's Properties panel (mockup rows 122 and 123): the UUID
+//! row, the
 //! Pins tab list and its filter, chips and issue marks, the way back from
 //! Pin properties, and what the illustrations leave out.
 
