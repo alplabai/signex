@@ -399,9 +399,37 @@ updated = "2026-05-04T00:00:00Z"
 symbols = []
 "#;
     match SymbolFile::from_toml_str(bad) {
-        Err(SymbolFileError::UnsupportedFormat { got }) => {
-            assert_eq!(got, "snxsym/99");
+        Err(SymbolFileError::UnsupportedFormat(reason)) => {
+            assert_eq!(reason.found(), Some("snxsym/99"));
         }
+        other => panic!("expected UnsupportedFormat, got {other:?}"),
+    }
+}
+
+/// #2207: every listed token reads, a newer one is refused naming it, and
+/// a file with no token is refused.
+#[test]
+fn symbol_file_tokens_follow_the_shared_version_policy() {
+    let body = "file_uuid = \"00000000-0000-0000-0000-000000000000\"\n\
+                display_name = \"\"\n\
+                created = \"2026-05-04T00:00:00Z\"\n\
+                updated = \"2026-05-04T00:00:00Z\"\n\
+                symbols = []\n";
+    for token in ["snxsym/v1", "snxsym/v2", "snxsym/v3"] {
+        let file = SymbolFile::from_toml_str(&format!("format = \"{token}\"\n{body}"))
+            .unwrap_or_else(|e| panic!("{token}: {e}"));
+        assert_eq!(file.format, token);
+    }
+    match SymbolFile::from_toml_str(&format!("format = \"snxsym/v4\"\n{body}")) {
+        Err(error @ SymbolFileError::UnsupportedFormat(_)) => {
+            let message = error.to_string();
+            assert!(message.contains("snxsym/v4"), "{message}");
+            assert!(message.contains("newer Signex"), "{message}");
+        }
+        other => panic!("expected UnsupportedFormat, got {other:?}"),
+    }
+    match SymbolFile::from_toml_str(body) {
+        Err(SymbolFileError::UnsupportedFormat(reason)) => assert_eq!(reason.found(), None),
         other => panic!("expected UnsupportedFormat, got {other:?}"),
     }
 }

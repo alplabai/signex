@@ -159,8 +159,8 @@ pub fn rectangle(a: Point, b: Point) -> Vec<Point> {
 }
 
 /// Solid copper over `outline` on `layer` (a Fill or a Solid Region, stored
-/// as a zone), on the net of the copper under its first point. `None` for an
-/// outline with no area or a point the geometry cannot hold.
+/// as a zone), on the net of the copper under its first corner on copper,
+/// or no net. `None` for an outline with no area.
 pub fn new_copper_area(
     board: &PcbBoard,
     id: Uuid,
@@ -170,7 +170,12 @@ pub fn new_copper_area(
     if !has_area(&outline) {
         return None;
     }
-    let net = net_under(board, *outline.first()?, 1 << layer_bit(layer));
+    let on_layer = 1 << layer_bit(layer);
+    let net = outline
+        .iter()
+        .map(|corner| net_under(board, *corner, on_layer))
+        .find(|&net| net != 0)
+        .unwrap_or(0);
     let net_name = board
         .nets
         .iter()
@@ -198,7 +203,8 @@ pub fn new_copper_area(
 }
 
 /// A polygon pour over `outline` on `layer` (#2216): a zone with the pour
-/// fill, on the net of the copper under its first point, or no net. Its
+/// fill, on the net of the copper under its first corner on copper, or no
+/// net. Its
 /// clearance is left at 0, which follows the board's clearance
 /// (`Zone::pour_clearance_mm`). `None` for an outline with no area or a
 /// point the geometry cannot hold.

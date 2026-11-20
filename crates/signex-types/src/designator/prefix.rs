@@ -77,4 +77,15 @@ mod tests {
         assert_eq!(split_reference("#PWR1"), ("", None));
         assert_eq!(split_reference("R1A"), ("R", None));
     }
+
+    /// EN IEC 81346-2 class codes (#1416) are stored without the `-` sign,
+    /// so the whole three-letter code is the prefix.
+    #[test]
+    fn three_letter_class_codes_split_whole() {
+        assert_eq!(split_reference("QAC12"), ("QAC", Some(12)));
+        assert_eq!(split_reference("XDB?"), ("XDB", None));
+        assert_eq!(alphabetic_prefix("TFA3"), "TFA");
+        assert_eq!(placement_prefix("kfb?"), "KFB");
+        assert_eq!(normalize_prefix_override(" rac "), Ok("RAC".to_owned()));
+    }
 }

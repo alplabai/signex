@@ -1,0 +1,26 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "qmtech-baseboard",
+  "net_classes": [
+    {
+      "clearance": 0.1524,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.1524,
+      "via_diameter": 0.6858,
+      "via_drill": 0.3302
+    }
+  ],
+  "pcb_file": "qmtech-baseboard.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

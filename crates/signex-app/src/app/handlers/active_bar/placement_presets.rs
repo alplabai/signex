@@ -52,6 +52,9 @@ impl Signex {
             ActiveBarAction::PlacePowerEarth => {
                 follow = self.set_pending_power_port("Earth", "power:Earth");
             }
+            ActiveBarAction::PlacePowerChassis => {
+                follow = self.set_pending_power_port("Chassis", "power:Chassis");
+            }
             ActiveBarAction::PlacePort => {
                 follow = self.update(Message::Tool(ToolMessage::SelectTool(Tool::Label)));
                 self.interaction_state.pending_port = Some((

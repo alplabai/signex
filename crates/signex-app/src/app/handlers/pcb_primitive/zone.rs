@@ -97,8 +97,22 @@ pub(super) fn zone_facts(
         min_island_area: shared(zones.iter().map(|z| z.min_island_area)),
         remove_dead_islands: shared(zones.iter().map(|z| z.remove_dead_islands)),
         copper: pour_copper(board, zones, fills),
+        unfilled: pour_unfilled(board, zones, fills),
         common,
     }
+}
+
+/// Why the first selected pour with no fill has none.
+fn pour_unfilled(
+    board: &PcbBoard,
+    zones: &[&Zone],
+    fills: Option<&ZoneFills>,
+) -> Option<pcb_geom::Unfilled> {
+    let fills = fills?;
+    zones.iter().find_map(|zone| {
+        let index = board.zones.iter().position(|z| z.uuid == zone.uuid)?;
+        fills.unfilled(index)
+    })
 }
 
 /// The area edit `edit` stands for; `None` for a field areas do not have.

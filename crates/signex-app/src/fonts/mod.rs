@@ -935,8 +935,11 @@ mod designator_standard_tests {
         for (key, _) in DEFAULT_COMPONENT_CLASSES {
             for standard in DesignatorStandard::ALL {
                 let letters = class_prefix(standard, key);
-                let unnamed = *key == "generic"
-                    || (standard == DesignatorStandard::Iec81346_2 && IEC_UNNAMED.contains(key));
+                let iec = matches!(
+                    standard,
+                    DesignatorStandard::Iec81346_2 | DesignatorStandard::Iec81346_2Full
+                );
+                let unnamed = *key == "generic" || (iec && IEC_UNNAMED.contains(key));
                 if unnamed {
                     assert_eq!(letters, None, "{key} under {standard}");
                 } else {

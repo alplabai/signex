@@ -16,10 +16,12 @@ pub mod bom;
 pub mod erc;
 mod expression;
 pub mod fab;
+pub mod field_value;
 mod markup_escape;
 pub mod netlist;
 pub mod pdf;
 pub mod preview;
+mod reference_display;
 pub mod substitution;
 pub mod svg;
 pub mod template;
@@ -37,6 +39,7 @@ pub use erc::{
     ErcReportError, ErcReportExporter, ErcReportFormat, ErcReportOptions, ErcReportOutput,
     ErcReportRow, ErcReportRuleSet, ErcReportSeverity, report as erc_report,
 };
+pub use field_value::{ShownValue, ValueScope, sheet_context, shown_value};
 pub use netlist::{NetlistExporter, NetlistFormat, NetlistOptions, NetlistOutput};
 pub use pdf::board::{
     BoardLayerSet, BoardPdfError, BoardPdfOutput, BoardPdfPage, BoardPrintOptions, BoardPrintPages,
@@ -52,7 +55,8 @@ pub use preview::{
     MAX_PREVIEW_EDGE_PX, PreviewOptions, PreviewPage, PreviewPageInfo, PreviewRasterizer,
     preview_raster_size,
 };
-pub use substitution::{SubstitutionContext, resolve};
+pub use reference_display::show_board_references;
+pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
 
@@ -201,6 +205,26 @@ pub struct ProjectMetadata {
     /// override. `None` for metadata built by hand, whose own values then
     /// stand in for the project's.
     pub project_parameters: Option<std::collections::BTreeMap<String, String>>,
+    /// The sheet's own variables (#1987), which shadow the project's
+    /// (`custom_fields`) in `${NAME}` and in expressions. Empty for project
+    /// metadata; set by [`Self::for_schematic`].
+    pub sheet_variables: std::collections::BTreeMap<String, String>,
+    /// The clock and the files' modified dates the computed tokens show;
+    /// every sheet's metadata keeps them from the metadata it derives from.
+    pub document_facts: DocumentFacts,
+}
+
+/// What the computed special strings show, formatted by the caller: the
+/// clock and each document file's modified date (maintainer decision
+/// 2026-11-18). An empty value resolves empty.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DocumentFacts {
+    /// `${CurrentDate}`, and `${Date}` while the title block leaves it empty.
+    pub current_date: String,
+    /// `${CurrentTime}` and `${Time}`.
+    pub current_time: String,
+    /// `${ModifiedDate}` of each document file, by the path it is open at.
+    pub modified_dates: std::collections::BTreeMap<PathBuf, String>,
 }
 
 /// Entries of `custom_fields` that describe the export, not a title-block
@@ -276,6 +300,14 @@ impl ProjectMetadata {
             }
         }
         out.project_parameters = self.project_parameters.clone();
+        out.document_facts = self.document_facts.clone();
+        out
+    }
+
+    /// [`Self::for_sheet`] for `sheet`'s title block, with its variables.
+    pub fn for_schematic(&self, sheet: &signex_types::schematic::SchematicSheet) -> Self {
+        let mut out = self.for_sheet(&sheet.title_block);
+        out.sheet_variables = sheet.variables.clone();
         out
     }
 }

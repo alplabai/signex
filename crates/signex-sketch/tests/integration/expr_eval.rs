@@ -95,11 +95,7 @@ fn eval_param_ref() {
 fn eval_ternary_takes_then() {
     // "i == 0 ? 0.4mm : 0.25mm" with array_index=Some((0,0)) → 0.4mm
     let e = ternary(
-        bin(
-            BinOp::Eq,
-            ExprNode::ArrayIndex(ArrayIndex::I),
-            lit_count(0.0),
-        ),
+        bin(BinOp::Eq, ArrayIndex::I.node(), lit_count(0.0)),
         lit_mm(0.4),
         lit_mm(0.25),
     );
@@ -115,11 +111,7 @@ fn eval_ternary_takes_then() {
 fn eval_ternary_takes_else() {
     // Same expression, array_index=Some((1,0)) → 0.25 mm
     let e = ternary(
-        bin(
-            BinOp::Eq,
-            ExprNode::ArrayIndex(ArrayIndex::I),
-            lit_count(0.0),
-        ),
+        bin(BinOp::Eq, ArrayIndex::I.node(), lit_count(0.0)),
         lit_mm(0.4),
         lit_mm(0.25),
     );
@@ -188,7 +180,7 @@ fn eval_unknown_param_errors() {
 #[test]
 fn eval_array_index_in_context() {
     // "i" with array_index = Some((3, 0)) → 3 (Dimensionless)
-    let e = ExprNode::ArrayIndex(ArrayIndex::I);
+    let e = ArrayIndex::I.node();
     let ctx = EvalContext {
         params: BTreeMap::new(),
         array_index: Some((3, 0)),
@@ -200,7 +192,7 @@ fn eval_array_index_in_context() {
 #[test]
 fn eval_array_index_outside_errors() {
     // "i" with array_index = None → ArrayIndexOutsideArray
-    let e = ExprNode::ArrayIndex(ArrayIndex::I);
+    let e = ArrayIndex::I.node();
     let result = eval(&e, &EvalContext::default());
     assert_eq!(result, Err(ExprError::ArrayIndexOutsideArray));
 }
@@ -254,13 +246,27 @@ fn eval_mul_length_times_count_keeps_length_unit() {
 }
 
 #[test]
-fn eval_mul_length_times_length_errors() {
-    // mm × mm would need an Area unit → UnitMismatch
+fn sketch_boundary_refuses_length_times_length() {
+    // mm × mm is an area in signex-expr; a sketch value must be a length,
+    // an angle or a count, so the sketch's eval refuses it.
     let e = bin(BinOp::Mul, lit_mm(2.0), lit_mm(3.0));
     assert!(matches!(
         eval(&e, &EvalContext::default()),
-        Err(ExprError::UnitMismatch { .. })
+        Err(ExprError::WrongFamily { .. })
     ));
+}
+
+#[test]
+fn sketch_accepts_an_intermediate_area() {
+    // 2mm × 3mm / 1mm → 6 mm: only the final value is checked.
+    let e = bin(
+        BinOp::Div,
+        bin(BinOp::Mul, lit_mm(2.0), lit_mm(3.0)),
+        lit_mm(1.0),
+    );
+    let q = eval(&e, &EvalContext::default()).unwrap();
+    assert_eq!(q.unit, Unit::Mm);
+    assert!((q.value - 6.0).abs() < EPS);
 }
 
 #[test]
@@ -377,13 +383,20 @@ fn eval_pow_length_to_one_is_identity() {
 }
 
 #[test]
-fn eval_pow_length_to_two_errors() {
-    // 5mm ^ 2 would need Area; not modelled in v0.13.
+fn sketch_boundary_refuses_length_squared() {
+    // 5mm ^ 2 is an area in signex-expr; the sketch's eval refuses it.
     let e = bin(BinOp::Pow, lit_mm(5.0), lit_count(2.0));
     assert!(matches!(
         eval(&e, &EvalContext::default()),
-        Err(ExprError::Domain(_))
+        Err(ExprError::WrongFamily { .. })
     ));
+}
+
+#[test]
+fn ref_cycle_in_context_is_an_error_not_an_overflow() {
+    // a = b; b = a — the evaluator reports the cycle.
+    let ctx = ctx_with(&[("a", r#ref("b")), ("b", r#ref("a"))]);
+    assert!(matches!(eval(&r#ref("a"), &ctx), Err(ExprError::Cycle(_))));
 }
 
 #[test]
@@ -399,7 +412,7 @@ fn eval_pow_with_unit_exponent_errors() {
 #[test]
 fn eval_array_index_j() {
     // "j" with array_index = Some((3, 7)) → 7
-    let e = ExprNode::ArrayIndex(ArrayIndex::J);
+    let e = ArrayIndex::J.node();
     let ctx = EvalContext {
         params: BTreeMap::new(),
         array_index: Some((3, 7)),

@@ -82,6 +82,16 @@ impl Point {
     pub const fn new(x: f64, y: f64) -> Self {
         Point { x, y }
     }
+
+    /// The point in the netlist's 1 µm integer key space: the one definition
+    /// of "the same point" (`signex_net::pt_key` reads it; #388).
+    #[must_use]
+    pub fn um_key(&self) -> (i64, i64) {
+        (
+            (self.x * 1000.0).round() as i64,
+            (self.y * 1000.0).round() as i64,
+        )
+    }
 }
 
 impl Default for Point {
@@ -791,6 +801,8 @@ impl Default for Symbol {
 
 // ---------------------------------------------------------------------------
 // Wiring primitives
+mod body_fill;
+pub use body_fill::{BodyFillShape, default_body_fill_shapes};
 mod body_style;
 pub use body_style::{BODY_ALTERNATE, BODY_COMMON, BODY_NORMAL, BodyStyle, item_shown, shown_on};
 mod bus_entry;
@@ -826,6 +838,8 @@ pub use directive::{
     ALL_ERC_RULES, DIFF_PAIR_SUFFIXES, DirectiveKind, SchDirective, diff_pair_base,
     parse_erc_exclusions,
 };
+mod no_erc;
+pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
 mod sheet;
 pub use sheet::*;
 mod sheet_frame;
@@ -847,6 +861,8 @@ pub use hotspot::{
     MoveHotspots, SCHEMATIC_HOTSPOT_RADIUS_MM, hotspot_capture_radius, snap_move_to_hotspot,
     snap_to_hotspot,
 };
+mod junction_color;
+pub use junction_color::junction_wire_colors;
 mod power_port_symbol;
 pub use power_port_symbol::{
     PowerPortStyle, power_port_graphics, power_port_lib_symbol, power_port_value_field,
