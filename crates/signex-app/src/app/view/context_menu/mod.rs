@@ -27,6 +27,4 @@ mod catalog_agreement_tests;
 #[cfg(test)]
 mod tests;
 
-pub(super) use anchored::AnchoredMenu;
-
 use super::*;
