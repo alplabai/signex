@@ -1,5 +1,5 @@
 //! The property illustration of the footprint Properties panel and the
-//! hover link between its callouts and the field rows (epic #2523, BB2).
+//! hover link between its callouts and the field rows (epic #2523).
 //! The hover is model state (`FootprintEditorState::properties_hover`);
 //! these helpers only draw it and publish its events.
 
