@@ -79,7 +79,7 @@ pub(in crate::panels::footprint_editor_properties) fn view_pad_header<'a>(
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     let faint = resolve(tokens).ink4;
-    let (title, kind, second): (Localized, MessageId, Element<'a, PanelMsg>) = match target {
+    let (title, kind, second): (Localized, Localized, Element<'a, PanelMsg>) = match target {
         PadEditTarget::Next => {
             let (hint, ink) = if fp.placement_paused {
                 (ids::EDITORS_PAD_PLACEMENT_PAUSED, ti(tokens.warning))
@@ -88,34 +88,41 @@ pub(in crate::panels::footprint_editor_properties) fn view_pad_header<'a>(
             };
             (
                 t!(i18n, ids::EDITORS_FP_PAD_NEXT_TITLE),
-                pill_message(fp.next_pad_kind, fp.next_pad_side),
+                t!(i18n, pill_message(fp.next_pad_kind, fp.next_pad_side)),
                 text(t!(i18n, hint)).size(TS.caption).color(ink).boxed(),
             )
         }
         PadEditTarget::Selected(pad_idx) => {
-            let (number, kind) = fp
-                .selected_pad
-                .as_ref()
-                .map(|pad| (pad.number.as_str(), pill_message(pad.kind, pad.side)))
-                .unwrap_or(("", ids::EDITORS_PAD_KIND_SMD));
             let mut line: Row<Element<'a, PanelMsg>> =
                 Row::new().spacing(SP.xs).align_y(iced::Alignment::Center);
-            if let Some(heading) = selected_pad_heading(fp, i18n) {
-                line = line
-                    .push(text(heading.place).size(TS.caption).color(faint).boxed())
-                    .push(
-                        text(t!(i18n, ids::EDITORS_FP_PAD_SEPARATOR))
-                            .size(TS.caption)
-                            .color(faint)
-                            .boxed(),
-                    );
-            }
+            // The heading the tests pin; without one (an index past the
+            // pad count) the title and pill still read from the pad.
+            let (title, kind) = match selected_pad_heading(fp, i18n) {
+                Some(heading) => {
+                    line = line
+                        .push(text(heading.place).size(TS.caption).color(faint).boxed())
+                        .push(
+                            text(t!(i18n, ids::EDITORS_FP_PAD_SEPARATOR))
+                                .size(TS.caption)
+                                .color(faint)
+                                .boxed(),
+                        );
+                    (heading.title, heading.kind)
+                }
+                None => {
+                    let (number, kind) = fp
+                        .selected_pad
+                        .as_ref()
+                        .map(|pad| (pad.number.as_str(), pill_message(pad.kind, pad.side)))
+                        .unwrap_or(("", ids::EDITORS_PAD_KIND_SMD));
+                    (
+                        t!(i18n, ids::EDITORS_FP_PAD_TITLE, "number" => number),
+                        t!(i18n, kind),
+                    )
+                }
+            };
             line = line.push(edit_in_sketch(pad_idx, tokens, i18n));
-            (
-                t!(i18n, ids::EDITORS_FP_PAD_TITLE, "number" => number),
-                kind,
-                line.boxed(),
-            )
+            (title, kind, line.boxed())
         }
     };
     let font = crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT);
@@ -133,7 +140,7 @@ pub(in crate::panels::footprint_editor_properties) fn view_pad_header<'a>(
                 .boxed(),
         )
         .push(
-            container(text(t!(i18n, kind)).size(TS.caption))
+            container(text(kind).size(TS.caption))
                 .padding([0.0, SP.s])
                 .style(crate::styles::pill(tokens, PillTone::Neutral))
                 .boxed(),
