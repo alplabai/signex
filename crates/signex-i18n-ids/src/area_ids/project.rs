@@ -28,8 +28,6 @@ define_ids! {
     PROJECT_VARIANTS_COL_ACTIVE = "project-variants-col-active";
     PROJECT_VARIANTS_COL_NAME = "project-variants-col-name";
     PROJECT_VARIANTS_BASE = "project-variants-base";
-    PROJECT_VARIANTS_NEW = "project-variants-new";
-    PROJECT_VARIANTS_ADD = "project-variants-add";
     PROJECT_VARIANTS_REMOVE = "project-variants-remove";
     PROJECT_VARIANT_EMPTY = "project-variant-empty";
     PROJECT_VARIANT_TOO_LONG = "project-variant-too-long";

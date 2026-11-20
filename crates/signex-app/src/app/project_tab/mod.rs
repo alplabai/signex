@@ -152,8 +152,6 @@ pub struct ProjectTabState {
     /// The newest edit of the project went to its rule history, not to
     /// `general_history`: what `undo document=<.snxprj>` steps first.
     pub rules_step_newest: bool,
-    /// The name typed for a new variant, not yet added (#1690).
-    pub new_variant_name: String,
     /// The variant name being typed over, until Enter renames it.
     pub variant_rename: Option<VariantRenameDraft>,
     /// Why the last variant edit was refused; cleared by the next edit.
@@ -277,17 +275,6 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         filename: String,
         step: signex_types::project::ListMove,
-    },
-    /// A new variant's name as typed (#1690). The Variants section adds
-    /// through `NewVariantRequested` and names in place; this typed add stays
-    /// for callers that name the variant up front.
-    NewVariantNameEdited {
-        project_id: ProjectId,
-        text: String,
-    },
-    /// Add the typed variant.
-    VariantAdded {
-        project_id: ProjectId,
     },
     /// A variant's name as typed over in its row.
     VariantRenameEdited {

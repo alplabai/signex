@@ -32,7 +32,6 @@ impl Signex {
                 section: ProjectSection::Variants,
             } => Some((*project_id, true)),
             ProjectTabMsg::NewVariantRequested { project_id }
-            | ProjectTabMsg::VariantAdded { project_id }
             | ProjectTabMsg::VariantRenameSubmitted { project_id }
             | ProjectTabMsg::VariantRemoved { project_id, .. } => Some((*project_id, false)),
             _ => None,
@@ -193,10 +192,6 @@ impl Signex {
                 filename,
                 step,
             } => self.move_project_sheet(project_id, filename, step),
-            ProjectTabMsg::NewVariantNameEdited { project_id, text } => {
-                self.edit_new_variant_name(project_id, text);
-            }
-            ProjectTabMsg::VariantAdded { project_id } => self.add_typed_variant(project_id),
             ProjectTabMsg::VariantRenameEdited {
                 project_id,
                 from,

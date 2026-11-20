@@ -36,40 +36,6 @@ pub(super) fn first_free_variant_name(data: &ProjectData, i18n: &I18n) -> Option
 }
 
 impl Signex {
-    pub(in crate::app::project_tab) fn edit_new_variant_name(
-        &mut self,
-        project_id: ProjectId,
-        text: String,
-    ) {
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            tab.new_variant_name = text;
-            tab.variant_problem = None;
-        }
-    }
-
-    /// Add: the typed name as a new variant, or the reason it is refused.
-    pub(in crate::app::project_tab) fn add_typed_variant(&mut self, project_id: ProjectId) {
-        let Some(name) = self
-            .document_state
-            .project_tabs
-            .get(&project_id)
-            .map(|tab| tab.new_variant_name.clone())
-        else {
-            return;
-        };
-        let command = signex_engine::ProjectSectionCommand::AddVariant { name };
-        let outcome = self.apply_project_section(project_id, &command);
-        if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
-            match outcome {
-                Ok(_) => {
-                    tab.new_variant_name.clear();
-                    tab.variant_problem = None;
-                }
-                Err(refused) => tab.variant_problem = Some(refused),
-            }
-        }
-    }
-
     /// `+` or New variant from Base: add the first free "Variant N", select
     /// it and open its name for typing, so Enter keeps or renames it.
     pub(in crate::app::project_tab) fn add_new_variant(&mut self, project_id: ProjectId) {
