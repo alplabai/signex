@@ -38,7 +38,8 @@ impl Signex {
         let ms = &self.ui_state.move_selection;
         let unit = self.ui_state.unit;
         let has_selection = !self.interaction_state.active_canvas().selected.is_empty();
-        let (dx_mm, dy_mm) = (offset_mm(&ms.dx, unit), offset_mm(&ms.dy, unit));
+        let preview = |text: &str| offset_mm(text, unit).unwrap_or(0.0);
+        let (dx_mm, dy_mm) = (preview(&ms.dx), preview(&ms.dy));
 
         let fields = row![
             offset_field(

@@ -25,12 +25,25 @@ pub(crate) fn window_height() -> f32 {
     sp.l + fields + sp.m + preview + sp.m + help + crate::styles::dense_footer_height()
 }
 
-/// The offset `text` stands for in mm, typed in `unit`; 0 while the text is
-/// not a number (empty, `-`), as Apply reads it.
-pub(crate) fn offset_mm(text: &str, unit: Unit) -> f64 {
-    signex_widgets::LengthFormat::new(&signex_i18n::I18n::en_us(), unit)
-        .parse(text)
-        .unwrap_or(0.0)
+/// The offset `text` stands for in mm, typed in `unit`, for both the preview
+/// and Apply. 0 while the text is not a number (empty, `-`: mid-edit).
+/// `Err` (the reason) for `nan` / `inf` or a value that overflows, before or
+/// after the unit conversion: an infinite offset would send the selection
+/// to infinity.
+pub(crate) fn offset_mm(text: &str, unit: Unit) -> Result<f64, String> {
+    use signex_types::numeric::{FiniteParseError, parse_finite_f64};
+    match parse_finite_f64(text) {
+        Ok(value) => {
+            let mm = value * signex_types::measure::mm_per(unit);
+            if mm.is_finite() {
+                Ok(mm)
+            } else {
+                Err(format!("{:?} is out of range", text.trim()))
+            }
+        }
+        Err(FiniteParseError::NotANumber(_)) => Ok(0.0),
+        Err(err @ FiniteParseError::NonFinite(_)) => Err(err.to_string()),
+    }
 }
 
 /// Whole grid steps an offset of `offset_mm` spans on a `grid_mm` grid;
@@ -78,9 +91,26 @@ mod tests {
 
     #[test]
     fn an_offset_reads_in_the_display_unit() {
-        assert_eq!(offset_mm("2.54", Unit::Mm), 2.54);
-        assert!((offset_mm("100", Unit::Mil) - 2.54).abs() < 1e-9);
-        assert_eq!(offset_mm("", Unit::Mm), 0.0);
-        assert_eq!(offset_mm("-", Unit::Mm), 0.0);
+        assert_eq!(offset_mm("2.54", Unit::Mm), Ok(2.54));
+        assert!((offset_mm("100", Unit::Mil).unwrap() - 2.54).abs() < 1e-9);
+        assert_eq!(offset_mm(" 2.5 ", Unit::Mm), Ok(2.5));
+        assert_eq!(offset_mm("-1", Unit::Mm), Ok(-1.0));
+        assert_eq!(offset_mm("", Unit::Mm), Ok(0.0));
+        assert_eq!(offset_mm("-", Unit::Mm), Ok(0.0));
+    }
+
+    /// #828: `inf` / `nan` / an overflow must not become a move offset.
+    #[test]
+    fn an_offset_refuses_non_finite_text() {
+        for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
+            assert!(offset_mm(bad, Unit::Mm).is_err(), "{bad:?}");
+        }
+    }
+
+    /// A finite number that overflows once converted to mm is refused too.
+    #[test]
+    fn an_offset_that_overflows_in_the_unit_is_refused() {
+        assert!(offset_mm("1e307", Unit::Mm).is_ok());
+        assert!(offset_mm("1e307", Unit::Inch).is_err());
     }
 }

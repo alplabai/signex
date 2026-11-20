@@ -408,19 +408,15 @@ impl Signex {
             );
             return Task::none();
         }
-        // Classify both axes before acting: a refused axis (`nan` / `inf` /
-        // overflow) must not be read as "0 on that axis" while the other
-        // axis still moves the selection. `move_offset` has already logged
-        // the refusal, naming the axis; the dialog stays open so the user
-        // can fix it.
-        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx);
-        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy);
+        // Classify both axes before acting: a refused axis must not be read
+        // as "0 on that axis" while the other still moves the selection.
+        // The dialog stays open so the user can fix the named box.
+        let unit = self.ui_state.unit;
+        let dx = move_offset("Move Selection X", &self.ui_state.move_selection.dx, unit);
+        let dy = move_offset("Move Selection Y", &self.ui_state.move_selection.dy, unit);
         let (Some(dx), Some(dy)) = (dx, dy) else {
             return Task::none();
         };
-        // The fields are typed in the display unit (their suffix).
-        let per = signex_types::measure::mm_per(self.ui_state.unit);
-        let (dx, dy) = (dx * per, dy * per);
         if dx == 0.0 && dy == 0.0 {
             self.ui_state.move_selection.open = false;
             return Task::none();
@@ -452,18 +448,14 @@ impl Signex {
     }
 }
 
-/// A Move Selection offset typed in the dialog. `None` means refused
-/// (`nan` / `inf` / overflow: an `inf` offset would send every selected item
-/// to infinity) and the whole apply is abandoned. Text that is not a number
-/// at all (empty, `-`) is the user mid-edit and moves by nothing. `field`
-/// names the box in the refusal line.
-fn move_offset(field: &str, text: &str) -> Option<f64> {
-    use crate::numeric_field::{FieldNumber, parse_named_field_number};
-    match parse_named_field_number(field, text) {
-        FieldNumber::Number(v) => Some(v),
-        FieldNumber::NotANumber => Some(0.0),
-        FieldNumber::Refused => None,
-    }
+/// A Move Selection offset in mm, read as the preview reads it
+/// (`move_selection_dialog::offset_mm`). `None` means refused, and the
+/// refusal is logged naming the box (`field`).
+fn move_offset(field: &str, text: &str, unit: signex_types::coord::Unit) -> Option<f64> {
+    use crate::app::handlers::editing_commands::move_selection_dialog::offset_mm;
+    offset_mm(text, unit)
+        .map_err(|reason| crate::diagnostics::log_warning(format!("{field} refused: {reason}")))
+        .ok()
 }
 
 /// The initial window size of `modal`: its in-window dimensions, so the user
@@ -620,20 +612,21 @@ pub(crate) fn detached_modal_settings(size: iced::Size) -> iced::window::Setting
 #[cfg(test)]
 mod tests {
     use super::{detached_modal_settings, move_offset};
+    use signex_types::coord::Unit::Mm;
 
     /// #828 -- `inf` / `nan` / an overflow must not become a move offset.
     #[test]
     fn move_offset_refuses_non_finite_text() {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
-            assert_eq!(move_offset("Move Selection X", bad), None, "{bad:?}");
+            assert_eq!(move_offset("Move Selection X", bad, Mm), None, "{bad:?}");
         }
     }
 
     #[test]
     fn move_offset_reads_ordinary_text() {
-        assert_eq!(move_offset("Move Selection X", " 2.5 "), Some(2.5));
-        assert_eq!(move_offset("Move Selection X", "-1"), Some(-1.0));
-        assert_eq!(move_offset("Move Selection X", ""), Some(0.0));
+        assert_eq!(move_offset("Move Selection X", " 2.5 ", Mm), Some(2.5));
+        assert_eq!(move_offset("Move Selection X", "-1", Mm), Some(-1.0));
+        assert_eq!(move_offset("Move Selection X", "", Mm), Some(0.0));
     }
 
     #[test]
