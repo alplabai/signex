@@ -1,10 +1,11 @@
 # Engine id-minting allowlist for scripts/check_engine_ids.sh (#2429): this list may only shrink, never grow.
-# `<path under crates/signex-engine/src>:<enclosing fn>`; blank lines and `#` comments are ignored.
-exec/change_component.rs:remap_pin_uuids
-selection_payload.rs:copy_selection
-sheet.rs:reconcile_child_sheet_pins
-transform/autoplace.rs:junction_at
-transform/rubber_band/env/follow.rs:apply_plan
-transform/rubber_band/env/overlap.rs:merge_overlaps
-transform/rubber_band/env/overlap.rs:trim_off_locked
-transform/rubber_band/env/route.rs:add_path
+# `<path under crates/signex-engine/src>:<enclosing fn> <uses>`; blank lines and `#` comments are ignored.
+# `<uses>` counts the production places that name the helper (its callers mint through it); it may only fall.
+exec/change_component.rs:remap_pin_uuids 1
+selection_payload.rs:copy_selection 0
+sheet.rs:reconcile_child_sheet_pins 1
+transform/autoplace.rs:junction_at 2
+transform/rubber_band/env/follow.rs:apply_plan 1
+transform/rubber_band/env/overlap.rs:merge_overlaps 2
+transform/rubber_band/env/overlap.rs:trim_off_locked 1
+transform/rubber_band/env/route.rs:add_path 1

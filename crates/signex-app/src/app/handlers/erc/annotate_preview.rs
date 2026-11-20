@@ -23,11 +23,16 @@ use crate::app::{AnnotateMsg, Message, Signex};
 #[derive(Debug, Clone)]
 pub struct AnnotatePreviewEntry {
     pub sheet: String,
+    /// The sheet file the row's symbol sits on (empty for a never-saved
+    /// active document).
+    pub sheet_path: PathBuf,
     pub current: String,
     pub proposed: String,
     /// Symbol uuid - lets the row's lock checkbox toggle the global
     /// `ui_state.annotate_locked` set without re-looking-up the symbol.
     pub uuid: uuid::Uuid,
+    /// The symbol's position on its sheet, mm.
+    pub location: (f64, f64),
 }
 
 /// Cached preview state, owned by `UiState`.
@@ -191,15 +196,31 @@ fn unit_titles(
     titles
 }
 
+/// The sheet file of each numbering unit, in the order of [`unit_titles`].
+fn unit_paths<'s>(
+    sheets: &'s [PreviewSheet],
+    placements: &[Vec<signex_engine::AnnotatePlacement>],
+) -> Vec<&'s Path> {
+    let mut paths = Vec::new();
+    for (sheet, places) in sheets.iter().zip(placements) {
+        for _ in 0..places.len().max(1) {
+            paths.push(sheet.path.as_path());
+        }
+    }
+    paths
+}
+
 /// The proposed `(current, new)` reference designators Annotate would hand
 /// out across the project. One row per symbol per numbering unit, so a sheet
 /// file placed more than once lists its symbols once per placement, as the
 /// pass numbers them (#1919); rows where `current == proposed` are "no
-/// change". Pure CPU over already-loaded sheets.
+/// change". A sheet in `unticked` lists no rows and keeps its designators,
+/// as the pass leaves it alone (#75). Pure CPU over already-loaded sheets.
 fn compute_entries(
     walked: &PreviewSheets,
     locked: &std::collections::HashSet<uuid::Uuid>,
     order: crate::app::state::AnnotateOrder,
+    unticked: &std::collections::BTreeSet<PathBuf>,
 ) -> Vec<AnnotatePreviewEntry> {
     let paths: Vec<PathBuf> = walked.sheets.iter().map(|s| s.path.clone()).collect();
     let symbols_of: std::collections::HashMap<&Path, &[Symbol]> = walked
@@ -214,6 +235,17 @@ fn compute_entries(
         &walked.multi,
     );
     let titles = unit_titles(&walked.sheets, &walk.placements);
+    let unit_paths = unit_paths(&walked.sheets, &walk.placements);
+    // An unticked sheet keeps every designator it has: its symbols act as
+    // locked, in the preview as in the pass.
+    let locked = &rows::with_unticked_locked(
+        locked,
+        unticked,
+        walked
+            .sheets
+            .iter()
+            .map(|s| (s.path.as_path(), s.sheet.symbols.as_slice())),
+    );
     let mut next = signex_types::designator::seed_counters(
         walk.docs
             .iter()
@@ -229,6 +261,10 @@ fn compute_entries(
         std::collections::HashMap::new();
     let mut out = Vec::new();
     for (unit, doc) in walk.docs.iter().enumerate() {
+        let sheet_path = unit_paths[unit];
+        if unticked.contains(sheet_path) {
+            continue;
+        }
         for i in signex_types::schematic::annotation_order(doc, parts.order()) {
             let sym = &doc[i];
             if sym.reference.is_empty() || !is_target(sym) {
@@ -256,9 +292,11 @@ fn compute_entries(
             };
             out.push(AnnotatePreviewEntry {
                 sheet: titles[unit].clone(),
+                sheet_path: sheet_path.to_path_buf(),
                 current: sym.reference.clone(),
                 proposed,
                 uuid: sym.uuid,
+                location: (sym.position.x, sym.position.y),
             });
         }
     }
@@ -325,6 +363,7 @@ impl Signex {
             &cache.sheets,
             &self.ui_state.annotate_locked,
             self.ui_state.annotate_order,
+            &self.ui_state.annotate_session.unticked,
         );
     }
 
@@ -370,10 +409,11 @@ impl Signex {
         }
     }
 
-    /// If the dialog is open and the cache no longer matches the documents,
-    /// claim a new generation and return the inputs for a reload.
+    /// If the dialog (or the reset confirm, which counts its scope) is open
+    /// and the cache no longer matches the documents, claim a new generation
+    /// and return the inputs for a reload.
     fn begin_annotate_preview_load(&mut self) -> Option<(u64, AnnotatePreviewInputs)> {
-        if !self.ui_state.annotate_dialog_open {
+        if !(self.ui_state.annotate_dialog_open || self.ui_state.annotate_reset_confirm) {
             return None;
         }
         let fp = fingerprint(&self.document_state);
@@ -447,9 +487,11 @@ impl Signex {
             &load.sheets,
             &self.ui_state.annotate_locked,
             self.ui_state.annotate_order,
+            &self.ui_state.annotate_session.unticked,
         )
     }
 }
 
+pub(crate) mod rows;
 #[cfg(test)]
 mod tests;

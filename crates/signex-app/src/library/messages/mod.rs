@@ -396,97 +396,11 @@ pub enum SketchConstraintTag {
     SymmetricAboutPoint,
 }
 
-/// v0.16.2 — role tag attached to a sketch entity. The Sketch-mode
-/// inspector emits one of these via
-/// [`FootprintEditorMsg::SketchSetRole`]; the dispatcher
-/// clears every `*Attr` slot on the target entity and writes the
-/// matching one with sensible defaults. Bake auto-emits whatever
-/// geometry the role implies (pad / silk segment / courtyard
-/// polygon / mask opening / pour / paste aperture / keepout / board
-/// cutout). `Pad` is only valid on a Point — non-Point entities
-/// fall through as a silent no-op.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RoleTag {
-    /// Clear every `*Attr` slot on the entity.
-    Unassigned,
-    /// `PadAttr` — bakes as an SMD pad. Point-only.
-    Pad,
-    /// `SilkAttr { layer: TopSilk }` — top-side silkscreen line/arc.
-    SilkTop,
-    /// `SilkAttr { layer: BottomSilk }`.
-    SilkBottom,
-    /// `CourtyardAttr` — closed loop becomes the courtyard polygon.
-    Courtyard,
-    /// `KeepoutAttr` with `NO_ROUTING` defaults on TopCopper.
-    Keepout,
-    /// `BoardCutoutAttr { through: true }` — board cutout polygon.
-    Cutout,
-    /// `MaskOpeningAttr { layer: TopSolderMask }`.
-    MaskOpeningTop,
-    /// `MaskOpeningAttr { layer: BottomSolderMask }`.
-    MaskOpeningBottom,
-    /// `MaskExcludeAttr { layer: TopSolderMask }`.
-    MaskExcludeTop,
-    /// `MaskExcludeAttr { layer: BottomSolderMask }`.
-    MaskExcludeBottom,
-    /// `PourAttr { layer: TopCopper, .. }` with thermal-relief defaults.
-    PourTop,
-    /// `PourAttr { layer: BottomCopper, .. }`.
-    PourBottom,
-    /// `PasteApertureAttr { layer: TopPaste }`.
-    PasteApertureTop,
-    /// `PasteApertureAttr { layer: BottomPaste }`.
-    PasteApertureBottom,
-}
-
-impl RoleTag {
-    /// Display order for the inspector's pick_list. Mirrors the
-    /// docstring order on the enum.
-    pub const ALL: &'static [RoleTag] = &[
-        RoleTag::Unassigned,
-        RoleTag::Pad,
-        RoleTag::SilkTop,
-        RoleTag::SilkBottom,
-        RoleTag::Courtyard,
-        RoleTag::Keepout,
-        RoleTag::Cutout,
-        RoleTag::MaskOpeningTop,
-        RoleTag::MaskOpeningBottom,
-        RoleTag::MaskExcludeTop,
-        RoleTag::MaskExcludeBottom,
-        RoleTag::PourTop,
-        RoleTag::PourBottom,
-        RoleTag::PasteApertureTop,
-        RoleTag::PasteApertureBottom,
-    ];
-
-    /// Human-readable label rendered in the inspector dropdown.
-    pub fn label(self) -> &'static str {
-        match self {
-            RoleTag::Unassigned => "Unassigned",
-            RoleTag::Pad => "Pad",
-            RoleTag::SilkTop => "Silk · Top",
-            RoleTag::SilkBottom => "Silk · Bottom",
-            RoleTag::Courtyard => "Courtyard",
-            RoleTag::Keepout => "Keepout",
-            RoleTag::Cutout => "Board Cutout",
-            RoleTag::MaskOpeningTop => "Mask Opening · Top",
-            RoleTag::MaskOpeningBottom => "Mask Opening · Bottom",
-            RoleTag::MaskExcludeTop => "Mask Exclude · Top",
-            RoleTag::MaskExcludeBottom => "Mask Exclude · Bottom",
-            RoleTag::PourTop => "Pour · Top",
-            RoleTag::PourBottom => "Pour · Bottom",
-            RoleTag::PasteApertureTop => "Paste · Top",
-            RoleTag::PasteApertureBottom => "Paste · Bottom",
-        }
-    }
-}
-
-impl std::fmt::Display for RoleTag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
-    }
-}
+/// The role picked for a sketch entity: what it bakes into. The domain
+/// type, so the host-aware lists (`SketchHost::roles`) and the editor
+/// speak one vocabulary (#2518). The Properties panel emits it through
+/// [`FootprintEditorMsg::SketchSetRole`].
+pub use signex_types::sketch::SketchRole as RoleTag;
 
 /// Selection target on the Symbol canvas — pure-data version of
 /// `editor::symbol::state::SymbolSelection`.

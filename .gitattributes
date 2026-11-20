@@ -13,3 +13,8 @@
 
 # Native-format fixture corpus: byte-for-byte goldens, never converted.
 crates/signex-types/tests/corpus/** text eol=lf
+
+# Routing corpus (#2481): third-party boards, large, stored in Git LFS. The
+# routing tests skip a board whose LFS object was not fetched, unless
+# SIGNEX_REQUIRE_ROUTING_CORPUS=1 (set by CI when it fetches the corpus).
+testdata/routing-corpus/**/*.snxpcb filter=lfs diff=lfs merge=lfs -text

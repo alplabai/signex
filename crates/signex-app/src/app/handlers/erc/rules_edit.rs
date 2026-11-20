@@ -27,6 +27,22 @@ impl Signex {
             .is_some_and(|p| p.data.has_unreadable_rules())
     }
 
+    /// How many rules the ERC dialog shows at each severity, in the order
+    /// Error, Warning, Info, Off: the project's stored rules, else the
+    /// machine's. The dialog's severity tiles (#2413).
+    pub fn erc_dialog_severity_counts(&self) -> [(signex_erc::Severity, usize); 4] {
+        let stored = self
+            .document_state
+            .active_document_project()
+            .and_then(|p| p.data.rules.as_ref())
+            .map(|rules| signex_erc::project_rules::resolve(&rules.erc).severity);
+        signex_erc::project_rules::severity_counts(
+            stored
+                .as_ref()
+                .unwrap_or(&self.ui_state.erc_severity_override),
+        )
+    }
+
     /// "Store ERC rules in this project": snapshot the machine preferences
     /// into the project. A no-op when the project already has rules or there
     /// is no project.

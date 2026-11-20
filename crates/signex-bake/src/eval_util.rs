@@ -6,17 +6,22 @@
 
 use std::collections::HashMap;
 
+use signex_expr::{LiteralContext, Quantity, parse, parse_with};
 use signex_sketch::SketchError;
 use signex_sketch::expr::eval::{EvalContext, eval};
-use signex_sketch::expr::parse::parse;
 use signex_sketch::sketch::SketchData;
-use signex_sketch::unit::Quantity;
 
-/// Strip the optional Altium-style leading `=` and surrounding
-/// whitespace so authored expressions like `= pad_w` parse cleanly.
+/// Strip the optional leading `=` and surrounding whitespace so authored
+/// expressions like `= pad_w` parse cleanly (the sketch-style rule,
+/// [`signex_expr::expression_body`]).
 pub(crate) fn strip_eq_prefix(src: &str) -> &str {
-    let s = src.trim();
-    s.strip_prefix('=').map(|s| s.trim_start()).unwrap_or(s)
+    signex_expr::expression_body(src)
+}
+
+/// Parse a value that must be a length: a bare `m` reads as metres here
+/// ([`signex_expr::bare_m_meaning`]).
+fn parse_length(src: &str) -> Result<signex_expr::ExprNode, signex_expr::ExprError> {
+    parse_with(strip_eq_prefix(src), LiteralContext::Length)
 }
 
 /// Build an [`EvalContext`] whose parameters are the canonical values in the
@@ -36,14 +41,14 @@ fn eval_quantity(expr: &str, ctx: &EvalContext) -> Result<Quantity, String> {
 /// Evaluate a length expression to millimetres. A unitless parameter is read
 /// as millimetres here (see [`crate::params::eval_length_mm`]).
 pub(crate) fn eval_mm(expr: &str, ctx: &EvalContext) -> Result<f64, String> {
-    let ast = parse(strip_eq_prefix(expr)).map_err(|e| format!("parse: {e:?}"))?;
+    let ast = parse_length(expr).map_err(|e| format!("parse: {e:?}"))?;
     crate::params::eval_length_mm(&ast, ctx).map_err(crate::params::describe)
 }
 
 /// [`eval_mm`] with the typed error, for callers that propagate
 /// [`SketchError`] (pad baking). Same parse + unitless-as-mm rule.
 pub(crate) fn eval_length(expr: &str, ctx: &EvalContext) -> Result<f64, SketchError> {
-    let ast = parse(strip_eq_prefix(expr)).map_err(SketchError::Expr)?;
+    let ast = parse_length(expr).map_err(SketchError::Expr)?;
     crate::params::eval_length_mm(&ast, ctx)
 }
 
@@ -111,5 +116,49 @@ mod tests {
                 .starts_with("unit:")
         );
         assert_eq!(eval_dimensionless("3", &ctx()), Ok(3.0));
+    }
+
+    #[test]
+    fn ten_m_via_a_parameter_matches_the_field_or_errors() {
+        let mut sketch = SketchData::default();
+        sketch.parameters.insert("pad_w", "10m");
+        let direct = eval_mm("10m", &ctx());
+        let via_param = signex_sketch::parameter::resolve(&sketch.parameters)
+            .map_err(|e| format!("resolve: {e:?}"))
+            .and_then(|p| eval_mm("= pad_w", &build_ctx(&sketch, &p)));
+        assert_eq!(direct, Ok(10_000.0));
+        assert!(
+            via_param.is_err() || via_param == direct,
+            "via parameter {via_param:?}, direct {direct:?}"
+        );
+    }
+
+    #[test]
+    fn prefix_only_literals_via_a_parameter_match_the_field_or_error() {
+        for literal in ["1u", "4k7", "2n", "10m", "500m", "2n2"] {
+            let mut sketch = SketchData::default();
+            sketch.parameters.insert("pad_w", literal);
+            let direct = eval_mm(literal, &ctx());
+            let via_param = signex_sketch::parameter::resolve(&sketch.parameters)
+                .map_err(|e| format!("resolve: {e:?}"))
+                .and_then(|p| eval_mm("= pad_w", &build_ctx(&sketch, &p)));
+            assert!(
+                via_param.is_err() || via_param == direct,
+                "{literal}: via parameter {via_param:?}, direct {direct:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_parameter_with_a_unit_still_bakes() {
+        let mut sketch = SketchData::default();
+        sketch.parameters.insert("pad_w", "0.5mm");
+        sketch.parameters.insert("pins", "16");
+        let p = signex_sketch::parameter::resolve(&sketch.parameters).unwrap();
+        assert_eq!(eval_mm("= pad_w", &build_ctx(&sketch, &p)), Ok(0.5));
+        assert_eq!(
+            eval_dimensionless("= pins", &build_ctx(&sketch, &p)),
+            Ok(16.0)
+        );
     }
 }

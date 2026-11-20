@@ -19,6 +19,7 @@ fn outcome_for(path: &str) -> ErcRunOutcome {
         waived_findings: Vec::new(),
         lapsed_waivers: Default::default(),
         page_frames: Default::default(),
+        checked: [1, 0, 0],
     }
 }
 

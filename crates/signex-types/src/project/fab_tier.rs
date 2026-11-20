@@ -27,10 +27,11 @@ pub struct FabCapabilities {
 }
 
 /// When the tier numbers were last checked.
-const TIERS_REVISED: &str = "2026-11-17";
+const TIERS_REVISED: &str = "2026-11-19";
 
 impl FabTemplate {
-    /// The tier's limits.
+    /// The tier's limits: the one tier table. A tier card's clearance and
+    /// via come from here (`SetupProfile::rule_values`).
     pub const fn capabilities(self) -> FabCapabilities {
         match self {
             Self::Standard => FabCapabilities {
@@ -60,8 +61,8 @@ impl FabTemplate {
             Self::Hdi => FabCapabilities {
                 clearance: 0.075,
                 track_width: 0.075,
-                via_diameter: 0.3,
-                via_drill: 0.15,
+                via_diameter: 0.25,
+                via_drill: 0.1,
                 hole: 0.1,
                 annular_ring: 0.075,
                 hole_to_hole: 0.3,
@@ -70,13 +71,6 @@ impl FabTemplate {
                 silk_to_pad: 0.075,
             },
         }
-    }
-
-    /// `(clearance, track, via size, via drill)` in mm: what a new
-    /// project's board setup takes from the tier.
-    pub const fn minimums(self) -> (f64, f64, f64, f64) {
-        let c = self.capabilities();
-        (c.clearance, c.track_width, c.via_diameter, c.via_drill)
     }
 
     /// Where the tier's numbers come from, as a fab profile names its own.

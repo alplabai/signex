@@ -30,6 +30,7 @@ mod document;
 pub mod document_ids;
 pub mod document_read;
 mod documents;
+pub(crate) mod engine_notices;
 pub(crate) mod fab_outputs;
 pub(crate) mod file_extension;
 mod handlers;
@@ -39,14 +40,17 @@ mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
 pub(crate) mod new_project;
+pub(crate) mod page_tab;
 pub mod parent_reference_disk;
 pub mod path_op_jobs;
 pub mod path_ops;
+pub(crate) mod pin_junction_repair;
 pub mod project_entry_disk;
 mod project_tab;
 mod rules_tab;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
+pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub use rules_tab::{RulesDomain, RulesFilter, RulesTabMsg, RulesTabState};
@@ -89,8 +93,8 @@ pub use undo_groups::{UndoGroupKind, UndoGroupSheets};
 pub(crate) mod view;
 
 pub use assign_footprints::{
-    AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer, FootprintPart,
-    PartAccess,
+    AssignFilter, AssignFootprintsMsg, AssignFootprintsState, AssignProblem, FootprintOffer,
+    FootprintPart, PartAccess, TickedBar,
 };
 pub use back_annotate::{BackAnnotateMsg, BackAnnotateState};
 pub use board_output::{
@@ -100,6 +104,7 @@ pub use board_output::{
 pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use board_reuse::ReuseBlockMsg;
+pub use contracts::ErcProfileAction;
 pub use contracts::{
     AnnotateMsg, AppQuitConfirmState, Board3dGesture, Board3dModelsRead, Board3dMsg, BoardNetMsg,
     BoardSketchMsg, BoardToolsMsg, BomPreviewMsg, CommandPaletteMsg, ContextAction, ContextMenuMsg,
@@ -131,6 +136,7 @@ pub use handlers::window_geometry_events::GeometryReadout;
 pub use handlers::window_tiling::{Tile, TileLayout, TilePlan, tiles};
 pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
+pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
 #[cfg(test)]

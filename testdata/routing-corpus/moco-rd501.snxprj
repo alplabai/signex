@@ -1,0 +1,106 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "moco-rd501",
+  "net_classes": [
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Analog",
+      "patterns": [
+        "/Motor Driver/SL_B",
+        "/Motor Driver/SL_C",
+        "/Motor Driver/SN1",
+        "/Motor Driver/SN2",
+        "/Motor Driver/SP1",
+        "/Motor Driver/SP2",
+        "/Motor Driver/V_SENSE"
+      ],
+      "trace_width": 0.3,
+      "via_diameter": 0.8,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Driver",
+      "patterns": [
+        "/Motor Driver/GH_A",
+        "/Motor Driver/GH_B",
+        "/Motor Driver/GH_C",
+        "/Motor Driver/GL_A",
+        "/Motor Driver/GL_B",
+        "/Motor Driver/GL_C",
+        "/Motor Driver/MOTOR_A",
+        "/Motor Driver/MOTOR_B",
+        "/Motor Driver/MOTOR_C",
+        "Net-(Q3-Pad4)",
+        "Net-(Q4-Pad4)",
+        "Net-(Q5-Pad4)",
+        "Net-(Q6-Pad4)"
+      ],
+      "trace_width": 0.25,
+      "via_diameter": 0.8,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "GND",
+      "patterns": [
+        "GND"
+      ],
+      "trace_width": 0.4,
+      "via_diameter": 0.8,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Power-1",
+      "patterns": [
+        "+5V",
+        "GATE_VDD",
+        "VCC"
+      ],
+      "trace_width": 0.5,
+      "via_diameter": 0.8,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Power-2",
+      "patterns": [
+        "Vdrive"
+      ],
+      "trace_width": 1.0,
+      "via_diameter": 0.8,
+      "via_drill": 0.4
+    },
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.2,
+      "via_diameter": 0.56,
+      "via_drill": 0.3
+    }
+  ],
+  "pcb_file": "moco-rd501.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

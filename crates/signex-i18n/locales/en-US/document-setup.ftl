@@ -86,3 +86,51 @@ setup-project-closed = Project { $project } was closed, so its New PCB or New Sc
 
 # Messages panel; $why is why a free Sheet<n> name could not be found.
 setup-sheet-name-failed = New schematic sheet: no free sheet name could be found, so nothing was made: { $why }
+
+# Messages panel after Edit profile... on a built-in (#2536); $name is the card name.
+setup-profile-edited = Saved your edits to the built-in profile "{ $name }". Reset to default drops them.
+
+# Messages panel after Reset to default; $name is the card name.
+setup-profile-reset = Reset the built-in profile "{ $name }" to its shipped values. Projects keep the values they copied.
+
+# Messages panel after Rename; $old and $name are the names before and after.
+setup-profile-renamed = Renamed the setup profile "{ $old }" to "{ $name }".
+
+# Messages panel after Duplicate; $name is the new profile's name.
+setup-profile-duplicated = Saved a copy as the setup profile "{ $name }".
+
+# Rows of a saved profile's menu.
+setup-profile-rename = Rename
+setup-profile-duplicate = Duplicate
+setup-profile-delete = Delete
+
+# Name a duplicate starts from; $name is the source profile's name.
+setup-profile-copy-name = { $name } copy
+
+# Under the Rename field when another saved profile has the name.
+setup-profile-err-name-taken = Another saved profile already has this name.
+
+# Caption of a saved profile in the New PCB row: copper layers, clearance / track (mm).
+setup-profile-ucard-pcb = { $layers }L · { $clearance }/{ $track }
+
+# Caption of a saved profile in the New Schematic row: sheet size and designator standard.
+setup-profile-ucard-sheet = { $paper } · { $designators }
+
+# Summary row of New PCB / New Schematic when the project saved a setup (#2538).
+setup-summary-heading = From project setup:
+
+# The PCB summary; $profile is the profile name, values in mm.
+setup-summary-pcb = { $profile } · { $layers } layers · { $clearance } mm clearance · { $track } mm tracks
+
+# The schematic summary; $paper such as A4 landscape, $block the title block, $designators the standard.
+setup-summary-sheet = { $paper } · { $block } · { $designators }
+
+setup-summary-block-default = Signex default title block
+
+setup-summary-block-none = No title block
+
+# The summary row's button that unfolds the profile cards.
+setup-summary-other = Use another profile…
+
+# The same button while the cards are unfolded: folds them and takes the project's setup back.
+setup-summary-keep = Keep project setup

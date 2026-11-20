@@ -23,7 +23,7 @@ pub(super) const WINDOW_LAYOUT: &[&str] = &[
 ];
 
 /// Is `command` one of [`WINDOW_LAYOUT`]?
-pub(super) fn is_window_layout(command: &AppCommandId) -> bool {
+pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
     WINDOW_LAYOUT.contains(&command.as_str())
 }
 
@@ -149,6 +149,9 @@ mod tests {
                 "rename_net_class",
                 // #2216: each pour's fill of the named board, as JSON.
                 "repour_all",
+                // The Reset rows of the board menus, on the named board.
+                "reset_board_origin",
+                "reset_layer_colors",
                 "resolve",
                 "revert",
                 "rules_add",

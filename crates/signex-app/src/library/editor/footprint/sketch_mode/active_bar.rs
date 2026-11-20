@@ -1,46 +1,35 @@
-//! Sketch-mode Active Bar — floating toolbar over the footprint
-//! canvas when the editor is in [`EditorMode::Sketch`](crate::library::editor::footprint::state::EditorMode::Sketch).
+//! The sketch Active Bar, one chrome on both hosts (#2518): the whole
+//! bar over a footprint in sketch mode and over a board sketch.
 //!
-//! Mirrors the Fusion 360 sketch toolbar layout, including its
-//! grouping: the geometry tools collapse into two dropdown triggers
-//! (**Create ▾** and **Modify ▾**) while the constraints stay a flat,
-//! selection-driven strip — exactly the split Fusion uses, and for the
-//! same reason. A constraint is applied to a selection you already
-//! made, so burying it costs a click on the most frequent action;
-//! arming a drawing tool happens once and then you draw many, so the
-//! extra click amortises to nothing.
+//! The geometry tools collapse into two dropdown triggers (**Create ▾**
+//! and **Modify ▾**) while the constraints stay a flat, selection-driven
+//! strip: a constraint is applied to a selection already made, so it
+//! should not cost a menu click.
 //!
 //! Layout (left → right):
 //!
 //! 1. **Select** — sketch entity selection tool.
-//! 2. **Create ▾** — Line / Rectangle / Rounded Rectangle / Circle /
-//!    Arc / Tangent Arc. The trigger borrows the armed tool's icon so
-//!    the collapsed bar still shows what's in hand.
-//! 3. **Modify ▾** — Fillet / Trim / Mirror / Offset / Rectangular +
-//!    Circular Pattern / Make Pad from Profile.
-//! 4. **Constrain** — 19 selection-aware constraint buttons. Only the
-//!    ones the current selection actually permits are rendered, so
-//!    this section is empty until something is selected. Enabled state
-//!    derives from the kinds of the primary + secondary selection
-//!    slots (+ the extra slot for the two 3-entity Symmetric
-//!    constraints).
+//! 2. **Create ▾** — the drawing tools; the trigger borrows the armed
+//!    tool's icon so the collapsed bar still shows what's in hand.
+//! 3. **Modify ▾** — the edit tools and Make Pad from Profile.
+//! 4. **Constrain** — the constraint buttons the current selection
+//!    permits; empty until something is selected.
 //! 5. **Dimension input** — `Custom` slot with a `text_input` for
 //!    the `DistancePtPt` numeric value.
-//! 6. **Linetype** — Normal / Construction / Centerline tri-state pill.
+//! 6. **Linetype** — Normal / Construction / Centerline segments.
+//! 7. **Snap ▾** — the snap options menu.
 //!
-//! Both dropdown menus live in
-//! [`crate::library::editor::footprint::active_bar_dropdowns`]; this
-//! module only builds their trigger buttons. The bar floats over the
-//! canvas (Stack overlay layer) so it doesn't steal vertical space
-//! from the drawing area.
+//! The menus live in [`super::menus`]; this module builds the triggers.
 
 use iced::widget::{Space, container};
 use iced::{Border, Color, Element, Length, Theme, Widget};
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
-use signex_widgets::{raw, text, text_input};
+use signex_widgets::{SegmentedStyle, raw, segmented, text, text_input};
 
+use super::SketchLinetype;
 use crate::app::FootprintDocument;
 use crate::icons;
 use crate::library::editor::footprint::state::{FpActiveBarMenu, SketchTool};
@@ -52,13 +41,13 @@ use crate::library::messages::{
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// Build the Active Bar items for the given editor state. Theme is
-/// pulled from `editor.path` → `themes::current_id()` lookup at the
-/// caller's site (same pattern as the SchLib editor).
+/// Build the sketch Active Bar items for the given editor state, the same
+/// on both hosts.
 pub fn items<'a>(
     editor: &'a FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
+    i18n: &I18n,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
     let path = editor.path.clone();
     let active_tool = editor.state.active_tool;
@@ -111,54 +100,6 @@ pub fn items<'a>(
         }))
     };
 
-    // v0.22 — Linetype tri-state pill. Combines the v0.16.1
-    // Construction toggle and v0.22 Phase A5 Centerline toggle into a
-    // single button that cycles Normal → Construction → Centerline →
-    // Normal on left-click. The icon + tooltip update to reflect the
-    // current state; the bar saves a button slot vs. two separate
-    // pills with mutual-exclusion logic in the dispatcher.
-    //
-    // Cycle mapping:
-    // - Normal      → ToggleConstruction (turns Construction on)
-    // - Construction → ToggleCenterline   (turns Centerline on; the
-    //                                      handler clears Construction
-    //                                      because of the existing
-    //                                      mutual-exclusivity rule)
-    // - Centerline  → ToggleCenterline   (turns Centerline off → Normal)
-    let construction_on = editor.state.construction_mode;
-    let centerline_on = editor.state.centerline_mode;
-    let linetype_path = path.clone();
-    let (linetype_glyph, linetype_tooltip, linetype_msg) = if centerline_on {
-        (
-            "\u{2501}",
-            "Linetype: Centerline (click → Normal)".to_string(),
-            FootprintEditorMsg::SketchToggleCenterline,
-        )
-    } else if construction_on {
-        (
-            "\u{2504}",
-            "Linetype: Construction (click → Centerline)".to_string(),
-            FootprintEditorMsg::SketchToggleCenterline,
-        )
-    } else {
-        (
-            "\u{2501}\u{0307}", // ━̇ — solid line with overdot hint
-            "Linetype: Normal (click → Construction)".to_string(),
-            FootprintEditorMsg::SketchToggleConstruction,
-        )
-    };
-    let linetype_button = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Glyph(linetype_glyph),
-        tooltip: linetype_tooltip,
-        enabled: true,
-        selected: construction_on || centerline_on,
-        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: linetype_path,
-            msg: PrimitiveEdit::Footprint(linetype_msg),
-        }),
-        ..ActiveBarButton::default()
-    });
-
     // Create ▾ / Modify ▾ group triggers. Both clicks open the menu —
     // there is no sensible "default action" for a group of six tools,
     // and guessing one would make the button do different things on
@@ -199,41 +140,24 @@ pub fn items<'a>(
     let dim_input = build_dimension_input(editor, tokens);
 
     // Bar shape: Select | Create ▾ Modify ▾ | <constraints the current
-    // selection permits> | DimInput | Linetype. The two group triggers
-    // replace what used to be twelve always-visible tool buttons; the
-    // constraint section still collapses to nothing when no selection
-    // is active, so the resting bar is six slots wide.
-    //
-    // NOTE — `unified_active_bar::dropdown_x_offset` mirrors the first
-    // four slots below (Select, Separator, Create, Modify) to place the
-    // Create / Modify dropdown panels. Reordering them without updating
-    // that function puts the panels under the wrong button;
-    // `sketch_group_triggers_sit_where_the_offsets_say` pins it.
-    //
-    // Sections 1-3 are unconditional, so they seed the vector directly:
-    // Select, a separator, then the Create / Modify group triggers.
-    // v0.14 — Place Point is absent from Create by design. Intersections
-    // snap automatically (Line×Line / Line×Arc / Arc×Arc, see snap.rs
-    // SnapKind::Intersection) and the Line/Rect/Circle/Arc tools
-    // auto-create their own endpoint Points, so a manual free-point tool
-    // was clutter in the footprint context. The SketchTool::Point
-    // variant + dispatch stay (constraints + pad auto-mint reference
-    // Points internally).
+    // selection permits> | DimInput | Linetype | Snap ▾. The dropdown
+    // panels find their trigger by its message
+    // (`unified_active_bar::menu_trigger_geometry`), not by position.
     let mut items: Vec<ActiveBarItem<LibraryMessage>> = vec![
         mk_tool(
-            "Select",
+            &t!(i18n, ids::EDITORS_SKETCH_SELECT).into_string(),
             SketchTool::Select,
             ActiveBarIcon::Svg(icons::icon_select(theme_id)),
         ),
         ActiveBarItem::Separator,
         mk_group(
             FpActiveBarMenu::SketchCreate,
-            "Create — Line / Rectangle / Rounded Rectangle / Circle / Arc / Tangent Arc",
+            &t!(i18n, ids::EDITORS_SKETCH_CREATE).into_string(),
             icons::icon_sk_create(theme_id),
         ),
         mk_group(
             FpActiveBarMenu::SketchModify,
-            "Modify — Fillet / Trim / Mirror / Offset / Patterns / Make Pad from Profile",
+            &t!(i18n, ids::EDITORS_SKETCH_MODIFY).into_string(),
             icons::icon_sk_modify(theme_id),
         ),
     ];
@@ -351,30 +275,108 @@ pub fn items<'a>(
         items.extend(constraint_buttons);
     }
 
-    // Section 5: Dimension input + Linetype tri-state pill — always
-    // visible.
+    // Sections 5-7: Dimension input, Linetype and Snap ▾ — always visible.
     items.push(ActiveBarItem::Separator);
     items.push(ActiveBarItem::custom(dim_input, DIM_INPUT_W));
     items.push(ActiveBarItem::Separator);
-    items.push(linetype_button);
+    items.push(ActiveBarItem::custom(
+        linetype_segments(editor, tokens, i18n),
+        LINETYPE_W,
+    ));
+    items.push(ActiveBarItem::Separator);
+    items.push(snap_trigger(editor, theme_id, i18n));
 
     items
 }
 
-/// Convenience wrapper — build items + render via
-/// [`signex_widgets::active_bar::view`].
-pub fn view<'a>(
-    editor: &'a FootprintDocument,
+/// Declared width of the Linetype slot: three glyph segments. Like
+/// [`DIM_INPUT_W`] it is stated, since the bar measures itself without a
+/// layout pass; the segments stretch to share it.
+pub(crate) const LINETYPE_W: f32 = TS.body * 12.0;
+
+/// The Linetype control: Normal / Construction / Centerline as one
+/// three-way segment, the picked one raised.
+fn linetype_segments(
+    editor: &FootprintDocument,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'static, LibraryMessage> {
+    let path = editor.path.clone();
+    let r = crate::styles::tokens::resolve(tokens);
+    let style = SegmentedStyle::new(
+        r.sunken,
+        r.raised,
+        r.shadow,
+        r.ink3,
+        theme_ext::text_primary(tokens),
+        TS.body,
+    )
+    .fill_width(true);
+    let glyph = |linetype| match linetype {
+        SketchLinetype::Normal => ids::EDITORS_SKETCH_LINETYPE_NORMAL,
+        SketchLinetype::Construction => ids::EDITORS_SKETCH_LINETYPE_CONSTRUCTION,
+        SketchLinetype::Centerline => ids::EDITORS_SKETCH_LINETYPE_CENTERLINE,
+    };
+    let options: Vec<(SketchLinetype, signex_widgets::Label<'static>)> = SketchLinetype::ALL
+        .into_iter()
+        .map(|linetype| (linetype, t!(i18n, glyph(linetype)).into()))
+        .collect();
+    let control = segmented(
+        options,
+        SketchLinetype::of(&editor.state),
+        style,
+        move |linetype| LibraryMessage::PrimitiveEditorEvent {
+            path: path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchLinetypePicked(linetype)),
+        },
+    );
+    let r = crate::styles::tokens::resolve(tokens);
+    let tip = container(
+        text(t!(i18n, ids::EDITORS_SKETCH_LINETYPE))
+            .size(TS.caption)
+            .color(theme_ext::text_primary(tokens)),
+    )
+    .padding([SP.xs, SP.s])
+    .style(signex_widgets::active_bar_dropdown::tooltip_style(
+        r.raised,
+        r.line_strong,
+    ));
+    container(signex_widgets::tooltip(
+        control,
+        tip,
+        signex_widgets::tooltip::Position::Bottom,
+    ))
+    .width(Length::Fixed(LINETYPE_W))
+    .boxed()
+}
+
+/// Snap ▾: opens the snap options menu on either click, like the other
+/// menu triggers.
+fn snap_trigger(
+    editor: &FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
-    tokens: &'a ThemeTokens,
-) -> Element<'a, LibraryMessage> {
-    signex_widgets::active_bar::view(items(editor, theme_id, tokens), tokens)
+    i18n: &I18n,
+) -> ActiveBarItem<LibraryMessage> {
+    let toggle = LibraryMessage::PrimitiveEditorEvent {
+        path: editor.path.clone(),
+        msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ToggleActiveBarMenu(
+            FpActiveBarMenu::Snap,
+        )),
+    };
+    ActiveBarItem::Button(ActiveBarButton {
+        icon: ActiveBarIcon::Svg(icons::icon_dd_align_grid(theme_id)),
+        tooltip: t!(i18n, ids::EDITORS_SKETCH_SNAP).into_string(),
+        enabled: true,
+        selected: editor.state.active_bar_menu == Some(FpActiveBarMenu::Snap),
+        on_press: Some(toggle.clone()),
+        on_right_press: Some(toggle),
+        dropdown_indicator: Some(ActiveBarIcon::Svg(icons::icon_chevron_45(theme_id))),
+    })
 }
 
 /// Icon for an armed sketch tool, so a collapsed group trigger can
 /// show what's in hand instead of the generic group glyph. `Select`
-/// and `Point` never reach a group trigger (neither belongs to one);
-/// they fall back to the Create glyph.
+/// never reaches a group trigger; it falls back to the Create glyph.
 fn sketch_tool_icon(
     tool: SketchTool,
     theme_id: signex_types::theme::ThemeId,
@@ -384,9 +386,6 @@ fn sketch_tool_icon(
         SketchTool::Rectangle => icons::icon_shape_rect(theme_id),
         SketchTool::RoundedRectangle => icons::icon_sk_rounded_rect(theme_id),
         SketchTool::Circle => icons::icon_shape_circle(theme_id),
-        // #467 — Edge Arc isn't in a group's tool list (no dropdown row
-        // yet, see the issue's menu-content note), so this arm only
-        // keeps the icon match exhaustive; it shares the Arc glyph.
         SketchTool::Arc | SketchTool::EdgeArc | SketchTool::TangentArc => {
             icons::icon_shape_arc(theme_id)
         }
@@ -401,7 +400,8 @@ fn sketch_tool_icon(
         // dropdown, not a sketch group trigger, so this icon is only a
         // fallback — use the Modify glyph, both being track-edit tools.
         SketchTool::BreakTrack | SketchTool::DragTrackEnd => icons::icon_sk_modify(theme_id),
-        SketchTool::Select | SketchTool::Point => icons::icon_sk_create(theme_id),
+        SketchTool::Point => icons::icon_sk_c_coincident(theme_id),
+        SketchTool::Select => icons::icon_sk_create(theme_id),
     }
 }
 

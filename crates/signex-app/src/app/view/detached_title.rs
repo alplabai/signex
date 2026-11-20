@@ -31,6 +31,12 @@ impl Signex {
                 .recovery
                 .as_ref()
                 .map(|dialog| crate::library::recovery::title(dialog, &self.ui_state.i18n)),
+            // The reset confirm is titled after the reset asked for (#76).
+            ModalId::AnnotateResetConfirm => Some(
+                self.ui_state
+                    .i18n
+                    .message_plain(self.ui_state.annotate_session.reset_title(), &[]),
+            ),
             _ => None,
         }
         .unwrap_or_else(|| {

@@ -8,14 +8,16 @@ use signex_i18n::{DateLength, I18n, UserText, ids, t};
 use signex_types::check::{CheckReport, Finding, Severity};
 use signex_types::project::{
     DEFAULT_PART_STATES, REQUIREMENT_KINDS, Requirement, RequirementEntry, RequirementField,
+    RequirementProblem,
 };
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{CheckboxLabel as _, PickListPlaceholder as _, checkbox, text, text_input};
 
 use super::super::table::{SP, TS, action, labelled, note, problem, section};
+use super::drafts::keys_of;
 use super::words::{field_words, kind_words, problem_words};
-use super::{RequirementsMsg, RequirementsTabState, message};
+use super::{EntryKey, RequirementsMsg, RequirementsTabState, message};
 use crate::app::Message;
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::styles::tokens as ink;
@@ -74,10 +76,18 @@ pub(in crate::app::project_tab) fn view<'a>(
     } else if data.requirements.is_empty() {
         body.push(note(t!(i18n, ids::REQUIREMENTS_EMPTY), tokens));
     }
-    for (index, entry) in data.requirements.iter().enumerate() {
+    let keys = keys_of(&data.requirements);
+    let problem_at = tab.and_then(|tab| tab.problem_shown_at(&data.requirements));
+    for ((index, entry), key) in data.requirements.iter().enumerate().zip(keys) {
+        let refused = tab
+            .and_then(|tab| tab.problem.as_ref())
+            .filter(|_| problem_at == Some(index))
+            .map(|(_, refused)| refused);
         let card = Entry {
             project_id,
             index,
+            key,
+            refused,
             tab,
             report,
             i18n,
@@ -179,6 +189,10 @@ fn user_note<'a>(words: String, tokens: &ThemeTokens) -> Element<'a, Message> {
 struct Entry<'s> {
     project_id: ProjectId,
     index: usize,
+    /// The entry's key: its drafts' and its refusal's.
+    key: Option<EntryKey>,
+    /// Why the last edit of this entry was refused.
+    refused: Option<&'s RequirementProblem>,
     tab: Option<&'s RequirementsTabState>,
     report: Option<&'s CheckReport>,
     i18n: &'s I18n,
@@ -222,9 +236,7 @@ impl Entry<'_> {
                 col = col.push(problem(words, self.tokens));
             }
         }
-        if let Some((Some(at), refused)) = self.tab.and_then(|tab| tab.problem.as_ref())
-            && *at == self.index
-        {
+        if let Some(refused) = self.refused {
             col = col.push(problem(problem_words(refused, self.i18n), self.tokens));
         }
         container(col)
@@ -349,7 +361,8 @@ impl Entry<'_> {
         let (project_id, index) = (self.project_id, self.index);
         let draft = self
             .tab
-            .and_then(|tab| tab.drafts.get(&(index, field)))
+            .zip(self.key.clone())
+            .and_then(|(tab, key)| tab.drafts.get(&(key, field)))
             .cloned();
         let shown = draft.unwrap_or_else(|| stored_text(field, raw));
         let hint = if field.is_optional() {
