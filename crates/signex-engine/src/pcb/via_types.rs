@@ -1,8 +1,9 @@
-//! The via types of a board (#96): span, kind, size and protection, as the
-//! Via panel picks them. Derived from the board's own vias until the Layer
-//! Stack Manager stores via types (#105). Applying a type or resetting a
-//! via's size override is built from the `primitive_edit` via edits and
-//! returned as one command, so the app runs it as one undo step.
+//! The via types of a board (mockup row 96): span, kind, size and
+//! protection, as the Via panel picks them. Derived from the board's own
+//! vias until the Layer Stack Manager stores via types (mockup row 105).
+//! Applying a type or resetting a via's size override is built from the
+//! `primitive_edit` via edits and returned as one command, so the app runs
+//! it as one undo step.
 
 use std::collections::BTreeMap;
 
@@ -14,7 +15,7 @@ use signex_types::pcb_stack::board_copper_layers;
 use signex_types::pcb_via_protection::ViaProtection;
 use uuid::Uuid;
 
-use super::primitive_edit::{PrimitiveEditRefusal, ViaEdit, via_edit_command};
+use super::primitive_edit::{PrimitiveEditRefusal, ViaEdit, edit_vias};
 use super::{BoardCommand, BoardItem};
 
 /// The copper a drilled via hole's wall is plated with, in mm: the finished
@@ -227,10 +228,10 @@ pub fn reset_override_commands(
     folded_command(board, items, &edits, None)
 }
 
-/// `edits` run in turn on the vias of `items`, each through
-/// `via_edit_command` on the vias as the edits before it left them, then
-/// gathered into one replace. `kind` sets the via kind last: a span edit
-/// keeps a micro via micro, a type may not.
+/// `edits` run in turn on copies of the vias of `items`, each as
+/// `via_edit_command` runs it on the vias as the edits before it left them,
+/// then gathered into one replace. `kind` sets the via kind last: a span
+/// edit keeps a micro via micro, a type may not.
 fn folded_command(
     board: &PcbBoard,
     items: &[ItemRef],
@@ -247,30 +248,19 @@ fn folded_command(
     if ids.is_empty() {
         return Err(PrimitiveEditRefusal::Empty);
     }
-    let mut scratch = board.clone();
+    let old: Vec<&Via> = ids
+        .iter()
+        .map(|id| board.vias.iter().find(|v| v.uuid == *id))
+        .collect::<Option<_>>()
+        .ok_or(PrimitiveEditRefusal::Gone)?;
+    // A scratch copy of the affected vias only, edited in turn.
+    let copper = board_copper_layers(&board.layers);
+    let mut scratch: Vec<Via> = old.iter().map(|v| (*v).clone()).collect();
     for edit in edits {
-        let Some(BoardCommand::ReplaceItems { items }) =
-            via_edit_command(&scratch, &ids, edit.clone())?
-        else {
-            continue;
-        };
-        for item in items {
-            if let BoardItem::Via(new) = item
-                && let Some(slot) = scratch.vias.iter_mut().find(|v| v.uuid == new.uuid)
-            {
-                *slot = new;
-            }
-        }
+        edit_vias(&mut scratch, edit, &copper)?;
     }
     let mut changed = Vec::new();
-    for id in &ids {
-        let (Some(old), Some(new)) = (
-            board.vias.iter().find(|v| v.uuid == *id),
-            scratch.vias.iter().find(|v| v.uuid == *id),
-        ) else {
-            return Err(PrimitiveEditRefusal::Gone);
-        };
-        let mut new = new.clone();
+    for (old, mut new) in old.into_iter().zip(scratch) {
         if let Some(kind) = kind {
             new.via_type = kind;
         }

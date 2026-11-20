@@ -271,7 +271,7 @@ fn the_finished_hole_is_the_drill_less_the_plating() {
 /// The trap PCB_LAYER_STACK.md "Via types" names: a derived type takes the
 /// size most of its vias share, so overriding most of them moves the type
 /// itself, and the vias left alone then read as overridden. Pinned until
-/// via types are stored (#105).
+/// via types are stored (mockup row 105).
 #[test]
 fn overriding_most_vias_of_a_derived_type_moves_the_type() {
     let mut b = board();
