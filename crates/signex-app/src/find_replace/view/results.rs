@@ -13,7 +13,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, checkbox, raw, text};
 
 use super::{SP, TS};
-use crate::find_replace::{FindReplaceMsg, FindReplaceState};
+use crate::find_replace::{FindMatch, FindReplaceMsg, FindReplaceState};
 use crate::styles::{ChromeMetrics, Radii, chrome_px, ti, tokens};
 
 /// Width of the right-hand sheet column.
@@ -281,12 +281,12 @@ fn result_row<'a>(
 
     let mut cells: Row<Element<'a, FindReplaceMsg>> =
         row![].spacing(SP.m).align_y(Alignment::Center);
-    if boxes {
+    if let Some(key) = state.matches.get(index).filter(|_| boxes).map(FindMatch::key) {
         cells = cells.push(
             checkbox(included)
                 .style(crate::panels::form_look::checkbox_style)
                 .size(TS.body)
-                .on_toggle(move |_| FindReplaceMsg::ResultIncludeToggled(index))
+                .on_toggle(move |_| FindReplaceMsg::ResultIncludeToggled(key.clone()))
                 .boxed(),
         );
     }

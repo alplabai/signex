@@ -177,11 +177,9 @@ impl FindReplaceState {
             .collect()
     }
 
-    /// Clear or set the include box of result `index`.
-    pub fn toggle_included(&mut self, index: usize) {
-        let Some(key) = self.matches.get(index).map(FindMatch::key) else {
-            return;
-        };
+    /// Clear or set the include box of the result `key` names. Keyed, not
+    /// indexed: a rescan between the draw and the click reorders the list.
+    pub fn toggle_included(&mut self, key: ResultKey) {
         if !self.excluded.remove(&key) {
             self.excluded.insert(key);
         }
@@ -202,8 +200,8 @@ pub enum FindReplaceMsg {
     MatchCaseToggled,
     WholeWordToggled,
     RegexToggled,
-    /// The include box of result `index` was clicked.
-    ResultIncludeToggled(usize),
+    /// The include box of the result with this key was clicked.
+    ResultIncludeToggled(ResultKey),
     /// Find next (F3): step to the result after the current one.
     NextRequested,
     /// Find previous (Shift+F3).

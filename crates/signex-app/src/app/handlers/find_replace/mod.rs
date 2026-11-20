@@ -138,8 +138,8 @@ impl Signex {
             FindReplaceMsg::RegexToggled => {
                 return self.change_match_options(|o| o.regex = !o.regex);
             }
-            FindReplaceMsg::ResultIncludeToggled(index) => {
-                self.ui_state.find_replace.toggle_included(index);
+            FindReplaceMsg::ResultIncludeToggled(key) => {
+                self.ui_state.find_replace.toggle_included(key);
             }
             FindReplaceMsg::ProjectReplacePrepared { generation, result } => {
                 return self.apply_project_replace(generation, &result);

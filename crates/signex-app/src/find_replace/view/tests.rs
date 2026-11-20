@@ -164,12 +164,12 @@ fn the_primary_button_counts_the_included_results() {
     let mut state = sample();
     assert_eq!(plain(replace_label(&state, &en)), "Replace 5 of 5");
     for index in [0, 2, 3, 4] {
-        state.toggle_included(index);
+        state.toggle_included(state.matches[index].key());
     }
     assert_eq!(plain(replace_label(&state, &en)), "Replace 1 of 5");
     assert_eq!(state.included_matches().len(), 1);
     assert_eq!(state.included_matches()[0].hit.text, "VOUT");
-    state.toggle_included(0);
+    state.toggle_included(state.matches[0].key());
     assert_eq!(plain(replace_label(&state, &en)), "Replace 2 of 5");
     assert_eq!(
         position_line(&state, &en).map(plain).as_deref(),
@@ -186,7 +186,7 @@ fn the_dialog_lays_out_in_graphite_light_and_dark() {
     let en = I18n::en_us();
     let mut state = sample();
     for index in [0, 2, 3, 4] {
-        state.toggle_included(index);
+        state.toggle_included(state.matches[index].key());
     }
     for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
         let tokens = theme_tokens(theme);

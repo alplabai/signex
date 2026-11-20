@@ -1289,6 +1289,11 @@ fn label_text(app: &Signex, path: &Path, id: uuid::Uuid) -> String {
         .unwrap()
 }
 
+/// The include-box click on result `index`, as the view sends it.
+fn include_toggled(app: &Signex, index: usize) -> FindReplaceMsg {
+    FindReplaceMsg::ResultIncludeToggled(app.ui_state.find_replace.matches[index].key())
+}
+
 /// The index of the result on label `id`.
 fn result_of(app: &Signex, id: uuid::Uuid) -> usize {
     app.ui_state
@@ -1342,7 +1347,8 @@ fn an_excluded_row_survives_replace_all() {
     );
     assert_eq!(app.ui_state.find_replace.matches.len(), 2);
     let kept = result_of(&app, ids[1]);
-    send(&mut app, FindReplaceMsg::ResultIncludeToggled(kept));
+    let toggled = include_toggled(&app, kept);
+    send(&mut app, toggled);
     assert!(!app.ui_state.find_replace.is_included(kept));
     assert_eq!(app.ui_state.find_replace.included_count(), 1);
 
@@ -1360,6 +1366,50 @@ fn an_excluded_row_survives_replace_all() {
     assert!(!app.ui_state.find_replace.is_included(kept));
 }
 
+/// A rescan between the draw and the click moves the rows; the click still
+/// clears the row the user saw, and Replace All leaves that row alone.
+#[test]
+fn an_include_click_after_a_rescan_clears_the_row_it_was_drawn_for() {
+    let (mut app, _dir, top, ids) = top_with_labels(&["VOUT", "VOUT", "VOUT"]);
+    send(&mut app, FindReplaceMsg::QueryChanged("VOUT".into()));
+    send(
+        &mut app,
+        FindReplaceMsg::ReplacementChanged("VOUT_A".into()),
+    );
+    let drawn_at = result_of(&app, ids[1]);
+    // The view built the box's message from the list it drew.
+    let click = include_toggled(&app, drawn_at);
+
+    // A new hit lands ahead of it and the list is read again.
+    let engine = app.document_state.engines.get_mut(&top).unwrap();
+    let mut sheet = engine.document().clone();
+    let added = signex_types::schematic::Label::new(
+        "VOUT",
+        signex_types::schematic::Point::new(1.0, 1.0),
+        signex_types::schematic::LabelType::Net,
+    );
+    let added_id = added.uuid;
+    sheet.labels.insert(0, added);
+    engine.set_document(sheet);
+    app.refresh_find_matches_now();
+    assert_ne!(
+        result_of(&app, ids[1]),
+        drawn_at,
+        "the rescan moved the row the box was drawn for"
+    );
+
+    send(&mut app, click);
+    assert!(!app.ui_state.find_replace.is_included(result_of(&app, ids[1])));
+    assert_eq!(app.ui_state.find_replace.included_count(), 3);
+
+    send(&mut app, FindReplaceMsg::ReplaceAll);
+
+    assert_eq!(label_text(&app, &top, ids[1]), "VOUT", "the cleared row");
+    for id in [added_id, ids[0], ids[2]] {
+        assert_eq!(label_text(&app, &top, id), "VOUT_A");
+    }
+}
+
 #[test]
 fn replace_all_with_exclusions_is_one_undo_step() {
     let (mut app, _dir, top, ids) = top_with_labels(&["VOUT", "VOUT", "VOUT", "VOUT_3V3"]);
@@ -1369,7 +1419,8 @@ fn replace_all_with_exclusions_is_one_undo_step() {
         FindReplaceMsg::ReplacementChanged("VOUT_A".into()),
     );
     let kept = result_of(&app, ids[1]);
-    send(&mut app, FindReplaceMsg::ResultIncludeToggled(kept));
+    let toggled = include_toggled(&app, kept);
+    send(&mut app, toggled);
     send(&mut app, FindReplaceMsg::ReplaceAll);
     let texts =
         |app: &Signex| -> Vec<String> { ids.iter().map(|id| label_text(app, &top, *id)).collect() };
@@ -1390,7 +1441,8 @@ fn the_include_set_resets_when_the_query_options_or_scope_change() {
     let clear_first = |app: &mut Signex| {
         send(app, FindReplaceMsg::QueryChanged("VOUT".into()));
         let index = result_of(app, ids[0]);
-        send(app, FindReplaceMsg::ResultIncludeToggled(index));
+        let toggled = include_toggled(app, index);
+        send(app, toggled);
         assert_eq!(app.ui_state.find_replace.included_count(), 1);
     };
 
@@ -1418,7 +1470,8 @@ fn the_include_set_resets_when_the_query_options_or_scope_change() {
     send(&mut app, FindReplaceMsg::ScopeChanged(FindScope::Sheet));
     clear_first(&mut app);
     let index = result_of(&app, ids[0]);
-    send(&mut app, FindReplaceMsg::ResultIncludeToggled(index));
+    let toggled = include_toggled(&app, index);
+    send(&mut app, toggled);
     assert_eq!(app.ui_state.find_replace.included_count(), 2);
 }
 
@@ -1435,7 +1488,8 @@ fn a_project_replace_job_holds_only_the_included_rows() {
         .iter()
         .position(|m| m.sheet.as_deref() == Some(child.as_path()))
         .expect("a child result");
-    send(&mut app, FindReplaceMsg::ResultIncludeToggled(on_child));
+    let toggled = include_toggled(&app, on_child);
+    send(&mut app, toggled);
 
     send(&mut app, FindReplaceMsg::ReplaceAll);
 
