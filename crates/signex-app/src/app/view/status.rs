@@ -325,6 +325,39 @@ mod tests {
         assert!(app.ui_state.grid_snap_popover.is_none(), "it stays closed");
     }
 
+    /// Closing the undocked sheet window the popover was opened in closes
+    /// the popover with it: nothing is left to take a later Esc.
+    #[test]
+    fn closing_the_popovers_window_closes_the_popover() {
+        let (mut app, _main) = app_with_window();
+        let path = std::path::PathBuf::from("a.snxsch");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "a.snxsch".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        let window = iced::window::Id::unique();
+        app.ui_state.windows.insert(
+            window,
+            crate::app::state::WindowKind::UndockedTab {
+                path,
+                title: String::new(),
+            },
+        );
+        let _ = app.update(right_click(window));
+        assert!(
+            app.grid_snap_popover_shown(),
+            "open over the undocked sheet"
+        );
+
+        let _ = app.update(Message::Window(
+            crate::app::WindowMsg::SecondaryWindowClosed(window),
+        ));
+        assert!(app.ui_state.grid_snap_popover.is_none());
+    }
+
     /// A popover whose window no longer shows a sheet claims no Esc, however
     /// it got there.
     #[test]
