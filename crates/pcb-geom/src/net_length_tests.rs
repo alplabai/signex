@@ -136,6 +136,7 @@ fn area(n: u128, fill: &str, net: u32) -> signex_types::pcb::Zone {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: Default::default(),
     }
 }

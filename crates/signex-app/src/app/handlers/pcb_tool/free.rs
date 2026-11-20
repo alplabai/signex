@@ -30,15 +30,6 @@ pub(crate) fn arc_mode_hint(mode: ArcMode) -> MessageId {
     }
 }
 
-/// The short name of `mode`, as Properties shows it.
-pub(crate) fn arc_mode_name(mode: ArcMode) -> MessageId {
-    match mode {
-        ArcMode::Centre => ids::PCB_ARC_MODE_CENTRE_NAME,
-        ArcMode::Edge => ids::PCB_ARC_MODE_EDGE_NAME,
-        ArcMode::AnyAngle => ids::PCB_ARC_MODE_ANY_NAME,
-    }
-}
-
 impl BoardToolDefaults {
     /// The free pad the Pad tool places at `at` on `board`.
     pub fn pad(&self, board: &PcbBoard, id: Uuid, at: Point) -> Pad {

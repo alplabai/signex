@@ -81,7 +81,7 @@ pub(super) fn arc_facts(
     common: PrimitiveCommon,
     arcs: &[&TrackArc],
     i18n: &I18n,
-    mode: Option<String>,
+    mode: Option<signex_engine::pcb::draw::ArcMode>,
 ) -> ArcFacts {
     let origin = board.options.origin;
     let spans: Vec<Option<ArcSpan>> = arcs.iter().map(|a| ArcSpan::of(a)).collect();

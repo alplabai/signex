@@ -294,11 +294,12 @@ pub fn generate(
         contents: job,
     });
     tally.skipped = skipped;
-    // A keepout (#2373) is a zone on a copper layer with no copper to fill.
+    // A keepout (#2373) is a zone on a copper layer with no copper to fill,
+    // and a shelved pour (#2523) holds none by choice.
     let copper_zones = board
         .zones
         .iter()
-        .filter(|z| z.fill_type != KEEPOUT_FILL)
+        .filter(|z| z.fill_type != KEEPOUT_FILL && !z.is_shelved_pour())
         .filter(|z| z.pcb_layer().is_some_and(PcbLayer::is_copper))
         .count();
     let pours = options.gerber || options.ipc2581 || options.odb.is_some();

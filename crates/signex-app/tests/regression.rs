@@ -207,9 +207,21 @@ mod pcb_component_schematic;
 // #2355: the track, via and pad Properties panels.
 #[path = "regression/board_primitive_properties.rs"]
 mod board_primitive_properties;
+// Mockup rows 96 and 97: via types, Override and the SMD pad's single
+// copper row.
+#[path = "regression/board_via_pad_panel.rs"]
+mod board_via_pad_panel;
 // #2373, #2393: free arcs, pads, strings and dimensions on a board.
 #[path = "regression/board_free_primitives.rs"]
 mod board_free_primitives;
+// #2523: the track, arc and drawing panels' illustrations, Ends and arc
+// Placement rows.
+#[path = "regression/board_track_arc_graphic_panel.rs"]
+mod board_track_arc_graphic_panel;
+// #2523: a pour's Shelve and Repour, string quick rotation, dimension
+// precision.
+#[path = "regression/board_pour_text_dimension_panel.rs"]
+mod board_pour_text_dimension_panel;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;
@@ -787,6 +799,11 @@ mod floating_panel_menu;
 
 #[path = "regression/rules_grid.rs"]
 mod rules_grid;
+
+// #2523 (mockup row 93) - the board Properties panel: Edit board shape, the materials
+// link, the bounding-box size row and the tile-callout hover.
+#[path = "regression/board_options_panel.rs"]
+mod board_options_panel;
 
 // #2525 — Find and Replace: Whole word renames only the exact net.
 #[path = "regression/find_replace_whole_word.rs"]

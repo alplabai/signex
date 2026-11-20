@@ -6,10 +6,13 @@ use std::fmt;
 use std::path::PathBuf;
 
 use pcb_geom::ItemRef;
-use signex_types::pcb::{MaskExpansion, PadShape};
+use signex_engine::pcb::draw::ArcMode;
+use signex_engine::pcb::via_types::ViaTypeKey;
+use signex_types::pcb::{MaskExpansion, PadShape, ViaType};
 use signex_types::pcb_graphic::BoardGraphicKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use signex_types::pcb_stack::StackMode;
+use signex_types::pcb_via_protection::ViaProtection;
 
 /// The board and the selected items a panel was built for. Every edit
 /// message carries it, so a selection change in between cannot send the
@@ -257,6 +260,13 @@ pub struct PrimitiveCommon {
     pub picking_net: bool,
     /// Placing is paused for these values to be edited (Tab, #2393).
     pub placement_paused: bool,
+    /// The field or illustration callout under the pointer (#2523).
+    pub hover: signex_widgets::property_illustration::IllustrationHover,
+    /// The "Not stored yet" group is open.
+    pub unstored_open: bool,
+    /// Locked and total items of a selection only partly locked; `None`
+    /// when all or none are locked, or the kind stores no lock.
+    pub locked_count: Option<(usize, usize)>,
 }
 
 impl PrimitiveCommon {
@@ -321,6 +331,38 @@ pub struct ViaFacts {
     pub top: MaskSideFacts,
     pub bottom: MaskSideFacts,
     pub from_hole_edge: Option<bool>,
+    /// The board's via types (mockup row 96), derived from its vias until the Layer
+    /// Stack Manager stores them; through types first.
+    pub types: Vec<ViaTypeChoice>,
+    /// The type the vias share; `None` when they differ or match none.
+    pub via_type: Option<ViaTypeChoice>,
+    /// The diameter and drill of `via_type`.
+    pub type_size: Option<(f64, f64)>,
+    /// Whether the vias' diameter or drill differs from their type's.
+    pub overridden: Option<bool>,
+    /// Override was switched on in the panel for these vias.
+    pub override_open: bool,
+    /// The protection the vias share (IPC-4761); fill and cap read as none
+    /// until the board stores them.
+    pub protection: Option<ViaProtection>,
+    /// The drill pair, "Through 1–4".
+    pub drill_pair: Option<String>,
+    /// The drill less the plating.
+    pub finished_hole: Option<f64>,
+    /// The board's smallest via drill, when its setup sets one.
+    pub min_drill: Option<f64>,
+    /// Whether the vias reach the Top and the Bottom layer.
+    pub reaches: (bool, bool),
+    /// The copper layer the illustration's top view shows.
+    pub view_layer: Option<CopperLayer>,
+}
+
+impl ViaFacts {
+    /// Override shows on: switched on in the panel, or the vias already
+    /// differ from their type. Diameter and Drill then take typed values.
+    pub fn override_on(&self) -> bool {
+        self.override_open || self.overridden == Some(true)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -342,6 +384,11 @@ pub struct PadFacts {
     /// How the pads size their copper by layer (#2401).
     pub mode: Option<StackMode>,
     pub layer_sizes: Vec<LayerSizeRow>,
+    /// The designator of the pads' footprint, for the header pill.
+    pub component_designator: Option<String>,
+    /// Whether the hole is plated; `None` without a hole or when the pads
+    /// differ.
+    pub plated: Option<bool>,
 }
 
 /// Fills, solid regions, polygon pours or keepouts (#2393).
@@ -369,6 +416,14 @@ pub struct ZoneFacts {
     /// The copper the selected pours' fills hold: area in mm² and pieces;
     /// `None` while the fills of the board are not computed.
     pub copper: Option<(f64, usize)>,
+    /// Whether the selected pours are shelved (#2523); `None` when they
+    /// differ or an area is not a pour.
+    pub shelved: Option<bool>,
+    /// The thermal relief the pours store: on, spoke width and air gap in
+    /// mm; `None` when they differ. The fill does not draw spokes yet.
+    pub thermal: Option<(bool, f64, f64)>,
+    /// The Copper card's menu of board-wide pour commands is open.
+    pub menu_open: bool,
     /// Why a selected pour has no fill, when one has none.
     pub unfilled: Option<pcb_geom::Unfilled>,
 }
@@ -389,7 +444,7 @@ pub struct ArcFacts {
     pub width: Option<f64>,
     pub length_mm: Option<f64>,
     /// How the Arc tool draws its next arc; `None` for placed arcs.
-    pub mode: Option<String>,
+    pub mode: Option<ArcMode>,
 }
 
 /// Board strings (#2373).
@@ -471,10 +526,38 @@ impl PcbPrimitiveFacts {
             Self::Graphic(f) => &f.common,
         }
     }
+
+    pub fn common_mut(&mut self) -> &mut PrimitiveCommon {
+        match self {
+            Self::Track(f) => &mut f.common,
+            Self::Via(f) => &mut f.common,
+            Self::Pad(f) => &mut f.common,
+            Self::Zone(f) => &mut f.common,
+            Self::Arc(f) => &mut f.common,
+            Self::Text(f) => &mut f.common,
+            Self::Dimension(f) => &mut f.common,
+            Self::Graphic(f) => &mut f.common,
+        }
+    }
 }
 
 /// The value `values` share, or `None` when they differ or there are none.
 pub fn shared<T: PartialEq>(mut values: impl Iterator<Item = T>) -> Option<T> {
     let first = values.next()?;
     values.all(|v| v == first).then_some(first)
+}
+
+/// A via type in the Via Type dropdown (mockup row 96).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViaTypeChoice {
+    /// What picking it applies; also how the board's vias are matched to it.
+    pub key: ViaTypeKey,
+    /// Its span name, "Thru 1:4".
+    pub name: String,
+    /// Its kind, span, sizes and protection class, "Through 1:4 · 0.6/0.3 ·
+    /// Type I-b".
+    pub spec: String,
+    pub kind: ViaType,
+    /// The dropdown entry: name and spec.
+    pub label: String,
 }

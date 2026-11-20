@@ -80,6 +80,24 @@ pub fn is_section_collapsed(key: &str, collapsed: &CollapsedSections) -> bool {
     collapsed.contains(key)
 }
 
+/// The entry `ToggleSection` flips for section `key`: the key itself for a
+/// section open by default (recorded while closed), `<key>.open` for one
+/// closed by default (recorded while open). The one encoding every panel
+/// with default-closed sections uses.
+pub fn section_toggle_key(key: &str, closed_by_default: bool) -> String {
+    if closed_by_default {
+        format!("{key}.open")
+    } else {
+        key.to_owned()
+    }
+}
+
+/// Whether section `key` shows its body: a default-open one unless its key
+/// is recorded, a default-closed one only while its open key is.
+pub fn is_section_open(key: &str, closed_by_default: bool, collapsed: &CollapsedSections) -> bool {
+    collapsed.contains(&section_toggle_key(key, closed_by_default)) == closed_by_default
+}
+
 /// Property key-value row: the key is UI text, the value is design data
 /// (owned, to avoid lifetime issues in closures).
 pub fn prop_kv_row<'a>(

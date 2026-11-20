@@ -32,6 +32,20 @@ are both built from it (see `MENU_BAR.md`, "Place on a board").
 through via (top to bottom copper) with the board's via size
 (`PcbSetup::via_diameter` and `via_drill`, else 0.6 mm and 0.3 mm).
 
+A selected via's Properties panel picks a via type (mockup row 96): the type
+sets the span, drill pair, stack and sizes, and its tenting, in one undo
+step. The types are derived from the board's vias until the Layer Stack
+Manager stores them (`docs/PCB_LAYER_STACK.md#via-types`). The stack tiles,
+Diameter and Drill are greyed with a "from type" tag until Override is on.
+A via whose diameter or drill already differs from its type shows Override
+on, its own values in bold with a reset arrow each; a reset arrow puts one
+back, and Override off puts both back in one undo step. A small
+illustration shows the via on the chosen layer and a cross-section of L1
+(Top) to Ln (Bottom); Protection names its IPC-4761 type and keeps Tented
+Top and Bottom editable per via. A microvia type lists Stacked / Staggered
+greyed under "Not stored yet". The form of the via about to be placed keeps
+Diameter and Drill editable.
+
 ## Track
 
 `place_board_track` (default profile: `P T` on a board). A run is drawn on
@@ -69,6 +83,29 @@ window of its own is left where it is.
   or right-click ends the tool.
 - Track goes where the clicks are, through anything; Interactive Routing
   (below) keeps the clearance.
+
+The Track panel (#2523) opens with the shared primitive header: the kind,
+a count pill ("3 Tracks", "Next to place" while placing), the lock icon
+(filled while the tracks are locked, a dash with "1 of 2 locked" for a
+selection partly locked; a press locks or unlocks them as one step), then
+the search, or while placing the placing callout. A locked track shows a
+warn callout with Unlock under the search. A small line-art illustration
+follows: the track with its Width callout, its net and a "layer · round
+ends" note (an inner copper layer is named by its place, L2 and on);
+hovering a row lights its callout and the other way round. Net Information
+is open: the net (with the layer's colour) and class as links, a Selected /
+Total table of Length and Delay (greyed: the board records no dielectric),
+and Show More, which adds the net's track, via and pad counts on one line.
+Properties holds Net (with the pick button), Layer, Width, Ends (Round;
+Square and Flat greyed until square and flat ends are decided for copper,
+for DRC and Gerber; the board stores no cap), Position (the selection's
+corner as one X / Y row: typing it moves every selected track), Start and
+End as one X / Y row each, Length (read-only) and Tune Net To (read-only
+"select one track to tune" while several are selected). The paste and
+solder mask sections follow. Lock is the header icon. While placing, Net
+Information and the
+geometry rows are left out. A value the selected tracks do not share reads
+"Mixed".
 
 ## Interactive Routing
 
@@ -338,7 +375,8 @@ active copper layer, on the net set in Properties (Tab), else the net of the
 copper under its first corner on copper, or no net; a pour placed with no
 net says so in the status bar and Messages. A pour with no fill (on no
 copper layer, an outline or clearance the geometry cannot hold) says why in
-Messages when placed and in its Properties (`pcb_geom::Unfilled`). With a
+Messages when placed and in the Copper card of its Properties
+(`pcb_geom::Unfilled`; a shelved pour is not one of these). With a
 non-copper layer active the tool says so and draws nothing. It is
 stored as a zone with `fill_type = "pour"` and `clearance = 0`, which follows
 the board's clearance (`Zone::pour_clearance_mm`: the zone's own clearance
@@ -376,17 +414,49 @@ of different nets, the higher priority keeps the overlap.
 Copper of the pour's own net is filled over: a pad joins the pour solidly, with
 no thermal relief spokes (`thermal_relief`, `thermal_gap` and `thermal_width`
 are kept but not read yet). Not modelled yet: copper text and footprint copper
-graphics are not cleared.
+graphics are not cleared, hatched fill, and rounded or chamfered corners.
+
+A shelved pour (`Zone::shelved`, #2523) keeps its outline and every setting
+but holds no copper: `pcb_geom::zone_fills` gives it no fill, so it clears no
+other pour, and the canvas, the fabrication and PDF outputs, the ratsnest
+and via stitching read no copper for it, since each takes a pour's copper
+from the fills. The design rule check reads no pour copper either way. The
+canvas draws a shelved pour's outline dashed. The flag is the zone key
+`shelved = true`, written only when on, so a board with no shelved pour
+saves as before, and a build that does not know the key keeps it on
+re-save. Fabrication Outputs does not count a shelved pour as a zone left
+unfilled.
 
 ### Picking and editing a pour
 
 A placed pour is picked inside its outline (`PickKind::Polygons`, the
-Polygons chip of the selection filter) and opens the area panel: net, layer,
-clearance, minimum width, Priority (a whole number from 0), Remove Islands
-Below (mm²), Remove Dead Copper, and the copper its fill holds (area and
-pieces), read from the fills the app holds. Each edit is one undo step.
-`min_island_area` and `remove_dead_islands` are written to the file only when
-set.
+Polygons chip of the selection filter) and opens the area panel (#2523): its
+illustration, Net Information, then Net, Layer and the Pour section: Fill
+Mode (Solid; Hatched is greyed, not supported yet), Clearance, Minimum
+Width, Thermal Relief (the stored switch with Spoke / Gap, read only and
+greyed, since the fill draws no spokes), Corners and Corner Size (Sharp;
+greyed, not stored yet), Priority (a whole number from 0), Remove Islands
+(below an area in mm²), Remove Dead Copper, and the Copper card. Each edit
+is one undo step. `min_island_area` and `remove_dead_islands` are written to
+the file only when set. Fill Mode has no None: the outline-only state is
+Shelve.
+
+The Copper card shows the copper the fill holds (area and pieces, read from
+the fills the app holds), or "shelved · no copper". Its buttons:
+
+- **Repour** fills the board again and reports the pours the panel shows,
+  as Repour Selected does; greyed while the pour is shelved.
+- **Shelve** / **Unshelve** sets `shelved` on the selected pours, one undo
+  step (`ZoneEdit::Shelved`). The fields stay editable while shelved.
+- **⋯** opens Repour all, Shelve all and Unshelve all, which act on every
+  pour of the board; Shelve all and Unshelve all are one undo step each
+  (`pour_edit::shelve_all_pours`). A pick closes the menu.
+
+Every button acts on the board the panel shows, which need not be the tab
+in view: the message carries that board.
+
+A fill, region or keepout has no Copper card. The area lock is not a row:
+the panel header shows it greyed, with the reason as its tooltip.
 
 ### Pour Cutout and Slice Pour
 
@@ -413,7 +483,9 @@ Repour Selected reports the selected pours. Fills depend on each other, so
 the whole board is filled either way. Nothing in the document changes, so
 there is no undo step. `repour_all document=<board>` answers an agent or the
 CLI with each pour's `zone`, `net`, `net_name`, `layer`, `priority`,
-`filled`, `pieces`, `area_mm2` and `islands_removed`.
+`shelved`, `filled`, `pieces`, `area_mm2` and `islands_removed`; a shelved
+pour is not filled. The area panel's Copper card has the same Repour, and
+Repour all in its ⋯ menu.
 
 A round part of a grown obstacle is cut as a polygon whose chords lie on or
 outside the true arc, so the fill never comes closer than the clearance. The
@@ -442,6 +514,13 @@ Copper text would be copper that the copper list, the design rule check and
 the ratsnest never read. The canvas draws it (#2387); a click or box picks
 it (`pcb_geom::ItemRef::Text`, the selection filter's Texts kind).
 
+The String panel (#2523) shows the illustration (the text box with its
+Text Height and its Position X/Y origin; the rotation is not drawn), then
+the text across the full width, Layer, Position (X and Y on one row), Text
+Height, Rotation, and the quick rotation steps 0°, 90°, 180° and 270°. A
+step is on while the rotation equals it; a pick sets the rotation as one
+undo step, like a typed one.
+
 ## Arc
 
 `place_board_arc` (no default key) draws an arc on the active layer, as one
@@ -467,11 +546,18 @@ copper: the ratsnest joins them, and DRC reports one finding per pair of
 items, the worst of their chords'. On any other layer it is a drawing
 with no net. Width follows `PcbSetup::trace_width` unless the form sets it.
 
-The Arc panel shows Net Information and Net (copper only), Layer (any board
-layer; moving off copper drops the net), Width, Centre, Radius, Start and End
-Angle (read from the board origin with Y up, counter-clockwise from start to
-end) and the length; each edit is one undo step
-(`primitive_edit::ArcEdit`, `BoardCommand::ReplaceItems`).
+The Arc panel (#2523) opens with the shared header (its lock greyed: the
+board stores no lock for an arc) and an illustration of the arc with its
+Radius and Width callouts and its Start and End rays, no rotation arrow.
+Net Information (copper only) is closed, its header naming the net and its
+class. Properties holds Net (copper only), Layer (any board layer; moving
+off copper drops the net), Width, Ends (Round; Square and Flat greyed, as
+for tracks), Centre as one X / Y row, Radius, Angles as one Start / End row
+(read from the board origin with Y up, counter-clockwise from start to end)
+and the length; each edit is one undo step (`primitive_edit::ArcEdit`,
+`BoardCommand::ReplaceItems`). While the Arc tool is armed, a Placement row
+picks Centre, Edge or Any angle, the same setting `cycle_arc_mode` steps,
+and the shape rows and Net Information are left out.
 
 ## Dimension
 
@@ -485,9 +571,13 @@ arrow at each end and the value (`value_text`, to `precision` decimals, at
 most 6), drawn by the board renderer and picked by its strokes and the box
 of its value. Two equal points add nothing and say so.
 
-The Dimension panel shows Start, End, Offset, Line Width, Text Height,
-Precision, the value and Layer (layers that take text); each edit is one
-undo step. Angular, radial, diameter, leader, baseline and centre-mark
+The Dimension panel (#2523) shows the illustration (the two points, the
+extension lines, the Offset and the value), the measured Value on a card
+under it, then Start and End (X and Y on one row each), Offset, and under
+Style: Line Width, Text Height, Precision and Layer (layers that take text).
+Precision is a 0 to 6 segmented control, so a precision outside that range
+cannot be entered from the panel. Each edit is one undo step. There is no
+Type row: angular, radial, diameter, leader, baseline and centre-mark
 dimensions have no model yet and are not offered.
 
 ## Graphics {#graphics}
@@ -526,6 +616,17 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
   frame) or centre and radius (arc, circle), and a text frame's text, where
   `\n` is a line break, and text height, one undo step per field
   (`signex_engine::pcb::primitive_edit::GraphicEdit`). Delete removes it.
+- **Panel (#2523).** The header names the kind (Line, Arc, Full Circle,
+  Rectangle, Text Frame; "Drawings" for a mix) with a "1 Drawing" pill and a
+  greyed lock (the board stores none). An illustration follows for one
+  kind: a line with its Width and ends, a circle or arc with its Radius and
+  Width, a rectangle or text frame with its Width and Height (and a frame's
+  Text Height); hovering a row lights its callout. Properties holds Layer,
+  Width and, for a line, Ends (Round; Square and Flat greyed: the board
+  stores no cap for a drawing). Location holds Start and End (lines,
+  rectangles, text frames) or Centre and Radius (arcs, circles), each point
+  one X / Y row. A text frame's Text section has the text across the row,
+  the hint and Text Height.
 - **Output.** Saved in `.snxpcb` (`[[extras.board.graphics]]`, each with its
   `uuid`; a text frame's `text` and `font_size`), drawn by the board
   renderer, printed by Board Print (#2402), and drawn into the fabrication
@@ -550,6 +651,15 @@ Code that reads footprint pads reads a free pad in the board's own frame
 turned), so the copper list, ratsnest, design rule check, pick index,
 renderer, drill file and netlist test points treat it as any pad. A click
 selects it and the pad panel edits it, each edit one undo step.
+
+The pad panel (mockup row 97) shows the copper as a Layer × (X-Size, Y-Size,
+Shape) table typed in place. A surface pad has one row, its own layer: no stack
+tiles, no Middle or Bottom rows and no hole. A through-hole pad keeps the
+Simple / Top-Middle-Bottom / Full Stack tiles and shows "All layers", Top /
+Middle / Bottom or a row per copper layer, then its Hole and Plated (read
+from the pad type). The board stores one shape per pad, so a shape picked
+in any row sets every layer. Paste and Solder mask are headed by their
+switch and stay greyed until the board stores pad masks.
 
 ## Placement form (Tab) {#placement-form}
 

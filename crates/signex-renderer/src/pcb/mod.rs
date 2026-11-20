@@ -87,6 +87,8 @@ pub struct ZonePolygonInput {
     /// (which is then only stroked); `None` for a zone whose copper is its
     /// outline. Set by [`PcbSnapshot::with_zone_fills`].
     pub fill: Option<Vec<ZoneFillPiece>>,
+    /// A shelved pour (#2523): drawn as its dashed outline alone.
+    pub shelved: bool,
     /// The View Options row it belongs to: its transparency (#2363).
     pub object: BoardObject,
 }
@@ -732,6 +734,7 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                shelved: false,
                 object: super::BoardObject::Polygons,
             },
             ZonePolygonInput {
@@ -746,6 +749,7 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                shelved: false,
                 object: super::BoardObject::Polygons,
             },
             ZonePolygonInput {
@@ -760,6 +764,7 @@ mod tests {
                 dimmed: false,
                 ink: CopperInk::Unknown,
                 fill: None,
+                shelved: false,
                 object: super::BoardObject::Polygons,
             },
         ];

@@ -75,10 +75,44 @@ Properties Lock box, the board menu's Lock
 and Unlock rows (`lock_board_items`, `unlock_board_items`) and an agent with
 `ids` set it.
 
-A via's span is edited with the From and To rows of the Via panel or
+A via's span comes from the via type it picks in the Via panel (mockup row
+96); the free From and To rows are gone. An agent still sets a span with
 `set_via_span`: both ends must be different copper layers of the board; Top
 to Bottom is a through via, any other span a blind (or buried) one, and a
 micro via stays micro. DRC reads the span (`pcb_geom::via_layers`).
+
+## Via types {#via-types}
+
+Until the Layer Stack Manager stores via types, the board's via types are
+derived from its vias (`signex_engine::pcb::via_types`): one type per kind,
+span and tenting the vias have, sized by the diameter and drill most of them
+share (on a tie the smaller), plus the through via the Via tool places
+(`PcbSetup::via_diameter`, `via_drill`) when no via is through. Through types
+come first, then by top layer; a type is named with the span name the panel
+shows ("Thru 1:4"). Picking a type in the Via panel sets the vias' kind,
+span, diameter, drill and tenting as one undo step. A via whose diameter or
+drill differs from its type's is an override: the panel shows Override on
+for it, with its own sizes in bold, and turning Override off puts both back
+to the type's in one step. A via that matches its type shows its sizes and
+stack tiles greyed until Override is switched on. The finished hole is the
+drill less twice `VIA_PLATING_MM` (0.025 mm); a drill below
+`PcbSetup::via_min_drill` shows a warning.
+
+A known trap of derived types: the type's size is the one most of its vias
+share, so an override on most vias of a type moves the type's size with it.
+Five vias at 0.6/0.3 with three of them overridden to 0.8/0.4 make a 0.8/0.4
+type; the two untouched vias then read as overridden, and turning Override
+off on them sizes them to 0.8/0.4. A type with a single via never reads as
+overridden. Stored via types (mockup row 105) end this; until then
+`via_types_tests::overriding_most_vias_of_a_derived_type_moves_the_type`
+pins it.
+
+The Protection section names the IPC-4761 type the via's fill, plug side, cap
+and per-side tenting make (`signex_types::pcb_via_protection`). A via stores
+only its tenting, so fill and cap read as none and the Type, Fill, Plug From
+and Cap rows are read-only; Tented Top and Bottom stay editable there until
+via types are stored. Type II is listed greyed: its second cover coat is not
+stored.
 
 Free pads (a pad that belongs to no footprint) do not exist on a board yet,
 so a pad's lock is its footprint's and its layer is not edited here.

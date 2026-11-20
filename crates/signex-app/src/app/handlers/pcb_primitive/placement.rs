@@ -4,6 +4,7 @@
 
 use std::path::Path;
 
+use signex_engine::pcb::draw::ArcMode;
 use signex_types::pcb::PcbBoard;
 
 use super::facts::{pad_facts, track_facts, via_facts};
@@ -11,7 +12,7 @@ use super::free::{arc_facts, dimension_facts, text_facts};
 use super::graphic::graphic_facts;
 use super::zone::zone_facts;
 use crate::app::Signex;
-use crate::app::handlers::pcb_tool::{arc_mode_name, has_form};
+use crate::app::handlers::pcb_tool::has_form;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::panels::pcb_primitive_properties::{
     Editability, PcbPrimitiveFacts, PrimitiveTarget, ZoneKind,
@@ -72,7 +73,6 @@ impl Signex {
                     self.primitive_common_on(board, target, Editability::Editable, net);
                 common.placement_paused = paused;
                 let mode = self.interaction_state.pcb_tool_defaults.arc_mode;
-                let mode = signex_i18n::t!(i18n, arc_mode_name(mode)).into_string();
                 PcbPrimitiveFacts::Arc(arc_facts(board, common, &[&arc], i18n, Some(mode)))
             }
             BoardPlaceTool::TextString => {
@@ -111,6 +111,24 @@ impl Signex {
             }
         };
         Some(facts)
+    }
+
+    /// The Arc form's Placement pick (#2523): the next arc is drawn `mode`'s
+    /// way, as `cycle_arc_mode` sets it. Clicks of an arc begun another way
+    /// do not carry over.
+    pub(super) fn pick_arc_mode(&mut self, mode: ArcMode) {
+        let defaults = &mut self.interaction_state.pcb_tool_defaults;
+        if defaults.arc_mode == mode {
+            return;
+        }
+        defaults.arc_mode = mode;
+        let arc_armed = self
+            .own_board_tool()
+            .is_some_and(|s| s.tool == BoardPlaceTool::Arc);
+        if arc_armed && let Some(session) = self.interaction_state.pcb_tool.as_mut() {
+            session.points.clear();
+        }
+        self.refresh_pcb_highlight();
     }
 }
 

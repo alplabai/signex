@@ -302,7 +302,10 @@ a board Import Changes From `<project>`. It is greyed unless a schematic or a
 board is in view and a project is open. The undocked windows' menu bars word
 and gate it by the window's own document. The same command is in the command
 palette, and the Projects tree's project row has an Update PCB Document row
-for the clicked project. No keymap preset binds it. The dialog:
+for the clicked project. The board component Properties panel runs it too:
+when a selected component's designator differs from the schematic's, a warn
+callout in Schematic Reference Information carries an Update PCB button,
+greyed on a read-only board (#2523). No keymap preset binds it. The dialog:
 [UPDATE_PCB.md](UPDATE_PCB.md).
 
 File ▸ New ▸ PCB runs `new_pcb_document`: it opens the New PCB setup dialog
