@@ -688,7 +688,7 @@ fn the_swap_keeps_exactly_the_ticked_user_parameters_and_replaces_library_fields
         sym.fields.get("Note").map(String::as_str),
         Some("FB divider, sets 3.3 V")
     );
-    assert!(sym.fields.get("Tolerance").is_none(), "unticked: cleared");
+    assert!(!sym.fields.contains_key("Tolerance"), "unticked: cleared");
     assert_eq!(sym.fields.get("MPN").map(String::as_str), Some("NEW-MPN"));
     assert_eq!(sym.footprint, "L:FP-NEW");
     engine.undo().unwrap();
