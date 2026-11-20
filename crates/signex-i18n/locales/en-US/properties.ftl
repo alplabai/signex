@@ -302,10 +302,6 @@ properties-style-bold-glyph = B
 properties-style-italic-glyph = I
 properties-style-underline-glyph = U
 properties-style-strike-glyph = T
-# Tooltip of the header's more-actions button.
-properties-header-more = More
-# The glyph of the header's more-actions button.
-properties-header-more-glyph = ⋯
 
 ## Document Options (#2531)
 

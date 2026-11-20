@@ -197,8 +197,6 @@ define_ids! {
     PROPERTIES_STYLE_ITALIC_GLYPH = "properties-style-italic-glyph";
     PROPERTIES_STYLE_UNDERLINE_GLYPH = "properties-style-underline-glyph";
     PROPERTIES_STYLE_STRIKE_GLYPH = "properties-style-strike-glyph";
-    PROPERTIES_HEADER_MORE = "properties-header-more";
-    PROPERTIES_HEADER_MORE_GLYPH = "properties-header-more-glyph";
     PROPERTIES_FORMAT = "properties-format";
     PROPERTIES_ZONES = "properties-zones";
     PROPERTIES_ZONES_V_SHORT = "properties-zones-v-short";
