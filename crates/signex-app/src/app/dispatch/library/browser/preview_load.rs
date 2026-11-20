@@ -1,9 +1,9 @@
-//! The Library Browser preview pane's symbol and footprint (#2260), read
-//! off-thread with the Components panel's loader and kept on the browser's
-//! state, and the pane's ⋯ menu.
+//! The Library Browser preview pane's symbol and footprint (mockup row 118),
+//! read off-thread with the Components panel's loader and kept on the
+//! browser's state, and the pane's ⋯ menu.
 
 use super::*;
-use crate::library::state::ComponentsPanelRowKey;
+use crate::library::state::{BrowserPreviewError, ComponentsPanelRowKey};
 
 impl Signex {
     /// Start a read for each Library Browser whose selected row has no
@@ -35,6 +35,7 @@ impl Signex {
                 browser.more_menu_open = false;
                 if browser.preview.key.is_some() {
                     browser.preview = Default::default();
+                    browser.preview_error = None;
                 }
             }
         }
@@ -69,12 +70,12 @@ impl Signex {
             return Task::none();
         };
         let generation = browser.preview.begin(key.clone(), stamp);
+        browser.preview_error = None;
         let Some(own) = own else {
-            let why = format!(
-                "The library {} is not open, so the preview cannot be read.",
-                key.library_path.display()
-            );
-            browser.preview.finish(&key, generation, Err(why));
+            browser.preview.end_read(&key, generation);
+            browser.preview_error = Some(BrowserPreviewError::LibraryNotOpen(
+                key.library_path.clone(),
+            ));
             return Task::none();
         };
         let read_key = key.clone();
@@ -86,9 +87,10 @@ impl Signex {
                         own.as_ref(),
                         &libraries,
                     )
+                    .map_err(BrowserPreviewError::Unreadable)
                 })
                 .await
-                .unwrap_or_else(|e| Err(format!("preview worker failed: {e}")))
+                .unwrap_or_else(|e| Err(BrowserPreviewError::Interrupted(e.to_string())))
             },
             move |result| {
                 Message::Library(LibraryMessage::BrowserPreviewLoaded {
@@ -106,10 +108,22 @@ impl Signex {
         &mut self,
         key: ComponentsPanelRowKey,
         generation: u64,
-        result: Result<Box<crate::panels::components_panel::details::ComponentDetails>, String>,
+        result: Result<
+            Box<crate::panels::components_panel::details::ComponentDetails>,
+            BrowserPreviewError,
+        >,
     ) -> Task<Message> {
         if let Some(browser) = self.library.library_browsers.get_mut(&key.library_path) {
-            browser.preview.finish(&key, generation, result);
+            match result {
+                Ok(details) => {
+                    browser.preview.finish(&key, generation, Ok(details));
+                }
+                Err(why) => {
+                    if browser.preview.end_read(&key, generation) {
+                        browser.preview_error = Some(why);
+                    }
+                }
+            }
         }
         Task::none()
     }
@@ -129,7 +143,52 @@ impl Signex {
 #[cfg(test)]
 mod tests {
     use crate::app::Signex;
-    use crate::library::state::{ComponentsPanelRowKey, LibraryBrowserState};
+    use crate::library::state::{BrowserPreviewError, ComponentsPanelRowKey, LibraryBrowserState};
+
+    /// A failed read keeps its typed reason, never English text; a result
+    /// of an older read is dropped.
+    #[test]
+    fn a_failed_read_keeps_a_typed_reason_and_an_older_one_is_dropped() {
+        let (mut app, root) = app_with_browser();
+        let key = ComponentsPanelRowKey {
+            library_path: root.clone(),
+            table: "R".into(),
+            row_id: signex_library::RowId::new(),
+        };
+        let older = app
+            .library
+            .library_browsers
+            .get_mut(&root)
+            .unwrap()
+            .preview
+            .begin(key.clone(), None);
+        let newer = app
+            .library
+            .library_browsers
+            .get_mut(&root)
+            .unwrap()
+            .preview
+            .begin(key.clone(), None);
+        let _ = app.handle_browser_preview_loaded(
+            key.clone(),
+            older,
+            Err(BrowserPreviewError::Interrupted("old".into())),
+        );
+        assert_eq!(app.library.library_browsers[&root].preview_error, None);
+        assert!(app.library.library_browsers[&root].preview.in_flight());
+        let _ = app.handle_browser_preview_loaded(
+            key,
+            newer,
+            Err(BrowserPreviewError::Unreadable("row 7 is gone".into())),
+        );
+        let browser = &app.library.library_browsers[&root];
+        assert!(!browser.preview.in_flight());
+        assert_eq!(
+            browser.preview_error,
+            Some(BrowserPreviewError::Unreadable("row 7 is gone".into()))
+        );
+        assert_eq!(browser.preview.error, None, "no text stored in place of it");
+    }
 
     fn app_with_browser() -> (Signex, std::path::PathBuf) {
         let (mut app, _task) = Signex::new();
@@ -172,7 +231,13 @@ mod tests {
                 row_id,
             })
         );
-        assert!(preview.error.is_some(), "the library is not mounted");
+        assert!(!preview.in_flight());
+        assert_eq!(
+            app.library.library_browsers[&root].preview_error,
+            Some(BrowserPreviewError::LibraryNotOpen(root.clone())),
+            "the library is not mounted, said as a typed reason"
+        );
+        let preview = &app.library.library_browsers[&root].preview;
         // A failed read is not retried while the row is unchanged.
         let generation = preview.generation;
         let _ = app.refresh_browser_previews();
