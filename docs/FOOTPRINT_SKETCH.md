@@ -188,8 +188,10 @@ table. The compact Parameters list in Properties is unchanged.
 Every dimension constraint (Distance, Distance to line, Distance to circle,
 Angle) draws its value where its letter glyph used to be, in a small label:
 `name · value` when its target is exactly one parameter (`pitch · 0.65 mm`),
-else the evaluated value with its unit (`0.70 mm`, `90°`). Constraints
-that are not dimensions keep their letters. One layout
+else the evaluated value with its unit (`0.70 mm`, `90°`); a reference
+shows the value it measures ([Reference dimensions](#reference-dimensions)).
+Constraints that are not dimensions draw their marks
+([Canvas look](#canvas-look)). One layout
 (`canvas/glyph_layout.rs`) places every glyph, value and pattern glyph; the
 draw pass and the hit test both read it, so a click lands on what is
 drawn.
@@ -213,13 +215,14 @@ a language change, because a canvas cannot read the catalog.
 
 A right-click on a constraint's glyph or value (Select tool) opens one
 menu at the click: Edit value, Make parameter and Convert to reference
-(dimensions only), Suppress, Select constrained entities, Show conflicts
-(only when the constraint is in a conflict; it selects every entity of the
-conflict) and Delete. Make parameter hands the dimension to the sketch
-parameters table, and is greyed when the value already is a parameter.
-Convert to reference and Suppress are greyed with a tooltip that says why:
-the sketch file cannot store a driven dimension or a suppressed constraint
-yet (see `DECISIONS.md`). Esc closes the menu first. A right-click anywhere
+(dimensions only; a reference shows Make driving instead, see
+[Reference dimensions](#reference-dimensions)), Suppress, Select
+constrained entities, Show conflicts (only when the constraint is in a
+conflict; it selects every entity of the conflict) and Delete. Make
+parameter hands the dimension to the sketch parameters table, and is
+greyed when the value already is a parameter. Suppress is greyed with a
+tooltip that says why: the sketch file cannot store a suppressed
+constraint yet (see `DECISIONS.md`). Esc closes the menu first. A right-click anywhere
 else keeps its behaviour: it cancels a tool, pans, or opens the footprint
 context menu.
 
@@ -340,3 +343,58 @@ A pad made in the sketch keeps the id of the entity that drives it
 Not done yet: the outline of the pattern instance a pad came from (pads do
 not record their instance yet), and a "Driven by sketch" section in the pad
 Properties.
+
+## Reference dimensions {#reference-dimensions}
+
+A dimension (Distance, Distance to line, Distance to circle, Angle) can be
+a reference: it measures the geometry and never drives it (decision 5,
+Caner 2026-11-20, mockups #187 and #188). The constraint menu offers
+**Convert to reference** on a driving dimension and **Make driving** on a
+reference; a Properties conflict row of a dimension has a Convert to
+reference button beside Remove. Each is one undo step, then a solve.
+Converting the conflicting dimension clears the conflict. Make driving that
+would over-constrain the sketch is reverted with its conflict named and
+leaves no undo step, as a value written on the drawing is.
+
+The sketch stores the references as a list of constraint ids
+(`SketchData::driven_dimensions`, `signex-types/src/sketch/driven.rs`), not
+as a flag on the constraint. Only a dimension can be a reference; an id in
+the list that names anything else is ignored. The solver reads one list,
+`SketchData::driving_constraints`, in every walk over the constraints: a
+reference has no residual, no Jacobian row and no degree of freedom, and
+is never named in a conflict or as redundant. A point only a reference
+reads stays out of the solve and does not move.
+
+On the drawing a reference shows the value it measures
+(`signex_sketch::solver::measure::measured_value`: the dimension's own
+residual with its target set to zero, so each kind keeps one formula),
+never its stored target. Its label and its dimension line draw dashed in
+the reference purple. Edit value and Make parameter are greyed on it ("A
+reference dimension measures; make it driving to edit it"), and a click
+on its value does not open an edit.
+
+## Canvas look {#canvas-look}
+
+Sketch mode paints the dark board ground on every theme (only the
+Graphite themes ship; the white sketch canvas is gone), and the sketch
+follows the mockups on it (decision 7, Caner 2026-11-20), from one palette
+(`canvas/draw/sketch/sketch_ink.rs`, `SketchInk::BOARD`): fully
+constrained geometry green `#7FD1A0`, under-constrained blue `#A9C2FF`,
+over-constrained red `#F2A093`, construction lines and an unsolved sketch
+grey `#8B8D93`, centerlines gold `#C9A13B`, selection `#E0865C`. Values sit
+in pills (`#1D1F23`, border `#34363C`, text `#CFD1D6`) on dimension lines
+in `#7C7F86` with an arrowhead at each end; a reference draws in
+`#C9A0FF`. A conflict keeps the theme's danger colour.
+
+Relations draw the mockup marks in small upright pills: H, V, ∥ parallel,
+⊥ perpendicular, = equal length or radius, ◡ tangent, ⇔ symmetric, ⌖
+fixed, ┃· point on line or arc, M midpoint; coincident is a dot. A
+conflicting mark fills in the danger colour.
+
+The cursor marks sketch mode draws in place of the OS cursor are light on
+that ground.
+
+A mirrored pattern draws a glyph by its mirror line, `⇔` and the mirrored
+pattern's glyph (`⇔ L×4`); a click selects it, and its menu has only
+Delete mirror (one undo step; the pattern and the line stay). A pattern
+whose source is another pattern names it: `P×4 of L×4`.
