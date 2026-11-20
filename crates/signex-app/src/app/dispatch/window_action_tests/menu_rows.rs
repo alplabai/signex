@@ -33,6 +33,8 @@ const SHEET_ROWS: &[&str] = &[
     "open_child_sheet",
     "create_sheet_from_sheet_symbol",
     "sync_sheet_pins",
+    "sync_sheet_entries",
+    "create_sheet_symbol_from_sheet",
     "number_schematic_sheets",
     "bring_drawings_to_front",
     "send_drawings_to_back",

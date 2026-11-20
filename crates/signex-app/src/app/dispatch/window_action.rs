@@ -221,11 +221,12 @@ fn command_runs_in_shown_document(message: &Message) -> bool {
 
 /// Commands that start from what the shown sheet holds: its net at the menu
 /// point or the selection, the selection's cross probe, the selected sheet
-/// symbol's child sheet, and the sheet's project for Number Sheets.
+/// symbol's child sheet and its entry sync, the sheet a new sheet symbol
+/// lands on, and the sheet's project for Number Sheets.
 fn command_reads_shown_sheet(message: &Message) -> bool {
     use crate::app::{
-        ContextAction, ContextMenuMsg, CrossProbeMsg, NetNavMsg, ProjectMsg, SheetNumberingMsg,
-        UiMsg,
+        ContextAction, ContextMenuMsg, CrossProbeMsg, EditMsg, NetNavMsg, ProjectMsg,
+        SheetNumberingMsg, SheetSyncMsg, UiMsg,
     };
     match message {
         Message::Ui(UiMsg::NetNav(nav)) => matches!(
@@ -240,6 +241,9 @@ fn command_reads_shown_sheet(message: &Message) -> bool {
                 | ContextAction::SyncSheetPins
         ),
         Message::Project(ProjectMsg::SheetNumbering(SheetNumberingMsg::Requested)) => true,
+        Message::Edit(EditMsg::SheetSync(
+            SheetSyncMsg::Requested | SheetSyncMsg::CreateSymbolRequested,
+        )) => true,
         _ => false,
     }
 }
