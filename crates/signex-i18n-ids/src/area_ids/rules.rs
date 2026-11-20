@@ -20,6 +20,12 @@ define_ids! {
     RULES_SEVERITY_INFO = "rules-severity-info";
     RULES_CELL_EMPTY = "rules-cell-empty";
     RULES_BLANK_NOT_CHECKED = "rules-blank-not-checked";
+    RULES_BLANK_STALE = "rules-blank-stale";
+    RULES_BLANK_CHANGED = "rules-blank-changed";
+    RULES_BLANK_NO_OBJECTS = "rules-blank-no-objects";
+    RULES_BLANK_OFF = "rules-blank-off";
+    RULES_BLANK_PASSES = "rules-blank-passes";
+    RULES_BLANK_NO_BOARD = "rules-blank-no-board";
     RULES_FLAG_SHADOWED = "rules-flag-shadowed";
     RULES_FLAG_CONFLICT = "rules-flag-conflict";
     RULES_FLAG_LOWERS = "rules-flag-lowers";

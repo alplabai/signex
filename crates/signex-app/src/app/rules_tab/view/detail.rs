@@ -253,10 +253,14 @@ fn field<'a>(
 /// Jump (show them on the board).
 fn violations<'a>(frame: &Frame<'a>, row: &RuleRow) -> Element<'a, Message> {
     let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
-    let findings = frame.result(row).map(|r| r.violations);
-    let line = match findings {
-        Some(count) => t!(i18n, ids::RULES_DETAIL_FINDINGS, "count" => count),
-        None => t!(i18n, ids::RULES_BLANK_NOT_CHECKED),
+    let reason = frame.findings_reason(row);
+    let findings = frame
+        .result(row)
+        .map(|r| r.violations)
+        .filter(|_| reason.is_none());
+    let line = match reason {
+        Some(reason) => t!(i18n, reason),
+        None => t!(i18n, ids::RULES_DETAIL_FINDINGS, "count" => findings.unwrap_or_default()),
     };
     let ink = if findings.is_some_and(|n| n > 0) {
         tokens::danger(tokens)

@@ -1155,3 +1155,88 @@ fn a_findings_badge_drops_a_rule_changed_since_the_run() {
     );
     assert_eq!(group_after, Some(domain - sig_b));
 }
+
+/// Why rule `rule`'s findings line has no count, as the detail strip reads it.
+fn findings_reason(app: &Signex, id: ProjectId, rule: &str) -> Option<signex_i18n::MessageId> {
+    let state = rules_tab(app, id);
+    let (src, origin) = app.rules_text_of(id).expect("rules");
+    let frame = app.rules_frame(
+        id,
+        &app.ui_state.i18n,
+        &app.document_state.panel_ctx.tokens,
+        state,
+        src,
+        origin,
+    );
+    let row = frame.table.row(rule).cloned().expect("the rule");
+    frame.findings_reason(&row)
+}
+
+#[test]
+fn the_findings_line_says_why_it_has_no_count() {
+    use signex_i18n::ids;
+    // No board open.
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &["top.snxsch"]);
+    store(&mut app, TEXT);
+    let id = app.document_state.projects[0].id;
+    send(&mut app, RulesTabMsg::OpenRequested { project: Some(id) });
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        Some(ids::RULES_BLANK_NO_BOARD)
+    );
+
+    // The board is open and has not been checked.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, path) = app_with_board(&dir);
+    open(&mut app);
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        Some(ids::RULES_BLANK_NOT_CHECKED)
+    );
+    let task = app.handle_pcb_drc_requested();
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        None,
+        "the run counts it"
+    );
+
+    // The rule changed since the run.
+    answer(
+        &mut app,
+        "rules_set",
+        &["id=sig_b", "field=min_clearance", "value=0.5mm"],
+    );
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        Some(ids::RULES_BLANK_CHANGED)
+    );
+
+    // Off.
+    send(
+        &mut app,
+        RulesTabMsg::EnabledToggled {
+            project_id: id,
+            rule: "sig_b".into(),
+            on: false,
+        },
+    );
+    assert_eq!(
+        findings_reason(&app, id, "sig_b"),
+        Some(ids::RULES_BLANK_OFF)
+    );
+
+    // The board changed since the run: stale, not "not checked yet".
+    *app.document_state.pcb_revisions.entry(path).or_default() += 1;
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    assert_eq!(
+        findings_reason(&app, id, "sig_a"),
+        Some(ids::RULES_BLANK_STALE)
+    );
+    let _ = app.view_rules_tab(id);
+}

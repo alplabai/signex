@@ -24,8 +24,16 @@ rules-severity-warning = Warning
 rules-severity-info = Info
 rules-cell-empty = —
 
-# A rule the last run did not check.
+# Why a rule's findings line has no count: the board has not been
+# checked yet, changed since the run, the rule changed since the run, it
+# is off, it covers no object, the board is not open; or it passed.
 rules-blank-not-checked = Not checked yet
+rules-blank-stale = Stale since the last edit
+rules-blank-changed = Changed since the run
+rules-blank-no-objects = No objects in scope
+rules-blank-off = Off
+rules-blank-passes = Passes
+rules-blank-no-board = Open the board to check
 
 # Flags on a row.
 rules-flag-shadowed = Never applies: { $by } wins

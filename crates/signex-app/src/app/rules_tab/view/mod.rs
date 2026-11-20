@@ -24,7 +24,7 @@ use iced::{Element, Length, Widget as _};
 use signex_drc::{Effective, RuleResult};
 use signex_drc_dsl::table::catalog::{CatalogGroup, Domain};
 use signex_drc_dsl::table::{RuleRow, RuleTable};
-use signex_i18n::{I18n, UserText, ids, t};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::project::{DrcRuleSet, NamedRuleSet};
 use signex_types::theme::ThemeTokens;
 use signex_types::violation::Severity;
@@ -101,6 +101,37 @@ impl<'a> Frame<'a> {
     pub fn group_findings(&self, group: &CatalogGroup) -> Option<usize> {
         self.has_current_run()
             .then(|| super::grid::group_findings(&self.table, group, |row| self.result(row)))
+    }
+
+    /// Why the rule's findings line shows no count (or that it passed);
+    /// `None` when the last run counts findings for the rule as it is.
+    /// A rule the board or an edit outdated is never "not checked yet".
+    pub fn findings_reason(&self, row: &RuleRow) -> Option<MessageId> {
+        if !self.is_on(row) {
+            return Some(ids::RULES_BLANK_OFF);
+        }
+        match &*self.checked {
+            Checked::NoBoard => Some(ids::RULES_BLANK_NO_BOARD),
+            Checked::NotRun => Some(ids::RULES_BLANK_NOT_CHECKED),
+            Checked::Ran { stale: true, .. } => Some(ids::RULES_BLANK_STALE),
+            Checked::Ran { used, .. } if used.get(&row.name) != row.compiled.as_ref() => {
+                Some(ids::RULES_BLANK_CHANGED)
+            }
+            // A rule the compiler refused is not applied, so not checked.
+            Checked::Ran { .. } if row.compiled.is_none() => Some(ids::RULES_BLANK_NOT_CHECKED),
+            Checked::Ran { results, .. } => {
+                let scope = self
+                    .state
+                    .analysis
+                    .as_ref()
+                    .and_then(|a| a.scope.get(&row.name));
+                if scope == Some(&0) {
+                    return Some(ids::RULES_BLANK_NO_OBJECTS);
+                }
+                let passes = results.get(&row.id()).is_none_or(|r| r.violations == 0);
+                passes.then_some(ids::RULES_BLANK_PASSES)
+            }
+        }
     }
 
     /// The layer's severity entry for `row`: `Some(None)` switches it off.
