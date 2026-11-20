@@ -51,7 +51,8 @@ pub use requirements::{
 };
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
-    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RULE_PROFILE_SCHEMA_V2,
+    RuleProfile, RuleProfileError,
 };
 pub use rules::{
     DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef, RuleSetUse,
@@ -322,6 +323,9 @@ pub struct ProjectData {
 /// The `.snxprj` key of the project's rule set.
 const RULES_KEY: &str = "rules";
 
+/// The `.snxprj` key of the router tool diameter (#179d).
+const ROUTER_TOOL_DIAMETER_KEY: &str = "router_tool_diameter";
+
 /// Interpret a `rules` section, or keep it for re-save when this build
 /// cannot: a newer `schema`, or a value whose shape it does not know. The
 /// project opens either way; the section is just not applied (#1180).
@@ -337,6 +341,32 @@ impl ProjectData {
     /// verbatim for re-save, not applied (#1180).
     pub fn has_unreadable_rules(&self) -> bool {
         self.rules.is_none() && self.unknown.get(RULES_KEY).is_some()
+    }
+
+    /// The router tool diameter of the project's fab tier or profile, in mm
+    /// (#179d): the top-level `router_tool_diameter` key, absent when none
+    /// was applied. A value that is not a positive number reads as absent.
+    /// Held with the keys this type does not declare, so an older build
+    /// keeps it the same way (see `docs/FORMAT_VERSIONS.md`).
+    pub fn router_tool_diameter(&self) -> Option<f64> {
+        self.unknown
+            .get(ROUTER_TOOL_DIAMETER_KEY)
+            .and_then(Value::as_f64)
+            .filter(|mm| mm.is_finite() && *mm > 0.0)
+    }
+
+    /// Store the router tool diameter; `None`, or a value that is not a
+    /// positive number, removes the key.
+    pub fn set_router_tool_diameter(&mut self, mm: Option<f64>) {
+        let stored = mm
+            .filter(|mm| mm.is_finite() && *mm > 0.0)
+            .and_then(serde_json::Number::from_f64);
+        match stored {
+            Some(number) => self
+                .unknown
+                .insert(ROUTER_TOOL_DIAMETER_KEY.into(), Value::Number(number)),
+            None => self.unknown.remove(ROUTER_TOOL_DIAMETER_KEY),
+        }
     }
 
     /// Resolve a [`LibraryEntry`]'s `path` to an absolute path. Project-
