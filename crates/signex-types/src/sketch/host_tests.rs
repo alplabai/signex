@@ -31,7 +31,7 @@ fn a_footprint_keeps_its_fifteen_roles_in_order() {
 }
 
 #[test]
-fn a_board_offers_the_five_targets_its_bake_produces() {
+fn a_board_offers_the_targets_its_bake_produces() {
     use SketchRole as R;
     assert_eq!(
         SketchHost::Board.roles(),

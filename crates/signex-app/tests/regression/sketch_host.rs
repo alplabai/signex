@@ -26,7 +26,7 @@ fn entity(f: &Fixture, id: signex_sketch::id::SketchEntityId) -> signex_sketch::
 }
 
 #[test]
-fn the_board_host_offers_its_five_targets_and_v_score_bakes_as_one_step() {
+fn the_board_host_offers_its_targets_and_v_score_bakes_as_one_step() {
     let mut f = open_board();
     let before = snapshot(&f);
     send(&mut f, menu_row("board_sketch"));

@@ -59,7 +59,7 @@ mod tests {
 
     /// The board picker reads in the board sketch design's words.
     #[test]
-    fn the_board_picker_names_its_five_targets() {
+    fn the_board_picker_names_its_targets() {
         let labels: Vec<String> = role_labels(SketchHost::Board, &en_us())
             .into_iter()
             .map(|(_, label)| label.replace(['\u{2068}', '\u{2069}'], ""))
