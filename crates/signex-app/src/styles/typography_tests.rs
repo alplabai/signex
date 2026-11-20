@@ -89,7 +89,9 @@ fn scale_steps_are_strictly_increasing() {
 const SWEPT: &[&str] = &[
     "library/close_prompt.rs",
     "library/document_options.rs",
-    "library/settings/distributor_apis.rs",
+    "library/settings/distributor_apis/mod.rs",
+    "library/settings/distributor_apis/cards.rs",
+    "library/settings/distributor_apis/order.rs",
     "library/editor/footprint/step_attach.rs",
     "library/editor/footprint/pads_active_bar.rs",
     "library/editor/footprint/move_by_modal.rs",

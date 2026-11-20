@@ -24,6 +24,7 @@ define_ids! {
         MENU_FILE_OPEN_LIBRARY = "menu-file-open-library";
         MENU_FILE_PLACE_COMPONENT = "menu-file-place-component";
         MENU_FILE_EXPORT_PDF = "menu-file-export-pdf";
+        MENU_FILE_EXPORT_BOM = "menu-file-export-bom";
         MENU_EDIT_MOVE = "menu-edit-move";
         MENU_EDIT_ARRANGE = "menu-edit-arrange";
         MENU_EDIT_ORIGIN = "menu-edit-origin";

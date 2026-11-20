@@ -135,7 +135,7 @@ pub fn run_blocking(
     cancel: CancelHandle,
     browser: Option<crate::io_ports::Opener>,
 ) -> Outcome {
-    if client_id.is_empty() {
+    if !client_id_configured(&client_id) {
         return fail_and_log(format!(
             "DigiKey OAuth client_id missing — set ${ENV_CLIENT_ID} before connecting."
         ));
@@ -635,6 +635,18 @@ pub fn read_env_credentials() -> (String, String) {
     let id = std::env::var(ENV_CLIENT_ID).unwrap_or_default();
     let secret = std::env::var(ENV_CLIENT_SECRET).unwrap_or_default();
     (id, secret)
+}
+
+/// Whether a client id is usable: the one test the flow and the settings
+/// card share.
+pub fn client_id_configured(client_id: &str) -> bool {
+    !client_id.is_empty()
+}
+
+/// Whether the environment carries a DigiKey client id. Blocking-free but
+/// an environment read: call it when the settings are made, never in a view.
+pub fn env_client_configured() -> bool {
+    client_id_configured(&read_env_credentials().0)
 }
 
 /// Courtesy HTML page shown in the browser after the redirect.

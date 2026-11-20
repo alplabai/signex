@@ -188,6 +188,8 @@ impl Signex {
                 in_view = sheet.patch;
             } else {
                 self.document_state.mark_history_edit_dirty(&sheet.path);
+                let patch = sheet.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
+                self.repaint_member_sheet(&sheet.path, patch);
             }
             recorded.live.push(sheet.path);
         }

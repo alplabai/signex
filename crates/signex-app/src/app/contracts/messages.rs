@@ -463,10 +463,21 @@ pub enum BomPreviewMsg {
     SetGrouping(signex_output::BomGrouping),
     /// User changed BOM output format (CSV / XLSX / HTML).
     SetFormat(signex_output::BomFormat),
-    /// User toggled "Include DNP" in the BOM preview modal.
-    SetIncludeDnp(bool),
-    /// User toggled "Include Not Fitted" in the BOM preview modal.
-    SetIncludeNotFitted(bool),
+    /// User ticked or cleared the one not-fitted option. Sets
+    /// `BomOptions.include_dnp` and `include_not_fitted` together
+    /// (docs/DECISIONS.md, 2026-11-19).
+    NotFittedIncludedToggled(bool),
+    /// User typed in the toolbar filter. View-only: it hides lines and never
+    /// changes what Export writes.
+    FilterChanged(String),
+    /// User clicked a table line; carries its row index in `table.rows`.
+    RowSelected(usize),
+    /// User clicked an issue in the Rules tab; carries its index in the
+    /// validation report. Selects and reveals the issue's line.
+    IssueSelected(usize),
+    /// The table body scrolled; carries its horizontal offset so the sticky
+    /// header follows it.
+    BodyScrolled(f32),
     /// User toggled a single column on / off in the BOM preview
     /// column picker. The handler flips the column's presence in
     /// `BomOptions.columns`, preserving the existing display order
@@ -500,8 +511,8 @@ pub enum BomPreviewMsg {
     ColumnResizeStart(usize),
     /// User released the mouse — clears the in-flight resize state.
     ColumnResizeEnd,
-    /// User clicked a Properties-sidebar tab (General / Columns) in
-    /// the BOM preview modal.
+    /// User clicked a Properties-sidebar tab (General / Columns / Rules), or
+    /// the toolbar's issue chip, which opens Rules.
     SetSidebarTab(crate::app::state::BomSidebarTab),
     /// User toggled one validation rule in the Rules tab.
     SetRule(signex_output::BomRule, bool),
@@ -574,11 +585,8 @@ pub enum PrintPreviewMsg {
     Zoom(f32),
     /// User clicked the "Export PDF" button in the preview dialog.
     Export,
-    /// User closed the print preview dialog.
+    /// User closed the print preview dialog (the header X or Cancel).
     Close,
-    /// User clicked the Preview / Settings tab inside the unified
-    /// Export PDF modal.
-    SetTab(crate::app::state::PdfPreviewTab),
     /// User pressed mouse-down on the preview viewport — kicks off
     /// pan-drag. The handler reads the cursor from
     /// `interaction_state.last_mouse_pos` rather than carrying it on
@@ -587,9 +595,9 @@ pub enum PrintPreviewMsg {
     PanStart,
     /// User released the pan drag — clears `panning`.
     PanFinished,
-    /// User toggled a project file in the Settings → Files list.
+    /// User toggled a sheet in the Sheets section.
     ToggleFile(crate::app::state::PageKey),
-    /// Select all project files in the Settings → Files list.
+    /// Select All in the Sheets section.
     SelectAllFiles,
     /// Deselect all project files (effectively "no override —
     /// fall back to all").
@@ -615,9 +623,14 @@ pub enum PrintPreviewMsg {
     SetBookmarkPins(bool),
     SetBookmarkNetLabels(bool),
     SetBookmarkPorts(bool),
-    SetIncludeComponentParameters(bool),
     SetGlobalBookmarks(bool),
     SetPcbColourMode(signex_output::ColourMode),
+    /// A settings section header was clicked: fold or unfold it.
+    SectionToggled(crate::app::state::PdfSection),
+    /// The page toolbar's Fit button was pressed.
+    ZoomFitPressed,
+    /// A Watermark, PDF Layers or Bookmarks control changed (#1298).
+    PdfOption(PdfOptionMsg),
 }
 
 impl PrintPreviewMsg {
@@ -635,7 +648,8 @@ impl PrintPreviewMsg {
             | Self::Zoom(..)
             | Self::Export
             | Self::Close
-            | Self::SetTab(..)
+            | Self::SectionToggled(..)
+            | Self::ZoomFitPressed
             | Self::PanStart
             | Self::PanFinished => true,
             Self::SetColourMode(..)
@@ -674,9 +688,9 @@ impl PrintPreviewMsg {
             | Self::SetBookmarkPins(..)
             | Self::SetBookmarkNetLabels(..)
             | Self::SetBookmarkPorts(..)
-            | Self::SetIncludeComponentParameters(..)
             | Self::SetGlobalBookmarks(..)
-            | Self::SetPcbColourMode(..) => false,
+            | Self::SetPcbColourMode(..)
+            | Self::PdfOption(..) => false,
         }
     }
 }

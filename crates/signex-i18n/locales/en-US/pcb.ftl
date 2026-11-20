@@ -423,24 +423,107 @@ pcb-place-part-refused = { $part } cannot be placed on a board: { $reason }. Not
 # part was being read.
 pcb-place-part-board-gone = The board { $board } is no longer active; { $part } was not placed.
 
-## The board 3D view (#2390).
+## The board 3D view (#2390) and its toolbar (mockup row 175).
 
-# The 3D view's bar: its name, how to move it, and its buttons.
+# The toolbar's title.
 pcb-3d-title = 3D View
+# The quiet caption at the view's bottom right: how to move it.
 pcb-3d-hint = Drag to turn, right-drag to slide, wheel to zoom, click to select
-# Back to the flat board.
+# The toolbar's 2D | 3D switch: back to the flat board, or the 3D view.
 pcb-3d-flat = 2D
+pcb-3d-solid = 3D
+# Fit icon button tooltip.
 pcb-3d-fit = Fit
+# Viewpoints; each also names the view in the status pill. Bottom is
+# reached by Flip.
 pcb-3d-top = Top
 pcb-3d-bottom = Bottom
 pcb-3d-front = Front
 pcb-3d-left = Left
 pcb-3d-right = Right
+pcb-3d-back = Back
 # From above a front corner.
-pcb-3d-iso = Angled
+pcb-3d-iso = Iso
+pcb-3d-reset = Reset camera
+# Flip button: its label while the top shows, and while the bottom shows.
+pcb-3d-flip = Flip
+pcb-3d-flipped = Bottom
+pcb-3d-flip-tooltip = Flip board
+pcb-3d-flip-back-tooltip = Flip back to the top
+# Explode button and its popover.
+pcb-3d-explode = Explode
+pcb-3d-explode-amount = Explode { $percent } %
+pcb-3d-explode-close = Close Explode
+pcb-3d-explode-readout = { $percent } %
+pcb-3d-explode-assembled = Assembled
+pcb-3d-explode-apart = Layers apart
+pcb-3d-explode-layers = Separate copper and mask
+pcb-3d-explode-parts = Lift components
+# Lighting presets; each also picks the view's backdrop.
+pcb-3d-lighting-studio = Studio
+pcb-3d-lighting-workshop = Workshop
+pcb-3d-lighting-outdoor = Outdoor
+pcb-3d-lighting-dark = Dark
+pcb-3d-lighting-tooltip = Next lighting preset
+# The lighting toast after the preset's name: where it is in the cycle.
+pcb-3d-lighting-position = · { $index } of { $count }
+# Screenshot button and its menu.
+pcb-3d-shot-tooltip = Copy a screenshot
+pcb-3d-shot-copy = Copy to clipboard
+pcb-3d-shot-save = Save PNG…
+pcb-3d-shot-save-title = Save a Screenshot of the 3D View
+pcb-3d-shot-filter = PNG image
+# Messages lines about a screenshot.
+pcb-3d-shot-copied = A screenshot of the 3D view was copied to the clipboard.
+pcb-3d-shot-copy-failed = The screenshot of the 3D view could not be copied to the clipboard: { $why }
+# Why the clipboard refused the screenshot ($why above).
+pcb-3d-shot-clipboard-unavailable = no clipboard is available
+pcb-3d-shot-clipboard-occupied = another program holds the clipboard
+pcb-3d-shot-clipboard-format = the clipboard does not take images
+pcb-3d-shot-clipboard-conversion = the image could not be converted for the clipboard
+pcb-3d-shot-saved = A screenshot of the 3D view was saved to { $path }.
+pcb-3d-shot-save-failed = The screenshot of the 3D view could not be saved to { $path }: { $why }
+pcb-3d-shot-empty = The 3D view could not be captured: the window had nothing to show.
+# View cube faces, top side up and turned over.
+pcb-3d-cube-top = TOP
+pcb-3d-cube-bottom = BOTTOM
+pcb-3d-cube-left = LEFT
+pcb-3d-cube-right = RIGHT
+pcb-3d-cube-front = FRONT
+# Status pill at the bottom left. $preset is a viewpoint name; $width,
+# $height and $thickness are millimetres; $bodies counts the parts.
+pcb-3d-status-view = { $preset } · { $width } × { $height } × { $thickness } mm · { $bodies ->
+        [one] 1 body
+       *[other] { $bodies } bodies
+    }
+pcb-3d-status-size = { $width } × { $height } × { $thickness } mm · { $bodies ->
+        [one] 1 body
+       *[other] { $bodies } bodies
+    }
+# $apart is all, layers, parts or none: what the explode moves apart.
+pcb-3d-status-explode = Explode { $percent } % · { $apart ->
+        [all] core, copper, mask and parts apart
+        [layers] core, copper and mask apart
+        [parts] parts lifted off the board
+       *[none] nothing set apart
+    }
+# While flipped: the parts on the bottom side, and the parts with
+# through-hole pins, as lists of designators.
+pcb-3d-status-bottom = Bottom side · { $parts }
+pcb-3d-status-bottom-tht = Bottom side · { $parts } · through-hole pins of { $tht }
+pcb-3d-status-no-parts = no parts
+# A designator list cut short: the first few, and how many more.
+pcb-3d-status-list-more = { $list } and { $count } more
 # Messages line when a part's model could not be read; the part is drawn as
-# a plain body. $source names the library footprint.
+# a plain body. $source names the library footprint. It also shows as the
+# view's warn toast.
 pcb-3d-model-unread = The 3D model of { $source } could not be read: { $why }. It is drawn as a plain body.
+# Under the toast when more parts could not be read.
+pcb-3d-model-unread-more = { $count ->
+        [one] One more part could not be read; Messages lists it.
+       *[other] { $count } more parts could not be read; Messages lists them.
+    }
+pcb-3d-dismiss = Dismiss
 
 ## The board Tools edits (#2408, #2409).
 

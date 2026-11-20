@@ -489,9 +489,10 @@ Checks: `pcb_geom::text_frame::tests`, `pcb::graphics::tests::a_text_frame_draws
 ## board-3d — Board 3D view (#2390)
 
 View ▸ 3D View (`view_board_3d`, key `3` on a board) shows the board in view
-in 3D in the main window; the same command, the bar's 2D button or `3` again
-shows it flat. Undocked board windows stay flat. It is view state like pan
-and zoom: no board command, no undo step, no dirty mark.
+in 3D in the main window; the same command, the toolbar's 2D segment or `3`
+again shows it flat. Undocked board windows stay flat. It is view state like
+pan and zoom: no board command, no undo step, no dirty mark; every toolbar
+action below is view state too.
 
 **Frame.** Millimetres, right-handed, z up out of the top face: a board
 point `(x, y)` (y down, as the flat view draws it) is `(x, -y)`. The bottom
@@ -533,14 +534,77 @@ mesh, `signex_gfx::scene3d::Scene3d`):
   hangs below the bottom face, x mirrored and z flipped, which turns it over.
   The component's body opacity scales its alpha.
 
+**Toolbar** (mockup rows 109 and 175): one floating toolbar at the top
+centre of the view, always shown: the "3D View" title; 2D | 3D; Top, Iso,
+Front, Left, Right, Back, Reset and Fit; Flip and Explode; the lighting
+preset; the screenshot button and its menu chevron. The interaction hint is
+a quiet caption at the bottom right, the status pill sits at the bottom
+left, the view cube at the top right. As decided (DECISIONS, the 2026-11-19
+board 3D view toolbar row), the "3D View" title stays and Left and Right
+are separate buttons (no single Side button with Shift+click).
+
 **Camera** (`signex_gfx::camera3d::OrbitCamera`): perspective, orbiting a
 target. Left drag turns it, right or middle drag or Shift left drag slides
-it, the wheel zooms; Top, Bottom, Front, Left, Right and Angled look from
-there and frame the board; Fit and View ▸ Fit All frame it from where it is
-seen. Entering the view looks from the top, framed for an assumed shape;
-the view's first redraw reports its real size and frames it again. A
-gesture never frames it again, so the first drag or wheel step cannot jump.
-The view follows a renamed board and ends when the board's tab closes.
+it, the wheel zooms. A viewpoint looks from there on the side shown
+(`OrbitCamera::set_preset_on`) and frames the board: Top, Iso (above a front
+corner), Front, Left, Right and Back (the high-y edge). The active
+viewpoint is tinted; a turn by hand clears it. Bottom is still a viewpoint
+(`PresetPicked`), reached by Flip. Reset looks
+from Iso on the side shown, framed; flip, explode and lighting stay. Fit and
+View ▸ Fit All frame the board from where it is seen. Entering the view looks
+from the top, framed for an assumed shape; the view's first redraw reports
+its real size and frames it again, and a later redraw reports where the
+view sits in the window (where a screenshot is cropped). A gesture never
+frames it again, so the first drag or wheel step cannot jump. The view
+follows a renamed board and ends when the board's tab closes.
+
+**Flip** turns the board over: the side shown changes at once and the
+camera turns to `OrbitCamera::flipped` over `FLIP_DURATION_MS`
+(`OrbitCamera::tween`), driven by a frame subscription that exists only
+while the turn runs. A gesture, a viewpoint, Reset or Fit during the turn
+ends it at its target first. While flipped the button reads Bottom and is
+tinted, the view cube reads BOTTOM, RIGHT, FRONT, and the status pill names
+the bottom side's parts and the parts with through-hole pins.
+
+**Popovers**: the Explode popover and the screenshot menu hang centred under
+their own buttons. Esc closes an open one first (`board_3d_popover_escape`
+in the Esc ladder), so it never reaches the tool reset behind the view.
+
+**Explode** opens a popover under its button: a slider from Assembled
+(0 %) to Layers apart (100 %) and two tick boxes, Separate copper and mask
+and Lift components. The scene the view draws and picks with is
+`BoardScene3d::exploded` of the assembled one (only heights move), cached by
+the assembled scene's generation and the explode, so a click still selects
+a lifted part. The button reads `Explode <n> %` and is tinted while its
+popover is open or the board stands apart; the status pill says what stands
+apart.
+
+**Lighting**: four presets, Studio, Workshop, Outdoor and Dark
+(`LightingPreset`); a click on the lighting button moves to the next and a
+toast under the toolbar shows the four swatches and `<Name> · <i> of 4` for
+about two seconds (a newer toast outlives an older timer). The mesh is lit
+by the preset (`OrbitCamera::uniform_lit`). The backdrop is the preset's
+vertical gradient (`styles::board_palette::LightingBackdrop`: Studio
+#E8E8EA to #BFC2C7, Workshop #EADBC6 to #9C8770, Outdoor #BFD8F2 to #9DB38A,
+Dark #2A2D33 to #0E0F12). It follows the preset only, the same in Graphite
+Light and Dark, as the board palette does (DECISIONS, the 2026-11-19 board 3D
+view toolbar row).
+
+**Screenshot**: a click on the camera copies the view to the clipboard;
+the chevron's menu has Copy to clipboard and Save PNG…. The toolbar,
+popovers, toasts, status pill, hint and view cube hide, the next frame is
+captured from the main window (`iced::window::screenshot`) and cropped to
+the view in physical pixels, and the chrome shows again. Save PNG… asks for
+the file first (the file-picker port) and writes the PNG atomically
+(temporary file renamed over it) off the update thread. Messages says
+whether the copy or the save worked, and why one failed (the clipboard's
+reason, or the write error).
+
+**Model-unread toast**: a part whose model could not be read adds its
+`pcb-3d-model-unread` line to Messages and also shows it as a dismissible
+warn toast at the bottom left, above the status pill (with how many more
+could not be read), as wide as its text up to 420 px at the default body
+size; dismissing it leaves the Messages lines.
 
 **Selection** is the flat view's: a click casts a ray and selects the
 footprint of the nearest part it meets before the board (on the board or on
@@ -549,12 +613,14 @@ selection colour.
 
 **GPU.** `signex_gfx::pipeline::mesh::MeshPipeline` through iced's shader
 widget (`board_3d_shader`), in its own render pass with its own depth buffer
-over the board canvas background; flat shading from the face's slope, both
-faces lit by a head light. The mesh uploads only when its generation
-changes.
+over the lighting preset's backdrop; flat shading from the face's slope,
+both faces lit by the preset's light from the eye. The mesh uploads only
+when its generation changes.
 
 Checks: `signex_gfx::scene3d::tests`, `signex_gfx::ring_fill::tests`, `signex_gfx::camera3d::tests`,
-`signex_renderer::board3d::tests`, regression `pcb_board_3d`.
+`signex_renderer::board3d::tests`, regression `pcb_board_3d` and
+`pcb_board_3d_toolbar`, `styles::board_palette::tests`,
+`app::handlers::board_3d_screenshot::tests`.
 
 ## What this document is *not*
 

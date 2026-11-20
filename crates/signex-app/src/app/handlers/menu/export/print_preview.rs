@@ -90,12 +90,17 @@ impl Signex {
             .unwrap_or_default();
         // Seed `pdf_options.variant` from the project's active variant
         // so the picker reflects the project state on open. The user
-        // can override locally without mutating the project.
+        // can override locally without mutating the project. The choice is
+        // always named, Base included (#2430).
         let mut pdf_opts = pdf_opts;
-        pdf_opts.variant = self
-            .document_state
-            .active_document_project()
-            .and_then(|p| p.data.active_variant.clone());
+        pdf_opts.variant = Some(
+            self.document_state
+                .active_document_project()
+                .map_or(signex_types::project::BASE_VARIANT, |p| {
+                    p.data.active_variant_name()
+                })
+                .to_string(),
+        );
         // Seed the file picker off the export context's own sheet set —
         // open-modal default is "export everything", and user toggles
         // take the box from checked to unchecked. Reading `ctx` rather
@@ -109,6 +114,9 @@ impl Signex {
         let selected_files: std::collections::HashSet<crate::app::state::PageKey> =
             sheet_files.iter().map(|(p, _)| p.clone()).collect();
         let page_setup = crate::app::state::PageSetupInputs::from_options(&pdf_opts);
+        let mut dialog = crate::app::state::PdfDialogState::default();
+        dialog.watermark.revision = ctx.metadata.revision.clone();
+        dialog.watermark.date = export_date();
         let mut preview = crate::app::state::PreviewState {
             source,
             pages: Vec::new(),
@@ -119,7 +127,7 @@ impl Signex {
             specific_page_input: "1".to_string(),
             range_note: None,
             zoom: 1.0,
-            active_tab: crate::app::state::PdfPreviewTab::Preview,
+            dialog,
             pan: (0.0, 0.0),
             panning: None,
             sheet_files,
@@ -148,9 +156,8 @@ impl Signex {
         ));
         let job = PreviewRasterJob::layout(generation, latest, ctx, options, preview.selected);
         self.document_state.preview = Some(preview);
-        // Altium parity: open Print Preview / Export PDF as its own OS
-        // window so the user can drag it off the app's client area —
-        // matches the Annotate / ERC modals.
+        // Open Export PDF as its own OS window so the user can drag it off
+        // the app's client area — matches the Annotate / ERC modals.
         Task::batch([
             self.launch_raster(job),
             self.handle_detach_modal(crate::app::state::ModalId::PrintPreview),
@@ -235,8 +242,10 @@ impl Signex {
         // this export writes, and the document on screen may not be its own.
         // The last outcome is stale the moment Export is clicked again, also
         // when validation refuses below.
+        // The watermark's date line carries the day of the export.
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.export_status = None;
+            preview.dialog.watermark.date = export_date();
         }
         // Pull the (possibly edited) options out of the live preview
         // and drive the OS save-file dialog directly. The intermediate
@@ -244,7 +253,8 @@ impl Signex {
         // opening Print Preview as the unified modal.
         let (source, pdf_options, files) = match self.document_state.preview.as_ref() {
             Some(preview) => {
-                let mut options = preview.pdf_options.clone();
+                // The watermark and the PDF layers only while switched on.
+                let mut options = preview.output_options();
                 if matches!(options.page_range, PageRange::Specific(_)) {
                     let parsed = preview.specific_page_input.trim().parse::<usize>().ok();
                     let page = match parsed {
@@ -385,6 +395,7 @@ impl Signex {
         // Class styles follow the context's own netlist, so sheets that are
         // not open in a tab are styled in the preview as in the export.
         let mut pdf_opts = pdf_opts;
+        super::apply_printed_variant(&mut ctx.metadata, &mut pdf_opts.variant);
         pdf_opts.net_class_styles =
             super::class_styles::export_class_styles(&self.document_state, &source, &ctx);
         pdf_opts.schematic_defaults = self.document_state.schematic_defaults_for(&source);
@@ -403,6 +414,8 @@ impl Signex {
                 .iter()
                 .map(|s| (s.path.clone(), s.placement.clone()))
                 .collect();
+            // The watermark's revision line follows the title block.
+            preview.dialog.watermark.revision = ctx.metadata.revision.clone();
             preview.selected_files.retain(|p| current.contains(p));
             for path in &current {
                 if !known.contains(path) {
@@ -416,10 +429,9 @@ impl Signex {
                 .collect();
             preview.selected_files.clone()
         };
-        // Drop sheets the user unchecked in the file picker. An
-        // empty filter set means "no files selected" — matches
-        // Altium's "you must pick at least one file" UX. We render
-        // a still-valid empty preview so the modal stays usable.
+        // Drop sheets the user unticked under Sheets. An empty filter set
+        // means "no sheet ticked": the preview shows a still-valid empty
+        // page area so the dialog stays usable.
         self.retire_dead_placement(&issues, &source, &pdf_opts.page_range);
         let descended = self.document_state.tab_placements.get(&source);
         if !super::isolate_undeclared_current(
@@ -507,9 +519,48 @@ impl Signex {
         }
     }
 
-    pub(crate) fn handle_print_preview_set_tab(&mut self, tab: crate::app::state::PdfPreviewTab) {
+    /// The page toolbar's Fit button: back to the whole page, no pan.
+    pub(crate) fn handle_print_preview_zoom_fit(&mut self) {
         if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.active_tab = tab;
+            preview.zoom = 1.0;
+            preview.pan = (0.0, 0.0);
+            preview.panning = None;
+        }
+    }
+
+    pub(crate) fn handle_print_preview_section_toggled(
+        &mut self,
+        section: crate::app::state::PdfSection,
+    ) {
+        if let Some(preview) = self.document_state.preview.as_mut() {
+            preview.dialog.sections.toggle(section);
+        }
+    }
+
+    /// The Watermark, PDF Layers and Bookmarks controls (#1298). None of them
+    /// changes the rasterised page: the preview draws the watermark over it.
+    /// The dispatcher routes every `PrintPreviewMsg::PdfOption` here.
+    pub(crate) fn handle_print_preview_pdf_option(&mut self, msg: PdfOptionMsg) {
+        let Some(preview) = self.document_state.preview.as_mut() else {
+            return;
+        };
+        let dialog = &mut preview.dialog;
+        let options = &mut preview.pdf_options;
+        match msg {
+            PdfOptionMsg::WatermarkToggled(on) => dialog.watermark.is_on = on,
+            PdfOptionMsg::WatermarkPresetPicked(preset) => dialog.watermark.pick_preset(preset),
+            PdfOptionMsg::WatermarkTextChanged(text) => dialog.watermark.set_text(text),
+            PdfOptionMsg::WatermarkOpacityChanged(text) => dialog.watermark.set_opacity(text),
+            PdfOptionMsg::WatermarkAngleChanged(text) => dialog.watermark.set_angle(text),
+            PdfOptionMsg::WatermarkPagesPicked(pages) => dialog.watermark.settings.pages = pages,
+            PdfOptionMsg::WatermarkRevisionToggled(on) => dialog.watermark.with_revision = on,
+            PdfOptionMsg::PdfLayersToggled(on) => dialog.layers.is_on = on,
+            PdfOptionMsg::PdfLayerVisibilityToggled(layer, visible) => {
+                dialog.layers.set_visible(layer, visible);
+            }
+            PdfOptionMsg::BookmarkSheetsToggled(on) => options.bookmark_sheets = on,
+            PdfOptionMsg::BookmarkPartsToggled(on) => options.bookmark_parts = on,
+            PdfOptionMsg::PartBookmarkOrderPicked(order) => options.part_bookmark_order = order,
         }
     }
 
@@ -565,15 +616,24 @@ impl Signex {
         self.rerasterize_print_preview()
     }
 
-    pub(crate) fn handle_print_preview_set_variant(&mut self, variant: Option<String>) {
+    /// `None` is the picker's Base row, stored as Base by name so the export
+    /// never falls back to the project's active variant (#2430). Re-renders:
+    /// the title block prints the variant.
+    pub(crate) fn handle_print_preview_set_variant(
+        &mut self,
+        variant: Option<String>,
+    ) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.pdf_options.variant = variant;
+            preview.pdf_options.variant =
+                Some(variant.unwrap_or_else(|| signex_types::project::BASE_VARIANT.to_string()));
         }
-        // No rerasterize: variant doesn't currently feed into the
-        // SVG render pipeline. When it does, move this handler into
-        // the visual-toggle group in the dispatcher (call
-        // `handle_print_preview_rerender` after mutating).
+        self.rerasterize_print_preview()
     }
+}
+
+/// Today as `YYYY-MM-DD`, the date the watermark's revision line prints.
+fn export_date() -> String {
+    chrono::Local::now().format("%Y-%m-%d").to_string()
 }
 
 /// The preview placeholder for a page range that selects no printed page.

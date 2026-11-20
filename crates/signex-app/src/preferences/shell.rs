@@ -1,35 +1,34 @@
-//! Graphite Preferences shell: 52 px header with a "Group / Page" subtitle,
-//! a 236 px navigation with radius-7 rows, and an always-visible footer.
-//! Cancel, Apply and OK reuse the discard, save and save-and-close actions;
-//! Restore defaults has no backend yet and is drawn disabled.
+//! Graphite Preferences shell (mockup row 143): 52 px header with a "Group / Page"
+//! subtitle, the broken-file banner across the full width, a 216 px page
+//! list with an accent dot on every page holding unsaved changes, and the
+//! footer: a note, Cancel, Apply and OK. Cancel, Apply and OK are the
+//! discard, save and save-and-close actions. Restore defaults has no backend
+//! yet, so it is not drawn.
 
 use super::graphite_fields::{graphite_label, group_messages, nav_matches, nav_search};
+use super::setting_row::{hairline, medium};
 use super::{PrefMsg, PrefNav, PrefsView, SP, TS, build_content, build_prefs_file_banner};
 use crate::app::view::dialogs::{PREFERENCES_HEADER_H, graphite_header};
-use crate::styles::{self, DialogButtonKind, PillTone, Radii, dialog_button, ti, tokens};
+use crate::styles::{
+    self, DialogButtonKind, PillTone, Radii, chrome_px, dialog_button, ti, tokens,
+};
 use iced::widget::{Column, Space, column, container, row, scrollable};
-use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Element, Font, Length, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text};
+use signex_widgets::{button, text, tooltip};
 
-/// Navigation width (236 px at the default base).
-pub(super) const GRAPHITE_NAV_W: f32 = styles::chrome_px(236.0 * 11.0 / 12.0);
+/// Navigation width (216 px, the mock's `.pnav`).
+pub(super) const GRAPHITE_NAV_W: f32 = chrome_px(216.0 * 11.0 / 12.0);
+/// Height of a nav row (28 px).
+const NAV_ROW_H: f32 = chrome_px(28.0 * 11.0 / 12.0);
+/// Side of the unsaved-changes dot (6 px).
+const DIRTY_DOT: f32 = chrome_px(6.0 * 11.0 / 12.0);
+/// Height of the footer's Unsaved changes pill (20 px).
+const FOOTER_PILL_H: f32 = chrome_px(20.0 * 11.0 / 12.0);
 /// Card size of the in-window dialog.
 pub(super) const GRAPHITE_DLG_W: f32 = 980.0;
 pub(super) const GRAPHITE_DLG_H: f32 = 680.0;
-
-fn hairline<'a>(t: &ThemeTokens) -> Element<'a, PrefMsg> {
-    let line = tokens::resolve(t).line_soft;
-    container(Space::new())
-        .width(Length::Fill)
-        .height(1)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(line)),
-            ..container::Style::default()
-        })
-        .boxed()
-}
 
 /// The whole dialog: header (in-window only), banner, nav | content, footer.
 pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Element<'a, PrefMsg> {
@@ -44,7 +43,7 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
         )
         .into_string();
         items.push(graphite_header(
-            "Preferences",
+            t!(v.i18n, ids::DIALOG_TITLE_PREFERENCES).into_string(),
             Some(subtitle),
             None,
             PrefMsg::Close,
@@ -52,7 +51,7 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
             t,
         ));
     }
-    if let Some(banner) = build_prefs_file_banner(v.prefs_load_error, v.prefs_status, v.i18n) {
+    if let Some(banner) = build_prefs_file_banner(v.prefs_load_error, v.prefs_status, v.i18n, t) {
         items.push(banner);
     }
     let divider = {
@@ -67,14 +66,10 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
             .boxed()
     };
     items.push(
-        row![
-            graphite_nav(v.nav, v.nav_search, t, v.i18n),
-            divider,
-            build_content(v)
-        ]
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .boxed(),
+        row![graphite_nav(&v), divider, build_content(v)]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed(),
     );
     items.push(hairline(t));
     items.push(graphite_footer(&v));
@@ -87,14 +82,19 @@ pub(super) fn graphite_dialog<'a>(v: PrefsView<'a>, with_header: bool) -> Elemen
         .boxed()
 }
 
-fn graphite_nav<'a>(
-    active: PrefNav,
-    query: &'a str,
-    t: &ThemeTokens,
-    i18n: &I18n,
-) -> Element<'a, PrefMsg> {
-    let mut col = column![].spacing(2).padding(SP.m).width(Length::Fill);
-    col = col.push(nav_search(query, t, i18n));
+/// The page list: the search field, then each group's heading in capitals
+/// and its pages.
+fn graphite_nav<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
+    let (t, i18n, query) = (v.panel_tokens, v.i18n, v.nav_search);
+    let mut col = column![].padding(SP.m).width(Length::Fill);
+    col = col.push(
+        container(nav_search(query, t, i18n))
+            .padding(iced::Padding {
+                bottom: SP.xs,
+                ..iced::Padding::ZERO
+            })
+            .boxed(),
+    );
     let mut last_group = "";
     for &item in PrefNav::ALL
         .iter()
@@ -107,6 +107,7 @@ fn graphite_nav<'a>(
                 container(
                     text(t!(i18n, group_messages(item).1))
                         .size(TS.section)
+                        .font(medium())
                         .style(styles::section_label(t)),
                 )
                 .padding(iced::Padding {
@@ -118,7 +119,8 @@ fn graphite_nav<'a>(
                 .boxed(),
             );
         }
-        col = col.push(nav_row(item, item == active, t, i18n));
+        let dirty = v.dirty_pages.contains(&item);
+        col = col.push(nav_row(item, item == v.nav, dirty, t, i18n));
     }
     let bg = ti(t.panel_bg);
     container(
@@ -136,23 +138,44 @@ fn graphite_nav<'a>(
     .boxed()
 }
 
-fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
+/// One page row: 28 px, control radius; the selection fill and weight 500
+/// when open, the hover overlay otherwise; an accent dot at the right when
+/// the page holds unsaved changes.
+fn nav_row<'a>(
+    item: PrefNav,
+    active: bool,
+    dirty: bool,
+    t: &ThemeTokens,
+    i18n: &I18n,
+) -> Element<'a, PrefMsg> {
     let (ink, selected, hover) = (
         ti(t.text),
         ti(t.selection),
         tokens::overlay(t, tokens::Overlay::Hover),
     );
+    let font = if active { medium() } else { Font::DEFAULT };
+    let mut line = row![
+        text(t!(i18n, graphite_label(item)))
+            .size(TS.label)
+            .font(font)
+            .color(ink)
+            .width(Length::Fill)
+    ]
+    .spacing(SP.s + SP.xs)
+    .align_y(Alignment::Center);
+    if dirty {
+        line = line.push(dirty_dot(t, i18n));
+    }
     button(
-        container(
-            text(t!(i18n, graphite_label(item)))
-                .size(TS.label)
-                .color(ink),
-        )
-        .padding([SP.s, SP.m])
-        .width(Length::Fill),
+        container(line)
+            .padding([0.0, SP.m])
+            .height(Length::Fill)
+            .align_y(iced::alignment::Vertical::Center)
+            .width(Length::Fill),
     )
     .padding(0)
     .width(Length::Fill)
+    .height(Length::Fixed(NAV_ROW_H))
     .on_press(PrefMsg::Nav(item))
     .style(move |_: &Theme, status: button::Status| button::Style {
         background: if active {
@@ -172,66 +195,146 @@ fn nav_row<'a>(item: PrefNav, active: bool, t: &ThemeTokens, i18n: &I18n) -> Ele
     .boxed()
 }
 
-/// Footer: Restore defaults at the left; hint or unsaved pill, Cancel,
-/// Apply and OK at the right. Apply needs unsaved changes; OK saves them and
-/// closes, or only closes when there are none.
+/// The 6 px accent dot of a page with unsaved changes, titled "Unsaved
+/// changes".
+fn dirty_dot<'a>(t: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
+    let accent = ti(t.accent);
+    let dot = container(Space::new())
+        .width(Length::Fixed(DIRTY_DOT))
+        .height(Length::Fixed(DIRTY_DOT))
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(accent)),
+            border: Border {
+                radius: Radii::GRAPHITE.pill.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    tooltip(
+        dot,
+        container(text(t!(i18n, ids::PREFERENCES_UNSAVED)).size(TS.caption))
+            .padding([SP.xs, SP.s + SP.xs]),
+        tooltip::Position::Bottom,
+    )
+    .style(styles::context_menu(t))
+    .boxed()
+}
+
+/// What the footer says left of its buttons, in the mock's order: the
+/// Language page says when the language changes; otherwise unsaved changes
+/// show the warn pill; otherwise the Appearance page says themes preview
+/// live.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum FooterNote {
+    LanguageApplies,
+    Unsaved,
+    ThemePreviews,
+    Nothing,
+}
+
+pub(super) fn footer_note(nav: PrefNav, dirty: bool) -> FooterNote {
+    match (nav, dirty) {
+        (PrefNav::Language, _) => FooterNote::LanguageApplies,
+        (_, true) => FooterNote::Unsaved,
+        (PrefNav::Appearance, false) => FooterNote::ThemePreviews,
+        _ => FooterNote::Nothing,
+    }
+}
+
+/// Footer: the note, Cancel, Apply and OK at the right on the chrome fill.
+/// Apply needs unsaved changes; OK saves them and closes, or only closes
+/// when there are none.
 fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
     let t = v.panel_tokens;
-    let note: Element<'a, PrefMsg> = if v.dirty {
-        container(text(t!(v.i18n, ids::PREFERENCES_UNSAVED)).size(TS.caption))
-            .padding([2.0, SP.m])
-            .style(styles::pill(t, PillTone::Warn))
-            .boxed()
-    } else if v.nav == PrefNav::Appearance {
-        text(t!(v.i18n, ids::PREFERENCES_THEME_PREVIEW_HINT))
-            .size(TS.label)
-            .color(tokens::resolve(t).ink3)
-            .boxed()
-    } else {
-        Space::new().boxed()
+    let ink3 = tokens::resolve(t).ink3;
+    let note: Element<'a, PrefMsg> = match footer_note(v.nav, v.dirty) {
+        FooterNote::LanguageApplies => text(t!(v.i18n, ids::PREFERENCES_LANGUAGE_FOOTER_NOTE))
+            .size(TS.body)
+            .color(ink3)
+            .boxed(),
+        FooterNote::Unsaved => {
+            container(text(t!(v.i18n, ids::PREFERENCES_UNSAVED)).size(TS.caption))
+                .padding([0.0, SP.m])
+                .height(Length::Fixed(FOOTER_PILL_H))
+                .align_y(iced::alignment::Vertical::Center)
+                .style(styles::pill(t, PillTone::Warn))
+                .boxed()
+        }
+        FooterNote::ThemePreviews => text(t!(v.i18n, ids::PREFERENCES_THEME_PREVIEW_HINT))
+            .size(TS.body)
+            .color(ink3)
+            .boxed(),
+        FooterNote::Nothing => Space::new().boxed(),
     };
     let ok_msg = if v.dirty {
         PrefMsg::SaveAndClose
     } else {
         PrefMsg::Close
     };
-    let buttons = row![
-        note,
-        dialog_button(
-            t!(v.i18n, ids::DIALOG_BUTTON_CANCEL),
-            DialogButtonKind::Cancel,
-            Some(PrefMsg::DiscardAndClose),
-            t
-        ),
-        dialog_button(
-            t!(v.i18n, ids::DIALOG_BUTTON_APPLY),
-            DialogButtonKind::Secondary,
-            v.dirty.then_some(PrefMsg::Save),
-            t
-        ),
-        dialog_button(
-            t!(v.i18n, ids::DIALOG_BUTTON_OK),
-            DialogButtonKind::Primary,
-            Some(ok_msg),
-            t
-        ),
-    ]
-    .spacing(SP.m)
-    .align_y(Alignment::Center);
+    let chrome = ti(t.toolbar_bg);
     container(
         row![
+            Space::new().width(Length::Fill),
+            note,
             dialog_button(
-                t!(v.i18n, ids::PREFERENCES_RESTORE_DEFAULTS),
-                DialogButtonKind::Ghost,
-                None,
+                t!(v.i18n, ids::DIALOG_BUTTON_CANCEL),
+                DialogButtonKind::Cancel,
+                Some(PrefMsg::DiscardAndClose),
                 t
             ),
-            Space::new().width(Length::Fill).boxed(),
-            buttons.boxed(),
+            dialog_button(
+                t!(v.i18n, ids::DIALOG_BUTTON_APPLY),
+                DialogButtonKind::Secondary,
+                v.dirty.then_some(PrefMsg::Save),
+                t
+            ),
+            dialog_button(
+                t!(v.i18n, ids::DIALOG_BUTTON_OK),
+                DialogButtonKind::Primary,
+                Some(ok_msg),
+                t
+            ),
         ]
+        .spacing(SP.m)
         .align_y(Alignment::Center),
     )
     .padding([SP.m, SP.l])
     .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(chrome)),
+        ..container::Style::default()
+    })
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup rows 143 and 144a: the footer note follows the mock's precedence.
+    #[test]
+    fn the_footer_note_follows_the_mock() {
+        assert_eq!(
+            footer_note(PrefNav::Language, true),
+            FooterNote::LanguageApplies
+        );
+        assert_eq!(
+            footer_note(PrefNav::Language, false),
+            FooterNote::LanguageApplies
+        );
+        assert_eq!(footer_note(PrefNav::Appearance, true), FooterNote::Unsaved);
+        assert_eq!(footer_note(PrefNav::Editing, true), FooterNote::Unsaved);
+        assert_eq!(
+            footer_note(PrefNav::Appearance, false),
+            FooterNote::ThemePreviews
+        );
+        assert_eq!(footer_note(PrefNav::Annotation, false), FooterNote::Nothing);
+    }
+
+    #[test]
+    fn the_nav_and_its_rows_match_the_mock() {
+        for (got, mock) in [(GRAPHITE_NAV_W, 216.0), (NAV_ROW_H, 28.0), (DIRTY_DOT, 6.0)] {
+            assert!((got - mock).abs() < 1e-3, "{got} != {mock}");
+        }
+    }
 }

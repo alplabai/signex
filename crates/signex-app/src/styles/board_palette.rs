@@ -11,6 +11,7 @@
 //! dark chrome around them.
 
 use iced::Color;
+use signex_gfx::camera3d::LightingPreset;
 use signex_renderer::pcb::{BOARD_OUTLINE, BoardPaint};
 use signex_types::pcb_layer::{CopperLayer, InnerCopper, PcbLayer, TechnicalLayer};
 use signex_types::theme::{ThemeId, ThemeTokens, theme_tokens};
@@ -222,6 +223,36 @@ impl LineArtPalette {
     }
 }
 
+/// The backdrop of the board 3D view under one lighting preset (mockup row 175): a
+/// vertical gradient from `top` to `bottom`. It follows the preset only and
+/// is the same in both themes (DECISIONS, the 2026-11-19 board 3D view toolbar row); the toolbar's
+/// lighting swatch shows the same gradient.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LightingBackdrop {
+    pub top: Color,
+    pub bottom: Color,
+}
+
+impl LightingBackdrop {
+    /// The backdrop of `preset`.
+    pub const fn of(preset: LightingPreset) -> Self {
+        let (top, bottom) = match preset {
+            LightingPreset::Studio => ([0xE8, 0xE8, 0xEA], [0xBF, 0xC2, 0xC7]),
+            LightingPreset::Workshop => ([0xEA, 0xDB, 0xC6], [0x9C, 0x87, 0x70]),
+            LightingPreset::Outdoor => ([0xBF, 0xD8, 0xF2], [0x9D, 0xB3, 0x8A]),
+            LightingPreset::Dark => ([0x2A, 0x2D, 0x33], [0x0E, 0x0F, 0x12]),
+        };
+        Self {
+            top: Color::from_rgb8(top[0], top[1], top[2]),
+            bottom: Color::from_rgb8(bottom[0], bottom[1], bottom[2]),
+        }
+    }
+}
+
+/// The quiet caption on the board 3D view (its interaction hint): the board
+/// canvas label grey, readable on every lighting backdrop.
+pub const BOARD_3D_CAPTION: Color = Color::from_rgb8(0x5C, 0x5E, 0x63);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,5 +382,23 @@ mod tests {
         let light = LineArtPalette::from_tokens(&theme_tokens(ThemeId::GraphiteLight));
         let dark = LineArtPalette::from_tokens(&theme_tokens(ThemeId::GraphiteDark));
         assert_ne!(light.ink, dark.ink);
+    }
+
+    /// Each lighting preset's backdrop is the approved gradient; it takes no
+    /// theme, so both themes draw the same one.
+    #[test]
+    fn the_3d_backdrops_are_the_approved_gradients() {
+        let expected = [
+            (LightingPreset::Studio, "#E8E8EA", "#BFC2C7"),
+            (LightingPreset::Workshop, "#EADBC6", "#9C8770"),
+            (LightingPreset::Outdoor, "#BFD8F2", "#9DB38A"),
+            (LightingPreset::Dark, "#2A2D33", "#0E0F12"),
+        ];
+        for (preset, top, bottom) in expected {
+            let backdrop = LightingBackdrop::of(preset);
+            assert_eq!(hex(backdrop.top), top, "{preset:?}");
+            assert_eq!(hex(backdrop.bottom), bottom, "{preset:?}");
+        }
+        assert_eq!(LightingPreset::ALL.len(), expected.len());
     }
 }

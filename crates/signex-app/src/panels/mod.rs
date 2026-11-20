@@ -380,7 +380,7 @@ impl PanelKind {
             PanelKind::Snippets => "Snippets",
             PanelKind::Todo => "To-Do",
             PanelKind::Wiki => "Wiki",
-            PanelKind::OutputJobs => "Output Jobs",
+            PanelKind::OutputJobs => "Export Jobs",
             PanelKind::Library => "Library",
             PanelKind::SchLibrary => "SCH Library",
             PanelKind::FootprintLibrary => "Footprint Library",
