@@ -9,7 +9,6 @@ define_ids! {
     DIALOG_ANNOTATE_REPREFIX_PARTS = "dialog-annotate-reprefix-parts";
     DIALOG_AUTOSAVE_RECOVERY_RESTORE = "dialog-autosave-recovery-restore";
     DIALOG_AUTOSAVE_RECOVERY_LATER = "dialog-autosave-recovery-later";
-    DIALOG_BOM_EXPORT = "dialog-bom-export";
     DIALOG_UNSAVED_DISCARD_ALL = "dialog-unsaved-discard-all";
     DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING = "dialog-create-child-sheet-open-existing";
     DIALOG_CREATE_CHILD_SHEET_BROWSE = "dialog-create-child-sheet-browse";

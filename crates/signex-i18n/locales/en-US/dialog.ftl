@@ -194,7 +194,6 @@ dialog-annotate-reprefix-parts =
 # Autosave recovery: load the recovered copy as unsaved edits.
 dialog-autosave-recovery-restore = Restore
 dialog-autosave-recovery-later = Decide later
-dialog-bom-export = Export…
 # Closing a project or quitting with unsaved documents.
 dialog-unsaved-discard-all = Discard All
 # Create Sheet: the file already exists; open it instead.
