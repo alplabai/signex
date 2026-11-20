@@ -8,23 +8,46 @@
 //! every supported extension and reports failures.
 
 use std::ffi::OsString;
+use std::io;
 use std::path::{Path, PathBuf};
 
-/// Paths named on the command line, resolved against `cwd`.
+/// Paths named on the command line, made absolute against `cwd`, the
+/// working directory, or the error reading it.
 ///
 /// `args` is argv *without* the program name. Anything starting with `-`
 /// is a flag this app does not own and is skipped, as is an empty
 /// argument. Extensions are deliberately not filtered: an unsupported
 /// file must reach the open flow so the user sees an error rather than an
 /// empty workspace.
-pub fn document_paths<I>(args: I, cwd: &Path) -> Vec<PathBuf>
+///
+/// A relative path is never passed on as relative: a sheet opened from one
+/// has no folder, so its child-sheet references resolve against nothing.
+/// When the working directory cannot be read, the first relative path is
+/// refused with a message saying why; absolute paths need no working
+/// directory.
+pub fn document_paths<I>(args: I, cwd: Result<&Path, &io::Error>) -> Result<Vec<PathBuf>, String>
 where
     I: IntoIterator<Item = OsString>,
 {
     args.into_iter()
         .filter(|arg| !arg.is_empty() && !arg.to_string_lossy().starts_with('-'))
-        .map(|arg| cwd.join(PathBuf::from(arg)))
+        .map(|arg| absolute(PathBuf::from(arg), cwd))
         .collect()
+}
+
+/// `path` as an absolute path, or why it cannot be made one.
+fn absolute(path: PathBuf, cwd: Result<&Path, &io::Error>) -> Result<PathBuf, String> {
+    if path.is_absolute() {
+        return Ok(path);
+    }
+    match cwd {
+        Ok(cwd) => Ok(cwd.join(path)),
+        Err(why) => Err(format!(
+            "cannot open {}: it is a relative path and the working directory \
+             cannot be read ({why}); pass an absolute path",
+            path.display()
+        )),
+    }
 }
 
 /// What the command line asks the process to do.
@@ -34,14 +57,18 @@ pub enum StartupAction {
     PrintVersion,
     /// `--help` / `-h`: print usage and exit without a window.
     PrintHelp,
-    /// Launch the GUI, opening these documents (possibly none).
+    /// Launch the GUI, opening these documents (possibly none), every one
+    /// an absolute path.
     Launch(Vec<PathBuf>),
+    /// A document path cannot be resolved: print why and exit without a
+    /// window.
+    Refused(String),
 }
 
 /// Classify argv (without the program name). `--version` / `--help` win
 /// over everything else, in argument order, so the early-exit paths never
 /// need a display or GPU.
-pub fn startup_action<I>(args: I, cwd: &Path) -> StartupAction
+pub fn startup_action<I>(args: I, cwd: Result<&Path, &io::Error>) -> StartupAction
 where
     I: IntoIterator<Item = OsString>,
 {
@@ -53,7 +80,10 @@ where
             _ => {}
         }
     }
-    StartupAction::Launch(document_paths(args, cwd))
+    match document_paths(args, cwd) {
+        Ok(paths) => StartupAction::Launch(paths),
+        Err(why) => StartupAction::Refused(why),
+    }
 }
 
 /// Text printed by `--version`.
@@ -82,11 +112,11 @@ pub fn help_text() -> String {
 }
 
 /// [`startup_action`] over the real process argv and working directory.
-/// An unreadable working directory only costs relative-path resolution:
-/// absolute paths (what every OS launcher passes) still work.
+/// An unreadable working directory only refuses relative paths: absolute
+/// paths (what every OS launcher passes) still work.
 pub fn startup_action_from_env() -> StartupAction {
-    let cwd = std::env::current_dir().unwrap_or_default();
-    startup_action(std::env::args_os().skip(1), &cwd)
+    let cwd = std::env::current_dir();
+    startup_action(std::env::args_os().skip(1), cwd.as_deref())
 }
 
 #[cfg(test)]
@@ -99,15 +129,18 @@ mod tests {
 
     #[test]
     fn no_arguments_opens_nothing() {
-        assert!(document_paths(args(&[]), Path::new("/work")).is_empty());
+        assert_eq!(
+            document_paths(args(&[]), Ok(Path::new("/work"))),
+            Ok(vec![])
+        );
     }
 
     #[test]
     fn relative_path_resolves_against_cwd() {
         let cwd = Path::new("/work");
         assert_eq!(
-            document_paths(args(&["a/b.snxsch"]), cwd),
-            vec![cwd.join("a/b.snxsch")]
+            document_paths(args(&["a/b.snxsch"]), Ok(cwd)),
+            Ok(vec![cwd.join("a/b.snxsch")])
         );
     }
 
@@ -116,17 +149,17 @@ mod tests {
         let abs = std::env::temp_dir().join("p.snxprj");
         let got = document_paths(
             vec![abs.clone().into_os_string()],
-            Path::new("/somewhere/else"),
+            Ok(Path::new("/somewhere/else")),
         );
-        assert_eq!(got, vec![abs]);
+        assert_eq!(got, Ok(vec![abs]));
     }
 
     #[test]
     fn flags_and_empty_arguments_are_ignored() {
         let cwd = Path::new("/work");
         assert_eq!(
-            document_paths(args(&["--foo", "", "-x", "a.snxsch"]), cwd),
-            vec![cwd.join("a.snxsch")]
+            document_paths(args(&["--foo", "", "-x", "a.snxsch"]), Ok(cwd)),
+            Ok(vec![cwd.join("a.snxsch")])
         );
     }
 
@@ -134,12 +167,12 @@ mod tests {
     fn several_paths_keep_their_order() {
         let cwd = Path::new("/work");
         assert_eq!(
-            document_paths(args(&["b.snxsch", "a.snxpcb", "p.snxprj"]), cwd),
-            vec![
+            document_paths(args(&["b.snxsch", "a.snxpcb", "p.snxprj"]), Ok(cwd)),
+            Ok(vec![
                 cwd.join("b.snxsch"),
                 cwd.join("a.snxpcb"),
                 cwd.join("p.snxprj")
-            ]
+            ])
         );
     }
 
@@ -147,8 +180,8 @@ mod tests {
     fn unsupported_extension_is_passed_through_for_the_open_flow_to_report() {
         let cwd = Path::new("/work");
         assert_eq!(
-            document_paths(args(&["notes.txt"]), cwd),
-            vec![cwd.join("notes.txt")]
+            document_paths(args(&["notes.txt"]), Ok(cwd)),
+            Ok(vec![cwd.join("notes.txt")])
         );
     }
 
@@ -156,11 +189,11 @@ mod tests {
     fn version_flag_requests_version_even_with_paths() {
         let cwd = Path::new("/work");
         assert_eq!(
-            startup_action(args(&["a.snxsch", "--version"]), cwd),
+            startup_action(args(&["a.snxsch", "--version"]), Ok(cwd)),
             StartupAction::PrintVersion
         );
         assert_eq!(
-            startup_action(args(&["-V"]), cwd),
+            startup_action(args(&["-V"]), Ok(cwd)),
             StartupAction::PrintVersion
         );
     }
@@ -169,23 +202,69 @@ mod tests {
     fn help_flag_requests_help() {
         let cwd = Path::new("/work");
         assert_eq!(
-            startup_action(args(&["--help"]), cwd),
+            startup_action(args(&["--help"]), Ok(cwd)),
             StartupAction::PrintHelp
         );
-        assert_eq!(startup_action(args(&["-h"]), cwd), StartupAction::PrintHelp);
+        assert_eq!(
+            startup_action(args(&["-h"]), Ok(cwd)),
+            StartupAction::PrintHelp
+        );
     }
 
     #[test]
     fn no_early_exit_flag_launches_with_the_paths() {
         let cwd = Path::new("/work");
         assert_eq!(
-            startup_action(args(&["--foo", "a.snxsch"]), cwd),
+            startup_action(args(&["--foo", "a.snxsch"]), Ok(cwd)),
             StartupAction::Launch(vec![cwd.join("a.snxsch")])
         );
         assert_eq!(
-            startup_action(args(&[]), cwd),
+            startup_action(args(&[]), Ok(cwd)),
             StartupAction::Launch(vec![])
         );
+    }
+
+    /// #2619: with no readable working directory a relative sheet path is
+    /// refused by name, never passed on relative.
+    #[test]
+    fn a_relative_path_is_refused_when_the_working_directory_cannot_be_read() {
+        let unreadable = io::Error::new(io::ErrorKind::NotFound, "the folder was removed");
+        let why = document_paths(args(&["sheets/top.snxsch"]), Err(&unreadable))
+            .expect_err("a relative path has nothing to resolve against");
+        let shown = Path::new("sheets/top.snxsch").display().to_string();
+        assert!(why.contains(&shown), "{why}");
+        assert!(why.contains("working directory cannot be read"), "{why}");
+        assert!(why.contains("the folder was removed"), "{why}");
+        assert_eq!(
+            startup_action(args(&["top.snxsch"]), Err(&unreadable)),
+            StartupAction::Refused(
+                document_paths(args(&["top.snxsch"]), Err(&unreadable)).expect_err("refused")
+            )
+        );
+    }
+
+    /// #2619: an absolute path needs no working directory.
+    #[test]
+    fn an_absolute_path_opens_when_the_working_directory_cannot_be_read() {
+        let unreadable = io::Error::new(io::ErrorKind::NotFound, "the folder was removed");
+        let abs = std::env::temp_dir().join("top.snxsch");
+        assert_eq!(
+            startup_action(vec![abs.clone().into_os_string()], Err(&unreadable)),
+            StartupAction::Launch(vec![abs])
+        );
+    }
+
+    /// Every launched path is absolute, so a sheet always has a folder for
+    /// its child-sheet references.
+    #[test]
+    fn launched_paths_are_absolute() {
+        let cwd = std::env::temp_dir();
+        let StartupAction::Launch(paths) =
+            startup_action(args(&["a.snxsch", "sub/b.snxpcb"]), Ok(cwd.as_path()))
+        else {
+            panic!("expected a launch");
+        };
+        assert!(paths.iter().all(|path| path.is_absolute()), "{paths:?}");
     }
 
     #[test]

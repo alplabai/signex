@@ -167,6 +167,7 @@ impl Signex {
         });
         match placed {
             Ok(placed) => {
+                self.refresh_selection_on(&target);
                 let entries = placed.entries.len();
                 crate::diagnostics::log_info(format!(
                     "{LABEL}: placed sheet symbol '{}' for {} with {entries} sheet entr{}",
