@@ -18,6 +18,13 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — footprint & board sketch: parameters
+
+- **Sketch info bar** — in sketch mode, the footprint and board sketch show what is sketched, the plane and the grid step, with a **Parameters** button, at the canvas's top right (#189).
+- **Parameters table** — Name, Expression, Value, Unit and Used by for every sketch parameter; Add parameter; typing re-solves on each keystroke, and a row in error keeps the last good solve and shows its message; typing a letter offers the parameter names with their values (#189).
+- **Rename and delete parameters** — a row's ⋯ menu has Rename…, which renames every reference (whole names only), and Delete; deleting a used parameter asks first, naming its uses, and Replace with value puts its value in each use, as one undo step (#189).
+- **Make parameter** — a dimension's value becomes a named parameter the dimension reads, as one undo step, and the table opens on it (#189).
+
 ## [26.11.0] — 2026-11-17
 
 _The Community Preview release: the schematic and PCB editors are supported, the whole app moves to the Graphite light and dark interface, and Signex is now licensed under FSL-1.1-ALv2. The footprint, symbol and library editors and the board 3D view ship at an earlier stage._

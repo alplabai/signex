@@ -118,3 +118,58 @@ reads **Bake preview · Discard changes · Bake**:
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.
+
+## Parameters {#parameters}
+
+A sketch's parameters are named values its expressions read: dimensions,
+pattern counts and spacings, pad sizes and the other bake attributes
+(#189). They are kept per footprint (or per board sketch); there are no
+family tables shared between footprints.
+
+**The sketch info bar** sits at the canvas's top right in sketch mode,
+under the mode switcher and clear of the DOF chips: "Footprint sketch ·
+plane Top · grid 0.05 mm" (a board reads "Board shape · …"), and the
+**Parameters** button, which opens or closes the table.
+
+**The table** is a card over the canvas with one row per parameter:
+
+- **Name**, **Expression**, **Value**, **Unit** (mm, deg or count, the unit
+  family the expression resolves to) and **Used by** (the parameters,
+  dimensions, patterns, pads and other attributes whose expressions read
+  it).
+- **Add parameter** adds `param_1`, `param_2`, … (the first free name)
+  holding `1mm`, as one undo step.
+- Typing in Expression edits the parameter the same way the Properties
+  list does: each keystroke re-solves and is one undo step. While the
+  expression does not resolve (it does not parse, names an unknown
+  parameter, or forms a cycle), the drawing keeps its last solve, the row
+  is marked with the message, and Value shows the last good value. A row
+  whose expression is fine but reads a broken parameter says which one.
+- Typing a letter offers the parameter names that start with it, with
+  their values; picking one completes the name. Nothing is offered after a
+  number or a unit suffix (`0.5mm`).
+- The row's **⋯** menu has **Rename…** and **Delete** (decision fp-07).
+  Rename changes the name and every reference to it, whole names only
+  (`pitch` never touches `pitch2`), as one undo step; a name that is taken,
+  reserved (`pi`, the array indices `i` and `j`) or not a plain identifier
+  is refused with the reason. Delete of an unused parameter is immediate.
+  Delete of a used one asks first, naming its uses: **Replace with value**
+  puts the parameter's value (for example `0.65mm`) in place of each
+  reference and deletes it, as one undo step; **Cancel** keeps it.
+- **Esc** closes the open prompt, rename or row menu, then the table.
+
+**Make parameter** on a dimension (the constraint menu, m188) creates
+`dim_N` (`angle_N` for an angle) holding the dimension's current value
+with its unit, points the dimension at it, and opens the table on that
+row, as one undo step. A dimension that already reads exactly one
+parameter keeps it, and the table opens on that row.
+
+The rules live in the domain: `signex_expr::rename` edits a source token
+by token, and `signex_sketch::parameter_refs` walks every expression a
+sketch holds (its patterns name every field, so a new field does not
+compile until it is placed) for Used by, rename, delete and Make
+parameter.
+
+Not built yet: a Comment column (the parameter table stores no comment),
+Import from another footprint, and the live-checks pane beside the
+table. The compact Parameters list in Properties is unchanged.
