@@ -433,6 +433,18 @@ pub fn catalog() -> &'static [CatalogGroup] {
     CATALOG
 }
 
+/// The domain of the first of `limits` (the check's limit kinds) that has a
+/// column: where a finding of those limits, or a rule checking them, is
+/// shown. `None` when none has one (a short, an unconnected link).
+pub fn domain_of_limits(limits: &[signex_drc::LimitKind]) -> Option<Domain> {
+    limits.iter().find_map(|kind| {
+        let field = LimitField::ALL
+            .into_iter()
+            .find(|f| f.limit_kind() == *kind)?;
+        group_of(field).map(|g| g.domain)
+    })
+}
+
 /// The group whose column shows `field`.
 pub fn group_of(field: LimitField) -> Option<&'static CatalogGroup> {
     catalog()

@@ -15,7 +15,7 @@ use signex_types::project::NamedRuleSet;
 use signex_widgets::LengthFormat;
 use signex_widgets::constraint_grid::{
     CellRef, CellValue, CellValues, ColumnGroup, ColumnId, ColumnKind, ConstraintGrid, GridColumn,
-    GridMessage, GridRow, GroupId, Resolved, RowId, RowKind, ValueSource,
+    GridRow, GroupId, Resolved, RowId, RowKind, ValueSource,
 };
 
 pub(crate) use super::search::FindState;
@@ -233,10 +233,16 @@ impl RulesGrid {
 
     /// Lay out the rows from `source` and the domain's `scoped` rules. Rows
     /// that were collapsed stay collapsed; a class starts collapsed unless
-    /// one of its nets has a rule of its own. The selected cell stays
-    /// selected on its row (by `RowRef`, ids move), with what was typed in
-    /// it, so its drawing and a value set on it are kept.
-    pub(crate) fn build_rows(&mut self, source: RowSource, scoped: Vec<String>, i18n: &I18n) {
+    /// one of its nets has a rule of its own. Returns the selected cell on
+    /// its row's new id (by `RowRef`, ids move) with what was typed in it,
+    /// for the caller to select again with the real cell values, so its
+    /// drawing, a value set on it and the editor's opening text are kept.
+    pub(crate) fn build_rows(
+        &mut self,
+        source: RowSource,
+        scoped: Vec<String>,
+        i18n: &I18n,
+    ) -> Option<Reselect> {
         let selected = self
             .view
             .selected()
@@ -297,18 +303,11 @@ impl RulesGrid {
                 );
             }
         }
-        if let Some((row, column)) = selected
-            && let Some(at) = self.row_of(&row).map(|id| CellRef::new(id, column))
-        {
-            let _ = view.update(GridMessage::CellPressed(at), &NoCells, mm_format(i18n));
-            let after = match typed {
-                Some(text) => GridMessage::EditTextChanged(text),
-                None => GridMessage::EditCancelled,
-            };
-            let _ = view.update(after, &NoCells, mm_format(i18n));
-        }
         self.view = view;
         self.built_from = Some((source, scoped));
+        let (row, column) = selected?;
+        let cell = CellRef::new(self.row_of(&row)?, column);
+        Some(Reselect { cell, typed })
     }
 }
 
@@ -316,6 +315,14 @@ impl RulesGrid {
 /// length keeps `.` in every locale).
 pub(crate) fn mm_format(i18n: &I18n) -> LengthFormat<'_> {
     LengthFormat::new(i18n, signex_types::coord::Unit::Mm)
+}
+
+/// The cell selected before the rows were laid out again, on its new row
+/// id, and what was typed in it (`None` when untouched).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Reselect {
+    pub cell: CellRef,
+    pub typed: Option<String>,
 }
 
 /// No cell values: for view-state messages that read none.
@@ -723,14 +730,15 @@ pub(crate) fn scoped_on(table: &RuleTable, domain: Domain) -> Vec<String> {
         .collect()
 }
 
-/// The constraint sets applied to `row`'s scope, by name.
+/// The constraint sets applied to `row`'s scope, by name. Scopes are
+/// compared as read, so a hand-edited `class ==  "HV"` still names its row.
 pub(crate) fn sets_on(row: &RowRef, sets: &BTreeMap<String, NamedRuleSet>) -> Vec<String> {
     let Some(scope) = row.scope().filter(|s| *s != GridScope::All) else {
         return Vec::new();
     };
-    let text = signex_drc_dsl::table::scope_text(&scope.net_scope());
+    let net_scope = scope.net_scope();
     sets.iter()
-        .filter(|(_, set)| set.uses.iter().any(|u| u.scope.trim() == text))
+        .filter(|(_, set)| signex_drc_dsl::table::sets::applied_scopes(set).contains(&net_scope))
         .map(|(name, _)| name.clone())
         .collect()
 }

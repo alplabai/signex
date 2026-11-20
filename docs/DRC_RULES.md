@@ -243,7 +243,9 @@ row's own rule that the cell shows (the stricter of two equal rules), or adds
 one (`all_clearance`, `class_HV_track`, `net_GND_via`, `layer_L1_track`), and
 every other rule stays exactly as typed. A value the cell would still not
 show, because another rule of the row or the fab floor is stricter, is
-refused and the tab names that rule. A rule the hierarchy cannot express (a
+refused and the tab names that rule; a value equal to that rule's is taken.
+Pressing a cell names its rule in the detail, or none. A rule the hierarchy
+cannot express (a
 pattern, an object pair, a layer on a class, a condition or limit the grid
 has no column for), and a rule no cell shows (one that is off or that the
 compiler refuses, or one another rule of its row beats on every limit it

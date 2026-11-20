@@ -1354,3 +1354,164 @@ fn a_row_rebuild_keeps_the_selected_cell_and_its_drawing() {
         "the drawing's value reached sig_b: {text}"
     );
 }
+
+/// A cell press names the cell's own rule in the detail, or none: never
+/// the rule of the cell selected before.
+#[test]
+fn a_cell_with_no_rule_clears_the_detail_rule() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    select_sig_b(&mut app, id);
+    let empty = cell(&app, id, &RowRef::All, "clearance_min");
+    grid_msg(&mut app, id, GridMessage::CellPressed(empty));
+    assert_eq!(rules_tab(&app, id).selected, None, "All sets no clearance");
+}
+
+/// A value set on the drawing for a column this grid does not show is
+/// not written into the selected column.
+#[test]
+fn a_drawing_value_of_a_column_off_this_grid_writes_nothing() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as L;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    select_sig_b(&mut app, id);
+    let before = undo_steps(&app, id);
+    // A hole drawing on the Clearance grid, which has no hole column.
+    app.rules_tab_mut(id).drawing_target = Some(super::drawing::PreviewTarget::Rule {
+        kind: RuleKind::Hole,
+        values: vec![(LimitField::MinHole, 0.3)],
+        caption: String::new(),
+    });
+    for step in [
+        L::LabelPressed(0),
+        L::DraftEdited("0.5".into()),
+        L::DraftSubmitted,
+    ] {
+        let _ = app.act_on_rules_drawing(id, super::drawing::PreviewMsg::Labels(step));
+    }
+    assert_eq!(dsl(&app).as_deref(), Some(TEXT), "nothing written");
+    assert_eq!(undo_steps(&app, id), before);
+}
+
+/// A hand-edited set use with extra spaces still names its row.
+#[test]
+fn a_set_use_with_extra_spaces_still_names_its_row() {
+    let set = signex_drc_dsl::table::sets::new_set("min_clearance=0.8mm", None).unwrap();
+    let (_, mut set) =
+        signex_drc_dsl::table::sets::apply_set("", "hv", &set, "class == \"HV\"").unwrap();
+    set.uses[0].scope = "  class  ==   \"HV\" ".into();
+    let sets = std::collections::BTreeMap::from([("hv".to_string(), set)]);
+    assert_eq!(
+        super::grid::sets_on(&RowRef::Class("HV".into()), &sets),
+        ["hv".to_string()]
+    );
+    assert!(super::grid::sets_on(&RowRef::Class("LV".into()), &sets).is_empty());
+}
+
+/// After the rows are laid out again, the reopened editor holds the
+/// cell's own text, so clearing it and pressing Enter resets the cell.
+#[test]
+fn a_rebuild_keeps_the_editor_opening_text_so_a_clear_resets() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    open(&mut app);
+    let sig = cell(&app, id, &RowRef::Net("SIG".into()), "clearance_min");
+    grid_msg(&mut app, id, GridMessage::CellPressed(sig));
+    grid_msg(&mut app, id, GridMessage::EditTextChanged("0.5".into()));
+    answer(
+        &mut app,
+        "rules_add",
+        &["kind=clearance", "values=0.5mm", "scope=class == \"HV\""],
+    );
+    send(&mut app, RulesTabMsg::InheritedToggled { project_id: id });
+    let edit = grid(&app, id).view.edit().cloned().expect("still typing");
+    assert_eq!(edit.text, "0.5", "the typed text is kept");
+    assert!(!edit.opened.is_empty(), "opened with the cell's own value");
+    grid_msg(&mut app, id, GridMessage::EditTextChanged(String::new()));
+    grid_msg(&mut app, id, GridMessage::EditSubmitted);
+    let text = dsl(&app).expect("stored");
+    assert!(!text.contains("rule sig_b"), "the cell was reset: {text}");
+    assert!(
+        !text.contains("rule sig_a"),
+        "both SIG clearance rules: {text}"
+    );
+}
+
+/// The DRC panel's Rule link opens the Rules tab on the rule's domain with
+/// its cell selected; a base rule link opens the domain of its limit.
+#[test]
+fn the_drc_rule_link_lands_on_the_rule_and_its_domain() {
+    use crate::dock::DockMessage;
+    use crate::panels::{BaseRule, DrcPanelMsg, PanelMsg};
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id, _) = app_with_board(&dir);
+    let task = app.handle_pcb_drc_requested();
+    crate::task_driver::TaskDriver::new()
+        .settle(&mut app, task)
+        .expect("the run lands");
+    let rule = app
+        .pcb_drc_panel()
+        .expect("the board in view")
+        .rows
+        .into_iter()
+        .find(|row| row.rule.ends_with("sig_b"))
+        .expect("sig_b has findings")
+        .rule;
+    let drc = |app: &mut Signex, msg| {
+        let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::Drc(msg))));
+    };
+    drc(&mut app, DrcPanelMsg::RuleOpened(rule));
+    assert_eq!(app.rules_tab_in_window(true), Some(id));
+    let tab = rules_tab(&app, id);
+    assert_eq!(tab.grid.domain(), Domain::Clearance);
+    assert_eq!(tab.selected.as_deref(), Some("sig_b"));
+    let at = tab.grid.view.selected().expect("its cell is selected");
+    assert_eq!(tab.grid.row(at.row), Some(&RowRef::Net("SIG".into())));
+    assert_eq!(Some(at.column), tab.grid.column_named("clearance_min"));
+    assert!(tab.grid.view.edit().is_none(), "selected, not typed in");
+    assert!(tab.drawing_target.is_some(), "the rule's drawing");
+
+    drc(&mut app, DrcPanelMsg::BaseRuleOpened(BaseRule::TrackWidth));
+    assert_eq!(rules_tab(&app, id).grid.domain(), Domain::Physical);
+}
+
+/// `rules_list` names each rule's domain by its first limit's grid domain.
+#[test]
+fn rules_list_names_the_grid_domain_of_each_rule() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _id, _) = app_with_board(&dir);
+    store(
+        &mut app,
+        "rule gap on clearance require clearance >= 0.2mm then error
+rule tr on track require width >= 0.15mm then error
+rule ed on edge require clearance >= 0.3mm then error
+rule ho on hole require diameter >= 0.2mm then error
+rule sk on silk require pad_clearance >= 0.1mm then error
+rule sl on mask require sliver >= 0.1mm then error
+rule mx on mask require expansion >= 0.05mm then error
+rule cy on courtyard require spacing >= 0.2mm then error
+",
+    );
+    let list = answer(&mut app, "rules_list", &[]);
+    let domains: Vec<(&str, &str)> = list["rules"]
+        .as_array()
+        .expect("rules")
+        .iter()
+        .map(|r| (r["name"].as_str().unwrap(), r["domain"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        domains,
+        [
+            ("gap", "clearance"),
+            ("tr", "physical"),
+            ("ed", "manufacturing"),
+            ("ho", "manufacturing"),
+            ("sk", "manufacturing"),
+            ("sl", "manufacturing"),
+            ("mx", "mask"),
+            ("cy", "placement"),
+        ]
+    );
+}

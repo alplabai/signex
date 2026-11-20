@@ -146,9 +146,20 @@ impl Signex {
                 .collect();
             source.overridden = Some(own);
         }
-        if !state.grid.is_built_from(&source, &scoped) {
-            state.grid.build_rows(source, scoped, i18n);
+        if state.grid.is_built_from(&source, &scoped) {
+            return;
         }
+        let Some(reselect) = state.grid.build_rows(source, scoped, i18n) else {
+            return;
+        };
+        // Select it again with the real values, so the editor opens with
+        // the cell's own text and a reset still reads as a change.
+        self.update_grid_view(id, GridMessage::CellPressed(reselect.cell));
+        let after = match reselect.typed {
+            Some(text) => GridMessage::EditTextChanged(text),
+            None => GridMessage::EditCancelled,
+        };
+        self.update_grid_view(id, after);
     }
 
     /// Apply a view-state message to the grid widget.
@@ -230,7 +241,9 @@ impl Signex {
         };
         let editable = show.is_editable();
         let moved = tab.grid.view.selected() != Some(cell);
-        tab.selected = governing.or(tab.selected.take());
+        // The detail names the cell's rule, or none: never one the cell
+        // does not show.
+        tab.selected = governing;
         tab.edit = None;
         if moved {
             tab.drawing = Default::default();
@@ -241,6 +254,31 @@ impl Signex {
             return Task::none();
         }
         iced::widget::operation::focus(signex_widgets::constraint_grid::EDITOR_ID)
+    }
+
+    /// Select written rule `rule`, as the DRC panel's Rule link asks: the
+    /// cell of its first limit on its Scoped row, else on its scope's row,
+    /// so the drawing and "Which value wins" are the rule's. A rule with
+    /// no such cell on the domain is named in the detail only.
+    pub(crate) fn select_rules_rule(&mut self, id: ProjectId, rule: String) {
+        let table = self.rules_table(id);
+        let grid = &self.rules_tab_mut(id).grid;
+        let cell = table.row(&rule).and_then(|row| {
+            let column = column_of(grid, row.limits.first()?.field)?;
+            let at = grid.row_of(&RowRef::Scoped(rule.clone())).or_else(|| {
+                cells::GridScope::of(&row.scope, row.layer.as_deref())
+                    .and_then(|scope| grid.row_of_scope(&scope))
+            })?;
+            Some(CellRef::new(at, column))
+        });
+        match cell {
+            Some(cell) => {
+                // Selected, not opened for typing.
+                let _ = self.press_rules_cell(id, cell);
+                self.update_grid_view(id, GridMessage::EditCancelled);
+            }
+            None => self.rules_tab_mut(id).selected = Some(rule),
+        }
     }
 
     /// Enter in a cell: write it into the rule text, or say why not and
@@ -392,10 +430,15 @@ impl Signex {
         let Some(selected) = grid.view.selected() else {
             return task;
         };
-        let column = commit
-            .field
-            .and_then(|field| column_of(grid, field))
-            .unwrap_or(selected.column);
+        // A pair gap writes the selected column; a value of a column this
+        // grid does not show writes nothing.
+        let column = match commit.field {
+            None => selected.column,
+            Some(field) => match column_of(grid, field) {
+                Some(column) => column,
+                None => return task,
+            },
+        };
         let value = mm_text(commit.value_mm);
         self.write_rules_cell(id, CellRef::new(selected.row, column), &value);
         task

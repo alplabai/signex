@@ -186,8 +186,10 @@ pub(super) fn grid_scroll_id() -> iced::widget::Id {
 }
 
 impl Signex {
-    /// The project whose Rules tab the main window shows. A Rules tab is
-    /// not undocked (it would take the main window's shortcuts).
+    /// The project whose Rules tab the main window shows. Undocking a page
+    /// tab is refused today (`handle_undock_tab`, #1202), so only the main
+    /// window draws one; its drawing keys already follow the window that
+    /// shows it (`rules_drawing_key`), should that change.
     pub(crate) fn rules_tab_in_window(&self, is_main: bool) -> Option<ProjectId> {
         if !is_main {
             return None;

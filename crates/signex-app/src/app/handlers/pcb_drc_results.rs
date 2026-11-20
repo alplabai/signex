@@ -484,22 +484,10 @@ fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
 }
 
 /// The Rules tab domain that holds the rule a violation kind breaks: the
-/// domain of the catalog column group of that limit.
-fn rules_domain_of(kind: signex_drc::ViolationKind) -> Domain {
-    use signex_drc::ViolationKind as K;
-    match kind {
-        K::Clearance | K::Short | K::Unconnected | K::Keepout => Domain::Clearance,
-        K::TrackWidth | K::ViaDiameter | K::ViaDrill | K::ViaInPad => Domain::Physical,
-        K::EdgeClearance
-        | K::HoleSize
-        | K::AnnularRing
-        | K::HoleToHole
-        | K::MaskSliver
-        | K::SilkToPad
-        | K::SilkToSilk => Domain::Manufacturing,
-        K::MaskExpansion | K::PasteExpansion => Domain::Mask,
-        K::CourtyardOverlap => Domain::Placement,
-    }
+/// catalog domain of the limit it checks; Clearance for a kind no written
+/// limit sets (an unconnected link, a keepout).
+pub(crate) fn rules_domain_of(kind: signex_drc::ViolationKind) -> Domain {
+    signex_drc_dsl::table::catalog::domain_of_limits(kind.limits()).unwrap_or(Domain::Clearance)
 }
 
 /// One shown row: its key, rule, severity, nets, place, layers and waiver.

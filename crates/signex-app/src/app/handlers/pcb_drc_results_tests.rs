@@ -645,3 +645,47 @@ fn a_run_edited_during_its_check_logs_no_lapsed_waivers() {
         "{said:?}"
     );
 }
+
+/// A Rules link opens the catalog domain of the limit its rule checks, for
+/// every violation kind and base rule; one with no limit opens Clearance.
+#[test]
+fn rule_links_open_the_catalog_domain_of_the_limit_they_check() {
+    use signex_drc::ViolationKind as K;
+    use signex_drc_dsl::table::LimitField;
+    use signex_drc_dsl::table::catalog::{Domain, group_of};
+
+    use super::pcb_drc_results::rules_domain_of;
+    use crate::panels::BaseRule;
+
+    let domain_of = |kind: &signex_drc::LimitKind| {
+        LimitField::ALL
+            .into_iter()
+            .find(|f| f.limit_kind() == *kind)
+            .and_then(group_of)
+            .map(|g| g.domain)
+    };
+    for kind in K::ALL {
+        let want = kind
+            .limits()
+            .first()
+            .and_then(domain_of)
+            .unwrap_or(Domain::Clearance);
+        assert_eq!(rules_domain_of(kind), want, "{kind:?}");
+    }
+    for rule in BaseRule::ALL {
+        let want = rule
+            .fields()
+            .first()
+            .and_then(|f| group_of(*f))
+            .map_or(Domain::Clearance, |g| g.domain);
+        assert_eq!(rule.domain(), want, "{rule:?}");
+    }
+    assert_eq!(rules_domain_of(K::TrackWidth), Domain::Physical);
+    assert_eq!(rules_domain_of(K::EdgeClearance), Domain::Manufacturing);
+    assert_eq!(rules_domain_of(K::MaskSliver), Domain::Manufacturing);
+    assert_eq!(rules_domain_of(K::MaskExpansion), Domain::Mask);
+    assert_eq!(rules_domain_of(K::CourtyardOverlap), Domain::Placement);
+    assert_eq!(rules_domain_of(K::Unconnected), Domain::Clearance);
+    assert_eq!(BaseRule::Edge.domain(), Domain::Manufacturing);
+    assert_eq!(BaseRule::Courtyard.domain(), Domain::Placement);
+}
