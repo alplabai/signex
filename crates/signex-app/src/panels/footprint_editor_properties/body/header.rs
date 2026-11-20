@@ -227,7 +227,7 @@ where
     segmented(options, selected, segment_style(tokens), on_select)
 }
 
-/// A segmented control across the panel (pages, snapping scope).
+/// A segmented control across the panel (the snapping scope).
 pub(in crate::panels::footprint_editor_properties) fn full_width_segment<'a, V>(
     options: impl IntoIterator<Item = (V, Label<'a>)>,
     selected: V,

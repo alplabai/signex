@@ -364,7 +364,7 @@ editors-pattern-skip-letters = Skip I/O/Q/S/X/Z (IPC-7351)
 editors-pattern-start-row = Start row
 editors-pattern-start-col = Start col
 
-## Footprint Properties body: header, pages and sections (#124)
+## Footprint Properties body: header and sections (mockup row 124)
 # Header with nothing selected.
 editors-fp-props-title = Footprint
 # Status line under it. $pads is a whole number.

@@ -12,11 +12,11 @@
 //! Un-scrolled: the parent wraps the column in the scrollable.
 
 mod footprint_illustration;
-mod footprint_page;
+mod footprint_sections;
 mod header;
-mod sketch_page;
+mod sketch_sections;
 mod snap_illustration;
-mod snap_page;
+mod snap_sections;
 
 #[cfg(test)]
 mod tests;
@@ -163,7 +163,7 @@ fn view_board<'a>(
     col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, cx.i18n);
     col = super::snap_options::view_snap_options(col, cx, false);
     col = super::managers::view_grid_manager(col, cx);
-    col = col.push(footprint_page::units_row(cx));
+    col = col.push(footprint_sections::units_row(cx));
     if cx.fp.mode_kind == FootprintModeKind::Sketch {
         col = super::sections::view_sketch_sections(col, cx);
     }
@@ -172,8 +172,7 @@ fn view_board<'a>(
 
 /// Nothing selected: the Footprint header, the pad stack check, then every
 /// section in one scroll (Footprint, Snap & Grid, Sketch), each
-/// collapsible. Pages or one scroll is an open maintainer decision (m124);
-/// one scroll is the shipped behaviour.
+/// collapsible: one scroll, not pages (Caner, 2026-11-20, mockup row 124).
 fn view_nothing_selected<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
@@ -185,9 +184,9 @@ fn view_nothing_selected<'a>(
         cx.tokens,
     ));
     col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, i18n);
-    col = footprint_page::view(col, cx);
-    col = snap_page::view(col, cx);
-    col = sketch_page::view(col, cx);
+    col = footprint_sections::view(col, cx);
+    col = snap_sections::view(col, cx);
+    col = sketch_sections::view(col, cx);
     col.push(hint(cx))
 }
 

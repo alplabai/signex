@@ -1,4 +1,4 @@
-//! The Footprint page illustration: the pads with a light fill, the
+//! The Footprint sections' illustration: the pads with a light fill, the
 //! courtyard dashed around them, a Courtyard leader and the Expansion
 //! callout between the pads and the courtyard.
 

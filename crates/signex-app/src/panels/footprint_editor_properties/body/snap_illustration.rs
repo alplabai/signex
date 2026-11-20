@@ -1,4 +1,4 @@
-//! The Snap & Grid page illustration: the active grid around the origin
+//! The Snap & Grid sections' illustration: the active grid around the origin
 //! (fine and coarse, as lines or dots), the snap distance circle at a
 //! sample cursor and the grid point it snaps to, and the axis band while
 //! snapping to axes is on. Callouts for Snap Distance, Axis Snap Range and

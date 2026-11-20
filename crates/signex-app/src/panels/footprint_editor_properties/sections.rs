@@ -1,7 +1,8 @@
 //! The sketch sections: Sketch solve (a DOF pill in the header; entity and
 //! constraint counts, the last solve's iterations, residual and time, the
 //! redundant and conflicting constraints), Parameters and Solve warnings.
-//! The Sketch page shows them, and so does Sketch mode under a selection.
+//! The nothing-selected body shows them, and so does Sketch mode under a
+//! selection.
 
 use iced::widget::{Column, container, row};
 use iced::{Element, Length, Widget as _};

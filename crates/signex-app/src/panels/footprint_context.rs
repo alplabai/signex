@@ -238,7 +238,7 @@ pub struct FootprintEditorPanelContext {
     pub courtyard_extent_mm: Option<[f64; 4]>,
     /// How far the generated courtyard grows past the pads, in mm.
     pub courtyard_expansion_mm: f64,
-    /// The editor's pads as the Footprint page illustration draws them.
+    /// The editor's pads as the Footprint sections' illustration draws them.
     pub pad_outlines: Vec<PadOutlineSummary>,
     /// The sketch's solve state, as the canvas chip names it.
     pub sketch_state: SketchStateSummary,
@@ -747,7 +747,7 @@ pub struct MountingHoleProps {
     pub net: String,
 }
 
-/// One pad as the Footprint page illustration draws it.
+/// One pad as the Footprint sections' illustration draws it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PadOutlineSummary {
     /// Centre in mm.

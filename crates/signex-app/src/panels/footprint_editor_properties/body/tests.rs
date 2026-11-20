@@ -138,7 +138,7 @@ fn nothing_selected_shows_every_section_in_one_scroll() {
     ] {
         assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
     }
-    // No page switch, and the empty Settings header is dropped.
+    // No section switch, and the empty Settings header is dropped.
     for label in ["Snap & Grid", "Settings"] {
         assert!(!has(&texts, label), "{label:?} shown: {texts:#?}");
     }
