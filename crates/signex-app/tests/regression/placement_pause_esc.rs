@@ -20,8 +20,11 @@ fn esc(app: &mut Signex) {
 #[test]
 fn tab_edit_esc_then_the_next_wire_places_with_the_original_values() {
     let mut app = app_with_empty_sheet();
+    // The first-run tour claims Esc ahead of the placement pause.
+    app.ui_state.first_run_tour_open = false;
     let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
     let _ = app.update(Message::Tool(ToolMessage::PrePlacementTab));
+    assert!(app.interaction_state.active_canvas().placement_paused);
     for edit in [
         PanelMsg::SetPrePlacementWireWidth(WireWidthPreset::Large),
         PanelMsg::SetPrePlacementWireColor(Some(RED)),
