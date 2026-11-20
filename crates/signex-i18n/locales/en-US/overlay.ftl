@@ -1,11 +1,11 @@
 # Canvas overlays.
 
-# Placement Paused card: the key that ends the paused placement.
-overlay-placement-paused-esc-hint = Esc cancels placement.
+# Placement Paused banner: Esc resumes placing without the panel edits.
+overlay-placement-paused-esc-hint = Esc back to placing
 
 ## Graphite views (#2225)
 overlay-placement-paused-title = Placement Paused
-overlay-placement-paused-body = Editing properties in the panel. Click Resume to keep placing.
+overlay-placement-paused-body = Editing properties in the panel.
 
 ## Command palette (#2057)
 # Key caps of the palette's hint line.
@@ -57,3 +57,9 @@ overlay-read-only-badge = Read-only: written by a newer { -brand-name }
 
 # Over a window that a dialog in its own window has locked.
 overlay-locked-window-hint = A dialog is open: click to show it, Esc to cancel
+
+# Tooltip of the read-only badge: why the sheet cannot be edited and what to
+# do about it.
+overlay-read-only-badge-tooltip = This sheet was saved by a newer { -brand-name }. Edits are off so nothing it wrote is lost. Update { -brand-name } to edit it.
+# Key hint above the in-place text editor, shown for its first few uses.
+overlay-text-edit-hint = Enter apply · Esc cancel
