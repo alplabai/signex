@@ -12,6 +12,8 @@ mod checks;
 mod error;
 mod features;
 mod geometry;
+mod items;
+mod slot;
 
 #[cfg(test)]
 mod tests;
@@ -21,6 +23,8 @@ pub use checks::{
     outline_checks_after,
 };
 pub use error::BoardBakeError;
+pub use items::{bake_board_items, bake_board_with_items, baked_item_count};
+pub use slot::{Slot, slot_size};
 
 use std::collections::HashMap;
 
@@ -40,21 +44,32 @@ use geometry::boundary;
 /// Bake `sketch` into board geometry. `nets` is the board's net table: a
 /// mounting hole names its net, and the hole stores that net's number.
 pub fn bake_board(sketch: &SketchData, nets: &[NetDef]) -> Result<BakedBoard, BoardBakeError> {
+    solved(sketch, |ctx| baked(ctx, nets))
+}
+
+/// Resolve and solve `sketch` once and run `bake` on the result.
+pub(crate) fn solved<T>(
+    sketch: &SketchData,
+    bake: impl FnOnce(&Context<'_>) -> Result<T, BoardBakeError>,
+) -> Result<T, BoardBakeError> {
     let params = resolve(&sketch.parameters).map_err(BoardBakeError::Parameters)?;
     let solve = Solver::default()
         .solve(sketch, &params)
         .map_err(BoardBakeError::Solve)?;
-    let ctx = Context {
+    bake(&Context {
         sketch,
         solve: &solve,
         params: &params,
-    };
+    })
+}
+
+fn baked(ctx: &Context<'_>, nets: &[NetDef]) -> Result<BakedBoard, BoardBakeError> {
     Ok(BakedBoard {
-        outline: outline(&ctx)?,
-        keepouts: features::keepouts(&ctx)?,
-        cutouts: features::cutouts(&ctx)?,
-        holes: features::holes(&ctx, nets)?,
-        v_scores: features::v_scores(&ctx)?,
+        outline: outline(ctx)?,
+        keepouts: features::keepouts(ctx)?,
+        cutouts: features::cutouts(ctx)?,
+        holes: features::holes(ctx, nets)?,
+        v_scores: features::v_scores(ctx)?,
     })
 }
 
@@ -89,6 +104,11 @@ impl BoardBakeError {
             | Self::HoleNotACircle { entity }
             | Self::HoleDrill { entity, .. }
             | Self::UnknownNet { entity, .. }
+            | Self::NotASlot { entity }
+            | Self::PourNotCopper { entity }
+            | Self::AnchorNotAPoint { entity }
+            | Self::AnchorWithoutComponent { entity }
+            | Self::UnknownComponent { entity, .. }
             | Self::VScoreNotALine { entity }
             | Self::Expression { entity, .. } => Some(entity),
             Self::MissingPoint { point, .. } => Some(point),
