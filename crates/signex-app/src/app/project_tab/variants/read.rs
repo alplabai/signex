@@ -4,6 +4,7 @@
 //! by variants matrix by `signex_output::variant_matrix`. Off the UI thread;
 //! the result lands as `ProjectTabMsg::VariantPartsRead`.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ use signex_output::{ExportContext, ProjectMetadata, VariantMatrix};
 use super::super::general::tab_message;
 use super::super::{ProjectSection, ProjectTabMsg};
 use crate::app::core::parts_read_error::PartsReadError;
+use crate::app::handlers::menu::export::export_metadata_with;
 use crate::app::handlers::menu::export::placements::netlist_placements;
 use crate::app::project_sheets::{
     OpenSheets, assemble_project_sheets_quiet_from, open_sheets_snapshot, project_graph_quiet,
@@ -30,6 +32,9 @@ struct PartsRead {
     dir: PathBuf,
     fold: CaseFold,
     variants: Vec<String>,
+    /// The project's parameters, so a value evaluates on its sheet as the
+    /// BOM evaluates it (#1986).
+    metadata: ProjectMetadata,
 }
 
 impl Signex {
@@ -70,6 +75,7 @@ impl Signex {
             dir: project.dir().to_path_buf(),
             fold: crate::app::state::project_case::fold_of(Some(project)),
             variants,
+            metadata: export_metadata_with(Some(project), &HashMap::new()),
         };
         let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) else {
             return Task::none();
@@ -141,7 +147,7 @@ fn read_parts(read: PartsRead) -> Result<VariantMatrix, PartsReadError> {
     let keys: Vec<_> = keyed.iter().map(|(key, _)| key.clone()).collect();
     let ctx = ExportContext {
         sheets: Vec::new(),
-        metadata: ProjectMetadata::default(),
+        metadata: read.metadata,
         netlist: None,
         netlist_placements: netlist_placements(&keys, occurrences),
         netlist_sheets: keyed.into_iter().map(|(_, sheet)| sheet).collect(),
