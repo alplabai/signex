@@ -63,6 +63,15 @@ define_ids! {
     PANELS_NAVIGATOR_REJECTED = "panels-navigator-rejected";
     PANELS_NAVIGATOR_CYCLE = "panels-navigator-cycle";
     PANELS_NAVIGATOR_NOT_EXPANDED = "panels-navigator-not-expanded";
+    PANELS_NAVIGATOR_FILTER = "panels-navigator-filter";
+    PANELS_NAVIGATOR_NO_PROJECT_BODY = "panels-navigator-no-project-body";
+    PANELS_NAVIGATOR_OPEN_PROJECT = "panels-navigator-open-project";
+    PANELS_NAVIGATOR_HINT = "panels-navigator-hint";
+    PANELS_NAVIGATOR_NO_MATCH = "panels-navigator-no-match";
+    PANELS_NAVIGATOR_NO_MATCH_BODY = "panels-navigator-no-match-body";
+    PANELS_NAVIGATOR_CLEAR_FILTER = "panels-navigator-clear-filter";
+    PANELS_NAVIGATOR_SHEET_COUNT = "panels-navigator-sheet-count";
+    PANELS_NAVIGATOR_SHEET_NUMBER = "panels-navigator-sheet-number";
     PANELS_COMPONENTS_DETAILS_SELECT = "panels-components-details-select";
     PANELS_COMPONENTS_DETAILS_LOADING = "panels-components-details-loading";
     PANELS_COMPONENTS_DETAILS_NO_SYMBOL = "panels-components-details-no-symbol";
@@ -73,7 +82,6 @@ define_ids! {
     PANELS_COMPONENTS_DETAILS_NO_PARAMETERS = "panels-components-details-no-parameters";
     PANELS_STUB_VARIANTS = "panels-stub-variants";
     PANELS_STUB_OUTPUT_JOBS = "panels-stub-output-jobs";
-    PANELS_STUB_SCH_LIST = "panels-stub-sch-list";
     PANELS_STUB_BOM_STUDIO = "panels-stub-bom-studio";
     PANELS_STUB_FAVORITES = "panels-stub-favorites";
     PANELS_STUB_SNIPPETS = "panels-stub-snippets";

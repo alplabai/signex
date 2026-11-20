@@ -43,6 +43,7 @@ mod close_preview_tests;
 mod commit_pending;
 mod component_preview;
 mod components_panel;
+mod components_panel_rows;
 #[cfg(test)]
 mod datasheet_open_tests;
 mod datasheet_save;
@@ -143,7 +144,10 @@ impl Signex {
             self.sync_component_tab_titles();
             return task;
         }
-        Task::batch([task, self.finish_update()])
+        let finished = self.finish_update();
+        // After the view caches are current, so the rows asked for are the
+        // rows the panel now lists.
+        Task::batch([task, finished, self.request_components_thumbnails()])
     }
 
     fn route_library_message(&mut self, msg: LibraryMessage) -> Task<Message> {
@@ -622,6 +626,16 @@ impl Signex {
                 outcome,
             } => self.handle_pricing_refresh_finished(library_path, outcome),
             LibraryMessage::StockCopy(msg) => self.handle_stock_copy(msg),
+            LibraryMessage::ComponentsPanelRowStylePicked(style) => {
+                self.handle_components_panel_row_style_picked(style)
+            }
+            LibraryMessage::ComponentsPanelThumbnailsLoaded(read) => {
+                self.library.components_panel.thumbs.finish(read);
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelOpenProjectClicked => {
+                Task::done(Message::Menu(crate::menu_bar::MenuMessage::OpenProject))
+            }
         }
     }
 }

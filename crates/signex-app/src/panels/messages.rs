@@ -10,6 +10,8 @@ pub enum PanelMsg {
     /// [`PanelMsg::Tree`] because both trees number their rows from `[0]`:
     /// one shared variant would act on the wrong tree.
     Navigator(TreeMsg),
+    /// The Navigator panel's filter and empty-state buttons (Graphite mockup #54).
+    NavigatorPanel(super::NavigatorMsg),
     SetUnit(Unit),
     RunErc,
     /// A Messages row's command link was pressed: the command and the
@@ -726,6 +728,8 @@ pub enum PanelMsg {
     SwitchFootprintChoice(uuid::Uuid, String),
     /// The Net Inspector panel (#1269).
     NetInspector(super::NetInspectorMsg),
+    /// The Object List panel (#1259).
+    ObjectList(super::ObjectListMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

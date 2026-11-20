@@ -77,24 +77,39 @@ fn run_on_document(
         Ok(path) => path,
         Err(reason) => return (CommandOutcome::disabled(reason), Task::none()),
     };
-    let targets = &mut app.document_state.agent_edits;
-    let previous = targets.target.replace(path.clone());
-    // Inside an edit list the list owns the repaint; on its own the run does.
-    let own_repaint = previous.is_none();
-    if own_repaint {
-        targets.owed = DocumentPatch::NONE;
+    app.on_edit_target(&path, |app| run_on_target(app, edit))
+}
+
+impl Signex {
+    /// Run `edit` with the sheet at `path` as the edit target, as an agent's
+    /// edit list sets it: the checks, the commit, undo and dirty go to that
+    /// sheet, never to the active tab. The target and the repaint it owes
+    /// are put back on every path; no tab or focus changes.
+    pub(crate) fn on_edit_target<T>(
+        &mut self,
+        path: &std::path::Path,
+        edit: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let targets = &mut self.document_state.agent_edits;
+        let previous = targets.target.replace(path.to_path_buf());
+        // Inside an edit list the list owns the repaint; on its own the run
+        // does.
+        let own_repaint = previous.is_none();
+        if own_repaint {
+            targets.owed = DocumentPatch::NONE;
+        }
+        let out = edit(self);
+        let owed = if own_repaint {
+            std::mem::take(&mut self.document_state.agent_edits.owed)
+        } else {
+            DocumentPatch::NONE
+        };
+        self.document_state.agent_edits.target = previous;
+        if owed != DocumentPatch::NONE {
+            self.after_sheet_change(path, owed);
+        }
+        out
     }
-    let ran = run_on_target(app, edit);
-    let owed = if own_repaint {
-        std::mem::take(&mut app.document_state.agent_edits.owed)
-    } else {
-        DocumentPatch::NONE
-    };
-    app.document_state.agent_edits.target = previous;
-    if owed != DocumentPatch::NONE {
-        app.after_sheet_change(&path, owed);
-    }
-    ran
 }
 
 fn run_on_target(

@@ -425,6 +425,17 @@ pub enum UiMsg {
     /// Cross-sheet net navigation family (#1270-#1272): partner jumps, sheet
     /// history, net highlight and the hover insight.
     NetNav(super::net_nav::NetNavMsg),
+    /// The zoom pill's percentage was clicked: the preset menu opens, or
+    /// closes when it is up (Graphite mockup #64).
+    ZoomPresetsToggled,
+    /// The preset menu was dismissed by Esc or a click outside it.
+    ZoomPresetsDismissed,
+    /// A zoom level was picked from the preset menu, in percent of the
+    /// default scale; the canvas zooms to it about its centre.
+    ZoomPresetPicked(u16),
+    /// Fit All or Fit Selection was picked from the preset menu: the menu
+    /// closes and the command runs as from the menu bar.
+    ZoomPresetCommandPicked(crate::keymap::AppCommandId),
 }
 
 /// Move Selection dialog message family (ADR-0001 D3). Namespaced under

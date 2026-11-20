@@ -46,3 +46,16 @@ first unused `P1`, `P2`, ... on that symbol, and the direction follows the edge
 Properties. Placement is `Command::PlaceSheetPin`: one undo step, and a blank
 or repeated name on a symbol is refused. A click away from every symbol places
 nothing and says so in the Messages panel.
+
+## Navigator panel {#navigator-panel}
+
+The Navigator lists the project's sheet hierarchy (Graphite mockup #54)
+under a Sheets heading with the sheet count. Each row has the sheet icon, the sheet name, its file name in muted mono and,
+on the right, the page number from the project's sheet numbering; a child
+sheet placed twice has a row and a number per placement. The focused sheet
+has the accent bar and fill. Missing, unreadable, rejected and cycle rows
+read in the error colour; loose pages are muted italic. The Filter sheets
+field keeps the rows whose sheet name or file name holds the text, with
+their parents; when nothing matches, a card names the filter and offers
+Clear filter. With no project open the panel shows a card with
+Open Project…. A click highlights a row; a double click opens the sheet.

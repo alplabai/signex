@@ -12,12 +12,23 @@
 //! them does not move them onto a different sheet.
 //!
 //! [`TreeView`]: signex_widgets::tree_view::TreeView
+//!
+//! The panel draws the rows itself (`view.rs`) from the flat list
+//! `rows.rs` derives: sheet name, file name, page number, the Filter sheets
+//! field, and the markers of problem rows and loose pages.
 
-use std::collections::HashSet;
+mod rows;
+mod view;
+
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use signex_types::schematic::InstancePath;
 use signex_widgets::tree_view::{TreeIcon, TreeNode};
+
+pub use rows::NavigatorRow;
+pub(crate) use view::view;
 
 use crate::app::sheet_hierarchy::CaseFold;
 use crate::app::sheet_hierarchy::{
@@ -47,6 +58,47 @@ pub struct NavigatorModel {
     pub selected: Option<Vec<usize>>,
     /// Previous click, for double-click detection.
     pub last_click: crate::double_click::DoubleClick<Vec<usize>>,
+    /// The page number of each sheet placement, as the project's sheet
+    /// numbering gives it; swapped in with `hierarchy`.
+    pub numbers: SheetNumbers,
+    /// The Filter sheets text; empty lists every row.
+    pub filter: String,
+}
+
+/// Page numbers by `(normalised sheet key, placement)`: one entry per
+/// placement, so a sheet placed twice has two numbers.
+pub type SheetNumbers = HashMap<(String, InstancePath), usize>;
+
+/// What happened in the Navigator panel besides its tree rows.
+#[derive(Debug, Clone)]
+pub enum NavigatorMsg {
+    FilterChanged(String),
+    /// The no-match card's Clear filter was pressed.
+    FilterCleared,
+    /// The no-project card's Open Project… was pressed.
+    OpenProjectPressed,
+}
+
+impl NavigatorModel {
+    /// The page number of the row at `tree_path`; `None` for a row that is
+    /// not a loaded sheet placement (missing, cycle, …) or that the
+    /// numbering does not reach.
+    pub fn number_at(&self, tree_path: &[usize]) -> Option<usize> {
+        let hierarchy = self.hierarchy.as_ref()?;
+        let node = hierarchy.node_at(tree_path)?;
+        if node.kind != SheetNodeKind::Present {
+            return None;
+        }
+        let placement = hierarchy.placement_at(tree_path)?;
+        self.numbers
+            .get(&(normalised_key(&node.path, hierarchy.fold), placement))
+            .copied()
+    }
+
+    /// How many sheet placements the hierarchy holds: the Sheets count.
+    pub fn sheet_count(&self) -> usize {
+        self.hierarchy.as_ref().map_or(0, |h| h.occurrences().len())
+    }
 }
 
 impl NavigatorModel {
@@ -445,7 +497,7 @@ mod tests {
             &[("name", "ADC".into())],
         );
         let texts: Vec<String> = crate::layout_probe::lay_out_texts(
-            crate::panels::projects::view_navigator(&ctx),
+            crate::panels::navigator::view(&ctx),
             iced::Size::new(360.0, 900.0),
         )
         .into_iter()
