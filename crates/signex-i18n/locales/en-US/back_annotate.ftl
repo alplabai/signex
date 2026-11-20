@@ -5,7 +5,7 @@
 back-annotate-title = Back Annotate Schematics
 # Under the title. $board is the board file, $project the project file.
 back-annotate-subtitle = From { $board } to the schematics of { $project }
-back-annotate-intro = Carries the board's designators and values to the schematic. Ticked rows are applied as one undo step; a sheet that is not open is changed in memory and marked unsaved. Nothing is saved until you save.
+back-annotate-intro = Carries the board's designators and values to the schematic. Ticked rows apply as one undo step; a sheet that is not open is changed in memory. Nothing is saved until you save.
 # The Design menu row on a board; $project is the project file.
 back-annotate-menu-update-in = Update Schematics in { $project }
 # The same row when no project is known for the document in view.
@@ -73,3 +73,18 @@ back-annotate-shared-warning = { $count ->
     [one] 1 designator would be on several parts; see Notes.
    *[other] { $count } designators would be on several parts; see Notes.
 }
+# Execute with the number of ticked changes it applies (#2533).
+back-annotate-execute-count = { $count ->
+    [one] Execute 1 change
+   *[other] Execute { $count } changes
+}
+# A rename that would put a designator on two parts starts unticked (AV-11).
+back-annotate-duplicates-unticked = { $count ->
+    [one] 1 rename would put a designator on two parts; it starts unticked.
+   *[other] { $count } renames would put a designator on two parts; they start unticked.
+}
+# The banner's link to the flagged row.
+back-annotate-show-row = Show
+# The caption of a flagged rename. $sheet is the sheet file of the part that has the designator.
+back-annotate-duplicate-on-sheet = { $designator } already exists on { $sheet }
+back-annotate-duplicate-exists = { $designator } already exists on another part

@@ -572,7 +572,32 @@ impl Signex {
             }
             AnnotateMsg::CloseDialog => self.handle_close_annotate_dialog(),
             AnnotateMsg::OrderChanged(order) => self.handle_annotate_order_changed(order),
-            AnnotateMsg::OpenResetConfirm => self.handle_open_annotate_reset_confirm(),
+            // The menu's Reset Schematic Designators is Reset & Renumber.
+            AnnotateMsg::OpenResetConfirm => {
+                self.handle_annotate_reset_pressed(signex_engine::AnnotateMode::ResetAndRenumber)
+            }
+            AnnotateMsg::ResetPressed(mode) => self.handle_annotate_reset_pressed(mode),
+            AnnotateMsg::ListViewPicked(view) => {
+                self.ui_state.annotate_session.list_view = view;
+                Task::none()
+            }
+            AnnotateMsg::ListFilterEdited(filter) => {
+                self.ui_state.annotate_session.filter = filter;
+                Task::none()
+            }
+            AnnotateMsg::SheetTickToggled(path) => {
+                self.handle_annotate_sheet_tick_toggled(path);
+                Task::none()
+            }
+            AnnotateMsg::AllSheetsTicked(on) => {
+                self.handle_annotate_all_sheets_ticked(on);
+                Task::none()
+            }
+            AnnotateMsg::FixedOptionsToggled => {
+                let session = &mut self.ui_state.annotate_session;
+                session.fixed_options_open = !session.fixed_options_open;
+                Task::none()
+            }
             AnnotateMsg::CloseResetConfirm => self.handle_close_annotate_reset_confirm(),
             AnnotateMsg::ToggleLock(uuid) => {
                 if self.ui_state.annotate_locked.contains(&uuid) {
@@ -652,6 +677,11 @@ impl Signex {
             }
             ErcMsg::PinMatrixCellCycled { row, col } => {
                 self.handle_pin_matrix_cell_cycled(row, col)
+            }
+            ErcMsg::ProfileMenuToggled => self.handle_erc_profile_menu_toggled(),
+            ErcMsg::ProfileMenuRowChosen(action) => {
+                self.ui_state.erc_profile_menu_open = false;
+                self.dispatch_erc_message(action.message())
             }
         }
     }

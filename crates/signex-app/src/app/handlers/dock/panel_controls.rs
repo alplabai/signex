@@ -257,11 +257,14 @@ impl Signex {
             crate::panels::PanelMsg::ErcWaiver(msg) => {
                 follow = self.handle_erc_waiver(msg);
             }
-            crate::panels::PanelMsg::FocusPrevErcDiagnostic => {
-                follow = self.handle_focus_erc_diagnostic_offset(-1);
+            crate::panels::PanelMsg::ErcView(msg) => {
+                self.handle_erc_panel_view(msg.clone());
             }
-            crate::panels::PanelMsg::FocusNextErcDiagnostic => {
-                follow = self.handle_focus_erc_diagnostic_offset(1);
+            crate::panels::PanelMsg::MessagesView(msg) => {
+                follow = self.handle_messages_panel(msg.clone());
+            }
+            crate::panels::PanelMsg::WaiverIdentityResolved(name) => {
+                self.handle_waiver_identity_resolved(name.clone());
             }
             crate::panels::PanelMsg::ToggleGrid => {
                 self.ui_state.grid_visible = !self.ui_state.grid_visible;

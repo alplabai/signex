@@ -364,11 +364,11 @@ pcb-footprint-enter-hint = Press Enter to apply the change.
 pcb-reannotate-title = Positional Re-Annotate
 # Under the title. $board is the board document's name.
 pcb-reannotate-subtitle = { $board }
-pcb-reannotate-intro = Numbers the board's parts by where they sit, from 1 within each prefix (R1, R2, … and C1, C2, …). Prefixes stay, and locked footprints keep their designators. Execute renames the parts on the board as one undo step; save the board to keep them.
-# The walk order and its two choices.
+pcb-reannotate-intro = Numbers the board's parts by where they sit, from 1 within each prefix. Prefixes stay; locked footprints keep their designators.
+# The walk order and its two choices (each card's hint is below them).
 pcb-reannotate-order = Order
-pcb-reannotate-order-columns = By X, then by Y (left to right; equal X top to bottom)
-pcb-reannotate-order-rows = By Y, then by X (top to bottom; equal Y left to right)
+pcb-reannotate-order-columns = By X, then by Y
+pcb-reannotate-order-rows = By Y, then by X
 # Where bottom-side parts fall in the numbering.
 pcb-reannotate-bottom = Bottom side
 pcb-reannotate-bottom-after = After the top side
@@ -482,3 +482,13 @@ pcb-reuse-block-refused = { $what } did nothing: { $why }
 pcb-reuse-blocks-unread = The project's reuse blocks could not be read: { $why }
 # A board menu row: place the block called $name around the selected part.
 pcb-reuse-block-place-row = Place Reuse Block "{ $name }"
+# Positional Re-Annotate, Graphite layout (#2533): the hints under the
+# Order cards, the preview heading and its toggle, the arrow between the
+# designators, the footer note and Execute with the rename count.
+pcb-reannotate-order-columns-hint = Left to right; equal X top to bottom
+pcb-reannotate-order-rows-hint = Top to bottom; equal Y left to right
+pcb-reannotate-preview = Preview
+pcb-reannotate-show-in-order = Show already in order
+pcb-reannotate-arrow = →
+pcb-reannotate-footer-note = One undo step; save the board to keep it.
+pcb-reannotate-execute-count = Execute { $count }

@@ -301,24 +301,34 @@ impl Signex {
     pub(crate) fn handle_open_annotate_dialog(&mut self) -> Task<Message> {
         self.ui_state.annotate_dialog_open = true;
         self.interaction_state.context_menu = None;
-        // Altium parity: these big modals live in their own OS window
-        // from the moment they open — no in-window overlay, no drag-off
-        // dance. `handle_detach_modal` is idempotent, so re-opening
-        // while a window already exists just no-ops.
+        self.reset_annotate_session();
+        // These big modals live in their own OS window from the moment they
+        // open. `handle_detach_modal` is idempotent, so re-opening while a
+        // window already exists just no-ops.
         self.handle_detach_modal(super::super::super::state::ModalId::AnnotateDialog)
     }
 
     pub(crate) fn handle_close_annotate_dialog(&mut self) -> Task<Message> {
         self.ui_state.annotate_dialog_open = false;
+        // The ticks belong to this dialog session: a later run from a menu
+        // covers every sheet.
+        self.reset_annotate_session();
         // A Re-prefix request belongs to this dialog session: leaving it
         // makes any lookup in flight and any open confirm stale.
         self.invalidate_reprefix();
         let close_confirm = self.drain_reprefix_window_close();
+        // So is an open Reset confirm: without the ticks its Run would
+        // cover every sheet.
+        let close_reset = if self.ui_state.annotate_reset_confirm {
+            self.handle_close_annotate_reset_confirm()
+        } else {
+            Task::none()
+        };
         let close = self.close_detached_modal(super::super::super::state::ModalId::AnnotateDialog);
-        Task::batch([close, close_confirm])
+        Task::batch([close, close_confirm, close_reset])
     }
 
-    /// Altium's "Reset Duplicate Designators" — find references that
+    /// Reset Duplicate Designators: find references that
     /// appear on more than one part across the WHOLE project and reset just
     /// those to `{prefix}?`. The project is the one assembler's answer; see
     /// `reset_duplicates.rs` for the numbering half.
@@ -334,5 +344,62 @@ impl Signex {
         // The cached preview rows were ordered under the old setting.
         self.recompute_annotate_entries();
         Task::none()
+    }
+
+    /// Forget the dialog session's view, filter and ticks; the reset the
+    /// confirm runs stays, as a confirm may be open over the dialog.
+    fn reset_annotate_session(&mut self) {
+        let session = &mut self.ui_state.annotate_session;
+        let reset_mode = session.reset_mode;
+        **session = crate::app::handlers::erc::AnnotateSession {
+            reset_mode,
+            ..Default::default()
+        };
+        self.recompute_annotate_entries();
+    }
+
+    /// A sheet row's tick was clicked: the file joins or leaves the run.
+    pub(crate) fn handle_annotate_sheet_tick_toggled(&mut self, path: std::path::PathBuf) {
+        let unticked = &mut self.ui_state.annotate_session.unticked;
+        if !unticked.remove(&path) {
+            unticked.insert(path);
+        }
+        self.recompute_annotate_entries();
+    }
+
+    /// The sheets table's header tick: every loaded sheet joins (`true`) or
+    /// leaves the run.
+    pub(crate) fn handle_annotate_all_sheets_ticked(&mut self, on: bool) {
+        let paths = self.ui_state.annotate_preview.sheet_paths();
+        let unticked = &mut self.ui_state.annotate_session.unticked;
+        if on {
+            unticked.clear();
+        } else {
+            unticked.extend(paths);
+        }
+        self.recompute_annotate_entries();
+    }
+
+    /// Reset All or Reset & Renumber was asked for: open the confirm for that
+    /// reset, with the preview loaded so it can name its scope (#76).
+    pub(crate) fn handle_annotate_reset_pressed(
+        &mut self,
+        mode: signex_engine::AnnotateMode,
+    ) -> Task<Message> {
+        self.ui_state.annotate_session.reset_mode = mode;
+        let open = self.handle_open_annotate_reset_confirm();
+        Task::batch([open, self.refresh_annotate_preview()])
+    }
+
+    /// The sheets the dialog's ticks leave out of an Annotate run. Empty
+    /// unless the dialog is open: a run from a menu covers every sheet.
+    pub(super) fn annotate_unticked_sheets(
+        &self,
+    ) -> std::collections::BTreeSet<std::path::PathBuf> {
+        if self.ui_state.annotate_dialog_open {
+            self.ui_state.annotate_session.unticked.clone()
+        } else {
+            Default::default()
+        }
     }
 }
