@@ -257,3 +257,39 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
   copper of that net. It reads no board area today, so the outline does not
   affect it.
 - A corpus golden for a board with a sketch (`SIGNEX_BLESS_CORPUS=1`).
+
+## Snapping to the board {#snapping-to-the-board}
+
+On a board sketch the cursor also snaps to the board drawn under the
+sketch (#2518, Graphite mockup #179): the outline's vertices and the
+nearest point on an outline edge, placed pads' centres, drilled pads'
+centres (plated and not), via centres, both ends of every track and the
+corners of component courtyards (`snap_board.rs`). The backdrop carries
+them (`BoardBackdrop::from_board`); a courtyard drawn as an arc or a
+circle is not carried yet.
+
+- **Point only.** A board-feature snap places the point there and lands
+  no constraint. The point does not follow the feature when the board
+  changes: references to board features are not decided yet.
+- **Priority.** A sketch Point within reach still wins; the board comes
+  next, before guides, intersections, the H / V and angle inference and
+  the grid. Among board features a point (vertex, centre, track end,
+  corner) wins over an outline edge, and a through-hole pad reads as a pad
+  rather than its hole.
+- **Reach.** The sketch Point snap's 8 px, in board mm at the current
+  zoom.
+- **Snap ▾.** The board sketch's Snap ▾ adds a Board features group: Snap
+  to board features (one switch for all) and one row per kind (Board
+  outline, Pad centres, Hole centres, Via centres, Track ends, Courtyard
+  corners). All are on by default; the kind rows grey out while the switch
+  for all is off. Like the other Snap ▾ rows they are the sketch editor's
+  snap options, not board data: they record no undo step, are not saved,
+  and start on again with the next sketch mode. The footprint
+  sketch has no board and does not show the group.
+- **Badge.** The badge names the feature: "Pad · J1-1", "Courtyard · J1",
+  "Board outline", under a hollow square glyph (see
+  [FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#snap-badges)).
+
+The backdrop also draws placed pads (top, bottom or Multi-Layer copper)
+and component courtyards faint, in the board palette's colours, which are
+the same in both Graphite themes.

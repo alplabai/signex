@@ -118,3 +118,26 @@ reads **Bake preview · Discard changes · Bake**:
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.
+
+## Snap badges {#snap-badges}
+
+While a drawing tool is armed, the cyan glyph at the cursor shows what the
+next click lands, and a pill beside it names it (Graphite mockup #188, "the
+badge names the target"; `canvas/draw/sketch/snap.rs`):
+
+| Snap | Glyph | Badge |
+|---|---|---|
+| A sketch point | ● | Coincident · pad 1 (the point is a pad's centre or one of its own points), else Coincident · point |
+| Horizontal / Vertical inference | ─ / │ | Horizontal / Vertical |
+| Angle | ◇ | Angle 45° (the slope as seen on screen, 0° to 179°) |
+| Intersection | + | Intersection |
+| Guide | none (the guide is drawn) | Guide |
+| A board feature (board sketch only) | ◻ | Pad · J1-1, Courtyard · J1, Board outline, … |
+| Grid, or no snap | none | none |
+
+The words come from the message catalog through the editor's canvas text,
+so they follow the app language. The pill takes the Graphite Dark chrome
+tokens (raised fill, strong line, text), since the board ground is Graphite
+Dark in both themes; the glyph keeps its cyan. Midpoint, Centre and the
+other snaps the mockup lists, and whether they land constraints, are not
+decided yet.
