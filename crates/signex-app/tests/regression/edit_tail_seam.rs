@@ -81,7 +81,9 @@ fn open_project(adapter: &mut TestAdapter, names: &[&str]) -> Vec<PathBuf> {
     assert_eq!(outcome, Outcome::Ran, "the project opens");
     adapter.deliver(pending).unwrap();
     for path in &paths {
-        let read = adapter.open_from_tree(path);
+        let read = adapter
+            .open_from_tree(path)
+            .expect("the project tree opens the sheet");
         adapter.deliver(read).unwrap();
     }
     paths
