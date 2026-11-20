@@ -1,7 +1,8 @@
-//! The symbol editor's Properties panel messages (#122, #123): its tab, the
-//! Pins tab filter and part chip and the illustration hover change only the
-//! panel state; `‹ Pins`, `+ Pin`, the Parts stepper and the Body choice act
-//! on the editor through the same paths as the canvas toolbar.
+//! The symbol editor's Properties panel messages (mockup rows 122 and 123):
+//! its tab, the Pins tab filter and part chip and the illustration hover
+//! change only the panel state; `‹ Pins`, `+ Pin`, the Parts stepper and the
+//! Body choice act on the editor through the same paths as the canvas
+//! toolbar.
 
 use super::*;
 use crate::library::editor::symbol::{PartStep, SymbolPropsMsg};
@@ -47,12 +48,14 @@ impl Signex {
             | SymbolPropsMsg::PinTableToggled
             | SymbolPropsMsg::IllustrationHovered(_) => return Task::none(),
         };
-        self.update(Message::Library(
+        // The library dispatcher, not `update`: no re-entry into the root
+        // loop, and the editor's edit guards still apply.
+        self.dispatch_library_message(
             crate::library::messages::LibraryMessage::PrimitiveEditorEvent {
                 path,
                 msg: crate::library::messages::PrimitiveEdit::Symbol(editor_msg),
             },
-        ))
+        )
     }
 
     /// Clear the active symbol editor's selection, so Properties shows the
