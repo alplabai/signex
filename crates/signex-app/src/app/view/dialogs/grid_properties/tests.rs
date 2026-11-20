@@ -86,7 +86,8 @@ fn ok_sends_apply_and_cancel_closes() {
 fn the_multiplier_caption_reads_the_coarse_spacing() {
     let st = draft("0.127", 5, GridDisplay::Dots, GridDisplay::Lines);
     assert_eq!(
-        coarse_caption(&st, en()).map(|c| c.into_string()),
+        // Fluent isolates the placeable; the words are what is checked.
+        coarse_caption(&st, en()).map(|c| c.into_string().replace(['\u{2068}', '\u{2069}'], "")),
         Some("coarse = 0.635".to_string())
     );
     let bad = draft("0", 5, GridDisplay::Dots, GridDisplay::Lines);
