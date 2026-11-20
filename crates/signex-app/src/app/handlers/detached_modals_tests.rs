@@ -608,18 +608,21 @@ fn copy_to_library_ends_with_cancel_then_new_library_and_no_empty_band() {
             .find(|t| t.text.contains("No writable library"))
             .expect("the empty-list hint");
         let gap = cancel.y - (hint.bounds.y + hint.bounds.height);
+        // The hint sits in a card (mockup row 134): its padding and border add to the
+        // gap, so the card's inset comes off before the old 48 px bound.
+        let card = crate::library::stock_copy::EMPTY_CARD_PAD_Y + crate::styles::HAIRLINE;
         assert!(
-            (0.0..=48.0).contains(&gap),
-            "{theme_id:?}: {gap} px between the hint and the footer"
+            (0.0..=48.0).contains(&(gap - card)),
+            "{theme_id:?}: {gap} px between the hint and the footer ({card} px card inset)"
         );
     }
 }
 
-/// Copy to Library with no writable library grows by one note line for each
+/// Copy to Library with no writable library grows by one banner for each
 /// note shown (an unavailable previous library, an error), and the notes
 /// stay above the footer.
 #[test]
-fn copy_to_library_notes_each_add_a_line_and_stay_above_the_footer() {
+fn copy_to_library_notes_each_add_a_banner_and_stay_above_the_footer() {
     let height_with = |previous: bool, error: bool| {
         let (mut app, _main) = test_app();
         open(&mut app, ModalId::LibraryStockCopy);
@@ -650,12 +653,37 @@ fn copy_to_library_notes_each_add_a_line_and_stay_above_the_footer() {
     let (none, scale) = height_with(false, false);
     let (one, _) = height_with(false, true);
     let (two, _) = height_with(true, true);
-    let line = crate::app::handlers::modal_sizing::NOTE_HEIGHT * scale;
+    // Each note is a banner (mockup row 134): one banner block, and more
+    // when its text wraps (the previous-library note names a path).
+    let banner = |text: &str| {
+        crate::app::handlers::modal_sizing::banner_height(
+            crate::app::handlers::erc::modal_size(ModalId::LibraryStockCopy).width,
+            crate::styles::Spacing::DEFAULT.l,
+            text,
+        ) * scale
+    };
+    let previous = crate::library::stock_copy::previous_note(
+        &signex_i18n::I18n::en_us(),
+        std::path::Path::new("/gone/Gone.snxlib"),
+    )
+    .into_string();
+    let block = crate::app::handlers::modal_sizing::BANNER_BLOCK * scale;
+    // The one-line error, written out: 7 px padding above and below, one
+    // 16.5 px body line (12 px x 1.375) and the 8.7 px gap above the banner.
+    let one_line_banner = (7.0 + 16.5 + 7.0 + 8.7) * scale;
     assert!(
-        (one - none - line).abs() <= 2.0,
-        "one note: {none} -> {one}"
+        (one - none - one_line_banner).abs() <= 2.0,
+        "one note: {none} -> {one}, a one-line banner is {one_line_banner} px"
     );
-    assert!((two - one - line).abs() <= 2.0, "two notes: {one} -> {two}");
+    assert!(
+        (banner("The copy could not be written") - one_line_banner).abs() <= 1.0,
+        "the sizing helper agrees for the one-line error"
+    );
+    assert!(
+        (two - one - banner(&previous)).abs() <= 2.0,
+        "two notes: {one} -> {two}"
+    );
+    assert!(two - one >= block - 2.0, "a note adds at least one banner");
 }
 
 fn quit_with_rows(rows: usize) -> (Signex, iced::window::Id) {
@@ -910,7 +938,10 @@ fn a_windowed_library_dialog_is_titled_by_its_state() {
     open(&mut app, ModalId::LibraryRecovery);
     assert_eq!(
         app.detached_modal_title(ModalId::LibraryRecovery),
-        crate::library::recovery::title(app.library.recovery.as_ref().expect("recovery"))
+        crate::library::recovery::title(
+            app.library.recovery.as_ref().expect("recovery"),
+            &app.ui_state.i18n
+        )
     );
     assert_ne!(
         app.detached_modal_title(ModalId::LibraryRecovery),

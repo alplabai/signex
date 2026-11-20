@@ -42,6 +42,11 @@ impl MissingLibraries {
     pub fn waiting_len(&self) -> usize {
         self.waiting.len()
     }
+
+    /// Project whose library the open Library Missing dialog is about.
+    pub fn open_owner(&self) -> Option<ProjectId> {
+        self.open_owner
+    }
 }
 
 impl LibraryState {

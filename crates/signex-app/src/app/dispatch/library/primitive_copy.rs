@@ -1,7 +1,9 @@
 //! The picker's offer of symbols that are in no library (#1841): list the
 //! project's own `.snxsym` files, and copy the chosen symbol into the
 //! target row's library before binding it, so a row never references a file
-//! outside its library. Reads and the copy run on workers; the library write
+//! outside its library. A symbol of a library that is not open can instead
+//! be linked: the library is opened and the row binds its symbol (lib-10).
+//! Reads and the copy run on workers; the library write
 //! takes its place in the library's write order. The original file is never
 //! touched. Every failure goes to the Messages panel and the picker's error
 //! line.
@@ -109,31 +111,96 @@ impl Signex {
         Task::none()
     }
 
-    /// "Open library" was answered yes: mount the `.snxlib` the symbol
-    /// belongs to through the usual mount request. The question stays up as
-    /// "Opening library…" until the mount lands ([`Self::picker_mount_settled`]);
-    /// the library's symbols then list under it and the user picks from there.
+    /// "Link without copying" was chosen (lib-10): mount the `.snxlib` the
+    /// symbol belongs to through the usual mount request, then bind the row
+    /// to that library's symbol. The question stays up as "Opening library…"
+    /// until the mount lands ([`Self::picker_link_after_mount`]). A library
+    /// that is already open binds at once.
     pub(super) fn handle_open_library_confirmed(&mut self) -> Task<Message> {
         let Some(picker) = self.library.primitive_picker.as_ref() else {
             return Task::none();
         };
-        let Some(library) = picker.copy_confirm.as_ref().and_then(|s| s.library.clone()) else {
+        let Some(symbol) = picker.copy_confirm.clone().filter(|s| s.library.is_some()) else {
             return Task::none();
         };
-        if picker.opening_library.is_some() {
+        if picker.opening_library.is_some() || picker.copying {
             return Task::none();
         }
+        let Some(library) = symbol.library.clone() else {
+            return Task::none();
+        };
         let mounted = self.library.library_at(&library).is_some();
         let Some(picker) = self.library.primitive_picker.as_mut() else {
             return Task::none();
         };
         picker.error = None;
-        if mounted {
-            picker.copy_confirm = None;
-        } else {
+        if !mounted {
             picker.opening_library = Some(library.clone());
+            return self.mount_added_libraries(vec![library]);
         }
-        self.mount_added_libraries(vec![library])
+        let pick = self.link_listed_symbol(&library, &symbol);
+        if let Some(picker) = self.library.primitive_picker.as_mut() {
+            picker.copy_confirm = None;
+        }
+        // Requested although already open: a mount request cancels a close
+        // still waiting on the library's writes (#1728), so the library the
+        // row now binds stays open. It also rescans it, as project open does.
+        Task::batch([self.mount_added_libraries(vec![library]), pick])
+    }
+
+    /// The pick that binds the row to `symbol` in the mounted library at
+    /// `path`, only when that library lists the symbol's uuid. Membership
+    /// comes from the directory the file sits in; the library may still have
+    /// skipped the file (it did not parse, or its uuid clashes), and a row
+    /// bound to a uuid the library does not hold would show Broken binding
+    /// from then on. Then the picker's error line says so and nothing binds.
+    fn link_listed_symbol(
+        &mut self,
+        path: &std::path::Path,
+        symbol: &LooseSymbol,
+    ) -> Task<Message> {
+        let Some(lib) = self.library.library_at(path) else {
+            return Task::none();
+        };
+        if lib.cached_symbols.iter().any(|s| s.uuid == symbol.uuid) {
+            return pick_task(signex_library::PrimitiveRef::new(
+                lib.library_id,
+                symbol.uuid,
+            ));
+        }
+        let reason = signex_i18n::t!(
+            &self.ui_state.i18n,
+            signex_i18n::ids::LIBRARY_PRIMITIVE_PICKER_NOT_LISTED,
+            "library" => lib.display_name.clone(),
+            "name" => symbol.name.clone()
+        )
+        .into_string();
+        crate::diagnostics::log_warning(reason.clone());
+        if let Some(picker) = self.library.primitive_picker.as_mut() {
+            picker.error = Some(reason);
+        }
+        Task::none()
+    }
+
+    /// The link a just-mounted library completes: when `path` is the library
+    /// the picker is opening for "Link without copying", the pick of that
+    /// library's symbol through the usual [`PrimitivePickerMsg::Pick`]. Call
+    /// it before [`Self::picker_mount_settled`], which drops the question.
+    pub(super) fn picker_link_after_mount(&mut self, path: &std::path::Path) -> Task<Message> {
+        let Some(picker) = self.library.primitive_picker.as_ref() else {
+            return Task::none();
+        };
+        if picker.opening_library.as_deref() != Some(path) {
+            return Task::none();
+        }
+        let Some(symbol) = picker
+            .copy_confirm
+            .clone()
+            .filter(|s| s.library.as_deref() == Some(path))
+        else {
+            return Task::none();
+        };
+        self.link_listed_symbol(path, &symbol)
     }
 
     /// A mount finished: if it is the library the picker is opening, end the
@@ -186,9 +253,11 @@ impl Signex {
             kind: picker.kind,
             target: picker.target.clone(),
         };
-        // A symbol that belongs to a library is opened, never copied.
+        // A symbol of a library that is not open copies like a loose one
+        // (lib-10): the copy reads its file, and a uuid the row's library
+        // already holds gets a fresh one.
         let (Some(symbol), Some(library_path)) = (
-            picker.copy_confirm.clone().filter(|s| s.library.is_none()),
+            picker.copy_confirm.clone(),
             picker
                 .target
                 .library_path()
@@ -196,7 +265,11 @@ impl Signex {
         ) else {
             return Task::none();
         };
-        if picker.copying || self.refuse_read_only_write(&library_path) {
+        // Not while the link is opening the other library.
+        if picker.copying
+            || picker.opening_library.is_some()
+            || self.refuse_read_only_write(&library_path)
+        {
             return Task::none();
         }
         let adapter = self
@@ -277,9 +350,7 @@ impl Signex {
             ));
             return refresh;
         }
-        refresh.chain(Task::done(Message::Library(
-            LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(reference)),
-        )))
+        refresh.chain(pick_task(reference))
     }
 
     fn copy_failed(&mut self, why: String) -> Task<Message> {
@@ -291,6 +362,13 @@ impl Signex {
         }
         Task::none()
     }
+}
+
+/// Bind `reference` exactly as a pick of it from the list would.
+fn pick_task(reference: signex_library::PrimitiveRef) -> Task<Message> {
+    Task::done(Message::Library(LibraryMessage::PrimitivePicker(
+        PrimitivePickerMsg::Pick(reference),
+    )))
 }
 
 fn read_loose_task(files: Vec<PathBuf>, from_browse: bool) -> Task<Message> {

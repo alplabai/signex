@@ -193,6 +193,15 @@ impl ErrorNotice {
         )
     }
 
+    /// An edit was refused because the library is open read-only: its Git
+    /// history is missing (Skip for now, mockup row 138).
+    pub fn history_missing(library: &str) -> Self {
+        Self::new(
+            ids::NOTICE_LIBRARY_READ_ONLY,
+            Translatable::new(ids::NOTICE_LIBRARY_HISTORY_MISSING_DETAIL).arg("library", library),
+        )
+    }
+
     /// A History restore did not happen.
     pub fn restore(detail: impl Into<Translatable>) -> Self {
         Self::new(ids::NOTICE_RESTORE_FAILED, detail)

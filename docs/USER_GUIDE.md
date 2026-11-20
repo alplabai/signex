@@ -193,10 +193,19 @@ part row opens its Component Preview tab.
 
 The stock library is read-only. Opening one of its **symbols** or
 **footprints** for editing does not open the original: the first time, a
-**Copy to Library** dialog asks which writable library receives a copy (or
-**New Library…** creates one), remembers the choice, and opens the copy for
-editing under the stock name. The stock original is never changed. If no
+**Copy to Library** dialog lists the writable libraries. A click on a library
+copies into it at once (or **New Library…** creates one); Signex remembers the
+choice and opens the copy for editing under the stock name. The stock original is never changed. If no
 writable library is open, the dialog says so and offers **New Library…**.
+
+**Pick Symbol** (and Pick Footprint, Pick Sim Model) binds a primitive to a
+component row. The list is grouped: each open library, then each library that
+holds one of the project's symbol files but is not open ("In library …
+(not open)"), then "Not in a library". A click on a row picks it. A symbol of
+a library that is not open asks **Link without copying** (the library opens
+and the row points at its symbol, so the link breaks if that library is not
+open) or **Copy into** the row's library. A symbol in no library can only be
+copied; the original file stays as it is. **Cancel** goes back to the list.
 
 **Typed values and the range filter.** A measurement such as a resistance or a
 capacitance is a number, an SI prefix and a unit, each chosen separately: you
@@ -205,6 +214,13 @@ fixed by the part's template or picked from a list. You do not type the unit,
 and `4k7` or `4.7uF` in the number field is refused with a message. The
 Library Browser opens the **Edit Component Details** modal for a measurement
 cell, and the component editor's **Parameters** tab edits the same way. In the
+modal the number and its prefix list form one field; a unit this version does
+not know is shown as written and kept. Parameters that come from the class
+template are marked **template** and cannot be removed there; your own
+parameters keep their **✕**. If the **Internal PN** you type is already used by
+another component in the library, the field turns red, says which table has
+it, and the footer counts the problem; **Save** waits until the PN is unique.
+A save the library refuses shows its reason in the same footer spot. In the
 Library Browser and in the **Place Component** picker, **Add range filter…**
 filters a measurement column with an operator (`≥`, `≤`, `=` or `between`), a
 number and a prefix, compared in base units, so 4.7 kΩ and 4700 Ω match. Rows
@@ -216,8 +232,12 @@ To place a part, open a schematic sheet, then either:
 - choose **Place ▸ Component…** (or **File ▸ Library ▸ Place Component…**,
   `P` then `P` in the default profile (`A` in Classic), or the Active Bar's
   **Part** button, which all open the same picker), select a part and press
-  **Place**; or
+  **Place**, or press `Enter` in the search field; or
 - press **Place** at the end of a part's row in the Components panel.
+
+The picker's header counts the open libraries and their parts. Its search
+field and **Add range filter…** share the top row, and the list shows each
+part's internal PN, lifecycle state, MPN and description.
 
 The part attaches to the cursor and follows it on the grid. While it is
 attached:
@@ -285,6 +305,21 @@ label. **Add document** appends one; **Make primary**, **Up**, **Down** and
 the one the schematic treats as the part's datasheet. Selecting a placed part
 lists all of its documents in the Properties panel. A document left empty is
 not saved.
+
+**Library updates.** When a schematic opens and some of its placed parts are
+older than their library rows, a library in the Personal workflow updates them
+silently, except a part with a conflict (below). Otherwise **Library Updates
+Available** opens, with a pill per change size (major, minor, patch) beside the
+count. Its table lists each part: the designator and Internal PN, the library,
+the version change (`1.4.2 → 2.0.0`) and a **Major**, **Minor** or **Patch**
+pill. Patch changes start ticked, minor and major changes unticked. Parts that
+share one library symbol share one tick. The checkbox in the table heading
+ticks every row, or clears them all when every row is ticked. When both your
+part and the library row changed a field, a line under the part shows
+**yours** and **library now**; choose **Keep mine** (the default) or **Use
+library value**, and answering ticks the part. **Update Selected Components**
+updates the ticked parts, each answer in the same **Undo** step as its part;
+**Skip All** and **Cancel** close without updating.
 
 **Copy and paste.** Select items and use **Edit ▸ Copy** or **Edit ▸ Cut**,
 then **Edit ▸ Paste**. The copy attaches to the cursor, centred on it and
@@ -723,11 +758,17 @@ The next successful commit records the pending files too.
 **Where a new library goes.** **New Library…** suggests
 `<project folder>/<project>-lib/<project>-lib.snxlib`: a folder of its own, made
 when the library is created, so that a library with version control gets its own
-repository and never touches the project's. If you tick **Enable version
-control (Git)** and pick the project folder itself while the project is already
-under version control, **Create Library** is refused with the reason, the
-dialog stays open, and nothing is written. Choose a folder of its own, or turn
-version control off for the library. A library with version control off at the
+repository and never touches the project's. After you pick the path, the
+**New Library** dialog shows it and asks whether the library gets version
+control (**Enable version control (Git)**, off by default) and, with Git on,
+**Use Git LFS for binary 3D models** (greyed while Git is off). If you turn on
+version control and pick the project folder itself while the project is already
+under version control, **Create Library** is refused: the dialog stays open with
+the reason in a red banner, **Create Library** is greyed, and nothing is
+written. **Choose another location…** in the banner closes the dialog and opens
+the save-as picker again (the version-control switches start off again there),
+or turn version control off to create the library where it is. A library with
+version control off at the
 new subfolder default is not committed by the project's own repository: its
 edits stay untracked by Signex in the project repo.
 

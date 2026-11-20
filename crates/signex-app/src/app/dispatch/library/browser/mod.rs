@@ -386,6 +386,23 @@ impl Signex {
             })
             .cloned();
         let template = template.as_ref();
+        // Save is held while another row holds the draft's Internal PN
+        // (lib-07): the view disables the button, and update refuses too.
+        let pn_conflict = if matches!(msg, BrowserEditMsg::Save) {
+            self.library
+                .library_browsers
+                .get(&library_path)
+                .and_then(|b| b.edit_modal.as_ref())
+                .and_then(|m| {
+                    crate::library::edit_row_modal::pn_conflict(
+                        self.library.library_at(&library_path)?,
+                        m.draft.internal_pn.as_str(),
+                        m.address.row_id,
+                    )
+                })
+        } else {
+            None
+        };
         if let Some(state) = self.library.library_browsers.get_mut(&library_path)
             && let Some(modal) = state.edit_modal.as_mut()
         {
@@ -524,6 +541,9 @@ impl Signex {
                         "This row is being saved; try again once the save has finished.",
                     );
                 }
+                // The modal already shows the clash under the field and in
+                // its footer; nothing is written.
+                BrowserEditMsg::Save if pn_conflict.is_some() => {}
                 BrowserEditMsg::Save => {
                     // Typed-but-not-Entered parameter edits live only in
                     // `param_buf`; commit them before the draft snapshot,

@@ -54,7 +54,7 @@ pub enum LibraryMessage {
     /// `project_path` is the project the library should attach to
     /// (the same file the original `CreateLibraryAt` carried);
     /// `lib_path` is the user's chosen `.snxlib/` directory path.
-    /// Opens the "Library Options" modal seeded with `(project_path,
+    /// Opens the New Library dialog seeded with `(project_path,
     /// lib_path, use_lfs = false)` so the user can opt into Git LFS
     /// for binary 3D models. Confirming the modal calls
     /// `crate::library::commands::register_pending_library` —
@@ -63,15 +63,15 @@ pub enum LibraryMessage {
         project_path: std::path::PathBuf,
         lib_path: std::path::PathBuf,
     },
-    /// "Library Options" modal — toggle the "Use Git LFS for binary
-    /// 3D models" checkbox. Default is off.
+    /// New Library dialog — toggle the "Use Git LFS for binary
+    /// 3D models" switch. Default is off.
     LibraryCreateOptionsToggleLfs,
-    /// Toggle the "Enable version control" checkbox on the New
-    /// Library Options modal. Off by default — fresh libraries land
+    /// Toggle the "Enable version control" switch on the New
+    /// Library dialog. Off by default — fresh libraries land
     /// as plain files; flipping this on triggers `git init` at
     /// create time.
     LibraryCreateOptionsToggleGit,
-    /// "Library Options" modal — Create Library button. Registers
+    /// New Library dialog — Create Library button. Registers
     /// a pending library via
     /// `commands::register_pending_library` and stashes the spec on
     /// `LoadedProject.pending_libraries`. The actual `.snxlib/`
@@ -79,9 +79,13 @@ pub enum LibraryMessage {
     /// (`commands::create_pending_library`), per the
     /// "wait for explicit user save" invariant.
     LibraryCreateOptionsConfirm,
-    /// "Library Options" modal — Cancel button (or Esc). Drops the
+    /// New Library dialog — Cancel button (or Esc). Drops the
     /// modal state without creating anything.
     LibraryCreateOptionsCancel,
+    /// New Library dialog — "Choose another location…" on the refusal
+    /// banner. Closes the dialog and reopens the New Library save-as
+    /// picker for the same project; nothing is written.
+    LibraryCreateOptionsRelocateRequested,
     /// F34 — Save-As dialog confirmed for a new symbol library file
     /// (`.snxsym`). Writes an empty `SymbolFile` to the picked path,
     /// refreshes the cached library file enumeration so the project
@@ -487,12 +491,13 @@ pub enum LibraryMessage {
     },
     /// Modal — pick a new sheet color preset.
     DocumentOptionsSetSheetColor(crate::panels::SheetColor),
-    /// Modal — toggle the visible-grid checkbox.
+    /// Modal — toggle the visible-grid switch.
     DocumentOptionsToggleGrid,
-    /// Modal — cycle the visible grid spacing.
-    DocumentOptionsCycleGridSize,
-    /// Modal — cycle the coordinate display unit.
-    DocumentOptionsCycleUnit,
+    /// Modal — a grid spacing preset (mm, one of
+    /// `crate::canvas::grid::GRID_SIZES_MM`) was picked.
+    DocumentOptionsGridSpacingPicked(f32),
+    /// Modal — a coordinate display unit was picked.
+    DocumentOptionsUnitPicked(signex_types::coord::Unit),
     /// Modal — apply the draft to the library and close.
     DocumentOptionsApply,
     /// Modal — drop the draft and close.
@@ -536,6 +541,9 @@ pub enum LibraryMessage {
     /// User dismissed the modal (Cancel / Esc / X). No state mutates;
     /// drift is left pinned and the schematic stays clean.
     LibraryUpdatesCancel,
+    /// The table's header checkbox was clicked: every row is cleared when
+    /// all are ticked, else every row is ticked.
+    LibraryUpdatesSelectAllToggled,
 
     // ── Components Panel (Stage 9 of v0.9-snxlib-as-file) ───────────
     /// Expand or collapse the library mounted at this root in the list.

@@ -367,6 +367,25 @@ pub(crate) fn lifecycle_label(state: signex_library::LifecycleState) -> &'static
     }
 }
 
+/// A lifecycle state's word from the catalog, for the controls that show it
+/// as text (the Edit Component State dropdown, the Place Component table).
+pub(crate) fn lifecycle_text(
+    i18n: &signex_i18n::I18n,
+    state: signex_library::LifecycleState,
+) -> signex_i18n::Localized {
+    use signex_i18n::ids;
+    use signex_library::LifecycleState as L;
+    let id = match state {
+        L::Draft => ids::LIBRARY_LIFECYCLE_DRAFT,
+        L::InReview => ids::LIBRARY_LIFECYCLE_IN_REVIEW,
+        L::Released => ids::LIBRARY_LIFECYCLE_RELEASED,
+        L::Deprecated => ids::LIBRARY_LIFECYCLE_DEPRECATED,
+        L::Obsolete => ids::LIBRARY_LIFECYCLE_OBSOLETE,
+        _ => ids::LIBRARY_LIFECYCLE_UNKNOWN,
+    };
+    signex_i18n::t!(i18n, id)
+}
+
 /// Pill tone of a lifecycle state.
 pub(crate) fn lifecycle_tone(state: signex_library::LifecycleState) -> styles::PillTone {
     use signex_library::LifecycleState as L;
