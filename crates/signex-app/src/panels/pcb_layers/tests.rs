@@ -105,14 +105,14 @@ fn plain(text: &str) -> String {
         .collect()
 }
 
-/// The context with System Colors opened: it starts closed (m103).
+/// The context with System Colors opened: it starts closed (mockup row 103).
 fn with_system_colors(mut ctx: PanelContext) -> PanelContext {
     ctx.collapsed_sections
         .insert("pcb_layers_system.open".to_string());
     ctx
 }
 
-/// m103: no title in the body (the dock's title bar names the panel), the
+/// mockup row 103: no title in the body (the dock's title bar names the panel), the
 /// search row with Used On, the Active | Set row and the sections. View
 /// From Bottom Side is in the more menu now.
 #[test]
@@ -149,7 +149,7 @@ fn the_tabs_the_search_and_the_sections_are_listed() {
     assert!(!texts(&ctx).iter().any(|t| t.text.starts_with("Mechanical")));
 }
 
-/// m103: System Colors starts closed; its header opens it.
+/// mockup row 103: System Colors starts closed; its header opens it.
 #[test]
 fn system_colors_start_closed_and_open_from_the_header() {
     let ctx = context(&PcbLayerView::default());
@@ -165,7 +165,7 @@ fn system_colors_start_closed_and_open_from_the_header() {
     assert!(listed(&with_system_colors(ctx), "Connection Lines"));
 }
 
-/// m103: each section header counts the rows it lists: two copper layers,
+/// mockup row 103: each section header counts the rows it lists: two copper layers,
 /// the eleven pairs with layers, six technical layers, Drill Drawing and
 /// Multi-Layer, and the fourteen system colours.
 #[test]
@@ -189,7 +189,7 @@ fn a_section_header_counts_its_rows() {
     }
 }
 
-/// m103: a section's eye hides every layer of the section, or shows them
+/// mockup row 103: a section's eye hides every layer of the section, or shows them
 /// all while one is hidden.
 #[test]
 fn a_section_eye_hides_or_shows_the_whole_section() {
@@ -289,7 +289,7 @@ fn a_name_click_picks_the_layer_and_its_eye_toggles_it() {
     );
 }
 
-/// #2363: a pair row has an eye per side; each hides only its side. m103:
+/// #2363: a pair row has an eye per side; each hides only its side. mockup row 103:
 /// the overlay pair reads Silkscreen.
 #[test]
 fn a_pair_row_eye_toggles_only_its_side() {
@@ -309,7 +309,7 @@ fn a_pair_row_eye_toggles_only_its_side() {
     assert_eq!(toggles(&right), [OVERLAY_BOTTOM]);
 }
 
-/// m103: a row Signex has no layer for is not listed (it was a greyed row
+/// mockup row 103: a row Signex has no layer for is not listed (it was a greyed row
 /// that sent nothing); it shows once the board has a layer for it.
 #[test]
 fn a_row_without_a_layer_is_not_listed() {
@@ -326,7 +326,7 @@ fn a_row_without_a_layer_is_not_listed() {
 }
 
 /// #2363: an open dot shows the colour card; a set colour is the layer's
-/// colour in this view, and its dot shows it. m103: the card lists the
+/// colour in this view, and its dot shows it. mockup row 103: the card lists the
 /// palette and a hex field holding the typed text.
 #[test]
 fn an_open_chip_shows_the_colours_and_a_set_colour_is_drawn() {
@@ -395,7 +395,7 @@ fn the_search_keeps_the_rows_whose_name_holds_it() {
     );
 }
 
-/// m103: a search that lists no row says so, and Clear empties it.
+/// mockup row 103: a search that lists no row says so, and Clear empties it.
 #[test]
 fn a_search_with_no_row_says_so_and_clears() {
     let ui = LayersPanelUi {
@@ -429,7 +429,7 @@ fn menu_open(view: &PcbLayerView) -> PanelContext {
 #[path = "menu_tests.rs"]
 mod menu;
 
-/// View From Bottom Side, now in the more menu (mockup m103), flips the
+/// View From Bottom Side, now in the more menu (mockup row 103), flips the
 /// view and closes the menu (`app::handlers::pcb_layers_panel::tests`).
 #[test]
 fn view_from_bottom_side_flips_the_view() {
@@ -507,7 +507,7 @@ fn a_tab_click_switches_to_view_options() {
     }
 }
 
-/// The On cell beside Single Layer turns the mode on. m103: the caption is
+/// The On cell beside Single Layer turns the mode on. mockup row 103: the caption is
 /// "Single Layer", the full name its tooltip.
 #[test]
 fn single_layer_mode_on_sends_the_toggle() {
@@ -557,7 +557,7 @@ fn an_object_row_hides_and_fades_its_kind() {
     assert!(left_of(&ctx, "Rooms").is_empty());
 }
 
-/// m103: Configuration is one labelled field above the sections, greyed
+/// mockup row 103: Configuration is one labelled field above the sections, greyed
 /// until presets exist; it sends nothing.
 #[test]
 fn the_configuration_field_is_greyed_and_sends_nothing() {
@@ -574,7 +574,7 @@ fn the_configuration_field_is_greyed_and_sends_nothing() {
     assert!(messages_on_click(panel(&ctx), WINDOW, "Default").is_empty());
 }
 
-/// m103: Show Grid is a switch beside its caption; it toggles the grid.
+/// mockup row 103: Show Grid is a switch beside its caption; it toggles the grid.
 #[test]
 fn the_show_grid_switch_toggles_the_grid() {
     let ctx = context_with(&PcbLayerView::default(), options());
@@ -592,7 +592,7 @@ fn a_click_on_the_show_grid_caption_toggles_the_grid() {
     assert_eq!(shown(&sent), shown(&[PanelMsg::ToggleGrid]));
 }
 
-/// m103: All Objects reads Mixed in the Transparency column while the
+/// mockup row 103: All Objects reads Mixed in the Transparency column while the
 /// kinds differ, and its eye then shows every kind; with every kind shown
 /// there is no Mixed.
 #[test]
@@ -635,7 +635,7 @@ fn percent_beside(ctx: &PanelContext, label: &str) -> LaidOutText {
         .unwrap_or_else(|| panic!("no percent beside {label}"))
 }
 
-/// m103: Mask and Dim show what the view draws today, greyed (nothing
+/// mockup row 103: Mask and Dim show what the view draws today, greyed (nothing
 /// sent), their percents lined up with the object rows'.
 #[test]
 fn mask_and_dim_show_todays_percentages() {
@@ -679,7 +679,7 @@ const ADDITIONAL_OPTIONS: [&str; 11] = [
     "Special Strings",
 ];
 
-/// m103: Additional Options is closed by default, its header counting the
+/// mockup row 103: Additional Options is closed by default, its header counting the
 /// options that are on (none is honoured yet); opened, it lists the eleven
 /// options as greyed checkboxes that send nothing.
 #[test]

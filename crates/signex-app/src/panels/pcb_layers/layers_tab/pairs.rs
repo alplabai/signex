@@ -1,4 +1,4 @@
-//! Component Layer Pairs (#2363, m103): Top | Layer | Bottom, each side
+//! Component Layer Pairs (#2363, mockup row 103): Top | Layer | Bottom, each side
 //! with its own eye and dot, the right side mirrored. A pair the board has
 //! no layer for (Coating, Component Center, Tenting, Value) is not listed;
 //! it shows once a layer exists for it.

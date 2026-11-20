@@ -589,7 +589,7 @@ chips are. Since #2373 Arcs picks free arcs, Texts strings, Pads free pads
 as well as footprint pads, and Other dimensions (`PickKind::of`).
 
 While any kind is off, the button carries a small accent badge at its
-top-right corner with the number of kinds that are off (mockup m108); there is no
+top-right corner with the number of kinds that are off (mockup row 108); there is no
 badge while every kind is on. Only kinds the board editor can pick count, so
 turning off a greyed kind (Rooms, 3D Bodies) does not change it. The badge is
 a layer over the bar that takes no clicks
@@ -634,7 +634,7 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   selected while one of its group's tools is armed on the board in the main
   window, as a schematic bar button is, and while its dropdown is open.
 - **Dropdown.** A right-click on a group with more than one row opens its
-  rows under a heading with the group's name in capitals (mockup m108). The tools
+  rows under a heading with the group's name in capitals (mockup row 108). The tools
   come first; a group's commands (Repour Selected and Repour All, Change
   Footprint) sit below a separator after them. The row the button shows is
   drawn current, with the accent-soft fill. A live row runs its command and
@@ -645,13 +645,13 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
 - **Glyphs.** Every button is an SVG glyph drawn in the bar's ink: Via, Pad,
   Dimension and Keepout use the board tool glyphs of their dropdown rows
   (`assets/icons/pcb/`), the via a ring around its drill hole and the pad a
-  rounded SMD pad with its centre (mockup m108). The View button and the
+  rounded SMD pad with its centre (mockup row 108). The View button and the
   View dropdown draw each turn with an arrow that turns the same way; the
   half turn uses the clockwise arrow and Reset View Rotation has no icon.
   The clockwise arrow's direction comes from the #2503 icon fix.
 - **Separators.** Components stands alone; Route, Tune, Via / Pad, Copper
   Areas and Copper Drawing form one run; Dimensions, Text and Graphics the
-  next (mockup m108).
+  next (mockup row 108).
 - **No live row.** A group whose rows are all greyed is one greyed button
   with that reason as its tooltip and no dropdown.
 - **Last used.** A tool armed from the group's dropdown, Place, a key or the
@@ -709,7 +709,7 @@ swatch is the layer's colour on this board.
 ## Layer tab menu
 
 A right-click on a layer tab under the board opens its menu (#2379, #2394,
-mockup m104). Every row has one 16 px icon column, so the labels line up
+mockup row 104). Every row has one 16 px icon column, so the labels line up
 whether or not a row has an icon:
 
 - Hide <layer> (eye crossed out) and Highlight <layer> (every other layer is
@@ -779,14 +779,14 @@ The strip under the board is 28 px tall and lists the tabs of "Layer tabs"
 above. The active layer's tab is filled with the soft accent and has the
 accent bar along its top. When the tabs are wider than the window the strip
 scrolls sideways with the thin scrollbar instead of widening the window
-(mockup m104). A layer token this build does not know keeps a tab under its
-own name, which picks nothing.
+(mockup row 104). A layer token this build does not know has no tab, as it
+has no row in the Layers panel (Caner, 2026-11-20).
 
 The button at the left end of the layer tabs names the set the tabs list and
 opens the set menu (#2394); it is drawn pressed while its menu is open. The
 menu has a LAYER SETS header, then All Layers, Signal Layers, Plane Layers,
 Non-signal Layers (every layer but copper), Mechanical Layers, then the sets
-the user saved, each with a "saved" hint at the right, then Save current as
+the user saved, each with a muted "saved" at the right, then Save current as
 set... (plus icon) and Manage sets.... The set the view shows has its check
 in the icon column. Picking a set shows its layers and hides every other
 listed layer (the board outline keeps its state), and the tabs list only the
@@ -811,7 +811,7 @@ layer and `reset_layer_colors` gives every layer the palette colour again
 
 ## Board view configuration
 
-The Layers panel configures the board view (#2363, #2480, mockup m103). The dock's title
+The Layers panel configures the board view (#2363, #2480, mockup row 103). The dock's title
 bar names it; its body starts with two tabs.
 
 **Layers & Colors**, top to bottom:
@@ -865,7 +865,9 @@ ring: the 24 colours of the board palette (the open layer's colour is
 ringed), a hex field (`#RRGGBB`) that recolours the layer as soon as it reads
 as a colour, and, while the layer has its own colour, Palette colour, which
 gives it the palette's again. A swatch or Palette colour closes the card, as
-does the card's close button or a second click on the dot. The colour is an
+does the card's close button, a second click on the dot or a switch to
+another board. An undo, a redo or a reset while the card is open puts the
+layer's colour back in the hex field; a half-typed colour stays. The colour is an
 override on top of the one board palette, saved with the board
 (`[board_options.layer_colors]`), one undo step; the canvas (the Board
 Outline colour draws the board edge too), the dot, the layer tab and the

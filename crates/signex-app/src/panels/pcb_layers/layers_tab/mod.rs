@@ -1,4 +1,4 @@
-//! The Layers & Colors tab (#2363, m103), top to bottom: the search row
+//! The Layers & Colors tab (#2363, mockup row 103), top to bottom: the search row
 //! (with Used On and the more button), the name row while a new layer set
 //! is named, the Active | Set row, All Layers, then the layers by section.
 

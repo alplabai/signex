@@ -1,4 +1,4 @@
-//! The View Options tab (#2363, mockup m103): the Configuration row, then
+//! The View Options tab (#2363, mockup row 103): the Configuration row, then
 //! General Settings, Object Visibility, Mask and Dim Settings and the
 //! Additional Options. Object Visibility and Mask and Dim share one grid of
 //! four columns, so their values line up. A control the board view cannot

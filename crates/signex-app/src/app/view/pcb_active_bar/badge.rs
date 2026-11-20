@@ -1,4 +1,4 @@
-//! The Selection Filter's badge on the PCB Active Bar (m108): the number of
+//! The Selection Filter's badge on the PCB Active Bar (mockup row 108): the number of
 //! object kinds a click or box cannot pick, pinned to the top-right corner
 //! of the filter button. No badge while every kind is on. The badge is a
 //! layer stacked over the bar, so the bar's buttons stay as they are; the

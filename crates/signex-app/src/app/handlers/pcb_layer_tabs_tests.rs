@@ -327,7 +327,7 @@ fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
             .len()
     };
     assert_eq!(traces(&app), 1, "the bottom track is no longer drawn");
-    // m104: a hidden layer has no tab.
+    // mockup row 104: a hidden layer has no tab.
     assert!(tab_right_click(&app, main, "Bottom Layer").is_none());
 
     hide_mechanical(&mut app);
@@ -386,7 +386,7 @@ fn the_tab_names_switch_and_the_numbers_row_change_the_strip() {
     assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
 }
 
-/// m104: hiding a layer from the Layers panel takes its tab out of the
+/// mockup row 104: hiding a layer from the Layers panel takes its tab out of the
 /// strip; Show all layers in a tab menu brings it back.
 #[test]
 fn a_hidden_layer_has_no_tab_and_show_all_layers_brings_it_back() {

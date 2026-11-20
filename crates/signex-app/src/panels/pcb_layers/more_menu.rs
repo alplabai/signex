@@ -1,4 +1,4 @@
-//! The more menu of the Layers panel (m103), opened in place by the more
+//! The more menu of the Layers panel (mockup row 103), opened in place by the more
 //! button beside the search field. It saves and deletes layer sets (a set is
 //! picked only in the Set dropdown of the Active row), holds Import... and
 //! Export... (greyed until a view can be saved to a file), View From Bottom

@@ -154,9 +154,9 @@ pcb-bar-align-tooltip = Align (click for the align and distribute menu)
 # cannot run yet (#2352).
 pcb-bar-component-unavailable = Place Component: not available on boards yet
 # The badge on the Selection Filter button: how many object kinds are off
-# (mockup m108). There is no badge while every kind is on.
+# (mockup row 108). There is no badge while every kind is on.
 pcb-bar-filter-off-count = { $count }
-# Heading of a tool group's dropdown on the PCB Active Bar (mockup m108), shown in
+# Heading of a tool group's dropdown on the PCB Active Bar (mockup row 108), shown in
 # capitals. $group is the group's key.
 pcb-bar-group =
     { $group ->

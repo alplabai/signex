@@ -1,4 +1,4 @@
-//! m103: what the Layers panel's own controls do to the board view: a
+//! mockup row 103: what the Layers panel's own controls do to the board view: a
 //! section's eye, a typed hex colour, and the more menu's Layer Stack....
 
 use std::path::PathBuf;
@@ -87,7 +87,7 @@ fn section_eye(app: &Signex, title: &str) -> Vec<PanelMsg> {
     sent
 }
 
-/// m103: the eye of Signal and Plane Layers hides every copper layer, and
+/// mockup row 103: the eye of Signal and Plane Layers hides every copper layer, and
 /// a second click shows them again.
 #[test]
 fn a_section_eye_hides_and_shows_its_layers() {
@@ -155,7 +155,7 @@ fn a_section_eye_leaves_the_rows_the_search_hides_alone() {
     );
 }
 
-/// m103: a dot opens the colour card with the layer's colour in the hex
+/// mockup row 103: a dot opens the colour card with the layer's colour in the hex
 /// field; a typed colour recolours the layer at once and the card stays
 /// open; a half-typed one changes nothing.
 #[test]
@@ -195,7 +195,7 @@ fn a_typed_hex_colour_recolours_the_layer_and_keeps_the_card_open() {
     assert_eq!(app.document_state.panel_ctx.pcb_layers_ui.picker, None);
 }
 
-/// m103: Layer Stack... in the more menu runs the Layer Stack command,
+/// mockup row 103: Layer Stack... in the more menu runs the Layer Stack command,
 /// which is live on a board.
 #[test]
 fn layer_stack_in_the_more_menu_opens_the_layer_stack() {

@@ -1,4 +1,4 @@
-//! The sections of Layers & Colors (#2363, m103): Signal and Plane Layers,
+//! The sections of Layers & Colors (#2363, mockup row 103): Signal and Plane Layers,
 //! Component Layer Pairs, Other Technical Layers, Other Layers (each with a
 //! count of the rows it lists and an eye for all of them) and System Colors
 //! (closed until opened).

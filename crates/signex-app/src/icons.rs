@@ -314,7 +314,7 @@ canonical_icon!(icon_dd_text_string, "dropdown/text_string.svg");
 canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
-// The layer tab menu under the board canvas (m104).
+// The layer tab menu under the board canvas (mockup row 104).
 canonical_icon!(icon_dd_draw_order, "dropdown/draw_order.svg");
 canonical_icon!(icon_dd_drill, "dropdown/drill.svg");
 canonical_icon!(icon_dd_eye, "dropdown/eye.svg");

@@ -1,4 +1,4 @@
-//! The Layers panel's own controls (#2363, m103): its tab, search, open
+//! The Layers panel's own controls (#2363, mockup row 103): its tab, search, open
 //! colour card, more menu and set name are panel state; a layer set picked,
 //! saved or deleted, a section's eye, a typed colour, Layer Stack... and the
 //! 3D switch act on the app as the layer set button, the eyes, a colour
@@ -17,7 +17,7 @@ impl Signex {
     /// Layer colour... (a layer tab's menu, `edit_layer_color`): the Layers
     /// panel opens on Layers & Colors, unfiltered, with the colour card of
     /// `layer` open under its row, its hex field at the layer's colour: the
-    /// board's one colour picker (#2363, m103).
+    /// board's one colour picker (#2363, mockup row 103).
     pub(crate) fn open_layer_colour(&mut self, layer: PcbLayer) -> Task<Message> {
         let ctx = &mut self.document_state.panel_ctx;
         let ui = &mut ctx.pcb_layers_ui;
