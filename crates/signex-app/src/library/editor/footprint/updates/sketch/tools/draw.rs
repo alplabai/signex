@@ -62,62 +62,8 @@ fn line(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
                 apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(line));
             });
 
-            // v0.22 Phase A2 — Auto-Horizontal/Vertical
-            // inference. If the line's slope is within ±5°
-            // of a cardinal axis, add the matching
-            // constraint so the alignment survives a drag.
-            // The cursor-snap engine already pulls the
-            // click onto the axis when within tolerance,
-            // so this just promotes the implicit alignment
-            // to an explicit constraint visible in the
-            // constraint list.
-            {
-                use signex_sketch::constraint::{Constraint, ConstraintKind};
-                use signex_sketch::id::ConstraintId;
-                const AXIS_THRESHOLD_DEG: f64 = 5.0;
-                let pos_of = |id: SketchEntityId| -> Option<(f64, f64)> {
-                    editor
-                        .primitive()
-                        .sketch
-                        .as_ref()
-                        .and_then(|s| s.entities.iter().find(|e| e.id == id))
-                        .and_then(|e| match e.kind {
-                            EntityKind::Point { x, y } => Some((x, y)),
-                            _ => None,
-                        })
-                };
-                if let (Some((x0, y0)), Some((x1, y1))) = (pos_of(first), pos_of(ctx.resolved_id)) {
-                    let dx = x1 - x0;
-                    let dy = y1 - y0;
-                    let len_sq = dx * dx + dy * dy;
-                    if len_sq > 1e-12 {
-                        let len = len_sq.sqrt();
-                        let sin_abs = (dy / len).abs();
-                        let cos_abs = (dx / len).abs();
-                        let thresh = AXIS_THRESHOLD_DEG.to_radians().sin();
-                        let kind = if sin_abs < thresh {
-                            Some(ConstraintKind::Horizontal { line: line_id })
-                        } else if cos_abs < thresh {
-                            Some(ConstraintKind::Vertical { line: line_id })
-                        } else {
-                            None
-                        };
-                        if let Some(k) = kind {
-                            let constraint = Constraint {
-                                id: ConstraintId::new(),
-                                kind: k,
-                            };
-                            editor.with_parts(|state, primitive| {
-                                apply_sketch_edit_with_warnings(
-                                    state,
-                                    primitive,
-                                    SketchEdit::AddConstraint(constraint),
-                                );
-                            });
-                        }
-                    }
-                }
-            }
+            // v0.22 Phase A2 — the auto H / V of a near-axis line.
+            super::inference::land_axis(editor, ctx, line_id, first);
 
             // v0.16.1 — chain: keep the Line tool active
             // and use this click's endpoint as the next

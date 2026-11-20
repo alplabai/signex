@@ -103,6 +103,32 @@ pub enum SketchTool {
     Extend,
     /// Linear Pattern: click the source, a one-row `ArrayKind::Linear`.
     LinearPattern,
+    /// Slot: click one end's centre, then the other's (the dimension input
+    /// is the centre distance), then a third click sets the half width.
+    Slot,
+    /// Regular polygon: click the centre, then the first vertex; the
+    /// dimension input is the side count (empty is 6).
+    Polygon,
+}
+
+impl SketchTool {
+    /// The tools that place new geometry, from the Create menu. Holding
+    /// Ctrl while one is armed places without inference (#188).
+    pub fn is_drawing(self) -> bool {
+        matches!(
+            self,
+            Self::Point
+                | Self::Line
+                | Self::Rectangle
+                | Self::RoundedRectangle
+                | Self::Circle
+                | Self::Arc
+                | Self::EdgeArc
+                | Self::TangentArc
+                | Self::Slot
+                | Self::Polygon
+        )
+    }
 }
 
 /// Transient per-tool gesture state. The canvas Program reads + writes
@@ -168,5 +194,18 @@ pub enum ToolPending {
     /// Chamfer, first Line picked. Awaiting the second Line.
     ChamferFirst {
         line: signex_sketch::id::SketchEntityId,
+    },
+    /// Slot, the first centre placed; awaiting the second.
+    SlotFirst {
+        a: signex_sketch::id::SketchEntityId,
+    },
+    /// Slot, both centres placed; the next click sets the half width.
+    SlotSecond {
+        a: signex_sketch::id::SketchEntityId,
+        b: signex_sketch::id::SketchEntityId,
+    },
+    /// Polygon, the centre placed; the next click is the first vertex.
+    PolygonCentre {
+        centre: signex_sketch::id::SketchEntityId,
     },
 }

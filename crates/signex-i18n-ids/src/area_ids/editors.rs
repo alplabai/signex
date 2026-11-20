@@ -148,4 +148,6 @@ define_ids! {
     EDITORS_SKETCH_TARGET_BOARD_OUTLINE = "editors-sketch-target-board-outline";
     EDITORS_SKETCH_TARGET_MOUNTING_HOLES = "editors-sketch-target-mounting-holes";
     EDITORS_SKETCH_BAKE_COUNT = "editors-sketch-bake-count";
+    EDITORS_SKETCH_TOOL_SLOT = "editors-sketch-tool-slot";
+    EDITORS_SKETCH_TOOL_POLYGON = "editors-sketch-tool-polygon";
 }

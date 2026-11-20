@@ -38,6 +38,8 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 ///   constraint will land on the new Line.
 /// - `◇` (cyan diamond) — `SnapKind::Angle` — angle-snapped to the
 ///   nearest 15° increment.
+/// - `◐` / `⊙` — `SnapKind::Midpoint` / `SnapKind::Centre` (#188): the
+///   click lands a Midpoint, or a Coincident on the centre.
 /// - Guide / Grid / Raw — silent (Guide already paints its line;
 ///   Grid + Raw aren't actionable hints).
 pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_snap_glyph(
@@ -115,6 +117,26 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_snap_glyp
             let path = Path::rectangle(Point::new(p.x - 6.0, p.y - 6.0), Size::new(12.0, 12.0));
             frame.stroke(&path, stroke);
         }
+        SnapKind::Midpoint(_) => {
+            // ◐: a ring with its left half filled (mockup #188).
+            let r = 6.0;
+            let half = Path::new(|b| {
+                b.arc(canvas::path::Arc {
+                    center: Point::new(p.x, p.y),
+                    radius: r,
+                    start_angle: iced::Radians(std::f32::consts::FRAC_PI_2),
+                    end_angle: iced::Radians(3.0 * std::f32::consts::FRAC_PI_2),
+                });
+                b.close();
+            });
+            frame.fill(&half, c);
+            frame.stroke(&Path::circle(Point::new(p.x, p.y), r), stroke);
+        }
+        SnapKind::Centre(_) => {
+            // ⊙: a ring around a dot (mockup #188).
+            frame.stroke(&Path::circle(Point::new(p.x, p.y), 6.0), stroke);
+            frame.fill(&Path::circle(Point::new(p.x, p.y), 2.0), c);
+        }
         SnapKind::Guide | SnapKind::Grid | SnapKind::Raw => {}
     }
 }
@@ -140,6 +162,13 @@ pub(crate) struct SnapBadgeWords<'a> {
     pub board_via: &'a str,
     pub board_track: &'a str,
     pub board_courtyard: &'a str,
+    pub midpoint: &'a str,
+    pub centre: &'a str,
+    /// The target of a Midpoint snap on a Line of no pad.
+    pub line: &'a str,
+    /// The target of a Centre snap on a Circle or an Arc of no pad.
+    pub circle: &'a str,
+    pub arc: &'a str,
 }
 
 impl<'a> SnapBadgeWords<'a> {
@@ -160,6 +189,11 @@ impl<'a> SnapBadgeWords<'a> {
             board_via: &t.snap_board_via,
             board_track: &t.snap_board_track,
             board_courtyard: &t.snap_board_courtyard,
+            midpoint: &t.snap_midpoint,
+            centre: &t.snap_centre,
+            line: &t.snap_line,
+            circle: &t.snap_circle,
+            arc: &t.snap_arc,
         }
     }
 }
@@ -197,6 +231,8 @@ pub(crate) fn snap_badge_label(
             BoardFeatureKind::TrackEnd => words.board_track,
             BoardFeatureKind::Courtyard => words.board_courtyard,
         })),
+        SnapKind::Midpoint(_) => Some(named(words.midpoint)),
+        SnapKind::Centre(_) => Some(named(words.centre)),
         SnapKind::Grid | SnapKind::Raw => None,
     }
 }
@@ -225,8 +261,25 @@ pub(crate) fn snap_badge_target(
             .board_backdrop
             .as_deref()
             .and_then(|board| snap_board::feature_name(board, feature, pos)),
+        SnapKind::Midpoint(id) | SnapKind::Centre(id) => Some(curve_name(sketch, id, words)),
         _ => None,
     }
+}
+
+/// A Midpoint or Centre target: the pad the curve belongs to ("pad 1"),
+/// else what it is ("line", "circle", "arc").
+fn curve_name(sketch: &SketchData, id: SketchEntityId, words: &SnapBadgeWords<'_>) -> String {
+    if let Some(number) = pad_number_of(sketch, id) {
+        return format!("{} {number}", words.pad);
+    }
+    use signex_sketch::entity::EntityKind;
+    let kind = sketch.entities.iter().find(|e| e.id == id).map(|e| &e.kind);
+    let word = match kind {
+        Some(EntityKind::Circle { .. }) => words.circle,
+        Some(EntityKind::Arc { .. }) => words.arc,
+        _ => words.line,
+    };
+    word.to_owned()
 }
 
 /// The number of the pad `id` is the centre of, or one of whose owned
@@ -327,6 +380,11 @@ mod tests {
         board_via: "Via",
         board_track: "Track end",
         board_courtyard: "Courtyard",
+        midpoint: "Midpoint",
+        centre: "Centre",
+        line: "line",
+        circle: "circle",
+        arc: "arc",
     };
 
     fn label(kind: SnapKind, target: Option<&str>) -> Option<String> {
@@ -437,5 +495,51 @@ mod tests {
             None
         );
         assert_eq!(label(edge, None).as_deref(), Some("Board outline"));
+    }
+
+    #[test]
+    fn midpoint_and_centre_name_their_curve_or_its_pad() {
+        let (mut sketch, [centre, corner, plain]) = sketch();
+        let plane = sketch.planes[0].id;
+        let mut add = |kind| {
+            let id = SketchEntityId::new();
+            sketch.entities.push(Entity::new(id, plane, kind));
+            id
+        };
+        let line = add(EntityKind::Line {
+            start: corner,
+            end: plain,
+        });
+        let circle = add(EntityKind::Circle {
+            center: plain,
+            radius: 1.0,
+        });
+        let arc = add(EntityKind::Arc {
+            center: plain,
+            start: corner,
+            end: centre,
+            sweep_ccw: true,
+        });
+        if let Some(pad) = sketch.entities[0].pad.as_mut() {
+            pad.owned.push(arc);
+        }
+        let state = FootprintEditorState::empty();
+        let named = |kind| {
+            let target = snap_badge_target(kind, (0.0, 0.0), &sketch, &state, &WORDS);
+            label(kind, target.as_deref())
+        };
+        assert_eq!(
+            named(SnapKind::Midpoint(line)).as_deref(),
+            Some("Midpoint · line")
+        );
+        assert_eq!(
+            named(SnapKind::Centre(circle)).as_deref(),
+            Some("Centre · circle")
+        );
+        assert_eq!(
+            named(SnapKind::Centre(arc)).as_deref(),
+            Some("Centre · pad 1"),
+            "an arc of pad 1 names the pad"
+        );
     }
 }

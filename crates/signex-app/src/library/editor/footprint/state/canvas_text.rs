@@ -30,6 +30,13 @@ pub struct SketchCanvasText {
     pub snap_board_via: String,
     pub snap_board_track: String,
     pub snap_board_courtyard: String,
+    /// Midpoint and Centre snaps (#188) and the curve they name when it is
+    /// no pad's.
+    pub snap_midpoint: String,
+    pub snap_centre: String,
+    pub snap_line: String,
+    pub snap_circle: String,
+    pub snap_arc: String,
 
     /// The conflict badge, rendered from the real count so the catalog picks
     /// the plural form; empty when nothing is in conflict.

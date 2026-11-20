@@ -606,4 +606,20 @@ pub enum FootprintEditorMsg {
     SketchSnap(crate::library::editor::footprint::snap_menu::SketchSnapMsg),
     /// #192 — the floating pad link on the sketch canvas.
     PadLink(crate::library::editor::footprint::state::PadLinkMsg),
+    /// A drawing tool's click that took an inference snap or was made
+    /// with Ctrl held (#188): [`Self::SketchToolClick`] plus the
+    /// constraint it lands, in the same undo step.
+    SketchToolClickInferred {
+        x_mm: f64,
+        y_mm: f64,
+        snap_id: Option<signex_sketch::id::SketchEntityId>,
+        inference: crate::library::editor::footprint::snap::SketchInference,
+    },
+    /// The Point tool's [`Self::SketchPlacePoint`] with the constraint its
+    /// snap lands (#188).
+    SketchPlacePointInferred {
+        x_mm: f64,
+        y_mm: f64,
+        inference: crate::library::editor::footprint::snap::SketchInference,
+    },
 }

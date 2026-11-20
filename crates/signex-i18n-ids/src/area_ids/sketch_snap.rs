@@ -11,4 +11,7 @@ define_ids! {
     SKETCH_SNAP_BOARD_VIAS = "sketch-snap-board-vias";
     SKETCH_SNAP_BOARD_TRACK_ENDS = "sketch-snap-board-track-ends";
     SKETCH_SNAP_BOARD_COURTYARDS = "sketch-snap-board-courtyards";
+    SKETCH_SNAP_INFERENCE_HEADER = "sketch-snap-inference-header";
+    SKETCH_SNAP_MIDPOINTS = "sketch-snap-midpoints";
+    SKETCH_SNAP_CENTRES = "sketch-snap-centres";
 }

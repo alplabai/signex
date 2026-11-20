@@ -11,14 +11,19 @@
 //! then dispatches to the per-tool sub-modules. Bodies moved verbatim.
 //! Clicks that pick an existing Line by its stroke (Chamfer, Extend,
 //! Mirror's centerline pick) go first, through [`try_stroke_pick`], and
-//! mint no click Point.
+//! mint no click Point. The Slot's width click and the Polygon's vertex
+//! click mint none either ([`slot_polygon::try_closing_click`]). A click
+//! that took an inference snap lands its constraint ([`inference`]).
 
 mod chamfer_extend;
 mod draw;
 mod edit;
+mod inference;
 mod pattern;
+mod slot_polygon;
 mod transform;
 
+use crate::library::editor::footprint::snap::SketchInference;
 use crate::library::messages::FootprintEditorMsg;
 use signex_sketch::entity::Entity;
 use signex_sketch::id::SketchEntityId;
@@ -26,7 +31,8 @@ use signex_sketch::plane::PlaneId;
 
 /// The per-click state the tool sub-modules read: the sketch plane, the
 /// resolved (snapped or freshly-minted) click Point, the raw click position,
-/// and the sticky construction / centerline flags applied to new entities.
+/// the sticky construction / centerline flags applied to new entities, and
+/// the inference the click's snap carries (`None` for a plain click).
 pub(super) struct ToolClickCtx {
     plane_id: PlaneId,
     resolved_id: SketchEntityId,
@@ -34,6 +40,7 @@ pub(super) struct ToolClickCtx {
     y_mm: f64,
     construction_mode: bool,
     centerline_mode: bool,
+    inference: Option<SketchInference>,
 }
 
 impl ToolClickCtx {
@@ -233,7 +240,18 @@ pub(in crate::library::editor::footprint::updates) fn apply(
             x_mm,
             y_mm,
             snap_id,
-        } => handle_tool_click(editor, x_mm, y_mm, snap_id),
+        } => handle_tool_click(editor, x_mm, y_mm, snap_id, None),
+        FootprintEditorMsg::SketchToolClickInferred {
+            x_mm,
+            y_mm,
+            snap_id,
+            inference,
+        } => handle_tool_click(editor, x_mm, y_mm, snap_id, Some(inference)),
+        FootprintEditorMsg::SketchPlacePointInferred {
+            x_mm,
+            y_mm,
+            inference,
+        } => inference::place_point(editor, (x_mm, y_mm), inference),
         _ => unreachable!("non-tool-click state machine sketch variant routed to sketch_tools.rs"),
     }
 }
@@ -243,6 +261,7 @@ fn handle_tool_click(
     x_mm: f64,
     y_mm: f64,
     snap_id: Option<SketchEntityId>,
+    inference: Option<SketchInference>,
 ) {
     use crate::library::editor::footprint::state::SketchTool;
 
@@ -286,6 +305,16 @@ fn handle_tool_click(
     // ID. Otherwise it appends a Point at the click position
     // and uses that new ID for the active tool's gesture state.
     let plane_id = resolve_sketch_plane(editor);
+    let flags = (construction_mode, centerline_mode);
+    if let Some(changed) =
+        slot_polygon::try_closing_click(editor, plane_id, (x_mm, y_mm), flags, inference)
+    {
+        editor.canvas_cache.clear();
+        if changed {
+            editor.mark_dirty();
+        }
+        return;
+    }
 
     let (eff_x_mm, eff_y_mm, used_placement_input) = resolve_effective_click(editor, x_mm, y_mm);
     // When numeric input pinned the click, ignore the snap
@@ -309,6 +338,11 @@ fn handle_tool_click(
         return;
     }
 
+    // A pinned click left the snap behind, and with it the inference.
+    let inference = inference.filter(|_| !used_placement_input);
+    if editor.state.active_tool.is_drawing() {
+        inference::land(editor, resolved_id, inference);
+    }
     let ctx = ToolClickCtx {
         plane_id,
         resolved_id,
@@ -316,6 +350,7 @@ fn handle_tool_click(
         y_mm,
         construction_mode,
         centerline_mode,
+        inference,
     };
 
     // Per-tool state machine — advance `tool_pending` and emit the
@@ -332,6 +367,7 @@ fn handle_tool_click(
         | SketchTool::Arc
         | SketchTool::EdgeArc
         | SketchTool::TangentArc => draw::apply(editor, &ctx, tool),
+        SketchTool::Slot | SketchTool::Polygon => slot_polygon::apply(editor, &ctx, tool),
         SketchTool::Mirror | SketchTool::Offset => transform::apply(editor, &ctx, tool),
         SketchTool::LinearPattern | SketchTool::RectPattern | SketchTool::CircularPattern => {
             pattern::apply(editor, &ctx, tool)
@@ -616,6 +652,14 @@ fn resolve_effective_click(
                 (ex, ey, true)
             } else {
                 (x_mm, y_mm, false)
+            }
+        }
+        // Slot second centre — a typed dimension input is the centre
+        // distance, along the cursor azimuth.
+        (_, _, SketchTool::Slot, ToolPending::SlotFirst { a }) => {
+            match slot_polygon::pinned_second_centre(editor, a, (x_mm, y_mm)) {
+                Some((x, y)) => (x, y, true),
+                None => (x_mm, y_mm, false),
             }
         }
         _ => (x_mm, y_mm, false),

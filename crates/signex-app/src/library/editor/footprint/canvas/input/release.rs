@@ -12,6 +12,7 @@ use iced::mouse;
 use iced::widget::canvas;
 use iced::{Point, Rectangle};
 
+use crate::library::editor::footprint::snap::{self, SketchInference};
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
 use super::super::hit_test::{sketch_glyph_at, sketch_hit_other, sketch_snap};
@@ -310,6 +311,20 @@ impl FootprintCanvas<'_> {
         if self.state.placement_paused && self.state.active_tool != SketchTool::Select {
             return None;
         }
+        // #188 — the constraint the press's snap infers, `Off` under Ctrl.
+        // An inferring click mints its own Point and the constraint ties it
+        // to the curve, so it reuses no Point.
+        let inference = snap::click_inference(
+            cstate.last_snap,
+            click_world,
+            self.sketch,
+            self.state,
+            cstate.current_modifiers.command(),
+        );
+        let snap_id = match inference {
+            Some(SketchInference::Off) | None => snap_id,
+            Some(_) => None,
+        };
         let msg = match self.state.active_tool {
             SketchTool::Select => EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {
                 id: select_id,
@@ -320,11 +335,20 @@ impl FootprintCanvas<'_> {
             // the press missed every line, so an un-moved empty click is
             // a no-op — it never places geometry.
             SketchTool::DragTrackEnd => return None,
-            SketchTool::Point => EditorMsg::Footprint(FootprintEditorMsg::SketchPlacePoint {
-                x_mm: click_world.0,
-                y_mm: click_world.1,
+            SketchTool::Point => EditorMsg::Footprint(match inference {
+                Some(inference) => FootprintEditorMsg::SketchPlacePointInferred {
+                    x_mm: click_world.0,
+                    y_mm: click_world.1,
+                    inference,
+                },
+                None => FootprintEditorMsg::SketchPlacePoint {
+                    x_mm: click_world.0,
+                    y_mm: click_world.1,
+                },
             }),
             SketchTool::Line
+            | SketchTool::Slot
+            | SketchTool::Polygon
             | SketchTool::Rectangle
             | SketchTool::RoundedRectangle
             | SketchTool::Circle
@@ -343,10 +367,18 @@ impl FootprintCanvas<'_> {
             // #372 — Break Track routes its single click through the
             // same SketchToolClick path as Trim; the dispatcher's edit
             // arm hit-tests the Line and hands off to `split_line`.
-            | SketchTool::BreakTrack => EditorMsg::Footprint(FootprintEditorMsg::SketchToolClick {
-                x_mm: click_world.0,
-                y_mm: click_world.1,
-                snap_id,
+            | SketchTool::BreakTrack => EditorMsg::Footprint(match inference {
+                Some(inference) => FootprintEditorMsg::SketchToolClickInferred {
+                    x_mm: click_world.0,
+                    y_mm: click_world.1,
+                    snap_id,
+                    inference,
+                },
+                None => FootprintEditorMsg::SketchToolClick {
+                    x_mm: click_world.0,
+                    y_mm: click_world.1,
+                    snap_id,
+                },
             }),
         };
         Some(canvas::Action::publish(LibraryMessage::EditorEvent {

@@ -1,13 +1,15 @@
 //! Ghost previews of the Modify tools that work on existing geometry
 //! (#187 / #191): the Line a Chamfer or Extend click would take, where an
 //! extended Line stops, the mirror image of the cursor, and the instances
-//! of a Linear Pattern. Drawn like the drawing tools' ghosts in `preview`:
-//! accent at low alpha, dashed.
+//! of a Linear Pattern; and the rubber band of the Slot and Polygon Create
+//! tools, from the geometry they will place. Drawn like the drawing tools'
+//! ghosts in `preview`: accent at low alpha, dashed.
 
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point};
 use signex_sketch::SketchData;
 use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::geom::shapes;
 use signex_sketch::geom::{Point2, extension_hit};
 use signex_sketch::id::SketchEntityId;
 
@@ -117,8 +119,78 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_tool_ghos
         SketchTool::Extend => extend_ghost(frame, cstate, &at, cursor, tol),
         SketchTool::Mirror => mirror_ghost(frame, cstate, &at, state, cursor, tol),
         SketchTool::LinearPattern => linear_pattern_ghost(frame, cstate, state, cursor),
+        SketchTool::Slot => slot_ghost(frame, cstate, &at, state, cursor),
+        SketchTool::Polygon => polygon_ghost(frame, cstate, &at, state, cursor),
         _ => {}
     }
+}
+
+/// Slot: the centre line from the first centre to the cursor, then the
+/// outline the width click would place.
+fn slot_ghost(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    at: &Positions<'_>,
+    state: &FootprintEditorState,
+    cursor: (f64, f64),
+) {
+    match state.tool_pending {
+        ToolPending::SlotFirst { a } => {
+            if let Some(a) = at.of(a) {
+                dashed(
+                    frame,
+                    cstate.world_to_screen(a),
+                    cstate.world_to_screen(cursor),
+                );
+            }
+        }
+        ToolPending::SlotSecond { a, b } => {
+            if let (Some(a), Some(b)) = (at.of(a), at.of(b)) {
+                dashed(frame, cstate.world_to_screen(a), cstate.world_to_screen(b));
+                let half = shapes::slot_half_width(a, b, cursor);
+                closed_outline(frame, cstate, &shapes::slot_outline(a, b, half));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Polygon: the polygon a first-vertex click at the cursor would place,
+/// with the typed side count (else the default).
+fn polygon_ghost(
+    frame: &mut canvas::Frame,
+    cstate: &FootprintCanvasState,
+    at: &Positions<'_>,
+    state: &FootprintEditorState,
+    cursor: (f64, f64),
+) {
+    let ToolPending::PolygonCentre { centre } = state.tool_pending else {
+        return;
+    };
+    let Some(centre) = at.of(centre) else {
+        return;
+    };
+    let sides =
+        shapes::parse_side_count(&state.dimension_input).unwrap_or(shapes::POLYGON_SIDES_DEFAULT);
+    closed_outline(
+        frame,
+        cstate,
+        &shapes::polygon_vertices(centre, cursor, sides),
+    );
+}
+
+fn closed_outline(frame: &mut canvas::Frame, cstate: &FootprintCanvasState, at: &[(f64, f64)]) {
+    let Some((&first, rest)) = at.split_first() else {
+        return;
+    };
+    let path = Path::new(|b| {
+        b.move_to(cstate.world_to_screen(first));
+        for &p in rest {
+            b.line_to(cstate.world_to_screen(p));
+        }
+        b.close();
+    });
+    frame.stroke(&path, stroke(GHOST_PX));
 }
 
 fn stroke(width: f32) -> Stroke<'static> {

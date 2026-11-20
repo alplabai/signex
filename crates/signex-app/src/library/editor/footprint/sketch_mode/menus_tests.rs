@@ -157,3 +157,49 @@ fn the_new_rows_arm_their_tools_and_show_the_armed_one() {
         assert_eq!(item.checked, tool == SketchTool::Extend, "{name}");
     }
 }
+
+/// Every Create row's label, headers left out.
+fn create_labels(state: &FootprintEditorState) -> Vec<String> {
+    create_entries(state, PathBuf::from("t"), ThemeId::DEFAULT, &en_us())
+        .into_iter()
+        .filter_map(|entry| match entry {
+            DropdownEntry::Item(item) => Some(strip(&item.label)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_board_sketch_has_the_same_create_rows_with_slot_and_polygon_after_point() {
+    let rows = create_labels(&footprint_state());
+    assert_eq!(rows, create_labels(&board_state()));
+    let point = rows.iter().position(|r| r == "Point").expect("Point");
+    assert_eq!(rows[point + 1..], ["Slot", "Polygon"]);
+}
+
+#[test]
+fn the_slot_and_polygon_rows_arm_their_tools() {
+    let mut state = footprint_state();
+    state.active_tool = SketchTool::Polygon;
+    let entries = create_entries(&state, PathBuf::from("t"), ThemeId::DEFAULT, &en_us());
+    for (name, tool) in [("Slot", SketchTool::Slot), ("Polygon", SketchTool::Polygon)] {
+        let item = entries
+            .iter()
+            .find_map(|entry| match entry {
+                DropdownEntry::Item(item) if strip(&item.label) == name => Some(item),
+                _ => None,
+            })
+            .expect(name);
+        assert!(
+            matches!(
+                &item.on_press,
+                Some(LibraryMessage::PrimitiveEditorEvent {
+                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::ActiveBarSetSketchTool(t)),
+                    ..
+                }) if *t == tool
+            ),
+            "{name} arms its tool"
+        );
+        assert_eq!(item.checked, tool == SketchTool::Polygon, "{name}");
+    }
+}

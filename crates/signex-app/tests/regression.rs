@@ -747,3 +747,7 @@ mod board_sketch_checks;
 // centerline, and the pad link of Edit in Sketch.
 #[path = "regression/sketch_tools_padlink.rs"]
 mod sketch_tools_padlink;
+// Caner (2026-11-20) items 1 and 6: Create ▾ Slot and Polygon, and the
+// Midpoint / Centre / Intersection snaps that land their constraint.
+#[path = "regression/sketch_create_inference.rs"]
+mod sketch_create_inference;

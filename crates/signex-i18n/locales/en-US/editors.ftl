@@ -479,3 +479,7 @@ editors-sketch-target-board-outline = Outline
 editors-sketch-target-mounting-holes = Holes
 # A count in the bake preview; $count is a whole number.
 editors-sketch-bake-count = { $count }
+# Sketch ▸ Create rows after Point (#187): two arcs joined by two lines,
+# and a regular polygon.
+editors-sketch-tool-slot = Slot
+editors-sketch-tool-polygon = Polygon

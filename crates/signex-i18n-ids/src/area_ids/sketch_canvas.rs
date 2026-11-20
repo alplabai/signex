@@ -70,4 +70,9 @@ define_ids! {
     SKETCH_CANVAS_MENU_EDIT_SPACING_Y = "sketch-canvas-menu-edit-spacing-y";
     SKETCH_CANVAS_MENU_EDIT_SWEEP = "sketch-canvas-menu-edit-sweep";
     SKETCH_CANVAS_MENU_DELETE_PATTERN = "sketch-canvas-menu-delete-pattern";
+    SKETCH_CANVAS_SNAP_MIDPOINT = "sketch-canvas-snap-midpoint";
+    SKETCH_CANVAS_SNAP_CENTRE = "sketch-canvas-snap-centre";
+    SKETCH_CANVAS_SNAP_LINE = "sketch-canvas-snap-line";
+    SKETCH_CANVAS_SNAP_CIRCLE = "sketch-canvas-snap-circle";
+    SKETCH_CANVAS_SNAP_ARC = "sketch-canvas-snap-arc";
 }

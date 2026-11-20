@@ -82,3 +82,10 @@ sketch-canvas-menu-edit-spacing-x = Edit X spacing…
 sketch-canvas-menu-edit-spacing-y = Edit Y spacing…
 sketch-canvas-menu-edit-sweep = Edit sweep angle…
 sketch-canvas-menu-delete-pattern = Delete pattern
+# Snap badges of the Midpoint and Centre snaps (#188), "Midpoint · line",
+# "Centre · circle"; the curve is named by its pad when it has one.
+sketch-canvas-snap-midpoint = Midpoint
+sketch-canvas-snap-centre = Centre
+sketch-canvas-snap-line = line
+sketch-canvas-snap-circle = circle
+sketch-canvas-snap-arc = arc

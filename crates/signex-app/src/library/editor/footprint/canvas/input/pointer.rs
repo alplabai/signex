@@ -201,10 +201,22 @@ impl FootprintCanvas<'_> {
             raw_world
         } else {
             let point_hit = sketch_snap(self.sketch, cstate, raw_world);
-            let result = snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
+            let infer = self.snap_infers(cstate);
+            let result =
+                snap::snap_cursor_with(raw_world, self.sketch, self.state, point_hit, infer);
             cstate.last_snap = Some(result);
             result.pos
         }
+    }
+
+    /// Whether the cursor snap may infer: not while Ctrl is held with a
+    /// sketch drawing tool armed (#188, "Ctrl while drawing turns off the
+    /// ±5° snap"); point reuse, guides and grid still apply.
+    fn snap_infers(&self, cstate: &FootprintCanvasState) -> bool {
+        use crate::library::editor::footprint::state::EditorMode;
+        !(cstate.current_modifiers.command()
+            && self.state.mode == EditorMode::Sketch
+            && self.state.active_tool.is_drawing())
     }
 
     /// Empty-area press — stash a pending click-add drag (commit on
@@ -477,7 +489,9 @@ impl FootprintCanvas<'_> {
             } else {
                 sketch_snap(self.sketch, cstate, raw_world)
             };
-            let result = snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
+            let infer = self.snap_infers(cstate);
+            let result =
+                snap::snap_cursor_with(raw_world, self.sketch, self.state, point_hit, infer);
             cstate.last_snap = Some(result);
             result.pos
         }

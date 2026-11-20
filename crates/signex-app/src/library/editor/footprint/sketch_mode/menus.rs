@@ -27,7 +27,7 @@ fn fp(path: PathBuf, msg: FootprintEditorMsg) -> LibraryMessage {
 type CreateRow = (MessageId, SketchTool, fn(ThemeId) -> Handle);
 
 /// The Create rows, in menu order.
-const CREATE_ROWS: [CreateRow; 8] = [
+const CREATE_ROWS: [CreateRow; 10] = [
     (
         ids::EDITORS_SKETCH_TOOL_LINE,
         SketchTool::Line,
@@ -67,6 +67,16 @@ const CREATE_ROWS: [CreateRow; 8] = [
         ids::EDITORS_SKETCH_TOOL_POINT,
         SketchTool::Point,
         ic::icon_sk_c_coincident,
+    ),
+    (
+        ids::EDITORS_SKETCH_TOOL_SLOT,
+        SketchTool::Slot,
+        ic::icon_sk_slot,
+    ),
+    (
+        ids::EDITORS_SKETCH_TOOL_POLYGON,
+        SketchTool::Polygon,
+        ic::icon_sk_polygon,
     ),
 ];
 
@@ -261,7 +271,9 @@ mod tests {
                 "Arc",
                 "Tangent Arc",
                 "Edge Arc",
-                "Point"
+                "Point",
+                "Slot",
+                "Polygon"
             ]
         );
     }
