@@ -25,9 +25,9 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use uuid::Uuid;
 
-const U1: u128 = 0x165_01;
-const U3: u128 = 0x165_03;
-const R4: u128 = 0x165_04;
+const U1: u128 = 0x0001_6501;
+const U3: u128 = 0x0001_6503;
+const R4: u128 = 0x0001_6504;
 
 /// `settle_support::settle` without the dock layout save, which would write
 /// the panel into the test run's shared config folder (see

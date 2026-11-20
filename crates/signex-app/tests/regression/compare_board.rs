@@ -211,11 +211,11 @@ fn engine(rig: &Rig) -> &BoardEngine {
         .expect("the board is open")
 }
 
-fn board_footprint<'a>(rig: &'a Rig, id: Uuid) -> Option<&'a Footprint> {
+fn board_footprint(rig: &Rig, id: Uuid) -> Option<&Footprint> {
     engine(rig).board().footprints.iter().find(|f| f.uuid == id)
 }
 
-fn sheet_symbol<'a>(rig: &'a Rig, uuid: Uuid) -> &'a Symbol {
+fn sheet_symbol(rig: &Rig, uuid: Uuid) -> &Symbol {
     rig.app.document_state.engines[&rig.root]
         .document()
         .symbols
