@@ -51,7 +51,10 @@ message. The chrome catalog draws a sample of it.
   with a digit, as Add requires, #1987), is a title-block key (`title`,
   `rev`, ...) or is already used (names are case-sensitive) is refused: the
   name stays in its box with the reason under the row and nothing changes.
-  × on a hovered row removes the variable; Name and Add at the end of
+  A rename moves only the project key: sheet text that uses `${OLD}` and a
+  sheet value named OLD keep the old name and stop resolving to the project
+  value, as after Remove; while a typed name would be accepted, a warning
+  under the row says so before Enter. × on a hovered row removes the variable; Name and Add at the end of
   Variables add one with an empty value. The filter and the folded groups
   are tab state, not project data.
 - **Sheets** — the project's sheets in list order (the Sheet N of M a
