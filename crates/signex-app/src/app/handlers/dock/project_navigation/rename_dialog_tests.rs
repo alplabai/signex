@@ -120,7 +120,10 @@ fn a_name_the_folder_already_has_is_shown_and_refused() {
     let dialog = app.ui_state.rename_dialog.as_ref().expect("dialog");
     assert_eq!(dialog.name_clash.as_deref(), Some("top.snxsch"));
 
-    let submitted = app.update(Message::Rename(RenameMsg::Submit));
+    // Submit goes through update; the units are counted on the handler,
+    // because update() also carries the batched background tasks.
+    let _ = app.update(Message::Rename(RenameMsg::Submit));
+    let submitted = app.handle_rename_submit();
     assert_eq!(submitted.units(), 0, "no move starts");
     assert!(
         app.ui_state.rename_dialog.is_some(),
