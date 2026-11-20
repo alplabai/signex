@@ -20,7 +20,7 @@
 # are not (they leave with their field).
 
 # Documents (slice 4a).
-struct crates/signex-app/src/app/state/mod.rs DocumentState
+struct crates/signex-app/src/app/state/document.rs DocumentState
 struct crates/signex-app/src/app/state/mod.rs LoadedProject
 # The PCB board engine still held by its tab (moves to DocumentState before 4a).
 struct crates/signex-app/src/app/documents.rs TabInfo cached_document
@@ -56,9 +56,9 @@ struct crates/signex-app/src/app/command/edit_reads.rs EditReads
 struct crates/signex-app/src/app/project_sheets.rs ProjectSheetSet
 struct crates/signex-app/src/app/project_sheets.rs RefusedChild
 enum crates/signex-app/src/app/command/outcome.rs CommandOutcome
-struct crates/signex-app/src/app/state/mod.rs PendingGitCommit
-struct crates/signex-app/src/app/state/mod.rs DeferredGitCommit
-struct crates/signex-app/src/app/state/mod.rs AltiumImportRun
+struct crates/signex-app/src/app/state/document.rs PendingGitCommit
+struct crates/signex-app/src/app/state/document.rs DeferredGitCommit
+struct crates/signex-app/src/app/state/document.rs AltiumImportRun
 struct crates/signex-app/src/app/document_read.rs InFlightReads
 struct crates/signex-app/src/app/document_read.rs Claim
 struct crates/signex-app/src/app/path_ops.rs PendingPathOps
@@ -84,7 +84,7 @@ struct crates/signex-app/src/persist/document_save.rs Ledger
 struct crates/signex-app/src/persist/document_save.rs Newest
 struct crates/signex-app/src/persist/document_save.rs DocumentSaveJob
 struct crates/signex-app/src/persist/document_save.rs InFlight
-struct crates/signex-app/src/app/state/mod.rs MovedProjectDir
+struct crates/signex-app/src/app/state/document.rs MovedProjectDir
 # Check results and profiles (slice 4b): kept ERC runs, the ERC outcome, the
 # board DRC, the profile file writes waiting their turn, and from UiState the
 # ERC/profile/machine/io fields plus the listed extras (`pin_matrix_overrides`,
