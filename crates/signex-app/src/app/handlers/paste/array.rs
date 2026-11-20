@@ -44,7 +44,7 @@ impl Signex {
             self.document_state.active_path.clone(),
         );
         dialog.id = self.ui_state.paste_array_opens;
-        self.ui_state.paste_array = Some(dialog);
+        self.ui_state.paste_array = Some(Box::new(dialog));
     }
 
     pub(crate) fn handle_paste_array_message(&mut self, msg: PasteArrayMsg) -> Task<Message> {

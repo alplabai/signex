@@ -525,8 +525,9 @@ pub struct UiState {
     /// The Annotations panel's filters, expanded row and last scan (#165).
     /// Boxed: a pointer of the size budget (#2412).
     pub annotations: Box<crate::panels::AnnotationsState>,
-    /// The open Paste Array dialog (#1264).
-    pub paste_array: Option<crate::paste_array::PasteArrayState>,
+    /// The open Paste Array dialog (#1264). Boxed: a closed dialog costs one
+    /// pointer (#2412).
+    pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers
     /// read answers only the dialog that asked for it.
     pub paste_array_opens: u64,
