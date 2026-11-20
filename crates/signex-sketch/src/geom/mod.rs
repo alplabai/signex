@@ -27,6 +27,7 @@ pub mod point;
 mod point_grid;
 pub mod predicates;
 pub mod segment;
+pub mod shapes;
 mod tolerant_clip;
 pub mod triangulate;
 
