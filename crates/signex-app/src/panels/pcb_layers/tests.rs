@@ -647,7 +647,7 @@ fn mask_and_dim_show_todays_percentages() {
         ("Masked Objects", dimmed.as_str()),
     ] {
         let percent = percent_beside(&ctx, label);
-        assert_eq!(percent.text, value, "{label}");
+        assert_eq!(plain(&percent.text), value, "{label}");
         let right = percent.bounds.x + percent.bounds.width;
         let tracks = percent_beside(&ctx, "Tracks").bounds;
         assert!(
@@ -682,7 +682,10 @@ const ADDITIONAL_OPTIONS: [&str; 11] = [
 #[test]
 fn additional_options_are_closed_with_a_count_and_list_greyed_checkboxes() {
     let ctx = context_with(&PcbLayerView::default(), options());
-    assert!(listed(&ctx, "0/11"), "the header count");
+    assert!(
+        texts(&ctx).iter().any(|t| plain(&t.text) == "0/11"),
+        "the header count"
+    );
     for label in ADDITIONAL_OPTIONS {
         assert!(!listed(&ctx, label), "{label} closed by default");
     }
