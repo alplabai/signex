@@ -153,7 +153,7 @@ where
 /// iced `text()` widget to capture the entry's lifetime, which doesn't
 /// compose with the row-builder iterator's per-item ownership. The
 /// allocation is paid anyway when the widget materialises the string.
-fn short_sha(sha: &str) -> String {
+pub(crate) fn short_sha(sha: &str) -> String {
     if sha.len() >= 7 {
         sha[..7].to_string()
     } else {
@@ -161,31 +161,51 @@ fn short_sha(sha: &str) -> String {
     }
 }
 
-/// Render `time` as a Slack/GitHub-style relative timestamp ("12m
-/// ago", "3h ago", "5d ago", "2mo ago", "3y ago"). Future times
-/// (clock skew, badly-set author date) collapse to "just now"
-/// rather than a misleading negative figure.
-fn format_relative(time: DateTime<Utc>, now: DateTime<Utc>) -> String {
+/// How long ago something happened, in the largest whole unit: the one
+/// bucketing rule of the widget crate (this pane and the history graph).
+/// Future times (clock skew, a badly-set author date) count as zero seconds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Age {
+    Seconds(i64),
+    Minutes(i64),
+    Hours(i64),
+    Days(i64),
+    Months(i64),
+    Years(i64),
+}
+
+pub(crate) fn relative_age(time: DateTime<Utc>, now: DateTime<Utc>) -> Age {
     let diff = now.signed_duration_since(time);
-    if diff < Duration::seconds(0) {
-        return "just now".into();
-    }
     if diff < Duration::seconds(60) {
-        return "just now".into();
+        return Age::Seconds(diff.num_seconds().max(0));
     }
     if diff < Duration::minutes(60) {
-        return format!("{}m ago", diff.num_minutes());
+        return Age::Minutes(diff.num_minutes());
     }
     if diff < Duration::hours(24) {
-        return format!("{}h ago", diff.num_hours());
+        return Age::Hours(diff.num_hours());
     }
     if diff < Duration::days(30) {
-        return format!("{}d ago", diff.num_days());
+        return Age::Days(diff.num_days());
     }
     if diff < Duration::days(365) {
-        return format!("{}mo ago", diff.num_days() / 30);
+        return Age::Months(diff.num_days() / 30);
     }
-    format!("{}y ago", diff.num_days() / 365)
+    Age::Years(diff.num_days() / 365)
+}
+
+/// Render `time` as a Slack/GitHub-style relative timestamp ("12m
+/// ago", "3h ago", "5d ago", "2mo ago", "3y ago"). Under a minute, and
+/// future times, read "just now" rather than a misleading figure.
+fn format_relative(time: DateTime<Utc>, now: DateTime<Utc>) -> String {
+    match relative_age(time, now) {
+        Age::Seconds(_) => "just now".into(),
+        Age::Minutes(n) => format!("{n}m ago"),
+        Age::Hours(n) => format!("{n}h ago"),
+        Age::Days(n) => format!("{n}d ago"),
+        Age::Months(n) => format!("{n}mo ago"),
+        Age::Years(n) => format!("{n}y ago"),
+    }
 }
 
 #[cfg(test)]

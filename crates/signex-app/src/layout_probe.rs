@@ -13,7 +13,7 @@
 //! running app's. Assert on relations a few pixels cannot flip: a label
 //! sits on one line, a button is at least as wide as its label.
 
-use iced::advanced::widget::operation::Text;
+use iced::advanced::widget::operation::{Text, TextInput};
 use iced::advanced::widget::{Id, Operation, Tree};
 use iced::advanced::{Layout, Widget as _, layout, renderer};
 use iced::{Element, Font, Pixels, Rectangle, Size, Theme};
@@ -29,9 +29,32 @@ pub(crate) struct LaidOutText {
 /// Every text widget of `element` laid out in a window of `window`, in
 /// tree order.
 pub(crate) fn lay_out_texts<M>(
-    mut element: Element<'_, M, Theme, iced::Renderer>,
+    element: Element<'_, M, Theme, iced::Renderer>,
     window: Size,
 ) -> Vec<LaidOutText> {
+    let mut collect = CollectTexts(Vec::new());
+    operate_laid_out(element, window, &mut collect);
+    collect.0
+}
+
+/// Every text input of `element` laid out in a window of `window`, in tree
+/// order, with what it shows: its value, or its placeholder while empty.
+/// [`lay_out_texts`] does not list them: an input is not a text widget.
+pub(crate) fn lay_out_inputs<M>(
+    element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+) -> Vec<LaidOutText> {
+    let mut collect = CollectInputs(Vec::new());
+    operate_laid_out(element, window, &mut collect);
+    collect.0
+}
+
+/// Lay `element` out in a window of `window` and run `operation` over it.
+fn operate_laid_out<M>(
+    mut element: Element<'_, M, Theme, iced::Renderer>,
+    window: Size,
+    operation: &mut dyn Operation,
+) {
     let renderer = headless_renderer();
     let mut tree = Tree::new(&element);
     // The fork's widgets build their child trees in `diff`, not in
@@ -43,15 +66,13 @@ pub(crate) fn lay_out_texts<M>(
         &layout::Limits::new(Size::ZERO, window),
     );
     let size = tree.size;
-    let mut collect = CollectTexts(Vec::new());
     element.operate(
         &mut tree,
         Layout::new(size),
         &Rectangle::with_size(size),
         &renderer,
-        &mut collect,
+        operation,
     );
-    collect.0
 }
 
 /// The messages a left click on the centre of the text `label` publishes,
@@ -291,6 +312,21 @@ impl<T> Operation<T> for CollectTexts {
     fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &mut dyn Text) {
         self.0.push(LaidOutText {
             text: text.text().into_owned(),
+            bounds,
+        });
+    }
+}
+
+struct CollectInputs(Vec<LaidOutText>);
+
+impl<T> Operation<T> for CollectInputs {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+        operate(self);
+    }
+
+    fn text_input(&mut self, _id: Option<&Id>, bounds: Rectangle, state: &mut dyn TextInput) {
+        self.0.push(LaidOutText {
+            text: state.text().into_owned(),
             bounds,
         });
     }

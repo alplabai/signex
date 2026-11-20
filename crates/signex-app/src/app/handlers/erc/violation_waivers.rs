@@ -70,12 +70,14 @@ impl Signex {
                 sheet,
             } => {
                 self.start_erc_waiver(key.clone(), message.clone(), sheet.clone());
-                Task::none()
+                self.ask_user_identity()
             }
-            ErcWaiverMsg::ReasonChanged(reason) => {
+            ErcWaiverMsg::ReasonActed(action) => {
                 if let Some(draft) = self.ui_state.erc_waive_draft.as_mut() {
-                    draft.reason = reason.clone();
-                    draft.error = None;
+                    if action.is_edit() {
+                        draft.error = None;
+                    }
+                    draft.reason.perform(action.clone());
                 }
                 Task::none()
             }
@@ -98,8 +100,8 @@ impl Signex {
     }
 
     /// Open the editor for the finding keyed `key`. The author defaults to
-    /// the last one used, then to the OS login name; the reason carries over
-    /// only when it is the same finding.
+    /// the last one used, then to the cached user identity (AV-13); the
+    /// reason carries over only when it is the same finding.
     fn start_erc_waiver(
         &mut self,
         key: signex_erc::waivers::violation::WaiverKey,
@@ -112,7 +114,7 @@ impl Signex {
             .as_ref()
             .map(|d| d.author.clone())
             .filter(|a| !a.trim().is_empty())
-            .unwrap_or_else(default_author);
+            .unwrap_or_else(|| self.ui_state.validation_panels.identity.author());
         // Re-opening the same finding (after a refused or stale Confirm and a
         // re-run) keeps the reason already typed.
         let reason = self
@@ -150,10 +152,11 @@ impl Signex {
             }
         };
         let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let reason = draft.reason.text();
         let waiver = match signex_erc::waivers::violation::new_waiver(
             &key,
             &draft.message,
-            &draft.reason,
+            &reason,
             &draft.author,
             &date,
         ) {
@@ -174,7 +177,7 @@ impl Signex {
             "ERC: waived {} ({}): {}",
             draft.key.rule_id,
             draft.message,
-            draft.reason.trim()
+            reason.trim()
         ));
         self.replace_project_rules(Some(rules), true);
         self.handle_run_erc()
@@ -237,12 +240,4 @@ impl Signex {
         self.replace_project_rules(Some(rules), true);
         self.handle_run_erc()
     }
-}
-
-/// The OS login name, or empty when the environment names none.
-fn default_author() -> String {
-    ["USER", "USERNAME", "LOGNAME"]
-        .iter()
-        .find_map(|k| std::env::var(k).ok().filter(|v| !v.trim().is_empty()))
-        .unwrap_or_default()
 }

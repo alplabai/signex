@@ -37,7 +37,7 @@ fn segment(n: u128, y: f64, layer: &str) -> Segment {
     }
 }
 
-/// Top Layer, Top Overlay, Bottom Layer, in that order, a track on each
+/// Top Layer, Top Silkscreen, Bottom Layer, in that order, a track on each
 /// copper layer.
 fn board() -> PcbBoard {
     let layer = |id: u8, name: &str, kind: &str| LayerDef {
@@ -103,6 +103,16 @@ fn press(app: &mut Signex, window: iced::window::Id, keys: &str) {
     }));
 }
 
+/// Hide the mechanical kind (3D body, assembly, fab, courtyard, the board
+/// outline...), whose tabs come before the silkscreen in the panel's order.
+fn hide_mechanical(app: &mut Signex) {
+    let event = crate::app::PcbViewMsg::LayerKindVisibilitySet {
+        kind: signex_renderer::pcb::LayerKind::Mechanical,
+        visible: false,
+    };
+    let _ = app.update(Message::Pcb(PcbMsg::View(event)));
+}
+
 fn pill(app: &Signex, window: iced::window::Id) -> Option<String> {
     app.status_active_layer(window)
         .map(|(_, name)| name.into_string())
@@ -133,12 +143,15 @@ fn a_tab_click_sets_the_active_layer_and_the_status_readout() {
     assert_eq!(snapshot.traces.last().map(|t| t.p0[1]), Some(5.0));
 
     // A non-copper tab is a layer like any other.
-    let sent = messages_on_click(app.view(main), WINDOW, "Top Overlay");
+    // The tabs before the silkscreen in the panel's order go with their
+    // layers, so the Top Silkscreen tab is on screen.
+    hide_mechanical(&mut app);
+    let sent = messages_on_click(app.view(main), WINDOW, "Top Silkscreen");
     for msg in sent {
         let _ = app.update(msg);
     }
     assert_eq!(app.pcb_layer_view(&path).active(), OVERLAY);
-    assert_eq!(pill(&app, main).as_deref(), Some("Top Overlay"));
+    assert_eq!(pill(&app, main).as_deref(), Some("Top Silkscreen"));
 }
 
 #[test]
@@ -146,7 +159,7 @@ fn plus_steps_to_the_next_layer_and_star_to_the_next_signal_layer() {
     let (mut app, path, main) = open();
     press(&mut app, main, "+");
     assert_eq!(app.pcb_layer_view(&path).active(), OVERLAY, "board order");
-    assert_eq!(pill(&app, main).as_deref(), Some("Top Overlay"));
+    assert_eq!(pill(&app, main).as_deref(), Some("Top Silkscreen"));
     press(&mut app, main, "+");
     assert_eq!(app.pcb_layer_view(&path).active(), BOTTOM);
     press(&mut app, main, "-");
@@ -199,7 +212,7 @@ fn the_layers_panel_on_a_board_tab_lists_and_drives_the_board_layers() {
         "Top Layer",
         "Bottom Layer",
         "COMPONENT LAYER PAIRS",
-        "Overlay",
+        "Silkscreen",
     ] {
         assert!(texts.iter().any(|t| t.text == label), "{label} listed");
     }
@@ -306,16 +319,18 @@ fn a_tab_right_click_opens_a_menu_whose_rows_change_visibility() {
     };
     assert_eq!(traces(&app), 1, "the bottom track is no longer drawn");
 
-    right_click_tab(&mut app, main, "Top Overlay");
+    hide_mechanical(&mut app);
+    right_click_tab(&mut app, main, "Top Silkscreen");
     pick_row(&mut app, main, "Show only this layer");
     let view = app.pcb_layer_view(&path);
     assert_eq!(view.active(), OVERLAY);
     assert!(!view.is_hidden(OVERLAY));
     assert!(view.is_hidden(TOP) && view.is_hidden(BOTTOM));
     assert_eq!(traces(&app), 0, "no copper is drawn");
-    assert_eq!(pill(&app, main).as_deref(), Some("Top Overlay"));
+    assert_eq!(pill(&app, main).as_deref(), Some("Top Silkscreen"));
 
-    right_click_tab(&mut app, main, "Top Layer");
+    // Every other layer is hidden, so only its own tab is left.
+    right_click_tab(&mut app, main, "Top Silkscreen");
     pick_row(&mut app, main, "Show all layers");
     assert!(app.interaction_state.pcb_layer_tab_menu.is_none());
     assert!(!app.pcb_layer_view(&path).has_hidden());

@@ -211,9 +211,9 @@ fn rejects_wrong_format_version() {
     let bad = "format = \"snxsch/99\"\nschematic_id = \"00000000-0000-0000-0000-000000000000\"\n";
     let err = SnxSchematic::parse(bad).expect_err("must reject");
     match err {
-        FormatError::UnsupportedVersion { found, expected } => {
+        FormatError::Version(FormatVersionError::Newer { found, readable }) => {
             assert_eq!(found, "snxsch/99");
-            assert_eq!(expected, SNXSCH_FORMAT_V1);
+            assert!(readable.contains(SNXSCH_FORMAT_V1), "{readable}");
         }
         other => panic!("unexpected error: {other:?}"),
     }
@@ -223,7 +223,10 @@ fn rejects_wrong_format_version() {
 fn rejects_wrong_pcb_format_version() {
     let bad = "format = \"snxpcb/99\"\npcb_id = \"00000000-0000-0000-0000-000000000000\"\n";
     let err = SnxPcb::parse(bad).expect_err("must reject");
-    assert!(matches!(err, FormatError::UnsupportedVersion { .. }));
+    assert!(matches!(
+        err,
+        FormatError::Version(FormatVersionError::Newer { .. })
+    ));
 }
 
 #[test]

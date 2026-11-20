@@ -30,6 +30,7 @@ mod graphic;
 mod pour_cut;
 mod quick;
 mod route;
+mod route_end;
 mod router;
 mod side_by_side;
 mod string;
@@ -50,6 +51,8 @@ mod form_tests;
 mod free_tests;
 #[cfg(test)]
 mod graphic_tests;
+#[cfg(test)]
+mod layer_tests;
 #[cfg(test)]
 mod pour_cut_tests;
 #[cfg(test)]
@@ -86,6 +89,9 @@ pub struct BoardToolSession {
     /// Tab paused placing for the values to be edited in Properties (#2393);
     /// what Esc puts back.
     pub paused: Option<PlacementPause>,
+    /// Why the last click added nothing, for the status bar; the next click
+    /// clears it.
+    pub note: Option<String>,
 }
 
 impl BoardToolSession {
@@ -139,6 +145,7 @@ impl Signex {
             route: None,
             router: None,
             paused: None,
+            note: None,
         });
         crate::diagnostics::log_info(self.board_tool_hint(tool));
         self.refresh_pcb_highlight();
@@ -240,6 +247,39 @@ impl Signex {
         layer
     }
 
+    /// Say why a click added nothing: in the Messages panel, and in the
+    /// status bar until the next click.
+    pub(super) fn note_board_tool(&mut self, line: String) {
+        crate::diagnostics::log_warning(&line);
+        if let Some(session) = self.own_board_tool_mut() {
+            session.note = Some(line);
+        }
+    }
+
+    /// What the status bar says while a tool is armed on the board this
+    /// window shows: paused, why the leg on the pointer or the last click
+    /// adds nothing, that the tool needs a copper layer, or how to use it.
+    pub(crate) fn board_tool_status(&self) -> Option<String> {
+        let session = self.own_board_tool()?;
+        let i18n = &self.ui_state.i18n;
+        let name = t!(i18n, session.tool.name()).into_string();
+        if session.paused.is_some() {
+            return Some(t!(i18n, ids::PCB_TOOL_PAUSED, "tool" => name).into_string());
+        }
+        if let Some(why) = self.router_preview_refusal() {
+            return Some(why.to_string());
+        }
+        if let Some(note) = &session.note {
+            return Some(note.clone());
+        }
+        if draws_on_copper(session.tool) && self.active_copper_layer().is_none() {
+            let note = t!(i18n, ids::PCB_TOOL_NEEDS_COPPER, "tool" => name.as_str());
+            return Some(note.into_string());
+        }
+        // Mid-route the corner rule is said instead (`corner_status`).
+        (!session.is_routing()).then(|| self.board_tool_hint(session.tool))
+    }
+
     /// Where a tool click at `at` lands on the board in view.
     fn board_tool_point(&self, board: &PcbBoard, at: Point) -> Point {
         snap_point(board, at, &self.ui_state.pcb_snap, self.pcb_active_layer())
@@ -269,6 +309,9 @@ impl Signex {
             // A paused tool places nothing; the net pick of its form still
             // takes the click.
             return self.interaction_state.pcb_primitive.net_pick.is_none();
+        }
+        if let Some(session) = self.own_board_tool_mut() {
+            session.note = None;
         }
         let Some(board) = self.active_pcb() else {
             return false;
@@ -384,4 +427,21 @@ impl Signex {
         }
         Some(preview)
     }
+}
+
+/// Whether `tool` draws on the active copper layer only.
+fn draws_on_copper(tool: BoardPlaceTool) -> bool {
+    matches!(
+        tool,
+        BoardPlaceTool::Track
+            | BoardPlaceTool::InteractiveRouting
+            | BoardPlaceTool::DiffPairRouting
+            | BoardPlaceTool::QuickRoute
+            | BoardPlaceTool::MultiRoute
+            | BoardPlaceTool::Fill
+            | BoardPlaceTool::SolidRegion
+            | BoardPlaceTool::PolygonPour
+            | BoardPlaceTool::PourCutout
+            | BoardPlaceTool::SlicePour
+    )
 }

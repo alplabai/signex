@@ -5,7 +5,8 @@
 
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_app::menu_bar::MenuMessage;
-use signex_app::start_screen::{self, Action, Surface};
+use signex_app::panels::PanelKind;
+use signex_app::start_screen::{self, Action, StartScreenMsg, StartSection, Surface};
 
 fn surface_of(app: &Signex) -> Surface {
     Surface::select(app.document_state.active_project.is_some())
@@ -175,4 +176,49 @@ fn shortcuts_modal_cache_is_built_on_open_and_rebuilt_on_keymap_change() {
     );
     app.ui_state.set_keymap_profiles(profiles);
     assert_eq!(app.ui_state.shortcut_sections, Some(expected));
+}
+
+/// The Projects row moves the Start screen to the project lists and Home
+/// moves it back; the picked row is the highlighted one (#2270 left both
+/// rows without a message).
+#[test]
+fn projects_and_home_rows_pick_their_section() {
+    let (mut app, _t) = Signex::new();
+    assert_eq!(app.interaction_state.start_section, StartSection::Home);
+    let _ = app.update(start_screen::message(StartScreenMsg::SectionPicked(
+        StartSection::Projects,
+    )));
+    assert_eq!(app.interaction_state.start_section, StartSection::Projects);
+    let _ = app.update(start_screen::message(StartScreenMsg::SectionPicked(
+        StartSection::Home,
+    )));
+    assert_eq!(app.interaction_state.start_section, StartSection::Home);
+}
+
+/// With no library open, the Libraries row opens the Library panel, whose
+/// list offers Open Library.
+#[test]
+fn libraries_row_without_an_open_library_opens_the_library_panel() {
+    let (mut app, _t) = Signex::new();
+    app.library.open_libraries.clear();
+    app.document_state.dock.close_panel(PanelKind::Library);
+    assert!(app.document_state.dock.locate(PanelKind::Library).is_none());
+    let _ = app.update(start_screen::message(StartScreenMsg::LibrariesPicked));
+    assert!(app.document_state.dock.locate(PanelKind::Library).is_some());
+}
+
+/// The picked section is forgotten once the Start screen goes away, so it
+/// shows Home again when it comes back.
+#[test]
+fn the_section_returns_to_home_when_the_start_screen_goes_away() {
+    let (mut app, _t) = Signex::new();
+    let _ = app.update(start_screen::message(StartScreenMsg::SectionPicked(
+        StartSection::Projects,
+    )));
+    let dir = tempfile::tempdir().expect("tempdir");
+    let prj = dir.path().join("Start.snxprj");
+    std::fs::write(&prj, b"").expect("create project");
+    let _ = app.update(Message::File(FileMsg::Opened(Some(prj))));
+    assert!(app.document_state.active_project.is_some());
+    assert_eq!(app.interaction_state.start_section, StartSection::Home);
 }

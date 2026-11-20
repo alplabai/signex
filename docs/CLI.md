@@ -112,7 +112,8 @@ The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_junction`, `place_no_connect`, `place_no_erc`, `place_wire`, `draw_wire`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
 `draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
-`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420,
+`place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420), and
+`edit_no_erc_rules` (#1699, see
 [SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md))) take an optional
 `document`, an id or a path as for `apply_edits`. Given, the command runs on that sheet and never on
 the active tab: pin references, the intent checks and their scratch copies, the
@@ -179,12 +180,13 @@ sheet first and judge the result with the netlist derivation
    included; running along a body edge or ending on one does not count.
 3. **Extra connection** (never allowed): the run pulls another pin, label,
    junction or wire into the net, wherever on its path or bend ("the wire also
-   touches R5.1 at 20.32,5.08"). "Touches" is what the netlist joins: a pin
-   the run only passes over, with no wire end or junction at its tip, is not
-   connected and not named. What an end intends is what is connected there
-   before the run (wire ends, junctions, labels, connected pins, sheet pins) and
-   what the caller named: a pin reference names only that pin (another pin on
-   the same tip is extra), a coordinate names the pins at the point. A start
+   touches R5.1 at 20.32,5.08"). "Touches" is what the netlist joins. A pin
+   end the run passes over gets an automatic junction (2026-11-18), so it is
+   joined and named like a pin the run ends on. What an end intends is what is
+   connected there before the run (wire ends, junctions, labels, connected pins,
+   sheet pins) and what the caller named: a pin reference names only that pin
+   (another pin on the same tip is extra), a coordinate names the pins at the
+   point. A start
    or end on a wire's interior is a T the caller asked for only for a
    coordinate with no pin tip there; for a pin reference, or any end on a pin
    tip, a wire passing under the tip is not intended, so its net is extra.
@@ -510,6 +512,46 @@ menu action, run by a person, keeps its read in place. The answer is
 `{"sheet", "file", "added", "removed", "kept"}`
 (entry names); Messages reports it as the menu action does.
 
+### Bottom-up hierarchy {#bottom-up-hierarchy}
+
+```text
+create_sheet_symbol_from_sheet path=power.snxsch [at=x,y] [allow_merge=..] [document=..]
+sync_sheet_entries symbol=<id or name> direction=to_symbol|to_sheet [document=..]
+```
+
+The operand forms of Design ▸ Create Sheet Symbol From Sheet and Design ▸
+Synchronize Sheet Entries and Ports (#1276); rules in
+[MENU_BAR.md](MENU_BAR.md#bottom-up-hierarchy).
+
+`create_sheet_symbol_from_sheet` places one sheet symbol for the sheet file
+`path` with an auto-generated entry for every port of the file, as one undo
+step. `path` is checked as `place_sheet_symbol`'s `file` is: inside the
+project folder, not through a link out of it, not this sheet, not a sheet
+above it at any depth, not a file whose subtree places this sheet, and the
+frozen name rule (a page of the project, a file placed elsewhere, or names
+that would short or rename a net need `allow_merge=true`). A file this sheet
+already places is refused. `at` is the top-left corner (a grid coordinate,
+never a pin reference); without it the symbol goes under the sheet's content.
+The file is read off the UI thread before the edit runs. The answer is
+`{"id", "name", "file", "at", "size", "entries"}`. It takes a file path, so it
+is not an edit of `apply_edits`, as `place_design_block` is not. Without
+`path` a headless run is refused for the missing operand; the file picker of
+the menu row is never opened.
+
+`sync_sheet_entries` applies what the dialog's preview would show for
+`direction`, at once, on the sheet symbol `symbol` (its id, or its unique
+name): `to_symbol` changes the symbol's entries (a renamed entry keeps its
+place and wires; only auto-generated entries of `symbol` are renamed, and
+only auto-generated entries are removed), `to_sheet`
+changes the child sheet's Hierarchical labels (never a Global label) as one
+undo step of the child, left unsaved; a closed child goes to a tabless
+engine. The closed child file is read off the UI thread first; a sheet that
+changed while it was read is refused with nothing applied, as any edit is.
+`to_sheet` is refused inside `apply_edits` and an agent's one-step run,
+whose undo step covers the edited sheet only. The answer is
+`{"symbol", "name", "file", "direction", "added", "removed", "renamed"}`,
+`renamed` a list of `{"from", "to"}`; empty lists when the two sides agree.
+
 ## Editing placed objects
 
 The Location and Parameters rows of a placed object in Properties run these
@@ -542,6 +584,22 @@ set_symbol_parameter id=<uuid> name=Manufacturer [value=..] [document=..]
 - `set_symbol_parameter` sets one custom parameter of a placed part (left out
   or empty `value`: the parameter stays, with no value). `reference`, `value`
   and `footprint` have their own rows and commands and are refused here.
+
+`set_sheet_variable name=<NAME> [value=..] [remove=true] [document=..]` sets
+one variable of the sheet (what `${NAME}` and expressions on it resolve), as
+the Sheet Variables rows in Properties do, in one undo step. A left-out or
+empty `value` keeps the variable with no value; `remove=true` deletes it and
+takes no `value`. A name is letters, digits and `_` and does not start with a
+digit. Variables that then do not evaluate (a cycle, an unknown name) are
+reported in Messages. The answer is `{"name", "value", "variables"}`.
+
+`repair_pin_junctions [document=..]` adds a junction dot on every pin end
+of the sheet that lies inside a wire with none, as Tools ▸ Repair Pin
+Junctions does, in one undo step; the answer is `{"added"}`.
+`reset_board_origin document=..` and `reset_layer_colors document=..` are
+the Reset rows of the board menus on the board named: the origin to the
+bottom-left of the outline (answer `{"document", "origin"}`), and every
+layer back to the palette colour. A read-only board is refused.
 
 A locked object is refused with the lock's reason before anything is sent.
 Without operands (the palette, a key) each says which Properties row to use.
@@ -789,7 +847,7 @@ The answer is a check report (above), `"check": "drc"`:
   the finding's `evidence.waiver_key`. A finding of a rule switched `off` is
   not listed and its waiver is in neither list. To waive a finding, run
   `waive_drc_violation document=<board> id=<evidence.waiver_key>
-  text=<note>` after a Run DRC of the board; it is refused when the board
+  text=<note> [author=<name>]` after a Run DRC of the board; it is refused when the board
   changed since that run (`docs/architecture/pcb-drc.md`, "Waivers").
 - The baseline is scoped to the board file: a run of another board, or an
   ERC run, is refused as a baseline.

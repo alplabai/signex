@@ -136,8 +136,9 @@ impl Signex {
     }
 
     /// What the person is in the middle of on the sheet at `path`, in the main
-    /// window or an undocked one, that an agent's `revert` must not cut under:
-    /// drawing, typing into an item of the sheet, or a move armed (#2178).
+    /// window or an undocked one, that an agent's `revert` and an operand
+    /// `undo` or `redo` must not cut under: drawing, typing into an item of
+    /// the sheet, or a move armed (#2178, #2548).
     pub(crate) fn person_busy_on(&self, path: &Path) -> Option<&'static str> {
         let windows = &self.ui_state.windows;
         let undocked = self.interaction_state.canvases.iter().filter(|(id, _)| {

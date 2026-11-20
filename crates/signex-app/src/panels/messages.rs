@@ -12,6 +12,9 @@ pub enum PanelMsg {
     Navigator(TreeMsg),
     SetUnit(Unit),
     RunErc,
+    /// A Messages row's command link was pressed: the command and the
+    /// document it acts on (`messages_row::row_action`).
+    MessageLinkPressed(crate::diagnostics::MessageLink),
     /// v0.14.2 — Properties panel toggle for the active footprint
     /// editor's Auto-fit Courtyard setting. Routes through
     /// `handle_dock_sch_library_message` (same dispatcher every other
@@ -636,10 +639,6 @@ pub enum PanelMsg {
     ClearErc,
     /// Focus a specific ERC diagnostic row from the global flattened list.
     FocusErcViolation(usize),
-    /// Focus previous ERC diagnostic row in the global list.
-    FocusPrevErcDiagnostic,
-    /// Focus next ERC diagnostic row in the global list.
-    FocusNextErcDiagnostic,
     /// User clicked the Quick Fix chip on an ERC violation row. Routes
     /// to a per-rule handler — UnusedPin places a NoConnect at the
     /// pin, every other rule falls back to "zoom + select" (same as
@@ -654,6 +653,13 @@ pub enum PanelMsg {
     },
     /// Per-finding waivers with a reason (#1285).
     ErcWaiver(super::ErcWaiverMsg),
+    /// The ERC panel's tiles, rule groups and row hover (#85).
+    ErcView(super::ErcPanelMsg),
+    /// The Messages panel's chips, filters, Copy and Clear (#86).
+    MessagesView(super::MessagesPanelMsg),
+    /// The user identity a waiver's Author starts as was read (AV-13);
+    /// `None` when neither git nor the login names anyone.
+    WaiverIdentityResolved(Option<String>),
     ToggleGrid,
     ToggleSnap,
     PropertiesTab(usize),
@@ -757,6 +763,8 @@ pub enum PanelMsg {
     EditTextNoteText(uuid::Uuid, String),
     /// Edit a Blanket's net class or ERC exclusions (#2420).
     EditBlanket(uuid::Uuid, super::BlanketEdit),
+    /// Edit the rules a No-ERC directive silences (#1699).
+    EditNoErcRules(uuid::Uuid, super::NoErcRuleEdit),
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
     /// family of the selected text item.
     EditTextFontFamily(signex_engine::TextTarget, Option<String>),
@@ -1093,6 +1101,8 @@ pub enum PanelMsg {
     TitleBlockTyping(super::TitleBlockField, String),
     /// Title Block: Enter in a field writes its draft to the sheet.
     CommitTitleBlockField(super::TitleBlockField),
+    /// Sheet Variables: an edit of the active sheet's variables (#1987).
+    SheetVariables(super::SheetVariableMsg),
     /// No-op placeholder for unimplemented UI controls.
     Noop,
     /// The multi-selection form of the Properties panel (#1258).

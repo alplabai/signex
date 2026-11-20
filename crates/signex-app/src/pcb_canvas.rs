@@ -159,8 +159,9 @@ pub struct PcbCanvas {
     clicks_only: bool,
     /// The board without the carried footprints, and them at their offset.
     drag_preview: Option<drag_preview::DragPreview>,
-    /// The library part on the cursor, dimmed, set by the app (#2364).
-    part_ghost: Option<Arc<Scene>>,
+    /// What the next click adds, set by the app (#2364), and the share of
+    /// its colour it keeps: dimmed, or whole for a route being drawn.
+    part_ghost: Option<(Arc<Scene>, f32)>,
     /// The footprint texts drawn by [`BoardTextLayer`], kept while the
     /// camera and the board stay as `text_key` says (#2368).
     text_cache: canvas::Cache,

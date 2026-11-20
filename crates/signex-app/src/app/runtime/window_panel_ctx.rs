@@ -33,6 +33,13 @@ impl PanelContext {
         self.erc_running = main.erc_running;
         self.erc_results_stale = main.erc_results_stale;
         self.erc_ran = main.erc_ran;
+        self.erc_focus_index = main.erc_focus_index;
+        if self.validation != main.validation {
+            self.validation.clone_from(&main.validation);
+        }
+        if self.erc_waive_draft != main.erc_waive_draft {
+            self.erc_waive_draft.clone_from(&main.erc_waive_draft);
+        }
         self.project_tree_selected
             .clone_from(&main.project_tree_selected);
         if self.ui_font_name != main.ui_font_name {

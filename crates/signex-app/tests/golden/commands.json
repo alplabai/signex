@@ -285,6 +285,11 @@
     "category": "design"
   },
   {
+    "id": "create_sheet_symbol_from_sheet",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "cross_probe",
     "group": "General",
     "category": "select"
@@ -465,9 +470,19 @@
     "category": "edit"
   },
   {
+    "id": "edit_layer_color",
+    "group": "Pcb",
+    "category": "view"
+  },
+  {
     "id": "edit_library_symbol",
     "group": "General",
     "category": "library"
+  },
+  {
+    "id": "edit_no_erc_rules",
+    "group": "Schematic",
+    "category": "place"
   },
   {
     "id": "edit_object_properties",
@@ -1370,6 +1385,11 @@
     "category": "design"
   },
   {
+    "id": "repair_pin_junctions",
+    "group": "Schematic",
+    "category": "validation"
+  },
+  {
     "id": "repeat_last_item",
     "group": "General",
     "category": "edit"
@@ -1388,6 +1408,16 @@
     "id": "repour_selected",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "reset_board_origin",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
+    "id": "reset_layer_colors",
+    "group": "Pcb",
+    "category": "view"
   },
   {
     "id": "reset_local_coordinates",
@@ -1610,6 +1640,11 @@
     "category": "edit"
   },
   {
+    "id": "set_board_origin",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
     "id": "set_board_panel",
     "group": "Pcb",
     "category": "pcb"
@@ -1685,6 +1720,11 @@
     "category": "edit"
   },
   {
+    "id": "set_sheet_variable",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "set_symbol_parameter",
     "group": "Schematic",
     "category": "edit"
@@ -1750,6 +1790,11 @@
     "category": "edit"
   },
   {
+    "id": "snap_board_origin_to_corner",
+    "group": "Pcb",
+    "category": "edit"
+  },
+  {
     "id": "stitch_vias",
     "group": "Pcb",
     "category": "pcb"
@@ -1768,6 +1813,11 @@
     "id": "switch_segment_posture",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "sync_sheet_entries",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "sync_sheet_pins",

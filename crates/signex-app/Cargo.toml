@@ -50,6 +50,7 @@ signex-library = { workspace = true, features = [
     "ai-stub",
     "search-tantivy",
 ] }
+signex-expr = { workspace = true }
 signex-sketch = { workspace = true }
 signex-bake = { workspace = true }
 # `log` feature: signex-app installs a `log`-based logger (SignexLogger) but

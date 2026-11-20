@@ -313,7 +313,10 @@ impl Signex {
         // not the schematic `custom_filter_presets`.
         let footprint_presets = &interaction.footprint_filter_presets;
         let bar_items = crate::library::editor::footprint::unified_active_bar::bar_items(
-            editor, theme_id, tokens,
+            editor,
+            theme_id,
+            tokens,
+            &self.ui_state.i18n,
         );
         let bar = signex_widgets::active_bar::view(bar_items, tokens)
             .map(Message::Library)
@@ -338,6 +341,7 @@ impl Signex {
                 footprint_presets,
                 dropdown_top,
                 self.ui_state.window_size.0,
+                &self.ui_state.i18n,
             )
         {
             out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));

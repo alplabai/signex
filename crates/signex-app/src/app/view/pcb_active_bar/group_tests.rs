@@ -288,3 +288,73 @@ fn the_copper_areas_group_lists_the_pour_rows() {
     );
     assert_eq!(armed(&app), Some(BoardPlaceTool::PourCutout));
 }
+
+/// A click on the canvas of the board in view at (`x`, `y`) mm.
+fn canvas_click(app: &mut Signex, x: f64, y: f64) {
+    let _ = app.update(Message::PcbCanvas(
+        crate::pcb_canvas::PcbCanvasMsg::Clicked {
+            at: signex_types::pcb::Point::new(x, y),
+            tolerance_mm: 0.05,
+            mode: pcb_geom::ClickMode::Replace,
+        },
+    ));
+}
+
+/// The pointer moved over the canvas to (`x`, `y`) mm.
+fn canvas_hover(app: &mut Signex, x: f64, y: f64) {
+    let _ = app.update(Message::PcbCanvas(
+        crate::pcb_canvas::PcbCanvasMsg::PointerMoved {
+            at: signex_types::pcb::Point::new(x, y),
+            zoom_pct: 100.0,
+            tolerance_mm: 0.05,
+        },
+    ));
+}
+
+/// The maintainer's report (2026-11-18): Interactive Routing picked from
+/// the Route dropdown routes from a pad. The click on the pad starts the
+/// route on its net, the leg follows the pointer, a click adds it and Esc
+/// lands it as one undo step on the pad's net and layer.
+#[test]
+fn the_route_row_routes_from_a_pad_as_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let board: signex_types::pcb::PcbBoard = serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(1),
+        "setup": {"grid_size": 0.5, "trace_width": 0.25, "clearance": 0.2},
+        "nets": [{"number": 1, "name": "A"}],
+        "footprints": [{
+            "uuid": uuid::Uuid::from_u128(2), "reference": "U1", "value": "",
+            "footprint_id": "Pad", "layer": "TopCopper", "rotation": 0.0,
+            "position": {"x": 0.0, "y": 0.0},
+            "pads": [{
+                "uuid": uuid::Uuid::from_u128(3), "number": "1", "pad_type": "smd",
+                "shape": "circle", "position": {"x": 0.0, "y": 0.0},
+                "size": {"x": 1.0, "y": 1.0}, "drill": null, "layers": ["TopCopper"],
+                "net": {"number": 1, "name": "A"}
+            }]
+        }]
+    }))
+    .unwrap();
+    let workspace = dir.path().to_string_lossy();
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(&workspace, &[]);
+    app.ui_state.pcb_bar_last_tools = PcbBarLastTools::default();
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), board);
+
+    let _ = pick_from_group(&mut app, PcbBarGroup::Route, "place_board_route");
+    assert_eq!(armed(&app), Some(BoardPlaceTool::InteractiveRouting));
+    assert!(app.board_tool_status().is_some(), "the status bar says so");
+    canvas_click(&mut app, 0.0, 0.0);
+    canvas_hover(&mut app, 5.0, 3.0);
+    assert!(app.interaction_state.pcb_canvas.has_part_ghost());
+    canvas_click(&mut app, 5.0, 3.0);
+    app.clear_pcb_selection();
+
+    let tracks = &app.document_state.pcb_board(&path).expect("board").segments;
+    assert!(!tracks.is_empty(), "the route landed");
+    let on_pad_net = |t: &signex_types::pcb::Segment| t.net == 1 && t.layer == "TopCopper";
+    assert!(tracks.iter().all(on_pad_net), "{tracks:?}");
+    let _ = app.update(Message::Edit(crate::app::EditMsg::Undo));
+    let board = app.document_state.pcb_board(&path).expect("board");
+    assert!(board.segments.is_empty(), "one undo removes the route");
+}

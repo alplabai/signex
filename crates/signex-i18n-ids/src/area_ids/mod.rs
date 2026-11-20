@@ -3,6 +3,7 @@
 //! re-exports them, so callers write `ids::NAME` either way.
 
 mod annotations;
+mod assign_footprints;
 mod board_checks;
 mod board_output;
 mod board_panel;
@@ -39,10 +40,12 @@ mod properties;
 mod requirements;
 mod rooms;
 mod rules;
+mod sheet_sync;
 mod update_pcb;
 mod workspace_layouts;
 
 pub use annotations::*;
+pub use assign_footprints::*;
 pub use board_checks::*;
 pub use board_output::*;
 pub use board_panel::*;
@@ -79,6 +82,7 @@ pub use properties::*;
 pub use requirements::*;
 pub use rooms::*;
 pub use rules::*;
+pub use sheet_sync::*;
 pub use update_pcb::*;
 pub use workspace_layouts::*;
 
@@ -87,6 +91,7 @@ pub use workspace_layouts::*;
 pub(crate) fn area_lists() -> Vec<crate::MessageId> {
     [
         annotations::ANNOTATIONS,
+        assign_footprints::ASSIGN_FOOTPRINTS,
         board_checks::BOARD_CHECKS,
         board_output::BOARD_OUTPUT,
         board_panel::BOARD_PANEL,
@@ -123,6 +128,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         requirements::REQUIREMENTS,
         rooms::ROOMS,
         rules::RULES,
+        sheet_sync::SHEET_SYNC,
         update_pcb::UPDATE_PCB,
         workspace_layouts::WORKSPACE_LAYOUTS,
     ]

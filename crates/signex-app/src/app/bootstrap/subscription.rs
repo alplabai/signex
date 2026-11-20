@@ -60,6 +60,7 @@ struct OpenOverlays {
     update_pcb_open: bool,
     document_setup_open: bool,
     sheet_numbering_open: bool,
+    sheet_sync_open: bool,
     board_reannotate_open: bool,
     /// Create Rooms from Sheets (#2457).
     create_rooms_open: bool,
@@ -368,6 +369,9 @@ impl OpenOverlays {
             OverlayId::SheetNumbering => self
                 .sheet_numbering_open
                 .then(|| Message::from(crate::app::SheetNumberingMsg::CancelRequested)),
+            OverlayId::SheetSync => self
+                .sheet_sync_open
+                .then(|| Message::from(crate::app::SheetSyncMsg::CancelRequested)),
             OverlayId::BoardReannotate => self
                 .board_reannotate_open
                 .then(|| Message::from(crate::app::BoardReannotateMsg::CancelRequested)),
@@ -709,6 +713,7 @@ impl Signex {
             update_pcb_open: self.ui_state.update_pcb.as_ref().is_some_and(|s| !s.apply),
             document_setup_open: self.ui_state.document_setup.is_some(),
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
+            sheet_sync_open: self.ui_state.sheet_sync.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
             create_rooms_open: self.ui_state.rooms.create.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
@@ -1261,6 +1266,12 @@ mod tests {
             only(|o| o.paste_array_open = true),
             Some(Message::Edit(crate::app::EditMsg::PasteArray(
                 crate::paste_array::PasteArrayMsg::Closed
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.sheet_sync_open = true),
+            Some(Message::Edit(crate::app::EditMsg::SheetSync(
+                crate::app::SheetSyncMsg::CancelRequested
             )))
         ));
         assert!(matches!(
@@ -1875,6 +1886,7 @@ mod tests {
             update_pcb_open,
             document_setup_open,
             sheet_numbering_open,
+            sheet_sync_open,
             board_reannotate_open,
             create_rooms_open,
             fab_outputs_open,
@@ -1958,6 +1970,7 @@ mod tests {
             ("update_pcb_open", |o| o.update_pcb_open = true),
             ("document_setup_open", |o| o.document_setup_open = true),
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
+            ("sheet_sync_open", |o| o.sheet_sync_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
             ("create_rooms_open", |o| o.create_rooms_open = true),
             ("fab_outputs_open", |o| o.fab_outputs_open = true),

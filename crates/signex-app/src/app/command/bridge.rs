@@ -6,6 +6,7 @@
 //! palette, and a future CLI all route a command id through here on
 //! their way to `update`.
 
+use crate::app::contracts::BoardOriginMsg;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::keymap::{AppCommandId, CatalogTextExt};
 
@@ -68,6 +69,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let pcb_view = |event| Message::Pcb(PcbMsg::View(event));
     let view_turn = |event| Message::Pcb(PcbMsg::ViewRotation(event));
     let board_tool = |tool| Message::Pcb(PcbMsg::PlaceToolPicked(tool));
+    let board_origin = |event| Message::Pcb(PcbMsg::Origin(event));
     let board_report = |kind| Message::from(crate::app::BoardOutputMsg::ReportRequested(kind));
     let board_tools = |event| Message::Pcb(PcbMsg::Tools(event));
     let part_swap = |kind| Message::Pcb(PcbMsg::PartSwap(crate::app::PartSwapMsg::Requested(kind)));
@@ -175,6 +177,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_child_sheet" => context_action(ContextAction::OpenChildSheet),
         "create_sheet_from_sheet_symbol" => context_action(ContextAction::CreateChildSheet),
         "sync_sheet_pins" => context_action(ContextAction::SyncSheetPins),
+        // #1276: bottom-up hierarchy.
+        "create_sheet_symbol_from_sheet" => {
+            Message::from(crate::app::SheetSyncMsg::CreateSymbolRequested)
+        }
+        "sync_sheet_entries" => Message::from(crate::app::SheetSyncMsg::Requested),
         "change_component" => placed_part(PlacedPartAction::ChangeComponent),
         // Opens the options tab of the project the call names (`args.project`,
         // a project-tree row), else of the active document's project.
@@ -322,6 +329,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_clockwise" => Message::Edit(EditMsg::RotateSelectedClockwise),
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
+        "repair_pin_junctions" => Message::Erc(ErcMsg::PinJunctionRepairRequested),
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
         // Design ▸ Rules (#2398): the active document's project.
         "open_rules" => {
@@ -450,6 +458,15 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "show_all_layers" => pcb_view(PcbViewMsg::AllLayersShown),
         // #2394: the board seen from below, and the layer tabs' numbers.
         "flip_board_view" => pcb_view(PcbViewMsg::BoardFlipToggled),
+        // 2026-11-18: the layer colours, saved with the board.
+        "edit_layer_color" => Message::Pcb(PcbMsg::LayerTabMenu(
+            crate::app::LayerTabMenuMsg::ColourEditRequested(None),
+        )),
+        "reset_layer_colors" => pcb_view(PcbViewMsg::LayerColoursReset),
+        // 2026-11-18: Edit ▸ Origin.
+        "set_board_origin" => board_origin(BoardOriginMsg::SetPicked),
+        "reset_board_origin" => board_origin(BoardOriginMsg::ResetPicked),
+        "snap_board_origin_to_corner" => board_origin(BoardOriginMsg::SnapToCornerPicked),
         "toggle_layer_numbers" => Message::Pcb(PcbMsg::LayerStrip(
             crate::app::LayerStripMsg::LayerNumbersToggled,
         )),

@@ -50,6 +50,32 @@ impl Signex {
                 self.tick_back_annotate(|list| list.set_group_on(group, on));
                 Task::none()
             }
+            M::GroupFolded { group, folded } => {
+                if let Some(state) = self.ui_state.back_annotate.as_mut() {
+                    state.folds.insert(group, folded);
+                }
+                Task::none()
+            }
+            M::NotesFolded(folded) => {
+                if let Some(state) = self.ui_state.back_annotate.as_mut() {
+                    state.notes_folded = folded;
+                }
+                Task::none()
+            }
+            M::DuplicateShown(key) => {
+                if let Some(state) = self.ui_state.back_annotate.as_mut() {
+                    let group = state
+                        .list
+                        .as_ref()
+                        .and_then(|l| l.row(&key))
+                        .map(|r| r.group);
+                    if let Some(group) = group {
+                        state.folds.insert(group, false);
+                    }
+                    state.focused = Some(key);
+                }
+                Task::none()
+            }
             M::RefreshRequested => {
                 let previous = self
                     .ui_state
@@ -214,6 +240,9 @@ impl Signex {
                 let Some(state) = self.ui_state.back_annotate.as_mut() else {
                     return;
                 };
+                // AV-11: a rename the user has not chosen yet that would put a
+                // designator on two parts starts unticked.
+                super::duplicates::untick_duplicate_renames(&mut list, state.list.as_ref());
                 state.list = Some(list);
                 state.read = Some(read);
                 state.phase = Phase::Ready;

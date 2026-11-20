@@ -144,7 +144,8 @@ one worker task at one board revision. Code:
 `crates/signex-app/src/app/view/dialogs/compare_board/`.
 
 Entry points: Project ▸ Compare Board with Schematic…, the board right-click
-menu's Compare with Schematic, and the command palette. It is gated like
+menu's Compare with Schematic (on an object or a selection; the empty-area
+menu stays short), and the command palette. It is gated like
 Update PCB: an open project with a schematic or a board in view. A project
 with no board or no root sheet is refused with a notice.
 

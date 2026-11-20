@@ -640,10 +640,11 @@ fn confirming_a_reprefix_while_a_run_is_going_keeps_the_confirm_open() {
         lookup: Arc::new(Default::default()),
         standard: signex_types::designator::DesignatorStandard::Ieee315,
         shown: Default::default(),
-        headline: String::new(),
-        change_lines: Vec::new(),
+        changes: Vec::new(),
         more: 0,
-        skip_lines: Vec::new(),
+        sheets: 0,
+        by_symbol: 0,
+        skips: Vec::new(),
         parts: 0,
     });
     let _ = app.handle_reprefix_confirmed();

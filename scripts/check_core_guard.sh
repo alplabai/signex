@@ -27,7 +27,10 @@
 #   tokio               names `tokio`;
 #   blocking            names `spawn_blocking` or `run_blocking`;
 #   std_fs / std_thread / std_process
-#                       names `std::fs`, `std::thread` or `std::process`.
+#                       names `std::fs`, `std::thread` or `std::process`;
+#   clock               reads the wall clock (`Local::now`, `Utc::now`,
+#                       `SystemTime::now`, `Instant::now`); the host reads it
+#                       and passes the stamp in.
 #
 # And the app module root (crates/signex-app/src/app.rs or app/mod.rs) fails
 # on core_decl: a `mod core` with an inline `{` body or behind a `#[path]`
@@ -48,6 +51,7 @@
 # Known blind spots:
 #   a macro defined outside the core and pulled in by `#[macro_use]` expands unseen;
 #   std IO roots not listed above (std::net, std::env, std::io::stdin, std::os::*::fs) pass;
+#   a clock type renamed on import (`use std::time::Instant as I; I::now()`) passes;
 #   a path split over lines, or with an empty turbofish (`std::<>::fs`), inside a macro
 #   body that rustfmt leaves alone passes. The text guard stops accidents, not evasion;
 #   the clippy lint after the lift (ADR-0006, Enforcement) closes this class.
@@ -73,7 +77,7 @@ export PATH_ATTR='#!?[[:space:]]*\[[[:space:]]*(cfg_attr\(.*,[[:space:]]*)?path[
 cd "$ROOT"
 
 RULES=(crate_outside_core crate_alias std_alias path_attr include_source super_escape
-  iced ui_stack tokio blocking std_fs std_thread std_process core_decl)
+  iced ui_stack tokio blocking std_fs std_thread std_process clock core_decl)
 
 pattern() {
   case "$1" in
@@ -88,6 +92,7 @@ pattern() {
     std_fs) printf '%s\n' '\bstd::(fs\b|\{[^;]*\bfs\b)' ;;
     std_thread) printf '%s\n' '\bstd::(thread\b|\{[^;]*\bthread\b)' ;;
     std_process) printf '%s\n' '\bstd::(process\b|\{[^;]*\bprocess\b)' ;;
+    clock) printf '%s\n' '\b(Local|Utc|SystemTime|Instant)::now\b' ;;
   esac
 }
 

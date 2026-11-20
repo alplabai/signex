@@ -6,6 +6,7 @@ pub(crate) mod case_fold;
 pub(crate) mod command_log;
 pub(crate) mod component_class;
 pub(crate) mod document_key;
+pub(crate) mod document_times;
 pub(crate) mod editor_address;
 pub(crate) mod new_library_defaults;
 pub(crate) mod origin;

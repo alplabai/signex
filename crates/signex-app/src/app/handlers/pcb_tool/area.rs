@@ -12,6 +12,7 @@
 //! a right-click once it has three; Esc drops it.
 
 use signex_engine::pcb::draw;
+use signex_engine::pcb::placement::grid_step_mm;
 use signex_i18n::{ids, t};
 use signex_types::pcb::{PcbBoard, Point, Zone};
 use signex_types::pcb_layer::PcbLayer;
@@ -21,6 +22,12 @@ use uuid::Uuid;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
+use crate::panels::pcb_primitive_properties::unfilled_reason;
+
+/// Whether `b` lies within `reach` mm of `a`.
+fn near(a: Point, b: Point, reach: f64) -> bool {
+    (a.x - b.x).hypot(a.y - b.y) <= reach
+}
 
 /// The outline the next click at `at` would close: the Fill's rectangle, or
 /// the polygon's corners with `at`.
@@ -73,13 +80,19 @@ impl Signex {
         if self.area_layer(tool).is_none() {
             return;
         }
+        // A click within half a grid step of the first corner closes the
+        // shape, though an object snap moved it off that corner.
+        let reach = self
+            .active_pcb()
+            .map_or(0.0, |board| grid_step_mm(board) / 2.0);
         let Some(session) = self.own_board_tool() else {
             return;
         };
         let points = &session.points;
+        let first = points.first().copied();
         let closes = match tool {
             BoardPlaceTool::Fill => !points.is_empty(),
-            _ => points.len() >= 3 && points.first() == Some(&at),
+            _ => points.len() >= 3 && first.is_some_and(|first| near(first, at, reach)),
         };
         if closes {
             let outline = match tool {
@@ -135,7 +148,11 @@ impl Signex {
         let defaults = &self.interaction_state.pcb_tool_defaults;
         match area_zone(tool, board, defaults, Uuid::now_v7(), outline, active) {
             Some(zone) => {
+                let (id, pour, netless) = (zone.uuid, zone.is_pour(), zone.net == 0);
                 self.run_placement(&name, Ok(vec![draw::place_zone(zone)]));
+                if pour {
+                    self.say_new_pour(id, &name, netless);
+                }
             }
             None => {
                 let note = t!(self.ui_state.i18n, ids::PCB_TOOL_NO_AREA, "tool" => name.as_str());
@@ -143,6 +160,25 @@ impl Signex {
             }
         }
         self.refresh_pcb_highlight();
+    }
+
+    /// A pour just placed: say in the status bar and Messages when it has
+    /// no net, or why it has no fill.
+    fn say_new_pour(&mut self, id: Uuid, name: &str, netless: bool) {
+        let unfilled = self.active_pcb().and_then(|board| {
+            let index = board.zones.iter().position(|zone| zone.uuid == id)?;
+            pcb_geom::zone_fills(board).unfilled(index)
+        });
+        let i18n = &self.ui_state.i18n;
+        let line = match unfilled {
+            Some(why) => {
+                let why = t!(i18n, unfilled_reason(why)).into_string();
+                t!(i18n, ids::PCB_POUR_NOT_FILLED, "pour" => name, "why" => why)
+            }
+            None if netless => t!(i18n, ids::PCB_POUR_NO_NET, "tool" => name),
+            None => return,
+        };
+        self.note_board_tool(line.into_string());
     }
 
     /// The area the next click closes, drawn into `preview`.

@@ -1,0 +1,179 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "koppar-lte-modem",
+  "net_classes": [
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.1,
+      "name": "PWR_1A",
+      "patterns": [
+        "+3V3",
+        "*/+3V3"
+      ],
+      "trace_width": 0.3,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.1,
+      "name": "PWR_3A",
+      "patterns": [
+        "+5V",
+        "*/+5V",
+        "BUCK_SW",
+        "*/BUCK_SW"
+      ],
+      "trace_width": 1.37,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.1,
+      "name": "PWR_VBAT",
+      "patterns": [
+        "+3V8",
+        "*/+3V8"
+      ],
+      "trace_width": 2.0,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.1,
+      "name": "Power",
+      "patterns": [
+        "DVDD",
+        "*/DVDD",
+        "USIM_VDD",
+        "*/USIM_VDD"
+      ],
+      "trace_width": 1.37,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.2,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.1,
+      "name": "RF_50R",
+      "patterns": [
+        "ANT_DIV_CONN",
+        "*/ANT_DIV_CONN",
+        "ANT_DIV_MOD",
+        "*/ANT_DIV_MOD",
+        "ANT_MAIN_CONN",
+        "*/ANT_MAIN_CONN",
+        "ANT_MAIN_MOD",
+        "*/ANT_MAIN_MOD",
+        "Net-(U8-ANT_MAIN)",
+        "*/Net-(U8-ANT_MAIN)",
+        "Net-(U8-ANT_DIV)",
+        "*/Net-(U8-ANT_DIV)"
+      ],
+      "trace_width": 0.2,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.1,
+      "name": "SIGNAL",
+      "patterns": [
+        "+1V8",
+        "*/+1V8",
+        "PCM_CLK_3V3",
+        "*/PCM_CLK_3V3",
+        "PCM_IN_3V3",
+        "*/PCM_IN_3V3",
+        "PCM_OUT_3V3",
+        "*/PCM_OUT_3V3",
+        "PCM_SYNC_3V3",
+        "*/PCM_SYNC_3V3",
+        "RI_3V3",
+        "*/RI_3V3",
+        "STATUS_3V3",
+        "*/STATUS_3V3"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.17,
+      "name": "USB_90R_A",
+      "patterns": [
+        "USB_UP_DP",
+        "*/USB_UP_DP",
+        "USB_UP_DM",
+        "*/USB_UP_DM"
+      ],
+      "trace_width": 0.17,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.17,
+      "name": "USB_90R_B",
+      "patterns": [
+        "EC_USB_DP",
+        "*/EC_USB_DP",
+        "EC_USB_DM",
+        "*/EC_USB_DM"
+      ],
+      "trace_width": 0.17,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.17,
+      "name": "USB_90R_C",
+      "patterns": [
+        "HUB_P2_DP",
+        "*/HUB_P2_DP",
+        "HUB_P2_DM",
+        "*/HUB_P2_DM",
+        "RP_USB_DP",
+        "*/RP_USB_DP",
+        "RP_USB_DM",
+        "*/RP_USB_DM"
+      ],
+      "trace_width": 0.17,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    },
+    {
+      "clearance": 0.1,
+      "diff_pair_gap": 0.15,
+      "diff_pair_width": 0.1,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.1,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+    }
+  ],
+  "pcb_file": "koppar-lte-modem.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

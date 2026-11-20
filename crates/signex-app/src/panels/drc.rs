@@ -1,18 +1,13 @@
-//! The design-rule check pieces the DRC panel draws (#2222, #2399): its
-//! header with Run DRC, the state lines and the row text. Rows are data
-//! (`DrcRow`); the text is rendered here from the message catalog, so a
-//! language switch needs no new run.
+//! What the DRC panel shows of a board's check (#2222, #2399): the panel's
+//! data (`DrcPanel`, one `DrcRow` per violation) and each row's text. Rows
+//! are data; the text is rendered here from the message catalog, so a
+//! language switch needs no new run. The idle state is drawn in
+//! `drc_idle.rs`, the results in `drc_results.rs`.
 
 use signex_drc::ViolationKind;
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::violation::Severity;
-
-use super::*;
-use crate::styles::{Spacing, TypeScale};
-
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
 
 /// Rows listed; the rest are counted, not drawn (one iced widget per row).
 pub const MAX_ROWS: usize = 500;
@@ -57,7 +52,7 @@ pub struct DrcPanel {
     /// The board changed after that report.
     pub stale: bool,
     /// The minimum clearance in mm, when the board set none and the default
-    /// was used.
+    /// was used (or, before a run, will be).
     pub default_clearance_mm: Option<String>,
     /// The run applied a written clearance rule (the default note then says
     /// it holds only where no written rule does).
@@ -66,8 +61,8 @@ pub struct DrcPanel {
     /// syntax error (none of it applied); see Messages for which.
     pub rules_not_applied: usize,
     pub rule_text_unparsed: bool,
-    /// Counts for the summary line; track width and via size findings are
-    /// listed as rows but not counted here yet. Keepouts are (#2300).
+    /// Counts for the tiles; track width and via size findings are listed
+    /// as rows but not counted here yet. Keepouts are (#2300).
     pub clearance: usize,
     pub short: usize,
     pub unconnected: usize,
@@ -80,18 +75,19 @@ pub struct DrcPanel {
     pub hidden: usize,
     /// What the DRC results panel shows of `rows` (#2399).
     pub filter: super::DrcFilter,
-    /// The waiver note being written there.
+    /// The tiles, folded groups and row hover (#88): view state.
+    pub view: super::DrcView,
+    /// The base rules the board's rule text writes (#2474), for the idle
+    /// list; the rest show "default" or "always".
+    pub written_base_rules: Vec<super::BaseRule>,
+    /// The waiver being written there.
     pub waive_draft: Option<super::DrcWaiveDraft>,
 }
 
+/// The name of a copper layer, from the shared layer-name function the
+/// Layers panel uses.
 pub(super) fn layer_label(i18n: &I18n, layer: Option<CopperLayer>) -> Option<Localized> {
-    Some(match layer? {
-        CopperLayer::Top => t!(i18n, ids::PCB_LAYER_TOP_COPPER),
-        CopperLayer::Bottom => t!(i18n, ids::PCB_LAYER_BOTTOM_COPPER),
-        CopperLayer::Inner(inner) => {
-            t!(i18n, ids::PCB_LAYER_INNER_COPPER, "index" => u32::from(inner.index()))
-        }
-    })
+    Some(crate::pcb_canvas::layer_style::copper_name(i18n, layer?))
 }
 
 pub(crate) fn row_text(i18n: &I18n, row: &DrcRow) -> (Localized, Localized, Localized) {
@@ -187,145 +183,9 @@ pub(super) fn kind_label(kind: ViolationKind) -> signex_i18n::MessageId {
     }
 }
 
-pub(super) type Rows<'a> = Column<Element<'a, PanelMsg>>;
-
-pub(super) fn note<'a>(message: Localized, color: Color) -> Element<'a, PanelMsg> {
-    text(message).size(TS.caption).color(color).boxed()
-}
-
-/// The section header: its title and a Graphite Run DRC button, disabled
-/// while a check runs.
-pub(super) fn header<'a>(ctx: &'a PanelContext, drc: &DrcPanel, col: Rows<'a>) -> Rows<'a> {
-    let i18n = &*ctx.i18n;
-    let primary = theme_ext::text_primary(&ctx.tokens);
-    let run = (!drc.running).then_some(PanelMsg::RunDrc);
-    col.push(
-        container(
-            row![
-                text(t!(i18n, ids::DRC_HEADING))
-                    .size(TS.label)
-                    .font(iced::Font {
-                        weight: iced::font::Weight::Semibold,
-                        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-                    })
-                    .color(primary),
-                Space::new().width(Length::Fill).height(Length::Shrink),
-                // The project's rules, as a document tab (#2398).
-                crate::styles::dialog_button(
-                    t!(i18n, ids::RULES_TAB_TITLE),
-                    crate::styles::DialogButtonKind::Ghost,
-                    Some(PanelMsg::OpenRules),
-                    &ctx.tokens,
-                ),
-                crate::styles::dialog_button(
-                    t!(i18n, ids::DRC_RUN),
-                    crate::styles::DialogButtonKind::Secondary,
-                    run,
-                    &ctx.tokens,
-                ),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .height(Length::Fixed(super::graphite::TABLE_ROW_HEIGHT + SP.m))
-        .align_y(iced::alignment::Vertical::Center)
-        .boxed(),
-    )
-}
-
-/// The base rules (#2474), one line each with how to write it; in
-/// `docs/ROADMAP.md`'s PCB Design scope and `docs/DRC_RULES.md`.
-const BASE_RULES: [signex_i18n::MessageId; 15] = [
-    ids::DRC_BASE_CLEARANCE,
-    ids::DRC_BASE_TRACK_WIDTH,
-    ids::DRC_BASE_ANNULAR_RING,
-    ids::DRC_BASE_HOLE_SIZE,
-    ids::DRC_BASE_HOLE_TO_HOLE,
-    ids::DRC_BASE_VIA_IN_PAD,
-    ids::DRC_BASE_SILK_TO_PAD,
-    ids::DRC_BASE_SILK_TO_SILK,
-    ids::DRC_BASE_MASK,
-    ids::DRC_BASE_PASTE,
-    ids::DRC_BASE_EDGE,
-    ids::DRC_BASE_KEEPOUT,
-    ids::DRC_BASE_UNROUTED,
-    ids::DRC_BASE_SHORT,
-    ids::DRC_BASE_COURTYARD,
-];
-
-/// The rule help shown before the first run: the base rules.
-fn base_rules<'a>(i18n: &I18n, muted: Color, mut col: Rows<'a>) -> Rows<'a> {
-    col = col.push(note(t!(i18n, ids::DRC_BASE_RULES), muted));
-    for id in BASE_RULES {
-        col = col.push(note(t!(i18n, id), muted));
-    }
-    col
-}
-
-/// The state line(s) above the rows: running, idle, or what the last run
-/// found. The default-clearance notice comes first among them.
-pub(super) fn status<'a>(ctx: &'a PanelContext, drc: &DrcPanel, mut col: Rows<'a>) -> Rows<'a> {
-    let i18n = &*ctx.i18n;
-    let muted = theme_ext::text_secondary(&ctx.tokens);
-    let warn = theme_ext::warning_color(&ctx.tokens);
-    if drc.running {
-        return col.push(note(t!(i18n, ids::DRC_RUNNING), muted));
-    }
-    if !drc.ran {
-        col = col.push(note(t!(i18n, ids::DRC_IDLE), muted));
-        return base_rules(i18n, muted, col);
-    }
-    if let Some(mm) = &drc.default_clearance_mm {
-        let id = if drc.written_clearance {
-            ids::DRC_DEFAULT_CLEARANCE_WRITTEN
-        } else {
-            ids::DRC_DEFAULT_CLEARANCE
-        };
-        col = col.push(note(t!(i18n, id, "clearance" => mm.clone()), muted));
-    }
-    if drc.stale {
-        col = col.push(note(t!(i18n, ids::DRC_STALE), warn));
-    }
-    if drc.rule_text_unparsed {
-        col = col.push(note(t!(i18n, ids::DRC_RULE_TEXT_UNPARSED), warn));
-    }
-    if drc.rules_not_applied > 0 {
-        col = col.push(note(
-            t!(i18n, ids::DRC_RULES_NOT_APPLIED, "count" => drc.rules_not_applied),
-            warn,
-        ));
-    }
-    col = if drc.rows.is_empty() && drc.skipped == 0 && drc.skipped_keepouts == 0 {
-        col.push(note(
-            t!(i18n, ids::DRC_CLEAN),
-            theme_ext::success_color(&ctx.tokens),
-        ))
-    } else {
-        col.push(note(
-            t!(
-                i18n, ids::DRC_SUMMARY,
-                "clearance" => drc.clearance, "short" => drc.short,
-                "unconnected" => drc.unconnected, "keepout" => drc.keepout
-            ),
-            muted,
-        ))
-    };
-    if drc.skipped_keepouts > 0 {
-        col = col.push(note(
-            t!(i18n, ids::DRC_KEEPOUTS_SKIPPED, "count" => drc.skipped_keepouts),
-            warn,
-        ));
-    }
-    if drc.skipped > 0 {
-        col = col.push(note(
-            t!(i18n, ids::DRC_SKIPPED, "count" => drc.skipped),
-            warn,
-        ));
-    }
-    col
-}
-
 #[cfg(test)]
 mod tests {
+    use super::super::{PanelContext, PanelMsg};
     use super::*;
     use crate::layout_probe::messages_on_click;
 
@@ -339,17 +199,26 @@ mod tests {
         ctx
     }
 
-    /// Round 9 of #2262: Run DRC is the DRC panel header's button; it runs the
-    /// check, and does nothing while a check is already running.
+    fn texts(ctx: &PanelContext) -> Vec<String> {
+        let section = super::super::drc_results::view(ctx);
+        crate::layout_probe::lay_out_texts(section, iced::Size::new(300.0, 4000.0))
+            .into_iter()
+            .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+            .collect()
+    }
+
+    /// Round 9 of #2262: Run DRC is the DRC panel's button; it runs the
+    /// check, and while a check runs it reads "Checking the board..." and
+    /// does nothing (#87).
     #[test]
-    fn run_drc_is_a_header_button_disabled_while_running() {
+    fn run_drc_is_the_panel_button_and_reads_checking_while_running() {
         let messages = crate::layout_probe::lay_out_texts(
             super::super::view_messages(&context(false)),
             iced::Size::new(900.0, 300.0),
         );
         // #2262: the check lives in the DRC panel, not at the top of Messages.
         assert!(messages.iter().all(|t| t.text != "Run DRC"), "{messages:?}");
-        let window = iced::Size::new(900.0, 300.0);
+        let window = iced::Size::new(300.0, 4000.0);
         let idle = context(false);
         let idle_section = super::super::drc_results::view(&idle);
         let pressed = messages_on_click(idle_section, window, "Run DRC");
@@ -357,16 +226,22 @@ mod tests {
             matches!(pressed.as_slice(), [PanelMsg::RunDrc]),
             "{pressed:?}"
         );
+        // While running, the button itself reads "Checking the board..."
+        // and pressing it sends nothing.
         let busy = context(true);
+        let busy_texts = texts(&busy);
+        assert!(busy_texts.iter().any(|t| t == "Checking the board..."));
+        assert!(busy_texts.iter().all(|t| t != "Run DRC"), "{busy_texts:?}");
         let busy_section = super::super::drc_results::view(&busy);
-        assert!(messages_on_click(busy_section, window, "Run DRC").is_empty());
+        assert!(messages_on_click(busy_section, window, "Checking the board...").is_empty());
     }
 
-    /// #2307: with written rules the default-clearance note says the board
-    /// value holds only where no written rule does; without, it is as before.
+    /// #2307, #87: with written rules the default-clearance notice says the
+    /// board value holds only where no written rule does; without, it says
+    /// what was checked. Either way "Set it in Rules" follows it.
     #[test]
     fn the_default_clearance_note_follows_whether_written_rules_ran() {
-        let texts = |written_clearance: bool| {
+        let shown = |written_clearance: bool| {
             let mut ctx = context(false);
             ctx.pcb_drc = Some(DrcPanel {
                 ran: true,
@@ -374,24 +249,21 @@ mod tests {
                 written_clearance,
                 ..DrcPanel::default()
             });
-            let section = super::super::drc_results::view(&ctx);
-            crate::layout_probe::lay_out_texts(section, iced::Size::new(1400.0, 300.0))
-                .into_iter()
-                .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
-                .collect::<Vec<_>>()
+            texts(&ctx)
         };
-        let plain =
-            "No clearance rule set on this board; checked with 0.2 mm. Set it in Board Setup.";
-        let written = "No clearance rule set on this board; 0.2 mm applies where no written rule does. Set it in Board Setup.";
-        let without = texts(false);
+        let plain = "No clearance rule set on this board; checked with 0.2 mm.";
+        let written =
+            "No clearance rule set on this board; 0.2 mm applies where no written rule does.";
+        let without = shown(false);
         assert!(without.iter().any(|t| t == plain), "{without:?}");
         assert!(!without.iter().any(|t| t == written), "{without:?}");
-        let with = texts(true);
+        let with = shown(true);
         assert!(with.iter().any(|t| t == written), "{with:?}");
         assert!(!with.iter().any(|t| t == plain), "{with:?}");
     }
 
-    /// An inner layer's DRC row uses the Layers panel's name (Mid-Layer n).
+    /// A DRC row names its layer with the shared layer-name function, the
+    /// one the Layers panel uses, never its own words.
     #[test]
     fn an_inner_layer_row_uses_the_layers_panel_name() {
         let i18n = I18n::en_us();
@@ -401,7 +273,12 @@ mod tests {
             .into_string();
         let panel = crate::pcb_canvas::layer_style::copper_name(&i18n, inner).into_string();
         assert_eq!(label, panel);
-        assert!(label.contains("Mid-Layer"), "{label}");
+        assert_eq!(
+            layer_label(&i18n, Some(CopperLayer::Top)).map(Localized::into_string),
+            Some(
+                crate::pcb_canvas::layer_style::copper_name(&i18n, CopperLayer::Top).into_string()
+            )
+        );
     }
 
     /// #2307 step 2b: a width or via-size row says which limit it breaks.
@@ -456,53 +333,56 @@ mod tests {
         );
     }
 
-    /// #2300: a board whose only violations are keepouts counts them in the
-    /// summary, and a keepout that was not checked is said, never "clean".
+    /// #2300, #88: a board whose only violations are keepouts counts them in
+    /// the keepout tile, and a keepout that was not checked is said, never
+    /// "clean".
     #[test]
-    fn the_summary_counts_keepouts_and_says_an_unchecked_keepout() {
-        let texts = |panel: DrcPanel| {
+    fn the_tiles_count_keepouts_and_an_unchecked_keepout_is_said() {
+        let keepout_only = {
             let mut ctx = context(false);
-            ctx.pcb_drc = Some(panel);
-            let section = super::super::drc_results::view(&ctx);
-            crate::layout_probe::lay_out_texts(section, iced::Size::new(1400.0, 300.0))
-                .into_iter()
-                .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
-                .collect::<Vec<_>>()
+            ctx.pcb_drc = Some(DrcPanel {
+                ran: true,
+                keepout: 1,
+                rows: vec![DrcRow {
+                    index: 0,
+                    kind: ViolationKind::Keepout,
+                    a: "GND".into(),
+                    b: "GND".into(),
+                    measured_mm: "0.000".into(),
+                    required_mm: "0.000".into(),
+                    over_maximum: false,
+                    x_mm: "0".into(),
+                    y_mm: "0".into(),
+                    layer: None,
+                    layers: Vec::new(),
+                    key: String::new(),
+                    rule: String::new(),
+                    severity: None,
+                    objects: 0,
+                    waiver: None,
+                }],
+                ..DrcPanel::default()
+            });
+            texts(&ctx)
         };
-        let keepout_only = texts(DrcPanel {
-            ran: true,
-            keepout: 1,
-            rows: vec![DrcRow {
-                index: 0,
-                kind: ViolationKind::Keepout,
-                a: "GND".into(),
-                b: "GND".into(),
-                measured_mm: "0.000".into(),
-                required_mm: "0.000".into(),
-                over_maximum: false,
-                x_mm: "0".into(),
-                y_mm: "0".into(),
-                layer: None,
-                layers: Vec::new(),
-                key: String::new(),
-                rule: String::new(),
-                severity: None,
-                objects: 0,
-                waiver: None,
-            }],
-            ..DrcPanel::default()
-        });
-        let summary = "0 clearance violations, 0 shorts, 0 unconnected links, 1 keepout violation";
         assert!(
-            keepout_only.iter().any(|t| t == summary),
+            keepout_only.iter().any(|t| t == "keepout"),
             "{keepout_only:?}"
         );
+        assert_eq!(
+            keepout_only.iter().filter(|t| *t == "1").count(),
+            1,
+            "{keepout_only:?}"
+        );
+        assert!(!keepout_only.iter().any(|t| t == "No violations."));
 
-        let unchecked = texts(DrcPanel {
+        let mut ctx = context(false);
+        ctx.pcb_drc = Some(DrcPanel {
             ran: true,
             skipped_keepouts: 2,
             ..DrcPanel::default()
         });
+        let unchecked = texts(&ctx);
         assert!(
             !unchecked.iter().any(|t| t == "No violations."),
             "{unchecked:?}"
@@ -510,7 +390,7 @@ mod tests {
         assert!(
             unchecked
                 .iter()
-                .any(|t| t == "2 keepouts could not be checked; see Messages."),
+                .any(|t| t == "2 keepouts could not be checked;"),
             "{unchecked:?}"
         );
     }

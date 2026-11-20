@@ -152,6 +152,9 @@ pub(super) fn edit(ctx: &MenuContext) -> Vec<MenuEntry> {
     if !ctx.commands.pcb.shown {
         rows.push(submenu(ctx, menu_ids::MENU_EDIT_ARRANGE, arrange(ctx)));
     }
+    // Where the board counts from (2026-11-18); greyed without an editable
+    // board.
+    rows.push(submenu(ctx, menu_ids::MENU_EDIT_ORIGIN, origin_menu(ctx)));
     rows.extend([
         SEP,
         cmd_item_gated(ctx, cmd("select_all", "Mod+A")),
@@ -177,6 +180,17 @@ fn move_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("mirror_x", "X")),
         cmd_item_gated(ctx, cmd("mirror_y", "Y")),
         cmd_item_gated(ctx, cmd("flip_selection", "")),
+    ]
+}
+
+/// Edit ▸ Origin (2026-11-18): set the board origin at a click, reset it to
+/// the bottom-left of the board, or snap it to the outline corner nearest
+/// the pointer.
+fn origin_menu(ctx: &MenuContext) -> Vec<MenuEntry> {
+    vec![
+        cmd_item_gated(ctx, cmd("set_board_origin", "")),
+        cmd_item_gated(ctx, cmd("reset_board_origin", "")),
+        cmd_item_gated(ctx, cmd("snap_board_origin_to_corner", "")),
     ]
 }
 
@@ -389,6 +403,10 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         // #2398: the project's design rules as a document tab; greyed with
         // no project open.
         cmd_item_gated(ctx, cmd("open_rules", "")),
+        SEP,
+        // #1276: bottom-up hierarchy; greyed with no sheet in view.
+        cmd_item_gated(ctx, cmd("create_sheet_symbol_from_sheet", "")),
+        cmd_item_gated(ctx, cmd("sync_sheet_entries", "")),
     ]
 }
 
@@ -535,6 +553,9 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
         // The project's parts and their row's footprints:
         // docs/MENU_BAR.md#tools-assign-footprints
         cmd_item_gated(ctx, cmd("assign_footprints", "")),
+        // A dot on every bare pin touch of the sheet in view:
+        // docs/MENU_BAR.md#tools-repair-pin-junctions
+        cmd_item_gated(ctx, cmd("repair_pin_junctions", "")),
         // Opens or focuses a Library Browser tab: docs/MENU_BAR.md#tools-library-editor
         cmd_item_gated(ctx, cmd("open_library_browser", "")),
         SEP,

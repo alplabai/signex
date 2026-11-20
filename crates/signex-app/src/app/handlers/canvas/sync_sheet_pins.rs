@@ -25,6 +25,7 @@ impl PendingFileSync {
         signex_engine::Command::ReconcileChildSheetPins {
             child_filename: self.filename.clone(),
             ports: self.ports.clone(),
+            renames: None,
         }
     }
 }

@@ -410,7 +410,7 @@ dates the numbers; they are starting points, not one maker's limits.
 |---|---|---|---|---|---|---|---|---|---|
 | Standard | 0.15 | 0.15 | 0.5 / 0.25 | 0.25 | 0.125 | 0.5 | 0.3 | 0.1 | 0.15 |
 | Advanced | 0.1 | 0.1 | 0.4 / 0.2 | 0.2 | 0.1 | 0.4 | 0.25 | 0.075 | 0.1 |
-| HDI | 0.075 | 0.075 | 0.3 / 0.15 | 0.1 | 0.075 | 0.3 | 0.2 | 0.06 | 0.075 |
+| HDI | 0.075 | 0.075 | 0.25 / 0.1 | 0.1 | 0.075 | 0.3 | 0.2 | 0.06 | 0.075 |
 
 All in mm. Mask sliver and silkscreen rules are warnings, the rest errors.
 Picking a tier in project setup (New Project, the Project tab's Project

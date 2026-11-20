@@ -48,6 +48,16 @@ pub struct DiagnosticEntry {
     pub message: String,
     /// When the record was logged (a held Info line keeps its own time).
     pub at: chrono::DateTime<chrono::Utc>,
+    /// The command the row offers as a link, with what it acts on.
+    pub link: Option<MessageLink>,
+}
+
+/// A command a Messages row offers as a link, carrying the document it acts
+/// on: the row may name a sheet other than the one in view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MessageLink {
+    /// Repair Pin Junctions on the sheet at this path.
+    RepairPinJunctions(std::path::PathBuf),
 }
 
 struct SignexLogger {
@@ -73,6 +83,17 @@ pub fn log_info(message: impl AsRef<str>) {
 
 pub fn log_warning(message: impl AsRef<str>) {
     warn!("{}", message.as_ref());
+}
+
+/// A warning logged under `target` whose Messages row offers `link`.
+pub fn log_warning_with_link(target: &str, message: impl AsRef<str>, link: MessageLink) {
+    let rendered = message.as_ref();
+    #[cfg(test)]
+    SAID_ON_THREAD.with(|said| said.set(said.get() + 1));
+    let (code, message) = summarize_record(target, rendered);
+    let entry = (DiagnosticLevel::Warning, code, message, chrono::Utc::now());
+    push_to_ring(entries(), &NEXT_ENTRY_ID, entry, Some(link));
+    eprintln!("[WARN] {rendered}");
 }
 
 /// Tell the user which locked objects an edit passed over.
@@ -291,18 +312,24 @@ fn push_entry(
     message: String,
     at: chrono::DateTime<chrono::Utc>,
 ) {
-    push_to_ring(entries(), &NEXT_ENTRY_ID, level, code, message, at);
+    push_to_ring(entries(), &NEXT_ENTRY_ID, (level, code, message, at), None);
 }
+
+/// What a ring entry holds besides its id and link.
+type EntryBody = (
+    DiagnosticLevel,
+    String,
+    String,
+    chrono::DateTime<chrono::Utc>,
+);
 
 /// [`push_entry`] against a given ring and id counter, so a test can hammer
 /// a private ring instead of the one every other test reads.
 fn push_to_ring(
     ring: &Mutex<VecDeque<DiagnosticEntry>>,
     next_id: &AtomicU64,
-    level: DiagnosticLevel,
-    code: String,
-    message: String,
-    at: chrono::DateTime<chrono::Utc>,
+    (level, code, message, at): EntryBody,
+    link: Option<MessageLink>,
 ) {
     let mut entries = ring.lock().expect("diagnostics mutex poisoned");
     if entries.len() == MAX_DIAGNOSTIC_ENTRIES {
@@ -314,6 +341,7 @@ fn push_to_ring(
         code,
         message,
         at,
+        link,
     });
 }
 
@@ -542,10 +570,13 @@ mod ring_order_tests {
                         push_to_ring(
                             ring,
                             next_id,
-                            DiagnosticLevel::Warning,
-                            "test".to_owned(),
-                            format!("ring-order {t}/{i}"),
-                            chrono::Utc::now(),
+                            (
+                                DiagnosticLevel::Warning,
+                                "test".to_owned(),
+                                format!("ring-order {t}/{i}"),
+                                chrono::Utc::now(),
+                            ),
+                            None,
                         );
                     }
                 });

@@ -3,6 +3,7 @@
 
 use crate::schematic_runtime::hit_index::HitIndex;
 use crate::schematic_runtime::{Designators, WireWidths};
+use signex_types::designator::DesignatorStandard;
 use signex_types::schematic::{SchematicDefaults, SelectedItem};
 
 use super::CanvasSlot;
@@ -15,6 +16,9 @@ pub(super) struct SheetKey {
     revision: u64,
     class_revision: u64,
     defaults: SchematicDefaults,
+    designator_standard: Option<DesignatorStandard>,
+    /// Value fields are boxed on their drawn text (#1986).
+    special_strings: Option<super::SpecialStrings>,
     designators: Designators,
 }
 
@@ -22,13 +26,15 @@ impl SheetKey {
     pub(super) fn new(
         revision: u64,
         class_revision: u64,
-        defaults: SchematicDefaults,
+        widths: &WireWidths<'_>,
         designators: &Designators,
     ) -> Self {
         Self {
             revision,
             class_revision,
-            defaults,
+            defaults: widths.defaults,
+            designator_standard: widths.designator_standard,
+            special_strings: widths.special_strings.cloned(),
             designators: designators.clone(),
         }
     }
@@ -39,12 +45,14 @@ impl SheetKey {
         &self,
         revision: u64,
         class_revision: u64,
-        defaults: &SchematicDefaults,
+        widths: &WireWidths<'_>,
         designators: &Designators,
     ) -> bool {
         self.revision == revision
             && self.class_revision == class_revision
-            && self.defaults == *defaults
+            && self.defaults == widths.defaults
+            && self.designator_standard == widths.designator_standard
+            && self.special_strings.as_ref() == widths.special_strings
             && self.designators == *designators
     }
 }
@@ -79,16 +87,12 @@ impl CanvasSlot {
         }
         let mut slot = self.hit_cache.borrow_mut();
         let fresh = slot.as_ref().is_some_and(|c| {
-            c.key.matches(
-                revision,
-                class_revision,
-                &widths.defaults,
-                &self.designators,
-            )
+            c.key
+                .matches(revision, class_revision, &widths, &self.designators)
         });
         if !fresh {
             *slot = Some(HitCache {
-                key: SheetKey::new(revision, class_revision, widths.defaults, &self.designators),
+                key: SheetKey::new(revision, class_revision, &widths, &self.designators),
                 index: HitIndex::build(snapshot, &self.designators, widths),
             });
         }

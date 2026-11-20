@@ -173,12 +173,21 @@ pub enum FootprintEditorMsg {
     /// switching tools mid-gesture doesn't leave dangling anchors.
     SketchSetTool(crate::library::editor::footprint::state::SketchTool),
 
-    /// v0.16.1 — toggle construction-mode (sticky).
-    SketchToggleConstruction,
+    /// A segment of the Active Bar's Linetype control was picked: the
+    /// linetype new entities get (sticky).
+    SketchLinetypePicked(crate::library::editor::footprint::sketch_mode::SketchLinetype),
 
-    /// v0.22 Phase A5 — toggle centerline-mode (sticky). Mutually
-    /// exclusive with construction-mode.
-    SketchToggleCenterline,
+    /// The sketch mode bar's Bake preview (or Back to sketch) was pressed.
+    SketchBakePreviewToggled,
+    /// The sketch mode bar's Bake was pressed: keep the edits and leave.
+    SketchBakeRequested,
+    /// Discard changes was pressed: leave, asking first when there are
+    /// edits.
+    SketchDiscardRequested,
+    /// The discard was confirmed: drop the edits and leave.
+    SketchDiscardConfirmed,
+    /// The discard was cancelled: keep editing.
+    SketchDiscardCancelled,
 
     /// v0.16.1 — TAB pause/resume during pad placement.
     TogglePlacementPause,

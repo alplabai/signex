@@ -65,6 +65,9 @@ pub(super) fn variants() -> Vec<MenuContext<'static>> {
                 footprints: 1,
                 pad_pair: false,
                 one_footprint: true,
+                routes: false,
+                hovered: false,
+                net: false,
             },
             ..base
         }),
@@ -366,6 +369,10 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #2394: fixture names only.
     ("toggle_layer_numbers", "ToggleLayerNumbers"),
     ("flip_board_view", "FlipBoardView"),
+    // 2026-11-18: Edit ▸ Origin, fixture names only.
+    ("set_board_origin", "SetBoardOrigin"),
+    ("reset_board_origin", "ResetBoardOrigin"),
+    ("snap_board_origin_to_corner", "SnapBoardOriginToCorner"),
     ("view_rotate", "RotateView"),
     ("view_rotate_ccw", "RotateViewCounterClockwise"),
     ("view_rotate_180", "RotateView180"),
@@ -421,6 +428,7 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("open_rules", "OpenRules"),
     // #2248 / #1269: fixture names only.
     ("assign_footprints", "AssignFootprints"),
+    ("repair_pin_junctions", "RepairPinJunctions"),
     ("open_net_inspector", "OpenNetInspector"),
     // #2408, #2409: fixture names only.
     ("stitch_vias", "StitchVias"),
@@ -456,6 +464,12 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     // #1667: fixture names only.
     ("place_design_block", "PlaceDesignBlock"),
     ("import_graphics", "ImportGraphics"),
+    // #1276: fixture names only.
+    (
+        "create_sheet_symbol_from_sheet",
+        "CreateSheetSymbolFromSheet",
+    ),
+    ("sync_sheet_entries", "SyncSheetEntries"),
     // #2420: the directive tools, fixture names only.
     ("place_blanket", "PlaceBlanket"),
     ("place_compile_mask", "PlaceCompileMask"),
@@ -661,8 +675,8 @@ fn model_shortcuts_follow_the_active_keymap() {
     // View ▸ Window ▸ Tile Horizontally, Tile Vertically and Untile (#2249), Design ▸
     // Board Sketch, Tools ▸ Design Rule Check, Edit ▸ Flip Selection, View ▸
     // Toggle Ratsnest and 3D Board (#2390, #2403, #2405) and Place ▸ Compile
-    // Mask (#2420) add nine.
-    assert_eq!(checked, 58, "the default profile labels 58 menu rows");
+    // Mask (#2420) add nine. Edit ▸ Origin ▸ Set adds `E O S` (2026-11-18).
+    assert_eq!(checked, 59, "the default profile labels 59 menu rows");
 }
 
 fn check_shortcuts(menu: &Menu, ctx: &MenuContext, checked: &mut usize) {

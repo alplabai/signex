@@ -26,7 +26,9 @@ use super::part_operands as part;
 use super::placed_operands as placed;
 use super::placement_extras_operands as extras;
 use super::placement_operands as place;
+use super::repair_reset_operands as repair_reset;
 use super::selection_filter_operands as filter;
+use super::sheet_sync_operands as sheet_sync;
 use super::{CommandArgs, CommandOutcome, enablement};
 use crate::app::board_output as output;
 use crate::app::board_reuse as reuse;
@@ -94,6 +96,7 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("draw_rectangle", place::rectangle),
     ("place_blanket", directive::blanket),
     ("edit_blanket", directive::edit_blanket),
+    ("edit_no_erc_rules", directive::edit_no_erc_rules),
     ("place_compile_mask", directive::compile_mask),
     ("place_diff_pair", directive::diff_pair),
     ("autoplace_fields", extras::autoplace_fields),
@@ -103,10 +106,20 @@ const HANDLERS: &[(&str, OperandHandler)] = &[
     ("place_sheet_symbol", hierarchy::place_sheet_symbol),
     ("place_sheet_entry", hierarchy::place_sheet_entry),
     ("sync_sheet_pins", hierarchy::sync_sheet_pins),
+    // #1276: bottom-up hierarchy.
+    (
+        "create_sheet_symbol_from_sheet",
+        sheet_sync::create_sheet_symbol_from_sheet,
+    ),
+    ("sync_sheet_entries", sheet_sync::sync_sheet_entries),
     ("set_object_position", placed::set_object_position),
     ("set_object_rotation", placed::set_object_rotation),
     ("set_sheet_symbol_size", placed::set_sheet_symbol_size),
     ("set_symbol_parameter", placed::set_symbol_parameter),
+    ("set_sheet_variable", placed::set_sheet_variable),
+    ("repair_pin_junctions", repair_reset::repair_pin_junctions),
+    ("reset_board_origin", repair_reset::reset_board_origin),
+    ("reset_layer_colors", repair_reset::reset_layer_colors),
     ("view_rotate", view_rotate),
     ("show_layer_set", strip::show_layer_set),
     ("save_layer_set", strip::save_layer_set),
@@ -329,8 +342,20 @@ pub(crate) fn operand_handler(command: &AppCommandId) -> Option<OperandHandler> 
 /// Commands a headless run hands to their handler even with no operands:
 /// the GUI form opens a setup dialog, the headless form makes the document
 /// from the project's own setup (#2232), as it did before the dialog.
+/// `create_sheet_symbol_from_sheet` (#1276) goes there too: its GUI form only
+/// opens a file picker, which a headless run refuses, so the handler refuses
+/// it for the missing `path` rather than the picker's refusal reading as run.
+/// `repair_pin_junctions` goes there too, so a headless run on the sheet in
+/// view answers how many dots it added (0 when nothing needed one) instead of
+/// a bare `Ran`.
 pub(crate) fn runs_headless_without_operands(command: &AppCommandId) -> bool {
-    matches!(command.as_str(), "new_pcb_document" | "new_schematic_sheet")
+    matches!(
+        command.as_str(),
+        "new_pcb_document"
+            | "new_schematic_sheet"
+            | "create_sheet_symbol_from_sheet"
+            | "repair_pin_junctions"
+    )
 }
 
 /// Why `command` does nothing without operands on a surface that gives it
@@ -413,6 +438,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
             "`set_symbol_parameter` needs the operands `id` and `name` — \
              use the Parameters rows in Properties",
         ),
+        "set_sheet_variable" => Some(
+            "`set_sheet_variable` needs the operand `name` — \
+             use the Sheet Variables rows in Properties",
+        ),
         // #2424: a person draws with the Graphics tools and edits in
         // Properties.
         "add_board_graphic" => Some(
@@ -469,6 +498,10 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         "edit_blanket" => Some(
             "`edit_blanket` needs the operand `id` and the values to set — \
              select the Blanket to read them in Properties",
+        ),
+        "edit_no_erc_rules" => Some(
+            "`edit_no_erc_rules` needs the operand `id` and the rules to set — \
+             tick the rules under Suppressed Rules in Properties",
         ),
         // #2410: a person picks the block on a component's board menu.
         "place_board_reuse_block" => Some(
