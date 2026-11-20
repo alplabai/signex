@@ -188,7 +188,7 @@ Each Net Parameters directive asks for design rules on its class (on its
 net when it sets no class): `Width_<CLASS>` (track, minimum width),
 `Clearance_<CLASS>` (minimum clearance) and `Via_<CLASS>` (minimum via
 diameter and drill). `current` makes no rule. Update PCB lists them below
-the board's rows (`update_pcb/rules_from_schematic.rs`): a rule of that name
+the board's rows (built in `signex_drc_dsl::schematic_rules`): a rule of that name
 written differently in the Rules tab first, with its text now, then new
 rules, then those already up to date. Execute writes the changed and new
 rules into the project's DRC rule text as one step of the rule history and

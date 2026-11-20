@@ -6,15 +6,19 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-# UI-free: rule text in, signex-drc rules and diagnostics out.
+# UI-free: rule text in, signex-drc rules and diagnostics out; the rules a
+# schematic's Net Parameters directives ask for (`schematic_rules`) read
+# their nets from signex-net.
 [dependencies]
 pcb-geom = { path = "../pcb-geom" }
 signex-drc.workspace = true
+signex-net.workspace = true
 signex-types.workspace = true
 chumsky.workspace = true
 uuid = { workspace = true, optional = true }
 
 [dev-dependencies]
+serde_json.workspace = true
 uuid.workspace = true
 
 [features]
