@@ -56,6 +56,9 @@ impl UiState {
                         != self.agent_connections_enabled
                     || self.fast_grid_drafts_differ()
             }
+            PrefNav::SchematicDisplay => {
+                self.preferences_draft_symbol_body_fill != self.symbol_body_fill
+            }
             // Rule profiles save to their files at once, and distributor
             // settings live in the library state: neither has drafts.
             PrefNav::RuleProfiles | PrefNav::LibraryDistributors => false,
@@ -143,6 +146,7 @@ impl Signex {
             PrefMsg::DraftNetHoverEnabled(enabled) => {
                 self.ui_state.preferences_draft_net_hover_enabled = enabled;
             }
+            PrefMsg::SymbolBodyFill(msg) => self.ui_state.apply_body_fill_message(msg),
             PrefMsg::DraftTrackpadPan(enabled) => {
                 self.ui_state.preferences_draft_trackpad_pan = enabled;
             }

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use signex_net::{ConnectedPoints, SheetConnectivity, best_net_name_of, pt_key};
 use signex_types::schematic::{InstancePath, SchematicSheet};
-use signex_types::schematic::{LabelType, PinDirection, Point, pin_tips};
+use signex_types::schematic::{LabelType, PinDirection, Point, no_erc_rules_suppress, pin_tips};
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -144,15 +144,18 @@ impl ErcSymbol {
     }
 }
 
-/// True when one of the No-ERC directive `positions` sits at `p`, compared in
-/// the 1 µm key space (`pt_key`). The one test both the per-sheet context and
-/// the project-wide units pass use.
+/// True when one of the No-ERC `directives` (position and rule list) sits at
+/// `p` and silences `rule_id`, compared in the 1 µm key space (`pt_key`). The
+/// one test the per-sheet context and the project-wide passes use.
 pub(crate) fn no_erc_directive_at<'a>(
-    positions: impl IntoIterator<Item = &'a Point>,
+    directives: impl IntoIterator<Item = (&'a Point, &'a [String])>,
     p: &Point,
+    rule_id: &str,
 ) -> bool {
     let k = pt_key(p);
-    positions.into_iter().any(|d| pt_key(d) == k)
+    directives
+        .into_iter()
+        .any(|(at, rules)| pt_key(at) == k && no_erc_rules_suppress(rules, rule_id))
 }
 
 /// The designator of each placement of `symbol`: its instance entries'
@@ -212,10 +215,13 @@ pub struct ErcNoConnect {
     pub position: Point,
 }
 
-/// A No-ERC directive: suppresses every diagnostic located at its point.
-#[derive(Debug, Clone, Copy)]
+/// A No-ERC directive: suppresses the diagnostics of its rules located at its
+/// point; no rules means every rule (#1699).
+#[derive(Debug, Clone)]
 pub struct ErcNoErcDirective {
     pub position: Point,
+    /// ERC rule ids it silences; empty silences every rule.
+    pub rules: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -339,10 +345,17 @@ pub struct ErcContext {
 }
 
 impl ErcContext {
-    /// True when a No-ERC directive sits at `p`, compared in the 1 µm key
-    /// space (`pt_key`) like every other point test in this crate.
-    pub fn has_no_erc_directive_at(&self, p: &Point) -> bool {
-        no_erc_directive_at(self.no_erc_directives.iter().map(|d| &d.position), p)
+    /// True when a No-ERC directive that silences `rule_id` sits at `p`,
+    /// compared in the 1 µm key space (`pt_key`) like every other point test in
+    /// this crate.
+    pub fn has_no_erc_directive_at(&self, p: &Point, rule_id: &str) -> bool {
+        no_erc_directive_at(
+            self.no_erc_directives
+                .iter()
+                .map(|d| (&d.position, d.rules.as_slice())),
+            p,
+            rule_id,
+        )
     }
 
     pub fn from_snapshot(snapshot: &SchematicSheet) -> Self {
@@ -432,6 +445,7 @@ impl ErcContext {
             .iter()
             .map(|d| ErcNoErcDirective {
                 position: d.position,
+                rules: d.rules.clone(),
             })
             .collect();
 
@@ -466,6 +480,11 @@ impl ErcContext {
                     .collect(),
             })
             .collect();
+
+        // A part's value as ERC reads it: an `=` value evaluated on its sheet
+        // (#1986); a power port's net name never is.
+        let sheet_variables = signex_types::variables::TextTable(&snapshot.variables);
+        let variables: [&dyn signex_types::variables::Resolver; 1] = [&sheet_variables];
 
         // --- Step 2: symbols with pre-computed pin connectivity -----------
         // Pins are projected first, then gated below. Pin-to-pin contact is not
@@ -503,7 +522,12 @@ impl ErcContext {
                         .collect(),
                     lib_id: sym.lib_id.clone(),
                     unit: sym.unit,
-                    value: sym.value.clone(),
+                    value: signex_types::part_fields::evaluated_value(
+                        &snapshot.symbols,
+                        sym,
+                        &variables,
+                        false,
+                    ),
                     footprint: sym.footprint.clone(),
                     on_board: sym.on_board,
                     unit_count: lib_sym.unit_count(),

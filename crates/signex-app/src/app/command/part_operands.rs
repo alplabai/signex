@@ -218,7 +218,8 @@ impl Signex {
                 None => self.next_designator_in_sheet(sheet, &prefix),
             });
         };
-        let wanted = wanted.trim().to_string();
+        // A `-` given as the designator is shown is not stored (#1416).
+        let wanted = docs.stored_reference_for(sheet, &wanted).trim().to_string();
         let used = match &scan {
             Some(scan) => self.used_designators_in(sheet, scan),
             None => self.used_designators(sheet),

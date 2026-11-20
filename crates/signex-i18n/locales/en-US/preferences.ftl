@@ -213,6 +213,16 @@ preferences-annotate-undo = Annotate undo
 # preferences-annotate-undo-project and preferences-annotate-undo-per-sheet read.
 preferences-annotate-undo-help = How many undo steps one annotate run is. One step for the whole project reverts every sheet the run touched together, from whichever sheet { $undo } is pressed on. Per sheet undoes each sheet on its own. Applies to the next annotate run.
 
+## Schematic ▸ Display
+# The page of how the schematic is drawn.
+preferences-page-schematic-display = Display
+preferences-section-schematic-display = Schematic — Display
+preferences-symbol-body-fill = Fill symbol bodies
+preferences-symbol-body-fill-help = When on, the closed rectangles, polygons and circles that form a symbol's body are drawn filled: on the canvas, in the symbol previews, and in PDF, SVG and print. Pins, text and open lines are never filled, and power ports are not filled. A body shape the symbol fills itself keeps its own fill.
+# Label of the swatch: the colour symbol bodies are filled with.
+preferences-symbol-body-fill-colour = Fill colour
+preferences-symbol-body-fill-colour-help = A soft tint of the theme unless you pick a colour. Reset to Default goes back to the theme's tint.
+
 ## Default Component Classes
 preferences-classes-title = Default Component Classes
 preferences-classes-help = The classes a new library starts with. They appear in the class picker of New Component and Edit Component. A library's own list is edited in that library.

@@ -887,11 +887,12 @@ fn a_path_that_touches_another_pin_is_refused_with_the_item_and_its_place() {
     let mut r5 = part("R5", Point::new(25.4, 8.89));
     r5.rotation = 90.0;
     sheet.symbols.push(r5);
-    // A pin the run only passes over joins nothing: the netlist needs a wire
-    // end or a junction at its tip, so the run is as clean as it was drawn.
+    // A pin end the run only passes over gets an automatic junction
+    // (2026-11-18), so the run would join it: refused, the pin named. (It
+    // used to join nothing, the netlist needing a wire end or a dot there.)
     let mut passing = app_with(sheet.clone());
-    let report = answered(run(&mut passing, "place_wire", &["start=R1.2", "end=C1.1"]));
-    assert_eq!(report["net"]["pins"], json!(["C1.1", "R1.2"]));
+    let reason = refusal(run(&mut passing, "place_wire", &["start=R1.2", "end=C1.1"]));
+    assert!(reason.contains("pin R5.1 at 25.4,"), "{reason}");
     // With a stub ending on the tip the engine joins it with a junction.
     sheet
         .wires

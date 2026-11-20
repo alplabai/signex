@@ -26,26 +26,28 @@ update-pcb-board-missing = The board { $board } could not be opened.
 update-pcb-no-schematic = This project has no schematic to update the board from.
 update-pcb-not-in-project = This document is not part of a project.
 
-# Summary chips: click one to list only its rows.
-update-pcb-chip-add = Add { $count }
-update-pcb-chip-change = Change { $count }
-update-pcb-chip-remove = Remove { $count }
-update-pcb-chip-problems = Problems { $count }
-update-pcb-chip-tooltip = List only these rows. Click again to list every row.
-update-pcb-problems-only = Show problems only
+# Summary tiles (the count is drawn above the word): click one to list only
+# its rows. The Add, Change and Remove tiles use the action words below.
+update-pcb-tile-problems = Problems
+update-pcb-tile-hint = Click a tile to list only those rows.
+update-pcb-filter-placeholder = Filter designator or net
+update-pcb-clear-filter = Clear filter
 update-pcb-filtered-empty = No row matches the filter.
 
-# The table: columns, actions, groups and their tick count.
-update-pcb-column-action = Action
-update-pcb-column-object = Object
-update-pcb-column-detail = Detail
-update-pcb-column-status = Status
+# The Problems card above the list. $count blocked rows hold back $parts parts.
+update-pcb-problems-heading = { $count ->
+        [one] 1 problem holds
+       *[other] { $count } problems hold
+    } back { $parts ->
+        [one] 1 part
+       *[other] { $parts } parts
+    }
+update-pcb-problems-hint = Fix them here, or execute without them
+
+# The list: action pills, groups and their tick count.
 update-pcb-action-add = Add
 update-pcb-action-change = Change
 update-pcb-action-remove = Remove
-update-pcb-action-add-icon = +
-update-pcb-action-change-icon = ~
-update-pcb-action-remove-icon = −
 update-pcb-table-components = Components
 update-pcb-table-nets = Nets
 update-pcb-table-pad-nets = Pad nets
@@ -62,11 +64,10 @@ update-pcb-detail-value = Value { $from } → { $to }
 update-pcb-detail-link = Link to its part
 update-pcb-detail-net = Net { $net }
 
-# A row's Status column, after Validate; a problem in short, the full text
-# is its tooltip.
+# A row's status icon (its words are the tooltip); a problem in short, as
+# the Problems card's reason pill.
 update-pcb-status-ok = ✓
 update-pcb-status-ok-tooltip = Validate: this change applies to the board.
-update-pcb-status-skipped = Skipped
 update-pcb-problem-no-footprint = No footprint
 update-pcb-problem-not-annotated = Not annotated
 update-pcb-problem-duplicate = Duplicate { $designator }
@@ -144,3 +145,19 @@ new-pcb-exists = A file named { $file } is already in the project folder.
 new-pcb-check-failed = Could not check whether { $file } is already in the project folder: { $why }
 new-pcb-no-project = Open a project to add a PCB to it.
 new-pcb-created = Created { $board } in { $project }. It is written when you save it.
+
+# The change-list rows and group headers Update PCB and Back Annotate share
+# (#2533). Status icons; their words are the row's tooltip.
+change-row-icon-skipped = –
+change-row-icon-blocked = ⊘
+change-row-icon-info = ⓘ
+change-row-icon-warn = ⚠
+change-row-status-ticked = Ticked: Execute applies this change.
+change-row-status-unticked = Not ticked: Execute leaves this change out.
+# A group header's split of its rows: added, changed and removed.
+change-row-split-add = +{ $count }
+change-row-split-change = ~{ $count }
+change-row-split-remove = −{ $count }
+change-row-split-separator = ·
+# The Notes group's count.
+change-row-notes-count = { $count }

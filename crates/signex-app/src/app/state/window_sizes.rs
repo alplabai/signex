@@ -23,10 +23,16 @@ impl UiState {
             self.windows.get(&window),
             Some(WindowKind::UndockedTab { .. })
         );
-        let real = size.0.is_finite() && size.1.is_finite() && size.0 > 0.0 && size.1 > 0.0;
-        if tracked && real {
+        if tracked && Self::is_real_window_size(size) {
             self.undocked_window_sizes.insert(window, size);
         }
+    }
+
+    /// Whether a reported window size is a real one. A minimised window
+    /// reports 0x0; no window's size is stored from such a reading.
+    #[must_use]
+    pub fn is_real_window_size((w, h): (f32, f32)) -> bool {
+        w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0
     }
 
     /// Forget a closed or reattached window's size.

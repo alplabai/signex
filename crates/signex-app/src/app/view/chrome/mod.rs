@@ -42,7 +42,7 @@ impl Signex {
     }
 
     /// `(x, width)` of the search bar for the current window width and
-    /// control layout; the palette dropdown anchors to the same `x`.
+    /// control layout; the palette dropdown centres on the same field.
     pub(in crate::app::view) fn chrome_search_bar_geometry(&self) -> (f32, f32) {
         let fullscreen = self.ui_state.main_window_is_fullscreen();
         let (leading_w, trailing_w) =
@@ -81,6 +81,9 @@ impl Signex {
             draft_annotate_undo: ui.preferences_draft_annotate_undo,
             draft_move_keeps_wires: ui.preferences_draft_move_keeps_wires,
             draft_net_hover_enabled: ui.preferences_draft_net_hover_enabled,
+            draft_symbol_body_fill: ui.preferences_draft_symbol_body_fill,
+            body_fill_palette_open: ui.preferences_body_fill_palette_open,
+            body_fill_picker_open: ui.preferences_body_fill_picker_open,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
             draft_wheel_mode: ui.preferences_draft_wheel_mode,
             draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,

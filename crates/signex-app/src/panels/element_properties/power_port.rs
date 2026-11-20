@@ -17,6 +17,7 @@ fn style_label(style: PowerPortStyle) -> MessageId {
         PowerPortStyle::PowerGround => ids::PROPERTIES_POWER_STYLE_POWER_GROUND,
         PowerPortStyle::SignalGround => ids::PROPERTIES_POWER_STYLE_SIGNAL_GROUND,
         PowerPortStyle::Earth => ids::PROPERTIES_POWER_STYLE_EARTH,
+        PowerPortStyle::Chassis => ids::PROPERTIES_POWER_STYLE_CHASSIS,
     }
 }
 

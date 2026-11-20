@@ -285,6 +285,13 @@ impl Signex {
             .then(|| self.view_sheet_numbering_dialog())
     }
 
+    pub(in crate::app::view) fn sheet_sync_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .sheet_sync
+            .is_some()
+            .then(|| self.view_sheet_sync_dialog())
+    }
+
     pub(in crate::app::view) fn board_reannotate_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .board_reannotate

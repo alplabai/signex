@@ -209,7 +209,7 @@ pub fn board_3d_highlight() -> [f32; 4] {
 mod tests {
     use super::*;
     use signex_renderer::pcb::{BOARD_OUTLINE, copper_slot};
-    use signex_types::theme::Color as ThemeColor;
+    use signex_types::theme::{Color as ThemeColor, pair_bottom};
 
     /// Every layer has a catalog name: none falls back to its message id.
     #[test]
@@ -225,16 +225,16 @@ mod tests {
         );
     }
 
-    /// The Altium name of every layer kind (decided 2026-11-10). Courtyard,
-    /// Fab, Assembly, 3D Body, Fiducial and Designator keep descriptive
-    /// names; the edge is the Board Outline row.
-    fn altium_name(layer: PcbLayer) -> String {
+    /// The house name of every layer kind (decided 2026-11-10; Silkscreen
+    /// since 2026-11-18). Courtyard, Fab, Assembly, 3D Body, Fiducial and
+    /// Designator keep descriptive names; the edge is the Board Outline row.
+    fn house_name(layer: PcbLayer) -> String {
         use TechnicalLayer as T;
         let technical = |t: TechnicalLayer| match t {
             T::EdgeCuts => "Board Outline",
             T::Margin => "Margin",
-            T::SilkscreenTop => "Top Overlay",
-            T::SilkscreenBottom => "Bottom Overlay",
+            T::SilkscreenTop => "Top Silkscreen",
+            T::SilkscreenBottom => "Bottom Silkscreen",
             T::SolderMaskTop => "Top Solder",
             T::SolderMaskBottom => "Bottom Solder",
             T::PasteTop => "Top Paste",
@@ -271,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn every_layer_kind_has_its_altium_name() {
+    fn every_layer_kind_has_its_house_name() {
         let i18n = I18n::en_us();
         let mut seen = std::collections::HashSet::new();
         for layer in PcbLayer::all() {
@@ -281,7 +281,7 @@ mod tests {
                 .chars()
                 .filter(|c| !matches!(c, '\u{2068}' | '\u{2069}'))
                 .collect();
-            assert_eq!(name, altium_name(layer), "{layer:?}");
+            assert_eq!(name, house_name(layer), "{layer:?}");
             assert!(seen.insert(name.clone()), "two layers named {name}");
         }
         assert_eq!(
@@ -439,10 +439,15 @@ mod tests {
         let light = theme_tokens(ThemeId::GraphiteLight);
         let dark = theme_tokens(ThemeId::GraphiteDark);
         let keepout = theme.color(ColorSlot::Keepout);
-        for t in [TechnicalLayer::KeepoutTop, TechnicalLayer::KeepoutBottom] {
-            let s = layer_colour(PcbLayer::Technical(t), &light);
-            assert_eq!([s.r, s.g, s.b, s.a], keepout, "{t:?}");
-        }
+        let keepout_top = layer_colour(PcbLayer::Technical(TechnicalLayer::KeepoutTop), &light);
+        assert_eq!(
+            [keepout_top.r, keepout_top.g, keepout_top.b, keepout_top.a],
+            keepout
+        );
+        // 2026-11-18: the bottom of a pair is its top, darker.
+        let keepout_bottom = PcbLayer::Technical(TechnicalLayer::KeepoutBottom);
+        let s = layer_colour(keepout_bottom, &light);
+        assert!(luminance(s) < luminance(keepout_top));
         let top = layer_colour(PcbLayer::Copper(CopperLayer::Top), &light);
         assert_eq!(rgba(top), palette_rgba(colors.top_copper));
         let bottom = layer_colour(PcbLayer::Copper(CopperLayer::Bottom), &light);
@@ -471,6 +476,9 @@ mod tests {
                 colors.silkscreen,
                 colors.solder_mask,
                 colors.paste,
+                pair_bottom(colors.silkscreen),
+                pair_bottom(colors.solder_mask),
+                pair_bottom(colors.paste),
                 t.dimensions,
                 t.notes,
                 t.drill_drawing,
@@ -481,7 +489,7 @@ mod tests {
             ]
             .map(palette_rgba),
         );
-        for layer in PcbLayer::all() {
+        for layer in PcbLayer::all().filter(|&l| l != keepout_bottom) {
             let swatch = layer_colour(layer, &light);
             assert!(palette.contains(&rgba(swatch)), "{layer:?}: {swatch:?}");
             assert_eq!(swatch, layer_colour(layer, &dark), "{layer:?}");
@@ -573,26 +581,22 @@ mod tests {
         }
     }
 
-    /// One related pair per kind: the top layer is the brighter.
+    /// Every Top/Bottom pair (2026-11-18), silkscreen, solder, paste and
+    /// keep-out included: the bottom is darker, in the top's hue.
     #[test]
     fn a_top_technical_layer_is_brighter_than_its_bottom() {
         let tokens = dark_tokens();
-        for top in
-            listed_technical().filter(|t| t.side() == Some(signex_types::pcb_layer::BoardSide::Top))
-        {
-            if matches!(
-                top,
-                TechnicalLayer::SilkscreenTop
-                    | TechnicalLayer::SolderMaskTop
-                    | TechnicalLayer::PasteTop
-            ) {
-                continue;
-            }
+        let tops = TechnicalLayer::ALL
+            .into_iter()
+            .filter(|t| t.side() == Some(signex_types::pcb_layer::BoardSide::Top));
+        for top in tops {
             let t = layer_colour(PcbLayer::Technical(top), &tokens);
             let b = layer_colour(PcbLayer::Technical(top.flipped()), &tokens);
             assert!(luminance(t) > luminance(b), "{top:?}");
+            // A grey (the silkscreen) has no hue to keep.
+            let grey = t.r == t.g && t.g == t.b;
             assert!(
-                (hue_degrees(t) - hue_degrees(b)).abs() < 10.0,
+                grey || (hue_degrees(t) - hue_degrees(b)).abs() < 10.0,
                 "{top:?} pair is not one hue"
             );
         }

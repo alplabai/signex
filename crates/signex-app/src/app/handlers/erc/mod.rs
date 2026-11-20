@@ -30,9 +30,13 @@ mod stale_findings;
 mod stale_findings_tests;
 
 pub(crate) use annotate_job::{AnnotateRuns, SheetWrite, SheetsRead};
-#[cfg(test)]
-pub(crate) use annotate_preview::AnnotatePreviewEntry;
-pub(crate) use annotate_preview::{AnnotatePreviewCache, AnnotatePreviewLoad};
+pub(crate) use annotate_preview::rows::{
+    AnnotateListView, AnnotateSession, PlacementLabel, SheetTickRow, TickState, change_count,
+    changing_sheets, is_changing, listed_rows, tick_state,
+};
+pub(crate) use annotate_preview::{
+    AnnotatePreviewCache, AnnotatePreviewEntry, AnnotatePreviewLoad,
+};
 pub(crate) use erc_check::ERC_CHECK;
 pub(crate) use erc_job::{ErcRunOutcome, PageFrames, WaivedFinding};
 pub(crate) use reprefix_confirm::ReprefixConfirm;
@@ -54,6 +58,8 @@ mod violation_waivers;
 mod violation_waivers_tests;
 pub(crate) use rule_profiles::blocking;
 #[cfg(test)]
+mod erc_dialog_tests;
+#[cfg(test)]
 mod rule_profiles_drc_tests;
 #[cfg(test)]
 mod rule_profiles_tests;
@@ -62,3 +68,4 @@ mod rules_edit;
 mod rules_edit_tests;
 #[cfg(test)]
 mod rules_undo_routing_tests;
+mod validation_panels;

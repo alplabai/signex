@@ -1,0 +1,26 @@
+{
+  "active_variant": null,
+  "dir": "",
+  "enable_git": false,
+  "format": "snxprj/1",
+  "libraries": [],
+  "name": "openfc-lite",
+  "net_classes": [
+    {
+      "clearance": 0.09,
+      "diff_pair_gap": 0.25,
+      "diff_pair_width": 0.2,
+      "name": "Default",
+      "patterns": [
+        "*"
+      ],
+      "trace_width": 0.09,
+      "via_diameter": 0.35,
+      "via_drill": 0.2
+    }
+  ],
+  "pcb_file": "openfc-lite.snxpcb",
+  "schematic_root": null,
+  "sheets": [],
+  "variant_definitions": []
+}

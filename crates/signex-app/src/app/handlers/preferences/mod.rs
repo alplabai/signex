@@ -1,5 +1,6 @@
 use iced::Task;
 
+mod body_fill;
 mod committed_writes;
 mod component_classes;
 mod drafts;
@@ -121,6 +122,9 @@ impl Signex {
         self.ui_state.preferences_draft_annotate_undo = self.ui_state.annotate_undo;
         self.ui_state.preferences_draft_move_keeps_wires = self.ui_state.move_keeps_wires;
         self.ui_state.preferences_draft_net_hover_enabled = self.ui_state.net_hover_enabled;
+        self.ui_state.preferences_draft_symbol_body_fill = self.ui_state.symbol_body_fill;
+        self.ui_state.preferences_body_fill_palette_open = false;
+        self.ui_state.preferences_body_fill_picker_open = false;
         self.ui_state.preferences_draft_trackpad_pan = self.ui_state.trackpad_pan;
         self.ui_state.preferences_draft_wheel_mode = self.ui_state.wheel_mode;
         self.ui_state.preferences_draft_remember_window_geometry =
@@ -321,6 +325,7 @@ impl Signex {
             | PrefMsg::DraftMoveKeepsWires(..)
             | PrefMsg::DraftDragDirectionSelect(..)
             | PrefMsg::DraftNetHoverEnabled(..)
+            | PrefMsg::SymbolBodyFill(..)
             | PrefMsg::DraftTrackpadPan(..)
             | PrefMsg::DraftWheelMode(..)
             | PrefMsg::DraftRememberWindowGeometry(..)
