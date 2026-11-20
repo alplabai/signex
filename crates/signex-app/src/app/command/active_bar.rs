@@ -469,8 +469,8 @@ mod tests {
         let accounted = ACTIVE_BAR_COMMANDS.len() + PARAMETERISED.len() + MAPPED_ELSEWHERE.len();
         assert_eq!(
             accounted,
-            87,
-            "ActiveBarAction accounted for {accounted} actions but held 87 \
+            90,
+            "ActiveBarAction accounted for {accounted} actions but held 90 \
              when this table was written ({} with ids, {} parameterised, {} \
              mapped elsewhere) — a new variant needs an id here, a slot in \
              PARAMETERISED, or a slot in MAPPED_ELSEWHERE",

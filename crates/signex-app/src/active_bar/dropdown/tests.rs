@@ -99,8 +99,8 @@ fn align_and_shapes_have_expected_shape() {
     assert_eq!(items(&a).len(), 9);
     assert_eq!(seps(&a), 2);
     let s = render(signex_i18n::I18n::en_us_ref(), SHAPES, TID, true, true);
-    assert_eq!(items(&s).len(), 10);
-    assert_eq!(seps(&s), 2);
+    assert_eq!(items(&s).len(), 13);
+    assert_eq!(seps(&s), 3);
 }
 
 #[test]
