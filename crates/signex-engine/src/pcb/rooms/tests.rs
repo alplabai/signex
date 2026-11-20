@@ -224,6 +224,37 @@ fn pulling_packs_the_members_outside_into_the_room() {
     assert_eq!(position(engine.board(), 1), Point::new(5.1, 5.2));
 }
 
+/// Caner (2026-11-20): Pull packs as Arrange in Box does, on the components
+/// grid and a gap clear of the member already inside.
+#[test]
+fn pulling_packs_on_the_grid_clear_of_the_members_inside() {
+    let mut engine = BoardEngine::new(board(), 1);
+    add(&mut engine, room(100, rect(4.0, 4.0, 4.0, 4.0), SHEET_A));
+    let id = Uuid::from_u128(100);
+    let inside = position(engine.board(), 1);
+    engine
+        .execute(BoardCommand::PullPartsIntoRoom { room: id })
+        .expect("pulls");
+    let board = engine.board();
+    assert!(members_outside(&board.rooms[0], board).is_empty());
+    let pulled = position(board, 2);
+    assert_eq!(position(board, 1), inside, "the member inside stays");
+    let gap = crate::pcb::board_tools::ARRANGE_GAP_MM - 1e-9;
+    assert!(
+        (pulled.x - inside.x).abs() >= gap || (pulled.y - inside.y).abs() >= gap,
+        "{pulled:?} keeps the gap to {inside:?}"
+    );
+    let grid =
+        crate::pcb::placement::grid_for(board, signex_types::pcb_options::GridUse::Components);
+    for (v, o) in [(pulled.x, grid.origin.x), (pulled.y, grid.origin.y)] {
+        let steps = (v - o) / grid.step_mm;
+        assert!(
+            (steps - steps.round()).abs() < 1e-6,
+            "{pulled:?} on the grid"
+        );
+    }
+}
+
 fn sheets() -> Vec<SheetMembers> {
     vec![
         SheetMembers {

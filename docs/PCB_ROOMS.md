@@ -40,8 +40,11 @@ undo is exact.
 - **Fit room to parts** sets the outline to the rectangle round the members'
   bodies plus the margin. A locked room, or one without members, refuses it.
 - **Pull parts into room** packs the unlocked members outside the room into
-  it in rows, from its top-left, clear of the members already inside, 0.5 mm
-  apart. A polygon room is packed into the box round it.
+  its outline shrunk by the margin as Arrange in Box packs
+  (`pcb_geom::pack_in_box`): in rows from its top-left, tallest first, each
+  origin on the components grid, 0.5 mm apart and from the edge, and clear of
+  the members already inside. Parts that do not fit go on in rows below the
+  room. A polygon room is packed into the box round it.
 - **Shape**: Rectangle ↔ Polygon. A rectangle becomes the polygon of its four
   corners; a polygon becomes the rectangle round it. Moving or adding polygon
   corners on the canvas is not built yet.
@@ -102,9 +105,10 @@ thread and opens the dialog for the sheets placed directly under the root.
 The planner is pure (`plan_rooms_from_sheets`):
 
 - *Around parts*: the box round the members already on the board (inside the
-  board's outline box) plus the margin. With Move parts on, a room with
-  members off the board is grown downward by the rows they need. A sheet with
-  no member on the board gets a grid cell.
+  board's outline box) plus the margin. With Move parts on, the members off
+  the board are packed into it as Pull parts into room packs them, and the
+  room grows over the rows they take. A sheet with no member on the board
+  gets a grid cell.
 - *Even grid*: the board's box split into one cell per room, rows of about
   the board's aspect.
 - Colours follow the palette per sheet in order, after the rooms the board

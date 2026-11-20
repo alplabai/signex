@@ -14,16 +14,15 @@ pub use plan::{
     PlanShape, PlannedRoom, RoomOptions, RoomPlan, SheetMembers, plan_rooms_from_sheets,
 };
 
+use pcb_geom::{PointNm, RectNm, nm_to_mm, placed_extent};
 use signex_types::pcb::room::is_room_colour;
 use signex_types::pcb::{Footprint, PcbBoard, Point, Room, RoomOutline};
 use uuid::Uuid;
 
+use super::board_tools::{PackGrid, packing_order};
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 use super::error::BoardCommandError;
 use super::items::BoardItemId;
-
-/// The gap between parts packed into a room, mm.
-pub const PACK_GAP_MM: f64 = 0.5;
 
 /// A box on the board, mm.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -76,6 +75,18 @@ impl BoxMm {
                     && inner[3] <= outer[3]
             }
             _ => false,
+        }
+    }
+
+    fn as_rect(&self) -> Option<RectNm> {
+        let [x0, y0, x1, y1] = self.as_nm()?;
+        Some(RectNm::new(PointNm::new(x0, y0), PointNm::new(x1, y1)))
+    }
+
+    fn of_rect(r: RectNm) -> BoxMm {
+        BoxMm {
+            min: Point::new(nm_to_mm(r.min.x), nm_to_mm(r.min.y)),
+            max: Point::new(nm_to_mm(r.max.x), nm_to_mm(r.max.y)),
         }
     }
 
@@ -155,64 +166,72 @@ pub fn fitted_outline(room: &Room, board: &PcbBoard) -> Option<RoomOutline> {
 /// Where the unlocked members of `room` outside it go so they sit in rows
 /// inside it, clear of the members already inside.
 pub fn pull_moves(room: &Room, board: &PcbBoard) -> Vec<(Uuid, Point)> {
-    pack_outside(room, room.members(&board.footprints).collect())
+    let Some(inner) = inner_box(room) else {
+        return Vec::new();
+    };
+    pack_outside(board, inner, room.members(&board.footprints).collect())
+        .into_iter()
+        .map(|p| (p.footprint, p.to))
+        .collect()
 }
 
-/// [`pull_moves`] for `members` of a room that may not be on the board yet.
-pub(crate) fn pack_outside(room: &Room, members: Vec<&Footprint>) -> Vec<(Uuid, Point)> {
-    let Some(inner) = inner_box(room) else {
+/// A member packed into a room: its new origin and the box its placed
+/// extent then covers.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Packed {
+    pub footprint: Uuid,
+    pub to: Point,
+    pub covers: BoxMm,
+}
+
+/// The unlocked `members` whose body is not inside `inner`, packed into it
+/// as Arrange in Box packs (`pcb_geom::pack_in_box`: its order, gap and
+/// grid), clear of the placed extents of the members already inside. What
+/// does not fit goes on below the box. A member whose extent does not
+/// convert stays where it is.
+pub(crate) fn pack_outside(
+    board: &PcbBoard,
+    inner: BoxMm,
+    members: Vec<&Footprint>,
+) -> Vec<Packed> {
+    let (Some(grid), Some(area)) = (PackGrid::of(board), inner.as_rect()) else {
         return Vec::new();
     };
     let (inside, outside): (Vec<&Footprint>, Vec<&Footprint>) = members
         .into_iter()
         .partition(|fp| inner.holds(&part_box(fp)));
-    let outside: Vec<&Footprint> = outside.into_iter().filter(|fp| !fp.locked).collect();
-    let occupied = inside.into_iter().map(part_box).collect();
-    pack(inner, occupied, &outside)
-}
-
-/// Place `parts` in rows from the least corner of `inner`, clear of
-/// `occupied` and of each other; the footprint origins that put them there.
-/// A part that does not fit any more goes on below the last row.
-pub(crate) fn pack(
-    inner: BoxMm,
-    mut occupied: Vec<BoxMm>,
-    parts: &[&Footprint],
-) -> Vec<(Uuid, Point)> {
-    // Enough tries to step past every occupied box of a dense room.
-    const MAX_TRIES: usize = 4096;
-    let mut out = Vec::with_capacity(parts.len());
-    let (mut x, mut y, mut row) = (inner.min.x, inner.min.y, 0.0_f64);
-    for fp in parts {
-        let body = part_box(fp);
-        let (w, h) = (body.width(), body.height());
-        for _ in 0..MAX_TRIES {
-            if x + w > inner.max.x && x > inner.min.x {
-                x = inner.min.x;
-                y += row.max(h) + PACK_GAP_MM;
-                row = 0.0;
+    let occupied: Vec<RectNm> = inside
+        .iter()
+        .filter_map(|fp| {
+            let extent = placed_extent(fp).ok()?;
+            let at = PointNm::from_mm(fp.position, "room member").ok()?;
+            Some(grid.to_grid(RectNm::new(at.plus(extent.min), at.plus(extent.max))))
+        })
+        .collect();
+    let mut sized: Vec<(&Footprint, RectNm)> = outside
+        .into_iter()
+        .filter(|fp| !fp.locked)
+        .filter_map(|fp| Some((fp, placed_extent(fp).ok()?)))
+        .collect();
+    packing_order(&mut sized);
+    let extents: Vec<RectNm> = sized.iter().map(|(_, e)| *e).collect();
+    let origins =
+        pcb_geom::pack_in_box(grid.to_grid(area), &occupied, &extents, grid.gap, grid.step);
+    sized
+        .iter()
+        .zip(origins)
+        .map(|((fp, extent), origin)| {
+            let origin = grid.to_board_nm(origin);
+            Packed {
+                footprint: fp.uuid,
+                to: Point::new(nm_to_mm(origin.x), nm_to_mm(origin.y)),
+                covers: BoxMm::of_rect(RectNm::new(
+                    origin.plus(extent.min),
+                    origin.plus(extent.max),
+                )),
             }
-            let slot = BoxMm {
-                min: Point::new(x, y),
-                max: Point::new(x + w, y + h),
-            };
-            match occupied.iter().find(|o| o.overlaps(&slot)) {
-                Some(block) => x = block.max.x + PACK_GAP_MM,
-                None => {
-                    let to = Point::new(
-                        fp.position.x + (x - body.min.x),
-                        fp.position.y + (y - body.min.y),
-                    );
-                    out.push((fp.uuid, to));
-                    occupied.push(slot.inflate(PACK_GAP_MM / 2.0));
-                    x += w + PACK_GAP_MM;
-                    row = row.max(h);
-                    break;
-                }
-            }
-        }
-    }
-    out
+        })
+        .collect()
 }
 
 fn patch(footprints: &[(Uuid, Point)]) -> BoardPatch {

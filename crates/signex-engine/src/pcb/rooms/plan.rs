@@ -11,8 +11,9 @@ use signex_types::pcb::{Footprint, PcbBoard, Point, Room, RoomLayer, RoomOutline
 use signex_types::schematic::InstancePath;
 use uuid::Uuid;
 
-use super::{BoxMm, PACK_GAP_MM, pack_outside, part_box};
+use super::{BoxMm, inner_box, pack_outside, part_box};
 use crate::pcb::BoardCommand;
+use crate::pcb::board_tools::ARRANGE_GAP_MM;
 
 /// How the planned rooms are drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -181,21 +182,11 @@ pub fn plan_rooms_from_sheets(
             .copied()
             .reduce(|a, b| a.union(&b))
             .map(|b| b.inflate(options.margin_mm));
-        let area = match (options.shape, around) {
-            (PlanShape::AroundParts, Some(around)) if options.move_parts => {
-                let staged: Vec<BoxMm> = draft
-                    .members
-                    .iter()
-                    .filter(|fp| !fp.locked)
-                    .map(|fp| part_box(fp))
-                    .filter(|b| !region.holds(b))
-                    .collect();
-                grown_for(around, &staged)
-            }
-            (PlanShape::AroundParts, Some(around)) => around,
-            _ => cells[k],
+        let (area, grows) = match (options.shape, around) {
+            (PlanShape::AroundParts, Some(around)) => (around, true),
+            _ => (cells[k], false),
         };
-        let room = Room {
+        let mut room = Room {
             source: Some(draft.source),
             layer: options.layer,
             keep_parts_inside: options.keep_rule,
@@ -208,8 +199,19 @@ pub fn plan_rooms_from_sheets(
             )
         };
         if options.move_parts {
+            let packed = inner_box(&room)
+                .map(|inner| pack_outside(board, inner, draft.members.clone()))
+                .unwrap_or_default();
+            if grows {
+                // A room round its parts grows over the rows packed below it.
+                let edge = ARRANGE_GAP_MM + options.margin_mm.max(0.0);
+                let grown = packed
+                    .iter()
+                    .fold(area, |a, p| a.union(&p.covers.inflate(edge)));
+                room.outline = RoomOutline::rect_between(grown.min, grown.max);
+            }
             plan.moves
-                .extend(pack_outside(&room, draft.members.clone()));
+                .extend(packed.iter().map(|p| (p.footprint, p.to)));
         }
         plan.rooms.push(PlannedRoom {
             members: draft.members.iter().map(|fp| fp.uuid).collect(),
@@ -229,25 +231,6 @@ struct Draft<'a> {
     source: RoomSource,
     members: Vec<&'a Footprint>,
     replaces: Option<Uuid>,
-}
-
-/// `around` grown downward by the rows the `staged` parts need when packed
-/// at its width.
-fn grown_for(around: BoxMm, staged: &[BoxMm]) -> BoxMm {
-    if staged.is_empty() {
-        return around;
-    }
-    let width = around.width().max(PACK_GAP_MM);
-    let total: f64 = staged.iter().map(|b| b.width() + PACK_GAP_MM).sum();
-    let tallest = staged.iter().map(BoxMm::height).fold(0.0_f64, f64::max);
-    let rows = (total / width).ceil().max(1.0);
-    BoxMm {
-        min: around.min,
-        max: Point::new(
-            around.max.x,
-            around.max.y + rows * (tallest + PACK_GAP_MM) + PACK_GAP_MM,
-        ),
-    }
 }
 
 /// The names `sheet`'s rooms take.
@@ -282,7 +265,7 @@ pub(crate) fn board_region(board: &PcbBoard) -> BoxMm {
 }
 
 /// `count` cells splitting `region` evenly, row by row, each inset by the
-/// pack gap so neighbouring rooms do not touch.
+/// arrange gap so neighbouring rooms do not touch.
 fn grid_cells(region: BoxMm, count: usize) -> Vec<BoxMm> {
     if count == 0 {
         return Vec::new();
@@ -302,7 +285,7 @@ fn grid_cells(region: BoxMm, count: usize) -> Vec<BoxMm> {
                 min,
                 max: Point::new(min.x + w, min.y + h),
             }
-            .inflate(-PACK_GAP_MM / 2.0)
+            .inflate(-ARRANGE_GAP_MM / 2.0)
         })
         .collect()
 }
