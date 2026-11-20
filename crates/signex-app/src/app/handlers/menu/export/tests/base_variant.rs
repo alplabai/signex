@@ -1,6 +1,7 @@
 //! #2430: Base picked in Export PDF prints Base, never the project's active
-//! variant. Driven through `Signex::update`, from opening the dialog to the
-//! written file.
+//! variant. Base prints no variant name: an empty `${VARIANT}` and no sheet
+//! bookmark tag (Caner, 2026-11-20). Driven through `Signex::update`, from
+//! opening the dialog to the written file.
 
 use signex_types::schematic::{HAlign, Point, TextNote, VAlign};
 
@@ -89,14 +90,39 @@ fn base_picked_while_the_project_is_on_lite_prints_base() {
         "the Base row is stored by name"
     );
 
-    // The same page with "[Base]" typed in: the note reads Base, with no
+    // The same page with "[]" typed in: Base prints no variant name, and no
     // trace of Lite.
-    let mut typed = project(None, "[Base]");
+    let mut typed = project(None, "[]");
     assert_eq!(base, export(&mut typed, None));
 
     // Lite picked prints Lite, so the comparison above can tell them apart.
     let mut lite = project(Some("Lite"), VARIANT_NOTE);
     assert_ne!(base, export(&mut lite, Some("Lite")));
+}
+
+fn contains(pdf: &[u8], needle: &[u8]) -> bool {
+    pdf.windows(needle.len()).any(|w| w == needle)
+}
+
+#[test]
+fn base_with_physical_structure_prints_no_variant_name_or_bookmark_tag() {
+    let mut base = project(None, "[${VARIANT}]");
+    let pdf = export(&mut base, None);
+    let mut typed = project(None, "[]");
+    assert_eq!(
+        pdf,
+        export(&mut typed, None),
+        "${{VARIANT}} is empty for Base"
+    );
+    assert!(!contains(&pdf, b" [Base]"), "no Base sheet-bookmark tag");
+
+    // A named variant still prints its name and tags the sheet bookmarks.
+    let mut lite = project(Some("Lite"), "[${VARIANT}]");
+    let lite_pdf = export(&mut lite, Some("Lite"));
+    assert!(
+        contains(&lite_pdf, b" [Lite]"),
+        "the Lite sheet bookmark is tagged"
+    );
 }
 
 #[test]
@@ -147,8 +173,8 @@ fn base_picked_while_the_project_is_on_lite_previews_base() {
     let mut on_lite = project(Some("Lite"), VARIANT_NOTE);
     let base = preview(&mut on_lite, None);
 
-    // The preview shows what the PDF prints: "[Base]", no trace of Lite.
-    let mut typed = project(None, "[Base]");
+    // The preview shows what the PDF prints: "[]", no trace of Lite.
+    let mut typed = project(None, "[]");
     assert_eq!(base, preview(&mut typed, None));
 
     // Lite picked previews Lite, so the comparison above can tell them apart.

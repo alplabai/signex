@@ -85,8 +85,8 @@ pub struct PdfOptions {
     /// embedded image content do; the value seeds `PreviewOptions.dpi`
     /// when set up by the unified preview modal.
     pub dpi: f32,
-    /// Variant override for sheet rendering — `None` means use the
-    /// project's active variant (or Base when none is set). The
+    /// The printed variant's name for `${VARIANT}` and the sheet bookmark
+    /// tag. `None` is Base, which prints no variant name. The
     /// preview/export modal can pin this to a specific variant
     /// without mutating the project's active variant.
     pub variant: Option<String>,
