@@ -88,16 +88,43 @@ impl GridPropertiesState {
         self.preview_labels.draft_refused(&labels)
     }
 
+    /// Whether the open preview label `index` holds text other than the
+    /// text it opened with.
+    fn draft_changed(&self, index: usize, labels: &[DimensionLabel<'_>]) -> bool {
+        let (Some(draft), Some(label)) = (self.preview_labels.draft(), labels.get(index)) else {
+            return false;
+        };
+        draft.trim() != label.format.field_text(label.value).trim()
+    }
+
+    /// Whether `event` is refused before the labels see it. Enter and Tab
+    /// wait while the text is not a length, and so does a press on
+    /// another label. A blur keeps a changed draft open: a click on OK
+    /// blurs the field before OK arrives, and OK then commits or refuses
+    /// the text. Esc still closes the label.
+    fn label_event_refused(
+        &self,
+        event: &DimensionLabelMessage,
+        labels: &[DimensionLabel<'_>],
+    ) -> bool {
+        use DimensionLabelMessage as M;
+        let open = self.preview_labels.editing_index();
+        match *event {
+            M::DraftSubmitted | M::TabPressed { .. } => self.preview_labels.draft_refused(labels),
+            M::LabelPressed(i) | M::HandlePressed(i) => {
+                open.is_some_and(|o| o != i) && self.preview_labels.draft_refused(labels)
+            }
+            M::DraftBlurred(i) => open == Some(i) && self.draft_changed(i, labels),
+            _ => false,
+        }
+    }
+
     /// Routes a preview label event: an Enter commits the typed value into
     /// the draft, and is refused while the text is not a length. Returns
     /// whether a label field opened, so the caller focuses it.
     pub(crate) fn label_edited(&mut self, event: DimensionLabelMessage, i18n: &I18n) -> bool {
         let (kinds, labels) = self.update_labels(i18n);
-        let commits = matches!(
-            event,
-            DimensionLabelMessage::DraftSubmitted | DimensionLabelMessage::TabPressed { .. }
-        );
-        if commits && self.preview_labels.draft_refused(&labels) {
+        if self.label_event_refused(&event, &labels) {
             return false;
         }
         let outcome = self.preview_labels.update(event, &labels);

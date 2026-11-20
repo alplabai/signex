@@ -122,7 +122,8 @@ fn the_expand_button_toggles_a_taller_preview() {
 
 /// OK with a preview label holding text that is not a length is refused:
 /// the dialog and the label stay open with the text, and the step is not
-/// written. Once the text is a length, OK commits it.
+/// written. Once the text is a length, OK commits it. Each OK is a mouse
+/// click, so the field's blur arrives first.
 #[test]
 fn ok_is_refused_while_a_preview_label_holds_text_that_is_not_a_length() {
     use signex_widgets::dimension_label::DimensionLabelMessage as M;
@@ -131,6 +132,7 @@ fn ok_is_refused_while_a_preview_label_holds_text_that_is_not_a_length() {
     send(&mut app, GridPropertiesMsg::Open);
     label(&mut app, M::LabelPressed(0));
     label(&mut app, M::DraftEdited("abc".into()));
+    label(&mut app, M::DraftBlurred(0));
     send(&mut app, GridPropertiesMsg::Apply);
     assert_eq!(step_mm(&mut app), before);
     let state = app.ui_state.grid_properties.as_ref().expect("still open");
@@ -138,7 +140,51 @@ fn ok_is_refused_while_a_preview_label_holds_text_that_is_not_a_length() {
     assert_eq!(state.preview_labels.draft(), Some("abc"));
 
     label(&mut app, M::DraftEdited("2.5".into()));
+    label(&mut app, M::DraftBlurred(0));
     send(&mut app, GridPropertiesMsg::Apply);
     assert_eq!(step_mm(&mut app), 2.5);
     assert!(app.ui_state.grid_properties.is_none());
+}
+
+/// A click on OK after typing a length on a fresh label writes it: the
+/// blur that comes first keeps the typed text.
+#[test]
+fn ok_clicked_after_typing_a_length_writes_it() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    let mut app = app_with_footprint_editor();
+    send(&mut app, GridPropertiesMsg::Open);
+    label(&mut app, M::LabelPressed(0));
+    label(&mut app, M::DraftEdited("2.5".into()));
+    label(&mut app, M::DraftBlurred(0));
+    send(&mut app, GridPropertiesMsg::Apply);
+    assert_eq!(step_mm(&mut app), 2.5);
+    assert!(app.ui_state.grid_properties.is_none());
+}
+
+/// A blur on a label whose text is untouched still closes it, and a
+/// refused draft is not replaced by a press on the other label.
+#[test]
+fn a_refused_draft_stays_when_the_other_label_is_pressed() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    let mut app = app_with_footprint_editor();
+    send(&mut app, GridPropertiesMsg::Open);
+    let state = app.ui_state.grid_properties.as_ref().expect("open");
+    assert_eq!(state.preview_label_values().len(), 2, "step and coarse");
+    label(&mut app, M::LabelPressed(0));
+    label(&mut app, M::DraftBlurred(0));
+    let state = app.ui_state.grid_properties.as_ref().expect("open");
+    assert!(state.preview_labels.editing_index().is_none());
+
+    label(&mut app, M::LabelPressed(0));
+    label(&mut app, M::DraftEdited("abc".into()));
+    label(&mut app, M::DraftBlurred(0));
+    label(&mut app, M::LabelPressed(1));
+    label(&mut app, M::HandlePressed(1));
+    let state = app.ui_state.grid_properties.as_ref().expect("open");
+    assert_eq!(state.preview_labels.editing_index(), Some(0));
+    assert_eq!(state.preview_labels.draft(), Some("abc"));
+
+    send(&mut app, GridPropertiesMsg::Close);
+    let state = app.ui_state.grid_properties.as_ref().expect("open");
+    assert!(state.preview_labels.editing_index().is_none());
 }
