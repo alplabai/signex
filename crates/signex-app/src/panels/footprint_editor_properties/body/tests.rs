@@ -48,6 +48,9 @@ fn app_with_eight_pads() -> Signex {
         kind: TabKind::FootprintEditor(path.clone()),
     });
     app.document_state.active_tab = 0;
+    // The Properties context is the Model's mirror, rebuilt in `update`; the
+    // tab was pushed directly, so build it as `update` would.
+    app.refresh_panel_ctx();
     app
 }
 
