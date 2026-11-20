@@ -18,6 +18,11 @@ Each release section is authored **before** the `vX.Y.Z` tag is created, so the 
 
 ## [Unreleased]
 
+### Added — board sketch: outline checks and bake preview
+
+- Board sketch Properties, with nothing selected, show **Outline checks**: one closed loop, no self-intersection, and every hole, cutout and keepout inside the outline, live after every edit. A failing check names its place (the open ends and the gap, the crossing point, the opening outside) and a click selects it. It warns only: Bake still applies the sketch. The inside-corner check waits for a router tool diameter.
+- **Bake preview** draws the result on the canvas, on a board and on a footprint: what Bake writes in its layer colours, with the sketch faint on top. The preview card lists why a sketch does not bake (a click selects the place the reason names), a board's failed outline checks, and a footprint's bake warnings.
+
 ## [26.11.0] — 2026-11-17
 
 _The Community Preview release: the schematic and PCB editors are supported, the whole app moves to the Graphite light and dark interface, and Signex is now licensed under FSL-1.1-ALv2. The footprint, symbol and library editors and the board 3D view ship at an earlier stage._
