@@ -24,6 +24,11 @@ fn main() -> iced::Result {
         // File associations launch `signex <path>...` (#317). Read once;
         // the boot closure hands each path to the normal open flow.
         StartupAction::Launch(paths) => paths,
+        // A relative path with no readable working directory (#2619).
+        StartupAction::Refused(why) => {
+            eprintln!("[signex] {why}");
+            std::process::exit(2);
+        }
     };
 
     // The pan/zoom frame bench, a dev/QA mode (#2472, docs/PERFORMANCE.md):

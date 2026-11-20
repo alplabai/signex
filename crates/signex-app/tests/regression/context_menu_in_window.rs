@@ -8,9 +8,12 @@
 use std::path::{Path, PathBuf};
 
 use signex_app::app::{
-    ContextAction, ContextMenuMsg, Message, Signex, TabInfo, TabKind, Tool, WindowMsg,
+    ContextAction, ContextMenuMsg, Message, SheetSyncMsg, Signex, TabInfo, TabKind, Tool, UiMsg,
+    WindowMsg,
 };
 use signex_app::io_ports::{HeadlessAnswers, IoPorts};
+use signex_app::keymap::AppCommandId;
+use signex_app::menu_bar::MenuMessage;
 use signex_types::schematic::{
     ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind,
 };
@@ -75,13 +78,94 @@ fn place_sheet_entry_from_an_undocked_sheets_menu_arms_beside_a_board() {
 /// Sheet Actions ▸ Sync Sheet Entries in the undocked sheet opens the dialog
 /// for the window's sheet and its selected sheet symbol, not for the board
 /// the main window shows.
-///
-/// The sheet has a real folder: a child reference resolves against the
-/// sheet's own directory, and a bare file name has none, so it is refused.
 #[test]
 fn sync_sheet_entries_from_an_undocked_sheets_menu_syncs_that_sheets_symbol() {
     let dir = tempfile::tempdir().expect("temp dir");
-    let parent = dir.path().join("parent.snxsch");
+    let (mut app, window, parent, symbol) = undocked_sheet_with_a_selected_symbol(dir.path());
+
+    let _ = pick_row(&mut app, window, "sync_sheet_entries");
+
+    let dialog = app
+        .ui_state
+        .sheet_sync
+        .as_ref()
+        .expect("the sync dialog opened");
+    assert_eq!(dialog.parent, parent, "the window's sheet");
+    assert_eq!(dialog.symbol, symbol, "the window's selected sheet symbol");
+    assert_eq!(
+        app.document_state.active_path, None,
+        "the main window still shows the board"
+    );
+}
+
+/// #2618 — Apply of a sync dialog opened in an undocked sheet window edits
+/// that window's sheet, though the dialog answers on the main window, which
+/// shows a board. It was refused as stale, because Apply wanted the main
+/// window's active sheet to be the dialog's parent.
+#[test]
+fn sync_sheet_entries_apply_from_an_undocked_sheet_lands_on_that_sheet() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    write_sheet(
+        &dir.path().join("child.snxsch"),
+        SchematicSheet {
+            labels: vec![Label {
+                shape: "input".to_string(),
+                ..Label::new("SDA", Point::new(10.0, 10.0), LabelType::Hierarchical)
+            }],
+            ..SchematicSheet::default()
+        },
+    );
+    let (mut app, window, parent, _symbol) = undocked_sheet_with_a_selected_symbol(dir.path());
+    let entries = |app: &Signex| -> Vec<String> {
+        app.document_state.engines[&parent].document().child_sheets[0]
+            .pins
+            .iter()
+            .map(|pin| pin.name.clone())
+            .collect()
+    };
+
+    let task = pick_row(&mut app, window, "sync_sheet_entries");
+    settle_task(&mut app, task);
+    let preview = app
+        .ui_state
+        .sheet_sync
+        .as_ref()
+        .and_then(|dialog| dialog.preview().cloned())
+        .expect("the closed child was read and previewed");
+    assert_eq!(preview.added, ["SDA"]);
+
+    let task = app.update(Message::from(SheetSyncMsg::ApplyRequested));
+    settle_task(&mut app, task);
+
+    assert!(
+        app.ui_state.sheet_sync.is_none(),
+        "Apply ran and closed the dialog, not refused as stale"
+    );
+    assert_eq!(entries(&app), ["SDA"], "the window's sheet symbol synced");
+    assert_eq!(
+        app.document_state.active_path, None,
+        "the main window still shows the board"
+    );
+    assert!(
+        app.document_state.dirty_document_paths().contains(&parent),
+        "the window's sheet is unsaved"
+    );
+
+    // Edit ▸ Undo in the window's own menu bar.
+    let task = app.update(Message::Ui(UiMsg::MenuInWindow {
+        window,
+        msg: MenuMessage::Command(AppCommandId::new("undo").expect("catalog id")),
+    }));
+    settle_task(&mut app, task);
+    assert!(entries(&app).is_empty(), "one undo step reverts the sync");
+}
+
+/// A sheet at `dir/parent.snxsch` placing `child.snxsch` through a sheet
+/// symbol with no entries, undocked beside a board with the symbol selected
+/// in its window. The sheet has a real folder: a child reference resolves
+/// against the sheet's own directory, and a bare file name has none.
+fn undocked_sheet_with_a_selected_symbol(dir: &Path) -> (Signex, iced::window::Id, PathBuf, Uuid) {
+    let parent = dir.join("parent.snxsch");
     let symbol = Uuid::now_v7();
     let sheet = SchematicSheet {
         uuid: Uuid::now_v7(),
@@ -109,20 +193,7 @@ fn sync_sheet_entries_from_an_undocked_sheets_menu_syncs_that_sheets_symbol() {
         .get_mut(&window)
         .expect("the window's canvas")
         .selected = vec![SelectedItem::new(symbol, SelectedKind::ChildSheet)];
-
-    let _ = pick_row(&mut app, window, "sync_sheet_entries");
-
-    let dialog = app
-        .ui_state
-        .sheet_sync
-        .as_ref()
-        .expect("the sync dialog opened");
-    assert_eq!(dialog.parent, parent, "the window's sheet");
-    assert_eq!(dialog.symbol, symbol, "the window's selected sheet symbol");
-    assert_eq!(
-        app.document_state.active_path, None,
-        "the main window still shows the board"
-    );
+    (app, window, parent, symbol)
 }
 
 fn write_sheet(path: &Path, sheet: SchematicSheet) {
