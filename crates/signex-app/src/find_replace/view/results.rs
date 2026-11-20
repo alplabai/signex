@@ -281,7 +281,12 @@ fn result_row<'a>(
 
     let mut cells: Row<Element<'a, FindReplaceMsg>> =
         row![].spacing(SP.m).align_y(Alignment::Center);
-    if let Some(key) = state.matches.get(index).filter(|_| boxes).map(FindMatch::key) {
+    if let Some(key) = state
+        .matches
+        .get(index)
+        .filter(|_| boxes)
+        .map(FindMatch::key)
+    {
         cells = cells.push(
             checkbox(included)
                 .style(crate::panels::form_look::checkbox_style)

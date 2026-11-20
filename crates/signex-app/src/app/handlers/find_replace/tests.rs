@@ -1399,7 +1399,11 @@ fn an_include_click_after_a_rescan_clears_the_row_it_was_drawn_for() {
     );
 
     send(&mut app, click);
-    assert!(!app.ui_state.find_replace.is_included(result_of(&app, ids[1])));
+    assert!(
+        !app.ui_state
+            .find_replace
+            .is_included(result_of(&app, ids[1]))
+    );
     assert_eq!(app.ui_state.find_replace.included_count(), 3);
 
     send(&mut app, FindReplaceMsg::ReplaceAll);
