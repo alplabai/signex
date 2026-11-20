@@ -126,8 +126,8 @@ pub(crate) use document::{Document, DocumentKey};
 pub use document_setup::{DocumentSetupMsg, DocumentSetupState, SetupKind, SheetChoice};
 pub use documents::{
     ComponentEditorTab, FootprintDocument, FootprintHistorySnapshot, GraphicFillPicker,
-    LocalColorPicker, LocalColorSlot, SchematicTabSession, SymbolDocument, SymbolViewRequest,
-    TabDocument, TabInfo, TabKind, Tool,
+    LocalColorPicker, LocalColorSlot, SymbolDocument, SymbolViewRequest, TabDocument, TabInfo,
+    TabKind, Tool,
 };
 pub use fab_outputs::{BoardNote, FabOutput, FabOutputsMsg, FabOutputsState, FabProblem};
 pub(crate) use handlers::document_files::is_pcb_path;

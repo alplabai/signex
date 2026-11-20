@@ -101,7 +101,7 @@ fn a_panicking_save_as_keeps_the_engine_at_its_old_path() {
     let (mut app, from, to, _revision) = app_with_dirty_sheet(dir.path());
 
     let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        app.with_active_schematic_session_mut(|_| -> () { panic!("injected") })
+        app.rekey_active_schematic(to.clone(), |_| panic!("injected"))
     }));
 
     assert!(unwound.is_err(), "the injected panic must reach the caller");
