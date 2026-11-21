@@ -124,10 +124,8 @@ impl Signex {
             return Task::none();
         }
 
-        // Make the tab active so the duplicated view in the new window
-        // lands on that tab's content. Main window's active_tab is
-        // shared — if the user wants to keep editing a different tab in
-        // main, they can switch after the window opens.
+        // Make the tab active so the new window is seeded from its content.
+        // `UndockedTabOpened` then moves main to a docked tab.
         if idx != self.document_state.active_tab {
             self.park_active_schematic_session();
             self.document_state.active_tab = idx;

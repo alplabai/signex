@@ -305,6 +305,37 @@ fn an_undocked_panel_edits_only_its_own_board() {
     assert_eq!(revision(&rig.app, &rig.a), main_before, "A took no edit");
 }
 
+/// Undocking the tab in view moves main to a docked tab, so main's commands
+/// do not keep editing the board that left.
+#[test]
+fn undocking_the_active_tab_leaves_main_on_a_docked_tab() {
+    let mut rig = rig();
+    let a = rig.a.clone();
+    let index = rig
+        .app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == a)
+        .expect("tab A");
+    let before: HashSet<iced::window::Id> = rig.app.ui_state.windows.keys().copied().collect();
+    let _ = rig.app.update(Message::Window(WindowMsg::UndockTab(index)));
+    let window = *rig
+        .app
+        .ui_state
+        .windows
+        .keys()
+        .find(|id| !before.contains(id))
+        .expect("an undocked window");
+    let _ = rig
+        .app
+        .update(Message::Window(WindowMsg::UndockedTabOpened {
+            path: a.clone(),
+            id: window,
+        }));
+    assert_ne!(rig.app.active_tab_path().as_ref(), Some(&a));
+}
+
 /// No wildcard hides a message from the window scope: the session's
 /// settings stay app-wide, a document edit does not.
 #[test]

@@ -492,6 +492,9 @@ impl Signex {
                         .pcb_canvases
                         .insert(id, per_window_pcb);
                 }
+                // The main window no longer shows it: main's commands must
+                // not keep editing the document that moved away.
+                self.leave_undocked_active_tab(&path);
                 self.refresh_window_panel_ctxs(None);
                 // One pane fewer in the main window (#2249).
                 self.settle_document_tiling();

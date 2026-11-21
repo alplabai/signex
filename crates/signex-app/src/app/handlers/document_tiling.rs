@@ -29,6 +29,25 @@ impl Signex {
             .collect()
     }
 
+    /// `path` moved to a window of its own: if it was main's active tab,
+    /// main shows the nearest docked tab instead. With none left it stays.
+    pub(crate) fn leave_undocked_active_tab(&mut self, path: &std::path::Path) {
+        let active = self.document_state.active_tab;
+        let shown = self.document_state.tabs.get(active);
+        if shown.is_none_or(|tab| tab.path != path) {
+            return;
+        }
+        let nearest = self
+            .docked_tab_indices()
+            .into_iter()
+            .min_by_key(|index| index.abs_diff(active));
+        if let Some(next) = nearest {
+            self.park_active_schematic_session();
+            self.document_state.active_tab = next;
+            self.sync_active_tab();
+        }
+    }
+
     /// Two documents or more can share the main window in panes.
     pub(crate) fn can_tile_documents(&self) -> bool {
         self.docked_tab_indices().len() >= 2

@@ -9,7 +9,8 @@ use iced::{Event, Rectangle, mouse};
 use serde_json::json;
 use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::snap::SnapObject;
-use signex_types::pcb::{PadNet, PcbBoard, Point};
+use signex_renderer::pcb::BoardObject;
+use signex_types::pcb::{PadNet, PadType, PcbBoard, Point};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
@@ -627,4 +628,150 @@ fn a_new_part_is_not_pulled_onto_an_object() {
         .expect("a part");
     let at = carry.anchor.expect("on the cursor");
     assert!(!close(at, pad) && on_grid(at, 0.1), "{at:?}");
+}
+
+/// `board(0.1)` with U4's through pad on net B.
+fn board_with_foreign_pad() -> PcbBoard {
+    let mut with_nets = board(0.1);
+    with_nets.footprints[3].pads[0].net = Some(PadNet {
+        number: 2,
+        name: "B".into(),
+    });
+    with_nets
+}
+
+fn tool_cursor(rig: &Rig) -> Point {
+    let session = rig.app.interaction_state.pcb_tool.as_ref().expect("armed");
+    session.cursor.expect("a cursor")
+}
+
+/// Caner, 2026-11-21: a route with no net snaps to any pad and takes its
+/// net; from then on only that net pulls.
+#[test]
+fn a_no_net_route_snaps_to_any_pad_and_takes_its_net() {
+    let mut rig = rig_on(board_with_foreign_pad());
+    rig.toggle(SnapObject::PadCenters);
+    rig.run("place_board_track");
+    rig.click(Point::new(33.0, 33.0));
+    let session = rig.app.interaction_state.pcb_tool.as_ref().expect("armed");
+    assert_eq!(session.route.expect("a run").net, 0, "bare board: no net");
+    let reach = rig.mm(4.0);
+    let foreign = Point::new(25.03, 15.03);
+    rig.app
+        .board_tool_followed(Point::new(foreign.x, foreign.y + reach));
+    assert!(close(tool_cursor(&rig), foreign), "any pad pulls it");
+
+    let pad_a = Point::new(30.03, 30.03);
+    rig.click(Point::new(pad_a.x, pad_a.y + reach));
+    let session = rig.app.interaction_state.pcb_tool.as_ref().expect("armed");
+    assert_eq!(session.route.expect("a run").net, 1, "it took net A");
+    rig.app
+        .board_tool_followed(Point::new(foreign.x, foreign.y + reach));
+    let at = tool_cursor(&rig);
+    assert!(!close(at, foreign) && on_grid(at, 0.1), "{at:?}");
+}
+
+#[test]
+fn a_running_route_ignores_a_foreign_parts_origin() {
+    let mut rig = rig_on(board_with_foreign_pad());
+    rig.toggle(SnapObject::FootprintOrigins);
+    rig.toggle(SnapObject::PadCenters);
+    rig.run("place_board_track");
+    rig.click(Point::new(30.03, 30.03));
+    rig.toggle(SnapObject::PadCenters);
+    let reach = rig.mm(4.0);
+    let foreign = Point::new(25.03, 15.03);
+    rig.app
+        .board_tool_followed(Point::new(foreign.x, foreign.y + reach));
+    let at = tool_cursor(&rig);
+    assert!(!close(at, foreign), "a part of net B: {at:?}");
+    let own = Point::new(25.03, 10.03);
+    rig.app
+        .board_tool_followed(Point::new(own.x, own.y + reach));
+    assert!(close(tool_cursor(&rig), own), "a part of net A");
+    let bare = Point::new(15.03, 40.03);
+    rig.app
+        .board_tool_followed(Point::new(bare.x, bare.y + reach));
+    assert!(close(tool_cursor(&rig), bare), "a part with no net");
+}
+
+#[test]
+fn a_hidden_object_kind_gives_no_targets() {
+    for (object, shown, (x, y)) in [
+        (SnapObject::TrackVertices, BoardObject::Tracks, (40.03, 5.03)),
+        (SnapObject::ArcCenters, BoardObject::Arcs, (52.03, 30.03)),
+        (SnapObject::ViaCenters, BoardObject::Vias, (20.03, 20.03)),
+        (SnapObject::PadCenters, BoardObject::Pads, (30.03, 30.03)),
+        (SnapObject::Texts, BoardObject::Texts, (5.03, 45.03)),
+        (SnapObject::Regions, BoardObject::Polygons, (35.03, 40.03)),
+    ] {
+        let mut rig = rig(0.1);
+        rig.toggle(object);
+        let target = Point::new(x, y);
+        let pointer = Point::new(x, y + rig.mm(4.0));
+        assert!(close(rig.via_tool_at(pointer), target), "{object:?} shown");
+        rig.app
+            .edit_pcb_view(None, |view, _| view.set_object_visible(shown, false));
+        let at = rig.via_tool_at(pointer);
+        assert!(!close(at, target), "{object:?} hidden: {at:?}");
+    }
+}
+
+#[test]
+fn the_multi_layer_row_hides_a_non_plated_pad() {
+    let mut with_hole = board(0.1);
+    with_hole.footprints[3].pads[0].pad_type = PadType::NpThru;
+    let mut rig = rig_on(with_hole);
+    rig.toggle(SnapObject::PadCenters);
+    let target = Point::new(25.03, 15.03);
+    let pointer = Point::new(target.x, target.y + rig.mm(4.0));
+    assert!(close(rig.via_tool_at(pointer), target));
+    rig.app
+        .edit_pcb_view(None, |view, _| view.toggle_multi_layer());
+    let at = rig.via_tool_at(pointer);
+    assert!(!close(at, target), "{at:?}");
+}
+
+/// A layer the stack does not list cannot be hidden, so it stays a target.
+#[test]
+fn copper_on_an_unlisted_layer_stays_a_target() {
+    let mut unlisted = board(0.1);
+    unlisted.segments[0].layer = "Inner7Copper".into();
+    let mut rig = rig_on(unlisted);
+    rig.toggle(SnapObject::TrackVertices);
+    let target = Point::new(40.03, 5.03);
+    let at = rig.via_tool_at(Point::new(target.x, target.y + rig.mm(4.0)));
+    assert!(close(at, target), "{at:?}");
+}
+
+#[test]
+fn with_snap_off_a_second_click_on_the_end_finishes_the_run() {
+    let mut rig = rig(0.1);
+    rig.app.ui_state.snap_enabled = false;
+    let before = rig.board().segments.len();
+    rig.run("place_board_track");
+    let start = Point::new(33.33, 22.22);
+    rig.click(start);
+    rig.click(Point::new(start.x + rig.mm(1.0), start.y));
+    let session = rig.app.interaction_state.pcb_tool.as_ref().expect("armed");
+    assert!(session.points.is_empty(), "the run ended");
+    assert_eq!(rig.board().segments.len(), before, "no tiny track");
+}
+
+#[test]
+fn with_snap_off_a_duplicate_keeps_its_exact_offset() {
+    use crate::app::handlers::clipboard_workflows::DEFAULT_PASTE_OFFSET_MM as OFFSET;
+    let mut rig = rig(0.1);
+    rig.click(Point::new(30.03, 30.03));
+    rig.app.ui_state.snap_enabled = false;
+    let before: Vec<Uuid> = rig.board().footprints.iter().map(|f| f.uuid).collect();
+    rig.run("duplicate");
+    let copy = rig
+        .board()
+        .footprints
+        .iter()
+        .find(|f| !before.contains(&f.uuid))
+        .expect("the copy");
+    let want = Point::new(30.03 + OFFSET, 30.03 + OFFSET);
+    assert!(close(copy.position, want), "{:?}", copy.position);
 }
