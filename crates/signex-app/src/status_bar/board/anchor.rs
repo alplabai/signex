@@ -102,7 +102,7 @@ fn counter_span(bar: &AnchorBar<'_>, counter: BoardCounter, i18n: &I18n) -> Opti
 pub(crate) fn popover_left(kind: BoardPopoverKind, bar: &AnchorBar<'_>, i18n: &I18n) -> f32 {
     let width = card_width(kind);
     let wanted = match kind {
-        BoardPopoverKind::Layer => layer_pill_x(bar, i18n),
+        BoardPopoverKind::Layer | BoardPopoverKind::ActiveLayer => layer_pill_x(bar, i18n),
         BoardPopoverKind::Grid => grid_readout_x(),
         BoardPopoverKind::Unrouted => counter_span(bar, BoardCounter::Routed, i18n)
             .or_else(|| counter_span(bar, BoardCounter::Unrouted, i18n))

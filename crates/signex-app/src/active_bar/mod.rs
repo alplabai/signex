@@ -67,6 +67,9 @@ pub enum ActiveBarMsg {
     /// A right press outside the open flyout closed it; its release stays
     /// off the canvas.
     FlyoutRightPressed,
+    /// A part of the bar or of its open flyout that opens no menu took a
+    /// right press: nothing changes, and its release stays off the canvas.
+    RightPressTaken,
     /// A canvas saw the held-back right release, or a new right press after
     /// that release was lost.
     RightReleaseSwallowed,
@@ -139,7 +142,11 @@ pub fn view_bar<'a>(
             button.on_right_press = Some(ActiveBarMsg::MenuRightPressed(menu));
         }
     }
-    signex_widgets::active_bar::view(items, tokens)
+    // Buttons take their own right press first; this takes the rest of the
+    // bar (the corner pill, separators, padding).
+    iced::widget::mouse_area(signex_widgets::active_bar::view(items, tokens))
+        .on_right_press(ActiveBarMsg::RightPressTaken)
+        .into()
 }
 
 #[cfg(test)]

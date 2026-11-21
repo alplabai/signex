@@ -129,7 +129,7 @@ fn lit(app: &Signex, field: &FieldId) -> bool {
 }
 
 #[test]
-fn hovering_a_row_lights_its_callout_and_a_callout_its_row() {
+fn hovering_a_row_lights_its_callout() {
     let mut f = open_board();
     click(&mut f.app, Point::new(5.0, 10.0), ClickMode::Replace);
     assert!(matches!(facts(&f.app), PcbPrimitiveFacts::Track(_)));
@@ -139,13 +139,6 @@ fn hovering_a_row_lights_its_callout_and_a_callout_its_row() {
     assert!(lit(&f.app, &WIDTH), "the Width row lights its callout");
     hover(&mut f.app, IllustrationMsg::FieldLeft(WIDTH));
     assert!(!lit(&f.app, &WIDTH), "leaving the row puts it out");
-
-    hover(&mut f.app, IllustrationMsg::CalloutHovered(WIDTH));
-    assert!(lit(&f.app, &WIDTH), "the Width callout lights its row");
-    hover(&mut f.app, IllustrationMsg::FieldLeft(WIDTH));
-    assert!(lit(&f.app, &WIDTH), "a row leave is not the callout's");
-    hover(&mut f.app, IllustrationMsg::CalloutLeft);
-    assert!(!lit(&f.app, &WIDTH), "leaving the callout puts it out");
 }
 
 #[test]

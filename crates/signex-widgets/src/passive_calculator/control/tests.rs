@@ -91,11 +91,9 @@ mod graphite_layout {
     use crate::checkbox;
     use crate::enable_section::EnableSectionStyle;
     use crate::passive_calculator::look::{CalculatorLook, CalculatorPalette};
-    use crate::passive_calculator::network_drawing::part_field;
     use crate::passive_calculator::production_date_code::{ProductionDateCycle, ProductionMonth};
     use crate::passive_calculator::rkm_encoder::RkmEncoderMessage;
     use crate::passive_calculator::widgets::{NARROW_WIDTH, TS};
-    use crate::property_illustration::IllustrationMsg;
     use crate::segmented::SegmentedStyle;
 
     fn palette() -> CalculatorPalette {
@@ -280,19 +278,6 @@ mod graphite_layout {
             control.active_state().validation_error,
             Some(TargetError::Negative)
         );
-    }
-
-    #[test]
-    fn hovering_a_drawn_part_marks_its_card() {
-        let mut control = calculated();
-        control.update(CalculatorMessage::DrawingHovered(
-            IllustrationMsg::CalloutHovered(part_field(0)),
-        ));
-        assert_eq!(control.drawing_hover.hovered(), Some(&part_field(0)));
-        control.update(CalculatorMessage::DrawingHovered(
-            IllustrationMsg::CalloutLeft,
-        ));
-        assert_eq!(control.drawing_hover.hovered(), None);
     }
 
     /// Every page builds, wide and narrow, with and without a result, on

@@ -38,19 +38,6 @@ const VISIBLE_LINE_Y: f32 = 20.0;
 const VISIBLE_LABEL_BOTTOM: f32 = 15.0;
 const SNAP_LINE_Y: f32 = 116.0;
 const SNAP_LABEL_BOTTOM: f32 = 134.0;
-/// The hover regions of the two grids; the band between them lights nothing.
-const VISIBLE_AREA: Rectangle = Rectangle {
-    x: 8.0,
-    y: 24.0,
-    width: 136.0,
-    height: 64.0,
-};
-const SNAP_AREA: Rectangle = Rectangle {
-    x: 8.0,
-    y: 96.0,
-    width: 136.0,
-    height: 40.0,
-};
 const CURSOR_ARM: f32 = 7.0;
 const PIN_END: Point = Point::new(176.0, 78.0);
 const PIN_LENGTH: f32 = 24.0;
@@ -146,7 +133,6 @@ fn cursor(step: f32) -> Vec<Part> {
             Style::outline(Ink::Secondary, Weight::Regular),
         )
         .linked(SNAP_GRID)
-        .highlight_only()
     };
     vec![arm(CURSOR_ARM, 0.0), arm(0.0, CURSOR_ARM)]
 }
@@ -223,16 +209,6 @@ pub fn grid_illustration(facts: &GridFacts, i18n: &I18n) -> Illustration {
     .label(snap)
     .label_at(Point::new(GRID_LEFT, SNAP_LABEL_BOTTOM), Anchor::Start);
     Illustration::new(VIEW.width, VIEW.height)
-        .part(
-            Part::hover_area(VISIBLE_AREA)
-                .linked(VISIBLE_GRID)
-                .requires(VISIBLE_GRID),
-        )
-        .part(
-            Part::hover_area(SNAP_AREA)
-                .linked(SNAP_GRID)
-                .requires(SNAP_GRID),
-        )
         .parts(dots())
         .parts(ticks(step))
         .parts(cursor(step))

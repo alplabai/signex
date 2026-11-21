@@ -460,7 +460,7 @@ pub(crate) fn popover_view<'a>(
 pub(crate) fn card_width(kind: super::BoardPopoverKind) -> f32 {
     use super::BoardPopoverKind as K;
     PX * match kind {
-        K::Layer => 230.0,
+        K::Layer | K::ActiveLayer => 230.0,
         K::Grid | K::Selection => 300.0,
         K::Unrouted => 320.0,
         K::Drc => 330.0,

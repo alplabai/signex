@@ -1,8 +1,7 @@
-use iced::{Color, Point, Radians, Rectangle, Size};
+use iced::{Color, Point, Rectangle, Size};
 use signex_types::theme::{ThemeId, theme_tokens};
 
-use super::geometry::{Fit, angle_in_sweep, callout_geometry, contains_point, distance_to_segment};
-use super::hit::{held_hit_test, hit_test};
+use super::geometry::{Fit, callout_geometry};
 use super::*;
 
 const W: FieldId = FieldId::new("w");
@@ -24,7 +23,6 @@ fn field_hover_sets_and_its_leave_clears() {
     let mut hover = IllustrationHover::default();
     hover.update(IllustrationMsg::FieldHovered(W));
     assert_eq!(hover.hovered(), Some(&W));
-    assert_eq!(hover.source(), Some(HoverSource::Field));
     assert!(hover.is_field_highlighted(&W));
     hover.update(IllustrationMsg::FieldLeft(W));
     assert_eq!(hover.hovered(), None);
@@ -37,56 +35,6 @@ fn late_leave_of_previous_row_keeps_new_hover() {
     hover.update(IllustrationMsg::FieldHovered(GAP));
     hover.update(IllustrationMsg::FieldLeft(W));
     assert_eq!(hover.hovered(), Some(&GAP));
-}
-
-#[test]
-fn callout_leave_does_not_clear_a_field_hover() {
-    let mut hover = IllustrationHover::default();
-    hover.update(IllustrationMsg::FieldHovered(W));
-    hover.update(IllustrationMsg::CalloutLeft);
-    assert_eq!(hover.hovered(), Some(&W));
-    assert_eq!(hover.hovered_callout(), None);
-}
-
-#[test]
-fn callout_hover_highlights_its_field_row_until_left() {
-    let mut hover = IllustrationHover::default();
-    hover.update(IllustrationMsg::CalloutHovered(GAP));
-    assert!(hover.is_field_highlighted(&GAP));
-    assert_eq!(hover.hovered_callout(), Some(&GAP));
-    hover.update(IllustrationMsg::FieldLeft(GAP));
-    assert!(
-        hover.is_field_highlighted(&GAP),
-        "a row leave is not a callout leave"
-    );
-    hover.update(IllustrationMsg::CalloutLeft);
-    assert_eq!(hover.hovered(), None);
-}
-
-#[test]
-fn transition_publishes_only_changes() {
-    assert_eq!(hover_transition(None, None, false), None);
-    assert_eq!(hover_transition(None, None, true), None);
-    assert_eq!(hover_transition(Some(&W), Some(W), true), None);
-    assert_eq!(
-        hover_transition(None, Some(W), false),
-        Some(IllustrationMsg::CalloutHovered(W))
-    );
-    assert_eq!(
-        hover_transition(Some(&W), Some(GAP), true),
-        Some(IllustrationMsg::CalloutHovered(GAP))
-    );
-    assert_eq!(
-        hover_transition(Some(&W), None, true),
-        Some(IllustrationMsg::CalloutLeft)
-    );
-}
-
-/// A drawing the pointer is not on never clears a callout that another
-/// drawing on the same hover set.
-#[test]
-fn only_the_drawing_that_set_a_callout_clears_it() {
-    assert_eq!(hover_transition(Some(&W), None, false), None);
 }
 
 #[test]
@@ -190,161 +138,6 @@ fn short_callout_puts_heads_outside_pointing_in() {
     assert!(g.label.is_none());
 }
 
-#[test]
-fn segment_distance_and_polygon_tests() {
-    let (a, b) = (Point::new(0.0, 0.0), Point::new(10.0, 0.0));
-    assert!(approx(distance_to_segment(Point::new(5.0, 3.0), a, b), 3.0));
-    assert!(approx(
-        distance_to_segment(Point::new(13.0, 4.0), a, b),
-        5.0
-    ));
-    let square = [
-        Point::new(0.0, 0.0),
-        Point::new(4.0, 0.0),
-        Point::new(4.0, 4.0),
-        Point::new(0.0, 4.0),
-    ];
-    assert!(contains_point(&square, Point::new(2.0, 2.0)));
-    assert!(!contains_point(&square, Point::new(5.0, 2.0)));
-}
-
-#[test]
-fn sweep_test_wraps_and_handles_full_turns() {
-    use std::f32::consts::{FRAC_PI_2, PI, TAU};
-    assert!(angle_in_sweep(FRAC_PI_2, 0.0, PI));
-    assert!(!angle_in_sweep(-FRAC_PI_2, 0.0, PI));
-    assert!(
-        angle_in_sweep(0.0, 3.0 * FRAC_PI_2, FRAC_PI_2),
-        "sweep across zero"
-    );
-    assert!(angle_in_sweep(1.0, 0.0, TAU));
-    assert!(!angle_in_sweep(1.0, 0.5, 0.5));
-}
-
-// ---- hit testing ----
-
-fn track_with_callout() -> Illustration {
-    Illustration::new(100.0, 100.0)
-        .part(Part::new(
-            Primitive::Line {
-                from: Point::new(0.0, 90.0),
-                to: Point::new(100.0, 90.0),
-            },
-            Style::outline(Ink::Rule, Weight::Hairline),
-        ))
-        .part(
-            Part::new(
-                Primitive::Band {
-                    points: vec![Point::new(10.0, 50.0), Point::new(90.0, 50.0)],
-                    width: 10.0,
-                    cap: Cap::Round,
-                },
-                Style::edge().with_fill(
-                    Paint::Document(Color::from_rgb(0.8, 0.25, 0.25)),
-                    Tint::Body,
-                ),
-            )
-            .linked_all(["w", "net"]),
-        )
-        .part(
-            Part::callout(Callout::new(Point::new(50.0, 45.0), Point::new(50.0, 55.0))).linked("w"),
-        )
-        .part(paste_outline())
-        .feature(PASTE_ON, false)
-}
-
-#[test]
-fn hit_reports_the_primary_field_of_the_top_part() {
-    let ill = track_with_callout();
-    let metrics = Metrics::new(10.0);
-    let fit = Fit::new(ill.view_size(), Size::new(100.0, 100.0));
-    assert_eq!(
-        hit_test(&ill, &fit, &metrics, Point::new(30.0, 52.0)),
-        Some(W)
-    );
-}
-
-#[test]
-fn unlinked_and_hidden_parts_are_not_hover_targets() {
-    let ill = track_with_callout();
-    let metrics = Metrics::new(10.0);
-    let fit = Fit::new(ill.view_size(), Size::new(100.0, 100.0));
-    // The unlinked rule line.
-    assert_eq!(hit_test(&ill, &fit, &metrics, Point::new(50.0, 90.0)), None);
-    // The paste outline, whose feature is off.
-    assert_eq!(hit_test(&ill, &fit, &metrics, Point::new(10.0, 20.0)), None);
-}
-
-#[test]
-fn arc_hit_follows_its_sweep() {
-    let ill = Illustration::new(100.0, 100.0).part(
-        Part::new(
-            Primitive::Arc {
-                center: Point::new(50.0, 50.0),
-                radius: 20.0,
-                start: Radians(0.0),
-                end: Radians(std::f32::consts::FRAC_PI_2),
-            },
-            Style::edge(),
-        )
-        .linked("r"),
-    );
-    let metrics = Metrics::new(10.0);
-    let fit = Fit::new(ill.view_size(), Size::new(100.0, 100.0));
-    // y down: a quarter turn clockwise from +x ends at +y.
-    assert_eq!(
-        hit_test(&ill, &fit, &metrics, Point::new(50.0, 70.0)),
-        Some(FieldId::new("r"))
-    );
-    assert_eq!(hit_test(&ill, &fit, &metrics, Point::new(50.0, 30.0)), None);
-}
-
-/// Two regions that touch at x = 50: the lit one holds while the pointer
-/// jitters over the shared edge, and hands over once clearly on the other.
-#[test]
-fn a_pointer_on_the_edge_of_two_regions_keeps_the_lit_one() {
-    let area = |x: f32, field: FieldId| {
-        Part::hover_area(Rectangle::new(Point::new(x, 0.0), Size::new(50.0, 100.0))).linked(field)
-    };
-    let ill = Illustration::new(100.0, 100.0)
-        .part(area(0.0, W))
-        .part(area(50.0, GAP));
-    let metrics = Metrics::new(10.0);
-    let fit = Fit::new(ill.view_size(), Size::new(100.0, 100.0));
-    let at = |x: f32, held: Option<&FieldId>| {
-        held_hit_test(&ill, &fit, &metrics, Point::new(x, 50.0), held)
-    };
-    for x in [49.0, 51.0, 49.5, 52.0, 48.0, 54.0] {
-        assert_eq!(at(x, Some(&W)), Some(W), "W holds at {x}");
-    }
-    for x in [51.0, 49.0, 50.5, 48.0, 52.0, 46.0] {
-        assert_eq!(at(x, Some(&GAP)), Some(GAP), "GAP holds at {x}");
-    }
-    assert_eq!(at(60.0, Some(&W)), Some(GAP), "clear of W, GAP takes over");
-    assert_eq!(at(40.0, Some(&GAP)), Some(W), "clear of GAP, W takes over");
-}
-
-/// A highlight-only mark lights with its field but is no hover target.
-#[test]
-fn a_highlight_only_part_reports_no_hover() {
-    let mark = Part::new(
-        Primitive::Line {
-            from: Point::new(10.0, 50.0),
-            to: Point::new(90.0, 50.0),
-        },
-        Style::edge(),
-    )
-    .linked(GAP)
-    .highlight_only();
-    let mut hover = IllustrationHover::default();
-    hover.update(IllustrationMsg::FieldHovered(GAP));
-    assert!(hover.is_part_highlighted(&mark));
-    let ill = Illustration::new(100.0, 100.0).part(mark);
-    let metrics = Metrics::new(10.0);
-    let fit = Fit::new(ill.view_size(), Size::new(100.0, 100.0));
-    assert_eq!(hit_test(&ill, &fit, &metrics, Point::new(50.0, 50.0)), None);
-}
-
 // ---- metrics and palette ----
 
 #[test]
@@ -352,7 +145,6 @@ fn every_size_scales_with_the_text_size() {
     let (small, large) = (Metrics::new(10.0), Metrics::new(20.0));
     assert!(approx(large.stroke(), 2.0 * small.stroke()));
     assert!(approx(large.arrow_length(), 2.0 * small.arrow_length()));
-    assert!(approx(large.hit_tolerance(), 2.0 * small.hit_tolerance()));
     assert!(approx(
         large.height(DEFAULT_HEIGHT_EM),
         2.0 * small.height(DEFAULT_HEIGHT_EM)

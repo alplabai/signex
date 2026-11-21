@@ -478,7 +478,7 @@ fn the_illustration_draws_pin_one_and_a_courtyard_only_when_there_is_one() {
 }
 
 #[test]
-fn hovering_a_field_lights_its_callouts_and_a_callout_lights_its_field() {
+fn hovering_a_field_lights_the_parts_linked_to_it() {
     let i18n = i18n();
     let mut facts = one_component("R7", "R_0603");
     facts.drawing = Some(drawn(true));
@@ -494,7 +494,7 @@ fn hovering_a_field_lights_its_callouts_and_a_callout_lights_its_field() {
     assert!(lit[0].is_linked_to(&DESIGNATOR_FIELD));
     facts
         .illustration_hover
-        .update(IllustrationMsg::CalloutHovered(LAYER_FIELD));
+        .update(IllustrationMsg::FieldHovered(LAYER_FIELD));
     assert!(facts.illustration_hover.is_field_highlighted(&LAYER_FIELD));
     let drawn = illustration(&facts, &i18n).expect("drawn");
     let lit = drawn

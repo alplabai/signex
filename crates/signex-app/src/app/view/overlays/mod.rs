@@ -197,6 +197,7 @@ impl Signex {
         Self::flyout_and_place(
             Message::ActiveBar(crate::active_bar::ActiveBarMsg::CloseMenus),
             Message::ActiveBar(crate::active_bar::ActiveBarMsg::FlyoutRightPressed),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::RightPressTaken),
             dropdown,
             (adjusted_x, ab_y),
         )

@@ -338,6 +338,7 @@ mod tests {
             drill_mm: 0.0,
             dimmed: false,
             ink: CopperInk::Layer(ink),
+            shown_on: None,
         };
         let snapshot = PcbSnapshot {
             traces: vec![TraceInput {
@@ -375,7 +376,8 @@ mod tests {
         );
     }
 
-    /// A via and a through-hole pad as drawn are the Multi-Layer swatch.
+    /// A via and a through-hole pad showing no active copper layer are the
+    /// Multi-Layer swatch.
     #[test]
     fn through_items_match_the_multi_layer_swatch() {
         use signex_gfx::scene::{DirtyFlags, Scene};
@@ -391,6 +393,7 @@ mod tests {
                 net: 1,
                 dimmed: false,
                 ink: CopperInk::MultiLayer,
+                shown_on: None,
             }],
             pads: vec![PadInput {
                 center: [0.5, 0.5],
@@ -400,6 +403,7 @@ mod tests {
                 drill_mm: 0.5,
                 dimmed: false,
                 ink: CopperInk::MultiLayer,
+                shown_on: None,
             }],
             ..PcbSnapshot::default()
         };

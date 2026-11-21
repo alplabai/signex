@@ -25,6 +25,14 @@ fn set_msg(event: LayerSetMenuMsg) -> Message {
     Message::Pcb(PcbMsg::LayerSetMenu(event))
 }
 
+/// `event` as a row of the status bar's layer dropdown sends it.
+fn through_layer_dropdown(event: LayerSetMenuMsg) -> Message {
+    let event = crate::status_bar::BoardPopoverEvent::LayerSetMenu(event);
+    Message::Ui(crate::app::UiMsg::StatusBar(
+        crate::app::StatusBarRequest::BoardPopover(event),
+    ))
+}
+
 /// The rows to pick a set from (mockup row 104): a LAYER SETS header, the built-in
 /// sets, the saved ones with a "saved" caption, then Save current as set...
 /// and Manage sets.... The shown set has its check in the icon column.
@@ -224,6 +232,26 @@ impl Signex {
             set_msg(LayerSetMenuMsg::Dismissed),
             super::anchored::AnchoredMenu::above(card.element, (menu.x, menu.y)),
         )
+    }
+
+    /// The layer sets as the status bar's layer dropdown lists them: the
+    /// menu's own rows, each sent through the dropdown so it first opens the
+    /// layer set menu for `window`.
+    pub(crate) fn layer_dropdown_sets(&self, window: iced::window::Id) -> Element<'_, Message> {
+        let panel_ctx = &self.document_state.panel_ctx;
+        let view = self.pcb_layer_view_of_window(self.overlay_owner(window));
+        let entries = layer_set_entries(
+            &self.ui_state.i18n,
+            &self.ui_state.layer_strip,
+            view.layer_set().map(|set| &set.id),
+            self.ui_state.effective_theme_id(),
+        );
+        super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name)
+            .element
+            .map(|message| match message {
+                Message::Pcb(PcbMsg::LayerSetMenu(event)) => through_layer_dropdown(event),
+                other => other,
+            })
     }
 }
 

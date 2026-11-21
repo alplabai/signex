@@ -133,6 +133,10 @@ impl Signex {
                 self.set_swallow_right_release(true);
                 Task::none()
             }
+            PcbBarMsg::RightPressTaken => {
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
             PcbBarMsg::CommandPicked(command) => {
                 let picked_from = open.take();
                 let remembered = match picked_from {

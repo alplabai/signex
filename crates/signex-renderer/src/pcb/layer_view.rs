@@ -9,7 +9,7 @@
 use std::collections::HashSet;
 
 use signex_types::format::parse_pcb_layer;
-use signex_types::pcb::{Footprint, Pad, PcbBoard};
+use signex_types::pcb::{Footprint, Pad, PadType, PcbBoard};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
 use super::board_paint::{BoardObject, BoardPaint};
@@ -127,6 +127,21 @@ fn classify(view: Option<&PcbLayerView>, names: &[String], through: bool) -> (Em
         None => CopperInk::Unknown,
     };
     (emphasis, ink)
+}
+
+/// The active copper layer when a via on `names` has copper there.
+fn active_in_span(view: Option<&PcbLayerView>, names: &[String]) -> Option<CopperLayer> {
+    let active = view?.active_copper()?;
+    let (top, bottom) = copper_span(names)?;
+    (top..=bottom).contains(&active).then_some(active)
+}
+
+/// The active copper layer for a plated through-hole pad, which has copper on
+/// every layer; a non-plated pad has none to paint.
+fn active_on_through_pad(view: Option<&PcbLayerView>, pad: &Pad) -> Option<CopperLayer> {
+    (pad.pad_type == PadType::Thru)
+        .then(|| view.and_then(PcbLayerView::active_copper))
+        .flatten()
 }
 
 impl PcbLayerView {
@@ -540,6 +555,7 @@ impl PcbSnapshot {
                 let mut input = via_from_board_via(via, view.and_then(PcbLayerView::active_copper));
                 input.dimmed = how == Emphasis::Dimmed;
                 input.ink = ink;
+                input.shown_on = active_in_span(view, &via.layers);
                 vias.push((how, input));
             }
         }
@@ -666,6 +682,7 @@ fn footprint_pads(footprint: &Footprint, view: Option<&PcbLayerView>) -> Vec<(Em
         {
             input.dimmed = how == Emphasis::Dimmed;
             input.ink = ink;
+            input.shown_on = active_on_through_pad(view, pad);
             pads.push((how, input));
         }
     }

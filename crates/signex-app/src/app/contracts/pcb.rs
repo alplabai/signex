@@ -245,6 +245,9 @@ pub enum PcbBarMsg {
     /// A right press outside the open dropdown closed it; its release stays
     /// off the canvas.
     FlyoutRightPressed,
+    /// A part of the bar or of its open dropdown that opens no menu took a
+    /// right press: nothing changes, and its release stays off the canvas.
+    RightPressTaken,
     /// A dropdown row was picked: the dropdown closes and the command runs
     /// as its menu row runs it.
     CommandPicked(crate::keymap::AppCommandId),
