@@ -53,7 +53,7 @@ fn settle(app: &mut Signex, task: Task<Message>) {
     }
 }
 
-fn note_item() -> SelectedItem {
+pub(super) fn note_item() -> SelectedItem {
     SelectedItem::new(uuid::Uuid::from_u128(NOTE), SelectedKind::TextNote)
 }
 
@@ -78,7 +78,7 @@ fn sheet_with_note() -> SchematicSheet {
 
 /// Sheets `a` and `b` open in the main window, both with the note, `a`
 /// active.
-fn two_sheets() -> (tempfile::TempDir, Signex, PathBuf, PathBuf) {
+pub(super) fn two_sheets() -> (tempfile::TempDir, Signex, PathBuf, PathBuf) {
     let dir = tempfile::tempdir().expect("tempdir");
     let (mut app, _task) = Signex::new();
     app.ui_state.main_window_id = Some(iced::window::Id::unique());
@@ -91,7 +91,7 @@ fn two_sheets() -> (tempfile::TempDir, Signex, PathBuf, PathBuf) {
     (dir, app, a, b)
 }
 
-fn switch_to(app: &mut Signex, index: usize) {
+pub(super) fn switch_to(app: &mut Signex, index: usize) {
     let window_id = app.ui_state.main_window_id.expect("main window");
     let msg = TabMessage::Select(index);
     let _ = app.update(Message::Tab { window_id, msg });
@@ -104,7 +104,7 @@ fn panel(app: &mut Signex, msg: PlacedEditMsg) {
 
 /// Select the note on the active sheet and type `c` at the end of its text,
 /// without Ctrl+Enter.
-fn type_into_note(app: &mut Signex, c: char) {
+pub(super) fn type_into_note(app: &mut Signex, c: char) {
     let item = note_item();
     app.interaction_state.active_canvas_mut().selected = vec![item];
     app.update_selection_info();
@@ -117,7 +117,7 @@ fn type_into_note(app: &mut Signex, c: char) {
     }
 }
 
-fn note_text(app: &Signex, sheet: &Path) -> String {
+pub(super) fn note_text(app: &Signex, sheet: &Path) -> String {
     app.document_state.engines[sheet].document().text_notes[0]
         .text
         .clone()
