@@ -736,6 +736,8 @@ pub enum GridPropertiesMsg {
     /// v0.18.11 — open the Grid Properties modal (Ctrl+G).
     /// Footprint editor only; other contexts no-op.
     Open,
+    /// The grid picker's last row: open it for the picker's footprint.
+    OpenFromPicker,
     /// v0.18.11 — close the Grid Properties modal (Esc). Discards
     /// in-flight edits; Esc while a preview label is open closes only
     /// that label.

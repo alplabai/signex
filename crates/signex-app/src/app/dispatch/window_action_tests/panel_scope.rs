@@ -436,7 +436,10 @@ fn a_board_report_in_a_window_reads_its_board() {
     };
     assert_eq!(report.board, b);
     // An SVG command exports the open dialog's board, not main's.
-    assert_eq!(app.assembly_svg_source().map(|(board, _)| board), Some(b.clone()));
+    assert_eq!(
+        app.assembly_svg_source().map(|(board, _)| board),
+        Some(b.clone())
+    );
     let _ = app.update(Message::from(crate::app::BoardOutputMsg::Closed));
     run_in(&mut app, "export_board_pdf", window);
     assert!(matches!(
