@@ -507,7 +507,7 @@ pub(super) fn live_replacement(
         let mine = signex_engine::replace_commands(document, &hit, &job.find, &job.replacement);
         // A hit on a locked label or note is skipped and named, and not
         // counted as replaced.
-        let (mine, skipped) = Signex::without_locked_items(engine, mine);
+        let (mine, skipped) = crate::app::core::locked_items::locked_items_pruned(engine, mine);
         locked.extend(skipped);
         if !mine.is_empty() {
             hits += 1;

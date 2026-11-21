@@ -7,12 +7,18 @@
 //! tool, a drag or a text edit. What follows an edit is the document's own
 //! derived state (dirty mark, render caches of windows that show it, the
 //! panel context).
+//!
+//! These are tail wrappers (#2704, until slice 6): the core half in
+//! `state::sheet_change`, then the projection in `app::projector`.
 
 use std::path::Path;
 
 use signex_engine::DocumentPatch;
 
 use crate::app::Signex;
+use crate::app::core::event::ChangeCause;
+use crate::app::core::mutation_outcome::MutationOutcome;
+use crate::app::projector::RefreshScope;
 
 impl Signex {
     /// Run `command` on the engine of the sheet at `path`, as one undo step.
@@ -23,24 +29,12 @@ impl Signex {
         path: &Path,
         command: signex_engine::Command,
     ) -> Result<bool, String> {
-        let Some(engine) = self.document_state.engines.get_mut(path) else {
-            return Err(format!("{} is not loaded", path.display()));
-        };
-        let executed = engine.execute(command);
-        Self::report_engine_warnings(engine);
-        let patch = match executed {
-            Ok(result) if result.changed => result
-                .patch_pair
-                .map_or(DocumentPatch::NONE, |pair| pair.document),
-            Ok(_) => return Ok(false),
-            Err(error) => {
-                let reason = error.to_string();
-                crate::diagnostics::log_error("Engine command failed", &anyhow::Error::new(error));
-                return Err(reason);
-            }
-        };
-        self.after_sheet_change(path, patch);
-        Ok(patch != DocumentPatch::NONE)
+        let edit = self.document_state.execute_at(path, command);
+        self.project_events(edit.events, RefreshScope::Sheet);
+        match edit.refusal {
+            Some(reason) => Err(reason),
+            None => Ok(edit.outcome == MutationOutcome::Changed),
+        }
     }
 
     /// One Undo (`undo`) or Redo of the sheet at `path`: its newest net-class
@@ -53,47 +47,12 @@ impl Signex {
             self.after_sheet_change(path, DocumentPatch::NET_COLORS);
             return Ok(true);
         }
-        let Some(engine) = self.document_state.engines.get(path) else {
-            return Err(format!("{} is not loaded", path.display()));
-        };
-        let group = if undo {
-            engine.next_undo_group()
-        } else {
-            engine.next_redo_group()
-        };
-        if let Some(group) = group {
-            return Err(
-                if self.document_state.agent_edits.labels.contains_key(&group) {
-                    "the next step is an agent's edit step; take it back with `revert`".to_string()
-                } else {
-                    "the next step belongs to a project-wide run (annotate, replace or re-prefix) \
-                 and moves other sheets too; undo it from the sheet it was run on"
-                        .to_string()
-                },
-            );
+        let step = self.document_state.step_history_at(path, undo);
+        self.project_events(step.events, RefreshScope::Sheet);
+        match step.refusal {
+            Some(reason) => Err(reason),
+            None => Ok(step.stepped),
         }
-        let Some(engine) = self.document_state.engines.get_mut(path) else {
-            return Err(format!("{} is not loaded", path.display()));
-        };
-        let stepped = if undo { engine.undo() } else { engine.redo() };
-        let patch = match stepped {
-            Ok(Some(pair)) => pair.document,
-            Ok(None) => return Ok(false),
-            Err(error) => {
-                let reason = error.to_string();
-                let failure = if undo {
-                    "Engine undo failed"
-                } else {
-                    "Engine redo failed"
-                };
-                crate::diagnostics::log_error(failure, &anyhow::Error::new(error));
-                return Err(reason);
-            }
-        };
-        // Undo / redo can bring back an older embedded library symbol.
-        self.library.drift.check_pending = true;
-        self.after_sheet_change(path, patch);
-        Ok(true)
     }
 
     /// What follows a change to the sheet at `path`: the document's dirty
@@ -101,26 +60,10 @@ impl Signex {
     /// the sheet is also the main window's active one the same refresh keeps
     /// that canvas current.
     pub(crate) fn after_sheet_change(&mut self, path: &Path, patch: DocumentPatch) {
-        // Inside an agent's edit list the refresh is owed once, at its end.
-        if self.document_state.agent_edits.target.as_deref() == Some(path) {
-            self.document_state.agent_edits.owed |= patch;
-            return;
-        }
-        let display_only = patch.is_display_only();
-        if !display_only {
-            self.document_state.note_sheet_edit();
-        }
-        self.mark_compiled_stale(path, patch);
-        self.document_state.sync_history_dirty(path);
-        let is_active = self.document_state.active_path.as_deref() == Some(path);
-        self.refresh_slots_from_engine(path, is_active, patch.into(), false);
-        if is_active {
-            self.prune_selected_wires();
-            if !display_only {
-                self.refresh_erc_after_edit();
-            }
-        }
-        self.refresh_panel_ctx();
+        let events = self
+            .document_state
+            .settle_sheet_at(path, patch, ChangeCause::Edit);
+        self.project_events(events, RefreshScope::Sheet);
     }
 
     /// Repaint the undocked windows and tile pane showing `path`, a member of

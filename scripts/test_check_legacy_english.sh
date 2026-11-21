@@ -25,9 +25,11 @@ new_tree() {
   local tree="$TMP/$1"
   mkdir -p "$tree/scripts"
   put "$tree" scripts/legacy-english-baseline.txt 'command_outcome_disabled=1
-translatable_legacy_english=1'
+translatable_legacy_english=1
+notice_legacy_english=1'
   put "$tree" crates/a/src/lib.rs 'fn a() { let _ = CommandOutcome::disabled("no"); }
-fn b() { let _ = Translatable::legacy_english("no"); }'
+fn b() { let _ = Translatable::legacy_english("no"); }
+fn n() { let _ = Notice::legacy_english(NoticeLevel::Warning, "no"); }'
   echo "$tree"
 }
 
@@ -52,6 +54,10 @@ expect a_new_disabled_call fail "$t"
 t="$(new_tree a_qualified_legacy_call)"
 put "$t" crates/b/src/lib.rs 'fn c() { let _ = signex_i18n_ids::Translatable::legacy_english("new"); }'
 expect a_qualified_legacy_call fail "$t"
+
+t="$(new_tree a_new_notice_legacy_call)"
+put "$t" crates/b/src/lib.rs 'fn c() { let _ = crate::app::core::event::Notice::legacy_english(level, "new"); }'
+expect a_new_notice_legacy_call fail "$t"
 
 t="$(new_tree a_paid_debt_not_locked_in)"
 put "$t" crates/a/src/lib.rs 'fn b() { let _ = Translatable::legacy_english("no"); }'

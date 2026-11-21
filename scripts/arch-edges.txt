@@ -19,6 +19,7 @@ signex-app -> signex-gerber
 signex-app -> signex-gfx
 signex-app -> signex-history
 signex-app -> signex-i18n
+signex-app -> signex-i18n-ids
 signex-app -> signex-library
 signex-app -> signex-net
 signex-app -> signex-notebook

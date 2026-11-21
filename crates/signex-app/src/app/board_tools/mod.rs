@@ -296,3 +296,5 @@ fn stitch_selection<F: Fn(u32, u32) -> i64 + Copy>(
 mod copper_tests;
 #[cfg(test)]
 mod placement_tests;
+#[cfg(test)]
+mod targets_tests;

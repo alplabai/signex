@@ -48,8 +48,10 @@ const DELIVER_LIMIT: Duration = Duration::from_secs(5);
 /// of what trunk reached when this landed (point 141, angle 12, turn 3,
 /// text 752, path 32, bool 29, color 4, document 65, length 2). The only
 /// length operand, `stitch_vias pitch`, reaches its handler through the
-/// fixture board's net `GND`.
+/// fixture board's net `GND`. Targets (#2326, 7 when added): the parser
+/// refuses all junk but a repeated uuid, which a handler refuses as unknown.
 const MIN_REACHED: &[(OperandKind, usize)] = &[
+    (OperandKind::Targets, 3),
     (OperandKind::Point, 70),
     (OperandKind::Angle, 6),
     (OperandKind::Turn, 1),
@@ -217,6 +219,7 @@ fn valid(kind: OperandKind, document: &Path) -> String {
         OperandKind::Bool => "true".into(),
         OperandKind::Color => "#ff0000".into(),
         OperandKind::Length => "1.27".into(),
+        OperandKind::Targets => uuid::Uuid::now_v7().to_string(),
     }
 }
 
@@ -240,6 +243,11 @@ fn junk(kind: OperandKind, root: &Path) -> Vec<String> {
         OperandKind::Length => add(&["-1", "0.000001", "1e9"]),
         OperandKind::Color => add(&["#gg0000", "#000000", "ffffff"]),
         OperandKind::Bool => add(&["maybe", "false"]),
+        OperandKind::Targets => {
+            let id = uuid::Uuid::now_v7().to_string();
+            values.extend(["x".to_string(), format!("{id},{id}")]);
+            values.push(vec![id; signex_commands::catalog::MAX_TARGETS + 1].join(","));
+        }
         OperandKind::Text => {
             values.extend(["..", "../../x", "Ω☃𝔘 ﷽"].map(String::from));
             values.push("x".repeat(10_000));

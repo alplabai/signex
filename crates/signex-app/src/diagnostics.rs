@@ -98,14 +98,9 @@ pub fn log_warning_with_link(target: &str, message: impl AsRef<str>, link: Messa
 
 /// Tell the user which locked objects an edit passed over.
 pub fn log_locked_skips(skipped: &[String]) {
-    if skipped.is_empty() {
-        return;
+    if let Some(line) = crate::app::core::event::locked_skips_line(skipped) {
+        log_warning(line);
     }
-    log_warning(format!(
-        "Skipped {} locked object(s): {}; unlock in Properties to change them",
-        skipped.len(),
-        skipped.join(", ")
-    ));
 }
 
 /// Tell the user what a drag in flight would leave in place because of a
@@ -124,7 +119,8 @@ pub fn log_error(context: &str, error: &anyhow::Error) {
     error!("{context}: {error:#}");
 }
 
-/// An error line already worded whole (a catalog message with its reason).
+/// [`log_error`] for a line already worded whole: a catalog message with its
+/// reason, or a context and cause chain.
 pub fn log_error_line(message: impl AsRef<str>) {
     error!("{}", message.as_ref());
 }

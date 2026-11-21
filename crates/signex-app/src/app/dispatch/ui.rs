@@ -788,7 +788,8 @@ impl Signex {
         std::mem::swap(&mut self.document_state.panel_ctx, &mut swapped_ctx);
         std::mem::swap(&mut self.document_state.history, &mut swapped_history);
         // The handler may have closed the window (Close Document): its
-        // context and canvas are then dropped, not put back.
+        // context and canvas are then dropped, not put back; its typed note
+        // boxes are still owed to their sheets (#2649).
         let window_alive = self.ui_state.windows.contains_key(&window_id);
         if window_alive {
             self.document_state
@@ -797,6 +798,8 @@ impl Signex {
             self.document_state
                 .window_panel_ctx
                 .insert(window_id, swapped_ctx);
+        } else {
+            self.owe_note_drafts_of(swapped_ctx);
         }
 
         // Always-run cleanup (runs on success, error return, or panic

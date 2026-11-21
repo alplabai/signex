@@ -27,7 +27,15 @@ pub enum OperandKind {
     Document,
     /// A length in mm, above zero: a grid step (#2408).
     Length,
+    /// The items a command acts on, by uuid, comma separated (#2326): at
+    /// least one and at most [`MAX_TARGETS`]; a repeated uuid counts once.
+    Targets,
 }
+
+/// The most uuids one [`OperandKind::Targets`] operand names. A handler finds
+/// each by a scan of the document's items, so this bounds one call's work
+/// (and its text, about 370 kB); a person's selection is far smaller.
+pub const MAX_TARGETS: usize = 10_000;
 
 impl OperandKind {
     pub const fn name(self) -> &'static str {
@@ -41,6 +49,7 @@ impl OperandKind {
             Self::Color => "color",
             Self::Document => "document",
             Self::Length => "length",
+            Self::Targets => "targets",
         }
     }
 
@@ -49,7 +58,9 @@ impl OperandKind {
         match self {
             Self::Point | Self::Length => Some("mm"),
             Self::Angle | Self::Turn => Some("deg"),
-            Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document => None,
+            Self::Text | Self::Path | Self::Bool | Self::Color | Self::Document | Self::Targets => {
+                None
+            }
         }
     }
 }
@@ -625,7 +636,7 @@ pub const MEASURE_BOARD: &[Operand] = &[
     required("document", OperandKind::Document),
     optional("start", OperandKind::Point),
     optional("end", OperandKind::Point),
-    optional("ids", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
 ];
 /// `query_board_nets` (#2403): every net of the named board, or one.
 pub const QUERY_BOARD_NETS: &[Operand] = &[
@@ -804,7 +815,7 @@ pub const TEARDROPS: &[Operand] = &[
 /// `arrange_in_box` (#2409): the components and the box's two corners.
 pub const ARRANGE_BOX: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("start", OperandKind::Point),
     required("end", OperandKind::Point),
 ];
@@ -934,13 +945,13 @@ pub const SET_LAYER_STACK: &[Operand] = &[
 /// separated.
 pub const BOARD_ITEMS: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
 ];
 /// `set_via_span` (#2407): vias by uuid and the two copper layers they join,
 /// `TopCopper,Inner2Copper`.
 pub const SET_VIA_SPAN: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("layers", OperandKind::Text),
 ];
 /// `set_layer_sizes` (#2401): vias or pads by uuid and their per-layer sizes
@@ -948,7 +959,7 @@ pub const SET_VIA_SPAN: &[Operand] = &[
 /// a via size one number, a pad size `<x>x<y>`.
 pub const SET_LAYER_SIZES: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("sizes", OperandKind::Text),
 ];
 /// `set_pad_shape` (#2242): pads by uuid and their `shape` (`circle`, `rect`,
@@ -957,7 +968,7 @@ pub const SET_LAYER_SIZES: &[Operand] = &[
 /// pad's own frame.
 pub const SET_PAD_SHAPE: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("ids", OperandKind::Text),
+    required("ids", OperandKind::Targets),
     required("shape", OperandKind::Text),
     optional("delta", OperandKind::Text),
     optional("corners", OperandKind::Text),

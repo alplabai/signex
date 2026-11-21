@@ -16,6 +16,8 @@ mod navigator;
 mod net_classes;
 #[cfg(test)]
 mod note_draft_persist_tests;
+#[cfg(test)]
+mod note_draft_window_close_tests;
 mod panel_controls;
 mod panel_open;
 mod part_actions;
