@@ -5,10 +5,7 @@
 //! `Signex` view impl, split across sibling files.
 
 use super::*;
-use crate::styles::{
-    DialogButtonKind, dialog_body, dialog_button, dialog_footer, dialog_footer_split,
-    dialog_message,
-};
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer_split};
 use iced::widget::Widget;
 use signex_i18n::{I18n, Localized, ids, t};
 

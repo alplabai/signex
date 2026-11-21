@@ -20,8 +20,6 @@ pub(crate) const TRACK_LIST_MAX_HEIGHT: f32 = 180.0;
 /// Padding and border of the bordered list box around the rows
 /// (`dialog_list`: 2 x `Spacing::s` + 2 x 1 px).
 pub(crate) const LIST_BOX_CHROME: f32 = 10.0;
-/// Height of one row of a dirty-document list.
-const ROW_HEIGHT: f32 = 24.5;
 /// Window height of a list dialog with an empty list: message, the list
 /// box chrome, footer buttons and the dialog padding.
 const LIST_DIALOG_BASE: f32 = 98.0;
@@ -131,10 +129,6 @@ fn graphite_extra(modal: ModalId) -> f32 {
     graphite_intro_extra(modal).map_or(0.0, |intro| {
         intro + crate::styles::dense_footer_height() - crate::styles::dialog_footer_height()
     })
-}
-
-fn list_height(rows: usize) -> f32 {
-    (rows as f32 * ROW_HEIGHT).min(LIST_MAX_HEIGHT)
 }
 
 /// One line of body text and of caption text.
