@@ -16,7 +16,7 @@ use std::path::Path;
 use signex_engine::DocumentPatch;
 
 use crate::app::Signex;
-use crate::app::core::event::ChangeCause;
+use crate::app::core::event::{ChangeCause, DocumentChanged};
 use crate::app::core::mutation_outcome::MutationOutcome;
 use crate::app::projector::RefreshScope;
 
@@ -75,7 +75,10 @@ impl Signex {
             self.document_state.agent_edits.owed |= patch;
             return;
         }
-        self.refresh_slots_from_engine(path, false, patch.into(), false);
+        let path = path.to_path_buf();
+        let cause = ChangeCause::Edit;
+        let changed = DocumentChanged { path, patch, cause };
+        self.project_events(vec![changed.into()], RefreshScope::Member);
     }
 
     /// After a person's edit run through `on_edit_target` on `path`: when
