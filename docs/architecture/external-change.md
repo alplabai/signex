@@ -60,7 +60,8 @@ the save ledger (Save All lists it), and the notice card offers:
   failure record goes with the old file. A File ▸ Save As of a sheet onto its
   own file name, exactly as it is open, is a plain save compared like Ctrl+S:
   after the card was cancelled, the changed file raises the card again instead
-  of being replaced.
+  of being replaced. A file deleted or moved away is written; a gone folder
+  raises Folder Missing on Disk, as Ctrl+S does.
 - **Overwrite** (Missing: Re-create): one save that is not compared; a failed
   write leaves the baseline, so the next save asks again.
 - **Reload from disk**: read and parse the file on a worker, then replace the
