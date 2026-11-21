@@ -331,6 +331,7 @@ impl Signex {
                 window_os_scales: std::collections::HashMap::new(),
                 undocked_window_sizes: std::collections::HashMap::new(),
                 panel_list_open: false,
+                grid_snap_popover: None,
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
                 shortcut_sections: None,
@@ -341,6 +342,7 @@ impl Signex {
                 pinned_projects: crate::pinned_projects::PinnedProjects::from_paths(
                     crate::fonts::read_pinned_projects_from(prefs),
                 ),
+                project_thumbnails: Box::default(),
                 first_run_tour_open,
                 find_replace: crate::find_replace::FindReplaceState::default(),
                 preferences_nav: crate::preferences::PrefNav::Appearance,
@@ -543,6 +545,10 @@ impl Signex {
                 lasso_polygon: None,
                 net_color_custom: crate::app::state::NetColorCustomState::default(),
                 command_palette: crate::app::command_palette::CommandPaletteState::default(),
+                start_screen: Box::new(crate::start_screen::StartScreenState::at_boot(
+                    chrono::Utc::now(),
+                )),
+                tab_overflow_menu_open: false,
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),
@@ -802,7 +808,6 @@ impl Signex {
                 zoom_presets_open: false,
                 tab_context_menu: None,
                 start_row_menu: None,
-                start_section: Default::default(),
                 context_submenu: None,
                 pending_submenu: None,
                 submenu_launcher_hovered: None,
@@ -923,11 +928,15 @@ impl Signex {
         let (main_id, open_task) = iced::window::open(main_settings);
         app.ui_state.main_window_id = Some(main_id);
         app.note_unusable_setup_profiles(crate::fonts::unusable_setup_profiles(prefs));
+        app.ui_state
+            .recent_projects
+            .restore_opened(crate::fonts::read_recent_opened_from(prefs));
         let boot_task = iced::Task::batch([
             open_task.map(|id| Message::Window(WindowMsg::MainWindowOpened(id))),
             mount_task,
             tour_boot,
             app.check_pinned_projects(),
+            app.load_project_thumbnails(),
         ]);
         // The panel context above was seeded with Signex tokens; point it at the
         // saved theme before the first frame, so a Graphite first launch does not

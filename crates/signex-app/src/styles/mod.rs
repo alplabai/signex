@@ -342,21 +342,41 @@ fn card_style(
     }
 }
 
-/// Translucent highlight overlay shown on dock regions when a floating panel
-/// is dragged near a window edge.
+/// The dock region a dragged floating panel would dock into if released now
+/// (mockup row 8): `accent-soft` fill, a 2 px accent border, card corners.
 pub fn dock_zone_highlight(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
     let accent = ti(tokens.accent);
+    let soft = tokens::resolve(tokens).accent_soft;
     move |_| container::Style {
-        background: Some(Background::Color(Color::from_rgba(
-            accent.r, accent.g, accent.b, 0.15,
-        ))),
+        background: Some(Background::Color(soft)),
         border: Border {
             width: 2.0,
-            radius: 4.0.into(),
-            color: Color::from_rgba(accent.r, accent.g, accent.b, 0.4),
+            radius: Radii::GRAPHITE.card.into(),
+            color: accent,
             ..Border::default()
         },
         ..container::Style::default()
+    }
+}
+
+/// A dashed outline drawn on a canvas: iced's `Border` has no dash.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DashedOutline {
+    pub color: Color,
+    pub width: f32,
+    pub radius: f32,
+    /// Dash and gap lengths, in px.
+    pub dash: [f32; 2],
+}
+
+/// The faint outline of a dock region a dragged floating panel could dock
+/// into but would not now (mockup row 8): 1.5 px dashed `line-strong`, card corners.
+pub fn dock_zone_outline(tokens: &ThemeTokens) -> DashedOutline {
+    DashedOutline {
+        color: tokens::resolve(tokens).line_strong,
+        width: 1.5,
+        radius: Radii::GRAPHITE.card,
+        dash: [5.0, 4.0],
     }
 }
 

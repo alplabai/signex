@@ -1,4 +1,5 @@
-//! Real text measurement for the collapsed rail and the tab strip.
+//! Real text measurement for the collapsed rail, the dock tab strip and the
+//! document tab strip's overflow (`tab_bar::overflow`).
 
 use iced::advanced::text::{self, Paragraph as _};
 use iced::{Pixels, Size};
@@ -11,7 +12,7 @@ pub(super) fn text_width(label: &str, size: f32) -> f32 {
 }
 
 /// [`text_width`] in `font`.
-pub(super) fn text_width_in(label: &str, size: f32, font: iced::Font) -> f32 {
+pub(crate) fn text_width_in(label: &str, size: f32, font: iced::Font) -> f32 {
     let para = Para::with_text(text::Text {
         content: label,
         bounds: Size::INFINITE,

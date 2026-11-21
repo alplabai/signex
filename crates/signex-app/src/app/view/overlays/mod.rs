@@ -15,22 +15,16 @@ use super::*;
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
-/// Width of the command palette card in an undocked window.
-const WINDOW_PALETTE_WIDTH: f32 = 480.0;
-/// Width of the Graphite palette card under the chrome strip (the mock's
-/// 640 px); independent of the search field's own width.
-const GRAPHITE_PALETTE_WIDTH: f32 = 640.0;
-/// Least gap between the chrome palette card and either window edge.
-const PALETTE_EDGE_GAP: f32 = 16.0;
-
 mod bars;
 #[cfg(test)]
 mod dismiss_tests;
+mod dock_zones;
 mod modals;
 mod net_hover;
 mod palette;
 #[cfg(test)]
 mod palette_scrim_tests;
+mod panel_list;
 mod placement_paused;
 pub(super) mod read_only_badge;
 mod text_edit;
@@ -228,142 +222,6 @@ impl Signex {
         Some(signex_widgets::Translate::new(card, (x, y)).boxed())
     }
 
-    /// Result list for the chrome-strip command palette. Anchored
-    /// below the chrome strip; scoring + ranking happens in the
-    /// `command_palette` module so this view stays a thin renderer.
-    pub(super) fn view_command_palette_dropdown(&self) -> Element<'_, Message> {
-        use crate::app::command_palette::MAX_RESULTS;
-        use iced::widget::{Space, column, container, scrollable};
-        use iced::{Background, Border, Color};
-        use signex_i18n::{ids, t};
-        use signex_widgets::{text, text_input};
-
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let i18n = &*self.ui_state.i18n;
-        let text_c = crate::styles::ti(tokens.text);
-        let muted_c = crate::styles::ti(tokens.text_secondary);
-
-        // Ranked in `update` (`refresh_command_palette_results`), read here.
-        let results = &self.ui_state.command_palette.results;
-        let total = self.ui_state.command_palette.total_matches;
-        let selected = self
-            .ui_state
-            .command_palette
-            .selected_index
-            .min(total.saturating_sub(1));
-
-        let mut rows: Vec<Element<'_, Message>> = Vec::with_capacity(MAX_RESULTS.min(total));
-        for (display_idx, entry) in results.iter().enumerate() {
-            let is_active = display_idx == selected;
-            // `results` is already grouped (see `group_for_display`), so a
-            // header goes wherever the source changes.
-            if display_idx == 0 || results[display_idx - 1].source != entry.source {
-                let count = results.iter().filter(|e| e.source == entry.source).count();
-                rows.push(palette::group_header(
-                    &self.ui_state.i18n,
-                    tokens,
-                    entry.source,
-                    count,
-                ));
-            }
-            rows.push(palette::result_row(
-                &self.ui_state.i18n,
-                tokens,
-                entry,
-                &self.ui_state.command_palette.query,
-                is_active,
-                Message::CommandPalette(CommandPaletteMsg::Select(display_idx)),
-            ));
-        }
-
-        let body: Element<'_, Message> = if total == 0 {
-            container(
-                text(t!(i18n, ids::OVERLAY_PALETTE_NO_RESULTS))
-                    .size(TS.label)
-                    .color(muted_c),
-            )
-            .padding([SP.l, 14.0])
-            .width(Length::Fill)
-            .boxed()
-        } else {
-            let list = column(rows).spacing(SP.xs).padding(SP.s);
-            // Bound the list so the 360 px card keeps room for the search
-            // row above and the hint footer below.
-            let list_cap = 360.0 - 2.0 * (TS.body * 1.6 + 2.0 * SP.l);
-            scrollable(list)
-                .height(Length::Fit.max(list_cap))
-                .style(palette::scrollbar_style(tokens))
-                .boxed()
-        };
-
-        // Footer with the hint line, and a note when there are more matches
-        // than we render.
-        let footer: Element<'_, Message> = if total > 0 {
-            let more = (total > MAX_RESULTS).then(|| {
-                t!(i18n, ids::OVERLAY_PALETTE_MORE_RESULTS, "count" => (total - MAX_RESULTS) as i64)
-            });
-            palette::hint_footer(i18n, tokens, results.get(selected), more)
-        } else {
-            Space::new().height(0).boxed()
-        };
-
-        // Card width and x come from the same geometry the chrome strip
-        // lays the input out with, so the dropdown reads as an extension
-        // of the input rather than a floating popup that happens to be
-        // nearby — including after a resize shrinks the bar.
-        let in_window = self.ui_state.command_palette.window.is_some();
-        // An undocked window has no chrome bar: its palette carries the
-        // text input at the top of the card.
-        let (card_x, card_w) = if in_window {
-            (16.0, WINDOW_PALETTE_WIDTH)
-        } else {
-            let (x, w) = self.chrome_search_bar_geometry();
-            chrome_palette_card(x, w, self.ui_state.window_size.0)
-        };
-        let ink4 = crate::styles::tokens::resolve(tokens).ink4;
-        let window_input: Option<Element<'_, Message>> =
-            self.ui_state.command_palette.window.map(|window| {
-                text_input(
-                    t!(i18n, ids::OVERLAY_PALETTE_WINDOW_SEARCH),
-                    &self.ui_state.command_palette.query,
-                )
-                .id(crate::app::command_palette::COMMAND_PALETTE_WINDOW_INPUT_ID.clone())
-                .on_input(move |q| {
-                    Message::CommandPalette(CommandPaletteMsg::QueryTypedInWindow(window, q))
-                })
-                .on_submit(Message::CommandPalette(CommandPaletteMsg::ExecuteSelected))
-                .size(TS.body)
-                .width(Length::Fill)
-                .padding(0)
-                .style(move |_: &iced::Theme, _| iced::widget::text_input::Style {
-                    background: Background::Color(Color::TRANSPARENT),
-                    border: Border::default(),
-                    placeholder: ink4,
-                    value: text_c,
-                    selection: Color { a: 0.4, ..text_c },
-                })
-                .boxed()
-            });
-        let input = palette::search_row(
-            i18n,
-            tokens,
-            &self.ui_state.command_palette.query,
-            window_input,
-        );
-        let card = container(column![input, body, footer])
-            .width(card_w)
-            .height(Length::Fit.max(360.0))
-            .padding(0)
-            .style(crate::styles::modal_card(tokens));
-
-        let y = if in_window {
-            16.0
-        } else {
-            crate::menu_bar::MENU_BAR_HEIGHT + 4.0
-        };
-        signex_widgets::Translate::new(card.boxed(), (card_x, y)).boxed()
-    }
-
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
         Self::dismiss_layer_tinted(
             on_press,
@@ -498,6 +356,12 @@ impl Signex {
     ) -> Vec<Element<'_, Message>> {
         let interaction = &self.interaction_state;
         let Some(tab_ctx) = interaction.tab_context_menu.as_ref() else {
+            // The tab strip's "+N" menu shares this slot; the menus are
+            // exclusive (`close_all_context_menus`).
+            let overflow = self.tab_overflow_menu_overlay(window_id);
+            if !overflow.is_empty() {
+                return overflow;
+            }
             return self.dock_tab_context_menu_overlay();
         };
         // Only the main window's tab strip opens this menu, so only the main
@@ -573,48 +437,9 @@ impl Signex {
         )
     }
 
-    /// Dock drop preview — paints the region the dragged floating panel
-    /// docks into if released now (`DockArea::drop_preview`).
-    pub(super) fn dock_drag_zone_overlay(&self) -> Option<Element<'_, Message>> {
-        use iced::widget::{column, container, row};
-
-        let ui = &self.ui_state;
-        let document = &self.document_state;
-        let position = document.dock.drop_preview?;
-        let geometry = document.dock.drop_geometry(
-            ui.window_size,
-            (ui.left_width, ui.right_width, ui.bottom_height),
-        );
-        let depth = geometry.preview_depth(position);
-        let zone_style = crate::styles::dock_zone_highlight(&document.panel_ctx.tokens);
-        let zone = |width: Length, height: Length| {
-            container(iced::widget::Space::new())
-                .width(width)
-                .height(height)
-                .style(zone_style)
-        };
-        Some(match position {
-            crate::dock::PanelPosition::Left => zone(depth.into(), Length::Fill).boxed(),
-            crate::dock::PanelPosition::Right => row![
-                iced::widget::Space::new().width(Length::Fill),
-                zone(depth.into(), Length::Fill),
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed(),
-            crate::dock::PanelPosition::Bottom => column![
-                iced::widget::Space::new().height(Length::Fill),
-                zone(Length::Fill, depth.into()),
-            ]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .boxed(),
-        })
-    }
-
     /// Floating panels — one `Translate`-positioned widget per floating
-    /// panel. No clamp: panels follow Altium behaviour and may be
-    /// dragged anywhere, even past the window edge (the OS clips).
+    /// panel. No clamp: a panel may be dragged anywhere, even past the
+    /// window edge (the OS clips).
     pub(super) fn floating_panels_overlay(
         &self,
         window_id: iced::window::Id,
@@ -716,44 +541,4 @@ fn symbol_card_widths(fields: &[(signex_i18n::Localized, String)], family: &str)
         .ceil()
         .min(SYMBOL_CARD_MAX_W);
     (label_w, card_w)
-}
-
-/// The x and width of the palette card under the chrome strip, centred on
-/// the search field (`search_x`, `search_w` from
-/// `chrome_search_bar_geometry`) and clamped to stay [`PALETTE_EDGE_GAP`]
-/// inside a `window_w` wide window.
-fn chrome_palette_card(search_x: f32, search_w: f32, window_w: f32) -> (f32, f32) {
-    let room = window_w - 2.0 * PALETTE_EDGE_GAP;
-    let w = GRAPHITE_PALETTE_WIDTH.min(room.max(WINDOW_PALETTE_WIDTH));
-    let centred = search_x + (search_w - w) / 2.0;
-    let x = centred
-        .min(window_w - w - PALETTE_EDGE_GAP)
-        .max(PALETTE_EDGE_GAP);
-    (x, w)
-}
-
-#[cfg(test)]
-mod palette_width_tests {
-    /// The palette card is 640 px wide (maintainer, 2026-11-10).
-    #[test]
-    fn the_chrome_palette_card_is_640_px_wide() {
-        assert_eq!(super::chrome_palette_card(700.0, 380.0, 1600.0).1, 640.0);
-    }
-
-    /// The card is centred on the search field when the window has room.
-    #[test]
-    fn the_chrome_palette_card_centres_on_the_search_field() {
-        let (x, w) = super::chrome_palette_card(600.0, 380.0, 1600.0);
-        assert_eq!(x + w / 2.0, 600.0 + 380.0 / 2.0);
-    }
-
-    /// Near either window edge the card is clamped inside the window.
-    #[test]
-    fn the_chrome_palette_card_stays_inside_the_window() {
-        let gap = super::PALETTE_EDGE_GAP;
-        let (x, _) = super::chrome_palette_card(100.0, 380.0, 900.0);
-        assert_eq!(x, gap);
-        let (x, w) = super::chrome_palette_card(1150.0, 380.0, 1560.0);
-        assert_eq!(x + w, 1560.0 - gap);
-    }
 }

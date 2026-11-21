@@ -7,6 +7,8 @@ impl Signex {
         match message {
             OverlayMsg::TogglePanelList => {
                 self.ui_state.panel_list_open = !self.ui_state.panel_list_open;
+                // The two status-bar popovers never stand together.
+                self.ui_state.grid_snap_popover = None;
                 Task::none()
             }
             OverlayMsg::OpenPanel(kind) => {
@@ -88,6 +90,27 @@ impl Signex {
                 select,
             } => self.handle_focus_at(world_x, world_y, select),
             OverlayMsg::ToggleAutoFocus => self.handle_toggle_auto_focus(),
+            OverlayMsg::GridSnapPopoverToggled(window) => {
+                let open_here = self
+                    .ui_state
+                    .grid_snap_popover
+                    .as_ref()
+                    .is_some_and(|popover| popover.window == window);
+                self.ui_state.grid_snap_popover =
+                    (!open_here).then(|| Box::new(crate::status_bar::GridSnapPopover::new(window)));
+                self.ui_state.panel_list_open = false;
+                Task::none()
+            }
+            OverlayMsg::GridSnapPopoverDismissed => {
+                self.ui_state.grid_snap_popover = None;
+                Task::none()
+            }
+            OverlayMsg::GridSnapPreviewHovered(msg) => {
+                if let Some(popover) = self.ui_state.grid_snap_popover.as_mut() {
+                    popover.hover.update(msg);
+                }
+                Task::none()
+            }
         }
     }
 
@@ -104,6 +127,7 @@ impl Signex {
                 Task::none()
             }
             ProjectMsg::StartScreen(msg) => self.dispatch_start_screen_message(msg),
+            ProjectMsg::Thumbnail(msg) => self.dispatch_project_thumbnail_message(msg),
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
@@ -396,6 +420,8 @@ impl Signex {
                 self.interaction_state.submenu_launcher_hovered = None;
                 self.interaction_state.submenu_panel_hovered = false;
                 self.interaction_state.submenu_unhovered_since = None;
+                // The tab strip's "+N" menu shares the tab menu's Esc rung.
+                self.ui_state.tab_overflow_menu_open = false;
                 Task::none()
             }
             ContextMenuMsg::TabAction(action) => self.handle_tab_context_action(action),
@@ -912,6 +938,7 @@ impl Signex {
         interaction.submenu_unhovered_since = None;
         self.document_state.dock.tab_menu = None;
         self.library.components_panel.row_menu = None;
+        self.ui_state.tab_overflow_menu_open = false;
     }
 }
 

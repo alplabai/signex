@@ -384,6 +384,13 @@ pub enum TabContextAction {
     CloseAll,
     /// Pop the tab at this index into its own OS window.
     Undock(usize),
+    /// Close every tab to the right of the one at this index.
+    CloseToTheRight(usize),
+    /// Put the file path of the tab at this index on the clipboard.
+    CopyPath(usize),
+    /// Show the Projects panel with the file of the tab at this index
+    /// selected in its tree.
+    RevealInProjects(usize),
 }
 
 /// Concrete actions dispatched when the user picks a menu item in the
@@ -718,9 +725,9 @@ pub enum StatusBarRequest {
     /// Click on the selection-summary segment opens the Properties panel
     /// scoped to the current selection.
     OpenPropertiesForSelection,
-    /// Click on the "Importing …" segment cancels the running Altium
+    /// Click on the "Importing …" segment cancels the running board
     /// import (#1123).
-    CancelAltiumImport,
+    CancelBoardImport,
     /// Click on the active-layer pill steps to the next copper layer (#2223).
     ActiveLayerStepRequested,
     /// Click on the board view's angle readout opens or closes its value
@@ -730,4 +737,7 @@ pub enum StatusBarRequest {
     ViewAngleEdited(String),
     /// Enter in the angle field.
     ViewAngleSubmitted,
+    /// Right-click on a sheet's Grid read-out: opens or closes the Grid &
+    /// Snap popover above it (mockup row 6).
+    GridReadoutRightClicked,
 }

@@ -1,4 +1,4 @@
-//! Window ▸ Tile in the main window (#2249): every docked document in a
+//! View ▸ Window ▸ Tile in the main window (#2249): every docked document in a
 //! pane, side by side or stacked. The focused pane is the active tab's full
 //! editor; every other pane draws its document and takes a press as "focus
 //! this one", so its first click never lands on the wrong document. Pane

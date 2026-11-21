@@ -105,10 +105,10 @@ pub(crate) struct CommandContext {
     pub has_project_sheet: bool,
     /// Two documents can share the main window in tile panes (#2249), or a
     /// document tab is undocked into its own window and the main window's
-    /// screen is known, so Window ▸ Tile has a plan.
+    /// screen is known, so View ▸ Window ▸ Tile has a plan.
     pub can_tile_windows: bool,
-    /// The main window shows its documents in tile panes, so Window ▸
-    /// Untile has something to undo (#2249).
+    /// The main window shows its documents in tile panes, so View ▸ Window
+    /// ▸ Untile has something to undo (#2249).
     pub is_tiled: bool,
     /// The active symbol editor's current part can be removed: a symbol
     /// keeps its first part, so Remove Part refuses part 1.

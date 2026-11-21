@@ -111,6 +111,8 @@ struct OpenOverlays {
     grid_picker_open: bool,
     /// The zoom pill's preset menu is painted (Graphite mockup #64).
     zoom_presets_open: bool,
+    /// The status bar's Grid & Snap popover: Esc closes it, not the tool.
+    grid_snap_popover_open: bool,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -261,6 +263,9 @@ impl OpenOverlays {
             OverlayId::ZoomPresets => self
                 .zoom_presets_open
                 .then_some(Message::Ui(UiMsg::ZoomPresetsDismissed)),
+            OverlayId::GridSnapPopover => self
+                .grid_snap_popover_open
+                .then_some(Message::Overlay(OverlayMsg::GridSnapPopoverDismissed)),
 
             // ── Editor chrome, menus, pickers, panels: no rung ───────
             // None of these is a modal. The symbol editor's menu closes from
@@ -643,13 +648,43 @@ impl Signex {
         //
         // Unless the Esc came from that very window, which is the one
         // case where the user IS looking at the card (#547).
-        let modal_detached = |modal: crate::app::state::ModalId| -> bool {
+        self.open_overlays_where(|modal: crate::app::state::ModalId| -> bool {
             esc_from_detached != Some(modal)
                 && self.ui_state.windows.values().any(|kind| {
                     matches!(kind, crate::app::state::WindowKind::DetachedModal(m) if *m == modal)
                 })
-        };
+        })
+    }
 
+    /// How many dialogs that cover the Grid & Snap popover are open, in the
+    /// main window or a window of their own (the Parameter Manager, which
+    /// only opens in its own, included): the ones painted above it, the
+    /// blocking cards that hide it (error card, print and BOM preview,
+    /// netlist prompt, net colour picker) and the command palette. The
+    /// popover closes when this grows, so every dialog closes it, trunk's
+    /// new ones too, with no per-dialog line (`handlers/grid_snap_popover.rs`).
+    pub(crate) fn dialogs_open_above_grid_snap_popover(&self) -> usize {
+        use crate::app::view::overlay_id::{PAINT_ORDER, visible};
+        let open = self.open_overlays_where(|_| false);
+        let above = PAINT_ORDER
+            .iter()
+            .skip_while(|id| **id != OverlayId::GridSnapPopover)
+            .skip(1);
+        let blocking = visible(true).iter();
+        blocking
+            .chain(above)
+            .filter(|id| open.rung(**id).is_some())
+            .count()
+            + usize::from(self.ui_state.parameter_manager_open)
+            + usize::from(self.ui_state.command_palette.open)
+    }
+
+    /// The snapshot, with `modal_detached` saying which modals show in a
+    /// window of their own (their in-window flag then reads closed).
+    fn open_overlays_where(
+        &self,
+        modal_detached: impl Fn(crate::app::state::ModalId) -> bool,
+    ) -> OpenOverlays {
         OpenOverlays {
             find_replace_open: self.ui_state.find_replace.open
                 && !modal_detached(crate::app::state::ModalId::FindReplace),
@@ -766,13 +801,17 @@ impl Signex {
                 .find(|(_, browser)| browser.edit_modal.is_some())
                 .map(|(path, _)| path.clone()),
             canvas_context_menu_open: self.interaction_state.context_menu.is_some(),
-            tab_context_menu_open: self.interaction_state.tab_context_menu.is_some(),
+            // The tab strip's "+N" menu paints in the same slot (mockup row 5).
+            tab_context_menu_open: self.interaction_state.tab_context_menu.is_some()
+                || self.ui_state.tab_overflow_menu_open,
             project_tree_context_menu_open: self
                 .interaction_state
                 .project_tree_context_menu
                 .is_some(),
             grid_picker_open: self.interaction_state.grid_picker.is_some(),
             zoom_presets_open: self.zoom_presets_shown(),
+            // Open is not enough: it must paint, or Esc is swallowed for it.
+            grid_snap_popover_open: self.grid_snap_popover_shown(),
         }
     }
 
@@ -1023,6 +1062,8 @@ impl Signex {
             window_subscriptions::quit_requests(),
             chord_cancel,
             chord_timeout,
+            // The Start screen's minute clock; none while it is off screen.
+            crate::start_screen::clock_subscription(self.start_screen_shown()),
             kbd,
             mouse_sub,
             window_close,
@@ -1859,6 +1900,7 @@ mod tests {
             project_tree_context_menu_open,
             grid_picker_open,
             zoom_presets_open,
+            grid_snap_popover_open,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1973,6 +2015,9 @@ mod tests {
             }),
             ("grid_picker_open", |o| o.grid_picker_open = true),
             ("zoom_presets_open", |o| o.zoom_presets_open = true),
+            ("grid_snap_popover_open", |o| {
+                o.grid_snap_popover_open = true
+            }),
         ];
 
         // Where a notice lives, not a modal of its own: no rung.

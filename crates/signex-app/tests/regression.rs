@@ -500,7 +500,7 @@ mod symbol_body_style;
 mod text_extents_save;
 #[path = "regression/window_tile_rows.rs"]
 mod window_tile_rows;
-// #2249: Window ▸ Tile shows the documents in panes; Untile.
+// #2249: View ▸ Window ▸ Tile shows the documents in panes; Untile.
 #[path = "regression/document_tiling.rs"]
 mod document_tiling;
 
@@ -838,3 +838,8 @@ mod sheet_tools_graphite;
 // #2533: the Graphite Update PCB dialog keeps a blocked row out and runs the rest.
 #[path = "regression/board_sync_graphite.rs"]
 mod board_sync_graphite;
+
+// Mockup row 6: Find and Replace, Paste Array and the Parameter Manager close
+// the status-bar Grid & Snap popover.
+#[path = "regression/grid_snap_popover_dialogs.rs"]
+mod grid_snap_popover_dialogs;

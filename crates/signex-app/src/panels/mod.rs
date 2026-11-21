@@ -82,6 +82,7 @@ mod numeric_draft;
 pub mod object_list;
 pub mod paired;
 mod palette;
+pub mod panel_groups;
 mod paper;
 pub mod pcb_board_properties;
 pub mod pcb_component;

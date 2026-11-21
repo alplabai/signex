@@ -72,6 +72,7 @@ pub mod persist;
 pub mod pinned_projects;
 pub(crate) mod polygon_path;
 pub mod preferences;
+pub mod project_thumbnail;
 pub mod recent_projects;
 pub mod render_config;
 pub mod renderer_scene_canvas;

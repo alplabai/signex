@@ -308,6 +308,9 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
         // The Compiled Design panel (#1308, docs/MENU_BAR.md#view-compiled-design).
         cmd_item_gated(ctx, cmd("open_compiled_design", "")),
         cmd_item_gated(ctx, cmd("open_selection_filter", "")),
+        SEP,
+        // The old Window root, rows unchanged (#2524): docs/MENU_BAR.md#root-menus
+        submenu(ctx, menu_ids::MENU_WINDOW, window(ctx)),
     ]
 }
 
@@ -471,10 +474,9 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
-/// Reports: every output of the open schematic, then the board's reports.
-/// The BOM row is the one working BOM dialog (#1251); the old Design >
-/// Generate BOM duplicate row is folded in.
-pub(super) fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
+/// Tools ▸ Reports: every output of the open schematic, then the board's
+/// reports. The BOM row is the one working BOM dialog (#1251).
+fn reports(ctx: &MenuContext) -> Vec<MenuEntry> {
     let has_schematic = ctx.commands.has_schematic;
     vec![
         item_if(
@@ -544,6 +546,8 @@ fn annotation(ctx: &MenuContext) -> Vec<MenuEntry> {
 pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         submenu(ctx, menu_ids::MENU_TOOLS_ANNOTATION, annotation(ctx)),
+        // The old Reports root, rows unchanged: docs/MENU_BAR.md#root-menus
+        submenu(ctx, menu_ids::MENU_REPORTS, reports(ctx)),
         SEP,
         // The project's parts and their row's footprints:
         // docs/MENU_BAR.md#tools-assign-footprints
@@ -630,10 +634,11 @@ pub(super) fn tools(ctx: &MenuContext) -> Vec<MenuEntry> {
     ]
 }
 
-pub(super) fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
+/// View ▸ Window: the document panes of the main window (#2249) and the
+/// undocked document windows.
+fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
-        // Document panes of the main window (#2249) and the undocked document
-        // windows; Untile is live while tiled: docs/MENU_BAR.md#window-tile
+        // Untile is live while tiled: docs/MENU_BAR.md#window-tile
         cmd_item_gated(ctx, cmd("tile_windows_horizontally", "")),
         cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
         cmd_item_gated(ctx, cmd("untile_documents", "")),

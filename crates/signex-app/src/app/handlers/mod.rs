@@ -27,12 +27,15 @@ pub mod dock;
 pub mod document_files;
 mod document_identity;
 pub mod document_tabs;
+#[cfg(test)]
+mod document_tabs_tests;
 mod document_tiling;
 pub mod drawing_order;
 pub mod editing_commands;
 pub mod erc;
 pub mod find_replace;
 pub mod find_similar;
+pub(crate) mod grid_snap_popover;
 mod intro_wrap;
 pub(in crate::app) mod keymap_mod_prompt;
 pub mod library_drift;

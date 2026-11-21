@@ -5,9 +5,14 @@
 menu-file = File
 
 ## Graphite views (#2225)
-menu-bar-search-placeholder = Search commands, parts, nets
+menu-bar-search-placeholder = Search commands, parts, nets, sheets
 menu-bar-light-theme = Light theme
 menu-bar-dark-theme = Dark theme
+# Tooltip of the search button a narrow window shows instead of the search
+# field: it opens the command palette. The second form names its shortcut;
+# $key is the key chord as the keymap writes it, for example Ctrl+K.
+menu-bar-search-button = Search
+menu-bar-search-button-key = Search ({ $key })
 
 ## Menu bar root titles (#2057)
 # Titles of the other nine menus of the menu bar, in bar order after File.
@@ -122,12 +127,22 @@ ctx-assign-net-class-elsewhere = Pick the class in the Net Class row of the Prop
 ctx-tab-close = Close { $title }
 ctx-tab-close-others = Close All Other Documents
 ctx-tab-open-in-new-window = Open In New Window
+ctx-tab-close-right = Close Tabs to the Right
+ctx-tab-copy-path = Copy Path
+ctx-tab-reveal-in-projects = Reveal in Projects
+# Tab strip overflow: the button at the strip's end ({ $count } is how many tabs
+# do not fit) and the caption of the menu that lists them.
+ctx-tab-overflow-button = +{ $count }
+ctx-tab-overflow-caption = Hidden tabs
 # Panel-tab menu: where the panel goes.
 ctx-dock-close = Close
 ctx-dock-float = Undock / Float
 ctx-dock-left = Dock Left
 ctx-dock-right = Dock Right
 ctx-dock-bottom = Dock Bottom
+# Button and tooltip in the title strip of a panel's own window: the panel goes
+# back into the dock.
+ctx-dock-back = Dock back
 # Menu of a component row of the Components panel (the verb "place").
 ctx-components-row-place = Place
 ctx-components-row-edit = Edit Component

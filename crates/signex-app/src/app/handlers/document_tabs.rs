@@ -100,6 +100,33 @@ impl Signex {
                 self.ui_state.tab_dragging = Some((idx, mx, my));
                 Task::none()
             }
+            // The "+N" menu belongs to the main window's strip (mockup row 5).
+            TabMessage::OverflowMenuToggled => {
+                let open = is_main && !self.ui_state.tab_overflow_menu_open;
+                if open {
+                    self.close_all_context_menus();
+                }
+                self.ui_state.tab_overflow_menu_open = open;
+                Task::none()
+            }
+            TabMessage::OverflowMenuDismissed => {
+                self.ui_state.tab_overflow_menu_open = false;
+                Task::none()
+            }
+            // Picking a hidden tab activates it; the strip's fit always
+            // shows the active tab, so it comes into view.
+            TabMessage::OverflowTabPicked(idx) => {
+                self.ui_state.tab_overflow_menu_open = false;
+                if !is_main || idx >= self.document_state.tabs.len() {
+                    return Task::none();
+                }
+                if idx != self.document_state.active_tab {
+                    self.park_active_schematic_session();
+                    self.document_state.active_tab = idx;
+                    self.sync_active_tab();
+                }
+                crate::tab_bar::reveal_active_tab(idx, self.document_state.tabs.len())
+            }
         }
     }
 
@@ -434,6 +461,132 @@ impl Signex {
                 }
             }
             A::Undock(idx) => Task::done(Message::Window(WindowMsg::UndockTab(idx))),
+            A::CloseToTheRight(idx) => {
+                // Descending, as Close All Other Documents: each close
+                // leaves the indices still to visit where they were.
+                let mut indices = self.strip_tabs_right_of(idx);
+                indices.reverse();
+                let tasks: Vec<Task<Message>> = indices
+                    .into_iter()
+                    .map(|i| self.close_tab_parking_dirty(i))
+                    .collect();
+                Task::batch(tasks)
+            }
+            A::CopyPath(idx) => match self.tab_copy_path_text(idx) {
+                Some(text) => iced::clipboard::write(text).discard(),
+                None => Task::none(),
+            },
+            A::RevealInProjects(idx) => self.reveal_tab_in_projects(idx),
         }
+    }
+
+    /// Whether the document at `path` lives in its own undocked window, and
+    /// so is not on the main window's tab strip.
+    pub(crate) fn tab_is_undocked(&self, path: &std::path::Path) -> bool {
+        use crate::app::state::WindowKind;
+        self.ui_state.windows.values().any(
+            |kind| matches!(kind, WindowKind::UndockedTab { path: shown, .. } if shown == path),
+        )
+    }
+
+    /// The indices, ascending, of the tabs after `idx` that the main tab
+    /// strip shows. An undocked tab has its own window and is never closed
+    /// from the strip's menu; nor does the menu of an undocked tab's own
+    /// one-tab strip reach the main window, so it gets an empty list.
+    pub(crate) fn strip_tabs_right_of(&self, idx: usize) -> Vec<usize> {
+        let Some(tab) = self.document_state.tabs.get(idx) else {
+            return Vec::new();
+        };
+        if self.tab_is_undocked(&tab.path) {
+            return Vec::new();
+        }
+        self.document_state
+            .tabs
+            .iter()
+            .enumerate()
+            .skip(idx.saturating_add(1))
+            .filter(|(_, tab)| !self.tab_is_undocked(&tab.path))
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// The text Copy Path puts on the clipboard for tab `idx`: its file path
+    /// as displayed, or `None` for a tab with no file behind it.
+    pub(crate) fn tab_copy_path_text(&self, idx: usize) -> Option<String> {
+        let tab = self.document_state.tabs.get(idx)?;
+        crate::tab_bar::tab_file_path(tab).map(|path| path.display().to_string())
+    }
+
+    /// The tree key of the Projects panel row whose file is `path`, or `None`
+    /// when no open project lists it. Rows resolve to files the way opening
+    /// them does (`tree_path_to_file_path`), and compare under the case rule
+    /// of the project's volume, as saving does.
+    pub(crate) fn project_tree_key_of_file(
+        &self,
+        path: &std::path::Path,
+    ) -> Option<signex_widgets::tree_view::TreeKey> {
+        use crate::app::state::scope::path_key_with;
+        let tree = self.document_state.panel_ctx.project_tree.as_slice();
+        let mut pending: Vec<Vec<usize>> = (0..tree.len()).map(|i| vec![i]).collect();
+        while let Some(index_path) = pending.pop() {
+            let node = signex_widgets::tree_view::get_node(tree, &index_path)?;
+            let same_file = |row: &std::path::Path| {
+                self.document_state
+                    .projects
+                    .get(index_path[0])
+                    .is_some_and(|p| {
+                        path_key_with(row, p.case_fold) == path_key_with(path, p.case_fold)
+                    })
+            };
+            if index_path.len() > 1
+                && node.children.is_empty()
+                && self
+                    .tree_path_to_file_path(&index_path)
+                    .as_deref()
+                    .is_some_and(same_file)
+            {
+                return signex_widgets::tree_view::key_of(tree, &index_path);
+            }
+            for child in 0..node.children.len() {
+                let mut next = index_path.clone();
+                next.push(child);
+                pending.push(next);
+            }
+        }
+        None
+    }
+
+    /// Reveal in Projects: show the Projects panel, open the folders above
+    /// the tab's file row and select the row with the tree's own Select.
+    fn reveal_tab_in_projects(&mut self, idx: usize) -> Task<Message> {
+        let Some(path) = self
+            .document_state
+            .tabs
+            .get(idx)
+            .map(|tab| tab.path.clone())
+        else {
+            return Task::none();
+        };
+        let Some(key) = self.project_tree_key_of_file(&path) else {
+            return Task::none();
+        };
+        let tree = &mut self.document_state.panel_ctx.project_tree;
+        if let Some(index_path) = signex_widgets::tree_view::resolve_path(tree, &key) {
+            let mut siblings = tree.as_mut_slice();
+            for &i in &index_path[..index_path.len().saturating_sub(1)] {
+                let Some(node) = std::mem::take(&mut siblings).get_mut(i) else {
+                    break;
+                };
+                node.expanded = true;
+                siblings = node.children.as_mut_slice();
+            }
+        }
+        let select = crate::panels::PanelMsg::Tree(signex_widgets::tree_view::TreeMsg::Select(key));
+        Task::batch([
+            Task::done(Message::Overlay(crate::app::OverlayMsg::OpenPanel(
+                crate::panels::PanelKind::Projects,
+            ))),
+            Task::done(Message::Dock(crate::dock::DockMessage::Panel(select))),
+        ])
     }
 }

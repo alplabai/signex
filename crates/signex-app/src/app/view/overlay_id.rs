@@ -79,6 +79,8 @@ pub(crate) enum OverlayId {
     PanelList,
     /// The zoom pill's preset menu (Graphite mockup #64).
     ZoomPresets,
+    /// The status bar's Grid & Snap popover (mockup row 6).
+    GridSnapPopover,
 
     // Dialogs.
     Preferences,
@@ -161,7 +163,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 74] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 75] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -192,6 +194,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 74] = [
     OverlayId::GridPicker,
     OverlayId::PanelList,
     OverlayId::ZoomPresets,
+    OverlayId::GridSnapPopover,
     OverlayId::Preferences,
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
@@ -323,6 +326,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::GridPicker
         | OverlayId::PanelList
         | OverlayId::ZoomPresets
+        | OverlayId::GridSnapPopover
         | OverlayId::DockDragZone
         | OverlayId::FloatingPanels
         | OverlayId::Preferences
@@ -547,6 +551,7 @@ impl Signex {
             OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::ZoomPresets => layers.extend(self.zoom_presets_overlay(window_id)),
+            OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
                 layers.extend(self.components_row_drag_label_overlay(window_id))
@@ -623,6 +628,18 @@ mod tests {
             PAINT_ORDER.len(),
             "PAINT_ORDER lists an overlay more than once"
         );
+    }
+
+    /// The Grid & Snap popover (mockup row 6) paints above the floating
+    /// panels and the dock drop zones, and below every dialog.
+    #[test]
+    fn the_grid_snap_popover_paints_above_the_floating_panels() {
+        let slot = |id| PAINT_ORDER.iter().position(|o| *o == id).expect("listed");
+        let popover = slot(OverlayId::GridSnapPopover);
+        for under in [OverlayId::FloatingPanels, OverlayId::DockDragZone] {
+            assert!(slot(under) < popover, "{under:?} paints over the popover");
+        }
+        assert!(popover < slot(OverlayId::Preferences));
     }
 
     #[test]
