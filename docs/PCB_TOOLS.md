@@ -984,10 +984,16 @@ Swap Pins and Swap Gates (#2410) trade connections inside one component. On
 the board menu they are live with two pads of one unlocked component
 selected: Swap Pins trades the nets of those two pads, Swap Gates trades the
 gates they belong to. As commands with operands, `swap_pins document=<board>
-designator=<ref> pins=<a>,<b>` and `swap_gates document=<board>
-designator=<ref> units=<a>,<b>` do the same, are on the agent channel, and
-answer with the pads whose nets changed (`pads`: pad, from, to) and the sheet
-that followed.
+ids=<uuid> pins=<a>,<b>` and `swap_gates document=<board> ids=<uuid>
+units=<a>,<b>` do the same, are on the agent channel, and answer with the
+pads whose nets changed (`pads`: pad, from, to) and the sheet that followed.
+
+The component is named by `ids`, its uuid, or by `designator=<ref>`, exactly
+one of the two (#2326). Both, or neither, is refused; so is an `ids` naming
+more than one item, or a uuid that is no component of the board
+(`board-target-unknown`). A blank `designator` counts as not given. The board
+menu names the clicked component by uuid, so it acts on that component even
+where another one shares its designator.
 
 Which pins and gates may trade is the part's own rule, read from two
 parameters of its placed units: `Pin Swap Groups` lists groups of pin
@@ -1054,11 +1060,16 @@ again on another channel of the same circuit, with its tracks and vias.
 - **Place**: the board menu lists one Place Reuse Block "<name>" row per
   block of the project, live with one unlocked component selected: the
   anchor. The project's blocks are read once, when a board menu first opens.
-  The row closes the menu and acts on the board of the window it was in.
-  `place_board_reuse_block document=<board> name=<name> designator=<ref>
-  [degrees=<turn>]` does the same; while the project's blocks are not read
-  yet it reads them first and answers when they land. Without operands from
-  the palette or a key it does nothing and says what it needs.
+  The row closes the menu and acts on the board of the window it was in,
+  around the clicked anchor by its uuid. It reads no blocks: the block kept
+  in memory is placed at once, and a missing one, or a failed read, is
+  refused at once.
+  `place_board_reuse_block document=<board> name=<name> ids=<uuid>
+  [degrees=<turn>]` does the same; the anchor is named by `ids` or by
+  `designator=<ref>`, exactly one, as for a pin swap. While the project's
+  blocks are not read yet it reads them first and answers when they land.
+  Without operands from the palette or a key it does nothing and says what
+  it needs.
 
 Placing finds each block footprint's counterpart through the schematic: a
 part of a sheet placed more than once keeps its unit ids in every placement,

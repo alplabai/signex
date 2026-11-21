@@ -36,6 +36,10 @@ pub(crate) struct AgentState {
     /// True while an agent request runs, so the code under it can tell an
     /// agent's call from a click.
     pub(crate) serving: bool,
+    /// True while a GUI translator runs a person's command
+    /// (`command::translator`): its operands come from what is in view, so
+    /// a handler does not read again what the view already holds.
+    pub(crate) from_view: bool,
     /// Who the command running now comes from; the person outside
     /// [`Signex::with_origin`].
     pub(crate) origin: super::Origin,
@@ -111,6 +115,7 @@ impl AgentState {
             endpoint: None,
             registered: None,
             serving: false,
+            from_view: false,
             origin: super::Origin::Person,
             journals_on: false,
             run_client: None,
