@@ -523,7 +523,6 @@ define_ids! {
     DIALOG_GRID_DOTS = "dialog-grid-dots";
     DIALOG_GRID_HIDDEN = "dialog-grid-hidden";
     DIALOG_GRID_MULTIPLIER = "dialog-grid-multiplier";
-    DIALOG_GRID_HELP = "dialog-grid-help";
     DIALOG_SELECTION_FILTER_HELP = "dialog-selection-filter-help";
     DIALOG_SELECTION_FILTER_PADS = "dialog-selection-filter-pads";
     DIALOG_SELECTION_FILTER_TRACKS = "dialog-selection-filter-tracks";

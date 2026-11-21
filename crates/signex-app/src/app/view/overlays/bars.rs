@@ -373,7 +373,9 @@ impl Signex {
             + crate::active_bar::symbol_editor_bar_drop(&document.panel_ctx.tokens);
         let theme_id = self.ui_state.effective_theme_id();
         let tokens = &document.panel_ctx.tokens;
-        let bar_items = crate::library::editor::symbol::active_bar::bar_items(editor, theme_id);
+        let i18n = &self.ui_state.i18n;
+        let bar_items =
+            crate::library::editor::symbol::active_bar::bar_items(editor, theme_id, i18n);
         let bar = signex_widgets::active_bar::view(bar_items, tokens)
             .map(Message::Library)
             .boxed();
@@ -392,6 +394,7 @@ impl Signex {
             theme_id,
             tokens,
             dropdown_top,
+            i18n,
         ) {
             out.push(super::scroll_guard(overlay.map(Message::Library).boxed()));
         }
@@ -417,6 +420,7 @@ impl Signex {
             editor,
             tokens,
             path,
+            &self.ui_state.active_keymap,
             &self.ui_state.i18n,
         ) else {
             return Vec::new();

@@ -107,7 +107,7 @@ const SWEPT: &[&str] = &[
     "library/editor/standalone/footprint.rs",
     "library/editor/standalone/symbol.rs",
     "library/editor/footprint/body3d.rs",
-    "library/editor/footprint/context_menu.rs",
+    "library/editor/footprint/context_menu/mod.rs",
     "library/editor/footprint/sketch_mode/active_bar.rs",
 ];
 
@@ -300,7 +300,7 @@ fn no_expand_collapse_header_draws_a_text_chevron() {
         "library/panel/frame.rs",
         "library/panel/parts.rs",
         "library/panel/symbols.rs",
-        "library/editor/footprint/context_menu.rs",
+        "library/editor/footprint/context_menu/mod.rs",
         "panels/components_panel/look.rs",
     ];
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");

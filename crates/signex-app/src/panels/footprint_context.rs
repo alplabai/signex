@@ -229,6 +229,19 @@ pub struct FootprintEditorPanelContext {
     /// renders one editable row per entry so the user can edit the
     /// shared sketch parameter without entering Sketch mode.
     pub selected_pad_shape_params: Vec<PadShapeParamSummary>,
+    /// The field or callout under the pointer (mirror of
+    /// `editor.state.properties_hover`).
+    pub illustration_hover: signex_widgets::property_illustration::IllustrationHover,
+    /// Extent of the courtyard in mm, `[min_x, min_y, max_x, max_y]`: the
+    /// generated rectangle, else the outline-following polygon's extent;
+    /// `None` without a courtyard.
+    pub courtyard_extent_mm: Option<[f64; 4]>,
+    /// How far the generated courtyard grows past the pads, in mm.
+    pub courtyard_expansion_mm: f64,
+    /// The editor's pads as the Footprint sections' illustration draws them.
+    pub pad_outlines: Vec<PadOutlineSummary>,
+    /// The sketch's solve state, as the canvas chip names it.
+    pub sketch_state: SketchStateSummary,
 }
 
 /// v0.24 Phase 3 (Track A2) — surface entry for one parametric pad
@@ -259,6 +272,8 @@ pub struct PourSummary {
     pub net: Option<String>,
     pub fill_type: signex_sketch::attr::PourFillType,
     pub priority: u32,
+    /// The copper layer of the pour: the sub-form header names it.
+    pub layer: signex_types::pcb_layer::PcbLayer,
 }
 
 /// v0.16.4 — Keepout role properties surfaced on the Properties panel.
@@ -270,6 +285,8 @@ pub struct KeepoutSummary {
     pub no_vias: bool,
     pub no_drilling: bool,
     pub no_pours: bool,
+    /// The layer the keepout applies to (`KeepoutAttr::layer`).
+    pub layer: signex_types::pcb_layer::PcbLayer,
 }
 
 /// v0.16.4 — BoardCutout role properties surfaced on the Properties panel.
@@ -278,6 +295,9 @@ pub struct CutoutSummary {
     pub edge_radius_expr: Option<String>,
     pub through: bool,
 }
+
+/// Most pattern instances the Properties drawing draws one by one.
+pub const PATTERN_PREVIEW_MAX_INSTANCES: usize = 256;
 
 /// v0.23 — Array (Pattern) properties surfaced on the Properties panel
 /// when the selected sketch entity is the source of an
@@ -296,6 +316,16 @@ pub struct ArraySummary {
     /// the Properties panel can surface editable rows for each. `None`
     /// for Linear / Explicit numbering schemes.
     pub bga_config: Option<BgaConfigSummary>,
+    /// Every instance with its offset and number, from the bake's own walk
+    /// (`signex_bake::array::preview_array`); the pattern drawing shows it.
+    pub preview: signex_bake::array::ArrayPreview,
+    /// Number of the source pad (`PadAttr::number`); empty when the source
+    /// carries no pad.
+    pub source_number: String,
+    /// Position of the source point in mm; `None` when it is not a Point.
+    pub source_position_mm: Option<[f64; 2]>,
+    /// Copper size of the source pad in mm, from the editor's pad list.
+    pub source_size_mm: Option<[f64; 2]>,
 }
 
 /// v0.25 polish — surface for BGA numbering scheme parameters.
@@ -607,6 +637,21 @@ pub struct SketchPadAttrSummary {
     /// `true` when the pad has a drill spec (i.e. THT / NPT). Used
     /// to gate Hole-detail UI rows.
     pub has_drill: bool,
+    /// The pad number (`PadAttr::number`).
+    pub number: String,
+    pub kind: signex_sketch::attr::PadKind,
+    /// The copper side of the pad (`PadAttr::side`): a surface pad shows
+    /// only its own side's paste and mask.
+    pub side: signex_sketch::attr::PadSide,
+    /// Paste and mask expansion expressions per side; `None` follows the
+    /// design rule (`PadStackOverrides::paste_*_expr` / `mask_*_expr`).
+    pub paste_top_expr: Option<String>,
+    pub paste_bottom_expr: Option<String>,
+    pub mask_top_expr: Option<String>,
+    pub mask_bottom_expr: Option<String>,
+    /// Copper size in mm, from the editor's pad bound to this entity; the
+    /// sketch profile sets it, so the form shows it and never edits it.
+    pub size_mm: Option<[f64; 2]>,
 }
 
 /// graphic (`FpGraphic` in `silk_f`). Drives the Properties panel's
@@ -700,4 +745,27 @@ pub struct MountingHoleProps {
     pub plated: bool,
     /// The net name; empty means no net.
     pub net: String,
+}
+
+/// One pad as the Footprint sections' illustration draws it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PadOutlineSummary {
+    /// Centre in mm.
+    pub position_mm: [f64; 2],
+    /// Width and height in mm, before rotation.
+    pub size_mm: [f64; 2],
+    pub rotation_deg: f64,
+    /// The four corners turned by the rotation, in mm.
+    pub corners_mm: [[f64; 2]; 4],
+    pub shape: signex_library::PadShape,
+    /// The pad has a drill hole.
+    pub has_drill: bool,
+}
+
+/// The sketch's solve state: the tone of its pill and the catalog message
+/// that names it (no sketch, not solved, under, fully or over-constrained).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SketchStateSummary {
+    pub tone: crate::styles::PillTone,
+    pub label: signex_i18n::MessageId,
 }

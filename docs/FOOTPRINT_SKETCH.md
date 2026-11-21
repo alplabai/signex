@@ -92,9 +92,69 @@ is unchanged.
 `FullSolveOutput.redundant_constraints` names consistent constraints whose
 every Jacobian row is implied by the EARLIER constraints (and the arc
 closures), so the verdict depends on constraint order and names the later
-duplicate. They are listed under "Redundant" in the footprint editor's
-DOF / Last solve section. Conflicts are reported separately as
-over-constrained.
+duplicate. They are listed under "Redundant" in the Sketch solve section
+of the footprint editor's Properties panel. Conflicts are reported
+separately as over-constrained.
+
+## The sketch in the Properties panel
+
+With nothing selected, the footprint Properties panel shows the Footprint,
+Snap & Grid and sketch sections in one scroll, in any mode. The sketch
+sections hold the solve state and the sketch parameters:
+
+- **Sketch solve**: a pill in the header names the state (DOF 0 in green when
+  fully constrained, Under-constrained in blue, Over-constrained in red, or
+  No sketch / Sketch not solved), then the entity and constraint counts and
+  the last solve's iterations, residual, time and over-constrained count,
+  the redundant constraints and the conflicting ones. A conflict or redundant
+  row selects its entity.
+- **Parameters**: one editable expression per sketch parameter.
+- **Solve warnings**: the notes of the last solve.
+
+In Sketch mode the same sections also follow a selected sketch entity, under
+its Entity section (kind, Role, position, construction, attached constraints
+and a banner with the entity's constraint state) and Snap Options.
+
+## Role sub-forms
+
+When the selected sketch entity carries a role, Properties shows the
+sub-form of each role it carries, one under the other: Pour, Keepout,
+Cutout, Sketch pad, then Pattern (a pattern's source is also a sketch pad,
+so both show). Each starts with a header (the object and a caption line),
+then a line-art illustration, then its sections. The forms live in
+`panels/footprint_editor_properties/subforms/`; the edits without a flat
+`FpEditor*` message are `FpSubformMsg`, handled in
+`app/handlers/dock/sch_library/footprint/role.rs`. Every edit is one undo
+step, re-solves and re-bakes the sketch, and dirties the tab.
+
+- **Keepout.** The **Layer** dropdown writes `KeepoutAttr::layer`. It offers
+  Top Layer and Bottom Layer, plus the stored layer when a file names
+  another one. A keepout on all layers or on the inner layers only cannot
+  be stored yet (`KeepoutAttr::layer` holds one board layer).
+- **Cutout.** **Limit depth (pocket)** is the inverse of
+  `BoardCutoutAttr::through`: ticked writes `through = false`. A cutout has
+  no stored depth, so the switch shows no Depth field.
+- **Sketch pad.** The copper size comes from the sketch profile and is
+  shown, not edited. Top Paste and Top Solder mask are enable sections: the
+  mask switch is ticked while the mask opens (`mask_top_tented = false`).
+  Each expansion is Rule (`paste_*_expr` / `mask_*_expr` empty) or Manual;
+  a plain number is stored as `<n>mm`, an expression as written, and text
+  that does not parse yet is kept in the editor's field buffers without
+  touching the pad. A paste expression clears the paste percentage of that
+  side. A pad without a drill shows the paste and mask of its own side
+  (`PadAttr::side`; both sides for a pad on every side), which are the
+  layers the bake gives it; a drilled pad shows both sides and the hole
+  details.
+- **Pattern.** The kind segment shows the pattern's kind; a pattern keeps
+  the kind it was made with. Start row / col and the letter skip apply to
+  BGA numbering and grey otherwise.
+
+The pattern illustration draws `signex_bake::array::preview_array`: the
+same walk the bake runs (`signex-bake/src/array/walk.rs`) gives each
+instance its offset, number and dropped flag, so the drawing shows what the
+bake produces. Dropped instances are drawn dashed. When a count, spacing or
+mask does not evaluate, or the pattern has more than 256 instances, the
+drawing shows the source pad only, with a note.
 
 ## Leaving sketch mode {#leaving-sketch-mode}
 

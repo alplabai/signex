@@ -715,19 +715,24 @@ impl PrintPreviewMsg {
 /// `dispatch_grid_properties_message`.
 #[derive(Debug, Clone)]
 pub enum GridPropertiesMsg {
-    /// v0.18.11 — open the Cartesian Grid Editor modal (Ctrl+G).
+    /// v0.18.11 — open the Grid Properties modal (Ctrl+G).
     /// Footprint editor only; other contexts no-op.
     Open,
-    /// v0.18.11 — close the Grid Properties modal (Cancel button or
-    /// Esc). Discards in-flight edits.
+    /// v0.18.11 — close the Grid Properties modal (Esc). Discards
+    /// in-flight edits; Esc while a preview label is open closes only
+    /// that label.
     Close,
+    /// Cancel or the header X was pressed: the modal closes, discarding
+    /// in-flight edits and any open preview label.
+    CancelPressed,
     /// v0.18.11 — Grid Properties modal: text input bound to the
     /// Step field (one value for both axes). Strings are validated on
     /// Apply, not per keystroke, so partial input doesn't fight the user.
     SetStep(String),
-    /// v0.18.11 — Grid Properties modal: Apply button. Validates +
-    /// writes the active footprint editor's `snap_options.grid_step_mm`
-    /// and commits fine/coarse display + multiplier.
+    /// v0.18.11 — Grid Properties modal: OK button (and Enter in the Step
+    /// field). Validates + writes the active footprint editor's
+    /// `snap_options.grid_step_mm` and commits fine/coarse display +
+    /// multiplier.
     Apply,
     /// v0.18.19 — Grid Properties modal: Fine grid display style.
     SetFineDisplay(crate::library::editor::footprint::state::GridDisplay),
@@ -735,6 +740,11 @@ pub enum GridPropertiesMsg {
     SetCoarseDisplay(crate::library::editor::footprint::state::GridDisplay),
     /// v0.18.19 — Grid Properties modal: Multiplier (5x / 10x / 2x / 1x).
     SetMultiplier(u32),
+    /// The preview's expand button was pressed: taller, or back.
+    PreviewExpandToggled,
+    /// A step or coarse label on the preview was pressed, edited, committed
+    /// (Enter) or closed (Esc, a press elsewhere).
+    PreviewLabelEdited(signex_widgets::dimension_label::DimensionLabelMessage),
 }
 
 /// Keyboard-input message family (ADR-0001 D3). Routed to

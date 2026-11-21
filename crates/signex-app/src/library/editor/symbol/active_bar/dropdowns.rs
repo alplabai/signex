@@ -14,6 +14,7 @@
 
 use std::path::PathBuf;
 
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -59,6 +60,7 @@ pub fn entries(
     active_tool: SymbolTool,
     path: PathBuf,
     tid: ThemeId,
+    i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
     match menu {
         SymActiveBarMenu::Filter => filter_entries(selection_filter, path),
@@ -68,7 +70,7 @@ pub fn entries(
         SymActiveBarMenu::Align => align_entries(path, tid),
         SymActiveBarMenu::Pin => pin_entries(active_tool, path),
         SymActiveBarMenu::Text => text_entries(active_tool, path, tid),
-        SymActiveBarMenu::Shapes => shapes_entries(active_tool, path, tid),
+        SymActiveBarMenu::Shapes => shapes_entries(active_tool, path, tid, i18n),
     }
 }
 
@@ -374,35 +376,54 @@ fn shapes_entries(
     active_tool: SymbolTool,
     path: PathBuf,
     tid: ThemeId,
+    i18n: &I18n,
 ) -> Vec<DropdownEntry<LibraryMessage>> {
-    let arm = |tool: SymbolToolMsg| -> LibraryMessage {
-        sym(path.clone(), SymbolEditorMsg::SetTool(tool))
+    // The armed tool's row keeps the highlight as well as the check; the
+    // stub rows below have no glyph and keep the icon column empty.
+    let shape = |label: &'static str,
+                 tool: SymbolToolMsg,
+                 armed: SymbolTool,
+                 icon: iced::widget::svg::Handle|
+     -> DropdownEntry<LibraryMessage> {
+        let is_armed = active_tool == armed;
+        DropdownEntry::Item(
+            DropdownItem::new(label, sym(path.clone(), SymbolEditorMsg::SetTool(tool)))
+                .icon(icon)
+                .checked(is_armed)
+                .active(is_armed),
+        )
     };
     vec![
-        DropdownEntry::Item(
-            DropdownItem::new("Line", arm(SymbolToolMsg::PlaceLine))
-                .icon(ic::icon_dd_line(tid))
-                .checked(active_tool == SymbolTool::PlaceLine),
+        DropdownEntry::Header(t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string()),
+        shape(
+            "Line",
+            SymbolToolMsg::PlaceLine,
+            SymbolTool::PlaceLine,
+            ic::icon_dd_line(tid),
         ),
-        DropdownEntry::Item(
-            DropdownItem::new("Arc", arm(SymbolToolMsg::PlaceArc))
-                .icon(ic::icon_dd_arc(tid))
-                .checked(active_tool == SymbolTool::PlaceArc),
+        shape(
+            "Arc",
+            SymbolToolMsg::PlaceArc,
+            SymbolTool::PlaceArc,
+            ic::icon_dd_arc(tid),
         ),
-        DropdownEntry::Item(
-            DropdownItem::new("Ellipse / Circle", arm(SymbolToolMsg::PlaceCircle))
-                .icon(ic::icon_dd_circle(tid))
-                .checked(active_tool == SymbolTool::PlaceCircle),
+        shape(
+            "Ellipse / Circle",
+            SymbolToolMsg::PlaceCircle,
+            SymbolTool::PlaceCircle,
+            ic::icon_dd_circle(tid),
         ),
-        DropdownEntry::Item(
-            DropdownItem::new("Rectangle", arm(SymbolToolMsg::PlaceRectangle))
-                .icon(ic::icon_dd_rect(tid))
-                .checked(active_tool == SymbolTool::PlaceRectangle),
+        shape(
+            "Rectangle",
+            SymbolToolMsg::PlaceRectangle,
+            SymbolTool::PlaceRectangle,
+            ic::icon_dd_rect(tid),
         ),
-        DropdownEntry::Item(
-            DropdownItem::new("Polygon", arm(SymbolToolMsg::PlacePolygon))
-                .icon(ic::icon_dd_polygon(tid))
-                .checked(active_tool == SymbolTool::PlacePolygon),
+        shape(
+            "Polygon",
+            SymbolToolMsg::PlacePolygon,
+            SymbolTool::PlacePolygon,
+            ic::icon_dd_polygon(tid),
         ),
         DropdownEntry::Separator,
         DropdownEntry::Item(stub("Round Rectangle", path.clone())),
@@ -504,5 +525,33 @@ mod tests {
                 other => panic!("row {label:?}: expected routed ActiveBarStub, got {other:?}"),
             }
         }
+    }
+
+    /// Mockup row 141: the Shapes menu opens under a "Shapes" header and highlights
+    /// the armed tool's row (and only it).
+    #[test]
+    fn shapes_menu_has_a_header_and_highlights_the_armed_tool() {
+        let i18n = I18n::en_us();
+        let entries = shapes_entries(
+            SymbolTool::PlaceRectangle,
+            PathBuf::from("t.snxsym"),
+            ThemeId::GraphiteLight,
+            &i18n,
+        );
+        let header = t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string();
+        assert_eq!(header, "Shapes");
+        assert!(matches!(&entries[0], DropdownEntry::Header(h) if *h == header));
+        let highlighted: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Item(item) if item.active => Some(item.label.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(highlighted, ["Rectangle"]);
+        assert!(matches!(
+            item_msg(&entries, "Rectangle"),
+            SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceRectangle)
+        ));
     }
 }

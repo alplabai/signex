@@ -354,6 +354,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         net: p.net.clone(),
                         fill_type: p.fill_type,
                         priority: p.priority,
+                        layer: p.layer,
                     });
                     let keepout = e.keepout.as_ref().map(|k| crate::panels::KeepoutSummary {
                         no_routing: k.kinds.no_routing,
@@ -362,6 +363,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         no_vias: k.kinds.no_vias,
                         no_drilling: k.kinds.no_drilling,
                         no_pours: k.kinds.no_pours,
+                        layer: k.layer,
                     });
                     let cutout = e
                         .board_cutout
@@ -392,6 +394,14 @@ pub(super) fn build_footprint_editor_panel_ctx(
                         copper_offset_x_mm: p.copper_offset_x_mm,
                         copper_offset_y_mm: p.copper_offset_y_mm,
                         has_drill: p.drill.is_some(),
+                        number: p.number.clone(),
+                        kind: p.kind,
+                        side: p.side,
+                        paste_top_expr: p.stack.paste_top_expr.clone(),
+                        paste_bottom_expr: p.stack.paste_bottom_expr.clone(),
+                        mask_top_expr: p.stack.mask_top_expr.clone(),
+                        mask_bottom_expr: p.stack.mask_bottom_expr.clone(),
+                        size_mm: editor_pad_size_mm(editor, e.id),
                     });
                     (pour, keepout, cutout, sketch_pad)
                 })
@@ -534,12 +544,37 @@ pub(super) fn build_footprint_editor_panel_ctx(
             editor.state.tool_pending,
             ToolPending::RepickPolarCenter { array_id } if array_id == array.id
         );
+        let source = sketch.entities.iter().find(|e| e.id == sel_id);
+        let source_position_mm = source.and_then(|e| match e.kind {
+            signex_sketch::entity::EntityKind::Point { x, y } => Some([x, y]),
+            _ => None,
+        });
+        let center_position_mm = match &kind {
+            crate::panels::ArrayKindSummary::Polar {
+                center_position_mm, ..
+            } => *center_position_mm,
+            _ => None,
+        };
+        let preview = signex_bake::array::preview_array(
+            array,
+            sketch,
+            source_position_mm,
+            center_position_mm,
+            crate::panels::PATTERN_PREVIEW_MAX_INSTANCES,
+        );
         Some(crate::panels::ArraySummary {
             array_id: array.id,
             kind,
             numbering,
             repicking_polar_center,
             bga_config,
+            preview,
+            source_number: source
+                .and_then(|e| e.pad.as_ref())
+                .map(|p| p.number.clone())
+                .unwrap_or_default(),
+            source_position_mm,
+            source_size_mm: editor_pad_size_mm(editor, sel_id),
         })
     });
 
@@ -664,5 +699,55 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_array,
         selected_pad_shape_params,
         numeric_buffers: editor.state.numeric_buffers.clone(),
+        illustration_hover: editor.state.properties_hover.clone(),
+        courtyard_extent_mm: courtyard_extent_mm(&editor.state),
+        courtyard_expansion_mm: crate::library::editor::footprint::COURTYARD_SLACK_MM,
+        pad_outlines: editor
+            .state
+            .pads
+            .iter()
+            .map(|pad| crate::panels::PadOutlineSummary {
+                position_mm: [pad.position_mm.0, pad.position_mm.1],
+                size_mm: [pad.size_mm.0, pad.size_mm.1],
+                rotation_deg: pad.rotation_deg,
+                corners_mm: pad.rotated_corners_mm().map(|(x, y)| [x, y]),
+                shape: pad.shape.clone(),
+                has_drill: pad.drill_diameter_mm.is_some(),
+            })
+            .collect(),
+        sketch_state: {
+            let (tone, label) = crate::library::editor::standalone::dof_chip::dof_state(editor);
+            crate::panels::SketchStateSummary { tone, label }
+        },
     })
+}
+
+/// The courtyard's extent: the generated rectangle, else the extent of the
+/// outline-following polygon.
+fn courtyard_extent_mm(
+    state: &crate::library::editor::footprint::FootprintEditorState,
+) -> Option<[f64; 4]> {
+    if let Some(c) = state.courtyard_mm {
+        return Some([c.min_x, c.min_y, c.max_x, c.max_y]);
+    }
+    let outline = state.courtyard_outline()?;
+    outline.iter().fold(None, |extent, &(x, y)| {
+        Some(match extent {
+            Some([x0, y0, x1, y1]) => [f64::min(x0, x), f64::min(y0, y), x1.max(x), y1.max(y)],
+            None => [x, y, x, y],
+        })
+    })
+}
+
+/// Copper size in mm of the editor pad bound to sketch entity `id`.
+fn editor_pad_size_mm(
+    editor: &crate::app::FootprintDocument,
+    id: signex_sketch::id::SketchEntityId,
+) -> Option<[f64; 2]> {
+    editor
+        .state
+        .pads
+        .iter()
+        .find(|pad| pad.sketch_entity_id == Some(id))
+        .map(|pad| [pad.size_mm.0, pad.size_mm.1])
 }

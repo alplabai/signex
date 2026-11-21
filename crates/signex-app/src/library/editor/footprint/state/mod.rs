@@ -32,6 +32,7 @@ mod courtyard_tests;
 pub mod mode;
 pub mod pad;
 pub mod placement;
+pub mod properties_view;
 pub mod selection;
 pub mod selection_filter;
 mod selection_filter_draft;
@@ -51,6 +52,7 @@ pub use pad::{
     PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
+pub use properties_view::{pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
 pub use snap_options::{
     GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,
@@ -64,7 +66,7 @@ use super::layers::LayerVisibility;
 
 /// Slack on each side of the pad bounding box when auto-fitting the
 /// courtyard polygon.
-const COURTYARD_SLACK_MM: f64 = 0.25;
+pub(crate) const COURTYARD_SLACK_MM: f64 = 0.25;
 
 /// v0.14 — typed-delta "Move Selection By X, Y" modal. `None` on
 /// `FootprintEditorState::move_by_modal` means the modal is closed.
@@ -303,6 +305,9 @@ pub struct FootprintEditorState {
     /// under the sketch. Which host the editor serves is read through
     /// `sketch_host()` (#2518), never from this field directly.
     pub board_backdrop: Option<std::sync::Arc<BoardBackdrop>>,
+    /// The field or callout under the pointer in the Properties panel
+    /// illustration. View state: it never dirties the tab.
+    pub properties_hover: signex_widgets::property_illustration::IllustrationHover,
     /// The sketch mode exit set: bake preview, discard confirmation and
     /// the footprint as sketch mode found it (#2518).
     pub sketch_exit: super::sketch_mode::SketchExit,
@@ -420,6 +425,7 @@ impl FootprintEditorState {
             fit_pending: false,
             zoom_request: ZoomRequest::default(),
             board_backdrop: None,
+            properties_hover: Default::default(),
             sketch_exit: Default::default(),
         }
     }

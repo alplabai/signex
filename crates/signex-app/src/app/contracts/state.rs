@@ -121,18 +121,20 @@ pub struct GridPickerState {
     pub y: f32,
 }
 
-/// v0.18.11 — Cartesian Grid Editor modal state. Carries the
-/// in-flight Step X / Step Y string buffers + the X/Y link toggle.
-/// Writes happen on `GridPropertiesApply`; close discards.
-///
-/// v0.18.19 added Fine / Coarse display + Multiplier draft fields.
-#[derive(Debug, Clone)]
+/// Grid Properties dialog draft (Ctrl+G in a footprint editor): the step
+/// text, the fine and coarse display and the multiplier. OK
+/// (`GridPropertiesMsg::Apply`) writes them; Cancel discards.
+#[derive(Debug, Clone, Default)]
 pub struct GridPropertiesState {
     /// Grid step in mm; one value drives both axes.
     pub step_mm: String,
     pub fine_display: crate::library::editor::footprint::state::GridDisplay,
     pub coarse_display: crate::library::editor::footprint::state::GridDisplay,
     pub multiplier: u32,
+    /// The live preview is drawn taller.
+    pub preview_expanded: bool,
+    /// The step and coarse labels on the preview: which one is open.
+    pub preview_labels: signex_widgets::dimension_label::DimensionLabels,
 }
 
 /// v0.18.14.1 — Custom Selection Filter modal draft state. Mirrors

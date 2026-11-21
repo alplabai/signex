@@ -25,6 +25,7 @@ mod erc;
 mod fab_outputs;
 mod graphite;
 mod graphite_annotate;
+pub(crate) mod grid_properties;
 mod header;
 mod netlist_incomplete;
 pub(crate) mod new_project;

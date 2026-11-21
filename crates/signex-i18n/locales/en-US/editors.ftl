@@ -362,6 +362,171 @@ editors-pattern-skip-letters = Skip I/O/Q/S/X/Z (IPC-7351)
 editors-pattern-start-row = Start row
 editors-pattern-start-col = Start col
 
+## Footprint Properties body: header and sections (mockup row 124)
+# Header with nothing selected.
+editors-fp-props-title = Footprint
+# Status line under it. $pads is a whole number.
+editors-fp-props-status = { $pads ->
+        [one] { $pads } pad
+       *[other] { $pads } pads
+    }
+# Status line once the sketch was solved. $state names the solve state.
+editors-fp-props-status-solved = { $pads ->
+        [one] { $pads } pad
+       *[other] { $pads } pads
+    } · { $state }
+editors-fp-props-section-footprint = Footprint
+editors-fp-props-name = Name
+editors-fp-props-description = Description
+editors-fp-props-designator = Designator
+# Beside the designator: it is the default for placed parts.
+editors-fp-props-designator-default = default
+# The component type (Standard, Mechanical…).
+editors-fp-props-type = Type
+editors-fp-props-height = Height (mm)
+editors-fp-props-version = Version
+editors-fp-props-section-courtyard = Courtyard & Silkscreen
+# Enable header: the courtyard follows the pads.
+editors-fp-props-courtyard = Courtyard (generated)
+# Size of the courtyard. $width and $height are millimetre numbers.
+editors-fp-props-courtyard-size = { $width } × { $height } mm
+# How far the generated courtyard grows past the pads.
+editors-fp-props-expansion = Expansion
+# A length in millimetres. $value is a number.
+editors-fp-props-length-mm = { $value } mm
+# Leader label of the courtyard in the illustration.
+editors-fp-props-illustration-courtyard = Courtyard
+editors-fp-props-section-snap = Snap Options
+editors-fp-props-snapping = Snapping
+editors-fp-props-snap-all-layers = All Layers
+editors-fp-props-snap-current-layer = Current Layer
+editors-fp-props-snap-off = Off
+editors-fp-props-snap-grids = Grids
+editors-fp-props-snap-guides = Guides
+editors-fp-props-snap-axes = Axes
+editors-fp-props-snap-objects = Objects for snapping
+editors-fp-props-object-track-vertices = Track Vertices
+editors-fp-props-object-track-lines = Track Lines
+editors-fp-props-object-arc-centers = Arc Centers
+editors-fp-props-object-intersections = Intersections
+editors-fp-props-object-pad-centers = Pad Centers
+editors-fp-props-object-pad-vertices = Pad Vertices
+editors-fp-props-object-pad-edges = Pad Edges
+editors-fp-props-object-via-centers = Via Centers
+editors-fp-props-object-texts = Texts
+editors-fp-props-object-regions = Regions
+editors-fp-props-object-footprint-origins = Footprint Origins
+editors-fp-props-object-body-points = 3D Body Snap Points
+editors-fp-props-snap-distance = Snap Distance
+editors-fp-props-axis-snap-range = Axis Snap Range
+# Beside Axis Snap Range while snapping to axes is off.
+editors-fp-props-axes-off = Axes off
+# The active grid's step, where the Grid Manager is not shown.
+editors-fp-props-grid-step-row = Grid step (mm)
+# Note in the snap illustration while snapping is off.
+editors-fp-props-illustration-snapping-off = Snapping off
+editors-fp-props-section-grids = Grid Manager
+# Header button that adds a grid.
+editors-fp-props-grid-add = + Add
+editors-fp-props-grid-name = Name
+editors-fp-props-grid-step = Step
+editors-fp-props-grid-display = Display
+editors-fp-props-grid-lines = Lines
+editors-fp-props-grid-dots = Dots
+editors-fp-props-grid-hidden = Hidden
+# Opens the Grid Properties dialog of the active grid.
+editors-fp-props-grid-properties = Properties…
+editors-fp-props-delete = Delete
+editors-fp-props-grid-none = No grids
+editors-fp-props-section-solve = Sketch solve
+# Pill of a fully constrained sketch: no degree of freedom left.
+editors-fp-props-dof-zero = DOF 0
+editors-fp-props-entities = Entities
+editors-fp-props-constraints = Constraints
+editors-fp-props-iterations = Iterations
+editors-fp-props-residual = Residual
+editors-fp-props-elapsed = Elapsed
+# A solve time. $ms is a whole number of milliseconds.
+editors-fp-props-elapsed-value = { $ms } ms
+editors-fp-props-over-constrained = Over-constrained
+editors-fp-props-not-solved = Not solved yet
+editors-fp-props-redundant = Redundant
+# A constraint that restates earlier ones. $kind names the constraint.
+editors-fp-props-redundant-row = { $kind } — already implied by earlier constraints
+editors-fp-props-conflicts = Conflicts (worst first)
+# More rows than the list shows. $count is a whole number.
+editors-fp-props-more = … +{ $count } more
+# A count in a section header pill. $count is a whole number.
+editors-fp-props-count = { $count }
+editors-fp-props-section-parameters = Parameters
+editors-fp-props-parameters-none = None yet: add one through an expression.
+editors-fp-props-parameter-placeholder = expression…
+editors-fp-props-section-warnings = Solve warnings
+editors-fp-props-warnings-none = None
+editors-fp-props-open-sketch = Open the sketch (Edit Sketch in the active bar) to see the constraints on the canvas.
+# Hint at the bottom of the panel, by editor mode.
+editors-fp-props-hint-pads = Click a pad to edit its properties.
+editors-fp-props-hint-sketch = Click a sketch entity (Point, Line, Arc or Circle) to edit it.
+editors-fp-props-hint-view3d = 3D View: use the 3D preview pane to inspect the body.
+# A sketch entity kind. $kind is the entity kind's name in the code.
+editors-fp-props-entity-kind = { $kind ->
+        [Point] Point
+        [Line] Line
+        [Arc] Arc
+        [Circle] Circle
+       *[other] Entity
+    }
+# Header of a selected sketch entity. $kind is its localized kind.
+editors-fp-props-entity-heading = Sketch entity · { $kind }
+# Status line of a selected sketch entity. $constraints is a whole number.
+editors-fp-props-entity-status = { $constraints ->
+        [one] { $constraints } constraint attached
+       *[other] { $constraints } constraints attached
+    }
+# The same, with the entity's constraint state. $state names it.
+editors-fp-props-entity-status-dof = { $constraints ->
+        [one] { $constraints } constraint attached
+       *[other] { $constraints } constraints attached
+    } · { $state }
+editors-fp-props-section-entity = Entity
+editors-fp-props-kind = Kind
+editors-fp-props-role = Role
+editors-fp-props-construction = Construction
+editors-fp-props-yes = Yes
+editors-fp-props-no = No
+editors-fp-props-attached = Attached constraints
+editors-fp-props-banner-under = Under-constrained: degrees of freedom are left.
+editors-fp-props-banner-full = Fully constrained: no degree of freedom is left.
+editors-fp-props-banner-over = Over-constrained: a constraint conflicts with the others.
+# A silk graphic kind. $kind is the graphic kind's name in the code.
+editors-fp-props-silk-kind = { $kind ->
+        [Line] Line
+        [Text] Text
+        [Rectangle] Rectangle
+        [Circle] Circle
+        [Arc] Arc
+       *[other] Polygon
+    }
+# Header of a selected silk graphic. $kind is its localized kind.
+editors-fp-props-silk-heading = Silk graphic · { $kind }
+editors-fp-props-section-silk = Silk graphic
+editors-fp-props-index = Index
+# The pad stack check card. $count is a number of sketch pads.
+editors-fp-props-pad-stack-check = Pad stack check
+editors-fp-props-pad-stack-offer = { $count ->
+        [one] The sketch pad has paste disabled and direct connect, the stack older builds wrote. It produces no paste stencil opening. Enable paste and thermal relief on it? Undo reverts it; nothing is saved until you save.
+       *[other] All { $count } sketch pads have paste disabled and direct connect, the stack older builds wrote. They produce no paste stencil openings. Enable paste and thermal relief on them? Undo reverts it; nothing is saved until you save.
+    }
+editors-fp-props-pad-stack-restore = { $count ->
+        [one] Enable paste and thermal relief on 1 pad
+       *[other] Enable paste and thermal relief on { $count } pads
+    }
+editors-fp-props-pad-stack-keep = Keep as is
+# $pads lists the pad numbers.
+editors-fp-props-pad-stack-no-paste = { $count ->
+        [one] Warning: 1 SMD pad has paste disabled on its copper side and gets no stencil opening: { $pads }
+       *[other] Warning: { $count } SMD pads have paste disabled on their copper side and get no stencil opening: { $pads }
+    }
 ## Component editor empty states
 editors-component-alternates-empty = No alternate drawings; the row uses its default symbol only.
 editors-component-datasheets-empty = No datasheet on this component yet.
@@ -601,6 +766,210 @@ editors-component-footer-unparsed = { $count ->
 editors-component-copy-to-library = Copy to Library…
 # Tooltip on the disabled Copy to Library… until a component row copy exists.
 editors-component-copy-to-library-unavailable = Copying a component to another library is not available yet.
+
+## Footprint Pad Properties (mockup row 125)
+# Header, first line: the selected pad's number.
+editors-fp-pad-title = Pad { $number }
+# Header, second line: the pad's place among the footprint's pads. $index and $pads are whole numbers.
+editors-fp-pad-place = { $index } of { $pads ->
+        [one] { $pads } pad
+       *[other] { $pads } pads
+    }
+# Header while a pad is being placed: the form edits the next pad.
+editors-fp-pad-next-title = Next pad
+# Link in the header that opens the pad's profile in Sketch mode.
+editors-fp-pad-edit-in-sketch = Edit in Sketch ▸
+# Kind pill of a non-plated hole.
+editors-fp-pad-pill-npth = NPTH
+editors-fp-pad-section-properties = Properties
+# The section of an SMD pad: it has one layer, so no pad stack.
+editors-fp-pad-section-pad-top = Pad · Top Layer
+editors-fp-pad-section-pad-bottom = Pad · Bottom Layer
+editors-fp-pad-section-pad-stack = Pad Stack
+editors-fp-pad-section-paste-solder = Paste & Solder
+editors-fp-pad-section-features = Pad Features
+# Pad stack modes of a through-hole pad.
+editors-fp-pad-stack-simple = Simple
+editors-fp-pad-stack-top-middle-bottom = Top-Middle-Bottom
+editors-fp-pad-stack-full = Full Stack
+# Layer chips under the illustration of a through-hole pad.
+editors-fp-pad-layers = Layers
+editors-fp-pad-layer-top = Top
+editors-fp-pad-layer-inner = Inner
+# Every inner copper layer, named by position: L1 is Top and Ln is Bottom.
+editors-fp-pad-layer-inner-range = L2…Ln−1
+editors-fp-pad-layer-bottom = Bottom
+editors-fp-pad-size = Size X / Y
+editors-fp-pad-position = X / Y (mm)
+editors-fp-pad-copper-offset = Copper offset
+# Hole shapes the pad model stores.
+editors-fp-pad-hole-round = Round
+editors-fp-pad-hole-slot = Slot
+editors-fp-pad-hole-size = Size
+editors-fp-pad-hole-width-length = Width / Length
+editors-fp-pad-plated = Plated
+editors-fp-pad-tolerance = Tolerance +/−
+# Beside Thermal relief while it is off: the pad connects to a plane directly.
+editors-fp-pad-thermal-off = off · direct connect
+editors-fp-pad-air-gap = Air gap
+editors-fp-pad-spoke-width = Spoke width
+editors-fp-pad-spokes = Spokes
+# Where a value comes from: the board's design rule, or a value typed for this pad.
+editors-fp-pad-rule = Rule
+editors-fp-pad-manual = Manual
+# Tag in a value cell that the board's design rule decides.
+editors-fp-pad-rule-tag = rule
+editors-fp-pad-expansion = Expansion
+# A pad's solder mask section; $layer is the solder mask layer's name from the Layers panel ("Top Solder").
+editors-fp-pad-solder-mask-layer = { $layer } mask
+# Beside a paste layer that is switched off.
+editors-fp-pad-paste-off = off
+# Beside a solder mask layer: an opening over the pad, or the mask covers it.
+editors-fp-pad-mask-opening = opening
+editors-fp-pad-mask-tented = tented
+editors-fp-pad-no-through-hole-paste = No paste on through-hole pads and holes.
+# Why a typed value was not taken. The field keeps the last good value.
+editors-fp-pad-invalid-number = Enter a number
+editors-fp-pad-invalid-positive = Must be greater than 0
+editors-fp-pad-invalid-no-copper = Leaves no copper with this trapezoid
+# Illustration labels. $value is a length in mm, already formatted.
+editors-fp-pad-callout-title = Pad { $number } · { $layer }
+editors-fp-pad-callout-size-x = Size X { $value }
+editors-fp-pad-callout-size-y = Size Y { $value }
+editors-fp-pad-callout-diameter = Size Ø { $value }
+# $value is a whole-number percentage.
+editors-fp-pad-callout-corner = Corner radius { $value }%
+editors-fp-pad-callout-hole-plated = Hole, plated
+editors-fp-pad-callout-slot-plated = Slot, plated
+editors-fp-pad-callout-hole-npth = Hole, no copper
+editors-fp-pad-callout-solder-mask = Solder mask
+# $layer is a solder mask layer name, such as Top Solder mask.
+editors-fp-pad-callout-tented = { $layer } off: tented
+# Between the parts of the pad header's second line.
+editors-fp-pad-separator = ·
+# Placeholder of the next pad's designator: numbered automatically.
+editors-fp-pad-auto = (auto)
+# Placeholder of a pad net that is not set.
+editors-fp-pad-unassigned = (unassigned)
+## Footprint Properties role sub-forms: Pour, Keepout, Cutout, Pattern and
+## Sketch pad (mockup row 126). Lower-case words are captions and drawing labels.
+# Header caption of a pour or keepout; $layer is a board layer name.
+editors-role-region-caption = Region · { $layer }
+editors-role-pour-title = Pour
+editors-role-pour-section = Pour properties
+# Placeholder of an empty net field.
+editors-role-pour-no-net = (none)
+# Drawing label of a pour with no net.
+editors-role-pour-no-net-short = no net
+editors-role-pour-priority = Priority
+editors-role-pour-fill = Fill
+editors-role-pour-fill-solid = Solid
+editors-role-pour-fill-hatched = Hatched
+# A pour drawn as its outline only.
+editors-role-pour-fill-outline = Outline
+# Drawing label; $fill is one of the fill names above.
+editors-role-pour-fill-callout = Fill: { $fill }
+editors-role-pour-priority-callout = Priority { $priority }
+editors-role-keepout-title = Keepout
+editors-role-keepout-kinds = Keepout kinds
+editors-role-keepout-no-copper = No copper
+editors-role-keepout-no-routing = No routing
+editors-role-keepout-no-vias = No vias
+editors-role-keepout-no-pours = No pours
+editors-role-keepout-no-components = No components
+editors-role-keepout-no-drilling = No drilling
+editors-role-keepout-from-sketch = The region shape comes from the sketch (Role = Keepout).
+editors-role-keepout-blocks-nothing = No kind ticked: the keepout blocks nothing
+editors-role-cutout-title = Cutout
+editors-role-cutout-caption = Board cutout
+editors-role-cutout-section = Cutout properties
+editors-role-cutout-edge-radius = Edge radius
+# Placeholder of an empty edge radius: the corners stay sharp.
+editors-role-cutout-sharp-placeholder = (sharp)
+# Enable header: the cutout stops inside the board instead of going through.
+editors-role-cutout-pocket = Limit depth (pocket)
+editors-role-cutout-through = through the board
+editors-role-cutout-pocket-short = pocket
+# Drawing label of the board around a cutout.
+editors-role-cutout-board = board
+# Drawing callout; $radius is the edge radius expression as written.
+editors-role-cutout-radius-callout = Edge radius { $radius }
+editors-role-cutout-radius-sharp = Edge radius sharp
+editors-role-pattern-title = Pattern
+editors-role-pattern-instances = { $count ->
+    [one] { $count } instance
+   *[other] { $count } instances
+}
+# Header caption; $source, $first and $last are pad numbers.
+editors-role-pattern-range = Pad { $source } → pads { $first }…{ $last }
+editors-role-pattern-source = Pad { $source }
+editors-role-pattern-kind-linear = Linear
+editors-role-pattern-kind-grid = Grid
+editors-role-pattern-kind-polar = Polar
+editors-role-pattern-layout = Layout
+# Two fields on one row: the instance count and the step along X.
+editors-role-pattern-count-dx = Count / dX
+editors-role-pattern-dy = dY
+# Two fields on one row: columns and rows of a grid.
+editors-role-pattern-nx-ny = nx / ny
+editors-role-pattern-dx-dy = dX / dY
+# Two fields on one row: the instance count and the angle a polar pattern covers.
+editors-role-pattern-count-sweep = Count / Sweep
+editors-role-pattern-centre = Centre
+# The centre point of a polar pattern in mm.
+editors-role-pattern-centre-value = { $x }, { $y }
+editors-role-pattern-centre-lost = (centre lost)
+editors-role-pattern-repick = Re-pick
+editors-role-pattern-repicking = Click a Point… (Esc to cancel)
+editors-role-pattern-instance-grid = Instances (untick one to skip it)
+editors-role-pattern-numbering = Numbering
+editors-role-pattern-scheme = Scheme
+editors-role-pattern-scheme-linear = Linear (1, 2, 3, …)
+editors-role-pattern-scheme-bga = BGA (A1, A2, …)
+editors-role-pattern-scheme-explicit = Explicit list
+editors-role-pattern-start-row-col = Start row / col
+editors-role-pattern-delete = Delete pattern
+# Drawing callouts; $value is a length in mm.
+editors-role-pattern-dx-callout = dX { $value }
+editors-role-pattern-dy-callout = dY { $value }
+editors-role-pattern-legend = Source pad outlined · skipped instances dashed
+editors-role-pattern-unresolved = The pattern does not evaluate: only the source pad is drawn
+editors-role-pattern-too-many = { $count } instances: only the source pad is drawn
+editors-role-sketch-pad-title = Sketch pad
+# Header caption, followed by the Edit in Pads link; $kind is a pad kind name.
+editors-role-sketch-pad-caption = Pad { $number } · { $kind } · from sketch profile ·
+editors-role-sketch-pad-edit-in-pads = Edit in Pads ▸
+editors-role-sketch-pad-attributes = Pad Attributes
+# Section title; $layer is a copper layer name.
+editors-role-sketch-pad-side-section = Pad · { $layer }
+# State beside a switched-off paste header.
+editors-role-sketch-pad-off = off
+# State beside a solder mask header: open over the pad, or covering it.
+editors-role-sketch-pad-opening = opening
+editors-role-sketch-pad-tented = tented
+editors-role-sketch-pad-expansion = Expansion
+editors-role-sketch-pad-features = Pad Features
+editors-role-sketch-pad-mask-off = Top Solder mask off: tented
+# Drawing note: the copper size in mm, set by the sketch profile.
+editors-role-sketch-pad-size = { $width } × { $height } (from the sketch)
+# Drawing corner note; $layer is a copper layer name, $number the pad number.
+editors-role-sketch-pad-corner = { $layer } · pad { $number }
+
+## Symbol editor active bar
+# Header of the Shapes menu.
+editors-symbol-bar-shapes = Shapes
+# Tooltip of the selection filter trigger; $kinds lists the filter categories.
+editors-symbol-bar-filter-tooltip = Selection Filter: { $kinds } (left or right click for menu)
+# A selection filter category; $kind is the category's name in the code.
+editors-symbol-bar-filter-kind = { $kind ->
+        [Pins] Pins
+        [Drawings] Drawings
+        [Texts] Texts
+        [Designators] Designators
+        [Values] Values
+        [Parameters] Parameters
+       *[other] Other
+    }
 
 ## Sketch tools shared by the footprint and board sketch (#2518).
 

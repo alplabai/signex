@@ -145,14 +145,47 @@ dialog-version-control-lfs = Track binary 3D models via Git LFS
 dialog-version-control-lfs-help = Routes *.step / *.stp / *.wrl / *.iges through Git LFS. Requires git lfs locally.
 dialog-version-control-scanning = Reading the project folder…
 dialog-grid-step = Step
-dialog-grid-step-unit = mm, both axes
-dialog-grid-fine = Fine
-dialog-grid-coarse = Coarse
+dialog-grid-step-unit = mm
+dialog-grid-fine = Fine display
+dialog-grid-coarse = Coarse display
 dialog-grid-lines = Lines
 dialog-grid-dots = Dots
 dialog-grid-hidden = Hidden
 dialog-grid-multiplier = Multiplier
-dialog-grid-help = The step applies to both axes (one grid step per footprint editor). Display: Lines / Dots / Hidden. Multiplier sets the coarse-grid stride (5× / 10× are typical Altium defaults).
+# Grid Properties (mockup row 142): the note beside the title, the step's scope and the footer.
+dialog-grid-note = Cartesian · mm
+dialog-grid-both-axes = both axes
+dialog-grid-footer = One grid per footprint editor
+# One multiplier segment. $multiplier is 1, 2, 5 or 10.
+dialog-grid-multiplier-option = { $multiplier }
+# The coarse grid spacing, step × multiplier. $value is the number in millimetres.
+dialog-grid-coarse-value = coarse = { $value }
+# Notes on the grid preview.
+dialog-grid-too-dense = Fine grid too dense to draw at this size
+dialog-grid-no-step = No grid: the step is not a number above zero
+dialog-grid-label-refused = Not a length: type a number in mm, or press Esc
+# Labels on the grid preview, before the value. $multiplier is 1, 2, 5 or 10.
+dialog-grid-preview-step = step
+dialog-grid-preview-coarse = { $multiplier }× =
+# Tooltips of the preview's expand button.
+dialog-grid-expand = Expand preview
+dialog-grid-collapse = Collapse preview
+# Move Selection By (footprint editor): the offset along X and Y, in millimetres.
+dialog-move-by-title = Move Selection By
+dialog-move-by-x = X (mm)
+dialog-move-by-y = Y (mm)
+# Align Selection (footprint editor): one choice per axis. "Space" makes the
+# gaps between the centres equal; "None" leaves that axis alone.
+dialog-align-title = Align Selection
+dialog-align-horizontal = Horizontal
+dialog-align-vertical = Vertical
+dialog-align-left = Left
+dialog-align-center = Center
+dialog-align-right = Right
+dialog-align-top = Top
+dialog-align-bottom = Bottom
+dialog-align-space = Space
+dialog-align-none = None
 dialog-selection-filter-help = Only Pads filters the canvas today. The other kinds are stored for later.
 dialog-selection-filter-pads = Pads
 dialog-selection-filter-tracks = Tracks
@@ -263,6 +296,8 @@ dialog-button-copy = Copy
 dialog-button-undo = Undo
 dialog-button-redo = Redo
 dialog-button-place = Place
+dialog-button-move = Move
+dialog-button-align = Align
 
 ## Create Sheet (#1275): the file of a sheet symbol that has none yet.
 dialog-create-child-sheet-title = Create Sheet

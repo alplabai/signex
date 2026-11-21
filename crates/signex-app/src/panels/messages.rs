@@ -1132,6 +1132,11 @@ pub enum PanelMsg {
     /// The symbol editor's Properties panel: its tabs, the Pins tab and the
     /// illustration hover (mockup rows 122 and 123).
     SymbolProps(crate::library::editor::symbol::SymbolPropsMsg),
+    /// View state of the footprint Properties panel: the illustration hover
+    /// link and the page shown with nothing selected. Never an edit.
+    FpProperties(super::FpPropertiesMsg),
+    /// The footprint role sub-forms: keepout layer, sketch pad expansions.
+    FpSubform(super::FpSubformMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

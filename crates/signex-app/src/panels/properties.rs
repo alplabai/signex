@@ -114,6 +114,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return view_footprint_editor_properties(
             fp,
             palette,
+            &ctx.tokens,
             &ctx.collapsed_sections,
             ctx.unit,
             &ctx.i18n,

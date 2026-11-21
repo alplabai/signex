@@ -256,6 +256,37 @@ marked **Restart** applies the next time Signex starts.
   Its title strip shows the panel and the document in view; **Dock back** (or
   closing the window) puts the panel back in its dock.
 
+### The footprint and symbol editors
+
+The floating bar over a footprint or a symbol is grouped: the selection tools
+(Selection Filter, Snap, Move, Select, Align) first, then the placement tools,
+then, in the footprint editor, Shapes. In Sketch mode the footprint editor shows
+the sketch bar instead. A small corner triangle marks a button with a dropdown;
+right-click it to open the dropdown.
+
+Right-click a pad in the footprint editor for the selection menu: **Move
+Selection By…** (type an X and a Y offset in mm, then **Move**), **Align ▸**
+(the **Align…** dialog, which aligns or spaces the selection per axis, the
+single align and distribute operations, and **Align To Grid**), **Rotate
+Selection** (`Space`), **Flip Selection** (`X`), **Rectangular Pattern…**,
+**Edit Sketch**, Properties, Pad Actions, Cut, Copy, Paste (while a pad is
+on the clipboard), Find Similar, and **Delete** last. In the symbol editor the menu starts with **Place ▸**, then
+**Rotate Selection** and **Align ▸ Align To Grid**, then Join into Polygon,
+Select All, Deselect All, Fit to Window and **Delete**.
+
+`Ctrl+G` in the footprint editor opens **Grid Properties**. Set the **Step**
+(both axes, in mm), the **Multiplier** (1, 2, 5 or 10; the coarse spacing shows
+beside it), and how the fine and the coarse grid draw (**Lines**, **Dots** or
+**Hidden**). The preview at the top draws the grids as you set them, with a pad
+for scale; click the step or the coarse label on it to type a new value and
+press `Enter` or click elsewhere, or `Esc` to leave it. Text that is not a
+length is outlined red and the preview says why; `Enter` and **OK** wait until
+it is fixed or `Esc` closes the label. Typing in the **Step** field or picking
+a **Multiplier** closes an open label without using its text. The button in
+its corner draws it taller. **OK** applies; a step that is not a number above
+zero is refused and the dialog stays open. **Cancel** closes the dialog and
+discards the changes.
+
 ## 5. Place a symbol
 
 A symbol is a part on the sheet: a resistor, a connector, a chip. Symbols come
@@ -1282,6 +1313,12 @@ mounting holes (tick **Mounting hole** on a circle, then set **Drill**,
 **Plated** and **Net**). The whole commit is one undo step. If the sketch
 cannot be turned into a board shape, for example an open loop, the reason is
 shown and the board stays as it was.
+
+A keepout or cutout selected in a sketch (on a board or in the footprint
+editor) shows its own form in Properties, with a drawing at the top. A
+keepout's **Layer** picks **Top Layer** or **Bottom Layer**, and its
+**Keepout kinds** say what it blocks; the drawing names each blocked kind.
+A cutout goes through the board unless **Limit depth (pocket)** is ticked.
 
 Two other ways to get an outline:
 

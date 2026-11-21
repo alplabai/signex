@@ -469,8 +469,9 @@ pub struct UiState {
     /// v0.18.11 — Cartesian Grid Editor modal (Ctrl+G in a
     /// footprint editor). `Some` while the dialog is visible;
     /// carries the in-flight Step X / Step Y / link buffers so
-    /// keystrokes don't immediately mutate the active editor.
-    pub grid_properties: Option<crate::app::GridPropertiesState>,
+    /// keystrokes don't immediately mutate the active editor. Boxed: a
+    /// closed dialog costs one pointer (#2412).
+    pub grid_properties: Option<Box<crate::app::GridPropertiesState>>,
     /// The New Project setup dialog, while open (#2232). Nothing is on disk
     /// until its Create. Boxed so a closed dialog costs one pointer (#2412).
     pub new_project: Option<Box<crate::app::NewProjectState>>,

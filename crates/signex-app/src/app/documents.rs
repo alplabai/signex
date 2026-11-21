@@ -866,10 +866,10 @@ impl FootprintDocument {
         }
     }
 
-    /// v0.24 Phase 1 — write a snapshot back into the live editor
-    /// state. Resets the canvas cache so the next render reflects
-    /// the rolled-back geometry.
+    /// Writes a snapshot back into the live editor state and redraws.
     fn restore(&mut self, snap: FootprintHistorySnapshot) {
+        // Refused field text belongs to the state that is gone.
+        self.state.numeric_buffers.clear();
         // The file's id is the live one, not the snapshot's (#2172).
         let live_id = self.file.file_uuid;
         self.file = snap.file;

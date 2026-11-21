@@ -89,8 +89,6 @@ define_ids! {
     DIALOG_VERSION_CONTROL_KIND_CONFIG = "dialog-version-control-kind-config";
     DIALOG_VERSION_CONTROL_KIND_COMPONENTS = "dialog-version-control-kind-components";
     DIALOG_VERSION_CONTROL_KIND_FOLDER = "dialog-version-control-kind-folder";
-    DIALOG_GRID_TITLE = "dialog-grid-title";
-    DIALOG_GRID_INTRO = "dialog-grid-intro";
     DIALOG_SELECTION_FILTER_TITLE = "dialog-selection-filter-title";
     DIALOG_SELECTION_FILTER_INTRO = "dialog-selection-filter-intro";
     DIALOG_SELECTION_FILTER_SUBTITLE = "dialog-selection-filter-subtitle";

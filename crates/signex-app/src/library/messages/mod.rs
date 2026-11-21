@@ -483,6 +483,7 @@ pub enum SymbolContextTargetMsg {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolContextSubmenuMsg {
     Place,
+    Align,
 }
 
 mod footprint;

@@ -224,8 +224,6 @@ dialog-version-control-kind-library = Library
 dialog-version-control-kind-config = Config
 dialog-version-control-kind-components = Components
 dialog-version-control-kind-folder = Folder
-dialog-grid-title = Cartesian Grid Editor [mm]
-dialog-grid-intro = Grid step and display
 dialog-selection-filter-title = Selection Filter
 dialog-selection-filter-intro = Selectable kinds
 # Subtitle beside the title of the Custom Selection Filter dialog.

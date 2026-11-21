@@ -409,12 +409,14 @@ impl Signex {
                 );
                 if let Some(opts) = editor_snap {
                     let step = opts.grid_step_mm;
-                    self.ui_state.grid_properties = Some(crate::app::GridPropertiesState {
-                        step_mm: format!("{step:.4}"),
-                        fine_display: opts.fine_grid_display,
-                        coarse_display: opts.coarse_grid_display,
-                        multiplier: opts.coarse_multiplier,
-                    });
+                    self.ui_state.grid_properties =
+                        Some(Box::new(crate::app::GridPropertiesState {
+                            step_mm: format!("{step:.4}"),
+                            fine_display: opts.fine_grid_display,
+                            coarse_display: opts.coarse_grid_display,
+                            multiplier: opts.coarse_multiplier,
+                            ..crate::app::GridPropertiesState::default()
+                        }));
                 }
                 self.finish_update()
             }
@@ -432,21 +434,70 @@ impl Signex {
             }
             GridPropertiesMsg::SetMultiplier(m) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.drop_open_label();
                     state.multiplier = m.max(1);
                 }
                 self.finish_update()
             }
             GridPropertiesMsg::Close => {
+                // Esc with a preview label open closes the label only.
+                if let Some(state) = self.ui_state.grid_properties.as_mut()
+                    && state.preview_labels.editing_index().is_some()
+                {
+                    state.drop_open_label();
+                    return self.finish_update();
+                }
                 self.ui_state.grid_properties = None;
                 self.finish_update()
             }
+            GridPropertiesMsg::CancelPressed => {
+                self.ui_state.grid_properties = None;
+                self.finish_update()
+            }
+            GridPropertiesMsg::PreviewExpandToggled => {
+                if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.preview_expanded = !state.preview_expanded;
+                }
+                self.finish_update()
+            }
+            GridPropertiesMsg::PreviewLabelEdited(event) => {
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+                let focus = match self.ui_state.grid_properties.as_mut() {
+                    Some(state) => {
+                        if state.label_edited(event, &i18n) {
+                            state.preview_labels.focus_input()
+                        } else {
+                            Task::none()
+                        }
+                    }
+                    None => Task::none(),
+                };
+                Task::batch([focus, self.finish_update()])
+            }
             GridPropertiesMsg::SetStep(value) => {
                 if let Some(state) = self.ui_state.grid_properties.as_mut() {
+                    state.drop_open_label();
                     state.step_mm = value;
                 }
                 self.finish_update()
             }
             GridPropertiesMsg::Apply => {
+                // A preview label still open commits its draft first, as
+                // Enter (or the blur of a click on OK) would. Text that is
+                // not a length refuses OK: the dialog stays open with the
+                // label outlined red until it is fixed or Esc closes it.
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+                if let Some(state) = self.ui_state.grid_properties.as_mut()
+                    && state.preview_labels.editing_index().is_some()
+                {
+                    if state.open_label_refused(&i18n) {
+                        return self.finish_update();
+                    }
+                    let _ = state.label_edited(
+                        signex_widgets::dimension_label::DimensionLabelMessage::DraftSubmitted,
+                        &i18n,
+                    );
+                }
                 // `SnapOptions` stores one grid step for both axes, so the
                 // dialog has a single Step field.
                 let draft = self.ui_state.grid_properties.clone();

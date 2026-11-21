@@ -177,6 +177,7 @@ impl Message {
 
 mod cross_probe;
 mod dialogs;
+pub(crate) mod grid_properties;
 mod layer_strip;
 mod messages;
 mod net_nav;

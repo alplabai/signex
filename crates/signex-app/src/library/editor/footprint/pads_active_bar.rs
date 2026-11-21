@@ -1,21 +1,11 @@
 //! Pads-mode Active Bar — floating tool row for the footprint editor
 //! when the editor is in [`EditorMode::Normal`].
 //!
-//! Mirrors Altium's PCB Library editor active-bar layout: Select +
-//! Place Pad / Track / Arc / String / Polygon / Hole, an Auto-fit
-//! Courtyard toggle, and a Sketch-mode entry button. Tools that
-//! aren't wired yet ship as stubs (greyed icons, no
-//! `on_press`) so the bar reads as the eventual finished surface,
-//! not a half-built one.
-//!
-//! The full set is intentional Altium parity — every pad/track/poly
-//! placement lands as wiring goes in. The current wiring is:
-//! - Select: cursor (no specific message; the canvas's empty-space
-//!   click already adds a pad in this mode, so "Place Pad" stays
-//!   visually present in the bar but acts as a discoverability
-//!   reminder until a proper place-pad gesture lands).
-//! - Auto-fit Courtyard: existing `FootprintToggleAutoFit` toggle.
-//! - Edit Sketch: mode-switch to `EditorMode::Sketch`.
+//! The Pads-mode tools: Select ([`selection_items`], at the end of the
+//! bar's selection group) and Place Pad / Place Via / Place String
+//! ([`placement_items`], at the start of its placement group). The mode
+//! switch (Sketch / Pads / 3D) is the floating overlay
+//! [`mode_switcher_overlay`].
 
 use std::path::PathBuf;
 
@@ -123,121 +113,79 @@ pub fn mode_switcher_overlay<'a>(
     .boxed()
 }
 
-/// Build the Pads-mode Active Bar items.
-pub fn items(
+/// One Pads-mode tool button, selected while `tool` is the armed tool.
+fn tool_button(
+    editor: &FootprintDocument,
+    icon: ActiveBarIcon,
+    tooltip: &str,
+    tool: PadsTool,
+) -> ActiveBarItem<LibraryMessage> {
+    ActiveBarItem::Button(ActiveBarButton {
+        icon,
+        tooltip: tooltip.to_string(),
+        enabled: true,
+        selected: editor.state.pads_tool == tool,
+        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
+            path: editor.path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(tool)),
+        }),
+        ..ActiveBarButton::default()
+    })
+}
+
+/// The Pads-mode Select tool, the default tool.
+pub fn selection_items(
     editor: &FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
 ) -> Vec<ActiveBarItem<LibraryMessage>> {
-    let path: PathBuf = editor.path.clone();
+    vec![tool_button(
+        editor,
+        ActiveBarIcon::Svg(icons::icon_select(theme_id)),
+        "Select",
+        PadsTool::Select,
+    )]
+}
 
-    let _stub = |label: &str, glyph: &'static str| -> ActiveBarItem<LibraryMessage> {
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Glyph(glyph),
-            tooltip: format!("{label} (coming soon)"),
-            enabled: false,
-            selected: false,
-            on_press: None,
-            ..ActiveBarButton::default()
-        })
-    };
-
-    let _stub_svg = |label: &str, icon: ActiveBarIcon| -> ActiveBarItem<LibraryMessage> {
-        ActiveBarItem::Button(ActiveBarButton {
-            icon,
-            tooltip: format!("{label} (coming soon)"),
-            enabled: false,
-            selected: false,
-            on_press: None,
-            ..ActiveBarButton::default()
-        })
-    };
-
-    // v0.15 — Pads-mode tool state machine. Select is the default;
-    // PlacePad makes empty-canvas clicks drop a pad at the cursor.
-    let pads_tool = editor.state.pads_tool;
-    let select_path = path.clone();
-    let select = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Svg(icons::icon_select(theme_id)),
-        tooltip: "Select".into(),
-        enabled: true,
-        selected: pads_tool == PadsTool::Select,
-        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: select_path,
-            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(PadsTool::Select)),
-        }),
-        ..ActiveBarButton::default()
-    });
-
-    // Place Pad. Activate the tool, then click an
-    // empty area of the canvas to drop a pad there.
-    let place_pad_path = path.clone();
-    let place_pad = ActiveBarItem::Button(ActiveBarButton {
-        icon: ActiveBarIcon::Glyph("\u{25CF}"), // ●
-        tooltip: "Place Pad — click empty canvas to drop pads".into(),
-        enabled: true,
-        selected: pads_tool == PadsTool::PlacePad,
-        on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-            path: place_pad_path,
-            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(PadsTool::PlacePad)),
-        }),
-        ..ActiveBarButton::default()
-    });
-
-    // Auto-fit Courtyard moved to the Properties panel
-    // default body (Settings section). The active bar stays focused
-    // on placement/edit tools.
-
-    // Dedicated "Edit Sketch" button removed — mode
-    // segments at the left of the bar drive mode switching.
-
-    // Pads-mode active bar simplified. Pure graphics
-    // (Line / Arc / Polygon / Region) live in Sketch mode only;
-    // PlaceHole is folded into PlacePad (the user picks `kind` via
-    // the Properties panel). Place Via is the new through-hole tool.
-    // Delete button removed — Delete key handles it.
+/// The Pads-mode place tools: arm one, then click empty canvas to drop a
+/// pad, a through-hole via or silk-layer text. Pure graphics live in
+/// Sketch mode; a hole is a pad `kind` set in the Properties panel.
+pub fn placement_items(
+    editor: &FootprintDocument,
+    _theme_id: signex_types::theme::ThemeId,
+) -> Vec<ActiveBarItem<LibraryMessage>> {
     vec![
-        select,
-        ActiveBarItem::Separator,
-        place_pad,
-        // Place Via — through-hole via. 1-click drop. Wired as a stub
-        // until the via primitive ships; the tool state survives so
-        // Esc + the Properties panel remain coherent.
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Glyph("\u{25CE}"), // ◎ — annular ring glyph
-            tooltip: "Place Via — click empty canvas to drop a through-hole via".into(),
-            enabled: true,
-            selected: pads_tool == PadsTool::PlaceVia,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(PadsTool::PlaceVia)),
-            }),
-            ..ActiveBarButton::default()
-        }),
-        // Place String — silk-layer 1-click text drop.
-        ActiveBarItem::Button(ActiveBarButton {
-            icon: ActiveBarIcon::Glyph("T"),
-            tooltip: "Place String — click empty canvas to drop silk-layer text".into(),
-            enabled: true,
-            selected: pads_tool == PadsTool::PlaceString,
-            on_press: Some(LibraryMessage::PrimitiveEditorEvent {
-                path: path.clone(),
-                msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SetPadsTool(
-                    PadsTool::PlaceString,
-                )),
-            }),
-            ..ActiveBarButton::default()
-        }),
+        tool_button(
+            editor,
+            ActiveBarIcon::Glyph("\u{25CF}"), // ●
+            "Place Pad — click empty canvas to drop pads",
+            PadsTool::PlacePad,
+        ),
+        tool_button(
+            editor,
+            ActiveBarIcon::Glyph("\u{25CE}"), // ◎ — annular ring glyph
+            "Place Via — click empty canvas to drop a through-hole via",
+            PadsTool::PlaceVia,
+        ),
+        tool_button(
+            editor,
+            ActiveBarIcon::Glyph("T"),
+            "Place String — click empty canvas to drop silk-layer text",
+            PadsTool::PlaceString,
+        ),
     ]
 }
 
-/// Convenience wrapper — build items + render via
+/// The Pads-mode tools alone (Select, a divider, the place tools) through
 /// [`signex_widgets::active_bar::view`].
 pub fn view<'a>(
     editor: &'a FootprintDocument,
     theme_id: signex_types::theme::ThemeId,
     tokens: &'a ThemeTokens,
 ) -> iced::Element<'a, LibraryMessage> {
-    signex_widgets::active_bar::view(items(editor, theme_id), tokens)
+    let mut items = selection_items(editor, theme_id);
+    items.push(ActiveBarItem::Separator);
+    items.extend(placement_items(editor, theme_id));
+    signex_widgets::active_bar::view(items, tokens)
 }
 
 type ChipStyle = Box<dyn Fn(&Theme, iced::widget::button::Status) -> iced::widget::button::Style>;

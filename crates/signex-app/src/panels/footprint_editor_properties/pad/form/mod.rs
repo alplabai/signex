@@ -1,29 +1,36 @@
-//! Pad-form types, message-helper macro, widget primitives, and the
-//! three Properties-panel render functions for Pads-mode (Properties
-//! / Pad Stack / Pad Features).
+//! Pad-form types, message-helper macro, row primitives and the pad form
+//! of the Properties panel (mockup row 125): the sections live one per file.
 //!
 //! Cross-module surface:
-//! - `PadEditTarget` / `PadFormValues` are exported `pub(super)` so
-//!   `pad_table`, `pad_stack_preview`, and the role sub-forms can
-//!   share the same form snapshot + edit-routing semantics.
-//! - The `pad_msg_fns!` macro stamps out ~30 near-identical message-
-//!   builder helpers; without it each builder cost ~7 lines of
-//!   boilerplate. The macro is declared file-local but the emitted
-//!   `pub(super) fn` are reachable from `pad_table`.
-//! - `pad_input_row` / `pad_pick_row` / `pad_check_row` are the row-
-//!   chrome primitives; `subforms` and `pad_table` import them.
+//! - `PadEditTarget` / `PadFormValues` are shared with the pad table so
+//!   both read the same form snapshot and edit routing.
+//! - The `pad_msg_fns!` macro stamps out the message-builder helpers.
+//! - `pad_input_row_w` / `pad_pick_row_w` are the row chrome of the
+//!   per-side stack rows.
 
 use iced::widget::{Column, Widget as _, container, pick_list, row};
-use iced::{Color, Length};
-use signex_i18n::{ids, t};
+use iced::{Color, Element, Length};
+use signex_i18n::{I18n, MessageId, t};
+use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
+use signex_widgets::property_illustration::{FieldId, IllustrationHover};
 use signex_widgets::{Label, raw, text, text_input};
 
 use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, FootprintPadSummary, PanelMsg, PanelPalette,
 };
+use crate::library::editor::footprint::{PadSide, pad_field_buffer_key};
 use crate::panels::{collapsible_section_header, is_section_collapsed};
 use crate::styles::{Spacing, TypeScale};
+
+mod features;
+mod hole;
+mod paste_mask;
+mod properties;
+mod stack;
+mod view;
+
+pub(in crate::panels::footprint_editor_properties) use view::view_pad_form;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -33,6 +40,16 @@ const SP: Spacing = Spacing::DEFAULT;
 pub(in crate::panels::footprint_editor_properties) enum PadEditTarget {
     Next,
     Selected(usize),
+}
+
+impl PadEditTarget {
+    /// The selected pad's index; `None` for the next pad placed.
+    pub(in crate::panels::footprint_editor_properties) fn selected_idx(self) -> Option<usize> {
+        match self {
+            PadEditTarget::Next => None,
+            PadEditTarget::Selected(idx) => Some(idx),
+        }
+    }
 }
 
 /// v0.20 — snapshot of the values the form renders. Built from
@@ -76,6 +93,8 @@ pub(in crate::panels::footprint_editor_properties) struct PadFormValues {
     /// the call sites tight as more fields adopt the buffer
     /// pattern.
     pub(super) numeric_buffers: std::collections::HashMap<String, String>,
+    /// The selected pad's position, mm; `None` for the next pad placed.
+    pub(super) position_mm: Option<[f64; 2]>,
 }
 
 impl PadFormValues {
@@ -108,6 +127,7 @@ impl PadFormValues {
             copper_offset_x_mm: fp.next_pad_copper_offset_x_mm,
             copper_offset_y_mm: fp.next_pad_copper_offset_y_mm,
             numeric_buffers: fp.numeric_buffers.clone(),
+            position_mm: None,
         }
     }
     pub(in crate::panels::footprint_editor_properties) fn from_selected_pad(
@@ -145,6 +165,7 @@ impl PadFormValues {
             copper_offset_x_mm: pad.copper_offset_x_mm,
             copper_offset_y_mm: pad.copper_offset_y_mm,
             numeric_buffers: fp.numeric_buffers.clone(),
+            position_mm: Some(pad.position_mm),
         }
     }
 }
@@ -248,24 +269,6 @@ pub(in crate::panels::footprint_editor_properties) fn pad_input_row_w<'a>(
     .boxed()
 }
 
-/// Legacy-width [`pad_input_row_w`] (110 px label).
-pub(in crate::panels::footprint_editor_properties) fn pad_input_row<'a>(
-    label: impl Into<Label<'a>>,
-    placeholder: &'a str,
-    value: String,
-    on_input: impl Fn(String) -> PanelMsg + 'a,
-    muted: Color,
-) -> iced::Element<'a, PanelMsg> {
-    pad_input_row_w(
-        (Length::Fixed(110.0), Length::Fill),
-        label,
-        placeholder,
-        value,
-        on_input,
-        muted,
-    )
-}
-
 /// v0.20 — pick_list row for a Pad Properties field.
 pub(in crate::panels::footprint_editor_properties) fn pad_pick_row_w<'a, T>(
     fw: (Length, Length),
@@ -295,304 +298,94 @@ where
     .boxed()
 }
 
-/// Legacy-width [`pad_pick_row_w`] (110 px label).
-pub(in crate::panels::footprint_editor_properties) fn pad_pick_row<'a, T>(
-    label: impl Into<Label<'a>>,
-    options: &'a [T],
-    selected: T,
-    on_change: impl Fn(T) -> PanelMsg + 'a + Clone,
-    muted: Color,
-) -> iced::Element<'a, PanelMsg>
-where
-    T: Clone + Eq + std::fmt::Display + 'static,
-{
-    pad_pick_row_w(
-        (Length::Fixed(110.0), Length::Fill),
-        label,
-        options,
-        selected,
-        on_change,
-        muted,
-    )
+/// What the pad is, for the form: what applies is shown, nothing else
+/// (mockup row 125, "show only what applies"). Through-hole follows the Layer
+/// picker (Multi-Layer gives the pad a drill); a non-plated hole is its
+/// kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PadClass {
+    /// One copper layer, no pad stack.
+    Smd(PadSide),
+    ThroughHole,
+    /// A through-hole pad whose drill has a slot length.
+    Slot,
+    /// A non-plated hole: no copper, no paste.
+    Npth,
 }
 
-/// v0.20 — checkbox row for a Pad Properties field. Label on left,
-/// flat checkbox on right.
-/// Legacy-width [`pad_check_row_w`] (110 px label).
-pub(in crate::panels::footprint_editor_properties) fn pad_check_row<'a>(
-    label: impl Into<Label<'a>>,
-    on: bool,
-    on_toggle: impl Fn(bool) -> PanelMsg + 'a,
-    muted: Color,
-    primary: Color,
-) -> iced::Element<'a, PanelMsg> {
-    pad_check_row_w(
-        (Length::Fixed(110.0), Length::Fill),
-        label,
-        on,
-        on_toggle,
-        muted,
-        primary,
-    )
-}
-
-pub(in crate::panels::footprint_editor_properties) fn pad_check_row_w<'a>(
-    fw: (Length, Length),
-    label: impl Into<Label<'a>>,
-    on: bool,
-    on_toggle: impl Fn(bool) -> PanelMsg + 'a,
-    muted: Color,
-    primary: Color,
-) -> iced::Element<'a, PanelMsg> {
-    container(
-        row![
-            text(label)
-                .size(TS.caption)
-                .color(if on { primary } else { muted })
-                .width(fw.0),
-            signex_widgets::checkbox(on)
-                .on_toggle(on_toggle)
-                .size(TS.label)
-                .spacing(0)
-                .style(crate::panels::form_look::checkbox_style),
-        ]
-        .spacing(6)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([SP.xs, SP.m])
-    .width(Length::Fill)
-    .boxed()
-}
-
-/// v0.20 — render the "Properties" section. `target` selects whether
-/// edits write to `next_pad_defaults` (placement form) or to a
-/// specific selected pad. The pause/resume hint banner only shows
-/// for the placement form (`PadEditTarget::Next`).
-pub(in crate::panels::footprint_editor_properties) fn render_pad_form_properties<'a>(
-    mut col: Column<iced::Element<'a, PanelMsg>>,
-    values: &PadFormValues,
-    target: PadEditTarget,
-    placement_paused: bool,
-    palette: PanelPalette,
-    collapsed_sections: &'a CollapsedSections,
-    i18n: &signex_i18n::I18n,
-) -> Column<iced::Element<'a, PanelMsg>> {
-    let PanelPalette {
-        muted,
-        primary,
-        border: border_c,
-        ..
-    } = palette;
-    let fw = palette.field_widths();
-    col = col.push(
-        collapsible_section_header(
-            "fp_pad_properties",
-            "Properties",
-            collapsed_sections,
-            primary,
-            border_c,
-        )
-        .boxed(),
-    );
-    if is_section_collapsed("fp_pad_properties", collapsed_sections) {
-        return col;
-    }
-
-    // TAB pause hint banner — only for the placement form.
-    if matches!(target, PadEditTarget::Next) {
-        if placement_paused {
-            col = col.push(
-                container(
-                    text(t!(i18n, ids::EDITORS_PAD_PLACEMENT_PAUSED))
-                        .size(TS.caption)
-                        .color(Color::from_rgba(1.0, 0.85, 0.30, 1.0)),
-                )
-                .padding([SP.xs, SP.m])
-                .width(Length::Fill)
-                .boxed(),
-            );
-        } else {
-            col = col.push(
-                container(
-                    text(t!(i18n, ids::EDITORS_PAD_PLACEMENT_PAUSE_HINT))
-                        .size(TS.caption)
-                        .color(muted),
-                )
-                .padding([SP.xs, SP.m])
-                .width(Length::Fill)
-                .boxed(),
-            );
+impl PadClass {
+    pub(super) fn of(values: &PadFormValues) -> Self {
+        if matches!(values.kind, signex_library::PadKind::NptHole) {
+            return PadClass::Npth;
+        }
+        match values.side {
+            PadSide::All if values.drill_slot_length_mm.is_some() => PadClass::Slot,
+            PadSide::All => PadClass::ThroughHole,
+            side => PadClass::Smd(side),
         }
     }
 
-    col = col.push(pad_input_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_DESIGNATOR),
-        "(auto)",
-        values.designator.clone(),
-        move |v| pad_designator_msg(target, v),
-        muted,
-    ));
-
-    use crate::library::editor::footprint::state::PadSide;
-    col = col.push(pad_pick_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_LAYER),
-        PadSide::ALL_OPTIONS,
-        values.side,
-        move |s: PadSide| pad_side_msg(target, s),
-        muted,
-    ));
-
-    col = col.push(pad_pick_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_ELECTRICAL_TYPE),
-        signex_sketch::attr::ElectricalType::ALL,
-        values.electrical_type,
-        move |v: signex_sketch::attr::ElectricalType| pad_electrical_type_msg(target, v),
-        muted,
-    ));
-
-    col = col.push(pad_input_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_NET),
-        "(unassigned)",
-        values.net.clone(),
-        move |v| pad_net_msg(target, v),
-        muted,
-    ));
-
-    col = col.push(pad_input_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_ROTATION),
-        "0",
-        format!("{:.1}", values.rotation_deg),
-        move |v| pad_rotation_msg(target, v),
-        muted,
-    ));
-
-    col = col.push(pad_check_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_LOCKED),
-        values.locked,
-        move |v| pad_locked_msg(target, v),
-        muted,
-        primary,
-    ));
-
-    col = col.push(pad_input_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_TEMPLATE),
-        "",
-        values.template.clone(),
-        move |v| pad_template_msg(target, v),
-        muted,
-    ));
-    col = col.push(pad_input_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_TEMPLATE_LIBRARY),
-        "",
-        values.template_library.clone(),
-        move |v| pad_template_library_msg(target, v),
-        muted,
-    ));
-
-    col
-}
-
-/// v0.20 — render the "Pad Features" section: top/bottom surface
-/// treatment + testpoint flags.
-pub(in crate::panels::footprint_editor_properties) fn render_pad_form_pad_features<'a>(
-    mut col: Column<iced::Element<'a, PanelMsg>>,
-    values: &PadFormValues,
-    target: PadEditTarget,
-    palette: PanelPalette,
-    collapsed_sections: &'a CollapsedSections,
-    i18n: &signex_i18n::I18n,
-) -> Column<iced::Element<'a, PanelMsg>> {
-    let PanelPalette {
-        muted,
-        primary,
-        border: border_c,
-        ..
-    } = palette;
-    let fw = palette.field_widths();
-    col = col.push(
-        collapsible_section_header(
-            "fp_pad_features",
-            "Pad Features",
-            collapsed_sections,
-            primary,
-            border_c,
-        )
-        .boxed(),
-    );
-    if is_section_collapsed("fp_pad_features", collapsed_sections) {
-        return col;
+    pub(super) fn has_hole(self) -> bool {
+        !matches!(self, PadClass::Smd(_))
     }
 
-    use signex_sketch::attr::PadFeature;
-    col = col.push(pad_pick_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_TOP_SIDE),
-        PadFeature::ALL,
-        values.feature_top,
-        move |v: PadFeature| pad_feature_top_msg(target, v),
-        muted,
-    ));
-    col = col.push(pad_pick_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_BOTTOM_SIDE),
-        PadFeature::ALL,
-        values.feature_bottom,
-        move |v: PadFeature| pad_feature_bottom_msg(target, v),
-        muted,
-    ));
-
-    col = col.push(
-        container(
-            text(t!(i18n, ids::EDITORS_PAD_TESTPOINT))
-                .size(TS.caption)
-                .color(muted),
-        )
-        .padding([SP.m, SP.m])
-        .width(Length::Fill)
-        .boxed(),
-    );
-    col = col.push(pad_check_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_TOP_ASSEMBLY),
-        values.testpoint.top_assembly,
-        move |v| pad_testpoint_top_assembly_msg(target, v),
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_TOP_FAB),
-        values.testpoint.top_fab,
-        move |v| pad_testpoint_top_fab_msg(target, v),
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_BOTTOM_ASSEMBLY),
-        values.testpoint.bottom_assembly,
-        move |v| pad_testpoint_bottom_assembly_msg(target, v),
-        muted,
-        primary,
-    ));
-    col = col.push(pad_check_row_w(
-        fw,
-        t!(i18n, ids::EDITORS_PAD_BOTTOM_FAB),
-        values.testpoint.bottom_fab,
-        move |v| pad_testpoint_bottom_fab_msg(target, v),
-        muted,
-        primary,
-    ));
-    col
+    /// Copper on every layer, so a pad stack and a thermal relief.
+    pub(super) fn has_copper_stack(self) -> bool {
+        matches!(self, PadClass::ThroughHole | PadClass::Slot)
+    }
 }
 
-mod stack;
-pub(in crate::panels::footprint_editor_properties) use stack::render_pad_form_pad_stack;
+/// Everything a pad form section reads, borrowed for one `view`.
+#[derive(Clone, Copy)]
+pub(super) struct Form<'f> {
+    pub(super) values: &'f PadFormValues,
+    pub(super) target: PadEditTarget,
+    pub(super) class: PadClass,
+    pub(super) palette: PanelPalette,
+    pub(super) tokens: &'f ThemeTokens,
+    pub(super) hover: &'f IllustrationHover,
+    pub(super) i18n: &'f I18n,
+    pub(super) collapsed: &'f CollapsedSections,
+}
+
+impl<'f> Form<'f> {
+    pub(super) fn fw(&self) -> (Length, Length) {
+        self.palette.field_widths()
+    }
+
+    /// The refused text of `field` (a `pad_field` name) on this target.
+    pub(super) fn buffer(&self, field: &str) -> Option<&'f String> {
+        let key = pad_field_buffer_key(self.target.selected_idx(), field);
+        self.values.numeric_buffers.get(&key)
+    }
+
+    /// `content` linked to `field` in the illustration.
+    pub(super) fn linked<'a>(
+        &self,
+        content: Element<'a, PanelMsg>,
+        field: FieldId,
+    ) -> Element<'a, PanelMsg> {
+        super::super::illustration::linked_field(content, field, self.hover, self.tokens)
+    }
+
+    /// A collapsible section header titled `title`; `true` while open.
+    pub(super) fn section<'a>(
+        &self,
+        col: Column<Element<'a, PanelMsg>>,
+        key: &str,
+        title: MessageId,
+    ) -> (Column<Element<'a, PanelMsg>>, bool) {
+        let title = t!(self.i18n, title).to_string();
+        let header = collapsible_section_header(
+            key,
+            &title,
+            self.collapsed,
+            self.palette.primary,
+            self.palette.border,
+        );
+        (
+            col.push(header.boxed()),
+            !is_section_collapsed(key, self.collapsed),
+        )
+    }
+}
