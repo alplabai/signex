@@ -222,6 +222,15 @@ impl DocumentState {
         self.active_path = None;
     }
 
+    /// The engine at `path` holds what was just read from disk: its history
+    /// position is the clean point. Only when `installed`: a failed install
+    /// leaves the older engine at `path`, which is not known to equal the file.
+    pub(crate) fn mark_installed_engine_saved(&mut self, path: &std::path::Path, installed: bool) {
+        if installed && let Some(engine) = self.engines.get_mut(path) {
+            engine.mark_saved();
+        }
+    }
+
     pub fn has_active_engine(&self) -> bool {
         self.active_engine().is_some()
     }
