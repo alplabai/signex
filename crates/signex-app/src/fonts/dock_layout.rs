@@ -472,9 +472,15 @@ mod tests {
     fn the_annotations_panel_round_trips_under_its_key() {
         assert_eq!(panel_kind_key(PanelKind::Annotations), "annotations");
         for kind in crate::panels::ALL_PANELS {
+            // The SCH Library and Footprint Library rows are aliases of the
+            // Library panel and save as it (mockup row 119).
+            let expected = match kind {
+                PanelKind::SchLibrary | PanelKind::FootprintLibrary => PanelKind::Library,
+                other => *other,
+            };
             assert_eq!(
                 parse_panel_kind(panel_kind_key(*kind)),
-                Some(*kind),
+                Some(expected),
                 "{kind:?}"
             );
         }
