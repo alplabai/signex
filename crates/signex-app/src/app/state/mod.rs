@@ -74,7 +74,9 @@ pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
 pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
-pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
+pub use error_notice::{
+    ErrorNotice, NoticeAction, NoticeSeverity, disk_changed_choices, untranslated, verbatim,
+};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
 pub use omitted_page::{OmittedPage, OmittedReason};

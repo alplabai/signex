@@ -1,6 +1,6 @@
-//! Floating overlay builders — the symbol hover tooltip, the chrome-strip
-//! command-palette dropdown, and the shared click-outside-to-dismiss
-//! layer.
+//! Floating overlay builders — the hover cards (`symbol_hover`,
+//! `net_hover`), the chrome-strip command-palette dropdown, and the shared
+//! click-outside-to-dismiss layer.
 //!
 //! Extracted verbatim from `view/mod.rs` (ADR-0001, issue #164) as pure
 //! code motion — no behaviour change. These are methods of the same
@@ -27,6 +27,7 @@ mod palette_scrim_tests;
 mod panel_list;
 mod placement_paused;
 pub(super) mod read_only_badge;
+mod symbol_hover;
 mod text_edit;
 #[cfg(test)]
 mod window_gate_tests;
@@ -90,136 +91,6 @@ impl Signex {
             self.canvas_bounds(),
             self.ui_state.window_size,
         )
-    }
-
-    /// Hover tooltip card showing the placed symbol's designator,
-    /// value, footprint, and library id. Only paints after the cursor
-    /// has dwelled on a Symbol hit for >= 250 ms — gates impulsive
-    /// motion from popping the card. Returns None when the gate
-    /// hasn't tripped, when no schematic is active, or when the
-    /// uuid no longer resolves (e.g. the symbol was deleted while
-    /// the dwell timer was running).
-    pub(super) fn view_hover_tooltip(
-        &self,
-        window_id: iced::window::Id,
-    ) -> Option<Element<'_, Message>> {
-        use signex_i18n::{Localized, ids, t};
-        use signex_widgets::text;
-
-        if self.interaction_state.editing_text.is_some() {
-            return None;
-        }
-        // A net card (a wire, pin or label, #1270) takes the place of the
-        // symbol card while the pointer rests on a pin.
-        if let Some(card) = &self.document_state.net_nav.hover.card {
-            return Some(self.view_net_hover_card(card, window_id));
-        }
-        let interaction = &self.interaction_state;
-        let uuid = interaction.hover_symbol_uuid?;
-        let started = interaction.hover_started_at?;
-        if started.elapsed() < std::time::Duration::from_millis(700) {
-            return None;
-        }
-        let (sx, sy) = interaction.hover_screen_pos?;
-        let active_path = self.document_state.active_path.as_ref()?;
-        let engine = self.document_state.engines.get(active_path)?;
-        let symbol = engine.document().symbols.iter().find(|s| s.uuid == uuid)?;
-
-        let tokens = &self.document_state.panel_ctx.tokens;
-        let text_c = crate::styles::ti(tokens.text);
-        let muted_c = crate::styles::ti(tokens.text_secondary);
-        // Match the schematic's own font (Iosevka by default; whatever
-        // the user picked under Preferences ▸ Canvas Font) so the
-        // tooltip reads as "this is data from the canvas" rather than
-        // floating Roboto chrome. We reuse the app's `IOSEVKA` font
-        // constant for canvas text so the lookup
-        // hits the embedded TTF (not whatever the system fontconfig
-        // falls back to for `Family::Name`).
-        let canvas_font_name: &str = &self.document_state.panel_ctx.canvas_font_name;
-        let canvas_font = crate::fonts::canvas_iced_font(canvas_font_name);
-
-        // Single row style — label in a fixed gutter, value fills the
-        // remaining card width and wraps onto further lines on its
-        // own when the payload is long. Keeps the rhythm uniform
-        // across short (Designator / Value) and long (Footprint /
-        // Library) fields without an inline-vs-stacked split.
-        let i18n = &self.ui_state.i18n;
-        let mut fields: Vec<(Localized, String)> = Vec::with_capacity(4);
-        let label = |id: signex_i18n::MessageId| t!(i18n, id);
-        fields.push((
-            label(ids::OVERLAY_SYMBOL_CARD_DESIGNATOR),
-            self.shown_designator(symbol).to_string(),
-        ));
-        fields.push((
-            label(ids::OVERLAY_SYMBOL_CARD_VALUE),
-            crate::library::part_label::card_value(&symbol.value).to_owned(),
-        ));
-        if !symbol.footprint.is_empty() {
-            fields.push((
-                label(ids::OVERLAY_SYMBOL_CARD_FOOTPRINT),
-                symbol.footprint.clone(),
-            ));
-        }
-        if !symbol.lib_id.is_empty() {
-            fields.push((
-                label(ids::OVERLAY_SYMBOL_CARD_LIBRARY),
-                self.library
-                    .drift
-                    .display_name(&symbol.lib_id, &self.library.open_libraries),
-            ));
-        }
-        let (label_w, card_w) = symbol_card_widths(&fields, canvas_font_name);
-        // Below the cap the card shrinks to its text; at the cap it holds
-        // the cap and long values wrap.
-        let at_cap = card_w >= SYMBOL_CARD_MAX_W;
-        let fill_or_shrink = if at_cap { Length::Fill } else { Length::Shrink };
-        let field = |label: Localized, value: String| -> Element<'_, Message> {
-            iced::widget::row![
-                text(label)
-                    .font(canvas_font)
-                    .size(TS.body)
-                    .color(muted_c)
-                    .width(label_w),
-                // The symbol's own field value (design data).
-                text(signex_i18n::UserText::new(value))
-                    .font(canvas_font)
-                    .size(TS.label)
-                    .color(text_c)
-                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
-                    .width(fill_or_shrink),
-            ]
-            .spacing(SP.s)
-            .width(fill_or_shrink)
-            .align_y(iced::Alignment::Start)
-            .boxed()
-        };
-
-        let rows: Vec<Element<'_, Message>> = fields
-            .into_iter()
-            .map(|(label, value)| field(label, value))
-            .collect();
-
-        let rows_len = rows.len();
-        let card = hover_card(
-            rows,
-            3.0,
-            if at_cap {
-                Length::Fixed(card_w)
-            } else {
-                Length::Shrink
-            },
-            &self.document_state.panel_ctx.tokens,
-        );
-
-        // Below-right of the cursor, flipped or clamped to stay on the
-        // canvas (not the Properties panel beside it). Rows wrap, so the
-        // height budgets a few lines each plus the card padding; iced lays
-        // the card out at its true size.
-        const ESTIMATED_ROW_H: f32 = 28.0;
-        let estimated_h = 16.0 + ESTIMATED_ROW_H * rows_len as f32;
-        let (x, y) =
-            canvas_region::place_card((sx, sy), (card_w, estimated_h), self.card_bounds(window_id));
-        Some(signex_widgets::Translate::new(card, (x, y)).boxed())
     }
 
     pub(super) fn dismiss_layer(on_press: Message) -> Element<'static, Message> {
@@ -481,64 +352,4 @@ pub(super) fn scroll_guard<'a>(element: Element<'a, Message>) -> Element<'a, Mes
         .on_scroll(|_| Message::noop())
         .interaction(iced::mouse::Interaction::Idle)
         .boxed()
-}
-
-/// The card both hover cards draw: `rows` on the panel background with a 1 px
-/// border, padded `8 14 8 10`. `width` is `Shrink` to fit the text, or fixed
-/// at the cap.
-fn hover_card<'a>(
-    rows: Vec<Element<'a, Message>>,
-    spacing: f32,
-    width: Length,
-    tokens: &signex_types::theme::ThemeTokens,
-) -> Element<'a, Message> {
-    let panel_bg = crate::styles::ti(tokens.panel_bg);
-    let border_c = crate::styles::ti(tokens.border);
-    container(column(rows).spacing(spacing))
-        .padding(iced::Padding {
-            top: 8.0,
-            right: 14.0,
-            bottom: 8.0,
-            left: 10.0,
-        })
-        .width(width)
-        .style(move |_: &iced::Theme| container::Style {
-            background: Some(iced::Background::Color(panel_bg)),
-            border: iced::Border {
-                color: border_c,
-                width: 1.0,
-                radius: 4.0.into(),
-                ..iced::Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
-/// Widest the symbol hover card grows; below that it fits its text and the
-/// values wrap (#2100).
-const SYMBOL_CARD_MAX_W: f32 = 320.0;
-/// Left (10) plus right (14) padding, plus the 1 px border on each side.
-const SYMBOL_CARD_PAD_W: f32 = 26.0;
-
-/// Label column and card width for the symbol hover card `fields`: the
-/// longest label, the gap and the longest value, at most
-/// [`SYMBOL_CARD_MAX_W`].
-fn symbol_card_widths(fields: &[(signex_i18n::Localized, String)], family: &str) -> (f32, f32) {
-    let family = signex_types::font::nonblank_family(family);
-    let width =
-        |text: &str, size: f32| signex_types::font::estimate_text_width_px(text, size, family);
-    let label_w = fields
-        .iter()
-        .map(|(label, _)| width(&label.to_string(), TS.body))
-        .fold(0.0, f32::max)
-        .ceil();
-    let value_w = fields
-        .iter()
-        .map(|(_, value)| width(value, TS.label))
-        .fold(0.0, f32::max);
-    let card_w = (label_w + SP.s + value_w + SYMBOL_CARD_PAD_W)
-        .ceil()
-        .min(SYMBOL_CARD_MAX_W);
-    (label_w, card_w)
 }

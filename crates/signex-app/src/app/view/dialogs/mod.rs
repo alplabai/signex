@@ -25,11 +25,13 @@ mod erc;
 mod fab_outputs;
 mod graphite;
 mod graphite_annotate;
+pub(crate) mod graphite_list;
 pub(crate) mod grid_properties;
 mod header;
 mod netlist_incomplete;
 pub(crate) mod new_project;
 mod project;
+mod quit_confirm;
 /// `pub(crate)`: the window sizing and the Enter key read its `content`.
 pub(crate) mod remove;
 mod rename;

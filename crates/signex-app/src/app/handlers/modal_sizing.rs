@@ -307,11 +307,18 @@ impl Signex {
         let fixed = crate::app::handlers::erc::modal_size(modal);
         let ui = &self.ui_state;
         let height = match modal {
+            // The grouped list: a heading per group over its rows, capped
+            // where it scrolls; the list-changed note is a one-line callout.
             ModalId::AppQuitConfirm => ui.app_quit_confirm.as_ref().map(|c| {
+                use crate::app::view::dialogs::graphite_list::{LIST_ROW_H, list_box_height};
+                use crate::styles::{LINE_HEIGHT, Spacing, TypeScale};
+                let callout = TypeScale::DEFAULT.body * LINE_HEIGHT + 3.0 * Spacing::DEFAULT.m;
+                let (groups, rows) = self.quit_list_shape(c);
                 LIST_DIALOG_BASE
-                    + list_height(c.dirty_paths.len() + c.dirty_rows.len())
+                    + list_box_height(groups, rows, LIST_ROW_H)
+                        .min(LIST_MAX_HEIGHT + LIST_BOX_CHROME)
                     + if ui.quit_confirm_refreshed {
-                        NOTE_HEIGHT
+                        callout
                     } else {
                         0.0
                     }
@@ -326,8 +333,37 @@ impl Signex {
                 .filter(|d| !d.unsaved_prompt)
                 .map(|d| fixed.height + self.remove_dialog_growth(d, fixed.width)),
             ModalId::ErrorNotice => self.document_state.error_notice.as_ref().map(|n| {
-                let detail = n.detail_text(&self.ui_state.i18n);
-                130.0 + (wrapped_lines(&detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX)
+                // The 44 px header is 10 px taller than the intro it replaced;
+                // the body parts sit 10 px apart. The system block is caption
+                // mono lines in 8 px padding; the choice list wraps each
+                // effect beside its label.
+                const BASE: f32 = 140.0;
+                const GAP: f32 = 10.0;
+                const SYSTEM_PAD: f32 = 16.0;
+                const CAPTION_LINE: f32 = 15.0;
+                const CHOICE_ROW_GAP: f32 = 3.0;
+                let i18n = &self.ui_state.i18n;
+                let detail = n.detail_text(i18n);
+                let mut height =
+                    BASE + (wrapped_lines(&detail, 64) as f32 * MESSAGE_LINE).min(MESSAGE_MAX);
+                if let Some(system) = &n.system {
+                    let lines = wrapped_lines(system.as_str(), 66) as f32;
+                    height += GAP + SYSTEM_PAD + (lines * CAPTION_LINE).min(MESSAGE_MAX);
+                }
+                if matches!(
+                    &n.action,
+                    Some(crate::app::state::NoticeAction::DiskChanged {
+                        drift: crate::persist::DiskDrift::Changed,
+                        ..
+                    })
+                ) {
+                    height += GAP;
+                    for (_, effect) in crate::app::state::disk_changed_choices(n.offers_save_as()) {
+                        let lines = wrapped_lines(&i18n.message_plain(effect, &[]), 50) as f32;
+                        height += lines * MESSAGE_LINE + CHOICE_ROW_GAP;
+                    }
+                }
+                height
             }),
             ModalId::NetlistIncompletePrompt => self
                 .document_state

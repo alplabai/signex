@@ -201,6 +201,15 @@ impl Signex {
                 };
                 iced::Task::batch([task, self.finish_update()])
             }
+            FileMsg::DiskConflictSaveAsPicked {
+                conflicted,
+                picked,
+                same_on_disk,
+            } => {
+                let task =
+                    self.handle_disk_conflict_save_as_picked(conflicted, *picked, same_on_disk);
+                iced::Task::batch([task, self.finish_update()])
+            }
             FileMsg::SaveAsProjectPatched(done) => {
                 self.handle_save_as_project_patched(*done);
                 self.finish_update()

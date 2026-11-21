@@ -1,8 +1,9 @@
 # Dialogs.
 
-# Autosave recovery card: how long ago the recovered copy was written.
-# $age is an already-worded duration, such as "5 minutes ago".
-dialog-autosave-recovery-autosaved-age = autosaved { $age }
+# Autosave recovery prompt, the recovery copy's row: how long ago the copy
+# was written and when. $age is an already-worded duration, such as
+# "5 minutes ago"; $time is a clock time, such as "14:26" or "Nov 16 17:40".
+dialog-autosave-recovery-autosaved-age = autosaved { $age } · { $time }
 
 ## Tools ▸ Assign Footprints (#2248): the project's placed parts and the
 ## footprints their library rows offer.
@@ -258,6 +259,8 @@ dialog-parameter-manager-done = Done
 # The file changed or vanished on disk since it was opened.
 dialog-disk-conflict-reload = Reload from disk
 dialog-disk-conflict-recreate = Re-create
+# Writes the open document to a new file and leaves the changed one as it is.
+dialog-disk-conflict-save-as = Save As…
 dialog-netlist-export-anyway = Export anyway (incomplete)
 dialog-print-preview-export-pdf = Export PDF
 # Footer of Print Preview when no file is ticked for export.

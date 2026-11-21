@@ -147,11 +147,18 @@ impl Signex {
                 built.as_slice()
             }
         };
+        let facts = crate::keyboard_shortcuts_modal::SheetFacts::read(
+            &ui.keymap_profiles,
+            &ui.active_keymap,
+            &ui.i18n,
+        );
         Some(
             iced::widget::opaque(crate::keyboard_shortcuts_modal::view(
                 &ui.i18n,
                 &self.document_state.panel_ctx.tokens,
                 sections,
+                &ui.shortcut_sheet,
+                &facts,
             ))
             .boxed(),
         )
@@ -169,10 +176,17 @@ impl Signex {
                 built.as_slice()
             }
         };
+        let facts = crate::keyboard_shortcuts_modal::SheetFacts::read(
+            &ui.keymap_profiles,
+            &ui.active_keymap,
+            &ui.i18n,
+        );
         crate::keyboard_shortcuts_modal::window_view(
             &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             sections,
+            &ui.shortcut_sheet,
+            &facts,
         )
     }
 
@@ -184,6 +198,7 @@ impl Signex {
         }
         Some(
             iced::widget::opaque(crate::about_modal::view(
+                &ui.i18n,
                 &self.document_state.panel_ctx.tokens,
             ))
             .boxed(),
@@ -199,6 +214,7 @@ impl Signex {
             return None;
         }
         Some(crate::passive_calculator_modal::view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
             &ui.passive_calculator,
         ))
@@ -211,8 +227,13 @@ impl Signex {
         {
             return None;
         }
+        let ui = &self.ui_state;
+        let facts =
+            crate::first_run_tour::TourFacts::read(ui.wheel_mode, &ui.active_keymap, &ui.i18n);
         Some(crate::first_run_tour::view(
+            &ui.i18n,
             &self.document_state.panel_ctx.tokens,
+            &facts,
         ))
     }
 

@@ -135,6 +135,15 @@ pub enum FileMsg {
         from_path: PathBuf,
         to_path: PathBuf,
     },
+    /// The Save As dialog opened from the File Changed on Disk card returned
+    /// `picked` (a `SaveAs` or `SavePrimitiveAs`); a pick onto `conflicted`
+    /// itself is refused (mockup row 11). `same_on_disk`: the two resolve to one file
+    /// once links are followed, read in the dialog Task.
+    DiskConflictSaveAsPicked {
+        conflicted: PathBuf,
+        picked: Box<FileMsg>,
+        same_on_disk: bool,
+    },
     /// The off-thread patch of the saved `.snxprj` after a sheet Save As
     /// finished (#1824).
     SaveAsProjectPatched(Box<SaveAsProjectPatched>),

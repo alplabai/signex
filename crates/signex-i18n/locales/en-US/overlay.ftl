@@ -37,8 +37,7 @@ overlay-palette-result-count = { $count ->
 overlay-palette-navigate = Navigate
 overlay-palette-run = Run
 
-## Hover card of a placed symbol: the field names
-overlay-symbol-card-designator = Designator
+## Hover card of a placed symbol: the field names under its designator
 overlay-symbol-card-value = Value
 overlay-symbol-card-footprint = Footprint
 overlay-symbol-card-library = Library
@@ -50,6 +49,13 @@ overlay-net-card-class = Class: { $class }
 # The card lists a few pins; $count is how many more it leaves out, a whole
 # number.
 overlay-net-card-more = +{ $count } more
+# Pill beside the net's name: how many pins the net has; $count is a whole
+# number.
+overlay-net-card-pin-count =
+    { $count ->
+        [one] { $count } pin
+       *[other] { $count } pins
+    }
 
 # Badge over the canvas of a sheet written by a newer Signex, which opens
 # read-only.

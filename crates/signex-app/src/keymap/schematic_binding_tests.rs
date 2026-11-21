@@ -130,7 +130,7 @@ fn the_shortcuts_sheet_lists_the_common_tools_in_both_profiles() {
         let labels: Vec<String> = crate::keyboard_shortcuts_modal::build_sections(i18n, &set)
             .into_iter()
             .flat_map(|section| section.rows)
-            .map(|(label, _)| label)
+            .map(|row| row.label)
             .collect();
         for id in COMMON_TOOLS {
             let label = super::metadata_for_str(id)

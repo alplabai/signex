@@ -555,6 +555,8 @@ fn restoring_an_offered_copy_whose_move_is_owed_keeps_it_offered_and_safe() {
         path: fx.sheet.clone(),
         age_secs: 60,
         older_than_file: false,
+        saved_age_secs: Some(600),
+        checked_at: std::time::SystemTime::UNIX_EPOCH,
     });
     let task = rename_foo_to_bar(&mut fx);
     run_task(&mut fx.app, task);
@@ -683,6 +685,8 @@ fn a_restore_read_that_a_rename_overtook_re_offers_the_copy_at_the_new_path() {
         path: fx.sheet.clone(),
         age_secs: 60,
         older_than_file: false,
+        saved_age_secs: Some(600),
+        checked_at: std::time::SystemTime::UNIX_EPOCH,
     });
     // Restore issues the read, and the folder rename lands before it runs.
     let restore = fx.app.update(Message::Autosave(AutosaveMsg::Recovery(

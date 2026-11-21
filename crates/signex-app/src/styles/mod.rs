@@ -39,8 +39,8 @@ pub use buttons::{
 };
 pub use dialog_kit::{
     DialogButtonKind, dense_footer_height, dialog_body, dialog_button, dialog_footer,
-    dialog_footer_height, dialog_footer_split, dialog_hint, dialog_list, dialog_message,
-    dialog_section,
+    dialog_footer_band, dialog_footer_height, dialog_footer_split, dialog_hint, dialog_icon_button,
+    dialog_list, dialog_message, dialog_section,
 };
 pub(crate) use dialog_parts::medium_font;
 pub use dialog_parts::{
@@ -49,8 +49,8 @@ pub use dialog_parts::{
     violet_pair,
 };
 pub use dialog_shell::{
-    DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, DialogIcon, dialog_icon_tile, dialog_intro,
-    dialog_intro_with,
+    DIALOG_ICON_TILE, DIALOG_INTRO_EXTRA, DialogIcon, dialog_glyph, dialog_icon_tile, dialog_intro,
+    dialog_intro_with, tinted_glyph,
 };
 pub use typography::{HAIRLINE, LINE_HEIGHT, Spacing, TypeScale, chrome_px};
 

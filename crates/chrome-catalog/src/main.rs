@@ -1,5 +1,6 @@
 mod board_palette;
 mod bom_modal;
+mod calculator;
 mod catalog;
 mod chips;
 mod compact_group;

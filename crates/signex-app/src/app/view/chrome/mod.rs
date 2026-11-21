@@ -166,11 +166,13 @@ impl Signex {
             ModalId::GridProperties => self.view_grid_properties_dialog_body(),
             ModalId::SelectionFilterCustom => self.view_selection_filter_custom_body(),
             ModalId::NewProject => self.view_new_project_window(),
-            ModalId::About => {
-                crate::about_modal::window_view(&self.document_state.panel_ctx.tokens)
-            }
+            ModalId::About => crate::about_modal::window_view(
+                &self.ui_state.i18n,
+                &self.document_state.panel_ctx.tokens,
+            ),
             ModalId::KeyboardShortcuts => self.view_keyboard_shortcuts_window(),
             ModalId::PassiveCalculator => crate::passive_calculator_modal::window_view(
+                &self.ui_state.i18n,
                 &self.document_state.panel_ctx.tokens,
                 &self.ui_state.passive_calculator,
             ),
@@ -211,7 +213,17 @@ impl Signex {
             ModalId::ProjectCloseConfirm => self.view_project_close_confirm_body(),
             ModalId::AppQuitConfirm => self.view_app_quit_confirm_body(),
             ModalId::FirstRunTour => {
-                crate::first_run_tour::window_view(&self.document_state.panel_ctx.tokens)
+                let ui = &self.ui_state;
+                let facts = crate::first_run_tour::TourFacts::read(
+                    ui.wheel_mode,
+                    &ui.active_keymap,
+                    &ui.i18n,
+                );
+                crate::first_run_tour::window_view(
+                    &ui.i18n,
+                    &self.document_state.panel_ctx.tokens,
+                    &facts,
+                )
             }
         }
     }

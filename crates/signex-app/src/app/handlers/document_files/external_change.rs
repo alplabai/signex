@@ -3,7 +3,8 @@
 //! The save job compares the file with what the document was loaded from or
 //! last saved as (`persist::disk_baseline`) and writes nothing when they differ.
 //! This module is what happens next: the failure reaches Messages, the sheet
-//! stays modified, and the notice card asks Overwrite / Reload / Cancel.
+//! stays modified, and the notice card asks Save As / Overwrite / Reload /
+//! Cancel.
 //! See `docs/architecture/external-change.md`.
 
 use std::path::{Path, PathBuf};
@@ -40,6 +41,16 @@ fn read_for_reload(path: &Path, is_pcb: bool) -> Result<Box<ReloadedFile>, Strin
         document,
         hash: ContentHash::of(text.as_bytes()),
     }))
+}
+
+/// The file a Save As dialog result names, if `picked` is one.
+fn save_as_target(picked: &FileMsg) -> Option<&Path> {
+    match picked {
+        FileMsg::SaveAs { to_path, .. } | FileMsg::SavePrimitiveAs { to_path, .. } => {
+            Some(to_path.as_path())
+        }
+        _ => None,
+    }
 }
 
 impl Signex {
@@ -219,13 +230,105 @@ impl Signex {
         }
     }
 
-    fn take_disk_conflict(&mut self) -> Option<PathBuf> {
+    /// The file the open conflict card is about, leaving the card up.
+    fn disk_conflict_path(&self) -> Option<PathBuf> {
         let notice = self.document_state.error_notice.as_ref()?;
-        let Some(NoticeAction::DiskChanged { path, .. }) = notice.action.clone() else {
+        let Some(NoticeAction::DiskChanged { path, .. }) = &notice.action else {
             return None;
         };
+        Some(path.clone())
+    }
+
+    fn take_disk_conflict(&mut self) -> Option<PathBuf> {
+        let path = self.disk_conflict_path()?;
         self.document_state.error_notice = None;
         Some(path)
+    }
+
+    /// The user chose Save As… (mockup row 11): the document goes to a new file
+    /// through the regular Save As and the changed file is left as it is.
+    /// The document stays modified until that Save As lands; a cancelled
+    /// dialog writes nothing and the next save asks again.
+    pub(crate) fn handle_disk_conflict_save_as(&mut self) -> Task<Message> {
+        let offered = self
+            .document_state
+            .error_notice
+            .as_ref()
+            .is_some_and(ErrorNotice::offers_save_as);
+        let Some(path) = self.disk_conflict_path().filter(|_| offered) else {
+            return Task::none();
+        };
+        // Save As writes the active tab, so the conflicted document must be it.
+        if !self.activate_tab_for_path(&path) {
+            crate::diagnostics::log_warning(format!(
+                "[save] {} is not open as a tab of the main window, so Save As cannot run \
+                 for it; the card stays",
+                file_label(&path)
+            ));
+            return Task::none();
+        }
+        // The card closes only once Save As has really started; a kind
+        // without one leaves it up, so the choice is never silently lost.
+        let task = self.save_as_dialog_for_active_tab();
+        if task.units() == 0 {
+            return task;
+        }
+        self.document_state.error_notice = None;
+        crate::diagnostics::log_info(format!(
+            "[save] Saving {} under a new name as the user chose; the changed file is kept",
+            file_label(&path)
+        ));
+        // The pick comes back through the conflict check, never straight to
+        // the write: the dialog may name the changed file itself. Links are
+        // resolved here, in the Task, so `update` reads no disk.
+        task.map(move |message| match message {
+            Message::File(picked) if save_as_target(&picked).is_some() => {
+                let same_on_disk = save_as_target(&picked)
+                    .is_some_and(|to| crate::app::path_op_jobs::same_path(&path, to));
+                Message::File(FileMsg::DiskConflictSaveAsPicked {
+                    conflicted: path.clone(),
+                    picked: Box::new(picked),
+                    same_on_disk,
+                })
+            }
+            other => other,
+        })
+    }
+
+    /// The Save As dialog the conflict card opened returned `picked`. A pick
+    /// that names the changed file itself, in any spelling, would replace the
+    /// other program's version without the Overwrite choice: nothing is
+    /// written, the reason goes to Messages and the card comes back.
+    pub(crate) fn handle_disk_conflict_save_as_picked(
+        &mut self,
+        conflicted: PathBuf,
+        picked: FileMsg,
+        same_on_disk: bool,
+    ) -> Task<Message> {
+        let onto_conflicted = same_on_disk
+            || save_as_target(&picked).is_some_and(|to| self.names_one_file(&conflicted, to));
+        if !onto_conflicted {
+            return Task::done(Message::File(picked));
+        }
+        crate::diagnostics::log_warning(format!(
+            "[save] Save As picked {} itself, which another program changed; nothing was \
+             written. Pick a new name, or choose Overwrite to replace their version",
+            file_label(&conflicted)
+        ));
+        if self.document_state.error_notice.is_none() {
+            self.document_state.error_notice =
+                Some(ErrorNotice::disk_changed(conflicted, DiskDrift::Changed));
+        }
+        Task::none()
+    }
+
+    /// Whether `a` and `b` name one file under the identity rule open and
+    /// Ctrl+S use (case, NFC / NFD, `.` and `..`). Links were resolved in the
+    /// dialog Task.
+    fn names_one_file(&self, a: &Path, b: &Path) -> bool {
+        use crate::app::state::scope::path_key_with;
+        let fold = self.identity_fold_for(a);
+        path_key_with(a, fold) == path_key_with(b, fold)
     }
 
     /// The user chose Overwrite (or Re-create): save again without comparing.

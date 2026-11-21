@@ -32,6 +32,7 @@ define_ids! {
     DIALOG_PARAMETER_MANAGER_DONE = "dialog-parameter-manager-done";
     DIALOG_DISK_CONFLICT_RELOAD = "dialog-disk-conflict-reload";
     DIALOG_DISK_CONFLICT_RECREATE = "dialog-disk-conflict-recreate";
+    DIALOG_DISK_CONFLICT_SAVE_AS = "dialog-disk-conflict-save-as";
     DIALOG_NETLIST_EXPORT_ANYWAY = "dialog-netlist-export-anyway";
     DIALOG_PRINT_PREVIEW_EXPORT_PDF = "dialog-print-preview-export-pdf";
     DIALOG_PRINT_PREVIEW_NO_FILES = "dialog-print-preview-no-files";

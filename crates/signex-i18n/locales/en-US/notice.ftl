@@ -42,10 +42,13 @@ notice-library-read-only-detail = The library "{ $library }" ships with { -brand
 # $library is the library's name.
 notice-library-history-missing-detail = The library "{ $library }" is open read-only because its Git history is missing. Close it and open it again to re-init its history, or restore its .git folder.
 # A save found its file changed outside the app. $name is the file name.
-notice-disk-changed =
-    { $name } changed on disk since it was opened or last saved. Saving now would discard that change.
-
-    Overwrite replaces the file with this document. Reload from disk loads the file and discards the unsaved edits in this document.
+notice-disk-changed = { $name } changed on disk since it was opened or last saved. Saving now would discard that change.
+# What each choice of that card does, shown beside the choice's button label
+# ("Save As…", "Overwrite", "Reload from disk"). Lower case: each one
+# continues the label.
+notice-disk-changed-save-as = writes this document to a new file and leaves the changed file as it is.
+notice-disk-changed-overwrite = replaces the file with this document.
+notice-disk-changed-reload = loads the file and discards the unsaved edits in this document.
 # $name is the file name; $path is the full path the save writes to.
 notice-disk-missing = { $name } is missing on disk (deleted or moved). Re-create writes this document to { $path }.
 # $name is the file name; $folder is the folder that is gone.

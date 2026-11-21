@@ -267,6 +267,12 @@ pub enum OverlayMsg {
     DiskConflictOverwriteChosen,
     /// "Reload from disk" on the same card: replace the document with the file.
     DiskConflictReloadChosen,
+    /// "Save As…" on the same card: write the document to a new file and
+    /// leave the changed one as it is (mockup row 11).
+    DiskConflictSaveAsChosen,
+    /// "Copy" on the error card: its heading, sentence and system part go to
+    /// the clipboard.
+    ErrorNoticeCopyPressed,
     /// User pressed the title bar of a modal at window-space (x, y) —
     /// begin dragging it. The next DragMove events update its offset.
     ModalDragStart {
@@ -293,6 +299,18 @@ pub enum OverlayMsg {
     GridSnapPopoverDismissed,
     /// The pointer moved over the popover's drawing or a Pitch row.
     GridSnapPreviewHovered(signex_widgets::property_illustration::IllustrationMsg),
+    /// Help cards (#2262). The Keyboard Shortcuts filter text changed.
+    ShortcutsFilterChanged(String),
+    /// The filter's clear button was pressed.
+    ShortcutsFilterCleared,
+    /// A scope was picked on the switch, or All from the no-match note.
+    ShortcutsScopePicked(crate::keyboard_shortcuts_modal::ShortcutScope),
+    /// "Edit in Preferences…" was pressed: the sheet closes and Preferences
+    /// opens on its Keyboard Shortcuts page.
+    ShortcutsPreferencesPressed,
+    /// The first-run card's "change" link was pressed: Preferences opens on
+    /// Appearance (the Mouse wheel setting); the card stays open.
+    FirstRunTourWheelChangePressed,
 }
 
 /// What a finished `Mod` move of a custom shortcut profile hands back.

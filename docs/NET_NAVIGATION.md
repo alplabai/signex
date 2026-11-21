@@ -61,6 +61,12 @@ the card is built from the cached index and stored in the Model, so `view` only
 draws it. Turn it off under Preferences, Schematic, Editing, "Show net info on
 hover" (default on; key `net_hover_enabled` in `prefs.json`).
 
+The card is the floating Graphite card of the menus and popovers: the net's name
+as its title with a pill counting all its pins, the class under it, then the
+shown pins in mono with each pin's sheet muted beside it and "+N more"; the
+symbol card beside it titles a part by its designator over Value, Footprint and
+Library rows.
+
 ## Commands
 
 | Command id | Does |

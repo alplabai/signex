@@ -83,14 +83,12 @@ impl DialogIcon {
     /// The glyph alone, `size` px square, drawn in `color`: for a list row
     /// or a banner, where no tile sits behind it.
     pub fn glyph_element<'a, M: 'a>(self, size: f32, color: iced::Color) -> Element<'a, M> {
-        svg(GLYPHS[self.index()].clone())
-            .width(Length::Fixed(size))
-            .height(Length::Fixed(size))
-            .style(move |_: &Theme, _| svg::Style {
-                color: Some(color),
-                ..Default::default()
-            })
-            .boxed()
+        tinted_glyph(self.glyph_handle(), size, color)
+    }
+
+    /// The glyph without its tile, for a callout that draws it inline.
+    pub fn glyph_handle(self) -> svg::Handle {
+        GLYPHS[self.index()].clone()
     }
 
     /// The 24 x 24 stroke glyph, drawn in the tile's ink.
@@ -182,6 +180,30 @@ pub fn dialog_icon_tile<'a, M: 'a>(icon: DialogIcon, tokens: &ThemeTokens) -> El
         ..container::Style::default()
     })
     .boxed()
+}
+
+/// `icon`'s bare glyph, `side` px square, in its tone's ink and with no
+/// tile: the severity mark of a dialog header.
+pub fn dialog_glyph<'a, M: 'a>(
+    icon: DialogIcon,
+    side: f32,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let (_, ink) = pill_colors(tokens, icon.tone());
+    tinted_glyph(GLYPHS[icon.index()].clone(), side, ink)
+}
+
+/// A monochrome SVG glyph, `side` px square, drawn in `ink`. The one way
+/// the dialogs, Help cards and hover cards draw a glyph.
+pub fn tinted_glyph<'a, M: 'a>(handle: svg::Handle, side: f32, ink: iced::Color) -> Element<'a, M> {
+    svg(handle)
+        .width(Length::Fixed(side))
+        .height(Length::Fixed(side))
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        })
+        .boxed()
 }
 
 /// Height the Graphite intro adds over the plain message line it replaces:

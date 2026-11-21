@@ -197,13 +197,18 @@ bar_icon!(
 bar_icon!(icon_text, "text.svg", "active_bar/graphite/text.svg");
 bar_icon!(icon_wire, "wire.svg", "active_bar/graphite/wire.svg");
 
-// ─── Chrome (window controls, search) ──────────────────────────────
+// ─── Chrome (window controls, search, the Help cards) ──────────────
 
 canonical_icon!(icon_chrome_gear, "chrome/gear.svg");
 canonical_icon!(icon_chrome_info, "chrome/info.svg");
 canonical_icon!(icon_chrome_lock, "chrome/lock.svg");
 canonical_icon!(icon_chrome_lock_mixed, "chrome/lock_mixed.svg");
 canonical_icon!(icon_chrome_more, "chrome/more.svg");
+canonical_icon!(icon_chrome_copy, "chrome/copy.svg");
+canonical_icon!(icon_chrome_external_link, "chrome/external_link.svg");
+canonical_icon!(icon_chrome_hand, "chrome/hand.svg");
+canonical_icon!(icon_chrome_keyboard, "chrome/keyboard.svg");
+canonical_icon!(icon_chrome_mouse, "chrome/mouse.svg");
 canonical_icon!(icon_chrome_search, "chrome/search.svg");
 canonical_icon!(icon_chrome_window_close, "chrome/window_close.svg");
 canonical_icon!(icon_chrome_window_max, "chrome/window_max.svg");
@@ -515,6 +520,34 @@ mod tests {
         assert_eq!(distinct.len(), glyphs.len());
         let theme = ThemeId::GraphiteDark;
         assert_ne!(icon_pcb_via(theme), icon_pcb_pad(theme));
+    }
+
+    /// #2262: the Help cards' glyphs are 16 px monochrome strokes (no fill,
+    /// no accent sentinel: the card tints them with an ink token), each a
+    /// distinct drawing.
+    #[test]
+    fn help_card_glyphs_are_distinct_monochrome_strokes() {
+        let glyphs: [&str; 5] = [
+            include_str!("../assets/icons/chrome/copy.svg"),
+            include_str!("../assets/icons/chrome/external_link.svg"),
+            include_str!("../assets/icons/chrome/hand.svg"),
+            include_str!("../assets/icons/chrome/keyboard.svg"),
+            include_str!("../assets/icons/chrome/mouse.svg"),
+        ];
+        for svg in glyphs {
+            assert!(svg.starts_with("<svg "), "{svg}");
+            assert!(svg.contains(r#"viewBox="0 0 16 16""#), "{svg}");
+            assert!(svg.contains(r#"fill="none""#), "{svg}");
+            assert!(svg.contains(r#"stroke="currentColor""#), "{svg}");
+            assert!(!svg.contains(ACCENT_SENTINEL), "{svg}");
+            assert!(svg.trim_end().ends_with("</svg>"), "{svg}");
+        }
+        let distinct: std::collections::HashSet<_> = glyphs.iter().collect();
+        assert_eq!(distinct.len(), glyphs.len());
+        let theme = ThemeId::GraphiteLight;
+        assert_ne!(icon_chrome_hand(theme), icon_chrome_mouse(theme));
+        assert_ne!(icon_chrome_keyboard(theme), icon_chrome_copy(theme));
+        assert_ne!(icon_chrome_external_link(theme), icon_chrome_search(theme));
     }
 
     /// Two paths with identical bytes (merged by the compiler) still get
