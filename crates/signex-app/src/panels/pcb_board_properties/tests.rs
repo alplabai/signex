@@ -668,7 +668,7 @@ fn closed_sections_show_their_summary_and_open_on_a_click() {
         2,
         "{shown:?}"
     );
-    for summary in ["All Layers"] {
+    for summary in std::iter::once("All Layers") {
         assert_eq!(
             shown.iter().filter(|t| *t == summary).count(),
             1,
