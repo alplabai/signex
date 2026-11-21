@@ -70,3 +70,14 @@ pub(crate) fn effective_paper_size(paper_size: &str) -> String {
         paper_size.to_string()
     }
 }
+
+#[cfg(test)]
+mod effective_paper_size_tests {
+    use super::effective_paper_size;
+
+    #[test]
+    fn an_empty_paper_size_reads_as_a4_everywhere() {
+        assert_eq!(effective_paper_size(""), "A4");
+        assert_eq!(effective_paper_size("A3"), "A3");
+    }
+}
