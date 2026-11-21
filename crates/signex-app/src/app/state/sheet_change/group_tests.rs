@@ -68,6 +68,39 @@ fn an_undo_keeps_a_parked_member_an_undocked_window_shows() {
 }
 
 #[test]
+fn an_undo_keeps_a_parked_member_the_user_opened_in_a_tab() {
+    let (mut rig, group) = renumbered();
+    let parked = rig.closed_parent.clone();
+    rig.app.document_state.tabs.push(crate::app::TabInfo {
+        title: "parked.snxsch".into(),
+        path: parked.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    let step = rig
+        .app
+        .document_state
+        .step_undo_group(group, true, &HashSet::new());
+    assert!(step.ran && step.stepped, "the group moved: {step:?}");
+    assert!(
+        rig.app.document_state.engines.contains_key(&parked),
+        "a tab holds it: its engine stays"
+    );
+    assert!(
+        step.members.iter().any(|event| matches!(
+            event, CoreEvent::DocumentChanged(changed) if changed.path == parked
+        )),
+        "the tab showing it repaints"
+    );
+    assert!(
+        rig.app.document_state.undo_groups[&group]
+            .dropped
+            .is_empty()
+    );
+}
+
+#[test]
 fn an_undo_drops_a_parked_member_nothing_holds_open() {
     let (mut rig, group) = renumbered();
     let parked = rig.closed_parent.clone();
@@ -128,6 +161,36 @@ fn blocked_group() -> (Signex, UndoGroupId, PathBuf, PathBuf) {
     let later = app.document_state.engines.get_mut(&b).unwrap();
     later.execute(colour_wire_a(9)).unwrap();
     (app, group, a, b)
+}
+
+/// A non-active member is the target of a running agent edit list: its
+/// refresh is owed to the list's end, not shown now. The active sheet is not
+/// in the group, so all the owed patch is the member's.
+#[test]
+fn a_group_step_owes_a_member_an_agent_edit_list_targets() {
+    let mut app = app_with(&[("b.snxsch", 101), ("a.snxsch", 100)]);
+    let b = path("b.snxsch");
+    let group = colour_group(&mut app, &[&b]);
+    assert_eq!(
+        app.document_state.agent_edits.owed,
+        signex_engine::DocumentPatch::NONE
+    );
+    app.document_state.agent_edits.target = Some(b.clone());
+    let step = app
+        .document_state
+        .step_undo_group(group, true, &HashSet::new());
+    assert!(step.ran, "the group moved: {step:?}");
+    assert_eq!(app.document_state.engines[&b].next_undo_group(), None);
+    assert!(
+        !step.members.iter().any(|event| matches!(
+            event, CoreEvent::DocumentChanged(changed) if changed.path == b
+        )),
+        "owed, not shown: {:?}",
+        step.members
+    );
+    assert!(
+        (app.document_state.agent_edits.owed).contains(signex_engine::DocumentPatch::NET_COLORS)
+    );
 }
 
 #[test]

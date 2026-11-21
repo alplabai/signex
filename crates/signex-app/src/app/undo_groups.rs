@@ -186,6 +186,21 @@ impl StepDirection {
     }
 }
 
+impl crate::app::state::DocumentState {
+    /// Record which sheets a group touched; a group that touched none goes.
+    pub(crate) fn record_undo_group(
+        &mut self,
+        group: signex_engine::UndoGroupId,
+        sheets: UndoGroupSheets,
+    ) {
+        if sheets.live.is_empty() && sheets.disk_only.is_empty() {
+            self.undo_groups.remove(&group);
+        } else {
+            self.undo_groups.insert(group, sheets);
+        }
+    }
+}
+
 impl Signex {
     /// Allocate a group id for a project-wide step.
     pub(super) fn mint_undo_group(&mut self) -> signex_engine::UndoGroupId {
@@ -200,11 +215,7 @@ impl Signex {
         group: signex_engine::UndoGroupId,
         sheets: UndoGroupSheets,
     ) {
-        if sheets.live.is_empty() && sheets.disk_only.is_empty() {
-            self.document_state.undo_groups.remove(&group);
-        } else {
-            self.document_state.undo_groups.insert(group, sheets);
-        }
+        self.document_state.record_undo_group(group, sheets);
     }
 
     /// Whether `group` holds board steps (#2366): those move through
@@ -340,9 +351,7 @@ impl Signex {
             record.undone = moved;
         }
         self.document_state.note_sheet_edit();
-        if let Some(patch) = active_patch {
-            self.finish_schematic_mutation(patch, true, true);
-        }
+        self.finish_schematic_mutation(active_patch, None, true, true);
         self.refresh_panel_ctx();
         true
     }

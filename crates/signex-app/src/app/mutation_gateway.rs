@@ -233,12 +233,23 @@ impl Signex {
             });
     }
 
+    /// The tail of an edit made outside the engine's commands: a multi-sheet
+    /// `run`'s other members and its group first, then the active sheet's
+    /// `patch`. `false` when the active sheet took no change.
     pub(super) fn finish_schematic_mutation(
         &mut self,
-        patch: signex_engine::DocumentPatch,
+        patch: Option<signex_engine::DocumentPatch>,
+        run: Option<sheet_change::SheetRun>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
+        if let Some(run) = run {
+            let members = self.document_state.settle_run(run, patch.is_some());
+            self.project_events(members, RefreshScope::Member);
+        }
+        let Some(patch) = patch else {
+            return false;
+        };
         let edit = self
             .document_state
             .settle_active_sheet(patch, ChangeCause::Edit);

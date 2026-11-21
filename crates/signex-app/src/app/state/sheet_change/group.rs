@@ -228,11 +228,24 @@ impl DocumentState {
         events: &mut Vec<CoreEvent>,
     ) {
         self.sync_history_dirty(path);
+        self.show_member(path, patch, ChangeCause::Step, events);
+    }
+
+    /// A member other than the active sheet changed: the windows showing it
+    /// repaint, or the refresh is owed to the end of an agent's edit list
+    /// that targets it.
+    pub(super) fn show_member(
+        &mut self,
+        path: &Path,
+        patch: DocumentPatch,
+        cause: ChangeCause,
+        events: &mut Vec<CoreEvent>,
+    ) {
         if self.agent_edits.target.as_deref() == Some(path) {
             self.agent_edits.owed |= patch;
             return;
         }
-        let (path, cause) = (path.to_path_buf(), ChangeCause::Step);
+        let path = path.to_path_buf();
         events.push(DocumentChanged { path, patch, cause }.into());
     }
 
