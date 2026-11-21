@@ -131,13 +131,16 @@ fn a_background_history_restore_moves_the_document_and_sheet_edit_epochs() {
     finish_restore(&mut rig.app, messages);
 
     assert!(holds_restored(&rig.app, &rig.root));
+    // The pin: only the written-behind note moves this epoch here.
     assert!(
         rig.app.document_state.documents_epoch > documents,
         "a read taken before the restore is stale"
     );
+    // Also moved by the restore's dirty mark, so it cannot tell the
+    // written-behind note was lost; it only says ERC sees an edit.
     assert!(
         rig.app.document_state.sheet_edit_epoch > sheets,
-        "ERC results taken before the restore are stale"
+        "the restore counts as a sheet edit"
     );
 }
 

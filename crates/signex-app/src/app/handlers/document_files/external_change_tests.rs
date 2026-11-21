@@ -8,7 +8,7 @@ use signex_types::schematic::{Point, SchematicSheet, Wire};
 
 use super::restore_commit_tests::collect_messages;
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::{FileMsg, Message, Signex};
+use crate::app::{FileMsg, Message, OverlayMsg, Signex};
 use crate::persist::{ContentHash, DiskDrift};
 
 /// The wire only the file on disk holds.
@@ -55,17 +55,35 @@ fn wire_ids(app: &Signex, path: &Path) -> Vec<uuid::Uuid> {
         .collect()
 }
 
-/// A save of `path` found the file changed: the card is up and the sheet modified.
+/// A save of `path` found the file changed: the card is up and the sheet
+/// modified. The sheet was read from disk once, so it has a baseline.
 fn save_found_drift(app: &mut Signex, path: &Path) {
+    app.record_disk_baseline(path, ContentHash::of(b"as opened"));
     app.document_state.mark_document_dirty(path);
     app.handle_save_found_disk_drift(path.to_path_buf(), DiskDrift::Changed);
     assert!(app.document_state.error_notice.is_some(), "the card is up");
 }
 
 /// Click Reload and run the read; the completion is returned unapplied.
+/// `update`'s other follow-ups (the project fs probe) are dropped.
 fn click_reload(app: &mut Signex) -> Vec<Message> {
-    let task = app.handle_disk_conflict_reload();
-    collect_messages(task)
+    let task = app.update(Message::Overlay(OverlayMsg::DiskConflictReloadChosen));
+    let finished: Vec<Message> = collect_messages(task)
+        .into_iter()
+        .filter(|m| matches!(m, Message::File(FileMsg::DiskReloadFinished { .. })))
+        .collect();
+    assert_eq!(finished.len(), 1, "Reload started one read");
+    finished
+}
+
+/// The reload let go of the file: the next disk poll stats it again.
+fn assert_disk_poll_resumes(app: &mut Signex) {
+    let polled = collect_messages(app.start_document_disk_poll());
+    assert_eq!(polled.len(), 1, "one poll ran: {polled:?}");
+    assert!(matches!(
+        polled[0],
+        Message::File(FileMsg::DocumentDiskPolled { .. })
+    ));
 }
 
 fn deliver(app: &mut Signex, messages: Vec<Message>) {
@@ -116,6 +134,7 @@ fn reloading_the_active_sheet_installs_the_file_and_leaves_it_saved() {
         app.document_state.error_notice.is_none(),
         "the card is gone"
     );
+    assert_disk_poll_resumes(&mut app);
 }
 
 #[test]
@@ -191,4 +210,5 @@ fn an_edit_made_while_the_file_is_read_refuses_the_reload_and_survives() {
         app.document_state.error_notice.is_some(),
         "the card comes back so the user chooses again"
     );
+    assert_disk_poll_resumes(&mut app);
 }
