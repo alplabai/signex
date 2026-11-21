@@ -92,12 +92,12 @@ pub use net_report::{NetReport, net_named, net_reports};
 pub use pick_filter::{PickFilter, PickKind};
 pub use pour_edit::{AreaShape, cut_area, slice_area};
 pub use ratsnest::{RatLine, ratsnest, ratsnest_with_fills};
-pub use route_rats::{RouteRats, route_rats};
 pub use rect::RectNm;
 pub use region::{
     OFFSET_ARC_POINTS, Polygon, chord_sag, difference, intersection, offset, twice_signed_area,
     union,
 };
+pub use route_rats::{RouteRats, route_rats};
 pub use selection::{
     ClickMode, Selection, marquee_mode, marquee_select, pick, pick_filtered, pick_under_texts,
 };

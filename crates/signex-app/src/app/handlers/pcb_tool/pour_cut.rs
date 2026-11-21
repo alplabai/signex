@@ -117,7 +117,9 @@ impl Signex {
             return;
         };
         if session.tool == BoardPlaceTool::SlicePour {
-            preview.segments.extend(open_outline(&[first, cursor], layer));
+            preview
+                .segments
+                .extend(open_outline(&[first, cursor], layer));
             return;
         }
         let outline: Vec<Point> = session.points.iter().copied().chain([cursor]).collect();

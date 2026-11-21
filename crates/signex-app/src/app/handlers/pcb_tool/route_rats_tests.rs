@@ -94,16 +94,27 @@ fn while_routing_the_routed_nets_line_starts_at_the_route_end() {
     let ghost = app.board_tool_ghost().expect("the route on the pointer");
     assert_eq!(ghost.ratsnest_lines.len(), 1, "the route draws the line");
     let during = board_lines(&app, &path);
-    assert!(during.iter().all(|l| l.net != 1), "no line from the start pad");
+    assert!(
+        during.iter().all(|l| l.net != 1),
+        "no line from the start pad"
+    );
     assert_eq!(net_b(&during), net_b(&before), "other nets are unchanged");
 
     hover(&mut app, 6.0, 3.0);
-    assert_eq!(route_line(&app).map(|l| l.from), Some(at(6.0, 3.0)), "it follows");
+    assert_eq!(
+        route_line(&app).map(|l| l.from),
+        Some(at(6.0, 3.0)),
+        "it follows"
+    );
 
     escape(&mut app);
     assert!(app.interaction_state.pcb_ratsnest.route_key().is_none());
     assert!(app.interaction_state.pcb_ratsnest.route_on(&path).is_none());
-    assert_eq!(board_lines(&app, &path), before, "the route ended: lines as before");
+    assert_eq!(
+        board_lines(&app, &path),
+        before,
+        "the route ended: lines as before"
+    );
 }
 
 /// A Track run that lands leg by leg: after a leg lands the split is read
@@ -126,5 +137,8 @@ fn a_track_run_keeps_the_line_at_its_end_and_esc_puts_the_lines_back() {
         from: at(0.0, 0.0),
         to: at(10.0, 0.0),
     };
-    assert!(lines.contains(&own), "the board's own line is back: {lines:?}");
+    assert!(
+        lines.contains(&own),
+        "the board's own line is back: {lines:?}"
+    );
 }

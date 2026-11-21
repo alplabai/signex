@@ -229,7 +229,9 @@ impl Signex {
         interaction
             .pcb_bar_menu
             .is_some()
-            .then_some(Message::Pcb(PcbMsg::Bar(crate::app::PcbBarMsg::MenuDismissed)))
+            .then_some(Message::Pcb(PcbMsg::Bar(
+                crate::app::PcbBarMsg::MenuDismissed,
+            )))
     }
 
     /// Esc closes an open dock tab right-click menu.

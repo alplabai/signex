@@ -42,7 +42,10 @@ fn a_placed_pad_takes_the_active_layer() {
         let ghost = app.board_tool_preview().expect("a preview");
         click(&mut app, at, 3.0);
         let placed = board_of(&app, &path).free.pads.last().expect("a pad");
-        assert_eq!(&ghost.free.pads[0].layers, &placed.layers, "the ghost agrees");
+        assert_eq!(
+            &ghost.free.pads[0].layers, &placed.layers,
+            "the ghost agrees"
+        );
         let copper: Vec<_> = placed
             .layers
             .iter()
@@ -197,10 +200,17 @@ fn a_dimension_placed_with_top_layer_active_is_on_top_layer() {
         click(&mut app, 1.0, 3.0);
         hover(&mut app, 6.0, 3.0);
         let ghost = app.board_tool_preview().expect("a preview");
-        assert_eq!(parse_pcb_layer(&ghost.free.dimensions[0].layer), Some(layer));
+        assert_eq!(
+            parse_pcb_layer(&ghost.free.dimensions[0].layer),
+            Some(layer)
+        );
         click(&mut app, 6.0, 3.0);
         click(&mut app, 6.0, 5.0);
-        let placed = board_of(&app, &path).free.dimensions.last().expect("placed");
+        let placed = board_of(&app, &path)
+            .free
+            .dimensions
+            .last()
+            .expect("placed");
         assert_eq!(parse_pcb_layer(&placed.layer), Some(layer), "{layer:?}");
     }
 }

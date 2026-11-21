@@ -41,7 +41,10 @@ fn each_area_tool_draws_a_line_from_its_first_corner_to_the_pointer() {
         hover(&mut app, third.x, third.y);
         let two = preview(&app);
         assert_eq!(two.zones.len(), 1, "{command}: the closing preview");
-        assert!(two.segments.is_empty(), "{command}: the area replaces the lines");
+        assert!(
+            two.segments.is_empty(),
+            "{command}: the area replaces the lines"
+        );
     }
 }
 

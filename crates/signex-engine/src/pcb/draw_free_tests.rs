@@ -128,8 +128,17 @@ fn a_free_pad_on_outer_copper_is_a_surface_pad_of_that_side() {
     assert!(top.drill.is_none());
     assert_eq!(top.layers, ["TopCopper", "TopSolderMask", "TopPaste"]);
     assert_eq!(top.net.as_ref().map(|n| n.number), Some(3));
-    let bottom = new_free_pad_on(&board, id, p(5.0, 0.0), "1".into(), CopperLayer::Bottom.into());
-    assert_eq!(bottom.layers, ["BottomCopper", "BottomSolderMask", "BottomPaste"]);
+    let bottom = new_free_pad_on(
+        &board,
+        id,
+        p(5.0, 0.0),
+        "1".into(),
+        CopperLayer::Bottom.into(),
+    );
+    assert_eq!(
+        bottom.layers,
+        ["BottomCopper", "BottomSolderMask", "BottomPaste"]
+    );
     assert!(bottom.net.is_none(), "the track is on the top copper only");
     let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
     let through = new_free_pad_on(&board, id, p(5.0, 0.0), "1".into(), silk);

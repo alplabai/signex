@@ -32,18 +32,29 @@ fn the_routed_line_leaves_the_route_end_for_the_nearest_open_pad() {
     let lines = rats.lines(&base, at(7, 3));
     let routed: Vec<_> = lines.iter().filter(|l| l.net == 1).collect();
     assert!(
-        routed.iter().any(|l| l.from == at(7, 3) && l.to == at(10, 0)),
+        routed
+            .iter()
+            .any(|l| l.from == at(7, 3) && l.to == at(10, 0)),
         "{routed:?}"
     );
     assert!(
-        routed.iter().all(|l| l.from != at(0, 0) && l.to != at(0, 0)),
+        routed
+            .iter()
+            .all(|l| l.from != at(0, 0) && l.to != at(0, 0)),
         "no line leaves the start pad: {routed:?}"
     );
     assert!(
-        routed.iter().any(|l| l.from == at(10, 0) && l.to == at(20, 0)),
+        routed
+            .iter()
+            .any(|l| l.from == at(10, 0) && l.to == at(20, 0)),
         "the net's other lines stay"
     );
-    let others = |ls: &[RatLine]| ls.iter().filter(|l| l.net == 2).copied().collect::<Vec<_>>();
+    let others = |ls: &[RatLine]| {
+        ls.iter()
+            .filter(|l| l.net == 2)
+            .copied()
+            .collect::<Vec<_>>()
+    };
     assert_eq!(others(&lines), others(&base), "other nets are unchanged");
 }
 
@@ -56,5 +67,9 @@ fn pads_the_start_copper_reaches_are_not_targets() {
     let rats = route_rats(&board, &zone_fills(&board), 1, at(0, 0));
     let line = rats.line_from(at(11, 2)).expect("one pad is open");
     assert_eq!(line.to, at(20, 0));
-    assert!(route_rats(&board, &zone_fills(&board), 0, at(0, 0)).line_from(at(1, 1)).is_none());
+    assert!(
+        route_rats(&board, &zone_fills(&board), 0, at(0, 0))
+            .line_from(at(1, 1))
+            .is_none()
+    );
 }

@@ -196,7 +196,10 @@ fn a_press_inside_the_flyout_picks_the_row() {
         )),
         "the row was not picked: {messages:?}"
     );
-    assert!(!closes(&messages), "the row press dismissed first: {messages:?}");
+    assert!(
+        !closes(&messages),
+        "the row press dismissed first: {messages:?}"
+    );
     run(&mut app, messages);
     assert!(app.interaction_state.active_bar_menu.is_none());
 }

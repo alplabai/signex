@@ -86,7 +86,11 @@ fn esc_in_the_pause_puts_the_runs_width_and_net_back() {
     escape(&mut app);
     assert!(!app.is_board_tool_paused(), "Esc ends the pause");
     assert!(!app.board_tool_paused_in_window(window));
-    assert_eq!(width_net(&app), before, "the width and net before the pause");
+    assert_eq!(
+        width_net(&app),
+        before,
+        "the width and net before the pause"
+    );
     click(&mut app, 2.0, 4.0);
     let tracks = &board_of(&app, &path).segments;
     let placed = tracks.last().expect("the leg lands");
