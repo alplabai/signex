@@ -196,8 +196,8 @@ impl Signex {
     /// Main's tab changed: its buffers go, but a wire being drawn in an
     /// undocked window belongs to that window's sheet and stays.
     pub(crate) fn clear_drawing_buffers_of_main(&mut self) {
-        let wire_in_a_window = self.interaction_state.wire_drawing
-            && self.interaction_state.wire_window.is_some();
+        let wire_in_a_window =
+            self.interaction_state.wire_drawing && self.interaction_state.wire_window.is_some();
         self.clear_drawing_buffers_keeping(wire_in_a_window);
     }
 
