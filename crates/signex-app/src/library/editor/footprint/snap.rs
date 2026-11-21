@@ -3,26 +3,35 @@
 //!
 //! Priority chain (highest first):
 //! 1. **Point snap** — cursor within `SKETCH_SNAP_RADIUS_PX` of an
-//!    existing `Point` entity → snap to that Point's position.
-//! 2. **Horizontal / Vertical inference** — when a multi-click tool
+//!    existing `Point` entity → snap to that Point's position (a Circle's
+//!    or Arc's centre reads as a Centre snap while a drawing tool infers).
+//!    Then, on a board sketch only, the board under it
+//!    ([`super::snap_board`]).
+//! 2. **Midpoint / Centre** — a Line's midpoint or a Circle's / Arc's
+//!    centre within the same radius, while a drawing tool is armed (mockup row 188).
+//! 3. **Guide**, then **Intersection** of two sketch curves.
+//! 4. **Horizontal / Vertical inference** — when a multi-click tool
 //!    is mid-gesture (line first endpoint, rect first corner, ...),
 //!    if the cursor's angle relative to the anchor falls within
 //!    [`AXIS_THRESHOLD_DEG`] of horizontal or vertical, snap to the
 //!    exact axis.
-//! 3. **Angle snap** — same anchor-relative angle, snap to nearest
+//! 5. **Angle snap** — same anchor-relative angle, snap to nearest
 //!    [`ANGLE_STEP_DEG`] increment if within
 //!    [`ANGLE_THRESHOLD_DEG`].
-//! 4. **Grid snap** — fall through: round each axis to the nearest
+//! 6. **Grid snap** — fall through: round each axis to the nearest
 //!    [`GRID_STEP_MM`] increment.
 //!
-//! No modifier-key suppression yet; iced's `CursorMoved` event
-//! doesn't carry modifier state cleanly in 0.14, so a Shift-to-
-//! disable toggle is deferred.
+//! [`snap_cursor_with`] with `infer = false` (Ctrl held while drawing)
+//! skips Midpoint, Centre, Intersection, H / V and Angle: point reuse,
+//! the board, guides and grid stay. The inference a click lands from its
+//! snap is [`click_inference`].
 
 use signex_sketch::SketchData;
+use signex_sketch::entity::EntityKind;
+use signex_sketch::geom::{Arc2, Circle2, Point2, Segment2};
 use signex_sketch::id::SketchEntityId;
 
-use super::state::{FootprintEditorState, ToolPending};
+use super::state::{EditorMode, FootprintEditorState, ToolPending};
 
 /// Fallback grid step (mm) used only by the snap unit tests where
 /// constructing a full `SnapOptions` is cumbersome. Production code
@@ -71,6 +80,30 @@ pub enum SnapKind {
     Intersection,
     /// Fell through to grid snap.
     Grid,
+    /// Snapped onto a feature of the board under a board sketch (#2518):
+    /// places the point only and lands no constraint. See
+    /// [`super::snap_board`].
+    BoardFeature(super::snap_board::BoardFeatureKind),
+    /// The midpoint of the sketch Line with this id (mockup row 188).
+    Midpoint(SketchEntityId),
+    /// The centre of the sketch Circle or Arc with this id (mockup row 188).
+    Centre(SketchEntityId),
+}
+
+/// The constraint a drawing-tool click lands from the snap it took
+/// (mockup row 188), in the same undo step as the click.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SketchInference {
+    /// Ctrl was held: no inferred constraint, the Line's auto H / V
+    /// included.
+    Off,
+    /// A Midpoint constraint on this Line.
+    Midpoint(SketchEntityId),
+    /// A Coincident with the centre of this Circle or Arc.
+    Centre(SketchEntityId),
+    /// The point lies on both curves: Point on Line, Point on Arc, or zero
+    /// distance to a Circle.
+    Intersection(SketchEntityId, SketchEntityId),
 }
 
 /// v0.18.23 — world-mm tolerance used by the guide-snap priority.
@@ -119,7 +152,11 @@ pub fn anchor_for_tool(
         // v0.27 — Fillet first-click stashes a Line, not a Point.
         // Lines aren't valid snap anchors here, so suppress the
         // tethered preview by returning None.
-        ToolPending::FilletFirst { .. } => return None,
+        ToolPending::FilletFirst { .. } | ToolPending::ChamferFirst { .. } => return None,
+        // A slot's second centre runs from its first; its width click and
+        // a polygon's first vertex run from no anchor.
+        ToolPending::SlotFirst { a } => a,
+        ToolPending::SlotSecond { .. } | ToolPending::PolygonCentre { .. } => return None,
     };
     point_pos(id, sketch, state)
 }
@@ -148,31 +185,38 @@ pub fn point_pos(
         .iter()
         .find(|e| e.id == id)
         .and_then(|e| match e.kind {
-            signex_sketch::entity::EntityKind::Point { x, y } => Some((x, y)),
+            EntityKind::Point { x, y } => Some((x, y)),
             _ => None,
         })
 }
 
-/// Apply the priority chain to `raw` and return the snapped
-/// position + the snap kind that fired. `point_hit` is the optional
-/// outcome of a prior call to the canvas's `sketch_snap` (we don't
-/// re-implement the spatial query here so the canvas's existing
-/// px-radius logic stays the source of truth).
+/// [`snap_cursor_with`] with inference on: the snap of every caller that
+/// is not a drawing tool under Ctrl.
 pub fn snap_cursor(
     raw: (f64, f64),
     sketch: Option<&SketchData>,
     state: &FootprintEditorState,
     point_hit: Option<SketchEntityId>,
 ) -> SnapResult {
-    // v0.18.14.3 — Altium "Snapping" 3-state short-circuits all
-    // priorities when set to `Off`. `CurrentLayer` is a placeholder
-    // for the v0.18.15 layer-aware filter; today it behaves like
-    // `AllLayers`.
-    //
-    // v0.18.25.1 — global status-bar Snap toggle (`ui_state.snap_enabled`)
-    // mirrors into `state.global_snap_disabled`. Treat the same as
-    // `SnappingMode::Off` so guides / grid / point-hit / angle all
-    // stop firing together when the user disables snap globally.
+    snap_cursor_with(raw, sketch, state, point_hit, true)
+}
+
+/// Apply the priority chain to `raw` and return the snapped
+/// position + the snap kind that fired. `point_hit` is the optional
+/// outcome of a prior call to the canvas's `sketch_snap` (we don't
+/// re-implement the spatial query here so the canvas's existing
+/// px-radius logic stays the source of truth). `infer = false` skips the
+/// snaps that land a constraint (see the module doc).
+pub fn snap_cursor_with(
+    raw: (f64, f64),
+    sketch: Option<&SketchData>,
+    state: &FootprintEditorState,
+    point_hit: Option<SketchEntityId>,
+    infer: bool,
+) -> SnapResult {
+    // Snapping Off, or the status bar's global Snap toggle
+    // (`global_snap_disabled`), turns every priority off.
+    // `CurrentLayer` behaves as `AllLayers` until a layer-aware filter.
     use super::state::SnappingMode;
     if state.global_snap_disabled || state.snapping_mode == SnappingMode::Off {
         return SnapResult::raw(raw);
@@ -182,16 +226,40 @@ pub fn snap_cursor(
     // disabled the cursor returns raw (matches Altium's "no snap"
     // workflow).
     let opts = state.snap_options;
+    let drawing = infer && draws_with_inference(state);
 
     // Priority 1 — Point snap.
     if opts.point_hit
         && let Some(id) = point_hit
         && let Some(pos) = point_pos(id, sketch, state)
     {
+        if drawing
+            && opts.snap_centres
+            && let Some(curve) = sketch.and_then(|s| curve_centred_on(s, id))
+        {
+            return SnapResult {
+                pos,
+                kind: SnapKind::Centre(curve),
+            };
+        }
         return SnapResult {
             pos,
             kind: SnapKind::Point(id),
         };
+    }
+
+    // Priority 1.2 — the board under a board sketch (#2518). `None` on
+    // a footprint sketch, which has no board.
+    if let Some(hit) = super::snap_board::board_feature_snap(raw, state) {
+        return hit;
+    }
+
+    // Priority 1.3 — a Line's midpoint, a Circle's or Arc's centre.
+    if drawing
+        && let Some(sketch) = sketch
+        && let Some(hit) = midpoint_or_centre(raw, sketch, state)
+    {
+        return hit;
     }
 
     // Priority 1.5 — Guide snap. Snaps the cursor onto enabled
@@ -232,174 +300,22 @@ pub fn snap_cursor(
         }
     }
 
-    // v0.27 — Intersection snap. Walks Line×Line, Line×Arc, and
-    // Line×Circle pairs through the geom module helpers, snaps to
-    // the closest hit within `snap_distance_mm`. Arc×Arc and
-    // Arc×Circle pairs are queued — they need a curve×curve
-    // intersection helper that doesn't exist yet.
-    if opts.snap_intersections
+    // v0.27 — Intersection snap: the closest crossing of two sketch
+    // curves within `snap_distance_mm` ([`nearest_intersection`]).
+    if infer
+        && opts.snap_intersections
         && let Some(sketch) = sketch
+        && let Some((pos, _, _)) = nearest_intersection(raw, sketch, state)
     {
-        use signex_sketch::entity::EntityKind;
-        use signex_sketch::geom::{
-            Arc2, Circle2, Point2, Segment2, SegmentIntersection, segment_arc_intersections,
-            segment_circle_intersections, segment_segment_intersection,
+        return SnapResult {
+            pos,
+            kind: SnapKind::Intersection,
         };
-
-        let resolve =
-            |id: SketchEntityId| -> Option<(f64, f64)> { point_pos(id, Some(sketch), state) };
-
-        // Lines as (start, end) world-mm pairs.
-        let lines: Vec<(Point2, Point2)> = sketch
-            .entities
-            .iter()
-            .filter_map(|e| {
-                if let EntityKind::Line { start, end } = e.kind {
-                    let s = resolve(start)?;
-                    let f = resolve(end)?;
-                    Some((Point2::new(s.0, s.1), Point2::new(f.0, f.1)))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Circles as (centre, radius).
-        let circles: Vec<(Point2, f64)> = sketch
-            .entities
-            .iter()
-            .filter_map(|e| {
-                if let EntityKind::Circle { center, radius } = e.kind {
-                    let c = resolve(center)?;
-                    Some((Point2::new(c.0, c.1), radius))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Arcs as (centre, radius, start_rad, end_rad, sweep_ccw).
-        let arcs: Vec<Arc2> = sketch
-            .entities
-            .iter()
-            .filter_map(|e| {
-                if let EntityKind::Arc {
-                    center,
-                    start,
-                    end,
-                    sweep_ccw,
-                } = e.kind
-                {
-                    let c = resolve(center)?;
-                    let s = resolve(start)?;
-                    let f = resolve(end)?;
-                    let radius = ((s.0 - c.0).powi(2) + (s.1 - c.1).powi(2)).sqrt();
-                    let start_rad = (s.1 - c.1).atan2(s.0 - c.0);
-                    let end_rad = (f.1 - c.1).atan2(f.0 - c.0);
-                    Some(Arc2::new(
-                        Point2::new(c.0, c.1),
-                        radius,
-                        start_rad,
-                        end_rad,
-                        sweep_ccw,
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let tol = state.snap_options.snap_distance_mm.max(1e-6);
-        let tol_sq = tol * tol;
-        let mut best: Option<(f64, (f64, f64))> = None;
-        let consider = |pt: Point2, best: &mut Option<(f64, (f64, f64))>| {
-            let dx = pt.x - raw.0;
-            let dy = pt.y - raw.1;
-            let d_sq = dx * dx + dy * dy;
-            if d_sq <= tol_sq {
-                match best {
-                    Some((b_sq, _)) if *b_sq <= d_sq => {}
-                    _ => *best = Some((d_sq, (pt.x, pt.y))),
-                }
-            }
-        };
-
-        // Line × Line.
-        for i in 0..lines.len() {
-            for j in (i + 1)..lines.len() {
-                let s_a = Segment2::new(lines[i].0, lines[i].1);
-                let s_b = Segment2::new(lines[j].0, lines[j].1);
-                if let SegmentIntersection::Point { pt, .. } =
-                    segment_segment_intersection(s_a, s_b)
-                {
-                    consider(pt, &mut best);
-                }
-            }
-        }
-
-        // Line × Arc.
-        for line in &lines {
-            let seg = Segment2::new(line.0, line.1);
-            for arc in &arcs {
-                for (pt, _) in segment_arc_intersections(seg, *arc) {
-                    consider(pt, &mut best);
-                }
-            }
-        }
-
-        // Line × Circle.
-        for line in &lines {
-            let seg = Segment2::new(line.0, line.1);
-            for c in &circles {
-                let circle = Circle2::new(c.0, c.1);
-                for (pt, _) in segment_circle_intersections(seg, circle) {
-                    consider(pt, &mut best);
-                }
-            }
-        }
-
-        // v0.27 — Curve × curve. Circle × Circle, Arc × Arc,
-        // Arc × Circle. Round out the snap so any pair of
-        // sketch curves yields a snap target at their
-        // crossing.
-        use signex_sketch::geom::{
-            arc_arc_intersections, arc_circle_intersections, circle_circle_intersections,
-        };
-        for i in 0..circles.len() {
-            for j in (i + 1)..circles.len() {
-                let a = Circle2::new(circles[i].0, circles[i].1);
-                let b = Circle2::new(circles[j].0, circles[j].1);
-                for pt in circle_circle_intersections(a, b) {
-                    consider(pt, &mut best);
-                }
-            }
-        }
-        for i in 0..arcs.len() {
-            for j in (i + 1)..arcs.len() {
-                for pt in arc_arc_intersections(arcs[i], arcs[j]) {
-                    consider(pt, &mut best);
-                }
-            }
-        }
-        for arc in &arcs {
-            for c in &circles {
-                let circle = Circle2::new(c.0, c.1);
-                for pt in arc_circle_intersections(*arc, circle) {
-                    consider(pt, &mut best);
-                }
-            }
-        }
-
-        if let Some((_, pos)) = best {
-            return SnapResult {
-                pos,
-                kind: SnapKind::Intersection,
-            };
-        }
     }
 
     // Priority 2 + 3 — anchor-relative angle snap (H/V/15°).
-    if (opts.horizontal_vertical || opts.angle)
+    if infer
+        && (opts.horizontal_vertical || opts.angle)
         && let Some(anchor) = anchor_for_tool(state, sketch)
     {
         let dx = raw.0 - anchor.0;
@@ -412,16 +328,9 @@ pub fn snap_cursor(
             // Horizontal: angle near 0 or ±π → |sin(angle)| small.
             // Vertical:   angle near ±π/2  → |cos(angle)| small.
             let axis_thresh = AXIS_THRESHOLD_DEG.to_radians().sin();
-            // v0.14-footprint — fold the active grid step into the
-            // snapped point. Previously H/V and angle snap returned
-            // a position built from the raw cursor distance and
-            // `return`ed before the grid block below, so a snapped
-            // point kept the anchor's coordinate on the locked axis
-            // but an arbitrary OFF-GRID value on the free axis /
-            // along the ray ("snapped to angle but not to grid").
-            // Grid-snapping the free axis (H/V) and the ray distance
-            // (diagonal) keeps both true at once. No-op when grid
-            // snap is disabled.
+            // The free axis (H / V) and the ray distance (angle) snap to
+            // the grid too, so a snapped point is on the axis and on the
+            // grid at once. No-op when grid snap is disabled.
             let grid_snap = |v: f64| -> f64 {
                 if opts.grid && opts.grid_step_mm > 1e-9 {
                     (v / opts.grid_step_mm).round() * opts.grid_step_mm
@@ -490,6 +399,202 @@ pub fn snap_cursor(
         }
     } else {
         SnapResult::raw(raw)
+    }
+}
+
+/// Whether the snap may land a constraint: a sketch drawing tool is armed.
+fn draws_with_inference(state: &FootprintEditorState) -> bool {
+    state.mode == EditorMode::Sketch && state.active_tool.is_drawing()
+}
+
+/// The Circle or Arc whose centre is the Point `id`, if any.
+fn curve_centred_on(sketch: &SketchData, id: SketchEntityId) -> Option<SketchEntityId> {
+    sketch.entities.iter().find_map(|e| match e.kind {
+        EntityKind::Circle { center, .. } | EntityKind::Arc { center, .. } if center == id => {
+            Some(e.id)
+        }
+        _ => None,
+    })
+}
+
+/// The nearest Line midpoint or Circle / Arc centre within the Point
+/// snap's reach of `raw`, each gated by its Snap ▾ switch.
+fn midpoint_or_centre(
+    raw: (f64, f64),
+    sketch: &SketchData,
+    state: &FootprintEditorState,
+) -> Option<SnapResult> {
+    let opts = state.snap_options;
+    let reach = super::snap_board::reach_mm(state.view_px_per_mm);
+    let at = |id| point_pos(id, Some(sketch), state);
+    let mut best: Option<(f64, SnapResult)> = None;
+    for e in &sketch.entities {
+        let target = match e.kind {
+            EntityKind::Line { start, end } if opts.snap_midpoints => {
+                let (Some(s), Some(f)) = (at(start), at(end)) else {
+                    continue;
+                };
+                (
+                    ((s.0 + f.0) / 2.0, (s.1 + f.1) / 2.0),
+                    SnapKind::Midpoint(e.id),
+                )
+            }
+            EntityKind::Circle { center, .. } | EntityKind::Arc { center, .. }
+                if opts.snap_centres =>
+            {
+                let Some(c) = at(center) else {
+                    continue;
+                };
+                (c, SnapKind::Centre(e.id))
+            }
+            _ => continue,
+        };
+        let d = (target.0.0 - raw.0).hypot(target.0.1 - raw.1);
+        if d <= reach && best.is_none_or(|(b, _)| d < b) {
+            best = Some((
+                d,
+                SnapResult {
+                    pos: target.0,
+                    kind: target.1,
+                },
+            ));
+        }
+    }
+    best.map(|(_, hit)| hit)
+}
+
+/// The closest crossing of two sketch curves within `snap_distance_mm` of
+/// `raw`, with the two curves' ids. Line × Line, Line × Arc, Line ×
+/// Circle, then Circle × Circle, Arc × Arc and Arc × Circle; a later
+/// crossing wins only when strictly closer.
+pub fn nearest_intersection(
+    raw: (f64, f64),
+    sketch: &SketchData,
+    state: &FootprintEditorState,
+) -> Option<((f64, f64), SketchEntityId, SketchEntityId)> {
+    use signex_sketch::geom::{
+        SegmentIntersection, arc_arc_intersections, arc_circle_intersections,
+        circle_circle_intersections, segment_arc_intersections, segment_circle_intersections,
+        segment_segment_intersection,
+    };
+    let resolve = |id: SketchEntityId| point_pos(id, Some(sketch), state);
+    let mut lines: Vec<(SketchEntityId, Segment2)> = Vec::new();
+    let mut circles: Vec<(SketchEntityId, Circle2)> = Vec::new();
+    let mut arcs: Vec<(SketchEntityId, Arc2)> = Vec::new();
+    for e in &sketch.entities {
+        match e.kind {
+            EntityKind::Line { start, end } => {
+                if let (Some(s), Some(f)) = (resolve(start), resolve(end)) {
+                    let seg = Segment2::new(Point2::new(s.0, s.1), Point2::new(f.0, f.1));
+                    lines.push((e.id, seg));
+                }
+            }
+            EntityKind::Circle { center, radius } => {
+                if let Some(c) = resolve(center) {
+                    circles.push((e.id, Circle2::new(Point2::new(c.0, c.1), radius)));
+                }
+            }
+            EntityKind::Arc {
+                center,
+                start,
+                end,
+                sweep_ccw,
+            } => {
+                if let (Some(c), Some(s), Some(f)) = (resolve(center), resolve(start), resolve(end))
+                {
+                    let radius = ((s.0 - c.0).powi(2) + (s.1 - c.1).powi(2)).sqrt();
+                    let start_rad = (s.1 - c.1).atan2(s.0 - c.0);
+                    let end_rad = (f.1 - c.1).atan2(f.0 - c.0);
+                    let arc =
+                        Arc2::new(Point2::new(c.0, c.1), radius, start_rad, end_rad, sweep_ccw);
+                    arcs.push((e.id, arc));
+                }
+            }
+            EntityKind::Point { .. } => {}
+        }
+    }
+
+    let tol = state.snap_options.snap_distance_mm.max(1e-6);
+    let mut best: Option<(f64, (f64, f64), SketchEntityId, SketchEntityId)> = None;
+    let mut consider = |pt: Point2, a: SketchEntityId, b: SketchEntityId| {
+        let d_sq = (pt.x - raw.0).powi(2) + (pt.y - raw.1).powi(2);
+        if d_sq <= tol * tol && best.is_none_or(|(b_sq, ..)| d_sq < b_sq) {
+            best = Some((d_sq, (pt.x, pt.y), a, b));
+        }
+    };
+    for (i, &(a, seg_a)) in lines.iter().enumerate() {
+        for &(b, seg_b) in &lines[i + 1..] {
+            if let SegmentIntersection::Point { pt, .. } =
+                segment_segment_intersection(seg_a, seg_b)
+            {
+                consider(pt, a, b);
+            }
+        }
+    }
+    for &(a, seg) in &lines {
+        for &(b, arc) in &arcs {
+            for (pt, _) in segment_arc_intersections(seg, arc) {
+                consider(pt, a, b);
+            }
+        }
+    }
+    for &(a, seg) in &lines {
+        for &(b, circle) in &circles {
+            for (pt, _) in segment_circle_intersections(seg, circle) {
+                consider(pt, a, b);
+            }
+        }
+    }
+    for (i, &(a, ca)) in circles.iter().enumerate() {
+        for &(b, cb) in &circles[i + 1..] {
+            for pt in circle_circle_intersections(ca, cb) {
+                consider(pt, a, b);
+            }
+        }
+    }
+    for (i, &(a, arc_a)) in arcs.iter().enumerate() {
+        for &(b, arc_b) in &arcs[i + 1..] {
+            for pt in arc_arc_intersections(arc_a, arc_b) {
+                consider(pt, a, b);
+            }
+        }
+    }
+    for &(a, arc) in &arcs {
+        for &(b, circle) in &circles {
+            for pt in arc_circle_intersections(arc, circle) {
+                consider(pt, a, b);
+            }
+        }
+    }
+    best.map(|(_, pos, a, b)| (pos, a, b))
+}
+
+/// The inference a sketch click at `click` lands, from the snap `snap`
+/// the press took there: `Off` while Ctrl is held with a drawing tool
+/// armed, a Midpoint / Centre / Intersection when that snap fired at the
+/// click, else `None` (a plain click: no inference beyond a Line's auto
+/// H / V).
+pub fn click_inference(
+    snap: Option<SnapResult>,
+    click: (f64, f64),
+    sketch: Option<&SketchData>,
+    state: &FootprintEditorState,
+    ctrl: bool,
+) -> Option<SketchInference> {
+    if !state.active_tool.is_drawing() {
+        return None;
+    }
+    if ctrl {
+        return Some(SketchInference::Off);
+    }
+    let snap =
+        snap.filter(|s| (s.pos.0 - click.0).abs() < 1e-9 && (s.pos.1 - click.1).abs() < 1e-9)?;
+    match snap.kind {
+        SnapKind::Midpoint(line) => Some(SketchInference::Midpoint(line)),
+        SnapKind::Centre(curve) => Some(SketchInference::Centre(curve)),
+        SnapKind::Intersection => nearest_intersection(click, sketch?, state)
+            .map(|(_, a, b)| SketchInference::Intersection(a, b)),
+        _ => None,
     }
 }
 

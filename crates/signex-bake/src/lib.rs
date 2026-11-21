@@ -20,6 +20,7 @@ mod eval_util;
 pub mod keepout;
 pub mod layer_label;
 pub mod mask;
+pub mod open_ends;
 pub mod pad;
 pub(crate) mod params;
 pub mod pour;
@@ -29,8 +30,8 @@ pub mod silk_ownership;
 pub mod traced_loops;
 pub mod vscore;
 
-pub use array::bake_arrays;
-pub use board::{BoardBakeError, bake_board};
+pub use array::{PatternSlot, bake_arrays, instance_at, pattern_slots};
+pub use board::{BoardBakeError, OutlineChecks, bake_board, outline_checks};
 pub use body3d::bake_body3d;
 pub use courtyard::bake_courtyard;
 pub use cutout::bake_cutouts;

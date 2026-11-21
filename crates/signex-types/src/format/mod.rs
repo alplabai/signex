@@ -48,6 +48,7 @@ mod pcb_footprints;
 mod pcb_rooms;
 mod pcb_row_columns;
 mod pcb_rows;
+mod pcb_token;
 mod pcb_uuid_repair;
 mod refinement_extras;
 mod sch_rows;
@@ -66,6 +67,8 @@ mod wire_color_repair;
 mod board_free_tests;
 #[cfg(test)]
 mod board_options_tests;
+#[cfg(test)]
+mod board_sketch_targets_tests;
 #[cfg(test)]
 mod board_sketch_tests;
 #[cfg(test)]
@@ -146,6 +149,11 @@ pub use load_repair::{RepairedObject, SheetLoadRepair};
 pub use pcb_rows::{
     PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow, parse_pcb_layer, pcb_layer_token,
 };
+pub use pcb_token::{
+    SNXPCB_FORMAT_BOARD_SKETCH_TARGETS, SNXPCB_FORMAT_LAYER_COLORS, SNXPCB_FORMAT_ROOMS,
+    SNXPCB_FORMAT_V1, SNXPCB_VERSION, snxpcb_opens_read_only, snxpcb_read, snxpcb_refuse_save,
+    snxpcb_token,
+};
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use sch_token::{
     SNXSCH_FORMAT_NO_ERC_RULES, SNXSCH_FORMAT_REFINEMENT, SNXSCH_FORMAT_V1, SNXSCH_VERSION,
@@ -171,62 +179,7 @@ use sch_rows::{
 };
 use tsv::{parse_optional_block, write_tsv_section};
 
-// ---------------------------------------------------------------------------
-// Format version tokens (the `.snxsch` ones are in `sch_token`)
-// ---------------------------------------------------------------------------
-
-/// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
-/// by uuid (1.0 keyed by reference designator) and the stackup carries
-/// `layer_types`. 1.2: the stackup carries `layer_ids`. 1.3: pads may
-/// carry a `rotation` column (their own turn), `trapezoid` and `custom` pad
-/// shapes are gone, and an unknown shape token or a roundrect ratio outside
-/// `0..=0.5` is a load error. 1.4: the `trapezoid` and `custom` pad shapes
-/// return with their parameters in the optional `trapezoid_delta` and
-/// `custom_outline` pad columns, and a parameter that cannot make copper is
-/// a load error. The policy is [`SNXPCB_VERSION`].
-pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.4";
-
-/// Written instead of [`SNXPCB_FORMAT_V1`] when the board carries layer
-/// colours (`[board_options.layer_colors]`, 2026-11-18): a build that knows
-/// only 1.4 would drop them on save, so it opens 1.5 read-only. A board
-/// without layer colours stays 1.4, byte for byte.
-pub const SNXPCB_FORMAT_LAYER_COLORS: &str = "snxpcb/1.5";
-
-/// Written when the board has rooms (`[[rooms]]`, #2457, 2026-11-20): a
-/// build that knows only 1.5 would drop them on save, so it opens 1.6
-/// read-only. A board without rooms keeps 1.4 or 1.5, byte for byte.
-pub const SNXPCB_FORMAT_ROOMS: &str = "snxpcb/1.6";
-
-/// The token a save of `board` writes: [`SNXPCB_FORMAT_ROOMS`] with rooms,
-/// else [`SNXPCB_FORMAT_LAYER_COLORS`] with a layer colour, else
-/// [`SNXPCB_FORMAT_V1`]. From content, so a board whose last room or colour
-/// goes writes the lower token again.
-pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
-    if !board.rooms.is_empty() {
-        SNXPCB_FORMAT_ROOMS
-    } else if !board.options.layer_colors.is_empty() {
-        SNXPCB_FORMAT_LAYER_COLORS
-    } else {
-        SNXPCB_FORMAT_V1
-    }
-}
-
-/// `.snxpcb` version policy: a newer minor opens read-only. A save writes
-/// the lowest token its content needs ([`snxpcb_token`]).
-pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_ROOMS,
-    readable: &[
-        "snxpcb/1",
-        "snxpcb/1.1",
-        "snxpcb/1.2",
-        "snxpcb/1.3",
-        SNXPCB_FORMAT_V1,
-        SNXPCB_FORMAT_LAYER_COLORS,
-        SNXPCB_FORMAT_ROOMS,
-    ],
-    newer_minor: NewerMinor::ReadOnly,
-    missing: MissingToken::Refused,
-};
+// The format version tokens are in `pcb_token` and `sch_token`.
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -832,17 +785,18 @@ impl SnxPcb {
     }
 
     /// True when the file was written by a newer minor version than this
-    /// build knows: it loaded for viewing but `write_string` refuses to
-    /// save it (unknown content would be lost); the caller should warn.
+    /// build knows, or carries the rooms token: it loaded for viewing but
+    /// `write_string` refuses to save it (unknown content would be lost);
+    /// the caller should warn.
     pub fn is_from_newer_minor(&self) -> bool {
-        SNXPCB_VERSION.is_newer_minor(&self.format)
+        snxpcb_opens_read_only(&self.format)
     }
 
     /// Serialise to a TOML+TSV string for writing to disk.
     pub fn write_string(&self) -> Result<String, FormatError> {
-        SNXPCB_VERSION.refuse_save(&self.format)?;
+        snxpcb_refuse_save(&self.format)?;
         if let Some(src) = &self.board.unknown.newer_minor_source {
-            SNXPCB_VERSION.refuse_save(src)?;
+            snxpcb_refuse_save(src)?;
         }
         pcb_footprints::check_unique_footprint_uuids(&self.board.footprints)?;
         let mut out = String::new();
@@ -1003,7 +957,7 @@ impl SnxPcb {
     pub fn parse(input: &str) -> Result<Self, FormatError> {
         let raw: PcbRaw = parse_finite(input)?;
 
-        let format = SNXPCB_VERSION.read(raw.format.as_deref())?;
+        let format = snxpcb_read(raw.format.as_deref())?;
 
         let footprint_rows = parse_optional_block::<PcbFootprintRow>("footprints", raw.footprints)?;
         let pad_rows = parse_optional_block::<PcbPadRow>("pads", raw.pads)?;
@@ -1075,9 +1029,7 @@ impl SnxPcb {
                 extras: board_extras.unknown,
                 extras_root: extras.unknown,
                 board_sketch: board_sketch_unknown,
-                newer_minor_source: SNXPCB_VERSION
-                    .is_newer_minor(&format)
-                    .then(|| format.clone()),
+                newer_minor_source: snxpcb_opens_read_only(&format).then(|| format.clone()),
                 load_repairs: Vec::new(),
             },
         };

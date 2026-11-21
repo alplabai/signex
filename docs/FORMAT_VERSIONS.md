@@ -39,14 +39,20 @@ format declares only its own table row below.
 |---|---|---|---|---|
 | `.snxsch` | `snxsch/1.1`, `1.2` with a No-ERC rule list, `1.3` with Schematic Refinement content | `snxsch/1`, `1.1`, `1.2`, `1.3` | opens read-only | refused |
 | `.snxpcb` | `snxpcb/1.4`; `1.5` with layer colours; `1.6` with rooms | `snxpcb/1` to `snxpcb/1.6` | opens read-only | refused |
+| `.snxpcb`, board sketch targets | `snxpcb/1.7` while the board sketch carries a slot, pour, mechanical drawing or component anchor (decision 2, 2026-11-20), or a reference dimension, pattern link, pattern mirror or pad override (decisions 5, 9, 10), rooms or not; else the token above, byte for byte | adds `snxpcb/1.7` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
-| `.snxfpt` | `snxfpt/1.1` | `snxfpt/1`, `snxfpt/1.1` | refused | refused |
+| `.snxfpt` | `snxfpt/1.1`, or `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides) | `snxfpt/1`, `1.1`, `1.2` | refused | refused |
 | `.snxsym` | `snxsym/v1`, `v2` or `v3` by content | `snxsym/v1`, `v2`, `v3` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
 
 `.snxrules` profiles carry a numeric `schema` key instead of a token
 (`docs/architecture/snxrules-format.md`); a newer schema is refused there too.
+It is content-driven: `2` only while the `fab` block names a
+`router_tool_diameter` (mockup row 179d), else as read; this build reads `1` and `2`.
+The project's copy, the top-level `.snxprj` key `router_tool_diameter`, is a
+declared `ProjectData` field and needs no token: an older build keeps it as an
+unknown key, as `fab_outputs`. No `.snxpcb` content is added for it.
 
 **`snxsch/1.3` and older builds.** A build that reads up to `snxsch/1.2`
 opens a 1.3 sheet read-only and refuses its saves. A build older than the

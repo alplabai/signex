@@ -123,7 +123,7 @@ fn conflict_rows<'a>(
         cx.tokens,
     ));
     for row in rows.iter().take(conflicts::MAX_ROWS) {
-        col = col.push(conflicts::conflict_row(row));
+        col = col.push(conflicts::conflict_row(row, cx.i18n));
     }
     if rows.len() > conflicts::MAX_ROWS {
         col = col.push(more_rows(cx, rows.len() - conflicts::MAX_ROWS));

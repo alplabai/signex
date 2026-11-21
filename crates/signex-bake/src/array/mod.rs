@@ -34,13 +34,23 @@ use signex_sketch::sketch::SketchData;
 use signex_sketch::solver::FullSolveOutput;
 
 mod grid;
+mod instance_at;
 mod linear;
+mod links;
+#[cfg(test)]
+mod links_tests;
 mod numbering;
+mod overrides;
 mod polar;
+#[cfg(test)]
+mod polar_tests;
 mod preview;
+mod slots;
 mod walk;
 
+pub use instance_at::instance_at;
 pub use preview::{ArrayPreview, InstancePreview, preview_array};
+pub use slots::{PatternSlot, pattern_slots};
 
 /// Bake one kept instance of an array: the source pad moved by the
 /// instance offset and given its number.
@@ -148,8 +158,14 @@ pub fn bake_arrays(
     let params_ast = crate::params::params_ast(sketch, params_canonical);
 
     for array in &sketch.arrays {
+        // A pattern link or an override bakes through the instance walk.
+        if links::bakes_through_links(sketch, array.id) {
+            links::bake_pattern(array.id, sketch, solve, &params_ast, out, warnings)?;
+            continue;
+        }
         bake_one_array(array, &params_ast, sketch, solve, out, warnings)?;
     }
+    links::bake_mirrors(sketch, solve, &params_ast, out, warnings)?;
 
     Ok(())
 }

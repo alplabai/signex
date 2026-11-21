@@ -40,6 +40,43 @@ pub struct SnapOptions {
     pub snap_to_grids: bool,
     pub snap_to_guides: bool,
     pub snap_to_axes: bool,
+    /// What a board sketch snaps to on the board under it (#2518). A
+    /// footprint sketch has no board, so it never reads these.
+    pub board_features: BoardFeatureSnaps,
+    /// A sketch drawing tool snaps to a Line's midpoint and lands a
+    /// Midpoint constraint (mockup row 188).
+    pub snap_midpoints: bool,
+    /// A sketch drawing tool snaps to a Circle's or an Arc's centre and
+    /// lands a Coincident on it (mockup row 188).
+    pub snap_centres: bool,
+}
+
+/// The board-feature snaps of a board sketch: one switch for all of them
+/// and one per kind, all on by default. A board-feature snap places the
+/// point only; it lands no constraint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BoardFeatureSnaps {
+    pub enabled: bool,
+    pub outline: bool,
+    pub pads: bool,
+    pub holes: bool,
+    pub vias: bool,
+    pub track_ends: bool,
+    pub courtyards: bool,
+}
+
+impl Default for BoardFeatureSnaps {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            outline: true,
+            pads: true,
+            holes: true,
+            vias: true,
+            track_ends: true,
+            courtyards: true,
+        }
+    }
 }
 
 impl Default for SnapOptions {
@@ -70,6 +107,9 @@ impl Default for SnapOptions {
             snap_to_grids: true,
             snap_to_guides: false,
             snap_to_axes: false,
+            board_features: BoardFeatureSnaps::default(),
+            snap_midpoints: true,
+            snap_centres: true,
         }
     }
 }

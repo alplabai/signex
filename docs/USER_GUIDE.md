@@ -1439,6 +1439,13 @@ keepout's **Layer** picks **Top Layer** or **Bottom Layer**, and its
 **Keepout kinds** say what it blocks; the drawing names each blocked kind.
 A cutout goes through the board unless **Limit depth (pocket)** is ticked.
 
+To drive sizes by name, press **Parameters** in the bar at the canvas's top
+right: the table lists each parameter with its expression, value, unit and
+what uses it. Type an expression to re-solve the drawing; use a row's **⋯**
+to rename or delete a parameter. **Make parameter** on a dimension names its
+value. The footprint sketch has the same table
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#parameters)).
+
 Two other ways to get an outline:
 
 - **File ▸ Import ▸ DXF as Board Outline…** reads the outline from a DXF

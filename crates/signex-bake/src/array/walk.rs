@@ -252,15 +252,15 @@ impl Walk<'_> {
         if count > self.limit {
             return Ok(Walked::TooMany(Some(count)));
         }
-        // The parser resolves `deg` to rad; anything but an angle refuses.
+        // The sweep is an angle in degrees or radians; the evaluator keeps
+        // the written unit, so convert. Anything but an angle refuses.
         let sweep_q = eval(&sweep_ast, &ctx).map_err(SketchError::Expr)?;
-        if sweep_q.unit.family() != signex_expr::UnitFamily::Angle {
+        let Ok(sweep_rad) = sweep_q.as_rad() else {
             warnings.push(format!(
                 "polar array source {source}: sweep_angle_expr did not resolve to an angle — array skipped"
             ));
             return Ok(Walked::Refused);
-        }
-        let sweep_rad = sweep_q.value;
+        };
         let mask_ast = mask_ast(depopulation)?;
         let denom = (count as f64).max(1.0);
         let (dx_src, dy_src) = (sx - cx, sy - cy);

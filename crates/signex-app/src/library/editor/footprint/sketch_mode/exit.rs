@@ -6,8 +6,12 @@
 //! module is the footprint host's half and the state both read.
 //! See `docs/FOOTPRINT_SKETCH.md`, "Leaving sketch mode".
 
+use std::sync::Arc;
+
 use signex_library::Footprint;
+use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::baked_kinds::BakedKind;
+use signex_types::sketch::board_attr::SketchBoardItems;
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::state::EditorPad;
@@ -25,6 +29,16 @@ pub struct SketchExit {
     pub preview: bool,
     /// Discard changes asked to confirm and waits for the answer.
     pub confirming_discard: bool,
+    /// What a board bake of the sketch writes, while the preview is open
+    /// and the sketch bakes: the canvas draws it (mockup row 190). Always `None` on
+    /// a footprint, whose own fields are the bake result.
+    pub board_result: Option<Arc<BakedBoard>>,
+    /// The pours, mechanical drawings and anchors that bake writes.
+    pub board_items: Option<Arc<SketchBoardItems>>,
+    /// The router tool diameter of the board's project, in mm (mockup row 179d), set
+    /// by the board session from the open project; the inside-corner check
+    /// reads it. Always `None` on a footprint.
+    pub router_tool_diameter: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +107,8 @@ pub fn apply(editor: &mut FootprintDocument, msg: &FootprintEditorMsg) -> ExitOu
         FootprintEditorMsg::SketchBakePreviewToggled => {
             let exit = &mut editor.state.sketch_exit;
             exit.preview = !exit.preview;
+            // The canvas draws the bake result while the preview is open.
+            editor.canvas_cache.clear();
             ExitOutcome::Stay
         }
         FootprintEditorMsg::SketchBakeRequested => ExitOutcome::Leave,
@@ -154,10 +170,18 @@ pub fn footprint_count(fp: &Footprint, kind: BakedKind) -> Option<usize> {
         BakedKind::Keepouts => fp.keepouts.len(),
         BakedKind::Cutouts => fp.cutouts.len(),
         BakedKind::VScores => fp.v_scores.len(),
-        BakedKind::BoardOutline | BakedKind::MountingHoles => return None,
+        BakedKind::BoardOutline
+        | BakedKind::MountingHoles
+        | BakedKind::BoardPours
+        | BakedKind::Mechanical
+        | BakedKind::ComponentAnchors => return None,
     })
 }
 
 #[cfg(test)]
 #[path = "exit_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "exit_preview_tests.rs"]
+mod preview_tests;

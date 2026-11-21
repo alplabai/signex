@@ -354,6 +354,8 @@ canonical_icon!(icon_layouts_edit, "layouts/edit.svg");
 canonical_icon!(icon_layouts_trash, "layouts/trash.svg");
 canonical_icon!(icon_layouts_info, "layouts/info.svg");
 canonical_icon!(icon_chrome_dock_back, "chrome/dock_back.svg");
+// Convert to reference on a Properties conflict row (mockup row 187).
+canonical_icon!(icon_dd_reference, "dropdown/reference.svg");
 
 // ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
 //
@@ -391,6 +393,11 @@ canonical_icon!(icon_sk_offset, "sketch/offset.svg");
 canonical_icon!(icon_sk_rect_pattern, "sketch/rect_pattern.svg");
 canonical_icon!(icon_sk_rounded_rect, "sketch/rounded_rect.svg");
 canonical_icon!(icon_sk_trim, "sketch/trim.svg");
+canonical_icon!(icon_sk_chamfer, "sketch/chamfer.svg");
+canonical_icon!(icon_sk_extend, "sketch/extend.svg");
+canonical_icon!(icon_sk_linear_pattern, "sketch/linear_pattern.svg");
+canonical_icon!(icon_sk_slot, "sketch/slot.svg");
+canonical_icon!(icon_sk_polygon, "sketch/polygon.svg");
 
 canonical_icon!(icon_sk_c_angle, "sketch/c_angle.svg");
 canonical_icon!(icon_sk_c_coincident, "sketch/c_coincident.svg");

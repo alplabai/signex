@@ -133,6 +133,11 @@ mod pcb_board_menu_view;
 #[path = "regression/pcb_hidden_layer_select.rs"]
 mod pcb_hidden_layer_select;
 
+// Decision 2 (2026-11-20) - board sketch targets Slot, Pour, Mechanical
+// layer and Component anchor.
+#[path = "regression/board_sketch_targets.rs"]
+mod board_sketch_targets;
+
 // #2234 - board sketch mode: entry points, commit, refused bake, Esc.
 #[path = "regression/board_sketch.rs"]
 mod board_sketch;
@@ -867,3 +872,45 @@ mod board_sync_graphite;
 // the status-bar Grid & Snap popover.
 #[path = "regression/grid_snap_popover_dialogs.rs"]
 mod grid_snap_popover_dialogs;
+
+// mockup row 189: the sketch parameters table, rename / delete with the in-use prompt
+// (Caner 2026-11-20) and Make parameter, each one undo step.
+#[path = "regression/sketch_parameters.rs"]
+mod sketch_parameters;
+// mockup row 187 / mockup row 191: the sketch canvas's pattern values and instance suppression.
+#[path = "regression/sketch_canvas_values.rs"]
+mod sketch_canvas_values;
+// #2518 / Graphite mockup row 179: a board sketch snaps to the board under it; Snap ▾
+// board rows turn that off without an undo step.
+#[path = "regression/sketch_snap_board.rs"]
+mod sketch_snap_board;
+// mockup row 179d / mockup row 190 - board sketch outline checks in Properties and the bake
+// preview drawn on the canvas.
+#[path = "regression/board_sketch_checks.rs"]
+mod board_sketch_checks;
+// mockup row 187 / mockup row 191 / mockup row 192: Chamfer, Extend, Linear Pattern, Mirror about a
+// centerline, and the pad link of Edit in Sketch.
+#[path = "regression/sketch_tools_padlink.rs"]
+mod sketch_tools_padlink;
+// mockup row 191: Mirror and the pattern tools with a pattern selected keep live
+// pattern links; a loop is refused.
+#[path = "regression/sketch_pattern_links.rs"]
+mod sketch_pattern_links;
+// mockup row 192, item D1: an edit of a patterned pad asks This pad / All pads.
+#[path = "regression/sketch_pad_scope.rs"]
+mod sketch_pad_scope;
+// mockup row 187 / mockup row 188 (decision 5): Convert to reference and Make driving.
+#[path = "regression/sketch_reference.rs"]
+mod sketch_reference;
+// Caner (2026-11-20) items 1 and 6: Create ▾ Slot and Polygon, and the
+// Midpoint / Centre / Intersection snaps that land their constraint.
+#[path = "regression/sketch_create_inference.rs"]
+mod sketch_create_inference;
+// Decisions 3 and 4 (mockup row 179d, mockup row 190): the router tool of the project's fab tier
+// and the inside-corner check, and Close gap on both hosts.
+#[path = "regression/board_sketch_router.rs"]
+mod board_sketch_router;
+// mockup row 187 (decision 8): the footprint editor bar's Footprint / Sketch switch and
+// the 3D toggle that returns to the mode it came from.
+#[path = "regression/editor_mode_switch.rs"]
+mod editor_mode_switch;

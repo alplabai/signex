@@ -18,10 +18,12 @@ pub mod layers;
 pub mod layers_panel;
 pub(crate) mod legacy_silk;
 pub mod move_by_modal;
+pub(crate) mod pad_scope_prompt;
 pub(crate) mod pad_shape_warnings;
 pub mod pad_stack_check;
 pub mod pad_to_sketch;
 pub mod pads_active_bar;
+pub mod parameters_table;
 pub mod preview3d;
 #[cfg(test)]
 mod silk_ownership_tests;
@@ -43,6 +45,10 @@ pub mod sketch_solve_task;
 #[cfg(test)]
 mod sketch_solve_task_tests;
 pub mod snap;
+pub mod snap_board;
+#[cfg(test)]
+mod snap_board_tests;
+pub mod snap_menu;
 pub mod state;
 pub(crate) mod status;
 pub mod step_attach;
@@ -67,13 +73,23 @@ pub use state::{BoardBackdrop, EditorMode, SketchTool, ToolPending};
 pub use state::{NextPadDefaults, PadsTool, SelectionFilterKind};
 pub(crate) use updates::apply_footprint_primitive_edit;
 
-// What the footprint Properties panel, the Grid Properties dialog and the pad
-// edit handlers read, named here so they do not reach into `state`.
+// What the footprint Properties panel, the Grid Properties dialog, the pad
+// edit handlers, the board sketch host and the regression tests read, named
+// here so they do not reach into `state` or `updates` (layer ratchet,
+// docs/architecture/layer-ratchet.md).
 pub(crate) use state::COURTYARD_SLACK_MM;
+pub use state::board_checks::GapOffer;
+pub(crate) use state::board_checks::mm as format_check_mm;
+pub use state::mode::ModeSwitch;
+pub use state::pad_link::driving_profile;
+pub use state::pad_scope::PadScope;
+pub use state::sketch_overlay::{CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget};
 pub use state::{
-    EditorPad, FootprintEditorState, GridDef, GridDisplay, PadSide, PadStackTab, SnappingMode,
+    CheckLine, CheckStatus, EditorPad, FootprintEditorState, GridDef, GridDisplay, PadLinkMsg,
+    PadLinkOffer, PadSide, PadStackTab, SketchCanvasText, SketchOverlay, SnappingMode, check_lines,
     pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,
 };
+pub(crate) use updates::hold_patterned_pad_edit;
 
 #[cfg(test)]
 mod tests;

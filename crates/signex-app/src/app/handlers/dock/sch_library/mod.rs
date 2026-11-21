@@ -14,6 +14,7 @@
 //!   - [`footprint::grid`] — grid / guide managers + snap sub-tab / mode.
 //!   - [`footprint::silk`] — selected silk-graphic edits.
 //!   - [`footprint::sketch`] — sketch-entity jumps + parameter forwards.
+//!   - [`sketch_fixes`] — conflict Remove / Convert and Close gap.
 //!
 //! Mutations mark the tab dirty and clear the canvas cache; the actual
 //! save to disk happens through the existing Save flow
@@ -31,6 +32,7 @@ use crate::panels::PanelMsg;
 
 mod footprint;
 mod numeric_input;
+mod sketch_fixes;
 mod symbol;
 mod symbol_delete;
 mod symbol_props;
@@ -61,6 +63,9 @@ impl Signex {
         &mut self,
         panel_msg: &PanelMsg,
     ) -> Option<Task<Message>> {
+        if let Some(task) = self.handle_sketch_fix_message(panel_msg) {
+            return Some(task);
+        }
         let mut follow = Task::none();
         let handled = match panel_msg {
             PanelMsg::FpLibraryOpenSibling(sibling_path) => {

@@ -14,6 +14,7 @@ mod board_sketch;
 pub(in crate::app) mod canvas_region;
 mod chrome;
 mod context_menu;
+pub(crate) use context_menu::AnchoredMenu;
 mod detached_panel;
 mod library_tab;
 mod modals;

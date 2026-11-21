@@ -14,6 +14,10 @@ use signex_types::sketch::SketchData;
 use super::command::{Applied, BoardCommand, BoardPatch, BoardPatchKind};
 use super::error::BoardCommandError;
 
+// The pours, mechanical drawings and anchors the sketch owns (decision 2).
+#[path = "board_sketch_items.rs"]
+pub(super) mod items;
+
 impl BoardCommand {
     /// Store `sketch` and what it baked to (`signex_bake::bake_board`) as
     /// the board's sketch, and write the baked outline when the sketch owns

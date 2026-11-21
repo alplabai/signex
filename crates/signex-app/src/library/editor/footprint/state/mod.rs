@@ -24,6 +24,8 @@
 //!   `SnappingMode`, `GridDisplay`.
 
 mod board_backdrop;
+pub mod board_checks;
+pub mod canvas_text;
 pub mod conflict;
 pub mod context_menu;
 mod courtyard;
@@ -31,17 +33,22 @@ mod courtyard;
 mod courtyard_tests;
 pub mod mode;
 pub mod pad;
+pub mod pad_link;
+pub mod pad_scope;
 pub mod placement;
 pub mod properties_view;
 pub mod selection;
 pub mod selection_filter;
 mod selection_filter_draft;
 pub mod silk_selection;
+pub mod sketch_overlay;
 pub mod snap_options;
 pub mod tool;
 mod zoom_request;
 
 pub use board_backdrop::{BackdropTrack, BoardBackdrop};
+pub use board_checks::{CheckLine, CheckStatus, check_lines};
+pub use canvas_text::SketchCanvasText;
 pub use context_menu::{
     FootprintContextAction, FootprintContextMenuState, FootprintContextSubmenu,
     FootprintContextTarget,
@@ -51,14 +58,20 @@ pub use pad::{
     AlignOp, CourtyardRect, DEFAULT_THROUGH_HOLE_DRILL_MM, EditorPad, NextPadDefaults,
     PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
+pub use pad_link::{PadLinkFocus, PadLinkMsg, PadLinkOffer};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use properties_view::{pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
+pub use sketch_overlay::SketchOverlay;
 pub use snap_options::{
     GridDef, GridDisplay, Guide, GuideAxis, SnapOptions, SnapSubTab, SnappingMode,
 };
 pub use tool::{PadsTool, SketchTool, ToolPending};
 pub use zoom_request::ZoomRequest;
+
+// What a board sketch snaps to on its board (#2518).
+pub use board_backdrop::{BackdropCourtyard, BackdropPad, PadCopper};
+pub use snap_options::BoardFeatureSnaps;
 
 use signex_library::{Footprint, LayerId};
 
@@ -311,6 +324,20 @@ pub struct FootprintEditorState {
     /// The sketch mode exit set: bake preview, discard confirmation and
     /// the footprint as sketch mode found it (#2518).
     pub sketch_exit: super::sketch_mode::SketchExit,
+    /// The sketch parameters table, when open (mockup row 189); boxed, it is rarely
+    /// open.
+    pub parameters_table: Option<Box<super::parameters_table::ParametersTableState>>,
+    /// The words the sketch canvas draws, rendered by the app per language.
+    pub canvas_text: SketchCanvasText,
+    /// Values edited on the drawing, the constraint menu, the selected pattern.
+    pub sketch_overlay: SketchOverlay,
+    /// The pad an Edit in Sketch came from (mockup row 192); read it through `live_pad_link`.
+    pub pad_link: Option<PadLinkFocus>,
+    /// A patterned pad edit waiting for "This pad / All pads" (mockup row 192,
+    /// item D1); the held value is read through `shown_pad`, never `pads`.
+    pub pad_scope: Option<Box<pad_scope::PadScopePrompt>>,
+    /// The mode the 3D toggle returns to (mockup row 187); set when 3D is entered.
+    pub mode_before_3d: EditorMode,
 }
 
 /// Pixels per mm at the canvas's "100%" zoom, picked so a 5x5 mm SOT-23
@@ -427,6 +454,12 @@ impl FootprintEditorState {
             board_backdrop: None,
             properties_hover: Default::default(),
             sketch_exit: Default::default(),
+            parameters_table: None,
+            canvas_text: SketchCanvasText::default(),
+            sketch_overlay: SketchOverlay::default(),
+            pad_link: None,
+            pad_scope: None,
+            mode_before_3d: EditorMode::Normal,
         }
     }
 

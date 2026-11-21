@@ -656,6 +656,7 @@ fn add_project(
         agent_journal: Default::default(),
         schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Default::default(),
         unknown: Default::default(),
     };

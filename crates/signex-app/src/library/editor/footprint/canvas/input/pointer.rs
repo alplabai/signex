@@ -11,10 +11,11 @@ use iced::mouse;
 use iced::widget::canvas;
 use iced::{Point, Rectangle};
 
+use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
 use crate::library::editor::footprint::snap;
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
-use super::super::hit_test::sketch_snap;
+use super::super::hit_test::{sketch_glyph_at, sketch_snap};
 use super::super::{
     DRAG_THRESHOLD_PX, DragState, FootprintCanvas, FootprintCanvasState, silk_f_hit_at,
 };
@@ -139,6 +140,9 @@ impl FootprintCanvas<'_> {
         if let Some(a) = self.try_touching_line_click(cstate, cursor_pos) {
             return Some(a);
         }
+        if let Some(a) = self.try_sketch_glyph_click(cstate, cursor_pos) {
+            return Some(a);
+        }
         let raw_world = cstate.screen_to_world(cursor_pos);
         let world = self.primary_press_snap(cstate, raw_world);
         if let Some(a) = self.try_round_handle_grab(cstate, cursor_pos, world) {
@@ -197,10 +201,22 @@ impl FootprintCanvas<'_> {
             raw_world
         } else {
             let point_hit = sketch_snap(self.sketch, cstate, raw_world);
-            let result = snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
+            let infer = self.snap_infers(cstate);
+            let result =
+                snap::snap_cursor_with(raw_world, self.sketch, self.state, point_hit, infer);
             cstate.last_snap = Some(result);
             result.pos
         }
+    }
+
+    /// Whether the cursor snap may infer: not while Ctrl is held with a
+    /// sketch drawing tool armed (mockup row 188, "Ctrl while drawing turns off the
+    /// ±5° snap"); point reuse, guides and grid still apply.
+    fn snap_infers(&self, cstate: &FootprintCanvasState) -> bool {
+        use crate::library::editor::footprint::state::EditorMode;
+        !(cstate.current_modifiers.command()
+            && self.state.mode == EditorMode::Sketch
+            && self.state.active_tool.is_drawing())
     }
 
     /// Empty-area press — stash a pending click-add drag (commit on
@@ -234,6 +250,60 @@ impl FootprintCanvas<'_> {
             cstate.box_select_current_screen = Some(cursor_pos);
         }
         Some(canvas::Action::capture())
+    }
+
+    /// `msg` for this canvas's editor, as the canvas publishes it.
+    pub(in crate::library::editor::footprint::canvas) fn sketch_canvas_event(
+        &self,
+        msg: SketchCanvasMsg,
+    ) -> LibraryMessage {
+        LibraryMessage::EditorEvent {
+            library_path: self.address.library_path.clone(),
+            table: self.address.table.clone(),
+            row_id: self.address.row_id,
+            msg: EditorMsg::Footprint(FootprintEditorMsg::SketchCanvas(msg)),
+        }
+    }
+
+    /// Select tool in sketch mode (mockup row 187, mockup row 191): a click on a value edits it
+    /// in place, on a pattern glyph selects (or drops) the pattern, on an
+    /// instance slot of the selected pattern suppresses it or brings it
+    /// back. While a value is edited, a click anywhere else drops the edit.
+    /// Anything else is left to the arms below.
+    fn try_sketch_glyph_click(
+        &self,
+        cstate: &FootprintCanvasState,
+        cursor_pos: Point,
+    ) -> Option<canvas::Action<LibraryMessage>> {
+        use super::super::glyph_layout::{GlyphFace, GlyphTarget};
+        use crate::library::editor::footprint::state::sketch_overlay::ValueTarget;
+        use crate::library::editor::footprint::state::{EditorMode, SketchTool};
+        if self.state.mode != EditorMode::Sketch || self.state.active_tool != SketchTool::Select {
+            return None;
+        }
+        let glyph = sketch_glyph_at(self.sketch, self.state, cstate, cursor_pos);
+        let editing = self.state.sketch_overlay.value_edit.is_some();
+        let msg = match glyph.as_ref().map(|g| (g.target, &g.face)) {
+            Some((_, GlyphFace::Value { editing: true, .. })) => {
+                return Some(canvas::Action::capture());
+            }
+            Some((GlyphTarget::Constraint(id), GlyphFace::Value { .. })) => {
+                SketchCanvasMsg::ValueEditOpened(ValueTarget::Constraint(id))
+            }
+            Some((GlyphTarget::PatternValue(array, field), _)) => {
+                SketchCanvasMsg::ValueEditOpened(ValueTarget::Pattern(array, field))
+            }
+            Some((GlyphTarget::Pattern(array), GlyphFace::Pattern { selected, .. })) => {
+                SketchCanvasMsg::PatternSelected((!*selected).then_some(array))
+            }
+            Some((GlyphTarget::Instance { array, i, j }, _)) => {
+                SketchCanvasMsg::InstanceSuppressionToggled { array, i, j }
+            }
+            _ if editing => SketchCanvasMsg::ValueEditCancelled,
+            _ => return None,
+        };
+        self.cache.clear();
+        Some(canvas::Action::publish(self.sketch_canvas_event(msg)).and_capture())
     }
 
     // ---- Button released --------------------------------------------
@@ -275,6 +345,11 @@ impl FootprintCanvas<'_> {
             && *button == mouse::Button::Right
             && let Some(cursor_pos) = cursor.position_in(bounds)
         {
+            // A constraint glyph or value, or a pattern glyph, opens its own
+            // menu instead (mockup row 188).
+            if let Some(a) = self.released_secondary_on_glyph(cstate, cursor_pos) {
+                return Some(a);
+            }
             // Window-absolute screen coords for the overlay.
             let screen_x = bounds.x + cursor_pos.x;
             let screen_y = bounds.y + cursor_pos.y;
@@ -414,7 +489,9 @@ impl FootprintCanvas<'_> {
             } else {
                 sketch_snap(self.sketch, cstate, raw_world)
             };
-            let result = snap::snap_cursor(raw_world, self.sketch, self.state, point_hit);
+            let infer = self.snap_infers(cstate);
+            let result =
+                snap::snap_cursor_with(raw_world, self.sketch, self.state, point_hit, infer);
             cstate.last_snap = Some(result);
             result.pos
         }

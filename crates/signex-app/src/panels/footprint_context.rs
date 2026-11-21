@@ -735,6 +735,15 @@ pub struct BoardSketchProps {
     pub outline: bool,
     /// Its mounting hole attributes, when it is one.
     pub hole: Option<MountingHoleProps>,
+    /// The Outline checks lines of the current solve (mockup row 179d): Properties
+    /// lists them with nothing selected, the bake preview the failed ones.
+    pub outline_checks: Vec<crate::library::editor::footprint::CheckLine>,
+    /// The selected entity's Slot, Pour, Mechanical layer or Component
+    /// anchor rows (decision 2, 2026-11-20).
+    pub target: crate::panels::BoardTargetProps,
+    /// The project's router tool diameter in mm (mockup row 179d), for the Fab
+    /// profile group; `None` when its fab profile names none.
+    pub router_tool_diameter: Option<f64>,
 }
 
 /// A mounting hole's fields as the Properties panel edits them.

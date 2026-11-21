@@ -17,11 +17,13 @@ mod attempt;
 mod attempt_tests;
 mod context_menu;
 mod geometry;
+mod pad_scope;
 mod selection;
 mod sketch;
 mod view;
 
 pub(crate) use active_bar::{apply_filter_preset, capture_filter_preset};
+pub(crate) use pad_scope::hold_patterned_pad_edit;
 pub(crate) use sketch::solved::settle_pending_inline;
 
 use crate::library::editor::footprint::sketch_solve_task;
@@ -394,6 +396,12 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
             use crate::library::editor::footprint::sketch_mode::exit;
             exit::apply(editor, &FootprintEditorMsg::SketchDiscardCancelled);
         }
+        // Esc answers an open "This pad / All pads" with Cancel (mockup row 192, item D1).
+        FootprintEditorMsg::ToolEscape if editor.state.pad_scope.is_some() => {
+            use crate::library::editor::footprint::state::pad_scope::PadScope;
+            pad_scope::apply(editor, PadScope::Cancel);
+        }
+        FootprintEditorMsg::PadScopeAnswered(scope) => pad_scope::apply(editor, scope),
         FootprintEditorMsg::SelectActiveIdx(..)
         | FootprintEditorMsg::ToggleSelectionFilter(..)
         | FootprintEditorMsg::SelectSilkF(..)
@@ -470,7 +478,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::SketchAddConstraintForSelection(..) => {
             sketch::constraints::apply(editor, msg)
         }
-        FootprintEditorMsg::SketchToolClick { .. } => sketch::tools::apply(editor, msg),
+        FootprintEditorMsg::SketchToolClick { .. }
+        | FootprintEditorMsg::SketchToolClickInferred { .. }
+        | FootprintEditorMsg::SketchPlacePointInferred { .. } => sketch::tools::apply(editor, msg),
         FootprintEditorMsg::ToggleLayer(..)
         | FootprintEditorMsg::LayersShowAllClicked
         | FootprintEditorMsg::LayersTopSideOnlyClicked
@@ -520,6 +530,19 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         | FootprintEditorMsg::ActiveBarSelectAll
         | FootprintEditorMsg::ActiveBarClearSelection
         | FootprintEditorMsg::ActiveBarSetSketchTool(..) => active_bar::apply(editor, msg),
+        FootprintEditorMsg::SketchParameters(m) => sketch::parameters::apply(editor, m),
+        FootprintEditorMsg::SketchCanvas(msg) => sketch::canvas_values::apply(editor, msg),
+        FootprintEditorMsg::SketchReference(msg) => sketch::reference::apply(editor, msg),
+        FootprintEditorMsg::SketchSnap(snap) => {
+            crate::library::editor::footprint::snap_menu::apply(editor, snap)
+        }
+        FootprintEditorMsg::PadLink(msg) => {
+            editor.state.apply_pad_link(msg);
+            editor.canvas_cache.clear();
+        }
+        FootprintEditorMsg::SketchCloseGapRequested { keep, merge } => {
+            sketch::close_gap::apply(editor, keep, merge)
+        }
     }
 }
 
@@ -692,7 +715,24 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         | ActiveBarRotateSelection
         | ActiveBarFlipSelection
         | ActiveBarAlignSelectionToGrid
-        | ActiveBarMoveOriginToGrid => false,
+        | ActiveBarMoveOriginToGrid
+        // mockup row 192 — the pad link changes mode and selection only.
+        | PadLink(_) => false,
+        // The parameters table: typing records here; its other edits record
+        // their own step, only when they change something.
+        SketchParameters(m) => m.records_undo_step(),
+        // The canvas values and menus record their own step for the edits
+        // that change the sketch (`record_edit`), and none for UI state.
+        SketchCanvas(_) => false,
+        // Convert to reference, Make driving, Delete mirror: likewise.
+        SketchReference(_) => false,
+        // A board sketch's Snap ▾ board rows: snap switches, no geometry.
+        SketchSnap(_) => false,
+        // This pad / All pads records its own step (`record_edit`) when it
+        // changes the sketch; Cancel changes nothing.
+        PadScopeAnswered(_) => false,
+        // Close gap records its own step (`record_edit`), only when it joins.
+        SketchCloseGapRequested { .. } => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

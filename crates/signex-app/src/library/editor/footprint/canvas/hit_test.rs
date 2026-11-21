@@ -7,6 +7,20 @@ use signex_sketch::id::SketchEntityId;
 
 use super::FootprintCanvasState;
 use super::geometry::screen_dist_to_segment_sq;
+use super::glyph_layout::{Glyph, glyph_at, sketch_glyphs};
+use crate::library::editor::footprint::state::FootprintEditorState;
+
+/// The constraint glyph, value, pattern glyph or instance slot under the
+/// canvas point `screen`, from the same layout the draw pass paints.
+pub(super) fn sketch_glyph_at(
+    sketch: Option<&signex_sketch::SketchData>,
+    state: &FootprintEditorState,
+    cstate: &FootprintCanvasState,
+    screen: iced::Point,
+) -> Option<Glyph> {
+    let glyphs = sketch_glyphs(sketch?, state, cstate);
+    glyph_at(&glyphs, screen).cloned()
+}
 
 /// v0.13.2 — Snap radius in screen pixels. A click within this
 /// distance of an existing sketch Point's screen position resolves

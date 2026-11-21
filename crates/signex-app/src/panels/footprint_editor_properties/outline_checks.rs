@@ -1,0 +1,136 @@
+//! The Outline checks section of board sketch mode (mockup row 179d): under the Board
+//! summary with nothing selected, one line per check of the current solve,
+//! a failing check one line per place. A click on a failing line selects
+//! its entity; an open outline says whether its gap heals and offers Close
+//! gap when it does (mockup row 190). Every check warns only; Bake still applies the
+//! sketch (decision 3, `docs/DECISIONS.md`). The Fab profile group under it
+//! names the router tool the inside-corner check uses.
+
+use iced::widget::{Column, container, row};
+use iced::{Element, Length, Widget as _};
+use signex_i18n::{I18n, RenderTranslatable as _, ids, t};
+use signex_widgets::{button, text};
+
+use crate::library::editor::footprint::{GapOffer, format_check_mm};
+use crate::library::editor::standalone::sketch_exit::status_line;
+use crate::panels::{BoardSketchProps, CollapsedSections, PanelMsg, PanelPalette, SketchFixMsg};
+use crate::panels::{collapsible_section_header, is_section_collapsed};
+use crate::styles::{Spacing, TypeScale};
+
+const TS: TypeScale = TypeScale::DEFAULT;
+const SP: Spacing = Spacing::DEFAULT;
+
+/// The section's key in the collapsed-sections set.
+const SECTION: &str = "fp_board_checks";
+
+/// The Fab profile group's key in the collapsed-sections set.
+const FAB_SECTION: &str = "fp_board_fab";
+
+pub(super) fn view_outline_checks<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    board: &'a BoardSketchProps,
+    palette: PanelPalette,
+    collapsed_sections: &'a CollapsedSections,
+    i18n: &I18n,
+) -> Column<Element<'a, PanelMsg>> {
+    col = col.push(
+        collapsible_section_header(
+            SECTION,
+            &t!(i18n, ids::BOARD_SKETCH_CHECKS_SECTION).into_string(),
+            collapsed_sections,
+            palette.primary,
+            palette.border,
+        )
+        .boxed(),
+    );
+    if !is_section_collapsed(SECTION, collapsed_sections) {
+        for line in &board.outline_checks {
+            let select = line
+                .place
+                .map(|id| PanelMsg::FpEditorSelectSketchEntity { id });
+            col = col.push(status_line(line.status, line.text.localized(i18n), select));
+            if let Some(offer) = &line.close_gap {
+                col = col.push(close_gap_row(offer, palette, i18n));
+            }
+        }
+        col = col.push(
+            container(
+                text(t!(i18n, ids::BOARD_SKETCH_CHECKS_CAPTION))
+                    .size(TS.caption)
+                    .color(palette.muted),
+            )
+            .padding([SP.s, SP.m])
+            .width(Length::Fill)
+            .boxed(),
+        );
+    }
+    view_fab_profile(col, board, palette, collapsed_sections, i18n)
+}
+
+/// Whether the gap heals, and Close gap when it does.
+fn close_gap_row<'a>(
+    offer: &GapOffer,
+    palette: PanelPalette,
+    i18n: &I18n,
+) -> Element<'a, PanelMsg> {
+    let mut line = row![
+        text(offer.text().localized(i18n))
+            .size(TS.caption)
+            .color(palette.muted)
+            .width(Length::Fill)
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    if offer.closes() {
+        line = line.push(
+            button(text(t!(i18n, ids::SKETCH_BAKE_CLOSE_GAP)).size(TS.caption))
+                .padding([SP.xs, SP.s])
+                .on_press(PanelMsg::SketchFix(SketchFixMsg::CloseGapClicked {
+                    keep: offer.keep,
+                    merge: offer.merge,
+                }))
+                .style(crate::panels::form_look::ghost_button)
+                .boxed(),
+        );
+    }
+    container(line)
+        .padding([SP.xs, SP.m])
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The Fab profile group (mockup row 179d): the router tool of the project's
+/// fab profile, or that it names none.
+fn view_fab_profile<'a>(
+    mut col: Column<Element<'a, PanelMsg>>,
+    board: &'a BoardSketchProps,
+    palette: PanelPalette,
+    collapsed_sections: &'a CollapsedSections,
+    i18n: &I18n,
+) -> Column<Element<'a, PanelMsg>> {
+    col = col.push(
+        collapsible_section_header(
+            FAB_SECTION,
+            &t!(i18n, ids::BOARD_SKETCH_FAB_SECTION).into_string(),
+            collapsed_sections,
+            palette.primary,
+            palette.border,
+        )
+        .boxed(),
+    );
+    if is_section_collapsed(FAB_SECTION, collapsed_sections) {
+        return col;
+    }
+    let router = match board.router_tool_diameter {
+        Some(diameter) => {
+            t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER, "diameter" => format_check_mm(diameter, 2))
+        }
+        None => t!(i18n, ids::BOARD_SKETCH_FAB_ROUTER_NONE),
+    };
+    col.push(
+        container(text(router).size(TS.caption).color(palette.primary))
+            .padding([SP.s, SP.m])
+            .width(Length::Fill)
+            .boxed(),
+    )
+}

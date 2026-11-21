@@ -5,6 +5,8 @@
 //! sibling `overlays` module.
 
 mod anchored;
+// The sketch canvas menu opens through it too (mockup row 188).
+pub(crate) use anchored::AnchoredMenu;
 mod backdrop;
 mod board_menu;
 mod board_part_rows;
@@ -25,7 +27,5 @@ mod submenu;
 mod catalog_agreement_tests;
 #[cfg(test)]
 mod tests;
-
-pub(super) use anchored::AnchoredMenu;
 
 use super::*;

@@ -91,6 +91,7 @@ impl Signex {
                     self.ui_state.effective_theme_id(),
                     &self.ui_state.i18n,
                     self.shows_footprint_layer_strip(window_id),
+                    &self.document_state.panel_ctx.ui_font_name,
                 )
                 .map(Message::Library)
                 .boxed(),

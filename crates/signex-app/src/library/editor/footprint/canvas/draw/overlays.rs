@@ -9,6 +9,7 @@ use iced::{Color, Point, Radians, Vector};
 
 use super::super::{DRAG_THRESHOLD_PX, FootprintCanvas, FootprintCanvasState};
 use super::cursor_ink::CursorInk;
+use super::sketch::draw_sketch_values;
 use super::sketch::{
     draw_dof_direction_arrows, draw_sketch_overlay, draw_sketch_snap_glyph,
     draw_sketch_tool_preview,
@@ -38,7 +39,7 @@ impl FootprintCanvas<'_> {
             let p = cstate.world_to_screen((cx, cy));
             let half = 7.0_f32;
             let arm = 4.5_f32;
-            let ink = CursorInk::for_sketch_on(self.bg_color);
+            let ink = CursorInk::sketch();
             let square_path = Path::rectangle(
                 Point::new(p.x - half, p.y - half),
                 iced::Size::new(half * 2.0, half * 2.0),
@@ -79,7 +80,7 @@ impl FootprintCanvas<'_> {
             && let Some(p) = cursor_screen
         {
             let arm = 5.0_f32;
-            let ink = CursorInk::for_sketch_on(self.bg_color);
+            let ink = CursorInk::sketch();
             let stroke = Stroke::default().with_width(1.0).with_color(ink.mark);
 
             // Hit-test the cursor against sketch Lines to find the one
@@ -313,8 +314,18 @@ impl FootprintCanvas<'_> {
             // v0.22 Phase E2 — DOF direction-arrow overlay.
             draw_dof_direction_arrows(frame, cstate, sketch, self.state);
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);
+            // mockup row 192 — the driving profile of an Edit in Sketch from a pad.
+            super::sketch::draw_pad_link_profile(frame, cstate, sketch, self.state);
+            // mockup row 187 / mockup row 191 — Chamfer, Extend, Mirror and Linear Pattern ghosts.
+            super::sketch::draw_sketch_tool_ghosts(frame, cstate, sketch, self.state);
             // v0.22 Phase A6 — Inferred-constraint snap glyph on top.
             draw_sketch_snap_glyph(frame, cstate, self.state);
+            // Values on the drawing, pattern glyphs, conflict badge (mockup row 187).
+            draw_sketch_values(frame, cstate, sketch, self.state, conflict_colour);
+            // The badge's words name the snap target (mockup row 188).
+            super::sketch::draw_sketch_snap_badge(frame, cstate, sketch, self.state);
         }
+        // mockup row 190 — the bake preview, over the sketch it faints.
+        self.draw_bake_preview(frame, cstate);
     }
 }

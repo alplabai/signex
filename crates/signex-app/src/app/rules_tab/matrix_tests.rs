@@ -890,3 +890,52 @@ fn a_matrix_cell_stores_its_length_as_typed() {
         let _ = app.view_rules_tab(id);
     }
 }
+
+/// A tier preset sets the project's router tool in its rules' undo step:
+/// one undo restores both and the project reads clean again; redo sets
+/// both again (Caner 2026-11-20).
+#[test]
+fn undoing_a_tier_preset_restores_the_router_tool_with_the_rules() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    open(&mut app);
+    let path = project_path(&app);
+    app.document_state.mark_documents_clean_where(|_| true);
+    app.document_state.note_project_clean_state(id);
+    let router = |app: &Signex| app.document_state.projects[0].data.router_tool_diameter();
+    assert_eq!(router(&app), None);
+
+    let _ = answer(&mut app, "rules_preset_apply", &["preset=tier:hdi"]);
+    assert_eq!(router(&app), Some(1.0));
+    assert!(dsl(&app).contains("fab_via"));
+    assert_eq!(undo_steps(&app, id), 1, "rules and router are one step");
+    assert!(app.document_state.is_document_dirty(&path));
+
+    command(&mut app, "undo");
+    assert_eq!(router(&app), None, "the undo restores the router tool");
+    assert_eq!(dsl(&app), TEXT);
+    assert!(
+        !app.document_state.is_document_dirty(&path),
+        "back at the saved bytes"
+    );
+
+    command(&mut app, "redo");
+    assert_eq!(router(&app), Some(1.0));
+    assert!(dsl(&app).contains("fab_via"));
+}
+
+/// The New PCB tier seed is one step too: its undo drops the seeded rules
+/// and the router tool together.
+#[test]
+fn undoing_a_seeded_tier_drops_its_router_tool_too() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, id) = app_with_board(&dir);
+    app.seed_tier_rules(id, signex_types::project::FabTemplate::Advanced);
+    let router = |app: &Signex| app.document_state.projects[0].data.router_tool_diameter();
+    assert_eq!(router(&app), Some(1.6));
+    assert_eq!(undo_steps(&app, id), 1);
+
+    assert!(app.step_rules_of(id, true));
+    assert_eq!(router(&app), None);
+    assert_eq!(dsl(&app), TEXT);
+}

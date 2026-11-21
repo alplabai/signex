@@ -29,6 +29,10 @@ pub fn role_label_id(role: SketchRole, host: SketchHost) -> MessageId {
         R::BoardOutline => ids::EDITORS_SKETCH_ROLE_BOARD_OUTLINE,
         R::MountingHole => ids::EDITORS_SKETCH_ROLE_MOUNTING_HOLE,
         R::VScore => ids::EDITORS_SKETCH_ROLE_V_SCORE,
+        R::Slot => ids::EDITORS_SKETCH_ROLE_SLOT,
+        R::BoardPour => ids::EDITORS_SKETCH_ROLE_BOARD_POUR,
+        R::MechanicalLayer => ids::EDITORS_SKETCH_ROLE_MECHANICAL_LAYER,
+        R::ComponentAnchor => ids::EDITORS_SKETCH_ROLE_COMPONENT_ANCHOR,
     }
 }
 
@@ -55,7 +59,7 @@ mod tests {
 
     /// The board picker reads in the board sketch design's words.
     #[test]
-    fn the_board_picker_names_its_five_targets() {
+    fn the_board_picker_names_its_targets() {
         let labels: Vec<String> = role_labels(SketchHost::Board, &en_us())
             .into_iter()
             .map(|(_, label)| label.replace(['\u{2068}', '\u{2069}'], ""))
@@ -66,8 +70,12 @@ mod tests {
                 "Unassigned",
                 "Board outline",
                 "Cutout",
+                "Slot",
                 "Keepout",
+                "Pour",
                 "V-score",
+                "Mechanical layer",
+                "Component anchor",
                 "Mounting hole"
             ]
         );

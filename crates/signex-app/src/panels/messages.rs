@@ -1143,6 +1143,8 @@ pub enum PanelMsg {
     FpProperties(super::FpPropertiesMsg),
     /// The footprint role sub-forms: keepout layer, sketch pad expansions.
     FpSubform(super::FpSubformMsg),
+    /// A sketch fix picked in Properties for the sketch in view.
+    SketchFix(super::SketchFixMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

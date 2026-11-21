@@ -90,6 +90,67 @@ impl ArrayKind {
             Self::Polar { source, center, .. } => vec![*source, *center],
         }
     }
+
+    /// Whether single instances of this array can be suppressed. A grid
+    /// and a polar array keep a suppression list; a linear array has none.
+    pub fn has_suppression_model(&self) -> bool {
+        !matches!(self, Self::Linear { .. })
+    }
+
+    /// Whether instance `(i, j)` is on the suppression list (`j` is 0 for
+    /// a polar array). The mask expression is not evaluated here.
+    pub fn is_instance_suppressed(&self, i: u32, j: u32) -> bool {
+        self.depopulation()
+            .is_some_and(|d| d.suppressed_instances.contains(&(i, j)))
+    }
+
+    /// Put instance `(i, j)` on the suppression list or take it off.
+    /// The list gains a depopulation with an empty mask when it first
+    /// needs one, and drops it again when the list empties and the mask is
+    /// blank. Returns whether the array changed; a linear array never does.
+    pub fn set_instance_suppressed(&mut self, i: u32, j: u32, suppressed: bool) -> bool {
+        let slot = match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => depopulation,
+            Self::Linear { .. } => return false,
+        };
+        if suppressed {
+            let d = slot.get_or_insert_with(|| GridDepopulation {
+                mask_expr: String::new(),
+                suppressed_instances: Vec::new(),
+            });
+            if d.suppressed_instances.contains(&(i, j)) {
+                return false;
+            }
+            d.suppressed_instances.push((i, j));
+            return true;
+        }
+        let Some(d) = slot.as_mut() else {
+            return false;
+        };
+        let before = d.suppressed_instances.len();
+        d.suppressed_instances.retain(|&entry| entry != (i, j));
+        let changed = d.suppressed_instances.len() != before;
+        if d.mask_expr.trim().is_empty() && d.suppressed_instances.is_empty() {
+            *slot = None;
+        }
+        changed
+    }
+
+    /// Flip the suppression of instance `(i, j)`. Returns whether the
+    /// array changed.
+    pub fn toggle_instance_suppressed(&mut self, i: u32, j: u32) -> bool {
+        let suppressed = self.is_instance_suppressed(i, j);
+        self.set_instance_suppressed(i, j, !suppressed)
+    }
+
+    fn depopulation(&self) -> Option<&GridDepopulation> {
+        match self {
+            Self::Grid { depopulation, .. } | Self::Polar { depopulation, .. } => {
+                depopulation.as_ref()
+            }
+            Self::Linear { .. } => None,
+        }
+    }
 }
 
 /// Predicate evaluated per `(i, j)` index in a Grid array.

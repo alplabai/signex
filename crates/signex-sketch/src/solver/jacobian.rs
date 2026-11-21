@@ -26,7 +26,8 @@ pub fn sparse_jacobian(
     params: &ResolvedParams,
 ) -> Result<Vec<SparseRow>, SketchError> {
     let mut rows = Vec::new();
-    for c in &sketch.constraints {
+    // The rows of `total_residual`: a driven dimension has none.
+    for c in sketch.driving_constraints() {
         rows.extend(constraint_rows(c, state, index, sketch, params)?);
     }
     rows.extend(arc_closure_rows(state, index, sketch)?);

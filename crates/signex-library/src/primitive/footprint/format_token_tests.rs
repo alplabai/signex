@@ -1,0 +1,238 @@
+//! `snxfpt/1.2` (Caner 2026-11-20, decisions 5, 9 and 10): a footprint
+//! whose sketch holds reference dimensions, pattern sources or mirrors, or
+//! per-instance pad overrides is written as 1.2 and round-trips them; one
+//! without them stays 1.1, byte for byte; a 1.1-only build refuses 1.2 by
+//! name rather than dropping the links on save.
+
+use signex_sketch::SketchData;
+use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+use signex_sketch::attr::PadAttr;
+use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
+use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::id::{ConstraintId, SketchEntityId};
+use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+use signex_sketch::sketch::{OverrideValue, PadAttrOverride, PatternMirror};
+use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
+
+use super::*;
+
+/// The `.snxfpt` policy of a build that knows only 1.1.
+const SNXFPT_1_1_ONLY: FormatVersion = FormatVersion {
+    current: "snxfpt/1.1",
+    readable: &["snxfpt/1", "snxfpt/1.1"],
+    newer_minor: NewerMinor::Refused,
+    missing: MissingToken::Refused,
+};
+
+/// A pad Point patterned by a polar and a linear array, a mirror Line and a
+/// dimension, with none of the 1.2 links yet.
+struct Fixture {
+    sketch: SketchData,
+    polar: ArrayId,
+    linear: ArrayId,
+    line: SketchEntityId,
+    dimension: ConstraintId,
+}
+
+fn fixture() -> Fixture {
+    let plane = PlaneId::new();
+    let mut sketch = SketchData {
+        planes: vec![Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        }],
+        ..SketchData::default()
+    };
+    let point = |sketch: &mut SketchData, x, y| {
+        let id = SketchEntityId::new();
+        sketch
+            .entities
+            .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+        id
+    };
+    let source = point(&mut sketch, 2.0, 0.0);
+    sketch.entities.last_mut().unwrap().pad = Some(PadAttr {
+        number: "1".into(),
+        size_x_expr: "1mm".into(),
+        size_y_expr: "1mm".into(),
+        ..PadAttr::default()
+    });
+    let centre = point(&mut sketch, 0.0, 0.0);
+    let a = point(&mut sketch, 10.0, -5.0);
+    let b = point(&mut sketch, 10.0, 5.0);
+    let line = SketchEntityId::new();
+    sketch.entities.push(Entity::new(
+        line,
+        plane,
+        EntityKind::Line { start: a, end: b },
+    ));
+    let dimension = ConstraintId::new();
+    sketch.constraints.push(Constraint {
+        id: dimension,
+        kind: ConstraintKind::DistancePtPt {
+            p1: a,
+            p2: b,
+            target: DimTarget::Literal(10.0),
+        },
+    });
+    let polar = ArrayId::new();
+    let linear = ArrayId::new();
+    sketch.arrays.push(Array {
+        id: polar,
+        kind: ArrayKind::Polar {
+            source,
+            center: centre,
+            count_expr: "4".into(),
+            sweep_angle_expr: "360deg".into(),
+            depopulation: None,
+        },
+        numbering: NumberingScheme::default(),
+    });
+    sketch.arrays.push(Array {
+        id: linear,
+        kind: ArrayKind::Linear {
+            source,
+            count_expr: "2".into(),
+            dx_expr: "20mm".into(),
+            dy_expr: "0mm".into(),
+        },
+        numbering: NumberingScheme::default(),
+    });
+    Fixture {
+        sketch,
+        polar,
+        linear,
+        line,
+        dimension,
+    }
+}
+
+fn file_of(sketch: SketchData) -> FootprintFile {
+    let stamp = DateTime::<Utc>::from_timestamp(1_790_000_000, 0).unwrap();
+    let mut fp = Footprint::with_identity("LINKS", Uuid::from_u128(7), stamp);
+    fp.sketch = Some(sketch);
+    FootprintFile::with_identity(fp, Uuid::from_u128(8), stamp)
+}
+
+/// Save `sketch`, read it back, and hand back (the text, the sketch read).
+fn round_trip(sketch: SketchData) -> (String, SketchData) {
+    let text = file_of(sketch).to_toml_string().expect("serialise");
+    let back = FootprintFile::from_toml_str(&text).expect("reads back");
+    let sketch = back.footprints[0].sketch.clone().expect("sketch kept");
+    (text, sketch)
+}
+
+#[test]
+fn a_footprint_without_links_stays_snxfpt_1_1_byte_for_byte() {
+    let file = file_of(fixture().sketch);
+    assert_eq!(file.format_token(), "snxfpt/1.1");
+    let text = file.to_toml_string().expect("serialise");
+    assert!(text.starts_with("format = \"snxfpt/1.1\"\n"), "{text}");
+    for key in [
+        "driven_dimensions",
+        "pattern_sources",
+        "pattern_mirrors",
+        "pad_overrides",
+    ] {
+        assert!(!text.contains(key), "{key} written: {text}");
+    }
+    let again = FootprintFile::from_toml_str(&text)
+        .expect("reads back")
+        .to_toml_string()
+        .expect("serialise");
+    assert_eq!(again, text, "a re-save is byte-identical");
+}
+
+#[test]
+fn a_reference_dimension_round_trips_as_snxfpt_1_2() {
+    let mut f = fixture();
+    f.sketch.driven_dimensions.push(f.dimension);
+    let (text, back) = round_trip(f.sketch.clone());
+    assert!(text.starts_with("format = \"snxfpt/1.2\"\n"), "{text}");
+    assert_eq!(back.driven_dimensions, vec![f.dimension]);
+    assert_eq!(back, f.sketch);
+}
+
+#[test]
+fn a_pattern_source_round_trips_as_snxfpt_1_2() {
+    let mut f = fixture();
+    f.sketch.set_pattern_source(f.linear, f.polar).unwrap();
+    let (text, back) = round_trip(f.sketch.clone());
+    assert!(text.starts_with("format = \"snxfpt/1.2\"\n"), "{text}");
+    assert_eq!(back.pattern_source_of(f.linear), Some(f.polar));
+    assert_eq!(back, f.sketch);
+}
+
+#[test]
+fn a_pattern_mirror_round_trips_as_snxfpt_1_2() {
+    let mut f = fixture();
+    let mirror = PatternMirror {
+        id: ArrayId::new(),
+        pattern: f.polar,
+        line: f.line,
+    };
+    f.sketch.add_pattern_mirror(mirror).unwrap();
+    let (text, back) = round_trip(f.sketch.clone());
+    assert!(text.starts_with("format = \"snxfpt/1.2\"\n"), "{text}");
+    assert_eq!(back.pattern_mirrors, vec![mirror]);
+    assert_eq!(back, f.sketch);
+}
+
+#[test]
+fn a_pad_override_round_trips_as_snxfpt_1_2() {
+    let mut f = fixture();
+    let pad = PadAttrOverride {
+        net: Some("GND".into()),
+        locked: Some(true),
+        paste_margin_expr: Some(OverrideValue::Set("-0.05mm".into())),
+        rotation_expr: Some(OverrideValue::Cleared),
+        ..PadAttrOverride::default()
+    };
+    f.sketch.set_override(f.polar, 2, 0, pad.clone());
+    let (text, back) = round_trip(f.sketch.clone());
+    assert!(text.starts_with("format = \"snxfpt/1.2\"\n"), "{text}");
+    assert_eq!(back.override_for(f.polar, 2, 0), Some(&pad));
+    assert_eq!(back, f.sketch);
+}
+
+#[test]
+fn a_file_whose_last_link_goes_saves_as_1_1_again() {
+    let mut f = fixture();
+    f.sketch.driven_dimensions.push(f.dimension);
+    let text = file_of(f.sketch).to_toml_string().expect("serialise");
+    let mut file = FootprintFile::from_toml_str(&text).expect("1.2 reads");
+    assert_eq!(file.format, "snxfpt/1.2", "the token it was read with");
+    if let Some(sketch) = file.footprints[0].sketch.as_mut() {
+        sketch.driven_dimensions.clear();
+    }
+    let saved = file.to_toml_string().expect("serialise");
+    assert!(saved.starts_with("format = \"snxfpt/1.1\"\n"), "{saved}");
+}
+
+#[test]
+fn a_1_1_only_build_refuses_a_1_2_file_by_name() {
+    let mut f = fixture();
+    f.sketch.set_pattern_source(f.linear, f.polar).unwrap();
+    let text = file_of(f.sketch).to_toml_string().expect("serialise");
+    let token = text
+        .lines()
+        .next()
+        .and_then(|l| l.strip_prefix("format = \""))
+        .and_then(|l| l.strip_suffix('"'))
+        .expect("a format line");
+    assert_eq!(token, "snxfpt/1.2");
+    let refused = SNXFPT_1_1_ONLY
+        .read(Some(token))
+        .expect_err("a 1.1 build refuses 1.2");
+    assert_eq!(refused.found(), Some("snxfpt/1.2"));
+    let message = refused.to_string();
+    assert!(message.contains("snxfpt/1.2"), "{message}");
+    assert!(message.contains("newer Signex"), "{message}");
+    // This build reads every token it ever wrote.
+    for token in ["snxfpt/1", "snxfpt/1.1", "snxfpt/1.2"] {
+        assert_eq!(
+            FOOTPRINT_FILE_VERSION.read(Some(token)).as_deref(),
+            Ok(token)
+        );
+    }
+}

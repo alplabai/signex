@@ -14,7 +14,7 @@ use iced::{Element, Event, Length, Rectangle, Size, Vector};
 use super::placement::{clamp_menu_origin, submenu_origin};
 
 /// A card at `anchor`, and a flyout beside it.
-pub(in crate::app::view) struct AnchoredMenu<'a, Message> {
+pub(crate) struct AnchoredMenu<'a, Message> {
     /// The card, then the flyout when there is one.
     children: Vec<Element<'a, Message>>,
     anchor: (f32, f32),

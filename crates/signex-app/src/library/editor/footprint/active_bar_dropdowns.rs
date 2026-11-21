@@ -91,7 +91,9 @@ pub fn entries(
     use crate::library::editor::footprint::sketch_mode::menus;
     match menu {
         FpActiveBarMenu::Filter => filter_entries(state, path, footprint_presets),
-        FpActiveBarMenu::Snap => snap_entries(state, path),
+        FpActiveBarMenu::Snap => {
+            super::snap_menu::with_board_rows(snap_entries(state, path.clone()), state, path, i18n)
+        }
         FpActiveBarMenu::Place => place_entries(path, tid),
         FpActiveBarMenu::Select => select_entries(path, tid),
         FpActiveBarMenu::Align => align_entries(path, tid),

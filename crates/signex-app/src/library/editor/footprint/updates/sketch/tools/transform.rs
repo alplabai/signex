@@ -1,4 +1,5 @@
-//! Footprint sketch tools — transform & pattern (carved from `sketch_tools::apply`, ADR-0001 D2).
+//! Footprint sketch tools — Mirror and Offset (carved from `sketch_tools::apply`, ADR-0001 D2).
+//! The pattern tools live in `pattern`.
 //!
 //! `apply` is a thin router; each `SketchTool` delegates to one named
 //! per-tool fn below. Bodies moved verbatim; the preamble locals they
@@ -27,16 +28,49 @@ pub(super) fn apply(
     match tool {
         SketchTool::Mirror => mirror(editor, ctx),
         SketchTool::Offset => offset(editor, ctx),
-        SketchTool::RectPattern => rect_pattern(editor, ctx),
-        SketchTool::CircularPattern => circular_pattern(editor, ctx),
-        _ => unreachable!("non-transform & pattern tool routed here"),
+        _ => unreachable!("non-transform tool routed here"),
     }
 }
 
+/// Mirror's first click without a Line selected (mockup row 191): a click on a Line
+/// of the Centerline linetype takes it as the mirror line. It becomes the
+/// selection, so the next clicks mirror entities about it as with a
+/// selected Line. Returns whether the click was that pick.
+pub(super) fn take_centerline_as_mirror_line(
+    editor: &mut crate::app::FootprintDocument,
+    x_mm: f64,
+    y_mm: f64,
+) -> bool {
+    // With a pattern selected, Mirror keeps a live mirror of it (mockup row 191).
+    if super::mirror_pattern::mirror_selected_pattern(editor, x_mm, y_mm) {
+        return true;
+    }
+    let Some(sketch) = editor.primitive().sketch.as_ref() else {
+        return false;
+    };
+    let line_selected = editor.state.selected_sketch.is_some_and(|id| {
+        sketch
+            .entities
+            .iter()
+            .any(|e| e.id == id && matches!(e.kind, EntityKind::Line { .. }))
+    });
+    if line_selected {
+        return false;
+    }
+    let Some(centerline) = super::pick_line_where(sketch, x_mm, y_mm, |e| e.centerline) else {
+        return false;
+    };
+    editor.state.selected_sketch = Some(centerline);
+    editor.state.selected_sketch_secondary = None;
+    editor.state.selected_sketch_extra.clear();
+    editor.state.tool_pending = ToolPending::Idle;
+    true
+}
+
 // v0.22 Phase B1 + extension — Mirror tool. Pre-condition: a Line entity
-// must already be selected via the Select tool; clicks while no Line is
-// selected are silent no-ops with a warning surfaced via
-// `solve_warnings`.
+// must already be selected via the Select tool, or picked as a centerline
+// by `take_centerline_as_mirror_line`; clicks while no Line is selected
+// are no-ops with a warning surfaced via `solve_warnings`.
 //
 // The picked entity's geometry is reflected across the selected Line and
 // a fresh entity is minted referencing mirrored copies of every Point it
@@ -56,7 +90,7 @@ fn mirror(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
         Some(id) => id,
         None => {
             editor.state.solve_warnings.push(
-                        "Mirror: select a Line first (Select tool, click a Line, then click here to mirror)"
+                        "Mirror: select a Line or click a centerline first (Select tool, click a Line, then click here to mirror)"
                             .into(),
                     );
             editor.state.tool_pending = ToolPending::Idle;
@@ -83,10 +117,10 @@ fn mirror(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
     let (a_id, b_id) = match line_endpoints {
         Some(p) => p,
         None => {
-            editor
-                .state
-                .solve_warnings
-                .push("Mirror: selection is not a Line — pick a Line entity first".into());
+            editor.state.solve_warnings.push(
+                "Mirror: selection is not a Line — pick a Line entity or click a centerline first"
+                    .into(),
+            );
             editor.state.tool_pending = ToolPending::Idle;
             editor.canvas_cache.clear();
             return;
@@ -686,74 +720,4 @@ fn offset_arc(
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddConstraint(dist_start));
         apply_sketch_edit_with_warnings(state, primitive, SketchEdit::AddConstraint(dist_end));
     });
-}
-
-// v0.22 Phase B3 — Rectangular Pattern. Click 1 picks the source entity
-// (whatever was clicked, including a freshly-minted Point if the click
-// missed everything). Mints a default 2×2 grid with 5 mm spacing,
-// sequential numbering. User edits via JSON until a Properties sub-form
-// lands.
-fn rect_pattern(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
-    use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
-    let array = Array {
-        id: ArrayId::new(),
-        kind: ArrayKind::Grid {
-            source: ctx.resolved_id,
-            nx_expr: "2".into(),
-            ny_expr: "2".into(),
-            dx_expr: "5mm".into(),
-            dy_expr: "5mm".into(),
-            depopulation: None,
-        },
-        numbering: NumberingScheme::default(),
-    };
-    let sketch = editor
-        .primitive_mut()
-        .sketch
-        .get_or_insert_with(signex_sketch::SketchData::default);
-    sketch.arrays.push(array);
-    editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
-    });
-    editor.state.tool_pending = ToolPending::Idle;
-}
-
-// v0.22 Phase B4 — Circular Pattern. Click 1 picks the source entity.
-// The polar array requires a centre Point — mint a fresh one 5 mm to the
-// right of the click position so the array doesn't all stack on the
-// source. Default count 4, sweep 360°.
-fn circular_pattern(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
-    use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
-    let centre_id = SketchEntityId::new();
-    let centre = ctx.flag(Entity::new(
-        centre_id,
-        ctx.plane_id,
-        EntityKind::Point {
-            x: ctx.x_mm + 5.0,
-            y: ctx.y_mm,
-        },
-    ));
-    editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::add_entity(centre));
-    });
-    let array = Array {
-        id: ArrayId::new(),
-        kind: ArrayKind::Polar {
-            source: ctx.resolved_id,
-            center: centre_id,
-            count_expr: "4".into(),
-            sweep_angle_expr: "360deg".into(),
-            depopulation: None,
-        },
-        numbering: NumberingScheme::default(),
-    };
-    let sketch = editor
-        .primitive_mut()
-        .sketch
-        .get_or_insert_with(signex_sketch::SketchData::default);
-    sketch.arrays.push(array);
-    editor.with_parts(|state, primitive| {
-        apply_sketch_edit_with_warnings(state, primitive, SketchEdit::ForceRebuild);
-    });
-    editor.state.tool_pending = ToolPending::Idle;
 }

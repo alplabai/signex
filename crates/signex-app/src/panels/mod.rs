@@ -26,7 +26,9 @@ mod symbol_editor_properties;
 
 // v0.14.x -- domain modules split out of the former single-file panels module.
 mod board_sketch_attr;
-pub use board_sketch_attr::BoardSketchAttrMsg;
+pub use board_sketch_attr::{BoardSketchAttrMsg, BoardTargetProps, ComponentChoice, LayerChoice};
+mod sketch_fix;
+pub use sketch_fix::SketchFixMsg;
 mod board_net_classes;
 mod color_field;
 pub mod command_log;

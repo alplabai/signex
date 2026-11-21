@@ -185,12 +185,14 @@ impl Signex {
     }
 
     /// A tier picked for a new board of `id`: its `fab_*` rules merged into
-    /// the project's as one rule-history step, nothing written until Save.
-    /// A refusal is said in Messages; the board is made either way.
+    /// the project's, and its router tool set, as one rule-history step,
+    /// nothing written until Save. A refusal is said in Messages; the board
+    /// is made either way.
     pub(crate) fn seed_tier_rules(&mut self, id: ProjectId, tier: FabTemplate) {
+        let router = Some(tier.capabilities().router_tool_diameter);
         let seeded = self
             .rules_with_tier(id, tier)
-            .and_then(|rules| self.commit_drc_section(id, |drc| *drc = rules.drc));
+            .and_then(|rules| self.commit_fab_section(id, |drc| *drc = rules.drc, router));
         if let Err(why) = seeded {
             crate::diagnostics::log_warning(format!(
                 "New PCB: the {} fab tier rules were not added: {why}",
@@ -200,7 +202,10 @@ impl Signex {
     }
 
     /// Apply `preview` as one undo step, unless the rules moved since it
-    /// was computed.
+    /// was computed. A tier, or a fab profile naming a router tool, also
+    /// sets the project's router tool diameter in the same step (mockup
+    /// row 179d), so an undo restores both; a profile naming none leaves it
+    /// as it is.
     pub(crate) fn apply_preset(
         &mut self,
         id: ProjectId,
@@ -213,7 +218,11 @@ impl Signex {
             return Err("the rules changed since the preview; pick the preset again".into());
         }
         let result: DrcRuleSet = preview.result.clone();
-        self.commit_drc_section(id, |drc| *drc = result)
+        let router = preview
+            .fab
+            .as_ref()
+            .and_then(|fab| fab.router_tool_diameter);
+        self.commit_fab_section(id, |drc| *drc = result, router)
     }
 
     /// `rules_preset_diff`: what applying `preset` changes. A profile

@@ -49,7 +49,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
     // surfacing while they're authoring sketch entities.
     let selected_pad = if mode_kind == FootprintModeKind::Pads {
         editor.state.selected_pad.and_then(|idx| {
-            editor.state.pads.get(idx).map(|pad| {
+            editor.state.shown_pad(idx).map(|pad| {
                 use crate::library::editor::footprint::state::PadSide;
                 // Side derived from the first layer's prefix. THT/NPT
                 // pads carry both copper sides → All. Otherwise Top
@@ -124,7 +124,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             editor
                 .state
                 .selected_pad
-                .and_then(|idx| editor.state.pads.get(idx))
+                .and_then(|idx| editor.state.shown_pad(idx))
                 .map(|pad| {
                     let parameters = editor.primitive().sketch.as_ref().map(|s| &s.parameters);
                     let mut entries: Vec<crate::panels::PadShapeParamSummary> = pad
@@ -312,7 +312,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 .and_then(|s| s.entities.iter().find(|e| e.id == id))
                 .map(|e| {
                     (
-                        current_role_of(e),
+                        current_role_of(e).on_host(editor.state.sketch_host()),
                         matches!(e.kind, EntityKind::Point { .. }),
                     )
                 })
@@ -687,7 +687,12 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_keepout,
         selected_cutout,
         selected_sketch_pad,
-        board: super::board_sketch_ctx::board_sketch_props(editor),
+        board: super::board_sketch_ctx::board_sketch_props(editor).map(|board| {
+            crate::panels::BoardSketchProps {
+                target: app.board_sketch_target(),
+                ..board
+            }
+        }),
         snap_options: editor.state.snap_options,
         selection_filter: editor.state.selection_filter,
         snap_subtab: editor.state.snap_subtab,

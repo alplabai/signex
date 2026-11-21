@@ -255,7 +255,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
             draw_backdrop(frame, &camera, area, look);
             // The legacy yellow crosshair does not read on the paper ground.
             if self.graphite.is_none() {
-                draw_origin(frame, &camera, false);
+                draw_origin(frame, &camera);
             }
             let mut layers = self.model.layer_input();
             if let Some((_, palette)) = self.graphite {

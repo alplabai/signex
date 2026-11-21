@@ -19,6 +19,7 @@ mod fab_tier;
 mod order;
 mod profile_override;
 mod requirements;
+mod router_tool;
 mod rule_file;
 mod rule_profile;
 mod rules;
@@ -52,7 +53,8 @@ pub use requirements::{
 };
 pub use rule_file::{MAX_RULE_FILE_BYTES, RuleFileError, RuleTemplate};
 pub use rule_profile::{
-    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RuleProfile, RuleProfileError,
+    FabProfileInfo, RULE_PROFILE_EXTENSION, RULE_PROFILE_SCHEMA_V1, RULE_PROFILE_SCHEMA_V2,
+    RuleProfile, RuleProfileError,
 };
 pub use rules::{
     DrcRuleSet, ErcRules, NamedRuleSet, ProjectRules, RULES_SCHEMA_V1, RuleProfileRef, RuleSetUse,
@@ -324,6 +326,17 @@ pub struct ProjectData {
     /// profile. Skipped on save when empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requirements: Vec<RequirementEntry>,
+    /// The router tool diameter of the project's fab tier or profile, in mm
+    /// (mockup row 179d). `None` when none was applied, skipped on save. A
+    /// value that is not a positive number reads as `None`. Read and set it
+    /// through [`ProjectData::router_tool_diameter`] and
+    /// [`ProjectData::set_router_tool_diameter`].
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "router_tool::lenient_router_tool_diameter"
+    )]
+    pub router_tool_diameter: Option<f64>,
     /// Keys written by a newer build that this one does not know; kept so a
     /// save does not drop them (#788).
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
@@ -348,6 +361,19 @@ impl ProjectData {
     /// verbatim for re-save, not applied (#1180).
     pub fn has_unreadable_rules(&self) -> bool {
         self.rules.is_none() && self.unknown.get(RULES_KEY).is_some()
+    }
+
+    /// The router tool diameter in mm, absent when none was applied or the
+    /// stored value is not a positive number.
+    pub fn router_tool_diameter(&self) -> Option<f64> {
+        self.router_tool_diameter
+            .filter(|mm| router_tool::is_usable_diameter(*mm))
+    }
+
+    /// Store the router tool diameter; `None`, or a value that is not a
+    /// positive number, clears it.
+    pub fn set_router_tool_diameter(&mut self, mm: Option<f64>) {
+        self.router_tool_diameter = mm.filter(|mm| router_tool::is_usable_diameter(*mm));
     }
 
     /// Resolve a [`LibraryEntry`]'s `path` to an absolute path. Project-
@@ -571,6 +597,7 @@ mod tests {
             agent_journal: Default::default(),
             schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -609,6 +636,7 @@ mod tests {
             agent_journal: Default::default(),
             schematic_design: Default::default(),
             fab_outputs: None,
+            router_tool_diameter: None,
             requirements: Default::default(),
             parameters: Default::default(),
             unknown: Default::default(),
@@ -851,6 +879,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         agent_journal: Default::default(),
         schematic_design: Default::default(),
         fab_outputs: None,
+        router_tool_diameter: None,
         requirements: Vec::new(),
         parameters: Default::default(),
         unknown: UnknownJson::default(),
