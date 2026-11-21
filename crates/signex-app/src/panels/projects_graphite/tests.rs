@@ -335,7 +335,10 @@ fn each_card_options_button_asks_for_its_projects_options() {
         })
         .collect();
     for id in [first, second] {
-        assert!(asked.contains(&id), "{asked:?} has no options button for {id:?}");
+        assert!(
+            asked.contains(&id),
+            "{asked:?} has no options button for {id:?}"
+        );
     }
 }
 

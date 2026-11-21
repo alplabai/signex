@@ -153,7 +153,10 @@ fn a_turned_port_draws_its_text_past_the_turned_head() {
     let [tx, ty] = drawn_text_at(doc(&app));
     // Past the head: the 1.27 mm stem every power port has (Caner, 2026-11-21),
     // then the 0.254 mm text gap (`VALUE_GAP_MM`).
-    assert!((f64::from(tx) - (AT.0 - (1.27 + 0.254))).abs() < 1e-3, "text at x {tx}");
+    assert!(
+        (f64::from(tx) - (AT.0 - (1.27 + 0.254))).abs() < 1e-3,
+        "text at x {tx}"
+    );
     assert!((f64::from(ty) - AT.1).abs() < 1e-3, "text at y {ty}");
 }
 
