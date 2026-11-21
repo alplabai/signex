@@ -282,7 +282,7 @@ fn diff_pair_answer(app: &mut Signex, args: &CommandArgs) -> Result<serde_json::
 fn outcome(ran: Result<serde_json::Value, String>) -> (CommandOutcome, Task<Message>) {
     match ran {
         Ok(answer) => (CommandOutcome::Answered(answer), Task::none()),
-        Err(reason) => (CommandOutcome::Disabled { reason }, Task::none()),
+        Err(reason) => (CommandOutcome::disabled(reason), Task::none()),
     }
 }
 

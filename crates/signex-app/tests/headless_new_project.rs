@@ -148,6 +148,7 @@ fn refusals() {
     ] {
         match session.run(&operands) {
             CommandOutcome::Disabled { reason } => {
+                let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
                 assert!(reason.contains(want), "{operands:?}: {reason}")
             }
             other => panic!("{operands:?} was not refused: {other:?}"),

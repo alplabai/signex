@@ -588,9 +588,7 @@ fn select_and_highlight_net_take_a_net_by_name() {
     );
     assert_eq!(
         outcome,
-        CommandOutcome::Disabled {
-            reason: "the board has no net named `NOPE`".into()
-        }
+        CommandOutcome::disabled("the board has no net named `NOPE`")
     );
     assert_eq!(selected(&app).len(), 2, "the selection is kept");
 }

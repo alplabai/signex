@@ -292,7 +292,10 @@ impl Signex {
         };
         let (outcome, reason) = match outcome {
             CommandOutcome::Ran | CommandOutcome::Answered(_) => ("ran", None),
-            CommandOutcome::Disabled { reason } => ("refused", Some(reason.clone())),
+            CommandOutcome::Disabled { reason } => (
+                "refused",
+                Some(signex_i18n::RenderTranslatable::render_en_us(reason)),
+            ),
             other => ("failed", Some(format!("{other:?}"))),
         };
         // A Save As moves the sheet: its revision now is under the new path.

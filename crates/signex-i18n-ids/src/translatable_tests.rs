@@ -91,3 +91,16 @@ fn an_unrendered_nested_message_reads_as_its_id() {
         ArgValue::Text("en:inner()")
     );
 }
+
+/// #2326 M2: legacy English renders as written in every language, has no
+/// id, and an argument does not change it.
+#[test]
+fn legacy_english_renders_as_written_and_has_no_id() {
+    let text = Translatable::legacy_english("Nothing to undo").arg("count", 1_u32);
+    assert_eq!(text.render(&Fake("de")), "Nothing to undo");
+    assert_eq!(text.id(), None);
+    assert_ne!(
+        text,
+        Translatable::verbatim(UserText::new("Nothing to undo"))
+    );
+}

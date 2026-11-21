@@ -425,6 +425,7 @@ fn a_close_by_operand_held_by_a_refused_bake_is_refused_with_the_reason() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("a held close reported {outcome:?}");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("could not be applied"), "{reason}");
     assert!(
         reason.contains("The sketch was not applied to the board"),

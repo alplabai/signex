@@ -5,6 +5,8 @@ use signex_output::{BoardLayerSet, BoardPrintOptions, BoardPrintPages, BoardPrin
 
 use super::tests::{app_with_board, output, run};
 use super::{BoardOutputDialog, BoardOutputMsg, BoardPrintFlag};
+use signex_i18n::RenderTranslatable;
+
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::handlers::menu::export::settle;
 use crate::app::{Message, Signex};
@@ -228,7 +230,7 @@ fn the_cli_refuses_an_unknown_option() {
     ] {
         let (outcome, _) = headless(&mut app, &[&document, &path, bad]);
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains(word)),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains(word)),
             "{bad}: {outcome:?}"
         );
     }

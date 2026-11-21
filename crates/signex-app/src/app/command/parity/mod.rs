@@ -22,8 +22,12 @@
 //! requirements run's result) run later against live state and are not rows.
 
 mod annotations;
+#[cfg(test)]
+mod enablement_tests;
 mod forms;
 mod inputs;
+#[cfg(test)]
+mod needs_owner_tests;
 mod owners;
 #[cfg(test)]
 mod probe_tests;

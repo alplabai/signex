@@ -92,6 +92,7 @@ fn turning_a_locked_selection_is_refused_with_a_reason_and_names_the_lock() {
         app.run_headless_command_in_test(&id("rotate_counterclockwise"), CommandArgs::none());
     match outcome {
         CommandOutcome::Disabled { reason } => {
+            let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
             assert!(reason.contains("locked"), "reason: {reason}");
         }
         other => panic!("expected a refusal, got {other:?}"),

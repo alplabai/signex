@@ -4,6 +4,8 @@
 
 use std::path::PathBuf;
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::{Value, json};
 use signex_library::adapters::local_git::{LibraryInitOptions, LocalGitAdapter};
 use signex_library::library_file::{FORMAT_TOKEN, LibrarySection, SnxlibManifest};
@@ -158,7 +160,7 @@ fn answered(outcome: CommandOutcome) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

@@ -31,7 +31,10 @@ pub(in crate::app) fn is_window_layout(command: &AppCommandId) -> bool {
 pub(super) fn refusal(command: &AppCommandId) -> Option<String> {
     let id = command.as_str();
     let Some(meta) = metadata_for(command) else {
-        return Some(format!("unknown command `{id}`"));
+        return Some(format!(
+            "unknown command `{id}`{}",
+            crate::keymap::did_you_mean(id)
+        ));
     };
     if PERSON_ONLY.contains(&id) {
         return Some(format!(

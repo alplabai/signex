@@ -188,7 +188,7 @@ impl Signex {
 fn answer(result: Result<DxfImportSummary, String>) -> CommandOutcome {
     match result.and_then(|s| serde_json::to_value(s).map_err(|e| e.to_string())) {
         Ok(summary) => CommandOutcome::Answered(summary),
-        Err(reason) => CommandOutcome::Disabled { reason },
+        Err(reason) => CommandOutcome::disabled(reason),
     }
 }
 
@@ -260,7 +260,7 @@ pub(crate) fn import_dxf_outline(app: &mut Signex, args: &CommandArgs) -> Ran {
 /// Checked up front, then answered once the file is read
 /// ([`CommandOutcome::Deferred`]): the summary, or why nothing changed.
 fn operand_import(app: &mut Signex, args: &CommandArgs, id: &str, outline: bool) -> Ran {
-    let refused = |reason: String| (CommandOutcome::Disabled { reason }, Task::none());
+    let refused = |reason: String| (CommandOutcome::disabled(reason), Task::none());
     let command = match AppCommandId::new(id) {
         Ok(command) => command,
         Err(reason) => return refused(reason),

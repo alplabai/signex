@@ -15,7 +15,7 @@ type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
     let reason = reason.into();
-    (CommandOutcome::Disabled { reason }, Task::none())
+    (CommandOutcome::disabled(reason), Task::none())
 }
 
 /// The two members of operand `name`, written `a,b`.

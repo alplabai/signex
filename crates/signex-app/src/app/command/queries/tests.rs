@@ -3,6 +3,8 @@
 
 use std::path::PathBuf;
 
+use signex_i18n::RenderTranslatable;
+
 use serde_json::Value;
 use signex_types::schematic::{
     ChildSheet, HAlign, Junction, Label, LabelType, Point, SchematicSheet, Symbol, TextNote,
@@ -161,7 +163,7 @@ pub(in crate::app) fn answer(app: &mut Signex, name: &str, args: &[&str]) -> Val
 
 fn refusal(app: &mut Signex, name: &str, args: &[&str]) -> String {
     match run(app, name, args) {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{name} {args:?} was not refused: {other:?}"),
     }
 }

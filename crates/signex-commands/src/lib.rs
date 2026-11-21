@@ -8,6 +8,7 @@ mod command_id;
 mod document_target;
 #[cfg(test)]
 mod modifier_tests;
+mod outcome;
 mod pcb_targets;
 mod platform;
 mod shortcut;
@@ -16,6 +17,7 @@ mod spelling_tests;
 
 pub use command_id::AppCommandId;
 pub use document_target::DocumentTarget;
+pub use outcome::CommandOutcome;
 pub use pcb_targets::PcbTargets;
 pub use platform::Platform;
 pub use shortcut::{Modifiers, ShortcutContext};

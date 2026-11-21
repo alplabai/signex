@@ -1,11 +1,12 @@
-//! What [`super::Signex::dispatch_command_reporting`] did with a command.
+//! What dispatching a command did, as a front end or an agent reads it.
+
+use signex_i18n_ids::Translatable;
 
 /// The result of dispatching a command id, returned next to the `Task`.
 ///
 /// A click, a key or the palette ignores it; a CLI or an agent (#1923) reads
 /// it to tell "ran" from "ignored".
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CommandOutcome {
     /// The command resolved to its handler and the handler was run. The
     /// handler may still report that it had nothing to do in the Messages
@@ -18,8 +19,9 @@ pub enum CommandOutcome {
     NoBridgeArm,
     /// The command has nothing to act on in the window it was invoked from.
     /// Where the command's handler explains this to the user, it still ran
-    /// (and said why); every other disabled command was dropped.
-    Disabled { reason: String },
+    /// (and said why); every other disabled command was dropped. The reason
+    /// is a catalog message, rendered by the front end (epic #2326, D6).
+    Disabled { reason: Translatable },
     /// A headless dispatch on an app that was not booted headless (no config
     /// root override, or native dialogs): nothing ran (#1933).
     NotHeadless,
@@ -34,9 +36,12 @@ pub enum CommandOutcome {
 }
 
 impl CommandOutcome {
-    pub(super) fn disabled(reason: impl Into<String>) -> Self {
+    /// A refusal whose reason is still the English a handler wrote before
+    /// the catalog (#2326 M2): it moves to a catalog id with its area
+    /// (#2644), so this constructor's call count may only fall.
+    pub fn disabled(reason: impl Into<String>) -> Self {
         Self::Disabled {
-            reason: reason.into(),
+            reason: Translatable::legacy_english(reason),
         }
     }
 }

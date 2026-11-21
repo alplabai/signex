@@ -5,6 +5,7 @@ use crate::{AppCommandId, Modifiers, ShortcutContext};
 use signex_i18n_ids::{MessageId, command_ids};
 
 pub use categories::{category_title_id, title_words};
+pub use closest::closest_command_ids;
 pub use operands::{Operand, OperandKind};
 
 mod annotate;
@@ -12,6 +13,7 @@ mod arrange;
 mod board;
 mod categories;
 mod clipboard;
+mod closest;
 mod documents;
 mod drawing;
 mod drc;
