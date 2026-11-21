@@ -702,12 +702,7 @@ impl Signex {
             );
             installed
         } else {
-            // Inline text typed into a window on this sheet targets an object
-            // of the engine being replaced: read it before the install.
-            if self.text_edit_targets_sheet_at(path) {
-                self.interaction_state.editing_text = None;
-            }
-            let result = signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()));
+            let result = self.engine_for_sheet_behind_tab(path, sheet);
             let install = self.document_state.replace_engine_at(path, result);
             self.project_replaced_engine(path, install.installed, &install.notices);
             install.installed

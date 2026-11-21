@@ -128,14 +128,26 @@ impl Signex {
         sheet: SchematicSheet,
     ) -> bool {
         // The non-active arm of `install_reloaded_schematic`, without its
-        // repair reports and settle steps, as on trunk.
-        if self.text_edit_targets_sheet_at(path) {
-            self.interaction_state.editing_text = None;
-        }
-        let result = signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()));
+        // repair reports and settle steps, as on trunk; only the core call
+        // and the projection repeat the wrapper's lines.
+        let result = self.engine_for_sheet_behind_tab(path, sheet);
         let install = self.document_state.replace_engine_at(path, result);
         self.project_replaced_engine(path, install.installed, &install.notices);
         install.installed
+    }
+
+    /// The GUI pre-step of an install behind a tab not in view, and the engine
+    /// to install. Inline text typed into a window on this sheet targets an
+    /// object of the engine being replaced: it ends before the install.
+    pub(crate) fn engine_for_sheet_behind_tab(
+        &mut self,
+        path: &std::path::Path,
+        sheet: SchematicSheet,
+    ) -> Result<signex_engine::Engine, signex_engine::EngineError> {
+        if self.text_edit_targets_sheet_at(path) {
+            self.interaction_state.editing_text = None;
+        }
+        signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()))
     }
 
     /// Make `result` the engine of the active tab at `p`; a failure reaches
