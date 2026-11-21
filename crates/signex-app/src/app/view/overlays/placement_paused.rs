@@ -46,7 +46,7 @@ impl Signex {
         Some(
             column![
                 Space::new().height(banner_top(tokens)),
-                container(banner)
+                container(scroll_guard(banner))
                     .width(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Center),
             ]
