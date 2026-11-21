@@ -17,7 +17,12 @@ are both built from it (see `MENU_BAR.md`, "Place on a board").
   (`PcbSetup::grid_size`, else the PCB default) when grid snapping is on.
 - **Preview.** What the next click adds follows the pointer, drawn by the
   board renderer in its layer's colour and dimmed, like a part on the
-  cursor. Nothing reaches the board until a click.
+  cursor. Nothing reaches the board until a click. A tool of several
+  corners or points (Solid Region, Polygon Pour, Keepout, Fill, Pour
+  Cutout, Slice Pour, Arc) shows its outline from the first click: while
+  the points placed and the pointer enclose no area yet, thin lines join
+  them to the pointer (`pcb_tool/outline_preview.rs`), then the closing
+  area as before (Caner, 2026-11-21).
 - **Undo.** Each click that adds something is one board undo step
   (`BoardCommand::AddItems`, built by `signex_engine::pcb::draw`).
 - **Ending.** Esc or a right-click drops the shape being drawn; with no

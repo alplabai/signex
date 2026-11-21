@@ -1631,8 +1631,9 @@ locked track, a pad or a via is never pushed; the route walks around it.
 1. Make the copper layer active.
 2. Choose **Place ▸ Polygon Pour** (`P G`).
 3. Click the corners. Start on a pad or track of the net you want, for
-   example `GND`; the pour takes the net under its first corner. Click the
-   first corner again to close the shape.
+   example `GND`; the pour takes the net under its first corner. From the
+   first corner a line follows the cursor; from the second the closed shape
+   does. Click the first corner again to close the shape.
 4. The pour fills its area and keeps clear of other nets' copper.
 
 Select a pour to change its net, clearance, priority and island removal in

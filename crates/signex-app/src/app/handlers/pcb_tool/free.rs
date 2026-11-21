@@ -18,6 +18,7 @@ use signex_types::pcb_dimension::LinearDimension;
 use signex_types::pcb_layer::PcbLayer;
 use uuid::Uuid;
 
+use super::outline_preview::open_outline;
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
@@ -224,7 +225,14 @@ impl Signex {
             BoardPlaceTool::Arc => {
                 let arc = draw::arc_points(defaults.arc_mode, &clicks)
                     .and_then(|points| defaults.arc(board, Uuid::nil(), points, layer));
-                preview.free.arcs.extend(arc);
+                match arc {
+                    Some(arc) => preview.free.arcs.push(arc),
+                    // Before the arc is made, a line from its first click.
+                    None if clicks.len() > 1 => {
+                        preview.segments.extend(open_outline(&clicks, layer));
+                    }
+                    None => {}
+                }
             }
             BoardPlaceTool::Dimension => {
                 // Before the second point the line lies on the measured one.

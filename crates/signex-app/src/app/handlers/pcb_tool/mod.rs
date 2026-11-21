@@ -27,6 +27,7 @@ mod form;
 mod free;
 mod free_form;
 mod graphic;
+mod outline_preview;
 mod pour_cut;
 mod quick;
 mod route;
@@ -52,6 +53,8 @@ mod free_tests;
 mod graphic_tests;
 #[cfg(test)]
 mod layer_tests;
+#[cfg(test)]
+mod outline_preview_tests;
 #[cfg(test)]
 mod pause_tests;
 #[cfg(test)]
