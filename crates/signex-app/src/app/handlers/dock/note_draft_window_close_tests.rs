@@ -78,6 +78,32 @@ fn reattaching_an_undocked_tab_applies_its_typed_note() {
     assert!(app.document_state.is_document_dirty(&a));
 }
 
+/// Close Document run inside the window, then the OS close it asks for.
+#[test]
+fn closing_the_document_from_its_undocked_window_applies_its_typed_note() {
+    let (_dir, mut app, a, window) = typed_in_undocked_window();
+    let index = app.document_state.tabs.iter().position(|t| t.path == a);
+    let index = index.expect("a has a tab");
+    drop(app.run_in_window(window, true, |app| app.close_tab_parking_dirty(index)));
+    let _ = app.update(Message::Window(WindowMsg::SecondaryWindowClosed(window)));
+    assert_eq!(note_text(&app, &a), "note!");
+    assert!(app.document_state.is_document_dirty(&a));
+}
+
+/// A handler that ends the window itself: its context is not put back, so
+/// the typed box must still reach the sheet.
+#[test]
+fn a_window_ended_inside_run_in_window_applies_its_typed_note() {
+    let (_dir, mut app, a, window) = typed_in_undocked_window();
+    drop(app.run_in_window(window, true, |app| {
+        app.ui_state.windows.remove(&window);
+        Task::none()
+    }));
+    let _ = app.update(Message::Ui(crate::app::UiMsg::Noop));
+    assert_eq!(note_text(&app, &a), "note!");
+    assert!(app.document_state.is_document_dirty(&a));
+}
+
 /// Control: the same typing in the main window reaches the sheet on a tab
 /// switch.
 #[test]
