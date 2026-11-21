@@ -78,7 +78,7 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
             board
                 .vias
                 .iter()
-                .filter(|via| on(via_layers(via)))
+                .filter(|via| !query.skip.contains(&via.uuid) && on(via_layers(via)))
                 .map(|via| via.position),
         );
     }

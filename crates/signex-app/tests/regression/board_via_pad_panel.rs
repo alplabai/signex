@@ -1,14 +1,16 @@
 //! Mockup rows 96 and 97: the Via panel picks one of the board's via types
 //! (derived from its vias until the Layer Stack Manager stores them),
-//! Override lets one via keep its own Diameter and Drill, and a surface
-//! pad's stack is its one copper layer. Driven through `Signex::update`
-//! with the panel's messages.
+//! a value typed away from the type's is that via's own, and a surface pad's
+//! stack is its one copper layer. Driven through `Signex::update` with the
+//! panel's messages.
 
 use pcb_geom::{ClickMode, ItemRef};
 use signex_app::app::{EditMsg, FileMsg, Message, Signex, TabDocument};
 use signex_app::diagnostics;
 use signex_app::dock::DockMessage;
-use signex_app::panels::pcb_primitive_properties::{PcbPrimitiveFacts, PrimitiveTarget, ViaMsg};
+use signex_app::panels::pcb_primitive_properties::{
+    PcbPrimitiveFacts, PrimitiveField, PrimitiveTarget, ViaMsg,
+};
 use signex_app::panels::{PanelMsg, PcbPrimitiveMsg};
 use signex_app::pcb_canvas::PcbCanvasMsg;
 use signex_types::format::SnxPcb;
@@ -278,7 +280,6 @@ fn a_via_lists_the_boards_types_and_names_its_own() {
         Some("Through 1–4")
     );
     assert_eq!(via.reaches, (true, true));
-    assert!(!via.override_open, "Diameter and Drill start read-only");
     assert_eq!(via.finished_hole.map(|h| (h * 1000.0).round()), Some(250.0));
 }
 
@@ -312,80 +313,96 @@ fn picking_a_via_type_is_one_undo_step_and_sets_span_sizes_and_tenting() {
     assert_eq!(v.net, 1, "the net stays");
 }
 
-#[test]
-fn override_unlocks_the_sizes_and_off_resets_them_in_one_step() {
-    let mut f = open_board();
-    let t = select_via(&mut f, 48.0, V4);
-    let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
-        panic!("the via panel shows");
-    };
-    assert_eq!(via.overridden, Some(true), "V4 has its own diameter");
-    assert!(
-        via.override_on(),
-        "a via that differs from its type shows Override on"
-    );
-    let before = snapshot(&f.app);
+fn type_value(f: &mut Fixture, t: &PrimitiveTarget, field: PrimitiveField, value: &str) {
+    let msg = |m| Message::Dock(DockMessage::Panel(PanelMsg::PcbPrimitive(m)));
     send(
         &mut f.app,
-        via_panel(ViaMsg::OverrideToggled {
+        msg(PcbPrimitiveMsg::FieldTyped {
             target: t.clone(),
-            on: true,
+            field,
+            text: value.into(),
         }),
     );
-    assert_eq!(snapshot(&f.app), before, "Override on changes nothing");
+    send(
+        &mut f.app,
+        msg(PcbPrimitiveMsg::FieldSubmitted {
+            target: t.clone(),
+            field,
+        }),
+    );
+}
+
+fn overridden(f: &Fixture) -> Option<bool> {
     let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
         panic!("the via panel shows");
     };
-    assert!(
-        via.override_open,
-        "Diameter and Drill now take typed values"
-    );
-    let edited = assert_one_step(&mut f, |f| {
-        send(
-            &mut f.app,
-            via_panel(ViaMsg::OverrideToggled {
-                target: t.clone(),
-                on: false,
-            }),
-        );
-    });
-    let v = via_on(&edited, V4);
-    assert_eq!((v.diameter, v.drill), (0.6, 0.3), "back to the type's");
-    assert_eq!(v.via_type, ViaType::Through);
+    via.overridden
 }
 
 #[test]
-fn a_via_overridden_on_its_type_shows_override_on_and_off_resets_it_in_one_step() {
+fn typing_a_size_overrides_the_type_in_one_step_and_its_value_clears_it() {
     let mut f = open_board();
-    select_via(&mut f, 40.0, V1);
-    let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
-        panic!("the via panel shows");
-    };
-    assert!(!via.override_on(), "V1 is its type: Override shows off");
-
-    let t = select_via(&mut f, 48.0, V4);
-    let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
-        panic!("the via panel shows");
-    };
-    assert!(!via.override_open, "nobody switched it on");
-    assert!(via.override_on(), "V4 differs from its type: Override on");
+    let t = select_via(&mut f, 40.0, V1);
+    assert_eq!(overridden(&f), Some(false), "V1 is its type");
     let edited = assert_one_step(&mut f, |f| {
-        send(
-            &mut f.app,
-            via_panel(ViaMsg::OverrideToggled {
-                target: t.clone(),
-                on: false,
-            }),
-        );
+        type_value(f, &t, PrimitiveField::Diameter, "0.7");
     });
-    let v = via_on(&edited, V4);
-    assert_eq!((v.diameter, v.drill), (0.6, 0.3), "back to the type's");
-    send(&mut f.app, Message::Edit(EditMsg::Redo));
-    let PcbPrimitiveFacts::Via(via) = facts(&f.app) else {
-        panic!("the via panel shows");
-    };
-    assert_eq!(via.overridden, Some(false));
-    assert!(!via.override_on(), "Override off stays off");
+    assert_eq!(via_on(&edited, V1).diameter, 0.7);
+
+    type_value(&mut f, &t, PrimitiveField::Diameter, "0.7");
+    assert_eq!(overridden(&f), Some(true), "its own diameter");
+    type_value(&mut f, &t, PrimitiveField::Diameter, "0.6");
+    assert_eq!(via_on(&live(&f.app), V1).diameter, 0.6);
+    assert_eq!(overridden(&f), Some(false), "the type's value clears it");
+
+    type_value(&mut f, &t, PrimitiveField::HoleSize, "0.35");
+    assert_eq!(overridden(&f), Some(true), "its own drill");
+    type_value(&mut f, &t, PrimitiveField::HoleSize, "0.3");
+    assert_eq!(overridden(&f), Some(false));
+}
+
+#[test]
+fn a_finished_hole_sets_the_drill_that_leaves_it_in_one_step() {
+    let mut f = open_board();
+    let t = select_via(&mut f, 40.0, V1);
+    let edited = assert_one_step(&mut f, |f| {
+        type_value(f, &t, PrimitiveField::FinishedHole, "0.3");
+    });
+    assert_eq!(via_on(&edited, V1).drill, 0.35, "0.3 plus the plating");
+
+    type_value(&mut f, &t, PrimitiveField::FinishedHole, "0.3");
+    assert_eq!(overridden(&f), Some(true));
+    type_value(&mut f, &t, PrimitiveField::FinishedHole, "0.25");
+    assert_eq!(via_on(&live(&f.app), V1).drill, 0.3);
+    assert_eq!(overridden(&f), Some(false), "back on the type's drill");
+
+    let before = snapshot(&f.app);
+    type_value(&mut f, &t, PrimitiveField::FinishedHole, "0");
+    assert_eq!(snapshot(&f.app), before, "no hole is refused");
+}
+
+#[test]
+fn a_locked_via_refuses_a_typed_size() {
+    let mut f = open_board();
+    let t = select_via(&mut f, 40.0, V1);
+    send(
+        &mut f.app,
+        Message::Dock(DockMessage::Panel(PanelMsg::PcbPrimitive(
+            PcbPrimitiveMsg::LockToggled {
+                target: t.clone(),
+                locked: true,
+            },
+        ))),
+    );
+    let before = snapshot(&f.app);
+    for field in [
+        PrimitiveField::Diameter,
+        PrimitiveField::HoleSize,
+        PrimitiveField::FinishedHole,
+    ] {
+        type_value(&mut f, &t, field, "0.2");
+        assert_eq!(snapshot(&f.app), before, "{field:?} stays");
+    }
 }
 
 #[test]
@@ -397,7 +414,7 @@ fn a_reset_arrow_puts_one_size_back_in_one_step() {
             &mut f.app,
             via_panel(ViaMsg::SizeReset {
                 target: t.clone(),
-                field: signex_app::panels::pcb_primitive_properties::PrimitiveField::Diameter,
+                field: PrimitiveField::Diameter,
             }),
         );
     });

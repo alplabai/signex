@@ -6,7 +6,7 @@
 
 use std::collections::BTreeSet;
 
-use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point};
+use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point, Via};
 use signex_types::pcb_options::{GridSpec, GridUse};
 use uuid::Uuid;
 
@@ -164,6 +164,53 @@ pub fn move_footprints_only(
             to: Point::new(fp.position.x + delta.x, fp.position.y + delta.y),
         })
         .collect())
+}
+
+/// The vias `ids` names, refusing an unknown, a locked or no via.
+pub fn editable_vias<'a>(
+    board: &'a PcbBoard,
+    ids: &BTreeSet<Uuid>,
+) -> Result<Vec<&'a Via>, PlacementRefusal> {
+    if ids.is_empty() {
+        return Err(PlacementRefusal::NothingSelected);
+    }
+    let mut found = Vec::with_capacity(ids.len());
+    for &id in ids {
+        let via = board
+            .vias
+            .iter()
+            .find(|via| via.uuid == id)
+            .ok_or(BoardCommandError::ItemNotFound(BoardItemId::Via(id)))?;
+        found.push(via);
+    }
+    let locked = super::lock::locked_names(board, ids.iter().map(|&id| BoardItemId::Via(id)));
+    if locked.is_empty() {
+        Ok(found)
+    } else {
+        Err(PlacementRefusal::Locked(locked))
+    }
+}
+
+/// Move every via in `ids` by `delta`, keeping its net. The tracks ending on
+/// it stay where they are, as when its position is typed in Properties.
+pub fn move_vias(
+    board: &PcbBoard,
+    ids: &BTreeSet<Uuid>,
+    delta: Point,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    let vias = editable_vias(board, ids)?;
+    if delta.x == 0.0 && delta.y == 0.0 {
+        return Ok(Vec::new());
+    }
+    let items = vias
+        .into_iter()
+        .map(|via| {
+            let mut moved = via.clone();
+            moved.position = Point::new(via.position.x + delta.x, via.position.y + delta.y);
+            BoardItem::Via(moved)
+        })
+        .collect();
+    Ok(vec![BoardCommand::ReplaceItems { items }])
 }
 
 /// Turn or mirror the footprints in `ids`. One footprint turns about its

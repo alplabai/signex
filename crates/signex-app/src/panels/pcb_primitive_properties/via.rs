@@ -1,12 +1,13 @@
 //! The Via panel (mockup row 96): Net Information; Definition (net, the via
 //! type the via is, its name, span and drill pair, position); Via Stack
-//! (the illustration, Override, Diameter and Drill); Protection
+//! (the illustration, Diameter, Drill and Finished Hole); Protection
 //! (IPC-4761); Solder Mask Expansion; and the rows the board does not store
 //! yet.
 //!
 //! A via picks a via type; span, drill pair, stack and protection come from
-//! it. Override lets one via take its own Diameter and Drill. The types are
-//! derived from the board's vias until the Layer Stack Manager stores them
+//! it. A Diameter or Drill typed away from the type's is this via's override,
+//! and typing the type's value clears it. The types are derived from the
+//! board's vias until the Layer Stack Manager stores them
 //! (`signex_engine::pcb::via_types`), so tenting stays editable here.
 
 use iced::widget::{column, pick_list, row};
@@ -17,7 +18,7 @@ use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_stack::StackMode;
 use signex_types::pcb_via_protection::{Ipc4761, PlugSide, ViaFill};
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{Label, ToggleSwitchStyle, button, chips, text, toggle_switch};
+use signex_widgets::{Label, button, chips};
 
 use super::drawing::via as drawing;
 use super::linked::{Segment, segments};
@@ -43,9 +44,6 @@ pub enum ViaMsg {
         target: PrimitiveTarget,
         key: ViaTypeKey,
     },
-    /// Override was switched: on lets Diameter and Drill be typed; off puts
-    /// them back to the type's.
-    OverrideToggled { target: PrimitiveTarget, on: bool },
     /// A reset arrow: `field` (Diameter or Drill) back to the type's value.
     SizeReset { target: PrimitiveTarget, field: F },
     /// A layer chip: the copper layer the illustration's top view shows.
@@ -67,13 +65,6 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a ViaFacts) -> Element<'a, Pa
         via_mask_section(look, f),
         not_stored(look, f),
     ])
-}
-
-/// Diameter, Drill and the stack tiles take typed values: Override is on
-/// (switched on, or the vias already differ from their type), or the panel
-/// shows the via the Via tool places next (#2393).
-fn sizes_live(f: &ViaFacts) -> bool {
-    f.override_on() || f.common.target.is_placement()
 }
 
 fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
@@ -213,38 +204,36 @@ fn labelled_blank<'a>(look: Look<'a>, value: Element<'a, PanelMsg>) -> Element<'
 
 fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
-    let live = sizes_live(f);
     let mut s = Section::new(look, ids::PCB_PRIM_VIA_STACK);
-    let tip = if live {
-        ids::PCB_PRIM_STACK_TIP
-    } else {
-        ids::PCB_PRIM_STACK_FROM_TYPE_TIP
-    };
     s.push(
         common,
         ids::PCB_PRIM_STACK_SIMPLE,
-        mode_tiles(look, common, f.mode, live, tip),
+        mode_tiles(look, common, f.mode, true, ids::PCB_PRIM_STACK_TIP),
     );
     s.push_row(illustration(look, common, drawing::illustration(look, f)));
     if let Some(chips) = layer_chips(look, f) {
         s.push_row(chips);
     }
-    if !common.target.is_placement() {
-        s.push(common, ids::PCB_PRIM_OVERRIDE, override_row(look, f));
-        if f.override_on() {
-            s.push_row(caption(look, look.t(ids::PCB_PRIM_OVERRIDE_NOTE)));
-        }
+    if !common.target.is_placement() && f.overridden == Some(true) {
+        s.push_row(caption(look, look.t(ids::PCB_PRIM_OVERRIDE_NOTE)));
     }
     let type_size = f.type_size;
     if f.mode == Some(StackMode::Simple) || f.layer_sizes.is_empty() {
         let row = size_row(look, f, F::Diameter, f.diameter, type_size.map(|t| t.0));
         s.push(common, ids::PCB_PRIM_DIAMETER, row);
     } else {
-        size_rows(look, common, &f.layer_sizes, false, live, &mut s);
+        size_rows(look, common, &f.layer_sizes, false, true, &mut s);
     }
     let row = size_row(look, f, F::HoleSize, f.hole, type_size.map(|t| t.1));
     s.push(common, ids::PCB_PRIM_DRILL, row);
-    let finished = f.finished_hole.map(|h| UserText::new(format_number(h)));
+    // The Via tool's form sets the drill; a placed via's finished hole types
+    // the drill that leaves it.
+    let finished = if common.target.is_placement() {
+        let shown = f.finished_hole.map(format_number).unwrap_or_default();
+        value_box(look, UserText::new(shown))
+    } else {
+        mm_field(common, F::FinishedHole, f.finished_hole, look)
+    };
     s.push(
         common,
         ids::PCB_PRIM_FINISHED_HOLE,
@@ -253,14 +242,7 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
             ids::PCB_PRIM_FINISHED_HOLE,
             with_tip(
                 look,
-                tagged(
-                    look,
-                    value_box(
-                        look,
-                        finished.unwrap_or_else(|| UserText::new(String::new())),
-                    ),
-                    Some(ids::PCB_PRIM_FROM_DRILL),
-                ),
+                tagged(look, finished, Some(ids::PCB_PRIM_FROM_DRILL)),
                 ids::PCB_PRIM_FINISHED_HOLE_TIP,
             ),
         ),
@@ -279,8 +261,8 @@ fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg
     s.finish()
 }
 
-/// Diameter or Drill: typed while Override is on, else greyed with a
-/// "from type" tag; a reset arrow while it differs from the type's value.
+/// Diameter or Drill, always typed: "from type" while it is the type's value;
+/// bold with a reset arrow while it differs.
 fn size_row<'a>(
     look: Look<'a>,
     f: &'a ViaFacts,
@@ -289,19 +271,18 @@ fn size_row<'a>(
     of_type: Option<f64>,
 ) -> Element<'a, PanelMsg> {
     let common = &f.common;
-    let live = sizes_live(f);
     let differs = match (value, of_type) {
         (Some(v), Some(t)) => (v - t).abs() > 1e-9,
         (None, Some(_)) => true,
         _ => false,
     };
-    let own = differs && live && !common.target.is_placement();
+    let own = differs && !common.target.is_placement();
     let input = if own && value.is_some() {
         bold_mm_field(look, f, field, value)
     } else {
         mm_field(common, field, value, look)
     };
-    let mut value_row = row![greyed_unless(look, live, input)]
+    let mut value_row = row![input]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center);
     if own {
@@ -348,38 +329,6 @@ fn bold_mm_field<'a>(
         .style(crate::panels::form_look::text_input_style)
         .font(bold)
         .boxed()
-}
-
-/// Override: the switch and "for this via".
-fn override_row<'a>(look: Look<'a>, f: &'a ViaFacts) -> Element<'a, PanelMsg> {
-    let common = &f.common;
-    let r = resolve(look.tokens());
-    let style = ToggleSwitchStyle::new(ti(look.tokens().accent), r.line_strong, r.primary_ink);
-    let on = f.override_on();
-    let msg = common.is_editable().then(|| {
-        via_msg(ViaMsg::OverrideToggled {
-            target: common.target.clone(),
-            on: !on,
-        })
-    });
-    let switch = with_tip(
-        look,
-        toggle_switch(on, style, msg),
-        ids::PCB_PRIM_OVERRIDE_TIP,
-    );
-    labelled(
-        look,
-        ids::PCB_PRIM_OVERRIDE,
-        row![
-            switch,
-            text(look.t(ids::PCB_PRIM_OVERRIDE_CAPTION))
-                .size(TS.dense)
-                .color(look.muted)
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center)
-        .boxed(),
-    )
 }
 
 /// The layer chips over the illustration: one per size row of a

@@ -90,20 +90,20 @@ share (on a tie the smaller), plus the through via the Via tool places
 (`PcbSetup::via_diameter`, `via_drill`) when no via is through. Through types
 come first, then by top layer; a type is named with the span name the panel
 shows ("Thru 1:4"). Picking a type in the Via panel sets the vias' kind,
-span, diameter, drill and tenting as one undo step. A via whose diameter or
-drill differs from its type's is an override: the panel shows Override on
-for it, with its own sizes in bold, and turning Override off puts both back
-to the type's in one step. A via that matches its type shows its sizes and
-stack tiles greyed until Override is switched on. The finished hole is the
-drill less twice `VIA_PLATING_MM` (0.025 mm); a drill below
-`PcbSetup::via_min_drill` shows a warning.
+span, diameter, drill and tenting as one undo step. Diameter, Drill and
+Finished Hole are always editable. A via whose diameter or drill differs from
+its type's is an override: that size is in bold with a reset arrow, and its
+"from type" note goes. Typing the type's value clears the override. The
+finished hole is the drill less twice `VIA_PLATING_MM` (0.025 mm), and typing
+one sets the drill that leaves it; a drill below `PcbSetup::via_min_drill`
+shows a warning.
 
 A known trap of derived types: the type's size is the one most of its vias
 share, so an override on most vias of a type moves the type's size with it.
 Five vias at 0.6/0.3 with three of them overridden to 0.8/0.4 make a 0.8/0.4
-type; the two untouched vias then read as overridden, and turning Override
-off on them sizes them to 0.8/0.4. A type with a single via never reads as
-overridden. Stored via types (mockup row 105) end this; until then
+type; the two untouched vias then read as overridden, and their reset arrows
+size them to 0.8/0.4. A type with a single via never reads as overridden:
+typing a new size on it changes the type's size. Stored via types (mockup row 105) end this; until then
 `via_types_tests::overriding_most_vias_of_a_derived_type_moves_the_type`
 pins it.
 

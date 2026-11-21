@@ -1,0 +1,304 @@
+//! A via dragged with the Select tool, driven from real pointer events on
+//! the board canvas into `Signex::update`.
+
+use std::path::{Path, PathBuf};
+
+use iced::widget::canvas;
+use iced::{Event, Rectangle, mouse};
+use signex_types::pcb::{PcbBoard, Point};
+use uuid::Uuid;
+
+use crate::app::handlers::menu::export::tests::app_workspace;
+use crate::app::{EditMsg, Message, Signex};
+use crate::pcb_canvas::PcbCanvasState;
+
+const U1: Uuid = Uuid::from_u128(0x10);
+const FREE: Uuid = Uuid::from_u128(0x40);
+const LOCKED: Uuid = Uuid::from_u128(0x41);
+const TRACK: Uuid = Uuid::from_u128(0x50);
+const BOUNDS: Rectangle = Rectangle {
+    x: 0.0,
+    y: 0.0,
+    width: 1600.0,
+    height: 1200.0,
+};
+
+/// U1 at (10, 10); a free via at (20, 10) with a track ending on it; a locked
+/// via at (20, 20). All on a 0.5 mm grid.
+fn board() -> PcbBoard {
+    let via = |id: Uuid, y: f64, locked: bool| {
+        serde_json::json!({
+            "uuid": id, "position": {"x": 20.0, "y": y}, "diameter": 0.8, "drill": 0.4,
+            "layers": ["TopCopper", "BottomCopper"], "net": 1, "locked": locked
+        })
+    };
+    serde_json::from_value(serde_json::json!({
+        "uuid": Uuid::from_u128(1),
+        "setup": {"grid_size": 0.5},
+        "footprints": [{
+            "uuid": U1, "reference": "U1", "position": {"x": 10.0, "y": 10.0},
+            "rotation": 0.0, "layer": "TopCopper", "locked": false,
+            "pads": [{"uuid": Uuid::from_u128(0x11), "number": "1", "pad_type": "smd",
+                      "shape": "rect", "position": {"x": 0.0, "y": 0.0},
+                      "size": {"x": 1.0, "y": 1.0}, "drill": null,
+                      "layers": ["TopCopper"]}]
+        }],
+        "vias": [via(FREE, 10.0, false), via(LOCKED, 20.0, true)],
+        "segments": [{"uuid": TRACK, "start": {"x": 15.0, "y": 10.0},
+                      "end": {"x": 20.0, "y": 10.0}, "width": 0.25,
+                      "layer": "TopCopper", "net": 1}]
+    }))
+    .unwrap()
+}
+
+struct Rig {
+    app: Signex,
+    path: PathBuf,
+    state: PcbCanvasState,
+    _dir: tempfile::TempDir,
+}
+
+fn rig() -> Rig {
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), board());
+    app.ui_state.pcb_snap.objects.clear();
+    app.ui_state.pcb_snap.to_guides = false;
+    app.ui_state.pcb_snap.to_axes = false;
+    // Close enough that a via is several pixels wide.
+    app.interaction_state
+        .pcb_canvas
+        .zoom_by_factor_about_centre(4.0);
+    app.refresh_pcb_highlight();
+    Rig {
+        app,
+        path,
+        state: PcbCanvasState::default(),
+        _dir: dir,
+    }
+}
+
+impl Rig {
+    /// The canvas pixel of a board point.
+    fn pixel(&self, at: Point) -> iced::Point {
+        self.app
+            .interaction_state
+            .pcb_canvas
+            .camera_ref()
+            .world_to_screen(iced::Point::new(at.x as f32, at.y as f32))
+    }
+
+    /// One pointer event through the canvas, its message through the app.
+    fn send(&mut self, event: Event, pixel: iced::Point) {
+        let cursor = mouse::Cursor::Available(pixel);
+        let action = canvas::Program::update(
+            &self.app.interaction_state.pcb_canvas,
+            &mut self.state,
+            &event,
+            BOUNDS,
+            cursor,
+        );
+        if let Some(message) = action.and_then(|action| action.into_inner().0) {
+            let _ = self.app.update(message);
+        }
+    }
+
+    fn press(&mut self, at: Point) {
+        let pixel = self.pixel(at);
+        let moved = mouse::Event::CursorMoved { position: pixel };
+        self.send(Event::Mouse(moved), pixel);
+        let event = mouse::Event::ButtonPressed(mouse::Button::Left);
+        self.send(Event::Mouse(event), pixel);
+    }
+
+    fn move_to(&mut self, at: Point) {
+        let pixel = self.pixel(at);
+        let event = mouse::Event::CursorMoved { position: pixel };
+        self.send(Event::Mouse(event), pixel);
+    }
+
+    fn release(&mut self, at: Point) {
+        let pixel = self.pixel(at);
+        let event = mouse::Event::ButtonReleased(mouse::Button::Left);
+        self.send(Event::Mouse(event), pixel);
+    }
+
+    fn drag(&mut self, from: Point, to: Point) {
+        self.press(from);
+        self.move_to(to);
+        self.release(to);
+    }
+
+    fn board(&self) -> &PcbBoard {
+        self.app
+            .document_state
+            .pcb_board(&self.path)
+            .expect("board")
+    }
+
+    fn via(&self, id: Uuid) -> &signex_types::pcb::Via {
+        self.board().vias.iter().find(|v| v.uuid == id).unwrap()
+    }
+
+    fn live(&self) -> String {
+        live(&self.app, &self.path)
+    }
+}
+
+fn live(app: &Signex, path: &Path) -> String {
+    serde_json::to_string(app.document_state.pcb_board(path).expect("board")).unwrap()
+}
+
+fn close(a: Point, x: f64, y: f64) -> bool {
+    (a.x - x).abs() < 1e-6 && (a.y - y).abs() < 1e-6
+}
+
+#[test]
+fn a_dragged_via_lands_on_the_grid_keeps_its_net_and_undoes_in_one_step() {
+    let mut rig = rig();
+    let before = rig.live();
+    rig.press(Point::new(20.0, 10.0));
+    rig.move_to(Point::new(24.1, 13.2));
+    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
+    assert!(carry.vias.contains(&FREE), "the via is carried");
+    assert!(
+        !rig.app
+            .interaction_state
+            .pcb_canvas
+            .highlight()
+            .ghost
+            .is_empty(),
+        "a preview follows the pointer"
+    );
+    assert_eq!(rig.live(), before, "nothing moves before the release");
+    rig.release(Point::new(24.1, 13.2));
+
+    let via = rig.via(FREE);
+    assert!(close(via.position, 24.0, 13.0), "{:?}", via.position);
+    assert_eq!(via.net, 1, "the net is unchanged");
+    let track = &rig.board().segments[0];
+    assert!(close(track.end, 20.0, 10.0), "the track stays: {track:?}");
+
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(rig.live(), before, "one undo restores the via");
+}
+
+#[test]
+fn a_via_pressed_off_centre_lands_with_its_centre_on_the_grid() {
+    let mut rig = rig();
+    rig.drag(Point::new(20.2, 10.1), Point::new(25.2, 12.1));
+    assert!(
+        close(rig.via(FREE).position, 25.0, 12.0),
+        "{:?}",
+        rig.via(FREE).position
+    );
+}
+
+#[test]
+fn with_grid_snap_off_a_via_moves_by_the_exact_drag() {
+    let mut rig = rig();
+    rig.app.ui_state.pcb_snap.to_grids = false;
+    let (from, to) = (Point::new(20.0, 10.0), Point::new(23.0, 12.0));
+    rig.drag(from, to);
+    let at = rig.via(FREE).position;
+    // The pointer goes through f32 pixels, so the drag is exact to a micron.
+    assert!(
+        (at.x - 23.0).abs() < 1e-3 && (at.y - 12.0).abs() < 1e-3,
+        "{at:?}"
+    );
+}
+
+#[test]
+fn a_via_does_not_snap_to_its_own_centre() {
+    let mut rig = rig();
+    rig.app
+        .ui_state
+        .pcb_snap
+        .objects
+        .insert(signex_engine::pcb::snap::SnapObject::ViaCenters);
+    rig.drag(Point::new(20.0, 10.0), Point::new(20.4, 10.0));
+    assert!(
+        !close(rig.via(FREE).position, 20.0, 10.0),
+        "the via left its place: {:?}",
+        rig.via(FREE).position
+    );
+}
+
+#[test]
+fn a_locked_via_stays_and_the_drag_carries_nothing() {
+    let mut rig = rig();
+    let before = rig.live();
+    rig.press(Point::new(20.0, 20.0));
+    rig.move_to(Point::new(25.0, 25.0));
+    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
+    assert!(carry.vias.is_empty(), "a refused drag carries nothing");
+    assert!(
+        rig.app
+            .interaction_state
+            .pcb_canvas
+            .highlight()
+            .ghost
+            .is_empty(),
+        "and paints no preview"
+    );
+    rig.release(Point::new(25.0, 25.0));
+    assert_eq!(rig.live(), before, "the locked via stays");
+    assert!(rig.app.interaction_state.pcb_carry.is_none());
+}
+
+#[test]
+fn a_click_on_a_via_only_selects_it() {
+    let mut rig = rig();
+    let before = rig.live();
+    let on_via = Point::new(20.0, 10.0);
+    rig.press(on_via);
+    rig.release(on_via);
+    assert_eq!(rig.live(), before);
+    assert!(rig.app.interaction_state.pcb_carry.is_none());
+    let selected: Vec<_> = rig
+        .app
+        .interaction_state
+        .pcb_selection
+        .selection()
+        .items()
+        .collect();
+    assert_eq!(selected, [pcb_geom::ItemRef::Via(FREE)]);
+}
+
+#[test]
+fn a_drag_from_empty_space_still_draws_a_box() {
+    let mut rig = rig();
+    let before = rig.live();
+    rig.press(Point::new(40.0, 40.0));
+    rig.move_to(Point::new(45.0, 45.0));
+    assert!(rig.app.interaction_state.pcb_carry.is_none(), "no carry");
+    rig.release(Point::new(45.0, 45.0));
+    assert_eq!(rig.live(), before);
+}
+
+#[test]
+fn a_footprint_drag_still_moves_the_footprint() {
+    let mut rig = rig();
+    rig.drag(Point::new(10.0, 10.0), Point::new(12.0, 11.0));
+    let u1 = rig
+        .board()
+        .footprints
+        .iter()
+        .find(|f| f.uuid == U1)
+        .unwrap();
+    assert!(close(u1.position, 12.0, 11.0), "{:?}", u1.position);
+    assert!(close(rig.via(FREE).position, 20.0, 10.0), "the via stays");
+}
+
+#[test]
+fn turning_vias_off_in_the_filter_leaves_a_press_on_one_to_draw_a_box() {
+    let mut rig = rig();
+    rig.app
+        .ui_state
+        .pcb_pick_filter
+        .set_on_kinds([pcb_geom::PickKind::Tracks]);
+    rig.app.refresh_pcb_highlight();
+    let on_via = Point::new(20.0, 20.0);
+    assert!(!rig.app.interaction_state.pcb_canvas.grabs(on_via, 0.05));
+}

@@ -221,10 +221,6 @@ define_ids! {
     PCB_PRIM_POSITION = "pcb-prim-position";
     PCB_PRIM_VIA_LOCKED = "pcb-prim-via-locked";
     PCB_PRIM_UNLOCK_VIA = "pcb-prim-unlock-via";
-    PCB_PRIM_STACK_FROM_TYPE_TIP = "pcb-prim-stack-from-type-tip";
-    PCB_PRIM_OVERRIDE = "pcb-prim-override";
-    PCB_PRIM_OVERRIDE_CAPTION = "pcb-prim-override-caption";
-    PCB_PRIM_OVERRIDE_TIP = "pcb-prim-override-tip";
     PCB_PRIM_OVERRIDE_NOTE = "pcb-prim-override-note";
     PCB_PRIM_DRILL = "pcb-prim-drill";
     PCB_PRIM_RESET_TO_TYPE = "pcb-prim-reset-to-type";

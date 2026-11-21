@@ -28,7 +28,7 @@ pub(super) struct Gesture {
     /// The press has passed the drag threshold and owns the canvas marquee,
     /// or (with `carrying`) drags the selected footprints.
     dragging: bool,
-    /// The press landed on a footprint: a drag moves it (#2240, #2358).
+    /// The press landed on a footprint or via: a drag moves it (#2240, #2358).
     carrying: bool,
     /// A tool or a carry waited for clicks at the press: its release is a
     /// click wherever it lands (#2396).
