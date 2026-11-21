@@ -435,7 +435,8 @@ impl PcbSelectionState {
     /// The vias a press at `at` grabs to drag: the via a click there picks,
     /// with the other selected vias when the selection is only vias and holds
     /// it; otherwise it becomes the selection. `None` off a via, and on a via
-    /// over a selected footprint, which the press carries instead.
+    /// over a footprint unless a click has already picked that via: the
+    /// press then carries the footprint (#2358).
     pub fn grab_vias_for_drag(
         &mut self,
         board: &PcbBoard,
@@ -449,11 +450,19 @@ impl PcbSelectionState {
         let p = PointNm::from_mm(at, "press").ok()?;
         let tol = pcb_geom::mm_to_nm(tolerance_mm, "reach").ok()?;
         let selected = self.selection.footprints();
-        let on_selected_footprint = self.index.as_ref()?.items_at(p, tol).iter().any(|i| {
-            matches!(i.item, ItemRef::Footprint(fp) | ItemRef::Pad { footprint: fp, .. }
-                if selected.contains(&fp))
-        });
-        if on_selected_footprint {
+        let under: Vec<Uuid> = self
+            .index
+            .as_ref()?
+            .items_at(p, tol)
+            .iter()
+            .filter_map(|i| match i.item {
+                ItemRef::Footprint(fp) | ItemRef::Pad { footprint: fp, .. } => Some(fp),
+                _ => None,
+            })
+            .collect();
+        if under.iter().any(|fp| selected.contains(fp))
+            || (!under.is_empty() && !self.selection.contains(item))
+        {
             return None;
         }
         let vias: Option<BTreeSet<Uuid>> = self

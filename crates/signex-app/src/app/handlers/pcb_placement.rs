@@ -164,6 +164,8 @@ impl Signex {
             .filter(|_| switched)
         {
             carry.leaves_tracks = leaves_tracks;
+            // A via's snap counts its tracks only while they stay.
+            self.carry_to(from, to);
             self.refresh_pcb_highlight();
         }
     }
@@ -351,7 +353,7 @@ impl Signex {
             // A text follows the pointer exactly (#2368).
             Point::new(to.x - from.x, to.y - from.y)
         } else if !carry.vias.is_empty() {
-            let Some(delta) = self.via_drag_delta(&carry.vias, from, to) else {
+            let Some(delta) = self.via_drag_delta(carry, from, to) else {
                 return;
             };
             delta

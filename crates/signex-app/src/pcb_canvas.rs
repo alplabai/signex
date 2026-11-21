@@ -32,7 +32,7 @@ pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{
     CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, carried_board, carry_delta,
-    snap_point, via_carry_delta,
+    followed_arcs, snap_point, via_carry_delta, with_arcs_replaced,
 };
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};

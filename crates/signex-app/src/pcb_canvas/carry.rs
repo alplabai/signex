@@ -7,12 +7,13 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use pcb_geom::{BoardTextField, TrackEnds};
+use pcb_geom::{ArcEnds, BoardTextField, TrackEnds};
 use signex_engine::pcb::BoardClipboard;
 use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::placement::{grid_for, grid_step_mm};
 use signex_engine::pcb::snap::{GuideHit, SnapQuery, axis_snap, guide_snap, object_snap_point};
 use signex_types::pcb::{PcbBoard, Point, Segment};
+use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_options::{GridUse, GuideKind};
 use uuid::Uuid;
@@ -68,7 +69,8 @@ pub struct PcbCarry {
     pub text: Option<(Uuid, BoardTextField)>,
     /// The vias a drag moves; `footprints` is then empty.
     pub vias: BTreeSet<Uuid>,
-    /// Tracks end on the carried `vias`, read when the drag starts.
+    /// Tracks or copper arcs end on the carried `vias`, read when the drag
+    /// starts.
     pub via_tracks: bool,
     /// A drag with Ctrl held moves the footprints or vias alone: the tracks
     /// on them stay where they are (Caner, 2026-11-21).
@@ -129,6 +131,25 @@ impl PcbCarry {
         }
     }
 
+    /// The copper arc ends on the carried vias, which move with them; none
+    /// with Ctrl held.
+    pub fn following_arcs(&self, board: &PcbBoard) -> Vec<ArcEnds> {
+        if self.leaves_tracks {
+            Vec::new()
+        } else {
+            pcb_geom::arcs_on_vias(board, &self.vias)
+        }
+    }
+
+    /// What a via's snap leaves out: the carried vias and the tracks and
+    /// arcs following them. With Ctrl they stay put, so they still count.
+    pub fn snap_skip(&self, board: &PcbBoard) -> BTreeSet<Uuid> {
+        let mut skip = self.vias.clone();
+        skip.extend(self.following(board).iter().map(|ends| ends.track));
+        skip.extend(self.following_arcs(board).iter().map(|ends| ends.arc));
+        skip
+    }
+
     /// A Move, a paste or a part on the cursor waits for clicks: nothing is
     /// grabbed and every press is a click (#2240, #2364, #2396).
     pub fn waits_for_clicks(&self) -> bool {
@@ -182,6 +203,7 @@ pub fn carry_delta(
 pub fn via_carry_delta(
     board: &PcbBoard,
     vias: &BTreeSet<Uuid>,
+    skip: &BTreeSet<Uuid>,
     from: Point,
     to: Point,
     snap: &PcbSnapOptions,
@@ -204,7 +226,7 @@ pub fn via_carry_delta(
         raw
     };
     let target = Point::new(centre.x + raw.x, centre.y + raw.y);
-    snapped_delta(board, vias, centre, target, on_grid, snap, active)
+    snapped_delta(board, skip, centre, target, on_grid, snap, active)
 }
 
 /// `on_grid` refined by the object, guide and axis snaps at `to`, leaving
@@ -356,6 +378,27 @@ pub fn board_without(
         .cloned()
         .collect();
     rest
+}
+
+/// The arcs of `ends` on `board` as the move by `delta` leaves them; an arc
+/// no longer where `ends` found it is left out.
+pub fn followed_arcs(board: &PcbBoard, ends: &[ArcEnds], delta: Point) -> Vec<TrackArc> {
+    ends.iter()
+        .filter_map(|ends| {
+            let arc = board.free.arcs.get(ends.index)?;
+            (arc.uuid == ends.arc).then(|| ends.follow(arc, delta))
+        })
+        .collect()
+}
+
+/// `board` with each of `arcs` put over the arc with its uuid.
+pub fn with_arcs_replaced(mut board: PcbBoard, arcs: &[TrackArc]) -> PcbBoard {
+    for arc in arcs {
+        if let Some(slot) = board.free.arcs.iter_mut().find(|a| a.uuid == arc.uuid) {
+            *slot = arc.clone();
+        }
+    }
+    board
 }
 
 /// The track of `ends` on `board` with its ends on the moved pads shifted

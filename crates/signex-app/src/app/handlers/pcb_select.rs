@@ -12,7 +12,7 @@ use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
 use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{
     PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_after_move, board_without,
-    carried_board,
+    carried_board, followed_arcs, with_arcs_replaced,
 };
 
 impl Signex {
@@ -358,7 +358,11 @@ fn sync_drag_preview(
         // is carried (none with Ctrl), and the board without what it
         // carries, with its pour fills.
         let following = carry.following(board);
-        let rest = board_without(board, &carried, &following);
+        let mut rest = board_without(board, &carried, &following);
+        let arcs = carry.following_arcs(board);
+        rest.free
+            .arcs
+            .retain(|arc| !arcs.iter().any(|ends| ends.arc == arc.uuid));
         let fills = pcb_geom::zone_fills(&rest);
         let base = PcbSnapshot::from_board_with_view(&rest, view)
             .with_designator_standard(standard)
@@ -367,12 +371,17 @@ fn sync_drag_preview(
     }
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
-        let moved = carried_board(board, &carried, &following, carry.delta);
+        let arcs = followed_arcs(board, &carry.following_arcs(board), carry.delta);
+        let mut moved = carried_board(board, &carried, &following, carry.delta);
+        moved.free.arcs = arcs.clone();
         let snapshot =
             PcbSnapshot::from_board_with_view(&moved, view).with_designator_standard(standard);
         match ratsnest {
             Some((cache, path)) => {
-                let after = board_after_move(board, &carried, &following, carry.delta);
+                let after = with_arcs_replaced(
+                    board_after_move(board, &carried, &following, carry.delta),
+                    &arcs,
+                );
                 let fills = pcb_geom::zone_fills(&after);
                 cache.apply_uncached(path, &after, &fills, snapshot)
             }

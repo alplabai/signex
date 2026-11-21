@@ -191,9 +191,9 @@ pub fn editable_vias<'a>(
     }
 }
 
-/// Move every via in `ids` by `delta`, keeping its net. The track ends on it
-/// move with it (`pcb_geom::tracks_on_vias`), in the same command, so the
-/// move stays one undo step.
+/// Move every via in `ids` by `delta`, keeping its net. The track and copper
+/// arc ends on it move with it (`pcb_geom::tracks_on_vias`, `arcs_on_vias`),
+/// in the same command, so the move stays one undo step.
 pub fn move_vias(
     board: &PcbBoard,
     ids: &BTreeSet<Uuid>,
@@ -205,6 +205,11 @@ pub fn move_vias(
             pcb_geom::tracks_on_vias(board, ids)
                 .iter()
                 .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta))),
+        );
+        items.extend(
+            pcb_geom::arcs_on_vias(board, ids)
+                .iter()
+                .map(|ends| BoardItem::Arc(ends.follow(&board.free.arcs[ends.index], delta))),
         );
     }
     Ok(commands)

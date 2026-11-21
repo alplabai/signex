@@ -136,6 +136,98 @@ fn a_footprint_not_moved_takes_nothing_along() {
     assert!(tracks_on_pads(&board, &[id(999)].into()).is_empty());
 }
 
+fn through_via(n: u128, x: f64, net: u32) -> signex_types::pcb::Via {
+    signex_types::pcb::Via {
+        attributes: Default::default(),
+        uuid: id(n),
+        position: Point::new(x, 0.0),
+        diameter: 0.8,
+        drill: 0.4,
+        layers: vec!["TopCopper".into(), "BottomCopper".into()],
+        net,
+        locked: false,
+        layer_sizes: None,
+        via_type: signex_types::pcb::ViaType::Through,
+        unknown_columns: Default::default(),
+    }
+}
+
+/// A stub from the via centre to a same-net pad 0.3 mm away has both ends on
+/// the via's copper; only the end at its centre follows.
+#[test]
+fn a_stub_to_a_near_pad_keeps_its_pad_end_when_the_via_moves() {
+    let mut board = board(vec![track(1, (8.7, 0.0), (9.0, 0.0), 1, "TopCopper")]);
+    board.vias.push(through_via(300, 8.7, 1));
+    let ends = tracks_on_vias(&board, &[id(300)].into());
+    assert_eq!(
+        ends,
+        [TrackEnds {
+            track: id(201),
+            index: 0,
+            start: true,
+            end: false,
+        }]
+    );
+    let moved = ends[0].follow(&board.segments[0], Point::new(-2.0, 1.0));
+    assert_eq!(moved.end, Point::new(9.0, 0.0), "the pad end stays");
+}
+
+fn arc(n: u128, start: (f64, f64), end: (f64, f64), net: u32, layer: &str) -> TrackArc {
+    let (cx, cy) = ((start.0 + end.0) / 2.0, (start.1 + end.1) / 2.0);
+    let half = (end.0 - start.0) / 2.0;
+    TrackArc {
+        uuid: id(400 + n),
+        start: Point::new(start.0, start.1),
+        mid: Point::new(cx, cy + half),
+        end: Point::new(end.0, end.1),
+        width: 0.25,
+        layer: layer.into(),
+        net,
+    }
+}
+
+#[test]
+fn only_a_copper_arc_end_at_the_via_on_its_net_and_layer_follows() {
+    let mut board = board(Vec::new());
+    board.vias.push(through_via(300, 2.0, 1));
+    board.free.arcs = vec![
+        arc(1, (2.0, 0.0), (6.0, 0.0), 1, "TopCopper"),
+        arc(2, (2.0, 0.0), (6.0, 0.0), 2, "TopCopper"),
+        arc(3, (2.0, 0.0), (6.0, 0.0), 1, "TopSilkscreen"),
+        arc(4, (2.1, 0.0), (6.0, 0.0), 1, "TopCopper"),
+    ];
+    assert_eq!(
+        arcs_on_vias(&board, &[id(300)].into()),
+        [ArcEnds {
+            arc: id(401),
+            index: 0,
+            start: true,
+            end: false,
+        }]
+    );
+}
+
+#[test]
+fn an_arc_following_one_end_keeps_its_other_end_and_its_sweep() {
+    let before = arc(1, (2.0, 0.0), (6.0, 0.0), 1, "TopCopper");
+    let ends = ArcEnds {
+        arc: before.uuid,
+        index: 0,
+        start: true,
+        end: false,
+    };
+    let after = ends.follow(&before, Point::new(-1.0, 3.0));
+    assert_eq!(after.start, Point::new(1.0, 3.0));
+    assert_eq!(after.end, before.end);
+    let (old, new) = (before.sweep().unwrap(), after.sweep().expect("still an arc"));
+    assert!((old.sweep - new.sweep).abs() < 1e-9, "{old:?} {new:?}");
+
+    let both = ArcEnds { end: true, ..ends };
+    let shifted = both.follow(&before, Point::new(-1.0, 3.0));
+    assert_eq!(shifted.mid, Point::new(3.0, 5.0));
+    assert_eq!(shifted.end, Point::new(5.0, 3.0));
+}
+
 #[test]
 fn follow_shifts_only_the_named_ends() {
     let segment = track(1, (0.0, 0.0), (9.0, 0.0), 1, "TopCopper");

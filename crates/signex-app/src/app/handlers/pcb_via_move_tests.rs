@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{EditMsg, Message, Signex};
-use crate::pcb_canvas::{PcbCanvasState, board_without, carried_board};
+use crate::pcb_canvas::{PcbCanvasState, board_without, carried_board, followed_arcs};
 
 const U1: Uuid = Uuid::from_u128(0x10);
 const FREE: Uuid = Uuid::from_u128(0x40);
@@ -20,6 +20,8 @@ const LONE: Uuid = Uuid::from_u128(0x42);
 const TRACK: Uuid = Uuid::from_u128(0x50);
 const OTHER_NET: Uuid = Uuid::from_u128(0x51);
 const LOCKED_TRACK: Uuid = Uuid::from_u128(0x52);
+const ON_PAD: Uuid = Uuid::from_u128(0x43);
+const ARC: Uuid = Uuid::from_u128(0x53);
 const BOUNDS: Rectangle = Rectangle {
     x: 0.0,
     y: 0.0,
@@ -310,6 +312,138 @@ fn a_via_with_no_track_keeps_its_ghost_and_moves() {
     rig.release(Point::new(33.0, 12.0));
     assert!(close(rig.via(LONE).position, 33.0, 12.0));
     assert_eq!(rig.board().segments, tracks);
+}
+
+/// `board()` with a via at (10.2, 10.2), on U1's pad.
+fn board_with_via_on_u1(locked: bool) -> PcbBoard {
+    let mut board = board();
+    let mut on_pad = board.vias[0].clone();
+    on_pad.uuid = ON_PAD;
+    on_pad.position = Point::new(10.2, 10.2);
+    on_pad.locked = locked;
+    board.vias.push(on_pad);
+    board
+}
+
+impl Rig {
+    fn u1_at(&self) -> Point {
+        let footprints = &self.board().footprints;
+        footprints.iter().find(|f| f.uuid == U1).unwrap().position
+    }
+}
+
+/// #2358: a press on an unselected footprint drags the footprint, even with
+/// a via, locked or not, under the pointer.
+#[test]
+fn a_press_on_a_via_inside_an_unselected_footprint_drags_the_footprint() {
+    for locked in [false, true] {
+        let mut rig = rig_on(board_with_via_on_u1(locked));
+        rig.drag(Point::new(10.2, 10.2), Point::new(12.2, 11.2));
+        let at = rig.u1_at();
+        assert!(close(at, 12.0, 11.0), "locked {locked}: {at:?}");
+        let via = rig.via(ON_PAD).position;
+        assert!(close(via, 10.2, 10.2), "locked {locked}: {via:?}");
+    }
+}
+
+#[test]
+fn a_via_inside_a_footprint_drags_once_a_click_has_picked_it() {
+    let mut rig = rig_on(board_with_via_on_u1(false));
+    let on_via = Point::new(10.2, 10.2);
+    rig.press(on_via);
+    rig.release(on_via);
+    let selected: Vec<_> = rig
+        .app
+        .interaction_state
+        .pcb_selection
+        .selection()
+        .items()
+        .collect();
+    assert_eq!(selected, [pcb_geom::ItemRef::Via(ON_PAD)]);
+    rig.drag(on_via, Point::new(12.2, 11.2));
+    let via = rig.via(ON_PAD).position;
+    assert!(close(via, 12.0, 11.0), "{via:?}");
+    assert!(close(rig.u1_at(), 10.0, 10.0), "the footprint stays");
+}
+
+/// `board()` with an arc from the free via over (22, 12) to (24, 10) in
+/// place of its track.
+fn board_with_arc() -> PcbBoard {
+    let mut board = board();
+    board.segments.clear();
+    board.free.arcs.push(signex_types::pcb_arc::TrackArc {
+        uuid: ARC,
+        start: Point::new(20.0, 10.0),
+        mid: Point::new(22.0, 12.0),
+        end: Point::new(24.0, 10.0),
+        width: 0.25,
+        layer: "TopCopper".into(),
+        net: 1,
+    });
+    board
+}
+
+#[test]
+fn a_copper_arc_follows_the_via_in_the_preview_and_in_one_undo_step() {
+    let mut rig = rig_on(board_with_arc());
+    let before = rig.live();
+    let sweep = rig.board().free.arcs[0].sweep().expect("an arc").sweep;
+    let to = Point::new(20.0, 12.0);
+    rig.press(Point::new(20.0, 10.0));
+    rig.move_to(to);
+    let canvas = &rig.app.interaction_state.pcb_canvas;
+    assert!(canvas.previews_drag(), "the arc is carried");
+    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
+    let board = rig.board();
+    let drawn = followed_arcs(board, &carry.following_arcs(board), carry.delta);
+    assert!(close(drawn[0].start, 20.0, 12.0), "{:?}", drawn[0]);
+    rig.release(to);
+
+    let arc = &rig.board().free.arcs[0];
+    assert!(close(arc.start, 20.0, 12.0), "{arc:?}");
+    assert!(close(arc.end, 24.0, 10.0), "its far end stays: {arc:?}");
+    let after = arc.sweep().expect("still an arc").sweep;
+    assert!((after - sweep).abs() < 1e-9, "{sweep} {after}");
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(rig.live(), before, "one undo restores via and arc");
+}
+
+#[test]
+fn a_ctrl_drag_leaves_a_copper_arc() {
+    let mut rig = rig_on(board_with_arc());
+    let arc = rig.board().free.arcs[0].clone();
+    rig.hold(Modifiers::CTRL, Point::new(20.0, 10.0));
+    rig.drag(Point::new(20.0, 10.0), Point::new(20.0, 12.0));
+    assert!(close(rig.via(FREE).position, 20.0, 12.0));
+    assert_eq!(rig.board().free.arcs[0], arc);
+}
+
+/// The via dragged to just off its own track, with Track Vertices and Track
+/// Lines on and the grid off.
+fn drag_along_own_track(ctrl: bool) -> Point {
+    use signex_engine::pcb::snap::SnapObject;
+    let mut rig = rig();
+    rig.app.ui_state.pcb_snap.to_grids = false;
+    let objects = &mut rig.app.ui_state.pcb_snap.objects;
+    objects.extend([SnapObject::TrackVertices, SnapObject::TrackLines]);
+    let from = Point::new(20.0, 10.0);
+    if ctrl {
+        rig.hold(Modifiers::CTRL, from);
+    }
+    rig.drag(from, Point::new(18.0, 10.05));
+    rig.via(FREE).position
+}
+
+#[test]
+fn a_via_does_not_snap_to_the_track_following_it() {
+    let at = drag_along_own_track(false);
+    assert!((at.y - 10.05).abs() < 1e-3, "off its own track: {at:?}");
+}
+
+#[test]
+fn with_ctrl_the_track_stays_and_the_via_can_snap_to_it() {
+    let at = drag_along_own_track(true);
+    assert!((at.y - 10.0).abs() < 1e-6, "onto the track: {at:?}");
 }
 
 #[test]

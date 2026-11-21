@@ -85,6 +85,7 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
     let tracks: Vec<(Point, Point)> = board
         .segments
         .iter()
+        .filter(|s| !query.skip.contains(&s.uuid))
         .filter(|s| on(layer_mask(std::iter::once(s.layer.as_str()))))
         .map(|s| (s.start, s.end))
         .collect();
@@ -111,17 +112,17 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
         }
     }
     // Free arcs (#2373): their ends are vertices, their centres arc centres.
+    let arcs: Vec<_> = board
+        .free
+        .arcs
+        .iter()
+        .filter(|a| !query.skip.contains(&a.uuid))
+        .collect();
     if wants(SnapObject::TrackVertices) && every_layer {
-        out.extend(board.free.arcs.iter().flat_map(|a| [a.start, a.end]));
+        out.extend(arcs.iter().flat_map(|a| [a.start, a.end]));
     }
     if wants(SnapObject::ArcCenters) && every_layer {
-        out.extend(
-            board
-                .free
-                .arcs
-                .iter()
-                .filter_map(|a| a.sweep().map(|s| s.center)),
-        );
+        out.extend(arcs.iter().filter_map(|a| a.sweep().map(|s| s.center)));
     }
     if wants(SnapObject::ArcCenters) && every_layer {
         out.extend(board.graphics.iter().filter_map(|g| g.center));
