@@ -181,8 +181,9 @@ fn a_paused_placement_leaves_the_window_buttons_working() {
             )
         })
     };
-    let along_the_title_bar = (0..60).flat_map(|step| {
-        let x = WINDOW.width - 4.0 - step as f32 * 4.0;
+    // The whole bar: the window buttons sit on the left on macOS.
+    let along_the_title_bar = (0..(WINDOW.width as u32 / 4)).flat_map(|step| {
+        let x = 2.0 + step as f32 * 4.0;
         [8.0, 16.0, 24.0].map(|y| Point::new(x, y))
     });
     assert!(
