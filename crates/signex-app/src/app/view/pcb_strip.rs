@@ -36,6 +36,8 @@ const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Height of the strip.
 pub(in crate::app) const STRIP_HEIGHT: f32 = chrome_px(28.0 * 11.0 / 12.0);
+/// Space between the tabs and the strip's scrollbar.
+const SCROLLBAR_GAP: f32 = SP.xs;
 /// Side padding of the layer set button.
 const SET_PAD_X: f32 = chrome_px(8.0 * 11.0 / 12.0);
 /// Side padding of a tab.
@@ -205,9 +207,12 @@ pub(super) fn layer_strip<'a>(
             .push(layer_tab(label, swatch, tokens, false, messages))
             .push(tab_divider(tokens));
     }
-    // A long strip scrolls inside the window instead of widening it.
+    // A long strip scrolls inside the window instead of widening it; its bar
+    // sits in its own space under the tabs, clear of them.
     let tabs = scrollable(tabs)
-        .direction(Direction::Horizontal(crate::styles::thin_scrollbar()))
+        .direction(Direction::Horizontal(
+            crate::styles::thin_scrollbar().spacing(SCROLLBAR_GAP),
+        ))
         .style(crate::styles::scrollbar_style(tokens))
         .width(Length::Fill)
         .height(Length::Fill);

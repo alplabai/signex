@@ -120,6 +120,30 @@ fn the_strip_lays_out_every_visible_tab_inside_its_scrollable() {
     assert_eq!(size.height, STRIP_HEIGHT);
 }
 
+/// A strip too long for its window keeps its height and moves the tabs up,
+/// so the scrollbar has its own space under them.
+#[test]
+fn an_overflowing_strip_keeps_the_scrollbar_clear_of_the_tabs() {
+    let board = board(&["TopCopper", "BottomCopper", "TopSilkscreen", "BottomSilkscreen"]);
+    let view = PcbLayerView::default();
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let centre = |width: f32| {
+        let window = Size::new(width, STRIP_HEIGHT);
+        let texts = lay_out_texts(strip(&board, &view, false, &tokens), window);
+        texts
+            .iter()
+            .find(|t| t.text == "Top Layer")
+            .expect("the first tab")
+            .bounds
+            .center_y()
+    };
+    let (fits, overflows) = (centre(1200.0), centre(120.0));
+    assert!(
+        fits - overflows >= SCROLLBAR_GAP / 2.0,
+        "tabs at {overflows} with a scrollbar, {fits} without"
+    );
+}
+
 /// A line divides two neighbouring tabs, in both Graphite themes.
 #[test]
 fn a_visible_line_divides_neighbouring_tabs() {
