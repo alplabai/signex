@@ -120,9 +120,11 @@ mod tests {
             let position = Point::new(x, 70.0);
             let event = canvas::Event::Mouse(mouse::Event::CursorMoved { position });
             let cursor = mouse::Cursor::Available(position);
-            assert!(program("grid", &hover)
-                .update(&mut (), &event, bounds, cursor)
-                .is_none());
+            assert!(
+                program("grid", &hover)
+                    .update(&mut (), &event, bounds, cursor)
+                    .is_none()
+            );
         }
     }
 }

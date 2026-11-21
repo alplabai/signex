@@ -69,11 +69,4 @@ fn general_rows_light_one_at_a_time_and_a_late_leave_keeps_the_new_row() {
     assert_eq!(lit(&app), vec![SNAP_GRID], "a late leave keeps the new row");
     hover(&mut app, IllustrationMsg::FieldLeft(SNAP_GRID));
     assert_eq!(lit(&app), Vec::<FieldId>::new());
-    // A callout on the grid drawing lights its row until the drawing
-    // reports the pointer left; a row leave does not clear it.
-    hover(&mut app, IllustrationMsg::CalloutHovered(VISIBLE_GRID));
-    hover(&mut app, IllustrationMsg::FieldLeft(VISIBLE_GRID));
-    assert_eq!(lit(&app), vec![VISIBLE_GRID]);
-    hover(&mut app, IllustrationMsg::CalloutLeft);
-    assert_eq!(lit(&app), Vec::<FieldId>::new());
 }

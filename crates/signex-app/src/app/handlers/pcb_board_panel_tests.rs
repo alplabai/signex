@@ -256,12 +256,11 @@ fn shift_e_on_a_board_steps_the_snapping_mode() {
     );
 }
 
-/// #2523: a hovered field row lights its callout and a hovered callout its
-/// row, through the panel's own state; a late leave of another field does
-/// not clear a hover that moved on.
+/// #2523: a hovered field row lights its callout through the panel's own
+/// state; a late leave of another field does not clear a hover that moved on.
 #[test]
-fn a_hovered_field_or_callout_is_panel_state_the_summary_carries() {
-    use crate::panels::pcb_board_properties::{BOARD_HEIGHT, BOARD_WIDTH, SNAP_STEP};
+fn a_hovered_field_is_panel_state_the_summary_carries() {
+    use crate::panels::pcb_board_properties::{BOARD_HEIGHT, BOARD_WIDTH};
     use signex_widgets::property_illustration::IllustrationMsg as M;
     let dir = tempfile::tempdir().unwrap();
     let (mut app, _path) = app_with_board(dir.path());
@@ -296,13 +295,5 @@ fn a_hovered_field_or_callout_is_panel_state_the_summary_carries() {
         &mut app,
         PcbBoardMsg::IllustrationHovered(M::FieldLeft(BOARD_WIDTH)),
     );
-    assert_eq!(hover(&app).hovered(), None);
-
-    panel(
-        &mut app,
-        PcbBoardMsg::IllustrationHovered(M::CalloutHovered(SNAP_STEP)),
-    );
-    assert_eq!(hover(&app).hovered_callout(), Some(&SNAP_STEP));
-    panel(&mut app, PcbBoardMsg::IllustrationHovered(M::CalloutLeft));
     assert_eq!(hover(&app).hovered(), None);
 }

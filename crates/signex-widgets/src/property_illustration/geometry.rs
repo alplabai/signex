@@ -1,9 +1,9 @@
-//! Pure geometry shared by drawing and hit testing, in screen space.
+//! Pure drawing geometry, in screen space.
 
 use iced::{Point, Rectangle, Size, Vector};
 
 use super::metrics::Metrics;
-use super::primitive::{Anchor, Callout, TextRole};
+use super::primitive::{Anchor, Callout};
 
 /// Uniform fit of the view box into the widget bounds, centred.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -59,24 +59,6 @@ pub struct LabelPlacement {
     pub at: Point,
     pub anchor: Anchor,
     pub baseline: Baseline,
-}
-
-impl LabelPlacement {
-    /// The box the label covers, for hover.
-    pub fn bounds(&self, text: &str, role: TextRole, metrics: &Metrics) -> Rectangle {
-        let width = metrics.text_width(text, role);
-        let height = metrics.text(role);
-        let x = match self.anchor {
-            Anchor::Start => self.at.x,
-            Anchor::Middle => self.at.x - width / 2.0,
-            Anchor::End => self.at.x - width,
-        };
-        let y = match self.baseline {
-            Baseline::Above => self.at.y - height,
-            Baseline::Centre => self.at.y - height / 2.0,
-        };
-        Rectangle::new(Point::new(x, y), Size::new(width, height))
-    }
 }
 
 /// A filled arrow head: tip and the two base corners.
@@ -184,77 +166,3 @@ pub fn leader_label(end: Point, anchor: Anchor, metrics: &Metrics) -> LabelPlace
     }
 }
 
-/// Distance from `p` to the segment `a`-`b`.
-pub fn distance_to_segment(p: Point, a: Point, b: Point) -> f32 {
-    let ab = b - a;
-    let ap = p - a;
-    let length_sq = ab.x * ab.x + ab.y * ab.y;
-    let t = if length_sq <= f32::EPSILON {
-        0.0
-    } else {
-        ((ap.x * ab.x + ap.y * ab.y) / length_sq).clamp(0.0, 1.0)
-    };
-    let closest = Point::new(a.x + ab.x * t, a.y + ab.y * t);
-    p.distance(closest)
-}
-
-/// Distance from `p` to an open or closed polyline.
-pub fn distance_to_polyline(p: Point, points: &[Point], is_closed: bool) -> f32 {
-    let mut best = match points {
-        [] => return f32::INFINITY,
-        [only] => p.distance(*only),
-        _ => f32::INFINITY,
-    };
-    for pair in points.windows(2) {
-        best = best.min(distance_to_segment(p, pair[0], pair[1]));
-    }
-    if is_closed && points.len() > 2 {
-        best = best.min(distance_to_segment(p, points[points.len() - 1], points[0]));
-    }
-    best
-}
-
-/// Even-odd point-in-polygon test.
-pub fn contains_point(points: &[Point], p: Point) -> bool {
-    let mut inside = false;
-    let mut j = points.len().wrapping_sub(1);
-    for (i, pi) in points.iter().enumerate() {
-        let pj = points[j];
-        if (pi.y > p.y) != (pj.y > p.y) && p.x < (pj.x - pi.x) * (p.y - pi.y) / (pj.y - pi.y) + pi.x
-        {
-            inside = !inside;
-        }
-        j = i;
-    }
-    inside
-}
-
-/// The four corners of `rect`, clockwise from the top left.
-pub fn corners(rect: Rectangle) -> [Point; 4] {
-    [
-        Point::new(rect.x, rect.y),
-        Point::new(rect.x + rect.width, rect.y),
-        Point::new(rect.x + rect.width, rect.y + rect.height),
-        Point::new(rect.x, rect.y + rect.height),
-    ]
-}
-
-/// `rect` grown by `by` on every side.
-pub fn grown(rect: Rectangle, by: f32) -> Rectangle {
-    Rectangle::new(
-        Point::new(rect.x - by, rect.y - by),
-        Size::new(rect.width + 2.0 * by, rect.height + 2.0 * by),
-    )
-}
-
-/// Whether `angle` lies on the clockwise sweep from `start` to `end`.
-pub fn angle_in_sweep(angle: f32, start: f32, end: f32) -> bool {
-    use std::f32::consts::TAU;
-    let sweep = (end - start).rem_euclid(TAU);
-    let offset = (angle - start).rem_euclid(TAU);
-    if sweep <= f32::EPSILON {
-        // A zero sweep with distinct ends is a full turn.
-        return (end - start).abs() > f32::EPSILON;
-    }
-    offset <= sweep
-}

@@ -1,7 +1,7 @@
 //! The illustration as data: parts linked to field ids, and the features
 //! switched off.
 
-use iced::{Rectangle, Size};
+use iced::Size;
 
 use super::field::FieldId;
 use super::primitive::{Callout, Leader, Primitive, TextLabel};
@@ -17,14 +17,11 @@ pub struct Part {
     pub primitive: Primitive,
     pub style: Style,
     /// The fields this part shows. The first one is the field the part holds
-    /// the value of; hovering the part reports it. Hovering any of them
-    /// highlights the part.
+    /// the value of. Hovering the row of any of them highlights the part.
     pub fields: Vec<FieldId>,
     /// The feature switch this part needs; the part is dropped while the
     /// feature is off.
     pub requires: Option<FieldId>,
-    /// Lights with its fields but never reports a hover itself.
-    pub is_highlight_only: bool,
 }
 
 impl Part {
@@ -34,25 +31,7 @@ impl Part {
             style,
             fields: Vec::new(),
             requires: None,
-            is_highlight_only: false,
         }
-    }
-
-    /// An undrawn hover region over `rect`, in view units.
-    pub fn hover_area(rect: Rectangle) -> Self {
-        Self::new(Primitive::HoverArea { rect }, Style::edge())
-    }
-
-    /// Keeps the part from reporting a hover: a small mark inside another
-    /// field's region would otherwise be an island the pointer flips onto.
-    pub fn highlight_only(mut self) -> Self {
-        self.is_highlight_only = true;
-        self
-    }
-
-    /// Whether the pointer on this part reports its field.
-    pub fn reports_hover(&self) -> bool {
-        !self.is_highlight_only && self.primary_field().is_some()
     }
 
     /// A dimension callout in the callout ink.
@@ -95,7 +74,7 @@ impl Part {
         self
     }
 
-    /// The field hovering this part reports.
+    /// The field the part holds the value of.
     pub fn primary_field(&self) -> Option<&FieldId> {
         self.fields.first()
     }
@@ -131,7 +110,7 @@ impl Illustration {
         self
     }
 
-    /// Appends a part; later parts draw on top and win the hover.
+    /// Appends a part; later parts draw on top.
     pub fn part(mut self, part: Part) -> Self {
         self.parts.push(part);
         self
