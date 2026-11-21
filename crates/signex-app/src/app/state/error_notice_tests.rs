@@ -472,8 +472,13 @@ fn file_save_as_onto_its_deleted_own_file_writes_it() {
         }),
     );
 
-    let written = std::fs::read(&sheet).expect("the file is written again");
-    assert!(!written.is_empty());
+    let text = std::fs::read_to_string(&sheet).expect("the file is written again");
+    let written = signex_types::format::SnxSchematic::parse(&text)
+        .expect("the open sheet, encoded")
+        .sheet;
+    let open = app.active_schematic().expect("the sheet is still open");
+    assert_eq!(written.uuid, open.uuid, "the open sheet is what is written");
+    assert_eq!(written.paper_size, "A4");
     assert_eq!(app.document_state.error_notice, None, "no card");
     assert!(!app.document_state.is_document_dirty(&sheet));
     assert_eq!(active_path(&app), sheet, "no re-key");
