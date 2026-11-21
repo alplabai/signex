@@ -1,7 +1,8 @@
 //! The orbit camera of a 3D view (#2390): a point it looks at, the turn
 //! about the vertical axis, the elevation above the view's base plane and
-//! the distance. View state only; the math the GPU camera, picking, fit and
-//! the presets all read.
+//! the distance. View state only; the math the GPU camera, picking, fit,
+//! the presets, the flip and its animation all read, and the lighting
+//! presets the mesh shader is lit by.
 //!
 //! CLEAN ROOM DECLARATION
 //! This module was written without reference to GPL-licensed software.
@@ -36,17 +37,20 @@ pub enum ViewPreset {
     Right,
     /// From above the front-left corner.
     Iso,
+    /// Level, from the back edge (the high y side).
+    Back,
 }
 
 impl ViewPreset {
     /// Every preset, in the order a toolbar lists them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Top,
         Self::Bottom,
         Self::Front,
         Self::Left,
         Self::Right,
         Self::Iso,
+        Self::Back,
     ];
 
     /// `(yaw, pitch)` in degrees.
@@ -58,8 +62,85 @@ impl ViewPreset {
             Self::Left => (-90.0, 0.0),
             Self::Right => (90.0, 0.0),
             Self::Iso => (-35.0, 35.0),
+            Self::Back => (180.0, 0.0),
         }
     }
+}
+
+/// Which side of the board a view looks at: the presets as they are, or
+/// with the board turned over.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ViewSide {
+    #[default]
+    Top,
+    /// The board turned over about the axis that is vertical on screen
+    /// (its y axis in the top view), so the bottom faces the eye where the
+    /// top did.
+    Bottom,
+}
+
+/// How long the animated turn of a flip takes, milliseconds.
+pub const FLIP_DURATION_MS: u64 = 400;
+
+/// A lighting preset of a 3D view. Each sets the light's colour, how much
+/// of the shading is ambient, and how far above the eye the key light sits;
+/// the light still follows the eye, so every view reads. The view's
+/// backdrop follows the preset, not the UI theme (the caller paints it).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum LightingPreset {
+    /// White light, 35% ambient, the key a little above the eye: the
+    /// shading the 3D view has always had.
+    #[default]
+    Studio,
+    /// Warm light (1.00, 0.91, 0.78), 38% ambient, the key as Studio's.
+    Workshop,
+    /// Cool, brighter light (1.00, 1.04, 1.12), 45% ambient, the key high
+    /// above the eye like the sky.
+    Outdoor,
+    /// Dim blue-grey light (0.62, 0.65, 0.72), 12% ambient, the key as
+    /// Studio's, so faces turned away fall nearly black.
+    Dark,
+}
+
+impl LightingPreset {
+    /// Every preset, in the order the cycle visits them.
+    pub const ALL: [Self; 4] = [Self::Studio, Self::Workshop, Self::Outdoor, Self::Dark];
+
+    /// The preset after this one; Dark comes back to Studio.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Studio => Self::Workshop,
+            Self::Workshop => Self::Outdoor,
+            Self::Outdoor => Self::Dark,
+            Self::Dark => Self::Studio,
+        }
+    }
+
+    /// Where the preset is in the cycle, from 1 (Studio) to 4 (Dark).
+    pub fn ordinal(self) -> usize {
+        match self {
+            Self::Studio => 1,
+            Self::Workshop => 2,
+            Self::Outdoor => 3,
+            Self::Dark => 4,
+        }
+    }
+
+    /// The light colour (rgb) with the ambient share (a), and how far the
+    /// key sits above the eye: screen-up units per unit toward the eye.
+    fn light(self) -> ([f32; 4], f32) {
+        match self {
+            Self::Studio => ([1.0, 1.0, 1.0, 0.35], 0.4),
+            Self::Workshop => ([1.0, 0.91, 0.78, 0.38], 0.4),
+            Self::Outdoor => ([1.0, 1.04, 1.12, 0.45], 1.2),
+            Self::Dark => ([0.62, 0.65, 0.72, 0.12], 0.4),
+        }
+    }
+}
+
+/// `deg` turned into (-180, 180].
+fn wrap_deg(deg: f32) -> f32 {
+    180.0 - (180.0 - deg).rem_euclid(360.0)
 }
 
 /// Where a 3D view looks from. `yaw_deg` 0 looks from the low-y side
@@ -87,8 +168,8 @@ impl Default for OrbitCamera {
 }
 
 /// What the mesh pipeline's uniform holds: the camera, the light and the
-/// colour a highlighted part is washed with. 96 bytes, mirrored by
-/// `Camera` in `shader/mesh.wgsl`.
+/// colour a highlighted part is washed with. 112 bytes, mirrored field for
+/// field by `Camera` in `shader/mesh.wgsl`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MeshUniform {
@@ -96,6 +177,9 @@ pub struct MeshUniform {
     /// Toward the light, `w` unused.
     pub light_dir: [f32; 4],
     pub highlight: [f32; 4],
+    /// The light colour (rgb) and the ambient share of the shading (a): a
+    /// face is lit `rgb * (a + (1 - a) * diffuse)`.
+    pub light: [f32; 4],
 }
 
 impl OrbitCamera {
@@ -141,16 +225,29 @@ impl OrbitCamera {
     }
 
     /// The uniform for a viewport `width` x `height` (any unit), lit from
-    /// the eye, with `highlight` as the selection wash.
+    /// the eye in the Studio preset, with `highlight` as the selection wash.
     pub fn uniform(&self, width: f32, height: f32, highlight: [f32; 4]) -> MeshUniform {
+        self.uniform_lit(width, height, highlight, LightingPreset::Studio)
+    }
+
+    /// [`Self::uniform`] lit by `lighting`.
+    pub fn uniform_lit(
+        &self,
+        width: f32,
+        height: f32,
+        highlight: [f32; 4],
+        lighting: LightingPreset,
+    ) -> MeshUniform {
         let (back, up) = self.forward_and_up();
-        // A head light, a little above the eye, so faces facing the eye are
-        // lit and level edges still shade apart.
-        let light = (back + up * 0.4).normalize_or_zero();
+        let (light, lift) = lighting.light();
+        // A head light above the eye, so faces facing the eye are lit and
+        // level edges still shade apart.
+        let toward = (back + up * lift).normalize_or_zero();
         MeshUniform {
             view_proj: self.view_proj_mat(width / height).to_cols_array_2d(),
-            light_dir: [light.x, light.y, light.z, 0.0],
+            light_dir: [toward.x, toward.y, toward.z, 0.0],
             highlight,
+            light,
         }
     }
 
@@ -209,6 +306,59 @@ impl OrbitCamera {
         let (yaw, pitch) = preset.angles();
         self.yaw_deg = yaw.rem_euclid(360.0);
         self.pitch_deg = pitch;
+    }
+
+    /// Look from `preset` at `side` of the board, keeping the target and
+    /// distance. On the top side this is [`Self::set_preset`]; on the
+    /// bottom side the preset's view is [`Self::flipped`], so the top
+    /// preset on the bottom side is [`ViewPreset::Bottom`].
+    pub fn set_preset_on(&mut self, preset: ViewPreset, side: ViewSide) {
+        self.set_preset(preset);
+        if side == ViewSide::Bottom {
+            *self = self.flipped();
+        }
+    }
+
+    /// This view with the board turned over about the axis that is
+    /// vertical on screen: the eye goes to the far side (yaw + 180°,
+    /// wrapped to (-180, 180]; pitch negated) and the screen's up stays.
+    /// The target, distance and field of view are kept; flipping twice
+    /// comes back.
+    pub fn flipped(&self) -> OrbitCamera {
+        OrbitCamera {
+            yaw_deg: wrap_deg(self.yaw_deg + 180.0),
+            pitch_deg: -self.pitch_deg,
+            ..*self
+        }
+    }
+
+    /// The view `t` of the way from this one to `to`, for an animated
+    /// move: `t` is clamped to 0..=1 and eased (smoothstep), the yaw turns
+    /// the short way round, and the target, pitch, distance and field of
+    /// view move in a straight line. `t` = 0 is this view and `t` = 1 is
+    /// `to`, exactly.
+    pub fn tween(&self, to: &OrbitCamera, t: f32) -> OrbitCamera {
+        let t = if t.is_nan() { 0.0 } else { t.clamp(0.0, 1.0) };
+        if t <= 0.0 {
+            return *self;
+        }
+        if t >= 1.0 {
+            return *to;
+        }
+        let eased = t * t * (3.0 - 2.0 * t);
+        let lerp = |a: f32, b: f32| a + (b - a) * eased;
+        let turn = wrap_deg(to.yaw_deg - self.yaw_deg);
+        OrbitCamera {
+            target: [
+                lerp(self.target[0], to.target[0]),
+                lerp(self.target[1], to.target[1]),
+                lerp(self.target[2], to.target[2]),
+            ],
+            yaw_deg: wrap_deg(self.yaw_deg + turn * eased),
+            pitch_deg: lerp(self.pitch_deg, to.pitch_deg),
+            distance: lerp(self.distance, to.distance),
+            fov_y_deg: lerp(self.fov_y_deg, to.fov_y_deg),
+        }
     }
 
     /// Frame the box `lo`..`hi` in a viewport of `aspect` (width over
@@ -318,5 +468,194 @@ mod tests {
             [after[0] - before[0], after[1] - before[1]],
             [40.0, -20.0]
         ));
+    }
+
+    /// The same angle, whichever turn of the circle each is written in.
+    fn same_angle(a: f32, b: f32) -> bool {
+        wrap_deg(a - b).abs() < 1e-3
+    }
+
+    fn same_view(a: &OrbitCamera, b: &OrbitCamera) -> bool {
+        let near = |x: f32, y: f32| (x - y).abs() < 1e-3;
+        (0..3).all(|i| near(a.target[i], b.target[i]))
+            && same_angle(a.yaw_deg, b.yaw_deg)
+            && near(a.pitch_deg, b.pitch_deg)
+            && near(a.distance, b.distance)
+            && near(a.fov_y_deg, b.fov_y_deg)
+    }
+
+    fn sample() -> OrbitCamera {
+        OrbitCamera {
+            target: [12.0, -7.0, 0.8],
+            yaw_deg: 250.0,
+            pitch_deg: 35.0,
+            distance: 140.0,
+            fov_y_deg: 30.0,
+        }
+    }
+
+    #[test]
+    fn every_preset_is_listed_once() {
+        assert_eq!(ViewPreset::ALL.len(), 7);
+        for (i, a) in ViewPreset::ALL.iter().enumerate() {
+            assert!(!ViewPreset::ALL[i + 1..].contains(a), "{a:?} twice");
+        }
+        assert_eq!(ViewPreset::ALL[6], ViewPreset::Back);
+    }
+
+    /// Back looks level from the high y side toward -y; +x is on the left.
+    #[test]
+    fn the_back_view_looks_level_from_high_y() {
+        let mut camera = OrbitCamera::default();
+        camera.set_preset(ViewPreset::Back);
+        let eye = camera.eye();
+        assert!(eye[1] > 50.0, "{eye:?}");
+        assert!(eye[0].abs() < 1e-3 && eye[2].abs() < 1e-3, "{eye:?}");
+        let centre = camera.project([0.0, 0.0, 0.0], 800.0, 600.0).unwrap();
+        let right = camera.project([10.0, 0.0, 0.0], 800.0, 600.0).unwrap();
+        let up = camera.project([0.0, 0.0, 10.0], 800.0, 600.0).unwrap();
+        assert!(right[0] < centre[0], "+x is on the left from the back");
+        assert!(up[1] < centre[1], "+z is up");
+    }
+
+    #[test]
+    fn the_top_preset_on_the_bottom_side_is_the_bottom_preset() {
+        let mut on_bottom = OrbitCamera::default();
+        on_bottom.set_preset_on(ViewPreset::Top, ViewSide::Bottom);
+        let mut bottom = OrbitCamera::default();
+        bottom.set_preset(ViewPreset::Bottom);
+        assert_eq!(on_bottom, bottom);
+    }
+
+    #[test]
+    fn a_preset_on_the_top_side_is_the_plain_preset() {
+        for preset in ViewPreset::ALL {
+            let mut on_top = sample();
+            on_top.set_preset_on(preset, ViewSide::Top);
+            let mut plain = sample();
+            plain.set_preset(preset);
+            assert_eq!(on_top, plain, "{preset:?}");
+        }
+    }
+
+    /// A flip keeps the target, distance, field of view and the screen's
+    /// up, and puts the eye on the far side; twice comes back.
+    #[test]
+    fn flipping_twice_comes_back() {
+        let camera = sample();
+        let once = camera.flipped();
+        assert_eq!(once.target, camera.target);
+        assert_eq!(once.distance, camera.distance);
+        assert_eq!(once.fov_y_deg, camera.fov_y_deg);
+        assert!(once.yaw_deg > -180.0 && once.yaw_deg <= 180.0);
+        let (eye, flipped_eye) = (Vec3::from(camera.eye()), Vec3::from(once.eye()));
+        let target = Vec3::from(camera.target);
+        assert!(((eye - target) + (flipped_eye - target)).length() < 1e-2);
+        assert!((camera.forward_and_up().1 - once.forward_and_up().1).length() < 1e-5);
+        assert!(same_view(&once.flipped(), &camera));
+    }
+
+    #[test]
+    fn a_tween_ends_exactly_at_its_two_views() {
+        let from = sample();
+        let mut to = OrbitCamera::default();
+        to.set_preset(ViewPreset::Iso);
+        to.distance = 80.0;
+        assert_eq!(from.tween(&to, 0.0), from);
+        assert_eq!(from.tween(&to, 1.0), to);
+        assert_eq!(from.tween(&to, -2.0), from, "clamped below");
+        assert_eq!(from.tween(&to, 3.0), to, "clamped above");
+        let half = from.tween(&to, 0.5);
+        assert!((half.distance - 110.0).abs() < 1e-3, "{half:?}");
+        let early = from.tween(&to, 0.1);
+        assert!(
+            (early.distance - 140.0).abs() < (140.0 - 80.0) * 0.1,
+            "eased: slow at the start"
+        );
+    }
+
+    /// From just short of a half turn one way to just past it, the yaw
+    /// crosses the back, not the front.
+    #[test]
+    fn a_tween_turns_the_short_way() {
+        let from = OrbitCamera {
+            yaw_deg: 170.0,
+            ..sample()
+        };
+        let to = OrbitCamera {
+            yaw_deg: -170.0,
+            ..sample()
+        };
+        let half = from.tween(&to, 0.5);
+        assert!(same_angle(half.yaw_deg, 180.0), "{}", half.yaw_deg);
+        let from = OrbitCamera {
+            yaw_deg: 350.0,
+            ..sample()
+        };
+        let to = OrbitCamera {
+            yaw_deg: 10.0,
+            ..sample()
+        };
+        assert!(same_angle(from.tween(&to, 0.5).yaw_deg, 0.0));
+    }
+
+    #[test]
+    fn the_plain_uniform_is_the_studio_preset() {
+        let camera = sample();
+        let wash = [0.1, 0.2, 0.3, 0.4];
+        assert_eq!(
+            camera.uniform(800.0, 600.0, wash),
+            camera.uniform_lit(800.0, 600.0, wash, LightingPreset::Studio)
+        );
+        let studio = camera.uniform(800.0, 600.0, wash);
+        assert_eq!(studio.light, [1.0, 1.0, 1.0, 0.35]);
+        let (back, up) = camera.forward_and_up();
+        let head = (back + up * 0.4).normalize_or_zero();
+        assert_eq!(studio.light_dir, [head.x, head.y, head.z, 0.0]);
+    }
+
+    #[test]
+    fn every_lighting_preset_lights_the_view_its_own_way() {
+        let camera = sample();
+        let lights: Vec<[f32; 4]> = LightingPreset::ALL
+            .iter()
+            .map(|&preset| camera.uniform_lit(800.0, 600.0, [0.0; 4], preset).light)
+            .collect();
+        for (i, light) in lights.iter().enumerate() {
+            assert!(!lights[i + 1..].contains(light), "{i} shares its light");
+            assert!((0.0..1.0).contains(&light[3]), "an ambient share");
+        }
+    }
+
+    /// The uniform is a whole number of 16-byte rows, as WGSL lays it out.
+    #[test]
+    fn the_mesh_uniform_is_112_bytes() {
+        assert_eq!(std::mem::size_of::<MeshUniform>(), 112);
+        assert_eq!(std::mem::size_of::<MeshUniform>() % 16, 0);
+    }
+
+    #[test]
+    fn the_lighting_cycle_visits_all_four_and_comes_back() {
+        let mut preset = LightingPreset::default();
+        assert_eq!(preset, LightingPreset::Studio);
+        for (i, &want) in LightingPreset::ALL.iter().enumerate() {
+            assert_eq!(preset, want);
+            assert_eq!(preset.ordinal(), i + 1);
+            preset = preset.next();
+        }
+        assert_eq!(preset, LightingPreset::Studio);
+    }
+
+    #[test]
+    fn a_wrapped_angle_lies_above_minus_180_up_to_180() {
+        for (deg, want) in [
+            (180.0, 180.0),
+            (-180.0, 180.0),
+            (270.0, -90.0),
+            (0.0, 0.0),
+            (540.0, 180.0),
+        ] {
+            assert_eq!(wrap_deg(deg), want, "{deg}");
+        }
     }
 }

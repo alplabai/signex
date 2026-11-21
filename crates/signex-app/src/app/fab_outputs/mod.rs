@@ -7,22 +7,26 @@
 //! rules: `docs/FABRICATION_OUTPUTS.md`.
 
 mod documents;
+mod groups;
 mod notes;
 mod update;
 mod write;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_dialog;
 
 use std::path::PathBuf;
 
 use signex_output::fab::{FabError, FabNote, FabOptions, OdbForm};
 pub use signex_types::project::FabOutputKinds;
 
-pub use notes::BoardNote;
-pub(crate) use notes::{
-    board_note_text, note_text, problem_text, stale_text, written_message, written_text,
-};
+pub use groups::{FabGroup, ticked_count};
+#[cfg(test)]
+pub(crate) use notes::note_text;
+pub use notes::{BoardNote, NoteSeverity};
+pub(crate) use notes::{outcome_notes, problem_text, written_message, written_text};
 pub use write::FabWritten;
 #[cfg(test)]
 pub(crate) use write::write_fab_outputs;
@@ -130,12 +134,22 @@ pub enum FabOutputsMsg {
     BrowseRequested,
     /// The folder picker closed; `None` when cancelled.
     FolderPicked(Option<PathBuf>),
+    /// Generate, or Generate again after a run.
     GenerateRequested,
     /// Write `generation` finished.
     Written {
         generation: u64,
         result: Result<FabWritten, FabProblem>,
     },
+    /// The success banner's Open folder: the written folder in the file
+    /// manager.
+    FolderOpenRequested,
+    /// The file manager launch for `folder` failed; the reason.
+    FolderOpenFailed {
+        folder: PathBuf,
+        why: String,
+    },
+    /// Cancel before a run, Close after one, Esc or the header's close.
     CancelRequested,
 }
 
@@ -179,6 +193,9 @@ pub struct FabOutputsState {
     /// Write the whole panel rather than the board alone; on by default for
     /// a board with a panel.
     pub whole_panel: bool,
+    /// The local time the last outcome arrived, read in `update` when it
+    /// did; the footer's "Generated HH:MM".
+    pub generated_at: Option<chrono::NaiveTime>,
 }
 
 impl FabOutputsState {
@@ -203,7 +220,14 @@ impl FabOutputsState {
             outcome: None,
             panel: None,
             whole_panel: false,
+            generated_at: None,
         }
+    }
+
+    /// Whether a Generate has run and its outcome shows: the footer then
+    /// offers Generate again and Close instead of Cancel and Generate.
+    pub fn has_run(&self) -> bool {
+        self.outcome.is_some()
     }
 
     /// Whether Generate can run with `kinds` ticked: no write in flight, a

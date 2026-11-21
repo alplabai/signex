@@ -32,10 +32,34 @@ written to the nm, degrees to a thousandth, trailing zeros dropped.
 Surfaces: Reports ▸ Board Bill of Materials..., Board Netlist..., Net
 Lengths..., Component Report... (`board_report_bom`, `board_report_netlist`,
 `board_report_net_length`, `board_report_components`), the Board panel's
-Reports button (the BOM), the palette; Board Reports has a tab per table and
-Export CSV (`export_board_report`: the table in view, the BOM when the dialog
-is closed). A table is made from the board when its tab is picked; Export CSV
-makes it again from the board as it is then.
+Reports button (the BOM), the palette; Board Reports switches between the
+tables and has Export CSV (`export_board_report`: the table in view, the
+BOM when the dialog is closed). A table is made from the board when its
+kind is picked; Export CSV makes it again from the board as it is then.
+
+The dialog (900 x 620, mockup row 117): a toolbar with the four kinds as a segmented
+switch, a filter field and the row count ("18 rows", or "3 of 18 rows"
+while the filter hides some); the table, whose header stays put while the
+rows scroll; and a footer caption that says what the rows are and the unit
+("Lengths in mm · routed copper only", "Positions in mil · rotation in
+degrees"), with Cancel and Export CSV…. Rows are 26 px, one line each; a
+long cell (the pads on a net, a BOM line's designators) ends in an ellipsis
+and shows its whole text on hover. Numbers (Qty, Pads, Routed Length,
+Tracks, Vias, X, Y, Rotation) sit right in the mono face, as do net names
+and designators; lengths and positions are bare numbers in the user's unit,
+since the caption names it. Each report lets one column take the spare
+width (Description, Pads on the Net, Net in Net Lengths, Footprint in
+Components); the others have fixed widths. A click on a heading sorts by
+that column (numbers by value, text in designator order, a missing value
+last either way), a second click turns the order round; Net Lengths opens
+longest first, the others in the report's own order. The filter keeps a row
+when one of its cells, as the CSV writes it, holds the text, ignoring case.
+Filter and sort are view only: Export CSV writes every row in the report's
+order, the same bytes as with neither. Picking another kind clears both;
+picking the same kind keeps them. A report with no rows says "This report
+has no rows for the board." centred in the table; a filter that matches
+nothing says so instead. A row click does nothing (no cross-probe yet), and
+the board BOM stays one of the four kinds.
 
 Agents and the CLI: `board_report_<kind> document=<board>` answers with
 `{kind, columns, rows, document}`; it is on the agent channel.
@@ -82,6 +106,22 @@ Defaults: Top, Bottom and Outline and Mechanical on their own pages, the
 bottom mirrored, fitted, colour, outline, drill holes and title block on, A4
 landscape. The dialog keeps its options for the next opening in the session.
 Export PDF asks for the file and writes it off the UI thread, crash-safe.
+
+The dialog (780 x 600, mockup row 116) puts the options on the left: Layer Sets with
+how many of the six are ticked, a Layout group with Pages, Scale and Ink as
+segmented controls on aligned labels, and Show. Mirror the Bottom Side is
+greyed and deaf, with a hover note, while no bottom set (Bottom Side,
+Assembly Drawing, Bottom) is ticked; its value is kept. On the right is the
+page plan, live with the options: the page count, then one card per page
+of `BoardPrintOptions::page_plan` (a schematic page, not a rendered
+thumbnail), with the page number, the set names (joined with `+` on a
+composite page), a "mirrored" tag on a mirrored bottom page only, and the
+board's layers the page prints (`BoardPrintOptions::page_layers`: the
+board's own layers each set holds, in the board's order, and the outline
+when it is drawn on every page). While sets are left unticked a last card
+lists them as not printed. With no set ticked the plan shows "Pick at least
+one layer set to print." and Export PDF… is disabled. The footer has Export
+Assembly SVG… on the left, Cancel and Export PDF… on the right.
 
 Headless and CLI: `export_board_pdf document=<board> path=<file>` with the
 optional `layers` (comma-separated set ids `top`, `bottom`, `inner`,

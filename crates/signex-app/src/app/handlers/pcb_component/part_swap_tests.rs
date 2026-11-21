@@ -142,7 +142,7 @@ fn board() -> PcbBoard {
     board
 }
 
-fn app_with_part(dir: &Path) -> (Signex, PathBuf, PathBuf) {
+pub(crate) fn app_with_part(dir: &Path) -> (Signex, PathBuf, PathBuf) {
     app_with(dir, board())
 }
 

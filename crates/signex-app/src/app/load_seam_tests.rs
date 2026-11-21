@@ -304,11 +304,13 @@ fn save_as_rekeys_the_old_dirty_mark_and_the_undocked_window() {
     let to = sheet_path("t9copy.snxsch");
     let revision = app.document_state.engines[&from].revision();
 
-    let renamed = app.with_active_schematic_session_mut(|session| {
-        session.finish_save_as(to.clone(), revision);
+    let renamed = app.rekey_active_schematic(to.clone(), |engine| {
+        assert_eq!(engine.revision(), revision);
+        engine.mark_saved();
+        false
     });
 
-    assert!(renamed.is_some());
+    assert!(renamed);
     assert!(
         !app.document_state.is_document_dirty(&from),
         "old mark gone"

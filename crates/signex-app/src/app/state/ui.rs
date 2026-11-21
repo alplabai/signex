@@ -214,6 +214,9 @@ pub struct UiState {
     /// The locale in force: its catalog bundle and the Language list. Shared
     /// with the menus; replaced by `Signex::set_language` (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,
+    /// The Preferences language draft, dirty pages and page view state.
+    /// Boxed: a pointer of the size budget (#2412).
+    pub preferences_pages: Box<crate::preferences::PreferencesPagesState>,
     /// Saved "Remember window size and position" preference. Off by default.
     pub remember_window_geometry: bool,
     /// Draft mirror of [`Self::remember_window_geometry`] for Preferences.
@@ -766,53 +769,9 @@ impl UiState {
         crate::canvas::Camera::zoom_step_factor(self.preferences_draft_zoom_step_percent)
     }
 
-    /// True when any Preferences draft differs from its saved live value.
-    /// Single source of truth so every live-preview `PrefMsg::Draft*` handler
-    /// stays consistent as new drafts are added (the old per-handler inline
-    /// chains had drifted to different term sets). Covers ALL draft state —
-    /// the 10 appearance drafts, the component-class table and the keymap
-    /// working copy — so an appearance recompute can't report "clean" while
-    /// a pending rebind or class edit would be lost on close.
-    ///
-    /// The three Symbol Editor terms joined in #629. Until then the claim
-    /// above was false: they wrote themselves to `prefs.json` on change and
-    /// were deliberately left out, so the predicate was consistent with
-    /// their behaviour but not with the footer the user was looking at.
-    pub fn preferences_draft_differs(&self) -> bool {
-        self.preferences_draft_theme != self.theme_id
-            || self.preferences_draft_font != self.ui_font_name
-            || self.preferences_draft_grid_style != self.grid_style
-            || self.preferences_draft_pcb_gpu_render != self.pcb_gpu_render
-            || self.preferences_draft_antialiasing != self.antialiasing
-            || self.preferences_draft_annotate_undo != self.annotate_undo
-            || self.preferences_draft_move_keeps_wires != self.move_keeps_wires
-            || self.preferences_draft_net_hover_enabled != self.net_hover_enabled
-            || self.preferences_draft_symbol_body_fill != self.symbol_body_fill
-            || self.preferences_draft_trackpad_pan != self.trackpad_pan
-            || self.preferences_draft_wheel_mode != self.wheel_mode
-            || self.preferences_draft_remember_window_geometry != self.remember_window_geometry
-            || self.preferences_draft_drag_direction_select != self.drag_direction_select
-            || self.preferences_draft_increment_step != self.increment_step
-            || self.preferences_draft_paste_designators != self.paste_designators
-            || self.preferences_draft_window_controls_placement != self.window_controls_placement
-            || self.preferences_draft_autosave_enabled != self.autosave_enabled
-            || self.preferences_draft_agent_connections_enabled != self.agent_connections_enabled
-            || self.preferences_draft_symbol_grid_style != self.symbol_grid_style
-            // Exact `!=` on the f32 is deliberate: the picker assigns from
-            // `canvas::grid::GRID_SIZES_MM`, so draft and committed are the
-            // same constant unless the user actually moved it. A tolerance
-            // here would let a real change read as clean.
-            || self.preferences_draft_symbol_grid_size_mm != self.symbol_grid_size_mm
-            || self.fast_grid_drafts_differ()
-            || self.preferences_draft_symbol_pin_selection != self.symbol_pin_selection
-            || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
-            || self.preferences_draft_ui_scale_percent
-                != crate::ui_scale::scale_to_percent(self.ui_scale)
-            || self.preferences_draft_component_classes != self.component_classes
-            || self
-                .preferences_keymap_editor
-                .differs_from(&self.keymap_profiles)
-    }
+    // The Preferences dirty predicate (`preferences_draft_differs`, per page
+    // `preferences_page_differs`) lives with the draft handlers in
+    // `app/handlers/preferences/drafts.rs`.
 
     /// The theme every surface paints with: the Preferences draft while
     /// the dialog is open (the live preview), the saved theme otherwise.
@@ -824,12 +783,6 @@ impl UiState {
         } else {
             self.theme_id
         }
-    }
-
-    /// True when closing Preferences without Save would lose work — drives
-    /// the Save/Discard footer + every dirty-close guard.
-    pub fn preferences_has_unsaved_changes(&self) -> bool {
-        self.preferences_draft_differs()
     }
 }
 

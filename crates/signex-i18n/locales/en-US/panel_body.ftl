@@ -75,7 +75,7 @@ panels-projects-open-hint = File > Open to begin
 panels-projects-group-schematics = Schematics
 panels-projects-group-pcb = PCB
 panels-projects-group-bom = Bill of Materials
-panels-projects-group-outputs = Output Jobs
+panels-projects-group-outputs = Export Jobs
 panels-projects-group-libraries = Libraries
 panels-projects-group-settings = Settings
 # A tree row whose file is gone from disk. $name is the file name.

@@ -360,6 +360,29 @@ pub(crate) fn export_metadata_with(
     base.for_sheet(title_block)
 }
 
+/// Print the dialog's variant, never the project's active one (#2430):
+/// title-block substitution reads `active_variant` from `metadata` and
+/// `${VARIANT}` from `variant`. Base (or no variant) prints no variant
+/// name: an empty `${VARIANT}` and no sheet-bookmark tag (Caner,
+/// 2026-11-20). Shared by the Print Preview and the PDF export so the two
+/// show the same variant.
+fn apply_printed_variant(metadata: &mut ProjectMetadata, variant: &mut Option<String>) {
+    let named = variant
+        .take()
+        .filter(|v| !v.trim().is_empty() && !signex_types::project::is_base_variant(v));
+    match &named {
+        Some(named) => {
+            metadata
+                .custom_fields
+                .insert("active_variant".to_string(), named.clone());
+        }
+        None => {
+            metadata.custom_fields.remove("active_variant");
+        }
+    }
+    *variant = named;
+}
+
 /// The export's page set + metadata + project netlist, alongside the stitch
 /// issues raised while deriving that netlist. Returns `None` if there is no
 /// active engine.

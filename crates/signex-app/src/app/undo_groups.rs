@@ -330,11 +330,15 @@ impl Signex {
                 StepDirection::Undo => engine.undo(),
                 StepDirection::Redo => engine.redo(),
             };
+            if matches!(result, Ok(Some(_))) {
+                // Undo/redo can bring back an older embedded library symbol.
+                self.library.drift.check_pending = true;
+            }
             match result {
                 Ok(Some(patch_pair)) if *path == active_path => {
                     active_patch = Some(patch_pair.document);
                 }
-                Ok(Some(_)) => {
+                Ok(Some(patch_pair)) => {
                     // A parked sheet undone back to what was loaded from disk
                     // has nothing to save; redo marks it dirty again.
                     let back_at_disk = direction == StepDirection::Undo
@@ -354,6 +358,7 @@ impl Signex {
                         dropped_now.push(path.clone());
                     } else {
                         self.document_state.sync_history_dirty(path);
+                        self.repaint_member_sheet(path, patch_pair.document);
                     }
                 }
                 Ok(None) => {}
@@ -464,10 +469,13 @@ impl Signex {
             match if undo { engine.undo() } else { engine.redo() } {
                 Ok(Some(pair)) => {
                     moved.push(path.clone());
+                    // Undo/redo can bring back an older embedded library symbol.
+                    self.library.drift.check_pending = true;
                     if active.as_ref() == Some(path) {
                         active_patch = Some(pair.document);
                     } else {
                         self.document_state.sync_history_dirty(path);
+                        self.repaint_member_sheet(path, pair.document);
                     }
                 }
                 Ok(None) => {}

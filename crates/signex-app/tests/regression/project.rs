@@ -1454,11 +1454,9 @@ fn fixture_schematic_with_symbol_and_child_sheet()
     let (mut app, _initial_task) = Signex::new();
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.active_path = Some(path.clone());
-    // `finish_schematic_mutation` (the tail of every engine-command
-    // apply, including Delete inside Cut) round-trips through
-    // `with_active_schematic_session_mut`, which requires a `TabInfo`
-    // at `active_tab` whose path matches — without one it silently
-    // no-ops and the post-delete `selected.clear()` never runs.
+    // A `TabInfo` at `active_tab` whose path matches, so the fixture is a
+    // real open sheet for `finish_schematic_mutation` (the tail of every
+    // engine-command apply, including Delete inside Cut).
     app.document_state.tabs.push(signex_app::app::TabInfo {
         title: "cut-gating".to_string(),
         path: path.clone(),

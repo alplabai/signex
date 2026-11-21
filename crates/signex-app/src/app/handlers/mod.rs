@@ -6,6 +6,7 @@ pub mod autosave_project;
 pub mod autosave_recovery;
 pub mod autosave_row;
 pub(crate) mod board_3d;
+mod board_3d_screenshot;
 pub(crate) mod board_net_classes;
 mod board_sketch;
 pub mod canvas;

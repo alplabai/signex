@@ -77,8 +77,12 @@ fn default_opts() -> PdfOptions {
         bookmark_pins: false,
         bookmark_net_labels: false,
         bookmark_ports: false,
-        include_component_parameters: false,
         global_bookmarks: false,
+        bookmark_sheets: true,
+        bookmark_parts: false,
+        part_bookmark_order: PartBookmarkOrder::BySheet,
+        watermark: None,
+        layers: None,
         palette: SchematicPalette::classic(),
         net_class_styles: Default::default(),
         schematic_defaults: Default::default(),
@@ -88,7 +92,10 @@ fn default_opts() -> PdfOptions {
 #[test]
 fn no_toggles_yields_empty_bookmarks() {
     let ctx = ctx_with_one_sheet();
-    let opts = default_opts();
+    let opts = PdfOptions {
+        bookmark_sheets: false,
+        ..default_opts()
+    };
     let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
     assert!(items.is_empty());
 }
@@ -97,7 +104,7 @@ fn no_toggles_yields_empty_bookmarks() {
 fn components_toggle_emits_sheet_components_and_each_symbol() {
     let ctx = ctx_with_one_sheet();
     let opts = PdfOptions {
-        include_component_parameters: true,
+        bookmark_parts: true,
         ..default_opts()
     };
     let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
@@ -143,7 +150,7 @@ fn nets_group_emits_only_when_a_net_subtoggle_is_on() {
 fn global_bookmarks_pulls_groups_to_top_level() {
     let ctx = ctx_with_one_sheet();
     let opts = PdfOptions {
-        include_component_parameters: true,
+        bookmark_parts: true,
         generate_nets_info: true,
         bookmark_net_labels: true,
         global_bookmarks: true,
@@ -167,7 +174,6 @@ fn global_bookmarks_pulls_groups_to_top_level() {
 fn variant_tag_appended_when_physical_structure_on() {
     let ctx = ctx_with_one_sheet();
     let opts = PdfOptions {
-        include_component_parameters: true,
         use_physical_structure: true,
         variant: Some("VarA".to_string()),
         ..default_opts()
@@ -276,7 +282,7 @@ fn multi_sheet_bookmarks_have_independent_groups() {
         }
     };
     let opts = PdfOptions {
-        include_component_parameters: true,
+        bookmark_parts: true,
         ..default_opts()
     };
     let items = build_bookmarks(&ctx, &opts, &[0, 1, 2], 297.0, 210.0, 595.0);
@@ -361,4 +367,174 @@ fn pin_bookmarks_are_sorted_and_skip_power_symbols() {
     );
     // Sheet -> Nets group -> 6 pins: the sheet owns 7 descendants.
     assert_eq!(descendant_count(&items, 0), 7);
+}
+
+/// One sheet per designator list, each part at the same spot.
+fn ctx_with_parts(pages: &[&[&str]]) -> ExportContext {
+    let sheets = pages
+        .iter()
+        .enumerate()
+        .map(|(i, references)| {
+            let mut sheet = empty_sheet();
+            for reference in *references {
+                sheet.symbols.push(Symbol {
+                    reference: reference.to_string(),
+                    position: Point::new(50.0, 50.0),
+                    ..Default::default()
+                });
+            }
+            SheetSnapshot {
+                path: std::path::PathBuf::from(format!("sheet_{i}.standard_sch")),
+                schematic: sheet,
+                sheet_name: format!("Sheet{}", i + 1),
+                sheet_number: i + 1,
+                sheet_count: pages.len(),
+                placement: Default::default(),
+            }
+        })
+        .collect();
+    ExportContext {
+        sheets,
+        metadata: ProjectMetadata::default(),
+        netlist: None,
+        netlist_sheets: Vec::new(),
+        current_sheet: None,
+        netlist_placements: Vec::new(),
+    }
+}
+
+/// Titles of the children of `items[idx]`, in outline order.
+fn child_titles(items: &[PendingBookmark], idx: usize) -> Vec<&str> {
+    items[idx]
+        .children
+        .iter()
+        .map(|&c| items[c].title.as_str())
+        .collect()
+}
+
+/// The default options keep the outline the exporter always wrote: the
+/// sheet, with its Components and Nets groups under it.
+#[test]
+fn default_options_keep_the_sheet_components_nets_outline() {
+    let ctx = ctx_with_one_sheet();
+    let opts = PdfOptions {
+        physical_designators: false,
+        ..PdfOptions::default()
+    };
+    let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
+    let titles: Vec<&str> = items.iter().map(|i| i.title.as_str()).collect();
+    assert_eq!(
+        titles,
+        ["Sheet 1: Power", "Components", "Nets", "R1", "/VCC"]
+    );
+    assert_eq!(child_titles(&items, 0), ["Components", "Nets"]);
+    assert_eq!(child_titles(&items, 1), ["R1"]);
+    assert_eq!(child_titles(&items, 2), ["/VCC"]);
+}
+
+#[test]
+fn without_sheet_bookmarks_the_groups_sit_at_the_top_level() {
+    let ctx = ctx_with_one_sheet();
+    let opts = PdfOptions {
+        bookmark_sheets: false,
+        bookmark_parts: true,
+        generate_nets_info: true,
+        bookmark_net_labels: true,
+        ..default_opts()
+    };
+    let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
+    assert!(
+        !items.iter().any(|i| i.title.starts_with("Sheet")),
+        "no sheet items"
+    );
+    let top: Vec<&str> = items
+        .iter()
+        .filter(|i| i.parent_idx.is_none())
+        .map(|i| i.title.as_str())
+        .collect();
+    assert_eq!(top, ["Components", "Nets"]);
+    assert_eq!(child_titles(&items, 0), ["R1"]);
+    assert_eq!(child_titles(&items, 1), ["/VCC"]);
+}
+
+#[test]
+fn sheet_bookmarks_alone_list_one_item_per_page() {
+    let ctx = ctx_with_parts(&[&["R1"], &["R2"]]);
+    let items = build_bookmarks(&ctx, &default_opts(), &[0, 1], 297.0, 210.0, 595.0);
+    let titles: Vec<&str> = items.iter().map(|i| i.title.as_str()).collect();
+    assert_eq!(titles, ["Sheet 1: Sheet1", "Sheet 2: Sheet2"]);
+    assert_eq!(items[1].page_idx, 1);
+}
+
+/// Part bookmarks off writes no Components group and no part item.
+#[test]
+fn part_bookmarks_off_writes_no_part_items() {
+    let ctx = ctx_with_one_sheet();
+    let opts = PdfOptions {
+        bookmark_parts: false,
+        ..default_opts()
+    };
+    let items = build_bookmarks(&ctx, &opts, &[0], 297.0, 210.0, 595.0);
+    assert!(!items.iter().any(|i| i.title == "Components"));
+    assert!(!items.iter().any(|i| i.title.starts_with("R1")));
+    assert_eq!(items.len(), 1, "the sheet item only");
+}
+
+#[test]
+fn alphabetical_parts_are_one_top_level_group_in_natural_order() {
+    let ctx = ctx_with_parts(&[&["R10", "U1"], &["R2", "C3", "R1"]]);
+    let opts = PdfOptions {
+        bookmark_parts: true,
+        part_bookmark_order: PartBookmarkOrder::Alphabetical,
+        ..default_opts()
+    };
+    let items = build_bookmarks(&ctx, &opts, &[0, 1], 297.0, 210.0, 595.0);
+    assert_eq!(items[0].title, "Components");
+    assert!(items[0].parent_idx.is_none());
+    assert_eq!(child_titles(&items, 0), ["C3", "R1", "R2", "R10", "U1"]);
+    // Each part still jumps to its own page.
+    let page_of = |title: &str| items.iter().find(|i| i.title == title).map(|i| i.page_idx);
+    assert_eq!(page_of("R10"), Some(0));
+    assert_eq!(page_of("R2"), Some(1));
+    // The sheets stay as top-level items with no Components group under them.
+    let sheets: Vec<usize> = (0..items.len())
+        .filter(|&i| items[i].title.starts_with("Sheet"))
+        .collect();
+    assert_eq!(sheets.len(), 2);
+    assert!(sheets.iter().all(|&i| items[i].children.is_empty()));
+}
+
+/// A to Z owns the Components group; global mode then moves only Nets.
+#[test]
+fn alphabetical_parts_leave_nets_to_the_global_setting() {
+    let ctx = ctx_with_one_sheet();
+    let alphabetical = PdfOptions {
+        bookmark_parts: true,
+        part_bookmark_order: PartBookmarkOrder::Alphabetical,
+        generate_nets_info: true,
+        bookmark_net_labels: true,
+        ..default_opts()
+    };
+    let items = build_bookmarks(&ctx, &alphabetical, &[0], 297.0, 210.0, 595.0);
+    let sheet = items
+        .iter()
+        .position(|i| i.title == "Sheet 1: Power")
+        .expect("sheet item");
+    assert_eq!(
+        child_titles(&items, sheet),
+        ["Nets"],
+        "Nets stays per sheet"
+    );
+
+    let global = PdfOptions {
+        global_bookmarks: true,
+        ..alphabetical
+    };
+    let items = build_bookmarks(&ctx, &global, &[0], 297.0, 210.0, 595.0);
+    let top: Vec<&str> = items
+        .iter()
+        .filter(|i| i.parent_idx.is_none())
+        .map(|i| i.title.as_str())
+        .collect();
+    assert_eq!(top, ["Components", "Nets", "Sheet 1: Power"]);
 }

@@ -52,6 +52,8 @@ pub(crate) use save::log_foreign_column_offenders;
 mod save_as_project;
 #[cfg(test)]
 mod save_as_project_tests;
+#[cfg(test)]
+mod save_as_rekey_tests;
 mod save_async;
 pub(crate) use save_async::is_pcb_path;
 #[cfg(test)]

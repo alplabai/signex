@@ -539,7 +539,7 @@ mod tests {
             specific_page_input: "1".to_string(),
             range_note: None,
             zoom: 1.0,
-            active_tab: crate::app::state::PdfPreviewTab::Preview,
+            dialog: Default::default(),
             pan: (0.0, 0.0),
             panning: None,
             sheet_files: Vec::new(),
