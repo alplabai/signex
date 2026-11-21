@@ -478,7 +478,10 @@ fn layers_apart_move_off_the_core_and_still_pick() {
     let (_, top_mask) = z_span(&apart, Layer3d::Mask(Face::Top));
     assert!(close(top_mask, 1.6 + 6.0), "{top_mask}");
     let (_, top_copper) = z_span(&apart, Layer3d::Copper(Face::Top));
-    assert!(top_copper > 1.6 && top_copper < top_mask, "copper under mask");
+    assert!(
+        top_copper > 1.6 && top_copper < top_mask,
+        "copper under mask"
+    );
     let (top_part, _) = z_span(&apart, Layer3d::Part(Face::Top));
     assert!(top_part > top_mask, "the top part above its mask");
 

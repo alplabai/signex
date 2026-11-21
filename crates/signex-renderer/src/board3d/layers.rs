@@ -336,7 +336,9 @@ fn pad_opens(footprint: &Footprint, pad: &Pad, face: Face) -> bool {
         })
         .collect();
     if !listed.is_empty() {
-        return listed.into_iter().any(|t| PcbLayer::Technical(t) == mask_layer(face));
+        return listed
+            .into_iter()
+            .any(|t| PcbLayer::Technical(t) == mask_layer(face));
     }
     match pad.pad_type {
         PadType::Thru | PadType::NpThru => true,

@@ -114,7 +114,12 @@ pub(super) fn slab_openings(every: &PcbSnapshot, outline: &[[f32; 2]]) -> (Vec<O
                 .iter()
                 .map(|pad| (pad.center, pad.drill_mm, pad.pad_type == PadType::Thru)),
         )
-        .chain(every.vias.iter().map(|via| (via.center, via.drill_mm, true)))
+        .chain(
+            every
+                .vias
+                .iter()
+                .map(|via| (via.center, via.drill_mm, true)),
+        )
         .filter(|(_, drill, _)| drill.is_finite() && *drill > 0.0)
         .map(|(center, drill, plated)| Opening::Drill {
             center: board_xy(center),

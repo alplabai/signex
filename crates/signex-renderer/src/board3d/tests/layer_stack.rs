@@ -38,10 +38,7 @@ fn track(id: u128, layer: &str, y: f64) -> Segment {
 /// The test board with a track on each outer layer.
 fn routed() -> PcbBoard {
     let mut board = board();
-    board.segments = vec![
-        track(20, "TopCopper", 25.0),
-        track(21, "BottomCopper", 5.0),
-    ];
+    board.segments = vec![track(20, "TopCopper", 25.0), track(21, "BottomCopper", 5.0)];
     board
 }
 
@@ -112,7 +109,11 @@ fn a_tented_via_has_no_exposed_copper_on_its_tented_side() {
     let scene = layers_of(&board);
     let raised = mask_over_copper(colors().mask);
     assert_eq!(seen(&scene, VIA_RING, Face::Top), raised);
-    assert_eq!(seen(&scene, VIA_CENTRE, Face::Top), raised, "the mask spans the drill");
+    assert_eq!(
+        seen(&scene, VIA_CENTRE, Face::Top),
+        raised,
+        "the mask spans the drill"
+    );
     assert_eq!(
         seen(&scene, VIA_RING, Face::Bottom),
         colors().finish,
@@ -127,9 +128,15 @@ fn copper_lies_between_the_laminate_and_the_mask_on_both_sides() {
     let heights = StackHeights::of(&board, 1.6);
     assert!(heights.bottom_core < heights.top_core);
     let (lo, hi) = z_span(&scene, Layer3d::Copper(Face::Top));
-    assert!(lo > heights.top_core && hi < heights.mask(Face::Top), "{lo} {hi}");
+    assert!(
+        lo > heights.top_core && hi < heights.mask(Face::Top),
+        "{lo} {hi}"
+    );
     let (lo, hi) = z_span(&scene, Layer3d::Copper(Face::Bottom));
-    assert!(hi < heights.bottom_core && lo > heights.mask(Face::Bottom), "{lo} {hi}");
+    assert!(
+        hi < heights.bottom_core && lo > heights.mask(Face::Bottom),
+        "{lo} {hi}"
+    );
 }
 
 #[test]
@@ -232,7 +239,10 @@ fn the_explode_keeps_every_layer_in_stack_order() {
     };
     for layer in [upper, lower] {
         let (lo, hi) = z_span(&scene, layer);
-        assert!(lo > heights.bottom_core && hi < heights.top_core, "{layer:?}");
+        assert!(
+            lo > heights.bottom_core && hi < heights.top_core,
+            "{layer:?}"
+        );
     }
 
     let apart = scene.exploded(Explode {
@@ -253,6 +263,9 @@ fn the_explode_keeps_every_layer_in_stack_order() {
         z_span(&apart, Layer3d::Mask(Face::Bottom)),
         z_span(&apart, Layer3d::Part(Face::Bottom)),
     ];
-    assert!(bottom[0].1 < heights.bottom_core, "inner copper leaves the core");
+    assert!(
+        bottom[0].1 < heights.bottom_core,
+        "inner copper leaves the core"
+    );
     assert!(bottom.windows(2).all(|p| p[0].0 > p[1].1), "{bottom:?}");
 }
