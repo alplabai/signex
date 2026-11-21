@@ -950,7 +950,8 @@ mod tests {
     }
 
     /// A job told to write a missing file writes one that is gone and still
-    /// refuses one that changed; without it a gone file is refused.
+    /// refuses one that changed or whose folder is gone; without it a gone
+    /// file is refused.
     #[test]
     fn writing_a_missing_file_writes_a_gone_file_and_refuses_a_changed_one() {
         let dir = tempfile::tempdir().unwrap();
@@ -983,6 +984,18 @@ mod tests {
             SaveOutcome::DiskChanged(super::super::DiskDrift::Changed)
         );
         assert_eq!(std::fs::read(&path).unwrap(), b"theirs");
+
+        // Only a gone file is written; a gone folder is still refused.
+        let in_gone_folder = dir.path().join("gone").join("a.snxsch");
+        let folder = saves
+            .begin(in_gone_folder, b"mine".to_vec())
+            .expecting(baseline)
+            .writing_a_missing_file();
+        assert_eq!(
+            folder.run().unwrap(),
+            SaveOutcome::DiskChanged(super::super::DiskDrift::FolderMissing)
+        );
+        assert!(!dir.path().join("gone").exists());
     }
 
     /// A sink whose write stays open until the test releases it.

@@ -19,9 +19,11 @@ use crate::persist::{DocumentSaveDone, SaveOutcome};
 /// How a schematic write is compared with its file before it lands.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DiskCheck {
-    /// Refuse when the file changed or is gone (Ctrl+S).
+    /// Refuse when the file changed or is gone (Ctrl+S). A Save As to a new
+    /// target has no baseline, so nothing is compared.
     Compare,
-    /// Refuse when the file changed; write it when it is gone.
+    /// Refuse when the file changed or its folder is gone; write it when only
+    /// the file is gone.
     CompareWritingMissing,
     /// Write without comparing.
     Skip,

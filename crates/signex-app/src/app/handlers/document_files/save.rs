@@ -367,7 +367,8 @@ impl Signex {
         // Onto its own file it is a plain save: no new document, so the id
         // stays (#2172). It is compared with disk like Ctrl+S, so a file
         // another program changed raises the card instead of being replaced;
-        // a file deleted or moved away is written, as before.
+        // a file deleted or moved away is written, as before; a gone folder
+        // raises Folder Missing on Disk.
         if path == from_path {
             return self.begin_schematic_save_onto_own_file(path);
         }
