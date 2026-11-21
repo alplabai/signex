@@ -339,8 +339,9 @@ fn a_group_dropdown_is_headed_by_the_group_name() {
 fn a_group_dropdown_puts_its_commands_below_a_separator() {
     let app = board_app();
     let areas = entries(&app, PcbBarMenu::Group(PcbBarGroup::CopperAreas));
-    assert_eq!(shape(&areas), "H*.....-..", "Polygon Pour is current");
-    let DropdownEntry::Item(first_command) = &areas[8] else {
+    // The Room tool joins the pour rows (#2457, Caner 2026-11-20).
+    assert_eq!(shape(&areas), "H*......-..", "Polygon Pour is current");
+    let DropdownEntry::Item(first_command) = &areas[9] else {
         panic!("a row after the separator");
     };
     assert_eq!(first_command.command_id, Some("repour_selected"));

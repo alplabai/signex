@@ -43,18 +43,18 @@ annotate_schematic_quietly	disabled_still_runs	explains_when_unavailable	core	ac
 apply_edits	operand_handler	run_operands: named document	core	active document,tool state,pre-placement form,origin	handler
 apply_edits	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_edits	headless_missing_operand	needs `document`	core	none	routing
-apply_layout_board	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Layout))))	undecided	window,settings	handler
+apply_layout_board	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Layout))))	gui	window,settings	handler
 apply_layout_board	in_window_rewrite	document_window	gui	window	routing
-apply_layout_board	headless_refusal	headless_refusal	undecided	none	routing
-apply_layout_notebook	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Notebook))))	undecided	window,settings	handler
+apply_layout_board	headless_refusal	headless_refusal	gui	none	routing
+apply_layout_notebook	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Notebook))))	gui	window,settings	handler
 apply_layout_notebook	in_window_rewrite	document_window	gui	window	routing
-apply_layout_notebook	headless_refusal	headless_refusal	undecided	none	routing
-apply_layout_review	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Review))))	undecided	window,settings	handler
+apply_layout_notebook	headless_refusal	headless_refusal	gui	none	routing
+apply_layout_review	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Review))))	gui	window,settings	handler
 apply_layout_review	in_window_rewrite	document_window	gui	window	routing
-apply_layout_review	headless_refusal	headless_refusal	undecided	none	routing
-apply_layout_schematic	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Schematic))))	undecided	window,settings	handler
+apply_layout_review	headless_refusal	headless_refusal	gui	none	routing
+apply_layout_schematic	bridge	DockLayout(Workspace(ApplyRequested(Builtin(Schematic))))	gui	window,settings	handler
 apply_layout_schematic	in_window_rewrite	document_window	gui	window	routing
-apply_layout_schematic	headless_refusal	headless_refusal	undecided	none	routing
+apply_layout_schematic	headless_refusal	headless_refusal	gui	none	routing
 apply_selection_filter_preset	operand_handler	run_operands: active-tab gate unless a document is named	gui	settings	handler
 apply_selection_filter_preset	refusal_needs_operands	needs_operands_reason	gui	none	routing
 apply_selection_filter_preset	headless_missing_operand	needs `name`	gui	none	routing
@@ -186,10 +186,10 @@ color_net	active_bar	NetColorCustom	gui	selection	handler
 color_net	operand_handler	run_operands: named document	core	origin	handler
 color_net	in_window_rewrite	document_window	gui	window	routing
 color_net	headless_missing_operand	needs `at`	core	none	routing
-compare_board_with_schematic	bridge	Pcb(CompareBoard(Requested))	undecided	active document,window	gate
+compare_board_with_schematic	bridge	Pcb(CompareBoard(Requested))	gui	active document,window	gate
 compare_board_with_schematic	in_window_rewrite	document_window	gui	window	routing
-compare_board_with_schematic	refusal_needs	PcbSync	undecided	active document,window	routing
-compare_board_with_schematic	headless_refusal	headless_refusal	undecided	none	routing
+compare_board_with_schematic	refusal_needs	PcbSync	gui	active document,window	routing
+compare_board_with_schematic	headless_refusal	headless_refusal	gui	none	routing
 compile_project	bridge	Project(CompiledDesign(CompileRequested))	core	active document	handler
 compile_project	in_window_rewrite	document_window	gui	window	routing
 compile_project	refusal_needs	ProjectSheet	core	active document	routing
@@ -201,10 +201,10 @@ copy_attributes_or_add_vertex	bridge	Edit(Extras(CopyAttributesRequested { at: N
 copy_attributes_or_add_vertex	bridge_context_menu	Edit(Extras(CopyAttributesRequested { at: Some((1.0, 2.0)) }))	gui	active document,selection,tool state,in-progress edit	handler
 copy_attributes_or_add_vertex	in_window_rewrite	document_window	gui	window	routing
 copy_attributes_or_add_vertex	headless_refusal	headless_refusal	gui	none	routing
-create_rooms_from_sheets	bridge	Pcb(CreateRooms(Requested))	undecided	active document	gate
+create_rooms_from_sheets	bridge	Pcb(CreateRooms(Requested))	gui	active document	gate
 create_rooms_from_sheets	in_window_rewrite	document_window	gui	window	routing
-create_rooms_from_sheets	refusal_needs	PcbInProject	undecided	active document	routing
-create_rooms_from_sheets	headless_refusal	headless_refusal	undecided	none	routing
+create_rooms_from_sheets	refusal_needs	PcbInProject	gui	active document	routing
+create_rooms_from_sheets	headless_refusal	headless_refusal	gui	none	routing
 create_sheet_from_sheet_symbol	bridge	ContextMenu(Action(CreateChildSheet))	gui	selection	handler
 create_sheet_from_sheet_symbol	in_window_rewrite	document_window	gui	window	routing
 create_sheet_from_sheet_symbol	headless_refusal	headless_refusal	gui	none	routing
@@ -539,9 +539,9 @@ lock_board_items	operand_handler	run_operands: named document	core	origin	handle
 lock_board_items	in_window_rewrite	document_window	gui	window	routing
 lock_board_items	refusal_needs	Pcb	core	active document	routing
 lock_board_items	headless_missing_operand	needs `document`	core	none	routing
-manage_workspace_layouts	bridge	DockLayout(Workspace(Manage(Requested)))	undecided	settings	handler
+manage_workspace_layouts	bridge	DockLayout(Workspace(Manage(Requested)))	gui	settings	handler
 manage_workspace_layouts	in_window_rewrite	document_window	gui	window	routing
-manage_workspace_layouts	headless_refusal	headless_refusal	undecided	none	routing
+manage_workspace_layouts	headless_refusal	headless_refusal	gui	none	routing
 measure_board	query	run_query	core	origin	handler
 measure_board	headless_missing_operand	needs `document`	core	none	routing
 measure_distance	bridge	Tool(SelectTool(Measure))	gui	active document	gate
@@ -1130,9 +1130,9 @@ reset_local_coordinates	headless_refusal	headless_refusal	gui	none	routing
 reset_schematic_designators	bridge	Annotate(OpenResetConfirm)	gui	none	handler
 reset_schematic_designators	in_window_rewrite	document_window	gui	window	routing
 reset_schematic_designators	headless_refusal	headless_refusal	gui	none	routing
-reset_workspace_layout	bridge	DockLayout(Workspace(ResetActiveRequested))	undecided	window,settings	handler
+reset_workspace_layout	bridge	DockLayout(Workspace(ResetActiveRequested))	gui	window,settings	handler
 reset_workspace_layout	in_window_rewrite	document_window	gui	window	routing
-reset_workspace_layout	headless_refusal	headless_refusal	undecided	none	routing
+reset_workspace_layout	headless_refusal	headless_refusal	gui	none	routing
 resolve	query	run_query	core	origin	handler
 resolve	headless_missing_operand	needs `id`	core	none	routing
 revert	operand_handler	run_operands: named document	core	active document,window,in-progress edit,origin	handler
@@ -1231,9 +1231,9 @@ save_layer_set	operand_handler	run_operands: named document	gui	origin,settings	
 save_layer_set	refusal_needs	Pcb	gui	active document	routing
 save_layer_set	refusal_needs_operands	needs_operands_reason	gui	none	routing
 save_layer_set	headless_missing_operand	needs `name`	gui	none	routing
-save_workspace_layout	bridge	DockLayout(Workspace(Save(Requested)))	undecided	settings	handler
+save_workspace_layout	bridge	DockLayout(Workspace(Save(Requested)))	gui	settings	handler
 save_workspace_layout	in_window_rewrite	document_window	gui	window	routing
-save_workspace_layout	headless_refusal	headless_refusal	undecided	none	routing
+save_workspace_layout	headless_refusal	headless_refusal	gui	none	routing
 select_all	bridge	Selection(SelectAll)	gui	active document,render cache	handler
 select_all	in_window_rewrite	document_window	gui	window	routing
 select_all	refusal_needs	SelectAllTarget	gui	active document	routing

@@ -579,9 +579,15 @@ fn the_filter_badge_counts_the_kinds_that_are_off() {
     assert!(badge.x + badge.width <= slot_left + m.btn, "{badge:?}");
     assert!(badge.y >= top && badge.y < top + m.btn / 2.0, "{badge:?}");
 
+    // Rooms are pickable (#2457), so turning them off counts.
     app.ui_state.pcb_pick_filter.toggle(PickKind::Rooms);
     let labels: Vec<String> = bar_texts(&app).into_iter().map(|(text, _)| text).collect();
-    assert_eq!(labels, ["2"], "Rooms cannot be picked yet");
+    assert_eq!(labels, ["3"], "Rooms can be picked");
+
+    // 3D bodies cannot be picked yet: turning them off changes nothing.
+    app.ui_state.pcb_pick_filter.toggle(PickKind::Bodies3d);
+    let labels: Vec<String> = bar_texts(&app).into_iter().map(|(text, _)| text).collect();
+    assert_eq!(labels, ["3"], "3D bodies cannot be picked yet");
 }
 
 /// #2389: the Interactive Routing button arms the router on the board.

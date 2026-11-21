@@ -179,6 +179,20 @@ pub(super) const WRITES: &[(&[&str], Surface, Writes)] = &[
     (&["board_sketch"], Menu, Pending),
     // The layer strip's name style and numbers, written to the prefs.
     (&["toggle_layer_numbers"], Menu, Settings),
+    // Applying or resetting a workspace layout arranges the panels and
+    // saves the dock layout and the layout list to the prefs (mockup row
+    // 166); Save and Manage only open their dialogs.
+    (
+        &[
+            "apply_layout_schematic",
+            "apply_layout_board",
+            "apply_layout_review",
+            "apply_layout_notebook",
+            "reset_workspace_layout",
+        ],
+        Menu,
+        Settings,
+    ),
     (MENU_SESSION, Menu, Session),
     // An unmapped id: no route but the headless refusal.
     (
@@ -303,8 +317,10 @@ const MENU_SESSION: &[&str] = &[
     "clear_net_color",
     "clear_net_highlighting",
     "color_net",
+    "compare_board_with_schematic",
     "copy",
     "copy_attributes_or_add_vertex",
+    "create_rooms_from_sheets",
     "create_sheet_from_sheet_symbol",
     "create_sheet_symbol_from_sheet",
     "create_union",
@@ -369,6 +385,7 @@ const MENU_SESSION: &[&str] = &[
     "import_graphics",
     "lasso_select",
     "leave_sheet",
+    "manage_workspace_layouts",
     "move_object",
     "move_selection",
     "move_selection_xy",
@@ -458,6 +475,7 @@ const MENU_SESSION: &[&str] = &[
     "reset_schematic_designators",
     "rubber_stamp_copy",
     "save_document_as",
+    "save_workspace_layout",
     "select_all",
     "select_board_net",
     "select_connection",
