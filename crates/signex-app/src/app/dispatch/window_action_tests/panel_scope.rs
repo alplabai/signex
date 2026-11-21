@@ -226,11 +226,26 @@ fn closing_a_window_ends_the_wire_drawn_in_it() {
     let window = undock(&mut app, &paths[2]);
     let state = &mut app.interaction_state;
     state.wire_drawing = true;
+    state.wire_window = Some(window);
     state.wire_points.push(Point::new(1.0, 1.0));
     state.canvases.get_mut(&window).unwrap().drawing_mode = true;
     let _ = app.update(Message::Window(WindowMsg::ReattachTab(window)));
     assert!(!app.interaction_state.wire_drawing);
     assert!(app.interaction_state.wire_points.is_empty());
+}
+
+/// A window whose `drawing_mode` is left over from an ended wire does not
+/// own the wire main is drawing now.
+#[test]
+fn a_stale_window_drawing_flag_does_not_end_mains_wire() {
+    let (mut app, paths) = three_sheets();
+    let window = undock(&mut app, &paths[2]);
+    start_main_wire(&mut app);
+    let state = &mut app.interaction_state;
+    state.canvases.get_mut(&window).unwrap().drawing_mode = true;
+    app.end_wire_of_window(window);
+    assert!(app.interaction_state.wire_drawing);
+    assert_eq!(app.interaction_state.wire_points.len(), 1);
 }
 
 /// Undocking main's tab leaves a wire another window is drawing alone.
@@ -240,6 +255,7 @@ fn undocking_main_tab_keeps_a_wire_of_another_window() {
     let other = undock(&mut app, &paths[1]);
     let state = &mut app.interaction_state;
     state.wire_drawing = true;
+    state.wire_window = Some(other);
     state.wire_points.push(Point::new(1.0, 1.0));
     let slot = state.canvases.get_mut(&other).unwrap();
     slot.drawing_mode = true;
@@ -356,9 +372,46 @@ fn the_grid_picker_in_a_window_acts_on_its_footprint() {
     assert_eq!(grid_step(&app, &a), before);
 
     run_in(&mut app, "open_grid_picker", window);
-    let _ = app.update(Message::GridProperties(G::Open));
+    let _ = app.update(Message::GridProperties(G::OpenFromPicker));
     let dialog = app.ui_state.grid_properties.as_ref().expect("it opened");
     assert_eq!(dialog.target, b);
+}
+
+/// Grid Properties from main, with a window's picker open: main's footprint.
+#[test]
+fn grid_properties_from_main_ignores_another_windows_picker() {
+    use crate::app::GridPropertiesMsg as G;
+    let (mut app, a, b, window) = two_footprints();
+    run_in(&mut app, "open_grid_picker", window);
+    let picker = app.interaction_state.grid_picker.as_ref().expect("open");
+    assert_eq!(picker.target, b);
+    let _ = app.update(Message::GridProperties(G::Open));
+    let dialog = app.ui_state.grid_properties.as_ref().expect("it opened");
+    assert_eq!(dialog.target, a);
+}
+
+/// An undocked symbol window enables symbol commands by its own tab.
+#[test]
+fn a_symbol_window_is_a_symbol_editor_with_main_on_a_sheet() {
+    let mut app = app_with_main();
+    let (sheet, symbol) = (PathBuf::from("m.snxsch"), PathBuf::from("s.snxsym"));
+    let engine =
+        signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
+    app.document_state.engines.insert(sheet.clone(), engine);
+    let file = signex_library::SymbolFile::from_symbol(signex_library::Symbol::empty("Sym"));
+    app.document_state
+        .symbol_editors
+        .insert(symbol.clone(), SymbolDocument::new(symbol.clone(), file));
+    app.document_state
+        .tabs
+        .push(tab_of(&symbol, TabKind::SymbolEditor(symbol.clone())));
+    app.document_state.tabs.push(tab(&sheet));
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = Some(sheet);
+    let window = window_over(&mut app, &symbol);
+    assert!(app.command_context(Some(window)).has_symbol_editor);
+    let main = app.ui_state.main_window_id;
+    assert!(!app.command_context(main).has_symbol_editor);
 }
 
 /// A board report asked for in a window reads that window's board.
@@ -382,6 +435,16 @@ fn a_board_report_in_a_window_reads_its_board() {
         panic!("Board Reports did not open");
     };
     assert_eq!(report.board, b);
+    // An SVG command exports the open dialog's board, not main's.
+    assert_eq!(app.assembly_svg_source().map(|(board, _)| board), Some(b.clone()));
+    let _ = app.update(Message::from(crate::app::BoardOutputMsg::Closed));
+    run_in(&mut app, "export_board_pdf", window);
+    assert!(matches!(
+        app.ui_state.board_output.dialog.as_deref(),
+        Some(BoardOutputDialog::Print(_))
+    ));
+    // And a CSV command with Board Print open does too.
+    assert_eq!(app.board_csv_source().map(|(board, _)| board), Some(b));
 }
 
 /// The dialog's document closed first: Apply writes nothing, anywhere.

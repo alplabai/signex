@@ -411,42 +411,49 @@ impl Signex {
         })
     }
 
+    /// Open Grid Properties on `target`, seeded from its current step. No-op
+    /// for anything but a footprint (the modal would have nothing to drive).
+    fn open_grid_properties_on(&mut self, target: Option<std::path::PathBuf>) {
+        let editor_snap = target
+            .as_deref()
+            .and_then(|target| self.footprint_editor_at(target))
+            .map(|e| e.state.snap_options);
+        tracing::info!(
+            target: "signex::ui",
+            has_snap = editor_snap.is_some(),
+            "GridPropertiesOpen received",
+        );
+        if let (Some(opts), Some(target)) = (editor_snap, target) {
+            let step = opts.grid_step_mm;
+            self.ui_state.grid_properties = Some(Box::new(crate::app::GridPropertiesState {
+                step_mm: format!("{step:.4}"),
+                fine_display: opts.fine_grid_display,
+                coarse_display: opts.coarse_grid_display,
+                multiplier: opts.coarse_multiplier,
+                target,
+                ..crate::app::GridPropertiesState::default()
+            }));
+        }
+    }
+
     /// Grid Properties dialog handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_grid_properties_message(
         &mut self,
         msg: GridPropertiesMsg,
     ) -> Task<Message> {
         match msg {
+            // The command: the footprint in view of the window it ran in.
+            // An open picker closes behind it and lends it nothing.
             GridPropertiesMsg::Open => {
-                // The grid picker's last row opens this dialog; the picker
-                // closes behind it and hands on the footprint it was for.
+                self.interaction_state.grid_picker = None;
+                let target = self.footprint_dialog_target();
+                self.open_grid_properties_on(target);
+                self.finish_update()
+            }
+            // The picker's own row: the footprint the picker was for.
+            GridPropertiesMsg::OpenFromPicker => {
                 let picked = self.interaction_state.grid_picker.take();
-                let target = picked
-                    .map(|picker| picker.target)
-                    .or_else(|| self.footprint_dialog_target());
-                // Pre-populate from that footprint's current step. No-op
-                // for other tabs (the modal would have nothing to drive).
-                let editor_snap = target
-                    .as_deref()
-                    .and_then(|target| self.footprint_editor_at(target))
-                    .map(|e| e.state.snap_options);
-                tracing::info!(
-                    target: "signex::ui",
-                    has_snap = editor_snap.is_some(),
-                    "GridPropertiesOpen received",
-                );
-                if let (Some(opts), Some(target)) = (editor_snap, target) {
-                    let step = opts.grid_step_mm;
-                    self.ui_state.grid_properties =
-                        Some(Box::new(crate::app::GridPropertiesState {
-                            step_mm: format!("{step:.4}"),
-                            fine_display: opts.fine_grid_display,
-                            coarse_display: opts.coarse_grid_display,
-                            multiplier: opts.coarse_multiplier,
-                            target,
-                            ..crate::app::GridPropertiesState::default()
-                        }));
-                }
+                self.open_grid_properties_on(picked.map(|picker| picker.target));
                 self.finish_update()
             }
             GridPropertiesMsg::SetFineDisplay(d) => {

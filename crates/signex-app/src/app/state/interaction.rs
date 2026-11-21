@@ -85,6 +85,8 @@ pub struct InteractionState {
     pub tab_drag_origin: Option<(f32, f32)>,
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
+    /// The undocked window the wire being drawn started in; `None`: main.
+    pub wire_window: Option<iced::window::Id>,
     /// Width and colour of the wire the route being drawn started on, which
     /// its wires take; `None` when it started on no wire.
     pub(crate) wire_start_style: Option<(f64, Option<signex_types::theme::Color>)>,

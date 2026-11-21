@@ -93,7 +93,8 @@ pub fn start_on_copper(
 }
 
 /// The via at `to` when a leg of `style` ends on a pad off its layer (a
-/// surface pad on Top while the leg runs on an inner layer). A leg of no
+/// surface pad on Top while the leg runs on an inner layer, or a point
+/// outside a through pad's smaller copper on the leg's layer). A leg of no
 /// net yet takes the pad's net. `new_via` makes the via at `to` (the caller
 /// sizes it and gives it its id).
 pub fn end_via(
@@ -103,7 +104,7 @@ pub fn end_via(
     new_via: impl FnOnce(Point) -> Via,
 ) -> Option<Via> {
     let pad = pad_at(board, to, u32::MAX)?;
-    if pad.reaches(style.layer) {
+    if pad_at(board, to, 1 << layer_bit(style.layer)).is_some() {
         return None;
     }
     if style.net == 0 {

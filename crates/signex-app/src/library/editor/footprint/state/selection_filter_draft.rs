@@ -112,7 +112,7 @@ mod tests {
     use super::{SelectionFilter, SelectionFilterCustomState as Draft, SelectionFilterKind};
 
     fn draft() -> Draft {
-        Draft::from_filter(SelectionFilter::default())
+        Draft::from_filter(SelectionFilter::default(), "part.snxfpt".into())
     }
 
     /// None turns all eight shown kinds off, All turns them back on; the
@@ -167,6 +167,7 @@ mod tests {
     fn the_draft_round_trips_the_filter() {
         let mut f = SelectionFilter::default();
         f.toggle(SelectionFilterKind::Pours);
-        assert_eq!(Draft::from_filter(f).to_filter(), f);
+        let draft = Draft::from_filter(f, "part.snxfpt".into());
+        assert_eq!(draft.to_filter(), f);
     }
 }

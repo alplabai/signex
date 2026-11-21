@@ -671,54 +671,36 @@ fn a_no_net_route_snaps_to_any_pad_and_takes_its_net() {
     assert!(!close(at, foreign) && on_grid(at, 0.1), "{at:?}");
 }
 
+/// A running route with a net takes no part's origin, its own net's or a
+/// bare part's. The first click and a route of no net keep them.
 #[test]
-fn a_running_route_ignores_a_foreign_parts_origin() {
+fn a_netted_route_ignores_every_origin_and_a_no_net_route_keeps_them() {
     let mut rig = rig_on(board_with_foreign_pad());
     rig.toggle(SnapObject::FootprintOrigins);
-    rig.toggle(SnapObject::PadCenters);
     rig.run("place_board_track");
-    rig.click(Point::new(30.03, 30.03));
-    rig.toggle(SnapObject::PadCenters);
     let reach = rig.mm(4.0);
-    let foreign = Point::new(25.03, 15.03);
-    rig.app
-        .board_tool_followed(Point::new(foreign.x, foreign.y + reach));
-    let at = tool_cursor(&rig);
-    assert!(!close(at, foreign), "a part of net B: {at:?}");
     let own = Point::new(25.03, 10.03);
-    rig.app
-        .board_tool_followed(Point::new(own.x, own.y + reach));
-    assert!(close(tool_cursor(&rig), own), "a part of net A");
     let bare = Point::new(15.03, 40.03);
     rig.app
         .board_tool_followed(Point::new(bare.x, bare.y + reach));
-    assert!(close(tool_cursor(&rig), bare), "a part with no net");
-}
+    assert!(close(tool_cursor(&rig), bare), "before the first click");
 
-/// A part with a pad on the route's net, but a pad of another net over its
-/// origin: landing there would short to that pad.
-#[test]
-fn a_running_route_refuses_an_origin_under_a_foreign_pad() {
-    let mut covered = board_with_foreign_pad();
-    let mut own_pad = covered.footprints[3].pads[0].clone();
-    own_pad.uuid = Uuid::from_u128(0xE1);
-    own_pad.position = Point::new(3.0, 0.0);
-    own_pad.net = Some(PadNet {
-        number: 1,
-        name: "A".into(),
-    });
-    covered.footprints[3].pads.push(own_pad);
-    let mut rig = rig_on(covered);
-    rig.toggle(SnapObject::FootprintOrigins);
-    rig.toggle(SnapObject::PadCenters);
-    rig.run("place_board_track");
-    rig.click(Point::new(30.03, 30.03));
-    rig.toggle(SnapObject::PadCenters);
-    let origin = Point::new(25.03, 15.03);
+    rig.click(Point::new(33.0, 33.0));
+    let session = rig.app.interaction_state.pcb_tool.as_ref().expect("armed");
+    assert_eq!(session.route.expect("a run").net, 0, "bare board: no net");
     rig.app
-        .board_tool_followed(Point::new(origin.x, origin.y + rig.mm(4.0)));
-    let at = tool_cursor(&rig);
-    assert!(!close(at, origin), "{at:?}");
+        .board_tool_followed(Point::new(bare.x, bare.y + reach));
+    assert!(close(tool_cursor(&rig), bare), "a route of no net");
+
+    rig.click(Point::new(30.03, 30.03));
+    let session = rig.app.interaction_state.pcb_tool.as_ref().expect("armed");
+    assert_eq!(session.route.expect("a run").net, 1, "it took net A");
+    for origin in [own, bare] {
+        rig.app
+            .board_tool_followed(Point::new(origin.x, origin.y + reach));
+        let at = tool_cursor(&rig);
+        assert!(!close(at, origin), "{origin:?}: {at:?}");
+    }
 }
 
 #[test]

@@ -303,7 +303,6 @@ fn snapped_delta(
         radius_mm,
         shown,
         net: view.net,
-        route_layer: 1 << pcb_geom::layer_bit(view.route_layer.unwrap_or(view.active)),
     });
     if let Some(query) = &query
         && let Some(target) = object_snap_point(board, to, query)

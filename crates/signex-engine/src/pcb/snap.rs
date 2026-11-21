@@ -73,12 +73,10 @@ pub struct SnapQuery<'a> {
     pub radius_mm: f64,
     /// The layers the view shows: a hidden layer gives no points.
     pub shown: ShownLayers<'a>,
-    /// While a route runs, its net: copper of another net gives no points.
-    /// Copper of no net (0) and objects without a net still do.
+    /// While a route runs, its net: copper of another net gives no points,
+    /// and no part origin does. Copper of no net (0) and objects without a
+    /// net still do.
     pub net: Option<u32>,
-    /// The copper a running route is on, as `pcb_geom::layer_bit` bits: a
-    /// part's origin under another net's pad on it gives no point.
-    pub route_layer: u32,
 }
 
 /// What the board view shows, as object snapping reads it.
@@ -123,7 +121,7 @@ pub fn object_snap_point(board: &PcbBoard, at: Point, query: &SnapQuery) -> Opti
         return None;
     }
     let reach = query.radius_mm * query.radius_mm;
-    candidates(board, query, at, query.radius_mm)
+    candidates(board, query, at)
         .into_iter()
         .filter(|p| p.x.is_finite() && p.y.is_finite())
         .map(|p| (distance_sq(p, at), p))
@@ -146,7 +144,7 @@ pub fn axis_snap(
         return (None, None);
     }
     let reach = range_mm * range_mm;
-    let near: Vec<(f64, Point)> = candidates(board, query, at, range_mm)
+    let near: Vec<(f64, Point)> = candidates(board, query, at)
         .into_iter()
         .filter(|p| p.x.is_finite() && p.y.is_finite())
         .map(|p| (distance_sq(p, at), p))

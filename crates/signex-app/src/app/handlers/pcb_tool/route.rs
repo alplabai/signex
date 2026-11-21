@@ -15,7 +15,7 @@ use signex_types::pcb::{PcbBoard, Point, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
-use super::route_end::end_via;
+use super::route_end::{end_via, track_end_refusal};
 use super::{BoardToolDefaults, BoardToolSession};
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
@@ -98,6 +98,11 @@ impl Signex {
         let (mut style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
         // A pad off the run's layer at its end is reached with a via there.
         let end = end_via(board, defaults, at, &mut style);
+        // A pad of another net refuses the leg, as Interactive Routing's.
+        if let Some(line) = track_end_refusal(&self.ui_state.i18n, board, at, style.net) {
+            self.note_board_tool(line);
+            return;
+        }
         let rule = self.interaction_state.corner_rule;
         let tracks = draw::track_run(anchor, at, rule, style, Uuid::now_v7);
         if let Some(command) = draw::place_route(tracks, via) {
@@ -148,6 +153,10 @@ impl Signex {
         let (mut style, via) =
             next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
         let end = end_via(board, defaults, cursor, &mut style);
+        // The leg a click would refuse is not previewed, nor its via.
+        if track_end_refusal(&self.ui_state.i18n, board, cursor, style.net).is_some() {
+            return;
+        }
         let rule = self.interaction_state.corner_rule;
         preview
             .segments

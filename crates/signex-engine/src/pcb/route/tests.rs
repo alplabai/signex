@@ -260,3 +260,20 @@ fn a_track_pushed_twice_keeps_its_latest_place_in_the_draft() {
     });
     assert_eq!(draft.shoved, vec![second]);
 }
+
+/// A through pad 3 mm wide on Top and 1 mm elsewhere: a Bottom leg ending
+/// outside its Bottom copper needs a via, one ending on it does not.
+#[test]
+fn an_end_via_reads_the_pads_size_on_the_legs_layer() {
+    use signex_types::pcb::{LayerSize, LayerSizes, PadType};
+    let mut board = board(vec![pad(1, 0.0, 0.0, A)], Vec::new());
+    let through = &mut board.footprints[0].pads[0];
+    through.pad_type = PadType::Thru;
+    through.layer_sizes = Some(LayerSizes::Full {
+        layers: vec![LayerSize::new(CopperLayer::Top, Point::new(3.0, 3.0))],
+    });
+    let mut leg = style(CopperLayer::Bottom);
+    let via = |at| new_via(&board, Uuid::from_u128(9), at);
+    assert!(end_via(&board, Point::new(1.0, 0.0), &mut leg, via).is_some());
+    assert!(end_via(&board, Point::new(0.1, 0.0), &mut leg, via).is_none());
+}

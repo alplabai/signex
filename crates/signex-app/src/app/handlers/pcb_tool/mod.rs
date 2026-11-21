@@ -332,7 +332,6 @@ impl Signex {
                         .as_ref()
                         .map(|style| style.net)
                         .filter(|net| *net != 0);
-                    view.route_layer = session.route.as_ref().map(|style| style.layer);
                 }
                 _ => {}
             }

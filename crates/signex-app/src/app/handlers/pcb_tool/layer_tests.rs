@@ -340,6 +340,27 @@ fn a_track_run_on_an_inner_layer_ends_on_a_top_pad_with_a_via() {
     assert!(all_on_inner(board, 1), "{:?}", board.segments);
 }
 
+/// A click on a pad of another net off the run's layer adds no via that
+/// would short to it, and says why.
+#[test]
+fn a_track_run_is_refused_on_a_pad_of_another_net_off_its_layer() {
+    let dir = tempfile::tempdir().unwrap();
+    let pads = vec![
+        pad(1, 0.0, 0.0, Some((1, "A"))),
+        pad(5, 10.0, 0.0, Some((2, "B"))),
+    ];
+    let (mut app, path) = app_with(dir.path(), pads);
+    let before = live(&app, &path);
+    make_active(&mut app, inner());
+    run(&mut app, "place_board_track");
+    click(&mut app, 0.0, 0.0);
+    click(&mut app, 10.0, 0.0);
+    assert_eq!(live(&app, &path), before, "nothing lands");
+    let why = status(&app);
+    assert!(why.contains(OTHER_NET), "{why}");
+    assert!(why.starts_with("Track:"), "{why}");
+}
+
 /// Arming a board tool brings Properties to the front on what the next
 /// click places, Via included.
 #[test]

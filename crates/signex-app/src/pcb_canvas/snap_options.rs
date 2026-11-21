@@ -155,8 +155,6 @@ pub struct SnapView<'a> {
     pub hidden_kinds: Vec<pcb_geom::PickKind>,
     /// A running route's net: other nets give no object points.
     pub net: Option<u32>,
-    /// A running route's layer; `active` when none runs.
-    pub route_layer: Option<CopperLayer>,
 }
 
 impl<'a> SnapView<'a> {
@@ -173,7 +171,6 @@ impl<'a> SnapView<'a> {
             through_hidden: false,
             hidden_kinds: Vec::new(),
             net: None,
-            route_layer: None,
         }
     }
 

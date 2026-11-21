@@ -89,19 +89,44 @@ pub(super) fn with_end_via(
 
 /// `why`, said as Interactive Routing's.
 pub(super) fn router_line(i18n: &I18n, why: String) -> String {
-    let tool = t!(i18n, BoardPlaceTool::InteractiveRouting.name()).into_string();
+    tool_line(i18n, BoardPlaceTool::InteractiveRouting, why)
+}
+
+fn tool_line(i18n: &I18n, tool: BoardPlaceTool, why: String) -> String {
+    let tool = t!(i18n, tool.name()).into_string();
     t!(i18n, ids::PCB_ROUTE_REFUSED, "tool" => tool, "why" => why).into_string()
+}
+
+/// Why a Track leg of net `net` may not end at `to`: a pad of another net
+/// there, on any copper layer.
+pub(super) fn track_end_refusal(
+    i18n: &I18n,
+    board: &PcbBoard,
+    to: Point,
+    net: u32,
+) -> Option<String> {
+    match pad_end(board, to, net) {
+        PadEnd::OtherNet { pad, route_net } => {
+            let why = other_net_why(i18n, board, &pad, route_net);
+            Some(tool_line(i18n, BoardPlaceTool::Track, why))
+        }
+        PadEnd::Free | PadEnd::Joins { .. } => None,
+    }
 }
 
 /// The line for a leg aimed at `pad` of another net than `route_net`.
 fn other_net_line(i18n: &I18n, board: &PcbBoard, pad: &PadAt, route_net: u32) -> String {
+    router_line(i18n, other_net_why(i18n, board, pad, route_net))
+}
+
+fn other_net_why(i18n: &I18n, board: &PcbBoard, pad: &PadAt, route_net: u32) -> String {
     let args = [
         ("pad", Arg::from(pad.label())),
         ("pad_net", Arg::from(net_label(board, pad.net))),
         ("net", Arg::from(net_label(board, route_net))),
     ];
-    let why = i18n.message(ids::PCB_ROUTE_END_OTHER_NET, &args);
-    router_line(i18n, why.into_string())
+    i18n.message(ids::PCB_ROUTE_END_OTHER_NET, &args)
+        .into_string()
 }
 
 /// The line for `pad` of no net joining net `net` with the route.

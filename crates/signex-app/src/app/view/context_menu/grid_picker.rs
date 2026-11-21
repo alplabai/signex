@@ -147,7 +147,7 @@ fn grid_picker_entries(i18n: &I18n, active_step: Option<f64>) -> Vec<DropdownEnt
     v.push(DropdownEntry::Separator);
     v.push(DropdownEntry::Item(DropdownItem::new(
         text(i18n, menu_ids::CTX_GRID_PROPERTIES),
-        Message::GridProperties(GridPropertiesMsg::Open),
+        Message::GridProperties(GridPropertiesMsg::OpenFromPicker),
     )));
     v
 }
@@ -214,7 +214,7 @@ mod tests {
         assert_eq!(last.label, "Grid Properties…");
         assert!(matches!(
             last.on_press,
-            Some(Message::GridProperties(GridPropertiesMsg::Open))
+            Some(Message::GridProperties(GridPropertiesMsg::OpenFromPicker))
         ));
     }
 

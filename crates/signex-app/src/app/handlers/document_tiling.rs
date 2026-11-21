@@ -86,7 +86,7 @@ impl Signex {
         {
             state.pcb_arrange_box = None;
         }
-        if state.wire_drawing && state.canvas.drawing_mode {
+        if state.wire_drawing && state.wire_window.is_none() {
             state.wire_drawing = false;
             state.wire_points.clear();
             let canvas = state.active_canvas_mut();
@@ -101,8 +101,7 @@ impl Signex {
     /// must not continue on the sheet main shows.
     pub(crate) fn end_wire_of_window(&mut self, window: iced::window::Id) {
         let state = &mut self.interaction_state;
-        let drawing = state.canvases.get(&window).is_some_and(|c| c.drawing_mode);
-        if state.wire_drawing && drawing {
+        if state.wire_drawing && state.wire_window == Some(window) {
             state.wire_drawing = false;
             state.wire_points.clear();
             state.current_tool = crate::app::Tool::Select;
