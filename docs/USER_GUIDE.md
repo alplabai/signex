@@ -199,10 +199,13 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
 ## 4. Canvas basics
 
-- **Pan:** hold the right mouse button and drag. The middle button also pans.
+- **Pan:** hold the right mouse button and drag.
   A right-click without dragging opens the context menu, unless you are in the
   middle of drawing a wire, where it cancels the wire.
-- **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer.
+- **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer. Or hold the
+  middle mouse button (the wheel button) and drag: up zooms in, down zooms out,
+  about the point you pressed. A tool you have armed stays armed. In the 3D
+  view the middle button still slides the view.
 - **Fit the sheet:** **View ▸ Fit All**.
 - **Grid:** the status bar at the bottom shows the grid size with its unit
   (**Grid 1.270 mm**) and whether snapping is on (**Snap on**) or off

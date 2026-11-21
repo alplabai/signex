@@ -315,6 +315,7 @@ pub(crate) fn symbol_canvas<'a>(
     .with_measured_size(editor.viewport)
     .with_trackpad_pan(editor.trackpad_pan)
     .with_wheel_mode(editor.wheel_mode)
+    .with_zoom_step(editor.zoom_step)
     .with_device_px_per_logical_px(device_px_per_logical_px)
 }
 

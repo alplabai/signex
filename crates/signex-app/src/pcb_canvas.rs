@@ -19,6 +19,9 @@ mod grid;
 mod highlight;
 pub mod layer_style;
 mod marks;
+mod middle_zoom;
+#[cfg(test)]
+mod middle_zoom_tests;
 mod msg;
 mod panel_preview;
 mod part_ghost;
@@ -60,9 +63,11 @@ use cull::SceneBounds;
 #[derive(Debug, Default)]
 pub struct PcbCanvasState {
     panning: bool,
-    /// The right or middle press moved the view, so its release opens no menu.
+    /// The right press moved the view, so its release opens no menu.
     pan_moved: bool,
     last_pan_pos: Option<iced::Point>,
+    /// The middle-button drag zooming the view, while it is held.
+    middle_zoom: Option<crate::canvas::middle_zoom::MiddleZoom>,
     /// Ctrl/Cmd held, tracked from `ModifiersChanged` (mouse events carry no
     /// modifiers); keeps a modified scroll zooming under "Two-finger scroll pans".
     zoom_modifier: bool,
@@ -648,6 +653,9 @@ impl canvas::Program<Message> for PcbCanvas {
     ) -> Option<canvas::Action<Message>> {
         // Remember the bounds so menu zoom (no cursor) can find the view centre.
         self.viewport.set(bounds);
+        if let Some(action) = self.middle_zoom_event(state, event, bounds, cursor) {
+            return Some(action);
+        }
         if self.resolve_pending_fit(bounds) {
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
@@ -713,30 +721,29 @@ impl canvas::Program<Message> for PcbCanvas {
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
                 // A press outside the board belongs to the widget under it:
                 // the layer tabs under the canvas open their menu (#2379).
-                if matches!(button, mouse::Button::Right | mouse::Button::Middle)
+                if *button == mouse::Button::Right
                     && let Some(pos) = cursor.position_in(bounds)
                 {
                     state.panning = true;
                     state.pan_moved = false;
                     state.last_pan_pos = Some(pos);
                     // A held-back release was lost: this press ends the hold.
-                    if *button == mouse::Button::Right && self.swallow_right_release {
+                    if self.swallow_right_release {
                         return Some(right_release_swallowed());
                     }
                     return Some(canvas::Action::capture());
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(button)) => {
-                if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+                if *button == mouse::Button::Right {
                     let moved = std::mem::take(&mut state.pan_moved);
                     state.panning = false;
                     state.last_pan_pos = None;
-                    if *button == mouse::Button::Right && self.swallow_right_release {
+                    if self.swallow_right_release {
                         return Some(right_release_swallowed());
                     }
                     // A right click that did not pan opens the board's menu (#2240).
-                    if *button == mouse::Button::Right
-                        && !moved
+                    if !moved
                         && self.selectable
                         && let Some(pos) = cursor.position_in(bounds)
                     {
@@ -763,22 +770,7 @@ impl canvas::Program<Message> for PcbCanvas {
                         );
                     }
 
-                    if self.selectable {
-                        return Some(canvas::Action::publish(Message::PcbCanvas(
-                            gesture::pointer_moved(self, cursor_pos, bounds),
-                        )));
-                    }
-                    let (world, zoom_pct) = {
-                        let camera = self.camera.borrow();
-                        (camera.screen_to_world(cursor_pos), camera.zoom_percent())
-                    };
-                    return Some(canvas::Action::publish(Message::CanvasEvent(
-                        CanvasEvent::CursorAt {
-                            x: world.x,
-                            y: world.y,
-                            zoom_pct,
-                        },
-                    )));
+                    return Some(canvas::Action::publish(self.pointer_report(cursor_pos, bounds)));
                 }
             }
             _ => {}
@@ -853,6 +845,9 @@ impl canvas::Program<Message> for PcbCanvas {
     ) -> mouse::Interaction {
         if state.panning {
             return mouse::Interaction::Grabbing;
+        }
+        if state.middle_zoom.is_some() {
+            return mouse::Interaction::ResizingVertically;
         }
         if self.carry.get() {
             return mouse::Interaction::Move;

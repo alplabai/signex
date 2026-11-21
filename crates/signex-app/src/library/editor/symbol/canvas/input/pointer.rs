@@ -10,7 +10,7 @@ use iced::Rectangle;
 use iced::mouse;
 use iced::widget::canvas;
 
-/// Screen-pixel motion a right/middle-button drag must cross before
+/// Screen-pixel motion a right-button drag must cross before
 /// it counts as a real pan (as opposed to 1px cursor jitter) — mirrors
 /// the footprint canvas's `pan_on_cursor_moved` threshold, so the same
 /// jitter can't wrongly suppress the context menu opening on release
@@ -18,13 +18,10 @@ use iced::widget::canvas;
 const PAN_MOVE_THRESHOLD_PX: f32 = 2.0;
 
 impl SymbolCanvas<'_> {
-    /// Right/Middle press: **Right** cancels an in-progress multi-click
-    /// draw (Place Polygon's stash included), else starts a pan.
-    /// **Middle** never cancels Place Polygon — it always proceeds
-    /// straight to arming a pan with the stash left intact. The
-    /// vertex stash has no undo, so treating a middle-button pan
-    /// attempt as a cancel would silently destroy every click the
-    /// user had placed so far.
+    /// Right press: cancels an in-progress multi-click draw (Place
+    /// Polygon's stash included), else starts a pan. The middle button
+    /// never reaches this: it zooms (`input::middle_zoom`) and leaves the
+    /// vertex stash, which has no undo, intact.
     pub(in crate::library::editor::symbol::canvas) fn on_secondary_press(
         &self,
         state: &mut CanvasState,
@@ -32,6 +29,7 @@ impl SymbolCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
+        state.middle_zoom = None;
         // Right-click cancels Place Polygon's editor-owned stash —
         // this needs its own publish (unlike the other multi-click
         // tools below, whose in-progress state is purely local to
@@ -78,13 +76,12 @@ impl SymbolCanvas<'_> {
         Some(canvas::Action::capture())
     }
 
-    /// Right/Middle release: end the pan. A **right**-release that did
+    /// Right release: end the pan. A release that did
     /// not pan opens the context menu (the left press's pin → handle → field →
     /// graphic priority, see `press_target`), window-absolute coords, mirroring the footprint
     /// canvas's `on_secondary_released`. In a placement tool the same
     /// click leaves the tool instead (`CanvasAction::LeaveTool`).
-    /// Middle-release never opens the menu. Note: when the matching
-    /// press instead cancelled an
+    /// Note: when the matching press instead cancelled an
     /// in-progress Place Polygon / multi-click draw (see
     /// `on_secondary_press`), `state.panning` was never armed, so this
     /// release naturally falls through to a no-op — placement-cancel
@@ -151,6 +148,9 @@ impl SymbolCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
+        if let Some(action) = self.middle_zoom_moved(state, cursor) {
+            return Some(action);
+        }
         let pos = cursor.position_in(bounds)?;
         // Pan first so panning while a handle is grabbed
         // doesn't accidentally reshape geometry.
@@ -311,11 +311,12 @@ impl SymbolCanvas<'_> {
         }))
     }
 
-    /// Cursor left the canvas: end pan, clear the coordinate readout.
+    /// Cursor left the canvas: end pan and zoom, clear the coordinate readout.
     pub(in crate::library::editor::symbol::canvas) fn on_cursor_left(
         &self,
         state: &mut CanvasState,
     ) -> Option<canvas::Action<CanvasAction>> {
+        state.middle_zoom = None;
         state.panning = false;
         state.last_pan_pos = None;
         state.secondary_press_pos = None;
@@ -391,8 +392,8 @@ impl SymbolCanvas<'_> {
 
 /// Whether a secondary-button press should cancel the Place Polygon
 /// stash instead of arming a pan (see `on_secondary_press`). Only
-/// `Right` cancels — the stash has no undo, so a `Middle`-button pan
-/// attempt must never destroy it.
+/// `Right` cancels — the stash has no undo, so a `Middle`-button press
+/// must never destroy it.
 fn should_cancel_polygon_placement(
     button: mouse::Button,
     tool: SymbolTool,
@@ -430,7 +431,7 @@ mod tests {
                 SymbolTool::PlacePolygon,
                 false,
             ),
-            "middle-button pan must never destroy the vertex stash"
+            "a middle-button press must never destroy the vertex stash"
         );
     }
 

@@ -1,11 +1,13 @@
 //! Input handling for the schematic canvas, split by concern:
-//! camera (zoom/fit), pointer (buttons + motion), keys (keyboard).
+//! camera (zoom/fit), pointer (buttons + motion), middle_zoom (middle-button
+//! drag), keys (keyboard).
 //!
 //! Each file adds `impl CanvasSlot` methods that
 //! `canvas::Program::update` dispatches to in the original event order.
 
 mod camera;
 mod keys;
+mod middle_zoom;
 mod pointer;
 
 use super::*;
@@ -21,6 +23,9 @@ impl SchematicCanvas<'_> {
     ) -> Option<canvas::Action<Message>> {
         // Remember the bounds so menu zoom (no cursor) can find the view centre.
         self.viewport.set(bounds);
+        if let Some(action) = self.end_middle_zoom_on(state, event, bounds, cursor) {
+            return Some(action);
+        }
         // Consume any pending fit-to-content before dispatching the event.
         if let Some(action) = self.update_pending_fit(bounds) {
             return Some(action);
@@ -100,6 +105,7 @@ impl SchematicCanvas<'_> {
                 action
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
+                state.middle_zoom = None;
                 let action = self.update_right_pressed(state, bounds, cursor);
                 self.refresh_drag_ghost(state);
                 if self.prefs.swallow_right_release && cursor.position_in(bounds).is_some() {
@@ -115,10 +121,14 @@ impl SchematicCanvas<'_> {
                 self.update_right_released(state, bounds, cursor)
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
-                self.update_middle_released(state)
+                self.update_middle_released(state, bounds, cursor)
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                let action = self.update_cursor_moved(state, bounds, cursor);
+                let action = if state.middle_zoom.is_some() {
+                    self.update_middle_zoom_moved(state, bounds, cursor)
+                } else {
+                    self.update_cursor_moved(state, bounds, cursor)
+                };
                 self.refresh_drag_ghost(state);
                 action
             }

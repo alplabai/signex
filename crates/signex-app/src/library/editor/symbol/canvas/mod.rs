@@ -9,7 +9,7 @@
 //! World-space convention mirrors the schematic editor: Standard y-axis
 //! (positive going up; on screen y goes down so we flip). The
 //! camera ([`crate::canvas::Camera`]) handles pan/zoom; the user
-//! pans with right- or middle-button drag and zooms with the wheel.
+//! pans with right-button drag and zooms with the wheel or a middle-button drag.
 //! Press Home (or click the Fit button) to fit the symbol bbox to
 //! the viewport — also the implicit state on tab open.
 //!
@@ -142,6 +142,9 @@ pub struct SymbolCanvas<'a> {
     pub trackpad_pan: bool,
     /// Preferences "Mouse wheel", synced with `trackpad_pan`.
     pub wheel_mode: crate::canvas::WheelMode,
+    /// Preferences "Zoom speed" as a per-notch factor, for the middle-button
+    /// drag. Set with [`Self::with_zoom_step`].
+    pub zoom_step: f32,
 }
 
 impl<'a> SymbolCanvas<'a> {
@@ -202,6 +205,9 @@ impl<'a> SymbolCanvas<'a> {
             device_px_per_logical_px: signex_types::schematic::UNSCALED_DEVICE_PX_PER_LOGICAL_PX,
             trackpad_pan: false,
             wheel_mode: Default::default(),
+            zoom_step: crate::canvas::Camera::zoom_step_factor(
+                crate::canvas::Camera::ZOOM_STEP_PERCENT_DEFAULT,
+            ),
         }
     }
 
@@ -225,6 +231,12 @@ impl<'a> SymbolCanvas<'a> {
     /// Set the "Mouse wheel" preference (zoom or scroll the view).
     pub fn with_wheel_mode(mut self, wheel_mode: crate::canvas::WheelMode) -> Self {
         self.wheel_mode = wheel_mode;
+        self
+    }
+
+    /// Set the "Zoom speed" factor the middle-button drag zooms by.
+    pub fn with_zoom_step(mut self, zoom_step: f32) -> Self {
+        self.zoom_step = zoom_step;
         self
     }
 
@@ -449,16 +461,27 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
         // `impl SymbolCanvas` method in `input::{tools, pointer,
         // camera, keys}`. Arm order + patterns are identical to the
         // pre-split god-function; behaviour is byte-identical.
+        let followed = self.follow_middle_zoom(state, event, bounds, cursor);
         let routed = match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 self.on_left_press(state, bounds, cursor)
             }
-            Event::Mouse(mouse::Event::ButtonPressed(
-                button @ (mouse::Button::Right | mouse::Button::Middle),
-            )) => self.on_secondary_press(state, button, bounds, cursor),
-            Event::Mouse(mouse::Event::ButtonReleased(
-                button @ (mouse::Button::Right | mouse::Button::Middle),
-            )) => self.on_secondary_release(state, button, bounds, cursor),
+            Event::Mouse(mouse::Event::ButtonPressed(button @ mouse::Button::Right)) => {
+                self.on_secondary_press(state, button, bounds, cursor)
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(button @ mouse::Button::Right)) => {
+                self.on_secondary_release(state, button, bounds, cursor)
+            }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
+                self.on_middle_press(state, bounds, cursor)
+            }
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Middle)) => {
+                self.on_middle_release(state)
+            }
+            Event::Window(iced::window::Event::Unfocused) => {
+                state.middle_zoom = None;
+                None
+            }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 self.on_cursor_moved(state, bounds, cursor)
             }
@@ -484,7 +507,8 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
                 ..
             }) => self.on_key_pressed(state, key, *physical_key, modifiers),
             _ => None,
-        };
+        }
+        .or(followed);
         // A queued Fit / centre-origin request needs the real canvas
         // size, which only the widget knows. Report it, and carry the
         // event's own action along so the dispatcher applies the view
@@ -519,6 +543,9 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
     ) -> mouse::Interaction {
         if state.panning {
             return mouse::Interaction::Grabbing;
+        }
+        if state.middle_zoom.is_some() {
+            return mouse::Interaction::ResizingVertically;
         }
         // While actively dragging a resize handle, keep the cursor that
         // matches the handle so it doesn't flicker back to the arrow.
@@ -895,6 +922,8 @@ fn symbol_draw_options(
 
 #[cfg(test)]
 mod layout_keys_tests;
+#[cfg(test)]
+mod middle_zoom_tests;
 #[cfg(test)]
 mod rotate_keys_tests;
 #[cfg(test)]
