@@ -87,7 +87,10 @@ fn moving_the_directive_off_the_wire_drops_the_dot_and_undo_brings_it_back() {
     engine
         .execute(Command::DeleteSelection { items: vec![item] })
         .unwrap();
-    assert!(dots(&engine).is_empty(), "the dot leaves with the directive");
+    assert!(
+        dots(&engine).is_empty(),
+        "the dot leaves with the directive"
+    );
 }
 
 #[test]

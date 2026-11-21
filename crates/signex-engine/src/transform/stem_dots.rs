@@ -48,7 +48,10 @@ pub(crate) fn stem_dots_for(
             .map(|item| item.uuid)
             .collect()
     };
-    let (directives, wires) = (of_kind(SelectedKind::Directive), of_kind(SelectedKind::Wire));
+    let (directives, wires) = (
+        of_kind(SelectedKind::Directive),
+        of_kind(SelectedKind::Wire),
+    );
     if directives.is_empty() && wires.is_empty() {
         return Vec::new();
     }

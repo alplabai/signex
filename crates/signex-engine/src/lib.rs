@@ -98,15 +98,15 @@ mod save_point_tests;
 mod symbol_drag_local_tests;
 
 #[cfg(test)]
+mod corner_dot_tests;
+#[cfg(test)]
 mod id_source_tests;
 #[cfg(test)]
 mod pin_junction_tests;
 #[cfg(test)]
-mod corner_dot_tests;
+mod sheet_identity_tests;
 #[cfg(test)]
 mod stem_dot_tests;
-#[cfg(test)]
-mod sheet_identity_tests;
 #[cfg(test)]
 mod undo_depth_tests;
 #[cfg(test)]
