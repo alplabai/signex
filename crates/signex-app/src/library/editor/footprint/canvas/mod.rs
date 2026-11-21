@@ -70,6 +70,8 @@ const DRAG_THRESHOLD_PX: f32 = 3.0;
 
 const MIN_SCALE: f32 = 5.0;
 const MAX_SCALE: f32 = 400.0;
+/// Free space a fit keeps on every side of the footprint, px.
+pub(crate) const FIT_PAD: f32 = 12.0;
 
 /// Canvas-only state owned by `iced::widget::Canvas`. The editor's
 /// model lives in `FootprintEditorState`; this struct only holds
@@ -219,7 +221,7 @@ impl FootprintCanvasState {
         let (min_x, min_y, max_x, max_y) = world_bbox;
         let w = (max_x - min_x).max(1e-3);
         let h = (max_y - min_y).max(1e-3);
-        let pad = 12.0_f32;
+        let pad = FIT_PAD;
         let avail_w = (viewport.width - pad * 2.0).max(1.0);
         let avail_h = (viewport.height - pad * 2.0).max(1.0);
         let scale_x = avail_w / w as f32;

@@ -12,7 +12,7 @@ use iced::{Color, Point, Rectangle, Renderer, Theme, Vector, mouse};
 
 use crate::canvas::Camera;
 use crate::library::editor::footprint::canvas::{
-    BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
+    BACKDROP_BG, BACKDROP_GRID, BackdropLook, FIT_PAD, FootprintCanvasState, PreviewFootprint,
     draw_back_layers, draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pad_bodies,
     draw_pad_numbers, draw_silk, graphite_look_for,
 };
@@ -128,7 +128,11 @@ fn board_pad_options(scale: f32) -> crate::renderer_scene_canvas::SceneDrawOptio
 pub(crate) fn fitted_camera(model: &PreviewFootprint, viewport: Rectangle) -> FootprintCanvasState {
     let mut camera = FootprintCanvasState::default();
     match model.bbox_mm() {
-        Some(bbox) => camera.fit_to_bounds_min(bbox, viewport, MIN_PREVIEW_SCALE),
+        Some(bbox) => camera.fit_to_bounds_min(
+            bbox,
+            footprint_scale::drawing_area(viewport, bbox, FIT_PAD),
+            MIN_PREVIEW_SCALE,
+        ),
         None => camera.offset = Point::new(viewport.width / 2.0, viewport.height / 2.0),
     }
     camera.did_initial_fit = true;
