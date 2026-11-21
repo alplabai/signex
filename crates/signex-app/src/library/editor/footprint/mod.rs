@@ -80,10 +80,10 @@ pub(crate) use updates::apply_footprint_primitive_edit;
 pub(crate) use state::COURTYARD_SLACK_MM;
 pub use state::board_checks::GapOffer;
 pub(crate) use state::board_checks::mm as format_check_mm;
+pub use state::canvas_text::ConflictSources;
 pub use state::mode::ModeSwitch;
 pub use state::pad_link::driving_profile;
 pub use state::pad_scope::PadScope;
-pub use state::canvas_text::ConflictSources;
 pub use state::sketch_overlay::{CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget};
 pub use state::{
     CheckLine, CheckStatus, EditorPad, FootprintEditorState, GridDef, GridDisplay, PadLinkMsg,

@@ -9,9 +9,9 @@
 use signex_i18n::{I18n, MessageId, ids};
 
 use super::super::*;
+use crate::library::editor::footprint::ConflictSources;
 use crate::library::editor::footprint::SketchCanvasText;
 use crate::library::editor::footprint::sketch_mode::value_edit::conflicting_constraints;
-use crate::library::editor::footprint::ConflictSources;
 
 /// `id` as plain canvas text: no bidi isolation marks.
 fn word(i18n: &I18n, id: MessageId) -> String {
