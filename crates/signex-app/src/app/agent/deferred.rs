@@ -163,7 +163,7 @@ impl Signex {
             .document_project(target)
             .map(|project| project.path.clone());
         let refused = self.journal_turned_away(pid, Some(&reason), named);
-        (CommandOutcome::Disabled { reason }, refused)
+        (CommandOutcome::disabled(reason), refused)
     }
 
     /// Answer the socket request waiting on `ticket` with `outcome`, or keep

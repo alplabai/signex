@@ -55,7 +55,8 @@ struct crates/signex-app/src/app/state/agent_edits.rs AgentEdits
 struct crates/signex-app/src/app/command/edit_reads.rs EditReads
 struct crates/signex-app/src/app/project_sheets.rs ProjectSheetSet
 struct crates/signex-app/src/app/project_sheets.rs RefusedChild
-enum crates/signex-app/src/app/command/outcome.rs CommandOutcome
+# CommandOutcome moved to signex-commands (slice 7): UI-free by its crate,
+# which scripts/check_arch_guard.sh keeps in DOMAIN.
 struct crates/signex-app/src/app/state/mod.rs PendingGitCommit
 struct crates/signex-app/src/app/state/mod.rs DeferredGitCommit
 struct crates/signex-app/src/app/state/mod.rs AltiumImportRun

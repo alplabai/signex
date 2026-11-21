@@ -299,7 +299,7 @@ fn an_off_grid_point_is_refused_and_changes_nothing() {
         let operands: Vec<&str> = operands.iter().map(String::as_str).collect();
         let outcome = run(&mut app, id, &operands);
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("grid")),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("grid")),
             "{id}: {outcome:?}"
         );
         assert_eq!(sheet_shape(&app), before, "{id} changed the document");
@@ -327,7 +327,7 @@ fn a_wire_point_a_click_would_pull_onto_a_connection_is_refused() {
     let start = format!("start={}", pt(near));
     let outcome = run(&mut app, "place_wire", &[&start, &end]);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("grid")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("grid")),
         "{outcome:?}"
     );
     assert_eq!(sheet_shape(&app), before, "the refused run changed nothing");
@@ -361,7 +361,7 @@ fn a_placement_on_a_read_only_sheet_is_refused_with_the_reason() {
         let before = sheet_shape(&app);
         let outcome = run(&mut app, case.id, &operand_strs(&case));
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("read-only")),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("read-only")),
             "{}: {outcome:?}",
             case.id
         );
@@ -382,7 +382,7 @@ fn a_power_port_needs_a_power_style_lib_id() {
         &[&at, "net_name=VCC", "lib_id=Device:R"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("power:")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("power:")),
         "{outcome:?}"
     );
     assert_eq!(sheet_shape(&app), before);

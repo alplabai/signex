@@ -240,6 +240,8 @@ mod core_safety_net;
 
 #[path = "regression/edit_tail_seam.rs"]
 mod edit_tail_seam;
+#[path = "regression/load_seam.rs"]
+mod load_seam;
 
 #[path = "regression/document_save_async.rs"]
 mod document_save_async;

@@ -161,7 +161,7 @@ impl Signex {
 /// again, answered as JSON (`document`, `pours`). The board in view is
 /// refreshed too when it is that board.
 pub(crate) fn repour_all(app: &mut Signex, args: &CommandArgs) -> (CommandOutcome, Task<Message>) {
-    let refused = |reason: String| (CommandOutcome::Disabled { reason }, Task::none());
+    let refused = |reason: String| (CommandOutcome::disabled(reason), Task::none());
     let Some(OperandValue::Document(named)) = args.operand("document") else {
         return refused("`repour_all` needs the operand `document`".to_string());
     };

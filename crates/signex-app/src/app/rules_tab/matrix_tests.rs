@@ -299,7 +299,7 @@ fn the_matrix_commands_read_and_set_cells_with_json() {
         &["class_a=HV", "class_b=Nope", "value=1mm"],
     );
     assert!(
-        matches!(&unknown, CommandOutcome::Disabled { reason } if reason.contains("no net class 'Nope'")),
+        matches!(&unknown, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("no net class 'Nope'")),
         "{unknown:?}"
     );
 }
@@ -489,7 +489,7 @@ fn a_set_edit_over_a_hand_edited_rule_is_refused() {
         &["set=hv", "values=min_clearance=1mm"],
     );
     assert!(
-        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("hv_LV_A_clearance")),
+        matches!(&refused, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("hv_LV_A_clearance")),
         "{refused:?}"
     );
     assert_eq!(dsl(&app), typed);

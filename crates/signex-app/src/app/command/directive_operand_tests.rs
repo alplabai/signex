@@ -191,7 +191,7 @@ fn an_unknown_rule_id_or_a_flat_region_is_refused_with_the_reason() {
         ],
     );
     assert!(
-        matches!(&unknown, CommandOutcome::Disabled { reason } if reason.contains("not an ERC rule id")),
+        matches!(&unknown, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("not an ERC rule id")),
         "{unknown:?}"
     );
     let flat = run(
@@ -200,7 +200,7 @@ fn an_unknown_rule_id_or_a_flat_region_is_refused_with_the_reason() {
         &[&format!("start={}", pt(a)), &format!("end={},{}", b.x, a.y)],
     );
     assert!(
-        matches!(&flat, CommandOutcome::Disabled { reason } if reason.contains("opposite corners")),
+        matches!(&flat, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("opposite corners")),
         "{flat:?}"
     );
     assert!(doc(&app).directives.is_empty());
@@ -212,7 +212,7 @@ fn edit_blanket_without_operands_says_what_it_needs() {
     let (outcome, _task) =
         app.dispatch_command_reporting(&command("edit_blanket"), CommandArgs::none(), None);
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("needs the operand `id`")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("needs the operand `id`")),
         "{outcome:?}"
     );
 }

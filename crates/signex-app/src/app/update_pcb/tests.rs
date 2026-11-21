@@ -127,7 +127,7 @@ fn the_headless_form_refuses_apply_false() {
     let mut app = headless_project(tmp.path());
     let outcome = run(&mut app, "apply=false");
     assert!(
-        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if reason.contains("apply=true")),
+        matches!(&outcome, crate::app::command::CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("apply=true")),
         "{outcome:?}"
     );
     assert!(app.ui_state.update_pcb.is_none());

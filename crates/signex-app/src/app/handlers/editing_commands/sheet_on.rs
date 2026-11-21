@@ -122,6 +122,18 @@ impl Signex {
         self.refresh_panel_ctx();
     }
 
+    /// Repaint the undocked windows and tile pane showing `path`, a member of
+    /// a multi-sheet run or grouped step other than the active sheet. Only
+    /// the drawing: the caller keeps its own dirty mark and ERC epoch.
+    pub(crate) fn repaint_member_sheet(&mut self, path: &Path, patch: DocumentPatch) {
+        // Inside an agent's edit list the refresh is owed once, at its end.
+        if self.document_state.agent_edits.target.as_deref() == Some(path) {
+            self.document_state.agent_edits.owed |= patch;
+            return;
+        }
+        self.refresh_slots_from_engine(path, false, patch.into(), false);
+    }
+
     /// After a person's edit run through `on_edit_target` on `path`: when
     /// that sheet is the main window's active one, its selection overlay and
     /// the Properties panel's selection fields follow the edit, as the

@@ -272,7 +272,7 @@ impl Signex {
         if let Some(reason) =
             crate::keymap::metadata_for(command).and_then(|meta| meta.headless_refusal())
         {
-            return (CommandOutcome::Disabled { reason }, Task::none());
+            return (CommandOutcome::disabled(reason), Task::none());
         }
         // Operands run only through the command's own operand handler; one
         // without a handler is refused, never run as if it had none (#2155).
@@ -288,9 +288,10 @@ impl Signex {
                 answered
             } else if let Some(name) = missing {
                 (
-                    CommandOutcome::Disabled {
-                        reason: format!("`{}` needs the operand `{name}`", command.as_str()),
-                    },
+                    CommandOutcome::disabled(format!(
+                        "`{}` needs the operand `{name}`",
+                        command.as_str()
+                    )),
                     Task::none(),
                 )
             } else if args.has_operands()

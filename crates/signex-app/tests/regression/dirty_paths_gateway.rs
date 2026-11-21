@@ -1,9 +1,9 @@
 //! #585 — every engine edit must reach `dirty_paths`.
 //!
 //! `DocumentState.dirty_paths` is the single source of truth for "this
-//! file has unsaved edits". It is written only through
-//! `with_active_schematic_session_mut`, which only
-//! `finish_schematic_mutation` calls — so an edit that runs the engine
+//! file has unsaved edits". An edit reaches it through
+//! `mark_active_document_dirty`, which `finish_schematic_mutation`
+//! calls — so an edit that runs the engine
 //! directly applies and repaints, and since #584 undoes correctly, but
 //! leaves the app believing the document is clean.
 //!
@@ -44,10 +44,9 @@ fn sheet_with(symbols: Vec<Symbol>) -> SchematicSheet {
     }
 }
 
-/// A loaded, active schematic. The `TabInfo` matters:
-/// `finish_schematic_mutation` reaches `dirty_paths` through
-/// `with_active_schematic_session_mut`, which needs a tab at
-/// `active_tab` or it silently no-ops.
+/// A loaded, active schematic with a `TabInfo` at `active_tab`, as an open
+/// sheet has; `finish_schematic_mutation` reaches `dirty_paths` through
+/// `mark_active_document_dirty`.
 pub(crate) fn app_with(symbols: Vec<Symbol>) -> (Signex, PathBuf) {
     let path = PathBuf::from("dirty-gateway.snxsch");
     let engine = signex_engine::Engine::new(sheet_with(symbols)).expect("engine");

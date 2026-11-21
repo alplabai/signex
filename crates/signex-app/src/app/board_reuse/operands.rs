@@ -20,7 +20,7 @@ type Ran = (CommandOutcome, Task<Message>);
 
 fn refused(reason: impl Into<String>) -> Ran {
     let reason = reason.into();
-    (CommandOutcome::Disabled { reason }, Task::none())
+    (CommandOutcome::disabled(reason), Task::none())
 }
 
 fn text<'a>(args: &'a CommandArgs, name: &str) -> &'a str {

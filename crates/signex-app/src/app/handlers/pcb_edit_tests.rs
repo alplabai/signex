@@ -516,6 +516,7 @@ fn a_parked_board_cannot_be_stepped_so_a_save_in_flight_loses_nothing() {
     let CommandOutcome::Disabled { reason } = undo_by_document(&mut app, "undo", &document) else {
         panic!("undo of a parked board must be refused");
     };
+    let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
     assert!(reason.contains("reopen"), "{reason}");
     assert!(!app.step_board_history(&path, true));
     assert_eq!(

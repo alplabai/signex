@@ -1,0 +1,26 @@
+# ast-grep rule for scripts/check_app_catch_unwind.sh: a `catch_unwind` call
+# (bare or by path) outside an item under `#[cfg(test)]`. The method form
+# `fut.catch_unwind()` (FutureExt) is not matched: it catches a task's panic,
+# not a panic inside `update`. Kept out of ast-grep/rules on purpose, like
+# scripts/uifree-test-item.yml.
+id: app-catch-unwind
+language: rust
+rule:
+  any:
+    - pattern: catch_unwind($$$)
+    - pattern: $P::catch_unwind($$$)
+  not:
+    inside:
+      stopBy: end
+      any:
+        - kind: mod_item
+        - kind: function_item
+        - kind: impl_item
+      follows:
+        stopBy:
+          not:
+            any:
+              - kind: attribute_item
+              - kind: line_comment
+              - kind: block_comment
+        pattern: '#[cfg(test)]'

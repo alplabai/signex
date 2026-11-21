@@ -209,7 +209,7 @@ fn a_missing_file_ran_the_open_but_made_no_document_and_the_read_failure_is_logg
     let outcome = run_with_operand(&mut app, "open_document", &gone, &[]);
 
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("made no document")),
         "{outcome:?}"
     );
     let named = gone.display().to_string();
@@ -243,6 +243,7 @@ fn an_unsupported_file_is_refused_with_its_reason_in_the_log_and_the_notice() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
+    let reason = reason.render_en_us();
     assert!(
         reason.contains("unsupported file type: .zq2155"),
         "{reason}"
@@ -302,6 +303,7 @@ fn a_new_project_path_that_is_not_a_project_file_is_refused_with_its_reason() {
     let CommandOutcome::Disabled { reason } = outcome else {
         panic!("not refused: {outcome:?}");
     };
+    let reason = reason.render_en_us();
     assert!(reason.contains("must end in .snxprj"), "{reason}");
     let log = messages_since(mark, &file.display().to_string());
     assert!(

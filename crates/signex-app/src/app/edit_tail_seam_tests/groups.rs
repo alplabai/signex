@@ -1,8 +1,7 @@
 //! Block A tests 3 and 4: a grouped undo's non-active members. Test 3 pins
 //! when a parked sheet goes back to disk (dropped) and when it is kept; test 4
-//! characterises whether a window or tile pane showing a non-active member
-//! repaints after a grouped undo and after Replace All (maintainer question
-//! M3 of the slice 2 plan).
+//! pins that a window or tile pane showing a non-active member repaints after
+//! a grouped undo or redo and after Replace All (M3 of the slice 2 plan).
 
 use std::path::Path;
 
@@ -16,7 +15,7 @@ use crate::canvas::CanvasSlot;
 
 /// Show the sheet at `path` in a new undocked window, drawn as its engine
 /// holds it now. The window's id.
-fn undock(app: &mut Signex, path: &Path) -> iced::window::Id {
+pub(super) fn undock(app: &mut Signex, path: &Path) -> iced::window::Id {
     let window = iced::window::Id::unique();
     app.ui_state.windows.insert(
         window,
@@ -33,7 +32,7 @@ fn undock(app: &mut Signex, path: &Path) -> iced::window::Id {
 
 /// Show the sheet at `path` in an unfocused tile pane, drawn as its engine
 /// holds it now.
-fn tile(app: &mut Signex, path: &Path) {
+pub(super) fn tile(app: &mut Signex, path: &Path) {
     let mut slot = CanvasSlot::default();
     slot.set_render_cache(Some(fresh_cache(app, path)));
     app.interaction_state
@@ -137,24 +136,24 @@ fn replace_on_both(app: &mut Signex, child: &Path) {
 }
 
 #[test]
-fn replace_all_leaves_a_window_and_a_tile_pane_on_another_sheet_stale_today() {
+fn replace_all_repaints_a_window_and_a_tile_pane_on_another_sheet() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, window, child) = child_shown_twice(&dir);
     replace_on_both(&mut app, &child);
     assert_eq!(
         window_label(&app, window),
-        "CHILD_NET",
-        "the undocked window still draws the old text"
+        "CHILD_X",
+        "the undocked window draws the replaced text"
     );
     assert_eq!(
         pane_label(&app, &child),
-        "CHILD_NET",
-        "the tile pane still draws the old text"
+        "CHILD_X",
+        "the tile pane draws the replaced text"
     );
 }
 
 #[test]
-fn a_grouped_undo_leaves_a_window_and_a_tile_pane_on_another_sheet_stale_today() {
+fn a_grouped_undo_and_redo_repaint_a_window_and_a_tile_pane_on_another_sheet() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, window, child) = child_shown_twice(&dir);
     replace_on_both(&mut app, &child);
@@ -165,14 +164,14 @@ fn a_grouped_undo_leaves_a_window_and_a_tile_pane_on_another_sheet_stale_today()
         "CHILD_NET",
         "the child was undone"
     );
+    assert_eq!(window_label(&app, window), "CHILD_NET", "window, undo");
+    assert_eq!(pane_label(&app, &child), "CHILD_NET", "tile pane, undo");
+    app.handle_redo_requested();
     assert_eq!(
-        window_label(&app, window),
+        engine_label(&app, &child),
         "CHILD_X",
-        "the undocked window still draws the replaced text"
+        "the child was redone"
     );
-    assert_eq!(
-        pane_label(&app, &child),
-        "CHILD_X",
-        "the tile pane still draws the replaced text"
-    );
+    assert_eq!(window_label(&app, window), "CHILD_X", "window, redo");
+    assert_eq!(pane_label(&app, &child), "CHILD_X", "tile pane, redo");
 }

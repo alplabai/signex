@@ -208,12 +208,10 @@ fn the_new_commands_report_their_outcome_to_an_agent() {
             "open_net_classes" => "No schematic or PCB is open",
             _ => "No schematic is open",
         };
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: reason.to_string()
-            },
-            "{id} without a sheet"
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason: got }
+                if signex_i18n::RenderTranslatable::render_en_us(got) == reason),
+            "{id} without a sheet: {outcome:?}"
         );
         let mut app = one_symbol_selected();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);

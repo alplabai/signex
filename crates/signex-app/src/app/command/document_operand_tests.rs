@@ -3,6 +3,8 @@
 //! focus, the selection, the tool, a drag, a text edit, the wire being drawn,
 //! the palette.
 
+use signex_i18n::RenderTranslatable;
+
 use super::interaction_snapshot_tests::interaction_snapshot;
 use super::queries::tests::{WIRE_A, answer, app_with, path, sheet, uid};
 use super::{CommandArgs, CommandOutcome};
@@ -26,7 +28,7 @@ fn run(app: &mut Signex, name: &str, operands: &[&str]) -> CommandOutcome {
 
 fn refusal(app: &mut Signex, name: &str, operands: &[&str]) -> String {
     match run(app, name, operands) {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{name} {operands:?} was not refused: {other:?}"),
     }
 }

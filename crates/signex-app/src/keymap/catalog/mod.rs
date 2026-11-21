@@ -77,9 +77,34 @@ pub fn category_title(i18n: &I18n, category: &str) -> String {
     }
 }
 
+/// The "did you mean" tail for an id the catalog does not have (ADR-0006
+/// slice 7): `; did you mean `a`, `b` or `c`?` with the closest catalog ids,
+/// or nothing when none is close. English, like the agent reply and the log
+/// line it ends.
+pub(crate) fn did_you_mean(unknown: &str) -> String {
+    let close: Vec<String> = signex_commands::catalog::closest_command_ids(unknown)
+        .iter()
+        .map(|id| format!("`{id}`"))
+        .collect();
+    match close.as_slice() {
+        [] => String::new(),
+        [one] => format!("; did you mean {one}?"),
+        [rest @ .., last] => format!("; did you mean {} or {last}?", rest.join(", ")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unknown_id_is_answered_with_its_closest_catalog_ids() {
+        assert_eq!(did_you_mean("redo_"), "; did you mean `redo`?");
+        assert_eq!(did_you_mean("redo"), "; did you mean `redo` or `undo`?");
+        assert_eq!(did_you_mean("zzzzzzzzzzzzzzzz"), "");
+        let tail = did_you_mean("plce_wire");
+        assert!(tail.starts_with("; did you mean `place_wire`"), "{tail}");
+    }
 
     /// #2170: a new row with no headless decision fails here. Decide it: set
     /// `GUI_ONLY` (window UI only), or give it an effect (a mutating flag,

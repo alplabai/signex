@@ -131,7 +131,7 @@ pub(crate) fn is_enabled(command: &AppCommandId, ctx: &CommandContext) -> bool {
 pub(crate) fn disabled_reason(
     command: &AppCommandId,
     ctx: &CommandContext,
-) -> Option<&'static str> {
+) -> Option<signex_i18n::MessageId> {
     super::needs::needs(command)
         .filter(|needs| !needs.is_met(ctx))
         .map(super::needs::Needs::reason)
@@ -905,7 +905,11 @@ mod tests {
                     is_enabled(&command, ctx),
                     "{name} in {ctx:?}"
                 );
-                assert!(reason.is_none_or(|r| !r.is_empty()), "{name}");
+                let en = signex_i18n::I18n::en_us();
+                assert!(
+                    reason.is_none_or(|r| !en.message_plain(r, &[]).is_empty()),
+                    "{name}"
+                );
             }
         }
     }
@@ -1220,6 +1224,64 @@ mod tests {
             assert!(!enabled(&top, name), "{name} on a top-level sheet");
             assert!(enabled(&child, name), "{name} on a child sheet");
         }
+    }
+
+    /// ADR-0006 slice 7: no `CoreContext` fact is read from a panel or from
+    /// the interaction state; resetting both leaves the core half as it was.
+    /// The one exception is the board sketch session (decision 8), pinned by
+    /// the next test.
+    #[test]
+    fn core_facts_ignore_panel_and_interaction_state() {
+        let fixtures: [fn() -> Signex; 4] = [
+            || with_hierarchy(true),
+            with_schematic,
+            with_board,
+            || with_footprint_editor().0,
+        ];
+        for build in fixtures {
+            let mut app = Box::new(build());
+            let before = app.command_context(None);
+            let fresh = Box::new(Signex::new().0);
+            app.document_state.panel_ctx = fresh.document_state.panel_ctx;
+            app.interaction_state = fresh.interaction_state;
+            assert_eq!(app.command_context(None).core(), before.core());
+        }
+        assert!(
+            with_hierarchy(true).command_context(None).has_parent_sheet,
+            "the hierarchy fixture reads a panel fact, so the check has teeth"
+        );
+    }
+
+    /// Decision 8 pending: the board sketch session sits in the interaction
+    /// state and still feeds `document_is_dirty_board`. When the session
+    /// moves to document state this goes red: drop the exception from
+    /// `need_context.rs` and this test.
+    #[test]
+    fn a_board_sketch_session_is_the_known_interaction_read_of_the_core_facts() {
+        let mut app = Box::new(with_board());
+        let board: signex_types::pcb::PcbBoard =
+            serde_json::from_str(r#"{"uuid":"00000000-0000-0000-0000-000000000000","setup":null}"#)
+                .expect("a minimal board parses");
+        let mut session = crate::app::state::BoardSketchSession::open(
+            std::path::Path::new("enablement.snxpcb"),
+            &board,
+        );
+        session.editor.primitive_mut().sketch = None;
+        app.interaction_state.board_sketch = Some(session);
+        let before = app.command_context(None).core();
+        app.interaction_state = Box::new(Signex::new().0).interaction_state;
+        let after = app.command_context(None).core();
+
+        assert!(before.document_is_dirty_board && !after.document_is_dirty_board);
+        assert_eq!(
+            super::super::need_context::CoreContext {
+                document_is_dirty_board: true,
+                ..after
+            },
+            before,
+            "in this fixture the session moves only the dirty-board fact; its \
+             fresh history leaves can_undo / can_redo as the board has them"
+        );
     }
 
     #[test]

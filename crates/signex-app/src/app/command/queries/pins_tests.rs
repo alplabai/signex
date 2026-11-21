@@ -2,6 +2,7 @@
 //! uses, per placed unit, and refuses what it cannot name.
 
 use serde_json::Value;
+use signex_i18n::RenderTranslatable;
 use signex_types::schematic::{
     BodyStyle, InstancePath, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle, Point,
     SchematicSheet, Symbol, SymbolInstance, snap_to_hotspot,
@@ -148,7 +149,7 @@ fn refusal(app: &mut Signex, operands: &[&str]) -> String {
     let command = AppCommandId::new("query_pins").unwrap();
     let args = CommandArgs::parse_operands(&command, operands).expect("operands parse");
     match app.run_query(&command, &args).expect("a query").0 {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("was not refused: {other:?}"),
     }
 }
@@ -310,7 +311,10 @@ fn a_project_sheet_placed_twice_answers_each_placements_designator() {
     // Before the project's hierarchy is read the designators are unknown:
     // refused, not guessed from the root path.
     match app.run_query_headless(&command, &args).expect("a query").0 {
-        CommandOutcome::Disabled { reason } => assert!(reason.contains("hierarchy"), "{reason}"),
+        CommandOutcome::Disabled { reason } => {
+            let reason = reason.render_en_us();
+            assert!(reason.contains("hierarchy"), "{reason}")
+        }
         other => panic!("was not refused: {other:?}"),
     }
     crate::app::runtime::sheet_tree_tests::settle(&mut app, true);
@@ -330,7 +334,10 @@ fn a_project_sheet_placed_twice_answers_each_placements_designator() {
     assert_eq!(first.as_array().unwrap().len(), 1, "{first}");
     assert_eq!(first, second, "one sheet, one set of tips");
     match ask("R201") {
-        CommandOutcome::Disabled { reason } => assert!(reason.contains("no part"), "{reason}"),
+        CommandOutcome::Disabled { reason } => {
+            let reason = reason.render_en_us();
+            assert!(reason.contains("no part"), "{reason}")
+        }
         other => panic!("was not refused: {other:?}"),
     }
 }
@@ -449,6 +456,7 @@ fn a_hierarchy_being_read_refuses_pin_references_and_query_pins_keeps_its_refusa
     match app.run_query_headless(&command, &args).expect("a query").0 {
         // `query_pins` keeps its own refusal: only a reference waits for a re-read.
         CommandOutcome::Disabled { reason } => {
+            let reason = reason.render_en_us();
             assert!(reason.contains("not read yet"), "{reason}")
         }
         other => panic!("was not refused: {other:?}"),

@@ -25,7 +25,7 @@ fn undo(app: &mut Signex) {
 }
 
 fn refused_with(outcome: &CommandOutcome, needle: &str) -> bool {
-    matches!(outcome, CommandOutcome::Disabled { reason } if reason.contains(needle))
+    matches!(outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains(needle))
 }
 
 /// `place_no_erc` at an on-grid point with `rules`, on a fresh sheet.
