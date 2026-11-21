@@ -4,7 +4,7 @@
 //! section takes the rest. Sizes derive from the row text size.
 
 use iced::widget::{Space, column, container};
-use iced::{Background, Border, Color, Element, Length, Theme};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 
 use super::HINT_TEXT_SIZE;
@@ -92,7 +92,7 @@ pub(super) fn handle<'a>(
         .on_press(LibraryMessage::ComponentsPanelSplitDragStarted)
         .on_enter(LibraryMessage::ComponentsPanelSplitHovered(true))
         .on_exit(LibraryMessage::ComponentsPanelSplitHovered(false))
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

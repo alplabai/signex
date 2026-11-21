@@ -323,7 +323,8 @@ pub(crate) fn view<'a>(
             )
             .map(|gesture| {
                 LibraryMessage::ComponentsPanelPreviewMoved(PreviewPane::Footprint, gesture)
-            }),
+            })
+            .boxed(),
             tokens,
         ),
         None if d.has_footprint_ref => empty(

@@ -9,7 +9,7 @@
 //! whose view lives in the model and follows the Mouse wheel preference.
 
 use iced::widget::canvas::{self, Action, Cache, Geometry};
-use iced::{Color, Point, Rectangle, Renderer, Theme, Vector, mouse};
+use iced::{Color, Point, Rectangle, Renderer, Theme, Vector, Widget, mouse};
 
 use super::preview_view::{GestureInput, PreviewGesture, PreviewView};
 use crate::canvas::{Camera, WheelMode};
@@ -399,7 +399,7 @@ pub(super) fn viewed_footprint<'a>(
     })
     .width(iced::Length::Fill)
     .height(height)
-    .into()
+    .boxed()
 }
 
 #[cfg(test)]
