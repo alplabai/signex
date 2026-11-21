@@ -1,61 +1,25 @@
+//! The schematic edit gateway. Each edit tail here is a wrapper (#2704,
+//! until slice 6): its core half in `state::sheet_change`, then the
+//! projection in `app::projector`, inside the same call.
+
+use super::core::event::ChangeCause;
+use super::projector::RefreshScope;
+use super::state::sheet_change;
 use super::undo_groups::StepDirection;
 use super::*;
 
-/// What an engine command did to the active document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MutationOutcome {
-    /// The document changed.
-    Changed,
-    /// The command ran and found nothing to change.
-    Unchanged,
-    /// The engine rejected the command (already logged) or there was no
-    /// active schematic to run it on.
-    Failed,
-}
+pub(crate) use super::core::mutation_outcome::MutationOutcome;
 
 impl Signex {
     /// Surface the notices a command raised (a rubber-band pin that could
     /// not be kept connected) in the Messages panel: the engine's older
     /// English lines as they are, its typed notices worded through the
-    /// catalog (`app::engine_notices`).
+    /// catalog (`app::engine_notices`). A GUI log helper for engine calls
+    /// outside the edit tails, not a tail wrapper.
     pub(crate) fn report_engine_warnings(engine: &mut signex_engine::Engine) {
-        for warning in engine.take_warnings() {
-            crate::diagnostics::log_warning(warning);
+        for notice in core::event::engine_notices(engine) {
+            super::projector::log_notice(&notice);
         }
-        let i18n = signex_i18n::I18n::en_us();
-        for notice in engine.take_notices() {
-            crate::diagnostics::log_warning(super::engine_notices::notice_line(&i18n, &notice));
-        }
-    }
-
-    /// `commands` without what the lock would refuse (see
-    /// `Engine::without_locked`), and the references skipped.
-    pub(crate) fn without_locked_items(
-        engine: &signex_engine::Engine,
-        commands: Vec<signex_engine::Command>,
-    ) -> (Vec<signex_engine::Command>, Vec<String>) {
-        let mut kept = Vec::with_capacity(commands.len());
-        let mut skipped = Vec::new();
-        for command in commands {
-            let (command, references) = engine.without_locked(command);
-            kept.extend(command);
-            skipped.extend(references);
-        }
-        skipped.sort();
-        skipped.dedup();
-        (kept, skipped)
-    }
-
-    /// The engine an edit acts on, ready for it: the active one, or the sheet
-    /// an agent's edit list targets (#2178). Refused when the sheet is
-    /// read-only or there is none.
-    fn prepare_active_engine(&mut self) -> Result<&mut signex_engine::Engine, String> {
-        if let Some(reason) = self.refuse_if_active_read_only() {
-            return Err(reason);
-        }
-        self.document_state
-            .edit_engine_mut()
-            .ok_or_else(|| "There is no active schematic.".to_string())
     }
 
     pub(crate) fn apply_engine_commands(
@@ -90,46 +54,23 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (MutationOutcome, Option<String>) {
-        if commands.is_empty() {
-            return (MutationOutcome::Unchanged, None);
-        }
+        let edit = self.document_state.execute_batch_on_edit_path(commands);
+        self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info)
+    }
 
-        let engine = match self.prepare_active_engine() {
-            Ok(engine) => engine,
-            Err(reason) => return (MutationOutcome::Failed, Some(reason)),
+    /// Project an edit's events on the active canvas; its outcome and refusal.
+    fn project_sheet_edit(
+        &mut self,
+        edit: sheet_change::SheetEdit,
+        clear_overlay: bool,
+        update_selection_info: bool,
+    ) -> (MutationOutcome, Option<String>) {
+        let scope = RefreshScope::ActiveCanvas {
+            clear_overlay,
+            update_selection_info,
         };
-
-        // A locked symbol is skipped, not allowed to cancel the batch.
-        let (commands, skipped) = Self::without_locked_items(engine, commands);
-        crate::diagnostics::log_locked_skips(&skipped);
-        if commands.is_empty() {
-            return (MutationOutcome::Unchanged, None);
-        }
-
-        // One engine history entry for the whole batch, with the patches
-        // OR-ed together - the grouping the app's marker stack used to
-        // encode, now owned by the engine that holds the history.
-        let batch = engine.execute_batch(commands);
-        Self::report_engine_warnings(engine);
-        let patch = match batch {
-            Ok(result) => result
-                .patch_pair
-                .map_or(signex_engine::DocumentPatch::NONE, |pair| pair.document),
-            Err(error) => {
-                let reason = error.to_string();
-                let error = anyhow::Error::new(error);
-                crate::diagnostics::log_error("Engine command execution failed", &error);
-                return (MutationOutcome::Failed, Some(reason));
-            }
-        };
-
-        let changed =
-            self.finish_schematic_mutation(patch, clear_overlay_cache, update_selection_info);
-        if changed {
-            (MutationOutcome::Changed, None)
-        } else {
-            (MutationOutcome::Unchanged, None)
-        }
+        self.project_events(edit.events, scope);
+        (edit.outcome, edit.refusal)
     }
 
     pub(crate) fn apply_engine_command(
@@ -189,70 +130,10 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> (MutationOutcome, Option<String>) {
-        let engine = match self.prepare_active_engine() {
-            Ok(engine) => engine,
-            Err(reason) => return (MutationOutcome::Failed, Some(reason)),
-        };
-        let mut failed = None;
-
-        // The same rule as a batch: held items are skipped and named, a
-        // wire on a locked pin included. A command that is nothing but locked
-        // items still reaches the engine, so the user is told why nothing
-        // happened; one that is only held items the engine would not refuse
-        // (a wire on a locked pin) does nothing, and says so. Other commands
-        // pass untouched, without a copy.
-        let names_locked = engine.names_locked_item(&command);
-        let command = if names_locked || command.is_selection_command() {
-            let (mut kept, skipped) = Self::without_locked_items(engine, vec![command.clone()]);
-            match kept.pop() {
-                Some(pruned) => {
-                    crate::diagnostics::log_locked_skips(&skipped);
-                    pruned
-                }
-                None if names_locked => command,
-                None => {
-                    crate::diagnostics::log_locked_skips(&skipped);
-                    return (MutationOutcome::Unchanged, None);
-                }
-            }
-        } else {
-            command
-        };
-
-        let executed = if record_history {
-            engine.execute(command)
-        } else {
-            engine.execute_unrecorded(command)
-        };
-        Self::report_engine_warnings(engine);
-        let patch = match executed {
-            Ok(result) if result.changed => result
-                .patch_pair
-                .map_or(signex_engine::DocumentPatch::NONE, |pair| pair.document),
-            Ok(_) => signex_engine::DocumentPatch::NONE,
-            Err(error) => {
-                failed = Some(error.to_string());
-                if matches!(error, signex_engine::EngineError::ItemLocked { .. }) {
-                    // Same level as the skip notice a batch raises.
-                    crate::diagnostics::log_warning(error.to_string());
-                } else {
-                    let error = anyhow::Error::new(error);
-                    crate::diagnostics::log_error("Engine command failed", &error);
-                }
-                signex_engine::DocumentPatch::NONE
-            }
-        };
-
-        let changed =
-            self.finish_schematic_mutation(patch, clear_overlay_cache, update_selection_info);
-        let outcome = if failed.is_some() {
-            MutationOutcome::Failed
-        } else if changed {
-            MutationOutcome::Changed
-        } else {
-            MutationOutcome::Unchanged
-        };
-        (outcome, failed)
+        let edit = self
+            .document_state
+            .execute_on_edit_path(command, record_history);
+        self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info)
     }
 
     /// Mark the active document as having unsaved edits, without running a
@@ -263,26 +144,11 @@ impl Signex {
     /// records its own history entry — so it cannot go through
     /// [`Signex::apply_engine_command`] but still has to be
     /// marked dirty (#585). Everything else should use the gateway, which
-    /// calls this as part of `finish_schematic_mutation`.
+    /// does the same as part of `finish_schematic_mutation`.
     ///
     /// Returns `false` when there is no active schematic session to mark.
     pub(crate) fn mark_active_document_dirty(&mut self) -> bool {
-        self.document_state.note_sheet_edit();
-        self.sync_active_history_dirty()
-    }
-
-    /// Re-derive the active sheet's dirty mark from its engine history after
-    /// a step (edit, undo, redo). `false` when no engine backs the active
-    /// document.
-    fn sync_active_history_dirty(&mut self) -> bool {
-        let Some(path) = self.document_state.active_path.clone() else {
-            return false;
-        };
-        if !self.document_state.engines.contains_key(&path) {
-            return false;
-        }
-        self.document_state.sync_history_dirty(&path);
-        true
+        self.document_state.note_active_edit()
     }
 
     /// Undo one step of the **active** engine's own history.
@@ -325,27 +191,22 @@ impl Signex {
             }
             return stepped;
         }
-        let patch = if let Some(engine) = self.document_state.active_engine_mut() {
-            let (stepped, failure) = match direction {
-                StepDirection::Undo => (engine.undo(), "Engine undo failed"),
-                StepDirection::Redo => (engine.redo(), "Engine redo failed"),
-            };
-            match stepped {
-                Ok(Some(patch_pair)) => patch_pair.document,
-                Ok(None) => return false,
-                Err(error) => {
-                    let error = anyhow::Error::new(error);
-                    crate::diagnostics::log_error(failure, &error);
-                    return false;
-                }
-            }
-        } else {
-            signex_engine::DocumentPatch::NONE
+        let Some(step) = self
+            .document_state
+            .step_active_history(direction == StepDirection::Undo)
+        else {
+            // No engine behind the active document: nothing moved, but the
+            // drift check is asked for as it always was (pinned by
+            // `state/sheet_change/tests.rs`).
+            self.library.drift.check_pending = true;
+            return false;
         };
-
-        // Undo/redo can bring back an older embedded library symbol.
-        self.library.drift.check_pending = true;
-        self.finish_schematic_mutation(patch, true, update_selection_info)
+        let scope = RefreshScope::ActiveCanvas {
+            clear_overlay: true,
+            update_selection_info,
+        };
+        self.project_events(step.events, scope);
+        step.stepped
     }
 
     /// Drop selected wires the edit removed (a merge folds one wire into its
@@ -371,56 +232,12 @@ impl Signex {
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
-        if patch == signex_engine::DocumentPatch::NONE {
-            return false;
-        }
-        // An agent's edit list refreshes the sheet once, when it ends, and
-        // never through the person's canvas (docs/AGENT_EDITS.md).
-        if self.document_state.agent_edit_running() {
-            self.document_state.agent_edits.owed |= patch;
-            return true;
-        }
-
-        let display_only = patch.is_display_only();
-        if !display_only {
-            self.document_state.note_sheet_edit();
-        }
-        if !self.sync_active_history_dirty() {
-            return false;
-        }
-        self.sync_canvas_from_visible_schematic(patch.into());
-        // The sheet's paper changed (a Page Options edit, or its undo or
-        // redo): the panel context and the drawn page follow the document.
-        if patch.intersects(signex_engine::DocumentPatch::PAPER)
-            && let Some(token) = self
-                .active_render_snapshot()
-                .map(|snapshot| super::load_gateway::effective_paper_size(&snapshot.paper_size))
-        {
-            self.document_state.panel_ctx.paper_size = token;
-            self.apply_page_dimensions_to_canvas();
-        }
-        self.interaction_state
-            .active_canvas_mut()
-            .clear_content_cache();
-        if clear_overlay_cache {
-            self.interaction_state
-                .active_canvas_mut()
-                .clear_overlay_cache();
-        }
-        self.prune_selected_wires();
-        if !display_only {
-            self.refresh_erc_after_edit();
-        }
-        if update_selection_info {
-            self.update_selection_info();
-        }
-        // Re-derive panel context — the document's dirty mark has just been
-        // set (or stayed set), and `panel_ctx.projects[*].sheets[*]
-        // .is_dirty` is what drives the red dot on the project-tree row.
-        // Without this refresh, the dot only appears after the next
-        // unrelated event that happens to call `refresh_panel_ctx`.
-        self.refresh_panel_ctx();
-        true
+        let edit = self
+            .document_state
+            .settle_active_sheet(patch, ChangeCause::Edit);
+        let (outcome, _) =
+            self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        outcome == MutationOutcome::Changed
     }
 }
 

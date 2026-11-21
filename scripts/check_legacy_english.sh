@@ -2,10 +2,13 @@
 #
 # Legacy-English ratchet (#2326 decision M2, #2644). App-authored English
 # that has no catalog id yet reaches a command outcome or a notice through
-# two named constructors:
+# named constructors:
 #
 #   command_outcome_disabled     calls of `CommandOutcome::disabled(..)`
 #   translatable_legacy_english  calls of `Translatable::legacy_english(..)`
+#   notice_legacy_english        calls of `Notice::legacy_english(..)`, the
+#                                edit tails' core notices (#2326 slice 2),
+#                                which wrap the one above
 #
 # Each count, over production code under crates/ (files named `tests.rs`,
 # `tests_*.rs`, `*_tests.rs` or under a `tests/` folder are left out), is
@@ -30,7 +33,7 @@ SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 ROOT="${LEGACY_ENGLISH_ROOT:-$(cd "$SCRIPTS/.." && pwd)}"
 RULE="$SCRIPTS/legacy-english-call.yml"
 BASELINE="$ROOT/scripts/legacy-english-baseline.txt"
-KEYS=(command_outcome_disabled translatable_legacy_english)
+KEYS=(command_outcome_disabled translatable_legacy_english notice_legacy_english)
 
 cd "$ROOT"
 for tool in ast-grep jq; do
@@ -56,6 +59,7 @@ rule_of() {
   case "$1" in
     command_outcome_disabled) echo command-outcome-disabled ;;
     translatable_legacy_english) echo translatable-legacy-english ;;
+    notice_legacy_english) echo notice-legacy-english ;;
   esac
 }
 

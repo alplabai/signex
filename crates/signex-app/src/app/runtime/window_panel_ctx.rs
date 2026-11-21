@@ -279,11 +279,22 @@ impl Signex {
     }
 
     /// Drop the context of `window`, which has closed or been reattached.
-    /// Drafts live in the app's one store, so none go with it.
+    /// Its typed note boxes are owed to their sheets first (#2649).
     pub(crate) fn retire_window_panel_ctx(&mut self, window: iced::window::Id) {
         self.document_state.window_panel_ctx_keys.remove(&window);
         self.document_state.window_history.remove(&window);
-        self.document_state.window_panel_ctx.remove(&window);
+        if let Some(ctx) = self.document_state.window_panel_ctx.remove(&window) {
+            self.owe_note_drafts_of(ctx);
+        }
+    }
+
+    /// Move the typed note boxes of a context that is going away into the
+    /// main Properties' owed set, which the update loop applies to their
+    /// sheets (`settle_owed_note_drafts`).
+    pub(crate) fn owe_note_drafts_of(&mut self, mut ctx: PanelContext) {
+        let typed = ctx.placed.take_typed_notes(&|_| true);
+        let owed = &mut self.document_state.panel_ctx.placed.notes_owed;
+        owed.extend(typed);
     }
 
     /// The project the main window's Navigator is built for.

@@ -1,5 +1,5 @@
 # Rules for scripts/check_legacy_english.sh (#2326 M2, #2644): a call of one
-# of the two constructors of app-authored English with no catalog id yet. The
+# of the constructors of app-authored English with no catalog id yet. The
 # path may be qualified (`signex_commands::CommandOutcome::disabled`).
 id: command-outcome-disabled
 language: rust
@@ -16,3 +16,11 @@ rule:
   has:
     field: function
     regex: "(^|::)Translatable::legacy_english$"
+---
+id: notice-legacy-english
+language: rust
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "(^|::)Notice::legacy_english$"
