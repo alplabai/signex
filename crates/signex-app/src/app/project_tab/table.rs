@@ -9,7 +9,7 @@ use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::project::ListMove;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text};
+use signex_widgets::text;
 
 use super::look::{Glyph, icon_button, mono_font, ui_font};
 use crate::app::Message;
