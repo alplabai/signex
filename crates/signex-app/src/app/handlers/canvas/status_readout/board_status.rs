@@ -113,7 +113,9 @@ impl Signex {
             BoardPopoverKind::Layer if !self.shows_pcb_layer_strip() => {
                 BoardPopoverModel::LayerDropdown(self.layer_dropdown(&path, board))
             }
-            BoardPopoverKind::Layer => BoardPopoverModel::Layer(self.layer_list(&path, board)),
+            BoardPopoverKind::Layer | BoardPopoverKind::ActiveLayer => {
+                BoardPopoverModel::Layer(self.layer_list(&path, board))
+            }
             BoardPopoverKind::Grid => BoardPopoverModel::Grid(GridChoice {
                 current_mm: self.ui_state.grid_size_mm,
                 custom: popover.custom_grid.clone(),

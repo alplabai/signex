@@ -243,16 +243,16 @@ fn layer_pill_view<'a>(
     ]
     .spacing(SP.s)
     .align_y(iced::Alignment::Center);
-    let opened = StatusBarRequest::BoardCounterClicked {
+    let opened = |counter| StatusBarRequest::BoardCounterClicked {
         window: None,
-        counter: super::BoardCounter::Layer,
+        counter,
     };
     let pill: Element<'a, StatusBarRequest> = if layer.opens_list {
         face = face.push(super::board::layer_chevron(tokens));
         button(face)
             .padding([1.5, 6.0])
             .style(layer_pill(tokens))
-            .on_press(opened.clone())
+            .on_press(opened(super::BoardCounter::Layer))
             .boxed()
     } else {
         container(face)
@@ -260,7 +260,11 @@ fn layer_pill_view<'a>(
             .style(layer_label(tokens))
             .boxed()
     };
-    Some(mouse_area(pill).on_right_press(opened).boxed())
+    Some(
+        mouse_area(pill)
+            .on_right_press(opened(super::BoardCounter::ActiveLayer))
+            .boxed(),
+    )
 }
 
 /// The tool alone, in ink and the UI face, then the live hint in muted mono

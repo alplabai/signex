@@ -342,7 +342,7 @@ fn counter_parts<'a>(
             badge(b.selected, Tone::Accent, tokens, i18n),
         ],
         // The pill and the Grid read-out are drawn by the w3a clusters.
-        BoardCounter::Layer | BoardCounter::Grid => Vec::new(),
+        BoardCounter::Layer | BoardCounter::ActiveLayer | BoardCounter::Grid => Vec::new(),
     }
 }
 
@@ -384,7 +384,7 @@ pub(super) fn counter_widths(b: &BoardReadout, i18n: &I18n) -> Vec<(BoardCounter
                     let inner = BAR_GLYPH + label_width(&name) + badge_of(b.selected);
                     segment_width(inner, 2, last)
                 }
-                BoardCounter::Layer | BoardCounter::Grid => 0.0,
+                BoardCounter::Layer | BoardCounter::ActiveLayer | BoardCounter::Grid => 0.0,
             };
             (counter, width)
         })

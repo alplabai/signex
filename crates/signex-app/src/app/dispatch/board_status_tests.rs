@@ -450,3 +450,73 @@ fn under_dropdown_the_pill_opens_the_list_and_a_pick_sets_the_layer() {
     event(&mut app, BoardPopoverEvent::Dismissed);
     assert_eq!(open_kind(&app), None, "a press outside closes it");
 }
+
+/// What a right press on the Layer pill of `window`'s bar sends.
+fn pill_right_press(app: &Signex, window: iced::window::Id) -> Vec<Message> {
+    use iced::mouse::{Button, Event};
+    let size = iced::Size::new(1600.0, 40.0);
+    let caption = signex_i18n::t!(app.ui_state.i18n, signex_i18n::ids::PCB_STATUS_LAYER);
+    let texts = crate::layout_probe::lay_out_texts(app.view_status_bar(window), size);
+    let at = crate::layout_probe::find(&texts, &caption.to_string())
+        .bounds
+        .center();
+    crate::layout_probe::messages_for_events(
+        app.view_status_bar(window),
+        size,
+        at,
+        &[iced::Event::Mouse(Event::ButtonPressed(Button::Right))],
+    )
+}
+
+/// #2460 under Dropdown: the click opens the list, the right-click the
+/// Active layer popover, which stays open on a pick.
+#[test]
+fn under_dropdown_the_pill_click_lists_and_its_right_click_opens_the_popover() {
+    use crate::layer_strip_prefs::LayerSwitcher;
+    let (mut app, path, main) = app_with_board();
+    app.ui_state.layer_switcher = LayerSwitcher::Dropdown;
+
+    for message in pill_click(&app, main) {
+        let _ = app.update(message);
+    }
+    assert!(matches!(
+        app.board_popover_model(main),
+        Some(BoardPopoverModel::LayerDropdown(_))
+    ));
+    event(&mut app, BoardPopoverEvent::Dismissed);
+
+    for message in pill_right_press(&app, main) {
+        let _ = app.update(message);
+    }
+    assert_eq!(open_kind(&app), Some((main, BoardPopoverKind::ActiveLayer)));
+    assert!(matches!(
+        app.board_popover_model(main),
+        Some(BoardPopoverModel::Layer(_))
+    ));
+    let bottom = PcbLayer::Copper(CopperLayer::Bottom);
+    event(&mut app, BoardPopoverEvent::LayerPicked(bottom));
+    assert_eq!(app.pcb_layer_view(&path).active(), bottom);
+    assert_eq!(
+        open_kind(&app),
+        Some((main, BoardPopoverKind::ActiveLayer)),
+        "the Active layer popover stays open on a pick"
+    );
+}
+
+/// #2460 under Strip: the pill takes no click, and its right-click opens
+/// the Active layer popover.
+#[test]
+fn under_strip_the_pill_right_click_opens_the_popover() {
+    use crate::layer_strip_prefs::LayerSwitcher;
+    let (mut app, _path, main) = app_with_board();
+    app.ui_state.layer_switcher = LayerSwitcher::Strip;
+    assert!(pill_click(&app, main).is_empty());
+    for message in pill_right_press(&app, main) {
+        let _ = app.update(message);
+    }
+    assert_eq!(open_kind(&app), Some((main, BoardPopoverKind::ActiveLayer)));
+    assert!(matches!(
+        app.board_popover_model(main),
+        Some(BoardPopoverModel::Layer(_))
+    ));
+}
