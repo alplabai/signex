@@ -140,7 +140,10 @@ fn a_dragged_designator_moves_itself_with_no_ghost() {
     assert_eq!(carry.text, Some((R1, BoardTextField::Designator)));
     let canvas = &app.interaction_state.pcb_canvas;
     assert!(canvas.highlight().ghost.is_empty(), "no ghost");
-    assert!(canvas.highlight().selected.is_empty(), "no mark left behind");
+    assert!(
+        canvas.highlight().selected.is_empty(),
+        "no mark left behind"
+    );
     let base = canvas.active_renderer_snapshot().expect("a board");
     assert!(base.texts.is_empty(), "the text left its old place");
     assert_eq!(base.pads.len(), 2, "the part stays");
@@ -163,7 +166,10 @@ fn a_dragged_footprint_moves_itself_with_no_ghost() {
     let canvas = &app.interaction_state.pcb_canvas;
     assert!(canvas.highlight().ghost.is_empty(), "no ghost");
     let base = canvas.active_renderer_snapshot().expect("a board");
-    assert!(base.pads.is_empty() && base.texts.is_empty(), "nothing left");
+    assert!(
+        base.pads.is_empty() && base.texts.is_empty(),
+        "nothing left"
+    );
     let moving = canvas.drag_preview_texts();
     assert_eq!(moving.len(), 1, "its designator goes with it");
     assert_eq!(

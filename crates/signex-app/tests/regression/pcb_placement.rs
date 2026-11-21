@@ -456,7 +456,10 @@ fn a_drag_previews_then_drops_the_footprint_on_the_grid() {
     assert_eq!(snapshot(&f.app), before, "a drag in progress edits nothing");
     let canvas = &f.app.interaction_state.pcb_canvas;
     assert!(canvas.highlight().ghost.is_empty(), "a move has no ghost");
-    assert!(canvas.drag_preview_scene().is_some(), "the part moves itself");
+    assert!(
+        canvas.drag_preview_scene().is_some(),
+        "the part moves itself"
+    );
     let dropped = Message::PcbCanvas(PcbCanvasMsg::FootprintDropped { from, to });
     let edited = one_step(&mut f, dropped);
     // The origin snaps to the 1.27 mm PCB default grid: (12.7, 10.16).

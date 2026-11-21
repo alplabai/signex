@@ -124,7 +124,10 @@ fn edit_move_picks_a_footprint_then_drops_it_on_the_grid_as_one_step() {
     let _ = app.update(Message::PcbCanvas(over));
     let canvas = &app.interaction_state.pcb_canvas;
     assert!(canvas.highlight().ghost.is_empty(), "a move has no ghost");
-    assert!(canvas.drag_preview_scene().is_some(), "the part moves itself");
+    assert!(
+        canvas.drag_preview_scene().is_some(),
+        "the part moves itself"
+    );
     click(&mut app, 14.0, 12.4);
     assert!(app.interaction_state.pcb_carry.is_none());
     let moved = position(&app, &path, U1);
