@@ -1,8 +1,9 @@
 # ast-grep rule for scripts/check_projector_writes.sh, run on app/projector
 # only: a write to the engine map, the active path, the whole document state
-# or any field reached through it but `panel_ctx`. The script adds the names of the marks and wrappers, part of them
-# read from scripts/sheet-change-wrappers.txt. Code nodes only, so a comment
-# never matches. Kept out of ast-grep/rules on purpose, like
+# or any field reached through it but `panel_ctx`. The script adds the names
+# of the marks and wrappers, part of them read from
+# scripts/sheet-change-wrappers.txt. Code nodes only, so a comment never
+# matches. Kept out of ast-grep/rules on purpose, like
 # scripts/app-catch-unwind.yml.
 id: projector-write
 language: rust

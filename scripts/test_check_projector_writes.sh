@@ -124,6 +124,9 @@ for w in open_schematic_tab install_reloaded_schematic restore_loaded apply_load
   run_case "wrapper_$w" fail board_view.rs "$(in_fn "self.$w();")"
 done
 run_case wrapper_as_value fail board_view.rs "$(in_fn 'let f = Signex::apply_engine_undo;')"
+# load_gateway functions that write core state (not load wrappers).
+run_case core_writing_apply_loaded_pcb_document fail board_view.rs "$(in_fn 'self.apply_loaded_pcb_document(true, true);')"
+run_case core_writing_apply_loaded_empty_document fail board_view.rs "$(in_fn 'self.apply_loaded_empty_document(false);')"
 run_case wrapper_suffix pass board_view.rs "$(in_fn 'self.reapply_engine_undo_marker();')"
 
 # A tree without the projector or the wrapper list is an error, never a pass.

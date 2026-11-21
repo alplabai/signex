@@ -13,7 +13,8 @@
 #            projection), a `&mut`, an assignment or a method other than the
 #            reads above and copied, cloned, first, last.
 #   names    any use of a dirty or saved mark, an engine-map method, a load
-#            wrapper, a delegating edit form, or an edit-tail wrapper listed in
+#            wrapper, a delegating edit form, a load_gateway function that
+#            writes core state, or an edit-tail wrapper listed in
 #            scripts/sheet-change-wrappers.txt: a call, a path call, a method
 #            or function named as a value, an import.
 #   state    a `&mut self` method of DocumentState, called on
@@ -26,7 +27,10 @@
 # left out: files named `tests.rs` or `*_tests.rs`, anything under a `tests/`
 # or `*_tests/` folder, and items under `#[cfg(test)]`. Blind spots: code
 # inside a macro's token tree (`dbg!(..)`, `vec![..]`) is not parsed for the
-# writes, though a listed name inside it is still caught.
+# writes, though a listed name inside it is still caught; a `Signex` method
+# or free function defined outside the projector that writes core state: only
+# the listed and derived names are caught. The structural fix is #2713 (the
+# projector takes `&DocumentState` at 4a).
 #
 # Usage: scripts/check_projector_writes.sh   (PROJECTOR_WRITES_ROOT overrides
 # the tree, for scripts/test_check_projector_writes.sh)
@@ -52,6 +56,10 @@ DELEGATING="apply_engine_command apply_engine_command_checked
   apply_engine_command_reporting apply_engine_command_unrecorded
   apply_engine_commands apply_engine_commands_checked apply_engine_undo
   apply_engine_redo refuse_if_active_read_only"
+# load_gateway functions that write core state: not load wrappers (#2705 names
+# seven), but callers of clear_schematic_ui_state that stay out of the
+# projector until 3.B splits that write.
+CORE_WRITING_LOADS="apply_loaded_pcb_document apply_loaded_empty_document"
 
 cd "$ROOT"
 for tool in ast-grep jq; do
@@ -66,7 +74,7 @@ if [[ ! -d "$SRC" || ! -f "$LIST" ]]; then
 fi
 
 listed="$(grep -vE '^[[:space:]]*(#|$)' "$LIST" | awk '{ print $2 }')"
-names="$(printf '%s\n' $MARKS $LOAD_WRAPPERS $DELEGATING $listed | sed '/^$/d' | sort -u | paste -sd '|' -)"
+names="$(printf '%s\n' $MARKS $LOAD_WRAPPERS $DELEGATING $CORE_WRITING_LOADS $listed | sed '/^$/d' | sort -u | paste -sd '|' -)"
 
 NOT_IN_TEST="
   not:
