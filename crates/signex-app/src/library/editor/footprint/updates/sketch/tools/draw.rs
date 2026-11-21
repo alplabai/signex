@@ -401,7 +401,7 @@ fn arc(editor: &mut crate::app::FootprintDocument, ctx: &ToolClickCtx) {
                     center,
                     start,
                     end: ctx.resolved_id,
-                    sweep_ccw: true,
+                    sweep_ccw: editor.state.arc_tool_sweeps_ccw(),
                 },
             ));
             editor.with_parts(|state, primitive| {

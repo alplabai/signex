@@ -3,9 +3,14 @@
 //! its snaps reach (#2518). Read once when sketch mode starts; it is a
 //! picture, never edited.
 
+use std::borrow::Cow;
+
 use pcb_geom::{GraphicShape, PointNm};
+use signex_sketch::constraint::{ConstraintKind, DimTarget};
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
 use signex_types::pcb_origin::BoardOrigin;
+
+use super::{GuideAxis, PlacementInputKind};
 
 /// A track as drawn under the sketch, in board mm.
 #[derive(Debug, Clone, PartialEq)]
@@ -94,6 +99,82 @@ impl super::FootprintEditorState {
             }
             None => [x, y],
         }
+    }
+
+    /// The model point a board sketch's grid steps from: the board origin.
+    /// `None` on a footprint, whose grid steps from (0, 0).
+    pub fn grid_origin_mm(&self) -> Option<(f64, f64)> {
+        let board = self.board_backdrop.as_deref()?;
+        Some((board.origin.at.x, board.origin.at.y))
+    }
+
+    /// A guide's stored position as the user reads it.
+    pub fn guide_shown_mm(&self, axis: GuideAxis, position_mm: f64) -> f64 {
+        match (self.board_backdrop.as_deref(), axis) {
+            (Some(board), GuideAxis::Vertical) => board.origin.user_x(position_mm),
+            (Some(board), GuideAxis::Horizontal) => board.origin.user_y(position_mm),
+            (None, _) => position_mm,
+        }
+    }
+
+    /// The position to store for a guide the user placed at `shown_mm`.
+    pub fn guide_model_mm(&self, axis: GuideAxis, shown_mm: f64) -> f64 {
+        match (self.board_backdrop.as_deref(), axis) {
+            (Some(board), GuideAxis::Vertical) => board.origin.board_x(shown_mm),
+            (Some(board), GuideAxis::Horizontal) => board.origin.board_y(shown_mm),
+            (None, _) => shown_mm,
+        }
+    }
+
+    /// A model angle in degrees as the user reads it. The model's y runs
+    /// down the screen, so a board's Y-up sense is its negative. The mirror
+    /// is its own inverse, so it also takes a typed angle to the model.
+    pub fn angle_deg_mirrored(&self, deg: f64) -> f64 {
+        if self.board_backdrop.is_some() {
+            0.0 - deg
+        } else {
+            deg
+        }
+    }
+
+    /// `kind` with a literal angle as the user reads it. An angle bound to
+    /// an expression keeps its text, which the sketch stores.
+    pub fn shown_constraint<'k>(&self, kind: &'k ConstraintKind) -> Cow<'k, ConstraintKind> {
+        match kind {
+            ConstraintKind::Angle {
+                l1,
+                l2,
+                target: DimTarget::Literal(rad),
+            } if self.board_backdrop.is_some() => Cow::Owned(ConstraintKind::Angle {
+                l1: *l1,
+                l2: *l2,
+                target: DimTarget::Literal(0.0 - rad),
+            }),
+            _ => Cow::Borrowed(kind),
+        }
+    }
+
+    /// The target to store for `kind` when the user entered `shown`.
+    pub fn stored_target(&self, kind: &ConstraintKind, shown: DimTarget) -> DimTarget {
+        match (kind, shown) {
+            (ConstraintKind::Angle { .. }, DimTarget::Literal(rad))
+                if self.board_backdrop.is_some() =>
+            {
+                DimTarget::Literal(0.0 - rad)
+            }
+            (_, shown) => shown,
+        }
+    }
+
+    /// The turn of the arc the Arc tool commits now. A positive sweep typed
+    /// on a board runs counter-clockwise on screen, clockwise in the model.
+    pub fn arc_tool_sweeps_ccw(&self) -> bool {
+        let typed = self
+            .placement_input
+            .as_ref()
+            .filter(|input| input.kind == PlacementInputKind::ArcSweep)
+            .and_then(|input| crate::numeric_field::parse_field_f64(&input.buffer));
+        !(self.board_backdrop.is_some() && typed.is_some_and(|deg| deg > 0.0))
     }
 }
 

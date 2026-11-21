@@ -381,13 +381,15 @@ fn value_text(c: &Constraint, l: &Lookup<'_>, params: &HashMap<String, f64>) -> 
         let measured = signex_sketch::solver::measure::measured_value(l.sketch, solve, c);
         return Some(match measured {
             Some(rad) if matches!(c.kind, ConstraintKind::Angle { .. }) => {
-                value_edit::format_angle(rad.to_degrees(), &words.unit_deg)
+                let shown = l.state.angle_deg_mirrored(rad.to_degrees());
+                value_edit::format_angle(shown, &words.unit_deg)
             }
             Some(mm) => value_edit::format_length(mm, &words.unit_mm),
             None => words.value_unresolved.clone(),
         });
     }
-    let (name, value) = value_edit::dimension_label(&c.kind, l.sketch, params, words)?;
+    let shown = l.state.shown_constraint(&c.kind);
+    let (name, value) = value_edit::dimension_label(&shown, l.sketch, params, words)?;
     Some(match name {
         Some(name) => format!("{name} · {value}"),
         None => value,

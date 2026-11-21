@@ -91,7 +91,14 @@ fn sketch(editor: &FootprintDocument) -> Option<&signex_sketch::SketchData> {
 }
 
 fn open_value_edit(editor: &mut FootprintDocument, target: ValueTarget) {
-    let Some(buffer) = sketch(editor).and_then(|s| value_edit::initial_buffer(target, s)) else {
+    let shown = sketch(editor).and_then(|s| match target {
+        ValueTarget::Constraint(id) => {
+            let constraint = s.constraints.iter().find(|c| c.id == id)?;
+            value_edit::constraint_buffer(&editor.state.shown_constraint(&constraint.kind))
+        }
+        ValueTarget::Pattern(..) => value_edit::initial_buffer(target, s),
+    });
+    let Some(buffer) = shown else {
         return;
     };
     // A reference (driven) dimension measures; its value is not edited.
@@ -144,8 +151,12 @@ fn prepared_write(editor: &FootprintDocument, edit: &ValueEdit) -> Option<ValueW
         ValueTarget::Constraint(id) => {
             let constraint = sketch.constraints.iter().find(|c| c.id == id)?;
             let params = value_edit::resolved_params(sketch, &editor.state);
-            value_edit::parse_constraint_buffer(&edit.buffer, &constraint.kind, &params)
-                .map(|target| ValueWrite::Constraint(id, target))
+            value_edit::parse_constraint_buffer(&edit.buffer, &constraint.kind, &params).map(
+                |shown| {
+                    let target = editor.state.stored_target(&constraint.kind, shown);
+                    ValueWrite::Constraint(id, target)
+                },
+            )
         }
         ValueTarget::Pattern(array, field) => {
             let typed = edit.buffer.trim();
