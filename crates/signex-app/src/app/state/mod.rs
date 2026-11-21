@@ -21,6 +21,7 @@ mod dirty;
 #[cfg(test)]
 mod dirty_tests;
 mod document;
+mod document_load;
 #[cfg(test)]
 mod draft_ownership_tests;
 mod error_notice;
@@ -74,6 +75,7 @@ pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
 pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
+pub(crate) use document_load::SheetInstall;
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;

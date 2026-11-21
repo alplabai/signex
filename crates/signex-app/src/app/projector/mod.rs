@@ -15,7 +15,7 @@ mod panel;
 mod replaced_engine;
 mod slots;
 
-pub(crate) use notice::log_notice;
+pub(crate) use notice::{log_notice, log_notices};
 pub(crate) use panel::effective_paper_size;
 
 use crate::app::Signex;

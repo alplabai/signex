@@ -24,6 +24,27 @@ impl Signex {
         }
     }
 
+    /// Draw an engine install behind a tab not in view: its `notices` to
+    /// Messages and, when it went in, every window on the sheet redrawn from
+    /// it, so none keeps drawing the replaced engine or selecting its objects.
+    /// Returns whether it went in.
+    pub(crate) fn project_replaced_engine(
+        &mut self,
+        path: &std::path::Path,
+        install: crate::app::state::SheetInstall,
+    ) -> bool {
+        super::log_notices(&install.notices);
+        if install.installed {
+            self.refresh_slots_from_engine(
+                path,
+                false,
+                crate::schematic_runtime::RenderInvalidation::FULL,
+                true,
+            );
+        }
+        install.installed
+    }
+
     /// A restore is about to replace (or drop) the engine behind the visible
     /// schematic. Inline text, a pending move and the selection point into
     /// the old document, so they must not outlive it.

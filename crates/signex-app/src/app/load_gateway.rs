@@ -110,22 +110,6 @@ impl Signex {
         // swap `active_tab` don't need to know the storage changed.
     }
 
-    fn activate_active_schematic_session(&mut self) -> bool {
-        // Point `active_path` at the active tab's schematic engine if
-        // one exists. Returns true iff the active engine is now live
-        // and ready for `active_engine()` lookups.
-        let path = self.active_tab_path();
-        if let Some(p) = path.as_ref()
-            && self.document_state.engines.contains_key(p)
-        {
-            self.document_state.active_path = path;
-            true
-        } else {
-            self.document_state.active_path = None;
-            false
-        }
-    }
-
     pub(crate) fn active_tab_path(&self) -> Option<PathBuf> {
         self.document_state
             .tabs
@@ -137,89 +121,52 @@ impl Signex {
     /// at `path`, leaving the canvas and the user's tool alone. A sheet the
     /// engine rejects drops the stale engine, so a save cannot undo it.
     /// Returns whether the new engine was installed.
+    #[cfg(test)]
     pub(crate) fn install_schematic_at(
         &mut self,
         path: &std::path::Path,
         sheet: SchematicSheet,
     ) -> bool {
-        // Inline text typed into a window on this sheet targets an object of
-        // the engine being replaced.
+        // The non-active arm of `install_reloaded_schematic`, without its
+        // repair reports and settle steps, as on trunk: the pre-step, the core
+        // call and the projection repeat the wrapper's three lines.
+        let result = self.engine_for_sheet_behind_tab(path, sheet);
+        let install = self.document_state.replace_engine_at(path, result);
+        self.project_replaced_engine(path, install)
+    }
+
+    /// The GUI pre-step of an install behind a tab not in view, and the engine
+    /// to install. Inline text typed into a window on this sheet targets an
+    /// object of the engine being replaced: it ends before the install.
+    pub(crate) fn engine_for_sheet_behind_tab(
+        &mut self,
+        path: &std::path::Path,
+        sheet: SchematicSheet,
+    ) -> Result<signex_engine::Engine, signex_engine::EngineError> {
         if self.text_edit_targets_sheet_at(path) {
             self.interaction_state.editing_text = None;
         }
-        match signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf())) {
-            Ok(engine) => {
-                self.document_state
-                    .engines
-                    .insert(path.to_path_buf(), engine);
-                // An undocked window on this sheet must not keep drawing the
-                // replaced engine, nor select its objects.
-                self.refresh_slots_from_engine(
-                    path,
-                    false,
-                    crate::schematic_runtime::RenderInvalidation::FULL,
-                    true,
-                );
-                true
-            }
-            Err(error) => {
-                self.document_state.engines.remove(path);
-                crate::diagnostics::log_warning(format!(
-                    "[git] restore: {} was restored but its engine could not start: {error}",
-                    path.display()
-                ));
-                false
-            }
-        }
+        signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()))
     }
 
-    /// Make `result` the engine of the active tab at `p`. A failed engine is
-    /// reported to the Messages panel and the engine already open there is
-    /// kept: it may hold unsaved edits that dropping it would lose silently.
-    /// Returns whether the new engine was installed.
+    /// Make `result` the engine of the active tab at `p`; a failure reaches
+    /// the Messages panel. The core half, then the step
+    /// `apply_loaded_schematic` ships. Returns whether it was installed.
+    #[cfg(test)]
     fn install_active_engine(
         &mut self,
         p: PathBuf,
         result: Result<signex_engine::Engine, signex_engine::EngineError>,
     ) -> bool {
-        match result {
-            Ok(engine) => {
-                self.document_state.insert_engine(p.clone(), engine);
-                self.document_state.active_path = Some(p);
-                true
-            }
-            Err(error) => {
-                crate::diagnostics::log_warning(format!(
-                    "{} could not be loaded into the editor ({error}); the sheet already open was kept",
-                    p.display()
-                ));
-                false
-            }
-        }
-    }
-
-    /// Returns whether a new engine was installed from `schematic`.
-    fn sync_engine_from_schematic(&mut self, schematic: Option<SchematicSheet>) -> bool {
-        let path = self.active_tab_path();
-        match (path, schematic) {
-            (Some(p), Some(sheet)) => {
-                let result = signex_engine::Engine::new_with_path(sheet, Some(p.clone()));
-                self.install_active_engine(p, result)
-            }
-            _ => {
-                self.document_state.clear_active_engine();
-                false
-            }
-        }
+        logged_active_install(self.document_state.install_active(p, result))
     }
 
     /// The engine at `path` holds what was just read from disk: its history
     /// position is the clean point. Only when `installed`: a failed install
     /// leaves the older engine at `path`, which is not known to equal the file.
     pub(crate) fn mark_installed_engine_saved(&mut self, path: &std::path::Path, installed: bool) {
-        if installed && let Some(engine) = self.document_state.engines.get_mut(path) {
-            engine.mark_saved();
-        }
+        self.document_state
+            .mark_installed_engine_saved(path, installed);
     }
 
     /// The board shown in `window_id`: the active tab's in the main window,
@@ -286,40 +233,21 @@ impl Signex {
         let repaired = super::sheet_repairs::log_sheet_repairs(&path, &sheet.take_load_repairs())
             && !sheet.is_read_only();
         self.park_active_schematic_session();
-        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
         let scan_path = path.clone();
-        self.document_state.tabs.push(TabInfo {
-            title,
-            path,
-            cached_document: None,
-            project_id,
-            kind: super::TabKind::Schematic,
-        });
-        self.document_state.active_tab = self.document_state.tabs.len() - 1;
+        self.document_state.register_schematic_tab(path, title);
 
         let installed = self.apply_loaded_schematic(Some(sheet), true, true, true);
         // Read from disk: the opened document is the saved state, so undoing
         // every edit made since returns to a clean sheet. (A recovery copy
-        // is installed by a different path and stays dirty-safe.)
-        self.mark_installed_engine_saved(&scan_path, installed);
-        if repaired && installed {
-            // The file on disk still holds what was repaired (#1830).
-            self.document_state.mark_document_dirty(&scan_path);
-        }
+        // is installed by a different path and stays dirty-safe.) Every
+        // schematic open funnels through here: File > Open, the project
+        // tree, a child sheet and ERC navigation (#1208), so here autosave
+        // is held for an earlier run's recovery copy and the per-placement
+        // designator note is queued.
+        self.document_state
+            .settle_opened_sheet(&scan_path, installed, repaired);
         self.note_sheet_focused();
         crate::oversize_text::rearm_warning();
-        // Every schematic open funnels through here; `finish_update` starts
-        // the (once per project) per-placement designator note off-thread.
-        self.document_state.instance_note_due = true;
-
-        // An earlier run's recovery copy of this file may exist. Hold
-        // autosave back from now on, and let `update` start the check:
-        // File > Open, the project tree, a child sheet and ERC navigation
-        // all open through here (#1208).
-        self.document_state.autosave.begin_check(&scan_path);
-        self.document_state
-            .recovery_check_due
-            .push(scan_path.clone());
 
         // A document naming a font this machine lacks is told to the user
         // once per open (#510); until the scan lands this is a no-op and
@@ -352,20 +280,10 @@ impl Signex {
     /// canvas reflects the parked sheet's current state.
     pub(crate) fn attach_parked_schematic_tab(&mut self, path: PathBuf, title: String) {
         self.park_active_schematic_session();
-        let project_id = self.document_state.project_for_path(&path).map(|p| p.id);
-        self.document_state.tabs.push(TabInfo {
-            title,
-            path: path.clone(),
-            cached_document: None,
-            project_id,
-            kind: super::TabKind::Schematic,
-        });
-        self.document_state.active_tab = self.document_state.tabs.len() - 1;
-        // Point active_path at the parked entry. `apply_loaded_schematic`
-        // with `schematic = None` skips the `engines.insert` overwrite
-        // path and just refreshes the canvas / panel against the
-        // existing engine.
-        self.document_state.active_path = Some(path);
+        self.document_state.reattach_parked_sheet(path, title);
+        // `apply_loaded_schematic` with `schematic = None` skips the
+        // `engines.insert` overwrite path and just refreshes the canvas /
+        // panel against the existing engine.
         self.apply_loaded_schematic(None, true, true, true);
         self.note_sheet_focused();
     }
@@ -421,7 +339,7 @@ impl Signex {
             // carrying them to another schematic tab leaves ghost
             // selections that delete/move would target (#102).
             let previous_path = self.document_state.active_path.clone();
-            if self.activate_active_schematic_session() {
+            if self.document_state.activate_tab_engine() {
                 if previous_path != self.document_state.active_path {
                     self.interaction_state.active_canvas_mut().selected.clear();
                     self.interaction_state
@@ -446,15 +364,9 @@ impl Signex {
     }
 
     fn clear_schematic_ui_state(&mut self) {
-        // Detach from the currently-visible schematic engine, but
-        // leave its entry in `document_state.engines` untouched — the
-        // engine should outlive a tab switch so switching back to a
-        // parked schematic (e.g. Schematic → PCB → Schematic from the
-        // project tree) finds its engine still resident. The only
-        // authoritative removal point is `close_tab_at_index` in
-        // `handlers/document_tabs.rs`, which explicitly prunes the
-        // closing tab's entry. GitHub issue #51.
-        self.document_state.active_path = None;
+        // The engine stays resident; only closing its tab removes it
+        // (`close_tab_at_index` in `handlers/document_tabs.rs`, #51).
+        self.document_state.detach_active_schematic();
         self.cancel_placement_session();
         self.interaction_state
             .active_canvas_mut()
@@ -534,7 +446,10 @@ impl Signex {
         refresh_panel_ctx: bool,
     ) -> bool {
         let installed = match schematic {
-            Some(schematic) => self.sync_engine_from_schematic(Some(schematic)),
+            Some(schematic) => logged_active_install(
+                self.document_state
+                    .sync_engine_from_schematic(Some(schematic)),
+            ),
             None => false,
         };
         if !self.document_state.has_active_engine() {
@@ -632,6 +547,13 @@ fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
             path.display()
         ));
     }
+}
+
+/// An install at the active tab with its notices sent to Messages; returns
+/// whether it went in. The test seam `install_active_engine` shares it.
+fn logged_active_install(install: super::state::SheetInstall) -> bool {
+    super::projector::log_notices(&install.notices);
+    install.installed
 }
 
 #[cfg(test)]
