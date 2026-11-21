@@ -250,6 +250,7 @@ fn sketch_pour_zones_and_mechanical_graphics_round_trip_as_board_rows() {
         min_thickness: 0.0,
         min_island_area: 0.0,
         remove_dead_islands: false,
+        shelved: false,
         unknown: UnknownFields::default(),
     });
     board.graphics.push(BoardGraphic {

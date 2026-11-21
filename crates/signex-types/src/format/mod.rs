@@ -29,7 +29,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::format_version::{FormatVersion, FormatVersionError, MissingToken, NewerMinor};
+#[cfg(test)]
+use crate::format_version::FormatVersion;
+use crate::format_version::FormatVersionError;
 use crate::pcb::{PcbBoard, Zone};
 use crate::schematic::SchematicSheet;
 
