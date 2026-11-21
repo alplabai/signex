@@ -42,7 +42,10 @@ fn panel_message(msg: CommandLogMsg) -> Message {
 pub(crate) fn dispatch_outcome(id: &str, outcome: &CommandOutcome) -> LogOutcome {
     match outcome {
         CommandOutcome::Ran | CommandOutcome::Answered(_) => LogOutcome::Ok(None),
-        CommandOutcome::Disabled { reason } => LogOutcome::Failed(reason.clone()),
+        // In English, as the log reads the other outcomes.
+        CommandOutcome::Disabled { reason } => {
+            LogOutcome::Failed(signex_i18n::RenderTranslatable::render_en_us(reason))
+        }
         CommandOutcome::UnknownId => LogOutcome::Failed(format!("unknown command `{id}`")),
         CommandOutcome::NoBridgeArm => {
             LogOutcome::Failed(format!("`{id}` has no dispatch arm yet"))

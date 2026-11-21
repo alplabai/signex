@@ -295,6 +295,7 @@ impl Needs {
             | Self::MoveObject
             | Self::PcbSync
             | Self::OpenProject
+            | Self::PcbInProject
             | Self::Library
             | Self::ProjectSheet => unreachable!("a CoreOnly need is met in is_met_from_core"),
         }
