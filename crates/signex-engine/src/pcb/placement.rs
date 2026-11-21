@@ -6,6 +6,7 @@
 
 use std::collections::BTreeSet;
 
+use pcb_geom::{ARC_FOLLOW_MAX_GROWTH, ArcFollowFault};
 use signex_types::pcb::{Footprint, PCB_GRID_MM, PcbBoard, Point, Via};
 use signex_types::pcb_options::{GridSpec, GridUse};
 use uuid::Uuid;
@@ -34,6 +35,10 @@ pub enum PlacementRefusal {
     NothingSelected,
     #[error("{} is locked", .0.join(", "))]
     Locked(Vec<String>),
+    #[error("arc {0} would collapse onto its other end")]
+    ArcCollapses(Uuid),
+    #[error("arc {0} would grow to more than {1} times its radius")]
+    ArcGrows(Uuid, f64),
     #[error(transparent)]
     Command(#[from] BoardCommandError),
 }
@@ -193,7 +198,8 @@ pub fn editable_vias<'a>(
 
 /// Move every via in `ids` by `delta`, keeping its net. The track and copper
 /// arc ends on it move with it (`pcb_geom::tracks_on_vias`, `arcs_on_vias`),
-/// in the same command, so the move stays one undo step.
+/// in the same command, so the move stays one undo step. Refused whole when
+/// a following arc would collapse or grow past its limit.
 pub fn move_vias(
     board: &PcbBoard,
     ids: &BTreeSet<Uuid>,
@@ -206,11 +212,17 @@ pub fn move_vias(
                 .iter()
                 .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta))),
         );
-        items.extend(
-            pcb_geom::arcs_on_vias(board, ids)
-                .iter()
-                .map(|ends| BoardItem::Arc(ends.follow(&board.free.arcs[ends.index], delta))),
-        );
+        for ends in pcb_geom::arcs_on_vias(board, ids) {
+            let moved = ends
+                .checked_follow(&board.free.arcs[ends.index], delta)
+                .map_err(|fault| match fault {
+                    ArcFollowFault::Collapses => PlacementRefusal::ArcCollapses(ends.arc),
+                    ArcFollowFault::GrowsTooMuch => {
+                        PlacementRefusal::ArcGrows(ends.arc, ARC_FOLLOW_MAX_GROWTH)
+                    }
+                })?;
+            items.push(BoardItem::Arc(moved));
+        }
     }
     Ok(commands)
 }

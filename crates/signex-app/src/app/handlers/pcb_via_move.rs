@@ -60,6 +60,21 @@ impl Signex {
         ))
     }
 
+    /// The offset the preview shows: the drag's, or none while the drop
+    /// there would be refused, so the preview shows what a release leaves.
+    pub(super) fn via_preview_delta(
+        &self,
+        carry: &PcbCarry,
+        from: Point,
+        to: Point,
+    ) -> Option<Point> {
+        let delta = self.via_drag_delta(carry, from, to)?;
+        let board = self.active_pcb()?;
+        let refused =
+            !carry.leaves_tracks && placement::move_vias(board, &carry.vias, delta).is_err();
+        Some(if refused { Point::new(0.0, 0.0) } else { delta })
+    }
+
     /// Release a via drag at `to`: move the vias as one step.
     pub(super) fn drop_via_carry(&mut self, carry: &PcbCarry, from: Point, to: Point) {
         let built = self.via_drag_delta(carry, from, to).and_then(|delta| {

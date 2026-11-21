@@ -94,6 +94,39 @@ impl ArcEnds {
         }
         moved
     }
+
+    /// [`Self::follow`], refused when one end moving would collapse the arc
+    /// (two of its points on one nanometre) or scale it past
+    /// [`ARC_FOLLOW_MAX_GROWTH`]. An arc shifted whole is never refused.
+    pub fn checked_follow(&self, arc: &TrackArc, delta: Point) -> Result<TrackArc, ArcFollowFault> {
+        let moved = self.follow(arc, delta);
+        if self.start == self.end {
+            return Ok(moved);
+        }
+        let nm = |p: Point| PointNm::from_mm(p, "arc point").map_err(|_| ArcFollowFault::Collapses);
+        let (start, mid, end) = (nm(moved.start)?, nm(moved.mid)?, nm(moved.end)?);
+        if start == end || mid == start || mid == end {
+            return Err(ArcFollowFault::Collapses);
+        }
+        // Turning and scaling about one end scales the radius as the chord.
+        let chord = |a: &TrackArc| (a.end.x - a.start.x).hypot(a.end.y - a.start.y);
+        if chord(&moved) > ARC_FOLLOW_MAX_GROWTH * chord(arc) {
+            return Err(ArcFollowFault::GrowsTooMuch);
+        }
+        Ok(moved)
+    }
+}
+
+/// How many times its radius an arc may grow when one end follows a via.
+pub const ARC_FOLLOW_MAX_GROWTH: f64 = 3.0;
+
+/// Why an arc cannot follow a moved via.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArcFollowFault {
+    /// Its moved end would land on its fixed end, or its middle on an end.
+    Collapses,
+    /// It would grow past [`ARC_FOLLOW_MAX_GROWTH`] times its radius.
+    GrowsTooMuch,
 }
 
 /// A pad of a moved footprint: its copper, layers and net.

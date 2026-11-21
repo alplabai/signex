@@ -448,12 +448,12 @@ impl PcbSelectionState {
             return None;
         };
         let p = PointNm::from_mm(at, "press").ok()?;
-        let tol = pcb_geom::mm_to_nm(tolerance_mm, "reach").ok()?;
         let selected = self.selection.footprints();
+        // Exactly under the press: a via merely near a part is not on it.
         let under: Vec<Uuid> = self
             .index
             .as_ref()?
-            .items_at(p, tol)
+            .items_at(p, 0)
             .iter()
             .filter_map(|i| match i.item {
                 ItemRef::Footprint(fp) | ItemRef::Pad { footprint: fp, .. } => Some(fp),

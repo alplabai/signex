@@ -231,6 +231,52 @@ fn an_arc_following_one_end_keeps_its_other_end_and_its_sweep() {
     assert_eq!(shifted.end, Point::new(5.0, 3.0));
 }
 
+fn start_follows(arc: &TrackArc) -> ArcEnds {
+    ArcEnds {
+        arc: arc.uuid,
+        index: 0,
+        start: true,
+        end: false,
+    }
+}
+
+#[test]
+fn an_arc_refuses_a_moved_end_on_its_fixed_end_or_a_chord_that_rounds_away() {
+    let before = arc(1, (2.0, 0.0), (6.0, 0.0), 1, "TopCopper");
+    let ends = start_follows(&before);
+    assert_eq!(
+        ends.checked_follow(&before, Point::new(4.0, 0.0)),
+        Err(ArcFollowFault::Collapses)
+    );
+    // 0.8 nm of chord: the ends differ in nanometres, the middle rounds
+    // onto the fixed end.
+    assert_eq!(
+        ends.checked_follow(&before, Point::new(4.0 - 0.8e-6, 0.0)),
+        Err(ArcFollowFault::Collapses)
+    );
+}
+
+#[test]
+fn an_arc_may_grow_up_to_three_times_its_radius() {
+    let before = arc(1, (2.0, 0.0), (6.0, 0.0), 1, "TopCopper");
+    let ends = start_follows(&before);
+    // A chord of 4 mm from the fixed end at x = 6.
+    assert_eq!(
+        ends.checked_follow(&before, Point::new(-8.4, 0.0)),
+        Err(ArcFollowFault::GrowsTooMuch),
+        "3.1 times"
+    );
+    assert!(
+        ends.checked_follow(&before, Point::new(-7.6, 0.0)).is_ok(),
+        "2.9 times"
+    );
+    let both = ArcEnds { end: true, ..ends };
+    assert!(
+        both.checked_follow(&before, Point::new(-80.0, 0.0)).is_ok(),
+        "shifted whole, it does not grow"
+    );
+}
+
 #[test]
 fn follow_shifts_only_the_named_ends() {
     let segment = track(1, (0.0, 0.0), (9.0, 0.0), 1, "TopCopper");

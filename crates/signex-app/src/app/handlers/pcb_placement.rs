@@ -353,7 +353,7 @@ impl Signex {
             // A text follows the pointer exactly (#2368).
             Point::new(to.x - from.x, to.y - from.y)
         } else if !carry.vias.is_empty() {
-            let Some(delta) = self.via_drag_delta(carry, from, to) else {
+            let Some(delta) = self.via_preview_delta(carry, from, to) else {
                 return;
             };
             delta

@@ -408,6 +408,63 @@ fn a_copper_arc_follows_the_via_in_the_preview_and_in_one_undo_step() {
     assert_eq!(rig.live(), before, "one undo restores via and arc");
 }
 
+/// A via 0.3 mm outside U1's pad, at 10 px/mm, is within the 4 px hover
+/// reach of the pad but not on it: the press drags the via.
+#[test]
+fn a_via_just_outside_a_part_drags_itself_and_the_part_stays() {
+    let mut board = board();
+    let mut near = board.vias[0].clone();
+    near.uuid = ON_PAD;
+    near.position = Point::new(10.8, 10.0);
+    board.vias.push(near);
+    let mut rig = rig_on(board);
+    let canvas = &rig.app.interaction_state.pcb_canvas;
+    let factor = 10.0 / canvas.camera_ref().scale();
+    canvas.zoom_by_factor_about_centre(factor);
+    canvas.center_on_world(10.8, 10.0);
+    assert!((canvas.camera_ref().scale() - 10.0).abs() < 1e-3);
+    rig.drag(Point::new(10.8, 10.0), Point::new(12.8, 11.0));
+    let via = rig.via(ON_PAD).position;
+    assert!(close(via, 13.0, 11.0), "{via:?}");
+    assert!(close(rig.u1_at(), 10.0, 10.0), "the part stays");
+}
+
+/// The drag of the via at (20, 10) with `board_with_arc`'s 4 mm chord to
+/// `to`: the preview's offset, whether the board changed, and the rig.
+fn drag_arc_via_to(to: Point) -> (Point, bool, Rig) {
+    let mut rig = rig_on(board_with_arc());
+    let before = rig.live();
+    rig.press(Point::new(20.0, 10.0));
+    rig.move_to(to);
+    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
+    let shown = carry.delta;
+    rig.release(to);
+    let changed = rig.live() != before;
+    (shown, changed, rig)
+}
+
+#[test]
+fn a_via_dropped_on_its_arcs_far_end_is_refused_and_the_board_stays() {
+    let (shown, changed, _rig) = drag_arc_via_to(Point::new(24.0, 10.0));
+    assert!(!changed, "nothing moved");
+    assert!(close(shown, 0.0, 0.0), "the preview stays put: {shown:?}");
+}
+
+#[test]
+fn an_arc_growing_past_three_times_is_refused_and_below_it_follows() {
+    // 12.5 mm from the far end: 3.125 times the 4 mm chord.
+    let (shown, changed, _rig) = drag_arc_via_to(Point::new(11.5, 10.0));
+    assert!(!changed, "refused");
+    assert!(close(shown, 0.0, 0.0), "{shown:?}");
+    // 11.5 mm: 2.875 times.
+    let (shown, changed, rig) = drag_arc_via_to(Point::new(12.5, 10.0));
+    assert!(changed, "allowed");
+    assert!(close(shown, -7.5, 0.0), "{shown:?}");
+    let arc = &rig.board().free.arcs[0];
+    assert!(close(arc.start, 12.5, 10.0), "{arc:?}");
+    assert!(close(arc.end, 24.0, 10.0), "{arc:?}");
+}
+
 #[test]
 fn a_ctrl_drag_leaves_a_copper_arc() {
     let mut rig = rig_on(board_with_arc());
