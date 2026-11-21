@@ -4,7 +4,7 @@
 //! Axis Snap Range is an editor setting for the session (`UiState`).
 
 use signex_engine::pcb::BoardCommand;
-use signex_engine::pcb::placement::{grid_for, grid_step_mm};
+use signex_engine::pcb::placement::grid_step_mm;
 use signex_i18n::{ids, t};
 use signex_types::measure::parse_length_field_mm;
 use signex_types::pcb::Point;
@@ -196,7 +196,7 @@ impl Signex {
         let Some(board) = self.active_pcb() else {
             return true;
         };
-        let at = grid_for(board, GridUse::NonComponents).snap(at);
+        let at = self.board_grid_point(board, GridUse::NonComponents, at);
         self.add_pcb_guide_at(kind, at);
         true
     }

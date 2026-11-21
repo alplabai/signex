@@ -7,17 +7,19 @@ use std::path::{Path, PathBuf};
 use iced::widget::canvas;
 use iced::{Event, Rectangle, mouse};
 use serde_json::json;
+use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::snap::SnapObject;
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::{PadNet, PcbBoard, Point};
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 use uuid::Uuid;
 
 use crate::app::command::CommandArgs;
 use crate::app::handlers::menu::export::tests::app_workspace;
-use crate::app::{EditMsg, Message, Signex};
+use crate::app::{EditMsg, Message, Signex, StatusBarRequest, UiMsg};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
 use crate::panels::{PanelMsg, PcbBoardMsg};
-use crate::pcb_canvas::{PcbCanvasState, SnapDistance, SnapScope};
+use crate::pcb_canvas::{PcbCanvasState, PcbCarry, SnapDistance, SnapScope};
 
 const U1: Uuid = Uuid::from_u128(0x10);
 const BOUNDS: Rectangle = Rectangle {
@@ -102,11 +104,16 @@ struct Rig {
 
 /// The board open with every object checkbox off, through the panel.
 fn rig(grid_mm: f64) -> Rig {
+    rig_on(board(grid_mm))
+}
+
+fn rig_on(board: PcbBoard) -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     app.ui_state.first_run_tour_open = false;
+    app.ui_state.snap_enabled = true;
     let path = dir.path().join("board.snxpcb");
-    app.open_pcb_tab(path.clone(), "board".into(), board(grid_mm));
+    app.open_pcb_tab(path.clone(), "board".into(), board);
     app.refresh_pcb_highlight();
     let mut state = PcbCanvasState::default();
     // The first event settles the view's fit.
@@ -429,4 +436,184 @@ fn a_part_pressed_off_centre_lands_its_pad_on_the_target() {
         .unwrap()
         .position;
     assert!(close(at, target), "{at:?}");
+}
+
+/// The status bar's Snap is the master switch: off, nothing pulls, and the
+/// panel's own options keep their values.
+#[test]
+fn the_status_bar_snap_off_frees_every_path() {
+    let mut rig = rig(0.1);
+    rig.toggle(SnapObject::PadCenters);
+    let before = rig.app.ui_state.pcb_snap.clone();
+    let toggle = Message::Ui(UiMsg::StatusBar(StatusBarRequest::ToggleSnap));
+    let _ = rig.app.update(toggle.clone());
+    assert_eq!(rig.app.ui_state.pcb_snap, before);
+    let pointer = Point::new(30.03 + 0.017, 30.03 + rig.mm(4.0));
+    let free = |at: Point| (at.x - pointer.x).abs() < 0.01 && (at.y - pointer.y).abs() < 0.01;
+    let at = rig.drag_u1(pointer);
+    assert!(free(at), "the drag is free: {at:?}");
+    let at = rig.via_tool_at(pointer);
+    assert!(free(at), "the tool is free: {at:?}");
+    let _ = rig.app.update(toggle);
+    let at = rig.drag_u1(pointer);
+    assert!(close(at, Point::new(30.03, 30.03)), "{at:?}");
+}
+
+/// The reach counts on the grid that applies: a 5 mm extra grid for parts
+/// widens a part's reach, not a via tool's.
+#[test]
+fn the_catch_radius_uses_the_grid_that_applies() {
+    let mut rig = rig(0.1);
+    rig.toggle(SnapObject::PadCenters);
+    let mut options = rig.board().options.clone();
+    options.grids.push(
+        serde_json::from_value(json!({
+            "uuid": Uuid::from_u128(0xC0), "name": "Parts", "step_mm": 5.0,
+            "origin": {"x": 0.0, "y": 0.0}, "color": {"r": 0, "g": 0, "b": 0, "a": 255},
+            "components": true, "non_components": false
+        }))
+        .unwrap(),
+    );
+    let path = rig.path.clone();
+    let command = signex_engine::pcb::BoardCommand::SetBoardOptions {
+        options: Box::new(options),
+    };
+    rig.app
+        .execute_board_commands(&path, vec![command], None)
+        .expect("the grid");
+    let gap = rig.mm(20.0);
+    assert!(gap < 2.5, "inside 0.5 x 5 mm: {gap}");
+    let target = Point::new(30.03, 30.03);
+    let pointer = Point::new(target.x, target.y + gap);
+    let at = rig.drag_u1(pointer);
+    assert!(close(at, target), "a part reaches it: {at:?}");
+    let at = rig.via_tool_at(pointer);
+    assert!(!close(at, target), "a via tool does not: {at:?}");
+}
+
+/// A dragged part does not snap to the track following its pad.
+#[test]
+fn a_dragged_footprint_ignores_its_own_following_track() {
+    let mut with_track = board(0.1);
+    let mut own = with_track.segments[0].clone();
+    own.uuid = Uuid::from_u128(0xD0);
+    own.start = Point::new(10.0, 10.0);
+    own.end = Point::new(12.0, 10.0);
+    own.net = 1;
+    with_track.segments.push(own);
+    let mut rig = rig_on(with_track);
+    rig.toggle(SnapObject::TrackVertices);
+    let step = 0.3_f64.min(rig.mm(6.0));
+    let to = Point::new(10.0 + step, 10.0);
+    let at = rig.drag_u1(to);
+    assert!(
+        (at.x - ((10.0 + step) * 10.0).round() / 10.0).abs() < 1e-6,
+        "it moves on the grid: {at:?}"
+    );
+    assert!(at.x > 10.0, "not pulled back to its own track end: {at:?}");
+}
+
+#[test]
+fn a_hidden_layer_gives_no_targets() {
+    let mut rig = rig(0.1);
+    rig.toggle(SnapObject::PadCenters);
+    let reach = rig.mm(4.0);
+    let top_only = Point::new(30.03, 30.03);
+    assert!(close(
+        rig.via_tool_at(Point::new(top_only.x, top_only.y + reach)),
+        top_only
+    ));
+    rig.app.edit_pcb_view(None, |view, _| {
+        view.hide(PcbLayer::Copper(CopperLayer::Top));
+    });
+    let at = rig.via_tool_at(Point::new(top_only.x, top_only.y + reach));
+    assert!(!close(at, top_only), "its only layer is hidden: {at:?}");
+    let through = Point::new(25.03, 15.03);
+    let at = rig.via_tool_at(Point::new(through.x, through.y + reach));
+    assert!(close(at, through), "a through pad still shows: {at:?}");
+}
+
+#[test]
+fn a_free_pad_is_a_snap_target() {
+    let mut with_pad = board(0.1);
+    let mut free = with_pad.footprints[1].pads[0].clone();
+    free.uuid = Uuid::from_u128(0xE0);
+    free.position = Point::new(45.03, 35.03);
+    with_pad.free.pads.push(free);
+    let mut rig = rig_on(with_pad);
+    rig.toggle(SnapObject::PadCenters);
+    let target = Point::new(45.03, 35.03);
+    let at = rig.via_tool_at(Point::new(target.x, target.y + rig.mm(4.0)));
+    assert!(close(at, target), "{at:?}");
+}
+
+/// Caner, 2026-11-21: a running route snaps to its own net only.
+#[test]
+fn a_running_route_snaps_to_its_own_net_only() {
+    for tool in [
+        "place_board_track",
+        "place_board_route",
+        "place_board_quick_route",
+    ] {
+        let mut with_nets = board(0.1);
+        with_nets.footprints[3].pads[0].net = Some(PadNet {
+            number: 2,
+            name: "B".into(),
+        });
+        let mut rig = rig_on(with_nets);
+        rig.toggle(SnapObject::PadCenters);
+        rig.run(tool);
+        // The first click finds net A on U2's pad.
+        rig.click(Point::new(30.03, 30.03));
+        let reach = rig.mm(4.0);
+        let foreign = Point::new(25.03, 15.03);
+        rig.app
+            .board_tool_followed(Point::new(foreign.x, foreign.y + reach));
+        let cursor = |rig: &Rig| {
+            let session = rig.app.interaction_state.pcb_tool.as_ref().expect("armed");
+            session.cursor.expect("a cursor")
+        };
+        let at = cursor(&rig);
+        assert!(!close(at, foreign) && on_grid(at, 0.1), "{tool}: {at:?}");
+        let own = Point::new(25.03, 10.03);
+        rig.app.board_tool_followed(Point::new(own.x, own.y + reach));
+        let at = cursor(&rig);
+        assert!(close(at, own), "{tool}: {at:?}");
+    }
+}
+
+/// Caner, 2026-11-21: a paste lands on the grid and guides, not on objects.
+#[test]
+fn a_paste_is_not_pulled_onto_an_object() {
+    let mut rig = rig(0.1);
+    rig.toggle(SnapObject::PadCenters);
+    rig.click(Point::new(10.0, 10.0));
+    rig.run("copy");
+    rig.run("paste");
+    let pad = Point::new(30.03, 30.03);
+    rig.move_to(Point::new(pad.x, pad.y + rig.mm(4.0)));
+    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("a paste");
+    assert!(
+        !close(carry.delta, pad) && on_grid(carry.delta, 0.1),
+        "{:?}",
+        carry.delta
+    );
+}
+
+/// Caner, 2026-11-21: a new part lands on the grid and guides only.
+#[test]
+fn a_new_part_is_not_pulled_onto_an_object() {
+    let mut rig = rig(0.1);
+    rig.toggle(SnapObject::PadCenters);
+    let template: signex_types::pcb::Footprint = serde_json::from_value(json!({
+        "uuid": Uuid::from_u128(0xF0), "position": {"x": 0.0, "y": 0.0}, "layer": "TopCopper"
+    }))
+    .unwrap();
+    let part = PartToPlace::new(template, "U", "").unwrap();
+    rig.app.interaction_state.pcb_carry = Some(PcbCarry::place(rig.path.clone(), None, part));
+    let pad = Point::new(30.03, 30.03);
+    rig.move_to(Point::new(pad.x, pad.y + rig.mm(4.0)));
+    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("a part");
+    let at = carry.anchor.expect("on the cursor");
+    assert!(!close(at, pad) && on_grid(at, 0.1), "{at:?}");
 }

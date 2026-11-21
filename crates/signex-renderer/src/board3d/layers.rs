@@ -272,7 +272,7 @@ fn copper_by_layer(input: &ArtInput<'_>) -> BTreeMap<CopperLayer, Vec<Polygon>> 
             if view.shows_pad(footprint, pad)
                 && let Some(shape) = pad_polygon(footprint, pad)
             {
-                put_on_layers(&mut out, pad_copper(footprint, pad), &shape);
+                put_on_layers(&mut out, view, pad_copper(footprint, pad), &shape);
             }
         });
     }
@@ -281,16 +281,23 @@ fn copper_by_layer(input: &ArtInput<'_>) -> BTreeMap<CopperLayer, Vec<Polygon>> 
             if view.shows_via(&via.layers)
                 && let Some(shape) = disc(drawn.center, drawn.diameter_mm * 0.5)
             {
-                put_on_layers(&mut out, via_layers(via), &shape);
+                put_on_layers(&mut out, view, via_layers(via), &shape);
             }
         }
     }
     out
 }
 
-fn put_on_layers(out: &mut BTreeMap<CopperLayer, Vec<Polygon>>, bits: u32, shape: &Polygon) {
+/// `shape` on each shown layer of `bits`: a through item's ring is not drawn
+/// on a layer the view hides.
+fn put_on_layers(
+    out: &mut BTreeMap<CopperLayer, Vec<Polygon>>,
+    view: &PcbLayerView,
+    bits: u32,
+    shape: &Polygon,
+) {
     for (layer, slot) in out.iter_mut() {
-        if bits & (1u32 << layer_bit(*layer)) != 0 {
+        if bits & (1u32 << layer_bit(*layer)) != 0 && view.is_visible(PcbLayer::Copper(*layer)) {
             slot.push(shape.clone());
         }
     }
@@ -422,4 +429,21 @@ fn zones_on(board: &PcbBoard, layer: PcbLayer) -> impl Iterator<Item = Polygon> 
         .filter(move |zone| !zone.is_rule_area() && parse_pcb_layer(&zone.layer) == Some(layer))
         .filter_map(zone_area)
         .map(|area| in_view_frame(&area))
+}
+
+#[cfg(test)]
+mod hidden_ring_tests {
+    use super::*;
+
+    #[test]
+    fn a_through_ring_is_not_put_on_a_hidden_layer() {
+        let mut view = PcbLayerView::default();
+        view.hide(PcbLayer::Copper(CopperLayer::Bottom));
+        let mut out: BTreeMap<CopperLayer, Vec<Polygon>> =
+            [(CopperLayer::Top, Vec::new()), (CopperLayer::Bottom, Vec::new())].into();
+        let ring = disc([0.0, 0.0], 1.0).expect("a disc");
+        put_on_layers(&mut out, &view, u32::MAX, &ring);
+        assert_eq!(out[&CopperLayer::Top].len(), 1);
+        assert!(out[&CopperLayer::Bottom].is_empty());
+    }
 }

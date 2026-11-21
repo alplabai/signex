@@ -640,11 +640,24 @@ fn the_panel_section_shows_only_on_a_panelized_board() {
     for gone in ["Panel", "Panelize Board"] {
         assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
     }
+
+    let mut panelized = board();
+    panelized.options.panel = Some(signex_types::pcb_panel::BoardPanel::default());
+    ctx.pcb_board = Some(Box::new(PcbBoardSummary::of(
+        &panelized,
+        "panelized".into(),
+        0,
+    )));
+    let shown = texts(&ctx);
+    for wanted in ["PANEL", "Remove Panel"] {
+        assert!(shown.iter().any(|t| t == wanted), "{wanted} in {shown:?}");
+    }
 }
 
-/// #2523 (mockup row 93): Selection Filter, Snap Options, Guide Manager and Panel
-/// start closed with a summary in their header, and the fold of layer and
-/// primitive counts too; a click on a header opens it.
+/// #2523 (mockup row 93): Selection Filter, Snap Options and Guide Manager,
+/// and Panel on a panelized board, start closed with a summary in their
+/// header, and the fold of layer and primitive counts too; a click on a
+/// header opens it.
 #[test]
 fn closed_sections_show_their_summary_and_open_on_a_click() {
     let ctx = context(0);

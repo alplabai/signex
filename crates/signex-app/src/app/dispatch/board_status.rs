@@ -92,7 +92,7 @@ impl Signex {
                     crate::panels::PanelKind::Layers,
                 )))
             }
-            E::GridPresetPicked(mm) => self.set_snap_grid(mm),
+            E::GridPresetPicked(mm) => self.run_in_window(window, true, |app| app.set_snap_grid(mm)),
             E::CustomGridEdited(entry) => {
                 if let Some(popover) = self.ui_state.board_status.popover.as_mut() {
                     popover.custom_grid = entry;
@@ -100,7 +100,7 @@ impl Signex {
                 }
                 Task::none()
             }
-            E::CustomGridSubmitted => self.custom_grid_submitted(),
+            E::CustomGridSubmitted => self.custom_grid_submitted(window),
             E::SnapToggled => {
                 self.update(Message::Ui(UiMsg::StatusBar(StatusBarRequest::ToggleSnap)))
             }
@@ -161,15 +161,18 @@ impl Signex {
     }
 
     /// Enter in the Grid popover's Custom… field: a pitch above 0 mm becomes
-    /// the grid; anything else is refused and changes nothing.
-    fn custom_grid_submitted(&mut self) -> Task<Message> {
+    /// the grid of `window`'s board; anything else, or a pitch below the
+    /// nanometre a board stores, is refused and changes nothing.
+    fn custom_grid_submitted(&mut self, window: iced::window::Id) -> Task<Message> {
         let Some(popover) = self.ui_state.board_status.popover.as_mut() else {
             return Task::none();
         };
-        match crate::status_bar::custom_pitch(&popover.custom_grid) {
+        let pitch = crate::status_bar::custom_pitch(&popover.custom_grid)
+            .filter(|mm| Self::board_grid_step(f64::from(*mm)).is_some());
+        match pitch {
             Some(mm) => {
                 popover.custom_refused = false;
-                self.set_snap_grid(mm)
+                self.run_in_window(window, true, |app| app.set_snap_grid(mm))
             }
             None => {
                 popover.custom_refused = true;

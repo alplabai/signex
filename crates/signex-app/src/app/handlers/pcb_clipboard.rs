@@ -109,7 +109,8 @@ impl Signex {
             .map(|indexed| indexed.shape.clone())
             .collect();
         let start = self.board_cursor(&path).unwrap_or(copy.origin());
-        let at = snap_point_on(board, start, copy.grid_use(), self.pcb_snap_view());
+        let view = self.pcb_snap_view().without_objects();
+        let at = snap_point_on(board, start, copy.grid_use(), view);
         let window = self.interaction_state.acting_window;
         let load = PasteLoad { copy, ghost };
         // A paste on the cursor replaces a placement tool (#2373) and
@@ -161,7 +162,8 @@ impl Signex {
         else {
             return;
         };
-        let to = snap_point_on(board, at, load.copy.grid_use(), self.pcb_snap_view());
+        let view = self.pcb_snap_view().without_objects();
+        let to = snap_point_on(board, at, load.copy.grid_use(), view);
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.delta != to
         {
@@ -181,7 +183,8 @@ impl Signex {
         };
         self.end_pcb_carry();
         if let Some(board) = self.active_pcb() {
-            let to = snap_point_on(board, at, load.copy.grid_use(), self.pcb_snap_view());
+            let view = self.pcb_snap_view().without_objects();
+            let to = snap_point_on(board, at, load.copy.grid_use(), view);
             self.place_board_copy("Paste", &load.copy, to);
         }
         true

@@ -163,7 +163,8 @@ impl Signex {
         let (Some(_), Some(board)) = (self.own_place_carry(), self.active_pcb()) else {
             return;
         };
-        let at = snap_point_on(board, at, GridUse::Components, self.pcb_snap_view());
+        let view = self.pcb_snap_view().without_objects();
+        let at = snap_point_on(board, at, GridUse::Components, view);
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.anchor != Some(at)
         {
@@ -182,7 +183,8 @@ impl Signex {
         let Some(part) = carry.part.as_deref() else {
             return false;
         };
-        let at = snap_point_on(board, at, GridUse::Components, self.pcb_snap_view());
+        let view = self.pcb_snap_view().without_objects();
+        let at = snap_point_on(board, at, GridUse::Components, view);
         let command = part.place_command(board, uuid::Uuid::now_v7(), at);
         self.run_placement("Place", Ok(vec![command]));
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut() {

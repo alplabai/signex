@@ -45,7 +45,7 @@ pub use marks::BoardMarks;
 pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
 pub use rooms::{RoomMark, RoomsOverlay};
 pub use select::PcbSelectionState;
-pub use snap_options::{PcbSnapOptions, SNAP_REACH_PX, SnapDistance, SnapScope, SnapView};
+pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope, SnapView};
 
 use crate::scene_generation::next_scene_generation;
 use iced::event::Event;

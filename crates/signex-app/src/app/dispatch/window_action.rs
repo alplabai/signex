@@ -45,6 +45,11 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::EditSymbolDesignator(..)
                 // A board window's footprint fields edit that window's board (#1312).
                 | P::PcbFootprintText(..)
+                // Its Grid Manager step edits that window's board.
+                | P::PcbBoard(
+                    crate::panels::PcbBoardMsg::GridStepSubmitted
+                        | crate::panels::PcbBoardMsg::FastGridApplied(_)
+                )
                 // And its Component view's edits (#2354).
                 | P::PcbComponent(..)
                 | P::PcbPrimitive(..)
@@ -227,6 +232,21 @@ fn command_runs_in_shown_document(message: &Message) -> bool {
     command_edits_shown_sheet(message)
         || command_reads_shown_sheet(message)
         || command_edits_shown_board(message)
+        || command_steps_shown_grid(message)
+}
+
+/// The grid-step commands: on a board they edit that board's own grid.
+fn command_steps_shown_grid(message: &Message) -> bool {
+    use crate::app::UiMsg;
+    matches!(
+        message,
+        Message::Ui(
+            UiMsg::GridCycle
+                | UiMsg::GridCycleBackward
+                | UiMsg::FastGridPicked(_)
+                | UiMsg::FastGridCycled
+        )
+    )
 }
 
 /// Commands that start from what the shown sheet holds: its net at the menu

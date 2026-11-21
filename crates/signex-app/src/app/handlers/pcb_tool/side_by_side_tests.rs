@@ -197,6 +197,21 @@ fn a_bus_centre_line_is_not_yanked_onto_an_object() {
     assert_eq!(session.points.last(), Some(&Point::new(4.0, 0.0)));
 }
 
+/// A coarse view grid does not coarsen the walkaround's search.
+#[test]
+fn the_route_search_step_does_not_grow_with_a_coarse_grid() {
+    use super::router::search_grid_mm;
+    let on = |grid: f64| {
+        let board: PcbBoard = serde_json::from_value(json!({
+            "uuid": Uuid::from_u128(1), "setup": {"grid_size": grid}
+        }))
+        .unwrap();
+        search_grid_mm(&board)
+    };
+    assert_eq!(on(5.08), signex_types::pcb::PCB_GRID_MM);
+    assert_eq!(on(0.1), 0.1);
+}
+
 #[test]
 fn quick_route_goes_straight_to_the_target_in_one_step() {
     let dir = tempfile::tempdir().unwrap();

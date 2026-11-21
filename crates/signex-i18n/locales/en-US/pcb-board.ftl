@@ -198,9 +198,6 @@ pcb-board-materials = Board materials
 pcb-board-materials-link = Board materials & finish → Open Layer Stack
 pcb-board-materials-tip = Solder mask, silkscreen, surface finish, copper weights and materials live in the Layer Stack.
 
-# The Panel section's header with no panel.
-pcb-board-panel-none = none
-
 # Grid and Guide Manager cards (#2386).
 pcb-board-more = ⋯
 pcb-board-more-tip = More actions

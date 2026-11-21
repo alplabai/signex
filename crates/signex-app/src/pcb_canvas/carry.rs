@@ -10,8 +10,10 @@ use std::sync::Arc;
 use pcb_geom::{ArcEnds, BoardTextField, TrackEnds};
 use signex_engine::pcb::footprint_text_edit::{FootprintTextEdit, footprint_text_command};
 use signex_engine::pcb::part_place::PartToPlace;
-use signex_engine::pcb::placement::{grid_for, grid_step_mm};
-use signex_engine::pcb::snap::{GuideHit, SnapQuery, axis_snap, guide_snap, object_snap_point};
+use signex_engine::pcb::placement::grid_for;
+use signex_engine::pcb::snap::{
+    GuideHit, ShownLayers, SnapQuery, axis_snap, guide_snap, object_snap_point,
+};
 use signex_engine::pcb::{BoardClipboard, BoardCommand};
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_arc::TrackArc;
@@ -153,10 +155,11 @@ impl PcbCarry {
         }
     }
 
-    /// What a via's snap leaves out: the carried vias and the tracks and
-    /// arcs following them. With Ctrl they stay put, so they still count.
+    /// What a carry's snap leaves out: the carried footprints or vias and
+    /// the tracks and arcs following them. With Ctrl they stay put, so they
+    /// still count.
     pub fn snap_skip(&self, board: &PcbBoard) -> BTreeSet<Uuid> {
-        let mut skip = self.vias.clone();
+        let mut skip = self.carried();
         skip.extend(self.following(board).iter().map(|ends| ends.track));
         skip.extend(self.following_arcs(board).iter().map(|ends| ends.arc));
         skip
@@ -196,10 +199,12 @@ impl PcbCarry {
 /// (`placement::grid_for`); then a guide in reach fixes the axes it runs
 /// across, and axis snapping lines the free axes up with object points
 /// (#2374). An object or guide pulls the carried pad centre or origin
-/// nearest the press, so it lands exactly on the point.
+/// nearest the press, so it lands exactly on the point. `skip` is what the
+/// snap leaves out ([`PcbCarry::snap_skip`]).
 pub fn carry_delta(
     board: &PcbBoard,
     footprints: &BTreeSet<Uuid>,
+    skip: &BTreeSet<Uuid>,
     from: Point,
     to: Point,
     view: SnapView,
@@ -207,7 +212,8 @@ pub fn carry_delta(
     let on_grid = grid_delta(board, footprints, from, to, view.options);
     let anchor = grabbed_point(board, footprints, from).unwrap_or(from);
     let target = Point::new(anchor.x + to.x - from.x, anchor.y + to.y - from.y);
-    snapped_delta(board, footprints, anchor, target, on_grid, view)
+    let what = GridUse::Components;
+    snapped_delta(board, skip, anchor, target, on_grid, what, view)
 }
 
 /// The origin or pad centre of the carried `footprints` nearest the press.
@@ -257,26 +263,45 @@ pub fn via_carry_delta(
         raw
     };
     let target = Point::new(centre.x + raw.x, centre.y + raw.y);
-    snapped_delta(board, skip, centre, target, on_grid, view)
+    let what = GridUse::NonComponents;
+    snapped_delta(board, skip, centre, target, on_grid, what, view)
 }
 
 /// `on_grid` refined by the object, guide and axis snaps at `to`, leaving
-/// the carried `skip` items out of them.
+/// the carried `skip` items out of them. The reach counts on the grid that
+/// applies to `what`. With the status bar's Snap off, nothing pulls.
 fn snapped_delta(
     board: &PcbBoard,
     skip: &BTreeSet<Uuid>,
     from: Point,
     to: Point,
     on_grid: Point,
+    what: GridUse,
     view: SnapView,
 ) -> Point {
+    if !view.snap_on {
+        return Point::new(to.x - from.x, to.y - from.y);
+    }
     let snap = view.options;
-    let radius_mm = snap.catch_radius_mm(grid_step_mm(board), view.px_per_mm);
+    let radius_mm = snap.catch_radius_mm(grid_for(board, what).step_mm, view.px_per_mm);
+    let no_objects = BTreeSet::new();
+    let objects = if view.objects_on {
+        &snap.objects
+    } else {
+        &no_objects
+    };
+    let shown = ShownLayers {
+        copper: view.shown_copper,
+        hidden: &view.hidden,
+        through_hidden: view.through_hidden,
+    };
     let query = snap.layer_mask(view.active).map(|layers| SnapQuery {
-        objects: &snap.objects,
+        objects,
         layers,
         skip,
         radius_mm,
+        shown,
+        net: view.net,
     });
     if let Some(query) = &query
         && let Some(target) = object_snap_point(board, to, query)
@@ -355,7 +380,8 @@ pub fn snap_point(board: &PcbBoard, to: Point, view: SnapView) -> Point {
 
 /// Where a point at `to` lands by every Snap Option, on the grid for `what`:
 /// an object point in reach, else the grid (when on) refined by guides and
-/// axes, else `to`. A paste and a part on the cursor land the same way.
+/// axes, else `to`. A paste and a part on the cursor land the same way,
+/// with a view [`SnapView::without_objects`].
 pub fn snap_point_on(board: &PcbBoard, to: Point, what: GridUse, view: SnapView) -> Point {
     let zero = Point::new(0.0, 0.0);
     let on_grid = if view.options.to_grids {
@@ -363,7 +389,7 @@ pub fn snap_point_on(board: &PcbBoard, to: Point, what: GridUse, view: SnapView)
     } else {
         to
     };
-    snapped_delta(board, &BTreeSet::new(), zero, to, on_grid, view)
+    snapped_delta(board, &BTreeSet::new(), zero, to, on_grid, what, view)
 }
 
 /// `board` without the `carried` footprints and vias and the `following`
@@ -572,11 +598,7 @@ mod tests {
 
     /// Zoomed in far enough that the Distance setting decides the reach.
     fn view(options: &PcbSnapOptions) -> SnapView<'_> {
-        SnapView {
-            options,
-            active: CopperLayer::Top,
-            px_per_mm: 1000.0,
-        }
+        SnapView::new(options, CopperLayer::Top, 1000.0)
     }
 
     #[test]
@@ -604,6 +626,7 @@ mod tests {
         let both: BTreeSet<Uuid> = [Uuid::from_u128(1), Uuid::from_u128(2)].into();
         let delta = carry_delta(
             &board,
+            &both,
             &both,
             Point::new(1.0, 1.0),
             Point::new(2.0, 1.3),
@@ -639,6 +662,7 @@ mod tests {
     fn carry(snap: &PcbSnapOptions, to: Point) -> Point {
         carry_delta(
             &guided_board(),
+            &[Uuid::from_u128(1)].into(),
             &[Uuid::from_u128(1)].into(),
             Point::new(1.0, 1.0),
             to,
