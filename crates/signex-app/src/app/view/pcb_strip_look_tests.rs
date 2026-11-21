@@ -124,7 +124,12 @@ fn the_strip_lays_out_every_visible_tab_inside_its_scrollable() {
 /// whether or not the tabs overflow.
 #[test]
 fn the_strip_keeps_a_lane_for_the_scrollbar_under_the_tabs() {
-    let board = board(&["TopCopper", "BottomCopper", "TopSilkscreen", "BottomSilkscreen"]);
+    let board = board(&[
+        "TopCopper",
+        "BottomCopper",
+        "TopSilkscreen",
+        "BottomSilkscreen",
+    ]);
     let view = PcbLayerView::default();
     let tokens = theme_tokens(ThemeId::GraphiteDark);
     for width in [1200.0, 120.0] {

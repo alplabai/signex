@@ -431,7 +431,10 @@ pub(super) fn footprint_sketching() -> (Signex, std::path::PathBuf) {
     (app, path)
 }
 
-pub(super) fn footprint_sketch_data(app: &Signex, path: &std::path::Path) -> signex_sketch::SketchData {
+pub(super) fn footprint_sketch_data(
+    app: &Signex,
+    path: &std::path::Path,
+) -> signex_sketch::SketchData {
     let editor = app.document_state.footprint_editors.get(path);
     let editor = editor.expect("the editor");
     editor.primitive().sketch.clone().expect("a sketch")
