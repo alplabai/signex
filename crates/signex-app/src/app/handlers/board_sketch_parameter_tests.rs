@@ -13,6 +13,7 @@ use super::tests::{
     sketching_off_grid,
 };
 use crate::app::{EditMsg, FootprintDocument, Message, Signex};
+use crate::library::editor::footprint::ValueTarget;
 use crate::library::editor::footprint::parameters_table::SketchParametersMsg;
 use crate::library::editor::footprint::sketch_dispatch::apply_sketch_edit_with_warnings;
 use crate::library::editor::footprint::sketch_mode::value_edit::{
@@ -20,7 +21,6 @@ use crate::library::editor::footprint::sketch_mode::value_edit::{
 };
 use crate::library::editor::footprint::sketch_mode::{SketchCanvasMsg, SketchEdit};
 use crate::library::editor::footprint::snap::point_pos;
-use crate::library::editor::footprint::ValueTarget;
 use crate::library::messages::FootprintEditorMsg;
 
 /// A fixed base line from (10, 10) to (20, 10) and a 10 mm arm from (10, 10)
