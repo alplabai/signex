@@ -523,33 +523,55 @@ the board as the flat view does; Bottom mirrors it left to right.
 **Lowering** (`signex_renderer::board3d::build_board_scene`, one indexed
 mesh, `signex_gfx::scene3d::Scene3d`):
 
-- **Board.** The outline extruded to the thickness, with every drill hole
-  (pads, vias), cutout and mounting hole that lies inside it cut through;
-  hidden layers do not close a hole. A board with no outline gets the box
-  round its copper, 1 mm wider each side. Faces in the solder mask colour,
-  edge and hole walls a darker shade of it. A hole that meets one cut
-  before it (two vias at one point, a pad drill on a mounting hole, a
+- **Physical stack.** From the laminate out on each side: copper, solder
+  mask, silkscreen. Heights come from the board's layer stack, or the stack
+  derived from its copper list and thickness, scaled to the board thickness
+  (`board3d::stack::StackHeights`). The outer mask surfaces are the board's
+  two faces (z = 0 and z = thickness). A mask or outer copper row is drawn
+  at least 0.005 mm thick so its order survives the depth buffer; nothing
+  else is exaggerated. Silkscreen stands 0.015 mm off the mask.
+- **Materials.** The assembled board uses physical colours
+  (`board_3d_colors`), never the flat view's layer colours: green,
+  slightly translucent mask, FR-4 laminate, copper, gold finish, white
+  silkscreen. The board stores no mask colour or surface finish, so these
+  are the defaults. The mask is drawn after the copper so it blends over it.
+- **Board.** The laminate is the outline with every drill hole (pads, vias),
+  cutout and mounting hole that lies inside it cut through; hidden layers do
+  not close a hole. A board with no outline gets the box round its copper,
+  1 mm wider each side. Edge and unplated hole walls are FR-4, plated drill
+  walls take the finish; walls run the full thickness. A hole that meets one
+  cut before it (two vias at one point, a pad drill on a mounting hole, a
   drill inside a cutout) is left out (`signex_gfx::ring_fill::disjoint_holes`,
   counted in `BoardScene3d::dropped_holes` and logged), so one such pair
   cannot make the fill refuse every hole. The fill with holes is the flat
   view's (`signex_gfx::ring_fill::triangulate_with_holes`).
+- **Solder mask** covers the board on both faces, whatever the mask layers'
+  eyes say. Openings come from the data: a pad's listed mask layers, or its
+  type's default as the fabrication images read it (a pad stores no
+  expansion of its own), a via per side unless tented (with its manual
+  expansion, from the hole edge when set), a track with a manual mask
+  expansion, and shapes and zones drawn on the mask layer. Mask over copper
+  or a tented via is a lighter tint of the mask colour; a tent spans the
+  drill.
 - **Single-layer mode does not reach 3D.** It is an editing aid of the flat
   view; in 3D the copper of every shown layer and the parts of both faces
   stay. Only a layer's eye hides it (`PcbLayerView::is_hidden`). The active
   layer's per-layer size does not reach 3D either: a via or pad keeps its
   stored `diameter` or `size`.
-- **Copper** comes from the same `PcbSnapshot` the flat view draws, so a
-  hidden layer is hidden in 3D too: top copper on the top face, bottom
-  copper on the bottom face, vias and through-hole pads on both, inner
-  copper not drawn. Copper sits 0.035 mm (1 oz) off its face, zones lowest,
-  then tracks, then pads and vias, so nothing fights in the depth buffer.
-  Silkscreen waits for the board graphics lowering (#2387).
+- **Copper** follows the layer eyes, so a hidden layer is hidden in 3D too.
+  Each layer is the union of its tracks, pads, vias and poured fills, clipped
+  to the board and cut by every drill, at its stack height. Copper inside a
+  mask opening takes the finish; the rest is under the mask. Inner copper
+  sits inside the laminate, seen only in the explode and at drill walls.
+- **Silkscreen** is the shown silkscreen drawings, texts and zones as areas,
+  clipped to the board and kept out of mask openings and holes.
 - **Parts.** One per footprint whose face's 3D Body layer is shown. The
   model is the library footprint's (`library_ref`), read off the update
   thread: its attached model file (`step/<hash>.step`; a `.wrl` or `.vrml`
   name reads VRML), in the file's units taken as mm, the model's y up the
   board, turned by the attachment's x, y, z angles and moved by its offset;
-  else its 3D Body (outline, height, offset, colours). A footprint with no
+  else its 3D Body (outline, height, offset, colours; a neutral body colour
+  when it has none). A footprint with no
   library footprint, or one that could not be read (Messages says why), is
   its body box (`pcb_geom::footprint_body`) extruded to its component height
   (1 mm when unset). Parts are placed by `pcb_geom::Placement`; a bottom part
@@ -594,7 +616,9 @@ in the Esc ladder), so it never reaches the tool reset behind the view.
 
 **Explode** opens a popover under its button: a slider from Assembled
 (0 %) to Layers apart (100 %) and two tick boxes, Separate copper and mask
-and Lift components. The scene the view draws and picks with is
+and Lift components. Apart, the layers keep their stack order: from the
+core out on each side, inner copper, outer copper, mask, silkscreen, then
+the parts. The scene the view draws and picks with is
 `BoardScene3d::exploded` of the assembled one (only heights move), cached by
 the assembled scene's generation and the explode, so a click still selects
 a lifted part. The button reads `Explode <n> %` and is tinted while its

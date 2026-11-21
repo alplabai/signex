@@ -1,15 +1,15 @@
 //! The board in 3D (#2390): the board lowered to one triangle mesh for the
-//! 3D view. The board outline is extruded to its thickness with the drill
-//! holes, cutouts and mounting holes through it; the copper the flat view
-//! shows lies on the two faces; each component is its attached model, or a
-//! plain body extruded from its 3D Body outline. Every vertex knows its
-//! slice of the board (core, mask, copper, part), so the view can draw the
-//! layers apart ([`BoardScene3d::exploded`]). Rules and frames:
-//! `docs/RENDERING_RULES.md`, "Board 3D view".
+//! 3D view, as its physical stack. On each side, from the laminate out:
+//! copper, solder mask with its real openings, silkscreen. Each component
+//! is its attached model, or a plain body extruded from its 3D Body
+//! outline. Every vertex knows its slice of the board, so the view can draw
+//! the layers apart ([`BoardScene3d::exploded`]). Rules and frames:
+//! `docs/RENDERING_RULES.md`, "board-3d".
 //!
-//! The copper and the board's own geometry come from the same
-//! [`PcbSnapshot`] the flat view draws, so the two views cannot disagree
-//! about what is on the board or which layers are hidden.
+//! The geometry comes from the board and the same [`PcbSnapshot`] the flat
+//! view draws, so the two views agree on what is on the board and which
+//! layers are hidden. The colours are physical materials, never the flat
+//! view's layer colours.
 //!
 //! CLEAN ROOM DECLARATION
 //! This module was written without reference to GPL-licensed software.
@@ -24,11 +24,17 @@ use signex_types::pcb::{PCB_DEFAULT_THICKNESS_MM, PcbBoard};
 use uuid::Uuid;
 
 use crate::pcb::{BOARD_OUTLINE, PcbLayerView, PcbSnapshot};
+use layers::{ArtInput, BoardArt};
+use stack::StackHeights;
 
 mod copper;
+mod drawings;
 mod explode;
+mod layers;
 mod model_file;
 mod parts;
+mod region;
+mod stack;
 mod step;
 
 pub use explode::{Explode, Layer3d};
@@ -66,8 +72,8 @@ pub struct BodyExtrusion {
     pub height_mm: f64,
     /// How far above the face the body starts.
     pub offset_z_mm: f64,
-    /// The top face's colour and the walls' colour; `None` takes the 3D
-    /// Body layer colour.
+    /// The top face's colour and the walls' colour; `None` takes
+    /// [`Board3dColors::body`].
     pub colors: Option<([f32; 4], [f32; 4])>,
 }
 
@@ -78,17 +84,19 @@ pub enum ComponentModel {
     Body(BodyExtrusion),
 }
 
-/// The colours of the board in 3D, from the board layer palette.
+/// The materials of the board in 3D. None is a flat-view layer colour.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Board3dColors {
-    /// The solder mask over the two faces.
+    /// The solder mask coat; its alpha lets the copper under it show.
     pub mask: [f32; 4],
-    /// The board edge and the hole walls.
-    pub edge: [f32; 4],
-    pub top_copper: [f32; 4],
-    pub bottom_copper: [f32; 4],
-    /// Vias and through-hole pads, on both faces.
-    pub multi_layer: [f32; 4],
+    /// The FR-4 laminate, its edge and unplated hole walls.
+    pub substrate: [f32; 4],
+    /// Bare copper: under the mask and on inner layers.
+    pub copper: [f32; 4],
+    /// The surface finish on exposed copper and plated drill walls.
+    pub finish: [f32; 4],
+    /// Silkscreen ink.
+    pub silk: [f32; 4],
     /// A body with no colour of its own.
     pub body: [f32; 4],
 }
@@ -123,7 +131,7 @@ pub struct Part3d {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BoardScene3d {
     pub scene: Scene3d,
-    /// The board slab: faces, edge and hole walls.
+    /// The board from mask to mask: laminate, walls, copper and mask.
     pub board: Range<u32>,
     pub parts: Vec<Part3d>,
     /// The board's thickness, mm: the top face is at this height, the
@@ -136,11 +144,10 @@ pub struct BoardScene3d {
     /// same order, for [`Self::exploded`]. A vertex with no entry is core
     /// and never moves.
     pub vertex_layers: Vec<Layer3d>,
+    /// How many inner copper layers move out on the top and on the bottom
+    /// side in [`Self::exploded`].
+    pub inner_copper: [u8; 2],
 }
-
-/// Height of the copper above its face, mm (1 oz copper). Keeps the copper
-/// off the mask in the depth buffer.
-pub(crate) const COPPER_LIFT_MM: f32 = 0.035;
 
 /// A board point (mm, y down as the flat view draws it) in the 3D frame
 /// (x right, y up, z up out of the top face).
@@ -199,34 +206,91 @@ pub fn build_board_scene(input: &Board3dInput<'_>) -> BoardScene3d {
     // layers' eyes show it. Single-layer mode is a flat-view editing aid and
     // does not reach 3D: see `docs/RENDERING_RULES.md`, "board-3d".
     let every = PcbSnapshot::from_board(board);
-    let shown = PcbSnapshot::from_board_with_view(board, &all_layers_of(input.view));
+    let view = all_layers_of(input.view);
+    let shown = PcbSnapshot::from_board_with_view(board, &view)
+        .with_zone_fills(&pcb_geom::zone_fills(board));
+    let heights = StackHeights::of(board, thickness);
     let mut out = BoardScene3d {
         thickness_mm: thickness,
+        inner_copper: heights.inner_per_side(),
         ..BoardScene3d::default()
     };
-    (out.board, out.dropped_holes) =
-        copper::append_board_slab(&mut out.scene, &every, thickness, &input.colors);
-    // Each append makes its own vertices, so every vertex is tagged with
-    // the one slice it belongs to as it lands.
-    explode::tag_slab(
-        &mut out.vertex_layers,
-        &out.scene,
-        out.board.clone(),
-        thickness,
-    );
-    copper::append_copper(&mut out.scene, &shown, thickness, &input.colors);
-    explode::tag_new(&mut out.vertex_layers, &out.scene, |vertex| {
-        Layer3d::Copper(explode::face_of(vertex.position[2], thickness))
+    let (slab, dropped) =
+        copper::append_board_slab(&mut out.scene, &every, &heights, &input.colors);
+    out.dropped_holes = dropped;
+    explode::tag_new(&mut out.vertex_layers, &out.scene, Layer3d::Core);
+    let outline = copper::slab_outline(&every).unwrap_or_default();
+    let art = layers::board_art(&ArtInput {
+        board,
+        every: &every,
+        shown: &shown,
+        view: &view,
+        outline: &outline,
+        heights: &heights,
     });
+    append_layers(&mut out, &art, &heights, &input.colors);
+    out.board = slab.start..board_end(&mut out, &art, &heights, &input.colors);
     for footprint in &board.footprints {
         let part = parts::append_part(&mut out.scene, footprint, input, thickness);
         let layer = part
             .as_ref()
             .map_or(Layer3d::Core, |part| Layer3d::Part(part.face));
-        explode::tag_new(&mut out.vertex_layers, &out.scene, |_| layer);
+        explode::tag_new(&mut out.vertex_layers, &out.scene, layer);
         out.parts.extend(part);
     }
     out
+}
+
+/// Append the copper, innermost first, so the translucent mask drawn after
+/// it blends over it from either side.
+fn append_layers(
+    out: &mut BoardScene3d,
+    art: &BoardArt,
+    heights: &StackHeights,
+    colors: &Board3dColors,
+) {
+    for (index, polygons) in art.inner.iter().enumerate() {
+        let Some((_, z)) = heights.inner.get(index) else {
+            continue;
+        };
+        region::append_polygons(&mut out.scene, polygons, *z, colors.copper);
+        let (face, rank) = heights.inner_place(index);
+        let layer = Layer3d::InnerCopper { face, rank };
+        explode::tag_new(&mut out.vertex_layers, &out.scene, layer);
+    }
+    for face in [Face::Top, Face::Bottom] {
+        let side = art.face(face);
+        let z = heights.copper(face);
+        region::append_polygons(&mut out.scene, &side.covered_copper, z, colors.copper);
+        region::append_polygons(&mut out.scene, &side.finish, z, colors.finish);
+        explode::tag_new(&mut out.vertex_layers, &out.scene, Layer3d::Copper(face));
+    }
+}
+
+/// Append the two masks, close the board's index range there, then append
+/// the silkscreen, which stands proud of the board's faces. Returns the
+/// range's end.
+fn board_end(
+    out: &mut BoardScene3d,
+    art: &BoardArt,
+    heights: &StackHeights,
+    colors: &Board3dColors,
+) -> u32 {
+    let raised = layers::mask_over_copper(colors.mask);
+    for face in [Face::Top, Face::Bottom] {
+        let side = art.face(face);
+        let z = heights.mask(face);
+        region::append_polygons(&mut out.scene, &side.mask, z, colors.mask);
+        region::append_polygons(&mut out.scene, &side.mask_over_copper, z, raised);
+        explode::tag_new(&mut out.vertex_layers, &out.scene, Layer3d::Mask(face));
+    }
+    let end = out.scene.indices.len() as u32;
+    for face in [Face::Top, Face::Bottom] {
+        let silk = &art.face(face).silk;
+        region::append_polygons(&mut out.scene, silk, heights.silk(face), colors.silk);
+        explode::tag_new(&mut out.vertex_layers, &out.scene, Layer3d::Silk(face));
+    }
+    end
 }
 
 /// The board's thickness, mm: its layer stack's total (the board engine

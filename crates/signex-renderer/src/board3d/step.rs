@@ -59,7 +59,9 @@ pub fn board_step(input: &BoardStepInput<'_>) -> Result<BoardStep, McadError> {
         .iter()
         .map(|opening| match opening {
             Opening::Cutout(ring) => Hole::Polygon(ring.iter().map(|&p| xy(p)).collect()),
-            Opening::Drill { center, diameter } => Hole::Round {
+            Opening::Drill {
+                center, diameter, ..
+            } => Hole::Round {
                 center: xy(*center),
                 diameter: mm(*diameter),
             },
@@ -132,10 +134,10 @@ fn part_meshes(
 /// The file carries no colours.
 const UNUSED_COLORS: Board3dColors = Board3dColors {
     mask: [0.0; 4],
-    edge: [0.0; 4],
-    top_copper: [0.0; 4],
-    bottom_copper: [0.0; 4],
-    multi_layer: [0.0; 4],
+    substrate: [0.0; 4],
+    copper: [0.0; 4],
+    finish: [0.0; 4],
+    silk: [0.0; 4],
     body: [0.0; 4],
 };
 
