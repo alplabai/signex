@@ -587,6 +587,17 @@ jobs:
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_legacy_english.sh
 
+      # A panic in the app must not leave a value taken out (#2651, ADR-0006):
+      # production catch_unwind calls under crates/signex-app/src/app may only
+      # get fewer. Rules and blind spots live in the script. Hard gate.
+      - name: catch_unwind ratchet
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_app_catch_unwind.sh
+
+      - name: catch_unwind ratchet controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_app_catch_unwind.sh
+
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its
       # own `[lints.clippy] let_underscore_must_use` that the workspace

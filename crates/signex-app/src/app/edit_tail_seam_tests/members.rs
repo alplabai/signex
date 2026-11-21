@@ -84,7 +84,7 @@ fn a_grouped_step_of_display_only_edits_still_bumps_the_erc_epoch_once() {
 
 /// Number Schematic Sheets over an open, active parent and a closed second
 /// parent the run loads into a parked engine: a non-active member.
-fn renumbered() -> crate::app::sheet_numbering::apply_tests::Rig {
+pub(super) fn renumbered() -> crate::app::sheet_numbering::apply_tests::Rig {
     use crate::app::sheet_numbering::apply_tests::{closed_parent_sheet, rig};
     let mut rig = rig(Some(closed_parent_sheet()));
     let open = rig.open_parent.clone();

@@ -42,90 +42,71 @@ impl Signex {
         self.active_pcb()
     }
 
-    pub(crate) fn with_active_schematic_session_mut<R>(
+    /// Move the active schematic to `to` once a Save As wrote it there.
+    /// `finish` settles the engine where it is and returns whether the
+    /// document is still dirty; only then is the engine moved, with no other
+    /// code between its removal and its reinsertion, so a panic in `finish`
+    /// leaves it at its old path. `false`, with nothing changed, when there
+    /// is no active schematic tab.
+    pub(crate) fn rekey_active_schematic(
         &mut self,
-        update: impl FnOnce(&mut SchematicTabSession) -> R,
-    ) -> Option<R> {
-        use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
-
-        // Temporarily remove the active engine from the HashMap so we
-        // can hand the caller a `SchematicTabSession` (legacy API that
-        // owns its engine). save/save_as mutate `session.path` — when
-        // that happens, we reinsert at the new key so the HashMap
-        // follows the tab's on-disk location.
-        let old_path = self.document_state.active_path.clone()?;
-        let engine = self.document_state.engines.remove(&old_path)?;
-
-        let Some(title) = self
+        to: PathBuf,
+        finish: impl FnOnce(&mut signex_engine::Engine) -> bool,
+    ) -> bool {
+        let Some(old_path) = self.document_state.active_path.clone() else {
+            return false;
+        };
+        if self
             .document_state
             .tabs
             .get(self.document_state.active_tab)
-            .map(|tab| tab.title.clone())
-        else {
-            self.document_state.engines.insert(old_path, engine);
-            return None;
-        };
-
+            .is_none()
+        {
+            return false;
+        }
         let was_dirty = self.document_state.is_document_dirty(&old_path);
-        // Panic guard: the engine moves into `session`, so a panicking
-        // closure drops it. We cannot get it back; catch the unwind only
-        // to clear `active_path` (no dangling key) before re-raising.
-        let session = SchematicTabSession::new(engine, title, old_path.clone(), was_dirty);
-        let update_result = catch_unwind(AssertUnwindSafe(move || {
-            let mut session = session;
-            let r = update(&mut session);
-            (r, session.into_parts())
-        }));
+        let Some(engine) = self.document_state.engines.get_mut(&old_path) else {
+            return false;
+        };
+        let dirty = finish(engine);
+        let Some(mut engine) = self.document_state.engines.remove(&old_path) else {
+            return false;
+        };
+        engine.set_path(Some(to.clone()));
+        self.document_state.insert_engine(to.clone(), engine);
 
-        match update_result {
-            Ok((result, (engine, title, new_path, dirty))) => {
-                if let Some(tab) = self
-                    .document_state
-                    .tabs
-                    .get_mut(self.document_state.active_tab)
-                {
-                    tab.title = title;
-                    tab.path = new_path.clone();
-                }
-
-                // The session carried the dirty flag in and out; write it
-                // back so the mark survives tab close.
-                if new_path != old_path {
-                    // Save As re-keyed the document; the old key no longer
-                    // has an engine, so a lingering dirty marker would make
-                    // every later Save All fail on it.
-                    self.document_state.clear_document_dirty(&old_path);
-                    self.rekey_page_setup(&old_path, &new_path);
-                    // The new file is not what any sheet symbol places.
-                    self.document_state.tab_placements.forget(&old_path);
-                    self.rekey_undocked_windows(&old_path, &new_path);
-                }
-                self.document_state.insert_engine(new_path.clone(), engine);
-
-                // Write back only a change the closure made: a dirty mark
-                // re-written here would count as one from outside the
-                // history and keep undo from ever clearing it.
-                if new_path != old_path || dirty != was_dirty {
-                    if dirty {
-                        self.document_state.mark_document_dirty(&new_path);
-                    } else {
-                        self.document_state.mark_document_clean(&new_path);
-                    }
-                }
-                self.document_state.active_path = Some(new_path);
-                Some(result)
-            }
-            Err(payload) => {
-                // Engine was consumed by the panicking session; the
-                // HashMap is now missing its entry and cannot be restored.
-                tracing::error!(
-                    path = %old_path.display(),
-                    "schematic session panicked; its engine was dropped"
-                );
-                self.document_state.active_path = None;
-                resume_unwind(payload);
+        if let Some(tab) = self
+            .document_state
+            .tabs
+            .get_mut(self.document_state.active_tab)
+        {
+            tab.title = to
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Schematic".to_string());
+            tab.path = to.clone();
+        }
+        if to != old_path {
+            // The old key no longer has an engine, so a lingering dirty
+            // marker would make every later Save All fail on it.
+            self.document_state.clear_document_dirty(&old_path);
+            self.rekey_page_setup(&old_path, &to);
+            // The new file is not what any sheet symbol places.
+            self.document_state.tab_placements.forget(&old_path);
+            self.rekey_undocked_windows(&old_path, &to);
+        }
+        // Write back only a change `finish` made: a dirty mark re-written
+        // here would count as one from outside the history and keep undo
+        // from ever clearing it.
+        if to != old_path || dirty != was_dirty {
+            if dirty {
+                self.document_state.mark_document_dirty(&to);
+            } else {
+                self.document_state.mark_document_clean(&to);
             }
         }
+        self.document_state.active_path = Some(to);
+        true
     }
 
     pub(crate) fn park_active_schematic_session(&mut self) {
@@ -749,8 +730,8 @@ impl Signex {
     /// refactor, schematic tabs keep their document in
     /// `document_state.engines` (keyed by path) and carry
     /// `cached_document: None`. `TabDocument` has no `Schematic` variant to
-    /// write back to, and dirty tracking runs through
-    /// `with_active_schematic_session_mut` in the mutation gateway.
+    /// write back to, and the mutation gateway derives the dirty mark from
+    /// the engine history (`mark_active_document_dirty`).
     /// Returns whether `schematic` was installed as a new active engine.
     pub(crate) fn apply_loaded_schematic(
         &mut self,
@@ -926,6 +907,10 @@ fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "load_seam_tests.rs"]
+mod load_seam_tests;
 
 #[cfg(test)]
 mod sheet_size_report_tests {

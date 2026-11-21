@@ -488,10 +488,21 @@ impl Signex {
         // The project that listed the sheet, found while the engine is still
         // keyed by the old path.
         let owner = self.document_state.document_project(from).map(|p| p.id);
-        let renamed = self.with_active_schematic_session_mut(|session| {
-            session.finish_save_as(to.clone(), revision);
+        // Saved only if the document has not changed since the snapshot
+        // taken at `revision`.
+        let renamed = self.rekey_active_schematic(to.clone(), |engine| {
+            if engine.revision() == revision {
+                engine.mark_saved();
+                false
+            } else {
+                // The new file holds a snapshot the document has moved past (an
+                // undo back to an older state counts), so no undo or redo step
+                // reproduces it and the document is not saved.
+                engine.forget_save_point();
+                true
+            }
         });
-        if renamed.is_some() {
+        if renamed {
             crate::diagnostics::log_info(format!("[save-as] Wrote {}", to.display()));
             return self.follow_save_as_in_project(owner, from, &to);
         }

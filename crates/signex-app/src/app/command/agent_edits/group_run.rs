@@ -168,6 +168,7 @@ fn undo_landed(app: &mut Signex, landed: &[(PathBuf, bool)], group: UndoGroupId)
             );
         }
         // The revision moved with the take-back: dirtiness and the screen follow.
+        // No library drift check: a take-back of the same call is not a Step.
         app.after_sheet_change(path, DocumentPatch::FULL);
     }
 }
