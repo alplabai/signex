@@ -92,7 +92,9 @@ impl Signex {
                     crate::panels::PanelKind::Layers,
                 )))
             }
-            E::GridPresetPicked(mm) => self.run_in_window(window, true, |app| app.set_snap_grid(mm)),
+            E::GridPresetPicked(mm) => {
+                self.run_in_window(window, true, |app| app.set_snap_grid(mm))
+            }
             E::CustomGridEdited(entry) => {
                 if let Some(popover) = self.ui_state.board_status.popover.as_mut() {
                     popover.custom_grid = entry;

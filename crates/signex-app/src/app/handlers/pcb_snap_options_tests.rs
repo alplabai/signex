@@ -576,7 +576,8 @@ fn a_running_route_snaps_to_its_own_net_only() {
         let at = cursor(&rig);
         assert!(!close(at, foreign) && on_grid(at, 0.1), "{tool}: {at:?}");
         let own = Point::new(25.03, 10.03);
-        rig.app.board_tool_followed(Point::new(own.x, own.y + reach));
+        rig.app
+            .board_tool_followed(Point::new(own.x, own.y + reach));
         let at = cursor(&rig);
         assert!(close(at, own), "{tool}: {at:?}");
     }
@@ -592,7 +593,12 @@ fn a_paste_is_not_pulled_onto_an_object() {
     rig.run("paste");
     let pad = Point::new(30.03, 30.03);
     rig.move_to(Point::new(pad.x, pad.y + rig.mm(4.0)));
-    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("a paste");
+    let carry = rig
+        .app
+        .interaction_state
+        .pcb_carry
+        .as_ref()
+        .expect("a paste");
     assert!(
         !close(carry.delta, pad) && on_grid(carry.delta, 0.1),
         "{:?}",
@@ -613,7 +619,12 @@ fn a_new_part_is_not_pulled_onto_an_object() {
     rig.app.interaction_state.pcb_carry = Some(PcbCarry::place(rig.path.clone(), None, part));
     let pad = Point::new(30.03, 30.03);
     rig.move_to(Point::new(pad.x, pad.y + rig.mm(4.0)));
-    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("a part");
+    let carry = rig
+        .app
+        .interaction_state
+        .pcb_carry
+        .as_ref()
+        .expect("a part");
     let at = carry.anchor.expect("on the cursor");
     assert!(!close(at, pad) && on_grid(at, 0.1), "{at:?}");
 }

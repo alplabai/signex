@@ -439,8 +439,11 @@ mod hidden_ring_tests {
     fn a_through_ring_is_not_put_on_a_hidden_layer() {
         let mut view = PcbLayerView::default();
         view.hide(PcbLayer::Copper(CopperLayer::Bottom));
-        let mut out: BTreeMap<CopperLayer, Vec<Polygon>> =
-            [(CopperLayer::Top, Vec::new()), (CopperLayer::Bottom, Vec::new())].into();
+        let mut out: BTreeMap<CopperLayer, Vec<Polygon>> = [
+            (CopperLayer::Top, Vec::new()),
+            (CopperLayer::Bottom, Vec::new()),
+        ]
+        .into();
         let ring = disc([0.0, 0.0], 1.0).expect("a disc");
         put_on_layers(&mut out, &view, u32::MAX, &ring);
         assert_eq!(out[&CopperLayer::Top].len(), 1);

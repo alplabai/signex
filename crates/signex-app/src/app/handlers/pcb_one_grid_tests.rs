@@ -249,10 +249,12 @@ fn an_undocked_window_edits_its_own_boards_grid() {
         .keys()
         .find(|id| !before.contains(id))
         .expect("an undocked window");
-    let _ = rig.app.update(Message::Window(WindowMsg::UndockedTabOpened {
-        path: b.clone(),
-        id: window,
-    }));
+    let _ = rig
+        .app
+        .update(Message::Window(WindowMsg::UndockedTabOpened {
+            path: b.clone(),
+            id: window,
+        }));
     let a_tab = rig
         .app
         .document_state
