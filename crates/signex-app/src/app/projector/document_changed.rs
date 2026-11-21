@@ -45,9 +45,9 @@ impl Signex {
         // The sheet's paper changed (a Page Options edit, or its undo or
         // redo): the panel context and the drawn page follow the document.
         if patch.intersects(DocumentPatch::PAPER)
-            && let Some(token) = self.active_render_snapshot().map(|snapshot| {
-                crate::app::load_gateway::effective_paper_size(&snapshot.paper_size)
-            })
+            && let Some(token) = self
+                .active_render_snapshot()
+                .map(|snapshot| crate::app::projector::effective_paper_size(&snapshot.paper_size))
         {
             self.document_state.panel_ctx.paper_size = token;
             self.apply_page_dimensions_to_canvas();
