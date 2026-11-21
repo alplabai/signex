@@ -176,6 +176,7 @@ impl Signex {
         let trackpad_pan = crate::fonts::read_trackpad_pan_pref_from(prefs);
         let wheel_mode = crate::fonts::read_wheel_mode_pref_from(prefs);
         let layer_switcher = crate::fonts::read_layer_switcher_pref_from(prefs);
+        let selected_segment = crate::fonts::read_selected_segment_pref_from(prefs);
         let i18n = std::sync::Arc::new(signex_i18n::I18n::new(
             &crate::fonts::read_language_pref_from(prefs),
         ));
@@ -397,6 +398,8 @@ impl Signex {
                 preferences_draft_wheel_mode: wheel_mode,
                 layer_switcher,
                 preferences_draft_layer_switcher: layer_switcher,
+                selected_segment,
+                preferences_draft_selected_segment: selected_segment,
                 i18n: std::sync::Arc::clone(&i18n),
                 // Mockup row 144a — seeded again (with its preview and the system
                 // language name) each time Preferences opens.

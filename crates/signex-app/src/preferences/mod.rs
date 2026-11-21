@@ -181,6 +181,8 @@ pub enum PrefMsg {
     DraftWheelMode(crate::canvas::WheelMode),
     /// Choose "Layer switcher": the strip or a dropdown. Persisted on Save.
     DraftLayerSwitcher(crate::layer_strip_prefs::LayerSwitcher),
+    /// Choose "Selected option": Neutral or Accent. Persisted on Save.
+    DraftSelectedSegment(signex_types::theme::SelectedSegmentLook),
     /// Toggle "Remember window size and position". Persisted on Save.
     DraftRememberWindowGeometry(bool),
     /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
@@ -349,6 +351,7 @@ pub struct PrefsView<'a> {
     pub draft_trackpad_pan: bool,
     pub draft_wheel_mode: crate::canvas::WheelMode,
     pub draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
+    pub draft_selected_segment: signex_types::theme::SelectedSegmentLook,
     pub draft_remember_window_geometry: bool,
     pub draft_drag_direction_select: bool,
     pub draft_increment_step: i32,

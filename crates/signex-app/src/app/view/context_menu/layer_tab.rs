@@ -13,7 +13,7 @@ use crate::app::{LayerStripMsg, LayerTabMenuMsg, LayerTabSubmenu, PcbMsg, PcbVie
 use crate::icons;
 use crate::layer_strip_prefs::{LayerNameStyle, LayerStripPrefs};
 use crate::pcb_canvas::layer_style::layer_name;
-use crate::styles::{ti, tokens::resolve};
+use crate::styles::tokens::resolve;
 use iced::widget::button::{Status, Style as ButtonStyle};
 use iced::widget::svg::Handle;
 use iced::widget::{container, row};
@@ -24,7 +24,7 @@ use signex_types::pcb::LayerDef;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem, MenuMetrics, RowPaint};
-use signex_widgets::{Label, SegmentedStyle, theme_ext};
+use signex_widgets::{Label, theme_ext};
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
@@ -207,15 +207,7 @@ fn tab_names_row(
 ) -> DropdownEntry<Message> {
     let m = MenuMetrics::GRAPHITE;
     let r = resolve(tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.caption,
-    )
-    .fill_width(true);
+    let style = r.segmented(TS.caption).fill_width(true);
     let cells: Vec<(LayerNameStyle, Label<'static>)> = tab_name_cells(i18n, prefs)
         .into_iter()
         .map(|(_, style, _)| (style, style_name(i18n, style).into()))

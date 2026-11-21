@@ -308,6 +308,13 @@ fn sheet_inks_follow_the_theme_the_tokens_belong_to() {
 }
 
 #[test]
+fn the_selected_option_look_does_not_change_the_sheet_theme() {
+    let id = ThemeId::GraphiteDark;
+    let accent = signex_types::theme::SelectedSegmentLook::Accent.apply(id, theme_tokens(id));
+    assert_eq!(sheet_canvas(&accent), canvas_colors(id));
+}
+
+#[test]
 fn the_art_is_fitted_centred_with_its_aspect() {
     let (scale, offset) = fit([1000.0, 500.0], [5.0, 5.0, 54.0, 36.0]);
     assert!((scale - 0.054).abs() < 1e-6);

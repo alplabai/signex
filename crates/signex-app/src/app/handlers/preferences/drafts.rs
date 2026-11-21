@@ -34,6 +34,7 @@ impl UiState {
                         != crate::ui_scale::scale_to_percent(self.ui_scale)
                     || self.preferences_draft_wheel_mode != self.wheel_mode
                     || self.preferences_draft_layer_switcher != self.layer_switcher
+                    || self.preferences_draft_selected_segment != self.selected_segment
                     || self.preferences_draft_trackpad_pan != self.trackpad_pan
                     || self.preferences_draft_zoom_step_percent != self.zoom_step_percent
                     || self.preferences_draft_window_controls_placement
@@ -154,6 +155,9 @@ impl Signex {
             PrefMsg::DraftWheelMode(mode) => self.ui_state.preferences_draft_wheel_mode = mode,
             PrefMsg::DraftLayerSwitcher(switcher) => {
                 self.ui_state.preferences_draft_layer_switcher = switcher;
+            }
+            PrefMsg::DraftSelectedSegment(look) => {
+                self.ui_state.preferences_draft_selected_segment = look;
             }
             PrefMsg::DraftRememberWindowGeometry(enabled) => {
                 self.ui_state.preferences_draft_remember_window_geometry = enabled;

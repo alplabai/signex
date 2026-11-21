@@ -19,6 +19,7 @@ impl Signex {
         let (trackpad_pan, remember_geometry) = (ui.trackpad_pan, ui.remember_window_geometry);
         let wheel_mode = ui.wheel_mode;
         let layer_switcher = ui.layer_switcher;
+        let selected_segment = ui.selected_segment;
         let (increment_step, paste_designators) = (ui.increment_step, ui.paste_designators);
         let antialiasing = ui.antialiasing;
         let fast_grids = ui.fast_grids_mm;
@@ -67,6 +68,9 @@ impl Signex {
             }),
             write("pcb_layer_switcher", move || {
                 crate::fonts::write_layer_switcher_pref(layer_switcher)
+            }),
+            write("selected_segment", move || {
+                crate::fonts::write_selected_segment_pref(selected_segment)
             }),
             write("remember_window_geometry", move || {
                 crate::fonts::write_remember_window_geometry_pref(remember_geometry)

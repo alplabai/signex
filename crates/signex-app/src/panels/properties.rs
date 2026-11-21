@@ -207,15 +207,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // ── General | Parameters: a segmented switch ──
     let tab = ctx.properties_tab;
     let r = crate::styles::tokens::resolve(&ctx.tokens);
-    let tab_style = signex_widgets::SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        crate::styles::ti(ctx.tokens.text),
-        TS.body,
-    )
-    .fill_width(true);
+    let tab_style = r.segmented(TS.body).fill_width(true);
     let tabs: [(usize, signex_widgets::Label<'a>); 2] = [
         (0, t!(ctx.i18n, ids::PANELS_PROPERTIES_TAB_GENERAL).into()),
         (

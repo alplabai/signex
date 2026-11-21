@@ -213,14 +213,7 @@ fn room_row<'a>(row_: &RoomRow, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a
 
 fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    )
+    r.segmented(TS.body)
 }
 
 fn option_row<'a>(

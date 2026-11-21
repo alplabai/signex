@@ -229,6 +229,10 @@ pub struct UiState {
     pub layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
     /// Draft mirror of [`Self::layer_switcher`] for the Preferences dialog.
     pub preferences_draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
+    /// How the selected option of a segmented control looks in a dark theme.
+    pub selected_segment: signex_types::theme::SelectedSegmentLook,
+    /// Draft mirror of [`Self::selected_segment`] for the Preferences dialog.
+    pub preferences_draft_selected_segment: signex_types::theme::SelectedSegmentLook,
     /// The locale in force: its catalog bundle and the Language list. Shared
     /// with the menus; replaced by `Signex::set_language` (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,

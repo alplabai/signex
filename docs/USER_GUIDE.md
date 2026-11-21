@@ -284,7 +284,8 @@ Esc cancels), or drag its handle; the field follows, and the other way round.
 
 **How the canvas looks.** **Tools ▸ Preferences… ▸ Appearance** holds the
 theme (Graphite Light or Graphite Dark), the UI font, the interface scale,
-the grid style of the schematic and of the symbol editor (dots, lines or
+**Selected option** (how the picked option of an Off / On / Mono style switch
+looks in the dark theme: Neutral, the default, or Accent), the grid style of the schematic and of the symbol editor (dots, lines or
 small crosses, shown side by side in the grid preview), the symbol editor's
 default grid, pin selection, the GPU render and anti-aliasing, the mouse
 wheel (Zoom or Scroll), two-finger scroll panning and zoom speed. A setting

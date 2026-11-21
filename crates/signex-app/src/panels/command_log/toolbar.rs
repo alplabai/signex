@@ -7,9 +7,7 @@ use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Widge
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
-use signex_widgets::{
-    Label, SegmentedStyle, ToggleSwitchStyle, segmented, text, text_input, toggle_switch,
-};
+use signex_widgets::{Label, ToggleSwitchStyle, segmented, text, text_input, toggle_switch};
 
 use super::{
     CM, CommandLogMsg, CommandLogState, GLYPH_THEME, ICON, LogCounts, PanelContext, PanelMsg,
@@ -249,14 +247,7 @@ fn result_switch<'a>(
             ),
         ],
         picked,
-        SegmentedStyle::new(
-            r.sunken,
-            r.raised,
-            r.shadow,
-            r.ink3,
-            ti(tokens.text),
-            TS.body,
-        ),
+        r.segmented(TS.body),
         |result| message(CommandLogMsg::ResultFilterPicked(result)),
     )
 }

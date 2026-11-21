@@ -163,6 +163,9 @@ impl<'de> Deserialize<'de> for ThemeId {
 // UI chrome tokens
 // ---------------------------------------------------------------------------
 
+mod selected_segment;
+pub use selected_segment::SelectedSegmentLook;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThemeTokens {
     pub bg: Color,
@@ -244,6 +247,15 @@ pub struct ExtendedTokens {
     /// Modal scrim colour; the alpha channel is its strength.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scrim: Option<Color>,
+    /// Fill of the selected option of a segmented control.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_segment: Option<Color>,
+    /// Text on [`ExtendedTokens::selected_segment`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_segment_ink: Option<Color>,
+    /// Shadow under the selected option; alpha 0 is no shadow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_segment_shadow: Option<Color>,
 }
 
 impl ExtendedTokens {
@@ -268,6 +280,9 @@ impl ExtendedTokens {
         info_soft: None,
         shadow: None,
         scrim: None,
+        selected_segment: None,
+        selected_segment_ink: None,
+        selected_segment_shadow: None,
     };
 
     /// True when no field is set (the serde skip test).
@@ -533,6 +548,9 @@ const GRAPHITE_LIGHT_TOKENS: ThemeTokens = ThemeTokens {
         // About 50%: the Light backdrop must visibly dim the app behind a
         // dialog or the palette (#2262, Caner 2026-11-12).
         scrim: Some(Color::new(0x15, 0x17, 0x1A, 128)),
+        selected_segment: s(0xFF, 0xFF, 0xFF),
+        selected_segment_ink: s(0x15, 0x17, 0x1A),
+        selected_segment_shadow: Some(Color::new(0x15, 0x17, 0x1A, 26)),
     },
 };
 
@@ -614,6 +632,10 @@ const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
         info_soft: s(0x16, 0x22, 0x3F),
         shadow: Some(Color::new(0, 0, 0, 115)),
         scrim: Some(Color::new(0, 0, 0, 140)),
+        // The Neutral look; `SelectedSegmentLook::apply` swaps in Accent.
+        selected_segment: s(0x3D, 0x40, 0x47),
+        selected_segment_ink: s(0xFF, 0xFF, 0xFF),
+        selected_segment_shadow: Some(Color::new(0, 0, 0, 115)),
     },
 };
 
@@ -940,6 +962,9 @@ mod tests {
                 info_soft: Some(c(0, 0, 0)),
                 shadow: Some(c(0, 0, 0)),
                 scrim: Some(c(0, 0, 0)),
+                selected_segment: Some(c(0, 0, 0)),
+                selected_segment_ink: Some(c(0, 0, 0)),
+                selected_segment_shadow: Some(c(0, 0, 0)),
             })
             .unwrap()
             .as_object()

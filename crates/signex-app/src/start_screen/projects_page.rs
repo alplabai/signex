@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
-use signex_widgets::{Label, SegmentedStyle, segmented};
+use signex_widgets::{Label, segmented};
 
 use super::kit::{
     GLYPH_THEME, Look, Size, action_button, empty_state, filter_field, filter_width, page_heading,
@@ -18,7 +18,7 @@ use super::projects::{RowKind, Rows, list_or_empty, no_match, project_row};
 use super::{Action, ProjectScope, StartScreenMsg, StartScreenState, message};
 use crate::app::Message;
 use crate::pinned_projects::PinnedProjects;
-use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
+use crate::styles::{Spacing, TypeScale, tokens::resolve};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -125,15 +125,7 @@ pub(super) fn view<'a>(
             ),
         ],
         state.project_scope,
-        SegmentedStyle::new(
-            resolve(tokens).sunken,
-            resolve(tokens).raised,
-            resolve(tokens).shadow,
-            resolve(tokens).ink3,
-            ti(tokens.text),
-            TS.body,
-        )
-        .fill_width(true),
+        resolve(tokens).segmented(TS.body).fill_width(true),
         |scope| message(StartScreenMsg::ProjectScopePicked(scope)),
     );
     let toolbar = row![

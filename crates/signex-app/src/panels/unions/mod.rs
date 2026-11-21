@@ -43,14 +43,7 @@ pub(crate) fn chip_style(tokens: &ThemeTokens) -> ChipStyle {
 /// Segmented-switch colours of the Graphite tokens.
 pub(crate) fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        ti(tokens.text_secondary),
-        ti(tokens.text),
-        TS.body,
-    )
+    r.segmented(TS.body).resting_ink(ti(tokens.text_secondary))
 }
 
 const SEARCH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9 9l3.5 3.5" stroke="currentColor" stroke-width="1.3"/></svg>"#;

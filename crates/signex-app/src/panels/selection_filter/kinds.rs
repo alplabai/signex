@@ -9,7 +9,7 @@ use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use pcb_geom::PickKind;
 use signex_i18n::{MessageId, UserText, ids, t};
 use signex_widgets::chips::count_text;
-use signex_widgets::{Label, SegmentedStyle, button, checkbox, segmented, text};
+use signex_widgets::{Label, button, checkbox, segmented, text};
 
 use super::KindCounts;
 use crate::active_bar::{PresetKind, SelectionFilter};
@@ -73,14 +73,7 @@ pub(super) fn header<'a>(
 ) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let r = resolve(&ctx.tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(ctx.tokens.text),
-        TS.body,
-    );
+    let style = r.segmented(TS.body);
     let all_label: Label<'a> = t!(i18n, ids::PANELS_FILTER_ALL).into();
     let none_label: Label<'a> = t!(i18n, ids::PANELS_FILTER_NONE).into();
     let bulk = segmented(
