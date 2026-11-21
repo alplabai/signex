@@ -4,7 +4,8 @@
 //! picture, never edited.
 
 use pcb_geom::{GraphicShape, PointNm};
-use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard};
+use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
+use signex_types::pcb_origin::BoardOrigin;
 
 /// A track as drawn under the sketch, in board mm.
 #[derive(Debug, Clone, PartialEq)]
@@ -65,6 +66,35 @@ pub struct BoardBackdrop {
     /// Component courtyards drawn as lines, rectangles or polygons; a
     /// courtyard arc or circle is not carried.
     pub courtyards: Vec<BackdropCourtyard>,
+    /// Where the board's coordinates count from, kept with the board.
+    pub origin: BoardOrigin,
+    /// The board view hides its origin marker.
+    pub hides_origin_marker: bool,
+}
+
+impl super::FootprintEditorState {
+    /// Where the origin marker goes, in model mm: the board's origin on a
+    /// board sketch (`None` while its view hides it), else the footprint's
+    /// (0, 0).
+    pub fn origin_marker_mm(&self) -> Option<(f64, f64)> {
+        match self.board_backdrop.as_deref() {
+            Some(board) if board.hides_origin_marker => None,
+            Some(board) => Some((board.origin.at.x, board.origin.at.y)),
+            None => Some((0.0, 0.0)),
+        }
+    }
+
+    /// A model point as the user reads it: on a board sketch from the board
+    /// origin with Y up, as the PCB view shows it; a footprint's as stored.
+    pub fn shown_mm(&self, [x, y]: [f64; 2]) -> [f64; 2] {
+        match self.board_backdrop.as_deref() {
+            Some(board) => {
+                let shown = board.origin.to_user(Point::new(x, y));
+                [shown.x, shown.y]
+            }
+            None => [x, y],
+        }
+    }
 }
 
 /// Where one pad sits, before its copper and drill are read.
@@ -111,6 +141,7 @@ impl BoardBackdrop {
                 .iter()
                 .map(|v| ((v.position.x, v.position.y), v.diameter))
                 .collect(),
+            origin: board.options.origin,
             ..Self::default()
         };
         for footprint in &board.footprints {

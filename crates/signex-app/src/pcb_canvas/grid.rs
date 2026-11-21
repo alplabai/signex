@@ -203,6 +203,12 @@ pub(super) fn draw_origin(
     if at.x < -reach || at.y < -reach || at.x > size.width + reach || at.y > size.height + reach {
         return;
     }
+    stroke_origin_marker(frame, at, color);
+}
+
+/// The board origin marker at canvas pixel `at`: a circle with an X through
+/// it. The board sketch draws the same one.
+pub(crate) fn stroke_origin_marker(frame: &mut Frame, at: Point, color: Color) {
     let arm = ORIGIN_RADIUS_PX * std::f32::consts::FRAC_1_SQRT_2;
     let marker = Path::new(|b| {
         b.circle(at, ORIGIN_RADIUS_PX);

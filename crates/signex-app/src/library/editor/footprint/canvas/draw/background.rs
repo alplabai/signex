@@ -12,6 +12,7 @@ use super::grid::{draw_grid, draw_grid_dots};
 use crate::library::editor::footprint::state::{
     EditorMode, GridDisplay as Gd, GuideAxis, SnapOptions,
 };
+use crate::pcb_canvas::{layer_style, stroke_origin_marker};
 
 /// Footprint canvas background: Altium-PCB black regardless of app theme.
 pub(crate) const BACKDROP_BG: Color = Color::BLACK;
@@ -195,6 +196,17 @@ impl FootprintCanvas<'_> {
         frame: &mut canvas::Frame,
         cstate: &FootprintCanvasState,
     ) {
+        // A board sketch marks the board's origin, as the PCB view draws it.
+        if self.state.board_backdrop.is_some() {
+            if let Some(at) = self.state.origin_marker_mm() {
+                stroke_origin_marker(
+                    frame,
+                    cstate.world_to_screen(at),
+                    layer_style::origin_marker_colour(),
+                );
+            }
+            return;
+        }
         let sketch = matches!(self.state.mode, EditorMode::Sketch);
         if let Some(g) = look_from_bg(self.bg_color).or_else(|| sketch.then(board_look)) {
             draw_origin_in(

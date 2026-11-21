@@ -39,6 +39,13 @@ fn send(app: &mut Signex, message: Message) {
 
 /// A two-layer board with a 40 x 25 mm outline, open and in sketch mode.
 fn sketching() -> (Signex, tempfile::TempDir) {
+    sketching_with(|_| {})
+}
+
+/// [`sketching`] on the board as `adjust` leaves it.
+fn sketching_with(
+    adjust: impl FnOnce(&mut signex_types::pcb::PcbBoard),
+) -> (Signex, tempfile::TempDir) {
     let tmp = tempfile::tempdir().expect("temp dir");
     let path = tmp.path().join("rover.snxpcb");
     let mut board = signex_types::project::SetupProfile::Standard
@@ -48,6 +55,7 @@ fn sketching() -> (Signex, tempfile::TempDir) {
         .into_iter()
         .map(|(x, y)| BoardPoint::new(x, y))
         .collect();
+    adjust(&mut board);
     let text = SnxPcb::new(board).write_string().expect("encode");
     std::fs::write(&path, text).expect("write board");
     let (mut app, _boot) = Signex::new();
@@ -141,6 +149,152 @@ fn properties_show_the_board_not_footprint_fields() {
     for board_row in ["rover", "Size", "40.00 × 25.00 mm", "Area", "1000.00 mm²"] {
         assert!(shows(board_row), "{board_row:?} missing from {texts:?}");
     }
+}
+
+/// The board in sketch mode with its origin at (5, 30).
+fn sketching_from_origin() -> (Signex, tempfile::TempDir) {
+    sketching_with(|board| {
+        board.options.origin =
+            signex_types::pcb_origin::BoardOrigin::new(BoardPoint::new(5.0, 30.0));
+    })
+}
+
+fn marker_mm(app: &Signex) -> Option<(f64, f64)> {
+    let session = app.interaction_state.board_sketch.as_ref()?;
+    session.editor.state.origin_marker_mm()
+}
+
+/// Caner, 2026-11-21: the sketch marks the same board point as the PCB view.
+#[test]
+fn the_origin_marker_sits_at_the_boards_origin_and_moves_with_it() {
+    use crate::app::contracts::BoardOriginMsg;
+    let (mut app, _tmp) = sketching_from_origin();
+    let board_mark = |app: &Signex| {
+        let board = app.active_pcb().expect("the board");
+        crate::pcb_canvas::BoardMarks::of(board).origin
+    };
+    assert_eq!(board_mark(&app), [5.0, 30.0]);
+    assert_eq!(marker_mm(&app), Some((5.0, 30.0)));
+
+    // Reset puts it on the outline's bottom-left corner.
+    send(
+        &mut app,
+        Message::Pcb(PcbMsg::Origin(BoardOriginMsg::ResetPicked)),
+    );
+    assert_eq!(board_mark(&app), [0.0, 25.0]);
+    assert_eq!(marker_mm(&app), Some((0.0, 25.0)), "the marker follows");
+}
+
+#[test]
+fn the_origin_marker_follows_the_board_views_visibility() {
+    use crate::app::contracts::PcbViewMsg;
+    let (mut app, _tmp) = sketching_from_origin();
+    let toggle = Message::Pcb(PcbMsg::View(PcbViewMsg::OriginMarkerVisibilityToggled));
+    send(&mut app, toggle.clone());
+    assert_eq!(marker_mm(&app), None, "hidden, and not at model (0, 0)");
+    send(&mut app, toggle);
+    assert_eq!(marker_mm(&app), Some((5.0, 30.0)));
+}
+
+#[test]
+fn a_footprint_sketch_keeps_its_origin_and_readouts() {
+    use crate::library::editor::footprint::{EditorMode, FootprintEditorState};
+    let footprint = signex_library::Footprint::empty("f");
+    let mut state = FootprintEditorState::from_footprint(&footprint);
+    state.mode = EditorMode::Sketch;
+    assert_eq!(state.origin_marker_mm(), Some((0.0, 0.0)));
+    assert_eq!(state.shown_mm([3.0, 4.0]), [3.0, 4.0]);
+}
+
+/// The status bar reads the sketch cursor as the PCB view reads a point:
+/// from the board origin, Y up.
+#[test]
+fn the_status_cursor_reads_from_the_board_origin_with_y_up() {
+    use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+    let (mut app, _tmp) = sketching_from_origin();
+    let window = iced::window::Id::unique();
+    app.ui_state.main_window_id = Some(window);
+    let path = app.active_tab_path().expect("the board tab");
+    send(
+        &mut app,
+        Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path,
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::CursorAt {
+                x_mm: 15.0,
+                y_mm: 10.0,
+                px_per_mm: 30.0,
+            }),
+        }),
+    );
+    assert_eq!(cursor_mm(&app), Some((15.0, 10.0)), "stored as model mm");
+    assert_eq!(app.status_cursor(window), (10.0, 20.0));
+}
+
+/// Properties reads a sketch point from the board origin; the sketch keeps
+/// the model coordinates.
+#[test]
+fn properties_read_a_sketch_point_from_the_board_origin() {
+    use crate::library::editor::footprint::SketchTool;
+    use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
+    use crate::panels::PanelMsg;
+    use signex_sketch::entity::EntityKind;
+    let (mut app, _tmp) = sketching_from_origin();
+    let path = app.active_tab_path().expect("the board tab");
+    let edit = |app: &mut Signex, msg| {
+        send(
+            app,
+            Message::Library(LibraryMessage::PrimitiveEditorEvent {
+                path: path.clone(),
+                msg: PrimitiveEdit::Footprint(msg),
+            }),
+        );
+    };
+    edit(
+        &mut app,
+        FootprintEditorMsg::SketchSetTool(SketchTool::Line),
+    );
+    for x_mm in [15.0, 25.0] {
+        edit(
+            &mut app,
+            FootprintEditorMsg::SketchToolClick {
+                x_mm,
+                y_mm: 10.0,
+                snap_id: None,
+            },
+        );
+    }
+    edit(&mut app, FootprintEditorMsg::ToolEscape);
+    let (id, x, y) = {
+        let session = app.interaction_state.board_sketch.as_ref().expect("on");
+        let sketch = session.working_sketch();
+        sketch
+            .entities
+            .iter()
+            .find_map(|e| match e.kind {
+                EntityKind::Point { x, y } => Some((e.id, x, y)),
+                _ => None,
+            })
+            .expect("a point")
+    };
+    send(
+        &mut app,
+        Message::Dock(crate::dock::DockMessage::Panel(
+            PanelMsg::FpEditorSelectSketchEntity { id },
+        )),
+    );
+    let shown = app
+        .document_state
+        .panel_ctx
+        .footprint_editor
+        .as_ref()
+        .and_then(|fp| fp.selected_sketch_entity.as_ref())
+        .and_then(|entity| entity.position_mm)
+        .expect("the point's position");
+    assert_eq!(shown, [x - 5.0, 30.0 - y]);
+    let session = app.interaction_state.board_sketch.as_ref().expect("on");
+    let stored = session.working_sketch();
+    let kept = stored.entities.iter().find(|e| e.id == id).expect("kept");
+    assert!(matches!(kept.kind, EntityKind::Point { x: a, y: b } if a == x && b == y));
 }
 
 /// The main window's texts, isolation marks stripped.

@@ -175,6 +175,12 @@ impl Signex {
             Surface::NoCamera => (0.0, 0.0),
             // On a board, from its origin with Y up (#2384).
             Surface::Pcb => self.pcb_for_window(window_id).map_or((x, y), |board| {
+                // The sketch canvas keeps its own cursor (main window only).
+                let (x, y) = self
+                    .board_sketch_in_view()
+                    .filter(|_| self.ui_state.main_window_id == Some(window_id))
+                    .and_then(|session| session.editor.state.cursor_mm)
+                    .unwrap_or((x, y));
                 let shown = board
                     .options
                     .origin

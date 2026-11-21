@@ -11,6 +11,7 @@ use signex_library::{Footprint, FootprintFile};
 use signex_sketch::SketchData;
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer};
+use signex_types::pcb_origin::BoardOrigin;
 use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::SketchHost;
 use signex_types::sketch::board_attr::SketchBoardItems;
@@ -78,6 +79,20 @@ impl BoardSketchSession {
             preview_error: None,
             start,
         }
+    }
+
+    /// Follow the board's origin and whether its view hides the marker.
+    pub fn follow_board_origin(&mut self, origin: BoardOrigin, hidden: bool) {
+        let Some(backdrop) = self.editor.state.board_backdrop.as_mut() else {
+            return;
+        };
+        if backdrop.origin == origin && backdrop.hides_origin_marker == hidden {
+            return;
+        }
+        let backdrop = Arc::make_mut(backdrop);
+        backdrop.origin = origin;
+        backdrop.hides_origin_marker = hidden;
+        self.editor.canvas_cache.clear();
     }
 
     /// The sketch as the user has it now.
@@ -167,7 +182,16 @@ impl BoardSketchSession {
     /// `board` is the board after the commit: the backdrop and the outline
     /// facts in Properties follow its new outline.
     pub fn mark_committed(&mut self, stored: SketchData, board: &PcbBoard) {
-        self.editor.state.board_backdrop = Some(Arc::new(BoardBackdrop::from_board(board)));
+        let hidden = self
+            .editor
+            .state
+            .board_backdrop
+            .as_ref()
+            .is_some_and(|backdrop| backdrop.hides_origin_marker);
+        self.editor.state.board_backdrop = Some(Arc::new(BoardBackdrop {
+            hides_origin_marker: hidden,
+            ..BoardBackdrop::from_board(board)
+        }));
         self.editor.primitive_mut().sketch = Some(stored.clone());
         self.editor.mark_saved();
         self.editor.canvas_cache.clear();

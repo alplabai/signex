@@ -574,6 +574,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 .map(|p| p.number.clone())
                 .unwrap_or_default(),
             source_position_mm,
+            center_shown_mm: center_position_mm.map(|centre| editor.state.shown_mm(centre)),
             source_size_mm: editor_pad_size_mm(editor, sel_id),
         })
     });

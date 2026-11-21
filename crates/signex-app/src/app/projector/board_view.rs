@@ -71,6 +71,7 @@ impl Signex {
         main.set_board_marks(marks);
         main.set_origin_marker_visible(origin_marker);
         main.set_view_flipped(flipped);
+        self.sync_board_sketch_origin();
         self.note_pcb_board_changed();
     }
 }

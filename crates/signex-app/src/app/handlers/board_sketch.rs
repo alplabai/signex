@@ -117,6 +117,30 @@ impl Signex {
         }
     }
 
+    /// Bring the sketch's origin marker and readouts in line with its board:
+    /// on entry and whenever the board or its view changes.
+    pub(crate) fn sync_board_sketch_origin(&mut self) {
+        let Some(path) = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .map(|session| session.board_path.clone())
+        else {
+            return;
+        };
+        let Some(origin) = self
+            .document_state
+            .pcb_board(&path)
+            .map(|board| board.options.origin)
+        else {
+            return;
+        };
+        let hidden = !self.pcb_layer_view(&path).origin_marker_visible();
+        if let Some(session) = self.interaction_state.board_sketch.as_mut() {
+            session.follow_board_origin(origin, hidden);
+        }
+    }
+
     /// The sketch mode of the board the main window shows, if it is on.
     pub(crate) fn board_sketch_in_view(&self) -> Option<&BoardSketchSession> {
         let session = self.interaction_state.board_sketch.as_ref()?;
@@ -319,6 +343,7 @@ impl Signex {
         let session = BoardSketchSession::open(&path, board);
         self.interaction_state.board_sketch = Some(session);
         self.sync_board_sketch_router();
+        self.sync_board_sketch_origin();
         // The board's own selection is hidden in the mode: no key may act
         // on it unseen.
         self.clear_pcb_selection();

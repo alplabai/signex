@@ -35,6 +35,7 @@ pub use carry::{
     followed_arcs, snap_point, via_carry_delta, with_arcs_replaced,
 };
 pub use content::BoardContentLayer;
+pub(crate) use grid::stroke_origin_marker;
 pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
 pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
