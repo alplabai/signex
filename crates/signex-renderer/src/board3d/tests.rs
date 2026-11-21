@@ -25,9 +25,15 @@ fn grey(level: f32) -> [f32; 4] {
 
 const OPAQUE: f32 = 1.0;
 
+/// `color` as translucent as solder mask.
+fn see_through(mut color: [f32; 4]) -> [f32; 4] {
+    color[3] = 0.88;
+    color
+}
+
 fn colors() -> Board3dColors {
     Board3dColors {
-        mask: [0.3, 0.3, 0.3, 0.88],
+        mask: see_through(grey(0.3)),
         substrate: grey(0.2),
         copper: grey(0.8),
         finish: grey(0.7),
