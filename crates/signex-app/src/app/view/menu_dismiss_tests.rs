@@ -174,7 +174,12 @@ fn a_paused_placement_leaves_the_window_buttons_working() {
             &[press(Button::Left), release(Button::Left)],
         )
         .iter()
-        .any(|m| matches!(m, Message::Window(crate::app::WindowMsg::MinimizeMainWindow)))
+        .any(|m| {
+            matches!(
+                m,
+                Message::Window(crate::app::WindowMsg::MinimizeMainWindow)
+            )
+        })
     };
     let along_the_title_bar = (0..60).flat_map(|step| {
         let x = WINDOW.width - 4.0 - step as f32 * 4.0;

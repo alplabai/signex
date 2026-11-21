@@ -431,9 +431,7 @@ pub(crate) fn covers_canvas_hover(id: OverlayId) -> bool {
     swallows_scroll(id)
         && !matches!(
             id,
-            OverlayId::TextEdit
-                | OverlayId::DockDragZone
-                | OverlayId::FloatingPanels
+            OverlayId::TextEdit | OverlayId::DockDragZone | OverlayId::FloatingPanels
         )
 }
 
