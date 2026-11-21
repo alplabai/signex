@@ -457,6 +457,8 @@ impl Signex {
             iced::widget::mouse_area(hint)
                 .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
         )
+        // A locked window takes no wheel either.
+        .capture_scroll(true)
         .boxed()
     }
 

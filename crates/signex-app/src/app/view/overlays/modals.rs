@@ -111,6 +111,8 @@ impl Signex {
                 &self.document_state.panel_ctx.tokens,
                 sections,
             ))
+            // Wheel over the modal must not zoom or pan the canvas below.
+            .capture_scroll(true)
             .boxed(),
         )
     }
@@ -144,6 +146,8 @@ impl Signex {
             iced::widget::opaque(crate::about_modal::view(
                 &self.document_state.panel_ctx.tokens,
             ))
+            // Wheel over the modal must not zoom or pan the canvas below.
+            .capture_scroll(true)
             .boxed(),
         )
     }
