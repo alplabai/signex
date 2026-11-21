@@ -1,0 +1,59 @@
+# ast-grep rule for scripts/check_projector_writes.sh, run on app/projector
+# only: a write to the engine map, the active path, or a dirty or saved mark.
+# Code nodes only, so a comment never matches. Kept out of ast-grep/rules on
+# purpose, like scripts/app-catch-unwind.yml.
+id: projector-write
+language: rust
+rule:
+  any:
+    # A mark or engine-map method, called as `x.name(..)` or `Type::name(..)`.
+    - kind: call_expression
+      has:
+        field: function
+        any:
+          - kind: field_expression
+            has:
+              field: field
+              regex: &marks '^(insert_engine|remove_engine|clear_active_engine|mark_saved|forget_save_point|mark_dirty|set_dirty|mark_document_dirty|mark_document_dirty_display_only|mark_history_edit_dirty|mark_document_clean|mark_landed_draft_clean|clear_document_dirty|mark_documents_clean_where|mark_active_document_dirty|mark_installed_engine_saved|mark_board_saved)$'
+          - kind: scoped_identifier
+            has:
+              field: name
+              regex: *marks
+    # `<..>.engines.insert(..)` / `.remove(..)`, however the chain is split.
+    - kind: call_expression
+      has:
+        field: function
+        kind: field_expression
+        all:
+          - has:
+              field: field
+              regex: '^(insert|remove)$'
+          - has:
+              field: value
+              kind: field_expression
+              has:
+                field: field
+                regex: '^engines$'
+    # `<..>.active_path = ..`; a local binding of that name is a read.
+    - kind: assignment_expression
+      has:
+        field: left
+        kind: field_expression
+        has:
+          field: field
+          regex: '^active_path$'
+  not:
+    inside:
+      stopBy: end
+      any:
+        - kind: mod_item
+        - kind: function_item
+        - kind: impl_item
+      follows:
+        stopBy:
+          not:
+            any:
+              - kind: attribute_item
+              - kind: line_comment
+              - kind: block_comment
+        pattern: '#[cfg(test)]'
