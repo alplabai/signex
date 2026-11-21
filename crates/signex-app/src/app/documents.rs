@@ -119,55 +119,6 @@ impl TabKind {
     }
 }
 
-#[derive(Debug)]
-pub struct SchematicTabSession {
-    title: String,
-    path: PathBuf,
-    dirty: bool,
-    engine: signex_engine::Engine,
-}
-
-impl SchematicTabSession {
-    pub fn new(engine: signex_engine::Engine, title: String, path: PathBuf, dirty: bool) -> Self {
-        Self {
-            title,
-            path,
-            dirty,
-            engine,
-        }
-    }
-
-    pub fn set_dirty(&mut self, dirty: bool) {
-        self.dirty = dirty;
-    }
-
-    /// A Save As write to `path` succeeded: re-key the session onto it. The
-    /// document counts as saved only if it has not changed since the
-    /// snapshot taken at `saved_revision`.
-    pub fn finish_save_as(&mut self, path: PathBuf, saved_revision: u64) {
-        self.engine.set_path(Some(path.clone()));
-        self.title = path
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Schematic".to_string());
-        self.path = path;
-        if self.engine.revision() == saved_revision {
-            self.dirty = false;
-            self.engine.mark_saved();
-        } else {
-            // The new file holds a snapshot the document has moved past (an
-            // undo back to an older state counts), so no undo or redo step
-            // reproduces it and the document is not saved.
-            self.engine.forget_save_point();
-            self.dirty = true;
-        }
-    }
-
-    pub fn into_parts(self) -> (signex_engine::Engine, String, PathBuf, bool) {
-        (self.engine, self.title, self.path, self.dirty)
-    }
-}
-
 /// Per-tab auxiliary document payload. Schematic tabs keep their
 /// engine in `DocumentState::engines` (keyed by path) rather than in
 /// this enum; currently only PCB tabs carry a document here. Kept as
