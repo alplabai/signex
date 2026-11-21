@@ -252,6 +252,7 @@ impl Signex {
                 Message::Pcb(PcbMsg::LayerSetMenu(event)) => through_layer_dropdown(event),
                 other => other,
             })
+            .boxed()
     }
 }
 

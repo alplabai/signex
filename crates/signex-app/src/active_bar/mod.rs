@@ -3,7 +3,7 @@
 //! 13 group buttons in four groups (Select / Place / Annotate), each with a
 //! dropdown menu behind its corner triangle.
 
-use iced::Element;
+use iced::{Element, Widget as _};
 use signex_i18n::I18n;
 use signex_types::theme::{ThemeId, ThemeTokens};
 
@@ -146,7 +146,7 @@ pub fn view_bar<'a>(
     // bar (the corner pill, separators, padding).
     iced::widget::mouse_area(signex_widgets::active_bar::view(items, tokens))
         .on_right_press(ActiveBarMsg::RightPressTaken)
-        .into()
+        .boxed()
 }
 
 #[cfg(test)]

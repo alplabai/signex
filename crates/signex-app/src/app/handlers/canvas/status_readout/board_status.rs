@@ -280,13 +280,14 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let left = self.status_popover_left(window, model.kind(), &board);
         let card = crate::status_bar::board_popover_view(&model, tokens, &ui.i18n)
-            .map(|event| Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))));
+            .map(|event| Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))))
+            .boxed();
         // The strip and its set button are hidden under Dropdown, so the
         // layer list carries the layer sets.
         let card: Element<'_, Message> = if matches!(model, BoardPopoverModel::LayerDropdown(_)) {
             iced::widget::column![self.layer_dropdown_sets(window), card]
                 .spacing(crate::status_bar::POPUP_GAP)
-                .into()
+                .boxed()
         } else {
             card
         };
