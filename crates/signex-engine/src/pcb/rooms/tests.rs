@@ -224,11 +224,35 @@ fn pulling_packs_the_members_outside_into_the_room() {
     assert_eq!(position(engine.board(), 1), Point::new(5.1, 5.2));
 }
 
+/// A silkscreen line from -0.5 to 0.5 mm, 0.4 mm wide, on every part: a
+/// 1.4 by 0.4 mm placed extent.
+fn with_extent(mut board: PcbBoard) -> PcbBoard {
+    let line: signex_types::pcb::FpGraphic = serde_json::from_value(json!({
+        "graphic_type": "line", "layer": "TopSilkscreen", "width": 0.4,
+        "start": {"x": -0.5, "y": 0.0}, "end": {"x": 0.5, "y": 0.0},
+        "center": null, "mid": null, "position": null
+    }))
+    .unwrap();
+    for fp in &mut board.footprints {
+        fp.graphics = vec![line.clone()];
+    }
+    board
+}
+
+/// Where part `n`'s placed extent lies on the board.
+fn placed_box(board: &PcbBoard, n: u128) -> pcb_geom::RectNm {
+    let id = Uuid::from_u128(n);
+    let fp = board.footprints.iter().find(|fp| fp.uuid == id).unwrap();
+    let extent = pcb_geom::placed_extent(fp).unwrap();
+    let at = pcb_geom::PointNm::from_mm(fp.position, "test part").unwrap();
+    pcb_geom::RectNm::new(at.plus(extent.min), at.plus(extent.max))
+}
+
 /// Caner (2026-11-20): Pull packs as Arrange in Box does, on the components
 /// grid and a gap clear of the member already inside.
 #[test]
 fn pulling_packs_on_the_grid_clear_of_the_members_inside() {
-    let mut engine = BoardEngine::new(board(), 1);
+    let mut engine = BoardEngine::new(with_extent(board()), 1);
     add(&mut engine, room(100, rect(4.0, 4.0, 4.0, 4.0), SHEET_A));
     let id = Uuid::from_u128(100);
     let inside = position(engine.board(), 1);
@@ -239,10 +263,15 @@ fn pulling_packs_on_the_grid_clear_of_the_members_inside() {
     assert!(members_outside(&board.rooms[0], board).is_empty());
     let pulled = position(board, 2);
     assert_eq!(position(board, 1), inside, "the member inside stays");
-    let gap = crate::pcb::board_tools::ARRANGE_GAP_MM - 1e-9;
+    let gap = pcb_geom::mm_to_nm(crate::pcb::board_tools::ARRANGE_GAP_MM, "gap").unwrap();
+    let (kept, packed) = (placed_box(board, 1), placed_box(board, 2));
     assert!(
-        (pulled.x - inside.x).abs() >= gap || (pulled.y - inside.y).abs() >= gap,
-        "{pulled:?} keeps the gap to {inside:?}"
+        kept.max.x > kept.min.x && kept.max.y > kept.min.y,
+        "{kept:?} has an area"
+    );
+    assert!(
+        !kept.inflate(gap - 1).intersects(&packed),
+        "{packed:?} keeps the {gap} nm gap to {kept:?}"
     );
     let grid =
         crate::pcb::placement::grid_for(board, signex_types::pcb_options::GridUse::Components);
