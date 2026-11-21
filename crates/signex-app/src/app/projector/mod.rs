@@ -35,6 +35,10 @@ pub(crate) enum RefreshScope {
     /// The by-path tail's: every slot showing the sheet, and when it is the
     /// active one its selection and ERC markers.
     Sheet,
+    /// A member of a multi-sheet step other than the active sheet: only the
+    /// windows and tile pane showing it; the wrapper re-derives the panel
+    /// context once for the whole step.
+    Member,
 }
 
 impl Signex {

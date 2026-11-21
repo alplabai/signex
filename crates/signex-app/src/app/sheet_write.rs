@@ -154,7 +154,7 @@ impl Signex {
             kind,
             ..Default::default()
         };
-        let mut active_patch = None;
+        let (mut active_patch, mut members) = (None, Vec::new());
         for done in &changed {
             recorded.live.push(done.path.clone());
             if done.tabless {
@@ -163,15 +163,17 @@ impl Signex {
             if active.as_deref() == Some(done.path.as_path()) {
                 active_patch = done.patch;
             } else {
-                self.document_state.mark_history_edit_dirty(&done.path);
                 let patch = done.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
-                self.repaint_member_sheet(&done.path, patch);
+                members.push((done.path.clone(), patch));
             }
         }
-        self.set_undo_group_sheets(group, recorded);
-        if let Some(patch) = active_patch {
-            self.finish_schematic_mutation(patch, true, true);
-        }
+        let run = crate::app::state::sheet_change::SheetRun {
+            group,
+            recorded,
+            members,
+            notes_edit: false,
+        };
+        self.finish_schematic_mutation(active_patch, Some(run), true, true);
         self.refresh_panel_ctx();
     }
 }

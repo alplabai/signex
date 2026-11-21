@@ -364,7 +364,7 @@ impl Signex {
             kind: crate::app::UndoGroupKind::Replace,
             ..Default::default()
         };
-        let mut active_patch = None;
+        let (mut active_patch, mut members) = (None, Vec::new());
         let mut replaced = 0usize;
         for done in &applied {
             replaced += done.hits;
@@ -375,21 +375,21 @@ impl Signex {
             if active.as_deref() == Some(done.path.as_path()) {
                 active_patch = done.patch;
             } else {
-                // Recorded in the sheet's history: undo back to the save
-                // point clears the mark.
-                self.document_state.mark_history_edit_dirty(&done.path);
                 let patch = done.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
-                self.repaint_member_sheet(&done.path, patch);
+                members.push((done.path.clone(), patch));
             }
         }
         let names: Vec<String> = applied
             .iter()
             .map(|a| shown_path(project_dir, &a.path))
             .collect();
-        self.set_undo_group_sheets(group, recorded);
-        if let Some(patch) = active_patch {
-            self.finish_schematic_mutation(patch, true, true);
-        }
+        let run = crate::app::state::sheet_change::SheetRun {
+            group,
+            recorded,
+            members,
+            notes_edit: false,
+        };
+        self.finish_schematic_mutation(active_patch, Some(run), true, true);
         self.refresh_panel_ctx();
         crate::diagnostics::log_info(if names.is_empty() {
             "Replaced 0 on 0 sheets".to_string()

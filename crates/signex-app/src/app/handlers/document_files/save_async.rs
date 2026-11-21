@@ -429,9 +429,18 @@ impl Signex {
 
     pub(crate) fn document_is_held_open(&self, path: &std::path::Path) -> bool {
         self.document_state.tabs.iter().any(|tab| tab.path == path)
-            || self.ui_state.windows.values().any(|kind| {
-                matches!(kind, crate::app::state::WindowKind::UndockedTab { path: p, .. } if p == path)
+            || self.undocked_sheet_paths().contains(path)
+    }
+
+    /// The documents an undocked window shows: with the tabs, what holds a
+    /// document open.
+    pub(crate) fn undocked_sheet_paths(&self) -> std::collections::HashSet<PathBuf> {
+        (self.ui_state.windows.values())
+            .filter_map(|kind| match kind {
+                crate::app::state::WindowKind::UndockedTab { path, .. } => Some(path.clone()),
+                _ => None,
             })
+            .collect()
     }
 
     /// Save As landed: re-key and retitle the tab, but only if it is still
