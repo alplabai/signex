@@ -5,7 +5,6 @@ define_ids! {
     FAB_OUTPUTS;
     FAB_OUTPUTS_TITLE = "fab-outputs-title";
     FAB_OUTPUTS_SUBTITLE = "fab-outputs-subtitle";
-    FAB_OUTPUTS_TOOLTIP = "fab-outputs-tooltip";
     FAB_OUTPUTS_INTRO = "fab-outputs-intro";
     FAB_OUTPUTS_GROUP_FABRICATION = "fab-outputs-group-fabrication";
     FAB_OUTPUTS_GROUP_SINGLE_FILE = "fab-outputs-group-single-file";
