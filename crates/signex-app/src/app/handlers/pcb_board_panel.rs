@@ -209,8 +209,14 @@ impl Signex {
     /// A Fast Grids button: the board's snap step becomes that fast grid.
     fn apply_pcb_fast_grid(&mut self, index: usize) {
         if let Some(mm) = self.ui_state.fast_grids_mm.get(index).copied() {
-            self.set_pcb_grid_step(f64::from(mm));
+            self.set_pcb_grid_preset(mm);
         }
+    }
+
+    /// The board's snap step becomes a preset held as `f32`, without its
+    /// float noise (0.1 stays 0.1, not 0.10000000149).
+    pub(crate) fn set_pcb_grid_preset(&mut self, mm: f32) {
+        self.set_pcb_grid_step((f64::from(mm) * 1e6).round() / 1e6);
     }
 
     fn say_pcb_grid_refused(&self, why: impl std::fmt::Display) {
@@ -218,8 +224,8 @@ impl Signex {
         crate::diagnostics::log_warning(line.into_string());
     }
 
-    /// Set the board's snap step as one undo step; a refusal is said in the
-    /// Messages panel.
+    /// Set the board's snap step as one undo step; the step it already has
+    /// is no edit. A refusal is said in the Messages panel.
     fn set_pcb_grid_step(&mut self, grid_mm: f64) {
         let Some(path) = self.active_tab_path() else {
             return;
@@ -227,6 +233,9 @@ impl Signex {
         let Some(engine) = self.document_state.board_engine(&path) else {
             return;
         };
+        if signex_engine::pcb::placement::grid_step_mm(engine.board()) == grid_mm {
+            return;
+        }
         let label = t!(self.ui_state.i18n, ids::PCB_BOARD_GRID_UNDO).into_string();
         let step = CheckedStep {
             label: &label,
