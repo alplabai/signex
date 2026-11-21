@@ -131,6 +131,8 @@ fn edit_buffer(editor: &mut FootprintDocument, next: impl FnOnce(&str) -> Option
 
 /// What a committed edit writes.
 enum ValueWrite {
+    /// What was entered is what the dimension already shows: no edit.
+    Unchanged,
     Constraint(ConstraintId, DimTarget),
     Pattern(ArrayId, PatternField, String),
 }
@@ -151,12 +153,19 @@ fn prepared_write(editor: &FootprintDocument, edit: &ValueEdit) -> Option<ValueW
         ValueTarget::Constraint(id) => {
             let constraint = sketch.constraints.iter().find(|c| c.id == id)?;
             let params = value_edit::resolved_params(sketch, &editor.state);
-            value_edit::parse_constraint_buffer(&edit.buffer, &constraint.kind, &params).map(
-                |shown| {
-                    let target = editor.state.stored_target(&constraint.kind, shown);
-                    ValueWrite::Constraint(id, target)
-                },
-            )
+            let typed =
+                value_edit::parse_constraint_buffer(&edit.buffer, &constraint.kind, &params)?;
+            if value_edit::repeats_shown_board_angle(
+                &editor.state,
+                &constraint.kind,
+                &edit.buffer,
+                &typed,
+                &params,
+            ) {
+                return Some(ValueWrite::Unchanged);
+            }
+            let target = editor.state.stored_target(&constraint.kind, typed);
+            Some(ValueWrite::Constraint(id, target))
         }
         ValueTarget::Pattern(array, field) => {
             let typed = edit.buffer.trim();
@@ -171,6 +180,7 @@ fn write_value(fp: &mut Footprint, write: &ValueWrite) {
         return;
     };
     match write {
+        ValueWrite::Unchanged => {}
         ValueWrite::Constraint(id, new_target) => {
             let Some(constraint) = sketch.constraints.iter_mut().find(|c| c.id == *id) else {
                 return;
@@ -208,6 +218,9 @@ fn commit_value(editor: &mut FootprintDocument) {
         return;
     };
     editor.state.sketch_overlay.value_edit = None;
+    if matches!(write, ValueWrite::Unchanged) {
+        return;
+    }
     record_sketch_change(editor, |state, fp| {
         mutate_solve_or_revert(state, fp, |fp| write_value(fp, &write))
     });

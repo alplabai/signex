@@ -7,7 +7,7 @@ use std::borrow::Cow;
 
 use pcb_geom::{GraphicShape, PointNm};
 use signex_sketch::constraint::{ConstraintKind, DimTarget};
-use signex_sketch::mirrored_angle::{mirrored_parameter, mirrored_reference};
+use signex_sketch::mirrored_angle::{mirrored_expression, unmirrored_expression};
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
 use signex_types::pcb_origin::BoardOrigin;
 
@@ -139,8 +139,8 @@ impl super::FootprintEditorState {
     }
 
     /// `kind` with an angle as the user reads it: a literal negated, and a
-    /// negated parameter (`-angle_1`) as that parameter. Any other
-    /// expression keeps the text the sketch stores.
+    /// mirrored expression (`-angle_1`, `-(a+b)`) as what was typed. Any
+    /// other expression keeps the text the sketch stores.
     pub fn shown_constraint<'k>(&self, kind: &'k ConstraintKind) -> Cow<'k, ConstraintKind> {
         let ConstraintKind::Angle { l1, l2, target } = kind else {
             return Cow::Borrowed(kind);
@@ -150,8 +150,8 @@ impl super::FootprintEditorState {
         }
         let shown = match target {
             DimTarget::Literal(rad) => DimTarget::Literal(0.0 - rad),
-            DimTarget::Expr(source) => match mirrored_parameter(source) {
-                Some(name) => DimTarget::Expr(name.to_string()),
+            DimTarget::Expr(source) => match unmirrored_expression(source) {
+                Some(typed) => DimTarget::Expr(typed.to_string()),
                 None => return Cow::Borrowed(kind),
             },
         };
@@ -162,24 +162,15 @@ impl super::FootprintEditorState {
         })
     }
 
-    /// The target to store for `kind` when the user entered `shown`. A name
-    /// entered on a dimension that reads a parameter negated stays negated.
+    /// The target to store for `kind` when the user entered `shown`: on a
+    /// board angle, its exact negation, since what is typed reads Y-up.
     pub fn stored_target(&self, kind: &ConstraintKind, shown: DimTarget) -> DimTarget {
-        let ConstraintKind::Angle { target, .. } = kind else {
-            return shown;
-        };
-        if self.board_backdrop.is_none() {
+        if self.board_backdrop.is_none() || !matches!(kind, ConstraintKind::Angle { .. }) {
             return shown;
         }
-        match (target, shown) {
-            (_, DimTarget::Literal(rad)) => DimTarget::Literal(0.0 - rad),
-            (DimTarget::Expr(stored), DimTarget::Expr(typed))
-                if mirrored_parameter(stored).is_some()
-                    && mirrored_parameter(&mirrored_reference(typed.trim())).is_some() =>
-            {
-                DimTarget::Expr(mirrored_reference(typed.trim()))
-            }
-            (_, shown) => shown,
+        match shown {
+            DimTarget::Literal(rad) => DimTarget::Literal(0.0 - rad),
+            DimTarget::Expr(typed) => DimTarget::Expr(mirrored_expression(&typed)),
         }
     }
 

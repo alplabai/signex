@@ -199,6 +199,37 @@ pub fn parse_constraint_buffer(
         .then_some(target)
 }
 
+/// Whether what was entered on a board angle is what it already shows: the
+/// same text, or on a bound angle the same value with no parameter in it.
+/// Writing it would mirror a stored expression, so nothing is written.
+pub fn repeats_shown_board_angle(
+    state: &FootprintEditorState,
+    kind: &ConstraintKind,
+    buffer: &str,
+    typed: &DimTarget,
+    params: &HashMap<String, f64>,
+) -> bool {
+    use signex_sketch::solver::residual::resolve_dim;
+    if state.board_backdrop.is_none() || !matches!(kind, ConstraintKind::Angle { .. }) {
+        return false;
+    }
+    let shown = state.shown_constraint(kind);
+    if constraint_buffer(&shown).is_some_and(|text| text.trim() == buffer.trim()) {
+        return true;
+    }
+    let expression = shown
+        .dim_target()
+        .filter(|target| matches!(target, DimTarget::Expr(_)));
+    let Some(bound) = expression else {
+        return false;
+    };
+    let entered = resolve_dim(typed, &HashMap::new());
+    matches!(
+        (entered, resolve_dim(bound, params)),
+        (Ok(a), Ok(b)) if (a - b).abs() < 1e-9
+    )
+}
+
 /// Evaluate `source` against the parameter table of `sketch`, each
 /// parameter in the unit family it declares.
 pub fn eval_source(sketch: &SketchData, source: &str) -> Option<Quantity> {

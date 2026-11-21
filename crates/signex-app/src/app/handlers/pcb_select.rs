@@ -340,9 +340,10 @@ impl Signex {
 /// while a carry of objects on the board is anchored, the board is drawn
 /// without them (footprints, vias or one text) and the tracks that follow
 /// them, and those are drawn at its offset; otherwise the whole board.
-/// `ratsnest` is the cache and the board path when the view shows it: during the carry the ratsnest is
-/// drawn with the carried footprints, read off the board as the drop would
-/// leave it, so its lines stay on the carried pads (#2379).
+/// `ratsnest` is the cache and the board path when the view shows it: during
+/// the carry the ratsnest is drawn with the carried footprints, read off the
+/// board as the drop would leave it, so its lines stay on the carried pads
+/// (#2379). It is computed only when the offset changes.
 fn sync_drag_preview(
     canvas: &mut PcbCanvas,
     board: &PcbBoard,
@@ -356,20 +357,17 @@ fn sync_drag_preview(
         canvas.end_drag_preview();
         return;
     };
+    if let Some(text) = carry.text {
+        sync_text_drag_preview(canvas, board, view, standard, text, carry.delta);
+        return;
+    }
     let carried = carry.carried();
-    let begun = match carry.text {
-        Some(text) => canvas.previews_text_drag_of(text),
-        None => canvas.previews_drag_of(&carried, carry.leaves_tracks),
-    };
-    if !begun {
+    if !canvas.previews_drag_of(&carried, carry.leaves_tracks) {
         // Once per carry and per Ctrl switch: the tracks that follow what
         // is carried (none with Ctrl), and the board without what it
         // carries, with its pour fills.
         let following = carry.following(board);
-        let mut rest = match carry.text {
-            Some(text) => board_without_text(board, text),
-            None => board_without(board, &carried, &following),
-        };
+        let mut rest = board_without(board, &carried, &following);
         let arcs = carry.following_arcs(board);
         rest.free
             .arcs
@@ -378,20 +376,12 @@ fn sync_drag_preview(
         let base = PcbSnapshot::from_board_with_view(&rest, view)
             .with_designator_standard(standard)
             .with_zone_fills(&fills);
-        match carry.text {
-            Some(text) => canvas.begin_text_drag_preview(text, base),
-            None => {
-                canvas.begin_drag_preview(carried.clone(), carry.leaves_tracks, following, base);
-            }
-        }
+        canvas.begin_drag_preview(carried.clone(), carry.leaves_tracks, following, base);
     }
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
         let arcs = followed_arcs(board, &carry.following_arcs(board), carry.delta);
-        let mut moved = match carry.text {
-            Some(text) => carried_text_board(board, text, carry.delta),
-            None => carried_board(board, &carried, &following, carry.delta),
-        };
+        let mut moved = carried_board(board, &carried, &following, carry.delta);
         moved.free.arcs = arcs.clone();
         let snapshot =
             PcbSnapshot::from_board_with_view(&moved, view).with_designator_standard(standard);
@@ -406,5 +396,35 @@ fn sync_drag_preview(
             }
             None => snapshot,
         }
+    });
+}
+
+/// The preview of one footprint text on the move. A text changes no copper,
+/// so the board drawn keeps its pour fills and ratsnest: only its texts are
+/// read again, once, and no fill or ratsnest is computed.
+fn sync_text_drag_preview(
+    canvas: &mut PcbCanvas,
+    board: &PcbBoard,
+    view: &PcbLayerView,
+    standard: Option<signex_types::designator::DesignatorStandard>,
+    text: (uuid::Uuid, pcb_geom::BoardTextField),
+    delta: signex_types::pcb::Point,
+) {
+    if !canvas.previews_text_drag_of(text) {
+        canvas.end_drag_preview();
+        let without = PcbSnapshot::from_board_with_view(&board_without_text(board, text), view)
+            .with_designator_standard(standard);
+        let base = match canvas.active_renderer_snapshot() {
+            Some(shown) => PcbSnapshot {
+                texts: without.texts,
+                ..shown.clone()
+            },
+            None => without,
+        };
+        canvas.begin_text_drag_preview(text, base);
+    }
+    canvas.move_drag_preview(delta, || {
+        PcbSnapshot::from_board_with_view(&carried_text_board(board, text, delta), view)
+            .with_designator_standard(standard)
     });
 }

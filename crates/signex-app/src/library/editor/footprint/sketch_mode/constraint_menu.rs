@@ -152,10 +152,14 @@ fn kind_name(kind: &ConstraintKind) -> MessageId {
     }
 }
 
-/// The parameter a dimension's target is bound to, if any.
+/// The parameter a dimension's target is bound to, if any, read through a
+/// board angle's mirrored form (`-slope`, `-(-slope)`).
 fn bound_name(kind: &ConstraintKind, sketch: &SketchData) -> Option<String> {
     match kind.dim_target()? {
-        DimTarget::Expr(source) => value_edit::bound_parameter(source, sketch).map(str::to_owned),
+        DimTarget::Expr(source) => {
+            let read = signex_sketch::mirrored_angle::read_through_mirrors(source);
+            value_edit::bound_parameter(read, sketch).map(str::to_owned)
+        }
         DimTarget::Literal(_) => None,
     }
 }

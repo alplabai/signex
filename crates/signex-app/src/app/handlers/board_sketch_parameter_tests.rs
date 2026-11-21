@@ -20,6 +20,7 @@ use crate::library::editor::footprint::sketch_mode::value_edit::{
 };
 use crate::library::editor::footprint::sketch_mode::{SketchCanvasMsg, SketchEdit};
 use crate::library::editor::footprint::snap::point_pos;
+use crate::library::editor::footprint::state::sketch_overlay::ValueTarget;
 use crate::library::messages::FootprintEditorMsg;
 
 /// A fixed base line from (10, 10) to (20, 10) and a 10 mm arm from (10, 10)
@@ -188,6 +189,146 @@ fn changing_the_parameter_turns_the_line_counter_clockwise_on_screen() {
     let close = |a: f64, b: f64| (a - b).abs() < 1e-3;
     assert!(close(x, 10.0 + 10.0 * rad.cos()), "{x}");
     assert!(close(y, 10.0 - 10.0 * rad.sin()), "{y}");
+}
+
+/// Open the angle's value edit, replace its text with `text`, press Enter.
+fn type_on(app: &mut Signex, path: &std::path::Path, id: ConstraintId, text: &str) {
+    let mut canvas = |msg| sketch_edit(app, path, FootprintEditorMsg::SketchCanvas(msg));
+    canvas(SketchCanvasMsg::ValueEditOpened(ValueTarget::Constraint(id)));
+    for _ in 0..32 {
+        canvas(SketchCanvasMsg::ValueErased);
+    }
+    for ch in text.chars() {
+        canvas(SketchCanvasMsg::ValueTyped(ch));
+    }
+    canvas(SketchCanvasMsg::ValueCommitted);
+}
+
+/// The angle's edit text and its value on the drawing.
+fn reads(app: &Signex, id: ConstraintId) -> (String, String) {
+    let session = app.interaction_state.board_sketch.as_ref().expect("on");
+    let state = &session.editor.state;
+    let data = session.working_sketch();
+    let kind = &data
+        .constraints
+        .iter()
+        .find(|c| c.id == id)
+        .expect("the angle")
+        .kind;
+    let shown = state.shown_constraint(kind);
+    let params = resolved_params(&data, state);
+    let (_, value) =
+        dimension_label(&shown, &data, &params, &state.canvas_text).expect("a label");
+    (constraint_buffer(&shown).expect("a value"), value)
+}
+
+fn with_parameters(app: &mut Signex, sketch: &AngleSketch) {
+    let mut data = sketch.data.clone();
+    for (name, value) in [
+        ("slope", "25deg"),
+        ("angle_2", "20deg"),
+        ("a", "10deg"),
+        ("b", "15deg"),
+    ] {
+        data.parameters.insert(name, value);
+    }
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    install(&mut session.editor, data);
+}
+
+/// Whatever is typed on a board angle means that value Y-up: it reads back
+/// as typed, turns the line that way on screen, survives a save and undoes
+/// in one step.
+#[test]
+fn a_typed_expression_keeps_the_sense_it_shows() {
+    for (typed, degrees) in [
+        ("30deg", 30.0_f64),
+        ("slope", 25.0),
+        ("-30deg", -30.0),
+        ("-angle_2", -20.0),
+        ("(a+b)", 25.0),
+    ] {
+        let (mut app, _tmp, path, sketch) = on_board(-10.0);
+        with_parameters(&mut app, &sketch);
+        let before = angle_target(&board_sketch_data(&app), sketch.angle);
+        type_on(&mut app, &path, sketch.angle, typed);
+
+        let (text, value) = reads(&app, sketch.angle);
+        assert_eq!(text, typed);
+        assert!(value.starts_with(&format!("{degrees:.0}")), "{typed}: {value}");
+        let (x, y) = solved_board_point(&app, sketch.arm_end);
+        let rad = degrees.to_radians();
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-3;
+        assert!(close(x, 10.0 + 10.0 * rad.cos()), "{typed}: x {x}");
+        assert!(close(y, 10.0 - 10.0 * rad.sin()), "{typed}: y {y}");
+
+        let saved = board_sketch_data(&app);
+        let file = serde_json::to_string(&saved).expect("written");
+        let loaded: SketchData = serde_json::from_str(&file).expect("read");
+        assert_eq!(
+            angle_target(&loaded, sketch.angle),
+            angle_target(&saved, sketch.angle)
+        );
+
+        send(&mut app, Message::Edit(EditMsg::Undo));
+        let undone = board_sketch_data(&app);
+        assert_eq!(angle_target(&undone, sketch.angle), before, "{typed}");
+    }
+}
+
+/// Typing what a bound angle already shows is no edit: the one undo step
+/// that follows is the Make parameter before it.
+#[test]
+fn the_same_number_on_a_bound_angle_changes_nothing() {
+    let (mut app, _tmp, path, sketch) = on_board(-30.0);
+    let literal = angle_target(&board_sketch_data(&app), sketch.angle);
+    make_parameter(&mut app, &path, sketch.angle);
+    let bound = board_sketch_data(&app);
+    type_on(&mut app, &path, sketch.angle, "30");
+    assert_eq!(board_sketch_data(&app), bound);
+    send(&mut app, Message::Edit(EditMsg::Undo));
+    assert_eq!(angle_target(&board_sketch_data(&app), sketch.angle), literal);
+}
+
+/// An older dimension stored as `slope` reads its stored sense: its number
+/// does not mirror it, and a different number becomes a Y-up literal.
+#[test]
+fn a_plain_bound_angle_keeps_its_number_and_takes_a_new_one_y_up() {
+    let (mut app, _tmp, path, sketch) = on_board(30.0);
+    let mut data = sketch.data.clone();
+    data.parameters.insert("slope", "30deg");
+    for constraint in &mut data.constraints {
+        if constraint.id == sketch.angle
+            && let ConstraintKind::Angle { target, .. } = &mut constraint.kind
+        {
+            *target = DimTarget::Expr("slope".into());
+        }
+    }
+    let session = app.interaction_state.board_sketch.as_mut().expect("on");
+    install(&mut session.editor, data);
+    let bound = board_sketch_data(&app);
+    for same in ["30", "30deg", "slope"] {
+        type_on(&mut app, &path, sketch.angle, same);
+        assert_eq!(board_sketch_data(&app), bound, "{same}");
+    }
+    type_on(&mut app, &path, sketch.angle, "40");
+    assert_eq!(
+        angle_target(&board_sketch_data(&app), sketch.angle),
+        DimTarget::Literal(0.0 - 40.0_f64.to_radians())
+    );
+}
+
+#[test]
+fn a_typed_expression_on_a_footprint_angle_is_stored_as_typed() {
+    let (mut app, path) = footprint_sketching();
+    let sketch = angle_sketch(-10.0);
+    let editor = app.document_state.footprint_editors.get_mut(&path);
+    install(editor.expect("the editor"), sketch.data.clone());
+    type_on(&mut app, &path, sketch.angle, "30deg");
+    assert_eq!(
+        angle_target(&footprint_sketch_data(&app, &path), sketch.angle),
+        DimTarget::Expr("30deg".into())
+    );
 }
 
 /// Entering the same name on a negated dimension keeps it negated.

@@ -22,6 +22,53 @@ pub fn mirrored_reference(name: &str) -> String {
     format!("-{name}")
 }
 
+/// The exact negation of what the user typed: `-name` for a plain name,
+/// `-(typed)` for anything else, so `-name` typed stays distinct.
+pub fn mirrored_expression(typed: &str) -> String {
+    let body = expression_body(typed);
+    if is_identifier(body) {
+        mirrored_reference(body)
+    } else {
+        format!("-({body})")
+    }
+}
+
+/// What [`mirrored_expression`] negated, when `stored` is that form.
+pub fn unmirrored_expression(stored: &str) -> Option<&str> {
+    if let Some(name) = mirrored_parameter(stored) {
+        return Some(name);
+    }
+    let inner = expression_body(stored)
+        .strip_prefix("-(")?
+        .strip_suffix(')')?;
+    is_balanced(inner).then(|| inner.trim())
+}
+
+/// The parameter `source` reads through any mirrored layers, or `source`
+/// itself: `-(-slope)` and `-slope` both read `slope`.
+pub fn read_through_mirrors(source: &str) -> &str {
+    let mut read = source;
+    while let Some(inner) = unmirrored_expression(read) {
+        read = inner;
+    }
+    read
+}
+
+/// Whether every bracket in `text` closes inside it, so a `-(` before it
+/// and a `)` after it are one group.
+fn is_balanced(text: &str) -> bool {
+    let mut depth = 0_usize;
+    for c in text.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' if depth == 0 => return false,
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    depth == 0
+}
+
 /// Name the literal angle `constraint` by the value read in the opposite
 /// sense: a new parameter holds that value and the dimension reads its
 /// negative, so the angle the solver sees is the same to within the 1e-9
@@ -64,5 +111,25 @@ mod tests {
         assert_eq!(mirrored_parameter("angle_1"), None);
         assert_eq!(mirrored_parameter("-30deg"), None);
         assert_eq!(mirrored_parameter("-(a + b)"), None);
+    }
+
+    #[test]
+    fn a_typed_expression_comes_back_from_its_negation() {
+        for typed in ["30deg", "slope", "-30deg", "-angle_2", "(a+b)", "-(a+b)"] {
+            let stored = mirrored_expression(typed);
+            assert_eq!(unmirrored_expression(&stored), Some(typed), "{stored}");
+        }
+        assert_eq!(mirrored_expression("slope"), "-slope");
+        assert_eq!(mirrored_expression("-slope"), "-(-slope)");
+        assert_eq!(mirrored_expression("= a + b"), "-(a + b)");
+    }
+
+    #[test]
+    fn only_one_whole_negated_group_is_a_mirrored_form() {
+        assert_eq!(unmirrored_expression("slope"), None);
+        assert_eq!(unmirrored_expression("-30deg"), None);
+        assert_eq!(unmirrored_expression("-(a)+(b)"), None);
+        assert_eq!(read_through_mirrors("-(-slope)"), "slope");
+        assert_eq!(read_through_mirrors("a+b"), "a+b");
     }
 }

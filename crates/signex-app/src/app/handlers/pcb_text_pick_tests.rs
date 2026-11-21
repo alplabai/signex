@@ -155,6 +155,30 @@ fn a_dragged_designator_moves_itself_with_no_ghost() {
     assert!(scene.top_polygons.is_empty(), "its pads do not move");
 }
 
+/// No counter sees the fill or ratsnest code, so a marker line stands in: a
+/// recomputed board would lose it.
+#[test]
+fn a_text_drag_keeps_the_ratsnest_and_fills_it_had() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_with_board(dir.path());
+    let canvas = &mut app.interaction_state.pcb_canvas;
+    let mut shown = canvas.active_renderer_snapshot().expect("a board").clone();
+    shown.ratsnest_lines.push(signex_renderer::pcb::RatsnestInput {
+        p0: [1.0, 2.0],
+        p1: [3.0, 4.0],
+        net: 77,
+    });
+    canvas.set_renderer_snapshot(Some(shown));
+    drag(&mut app, Point::new(10.0, 10.0), Point::new(13.0, 12.0));
+    drag(&mut app, Point::new(10.0, 10.0), Point::new(14.0, 12.5));
+    let canvas = &app.interaction_state.pcb_canvas;
+    assert_eq!(canvas.drag_preview_texts()[0].position, [14.0, 12.5]);
+    let base = canvas.active_renderer_snapshot().expect("a board");
+    assert!(base.texts.is_empty(), "the text left its old place");
+    assert_eq!(base.ratsnest_lines.len(), 1, "the ratsnest is the one shown");
+    assert_eq!(base.ratsnest_lines[0].net, 77);
+}
+
 #[test]
 fn a_dragged_footprint_moves_itself_with_no_ghost() {
     let dir = tempfile::tempdir().unwrap();
