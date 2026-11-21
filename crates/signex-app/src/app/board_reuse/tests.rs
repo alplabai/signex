@@ -788,3 +788,33 @@ fn a_menu_place_of_a_kept_block_while_a_read_is_owed_places_it_at_once() {
     assert_eq!(at(&app, &board, R2), (54.0, 50.0), "placed, {said:?}");
     assert!(app.document_state.agent_edits.finished.is_empty());
 }
+
+/// A menu run ends `from_view`: an agent's Place after it, while the
+/// project's blocks are owed a read, still reads them first (`Deferred`).
+#[test]
+fn an_agent_place_after_a_menu_place_still_reads_the_blocks_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    save_channel_a(&mut app);
+    place_on_u2(&mut app, "R1-U1");
+    assert!(translator::ran("place_board_reuse_block"));
+    assert!(!app.agent.from_view, "the translator restores it");
+
+    let failed = super::BlocksOnDisk {
+        error: Some("the read did not finish".into()),
+        ..Default::default()
+    };
+    let blocks = &mut app.document_state.reuse_blocks;
+    blocks.land(dir.path(), &failed);
+    blocks.retry_failed_read(dir.path());
+    let command = AppCommandId::new("place_board_reuse_block").unwrap();
+    let document = format!("document={}", board.display());
+    let args = CommandArgs::parse_operands(&command, &[&document, "name=R1-U1", "designator=U2"])
+        .expect("operands parse");
+    let (outcome, _) = app.run_operands(&command, &args);
+
+    assert!(
+        matches!(outcome, CommandOutcome::Deferred { .. }),
+        "{outcome:?}"
+    );
+}
