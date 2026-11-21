@@ -7,6 +7,7 @@ use std::borrow::Cow;
 
 use pcb_geom::{GraphicShape, PointNm};
 use signex_sketch::constraint::{ConstraintKind, DimTarget};
+use signex_sketch::mirrored_angle::{mirrored_parameter, mirrored_reference};
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
 use signex_types::pcb_origin::BoardOrigin;
 
@@ -137,30 +138,46 @@ impl super::FootprintEditorState {
         }
     }
 
-    /// `kind` with a literal angle as the user reads it. An angle bound to
-    /// an expression keeps its text, which the sketch stores.
+    /// `kind` with an angle as the user reads it: a literal negated, and a
+    /// negated parameter (`-angle_1`) as that parameter. Any other
+    /// expression keeps the text the sketch stores.
     pub fn shown_constraint<'k>(&self, kind: &'k ConstraintKind) -> Cow<'k, ConstraintKind> {
-        match kind {
-            ConstraintKind::Angle {
-                l1,
-                l2,
-                target: DimTarget::Literal(rad),
-            } if self.board_backdrop.is_some() => Cow::Owned(ConstraintKind::Angle {
-                l1: *l1,
-                l2: *l2,
-                target: DimTarget::Literal(0.0 - rad),
-            }),
-            _ => Cow::Borrowed(kind),
+        let ConstraintKind::Angle { l1, l2, target } = kind else {
+            return Cow::Borrowed(kind);
+        };
+        if self.board_backdrop.is_none() {
+            return Cow::Borrowed(kind);
         }
+        let shown = match target {
+            DimTarget::Literal(rad) => DimTarget::Literal(0.0 - rad),
+            DimTarget::Expr(source) => match mirrored_parameter(source) {
+                Some(name) => DimTarget::Expr(name.to_string()),
+                None => return Cow::Borrowed(kind),
+            },
+        };
+        Cow::Owned(ConstraintKind::Angle {
+            l1: *l1,
+            l2: *l2,
+            target: shown,
+        })
     }
 
-    /// The target to store for `kind` when the user entered `shown`.
+    /// The target to store for `kind` when the user entered `shown`. A name
+    /// entered on a dimension that reads a parameter negated stays negated.
     pub fn stored_target(&self, kind: &ConstraintKind, shown: DimTarget) -> DimTarget {
-        match (kind, shown) {
-            (ConstraintKind::Angle { .. }, DimTarget::Literal(rad))
-                if self.board_backdrop.is_some() =>
+        let ConstraintKind::Angle { target, .. } = kind else {
+            return shown;
+        };
+        if self.board_backdrop.is_none() {
+            return shown;
+        }
+        match (target, shown) {
+            (_, DimTarget::Literal(rad)) => DimTarget::Literal(0.0 - rad),
+            (DimTarget::Expr(stored), DimTarget::Expr(typed))
+                if mirrored_parameter(stored).is_some()
+                    && mirrored_parameter(&mirrored_reference(typed.trim())).is_some() =>
             {
-                DimTarget::Literal(0.0 - rad)
+                DimTarget::Expr(mirrored_reference(typed.trim()))
             }
             (_, shown) => shown,
         }

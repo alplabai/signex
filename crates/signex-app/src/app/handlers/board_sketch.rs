@@ -539,3 +539,7 @@ fn board_sketch_command(
 #[cfg(test)]
 #[path = "board_sketch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "board_sketch_parameter_tests.rs"]
+mod parameter_tests;

@@ -33,7 +33,7 @@ fn drive(app: &mut Signex, task: iced::Task<Message>) {
     }
 }
 
-fn send(app: &mut Signex, message: Message) {
+pub(super) fn send(app: &mut Signex, message: Message) {
     let task = app.update(message);
     drive(app, task);
 }
@@ -300,18 +300,18 @@ fn properties_read_a_sketch_point_from_the_board_origin() {
 
 /// Caner, 2026-11-21: on a board with an off-grid origin at (5.3, 30.7) the
 /// sketch's grid, guides and angles follow the board origin.
-fn sketching_off_grid() -> (Signex, tempfile::TempDir) {
+pub(super) fn sketching_off_grid() -> (Signex, tempfile::TempDir) {
     sketching_with(|board| {
         board.options.origin =
             signex_types::pcb_origin::BoardOrigin::new(BoardPoint::new(5.3, 30.7));
     })
 }
 
-fn near(a: f64, b: f64) -> bool {
+pub(super) fn near(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-6
 }
 
-fn sketch_edit(
+pub(super) fn sketch_edit(
     app: &mut Signex,
     path: &std::path::Path,
     msg: crate::library::messages::FootprintEditorMsg,
@@ -402,13 +402,13 @@ fn arc_turn(sketch: &signex_sketch::SketchData) -> bool {
         .expect("an arc")
 }
 
-fn board_sketch_data(app: &Signex) -> signex_sketch::SketchData {
+pub(super) fn board_sketch_data(app: &Signex) -> signex_sketch::SketchData {
     let session = app.interaction_state.board_sketch.as_ref().expect("on");
     session.working_sketch()
 }
 
 /// A footprint tab in sketch mode, the same inputs' other host.
-fn footprint_sketching() -> (Signex, std::path::PathBuf) {
+pub(super) fn footprint_sketching() -> (Signex, std::path::PathBuf) {
     use crate::app::{FootprintDocument, TabInfo, TabKind};
     use crate::library::editor::footprint::EditorMode;
     let (mut app, _boot) = Signex::new();
@@ -431,7 +431,7 @@ fn footprint_sketching() -> (Signex, std::path::PathBuf) {
     (app, path)
 }
 
-fn footprint_sketch_data(app: &Signex, path: &std::path::Path) -> signex_sketch::SketchData {
+pub(super) fn footprint_sketch_data(app: &Signex, path: &std::path::Path) -> signex_sketch::SketchData {
     let editor = app.document_state.footprint_editors.get(path);
     let editor = editor.expect("the editor");
     editor.primitive().sketch.clone().expect("a sketch")

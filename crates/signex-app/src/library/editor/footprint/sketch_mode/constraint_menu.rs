@@ -295,14 +295,16 @@ fn open_menu(
             let c = sketch.constraints.iter().find(|c| c.id == id)?;
             let in_conflict = value_edit::conflicting_constraints(state).contains(&id);
             let kind = t!(i18n, kind_name(&c.kind)).into_string();
-            let header = match bound_name(&c.kind, sketch) {
+            // A board's `-angle_1` is bound to `angle_1`, as the user reads it.
+            let shown = state.shown_constraint(&c.kind);
+            let header = match bound_name(&shown, sketch) {
                 Some(name) => i18n.message_plain(
                     ids::SKETCH_CANVAS_MENU_HEADER_BOUND,
                     &[("kind", Arg::from(kind)), ("name", Arg::from(name))],
                 ),
                 None => kind,
             };
-            Some((header, constraint_rows(id, &c.kind, sketch, in_conflict)))
+            Some((header, constraint_rows(id, &shown, sketch, in_conflict)))
         }
         MenuTarget::Pattern(array) => {
             if sketch.pattern_mirrors.iter().any(|m| m.id == array) {
