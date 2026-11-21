@@ -292,21 +292,47 @@ fn builtin_rules() -> impl Iterator<Item = (String, &'static str)> {
     })
 }
 
-/// Suppressed rules: the All rules enable row first, then the filter, a
-/// hairline and one box per rule. While All rules is on, the filter and the
-/// boxes are disabled and a caption says why. The header counts the rules
-/// that are off.
+/// One row of the rule list: the rule's id, its name and whether its box
+/// shows ticked. While All rules is on every box shows ticked, since every
+/// rule is silenced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct RuleRow {
+    pub id: String,
+    pub name: &'static str,
+    pub checked: bool,
+}
+
+/// The rows the list shows for `query`, in catalog order.
+pub(super) fn rule_rows(
+    i18n: &signex_i18n::I18n,
+    list: &RuleList<'_>,
+    query: &str,
+) -> Vec<RuleRow> {
+    builtin_rules()
+        .filter(|(_, name)| rule_matches(i18n, name, query))
+        .map(|(id, name)| RuleRow {
+            checked: list.all_on || (list.ticked)(&id),
+            id,
+            name,
+        })
+        .collect()
+}
+
+/// Suppressed rules (mockup row 49): the All rules enable row first, a
+/// hairline, then the filter and one row per rule, box first. While All
+/// rules is on, the filter and the rows are disabled, every box shows
+/// ticked, and a caption under the list says why. The header counts the
+/// rules that are off.
 pub(super) fn suppressed_rules_section<'a>(
     ctx: &'a PanelContext,
     list: RuleList<'a>,
     st: PanelStyle,
 ) -> Element<'a, PanelMsg> {
     let total = signex_erc::RuleKind::ALL.len();
-    let off = if list.all_on {
-        total
-    } else {
-        builtin_rules().filter(|(id, _)| (list.ticked)(id)).count()
-    };
+    let off = rule_rows(&ctx.i18n, &list, "")
+        .iter()
+        .filter(|row| row.checked)
+        .count();
     let pill = t!(ctx.i18n, ids::PROPERTIES_RULES_OFF, "count" => off)
         .to_string()
         .replace(['\u{2068}', '\u{2069}'], "");
@@ -326,16 +352,10 @@ fn rules_body<'a>(
     st: PanelStyle,
 ) -> Column<Element<'a, PanelMsg>> {
     let i18n = &ctx.i18n;
-    let RuleList {
-        all_on,
-        all_toggled,
-        ticked,
-        rule_toggled,
-        ..
-    } = list;
+    let all_toggled = list.all_toggled.clone();
     let header = EnableSection::new(
         t!(i18n, ids::PROPERTIES_ALL_RULES, "count" => total),
-        all_on,
+        list.all_on,
     )
     .on_toggle(move |_| all_toggled.clone())
     .view(
@@ -349,47 +369,75 @@ fn rules_body<'a>(
         .padding(SP.s)
         .width(Length::Fill)
         .style(crate::panels::form_look::text_input_style);
-    let mut rules = Column::new()
-        .spacing(0)
-        .width(Length::Fill)
-        .push(
-            container(filter)
-                .padding([SP.xs, SP.l])
-                .width(Length::Fill)
-                .boxed(),
-        )
-        .push(thin_sep(st.border_c));
-    let mut shown = 0;
-    for (rule_id, name) in builtin_rules().filter(|(_, name)| rule_matches(i18n, name, &query)) {
-        let on = ticked(&rule_id);
-        shown += 1;
-        rules = rules.push(form_check_row(
-            // raw: the rule's name comes from signex-erc (#2062).
-            raw(name),
-            on,
-            rule_toggled(rule_id, !on),
-            st.muted,
-            st.palette.panel_bg,
-        ));
-    }
-    if shown == 0 {
+    let mut rules = Column::new().spacing(0).width(Length::Fill).push(
+        container(filter)
+            .padding([SP.xs, PAD_X])
+            .width(Length::Fill)
+            .boxed(),
+    );
+    let rows = rule_rows(i18n, &list, &query);
+    if rows.is_empty() {
         rules = rules.push(inset_caption(
             t!(i18n, ids::PROPERTIES_RULE_NO_MATCH, "query" => query.trim()),
             st.muted,
         ));
     }
-    let rules: Element<'a, PanelMsg> = match dependents_veil(st.palette.panel_bg, !all_on) {
+    for row in rows {
+        let toggled = (list.rule_toggled)(row.id, !row.checked);
+        rules = rules.push(rule_row(ctx, row.name, row.checked, toggled));
+    }
+    let rules: Element<'a, PanelMsg> = match dependents_veil(st.palette.panel_bg, !list.all_on) {
         Some(veil) => Inert::new(rules.boxed(), veil).boxed(),
         None => rules.boxed(),
     };
-    let mut body = Column::new().spacing(0).width(Length::Fill).push(header);
-    if all_on {
+    let mut body = Column::new()
+        .spacing(0)
+        .width(Length::Fill)
+        .push(header)
+        .push(thin_sep(st.border_c))
+        .push(rules);
+    if list.all_on {
         body = body.push(inset_caption(
             t!(i18n, ids::PROPERTIES_ALL_RULES_ON),
             st.muted,
         ));
     }
-    body.push(rules)
+    body
+}
+
+/// A rule's row: its box first, then its name on one line across the
+/// width, cut with an ellipsis when too long and shown whole in a tooltip.
+/// A click on the name toggles the rule too.
+fn rule_row<'a>(
+    ctx: &PanelContext,
+    name: &'static str,
+    checked: bool,
+    toggled: PanelMsg,
+) -> Element<'a, PanelMsg> {
+    let on_box = toggled.clone();
+    let check = signex_widgets::checkbox(checked)
+        .on_toggle(move |_| on_box.clone())
+        .size(TS.body)
+        .style(crate::panels::form_look::checkbox_style);
+    // raw: the rule's name comes from signex-erc (#2062).
+    let label = text(raw(name))
+        .size(TS.body)
+        .color(crate::styles::ti(ctx.tokens.text))
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End)
+        .width(Length::Fill);
+    let cells = iced::widget::row![check, label]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill);
+    let tip = container(text(raw(name)).size(TS.body)).padding([SP.xs, SP.s]);
+    let row = container(cells)
+        .padding([SP.xs, PAD_X])
+        .width(Length::Fill);
+    let row = iced::widget::mouse_area(row).on_press(toggled);
+    signex_widgets::tooltip(row, tip, iced::widget::tooltip::Position::Bottom)
+        .style(crate::panels::form_look::value_tip)
+        .boxed()
 }
 
 pub(super) fn push_directive_sections<'a>(
