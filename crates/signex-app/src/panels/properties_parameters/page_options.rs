@@ -256,13 +256,16 @@ pub(super) fn page_options_section<'a>(ctx: &'a PanelContext) -> Column<Element<
         PanelMsg::SetPageOrigin,
     );
     c = c.push(hover_row(ORIGIN, hover, &ctx.tokens, origin));
+    // The hover region is the header only: wrapping the whole section would
+    // nest the Zones row's region inside it and light both rows together.
     let border = EnableSection::new(t!(i18n, ids::PROPERTIES_SHOW_BORDER), frame.show_border)
         .on_toggle(|on| PanelMsg::EditSheetFrame(SheetFrameEdit::ShowBorder(on)))
+        .wrap_header(move |header| hover_row(BORDER, hover, &ctx.tokens, header))
         .view(
             crate::panels::enable_section::enable_section_style(&ctx.tokens),
             zones_row(ctx),
         );
-    c = c.push(hover_row(BORDER, hover, &ctx.tokens, border));
+    c = c.push(border);
     let title_block = check_row(enable_box(
         t!(i18n, ids::PROPERTIES_SHOW_TITLE_BLOCK),
         frame.show_title_block,
