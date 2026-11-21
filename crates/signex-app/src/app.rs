@@ -23,6 +23,7 @@ mod bootstrap;
 pub(crate) mod channel_view;
 pub(crate) mod command;
 pub mod command_palette;
+pub(crate) mod compare_board;
 pub(crate) mod compiled_design;
 pub mod contracts;
 pub(crate) mod core;
@@ -55,6 +56,7 @@ pub mod path_ops;
 pub(crate) mod pin_junction_repair;
 pub mod project_entry_disk;
 mod project_tab;
+pub(crate) mod rooms;
 mod rules_tab;
 pub(crate) mod sch_tables;
 pub(crate) mod sheet_numbering;
@@ -117,6 +119,7 @@ pub use board_output::{
 pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use board_reuse::ReuseBlockMsg;
+pub use compare_board::{CompareBoardMsg, CompareBoardState, CompareRead, JumpSide};
 pub use compiled_design::CompiledDesignMsg;
 pub use contracts::Board3dShot;
 pub use contracts::ErcProfileAction;
@@ -194,6 +197,10 @@ impl Signex {
         // An Update PCB waiting for its board starts reading once it opened.
         tasks.push(self.sync_update_pcb());
         tasks.push(self.sync_back_annotate());
+        // The Annotations panel reads the notebook when shown or when the
+        // project in view changes (mockup row 165).
+        tasks.push(self.sync_annotations_panel());
+        tasks.push(self.sync_compare_board());
         // A Properties draft of a board no window shows any more goes (#1312).
         self.prune_pcb_footprint_draft();
         self.prune_pcb_component_draft();

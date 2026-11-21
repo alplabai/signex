@@ -49,6 +49,7 @@ impl Signex {
             PcbMsg::FabOutputs(msg) => self.dispatch_fab_outputs_message(msg),
             PcbMsg::Panel(msg) => self.dispatch_board_panel_message(msg),
             PcbMsg::BackAnnotate(msg) => self.dispatch_back_annotate_message(msg),
+            PcbMsg::CompareBoard(msg) => self.dispatch_compare_board_message(msg),
             PcbMsg::Output(msg) => self.dispatch_board_output_message(msg),
             PcbMsg::Bar(event) => self.handle_pcb_bar(event),
             PcbMsg::PlaceToolPicked(tool) => {
@@ -79,6 +80,8 @@ impl Signex {
             PcbMsg::FootprintSwap(event) => self.handle_footprint_swap(event),
             PcbMsg::DxfImport(event) => self.handle_dxf_import(event),
             PcbMsg::PartSwap(event) => self.handle_part_swap(event),
+            PcbMsg::Room(event) => self.handle_room(event),
+            PcbMsg::CreateRooms(event) => self.handle_create_rooms(event),
             PcbMsg::ReuseBlock(event) => self.handle_reuse_block(event),
             PcbMsg::LayerTabMenu(event) => self.handle_layer_tab_menu(event),
             PcbMsg::LayerSetMenu(event) => self.handle_layer_set_menu(event),

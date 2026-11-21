@@ -9,6 +9,7 @@ use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use signex_widgets::{button, raw, text};
 
+pub mod annotations;
 pub mod compiled_design;
 pub mod components_panel;
 mod element_properties;
@@ -28,6 +29,8 @@ mod board_sketch_attr;
 pub use board_sketch_attr::BoardSketchAttrMsg;
 mod board_net_classes;
 mod color_field;
+pub mod command_log;
+pub use command_log::{CommandLogMsg, CommandLogState};
 mod context;
 mod drafts;
 mod drc;
@@ -39,6 +42,8 @@ pub use board_net_classes::{
     BoardNetClassDraft, BoardNetClassField, BoardNetClassMsg, BoardNetClassView,
 };
 pub use drc::{DrcPanel, DrcRow, MAX_ROWS as DRC_MAX_ROWS};
+// The DRC popover of the status bar words its rows as the panel does (#2460).
+pub(crate) use drc::row_text as drc_row_text;
 mod drc_idle;
 pub use drc_idle::BaseRule;
 mod drc_rows;
@@ -92,6 +97,7 @@ pub mod pcb_board_properties;
 pub mod pcb_component;
 pub mod pcb_nets;
 pub mod pcb_primitive_properties;
+pub mod pcb_room_properties;
 mod projects;
 mod projects_graphite;
 mod properties;
@@ -152,6 +158,7 @@ use symbol_editor_properties::view_symbol_editor_properties;
 
 // -- Re-exports: keep the `crate::panels::*` public surface stable and the
 //    sibling `super::` / `crate::panels::` paths resolving after the split. --
+pub use annotations::{AnnotationsMsg, AnnotationsState, AnnotationsView};
 pub use color_field::{ColorFieldProps, color_field};
 pub use context::{FootprintChoiceItem, PINS_SECTION_KEY, PanelContext, SymbolChoiceItem};
 pub use erc_waivers::{ErcViolationWaiverEntry, ErcWaiveDraft, ErcWaiverMsg, ErcWaiverStatus};
@@ -235,6 +242,8 @@ pub enum PanelKind {
     Filter,
     Erc,
     Messages,
+    /// Every catalog command this session ran (#2458).
+    CommandLog,
     Drc,
     LayerStack,
     /// The layers of the active tab (#2223, #2359): a board's layers with
@@ -277,6 +286,9 @@ pub enum PanelKind {
     CompiledDesign,
     /// Named unions of the sheet in view or the project (mockup row 158).
     Unions,
+    /// Every annotation block of the project's Design Notebook files,
+    /// filterable; a reference chip goes to its part or net (mockup row 165).
+    Annotations,
 }
 
 /// All available panel kinds for the panel list button.
@@ -285,12 +297,14 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::Components,
     PanelKind::Library,
     PanelKind::Navigator,
+    PanelKind::Annotations,
     PanelKind::Properties,
     PanelKind::Filter,
     PanelKind::SchFilter,
     PanelKind::ObjectList,
     PanelKind::Erc,
     PanelKind::Messages,
+    PanelKind::CommandLog,
     PanelKind::Drc,
     PanelKind::BomStudio,
     PanelKind::Favorites,
@@ -359,6 +373,7 @@ impl PanelKind {
             PanelKind::Filter => ids::PANELS_KIND_FILTER,
             PanelKind::Erc => ids::PANELS_KIND_ERC,
             PanelKind::Messages => ids::PANELS_KIND_MESSAGES,
+            PanelKind::CommandLog => ids::PANELS_KIND_COMMAND_LOG,
             PanelKind::Drc => ids::PANELS_KIND_DRC,
             PanelKind::LayerStack => ids::PANELS_KIND_LAYER_STACK,
             PanelKind::Layers => ids::PANELS_KIND_LAYERS,
@@ -380,6 +395,7 @@ impl PanelKind {
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
             PanelKind::CompiledDesign => ids::PANELS_KIND_COMPILED_DESIGN,
             PanelKind::Unions => ids::PANELS_KIND_UNIONS,
+            PanelKind::Annotations => ids::PANELS_KIND_ANNOTATIONS,
         }
     }
 
@@ -392,6 +408,7 @@ impl PanelKind {
             PanelKind::Filter => "Filter",
             PanelKind::Erc => "ERC",
             PanelKind::Messages => "Messages",
+            PanelKind::CommandLog => "Command Log",
             PanelKind::Drc => "DRC",
             PanelKind::LayerStack => "Layer Stack",
             PanelKind::Layers => "Layers",
@@ -413,6 +430,7 @@ impl PanelKind {
             PanelKind::NetInspector => "Net Inspector",
             PanelKind::CompiledDesign => "Compiled Design",
             PanelKind::Unions => "Unions",
+            PanelKind::Annotations => "Annotations",
         }
     }
 }
@@ -469,6 +487,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::Filter => selection_filter::filter_view(ctx),
         PanelKind::Erc => view_erc(ctx),
         PanelKind::Messages => view_messages(ctx),
+        // The log keeps its header and footer in place and scrolls its rows.
+        PanelKind::CommandLog => return command_log::view(ctx),
         PanelKind::Drc => drc_results::view(ctx),
         PanelKind::LayerStack => layer_stack::view(ctx),
         // One Layers panel follows the active tab (#2359): a footprint's
@@ -512,6 +532,7 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::NetInspector => return net_inspector::view(ctx),
         PanelKind::CompiledDesign => return compiled_design::view(ctx),
         PanelKind::Unions => return unions::view(ctx),
+        PanelKind::Annotations => return annotations::view(ctx),
     };
 
     panel_scrollable(content).boxed()

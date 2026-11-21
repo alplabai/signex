@@ -73,6 +73,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
 | `apply_edits` | Apply edits (agent) | edit | — | — |
+| `apply_layout_board` | Workspace layout: Layout | window | — | — |
+| `apply_layout_notebook` | Workspace layout: Notebook | window | — | — |
+| `apply_layout_review` | Workspace layout: Review | window | — | — |
+| `apply_layout_schematic` | Workspace layout: Schematic | window | — | — |
 | `autoplace_fields` | Autoplace fields | edit | — | `O` |
 | `break_wire` | Break wire | modify | `E W` | — |
 | `bring_drawings_forward` | Bring drawings forward | edit | — | — |
@@ -119,6 +123,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `find_text` | Find text | search | — | — |
 | `import_graphics` | Import graphics | place | — | `Mod+Shift+F` |
 | `list_documents` | List documents | file | — | — |
+| `manage_workspace_layouts` | Manage workspace layouts | window | — | — |
 | `measure_distance` | Measure distance | view | `Ctrl+M` | `Ctrl+M` |
 | `mirror_x` | Mirror along X-axis | modify | `X` | `X` |
 | `mirror_y` | Mirror along Y-axis | modify | `Y` | `Y` |
@@ -171,6 +176,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `repeat_last_item` | Repeat last item | edit | — | `Insert` |
 | `report_manager_bom` | Report Manager / BOM | reports | `R I` | — |
 | `reset_local_coordinates` | Reset local coordinates | view | — | `Space` |
+| `reset_workspace_layout` | Reset the edited built-in workspace layout | window | — | — |
 | `resolve` | Resolve id | file | — | — |
 | `revert` | Revert an agent's edit step | edit | — | — |
 | `rotate_clockwise` | Rotate clockwise by 90 degrees | modify | `Shift+Space` | `Shift+R` |
@@ -178,6 +184,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `rubber_stamp_copy` | Rubber-stamp copy / repeated paste | edit | `Mod+R` | — |
 | `save_document` | Save document | file | `Mod+S` | `Mod+S` |
 | `save_document_as` | Save as | file | `Mod+Shift+S` | `Mod+Shift+S` |
+| `save_workspace_layout` | Save the panel arrangement as a workspace layout | window | — | — |
 | `select_all` | Select all | select | `Mod+A` | `Mod+A` |
 | `send_drawings_backward` | Send drawings backward | edit | — | — |
 | `send_drawings_to_back` | Send drawings to back | edit | — | — |
@@ -235,6 +242,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
 | `color_net` | Color net | view | — | — |
+| `compare_board_with_schematic` | Compare board with schematic | pcb_sync | — | — |
 | `compile_project` | Compile the project | design | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `create_sheet_symbol_from_sheet` | Create a sheet symbol from a sheet file, with an entry for every port | design | — | — |
@@ -362,6 +370,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `board_shape_from_selection` | Make the selected closed lines the board outline | design | — | — |
 | `board_sketch` | Enter or leave the board sketch | design | `1` | `1` |
 | `change_footprint` | Change the footprint of the selected components | modify | `F` | `F` |
+| `create_rooms_from_sheets` | Make a room for each sheet of the project and move its parts into it | design | — | — |
 | `cycle_arc_mode` | Switch the Arc tool between by centre, by edge and any angle | pcb | — | — |
 | `cycle_route_mode` | Switch Interactive Routing between walking around and pushing other nets' tracks | pcb | — | — |
 | `delete_layer_set` | Delete a saved layer set | view | — | — |
@@ -408,6 +417,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_board_rectangle` | Draw a rectangle by two corners on the active non-copper layer | place | — | — |
 | `place_board_region` | Place a polygon of solid copper on the active copper layer | place | `P R` | — |
 | `place_board_reuse_block` | Place a reuse block on the channel of the selected component | design | — | — |
+| `place_board_room` | Draw a room by two corners: an area for the parts of one sheet | place | — | — |
 | `place_board_route` | Route on the active copper layer around other nets, keeping the rule clearance | place | — | — |
 | `place_board_slice_pour` | Slice the polygon pours on the active copper layer along a line | place | — | — |
 | `place_board_string` | Place a string on the active silkscreen, mechanical or documentation layer | place | — | — |

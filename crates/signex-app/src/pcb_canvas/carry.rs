@@ -349,6 +349,7 @@ pub fn carried_board(
         free: Default::default(),
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
     }

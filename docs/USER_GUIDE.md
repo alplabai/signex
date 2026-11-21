@@ -208,7 +208,9 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   (**Grid 1.270 mm**) and whether snapping is on (**Snap on**) or off
   (**Snap off**). Click the grid value to show or hide the grid, and click the
   Snap pill to switch snapping. **View ▸ Toggle Grid** does the same as the
-  grid click. Placed objects snap to the grid while snapping is on.
+  grid click. Placed objects snap to the grid while snapping is on. On a
+  board the grid value opens the **Grid** popover instead; see the board
+  counters below.
   Right-click the grid value on a schematic to open **Grid & Snap**: Visible
   Grid, Snap Grid and Snap to Hotspots, each with its switch, and a Pitch for
   the two grids. These are the settings of **Properties ▸ Document Options ▸
@@ -226,6 +228,35 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   PCB; an open panel has a check and says where it is (left, right, bottom,
   floating or window). Click a panel to open it, or to bring an open one
   forward.
+- **Board counters:** on a board the status bar also shows how far the
+  board is: **Routed** (routed connections of all, with a bar and the
+  percent), **Unrouted**, **DRC** (the violations of the last **Run DRC** and
+  how long ago it ran, or *not run yet*) and **Selected**, which takes the
+  place of the selection summary. A count of zero shows as a grey 0. Each of
+  them is a button that opens a popover above it. A click on the active
+  layer pill still steps to the next layer and a click on the grid value
+  still shows or hides the grid; right-click either to open its popover.
+  Esc or a click elsewhere closes a popover:
+  - **Active layer:** the board's shown layers; click one to make it the
+    active layer. **Layers panel** opens the panel. The `+` and `-` keys
+    (**View ▸ Next Layer** and **Previous Layer**) step the layer too.
+  - **Grid:** pick 0.100, 0.250, 0.500 or 1.270 mm, or type any pitch in mm
+    into **Custom…** and press Enter (a pitch of 0 or less is refused and
+    shows red). **Snap to grid** switches snapping; **Grids…** opens the
+    board's grid settings in Properties.
+  - **Unrouted connections:** each net with what it still has to join, for
+    example `C1-1 → U1-2`, and *pour will connect* when a pour of that net is
+    on the board (those connections count as unrouted until the pour reaches
+    the pads). **Zoom** shows the net's connections; **Route next** zooms to
+    the first one and starts Interactive Routing.
+  - **DRC:** when the last check ran and how many edits the board has had
+    since, its violations with a **Zoom** each, **Run DRC** and **Open
+    Messages**.
+  - **Selection:** the selected objects with a **Zoom** each, then
+    **Properties**, **Select in schematic** (for a board in a project) and
+    **Clear**.
+
+  In a board's own window the counters and popovers are that board's.
 
 **View ▸ Cycle Grid Size** steps the grid of the schematic. In the Altium
 profile `G` (forward) acts only in the footprint editor, while `Shift+G` steps
@@ -268,6 +299,64 @@ marked **Restart** applies the next time Signex starts.
 - **A panel in its own window:** drag a floating panel out of the main window.
   Its title strip shows the panel and the document in view; **Dock back** (or
   closing the window) puts the panel back in its dock.
+- **Workspace layouts:** **View ▸ Window ▸ Layouts** arranges the panels for
+  a kind of work in one step: **Schematic**, **Layout** (board work),
+  **Review** or **Notebook**, or a layout of your own. Your open documents
+  stay as they are; only the panels move. **Save Layout…** names the
+  arrangement on screen (giving one of your names again replaces that
+  layout), and **Manage Layouts…** renames, duplicates, deletes (with Undo),
+  reorders by dragging a row's grip, imports and exports your layouts.
+  **Update from current** there changes a built-in to your arrangement, and
+  **Reset** in the menu brings it back. Layouts are kept in your preferences,
+  not in the project. Details: [WORKSPACE_LAYOUTS.md](WORKSPACE_LAYOUTS.md).
+
+### The Command Log
+
+**View ▸ Command Log** opens a panel at the bottom that lists every command
+you ran in this session, newest last: from a menu, a key, a tool, the command
+palette or a context menu, and every command `signex-cli` or an agent sent to
+this window. Each row shows the time, where it came from (GUI, CLI or Agent),
+the command, its arguments, the result and how long it took. A failed command
+is tinted red; an undone one is struck through.
+
+- Type in the search field to find a command by name, id or argument; the
+  GUI, CLI and Agent socket chips and the **All / Failed / Undone** switch
+  narrow the list.
+- Click a row to see its arguments, the full error of a failed command
+  (**Copy error** copies it), and the command as a `signex-cli run` line
+  (**Copy as CLI**). **Replay** runs it again with the same arguments;
+  **Jump to** shows the part, net or point it named.
+- Zoom, pan and selection commands are hidden until **More ▸ Show view
+  commands** is on.
+- **Pause logging**, **Save log as…** (a `.jsonl` file), **Clear** and
+  **More** are at the right end of the filter bar. The log is kept for this
+  session only; nothing is written to disk unless you save it. Details:
+  `docs/COMMAND_LOG.md`.
+
+### Annotations
+
+**View ▸ Annotations** opens a panel that lists the notes, calculations,
+measurements, issues and decisions written in the project's Design Notebook
+files (`.snxnbk` files in the project's `notebook/` folder). A block is
+written like this:
+
+```text
+#annotation(kind: "issue", status: "open", date: "2026-11-17")[
+  U3 runs warm at 300 mA; check the copper under #component("U3").
+]
+```
+
+- The rows are grouped by file, newest first. Filter them by kind (the
+  chips), by part, status and date, or type in the search field.
+- Click a row to see the block as written. Click a part chip such as **U3**
+  to open its sheet with the part selected; an amber chip names a part the
+  design no longer has. A net chip highlights that net.
+- The panel reads the files when it opens and when you open a project;
+  press the refresh button beside the search field after editing a file.
+  Anything it cannot read is listed in the Messages panel with the file and
+  the line.
+
+The full grammar is in [NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md).
 
 ### The footprint and symbol editors
 
@@ -1299,6 +1388,23 @@ the next update. To carry board changes to the schematic instead, use
 **Design ▸ Update Schematics** (or **Tools ▸ Annotation ▸ Back Annotate
 Schematics…**).
 
+### Compare the board with the schematic
+
+To see every difference both ways and pick a side per row, use **Project ▸
+Compare Board with Schematic…** (or **Compare with Schematic** in the
+right-click menu of an object on the board). The report groups the differences: Missing on
+board, Extra on board, Net differences, Footprint mismatches and Value
+changes. Click a chip to show one kind. Each row has **Update PCB** (the
+schematic wins), **Update schematic** (the board wins) or **Skip**; a choice
+that is greyed says why in its tooltip. Extra parts on the board and
+footprint mismatches start skipped, since they are often deliberate board
+edits. **Set shown rows** sets every shown row at once.
+
+The **Schematic** and **Board** links show the object in that editor and
+keep the report open. **Apply** asks first when it would remove something
+from the board, then makes one undo step on the board and one on the
+schematic. **Export report…** saves the report as text.
+
 More detail: [UPDATE_PCB.md](UPDATE_PCB.md).
 
 ## Board 2. Outline, layer stack and the Layers panel
@@ -1445,6 +1551,20 @@ board is greyed with the reason "not available on boards yet".
 **Tools ▸ Re-Annotate Board…** renumbers designators by position on the
 board. Run **Design ▸ Update Schematics** afterwards to carry the new names
 to the schematic; otherwise the next Update PCB renames them back.
+
+**Rooms** group the parts of each sheet:
+
+- **Design ▸ Rooms ▸ Create Rooms from Sheets…** makes one room per sheet
+  (`name_CH1`, `name_CH2`, … for a sheet placed several times), shows them
+  on a preview, and on **Create** draws them and moves the parts that Update
+  PCB left beside the board into their rooms. One undo takes it all back.
+- **Place ▸ Room** draws a room by two corners.
+- Select a room to edit it in **Properties**: name, sheet, side, position and
+  size. Moving a room moves its parts. **Keep parts inside** makes a part
+  outside the room, or inside its margin, a DRC error; **Pull parts into
+  room** moves them back in.
+
+More: [PCB_ROOMS.md](PCB_ROOMS.md).
 
 ## Board 4. Route and pour copper
 
@@ -1643,6 +1763,7 @@ More detail: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md) and
 | `.snxlib` | A component library. It is a folder, not a single file. |
 | `.snxsym` | A schematic symbol, edited in the symbol editor. |
 | `.snxfpt` | A PCB footprint, edited in the footprint editor. |
+| `.snxnbk` | A Design Notebook file in the project's `notebook/` folder; the Annotations panel lists its annotation blocks. |
 
 ## 13. Keyboard shortcuts
 

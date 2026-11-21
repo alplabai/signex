@@ -135,6 +135,15 @@ impl Signex {
         let search_prefs = crate::persist::SearchPrefsSync::new(std::sync::Arc::new(
             crate::fonts::PrefsSearchStore::user_prefs(),
         ));
+        // Workspace layouts (mockup row 166): a skipped entry is said in Messages once
+        // the language is known.
+        let (workspace_layouts, layout_problems) =
+            crate::workspace_layouts::WorkspaceLayoutsState::boot(
+                prefs,
+                std::sync::Arc::new(
+                    crate::workspace_layouts::PrefsWorkspaceLayoutsStore::user_prefs(),
+                ),
+            );
 
         let sch_canvas = CanvasSlot::new();
         let mut pcb_canvas = crate::pcb_canvas::PcbCanvas::new();
@@ -170,6 +179,11 @@ impl Signex {
             &crate::fonts::read_language_pref_from(prefs),
         ));
         crate::app::handlers::preferences::language::log_dropped_language(&i18n);
+        for problem in &layout_problems {
+            crate::diagnostics::log_warning(crate::workspace_layouts::problems::problem_line(
+                &i18n, problem,
+            ));
+        }
         let remember_window_geometry = crate::fonts::read_remember_window_geometry_pref_from(prefs);
         let drag_direction_select = crate::fonts::read_drag_direction_select_pref_from(prefs);
         let increment_step = crate::fonts::read_increment_step_pref_from(prefs);
@@ -332,6 +346,7 @@ impl Signex {
                 undocked_window_sizes: std::collections::HashMap::new(),
                 panel_list_open: false,
                 grid_snap_popover: None,
+                board_status: Box::default(),
                 preferences_open: false,
                 keyboard_shortcuts_open: false,
                 shortcut_sections: None,
@@ -457,11 +472,13 @@ impl Signex {
                 sheet_sync_reads: 0,
                 board_reannotate: None,
                 board_reannotate_options: Default::default(),
+                rooms: Default::default(),
                 fab_outputs: None,
                 diff_pair_classes: None,
                 fab_outputs_writes: 0,
                 board_output: Default::default(),
                 back_annotate: None,
+                compare_board: None,
                 find_similar: None,
                 find_similar_generation: 0,
                 assign_footprints: None,
@@ -471,6 +488,7 @@ impl Signex {
                 unions: Default::default(),
                 smart_paste: None,
                 object_list: Default::default(),
+                annotations: Default::default(),
                 paste_array: None,
                 paste_array_opens: 0,
                 text_edit_opens: 0,
@@ -550,6 +568,8 @@ impl Signex {
                     chrono::Utc::now(),
                 )),
                 tab_overflow_menu_open: false,
+                command_log: Default::default(),
+                workspace_layouts: Box::new(workspace_layouts),
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),
@@ -659,6 +679,8 @@ impl Signex {
                     compiled_design: Default::default(),
                     unions: Default::default(),
                     object_list: Default::default(),
+                    command_log: Default::default(),
+                    annotations: Default::default(),
                     pcb_board: None,
                     layer_stack: None,
                     selection_count: 0,

@@ -146,6 +146,9 @@ pub struct UiState {
     /// opens (mockup row 6), with the window it belongs to; `None` while closed. Boxed
     /// to keep `UiState` under its size ceiling.
     pub grid_snap_popover: Option<Box<crate::status_bar::GridSnapPopover>>,
+    /// The board counters' open popover and the time their DRC age is read
+    /// against (#2460). Boxed to keep `UiState` under its size ceiling.
+    pub board_status: Box<crate::status_bar::BoardStatusUi>,
     pub preferences_open: bool,
     /// Help ▸ Keyboard Shortcuts modal — reference table over the
     /// active keyboard-shortcut profile. Toggled from the Help menu
@@ -509,6 +512,10 @@ pub struct UiState {
     pub board_reannotate: Option<crate::app::BoardReannotateState>,
     /// The options Re-Annotate Board was last used with, for its next opening.
     pub board_reannotate_options: signex_engine::pcb::designators::ReannotateOptions,
+    /// Rooms (#2457): the Room Properties drafts and illustration hover, and
+    /// Create Rooms from Sheets while open. Boxed: a pointer of the size
+    /// budget (#2412).
+    pub rooms: Box<crate::app::rooms::RoomsUi>,
     /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
     /// until Generate.
     pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,
@@ -525,6 +532,9 @@ pub struct UiState {
     /// memory as one undo group; nothing is written to disk. Boxed like
     /// `new_project`.
     pub back_annotate: Option<Box<crate::app::BackAnnotateState>>,
+    /// Compare Board with Schematic (#2462), while open. Boxed like
+    /// `back_annotate`.
+    pub compare_board: Option<Box<crate::app::CompareBoardState>>,
     /// The Find Similar Objects dialog, while open (#1257); boxed so the
     /// closed dialog costs one pointer (#2412).
     pub find_similar: Option<Box<crate::find_similar::FindSimilarState>>,
@@ -551,6 +561,9 @@ pub struct UiState {
     pub unions: Box<crate::app::unions::UnionsState>,
     /// The open Smart Paste dialog (mockup row 155).
     pub smart_paste: Option<Box<crate::smart_paste::SmartPasteState>>,
+    /// The Annotations panel's filters, expanded row and last scan (mockup row 165).
+    /// Boxed: a pointer of the size budget (#2412).
+    pub annotations: Box<crate::panels::AnnotationsState>,
     /// The open Paste Array dialog (#1264); boxed as `find_similar`.
     pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers
@@ -763,6 +776,12 @@ pub struct UiState {
     /// The tab strip's "+N" overflow menu is open (mockup row 5); it lists the tabs
     /// the main window's strip has no room for.
     pub tab_overflow_menu_open: bool,
+    /// The Command Log (#2458): every command this session ran and what its
+    /// panel shows. Session only; boxed, a pointer of the size budget (#2412).
+    pub command_log: Box<crate::panels::CommandLogState>,
+    /// Workspace layouts (mockup row 166): the list, its store, and the Save Layout
+    /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
+    pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,
 }
 
 impl UiState {
@@ -840,6 +859,8 @@ mod tests {
             ),
             ("update_pcb", field_size(|ui| &ui.update_pcb)),
             ("back_annotate", field_size(|ui| &ui.back_annotate)),
+            ("compare_board", field_size(|ui| &ui.compare_board)),
+            ("rooms.create", field_size(|ui| &ui.rooms.create)),
             (
                 "pending_profile_update",
                 field_size(|ui| &ui.pending_profile_update),

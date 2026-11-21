@@ -252,6 +252,7 @@ rules_set_apply	design	Apply a constraint set to a class or net	-	PCB	-	-	Always
 rules_preset_diff	validation	Show what a rules preset would change	-	PCB	-	-	Always	-	document:document,preset:text
 rules_preset_apply	design	Apply a rules preset	-	PCB	-	-	Always	mutates_doc,undoable	document:document,preset:text
 update_pcb_from_schematic	pcb_sync	Update PCB from schematic	-	Schematic	-	-	Always	mutates_doc,undoable	apply:bool
+compare_board_with_schematic	pcb_sync	Compare board with schematic	Compare Board with Schematic…	Schematic	-	-	Always	gui_only	-
 assign_footprints	design	Assign footprints	Assign Footprints	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 change_footprint	modify	Change the footprint of the selected components	Change Footprint...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 place_board_via	place	Place a via on the board	Via	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
@@ -271,6 +272,8 @@ panelize_board	pcb	Array the board into a manufacturing panel	Panelize Board	PCB
 remove_board_panel	pcb	Remove the board's panel	Remove Panel	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document
 set_board_panel	pcb	Change a setting of the board's panel	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,field:text,value:text
 board_panel	pcb	Describe the board's panel	-	PCB	-	-	Always	-	document:document
+place_board_room	place	Draw a room by two corners: an area for the parts of one sheet	Room	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
+create_rooms_from_sheets	design	Make a room for each sheet of the project and move its parts into it	Create Rooms from Sheets...	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_layer	view	Make the next layer of the board active	Next Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 prev_layer	view	Make the previous layer of the board active	Previous Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
 next_signal_layer	view	Make the next signal layer active	Next Signal Layer	PCB	-	-	RequiresDocument(Pcb)	gui_only	-
@@ -405,3 +408,10 @@ toggle_floating_panels	window	Toggle floating panels	-	General	-	-	Always	gui_on
 toggle_properties_panel	panels	Toggle Properties panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_filter_panel	panels	Toggle schematic filter panel	-	General	-	-	Always	gui_only	-
 toggle_schematic_list_panel	panels	Toggle Object List panel	-	General	-	-	Always	gui_only	-
+apply_layout_schematic	window	Workspace layout: Schematic	Schematic	General	-	-	Always	gui_only	-
+apply_layout_board	window	Workspace layout: Layout	Layout	General	-	-	Always	gui_only	-
+apply_layout_review	window	Workspace layout: Review	Review	General	-	-	Always	gui_only	-
+apply_layout_notebook	window	Workspace layout: Notebook	Notebook	General	-	-	Always	gui_only	-
+save_workspace_layout	window	Save the panel arrangement as a workspace layout	Save Layout…	General	-	-	Always	gui_only	-
+manage_workspace_layouts	window	Manage workspace layouts	Manage Layouts…	General	-	-	Always	gui_only	-
+reset_workspace_layout	window	Reset the edited built-in workspace layout	Reset Layout	General	-	-	Always	gui_only	-

@@ -1,19 +1,22 @@
 //! #2271 review — a footprint drag ends when its window loses focus or
 //! closes, a locked footprint refuses at the start of a drag, and the
-//! status-bar layer pill of a board window steps that window's board
-//! (#2272).
+//! status-bar layer pill of a board window acts on that window's board
+//! (#2272): a click steps it, a right-click opens the Active layer popover
+//! there (#2460).
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use pcb_geom::ClickMode;
 use signex_app::app::{
-    ContextMenuMsg, FileMsg, Message, PcbMsg, Signex, StatusBarRequest, TabDocument, WindowMsg,
+    ContextMenuMsg, FileMsg, Message, PcbMsg, Signex, StatusBarRequest, TabDocument, UiMsg,
+    WindowMsg,
 };
 use signex_app::diagnostics;
 use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::pcb_canvas::{CarryKind, PcbCanvasMsg};
+use signex_app::status_bar::{BoardCounter, BoardPopoverEvent, BoardPopoverKind};
 use signex_app::tab_bar::TabMessage;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::{Footprint, LayerDef, Pad, PadShape, PadType, PcbBoard, Point};
@@ -77,6 +80,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         uuid: Uuid::now_v7(),
         version: 1,
@@ -347,6 +351,20 @@ fn active_layer(app: &Signex, path: &Path) -> Option<PcbLayer> {
     app.ui_state.pcb_layer_views.get(path).map(|v| v.active())
 }
 
+/// The open board popover: its window and kind.
+fn open_popover(app: &Signex) -> Option<(iced::window::Id, BoardPopoverKind)> {
+    let popover = app.ui_state.board_status.popover.as_ref()?;
+    Some((popover.window, popover.kind))
+}
+
+fn pick_layer(app: &mut Signex, layer: PcbLayer) {
+    let event = BoardPopoverEvent::LayerPicked(layer);
+    send(
+        app,
+        Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))),
+    );
+}
+
 #[test]
 fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
     let mut rig = rig();
@@ -375,5 +393,54 @@ fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
         active_layer(&rig.app, &rig.a),
         Some(PcbLayer::Copper(CopperLayer::Bottom)),
         "the main pill leaves A"
+    );
+}
+
+/// #2460: a right-click on the pill of a board window opens the Active
+/// layer popover over that window, and a row of it sets that window's board
+/// (#2272 kept: the other board is untouched).
+#[test]
+fn the_layer_pill_of_a_board_window_opens_the_popover_and_a_row_sets_that_board() {
+    let mut rig = rig();
+    let window = undock_a(&mut rig);
+    let a_before = active_layer(&rig.app, &rig.a);
+    let b_before = active_layer(&rig.app, &rig.b);
+    let pill = StatusBarRequest::BoardCounterClicked {
+        window: None,
+        counter: BoardCounter::Layer,
+    };
+    send(
+        &mut rig.app,
+        Signex::status_bar_message(window, None, pill.clone()),
+    );
+    assert_eq!(
+        open_popover(&rig.app),
+        Some((window, BoardPopoverKind::Layer))
+    );
+    assert_eq!(
+        active_layer(&rig.app, &rig.a),
+        a_before,
+        "opening the popover steps nothing"
+    );
+    let bottom = PcbLayer::Copper(CopperLayer::Bottom);
+    pick_layer(&mut rig.app, bottom);
+    assert_eq!(active_layer(&rig.app, &rig.a), Some(bottom));
+    assert_eq!(active_layer(&rig.app, &rig.b), b_before, "B untouched");
+
+    send(
+        &mut rig.app,
+        Signex::status_bar_message(rig.main, None, pill),
+    );
+    assert_eq!(
+        open_popover(&rig.app),
+        Some((rig.main, BoardPopoverKind::Layer)),
+        "the main pill moves the popover to the main window"
+    );
+    pick_layer(&mut rig.app, bottom);
+    assert_eq!(active_layer(&rig.app, &rig.b), Some(bottom));
+    assert_eq!(
+        active_layer(&rig.app, &rig.a),
+        Some(bottom),
+        "the main popover leaves A"
     );
 }

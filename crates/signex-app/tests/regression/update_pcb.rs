@@ -383,6 +383,7 @@ fn board_of(footprints: Vec<signex_types::pcb::Footprint>) -> PcbBoard {
         outline: Vec::new(),
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         layers: Vec::new(),
         setup: None,

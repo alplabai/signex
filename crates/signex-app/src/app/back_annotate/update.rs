@@ -1,14 +1,11 @@
 //! Opening the dialog, opening the board when it is not, the read on the
 //! worker and the ticks. Validate and Execute: `apply.rs`.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use iced::Task;
 use signex_engine::pcb::eco::BackChangeList;
 use signex_i18n::{MessageId, ids, t};
-use signex_types::schematic::InstancePath;
-use uuid::Uuid;
 
 use super::read::{BackRequest, compute};
 use super::{BackAnnotateMsg, BackAnnotateState};
@@ -238,16 +235,8 @@ impl Signex {
                 }
                 // A sheet file another open project reaches holds that
                 // project's part too: its values are not carried (#1224).
-                let shared: HashSet<(InstancePath, Vec<Uuid>)> = read
-                    .files
-                    .iter()
-                    .filter(|(_, part)| self.shared_with_project_other_than(owner, &part.file))
-                    .map(|(key, _)| key.clone())
-                    .collect();
                 let mut list = read.list.clone();
-                list.block_shared_values(|sheet, units| {
-                    shared.contains(&(sheet.clone(), units.to_vec()))
-                });
+                self.block_values_shared_elsewhere(owner, &read, &mut list);
                 let Some(state) = self.ui_state.back_annotate.as_mut() else {
                     return;
                 };

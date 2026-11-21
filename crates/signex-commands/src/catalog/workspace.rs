@@ -145,4 +145,76 @@ pub(super) const WORKSPACE: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
+    // Workspace layouts (mockup row 166): View ▸ Window ▸ Layouts. Unbound by default:
+    // docs/WORKSPACE_LAYOUTS.md, "Shortcuts".
+    CommandMetadata {
+        id: "apply_layout_schematic",
+        category: "window",
+        label: command_ids::CMD_APPLY_LAYOUT_SCHEMATIC,
+        menu_label: Some(command_ids::CMD_MENU_APPLY_LAYOUT_SCHEMATIC),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "apply_layout_board",
+        category: "window",
+        label: command_ids::CMD_APPLY_LAYOUT_BOARD,
+        menu_label: Some(command_ids::CMD_MENU_APPLY_LAYOUT_BOARD),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "apply_layout_review",
+        category: "window",
+        label: command_ids::CMD_APPLY_LAYOUT_REVIEW,
+        menu_label: Some(command_ids::CMD_MENU_APPLY_LAYOUT_REVIEW),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "apply_layout_notebook",
+        category: "window",
+        label: command_ids::CMD_APPLY_LAYOUT_NOTEBOOK,
+        menu_label: Some(command_ids::CMD_MENU_APPLY_LAYOUT_NOTEBOOK),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "save_workspace_layout",
+        category: "window",
+        label: command_ids::CMD_SAVE_WORKSPACE_LAYOUT,
+        menu_label: Some(command_ids::CMD_MENU_SAVE_WORKSPACE_LAYOUT),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "manage_workspace_layouts",
+        category: "window",
+        label: command_ids::CMD_MANAGE_WORKSPACE_LAYOUTS,
+        menu_label: Some(command_ids::CMD_MENU_MANAGE_WORKSPACE_LAYOUTS),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
+    CommandMetadata {
+        id: "reset_workspace_layout",
+        category: "window",
+        label: command_ids::CMD_RESET_WORKSPACE_LAYOUT,
+        menu_label: Some(command_ids::CMD_MENU_RESET_WORKSPACE_LAYOUT),
+        group: CommandGroup::General,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
+        ..CommandMetadata::DEFAULT
+    },
 ];

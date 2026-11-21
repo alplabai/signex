@@ -37,6 +37,7 @@ fn every_kind_has_a_stable_builtin_rule_id() {
             "builtin::mask_expansion",
             "builtin::paste_expansion",
             "builtin::courtyard_overlap",
+            "builtin::part_outside_room",
         ]
     );
     for kind in ViolationKind::ALL {

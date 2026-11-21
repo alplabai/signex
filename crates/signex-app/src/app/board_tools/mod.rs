@@ -101,7 +101,8 @@ impl Picked {
                 ItemRef::Text(_)
                 | ItemRef::Dimension(_)
                 | ItemRef::Graphic { .. }
-                | ItemRef::FootprintText { .. } => {}
+                | ItemRef::FootprintText { .. }
+                | ItemRef::Room(_) => {}
             }
         }
         picked.nets.remove(&0);

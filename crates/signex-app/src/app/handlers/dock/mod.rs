@@ -91,6 +91,14 @@ impl Signex {
             if let Some(task) = self.handle_dock_selection_form_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::CommandLog(log_msg) = panel_msg {
+                let task = self.handle_command_log_message(log_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::Annotations(annotations_msg) = panel_msg {
+                let task = self.handle_annotations_message(annotations_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let Some(task) = self.handle_dock_panel_control_message(panel_msg) {
                 return Task::batch([task, self.finish_update()]);
             }
@@ -127,6 +135,11 @@ impl Signex {
             if let crate::panels::PanelMsg::PcbPrimitive(msg) = panel_msg {
                 self.handle_pcb_primitive(msg);
                 return self.finish_update();
+            }
+            // #2457: Room Properties.
+            if let crate::panels::PanelMsg::Room(msg) = panel_msg {
+                let task = self.handle_room(msg.clone());
+                return Task::batch([task, self.finish_update()]);
             }
             if let crate::panels::PanelMsg::LayerStack(msg) = panel_msg {
                 self.handle_layer_stack(msg);

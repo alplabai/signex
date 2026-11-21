@@ -172,6 +172,7 @@ pub(super) fn menu_context_in(app: &Signex, window: Option<iced::window::Id>) ->
         i18n: std::sync::Arc::clone(&app.ui_state.i18n),
         cross_select: app.interaction_state.cross_select.enabled,
         pcb_sync: app.pcb_sync_label(window),
+        layouts: app.layouts_menu(),
     }
 }
 
@@ -301,6 +302,11 @@ pub(super) struct Probe {
     pub active_bar_menu: bool,
     /// Design ▸ Differential Pair Classes... opens its dialog.
     pub diff_pair_classes: bool,
+    /// View ▸ Window ▸ Layouts (mockup row 166): the two dialogs and the layout on
+    /// screen.
+    pub save_layout: bool,
+    pub manage_layouts: bool,
+    pub layout_active: Option<String>,
 }
 
 pub(super) fn probe(app: &Signex) -> Probe {
@@ -384,6 +390,14 @@ pub(super) fn probe(app: &Signex) -> Probe {
         find_similar: app.ui_state.find_similar.is_some(),
         active_bar_menu: app.interaction_state.active_bar_menu.is_some(),
         diff_pair_classes: app.ui_state.diff_pair_classes.is_some(),
+        save_layout: app.ui_state.workspace_layouts.save.is_some(),
+        manage_layouts: app.ui_state.workspace_layouts.manage.is_some(),
+        layout_active: app
+            .ui_state
+            .workspace_layouts
+            .layouts
+            .active()
+            .map(|id| id.key().to_string()),
     }
 }
 
@@ -502,6 +516,7 @@ pub(super) fn loaded_board_app() -> Signex {
     let board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: Uuid::now_v7(),

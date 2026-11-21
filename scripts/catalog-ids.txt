@@ -16,6 +16,10 @@ align_vertical_centers
 annotate_schematic
 annotate_schematic_quietly
 apply_edits
+apply_layout_board
+apply_layout_notebook
+apply_layout_review
+apply_layout_schematic
 apply_selection_filter_preset
 arrange_in_box
 assign_board_net_class
@@ -52,9 +56,11 @@ clear_net_highlighting
 close_active_document
 close_all_documents
 color_net
+compare_board_with_schematic
 compile_project
 copy
 copy_attributes_or_add_vertex
+create_rooms_from_sheets
 create_sheet_from_sheet_symbol
 create_sheet_symbol_from_sheet
 create_union
@@ -144,6 +150,7 @@ lasso_select
 leave_sheet
 list_documents
 lock_board_items
+manage_workspace_layouts
 measure_board
 measure_distance
 mirror_x
@@ -209,6 +216,7 @@ place_board_quick_route
 place_board_rectangle
 place_board_region
 place_board_reuse_block
+place_board_room
 place_board_route
 place_board_slice_pour
 place_board_string
@@ -291,6 +299,7 @@ reset_board_origin
 reset_layer_colors
 reset_local_coordinates
 reset_schematic_designators
+reset_workspace_layout
 resolve
 revert
 rotate_clockwise
@@ -320,6 +329,7 @@ save_board_reuse_block
 save_document
 save_document_as
 save_layer_set
+save_workspace_layout
 select_all
 select_board_net
 select_connection

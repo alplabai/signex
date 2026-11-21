@@ -45,6 +45,7 @@ mod pad_shape_cells;
 mod page_extras;
 mod pcb_cells;
 mod pcb_footprints;
+mod pcb_rooms;
 mod pcb_row_columns;
 mod pcb_rows;
 mod pcb_uuid_repair;
@@ -105,6 +106,8 @@ mod pcb_lib_ref_tests;
 mod pcb_lock_name_tests;
 #[cfg(test)]
 mod pcb_pad_shape_tests;
+#[cfg(test)]
+mod pcb_rooms_tests;
 #[cfg(test)]
 mod pcb_route_attrs_tests;
 #[cfg(test)]
@@ -189,21 +192,29 @@ pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.4";
 /// without layer colours stays 1.4, byte for byte.
 pub const SNXPCB_FORMAT_LAYER_COLORS: &str = "snxpcb/1.5";
 
-/// The token a save of `board` writes: [`SNXPCB_FORMAT_LAYER_COLORS`] when
-/// a layer has a colour of its own, else [`SNXPCB_FORMAT_V1`]. From content,
-/// so a board whose last colour is reset goes back to 1.4.
+/// Written when the board has rooms (`[[rooms]]`, #2457, 2026-11-20): a
+/// build that knows only 1.5 would drop them on save, so it opens 1.6
+/// read-only. A board without rooms keeps 1.4 or 1.5, byte for byte.
+pub const SNXPCB_FORMAT_ROOMS: &str = "snxpcb/1.6";
+
+/// The token a save of `board` writes: [`SNXPCB_FORMAT_ROOMS`] with rooms,
+/// else [`SNXPCB_FORMAT_LAYER_COLORS`] with a layer colour, else
+/// [`SNXPCB_FORMAT_V1`]. From content, so a board whose last room or colour
+/// goes writes the lower token again.
 pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
-    if board.options.layer_colors.is_empty() {
-        SNXPCB_FORMAT_V1
-    } else {
+    if !board.rooms.is_empty() {
+        SNXPCB_FORMAT_ROOMS
+    } else if !board.options.layer_colors.is_empty() {
         SNXPCB_FORMAT_LAYER_COLORS
+    } else {
+        SNXPCB_FORMAT_V1
     }
 }
 
 /// `.snxpcb` version policy: a newer minor opens read-only. A save writes
 /// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_LAYER_COLORS,
+    current: SNXPCB_FORMAT_ROOMS,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
@@ -211,6 +222,7 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
         "snxpcb/1.3",
         SNXPCB_FORMAT_V1,
         SNXPCB_FORMAT_LAYER_COLORS,
+        SNXPCB_FORMAT_ROOMS,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,
@@ -928,6 +940,7 @@ impl SnxPcb {
         board_sketch::write(&mut out, &self.board)?;
         board_options::write(&mut out, &self.board)?;
         board_free::write(&mut out, &self.board)?;
+        pcb_rooms::write(&mut out, &self.board)?;
 
         // Footprint extras / pad extras / board extras — wrap in a
         // single `[extras]` tree so toml's serializer produces the
@@ -1052,6 +1065,7 @@ impl SnxPcb {
             free: board_free::read(raw.free)?,
             sketch,
             stackup: stack,
+            rooms: pcb_rooms::read(raw.rooms)?,
             options: board_options::read(raw.board_options)?,
             unknown: BoardUnknown {
                 manifest: raw.unknown,
@@ -1121,6 +1135,9 @@ struct PcbRaw {
     board_options: Option<board_options::BoardOptionsRaw>,
     #[serde(default)]
     free: Option<board_free::FreeRaw>,
+    /// Rooms (#2457), `format::pcb_rooms`.
+    #[serde(default)]
+    rooms: Option<Vec<pcb_rooms::RoomRaw>>,
     /// Foreign manifest keys; carried onto the board so they survive
     /// the codec wrapper being discarded.
     #[serde(flatten)]

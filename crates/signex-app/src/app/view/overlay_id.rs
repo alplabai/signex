@@ -81,6 +81,8 @@ pub(crate) enum OverlayId {
     ZoomPresets,
     /// The status bar's Grid & Snap popover (mockup row 6).
     GridSnapPopover,
+    /// The popover a board counter of the status bar opened (#2460).
+    BoardStatusPopover,
 
     // Dialogs.
     Preferences,
@@ -114,6 +116,8 @@ pub(crate) enum OverlayId {
     SheetSync,
     /// Tools ▸ Re-Annotate Board (#1312).
     BoardReannotate,
+    /// Design ▸ Rooms ▸ Create Rooms from Sheets (#2457).
+    CreateRooms,
     /// File ▸ Fabrication Outputs (#2388).
     FabOutputs,
     /// Design ▸ Differential Pair Classes… (#1282).
@@ -122,6 +126,10 @@ pub(crate) enum OverlayId {
     BoardOutput,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
     BackAnnotate,
+    /// Project ▸ Compare Board with Schematic… (#2462).
+    CompareBoard,
+    /// Its confirmation listing the board deletions, above it.
+    CompareBoardConfirm,
     AnnotateDialog,
     AnnotateResetConfirm,
     ReprefixConfirm,
@@ -130,6 +138,10 @@ pub(crate) enum OverlayId {
     UpdatePcb,
     /// New PCB / New Schematic setup (#2232).
     DocumentSetup,
+    /// View ▸ Window ▸ Layouts ▸ Manage Layouts (mockup row 166).
+    ManageLayouts,
+    /// View ▸ Window ▸ Layouts ▸ Save Layout (mockup row 166).
+    SaveLayout,
 
     // Library modals.
     LibraryPicker,
@@ -163,7 +175,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 75] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 81] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -195,6 +207,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 75] = [
     OverlayId::PanelList,
     OverlayId::ZoomPresets,
     OverlayId::GridSnapPopover,
+    OverlayId::BoardStatusPopover,
     OverlayId::Preferences,
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
@@ -220,10 +233,14 @@ pub(crate) const PAINT_ORDER: [OverlayId; 75] = [
     OverlayId::SheetNumbering,
     OverlayId::SheetSync,
     OverlayId::BoardReannotate,
+    OverlayId::CreateRooms,
     OverlayId::FabOutputs,
     OverlayId::DiffPairClasses,
     OverlayId::BoardOutput,
     OverlayId::BackAnnotate,
+    OverlayId::CompareBoard,
+    // Above its dialog: Esc closes the confirmation first.
+    OverlayId::CompareBoardConfirm,
     OverlayId::AnnotateDialog,
     OverlayId::AnnotateResetConfirm,
     OverlayId::ReprefixConfirm,
@@ -231,6 +248,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 75] = [
     OverlayId::UpdatePcb,
     // Above Update PCB: its Create PCB opens this dialog on top.
     OverlayId::DocumentSetup,
+    OverlayId::ManageLayouts,
+    OverlayId::SaveLayout,
     OverlayId::LibraryPicker,
     OverlayId::EditRowModal,
     OverlayId::DeleteConfirm,
@@ -327,6 +346,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::PanelList
         | OverlayId::ZoomPresets
         | OverlayId::GridSnapPopover
+        | OverlayId::BoardStatusPopover
         | OverlayId::DockDragZone
         | OverlayId::FloatingPanels
         | OverlayId::Preferences
@@ -353,16 +373,21 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::SheetNumbering
         | OverlayId::SheetSync
         | OverlayId::BoardReannotate
+        | OverlayId::CreateRooms
         | OverlayId::FabOutputs
         | OverlayId::DiffPairClasses
         | OverlayId::BoardOutput
         | OverlayId::BackAnnotate
+        | OverlayId::CompareBoard
+        | OverlayId::CompareBoardConfirm
         | OverlayId::AnnotateDialog
         | OverlayId::AnnotateResetConfirm
         | OverlayId::ReprefixConfirm
         | OverlayId::ErcDialog
         | OverlayId::UpdatePcb
         | OverlayId::DocumentSetup
+        | OverlayId::ManageLayouts
+        | OverlayId::SaveLayout
         | OverlayId::LibraryPicker
         | OverlayId::EditRowModal
         | OverlayId::DeleteConfirm
@@ -552,6 +577,14 @@ impl Signex {
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::ZoomPresets => layers.extend(self.zoom_presets_overlay(window_id)),
             OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),
+            OverlayId::BoardStatusPopover => {
+                if let Some(card) = self.board_popover_card(window_id) {
+                    let dismissed = Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+                        crate::status_bar::BoardPopoverEvent::Dismissed,
+                    )));
+                    layers.extend(Self::dismiss_over(dismissed, card));
+                }
+            }
             OverlayId::DockDragZone => layers.extend(self.dock_drag_zone_overlay()),
             OverlayId::ComponentsRowDragLabel => {
                 layers.extend(self.components_row_drag_label_overlay(window_id))
@@ -585,16 +618,23 @@ impl Signex {
             OverlayId::SheetNumbering => layers.extend(self.sheet_numbering_overlay()),
             OverlayId::SheetSync => layers.extend(self.sheet_sync_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
+            OverlayId::CreateRooms => layers.extend(self.create_rooms_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
             OverlayId::DiffPairClasses => layers.extend(self.diff_pair_classes_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
+            OverlayId::CompareBoard => layers.extend(self.compare_board_overlay()),
+            OverlayId::CompareBoardConfirm => {
+                layers.extend(self.compare_board_confirm_overlay());
+            }
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),
             OverlayId::AnnotateResetConfirm => layers.extend(self.annotate_reset_confirm_overlay()),
             OverlayId::ReprefixConfirm => layers.extend(self.reprefix_confirm_overlay()),
             OverlayId::ErcDialog => layers.extend(self.erc_dialog_overlay()),
             OverlayId::UpdatePcb => layers.extend(self.update_pcb_overlay()),
             OverlayId::DocumentSetup => layers.extend(self.document_setup_overlay()),
+            OverlayId::ManageLayouts => layers.extend(self.manage_layouts_overlay()),
+            OverlayId::SaveLayout => layers.extend(self.save_layout_overlay()),
             OverlayId::LibraryPicker => layers.extend(self.library_picker_overlay()),
             OverlayId::EditRowModal => layers.extend(self.edit_row_modal_overlay()),
             OverlayId::DeleteConfirm => layers.extend(self.delete_confirm_overlay()),
@@ -691,6 +731,8 @@ mod tests {
             OverlayId::GridPicker,
             OverlayId::PanelList,
             OverlayId::ZoomPresets,
+            OverlayId::GridSnapPopover,
+            OverlayId::BoardStatusPopover,
         ];
         for id in menus {
             assert!(

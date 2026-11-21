@@ -1,4 +1,5 @@
 pub mod active_bar;
+pub(crate) mod annotations;
 pub mod autosave;
 pub mod autosave_pcb;
 pub mod autosave_primitives;
@@ -11,6 +12,7 @@ pub(crate) mod board_net_classes;
 mod board_sketch;
 pub mod canvas;
 pub mod clipboard_workflows;
+pub(crate) mod command_log;
 mod component_history;
 mod cross_probe;
 #[cfg(test)]
@@ -121,3 +123,4 @@ pub mod window_controls;
 pub mod window_geometry_events;
 pub mod window_placement;
 pub mod window_tiling;
+pub(crate) mod workspace_layouts;

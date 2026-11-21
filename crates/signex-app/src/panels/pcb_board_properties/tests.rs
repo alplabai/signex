@@ -21,6 +21,7 @@ fn board() -> PcbBoard {
     PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),

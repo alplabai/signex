@@ -295,6 +295,22 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         // View ▸ Window ▸ Untile (#2249).
         "untile_documents" => Message::Window(WindowMsg::UntileRequested),
+        // View ▸ Window ▸ Layouts (mockup row 166).
+        "apply_layout_schematic"
+        | "apply_layout_board"
+        | "apply_layout_review"
+        | "apply_layout_notebook" => {
+            use crate::workspace_layouts::{BuiltinLayout, LayoutId, WorkspaceLayoutMsg};
+            let builtin = BuiltinLayout::ALL
+                .into_iter()
+                .find(|b| b.command_id() == command.as_str())?;
+            WorkspaceLayoutMsg::ApplyRequested(LayoutId::Builtin(builtin)).into()
+        }
+        "save_workspace_layout" => crate::workspace_layouts::SaveLayoutMsg::Requested.into(),
+        "manage_workspace_layouts" => crate::workspace_layouts::ManageLayoutsMsg::Requested.into(),
+        "reset_workspace_layout" => {
+            crate::workspace_layouts::WorkspaceLayoutMsg::ResetActiveRequested.into()
+        }
         "open_parameter_manager" => Message::ParameterManager(ParameterManagerMsg::Open),
         "print" => Message::PrintPreview(PrintPreviewMsg::Requested),
         "redo" => Message::Edit(EditMsg::Redo),
@@ -395,6 +411,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "repour_selected" => Message::Pcb(PcbMsg::RepourRequested { selected: true }),
         "repour_all" => Message::Pcb(PcbMsg::RepourRequested { selected: false }),
         "place_board_keepout" => board_tool(BoardPlaceTool::Keepout),
+        // #2457: Place ▸ Room and Design ▸ Rooms ▸ Create Rooms from Sheets.
+        "place_board_room" => board_tool(BoardPlaceTool::Room),
+        "create_rooms_from_sheets" => Message::Pcb(PcbMsg::CreateRooms(
+            crate::app::rooms::CreateRoomsMsg::Requested,
+        )),
         "place_board_route" => board_tool(BoardPlaceTool::InteractiveRouting),
         // #2424: the Graphics tools.
         "place_board_line" => board_tool(BoardPlaceTool::Line),
@@ -485,6 +506,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         // #1312: the Update PCB dialog for the document in view. Its headless
         // `apply=true` form runs through `run_operands`, not here.
         "update_pcb_from_schematic" => Message::UpdatePcb(UpdatePcbMsg::Requested { apply: false }),
+        // #2462: the Compare Board with Schematic report of the project in view.
+        "compare_board_with_schematic" => Message::from(crate::app::CompareBoardMsg::Requested),
         "back_annotate_schematics" => Message::from(crate::app::BackAnnotateMsg::Requested),
         "new_pcb_document" => Message::UpdatePcb(UpdatePcbMsg::NewPcbRequested(None)),
         // #2232: the setup dialogs; a headless run with `profile` makes the

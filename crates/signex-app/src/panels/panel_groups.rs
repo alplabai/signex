@@ -49,6 +49,7 @@ pub fn panel_group(kind: PanelKind) -> PanelGroup {
         | PanelKind::Components
         | PanelKind::Library
         | PanelKind::Navigator
+        | PanelKind::Annotations
         | PanelKind::Favorites
         | PanelKind::Snippets
         | PanelKind::Variants
@@ -67,6 +68,7 @@ pub fn panel_group(kind: PanelKind) -> PanelGroup {
         PanelKind::Messages | PanelKind::Erc | PanelKind::Drc | PanelKind::History => {
             PanelGroup::Verify
         }
+        PanelKind::CommandLog => PanelGroup::Verify,
         PanelKind::SchLibrary | PanelKind::FootprintLibrary => PanelGroup::Library,
         PanelKind::Layers | PanelKind::LayerStack | PanelKind::NetClasses | PanelKind::PcbNets => {
             PanelGroup::Pcb
@@ -134,6 +136,7 @@ mod tests {
                 K::Components,
                 K::Library,
                 K::Navigator,
+                K::Annotations,
                 K::BomStudio,
                 K::Favorites,
                 K::Snippets,
@@ -157,7 +160,7 @@ mod tests {
         );
         assert_eq!(
             members(PanelGroup::Verify),
-            [K::Erc, K::Messages, K::Drc, K::History]
+            [K::Erc, K::Messages, K::CommandLog, K::Drc, K::History]
         );
         assert_eq!(
             members(PanelGroup::Library),

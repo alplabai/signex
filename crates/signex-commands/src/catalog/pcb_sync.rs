@@ -1,5 +1,5 @@
 //! Schematic-to-board sync commands: update the board from the schematic,
-//! assign footprints and change a placed footprint.
+//! compare the two, assign footprints and change a placed footprint.
 
 use super::{CommandFlags, CommandGroup, CommandMetadata, DocumentKind, Enablement, operands};
 use signex_i18n_ids::command_ids;
@@ -16,6 +16,19 @@ pub(super) const PCB_SYNC: &[CommandMetadata] = &[
         enable: Enablement::Always,
         flags: CommandFlags::MUTATES,
         operands: operands::APPLY,
+        ..CommandMetadata::DEFAULT
+    },
+    // #2462: the report of every difference between the schematic and the
+    // board, with a direction per row. Apply is one board undo step and one
+    // schematic undo group. Gated like Update PCB. No default key.
+    CommandMetadata {
+        id: "compare_board_with_schematic",
+        category: "pcb_sync",
+        label: command_ids::CMD_COMPARE_BOARD_WITH_SCHEMATIC,
+        menu_label: Some(command_ids::CMD_MENU_COMPARE_BOARD_WITH_SCHEMATIC),
+        group: CommandGroup::Schematic,
+        enable: Enablement::Always,
+        flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
     CommandMetadata {

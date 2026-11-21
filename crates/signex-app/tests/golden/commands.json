@@ -75,6 +75,26 @@
     "category": "edit"
   },
   {
+    "id": "apply_layout_board",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_notebook",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_review",
+    "group": "General",
+    "category": "window"
+  },
+  {
+    "id": "apply_layout_schematic",
+    "group": "General",
+    "category": "window"
+  },
+  {
     "id": "apply_selection_filter_preset",
     "group": "Schematic",
     "category": "select"
@@ -255,6 +275,11 @@
     "category": "view"
   },
   {
+    "id": "compare_board_with_schematic",
+    "group": "Schematic",
+    "category": "pcb_sync"
+  },
+  {
     "id": "compile_project",
     "group": "Schematic",
     "category": "design"
@@ -268,6 +293,11 @@
     "id": "copy_attributes_or_add_vertex",
     "group": "General",
     "category": "interactive"
+  },
+  {
+    "id": "create_rooms_from_sheets",
+    "group": "Pcb",
+    "category": "design"
   },
   {
     "id": "create_sheet_from_sheet_symbol",
@@ -715,6 +745,11 @@
     "category": "modify"
   },
   {
+    "id": "manage_workspace_layouts",
+    "group": "General",
+    "category": "window"
+  },
+  {
     "id": "measure_board",
     "group": "Pcb",
     "category": "search"
@@ -1038,6 +1073,11 @@
     "id": "place_board_reuse_block",
     "group": "Pcb",
     "category": "design"
+  },
+  {
+    "id": "place_board_room",
+    "group": "Pcb",
+    "category": "place"
   },
   {
     "id": "place_board_route",
@@ -1450,6 +1490,11 @@
     "category": "design"
   },
   {
+    "id": "reset_workspace_layout",
+    "group": "General",
+    "category": "window"
+  },
+  {
     "id": "resolve",
     "group": "General",
     "category": "file"
@@ -1593,6 +1638,11 @@
     "id": "save_layer_set",
     "group": "Pcb",
     "category": "view"
+  },
+  {
+    "id": "save_workspace_layout",
+    "group": "General",
+    "category": "window"
   },
   {
     "id": "select_all",

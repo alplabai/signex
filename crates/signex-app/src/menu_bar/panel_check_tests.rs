@@ -6,7 +6,7 @@ use crate::app::Signex;
 use crate::keymap::AppCommandId;
 use crate::panels::PanelKind;
 
-const PANEL_ROWS: [(&str, PanelKind); 8] = [
+const PANEL_ROWS: [(&str, PanelKind); 10] = [
     ("Projects", PanelKind::Projects),
     ("Components", PanelKind::Components),
     ("Navigator", PanelKind::Navigator),
@@ -15,6 +15,8 @@ const PANEL_ROWS: [(&str, PanelKind); 8] = [
     ("Messages", PanelKind::Messages),
     ("Layers", PanelKind::Layers),
     ("Unions", PanelKind::Unions),
+    ("Annotations", PanelKind::Annotations),
+    ("Command Log", PanelKind::CommandLog),
 ];
 
 pub(crate) fn context(app: &Signex) -> MenuContext<'static> {

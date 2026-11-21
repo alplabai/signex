@@ -66,10 +66,19 @@ struct OpenOverlays {
     sheet_numbering_open: bool,
     sheet_sync_open: bool,
     board_reannotate_open: bool,
+    /// Create Rooms from Sheets (#2457).
+    create_rooms_open: bool,
     fab_outputs_open: bool,
     diff_pair_classes_open: bool,
     board_output_open: bool,
     back_annotate_open: bool,
+    compare_board_open: bool,
+    compare_board_confirm_open: bool,
+    /// Workspace layouts (mockup row 166): Save Layout, Manage Layouts, and Manage's
+    /// inline Rename field, which Esc closes before the dialog.
+    save_layout_open: bool,
+    manage_layouts_open: bool,
+    manage_layouts_renaming: bool,
     library_picker_open: bool,
     library_document_options_open: bool,
     library_updates_open: bool,
@@ -113,6 +122,8 @@ struct OpenOverlays {
     zoom_presets_open: bool,
     /// The status bar's Grid & Snap popover: Esc closes it, not the tool.
     grid_snap_popover_open: bool,
+    /// A board counter's popover (#2460): Esc closes it, not the tool.
+    board_status_popover_open: bool,
 }
 
 // `KeyContext` used to live here — the slice of modal state the
@@ -266,6 +277,11 @@ impl OpenOverlays {
             OverlayId::GridSnapPopover => self
                 .grid_snap_popover_open
                 .then_some(Message::Overlay(OverlayMsg::GridSnapPopoverDismissed)),
+            OverlayId::BoardStatusPopover => self.board_status_popover_open.then(|| {
+                Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(
+                    crate::status_bar::BoardPopoverEvent::Dismissed,
+                )))
+            }),
 
             // ── Editor chrome, menus, pickers, panels: no rung ───────
             // None of these is a modal. The symbol editor's menu closes from
@@ -381,6 +397,9 @@ impl OpenOverlays {
             OverlayId::BoardReannotate => self
                 .board_reannotate_open
                 .then(|| Message::from(crate::app::BoardReannotateMsg::CancelRequested)),
+            OverlayId::CreateRooms => self
+                .create_rooms_open
+                .then(|| Message::from(crate::app::rooms::CreateRoomsMsg::Cancelled)),
             OverlayId::FabOutputs => self
                 .fab_outputs_open
                 .then(|| Message::from(crate::app::FabOutputsMsg::CancelRequested)),
@@ -393,6 +412,14 @@ impl OpenOverlays {
             OverlayId::BackAnnotate => self
                 .back_annotate_open
                 .then(|| Message::from(crate::app::BackAnnotateMsg::CloseRequested)),
+            OverlayId::CompareBoard => self
+                .compare_board_open
+                .then(|| Message::from(crate::app::CompareBoardMsg::CloseRequested)),
+            // The child confirmation outranks its dialog: Esc cancels it
+            // and leaves the report open.
+            OverlayId::CompareBoardConfirm => self
+                .compare_board_confirm_open
+                .then(|| Message::from(crate::app::CompareBoardMsg::ApplyCancelled)),
             OverlayId::AnnotateDialog => self
                 .annotate_open
                 .then(|| Message::Annotate(AnnotateMsg::CloseDialog)),
@@ -425,6 +452,18 @@ impl OpenOverlays {
             OverlayId::DocumentSetup => self
                 .document_setup_open
                 .then(|| Message::from(crate::app::DocumentSetupMsg::CancelRequested)),
+            // An open Rename field closes first and keeps the dialog.
+            OverlayId::ManageLayouts => self.manage_layouts_open.then(|| {
+                use crate::workspace_layouts::ManageLayoutsMsg;
+                if self.manage_layouts_renaming {
+                    Message::from(ManageLayoutsMsg::RenameCancelled)
+                } else {
+                    Message::from(ManageLayoutsMsg::Closed)
+                }
+            }),
+            OverlayId::SaveLayout => self
+                .save_layout_open
+                .then(|| Message::from(crate::workspace_layouts::SaveLayoutMsg::Cancelled)),
 
             // ── Library modals ──────────────────────────────────────
             OverlayId::LibraryPicker => self
@@ -733,10 +772,25 @@ impl Signex {
             sheet_numbering_open: self.ui_state.sheet_numbering.is_some(),
             sheet_sync_open: self.ui_state.sheet_sync.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
+            create_rooms_open: self.ui_state.rooms.create.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
             diff_pair_classes_open: self.ui_state.diff_pair_classes.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
+            compare_board_open: self.ui_state.compare_board.is_some(),
+            compare_board_confirm_open: self
+                .ui_state
+                .compare_board
+                .as_ref()
+                .is_some_and(|s| s.confirming),
+            save_layout_open: self.ui_state.workspace_layouts.save.is_some(),
+            manage_layouts_open: self.ui_state.workspace_layouts.manage.is_some(),
+            manage_layouts_renaming: self
+                .ui_state
+                .workspace_layouts
+                .manage
+                .as_ref()
+                .is_some_and(|dialog| dialog.rename.is_some()),
             library_picker_open: self.library.picker.is_some()
                 && !modal_detached(crate::app::state::ModalId::LibraryPicker),
             library_document_options_open: self.library.document_options.is_some()
@@ -812,6 +866,14 @@ impl Signex {
             zoom_presets_open: self.zoom_presets_shown(),
             // Open is not enough: it must paint, or Esc is swallowed for it.
             grid_snap_popover_open: self.grid_snap_popover_shown(),
+            // Painted only while its window shows a board: no rung for a
+            // popover left behind by a tab switch.
+            board_status_popover_open: self
+                .ui_state
+                .board_status
+                .popover
+                .as_ref()
+                .is_some_and(|p| self.status_board_target(p.window).is_some()),
         }
     }
 
@@ -1064,6 +1126,9 @@ impl Signex {
             chord_timeout,
             // The Start screen's minute clock; none while it is off screen.
             crate::start_screen::clock_subscription(self.start_screen_shown()),
+            // The board DRC counter's age (#2460); none unless a board with a
+            // finished run is shown.
+            self.board_clock_subscription(),
             kbd,
             mouse_sub,
             window_close,
@@ -1445,6 +1510,31 @@ mod tests {
         assert!(matches!(
             only(|o| o.net_color_custom_open = true),
             Some(Message::NetColor(NetColorMsg::CustomShow(false)))
+        ));
+        // Mockup row 166: Save Layout cancels; Manage Layouts closes its Rename field
+        // first, then itself.
+        use crate::dock::DockLayoutMsg;
+        use crate::workspace_layouts::{ManageLayoutsMsg, SaveLayoutMsg, WorkspaceLayoutMsg};
+        assert!(matches!(
+            only(|o| o.save_layout_open = true),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Save(SaveLayoutMsg::Cancelled)
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.manage_layouts_open = true),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Manage(ManageLayoutsMsg::Closed)
+            )))
+        ));
+        assert!(matches!(
+            only(|o| {
+                o.manage_layouts_open = true;
+                o.manage_layouts_renaming = true;
+            }),
+            Some(Message::DockLayout(DockLayoutMsg::Workspace(
+                WorkspaceLayoutMsg::Manage(ManageLayoutsMsg::RenameCancelled)
+            )))
         ));
     }
 
@@ -1876,10 +1966,16 @@ mod tests {
             sheet_numbering_open,
             sheet_sync_open,
             board_reannotate_open,
+            create_rooms_open,
             fab_outputs_open,
             diff_pair_classes_open,
             board_output_open,
             back_annotate_open,
+            compare_board_open,
+            compare_board_confirm_open,
+            save_layout_open,
+            manage_layouts_open,
+            manage_layouts_renaming,
             library_picker_open,
             library_document_options_open,
             library_updates_open,
@@ -1901,6 +1997,7 @@ mod tests {
             grid_picker_open,
             zoom_presets_open,
             grid_snap_popover_open,
+            board_status_popover_open,
         ];
 
         type EscapeSetter = fn(&mut OpenOverlays);
@@ -1957,12 +2054,23 @@ mod tests {
             ("sheet_numbering_open", |o| o.sheet_numbering_open = true),
             ("sheet_sync_open", |o| o.sheet_sync_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
+            ("create_rooms_open", |o| o.create_rooms_open = true),
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
             ("diff_pair_classes_open", |o| {
                 o.diff_pair_classes_open = true
             }),
             ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
+            ("compare_board_open", |o| o.compare_board_open = true),
+            ("compare_board_confirm_open", |o| {
+                o.compare_board_confirm_open = true
+            }),
+            ("save_layout_open", |o| o.save_layout_open = true),
+            ("manage_layouts_open", |o| o.manage_layouts_open = true),
+            ("manage_layouts_renaming", |o| {
+                o.manage_layouts_open = true;
+                o.manage_layouts_renaming = true
+            }),
             ("selection_filter_custom_open", |o| {
                 o.selection_filter_custom_open = true
             }),
@@ -2017,6 +2125,9 @@ mod tests {
             ("zoom_presets_open", |o| o.zoom_presets_open = true),
             ("grid_snap_popover_open", |o| {
                 o.grid_snap_popover_open = true
+            }),
+            ("board_status_popover_open", |o| {
+                o.board_status_popover_open = true
             }),
         ];
 

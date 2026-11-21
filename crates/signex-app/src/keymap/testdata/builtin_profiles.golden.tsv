@@ -367,6 +367,7 @@ altium	hint	-	-	rules_set_apply
 altium	hint	-	-	rules_preset_diff
 altium	hint	-	-	rules_preset_apply
 altium	hint	-	-	update_pcb_from_schematic
+altium	hint	-	-	compare_board_with_schematic
 altium	hint	-	-	assign_footprints
 altium	hint	-	F	change_footprint
 altium	hint	-	P V	place_board_via
@@ -386,6 +387,8 @@ altium	hint	-	-	panelize_board
 altium	hint	-	-	remove_board_panel
 altium	hint	-	-	set_board_panel
 altium	hint	-	-	board_panel
+altium	hint	-	-	place_board_room
+altium	hint	-	-	create_rooms_from_sheets
 altium	hint	-	Shift++	next_layer
 altium	hint	-	"-"	prev_layer
 altium	hint	-	Shift+*	next_signal_layer
@@ -520,6 +523,13 @@ altium	hint	-	F4	toggle_floating_panels
 altium	hint	-	F11	toggle_properties_panel
 altium	hint	-	F12	toggle_schematic_filter_panel
 altium	hint	-	Shift+F12	toggle_schematic_list_panel
+altium	hint	-	-	apply_layout_schematic
+altium	hint	-	-	apply_layout_board
+altium	hint	-	-	apply_layout_review
+altium	hint	-	-	apply_layout_notebook
+altium	hint	-	-	save_workspace_layout
+altium	hint	-	-	manage_workspace_layouts
+altium	hint	-	-	reset_workspace_layout
 classic	bind	Pcb	Q	command:cycle_unit
 classic	bind	Global	/	command:switch_segment_posture
 classic	bind	Global	A	command:place_symbol
@@ -887,6 +897,7 @@ classic	hint	-	-	rules_set_apply
 classic	hint	-	-	rules_preset_diff
 classic	hint	-	-	rules_preset_apply
 classic	hint	-	-	update_pcb_from_schematic
+classic	hint	-	-	compare_board_with_schematic
 classic	hint	-	-	assign_footprints
 classic	hint	-	F	change_footprint
 classic	hint	-	-	place_board_via
@@ -906,6 +917,8 @@ classic	hint	-	-	panelize_board
 classic	hint	-	-	remove_board_panel
 classic	hint	-	-	set_board_panel
 classic	hint	-	-	board_panel
+classic	hint	-	-	place_board_room
+classic	hint	-	-	create_rooms_from_sheets
 classic	hint	-	Shift++	next_layer
 classic	hint	-	"-"	prev_layer
 classic	hint	-	Shift+*	next_signal_layer
@@ -1040,3 +1053,10 @@ classic	hint	-	-	toggle_floating_panels
 classic	hint	-	-	toggle_properties_panel
 classic	hint	-	-	toggle_schematic_filter_panel
 classic	hint	-	-	toggle_schematic_list_panel
+classic	hint	-	-	apply_layout_schematic
+classic	hint	-	-	apply_layout_board
+classic	hint	-	-	apply_layout_review
+classic	hint	-	-	apply_layout_notebook
+classic	hint	-	-	save_workspace_layout
+classic	hint	-	-	manage_workspace_layouts
+classic	hint	-	-	reset_workspace_layout

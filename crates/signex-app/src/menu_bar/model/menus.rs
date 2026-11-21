@@ -2,8 +2,8 @@
 //! menu contract pinned by `testdata/menu_bar.golden.tsv`.
 
 use super::items::{
-    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, item, item_if, item_if_command,
-    item_named, panel_item, placeholder, submenu, unavailable,
+    cmd, cmd_item, cmd_item_gated, cmd_item_gated_as, cmd_toggle, header, item, item_if,
+    item_if_command, item_named, panel_item, placeholder, submenu, unavailable,
 };
 use super::{MenuEntry, MenuMessage};
 use crate::app::command::enablement::{new_part_menu_enabled, remove_part_menu_enabled};
@@ -270,6 +270,13 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Navigator,
             MenuMessage::OpenNavigatorPanel,
         ),
+        // Mockup row 165: docs/MENU_BAR.md#view-annotations
+        panel_item(
+            ctx,
+            ids::PANELS_KIND_ANNOTATIONS,
+            PanelKind::Annotations,
+            MenuMessage::OpenAnnotationsPanel,
+        ),
         panel_item(
             ctx,
             ids::PANELS_KIND_PROPERTIES,
@@ -287,6 +294,13 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             ids::PANELS_KIND_MESSAGES,
             PanelKind::Messages,
             MenuMessage::OpenMessagesPanel,
+        ),
+        // #2458: docs/MENU_BAR.md#view-command-log
+        panel_item(
+            ctx,
+            ids::PANELS_KIND_COMMAND_LOG,
+            PanelKind::CommandLog,
+            MenuMessage::OpenCommandLogPanel,
         ),
         panel_item(
             ctx,
@@ -394,6 +408,12 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("board_sketch", "")),
         // #2401: the layer stack manager of the board in view.
         cmd_item_gated(ctx, cmd("board_layer_stack", "")),
+        // #2457: rooms of the board in view; greyed without a project.
+        submenu(
+            ctx,
+            menu_ids::MENU_DESIGN_ROOMS,
+            vec![cmd_item_gated(ctx, cmd("create_rooms_from_sheets", ""))],
+        ),
         SEP,
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
         // #2416: the project's net-class table, in its own panel.
@@ -456,6 +476,9 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("open_erc_dialog", "")),
         // #1300: writes contents.snxsch and adds it to the project.
         cmd_item_gated(ctx, cmd("add_table_of_contents", "")),
+        // #2462: the report of every difference between the schematic and
+        // the board, gated like Update PCB.
+        cmd_item_gated(ctx, cmd("compare_board_with_schematic", "")),
         SEP,
         // Gated like Close Project: with no project there is no tab to open.
         item_if_command(
@@ -643,8 +666,57 @@ fn window(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("tile_windows_vertically", "")),
         cmd_item_gated(ctx, cmd("untile_documents", "")),
         SEP,
+        // Mockup row 166: docs/MENU_BAR.md#window-layouts
+        submenu(ctx, menu_ids::MENU_WINDOW_LAYOUTS, layouts(ctx)),
         cmd_item_gated(ctx, cmd("close_all_documents", "")),
     ]
+}
+
+/// View ▸ Window ▸ Layouts (mockup row 166): the built-ins (the active one checked),
+/// your layouts, each group under its header caption, then Save Layout…,
+/// Manage Layouts… and, while the active built-in carries your edit, its
+/// Reset row.
+fn layouts(ctx: &MenuContext) -> Vec<MenuEntry> {
+    use crate::workspace_layouts::BuiltinLayout;
+    let menu = &ctx.layouts;
+    let mut rows = vec![header(ctx, menu_ids::MENU_WINDOW_LAYOUTS_BUILTIN)];
+    for (row, builtin) in [
+        (cmd("apply_layout_schematic", ""), BuiltinLayout::Schematic),
+        (cmd("apply_layout_board", ""), BuiltinLayout::Layout),
+        (cmd("apply_layout_review", ""), BuiltinLayout::Review),
+        (cmd("apply_layout_notebook", ""), BuiltinLayout::Notebook),
+    ] {
+        rows.push(cmd_toggle(ctx, row, menu.active_builtin == Some(builtin)));
+    }
+    if !menu.user.is_empty() {
+        rows.push(header(ctx, menu_ids::MENU_WINDOW_LAYOUTS_YOURS));
+        for layout in &menu.user {
+            rows.push(MenuEntry::Item(super::MenuItem {
+                label: layout.name.clone(),
+                shortcut: None,
+                state: super::ItemState::Live {
+                    action: MenuMessage::WorkspaceLayoutChosen(layout.id.clone()),
+                    is_enabled: true,
+                },
+                checked: Some(layout.active),
+            }));
+        }
+    }
+    rows.push(SEP);
+    rows.push(cmd_item(ctx, cmd("save_workspace_layout", "")));
+    rows.push(cmd_item(ctx, cmd("manage_workspace_layouts", "")));
+    if let Some(name) = &menu.resettable {
+        let label = ctx.i18n.message_plain(
+            menu_ids::MENU_WINDOW_LAYOUTS_RESET,
+            &[("name", signex_i18n::Arg::from(name.as_str()))],
+        );
+        rows.push(cmd_item_gated_as(
+            ctx,
+            cmd("reset_workspace_layout", ""),
+            label,
+        ));
+    }
+    rows
 }
 
 pub(super) fn help(ctx: &MenuContext) -> Vec<MenuEntry> {

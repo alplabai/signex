@@ -158,7 +158,10 @@ impl Signex {
                     board, common, &graphics, i18n,
                 ))
             }
-            ItemRef::Footprint(_) | ItemRef::FootprintText { .. } => return None,
+            // A room shows Room Properties (#2457).
+            ItemRef::Footprint(_) | ItemRef::FootprintText { .. } | ItemRef::Room(_) => {
+                return None;
+            }
         })
     }
 
@@ -302,7 +305,8 @@ fn item_on_board(board: &PcbBoard, item: ItemRef) -> bool {
         ItemRef::Footprint(_)
         | ItemRef::Zone { .. }
         | ItemRef::Graphic { .. }
-        | ItemRef::FootprintText { .. } => false,
+        | ItemRef::FootprintText { .. }
+        | ItemRef::Room(_) => false,
     }
 }
 

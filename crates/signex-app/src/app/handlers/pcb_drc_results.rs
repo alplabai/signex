@@ -486,8 +486,12 @@ fn apply_drc_view(view: &mut crate::panels::DrcView, msg: DrcPanelMsg) {
 /// The Rules tab domain that holds the rule a violation kind breaks: the
 /// catalog domain holding most of the limits it checks (ties to the
 /// first's); Clearance for a kind no written limit sets (an unconnected
-/// link, a keepout).
+/// link, a keepout). A part outside its room opens Placement: its rule is
+/// set on the room, not in the Rules tab (#2457; Caner, 2026-11-21).
 pub(crate) fn rules_domain_of(kind: signex_drc::ViolationKind) -> Domain {
+    if matches!(kind, signex_drc::ViolationKind::PartOutsideRoom) {
+        return Domain::Placement;
+    }
     signex_drc_dsl::table::catalog::domain_of_limits(kind.limits()).unwrap_or(Domain::Clearance)
 }
 
@@ -510,4 +514,29 @@ fn row_json(row: &DrcRow) -> Value {
         "objects": row.objects,
         "waiver": row.waiver,
     })
+}
+
+#[cfg(test)]
+mod domain_tests {
+    use super::rules_domain_of;
+    use signex_drc::ViolationKind;
+    use signex_drc_dsl::table::catalog::Domain;
+
+    /// Keep parts inside is set on the room, not in the Rules tab, so its
+    /// finding opens the Rules tab at Placement, where courtyard overlap is,
+    /// and not the Clearance fallback (Caner, 2026-11-21).
+    #[test]
+    fn a_part_outside_its_room_opens_the_rules_at_placement() {
+        assert_eq!(
+            rules_domain_of(ViolationKind::PartOutsideRoom),
+            Domain::Placement
+        );
+        assert_ne!(
+            signex_drc_dsl::table::catalog::domain_of_limits(
+                ViolationKind::PartOutsideRoom.limits()
+            ),
+            Some(Domain::Placement),
+            "the special case is needed: no Rules-tab limit leads there"
+        );
+    }
 }

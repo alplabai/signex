@@ -692,6 +692,8 @@ pub enum PanelMsg {
     PcbComponent(super::PcbComponentMsg),
     /// The selected tracks', vias' or pads' panel (#2355).
     PcbPrimitive(super::PcbPrimitiveMsg),
+    /// Room Properties (#2457).
+    Room(crate::app::rooms::RoomMsg),
     /// The Layer Stack manager (#2401).
     LayerStack(super::LayerStackMsg),
     /// F15 — Properties panel: open the primitive picker (symbol /
@@ -735,6 +737,10 @@ pub enum PanelMsg {
     Unions(crate::app::unions::UnionsMsg),
     /// The Object List panel (#1259).
     ObjectList(super::ObjectListMsg),
+    /// The Command Log panel (#2458).
+    CommandLog(super::CommandLogMsg),
+    /// The Annotations panel and its scans (mockup row 165).
+    Annotations(super::AnnotationsMsg),
     /// Toggle a symbol's mirror_x.
     ToggleSymbolMirrorX(uuid::Uuid),
     /// Toggle a symbol's mirror_y.

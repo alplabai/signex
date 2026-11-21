@@ -58,6 +58,7 @@ fn old_reason(need: Needs) -> &'static str {
         Needs::ProbeTarget => "Nothing is selected on the sheet or board to cross probe",
         Needs::PcbSync => "No schematic or PCB of an open project is in view",
         Needs::OpenProject => "No project is open",
+        Needs::PcbInProject => "No board of an open project is in view, or it is read-only",
         Needs::Library => "No library is open",
         Needs::ProjectSheet => "No sheet of a project is open",
         Needs::TileableWindows => {
@@ -84,7 +85,7 @@ fn every_need() -> Vec<Needs> {
 #[test]
 fn every_reason_renders_the_english_it_replaced() {
     let needs = every_need();
-    assert_eq!(needs.len(), 45, "a need no catalog id reaches: {needs:?}");
+    assert_eq!(needs.len(), 46, "a need no catalog id reaches: {needs:?}");
     for need in needs {
         assert_eq!(
             Translatable::new(need.reason()).render_en_us(),

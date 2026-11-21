@@ -105,7 +105,9 @@ impl Signex {
             summary
                 .with_footprint(footprint)
                 .with_component(component)
-                .with_primitive(primitive),
+                .with_primitive(primitive)
+                // #2457: one room selected shows Room Properties.
+                .with_room(self.room_facts(&tab.path, board)),
         )
     }
 

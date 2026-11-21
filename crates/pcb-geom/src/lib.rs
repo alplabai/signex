@@ -15,6 +15,7 @@ mod area_touch;
 mod arrange;
 mod body;
 mod closed_path;
+mod connections;
 mod copper;
 mod flip;
 mod free;
@@ -57,9 +58,10 @@ mod union_find;
 mod units;
 mod zone_fill;
 
-pub use arrange::{arrange_in_box, placed_extent};
+pub use arrange::{arrange_in_box, pack_in_box, placed_extent};
 pub use body::{footprint_body, is_courtyard};
 pub use closed_path::{PathRefusal, closed_path};
+pub use connections::{ConnectionCounts, NetUnrouted, PadName, connection_counts};
 pub use copper::{
     CopperItem, collect_copper, copper_layers, layer_bit, layer_mask, net_at, pad_layers,
     pad_pieces, pieces_on, via_layers, via_pieces,
@@ -76,7 +78,8 @@ pub use graphic::{
 };
 pub use graphic_index::graphic_strokes;
 pub use index::{
-    BoardIndex, IndexedItem, ItemRef, RectSelect, Rejected, item_by_uuid, track_shape, via_shape,
+    BoardIndex, IndexedItem, ItemRef, ROOM_LABEL_HEIGHT_MM, ROOM_LABEL_INSET_MM, RectSelect,
+    Rejected, item_by_uuid, room_label_box, track_shape, via_shape,
 };
 pub use measure::{Span, edge_gap};
 pub use mst::{Edge, euclidean_mst, spanning_forest};

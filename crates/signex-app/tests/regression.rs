@@ -177,6 +177,9 @@ mod pcb_canvas_select;
 mod pcb_carry_windows;
 #[path = "regression/pcb_placement.rs"]
 mod pcb_placement;
+// #2460 — the board counters of the status bar and their popovers.
+#[path = "regression/pcb_status_counters.rs"]
+mod pcb_status_counters;
 // #2358 - press on an unselected footprint and drag: select and move.
 #[path = "regression/pcb_drag_unselected.rs"]
 mod pcb_drag_unselected;
@@ -225,6 +228,9 @@ mod board_pour_text_dimension_panel;
 // #1312 PR 2: Back Annotate.
 #[path = "regression/back_annotate.rs"]
 mod back_annotate;
+// #2462: Compare Board with Schematic.
+#[path = "regression/compare_board.rs"]
+mod compare_board;
 
 #[path = "regression/dock_layout_persist.rs"]
 mod dock_layout_persist;
@@ -836,6 +842,17 @@ mod find_replace_whole_word;
 // Move Selection offsets are typed in the display unit.
 #[path = "regression/move_selection_unit.rs"]
 mod move_selection_unit;
+
+#[path = "regression/command_log.rs"]
+mod command_log;
+
+// Mockup row 165 — the Annotations panel and its notebook scan.
+#[path = "regression/annotations_panel.rs"]
+mod annotations_panel;
+
+// Mockup row 166 — workspace layouts: apply, Save Layout and Manage Layouts.
+#[path = "regression/workspace_layouts.rs"]
+mod workspace_layouts;
 
 // Graphite #78 / #80 - Number Schematic Sheets greys Apply on a clash, gap
 // or high number; Assign Footprints filter chips, ticked bar and reason pills.

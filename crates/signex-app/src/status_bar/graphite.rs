@@ -49,8 +49,6 @@ pub(super) const Y_COLUMN: f32 = TS.body * 7.0;
 pub(super) const UNIT_COLUMN: f32 = TS.body * 2.5;
 /// Height of a cluster rule.
 const RULE_HEIGHT: f32 = TS.body;
-/// Side of the layer colour dot in the layer pill.
-const LAYER_DOT: f32 = TS.body * 0.75;
 /// Side of the Panels button's icon.
 pub(super) const PANELS_ICON: f32 = TS.body;
 
@@ -251,22 +249,6 @@ pub(super) fn rule<'a>(tokens: &ThemeTokens) -> Element<'a, StatusBarRequest> {
         .height(RULE_HEIGHT)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(ink)),
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
-/// The layer colour dot of the layer pill.
-pub(super) fn layer_dot<'a>(colour: Color) -> Element<'a, StatusBarRequest> {
-    container(iced::widget::Space::new())
-        .width(LAYER_DOT)
-        .height(LAYER_DOT)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(colour)),
-            border: Border {
-                radius: (LAYER_DOT / 2.0).into(),
-                ..Border::default()
-            },
             ..container::Style::default()
         })
         .boxed()

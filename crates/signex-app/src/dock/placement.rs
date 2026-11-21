@@ -149,6 +149,8 @@ impl PanelPosition {
             // A sibling tab of Projects (#1308, DECISIONS 2026-11-19).
             | PanelKind::CompiledDesign => PanelPosition::Left,
             PanelKind::Erc => PanelPosition::Bottom,
+            // A wide table, like the mock's bottom dock (#2458).
+            PanelKind::CommandLog => PanelPosition::Bottom,
             PanelKind::Navigator
             | PanelKind::Properties
             | PanelKind::Messages
@@ -168,7 +170,8 @@ impl PanelPosition {
             | PanelKind::Wiki
             | PanelKind::History
             | PanelKind::NetInspector
-            | PanelKind::Unions => PanelPosition::Right,
+            | PanelKind::Unions
+            | PanelKind::Annotations => PanelPosition::Right,
         }
     }
 }

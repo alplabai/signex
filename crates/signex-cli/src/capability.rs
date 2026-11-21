@@ -98,6 +98,8 @@ const SAVES: &[&str] = &[
     "save_board_reuse_block",
     // Writes the named layer set into the user's preferences (#2394).
     "save_layer_set",
+    // Writes the named workspace layout into the user's preferences (mockup row 166).
+    "save_workspace_layout",
 ];
 
 /// The one capability `command` needs, from its catalog flags.
@@ -176,6 +178,7 @@ mod tests {
             (Capability::Save, "save_document_as"),
             (Capability::Save, "save_board_reuse_block"),
             (Capability::Save, "save_layer_set"),
+            (Capability::Save, "save_workspace_layout"),
             (Capability::Export, "print"),
             (Capability::Export, "report_manager_bom"),
             (Capability::Export, "export_board_report"),

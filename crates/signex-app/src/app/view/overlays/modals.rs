@@ -370,6 +370,15 @@ impl Signex {
             .then(|| self.view_diff_pair_classes_dialog())
     }
 
+    /// Design ▸ Rooms ▸ Create Rooms from Sheets (#2457).
+    pub(in crate::app::view) fn create_rooms_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .rooms
+            .create
+            .is_some()
+            .then(|| self.view_create_rooms_dialog())
+    }
+
     pub(in crate::app::view) fn fab_outputs_overlay(&self) -> Option<Element<'_, Message>> {
         self.ui_state
             .fab_outputs
@@ -390,6 +399,25 @@ impl Signex {
             .back_annotate
             .is_some()
             .then(|| self.view_back_annotate_dialog())
+    }
+
+    /// Compare Board with Schematic (#2462).
+    pub(in crate::app::view) fn compare_board_overlay(&self) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .compare_board
+            .is_some()
+            .then(|| self.view_compare_board_dialog())
+    }
+
+    /// The confirmation before its Apply deletes from the board.
+    pub(in crate::app::view) fn compare_board_confirm_overlay(
+        &self,
+    ) -> Option<Element<'_, Message>> {
+        self.ui_state
+            .compare_board
+            .as_ref()
+            .is_some_and(|state| state.confirming)
+            .then(|| self.view_compare_board_confirm())
     }
 
     /// Update PCB from Schematic (#1312); a headless `apply=true` run has no

@@ -24,6 +24,12 @@ menu-design = Design
 menu-tools = Tools
 menu-reports = Reports
 menu-window = Window
+# View ▸ Window ▸ Layouts (mockup row 166): the submenu, its two caption rows, and the
+# Reset row of an edited built-in; { $name } is the built-in's name.
+menu-window-layouts = Layouts
+menu-window-layouts-builtin = BUILT-IN
+menu-window-layouts-yours = YOUR LAYOUTS
+menu-window-layouts-reset = Reset “{ $name }”
 menu-help = Help
 
 ## File menu (#2057)
@@ -60,6 +66,8 @@ menu-place-no-connect = No Connect
 menu-place-ports = Ports & Connectors
 menu-place-directives = Directives
 menu-place-graphics = Graphics
+# Design ▸ Rooms on a board (#2457).
+menu-design-rooms = Rooms
 
 ## Project menu (#2057)
 # Rows of the Project menu that are not commands.
@@ -111,6 +119,8 @@ ctx-part-actions = Part Actions
 ctx-sheet-actions = Sheet Actions
 ctx-references = References
 ctx-align = Align
+# Board menu: runs `compare_board_with_schematic` under a shorter name (#2462).
+ctx-compare-with-schematic = Compare with Schematic
 ctx-unions = Unions
 ctx-snippets = Snippets
 ctx-comment = Comment...

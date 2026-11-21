@@ -8,15 +8,18 @@ format declares only its own table row below.
 
 ## The rules
 
-- **Save** writes the format's current token. The exceptions are `.snxsym`
-  and `.snxsch`: each writes the lowest token the content needs. A symbol
-  file without polygons or De Morgan bodies stays `snxsym/v1`; a schematic
-  stays `snxsch/1.1`, byte for byte, unless a No-ERC directive names the
-  rules it silences, which writes `snxsch/1.2` (#1699), or it holds any
-  Schematic Refinement content (a harness object, a union, a Bezier,
+- **Save** writes the format's current token. The exceptions are `.snxsym`,
+  `.snxsch` and `.snxpcb`: each writes the lowest token the content needs. A
+  symbol file without polygons or De Morgan bodies stays `snxsym/v1`; a
+  schematic stays `snxsch/1.1`, byte for byte, unless a No-ERC directive
+  names the rules it silences, which writes `snxsch/1.2` (#1699), or it holds
+  any Schematic Refinement content (a harness object, a union, a Bezier,
   dimension or table drawing, a Net Parameters directive, or a Blanket or
   Differential Pair using a field added with them), which writes
-  `snxsch/1.3` (`docs/architecture/snxsch-refinement-objects.md`).
+  `snxsch/1.3` (`docs/architecture/snxsch-refinement-objects.md`). A board
+  stays `snxpcb/1.4`, byte for byte, writes `snxpcb/1.5` when a layer has a
+  colour of its own and `snxpcb/1.6` when it has rooms (#2457), so a build
+  that reads only the lower token opens it read-only.
 - **Load** reads every token in the format's readable list. `snxsch/1` and
   `snxsch/1.0` are the same version.
 - **A newer token** is refused on load with an error that names the token,
@@ -35,7 +38,7 @@ format declares only its own table row below.
 | File | Writes | Reads | Newer minor | No token |
 |---|---|---|---|---|
 | `.snxsch` | `snxsch/1.1`, `1.2` with a No-ERC rule list, `1.3` with Schematic Refinement content | `snxsch/1`, `1.1`, `1.2`, `1.3` | opens read-only | refused |
-| `.snxpcb` | `snxpcb/1.4`, or `1.5` with layer colours | `snxpcb/1` to `snxpcb/1.5` | opens read-only | refused |
+| `.snxpcb` | `snxpcb/1.4`; `1.5` with layer colours; `1.6` with rooms | `snxpcb/1` to `snxpcb/1.6` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1` | `snxfpt/1`, `snxfpt/1.1` | refused | refused |

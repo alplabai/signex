@@ -495,6 +495,8 @@ fn place_on_a_board_lists_the_boards_tools() {
             "String",
             "Dimension",
             "Keepout",
+            // #2457
+            "Room",
             "Board Sketch",
         ]
     );

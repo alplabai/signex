@@ -347,6 +347,12 @@ canonical_icon!(icon_dd_folder, "dropdown/folder.svg");
 // Tab strip overflow button and the detached panel window's Dock back
 // (mockup rows 5 and 8).
 canonical_icon!(icon_chrome_chevron_down, "chrome/chevron_down.svg");
+// Manage Layouts and Save Layout (mockup row 166): currentColor strokes, tinted per use.
+canonical_icon!(icon_layouts_lock, "layouts/lock.svg");
+canonical_icon!(icon_layouts_grip, "layouts/grip.svg");
+canonical_icon!(icon_layouts_edit, "layouts/edit.svg");
+canonical_icon!(icon_layouts_trash, "layouts/trash.svg");
+canonical_icon!(icon_layouts_info, "layouts/info.svg");
 canonical_icon!(icon_chrome_dock_back, "chrome/dock_back.svg");
 
 // ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
@@ -460,6 +466,23 @@ canonical_icon!(icon_start_home, "start/home.svg");
 canonical_icon!(icon_start_key, "start/key.svg");
 canonical_icon!(icon_start_pin, "start/pin.svg");
 canonical_icon!(icon_start_remove, "start/remove.svg");
+
+// ─── Command Log (actions, sources, results; #2458) ────────────────
+
+canonical_icon!(icon_log_check, "command_log/check.svg");
+canonical_icon!(icon_log_copy, "command_log/copy.svg");
+canonical_icon!(icon_log_error, "command_log/error.svg");
+canonical_icon!(icon_log_jump, "command_log/jump.svg");
+canonical_icon!(icon_log_more, "command_log/more.svg");
+canonical_icon!(icon_log_mouse, "command_log/mouse.svg");
+canonical_icon!(icon_log_ok, "command_log/ok.svg");
+canonical_icon!(icon_log_pause, "command_log/pause.svg");
+canonical_icon!(icon_log_play, "command_log/play.svg");
+canonical_icon!(icon_log_plug, "command_log/plug.svg");
+canonical_icon!(icon_log_save, "command_log/save.svg");
+canonical_icon!(icon_log_terminal, "command_log/terminal.svg");
+canonical_icon!(icon_log_trash, "command_log/trash.svg");
+canonical_icon!(icon_log_warn, "command_log/warn.svg");
 
 #[cfg(test)]
 mod tests {

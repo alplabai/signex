@@ -124,6 +124,11 @@ pub fn log_error(context: &str, error: &anyhow::Error) {
     error!("{context}: {error:#}");
 }
 
+/// An error line already worded whole (a catalog message with its reason).
+pub fn log_error_line(message: impl AsRef<str>) {
+    error!("{}", message.as_ref());
+}
+
 pub fn recent_entries() -> Vec<DiagnosticEntry> {
     entries()
         .lock()

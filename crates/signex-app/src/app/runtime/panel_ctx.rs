@@ -751,6 +751,10 @@ impl Signex {
             compiled_design: self.compiled_design_view(),
             // Kept in step with the documents by `sync_object_list`.
             object_list: self.document_state.panel_ctx.object_list.clone(),
+            // Replaced by `sync_command_log_panel_ctx` after each change.
+            command_log: std::sync::Arc::clone(&self.document_state.panel_ctx.command_log),
+            // Kept in step with the scan and filters by `handlers/annotations.rs`.
+            annotations: std::sync::Arc::clone(&self.document_state.panel_ctx.annotations),
             pcb_board: self.pcb_board_summary(),
             layer_stack: self.layer_stack_facts(),
             selection_count,

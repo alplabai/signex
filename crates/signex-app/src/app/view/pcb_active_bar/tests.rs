@@ -503,9 +503,12 @@ fn the_selection_filter_is_the_schematic_dropdown_with_the_board_kinds() {
     assert!(!app.ui_state.pcb_pick_filter.is_on(PickKind::Tracks));
     assert_eq!(app.interaction_state.pcb_bar_menu, Some(PcbBarMenu::Filter));
 
-    // Rooms cannot be picked yet: its chip sends nothing.
+    // 3D bodies cannot be picked yet: its chip sends nothing.
+    let bodies = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "3D Bodies");
+    assert!(bodies.is_empty(), "{bodies:?}");
+    // Rooms are picked since #2457: its chip toggles the kind.
     let rooms = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "Rooms");
-    assert!(rooms.is_empty(), "{rooms:?}");
+    assert_eq!(rooms.len(), 1, "{rooms:?}");
 
     let none = crate::layout_probe::messages_on_click(filter_grid(&app), WINDOW, "None");
     let _ = app.update(none[0].clone());

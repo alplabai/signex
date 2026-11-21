@@ -224,6 +224,7 @@ fn empty_pcb_board() -> signex_types::pcb::PcbBoard {
     signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: uuid::Uuid::now_v7(),

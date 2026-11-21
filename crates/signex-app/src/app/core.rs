@@ -3,6 +3,7 @@
 //! `signex-app` outside `app::core`; `scripts/check_core_guard.sh` enforces it.
 
 pub(crate) mod case_fold;
+pub(crate) mod command_log;
 pub(crate) mod compiled_design;
 pub(crate) mod component_class;
 pub(crate) mod document_key;

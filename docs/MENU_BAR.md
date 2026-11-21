@@ -44,6 +44,31 @@ greyed row's is `Disabled`. The golden fixture still names each such row by the
 message it used to send; `COMMAND_ROW_NAMES` in `menu_bar/golden_tests.rs` maps
 the id back to that name.
 
+## Header entries {#header-entries}
+
+A header is a small caption over a group of rows, such as BUILT-IN and YOUR
+LAYOUTS in [View ▸ Window ▸ Layouts](#window-layouts). It is not a command
+row and not a greyed row (maintainer decision, Caner, 2026-11-20). In the
+model it is a `MenuItem` in the `ItemState::Header` state, not a `MenuEntry`
+variant of its own (`MenuEntry` stays `Item`, `Submenu`, `Separator`), built
+by `header()` in
+`model/items.rs`, with catalog text, no command, no shortcut and no check
+mark. `MenuItem::is_header()` says which rows are headers.
+
+- **In-window bar.** The caption is drawn at the caption type step in the
+  muted text colour, with the row padding and the shared menu card's header
+  height. It is a plain container, not a button, so it has no hover fill and
+  no press handler, and iced_aw never makes it the active row.
+- **Command walks.** A header never dispatches (`dispatches()` is `None`), so
+  it is not a live row, and it is not a planned or unexplained greyed row:
+  the `stub` and `unavailable` ratchets in `menu_bar/planned_tests.rs` do not
+  count it. It has no command id, so the shortcut, catalog and accelerator
+  checks skip it too.
+- **Golden fixture.** `menu_bar.golden.tsv` lists it with the kind `header`,
+  enablement `0` and gate `never`.
+- **Native macOS menu.** An OS menu has no caption row, so the header shows
+  as inert text there.
+
 ## Root menus {#root-menus}
 
 Eight roots, left to right: File, Edit, View, Project, Place, Design, Tools,
@@ -66,6 +91,8 @@ greyed.
   `contents.snxsch` next to the root sheet (refused, and said so, when that
   file is there) and adds it to the project; gated like Electrical Rules
   Check. See `SCHEMATIC_TABLES.md`.
+- Compare Board with Schematic… (`compare_board_with_schematic`, see
+  [below](#project-compare-board))
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
 
@@ -95,14 +122,16 @@ PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 
 **View ▸ Window** (the last entry of View, after the panel rows and a
 separator): Tile Horizontally, Tile Vertically, Untile (see
-[below](#window-tile)), a separator, and Close All Documents (see
+[below](#window-tile)), a separator, the Layouts submenu (mockup row 166, see
+[below](#window-layouts)), and Close All Documents (see
 [below](#tools-library-editor)). Their built-in keys are unchanged.
 
 **Design** has Update PCB Document (see
 [Design ▸ Update PCB Document](#design-update-pcb)), Update Schematics (see
 [Back Annotate](#back-annotate)), Board Sketch (see
 [Design ▸ Board Sketch](#design-board-sketch)), Layer Stack Manager... (see
-[Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
+[Design ▸ Layer Stack Manager](#design-layer-stack)), the Rooms submenu (see
+[Design ▸ Rooms](#design-rooms)), a separator, then
 Parameter Manager..., Net Classes (see
 [below](#find-similar-filter-net-classes)), Differential Pair Classes…
 (`open_diff_pair_classes`, #1282: the project's differential pair classes in
@@ -276,6 +305,23 @@ The dialog has the Update PCB dialog's look with the board as the source:
 - Opening the board for the read brings its tab to the front, as Update
   PCB does.
 
+## Project ▸ Compare Board with Schematic {#project-compare-board}
+
+Project ▸ Compare Board with Schematic… (right after Electrical Rules
+Check) and the board right-click menu's Compare with Schematic run
+`compare_board_with_schematic` (#2462). Both are gated like Update PCB:
+greyed unless a schematic or a board of an open project is in view. The
+command is also in the palette; no keymap preset binds it. It opens a modal
+report of every difference between the project's schematic and its board,
+opening the board first when it is not open; Esc closes it (or, while it is
+open, the confirmation before Apply).
+
+Each row picks Update PCB, Update schematic or Skip; Extra on board and
+Footprint mismatches start skipped. Apply asks first when a chosen
+row deletes from the board, then runs the PCB side as one board undo step
+and the schematic side as one undo group. Rows, defaults and Apply:
+[UPDATE_PCB.md](UPDATE_PCB.md#compare-board-with-schematic).
+
 ## Board Properties: designator and value {#board-properties}
 
 With exactly one footprint selected on a board, the Properties panel shows
@@ -354,6 +400,15 @@ each edit is one undo step. It is greyed while no PCB is open. The same
 command is a palette row and the layer tab menu's "Layer stack..." row; no
 keymap preset binds it. The table and its rules:
 [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md#stack).
+
+## Design ▸ Rooms {#design-rooms}
+
+Design ▸ Rooms (#2457) holds Create Rooms from Sheets..., which runs
+`create_rooms_from_sheets`: it reads the sheets of the board's project off
+the update thread and opens its dialog. It is greyed unless a board that is
+not read-only is in view and belongs to an open project (`Needs::PcbInProject`).
+No keymap preset binds it. Rooms, the dialog and its plan:
+[PCB_ROOMS.md](PCB_ROOMS.md#create-rooms-from-sheets).
 
 ## File ▸ Library {#file-library}
 
@@ -522,7 +577,8 @@ Rows added by #2416, each a catalog command greyed without a sheet:
 Place follows the document in view (#2360). While the window shows a board
 (`CommandContext::pcb.shown`), it lists the board's tools: Component, Pad,
 Via, Interactive Routing, Track, Arc, Fill, Solid Region, Polygon Pour,
-String, Dimension and Keepout, the Graphics submenu (Line, Arc, Full Circle,
+String, Dimension, Keepout and Room (`place_board_room`, #2457), the
+Graphics submenu (Line, Arc, Full Circle,
 Rectangle and Text Frame on non-copper layers, #2424, the PCB Active Bar's
 Graphics group), then Board Sketch (`board_sketch`, the same command as
 Design ▸ Board Sketch and the PCB Active Bar's button). Every other tab keeps
@@ -593,6 +649,16 @@ by designator. The project's sheets are read off the UI thread when it opens.
   Sheets it loads no tabless engine, so nothing outside the open tabs changes
   and no closed file can drift between the read and Apply. A sheet written by
   a newer Signex is listed read-only too.
+
+## View ▸ Annotations {#view-annotations}
+
+A panel row (`MenuMessage::OpenAnnotationsPanel`, mockup row 165) right under
+Navigator: it opens (or reveals) the Annotations panel, docked on the right
+by default, and is checked while the panel is open anywhere. Always
+available, like the other panel rows; without a project in view the panel
+says so. It has no command id and no default key. The panel lists the
+annotation blocks of the project's `notebook/*.snxnbk` files; see
+[NOTEBOOK_ANNOTATIONS.md](NOTEBOOK_ANNOTATIONS.md).
 
 ## Tools ▸ Repair Pin Junctions {#tools-repair-pin-junctions}
 
@@ -687,6 +753,16 @@ bound. Always available; with no sheet of a project open the panel says so.
   Recompile is never automatic: an edit to a compiled sheet only marks its
   rows out of date.
 
+## View ▸ Command Log {#view-command-log}
+
+A panel row right after View ▸ Messages (#2458): it opens (or reveals) the
+Command Log panel, docked at the bottom by default, and carries a check mark
+while the panel is open, like the other panel rows. It runs
+`MenuMessage::OpenCommandLogPanel`, not a catalog command, so it has no key
+and is never greyed. The panel lists every catalog command the session ran,
+from the GUI, the CLI and the agent socket; see
+[COMMAND_LOG.md](COMMAND_LOG.md).
+
 ## Tools: board edits {#tools-board-edits}
 
 Seven rows under Net Inspector (#2408, #2409) edit the board in view, each
@@ -772,6 +848,22 @@ read (the settled geometry reading, shortly after start-up). iced reports the
 monitor's full size, not its work area, so the tiles cover the whole monitor.
 Tile is greyed when it has neither to do. The Messages panel names how many
 documents or windows were arranged.
+
+## View ▸ Window ▸ Layouts {#window-layouts}
+
+Workspace layouts (mockup row 166), between the tiling rows' separator and Close All
+Documents: the [header](#header-entries) BUILT-IN, the four built-ins Schematic,
+Layout, Review and Notebook (`apply_layout_schematic`, `apply_layout_board`,
+`apply_layout_review`, `apply_layout_notebook`; check rows, the active
+layout checked), then, when you have saved any, the header YOUR LAYOUTS
+and one row per layout of yours in your order (`MenuMessage::
+WorkspaceLayoutChosen` with the layout's id, checked while active), a
+separator, Save Layout… (`save_workspace_layout`), Manage Layouts…
+(`manage_workspace_layouts`), and Reset "<name>" (`reset_workspace_layout`)
+only while the active built-in carries your edit. Every row other than the
+two headers is live in every context; none has a key by default. The native macOS bar shows the same
+three-level submenu. Rules, dialogs and storage:
+[WORKSPACE_LAYOUTS.md](WORKSPACE_LAYOUTS.md).
 
 ## Sheet right-click menu {#sheet-context-menu}
 
@@ -961,13 +1053,14 @@ Selection follow. Change Footprint, Swap Pins, Swap Gates and Arrange in Box
 show only with a footprint selected; Lock, Unlock, Gloss Selected Routes and
 Add Teardrops only with a track or via selected; Select Net
 (`select_board_net`) and Highlight Net (`highlight_board_net`) only when the
-selection or the object under the pointer has a net; Cross Probe and
-Properties with an object. Each row runs its catalog command and is live
-exactly when that command is enabled in the window's `CommandContext`, so
-the menu greys what the keys and the menu bar grey. A board written by a
-newer Signex is read-only (`PcbTargets::read_only`): every row that edits
-it, the Place tools and Board Sketch included, is greyed, and the rows that
-only read it stay live.
+selection or the object under the pointer has a net; Cross Probe,
+Properties and Compare with Schematic (`compare_board_with_schematic` under
+a shorter name, see [above](#project-compare-board)) with an object. Each row
+runs its catalog command and is live exactly when that command is enabled in
+the window's `CommandContext`, so the menu greys what the keys and the menu
+bar grey. A board written by a newer Signex is read-only
+(`PcbTargets::read_only`): every row that edits it, the Place tools and
+Board Sketch included, is greyed, and the rows that only read it stay live.
 
 ## Edit clipboard on a board {#edit-clipboard-board}
 

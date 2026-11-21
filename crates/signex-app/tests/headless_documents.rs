@@ -170,6 +170,7 @@ fn write_board(path: &Path, id: &str) {
     let mut board = signex_types::pcb::PcbBoard {
         sketch: None,
         stackup: None,
+        rooms: Vec::new(),
         options: Default::default(),
         unknown: Default::default(),
         uuid: id.parse().expect("uuid"),

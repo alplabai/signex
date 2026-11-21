@@ -93,9 +93,11 @@ View/---	separator	-	-	-	-	-	-
 View/Projects	item	Projects	-	-	OpenProjectsPanel	11111111	always
 View/Components	item	Components	-	-	OpenComponentsPanel	11111111	always
 View/Navigator	item	Navigator	-	-	OpenNavigatorPanel	11111111	always
+View/Annotations	item	Annotations	-	-	OpenAnnotationsPanel	11111111	always
 View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
+View/Command Log	item	Command Log	-	-	OpenCommandLogPanel	11111111	always
 View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
 View/Unions	item	Unions	-	-	OpenUnionsPanel	11111111	always
 View/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
@@ -107,10 +109,20 @@ View/Window/Tile Horizontally	item	Tile Horizontally	-	-	TileHorizontally	000001
 View/Window/Tile Vertically	item	Tile Vertically	-	-	TileVertically	00000100	cmd:tile_windows_vertically
 View/Window/Untile	item	Untile	-	-	UntileDocuments	00000100	cmd:untile_documents
 View/Window/---	separator	-	-	-	-	-	-
+View/Window/Layouts	submenu	Layouts	-	-	-	-	-
+View/Window/Layouts/BUILT-IN	header	BUILT-IN	-	-	-	00000000	never
+View/Window/Layouts/Schematic	item	Schematic	-	-	ApplyLayoutSchematic	11111111	always
+View/Window/Layouts/Layout	item	Layout	-	-	ApplyLayoutBoard	11111111	always
+View/Window/Layouts/Review	item	Review	-	-	ApplyLayoutReview	11111111	always
+View/Window/Layouts/Notebook	item	Notebook	-	-	ApplyLayoutNotebook	11111111	always
+View/Window/Layouts/---	separator	-	-	-	-	-	-
+View/Window/Layouts/Save Layout…	item	Save Layout…	-	-	SaveWorkspaceLayout	11111111	always
+View/Window/Layouts/Manage Layouts…	item	Manage Layouts…	-	-	ManageWorkspaceLayouts	11111111	always
 View/Window/Close All Documents	item	Close All Documents	-	-	CloseAllDocuments	01110010	cmd:close_all_documents
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
 Project/Add Table of Contents Sheet	item	Add Table of Contents Sheet	-	-	AddTableOfContents	01001000	cmd:add_table_of_contents
+Project/Compare Board with Schematic…	item	Compare Board with Schematic…	-	-	CompareBoardWithSchematic	01000000	cmd:compare_board_with_schematic
 Project/---	separator	-	-	-	-	-	-
 Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	01001001	project
 Project/---	separator	-	-	-	-	-	-
@@ -173,6 +185,8 @@ Design/Update PCB Document	item	Update PCB Document	-	-	UpdatePcb	01000000	cmd:u
 Design/Update Schematics	item	Update Schematics	-	-	BackAnnotate	01000000	cmd:back_annotate_schematics
 Design/Board Sketch	item	Board Sketch	-	-	BoardSketch	01100000	cmd:board_sketch
 Design/Layer Stack Manager...	item	Layer Stack Manager...	-	-	BoardLayerStack	01100000	cmd:board_layer_stack
+Design/Rooms	submenu	Rooms	-	-	-	-	-
+Design/Rooms/Create Rooms from Sheets...	item	Create Rooms from Sheets...	-	-	CreateRoomsFromSheets	01000000	cmd:create_rooms_from_sheets
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01100000	cmd:open_net_classes

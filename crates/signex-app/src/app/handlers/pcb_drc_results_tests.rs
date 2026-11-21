@@ -674,7 +674,9 @@ fn rule_links_open_the_catalog_domain_of_the_limit_they_check() {
             .into_iter()
             .find(|f| f.limit_kind() == *kind)
     };
-    for kind in K::ALL {
+    // A part outside its room has no Rules-tab limit; it opens Placement
+    // (`domain_tests::a_part_outside_its_room_opens_the_rules_at_placement`).
+    for kind in K::ALL.into_iter().filter(|k| *k != K::PartOutsideRoom) {
         let domains = kind
             .limits()
             .iter()

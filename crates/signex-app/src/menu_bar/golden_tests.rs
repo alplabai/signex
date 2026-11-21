@@ -292,12 +292,17 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("new_pcb_document", "NewPcb"),
     ("new_schematic_sheet", "NewSchematic"),
     ("update_pcb_from_schematic", "UpdatePcb"),
+    // #2462: Project ▸ Compare Board with Schematic…, fixture name only.
+    ("compare_board_with_schematic", "CompareBoardWithSchematic"),
     // #2234: Design ▸ Board Sketch.
     ("board_sketch", "BoardSketch"),
     // #2388: File ▸ Fabrication Outputs.
     ("fabrication_outputs", "FabricationOutputs"),
     // #2401: Design ▸ Layer Stack Manager.
     ("board_layer_stack", "BoardLayerStack"),
+    // #2457: Design ▸ Rooms and Place ▸ Room on a board.
+    ("create_rooms_from_sheets", "CreateRoomsFromSheets"),
+    ("place_board_room", "PlaceBoardRoom"),
     // #2373: Place on a board, fixture names only.
     ("place_board_via", "PlaceBoardVia"),
     ("place_board_track", "PlaceBoardTrack"),
@@ -388,6 +393,14 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("tile_windows_vertically", "TileVertically"),
     // #2249: fixture name only.
     ("untile_documents", "UntileDocuments"),
+    // Mockup row 166: View ▸ Window ▸ Layouts, fixture names only.
+    ("apply_layout_schematic", "ApplyLayoutSchematic"),
+    ("apply_layout_board", "ApplyLayoutBoard"),
+    ("apply_layout_review", "ApplyLayoutReview"),
+    ("apply_layout_notebook", "ApplyLayoutNotebook"),
+    ("save_workspace_layout", "SaveWorkspaceLayout"),
+    ("manage_workspace_layouts", "ManageWorkspaceLayouts"),
+    ("reset_workspace_layout", "ResetWorkspaceLayout"),
     ("next_grid", "CycleGrid"),
     ("open_erc_dialog", "OpenErcDialog"),
     ("run_drc", "RunDrc"),
@@ -506,6 +519,7 @@ fn flatten(menu: &Menu, parent: Option<&str>, out: &mut Vec<(String, char)>) {
                     ItemState::Placeholder { .. } | ItemState::Unavailable => {
                         ("stub", "-".to_string())
                     }
+                    ItemState::Header => ("header", "-".to_string()),
                     ItemState::Live { action, .. } => ("item", action_name(action)),
                 };
                 let (id, text) = item
@@ -788,7 +802,25 @@ fn reports_and_window_are_submenus_of_tools_and_view() {
             "Tile Vertically",
             "Untile",
             "---",
+            // Mockup row 166: the Layouts submenu joins the old Window rows.
+            "Layouts>",
             "Close All Documents",
+        ]
+    );
+    // Mockup row 166: View ▸ Window ▸ Layouts with no layouts of your own and no
+    // edited built-in.
+    let window = submenu(root("View"), "Window");
+    assert_eq!(
+        entry_titles(&submenu(&window, "Layouts")),
+        [
+            "BUILT-IN",
+            "Schematic",
+            "Layout",
+            "Review",
+            "Notebook",
+            "---",
+            "Save Layout…",
+            "Manage Layouts…",
         ]
     );
 }

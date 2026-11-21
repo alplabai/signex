@@ -17,8 +17,10 @@ mod board_reannotate;
 mod bom;
 pub(in crate::app) use bom::{default_column_width as bom_default_column_width, sorted_row_order};
 mod close_project;
+mod compare_board;
 mod confirms;
 mod create_child_sheet;
+mod create_rooms;
 // #1282: Design ▸ Differential Pair Classes….
 mod diff_pair_classes;
 mod erc;
@@ -42,6 +44,7 @@ mod sizes;
 mod title_bar;
 mod update_pcb;
 mod version_control;
+mod workspace_layouts;
 pub(crate) use header::DIALOG_HEADER_H;
 pub(crate) use rule_editor::{RuleEditor, rule_editor, shipped_rules};
 pub(crate) use title_bar::DIALOG_TITLE_BAR_H;

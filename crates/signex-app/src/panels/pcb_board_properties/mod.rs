@@ -270,6 +270,8 @@ pub struct PcbBoardSummary {
     /// The selected tracks, vias or pads, when the selection is only those
     /// of one kind (#2355).
     pub primitive: Option<super::PcbPrimitiveFacts>,
+    /// The one selected room (#2457).
+    pub room: Option<super::pcb_room_properties::RoomFacts>,
 }
 
 impl PcbBoardSummary {
@@ -324,6 +326,11 @@ impl PcbBoardSummary {
     pub fn with_primitive(self, primitive: Option<super::PcbPrimitiveFacts>) -> Self {
         Self { primitive, ..self }
     }
+
+    /// This summary showing the selected room (#2457).
+    pub fn with_room(self, room: Option<super::pcb_room_properties::RoomFacts>) -> Self {
+        Self { room, ..self }
+    }
 }
 
 /// Whether `outline` is the rectangle `extent`: four corners, each on a
@@ -352,6 +359,9 @@ pub fn shown_unit(unit: Unit) -> Unit {
 /// The panel body for `board`.
 pub fn view<'a>(ctx: &'a PanelContext, board: &'a PcbBoardSummary) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
+    if let Some(room) = board.room.as_ref() {
+        return super::pcb_room_properties::view(ctx, room);
+    }
     if let Some(component) = board.component.as_ref() {
         return super::pcb_component::view(ctx, component, board.footprint.as_ref());
     }

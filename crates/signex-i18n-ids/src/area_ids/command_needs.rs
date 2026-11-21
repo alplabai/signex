@@ -39,6 +39,7 @@ define_ids! {
     COMMAND_NEEDS_PROBE_TARGET = "command-needs-probe-target";
     COMMAND_NEEDS_PCB_SYNC = "command-needs-pcb-sync";
     COMMAND_NEEDS_OPEN_PROJECT = "command-needs-open-project";
+    COMMAND_NEEDS_PCB_IN_PROJECT = "command-needs-pcb-in-project";
     COMMAND_NEEDS_LIBRARY = "command-needs-library";
     COMMAND_NEEDS_PROJECT_SHEET = "command-needs-project-sheet";
     COMMAND_NEEDS_TILEABLE_WINDOWS = "command-needs-tileable-windows";
