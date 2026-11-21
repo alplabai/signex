@@ -582,7 +582,20 @@ impl Signex {
                 self.handle_components_panel_row_menu_picked(action)
             }
             LibraryMessage::ComponentsPanelSplitDragStarted => {
+                self.library.components_panel.split_dragging = true;
                 self.handle_layout_drag_started(DragTarget::ComponentsSplit);
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelSplitHovered(is_hovered) => {
+                self.library.components_panel.split_hovered = is_hovered;
+                Task::none()
+            }
+            LibraryMessage::ComponentsPanelPreviewMoved(pane, gesture) => {
+                let zoom_step = self.ui_state.effective_zoom_step();
+                self.library
+                    .components_panel
+                    .preview_views
+                    .apply(pane, gesture, zoom_step);
                 Task::none()
             }
             LibraryMessage::ComponentsPanelDetailsLoaded {

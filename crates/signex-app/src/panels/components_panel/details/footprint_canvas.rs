@@ -5,14 +5,16 @@
 //! box on first show, and again when the box changes size while the user has
 //! not zoomed or panned. Shared by the Components panel and the Component Preview
 //! dialog. Left-drag pans; Ctrl/Cmd+wheel zooms (a plain wheel scrolls the
-//! panel around it).
+//! panel around it). The Components panel card wraps it in [`viewed_footprint`],
+//! whose view lives in the model and follows the Mouse wheel preference.
 
 use iced::widget::canvas::{self, Action, Cache, Geometry};
 use iced::{Color, Point, Rectangle, Renderer, Theme, Vector, mouse};
 
-use crate::canvas::Camera;
+use super::preview_view::{GestureInput, PreviewGesture, PreviewView};
+use crate::canvas::{Camera, WheelMode};
 use crate::library::editor::footprint::canvas::{
-    BACKDROP_BG, BACKDROP_GRID, BackdropLook, FootprintCanvasState, PreviewFootprint,
+    BACKDROP_BG, BACKDROP_GRID, BackdropLook, FIT_PAD, FootprintCanvasState, PreviewFootprint,
     draw_back_layers, draw_backdrop, draw_courtyard, draw_fab, draw_origin, draw_pad_bodies,
     draw_pad_numbers, draw_silk, graphite_look_for,
 };
@@ -87,6 +89,8 @@ pub struct PreviewState {
     /// Ground colour the cached drawing was built with; another colour
     /// (a theme switch) drops the cache.
     shown_bg: std::cell::Cell<Option<Color>>,
+    /// The view the cached drawing was built through.
+    shown_view: std::cell::Cell<PreviewView>,
 }
 
 impl PreviewState {
@@ -106,6 +110,19 @@ impl PreviewState {
         self.fitted_for == Some(model.key())
             && (self.user_moved || self.fitted_size == Some(size))
             && self.camera.did_initial_fit
+    }
+
+    /// Fit the camera to `model` in a box of `size` unless it already is.
+    fn refit(&mut self, model: &PreviewFootprint, size: iced::Size) {
+        if size.width <= 0.0 || size.height <= 0.0 || self.is_fitted_for(model, size) {
+            return;
+        }
+        self.camera = fitted_camera(model, Rectangle::new(Point::ORIGIN, size));
+        self.fitted_for = Some(model.key());
+        self.fitted_size = Some(size);
+        self.user_moved = false;
+        self.pan_from = None;
+        self.cache.clear();
     }
 }
 
@@ -128,7 +145,11 @@ fn board_pad_options(scale: f32) -> crate::renderer_scene_canvas::SceneDrawOptio
 pub(crate) fn fitted_camera(model: &PreviewFootprint, viewport: Rectangle) -> FootprintCanvasState {
     let mut camera = FootprintCanvasState::default();
     match model.bbox_mm() {
-        Some(bbox) => camera.fit_to_bounds_min(bbox, viewport, MIN_PREVIEW_SCALE),
+        Some(bbox) => camera.fit_to_bounds_min(
+            bbox,
+            footprint_scale::drawing_area(viewport, bbox, FIT_PAD),
+            MIN_PREVIEW_SCALE,
+        ),
         None => camera.offset = Point::new(viewport.width / 2.0, viewport.height / 2.0),
     }
     camera.did_initial_fit = true;
@@ -145,15 +166,7 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<Action<M>> {
-        let size_ok = bounds.width > 0.0 && bounds.height > 0.0;
-        if size_ok && !state.is_fitted_for(self.model, bounds.size()) {
-            state.camera = fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()));
-            state.fitted_for = Some(self.model.key());
-            state.fitted_size = Some(bounds.size());
-            state.user_moved = false;
-            state.pan_from = None;
-            state.cache.clear();
-        }
+        state.refit(self.model, bounds.size());
         if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) = event {
             state.ctrl_held = mods.command();
             return None;
@@ -228,17 +241,50 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
+        self.paint(state, renderer, bounds, PreviewView::default())
+    }
+
+    fn mouse_interaction(
+        &self,
+        state: &PreviewState,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if state.pan_from.is_some() {
+            mouse::Interaction::Grabbing
+        } else if cursor.is_over(bounds) {
+            mouse::Interaction::Grab
+        } else {
+            mouse::Interaction::None
+        }
+    }
+}
+
+impl FootprintPreview<'_> {
+    /// Draw through `view`, on top of the camera in `state`.
+    fn paint(
+        &self,
+        state: &PreviewState,
+        renderer: &Renderer,
+        bounds: Rectangle,
+        view: PreviewView,
+    ) -> Vec<Geometry> {
         // Until `update` has fitted this footprint, draw the fitted view
         // without caching it against the stale camera.
         let fitted = state.is_fitted_for(self.model, bounds.size());
         if !fitted {
             state.cache.clear();
         }
-        let camera = if fitted {
+        let base = if fitted {
             FootprintCanvasState::with_view(state.camera.scale, state.camera.offset)
         } else {
             fitted_camera(self.model, Rectangle::new(Point::ORIGIN, bounds.size()))
         };
+        let (scale, offset) = view.place(base.scale, base.offset);
+        let camera = FootprintCanvasState::with_view(scale, offset);
+        if state.shown_view.replace(view) != view {
+            state.cache.clear();
+        }
         let snap = SnapOptions::default();
         let bg = self.graphite.map_or(BACKDROP_BG, |(bg, _)| bg);
         if state.shown_bg.replace(Some(bg)) != Some(bg) {
@@ -286,21 +332,74 @@ impl<M> canvas::Program<M> for FootprintPreview<'_> {
         });
         vec![geometry]
     }
+}
+
+/// The preview with its view held in the model: gestures are published, the
+/// widget keeps only the fit, the cache and the pointer.
+struct ViewedFootprint<'a> {
+    preview: FootprintPreview<'a>,
+    view: PreviewView,
+    wheel_mode: WheelMode,
+}
+
+#[derive(Default)]
+struct ViewedState {
+    inner: PreviewState,
+    input: GestureInput,
+}
+
+impl canvas::Program<PreviewGesture> for ViewedFootprint<'_> {
+    type State = ViewedState;
+
+    fn update(
+        &self,
+        state: &mut ViewedState,
+        event: &iced::Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<Action<PreviewGesture>> {
+        state.inner.refit(self.preview.model, bounds.size());
+        state.input.read(event, bounds, cursor, self.wheel_mode)
+    }
+
+    fn draw(
+        &self,
+        state: &ViewedState,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        self.preview
+            .paint(&state.inner, renderer, bounds, self.view)
+    }
 
     fn mouse_interaction(
         &self,
-        state: &PreviewState,
+        state: &ViewedState,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        if state.pan_from.is_some() {
-            mouse::Interaction::Grabbing
-        } else if cursor.is_over(bounds) {
-            mouse::Interaction::Grab
-        } else {
-            mouse::Interaction::None
-        }
+        state.input.interaction(bounds, cursor)
     }
+}
+
+/// The footprint preview of the details card, `height` tall, through `view`.
+pub(super) fn viewed_footprint<'a>(
+    model: &'a PreviewFootprint,
+    tokens: &signex_types::theme::ThemeTokens,
+    view: PreviewView,
+    wheel_mode: WheelMode,
+    height: f32,
+) -> iced::Element<'a, PreviewGesture> {
+    iced::widget::canvas(ViewedFootprint {
+        preview: FootprintPreview::new(model).with_theme_tokens(tokens),
+        view,
+        wheel_mode,
+    })
+    .width(iced::Length::Fill)
+    .height(height)
+    .into()
 }
 
 #[cfg(test)]

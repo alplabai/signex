@@ -323,13 +323,15 @@ fn drive_with(
                 &mut renderer,
                 &mut published,
             );
-            // An outdated interface is rebuilt and so redrawn.
-            live.redraws.push(match event_state {
+            // An outdated interface is rebuilt and so redrawn; so is one
+            // that published a message.
+            let asked = match event_state {
                 State::Updated { redraw_request, .. } => {
                     !matches!(redraw_request, iced::window::RedrawRequest::Wait)
                 }
                 State::Outdated => true,
-            });
+            };
+            live.redraws.push(asked || !published.is_empty());
             cache = ui.into_cache();
         }
         for message in published {
@@ -463,7 +465,7 @@ fn grab_edge(app: &mut Live, inside: f32, y: f32, dir: f32) -> f32 {
 
 /// The press point of the drag check in the preview under `label`: 40 px
 /// below the preview's top (the first point below the label that offers a
-/// grab), so the band sits between the size readout and the scale bar. Its
+/// grab), so the band sits above the size readout and the scale bar. Its
 /// x comes from the preview's measured side edges, so the band and the
 /// pixels the drag brings into it both lie inside the canvas however wide
 /// the preview is (side by side in a narrow dock, #2535). Panics with the
@@ -534,10 +536,9 @@ fn assert_drag_pans(app: &mut Live, from: Point, what: &str) {
     );
     // Inside the preview, beside the press: the drawing has moved, and moved
     // exactly with the pointer, so the frame after the drag is the frame
-    // before it shifted by the drag. The size readout (top-left) and the
+    // before it shifted by the drag. The size readout (bottom-right) and the
     // scale bar (bottom-left) stay put while the drawing pans (#1952), so the
-    // band sits below the readout, also at the shifted source rows, and
-    // above the scale bar.
+    // band sits above both, also at the shifted source rows.
     let area = Rectangle::new(
         Point::new(from.x + BAND_OFFSET.0, from.y + BAND_OFFSET.1),
         BAND,

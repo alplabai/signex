@@ -571,6 +571,13 @@ pub enum LibraryMessage {
     /// The divider above the details section was pressed; the pointer now
     /// drives the list height until release.
     ComponentsPanelSplitDragStarted,
+    /// The pointer entered (`true`) or left the divider above the details.
+    ComponentsPanelSplitHovered(bool),
+    /// A zoom, pan or fit gesture landed on one preview of the details card.
+    ComponentsPanelPreviewMoved(
+        crate::panels::components_panel::details::preview_view::PreviewPane,
+        crate::panels::components_panel::details::preview_view::PreviewGesture,
+    ),
     /// The off-thread read of a row's details finished. A result for a row
     /// that is no longer the selected one is dropped.
     ComponentsPanelDetailsLoaded {

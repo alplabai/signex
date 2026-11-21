@@ -70,6 +70,7 @@ impl Signex {
         let zoom_step = self.ui_state.effective_zoom_step();
         let trackpad_pan = self.ui_state.trackpad_pan;
         let wheel_mode = self.ui_state.wheel_mode;
+        self.library.components_panel.wheel_mode = wheel_mode;
         for canvas in self.interaction_state.all_pcb_canvases_mut() {
             canvas.zoom_step = zoom_step;
             canvas.trackpad_pan = trackpad_pan;
