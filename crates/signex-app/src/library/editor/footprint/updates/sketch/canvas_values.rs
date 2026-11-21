@@ -155,13 +155,10 @@ fn prepared_write(editor: &FootprintDocument, edit: &ValueEdit) -> Option<ValueW
             let params = value_edit::resolved_params(sketch, &editor.state);
             let typed =
                 value_edit::parse_constraint_buffer(&edit.buffer, &constraint.kind, &params)?;
-            if value_edit::repeats_shown_board_angle(
-                &editor.state,
-                &constraint.kind,
-                &edit.buffer,
-                &typed,
-                &params,
-            ) {
+            if editor
+                .state
+                .retypes_shown_angle(&constraint.kind, &typed, &params)
+            {
                 return Some(ValueWrite::Unchanged);
             }
             let target = editor.state.stored_target(&constraint.kind, typed);

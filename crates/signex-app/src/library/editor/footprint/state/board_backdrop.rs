@@ -7,7 +7,8 @@ use std::borrow::Cow;
 
 use pcb_geom::{GraphicShape, PointNm};
 use signex_sketch::constraint::{ConstraintKind, DimTarget};
-use signex_sketch::mirrored_angle::{mirrored_expression, unmirrored_expression};
+use signex_sketch::mirrored_angle::{mirror, retypes_shown};
+use signex_sketch::solver::residual::ResolvedParams;
 use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
 use signex_types::pcb_origin::BoardOrigin;
 
@@ -138,9 +139,7 @@ impl super::FootprintEditorState {
         }
     }
 
-    /// `kind` with an angle as the user reads it: a literal negated, and a
-    /// mirrored expression (`-angle_1`, `-(a+b)`) as what was typed. Any
-    /// other expression keeps the text the sketch stores.
+    /// `kind` as the user reads it: a board angle through the mirror.
     pub fn shown_constraint<'k>(&self, kind: &'k ConstraintKind) -> Cow<'k, ConstraintKind> {
         let ConstraintKind::Angle { l1, l2, target } = kind else {
             return Cow::Borrowed(kind);
@@ -148,30 +147,34 @@ impl super::FootprintEditorState {
         if self.board_backdrop.is_none() {
             return Cow::Borrowed(kind);
         }
-        let shown = match target {
-            DimTarget::Literal(rad) => DimTarget::Literal(0.0 - rad),
-            DimTarget::Expr(source) => match unmirrored_expression(source) {
-                Some(typed) => DimTarget::Expr(typed.to_string()),
-                None => return Cow::Borrowed(kind),
-            },
-        };
         Cow::Owned(ConstraintKind::Angle {
             l1: *l1,
             l2: *l2,
-            target: shown,
+            target: mirror(target),
         })
     }
 
-    /// The target to store for `kind` when the user entered `shown`: on a
-    /// board angle, its exact negation, since what is typed reads Y-up.
+    /// The target to store for `kind` when the user entered `shown`: a board
+    /// angle through the mirror.
     pub fn stored_target(&self, kind: &ConstraintKind, shown: DimTarget) -> DimTarget {
         if self.board_backdrop.is_none() || !matches!(kind, ConstraintKind::Angle { .. }) {
             return shown;
         }
-        match shown {
-            DimTarget::Literal(rad) => DimTarget::Literal(0.0 - rad),
-            DimTarget::Expr(typed) => DimTarget::Expr(mirrored_expression(&typed)),
-        }
+        mirror(&shown)
+    }
+
+    /// Whether `typed` on a board angle is what it already shows, so
+    /// committing it is no edit. Always false on a footprint.
+    pub fn retypes_shown_angle(
+        &self,
+        kind: &ConstraintKind,
+        typed: &DimTarget,
+        params: &ResolvedParams,
+    ) -> bool {
+        let ConstraintKind::Angle { target, .. } = kind else {
+            return false;
+        };
+        self.board_backdrop.is_some() && retypes_shown(&mirror(target), typed, params)
     }
 
     /// The turn of the arc the Arc tool commits now. A positive sweep typed

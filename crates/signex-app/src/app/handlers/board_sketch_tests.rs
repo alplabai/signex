@@ -562,7 +562,7 @@ fn a_footprint_typed_arc_sweep_is_unchanged() {
 }
 
 /// A literal angle reads and is entered in the board's sense and is stored
-/// as it was; an angle bound to an expression keeps its text.
+/// as it was; an expression reads through the same mirror.
 #[test]
 fn a_literal_angle_dimension_converts_only_at_the_boundary() {
     use crate::library::editor::footprint::FootprintEditorState;
@@ -580,7 +580,10 @@ fn a_literal_angle_dimension_converts_only_at_the_boundary() {
     let back = state.stored_target(&stored, DimTarget::Literal(30.0_f64.to_radians()));
     assert_eq!(back, DimTarget::Literal(0.0 - 30.0_f64.to_radians()));
     let bound = angle(DimTarget::Expr("slope".into()));
-    assert_eq!(*state.shown_constraint(&bound), bound);
+    assert_eq!(
+        *state.shown_constraint(&bound),
+        angle(DimTarget::Expr("-slope".into()))
+    );
 
     let footprint = signex_library::Footprint::empty("f");
     let plain = FootprintEditorState::from_footprint(&footprint);

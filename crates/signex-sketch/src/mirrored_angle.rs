@@ -1,7 +1,7 @@
-//! An angle dimension whose parameter is read in the opposite sense to the
-//! model's. A board shows Y up while the model's y runs down, so a board
-//! sketch's parameter holds the value the user reads and the dimension
-//! stores its negative (`-angle_1`): the solver sees the same angle.
+//! The one mirror between a board sketch's stored angles and what the user
+//! reads. A board shows Y up while the model's y runs down, so every angle
+//! dimension is shown as `mirror(stored)` and stored as `mirror(typed)`.
+//! Stored data changes only when the user commits an edit.
 
 use signex_expr::{expression_body, is_identifier};
 
@@ -9,53 +9,48 @@ use crate::constraint::{ConstraintKind, DimTarget};
 use crate::id::ConstraintId;
 use crate::parameter_refs::{literal_of, unique_name};
 use crate::sketch::SketchData;
+use crate::solver::residual::{ResolvedParams, resolve_dim};
 use crate::unit::Quantity;
 
-/// The parameter `source` reads negated (`-angle_1`), if that is all it is.
-pub fn mirrored_parameter(source: &str) -> Option<&str> {
-    let name = expression_body(source).strip_prefix('-')?;
-    is_identifier(name).then_some(name)
+/// Rounding between two routes to the same angle (`30` and `30deg`), far
+/// below any value a user can tell apart.
+const SAME_VALUE_ULPS: f64 = 4.0;
+
+/// The angle read in the opposite sense: a literal negates, `name` and
+/// `-name` swap, `-(x)` and `x` swap, and any other `x` becomes `-(x)`.
+pub fn mirror(target: &DimTarget) -> DimTarget {
+    match target {
+        DimTarget::Literal(rad) => DimTarget::Literal(0.0 - rad),
+        DimTarget::Expr(source) => DimTarget::Expr(mirror_source(source)),
+    }
 }
 
-/// The expression reading the parameter `name` negated.
-pub fn mirrored_reference(name: &str) -> String {
-    format!("-{name}")
-}
-
-/// The exact negation of what the user typed: `-name` for a plain name,
-/// `-(typed)` for anything else, so `-name` typed stays distinct.
-pub fn mirrored_expression(typed: &str) -> String {
-    let body = expression_body(typed);
+fn mirror_source(source: &str) -> String {
+    let body = expression_body(source);
     if is_identifier(body) {
-        mirrored_reference(body)
-    } else {
-        format!("-({body})")
+        return format!("-{body}");
+    }
+    if let Some(name) = negated_name(body) {
+        return name.to_string();
+    }
+    match negated_group(body) {
+        Some(inner) => inner.to_string(),
+        None => format!("-({body})"),
     }
 }
 
-/// What [`mirrored_expression`] negated, when `stored` is that form.
-pub fn unmirrored_expression(stored: &str) -> Option<&str> {
-    if let Some(name) = mirrored_parameter(stored) {
-        return Some(name);
-    }
-    let inner = expression_body(stored)
-        .strip_prefix("-(")?
-        .strip_suffix(')')?;
+/// The name in `-name`.
+fn negated_name(body: &str) -> Option<&str> {
+    body.strip_prefix('-').filter(|name| is_identifier(name))
+}
+
+/// The `x` of `-(x)`, when its brackets are one group around all of it.
+fn negated_group(body: &str) -> Option<&str> {
+    let inner = body.strip_prefix("-(")?.strip_suffix(')')?;
     is_balanced(inner).then(|| inner.trim())
 }
 
-/// The parameter `source` reads through any mirrored layers, or `source`
-/// itself: `-(-slope)` and `-slope` both read `slope`.
-pub fn read_through_mirrors(source: &str) -> &str {
-    let mut read = source;
-    while let Some(inner) = unmirrored_expression(read) {
-        read = inner;
-    }
-    read
-}
-
-/// Whether every bracket in `text` closes inside it, so a `-(` before it
-/// and a `)` after it are one group.
+/// Whether every bracket in `text` closes inside it.
 fn is_balanced(text: &str) -> bool {
     let mut depth = 0_usize;
     for c in text.chars() {
@@ -69,11 +64,45 @@ fn is_balanced(text: &str) -> bool {
     depth == 0
 }
 
-/// Name the literal angle `constraint` by the value read in the opposite
-/// sense: a new parameter holds that value and the dimension reads its
-/// negative, so the angle the solver sees is the same to within the 1e-9
-/// degree a parameter's literal keeps. A dimension already reading one this
-/// way keeps it. `None` for anything else, which this does not touch.
+/// The parameter a shown angle reads, plainly or negated (`slope`, `-slope`).
+pub fn shown_parameter(shown: &str) -> Option<&str> {
+    let body = expression_body(shown);
+    if is_identifier(body) {
+        Some(body)
+    } else {
+        negated_name(body)
+    }
+}
+
+/// Whether `typed` is what is `shown`: the same expression once normalised,
+/// or the same value with no parameter in it. A rounded display does not
+/// count, so typing 30 over a stored 30.00004 is an edit.
+pub fn retypes_shown(shown: &DimTarget, typed: &DimTarget, params: &ResolvedParams) -> bool {
+    if let (DimTarget::Expr(a), DimTarget::Expr(b)) = (shown, typed)
+        && normal_form(a) == normal_form(b)
+    {
+        return true;
+    }
+    matches!(
+        (resolve_dim(typed, &ResolvedParams::new()), resolve_dim(shown, params)),
+        (Ok(a), Ok(b)) if same_value(a, b)
+    )
+}
+
+fn normal_form(source: &str) -> String {
+    mirror_source(&mirror_source(source))
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect()
+}
+
+fn same_value(a: f64, b: f64) -> bool {
+    a == b || (a - b).abs() <= SAME_VALUE_ULPS * f64::EPSILON * a.abs().max(b.abs())
+}
+
+/// Make parameter on a board angle: a new parameter holds what is shown and
+/// the dimension stores `-name`, so the number and the geometry stay. One
+/// already bound keeps its parameter. `None` if `constraint` is no angle.
 pub fn parameter_from_mirrored_angle(
     sketch: &mut SketchData,
     constraint: ConstraintId,
@@ -82,20 +111,21 @@ pub fn parameter_from_mirrored_angle(
     let ConstraintKind::Angle { target, .. } = &sketch.constraints[index].kind else {
         return None;
     };
-    let value = match target {
-        DimTarget::Literal(rad) => 0.0 - *rad,
-        DimTarget::Expr(source) => {
-            let name = mirrored_parameter(source)?;
-            let known = sketch.parameters.get_raw(name).is_some();
-            return known.then(|| name.to_string());
+    let source = match mirror(target) {
+        DimTarget::Literal(rad) => literal_of(Quantity::angle(rad)),
+        DimTarget::Expr(shown) => {
+            if let Some(name) = shown_parameter(&shown)
+                && sketch.parameters.get_raw(name).is_some()
+            {
+                return Some(name.to_string());
+            }
+            shown
         }
     };
     let name = unique_name(&sketch.parameters, "angle");
-    sketch
-        .parameters
-        .insert(name.clone(), literal_of(Quantity::angle(value)));
+    sketch.parameters.insert(name.clone(), source);
     if let ConstraintKind::Angle { target, .. } = &mut sketch.constraints[index].kind {
-        *target = DimTarget::Expr(mirrored_reference(&name));
+        *target = DimTarget::Expr(mirror_source(&name));
     }
     Some(name)
 }
@@ -104,32 +134,44 @@ pub fn parameter_from_mirrored_angle(
 mod tests {
     use super::*;
 
-    #[test]
-    fn only_a_negated_name_is_a_mirrored_parameter() {
-        assert_eq!(mirrored_parameter("-angle_1"), Some("angle_1"));
-        assert_eq!(mirrored_parameter("= -angle_1"), Some("angle_1"));
-        assert_eq!(mirrored_parameter("angle_1"), None);
-        assert_eq!(mirrored_parameter("-30deg"), None);
-        assert_eq!(mirrored_parameter("-(a + b)"), None);
+    fn expr(source: &str) -> DimTarget {
+        DimTarget::Expr(source.into())
     }
 
     #[test]
-    fn a_typed_expression_comes_back_from_its_negation() {
-        for typed in ["30deg", "slope", "-30deg", "-angle_2", "(a+b)", "-(a+b)"] {
-            let stored = mirrored_expression(typed);
-            assert_eq!(unmirrored_expression(&stored), Some(typed), "{stored}");
+    fn mirror_is_its_own_inverse() {
+        for form in [
+            "30deg", "-30deg", "slope", "-slope", "(a+b)", "-(a+b)", "-a+b", "a+b", "-(a)+(b)",
+        ] {
+            assert_eq!(mirror(&mirror(&expr(form))), expr(form), "{form}");
         }
-        assert_eq!(mirrored_expression("slope"), "-slope");
-        assert_eq!(mirrored_expression("-slope"), "-(-slope)");
-        assert_eq!(mirrored_expression("= a + b"), "-(a + b)");
+        for rad in [0.0, 0.5, -0.5] {
+            let literal = DimTarget::Literal(rad);
+            assert_eq!(mirror(&mirror(&literal)), literal);
+        }
     }
 
     #[test]
-    fn only_one_whole_negated_group_is_a_mirrored_form() {
-        assert_eq!(unmirrored_expression("slope"), None);
-        assert_eq!(unmirrored_expression("-30deg"), None);
-        assert_eq!(unmirrored_expression("-(a)+(b)"), None);
-        assert_eq!(read_through_mirrors("-(-slope)"), "slope");
-        assert_eq!(read_through_mirrors("a+b"), "a+b");
+    fn mirror_takes_each_form_to_its_negation() {
+        assert_eq!(mirror(&expr("slope")), expr("-slope"));
+        assert_eq!(mirror(&expr("-slope")), expr("slope"));
+        assert_eq!(mirror(&expr("-(a+b)")), expr("a+b"));
+        assert_eq!(mirror(&expr("= a + b")), expr("-(a + b)"));
+        assert_eq!(mirror(&expr("-a+b")), expr("-(-a+b)"));
+        assert_eq!(mirror(&expr("-(a)+(b)")), expr("-(-(a)+(b))"));
+        // A double negation is its name, the same value in its plain form.
+        assert_eq!(mirror(&expr("-(-slope)")), expr("-slope"));
+        assert_eq!(mirror(&mirror(&expr("-(-slope)"))), expr("slope"));
+    }
+
+    #[test]
+    fn a_rounded_display_is_not_a_retype() {
+        let params = ResolvedParams::new();
+        let thirty = DimTarget::Literal(30.0_f64.to_radians());
+        let near = DimTarget::Literal(30.00004_f64.to_radians());
+        assert!(retypes_shown(&thirty, &expr("30deg"), &params));
+        assert!(!retypes_shown(&near, &thirty, &params));
+        assert!(retypes_shown(&expr("a + b"), &expr("a+b"), &params));
+        assert!(retypes_shown(&expr("slope"), &expr("-(-slope)"), &params));
     }
 }
