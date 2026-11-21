@@ -75,7 +75,10 @@ fn wires_drawn_to_a_power_port_get_a_dot_once_two_end_there() {
     let mut engine = Engine::new(test_sheet()).unwrap();
     place_gnd(&mut engine, CORNER);
     draw_wire(&mut engine, (50.0, 10.0), CORNER);
-    assert!(dots(&engine).is_empty(), "one wire on the pin is no meeting");
+    assert!(
+        dots(&engine).is_empty(),
+        "one wire on the pin is no meeting"
+    );
     draw_wire(&mut engine, CORNER, (90.0, 40.0));
     assert_eq!(dots(&engine), vec![corner()]);
 
@@ -123,5 +126,9 @@ fn moving_the_power_port_off_the_corner_drops_the_dot() {
     assert_eq!(dots(&engine), vec![corner()]);
     let item = SelectedItem::new(port, SelectedKind::Symbol);
     mv(&mut engine, vec![item], 0.0, 20.0, false);
-    assert!(dots(&engine).is_empty(), "the pin left: {:?}", dots(&engine));
+    assert!(
+        dots(&engine).is_empty(),
+        "the pin left: {:?}",
+        dots(&engine)
+    );
 }
