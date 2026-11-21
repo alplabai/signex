@@ -193,6 +193,13 @@ surface floor (`scene_shader::SchematicSurface`) and the Symbol Editor.
    The paper border in `canvas/draw/background.rs` is chrome, not a
    schematic stroke: a fixed `with_width(1.0)` logical px, outside the floor
    rule and the snap.
+
+   **Stroke ends.** A solid scene line (a placed wire or bus segment) is
+   stroked with round ends, `renderer_scene_canvas::solid_line_stroke`, so two
+   segments meeting at a bend close the corner even where the snap moves
+   their ends apart. The wire and bus routing preview strokes its segments
+   with the same function, so a route draws its corners as the placed one
+   will (`wire_corner_tests::the_routing_preview_joins_its_corners_like_a_placed_segment`).
 5. **Display scale.** The floor and the snap are defined in device pixels.
    Each window's scale (OS factor times the interface scale,
    `UiState::device_px_per_logical_px`) reaches its canvas through
