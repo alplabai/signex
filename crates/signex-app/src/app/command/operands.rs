@@ -2,10 +2,12 @@
 //! `key=value` pairs a CLI or an agent passes, validated against the
 //! command's descriptor in the catalog. Pure: nothing here runs a command.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
+use signex_commands::catalog::MAX_TARGETS;
 use signex_types::format::mm_as_stored_nm;
+use uuid::Uuid;
 
 use crate::app::document_ids::DocumentTarget;
 use crate::keymap::{AppCommandId, Operand, OperandKind, metadata_for};
@@ -36,6 +38,8 @@ pub enum OperandValue {
     Document(DocumentTarget),
     /// A length in mm, above zero (#2408).
     Length(f64),
+    /// The items a command acts on, each once, in the order first given.
+    Targets(Vec<Uuid>),
 }
 
 /// Why operands were refused; every variant names the operand.
@@ -55,6 +59,8 @@ pub enum OperandError {
         expected: &'static str,
         got: String,
     },
+    /// A target list longer than [`MAX_TARGETS`].
+    TooMany { operand: String, max: usize },
 }
 
 impl std::fmt::Display for OperandError {
@@ -73,6 +79,9 @@ impl std::fmt::Display for OperandError {
                 expected,
                 got,
             } => write!(f, "operand `{operand}` must be {expected}, got `{got}`"),
+            Self::TooMany { operand, max } => {
+                write!(f, "operand `{operand}` names more than {max} items")
+            }
         }
     }
 }
@@ -128,6 +137,15 @@ impl CommandArgs {
     /// The operand `name` as parsed, `None` when it was not given.
     pub fn operand(&self, name: &str) -> Option<&OperandValue> {
         self.operands.values.get(name)
+    }
+
+    /// The uuids the targets operand `name` names, `None` when it was not
+    /// given.
+    pub(crate) fn targets(&self, name: &str) -> Option<&[Uuid]> {
+        match self.operand(name) {
+            Some(OperandValue::Targets(ids)) => Some(ids),
+            _ => None,
+        }
     }
 
     /// Whether any operand was given.
@@ -218,7 +236,42 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             .filter(|mm| *mm > 0.0 && mm_as_stored_nm(*mm).is_some())
             .map(OperandValue::Length)
             .ok_or_else(|| invalid("a length in mm above zero")),
+        OperandKind::Targets => parse_targets(operand.name, text),
     }
+}
+
+/// The one parser of a uuid list (#2326): `uuid,uuid,..`, empty parts
+/// skipped, a repeated uuid kept at its first place; refused when empty,
+/// longer than [`MAX_TARGETS`] or holding anything but a uuid.
+fn parse_targets(operand: &str, text: &str) -> Result<OperandValue, OperandError> {
+    let invalid = |got: &str| OperandError::Invalid {
+        operand: operand.to_string(),
+        expected: "uuids, comma separated",
+        got: got.to_string(),
+    };
+    let parts: Vec<&str> = text
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect();
+    if parts.is_empty() {
+        return Err(invalid(text));
+    }
+    if parts.len() > MAX_TARGETS {
+        return Err(OperandError::TooMany {
+            operand: operand.to_string(),
+            max: MAX_TARGETS,
+        });
+    }
+    let mut seen = HashSet::with_capacity(parts.len());
+    let mut ids = Vec::with_capacity(parts.len());
+    for part in parts {
+        let id = Uuid::parse_str(part).map_err(|_| invalid(part))?;
+        if seen.insert(id) {
+            ids.push(id);
+        }
+    }
+    Ok(OperandValue::Targets(ids))
 }
 
 /// Whether both sides of the first `.` are numbers (`1.5`, `10.16`).
@@ -488,6 +541,62 @@ mod tests {
         }
     }
 
+    /// #2326: a targets list is uuids, each once in the order first given.
+    #[test]
+    fn a_targets_list_keeps_each_uuid_once_in_its_first_place() {
+        let (a, b) = (Uuid::now_v7(), Uuid::now_v7());
+        let doc = format!(
+            "document={}",
+            std::env::temp_dir().join("b.snxpcb").display()
+        );
+        let ids = format!("ids={b}, {a},{b},,{a},");
+        let args = parse("lock_board_items", &[&doc, &ids]).unwrap();
+        assert_eq!(args.targets("ids"), Some(&[b, a][..]));
+        assert_eq!(
+            args.operand("ids"),
+            Some(&OperandValue::Targets(vec![b, a]))
+        );
+    }
+
+    /// #2326: an empty list, a part that is not a uuid and a list over the
+    /// cap are refused by the parser, naming the operand.
+    #[test]
+    fn a_targets_list_that_is_empty_not_uuids_or_too_long_is_refused() {
+        let doc = format!(
+            "document={}",
+            std::env::temp_dir().join("b.snxpcb").display()
+        );
+        let id = Uuid::now_v7();
+        for bad in ["ids=", "ids= , ,", "ids=U1", &format!("ids={id},R1")] {
+            let err = parse("lock_board_items", &[&doc, bad]).unwrap_err();
+            assert!(
+                matches!(&err, OperandError::Invalid { operand, .. } if operand == "ids"),
+                "{bad}: {err}"
+            );
+        }
+        let at_cap = vec![id.to_string(); MAX_TARGETS].join(",");
+        let args = parse("lock_board_items", &[&doc, &format!("ids={at_cap}")]).unwrap();
+        assert_eq!(args.targets("ids"), Some(&[id][..]));
+        let over = format!("ids={at_cap},{id}");
+        assert_eq!(
+            parse("lock_board_items", &[&doc, &over]).unwrap_err(),
+            OperandError::TooMany {
+                operand: "ids".into(),
+                max: MAX_TARGETS
+            }
+        );
+    }
+
+    /// #2326: every command listed as keeping a text `ids` has one.
+    #[test]
+    fn the_ids_still_text_list_names_commands_with_a_text_ids() {
+        for id in crate::keymap::IDS_STILL_TEXT {
+            let meta = metadata_for_str(id).unwrap();
+            let ids = meta.operands.iter().find(|op| op.name == "ids");
+            assert_eq!(ids.map(|op| op.kind), Some(OperandKind::Text), "{id}");
+        }
+    }
+
     /// The one convention (#1923): every descriptor names operands from the
     /// shared table with that name's one kind, and a `gui_only` row has none.
     #[test]
@@ -502,10 +611,11 @@ mod tests {
             );
             let mut seen = Vec::new();
             for op in meta.operands {
+                let still_text = op.name == "ids" && crate::keymap::IDS_STILL_TEXT.contains(&id);
                 let want = crate::keymap::OPERAND_CONVENTION
                     .iter()
                     .find(|(name, _)| *name == op.name)
-                    .map(|(_, kind)| *kind);
+                    .map(|(_, kind)| if still_text { OperandKind::Text } else { *kind });
                 assert_eq!(want, Some(op.kind), "{id}: operand `{}`", op.name);
                 assert!(!seen.contains(&op.name), "{id}: `{}` twice", op.name);
                 seen.push(op.name);

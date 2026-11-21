@@ -12,6 +12,7 @@ use signex_engine::pcb::board_tools::{
     StitchArea, ToolEdit, ToolRefusal, add_teardrops, arrange_in_box, default_stitch_pitch_mm,
     gloss_tracks, keepout_from_selection, outline_from_tracks, remove_teardrops, stitch_vias,
 };
+use signex_i18n::{Translatable, ids};
 use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
@@ -45,20 +46,43 @@ fn named_board(app: &Signex, args: &CommandArgs) -> Result<PathBuf, String> {
     }
 }
 
-/// The uuids in the text operand `name` (comma separated); empty when it
-/// was not given.
-fn uuids(args: &CommandArgs, name: &str) -> Result<BTreeSet<Uuid>, String> {
-    let Some(OperandValue::Text(text)) = args.operand(name) else {
-        return Ok(BTreeSet::new());
-    };
-    text.split(',')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            part.parse::<Uuid>()
-                .map_err(|_| format!("`{part}` in `{name}` is not a uuid"))
-        })
-        .collect()
+/// The items `ids` names; empty when it was not given.
+fn targets(args: &CommandArgs) -> BTreeSet<Uuid> {
+    args.targets("ids")
+        .map_or_else(BTreeSet::new, |ids| ids.iter().copied().collect())
+}
+
+/// The zone the text operand `id` names, if any.
+fn zone_id(args: &CommandArgs) -> Result<Option<Uuid>, String> {
+    match args.operand("id") {
+        Some(OperandValue::Text(text)) if !text.trim().is_empty() => text
+            .trim()
+            .parse::<Uuid>()
+            .map(Some)
+            .map_err(|_| format!("`{}` in `id` is not a uuid", text.trim())),
+        _ => Ok(None),
+    }
+}
+
+/// Refused whole when an id of `ids` names nothing `acts_on` takes on the
+/// named board (#2326): a command never runs on the rest and skips one.
+fn unknown_target(
+    app: &Signex,
+    args: &CommandArgs,
+    acts_on: impl Fn(&PcbBoard, Uuid) -> bool,
+) -> Option<Ran> {
+    let path = named_board(app, args).ok()?;
+    let board = app.document_state.pcb_board(&path)?;
+    let id = args
+        .targets("ids")?
+        .iter()
+        .find(|id| !acts_on(board, **id))?;
+    let reason = Translatable::new(ids::BOARD_TARGET_UNKNOWN).arg("id", id.to_string());
+    Some((CommandOutcome::Disabled { reason }, Task::none()))
+}
+
+fn is_track(board: &PcbBoard, id: Uuid) -> bool {
+    board.segments.iter().any(|s| s.uuid == id)
 }
 
 /// The board point the operand `name` gives, if any.
@@ -121,13 +145,10 @@ fn run(
 /// `stitch_vias document=.. (id=<zone> | start=x,y end=x,y) net=? pitch=?`.
 pub(crate) fn stitch_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
     run(app, args, true, |board, gap| {
-        let zone = uuids(args, "id")?;
-        if zone.len() > 1 {
-            return Err("`id` names one zone".into());
-        }
+        let zone = zone_id(args)?;
         let corners = (point(args, "start")?, point(args, "end")?);
-        let area = match (zone.first(), corners) {
-            (Some(&zone), (None, None)) => StitchArea::Zone(zone),
+        let area = match (zone, corners) {
+            (Some(zone), (None, None)) => StitchArea::Zone(zone),
             (None, (Some(a), Some(b))) => StitchArea::Rect(a, b),
             _ => return Err("name the area with `id` (a zone) or with `start` and `end`".into()),
         };
@@ -165,22 +186,33 @@ pub(crate) fn remove_teardrops_by_operands(app: &mut Signex, args: &CommandArgs)
 
 /// `gloss_selected_routes document=.. ids=<tracks>`.
 pub(crate) fn gloss_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
+    if let Some(refused) = unknown_target(app, args, is_track) {
+        return refused;
+    }
     run(app, args, true, |board, gap| {
-        gloss_tracks(board, &uuids(args, "ids")?, gap).map_err(|r| r.to_string())
+        gloss_tracks(board, &targets(args), gap).map_err(|r| r.to_string())
     })
 }
 
 /// `board_shape_from_selection document=.. ids=<lines>`.
 pub(crate) fn board_shape_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
+    if let Some(refused) = unknown_target(app, args, is_track) {
+        return refused;
+    }
     run(app, args, false, |board, _| {
-        outline_from_tracks(board, &uuids(args, "ids")?).map_err(|r| r.to_string())
+        outline_from_tracks(board, &targets(args)).map_err(|r| r.to_string())
     })
 }
 
 /// `keepout_from_selection document=.. ids=<zones or lines>`.
 pub(crate) fn keepout_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
+    let zone_or_line =
+        |board: &PcbBoard, id| is_track(board, id) || board.zones.iter().any(|z| z.uuid == id);
+    if let Some(refused) = unknown_target(app, args, zone_or_line) {
+        return refused;
+    }
     run(app, args, false, |board, _| {
-        let ids = uuids(args, "ids")?;
+        let ids = targets(args);
         let zones: BTreeSet<Uuid> = board
             .zones
             .iter()
@@ -197,6 +229,6 @@ pub(crate) fn arrange_in_box_by_operands(app: &mut Signex, args: &CommandArgs) -
         let (Some(a), Some(b)) = (point(args, "start")?, point(args, "end")?) else {
             return Err("the box needs `start` and `end`".into());
         };
-        arrange_in_box(board, &uuids(args, "ids")?, a, b).map_err(|r| r.to_string())
+        arrange_in_box(board, &targets(args), a, b).map_err(|r| r.to_string())
     })
 }

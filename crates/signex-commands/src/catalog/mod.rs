@@ -6,7 +6,7 @@ use signex_i18n_ids::{MessageId, command_ids};
 
 pub use categories::{category_title_id, title_words};
 pub use closest::closest_command_ids;
-pub use operands::{Operand, OperandKind};
+pub use operands::{MAX_TARGETS, Operand, OperandKind};
 
 mod annotate;
 mod arrange;
