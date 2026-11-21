@@ -1,4 +1,4 @@
-//! The Rules from the schematic rows of Update PCB (#1281): each rule the
+//! The Rules from the schematic rows of Update PCB (#1489): each rule the
 //! Net Parameters directives ask for, what Execute does to it (rewrite a
 //! rule edited in the Rules tab, add a new one, or nothing), the rule as it
 //! will read and, for a rewrite, as it reads now. Rewrites come first.

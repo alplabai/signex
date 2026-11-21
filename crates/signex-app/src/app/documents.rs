@@ -1064,7 +1064,7 @@ pub enum Tool {
     HarnessConnector,
     /// One click on a connector's flat side adds an entry there (#1280).
     HarnessEntry,
-    /// One click on a wire places a Net Parameters flag there (#1281).
+    /// One click on a wire places a Net Parameters flag there (#1489).
     NetParameters,
 }
 

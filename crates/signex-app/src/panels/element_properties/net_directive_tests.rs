@@ -1,4 +1,4 @@
-//! #1281: the Net Parameters and Net Blanket Properties snapshot and
+//! #1281, #1489: the Net Parameters and Net Blanket Properties snapshot and
 //! drawings.
 
 use super::directive::{DirectivePanel, DraftField, NetRule, format_value};

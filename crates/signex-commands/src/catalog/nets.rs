@@ -178,7 +178,7 @@ pub(super) const NETS: &[CommandMetadata] = &[
         flags: CommandFlags::GUI_ONLY,
         ..CommandMetadata::DEFAULT
     },
-    // #1489: Design ▸ Differential Pair Classes… opens the project's class
+    // #1282: Design ▸ Differential Pair Classes… opens the project's class
     // dialog; OK applies it as one step of the project history. No key.
     CommandMetadata {
         id: "open_diff_pair_classes",

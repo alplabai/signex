@@ -311,7 +311,7 @@ dialog-title-net-color-custom = Custom Net Colour
 # $path is the parent sheet's file.
 dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused
 
-## Design ▸ Differential Pair Classes… (#1489).
+## Design ▸ Differential Pair Classes… (#1282).
 
 dialog-dpc-title = Differential Pair Classes
 # $project is the project name; $classes and $pairs are whole numbers.

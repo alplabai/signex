@@ -11,7 +11,7 @@ mod design;
 mod execute;
 mod fix;
 mod new_pcb;
-// #1281: the rules the schematic's Net Parameters directives ask for.
+// #1489: the rules the schematic's Net Parameters directives ask for.
 pub(crate) mod rules_from_schematic;
 mod state;
 pub(crate) mod table;

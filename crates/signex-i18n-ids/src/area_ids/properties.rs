@@ -264,6 +264,7 @@ define_ids! {
     TABLE_TOC_NOT_SERIALISED = "properties-table-toc-not-serialised";
     TABLE_TOC_HEADING = "properties-table-toc-heading";
     TABLE_REFRESH_FAILED = "properties-table-refresh-failed";
+    TABLE_REFRESH_NO_REASON = "properties-table-refresh-no-reason";
     TABLE_CSV_TABLE_GONE = "properties-table-csv-table-gone";
     // Multi-channel sheets and the Compiled Design panel (#1279, #1308).
     PROPERTIES_SHEET_SYMBOL_DESIGNATOR = "properties-sheet-symbol-designator";

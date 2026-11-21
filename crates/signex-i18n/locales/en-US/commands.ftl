@@ -697,7 +697,7 @@ cmd-menu-open-compiled-design = Compiled Design
 
 cmd-open-harness-definitions = Open the harness definitions
 
-## Differential pair classes (#1489).
+## Differential pair classes (#1282).
 cmd-open-diff-pair-classes = Open the project's differential pair classes
 cmd-menu-open-diff-pair-classes = Differential Pair Classes…
 

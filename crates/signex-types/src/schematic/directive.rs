@@ -1,4 +1,4 @@
-//! Schematic directives (#2420, #1281): a Net Blanket, a Compile Mask, a
+//! Schematic directives (#2420, #1281, #1489): a Net Blanket, a Compile Mask, a
 //! Differential Pair and a Net Parameters directive. They carry no
 //! connectivity of their own; the netlist and ERC read them. Design note:
 //! `docs/SCHEMATIC_DIRECTIVES.md`.

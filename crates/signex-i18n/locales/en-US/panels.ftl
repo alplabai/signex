@@ -1028,7 +1028,7 @@ panels-harness-defs-nested-section = { $type } (nested)
 panels-harness-defs-new = New harness type
 panels-harness-defs-back = Back
 
-## Properties of a Net Parameters directive (#1281): a flag on one wire that
+## Properties of a Net Parameters directive (#1489): a flag on one wire that
 ## sets its net's class, diff-pair class and routing rules.
 
 # Caption under the header: the net the flag sits on and the sheet file.

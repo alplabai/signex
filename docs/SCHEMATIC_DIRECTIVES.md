@@ -1,6 +1,6 @@
 # Schematic directives
 
-Four objects a sheet can carry that are not circuit (#2420, #1281). None of
+Four objects a sheet can carry that are not circuit (#2420, #1281, #1489). None of
 them makes a connection; the netlist and ERC read them.
 
 | Directive | Shape | What it does |

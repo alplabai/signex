@@ -48,7 +48,7 @@ pub(crate) use body_row::{
 pub(super) use channel_view::channel_view_properties;
 pub(super) use child_sheet::view_child_sheet_properties;
 pub use directive::BlanketEdit;
-// #1281: the Net Parameters and Net Blanket surfaces.
+// #1281, #1489: the Net Parameters and Net Blanket surfaces.
 mod blanket;
 #[cfg(test)]
 mod net_directive_tests;

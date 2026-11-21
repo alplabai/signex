@@ -326,16 +326,40 @@ fn the_refresh_rebuilds_a_pin_table_as_one_undo_step_and_only_when_stale() {
 /// (a compiled view) and a read-only sheet refuse it.
 #[test]
 fn a_channel_view_or_a_read_only_sheet_refuses_the_refresh() {
+    let _ = crate::diagnostics::init_logging();
+    // The refusal says so in Messages, with a reason after the colon.
+    let refresh_says_why = |app: &mut Signex, case: &str| {
+        let before = crate::diagnostics::newest_entry_id();
+        let said = crate::diagnostics::said_on_this_thread();
+        app.refresh_bound_tables(None);
+        assert!(
+            crate::diagnostics::said_on_this_thread() > said,
+            "{case}: nothing in Messages"
+        );
+        let lines: Vec<String> = crate::diagnostics::entries_since(before)
+            .entries
+            .into_iter()
+            .map(|e| e.message.replace(['\u{2068}', '\u{2069}'], ""))
+            .filter(|m| m.contains("Table refresh failed on"))
+            .collect();
+        assert!(
+            lines.iter().any(|m| m
+                .rsplit_once(": ")
+                .is_some_and(|(_, why)| !why.trim().is_empty())),
+            "{case}: {lines:?}"
+        );
+    };
+
     let mut app = app_with_sheet(sheet_with_pin_table());
     let path = app.document_state.active_path.clone().expect("active");
     app.ui_state.compiled_design.channel_tabs.insert(path, 1);
-    app.refresh_bound_tables(None);
+    refresh_says_why(&mut app, "a channel tab");
     assert_eq!(pin_table(&app).cell(0, 1), "OLD", "a channel tab");
 
     let mut sheet = sheet_with_pin_table();
     sheet.unknown.newer_minor_source = Some("snxsch/1.9".into());
     let mut app = app_with_sheet(sheet);
-    app.refresh_bound_tables(None);
+    refresh_says_why(&mut app, "a read-only sheet");
     assert_eq!(pin_table(&app).cell(0, 1), "OLD", "a read-only sheet");
 }
 

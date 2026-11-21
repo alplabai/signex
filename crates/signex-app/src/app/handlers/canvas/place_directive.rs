@@ -1,4 +1,4 @@
-//! The directive tools (#2420, #1281): a Net Blanket or Compile Mask is two
+//! The directive tools (#2420, #1489): a Net Blanket or Compile Mask is two
 //! corner clicks, a Differential Pair directive one click on a `_P` or `_N`
 //! net, a Net Parameters flag one click on a wire. Every placement and edit
 //! is one `Command` through the gateway, so one undo step. Design note:

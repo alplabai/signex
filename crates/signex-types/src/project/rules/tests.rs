@@ -358,7 +358,7 @@ fn named_rule_sets_round_trip_and_stay_absent_when_empty() {
     assert!(!drc.is_empty());
 }
 
-/// #1281: the names of the rules Update PCB wrote from the schematic ride
+/// #1489: the names of the rules Update PCB wrote from the schematic ride
 /// in `drc.from_schematic`, are left out while empty, and survive a build
 /// that does not know the key (it lands in that build's `unknown` bag).
 #[test]

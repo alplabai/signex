@@ -1,4 +1,4 @@
-//! Properties of a selected directive (#2420, #1281, mockup row 49). A Net
+//! Properties of a selected directive (#2420, #1281, #1489, mockup row 49). A Net
 //! Parameters directive and a Net Blanket have their own surfaces
 //! (`net_parameters.rs`, `blanket.rs`), read from the panel's
 //! [`DirectivePanel`] snapshot; a Compile Mask and a Differential Pair show

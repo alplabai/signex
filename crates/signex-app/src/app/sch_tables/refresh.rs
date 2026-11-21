@@ -109,7 +109,11 @@ impl Signex {
                         self.ui_state.i18n,
                         signex_i18n::ids::TABLE_REFRESH_FAILED,
                         "file" => path.display().to_string(),
-                        "reason" => reason.unwrap_or_default()
+                        "reason" => reason.unwrap_or_else(|| signex_i18n::t!(
+                            self.ui_state.i18n,
+                            signex_i18n::ids::TABLE_REFRESH_NO_REASON
+                        )
+                        .into_string())
                     )
                     .into_string(),
                 ),

@@ -114,7 +114,7 @@ pub(crate) enum OverlayId {
     BoardReannotate,
     /// File ▸ Fabrication Outputs (#2388).
     FabOutputs,
-    /// Design ▸ Differential Pair Classes… (#1489).
+    /// Design ▸ Differential Pair Classes… (#1282).
     DiffPairClasses,
     /// Board Reports and Board Print / PDF (#2404, #2402).
     BoardOutput,

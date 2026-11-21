@@ -113,7 +113,7 @@ impl Signex {
         let (Some(list), Some(board)) = (state.ready_list().cloned(), state.board.clone()) else {
             return Task::none();
         };
-        // #1281: the rules the schematic asks for go with the board's rows.
+        // #1489: the rules the schematic asks for go with the board's rows.
         let project = state.project;
         let rule_rows = self.update_pcb_rule_rows(state);
         let rules_pending = super::rules_from_schematic::pending(&rule_rows);

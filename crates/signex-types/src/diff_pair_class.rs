@@ -1,4 +1,4 @@
-//! Differential pair classes (#1281): a named set of pair rules (impedance,
+//! Differential pair classes (#1282): a named set of pair rules (impedance,
 //! trace width and gap) a Differential Pair directive on the schematic can
 //! name. Stored per project in `.snxprj` under `schematic_design`
 //! (`docs/architecture/snxprj-format.md`).

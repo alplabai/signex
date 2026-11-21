@@ -33,7 +33,7 @@ pub(crate) struct DesignSnapshot {
     /// Libraries whose adapter did not open, with why: their parts resolve
     /// to no footprint, and the update thread logs each to Messages.
     pub library_errors: Vec<(PathBuf, String)>,
-    /// The rules the schematic's Net Parameters directives ask for (#1281).
+    /// The rules the schematic's Net Parameters directives ask for (#1489).
     pub schematic_rules: Vec<super::rules_from_schematic::SchematicRule>,
     /// The rules they ask for that are left out, with why; logged to
     /// Messages like `library_errors`.

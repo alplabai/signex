@@ -130,7 +130,7 @@ pub const EDIT_BLANKET: &[Operand] = &[
     optional("exclude", OperandKind::Text),
     optional("document", OperandKind::Document),
 ];
-/// A Net Parameters directive (#1281): the point on a wire it sits on, the
+/// A Net Parameters directive (#1489): the point on a wire it sits on, the
 /// net class and diff-pair class it gives that net, and its routing rules
 /// (lengths in mm, `current` in A, information only).
 pub const NET_PARAMETERS: &[Operand] = &[

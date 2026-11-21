@@ -496,7 +496,7 @@ pub struct UiState {
     /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
     /// until Generate.
     pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,
-    /// Design ▸ Differential Pair Classes… (#1489), while open: a copy of
+    /// Design ▸ Differential Pair Classes… (#1282), while open: a copy of
     /// the project's classes until OK.
     pub diff_pair_classes: Option<Box<crate::app::DiffPairClassesState>>,
     /// Generation of the newest Fabrication Outputs write, outside the

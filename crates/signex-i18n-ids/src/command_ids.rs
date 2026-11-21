@@ -664,7 +664,7 @@ define_ids! {
         CMD_MENU_COMPILE_PROJECT = "cmd-menu-compile-project";
         CMD_OPEN_COMPILED_DESIGN = "cmd-open-compiled-design";
         CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
-        // Signal harnesses (#1280) and differential pair classes (#1489).
+        // Signal harnesses (#1280) and differential pair classes (#1282).
         CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
         CMD_OPEN_DIFF_PAIR_CLASSES = "cmd-open-diff-pair-classes";
         CMD_MENU_OPEN_DIFF_PAIR_CLASSES = "cmd-menu-open-diff-pair-classes";

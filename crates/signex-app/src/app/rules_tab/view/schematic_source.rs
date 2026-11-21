@@ -1,4 +1,4 @@
-//! Where a rule came from (#1281): a rule Update PCB wrote from the
+//! Where a rule came from (#1489): a rule Update PCB wrote from the
 //! schematic's Net Parameters directives reads "from schematic" under its
 //! name. The schematic wins on the next Update PCB, so an edit made here to
 //! such a rule is rewritten unless the directive changes too.

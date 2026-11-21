@@ -1,4 +1,4 @@
-//! Properties of a selected Net Parameters directive (#1281): the net it
+//! Properties of a selected Net Parameters directive (#1489): the net it
 //! sits on, a line-art illustration of the flag (its Width, Clearance and
 //! Via linked to the rule rows), the net class and diff-pair class, the
 //! rule list and whether the flag shows the values. Each edit is one

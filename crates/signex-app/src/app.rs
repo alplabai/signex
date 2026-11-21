@@ -34,7 +34,7 @@ pub mod document_read;
 mod documents;
 pub(crate) mod engine_notices;
 pub(crate) mod fab_outputs;
-// #1489: Design ▸ Differential Pair Classes….
+// #1282: Design ▸ Differential Pair Classes….
 pub(crate) mod diff_pair_classes;
 pub use diff_pair_classes::{
     DiffPairClassesMsg, DiffPairClassesState, PairClassField, PairClassProblem, PairMemberRow,

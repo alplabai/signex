@@ -1,4 +1,4 @@
-//! Differential pairs from the schematic's directives (#1282, #1489): a
+//! Differential pairs from the schematic's directives (#1282): a
 //! Differential Pair directive (or a Net Parameters directive naming a
 //! diff-pair class) on one half of a pair names the pair and, when set, its
 //! diff-pair class. The partner is found by name: with the class's

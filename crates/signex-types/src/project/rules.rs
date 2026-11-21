@@ -153,7 +153,7 @@ pub struct DrcRuleSet {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub sets: BTreeMap<String, NamedRuleSet>,
     /// The names of the rules in `dsl` that Update PCB wrote from the
-    /// schematic's directives (#1281), so the Rules tab shows their source.
+    /// schematic's directives (#1489), so the Rules tab shows their source.
     /// Not written while empty; a build without the key keeps it in
     /// `unknown`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

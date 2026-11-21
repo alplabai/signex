@@ -1,6 +1,6 @@
 //! #1248 / #1249 - a planned tool (Reuse Block) must not be remembered as
 //! its group's last tool, and no dispatch path may place anything for it.
-//! Net Parameters, the tool #1248 was about, is live since #1281; its own
+//! Net Parameters, the tool #1248 was about, is live since #1489; its own
 //! tests are in `tests/regression/schematic_directives.rs`.
 
 use super::super::super::*;

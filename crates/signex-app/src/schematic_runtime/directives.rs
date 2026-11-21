@@ -1,4 +1,4 @@
-//! How the sheet's directives are drawn and hit (#2420, #1281): a Net
+//! How the sheet's directives are drawn and hit (#2420, #1281, #1489): a Net
 //! Blanket is a dashed outline, a Compile Mask a dotted one, a Differential
 //! Pair directive two short parallel strokes, a Net Parameters directive a
 //! flag on its wire. A Net Blanket with a class and a classed Differential

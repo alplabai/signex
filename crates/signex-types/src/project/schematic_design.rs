@@ -1,4 +1,4 @@
-//! Project-wide Schematic Refinement settings (#1267, #1279, #1281): how a
+//! Project-wide Schematic Refinement settings (#1267, #1279, #1282): how a
 //! repeated channel names its parts and nets, the harness definitions and
 //! the differential pair classes. Saved under the `schematic_design` key of
 //! `.snxprj`, only when something differs from the defaults

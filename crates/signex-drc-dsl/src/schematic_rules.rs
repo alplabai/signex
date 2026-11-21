@@ -1,5 +1,5 @@
 //! The design rules the schematic's Net Parameters directives ask for
-//! (#1281): per class (or per net, for a directive with no class) a track
+//! (#1489): per class (or per net, for a directive with no class) a track
 //! width rule `Width_<CLASS>`, a clearance rule `Clearance_<CLASS>` and a via
 //! rule `Via_<CLASS>`, how each stands against a project's rule text, and
 //! that text with them written in. The schematic wins: a rule of the same

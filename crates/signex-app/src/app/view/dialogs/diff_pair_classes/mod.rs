@@ -1,4 +1,4 @@
-//! The Differential Pair Classes dialog (#1489): the class list on the
+//! The Differential Pair Classes dialog (#1282): the class list on the
 //! left (each row with Rename, Duplicate and Delete), the selected class on
 //! the right (name, impedance, width and gap, the read-only skew and
 //! uncoupled limits that live in the Rules tab, a board-style preview, the

@@ -1,8 +1,8 @@
 # `.snxsch` Schematic Refinement objects (`snxsch/1.3`)
 
 Schematic Refinement adds harnesses (#1279), unions (#1300), Bezier, dimension
-and table drawings (#1267, #1300) and new directive fields (#1281). A sheet
-that holds any of them is written as `snxsch/1.3`; a sheet without them is
+and table drawings (#1267, #1300) and new directive fields (#1281, #1489,
+#1282). A sheet that holds any of them is written as `snxsch/1.3`; a sheet without them is
 written exactly as before (`snxsch/1.1`, or `1.2` with a No-ERC rule list).
 The rule is `format::snxsch_token`; the version policy is in
 `docs/FORMAT_VERSIONS.md`.

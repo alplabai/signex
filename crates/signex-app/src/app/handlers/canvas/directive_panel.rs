@@ -1,5 +1,5 @@
 //! The Properties snapshot of a selected Net Parameters directive or Net
-//! Blanket (#1281), and its events: an edit keeps the typed text as a draft
+//! Blanket (#1281, #1489), and its events: an edit keeps the typed text as a draft
 //! while it is typed, a net row's hover lights that net on the sheet, and a
 //! hover on the illustration or a linked row lights the other side.
 

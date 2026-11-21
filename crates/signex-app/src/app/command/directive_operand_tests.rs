@@ -412,7 +412,7 @@ fn the_netlist_reads_what_the_directive_commands_placed() {
     assert_eq!(netlist(&app).nets.len(), 1);
 }
 
-/// #1281: `place_parameter_set` puts a Net Parameters flag on the wire under
+/// #1489: `place_parameter_set` puts a Net Parameters flag on the wire under
 /// `at` with its class and rules, answers with the net, gives the net its
 /// class (over a Blanket's), and is refused off a wire.
 #[test]

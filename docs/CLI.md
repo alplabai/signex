@@ -113,7 +113,7 @@ The placements (`place_net_label` and the other labels, `place_power_symbol`,
 `place_bus`, `draw_bus`, `place_text`, `place_text_string`, `draw_line`,
 `draw_graphic_line`, `draw_rectangle`, and the directives `place_blanket`,
 `place_compile_mask`, `place_diff_pair` and `edit_blanket` (#2420) and
-`place_parameter_set` (#1281: `at` on a wire, refused off one; optional
+`place_parameter_set` (#1489: `at` on a wire, refused off one; optional
 `class`, `diff_pair_class`, `width`, `clearance`, `via_diameter` and
 `via_hole` in mm, and `current` in A, information only), and
 `edit_no_erc_rules` (#1699, see

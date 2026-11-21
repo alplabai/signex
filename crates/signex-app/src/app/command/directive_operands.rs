@@ -49,7 +49,7 @@ pub(super) fn diff_pair(app: &mut Signex, args: &CommandArgs) -> Ran {
 
 /// `place_parameter_set at=x,y [class=..] [diff_pair_class=..] [width=..]
 /// [clearance=..] [via_diameter=..] [via_hole=..] [current=..]
-/// [document=..]` (#1281): a Net Parameters flag on the wire under `at`;
+/// [document=..]` (#1489): a Net Parameters flag on the wire under `at`;
 /// refused off a wire. Lengths are mm, `current` is A.
 pub(super) fn net_parameters(app: &mut Signex, args: &CommandArgs) -> Ran {
     run_edit(app, args, |app| {

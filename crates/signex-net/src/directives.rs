@@ -1,4 +1,4 @@
-//! What the sheet's directives (#2420, #1281) mean for connectivity, derived
+//! What the sheet's directives (#2420, #1281, #1489) mean for connectivity, derived
 //! once here so the netlist, ERC and the board read the same answer:
 //!
 //! - a Compile Mask takes what it covers out of the netlist and ERC

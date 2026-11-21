@@ -1,4 +1,4 @@
-//! #2420, #1281: what the sheet's directives do to the netlist.
+//! #2420, #1281, #1489, #1282: what the sheet's directives do to the netlist.
 use super::*;
 use signex_types::diff_pair_class::DiffPairClass;
 use signex_types::net::NetClassId;

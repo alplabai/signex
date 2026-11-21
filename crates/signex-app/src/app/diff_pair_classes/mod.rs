@@ -1,4 +1,4 @@
-//! Design ▸ Differential Pair Classes… (#1489): the dialog that edits the
+//! Design ▸ Differential Pair Classes… (#1282): the dialog that edits the
 //! project's differential pair classes (impedance, width and gap, pairing
 //! by suffix). It works on a copy: Cancel and Esc drop it, OK writes it to
 //! `ProjectData.schematic_design.diff_pair_classes` as one step of the

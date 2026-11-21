@@ -155,6 +155,6 @@ list opens it, docked on the left as a tab beside Projects.
 - Ctrl+click on a panel row (open in a new tab): a sheet has one tab, so a
   row click focuses it (#2658).
 - The naming menu opens inline under its field, right-aligned to it, not as
-  a floating layer over the dock.
+  a floating layer over the dock (#2674).
 - Sheet entry sync does not yet treat `Repeat(<net>)` as matching the port
   `<net>`; it offers to add `<net>` as a new entry (#2659).

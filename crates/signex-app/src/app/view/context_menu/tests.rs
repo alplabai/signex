@@ -648,7 +648,7 @@ fn place_menu_greys_only_the_planned_tools() {
     assert!(has_row(&e, "Part"));
     // Placement actions are always available; the planned tools (#1249) are
     // gathered in one greyed row that names them (Graphite mockup #62).
-    // Net Parameters and the harness tools are live (#1281, #1280).
+    // Net Parameters and the harness tools are live (#1489, #1280).
     let planned = ["Device Sheet Symbol"];
     for entry in &e {
         if let DropdownEntry::Item(it) = entry {

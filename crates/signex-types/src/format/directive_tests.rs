@@ -1,4 +1,4 @@
-//! Directives (#2420, #1281) persist in `[extras.sheet]` as `directives`, a
+//! Directives (#2420, #1281, #1489) persist in `[extras.sheet]` as `directives`, a
 //! list of tables tagged by `type`. A sheet without any writes nothing, so a
 //! file from a build without the field re-saves byte-identical.
 
@@ -42,7 +42,7 @@ fn all_three() -> Vec<SchDirective> {
     ]
 }
 
-/// Every field added with the Net Parameters directive (#1281), set.
+/// Every field added with the Net Parameters directive (#1489), set.
 fn every_new_field() -> Vec<SchDirective> {
     vec![
         SchDirective::Blanket {

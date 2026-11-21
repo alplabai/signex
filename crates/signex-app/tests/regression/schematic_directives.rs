@@ -116,7 +116,7 @@ fn a_diff_pair_mark_is_selectable() {
     assert!(selected_directive(&app));
 }
 
-/// #1281: a sheet with one wire from (0, 0) to (20, 0).
+/// #1489: a sheet with one wire from (0, 0) to (20, 0).
 fn app_with_wire() -> Signex {
     let mut app = app_with_empty_sheet();
     let path = PathBuf::from("directives.snxsch");

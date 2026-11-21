@@ -1,4 +1,4 @@
-//! #1489: the Differential Pair Classes dialog edits a copy; OK applies it
+//! #1282: the Differential Pair Classes dialog edits a copy; OK applies it
 //! as one project step, Cancel drops it.
 
 use std::collections::HashMap;

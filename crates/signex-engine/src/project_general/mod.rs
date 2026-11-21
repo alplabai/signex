@@ -98,7 +98,7 @@ pub enum ProjectGeneralCommand {
     /// defaults. Always a step of its own.
     SetFabOutputs(Option<FabOutputKinds>),
     /// The project's differential pair classes as the Differential Pair
-    /// Classes dialog's OK leaves them (#1489). Always a step of its own.
+    /// Classes dialog's OK leaves them (#1282). Always a step of its own.
     SetDiffPairClasses(Vec<signex_types::diff_pair_class::DiffPairClass>),
 }
 

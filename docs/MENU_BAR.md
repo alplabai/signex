@@ -94,7 +94,7 @@ PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 [Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
 Parameter Manager..., Net Classes (see
 [below](#find-similar-filter-net-classes)), Differential Pair Classes…
-(`open_diff_pair_classes`, #1489: the project's differential pair classes in
+(`open_diff_pair_classes`, #1282: the project's differential pair classes in
 a dialog, greyed with no project open; see
 [SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md#differential-pair-classes))
 and Rules... (the project's design rules as a document tab,
@@ -432,7 +432,7 @@ buttons (`menu_bar/model/sheet_place.rs`):
 - **Ports & Connectors**: Port, Off Sheet Connector; Sheet Symbol, Device
   Sheet Symbol, Reuse Block; Signal Harness, Harness Connector, Harness Entry.
 - **Directives**: Net Parameters, Generic No ERC, Differential Pair, Net
-  Blanket, Compile Mask (#1281: Net Parameters was the planned Parameter Set
+  Blanket, Compile Mask (#1489: Net Parameters was the planned Parameter Set
   row; the commands keep their ids `place_parameter_set` and
   `place_blanket`).
 - **Graphics**: Arc, Full Circle, Elliptical Arc, Ellipse; Line, Rectangle,
@@ -827,7 +827,7 @@ Every other menu row runs a command (#2247). The only greyed tool rows are the
 planned tools of Place on a sheet and on a board, each with its reason.
 
 Place on a sheet has six planned commands (#2415; Bezier left the list with
-#1267 and Parameter Set with #1281), greyed with the planned
+#1267 and Parameter Set with #1489), greyed with the planned
 tooltip in every state until their tools are built
 (`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`). The three
 harness rows went live with the harness tools (#1280, see

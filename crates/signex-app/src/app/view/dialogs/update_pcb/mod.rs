@@ -93,7 +93,7 @@ impl Signex {
             body = body.push(summary::bar(list, &state.table, i18n, tokens));
         }
         body = body.push(self.update_pcb_banner(state, i18n, tokens));
-        // #1281: the rules the schematic asks for, below the board's rows.
+        // #1489: the rules the schematic asks for, below the board's rows.
         let rules = schematic_rules::section(&self.update_pcb_rule_rows(state), i18n, tokens);
         if let Some(list) = state.list.as_ref().filter(|l| !l.rows.is_empty()) {
             if let Some(card) = problems::card(list, i18n, tokens) {

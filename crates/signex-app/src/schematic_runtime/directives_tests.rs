@@ -124,7 +124,7 @@ fn net_parameters(show: bool) -> SchDirective {
     }
 }
 
-/// #1281: the flag stands above its wire on a stem, holds its text and
+/// #1489: the flag stands above its wire on a stem, holds its text and
 /// lists the rules only when told to.
 #[test]
 fn a_net_parameters_flag_sits_above_its_wire_and_holds_its_text() {

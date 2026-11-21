@@ -1,5 +1,5 @@
 //! Update PCB's half of the rules the schematic's Net Parameters directives
-//! ask for (#1281): the dialog's rows against the project's rule text now,
+//! ask for (#1489): the dialog's rows against the project's rule text now,
 //! the Messages line of a rule left out, and Execute writing them into the
 //! project's DRC rule text as one step of the rule history, each name
 //! recorded in `drc.from_schematic` so the Rules tab shows where it came

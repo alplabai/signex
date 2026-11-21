@@ -329,7 +329,7 @@ added without bumping the `snxprj/1` token.
 - `harness_definitions` (#1279): each harness type (`name`, an optional
   `description`) and its `entries` in order. An entry with `harness` is a
   nested harness of that type; without it, a signal.
-- `diff_pair_classes` (#1281): `name` plus optional `impedance_ohm`,
+- `diff_pair_classes` (#1282): `name` plus optional `impedance_ohm`,
   `impedance_tolerance_pct`, `width_mm` and `gap_mm`; `pair_by_suffix` is
   written only when `false`. Keys a newer build wrote inside a class are kept
   (`unknown`, as for net classes). A Differential Pair or Net Parameters

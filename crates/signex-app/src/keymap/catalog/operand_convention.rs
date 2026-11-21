@@ -109,7 +109,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("author", OperandKind::Text),
     // #1699: the ERC rule ids a No-ERC directive silences, comma separated.
     ("rules", OperandKind::Text),
-    // #1281: a Net Parameters directive's diff-pair class, via hole and
+    // #1489: a Net Parameters directive's diff-pair class, via hole and
     // current (A).
     ("diff_pair_class", OperandKind::Text),
     ("via_hole", OperandKind::Text),
