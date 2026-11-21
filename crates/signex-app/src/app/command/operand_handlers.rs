@@ -506,7 +506,7 @@ pub(crate) fn needs_operands_reason(command: &AppCommandId) -> Option<&'static s
         ),
         // #2410: a person picks the block on a component's board menu.
         "place_board_reuse_block" => Some(
-            "`place_board_reuse_block` needs the operands `document`, `name` and `designator` — \
+            "`place_board_reuse_block` needs the operands `document`, `name` and `ids` or `designator` — \
              right-click a component on the board and pick the block",
         ),
         "project_move_sheet"

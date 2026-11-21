@@ -192,7 +192,14 @@ impl Signex {
             .active_engine()
             .and_then(|engine| direction.top(engine))
         {
-            let stepped = self.apply_grouped_step(group, direction, update_selection_info);
+            let undo = direction == StepDirection::Undo;
+            let stepped = if self.undo_group_has_boards(group) {
+                self.step_board_undo_group(group, undo)
+            } else {
+                let undocked = self.undocked_sheet_paths();
+                let step = self.document_state.step_undo_group(group, undo, &undocked);
+                self.project_group_step(step, update_selection_info)
+            };
             // An agent's step says what it was (docs/AGENT_EDITS.md, "Undo").
             if stepped && let Some(label) = self.document_state.agent_edits.step_text(group) {
                 let verb = if direction == StepDirection::Undo {
@@ -239,12 +246,23 @@ impl Signex {
             });
     }
 
+    /// The tail of an edit made outside the engine's commands: a multi-sheet
+    /// `run`'s other members and its group first, then the active sheet's
+    /// `patch`. `false` when the active sheet took no change.
     pub(super) fn finish_schematic_mutation(
         &mut self,
-        patch: signex_engine::DocumentPatch,
+        patch: Option<signex_engine::DocumentPatch>,
+        run: Option<sheet_change::SheetRun>,
         clear_overlay_cache: bool,
         update_selection_info: bool,
     ) -> bool {
+        if let Some(run) = run {
+            let members = self.document_state.settle_run(run, patch.is_some());
+            self.project_events(members, RefreshScope::Member);
+        }
+        let Some(patch) = patch else {
+            return false;
+        };
         let edit = self
             .document_state
             .settle_active_sheet(patch, ChangeCause::Edit);

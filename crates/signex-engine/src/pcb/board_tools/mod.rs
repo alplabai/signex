@@ -14,7 +14,7 @@ mod outline;
 mod stitch;
 mod teardrop;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub use arrange::arrange_in_box;
 pub(crate) use arrange::{ARRANGE_GAP_MM, PackGrid, packing_order};
@@ -75,8 +75,11 @@ pub struct ToolEdit {
     pub report: ToolReport,
 }
 
-/// What a tool edit does, as an agent reads it back.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+/// What a tool edit does, as an agent reads it back and as the GUI reads
+/// it back from the operand handler's answer: a field must round-trip
+/// (`a_tool_report_reads_back_as_it_was_written`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ToolReport {
     /// Items the edit adds (vias, teardrops, a keepout), by uuid.
     #[serde(skip_serializing_if = "Vec::is_empty")]

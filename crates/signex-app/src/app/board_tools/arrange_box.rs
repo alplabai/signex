@@ -1,19 +1,20 @@
 //! Arrange in Box on the board in view (#2409): `arrange_in_box` arms the
 //! box for the selected unlocked components, two clicks on the board draw
-//! it, and the components are packed inside it as one undo step. Esc drops
-//! it; arming a placement tool does too.
+//! it, and the components are packed inside it as one undo step by the
+//! command's operand handler. Esc drops it; arming a placement tool does too.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use signex_engine::pcb::board_tools::arrange_in_box;
+use iced::Task;
 use signex_engine::pcb::placement::{editable_footprints, grid_for};
 use signex_i18n::{ids, t};
 use signex_types::pcb::Point;
 use signex_types::pcb_options::GridUse;
 use uuid::Uuid;
 
-use crate::app::Signex;
+use crate::app::command::OperandValue;
+use crate::app::{Message, Signex};
 
 const COMMAND: &str = "arrange_in_box";
 
@@ -58,30 +59,34 @@ impl Signex {
     }
 
     /// A click on the board while the box is armed: the first sets a
-    /// corner, the second the opposite one and runs the arrange. Whether
-    /// the click belonged to it.
-    pub(crate) fn pcb_arrange_box_clicked(&mut self, at: Point) -> bool {
-        let Some(armed) = self.interaction_state.pcb_arrange_box.clone() else {
-            return false;
-        };
+    /// corner, the second the opposite one and runs `arrange_in_box`'s
+    /// operand handler on the armed components and the two corners. `None`
+    /// when the click did not belong to it.
+    pub(crate) fn pcb_arrange_box_clicked(&mut self, at: Point) -> Option<Task<Message>> {
+        let armed = self.interaction_state.pcb_arrange_box.clone()?;
         let main_window = self.interaction_state.acting_window.is_none();
         if !main_window || self.active_tab_path().as_deref() != Some(armed.path.as_path()) {
-            return false;
+            return None;
         }
         let Some(board) = self.active_pcb() else {
-            return true;
+            return Some(Task::none());
         };
         let at = grid_for(board, GridUse::NonComponents).snap(at);
         let Some(first) = armed.first else {
             if let Some(armed) = self.interaction_state.pcb_arrange_box.as_mut() {
                 armed.first = Some(at);
             }
-            return true;
+            return Some(Task::none());
         };
-        let built = arrange_in_box(board, &armed.footprints, first, at);
         self.interaction_state.pcb_arrange_box = None;
-        let ran = self.run_board_tool(&armed.path, built);
-        self.say_board_tool(COMMAND, &ran);
-        true
+        let mut operands = vec![
+            ("start", OperandValue::Point(first.x, first.y)),
+            ("end", OperandValue::Point(at.x, at.y)),
+        ];
+        if !armed.footprints.is_empty() {
+            let ids = armed.footprints.into_iter().collect();
+            operands.push(("ids", OperandValue::Targets(ids)));
+        }
+        Some(self.run_translated_tool(COMMAND, &armed.path, operands))
     }
 }
