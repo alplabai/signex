@@ -521,7 +521,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             return mouse::Interaction::Grabbing;
         }
         // While actively dragging a resize handle, keep the cursor that
-        // matches the handle so it doesn't flicker back to Crosshair.
+        // matches the handle so it doesn't flicker back to the arrow.
         if let Some((_, handle)) = state.dragging_handle {
             return state::handle_interaction(handle);
         }
@@ -540,7 +540,7 @@ impl<'a> canvas::Program<CanvasAction> for SymbolCanvas<'a> {
             }
         }
         if cursor.is_over(bounds) {
-            mouse::Interaction::Crosshair
+            crate::canvas::cursor::tool_cursor(self.tool != SymbolTool::Select)
         } else {
             mouse::Interaction::default()
         }

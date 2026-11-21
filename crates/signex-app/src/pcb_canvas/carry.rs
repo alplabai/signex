@@ -66,6 +66,9 @@ pub struct PcbCarry {
     /// A footprint's designator or comment a drag moves on its own (#2368);
     /// `footprints` is then empty.
     pub text: Option<(Uuid, BoardTextField)>,
+    /// A drag with Ctrl held moves the footprints alone: the tracks on
+    /// their pads stay where they are (Caner, 2026-11-21).
+    pub leaves_tracks: bool,
 }
 
 impl PcbCarry {
@@ -93,6 +96,7 @@ impl PcbCarry {
             paste: None,
             part: None,
             text: None,
+            leaves_tracks: false,
         }
     }
 

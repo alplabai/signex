@@ -96,8 +96,9 @@ impl Signex {
                 from,
                 to,
                 tolerance_mm,
+                leaves_tracks,
             } => {
-                self.pcb_footprints_dragged(from, to, tolerance_mm);
+                self.pcb_footprints_dragged(from, to, tolerance_mm, leaves_tracks);
                 Task::none()
             }
             PcbCanvasMsg::FootprintDropped { from, to } => {
@@ -351,16 +352,22 @@ fn sync_drag_preview(
         canvas.end_drag_preview();
         return;
     };
-    if !canvas.previews_drag_of(&carry.footprints) {
-        // Once per carry: the tracks that follow the carried pads, and the
-        // board without what it carries, with its pour fills.
-        let following = pcb_geom::tracks_on_pads(board, &carry.footprints);
+    if !canvas.previews_drag_of(&carry.footprints, carry.leaves_tracks) {
+        // Once per carry and per Ctrl switch: the tracks that follow the
+        // carried pads (none with Ctrl), and the board without what it
+        // carries, with its pour fills.
+        let following = if carry.leaves_tracks {
+            Vec::new()
+        } else {
+            pcb_geom::tracks_on_pads(board, &carry.footprints)
+        };
         let rest = board_without(board, &carry.footprints, &following);
         let fills = pcb_geom::zone_fills(&rest);
         let base = PcbSnapshot::from_board_with_view(&rest, view)
             .with_designator_standard(standard)
             .with_zone_fills(&fills);
-        canvas.begin_drag_preview(carry.footprints.clone(), following, base);
+        let carried = carry.footprints.clone();
+        canvas.begin_drag_preview(carried, carry.leaves_tracks, following, base);
     }
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {

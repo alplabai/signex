@@ -37,7 +37,7 @@ pub use carry::{
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
-pub use msg::PcbCanvasMsg;
+pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
 pub use rooms::{RoomMark, RoomsOverlay};
 pub use select::PcbSelectionState;
 pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope};
@@ -824,8 +824,12 @@ impl canvas::Program<Message> for PcbCanvas {
         if state.panning {
             return mouse::Interaction::Grabbing;
         }
+        if self.carry.get() {
+            return mouse::Interaction::Move;
+        }
+        // A tool, Measure, or a Move, paste or part waiting for clicks.
         if cursor.is_over(bounds) {
-            mouse::Interaction::Crosshair
+            crate::canvas::cursor::tool_cursor(self.clicks_only)
         } else {
             mouse::Interaction::default()
         }

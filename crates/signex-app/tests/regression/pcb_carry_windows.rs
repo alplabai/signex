@@ -202,6 +202,7 @@ fn drag_to(x: f64) -> PcbCanvasMsg {
         from: Point::new(10.0, 10.0),
         to: Point::new(x, 10.0),
         tolerance_mm: 0.05,
+        leaves_tracks: false,
     }
 }
 
@@ -334,6 +335,7 @@ fn a_locked_footprint_refuses_the_drag_at_its_start_once() {
         from,
         to: Point::new(x, 10.0),
         tolerance_mm: 0.05,
+        leaves_tracks: false,
     };
     send(&mut rig.app, Message::PcbCanvas(dragged(32.0)));
     assert_eq!(refusals_since(since), 1, "refused as the drag starts");

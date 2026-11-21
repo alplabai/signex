@@ -228,6 +228,10 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   PCB; an open panel has a check and says where it is (left, right, bottom,
   floating or window). Click a panel to open it, or to bring an open one
   forward.
+- **Cursor:** on every canvas the pointer is the normal arrow while nothing
+  is being placed or drawn. It turns into a crosshair while a placement,
+  drawing or routing tool or Measure is active, and back to the arrow when
+  `Esc` ends the tool. Dragging and resize handles show their own cursors.
 - **Board counters:** on a board the status bar also shows how far the
   board is: **Routed** (routed connections of all, with a bar and the
   percent), **Unrouted**, **DRC** (the violations of the last **Run DRC** and
@@ -1547,7 +1551,11 @@ Parts come from the schematic through Update PCB. **Place ▸ Component** on a
 board is greyed with the reason "not available on boards yet".
 
 - **Move:** drag a footprint, or select it and choose **Edit ▸ Move ▸
-  Move**. Tracks joined to its pads come along. The move is one undo step.
+  Move**. Tracks joined to its pads come along. Hold `Ctrl` (`Cmd` on macOS)
+  while you drag to move the part alone: its tracks stay where they are, so
+  their ends no longer reach the pads and DRC and the ratsnest show the open
+  connections. Press or release `Ctrl` during the drag to switch; the status
+  bar says which. The move is one undo step.
 - **Turn:** `Space` turns the selection 90° counter-clockwise, `Shift+Space`
   clockwise.
 - **Other side:** `L` (**Edit ▸ Move ▸ Flip Selection**) puts the part on the
@@ -1587,7 +1595,9 @@ More: [PCB_ROOMS.md](PCB_ROOMS.md).
 
 1. Make the layer you want active (a layer tab, `+` or `-`).
 2. Choose **Place ▸ Interactive Routing**.
-3. Click on a pad. The route takes the pad's net.
+3. Click on a pad. The route takes the pad's net. While you route, the
+   ratsnest line of that net runs from the route's end to the nearest pad
+   it still has to reach.
 4. Click to add each leg. The route keeps the clearance the design rules ask
    from other nets and finds its way around copper in the way. `Space` flips
    the bend; `Shift+Space` steps the corner mode (90°, 45°, any angle).

@@ -59,6 +59,7 @@ impl Signex {
             return Some(Activity::note(text));
         }
         self.move_status(window_id)
+            .or_else(|| self.board_drag_status())
             .or_else(|| self.measure_status(window_id))
             .or_else(|| self.board_tool_status())
             .or_else(|| self.corner_status())

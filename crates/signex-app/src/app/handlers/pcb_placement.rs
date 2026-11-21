@@ -143,9 +143,29 @@ impl Signex {
 
     /// A drag pressed at `from` reached `to`: preview it. A press on the
     /// selection carries it; a press on an unselected footprint selects and
-    /// carries that one (#2358).
-    pub(crate) fn pcb_footprints_dragged(&mut self, from: Point, to: Point, tolerance_mm: f64) {
+    /// carries that one (#2358). With `leaves_tracks` (Ctrl held) the tracks
+    /// on their pads stay where they are; it is read on every step, so Ctrl
+    /// switches it mid-drag.
+    pub(crate) fn pcb_footprints_dragged(
+        &mut self,
+        from: Point,
+        to: Point,
+        tolerance_mm: f64,
+        leaves_tracks: bool,
+    ) {
         self.follow_pcb_drag(from, to, Some(tolerance_mm));
+        let switched = self
+            .live_carry(CarryKind::Drag)
+            .is_some_and(|carry| carry.leaves_tracks != leaves_tracks);
+        if let Some(carry) = self
+            .interaction_state
+            .pcb_carry
+            .as_mut()
+            .filter(|_| switched)
+        {
+            carry.leaves_tracks = leaves_tracks;
+            self.refresh_pcb_highlight();
+        }
     }
 
     /// Start the drag pressed at `from`, unless it is under way, and follow
@@ -192,6 +212,22 @@ impl Signex {
             self.refresh_pcb_highlight();
         }
         self.carry_to(from, to);
+    }
+
+    /// What the status bar says while this window drags footprints: whether
+    /// their tracks follow, and the key that switches it.
+    pub(crate) fn board_drag_status(&self) -> Option<String> {
+        let carry = self.live_carry(CarryKind::Drag)?;
+        if carry.footprints.is_empty() || carry.anchor.is_none() {
+            return None;
+        }
+        let id = if carry.leaves_tracks {
+            signex_i18n::ids::BOARD_STATUS_DRAG_WITHOUT_TRACKS
+        } else {
+            signex_i18n::ids::BOARD_STATUS_DRAG_WITH_TRACKS
+        };
+        let key = crate::pcb_canvas::LEAVE_TRACKS_KEY;
+        Some(self.ui_state.i18n.message_plain(id, &[("key", key.into())]))
     }
 
     /// The drag was released at `to`: move as one step.
@@ -354,7 +390,11 @@ impl Signex {
                 &self.ui_state.pcb_snap,
                 active,
             );
-            placement::move_commands(board, &carry.footprints, delta)
+            if carry.leaves_tracks {
+                placement::move_footprints_only(board, &carry.footprints, delta)
+            } else {
+                placement::move_commands(board, &carry.footprints, delta)
+            }
         });
         self.end_pcb_carry();
         if let Some(built) = built {

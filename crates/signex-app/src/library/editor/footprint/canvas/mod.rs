@@ -543,15 +543,16 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
                         }
                     }
                 }
-                // Sketch mode hides the OS cursor in BOTH Select
-                // and Placement tools. Select draws its own dark
-                // "+" at the raw cursor position (see draw); the
-                // OS Crosshair was rendering as a pale "ghost" on
-                // the white canvas with the user's cursor scheme
-                // and breaking the dark-on-white expectation.
-                mouse::Interaction::Hidden
+                // An idle Select shows the OS arrow; a drawing tool hides
+                // the OS cursor, its reticle is the crosshair (draw).
+                if self.state.active_tool == super::state::SketchTool::Select {
+                    mouse::Interaction::Idle
+                } else {
+                    mouse::Interaction::Hidden
+                }
             } else {
-                mouse::Interaction::Crosshair
+                let placing = self.state.pads_tool != super::state::PadsTool::Select;
+                crate::canvas::cursor::tool_cursor(placing)
             }
         } else {
             mouse::Interaction::default()

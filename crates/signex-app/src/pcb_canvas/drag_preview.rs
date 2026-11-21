@@ -29,6 +29,8 @@ use super::{BoardCamera, PcbCanvas};
 pub(super) struct DragPreview {
     /// The footprints the base snapshot leaves out.
     footprints: BTreeSet<Uuid>,
+    /// Ctrl was held when it began: the tracks stay and `following` is empty.
+    leaves_tracks: bool,
     /// The tracks with an end on their pads, read once when the carry
     /// starts so a grid step does not search the board again (#2379).
     following: Vec<TrackEnds>,
@@ -48,11 +50,12 @@ struct MovingScene {
 }
 
 impl PcbCanvas {
-    /// Whether the board content leaves out `footprints` for a drag preview.
-    pub fn previews_drag_of(&self, footprints: &BTreeSet<Uuid>) -> bool {
+    /// Whether the board content leaves out `footprints` for a drag preview
+    /// that leaves the tracks in place or not, as `leaves_tracks` says.
+    pub fn previews_drag_of(&self, footprints: &BTreeSet<Uuid>, leaves_tracks: bool) -> bool {
         self.drag_preview
             .as_ref()
-            .is_some_and(|p| p.footprints == *footprints)
+            .is_some_and(|p| p.footprints == *footprints && p.leaves_tracks == leaves_tracks)
     }
 
     /// Whether a drag preview is in progress.
@@ -63,9 +66,11 @@ impl PcbCanvas {
     /// Start a drag preview of `footprints` and the `following` tracks on
     /// their pads: the board content becomes `base`, the board without
     /// them. The snapshot in place is kept for [`Self::end_drag_preview`].
+    /// `leaves_tracks`: a Ctrl drag, `following` is then empty.
     pub fn begin_drag_preview(
         &mut self,
         footprints: BTreeSet<Uuid>,
+        leaves_tracks: bool,
         following: Vec<TrackEnds>,
         base: PcbSnapshot,
     ) {
@@ -74,6 +79,7 @@ impl PcbCanvas {
         self.replace_snapshot(Some(base));
         self.drag_preview = Some(DragPreview {
             footprints,
+            leaves_tracks,
             following,
             held,
             moving: None,

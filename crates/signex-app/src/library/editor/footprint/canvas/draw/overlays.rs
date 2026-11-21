@@ -60,10 +60,10 @@ impl FootprintCanvas<'_> {
         }
     }
 
-    /// v0.27 — Select-tool cursor mark: a "+" at the raw cursor, in an
-    /// ink that reads on the ground ([`CursorInk`], #2356),
-    /// replaced by a rotated double-headed arrow when hovering a
-    /// sketch Line (the resize cue at the exact line angle).
+    /// v0.27 — Select-tool cursor mark: a rotated double-headed arrow when
+    /// hovering a sketch Line (the resize cue at the exact line angle), in
+    /// an ink that reads on the ground ([`CursorInk`], #2356). Elsewhere
+    /// the idle Select shows the OS arrow and draws nothing.
     pub(in crate::library::editor::footprint::canvas) fn draw_select_cursor_mark(
         &self,
         frame: &mut canvas::Frame,
@@ -79,9 +79,7 @@ impl FootprintCanvas<'_> {
             && !context_menu_open
             && let Some(p) = cursor_screen
         {
-            let arm = 5.0_f32;
             let ink = CursorInk::sketch();
-            let stroke = Stroke::default().with_width(1.0).with_color(ink.mark);
 
             // Hit-test the cursor against sketch Lines to find the one
             // we'd resize on drag (same tolerance as the hover test).
@@ -191,15 +189,6 @@ impl FootprintCanvas<'_> {
                     inner.fill(&right_head, ink.mark);
                     inner.fill(&left_head, ink.mark);
                 });
-            } else {
-                frame.stroke(
-                    &Path::line(Point::new(p.x - arm, p.y), Point::new(p.x + arm, p.y)),
-                    stroke,
-                );
-                frame.stroke(
-                    &Path::line(Point::new(p.x, p.y - arm), Point::new(p.x, p.y + arm)),
-                    stroke,
-                );
             }
         }
     }
