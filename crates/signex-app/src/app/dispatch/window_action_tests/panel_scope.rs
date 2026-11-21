@@ -304,6 +304,82 @@ fn a_custom_filter_opened_in_a_window_applies_to_its_footprint() {
     assert!(editors[&a].state.selection_filter.pads, "main's stays");
 }
 
+/// Two footprints, B in a window, with main on a sheet.
+fn footprint_window_over_a_sheet() -> (Signex, PathBuf, PathBuf, iced::window::Id) {
+    let (mut app, a, b, window) = two_footprints();
+    let sheet = PathBuf::from("main.snxsch");
+    let engine =
+        signex_engine::Engine::new(signex_types::schematic::SchematicSheet::default()).unwrap();
+    app.document_state.engines.insert(sheet.clone(), engine);
+    app.document_state.tabs.push(tab(&sheet));
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.document_state.active_path = Some(sheet);
+    (app, a, b, window)
+}
+
+fn run_in(app: &mut Signex, id: &str, window: iced::window::Id) {
+    let command = crate::keymap::AppCommandId::new(id).expect("a catalog id");
+    let args = crate::app::command::CommandArgs::none();
+    let _ = app.dispatch_command(&command, args, Some(window));
+}
+
+#[test]
+fn the_grid_properties_command_in_a_window_targets_its_footprint() {
+    use crate::app::GridPropertiesMsg as G;
+    let (mut app, a, b, window) = footprint_window_over_a_sheet();
+    let before = grid_step(&app, &a);
+    run_in(&mut app, "open_grid_properties", window);
+    let dialog = app.ui_state.grid_properties.as_ref().expect("it opened");
+    assert_eq!(dialog.target, b);
+    let _ = app.update(Message::GridProperties(G::SetStep("2.5".into())));
+    let _ = app.update(Message::GridProperties(G::Apply));
+    assert_eq!(grid_step(&app, &b), 2.5);
+    assert_eq!(grid_step(&app, &a), before);
+}
+
+/// The picker's rows arrive with no window: they act on the footprint it
+/// opened on, and its last row opens Grid Properties for that footprint.
+#[test]
+fn the_grid_picker_in_a_window_acts_on_its_footprint() {
+    use crate::app::{GridPropertiesMsg as G, UiMsg};
+    let (mut app, a, b, window) = footprint_window_over_a_sheet();
+    let before = grid_step(&app, &a);
+    run_in(&mut app, "open_grid_picker", window);
+    let picker = app.interaction_state.grid_picker.as_ref().expect("open");
+    assert_eq!((&picker.target, picker.owner), (&b, Some(window)));
+    let _ = app.update(Message::Ui(UiMsg::GridPickerSelect(1.27)));
+    assert_eq!(grid_step(&app, &b), 1.27);
+    assert_eq!(grid_step(&app, &a), before);
+
+    run_in(&mut app, "open_grid_picker", window);
+    let _ = app.update(Message::GridProperties(G::Open));
+    let dialog = app.ui_state.grid_properties.as_ref().expect("it opened");
+    assert_eq!(dialog.target, b);
+}
+
+/// A board report asked for in a window reads that window's board.
+#[test]
+fn a_board_report_in_a_window_reads_its_board() {
+    use crate::app::BoardOutputDialog;
+    let mut app = app_with_main();
+    let (a, b) = (PathBuf::from("a.snxpcb"), PathBuf::from("b.snxpcb"));
+    for path in [&a, &b] {
+        let data = serde_json::json!({"uuid": uuid::Uuid::now_v7()});
+        let board = serde_json::from_value(data).unwrap();
+        app.open_pcb_tab(path.clone(), "board".into(), board);
+    }
+    let first = app.document_state.tabs.len() - 2;
+    app.document_state.active_tab = first;
+    let window = undock(&mut app, &b);
+    assert_eq!(app.active_tab_path().as_ref(), Some(&a));
+    run_in(&mut app, "board_report_bom", window);
+    let dialog = app.ui_state.board_output.dialog.as_deref();
+    let Some(BoardOutputDialog::Reports(report)) = dialog else {
+        panic!("Board Reports did not open");
+    };
+    assert_eq!(report.board, b);
+}
+
 /// The dialog's document closed first: Apply writes nothing, anywhere.
 #[test]
 fn grid_properties_apply_does_nothing_once_its_footprint_is_closed() {

@@ -570,7 +570,7 @@ impl Signex {
                 layers.extend(self.start_row_context_menu_overlay(window_id))
             }
             OverlayId::LayerTabContextMenu => layers.extend(self.layer_tab_menu_overlay(window_id)),
-            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
+            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay(window_id)),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::ZoomPresets => layers.extend(self.zoom_presets_overlay(window_id)),
             OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),

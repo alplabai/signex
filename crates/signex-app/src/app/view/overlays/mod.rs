@@ -312,11 +312,17 @@ impl Signex {
 
     /// v0.18.10 — Altium-style grid picker popup. Floats at the cursor
     /// when `G` is pressed in a footprint editor. Pushes dismiss then the
-    /// placed menu.
-    pub(super) fn grid_picker_overlay(&self) -> Vec<Element<'_, Message>> {
+    /// placed menu, only in the window it opened in.
+    pub(super) fn grid_picker_overlay(
+        &self,
+        window_id: iced::window::Id,
+    ) -> Vec<Element<'_, Message>> {
         let Some(picker) = self.interaction_state.grid_picker.as_ref() else {
             return Vec::new();
         };
+        if picker.owner != self.overlay_owner(window_id) {
+            return Vec::new();
+        }
         Self::menu_overlay(
             Message::Ui(UiMsg::GridPickerClose),
             self.view_grid_picker_menu(),

@@ -119,6 +119,10 @@ pub struct ContextMenuState {
 pub struct GridPickerState {
     pub x: f32,
     pub y: f32,
+    /// The footprint its rows and Grid Properties act on.
+    pub target: std::path::PathBuf,
+    /// The undocked window it opened in; `None` for the main window.
+    pub owner: Option<iced::window::Id>,
 }
 
 /// Grid Properties dialog draft (Ctrl+G in a footprint editor): the step

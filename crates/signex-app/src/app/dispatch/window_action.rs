@@ -129,19 +129,21 @@ fn command_edits_shown_sheet(message: &Message) -> bool {
 /// it, or edits that board. A canvas menu row picked in the window resolves
 /// to one of these (#2267), as do the window's keys and menu bar. Everything
 /// else (sheet stepping, project opens, net jumps, Find next / previous,
-/// Annotate, ERC, export, app-wide toggles, and any message added later)
-/// runs on the main window, where it cannot load one sheet into another's
-/// canvas.
+/// Annotate, ERC, sheet export, app-wide toggles, and any message added
+/// later) runs on the main window, where it cannot load one sheet into
+/// another's canvas.
 fn command_runs_in_shown_document(message: &Message) -> bool {
     command_edits_shown_sheet(message)
         || command_reads_shown_sheet(message)
         || command_edits_shown_board(message)
         || command_steps_shown_grid(message)
+        || command_outputs_shown_board(message)
 }
 
-/// The grid-step commands: on a board they edit that board's own grid.
+/// The grid-step commands: on a board they edit that board's own grid. The
+/// picker and Grid Properties bind to the footprint the window shows.
 fn command_steps_shown_grid(message: &Message) -> bool {
-    use crate::app::UiMsg;
+    use crate::app::{GridPropertiesMsg, UiMsg};
     matches!(
         message,
         Message::Ui(
@@ -149,7 +151,25 @@ fn command_steps_shown_grid(message: &Message) -> bool {
                 | UiMsg::GridCycleBackward
                 | UiMsg::FastGridPicked(_)
                 | UiMsg::FastGridCycled
-        )
+                | UiMsg::GridPickerOpen
+        ) | Message::GridProperties(GridPropertiesMsg::Open)
+    )
+}
+
+/// The board outputs that start from the board in view: each dialog or
+/// file request then carries that board's path.
+fn command_outputs_shown_board(message: &Message) -> bool {
+    use crate::app::{BoardOutputMsg as Output, PcbMsg};
+    matches!(
+        message,
+        Message::Pcb(PcbMsg::Output(
+            Output::ReportRequested(_)
+                | Output::CsvExportRequested
+                | Output::PrintRequested
+                | Output::AssemblyPrintRequested(_)
+                | Output::SvgExportRequested
+                | Output::StepExportRequested
+        ))
     )
 }
 

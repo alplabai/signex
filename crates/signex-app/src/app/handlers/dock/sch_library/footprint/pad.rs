@@ -65,6 +65,18 @@ impl Signex {
         }
     }
 
+    /// [`Self::footprint_editor_at_mut`], to read.
+    pub(crate) fn footprint_editor_at(
+        &self,
+        target: &std::path::Path,
+    ) -> Option<&crate::app::FootprintDocument> {
+        let sketch = self.interaction_state.board_sketch.as_ref();
+        match sketch.filter(|session| session.board_path == target) {
+            Some(session) => Some(&*session.editor),
+            None => self.document_state.footprint_editors.get(target),
+        }
+    }
+
     /// The editor of a dialog's `target`, whatever tab main shows by then.
     /// `None` once it is closed or its board has left sketch mode.
     pub(crate) fn footprint_editor_at_mut(
