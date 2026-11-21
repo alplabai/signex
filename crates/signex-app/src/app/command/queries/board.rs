@@ -20,6 +20,10 @@ use crate::app::document::DocumentKey;
 fn item_by_id(board: &PcbBoard, text: &str) -> Result<ItemRef, String> {
     let id = uuid::Uuid::parse_str(text.trim())
         .map_err(|_| format!("`{}` is not an id (a hyphenated uuid)", text.trim()))?;
+    item_by_uuid(board, id)
+}
+
+fn item_by_uuid(board: &PcbBoard, id: uuid::Uuid) -> Result<ItemRef, String> {
     pcb_geom::item_by_uuid(board, id).ok_or_else(|| format!("nothing on the board has the id {id}"))
 }
 
@@ -98,10 +102,10 @@ impl Signex {
     /// edge to edge between two items.
     pub(super) fn measure_board(&self, args: &CommandArgs) -> Answer {
         let (board, name) = self.named_board(args)?;
-        if let Some(ids) = text_operand(args, "ids") {
+        if let Some(ids) = args.targets("ids") {
             let items = ids
-                .split(',')
-                .map(|text| item_by_id(board, text))
+                .iter()
+                .map(|id| item_by_uuid(board, *id))
                 .collect::<Result<Vec<_>, _>>()?;
             let [a, b] = items.as_slice() else {
                 return Err("`ids` names two items, comma separated".into());

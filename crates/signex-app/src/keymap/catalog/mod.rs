@@ -14,7 +14,7 @@ pub use signex_commands::catalog::{
 
 #[cfg(test)]
 pub(crate) use operand_convention::{
-    CONVENTION as OPERAND_CONVENTION, describe as describe_operands,
+    CONVENTION as OPERAND_CONVENTION, IDS_STILL_TEXT, describe as describe_operands,
 };
 
 #[cfg(test)]
