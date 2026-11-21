@@ -132,3 +132,38 @@ fn moving_the_power_port_off_the_corner_drops_the_dot() {
         dots(&engine)
     );
 }
+
+/// Wire C (0,0)-(10,0), and wires A and B ending on its interior at (5,0)
+/// with no dot: a bare T, so C stays apart from A and B (#107).
+fn bare_t() -> SchematicSheet {
+    let mut sheet = test_sheet();
+    add_wire(&mut sheet, (0.0, 0.0), (10.0, 0.0));
+    add_wire(&mut sheet, (5.0, 0.0), (5.0, 5.0));
+    add_wire(&mut sheet, (5.0, 0.0), (5.0, -5.0));
+    sheet
+}
+
+/// Whether wire C (through (0,0)) and wire A (through (5,5)) are one net.
+fn c_joins_a(sheet: &SchematicSheet) -> bool {
+    let mut nets = signex_net::logical_connectivity(sheet);
+    nets.root_of(&Point::new(0.0, 0.0)) == nets.root_of(&Point::new(5.0, 5.0))
+}
+
+#[test]
+fn a_power_port_placed_on_a_bare_t_gets_no_dot_and_joins_no_nets() {
+    let mut engine = Engine::new(bare_t()).unwrap();
+    assert!(!c_joins_a(engine.document()));
+    place_gnd(&mut engine, (5.0, 0.0));
+    assert!(dots(&engine).is_empty(), "{:?}", dots(&engine));
+    assert!(!c_joins_a(engine.document()), "the dot would join C");
+}
+
+#[test]
+fn a_power_port_dragged_onto_a_bare_t_gets_no_dot_and_joins_no_nets() {
+    let mut engine = Engine::new(bare_t()).unwrap();
+    let port = place_gnd(&mut engine, (5.0, 20.0));
+    let item = SelectedItem::new(port, SelectedKind::Symbol);
+    mv(&mut engine, vec![item], 0.0, -20.0, true);
+    assert!(dots(&engine).is_empty(), "{:?}", dots(&engine));
+    assert!(!c_joins_a(engine.document()), "the dot would join C");
+}

@@ -10,17 +10,20 @@ use signex_types::object_id::IdSource;
 use signex_types::schematic::{Junction, Point, SchematicSheet, SelectedItem, SelectedKind};
 
 use super::pin_junctions::{pin_dot, symbol_pin_tips};
-use super::stem_dots::stem_dots_for;
+use super::stem_dots::{stem_dots_for, wires_at};
 
 /// Add to `dots` (the pin dots an edit mints) the corner dots of this module
-/// and the stem dots of `stem_dots`, one per point.
+/// and the stem dots of `stem_dots`, one per point and none on `bare` (the
+/// dotless T points a guarded move keeps bare).
 pub(crate) fn add_meeting_dots(
     sheet: &SchematicSheet,
     items: &[SelectedItem],
+    bare: Option<&HashSet<Key>>,
     ids: &mut dyn IdSource,
     dots: &mut Vec<Junction>,
 ) {
     let mut taken: HashSet<Key> = dots.iter().map(|dot| pt_key(&dot.position)).collect();
+    taken.extend(bare.into_iter().flatten().copied());
     let corners = corner_dots_for(sheet, items, ids);
     let stems = stem_dots_for(sheet, items, ids);
     dots.extend(
@@ -80,7 +83,10 @@ fn corner_dots_for(
     let mut taken: HashSet<Key> = (sheet.junctions.iter())
         .map(|j| pt_key(&j.position))
         .collect();
+    // A wire passing strictly through the point would be joined by the dot
+    // (a dotless T stays unconnected, #107): no dot there.
     (corners.into_iter())
+        .filter(|at| wires_at(sheet, pt_key(at)).0 == 0)
         .filter(|at| taken.insert(pt_key(at)))
         .map(|at| pin_dot(at, ids))
         .collect()
