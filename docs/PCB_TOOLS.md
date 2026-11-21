@@ -136,6 +136,12 @@ clearance the design rules ask from other nets' copper (#2389).
   route its net and a via there with the first leg, as for a Track run
   (`signex_engine::pcb::route::copper_under`). Quick Route starts the same
   way.
+- **Ratsnest.** While a route or Track run of a net is drawn, that net's
+  ratsnest line leaves from the route's end, not from the pad it started
+  on, and points to the nearest pad of the net the start's copper does not
+  reach; other nets keep their lines. When the route lands or is dropped
+  the ratsnest is the board's again (Caner, 2026-11-21;
+  `docs/architecture/pcb-ratsnest.md`, "While a route is drawn").
 - **Ends.** A leg aimed at a pad of another net is refused; the status bar
   and Messages name the pad and both nets ("U1.1 is on net B, the route is
   on net A"). A route that ends on a pad of no net connects: when it lands

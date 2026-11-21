@@ -32,6 +32,7 @@ mod pour_cut;
 mod quick;
 mod route;
 mod route_end;
+mod route_rats;
 mod router;
 mod side_by_side;
 mod string;
@@ -61,6 +62,8 @@ mod pause_tests;
 mod pour_cut_tests;
 #[cfg(test)]
 mod pour_tests;
+#[cfg(test)]
+mod route_rats_tests;
 #[cfg(test)]
 mod route_tests;
 #[cfg(test)]
@@ -152,6 +155,7 @@ impl Signex {
             note: None,
         });
         crate::diagnostics::log_info(self.board_tool_hint(tool));
+        self.sync_route_ratsnest();
         self.refresh_pcb_highlight();
     }
 
@@ -200,6 +204,7 @@ impl Signex {
     pub(crate) fn release_board_tool(&mut self) {
         self.finish_board_route(true);
         self.interaction_state.pcb_tool = None;
+        self.sync_route_ratsnest();
     }
 
     /// Esc or a right-click: undo the edits of a pause and go on placing,
@@ -218,6 +223,7 @@ impl Signex {
         } else {
             self.end_route_shape();
         }
+        self.sync_route_ratsnest();
         true
     }
 
@@ -228,6 +234,7 @@ impl Signex {
             session.route = None;
             session.router = None;
         }
+        self.sync_route_ratsnest();
         self.refresh_pcb_highlight();
     }
 
@@ -383,16 +390,23 @@ impl Signex {
         if let Some(session) = self.own_board_tool_mut() {
             session.cursor = Some(at);
         }
+        self.sync_route_ratsnest();
         self.refresh_pcb_highlight();
         true
     }
 
     /// What the canvas draws on the cursor for the tool armed on the board
-    /// in view: the board holding only what the next click adds.
+    /// in view: the board holding only what the next click adds, and the
+    /// routed net's ratsnest line from the route's end (`route_rats`).
     pub(crate) fn board_tool_ghost(&self) -> Option<PcbSnapshot> {
         let session = self.own_board_tool()?;
         let preview = self.board_tool_preview()?;
-        Some(self.pcb_snapshot_for(&session.path, &preview))
+        let line = self.route_ratsnest_line(session, &preview);
+        let snapshot = self.pcb_snapshot_for(&session.path, &preview);
+        Some(match line {
+            Some(line) => snapshot.with_ratsnest(&[line], &Default::default()),
+            None => snapshot,
+        })
     }
 
     /// The board holding only what the next click of the tool armed on the

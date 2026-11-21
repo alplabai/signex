@@ -1587,7 +1587,9 @@ More: [PCB_ROOMS.md](PCB_ROOMS.md).
 
 1. Make the layer you want active (a layer tab, `+` or `-`).
 2. Choose **Place ▸ Interactive Routing**.
-3. Click on a pad. The route takes the pad's net.
+3. Click on a pad. The route takes the pad's net. While you route, the
+   ratsnest line of that net runs from the route's end to the nearest pad
+   it still has to reach.
 4. Click to add each leg. The route keeps the clearance the design rules ask
    from other nets and finds its way around copper in the way. `Space` flips
    the bend; `Shift+Space` steps the corner mode (90°, 45°, any angle).

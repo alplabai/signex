@@ -82,7 +82,7 @@ pub use keymap_recorder::KeymapRecorderState;
 pub use omitted_page::{OmittedPage, OmittedReason};
 pub use parameter_table::{ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;
-pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
+pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey, RouteRatsKey};
 pub use pdf_dialog::{ANGLE_PRESETS, PdfDialogState, PdfSection, WatermarkPreset};
 pub use pdf_page_setup::PageSetupInputs;
 pub use pdf_preview_raster::{
