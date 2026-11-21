@@ -39,7 +39,7 @@ const STRIP_HEIGHT: f32 = chrome_px(28.0 * 11.0 / 12.0);
 /// Side padding of the layer set button.
 const SET_PAD_X: f32 = chrome_px(8.0 * 11.0 / 12.0);
 /// Side padding of a tab.
-const TAB_PAD_X: f32 = chrome_px(10.0 * 11.0 / 12.0);
+const TAB_PAD_X: f32 = SP.s;
 /// Gap between a tab's swatch and its name.
 const TAB_GAP: f32 = chrome_px(6.0 * 11.0 / 12.0);
 /// Edge of a tab's colour swatch.
@@ -299,7 +299,7 @@ fn layer_set_button<'a>(
     signex_widgets::tooltip(set_button, tip, signex_widgets::tooltip::Position::Top).boxed()
 }
 
-/// One tab: swatch and name with a line on its right; the active layer's
+/// One tab: swatch and name with a divider on its right; the active layer's
 /// tab is filled accent-soft, in medium weight, with the accent bar along
 /// its top.
 fn layer_tab<'a>(
@@ -349,7 +349,7 @@ fn layer_tab<'a>(
         r.accent_soft,
         crate::styles::tokens::hover_overlay(tokens),
         ti(tokens.accent),
-        r.line_soft,
+        r.line_strong,
     );
     let TabMessages { press, menu } = messages;
     let tab = button(container(content).center_y(Length::Fill))
