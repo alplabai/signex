@@ -106,8 +106,8 @@ pub enum CanvasAction {
     },
     DeleteSelected,
     // ── View / camera ──
-    /// Pan the camera by `(dx, dy)` screen pixels. Fired by right-
-    /// or middle-button drag.
+    /// Pan the camera by `(dx, dy)` screen pixels. Fired by a right-button
+    /// drag.
     Pan {
         dx: f32,
         dy: f32,
@@ -120,7 +120,7 @@ pub enum CanvasAction {
         delta: f32,
     },
     /// Zoom centred on `(sx, sy)` by an absolute scale `factor` (a trackpad
-    /// pinch). Greater than 1 zooms in.
+    /// pinch or a middle-button drag). Greater than 1 zooms in.
     ZoomFactor {
         sx: f32,
         sy: f32,
@@ -236,8 +236,13 @@ pub struct CanvasState {
     /// compute delta-based `MoveAll` events since there is no single
     /// anchor to absolute-position against.
     pub last_drag_world_pos: Option<(f64, f64)>,
-    /// True while the user holds right- or middle-button to pan.
+    /// True while the user holds the right button to pan.
     pub panning: bool,
+    /// The middle-button drag zooming the view, while it is held.
+    pub middle_zoom: Option<crate::canvas::middle_zoom::MiddleZoom>,
+    /// A zoom was published: the next redraw re-tracks the pointer at the
+    /// new camera, so a tool's preview stays under it.
+    pub middle_zoom_follow: bool,
     /// Last cursor screen position during a pan, used to compute
     /// per-frame deltas.
     pub last_pan_pos: Option<iced::Point>,
@@ -247,7 +252,7 @@ pub struct CanvasState {
     /// `last_pan_pos` (which moves every frame). Cleared on release /
     /// cursor-left.
     pub secondary_press_pos: Option<iced::Point>,
-    /// Set the first time a right/middle-button drag's CUMULATIVE
+    /// Set the first time a right-button drag's CUMULATIVE
     /// displacement from `secondary_press_pos` crosses the pan motion
     /// threshold (mirrors the footprint canvas's `pan_moved`). A
     /// right-release with this still `false` opens the context menu

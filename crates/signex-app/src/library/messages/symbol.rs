@@ -132,7 +132,7 @@ pub enum SymbolEditorMsg {
     SetPinName { idx: usize, name: String },
 
     // ── View / camera (Altium-style pan/zoom/grid) ─────────
-    /// Right- or middle-button pan delta in screen pixels.
+    /// Right-button pan delta in screen pixels.
     /// Updates `editor.camera.offset`.
     Pan { dx: f32, dy: f32 },
 

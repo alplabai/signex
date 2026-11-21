@@ -389,21 +389,6 @@ impl SchematicCanvas<'_> {
         )
     }
 
-    /// Middle-press: start pan.
-    pub(in crate::canvas) fn update_middle_pressed(
-        &self,
-        state: &mut CanvasState,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> Option<canvas::Action<Message>> {
-        if let Some(pos) = cursor.position_in(bounds) {
-            state.panning = true;
-            state.pan_moved = false;
-            state.last_pan_pos = Some(pos);
-        }
-        Some(canvas::Action::capture())
-    }
-
     /// Right-release: stop pan, context menu, or cancel drawing.
     pub(in crate::canvas) fn update_right_released(
         &self,
@@ -442,16 +427,6 @@ impl SchematicCanvas<'_> {
         Some(canvas::Action::capture())
     }
 
-    /// Middle-release: stop pan.
-    pub(in crate::canvas) fn update_middle_released(
-        &self,
-        state: &mut CanvasState,
-    ) -> Option<canvas::Action<Message>> {
-        state.panning = false;
-        state.last_pan_pos = None;
-        Some(canvas::Action::capture())
-    }
-
     /// Cursor motion: pan, track drag-move / box-select, hover reporting.
     pub(in crate::canvas) fn update_cursor_moved(
         &self,
@@ -468,7 +443,7 @@ impl SchematicCanvas<'_> {
             )));
         }
         if let Some(cursor_pos) = cursor.position_in(bounds) {
-            // Pan if right/middle button held
+            // Pan if the right button is held
             if state.panning {
                 let mut pan_just_started = false;
                 if let Some(last) = state.last_pan_pos {

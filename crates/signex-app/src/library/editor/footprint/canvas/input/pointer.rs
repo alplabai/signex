@@ -34,7 +34,11 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+        if *button == mouse::Button::Middle {
+            return self.on_middle_pressed(cstate, bounds, cursor);
+        }
+        if *button == mouse::Button::Right {
+            cstate.middle_zoom = None;
             return self.on_secondary_pressed(cstate, button, bounds, cursor);
         }
         if *button == mouse::Button::Left
@@ -45,7 +49,7 @@ impl FootprintCanvas<'_> {
         None
     }
 
-    /// Right/Middle press — right-click tool cancel (schematic parity),
+    /// Right press — right-click tool cancel (schematic parity),
     /// otherwise start a pan.
     fn on_secondary_pressed(
         &self,
@@ -56,7 +60,7 @@ impl FootprintCanvas<'_> {
     ) -> Option<canvas::Action<LibraryMessage>> {
         // v0.15 — schematic-parity tool cancel. Right-click while a
         // non-Select tool is active cancels the tool back to Select
-        // instead of starting a pan. Middle-click always pans.
+        // instead of starting a pan.
         use crate::library::editor::footprint::state::{
             EditorMode, PadsTool, SketchTool, ToolPending,
         };
@@ -120,8 +124,7 @@ impl FootprintCanvas<'_> {
                 );
             }
         }
-        // Otherwise (Middle, or Right with no active tool) → start a
-        // pan as usual.
+        // Right with no active tool → start a pan as usual.
         cstate.panning = true;
         cstate.last_pan_pos = cursor.position_in(bounds);
         // v0.26 — track motion so right-release without pan motion
@@ -351,7 +354,7 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
-        if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+        if *button == mouse::Button::Right {
             return self.on_secondary_released(cstate, button, bounds, cursor);
         }
         if *button == mouse::Button::Left {
@@ -360,8 +363,8 @@ impl FootprintCanvas<'_> {
         None
     }
 
-    /// Right/Middle release — a right-release that did not pan opens
-    /// the context menu (pad → silk → empty hit priority).
+    /// Right release — a release that did not pan opens the context
+    /// menu (pad → silk → empty hit priority).
     fn on_secondary_released(
         &self,
         cstate: &mut FootprintCanvasState,
@@ -467,10 +470,22 @@ impl FootprintCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
+        if cstate.middle_zoom.is_some() {
+            return Some(self.on_middle_zoom_moved(cstate, bounds, cursor));
+        }
         let cursor_pos = cursor.position_in(bounds)?;
         if let Some(action) = self.pan_on_cursor_moved(cstate, cursor_pos) {
             return Some(action);
         }
+        self.track_pointer(cstate, cursor_pos)
+    }
+
+    /// The pointer is at `cursor_pos`: drive a drag in flight, or the hover.
+    pub(in crate::library::editor::footprint::canvas) fn track_pointer(
+        &self,
+        cstate: &mut FootprintCanvasState,
+        cursor_pos: Point,
+    ) -> Option<canvas::Action<LibraryMessage>> {
         let world = self.pointer_move_world(cstate, cursor_pos);
         if let Some(a) = self.try_round_resize_tick(cstate, world) {
             return Some(a);

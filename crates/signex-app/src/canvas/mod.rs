@@ -27,6 +27,7 @@ pub mod grid;
 mod halo_cache;
 mod hit_cache;
 mod input;
+pub(crate) mod middle_zoom;
 mod move_pick;
 mod net_highlight;
 pub(crate) mod pan_reuse;
@@ -76,12 +77,14 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    /// Is the user currently panning (right-click or middle-click drag)?
+    /// Is the user currently panning (right-button drag)?
     panning: bool,
     /// Whether actual pan movement occurred (to distinguish click from drag).
     pan_moved: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
+    /// The middle-button drag zooming the view, while it is held.
+    middle_zoom: Option<middle_zoom::MiddleZoom>,
     /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
     /// Ctrl or Cmd held: a scroll zooms even with "Two-finger scroll pans" on.
@@ -924,6 +927,8 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // crosshair while a tool is armed (`cursor::tool_cursor`).
         if state.panning {
             mouse::Interaction::Grabbing
+        } else if state.middle_zoom.is_some() {
+            mouse::Interaction::ResizingVertically
         } else if state.move_dragging {
             mouse::Interaction::Move
         } else if cursor.is_over(bounds) {
@@ -1035,6 +1040,8 @@ pub(crate) mod grid_order_tests;
 mod halo_cache_tests;
 #[cfg(test)]
 mod hit_cache_tests;
+#[cfg(test)]
+mod middle_zoom_tests;
 #[cfg(test)]
 pub(crate) mod overlay_camera_tests;
 #[cfg(test)]
