@@ -274,15 +274,19 @@ fn draw_line_bucket<F>(
             draw_dashed_line(frame, p0, p1, width, color, pattern);
         } else {
             let path = canvas::Path::line(p0, p1);
-            frame.stroke(
-                &path,
-                canvas::Stroke::default()
-                    .with_width(width)
-                    .with_color(color)
-                    .with_line_cap(canvas::LineCap::Round),
-            );
+            frame.stroke(&path, solid_line_stroke(width, color));
         }
     }
+}
+
+/// The stroke of a solid scene line (a placed wire or bus segment): round
+/// ends, so two segments meeting at a bend close the corner. The routing
+/// preview strokes with it too (docs/RENDERING_RULES.md, "Stroke ends").
+pub(crate) fn solid_line_stroke(width: f32, color: Color) -> canvas::Stroke<'static> {
+    canvas::Stroke::default()
+        .with_width(width)
+        .with_color(color)
+        .with_line_cap(canvas::LineCap::Round)
 }
 
 /// Screen endpoints and stroke width of `line`, solid or dashed, with an
