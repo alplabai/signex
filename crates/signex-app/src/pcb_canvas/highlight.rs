@@ -23,7 +23,8 @@ pub struct Highlight {
     /// Bodies of selected footprints, outlined with a faint fill.
     pub bodies: Vec<Shape>,
     pub hover_body: Option<Shape>,
-    /// Where a footprint drag or Move would put what it carries (#2240).
+    /// Where a paste would put its copy: something not on the board yet. An
+    /// object already on the board moves itself and has no ghost.
     pub ghost: Vec<Shape>,
     /// The copper of the highlighted board net (#2403).
     pub net: Vec<Shape>,

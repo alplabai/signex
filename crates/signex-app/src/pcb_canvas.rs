@@ -34,8 +34,9 @@ mod viewport_resize;
 pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{
-    CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, carried_board, carry_delta,
-    followed_arcs, snap_point, via_carry_delta, with_arcs_replaced,
+    CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, board_without_text,
+    carried_board, carried_text_board, carry_delta, followed_arcs, snap_point, via_carry_delta,
+    with_arcs_replaced,
 };
 pub use content::BoardContentLayer;
 pub(crate) use grid::stroke_origin_marker;

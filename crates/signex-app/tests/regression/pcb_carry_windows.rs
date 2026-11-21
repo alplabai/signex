@@ -229,8 +229,9 @@ fn main_drag(rig: &mut Rig) {
     send(&mut rig.app, Message::PcbCanvas(click(10.0, 10.0)));
     send(&mut rig.app, Message::PcbCanvas(drag_to(15.0)));
     assert_eq!(carry_kind(&rig.app), Some(CarryKind::Drag));
-    let ghost = &rig.app.interaction_state.pcb_canvas.highlight().ghost;
-    assert!(!ghost.is_empty(), "the drag is previewed");
+    let canvas = &rig.app.interaction_state.pcb_canvas;
+    assert!(canvas.previews_drag(), "the drag is previewed");
+    assert!(canvas.highlight().ghost.is_empty(), "with no ghost");
 }
 
 /// A drag of U1 in the board window, in progress.
@@ -247,8 +248,10 @@ fn focus_loss_mid_drag_ends_it_and_the_right_click_opens_the_board_menu() {
     main_drag(&mut rig);
     unfocus(&mut rig.app, rig.main);
     assert_eq!(carry_kind(&rig.app), None, "the drag ended");
-    let ghost = &rig.app.interaction_state.pcb_canvas.highlight().ghost;
-    assert!(ghost.is_empty(), "no ghost is left painted");
+    assert!(
+        !rig.app.interaction_state.pcb_canvas.previews_drag(),
+        "no preview is left painted"
+    );
     assert_eq!(board_text(&rig.app, &rig.b), before, "nothing moved");
     send(
         &mut rig.app,
@@ -266,18 +269,13 @@ fn focus_loss_ends_only_the_drag_of_the_window_that_lost_it() {
     let window = undock_a(&mut rig);
     let before = board_text(&rig.app, &rig.a);
     window_drag(&mut rig, window);
-    let ghost = |app: &Signex| {
-        app.interaction_state.pcb_canvases[&window]
-            .highlight()
-            .ghost
-            .len()
-    };
-    assert!(ghost(&rig.app) > 0, "the window previews its drag");
+    let previews = |app: &Signex| app.interaction_state.pcb_canvases[&window].previews_drag();
+    assert!(previews(&rig.app), "the window previews its drag");
     unfocus(&mut rig.app, rig.main);
     assert_eq!(carry_kind(&rig.app), Some(CarryKind::Drag), "main lost it");
     unfocus(&mut rig.app, window);
     assert_eq!(carry_kind(&rig.app), None);
-    assert_eq!(ghost(&rig.app), 0, "the window's ghost is gone");
+    assert!(!previews(&rig.app), "the window's preview is gone");
     assert_eq!(board_text(&rig.app, &rig.a), before, "nothing moved");
 }
 
@@ -339,8 +337,10 @@ fn a_locked_footprint_refuses_the_drag_at_its_start_once() {
     };
     send(&mut rig.app, Message::PcbCanvas(dragged(32.0)));
     assert_eq!(refusals_since(since), 1, "refused as the drag starts");
-    let ghost = &rig.app.interaction_state.pcb_canvas.highlight().ghost;
-    assert!(ghost.is_empty(), "the locked part is not previewed");
+    assert!(
+        !rig.app.interaction_state.pcb_canvas.previews_drag(),
+        "the locked part is not previewed"
+    );
     send(&mut rig.app, Message::PcbCanvas(dragged(34.0)));
     let dropped = PcbCanvasMsg::FootprintDropped { from, to };
     send(&mut rig.app, Message::PcbCanvas(dropped));

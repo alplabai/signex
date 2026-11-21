@@ -180,15 +180,7 @@ fn a_dragged_via_lands_on_the_grid_keeps_its_net_and_undoes_in_one_step() {
     rig.move_to(Point::new(24.1, 13.2));
     let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
     assert!(carry.vias.contains(&FREE), "the via is carried");
-    assert!(
-        !rig.app
-            .interaction_state
-            .pcb_canvas
-            .highlight()
-            .ghost
-            .is_empty(),
-        "a preview follows the pointer"
-    );
+    rig.assert_via_moves_itself(Point::new(20.0, 10.0), Point::new(24.0, 13.0));
     assert_eq!(rig.live(), before, "nothing moves before the release");
     rig.release(Point::new(24.1, 13.2));
 
@@ -238,6 +230,26 @@ impl Rig {
         let event = Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers));
         self.send(event, pixel);
     }
+
+    /// Mid-drag the via is drawn at `to` in its real look: no ghost, and
+    /// nothing at `from`.
+    fn assert_via_moves_itself(&self, from: Point, to: Point) {
+        let near = |c: [f32; 2], p: Point| {
+            (f64::from(c[0]) - p.x).abs() < 1e-3 && (f64::from(c[1]) - p.y).abs() < 1e-3
+        };
+        let canvas = &self.app.interaction_state.pcb_canvas;
+        assert!(canvas.highlight().ghost.is_empty(), "no ghost");
+        let base = canvas.active_renderer_snapshot().expect("a board");
+        assert!(
+            !base.vias.iter().any(|via| near(via.center, from)),
+            "nothing is left at the old place"
+        );
+        let moving = canvas.drag_preview_scene().expect("a moving scene");
+        assert!(
+            moving.circles.iter().any(|c| near(c.center, to)),
+            "the via is drawn at the new place"
+        );
+    }
 }
 
 #[test]
@@ -257,8 +269,13 @@ fn a_ctrl_drag_moves_the_via_alone_and_ctrl_switches_live() {
     rig.hold(Modifiers::CTRL, Point::new(20.0, 10.0));
     rig.press(Point::new(20.0, 10.0));
     rig.move_to(to);
+    rig.assert_via_moves_itself(Point::new(20.0, 10.0), to);
     assert!(
-        !rig.app.interaction_state.pcb_canvas.previews_drag(),
+        rig.app
+            .interaction_state
+            .pcb_canvas
+            .drag_preview_following()
+            .is_empty(),
         "with Ctrl no track is carried"
     );
     rig.hold(Modifiers::empty(), to);
@@ -285,8 +302,8 @@ fn the_preview_draws_the_via_and_its_track_where_they_are_going() {
     let saved = rig.live();
     rig.press(Point::new(20.0, 10.0));
     rig.move_to(Point::new(24.0, 13.0));
+    rig.assert_via_moves_itself(Point::new(20.0, 10.0), Point::new(24.0, 13.0));
     let canvas = &rig.app.interaction_state.pcb_canvas;
-    assert!(canvas.drag_preview_scene().is_some(), "a moving scene");
     let following = canvas.drag_preview_following().to_vec();
     assert_eq!(following.len(), 1);
     assert_eq!(following[0].track, TRACK);
@@ -301,14 +318,12 @@ fn the_preview_draws_the_via_and_its_track_where_they_are_going() {
 }
 
 #[test]
-fn a_via_with_no_track_keeps_its_ghost_and_moves() {
+fn a_via_with_no_track_moves_itself_with_no_ghost() {
     let mut rig = rig_on(board_with_other_tracks());
     let tracks = rig.board().segments.clone();
     rig.press(Point::new(30.0, 10.0));
     rig.move_to(Point::new(33.0, 12.0));
-    let canvas = &rig.app.interaction_state.pcb_canvas;
-    assert!(!canvas.previews_drag(), "the board is drawn as it is");
-    assert!(!canvas.highlight().ghost.is_empty(), "the ghost follows");
+    rig.assert_via_moves_itself(Point::new(30.0, 10.0), Point::new(33.0, 12.0));
     rig.release(Point::new(33.0, 12.0));
     assert!(close(rig.via(LONE).position, 33.0, 12.0));
     assert_eq!(rig.board().segments, tracks);
@@ -552,13 +567,9 @@ fn a_locked_via_stays_and_the_drag_carries_nothing() {
     rig.move_to(Point::new(25.0, 25.0));
     let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
     assert!(carry.vias.is_empty(), "a refused drag carries nothing");
+    let canvas = &rig.app.interaction_state.pcb_canvas;
     assert!(
-        rig.app
-            .interaction_state
-            .pcb_canvas
-            .highlight()
-            .ghost
-            .is_empty(),
+        canvas.highlight().ghost.is_empty() && !canvas.previews_drag(),
         "and paints no preview"
     );
     rig.release(Point::new(25.0, 25.0));
