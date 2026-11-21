@@ -43,6 +43,7 @@ pub mod find_replace;
 pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
+pub mod gpu_backend;
 pub mod frame_probe;
 pub mod headless;
 pub mod icons;
