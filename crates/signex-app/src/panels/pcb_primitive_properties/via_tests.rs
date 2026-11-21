@@ -9,7 +9,7 @@ use signex_types::pcb::ViaType;
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
-use super::not_stored;
+use super::{not_stored, via_stack};
 use crate::app::Signex;
 use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click_at};
 use crate::panels::PanelContext;
@@ -60,7 +60,6 @@ fn via(kind: ViaType, unstored_open: bool) -> ViaFacts {
         via_type: Some(choice),
         type_size: Some((0.6, 0.3)),
         overridden: Some(false),
-        override_open: false,
         protection: None,
         drill_pair: None,
         finished_hole: None,
@@ -127,6 +126,36 @@ fn a_microvia_type_adds_the_greyed_microvia_row_to_the_not_stored_yet_group() {
         vec![header(&ctx, 5)],
         "a closed group shows its header"
     );
+}
+
+/// The Via Stack section's laid-out texts, isolation marks stripped.
+fn stack_texts(ctx: &PanelContext, f: &ViaFacts) -> Vec<String> {
+    let section = via_stack(Look::of(ctx), f).expect("the via stack");
+    lay_out_texts(section, WINDOW)
+        .into_iter()
+        .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
+        .collect()
+}
+
+/// Caner, 2026-11-21: no Override switch; the row's note follows the value.
+#[test]
+fn the_via_stack_has_no_override_switch_and_a_changed_size_loses_from_type() {
+    let ctx = context();
+    let from_type = said(&ctx, ids::PCB_PRIM_FROM_TYPE);
+    let count = |texts: &[String]| texts.iter().filter(|t| **t == from_type).count();
+
+    let plain = via(ViaType::Through, false);
+    let shown = stack_texts(&ctx, &plain);
+    for gone in ["Override", "for this via"] {
+        assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
+    }
+    assert_eq!(count(&shown), 2, "Diameter and Drill: {shown:?}");
+
+    let mut own = via(ViaType::Through, false);
+    own.diameter = Some(0.8);
+    own.overridden = Some(true);
+    let shown = stack_texts(&ctx, &own);
+    assert_eq!(count(&shown), 1, "only Drill is the type's: {shown:?}");
 }
 
 #[test]

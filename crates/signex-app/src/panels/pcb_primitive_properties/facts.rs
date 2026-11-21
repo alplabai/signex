@@ -53,6 +53,8 @@ pub enum PrimitiveField {
     EndY,
     Diameter,
     HoleSize,
+    /// A via's finished hole: Enter sets the drill that leaves it.
+    FinishedHole,
     Designator,
     Rotation,
     SizeX,
@@ -340,8 +342,6 @@ pub struct ViaFacts {
     pub type_size: Option<(f64, f64)>,
     /// Whether the vias' diameter or drill differs from their type's.
     pub overridden: Option<bool>,
-    /// Override was switched on in the panel for these vias.
-    pub override_open: bool,
     /// The protection the vias share (IPC-4761); fill and cap read as none
     /// until the board stores them.
     pub protection: Option<ViaProtection>,
@@ -355,14 +355,6 @@ pub struct ViaFacts {
     pub reaches: (bool, bool),
     /// The copper layer the illustration's top view shows.
     pub view_layer: Option<CopperLayer>,
-}
-
-impl ViaFacts {
-    /// Override shows on: switched on in the panel, or the vias already
-    /// differ from their type. Diameter and Drill then take typed values.
-    pub fn override_on(&self) -> bool {
-        self.override_open || self.overridden == Some(true)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

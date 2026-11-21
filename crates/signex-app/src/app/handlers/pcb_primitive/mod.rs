@@ -59,9 +59,6 @@ pub struct PcbPrimitivePanel {
     pub hover: IllustrationHover,
     /// The "Not stored yet" group is open.
     pub unstored_open: bool,
-    /// The vias Override was switched on for (mockup row 96): their
-    /// Diameter and Drill take typed values.
-    pub via_override: Option<PrimitiveTarget>,
     /// The copper layer the via illustration's top view shows.
     pub via_view_layer: Option<CopperLayer>,
     /// The pour Copper card's menu of board-wide commands is open (#2523).
@@ -72,9 +69,9 @@ pub struct PcbPrimitivePanel {
 }
 
 impl PcbPrimitivePanel {
-    /// Forget drafts, a pick and Override that were not made for `shown` on
-    /// `board`; a new `shown` also drops the hover, the via view layer and
-    /// the pour menu.
+    /// Forget drafts and a pick that were not made for `shown` on `board`; a
+    /// new `shown` also drops the hover, the via view layer and the pour
+    /// menu.
     pub(crate) fn keep_only(&mut self, board: &Path, shown: Option<&PrimitiveTarget>) {
         let stale = |t: &PrimitiveTarget| t.board == board && Some(t) != shown;
         if self.draft_target.as_ref().is_some_and(stale) {
@@ -83,9 +80,6 @@ impl PcbPrimitivePanel {
         }
         if self.net_pick.as_ref().is_some_and(stale) {
             self.net_pick = None;
-        }
-        if self.via_override.as_ref().is_some_and(stale) {
-            self.via_override = None;
         }
         if self.shown.as_ref() != shown {
             self.shown = shown.cloned();
@@ -415,6 +409,7 @@ fn field_name(field: PrimitiveField) -> MessageId {
         F::EndX | F::EndY => ids::PCB_PRIM_END,
         F::Diameter => ids::PCB_PRIM_DIAMETER,
         F::HoleSize => ids::PCB_PRIM_HOLE_SIZE,
+        F::FinishedHole => ids::PCB_PRIM_FINISHED_HOLE,
         F::Designator => ids::PCB_PRIM_DESIGNATOR,
         F::Rotation => ids::PCB_PRIM_ROTATION,
         F::SizeX => ids::PCB_PRIM_X_SIZE,
@@ -543,6 +538,9 @@ fn via_edit(edit: &PrimitiveEdit) -> Option<ViaEdit> {
         PrimitiveEdit::Number(F::Y, v) => ViaEdit::Y(v),
         PrimitiveEdit::Number(F::Diameter, v) => ViaEdit::Diameter(v),
         PrimitiveEdit::Number(F::HoleSize, v) => ViaEdit::HoleSize(v),
+        PrimitiveEdit::Number(F::FinishedHole, v) => {
+            ViaEdit::HoleSize(signex_engine::pcb::via_types::ViaTypeDef::drill_for_finished(v))
+        }
         PrimitiveEdit::Number(F::LayerSize(layer), v) => ViaEdit::LayerDiameter(layer, v),
         PrimitiveEdit::Net(net) => ViaEdit::Net(net),
         PrimitiveEdit::Span(top, bottom) => ViaEdit::Span(top, bottom),

@@ -204,26 +204,11 @@ fn a_micro_type_makes_a_through_via_micro() {
 }
 
 #[test]
-fn resetting_an_override_restores_only_diameter_and_drill() {
-    let mut b = four_layer_board(vec![
-        through(1, (0.6, 0.3)),
-        through(2, (0.6, 0.3)),
-        through(3, (0.9, 0.45)),
-    ]);
-    b.vias[2].net = 7;
-    let types = via_types(&b);
-    let items = [ItemRef::Via(Uuid::from_u128(3))];
-    let commands = reset_override_commands(&b, &items, &types[0]).unwrap();
-    run(&mut b, commands);
-    let v = &b.vias[2];
-    assert_eq!((v.diameter, v.drill), (0.6, 0.3));
-    assert_eq!((v.via_type, v.net), (ViaType::Through, 7));
-    assert!(!is_overridden(&types[0], v));
-    assert_eq!(
-        reset_override_commands(&b, &items, &types[0]),
-        Ok(Vec::new()),
-        "nothing left to reset"
-    );
+fn a_finished_hole_gives_the_drill_that_leaves_it_after_plating() {
+    assert_eq!(ViaTypeDef::drill_for_finished(0.25), 0.3);
+    assert_eq!(ViaTypeDef::drill_for_finished(0.3), 0.35);
+    assert_eq!(ViaTypeDef::drill_for_finished(0.0), 0.0, "left to be refused");
+    assert_eq!(ViaTypeDef::drill_for_finished(-0.01), -0.01);
 }
 
 #[test]

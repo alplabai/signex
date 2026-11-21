@@ -282,7 +282,7 @@ pcb-prim-drawing-inner-layer = L{ $number }
 pcb-prim-drawing-next = { $net } · next
 pcb-prim-drawing-cursor = cursor
 
-## Via (mockup row 96): the via type a via picks, Override, protection after IPC-4761.
+## Via (mockup row 96): the via type a via picks, protection after IPC-4761.
 ## The types are derived from the board's vias until the Layer Stack
 ## Manager stores them.
 pcb-prim-via-type = Via Type
@@ -309,10 +309,6 @@ pcb-prim-drill-pair = Drill Pair
 pcb-prim-position = Position
 pcb-prim-via-locked = This via is locked. Click the lock to edit it.
 pcb-prim-unlock-via = Unlock
-pcb-prim-stack-from-type-tip = Set by the via type: Simple is one size on every layer; Top-Middle-Bottom and Full Stack size each copper layer. Turn on Override to change it for this via.
-pcb-prim-override = Override
-pcb-prim-override-caption = for this via
-pcb-prim-override-tip = Let this via use its own Diameter and Drill. Span and drill pair stay with the type.
 pcb-prim-override-note = Span and drill pair stay with the type; only Diameter and Drill change for this via.
 pcb-prim-drill = Drill
 pcb-prim-reset-to-type = Reset to the via type's value
