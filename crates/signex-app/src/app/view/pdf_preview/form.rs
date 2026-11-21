@@ -40,7 +40,7 @@ pub(super) struct Look {
     pub accent: Color,
     pub panel: Color,
     pub sunken: Color,
-    segment: SegmentedStyle,
+    pub segment: SegmentedStyle,
     pub line_soft: Color,
     pub line_strong: Color,
 }
