@@ -48,15 +48,13 @@ impl Signex {
     /// to `to`, under the Snap options.
     pub(super) fn via_drag_delta(&self, carry: &PcbCarry, from: Point, to: Point) -> Option<Point> {
         let board = self.active_pcb()?;
-        let snap = &self.ui_state.pcb_snap;
         Some(via_carry_delta(
             board,
             &carry.vias,
             &carry.snap_skip(board),
             from,
             to,
-            snap,
-            self.pcb_active_layer(),
+            self.pcb_snap_view(),
         ))
     }
 

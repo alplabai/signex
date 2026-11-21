@@ -15,11 +15,10 @@ use signex_engine::pcb::snap::{GuideHit, SnapQuery, axis_snap, guide_snap, objec
 use signex_engine::pcb::{BoardClipboard, BoardCommand};
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_arc::TrackArc;
-use signex_types::pcb_layer::CopperLayer;
 use signex_types::pcb_options::{GridUse, GuideKind};
 use uuid::Uuid;
 
-use super::PcbSnapOptions;
+use super::{PcbSnapOptions, SnapView};
 
 /// What a paste on the cursor places, and the shapes its preview draws
 /// with the copy's origin at (0, 0).
@@ -196,17 +195,37 @@ impl PcbCarry {
 /// footprint nearest `from` lands on the components grid
 /// (`placement::grid_for`); then a guide in reach fixes the axes it runs
 /// across, and axis snapping lines the free axes up with object points
-/// (#2374). `active` is the active copper layer.
+/// (#2374). An object or guide pulls the carried pad centre or origin
+/// nearest the press, so it lands exactly on the point.
 pub fn carry_delta(
     board: &PcbBoard,
     footprints: &BTreeSet<Uuid>,
     from: Point,
     to: Point,
-    snap: &PcbSnapOptions,
-    active: CopperLayer,
+    view: SnapView,
 ) -> Point {
-    let on_grid = grid_delta(board, footprints, from, to, snap);
-    snapped_delta(board, footprints, from, to, on_grid, snap, active)
+    let on_grid = grid_delta(board, footprints, from, to, view.options);
+    let anchor = grabbed_point(board, footprints, from).unwrap_or(from);
+    let target = Point::new(anchor.x + to.x - from.x, anchor.y + to.y - from.y);
+    snapped_delta(board, footprints, anchor, target, on_grid, view)
+}
+
+/// The origin or pad centre of the carried `footprints` nearest the press.
+fn grabbed_point(board: &PcbBoard, footprints: &BTreeSet<Uuid>, from: Point) -> Option<Point> {
+    let distance = |p: &Point| (p.x - from.x).powi(2) + (p.y - from.y).powi(2);
+    board
+        .footprints
+        .iter()
+        .filter(|fp| footprints.contains(&fp.uuid))
+        .flat_map(|fp| {
+            let pads = fp
+                .pads
+                .iter()
+                .filter_map(|pad| pcb_geom::pad_world_center(fp, pad).ok())
+                .map(pcb_geom::PointNm::to_mm);
+            std::iter::once(fp.position).chain(pads)
+        })
+        .min_by(|a, b| distance(a).total_cmp(&distance(b)))
 }
 
 /// The offset that takes the carried `vias` from `from` towards `to`, snapped
@@ -219,8 +238,7 @@ pub fn via_carry_delta(
     skip: &BTreeSet<Uuid>,
     from: Point,
     to: Point,
-    snap: &PcbSnapOptions,
-    active: CopperLayer,
+    view: SnapView,
 ) -> Point {
     let raw = Point::new(to.x - from.x, to.y - from.y);
     let distance = |p: Point| (p.x - from.x).powi(2) + (p.y - from.y).powi(2);
@@ -233,13 +251,13 @@ pub fn via_carry_delta(
     else {
         return raw;
     };
-    let on_grid = if snap.to_grids {
+    let on_grid = if view.options.to_grids {
         grid_for(board, GridUse::NonComponents).snap_delta(centre, raw)
     } else {
         raw
     };
     let target = Point::new(centre.x + raw.x, centre.y + raw.y);
-    snapped_delta(board, skip, centre, target, on_grid, snap, active)
+    snapped_delta(board, skip, centre, target, on_grid, view)
 }
 
 /// `on_grid` refined by the object, guide and axis snaps at `to`, leaving
@@ -250,11 +268,11 @@ fn snapped_delta(
     from: Point,
     to: Point,
     on_grid: Point,
-    snap: &PcbSnapOptions,
-    active: CopperLayer,
+    view: SnapView,
 ) -> Point {
-    let radius_mm = snap.distance.factor() * grid_step_mm(board);
-    let query = snap.layer_mask(active).map(|layers| SnapQuery {
+    let snap = view.options;
+    let radius_mm = snap.catch_radius_mm(grid_step_mm(board), view.px_per_mm);
+    let query = snap.layer_mask(view.active).map(|layers| SnapQuery {
         objects: &snap.objects,
         layers,
         skip,
@@ -329,33 +347,23 @@ fn grid_delta(
     }
 }
 
-/// Where a placement tool's point at `to` lands (#2373): an object point
-/// within the snap distance, else the nearest point of the board's grid when
-/// grid snapping is on, else `to` itself. `active` is the active copper
-/// layer.
-pub fn snap_point(
-    board: &PcbBoard,
-    to: Point,
-    snap: &PcbSnapOptions,
-    active: CopperLayer,
-) -> Point {
-    if let Some(layers) = snap.layer_mask(active) {
-        let none = BTreeSet::new();
-        let query = SnapQuery {
-            objects: &snap.objects,
-            layers,
-            skip: &none,
-            radius_mm: snap.distance.factor() * grid_step_mm(board),
-        };
-        if let Some(target) = object_snap_point(board, to, &query) {
-            return target;
-        }
-    }
-    if !snap.to_grids {
-        return to;
-    }
-    // Tool points are not components: the Non-Components grid (#2374).
-    grid_for(board, GridUse::NonComponents).snap_delta(Point::new(0.0, 0.0), to)
+/// Where a placement tool's point at `to` lands (#2373). Tool points are
+/// not components: the Non-Components grid (#2374).
+pub fn snap_point(board: &PcbBoard, to: Point, view: SnapView) -> Point {
+    snap_point_on(board, to, GridUse::NonComponents, view)
+}
+
+/// Where a point at `to` lands by every Snap Option, on the grid for `what`:
+/// an object point in reach, else the grid (when on) refined by guides and
+/// axes, else `to`. A paste and a part on the cursor land the same way.
+pub fn snap_point_on(board: &PcbBoard, to: Point, what: GridUse, view: SnapView) -> Point {
+    let zero = Point::new(0.0, 0.0);
+    let on_grid = if view.options.to_grids {
+        grid_for(board, what).snap_delta(zero, to)
+    } else {
+        to
+    };
+    snapped_delta(board, &BTreeSet::new(), zero, to, on_grid, view)
 }
 
 /// `board` without the `carried` footprints and vias and the `following`
@@ -560,6 +568,27 @@ pub fn carried_board(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_types::pcb_layer::CopperLayer;
+
+    /// Zoomed in far enough that the Distance setting decides the reach.
+    fn view(options: &PcbSnapOptions) -> SnapView<'_> {
+        SnapView {
+            options,
+            active: CopperLayer::Top,
+            px_per_mm: 1000.0,
+        }
+    }
+
+    #[test]
+    fn the_catch_radius_is_the_larger_of_the_grid_and_the_screen_reach() {
+        let snap = PcbSnapOptions::default();
+        // 0.5 x 0.1 mm is 2.4 px at 48 px/mm: the 8 px reach wins.
+        assert!((snap.catch_radius_mm(0.1, 48.0) - 8.0 / 48.0).abs() < 1e-12);
+        // 0.5 x 2.54 mm beats 8 px: a coarse grid keeps its larger radius.
+        assert!((snap.catch_radius_mm(2.54, 48.0) - 1.27).abs() < 1e-12);
+        // Zoomed out, 8 px is more of the board.
+        assert!((snap.catch_radius_mm(0.1, 2.0) - 4.0).abs() < 1e-12);
+    }
 
     #[test]
     fn the_nearest_origin_lands_on_the_grid() {
@@ -578,8 +607,7 @@ mod tests {
             &both,
             Point::new(1.0, 1.0),
             Point::new(2.0, 1.3),
-            &PcbSnapOptions::default(),
-            CopperLayer::Top,
+            view(&PcbSnapOptions::default()),
         );
         // U1 at 1.1 + 1.0 = 2.1 snaps to 2.0; y 1.0 + 0.3 snaps to 1.5.
         assert!(
@@ -614,8 +642,7 @@ mod tests {
             &[Uuid::from_u128(1)].into(),
             Point::new(1.0, 1.0),
             to,
-            snap,
-            CopperLayer::Top,
+            view(snap),
         )
     }
 

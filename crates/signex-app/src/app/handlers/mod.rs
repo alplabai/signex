@@ -99,6 +99,8 @@ pub(crate) mod pcb_query;
 pub mod pcb_select;
 #[cfg(test)]
 mod pcb_select_tests;
+#[cfg(test)]
+mod pcb_snap_options_tests;
 mod pcb_text_move;
 #[cfg(test)]
 mod pcb_text_pick_tests;

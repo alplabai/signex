@@ -84,6 +84,10 @@ pub struct PcbSnapOptions {
 /// Axis Snap Range of a new session, mm.
 pub const DEFAULT_AXIS_RANGE_MM: f64 = 10.0;
 
+/// The least on-screen reach of object and guide snapping, in pixels, so
+/// they still catch on a fine grid.
+pub const SNAP_REACH_PX: f64 = 8.0;
+
 impl Default for PcbSnapOptions {
     fn default() -> Self {
         Self {
@@ -115,4 +119,25 @@ impl PcbSnapOptions {
             SnapScope::Off => None,
         }
     }
+
+    /// How far from the pointer an object or guide pulls it, in mm: the
+    /// Distance setting on the board's grid, or [`SNAP_REACH_PX`] at this
+    /// zoom (`px_per_mm`), whichever is larger.
+    pub fn catch_radius_mm(&self, grid_mm: f64, px_per_mm: f64) -> f64 {
+        let by_grid = self.distance.factor() * grid_mm;
+        if px_per_mm.is_finite() && px_per_mm > 0.0 {
+            by_grid.max(SNAP_REACH_PX / px_per_mm)
+        } else {
+            by_grid
+        }
+    }
+}
+
+/// The options a snap reads, the active copper layer, and the zoom of the
+/// canvas the pointer is on.
+#[derive(Debug, Clone, Copy)]
+pub struct SnapView<'a> {
+    pub options: &'a PcbSnapOptions,
+    pub active: CopperLayer,
+    pub px_per_mm: f64,
 }

@@ -15,7 +15,7 @@ use signex_types::pcb::Point;
 use uuid::Uuid;
 
 use crate::app::{Message, Signex};
-use crate::pcb_canvas::{CarryKind, PcbCarry, carry_delta};
+use crate::pcb_canvas::{CarryKind, PcbCarry, SnapView, carry_delta};
 
 impl Signex {
     /// Rotate or mirror the board selection when the active tab is a PCB.
@@ -337,6 +337,23 @@ impl Signex {
         (carry.kind == kind && self.has_own_pcb_carry()).then(|| carry.clone())
     }
 
+    pub(crate) fn pcb_snap_view(&self) -> SnapView<'_> {
+        let state = &self.interaction_state;
+        let tile = || {
+            let path = self.active_tab_path()?;
+            state.tile_panes.board.get(&path)
+        };
+        let canvas = match state.acting_window {
+            Some(window) => state.pcb_canvas_for_window(window),
+            None => tile().unwrap_or(&state.pcb_canvas),
+        };
+        SnapView {
+            options: &self.ui_state.pcb_snap,
+            active: self.pcb_active_layer(),
+            px_per_mm: f64::from(canvas.camera_ref().scale()),
+        }
+    }
+
     fn carry_to(&mut self, from: Point, to: Point) {
         let Some(board) = self.active_pcb() else {
             return;
@@ -363,8 +380,7 @@ impl Signex {
                 &carry.footprints,
                 from,
                 to,
-                &self.ui_state.pcb_snap,
-                self.pcb_active_layer(),
+                self.pcb_snap_view(),
             )
         };
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
@@ -398,16 +414,8 @@ impl Signex {
             self.end_pcb_carry();
             return;
         }
-        let active = self.pcb_active_layer();
         let built = self.active_pcb().map(|board| {
-            let delta = carry_delta(
-                board,
-                &carry.footprints,
-                from,
-                to,
-                &self.ui_state.pcb_snap,
-                active,
-            );
+            let delta = carry_delta(board, &carry.footprints, from, to, self.pcb_snap_view());
             if carry.leaves_tracks {
                 placement::move_footprints_only(board, &carry.footprints, delta)
             } else {
