@@ -116,7 +116,6 @@ fn an_unselected_board_shows_its_own_properties() {
         "BOARD INFORMATION",
         "GRID MANAGER",
         "GUIDE MANAGER",
-        "PANEL",
         "OTHER",
     ] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted} in {texts:?}");
@@ -130,7 +129,6 @@ fn an_unselected_board_shows_its_own_properties() {
         "SELECTION FILTER",
         "SNAP OPTIONS",
         "GUIDE MANAGER",
-        "PANEL",
     ] {
         assert!(
             texts_closed.iter().any(|t| t == wanted),

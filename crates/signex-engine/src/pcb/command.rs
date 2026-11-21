@@ -186,9 +186,13 @@ pub enum BoardCommand {
     SetNets(BoardNetEdit),
     /// Set the board's snap grid step in mm, `PcbSetup::grid_size` (#2353).
     /// `0` is the PCB default step. Refused for a negative or non-finite
-    /// step and on a board without a setup. The inverse is another one
-    /// holding the old step.
+    /// step. The inverse is another one holding the old step; on a board
+    /// without a setup it gives the board one with every other value unset
+    /// (`0`, read as the default), and the inverse is [`Self::RemoveSetup`].
     SetGridSize { grid_mm: f64 },
+    /// Take away the setup a [`Self::SetGridSize`] gave a board that had
+    /// none. The inverse is that command again.
+    RemoveSetup,
     /// Replace the board options (#2374): guides, extra snap grids, the
     /// sheet and the naming options. Refused for a number that is not
     /// finite, a grid step or sheet side that is not positive, or a guide or
@@ -399,6 +403,7 @@ impl BoardCommand {
             } => footprint::set_component(board, id, component),
             Self::SetNets(edit) => batch::set_nets(board, edit),
             Self::SetGridSize { grid_mm } => set_grid_size(board, grid_mm),
+            Self::RemoveSetup => remove_setup(board),
             Self::SetBoardOptions { options: new } => options::set(board, *new),
             Self::SetLayerStack { stack: new } => stack::set(board, *new),
             Self::RestoreLayerStack(snapshot) => stack::restore(board, *snapshot),
@@ -446,10 +451,40 @@ fn set_grid_size(board: &mut PcbBoard, grid_mm: f64) -> Result<Applied, BoardCom
     if grid_mm < 0.0 {
         return Err(BoardCommandError::NegativeGridStep(grid_mm));
     }
-    let setup = board.setup.as_mut().ok_or(BoardCommandError::NoSetup)?;
-    let previous = std::mem::replace(&mut setup.grid_size, grid_mm);
+    let inverse = match board.setup.as_mut() {
+        Some(setup) => BoardCommand::SetGridSize {
+            grid_mm: std::mem::replace(&mut setup.grid_size, grid_mm),
+        },
+        None => {
+            // Every reader takes an unset (0) value as its default.
+            board.setup = Some(signex_types::pcb::PcbSetup {
+                grid_size: grid_mm,
+                trace_width: 0.0,
+                via_diameter: 0.0,
+                via_drill: 0.0,
+                clearance: 0.0,
+                track_min_width: 0.0,
+                via_min_diameter: 0.0,
+                via_min_drill: 0.0,
+            });
+            BoardCommand::RemoveSetup
+        }
+    };
     Ok(Applied {
-        inverse: BoardCommand::SetGridSize { grid_mm: previous },
+        inverse,
+        patch: BoardPatch {
+            kind: BoardPatchKind::GridChanged,
+            items: Vec::new(),
+        },
+    })
+}
+
+fn remove_setup(board: &mut PcbBoard) -> Result<Applied, BoardCommandError> {
+    let setup = board.setup.take().ok_or(BoardCommandError::NoSetup)?;
+    Ok(Applied {
+        inverse: BoardCommand::SetGridSize {
+            grid_mm: setup.grid_size,
+        },
         patch: BoardPatch {
             kind: BoardPatchKind::GridChanged,
             items: Vec::new(),

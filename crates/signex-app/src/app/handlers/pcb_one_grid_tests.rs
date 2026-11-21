@@ -203,6 +203,29 @@ fn picking_the_current_grid_changes_nothing() {
     rig.assert_one_grid(0.5);
 }
 
+/// A board with no setup takes a pick, keeps it through the file, and one
+/// undo gives back no setup.
+#[test]
+fn a_board_without_a_setup_takes_a_pick_and_undo_gives_none() {
+    let mut rig = rig();
+    let path = PathBuf::from("/w/bare.snxpcb");
+    let bare: PcbBoard = serde_json::from_value(json!({"uuid": Uuid::now_v7()})).unwrap();
+    rig.app.open_pcb_tab(path.clone(), "bare".into(), bare);
+    rig.select(3);
+    rig.open_popover();
+    rig.popover(BoardPopoverEvent::GridPresetPicked(0.25));
+    assert_eq!(rig.status(), 0.25);
+    let board = rig.app.document_state.pcb_board(&path).expect("board");
+    let text = signex_types::format::SnxPcb::new(board.clone())
+        .write_string()
+        .expect("written");
+    let read = signex_types::format::SnxPcb::parse(&text).expect("read");
+    assert_eq!(grid_step_mm(&read.board), 0.25, "kept by the file");
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    let board = rig.app.document_state.pcb_board(&path).expect("board");
+    assert!(board.setup.is_none(), "undo gives back no setup");
+}
+
 /// On a sheet the grid commands stay app-wide.
 #[test]
 fn a_sheet_still_steps_the_app_wide_grid() {

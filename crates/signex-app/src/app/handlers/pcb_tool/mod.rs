@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
-use crate::pcb_canvas::{carried_board, snap_point};
+use crate::pcb_canvas::{SnapView, carried_board, snap_point};
 
 mod area;
 mod form;
@@ -291,9 +291,28 @@ impl Signex {
         (!session.is_routing()).then(|| self.board_tool_hint(session.tool))
     }
 
-    /// Where a tool click at `at` lands on the board in view.
+    /// Where a tool click at `at` lands on the board in view. A running
+    /// pair or multi-track route places its centre line, which runs between
+    /// its tracks: an object point would put one member on that object, so
+    /// only the grid, guides and axes hold it.
     fn board_tool_point(&self, board: &PcbBoard, at: Point) -> Point {
-        snap_point(board, at, self.pcb_snap_view())
+        let view = self.pcb_snap_view();
+        let on_centre_line = self.own_board_tool().is_some_and(|session| {
+            matches!(
+                session.tool,
+                BoardPlaceTool::DiffPairRouting | BoardPlaceTool::MultiRoute
+            ) && !session.points.is_empty()
+        });
+        if !on_centre_line {
+            return snap_point(board, at, view);
+        }
+        let mut no_objects = view.options.clone();
+        no_objects.objects.clear();
+        let view = SnapView {
+            options: &no_objects,
+            ..view
+        };
+        snap_point(board, at, view)
     }
 
     /// The pointer moved over the board: what the next click adds follows,
