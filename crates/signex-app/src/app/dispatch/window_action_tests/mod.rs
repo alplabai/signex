@@ -352,12 +352,11 @@ fn only_commands_that_edit_the_shown_sheet_run_in_a_windows_swap() {
 }
 
 #[test]
-fn erc_focus_and_library_rows_from_an_undocked_window_run_on_the_main_window() {
+fn erc_focus_and_opening_a_sibling_run_on_main_and_a_symbol_row_in_the_window() {
     let f = fixture();
     for message in [
         crate::panels::PanelMsg::FocusErcViolation(0),
         crate::panels::PanelMsg::FpLibraryOpenSibling(PathBuf::from("x.snxfpt")),
-        crate::panels::PanelMsg::SchLibrarySelectSymbol(0),
     ] {
         let sent = f.app.scope_dock_message(f.window, dock(message.clone()));
         assert!(
@@ -365,6 +364,12 @@ fn erc_focus_and_library_rows_from_an_undocked_window_run_on_the_main_window() {
             "{message:?} would run inside the window's swap"
         );
     }
+    // A symbol row picks within the file the window shows.
+    let row = dock(crate::panels::PanelMsg::SchLibrarySelectSymbol(0));
+    assert!(is_scoped(
+        &f.app.scope_dock_message(f.window, row),
+        f.window
+    ));
 }
 
 #[test]
@@ -819,3 +824,6 @@ mod scoped;
 
 #[path = "surfaces.rs"]
 mod surfaces;
+
+#[path = "panel_scope.rs"]
+mod panel_scope;

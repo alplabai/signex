@@ -179,19 +179,28 @@ pub(super) fn action_button<'a>(
     label: Localized,
     on_press: Option<Message>,
 ) -> Element<'a, Message> {
-    sized_button(tokens, look_size, glyph, label, on_press, true)
+    sized_button(tokens, look_size, glyph, label, on_press, ButtonFace::Shown)
 }
 
-/// The room [`action_button`] takes, drawn as nothing: a row reserves it
-/// for a button that only shows on hover, so the row's text never runs
-/// under the button.
+/// The room [`action_button`] takes, for a button that only shows on hover,
+/// so the row's text never runs under it. Draws no frame or label; the glyph
+/// stays, in the button's place, when `glyph_ink` is given.
 pub(super) fn reserved_button<'a>(
     tokens: &ThemeTokens,
     look_size: (Look, Size),
     glyph: Option<svg::Handle>,
     label: Localized,
+    glyph_ink: Option<Color>,
 ) -> Element<'a, Message> {
-    sized_button(tokens, look_size, glyph, label, None, false)
+    let face = ButtonFace::Reserved { glyph_ink };
+    sized_button(tokens, look_size, glyph, label, None, face)
+}
+
+/// What a button draws: all of itself, or only what its reserved room keeps.
+#[derive(Clone, Copy)]
+enum ButtonFace {
+    Shown,
+    Reserved { glyph_ink: Option<Color> },
 }
 
 fn sized_button<'a>(
@@ -200,8 +209,9 @@ fn sized_button<'a>(
     glyph: Option<svg::Handle>,
     label: Localized,
     on_press: Option<Message>,
-    visible: bool,
+    face: ButtonFace,
 ) -> Element<'a, Message> {
+    let visible = matches!(face, ButtonFace::Shown);
     let ink = match look {
         Look::Outline => ti(tokens.text),
         Look::Primary => resolve(tokens).primary_ink,
@@ -213,10 +223,14 @@ fn sized_button<'a>(
     if let Some(glyph) = glyph {
         let side = size.glyph();
         // An SVG tint drops its alpha, so a transparent one paints black.
-        content = content.push(if visible {
-            icon(glyph, side, ink)
-        } else {
-            Space::new().width(side).height(side).boxed()
+        content = content.push(match face {
+            ButtonFace::Shown => icon(glyph, side, ink),
+            ButtonFace::Reserved {
+                glyph_ink: Some(quiet),
+            } => icon(glyph, side, quiet),
+            ButtonFace::Reserved { glyph_ink: None } => {
+                Space::new().width(side).height(side).boxed()
+            }
         });
     }
     content = content.push(

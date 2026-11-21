@@ -32,7 +32,7 @@ impl Signex {
             self.start_route(at, layer);
             return;
         };
-        if at != anchor {
+        if !self.clicks_run_end(at, anchor) {
             let Some((board, session)) = self.active_pcb().zip(self.own_board_tool()) else {
                 return;
             };

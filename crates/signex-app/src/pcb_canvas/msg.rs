@@ -32,11 +32,11 @@ pub enum PcbCanvasMsg {
         mode: ClickMode,
         view_rotation_deg: f64,
     },
-    /// A press on a footprint is being dragged from `from` to `to` (#2240).
-    /// An unselected one is selected by the drag (#2358); `tolerance_mm` is
+    /// A press on a footprint or via is being dragged from `from` to `to`
+    /// (#2240). An unselected one is selected by the drag (#2358); `tolerance_mm` is
     /// the reach the press grabbed it with. The board is untouched until
-    /// the drop. `leaves_tracks`: Ctrl is held, so the footprints move
-    /// alone and the tracks on their pads stay (Caner, 2026-11-21).
+    /// the drop. `leaves_tracks`: Ctrl has been down in this drag, so
+    /// what is carried moves alone and its tracks stay (Caner, 2026-11-21).
     FootprintDragged {
         from: Point,
         to: Point,

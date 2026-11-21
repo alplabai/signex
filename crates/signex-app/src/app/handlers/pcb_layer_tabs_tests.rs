@@ -464,6 +464,26 @@ fn undocked() -> (Signex, PathBuf, PathBuf, iced::window::Id) {
     (app, main_path, path, window)
 }
 
+/// The right-release hold set or cleared from an undocked window reaches the
+/// main canvas too, which sits in a local while that window's handler runs.
+#[test]
+fn the_right_release_hold_stays_in_step_across_an_undocked_window() {
+    use crate::active_bar::ActiveBarMsg;
+    let (mut app, _main_path, _path, window) = undocked();
+    let scoped = |inner| Message::ActiveBar(ActiveBarMsg::ScopedToWindow(window, Box::new(inner)));
+    let holds = |app: &Signex| {
+        (
+            app.interaction_state.swallow_right_release,
+            app.interaction_state.pcb_canvas.swallows_right_release(),
+            app.interaction_state.pcb_canvases[&window].swallows_right_release(),
+        )
+    };
+    let _ = app.update(scoped(ActiveBarMsg::RightPressTaken));
+    assert_eq!(holds(&app), (true, true, true));
+    let _ = app.update(scoped(ActiveBarMsg::RightReleaseSwallowed));
+    assert_eq!(holds(&app), (false, false, false));
+}
+
 /// #2379 review: a pick in an undocked window's tab menu changes that
 /// window's board view, not the main window's.
 #[test]

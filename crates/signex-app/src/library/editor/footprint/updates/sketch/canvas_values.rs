@@ -91,7 +91,14 @@ fn sketch(editor: &FootprintDocument) -> Option<&signex_sketch::SketchData> {
 }
 
 fn open_value_edit(editor: &mut FootprintDocument, target: ValueTarget) {
-    let Some(buffer) = sketch(editor).and_then(|s| value_edit::initial_buffer(target, s)) else {
+    let shown = sketch(editor).and_then(|s| match target {
+        ValueTarget::Constraint(id) => {
+            let constraint = s.constraints.iter().find(|c| c.id == id)?;
+            value_edit::constraint_buffer(&editor.state.shown_constraint(&constraint.kind))
+        }
+        ValueTarget::Pattern(..) => value_edit::initial_buffer(target, s),
+    });
+    let Some(buffer) = shown else {
         return;
     };
     // A reference (driven) dimension measures; its value is not edited.
@@ -124,6 +131,8 @@ fn edit_buffer(editor: &mut FootprintDocument, next: impl FnOnce(&str) -> Option
 
 /// What a committed edit writes.
 enum ValueWrite {
+    /// What was entered is what the dimension already shows: no edit.
+    Unchanged,
     Constraint(ConstraintId, DimTarget),
     Pattern(ArrayId, PatternField, String),
 }
@@ -144,8 +153,16 @@ fn prepared_write(editor: &FootprintDocument, edit: &ValueEdit) -> Option<ValueW
         ValueTarget::Constraint(id) => {
             let constraint = sketch.constraints.iter().find(|c| c.id == id)?;
             let params = value_edit::resolved_params(sketch, &editor.state);
-            value_edit::parse_constraint_buffer(&edit.buffer, &constraint.kind, &params)
-                .map(|target| ValueWrite::Constraint(id, target))
+            let typed =
+                value_edit::parse_constraint_buffer(&edit.buffer, &constraint.kind, &params)?;
+            if editor
+                .state
+                .retypes_shown_angle(&constraint.kind, &typed, &params)
+            {
+                return Some(ValueWrite::Unchanged);
+            }
+            let target = editor.state.stored_target(&constraint.kind, typed);
+            Some(ValueWrite::Constraint(id, target))
         }
         ValueTarget::Pattern(array, field) => {
             let typed = edit.buffer.trim();
@@ -160,6 +177,7 @@ fn write_value(fp: &mut Footprint, write: &ValueWrite) {
         return;
     };
     match write {
+        ValueWrite::Unchanged => {}
         ValueWrite::Constraint(id, new_target) => {
             let Some(constraint) = sketch.constraints.iter_mut().find(|c| c.id == *id) else {
                 return;
@@ -197,6 +215,9 @@ fn commit_value(editor: &mut FootprintDocument) {
         return;
     };
     editor.state.sketch_overlay.value_edit = None;
+    if matches!(write, ValueWrite::Unchanged) {
+        return;
+    }
     record_sketch_change(editor, |state, fp| {
         mutate_solve_or_revert(state, fp, |fp| write_value(fp, &write))
     });

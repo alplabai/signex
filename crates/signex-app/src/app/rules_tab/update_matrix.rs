@@ -168,6 +168,7 @@ impl Signex {
                 self.rules_tab_mut(project_id).preview = None;
             }
             RulesTabMsg::OpenRequested { .. }
+            | RulesTabMsg::OpenedAt { .. }
             | RulesTabMsg::DomainPicked { .. }
             | RulesTabMsg::GridActed { .. }
             | RulesTabMsg::PreviewActed { .. }

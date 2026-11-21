@@ -1,15 +1,12 @@
-//! The Via panel's own events (mockup row 96): picking a via type,
-//! Override, a reset arrow and the shown layer. A pick or a reset is one
-//! board undo step built by `signex_engine::pcb::via_types` from the
-//! board's derived via types; Override on and the shown layer are panel
-//! state only.
+//! The Via panel's own events (mockup row 96): picking a via type, a reset
+//! arrow and the shown layer. A pick or a reset is one board undo step built
+//! from the board's derived via types (`signex_engine::pcb::via_types`); the
+//! shown layer is panel state only.
 
 use pcb_geom::ItemRef;
 use signex_engine::pcb::BoardCommand;
 use signex_engine::pcb::primitive_edit::{PrimitiveEditRefusal, ViaEdit, via_edit_command};
-use signex_engine::pcb::via_types::{
-    ViaTypeDef, apply_type_commands, reset_override_commands, type_of, via_types,
-};
+use signex_engine::pcb::via_types::{ViaTypeDef, apply_type_commands, type_of, via_types};
 use signex_i18n::{MessageId, ids};
 use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
@@ -29,15 +26,6 @@ impl Signex {
                         return Ok(Vec::new());
                     };
                     apply_type_commands(board, items, t)
-                });
-            }
-            ViaMsg::OverrideToggled { target, on: true } => {
-                panel.via_override = Some(target.clone());
-            }
-            ViaMsg::OverrideToggled { target, on: false } => {
-                panel.via_override = None;
-                self.run_via_type_step(target, ids::PCB_PRIM_OVERRIDE, |board, items| {
-                    per_type(board, items, reset_override_commands)
                 });
             }
             ViaMsg::SizeReset { target, field } => {

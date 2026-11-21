@@ -99,10 +99,7 @@ impl Signex {
                 self.handle_board_net(event);
                 Task::none()
             }
-            PcbMsg::Tools(event) => {
-                self.handle_board_tools(event);
-                Task::none()
-            }
+            PcbMsg::Tools(event) => self.handle_board_tools(event),
             PcbMsg::Tune(event) => {
                 self.handle_tune(event);
                 Task::none()
@@ -121,6 +118,20 @@ impl Signex {
             }
             PcbBarMsg::MenuDismissed => {
                 *open = None;
+                Task::none()
+            }
+            PcbBarMsg::MenuRightPressed(menu) => {
+                *open = (*open != Some(menu)).then_some(menu);
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
+            PcbBarMsg::FlyoutRightPressed => {
+                *open = None;
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
+            PcbBarMsg::RightPressTaken => {
+                self.set_swallow_right_release(true);
                 Task::none()
             }
             PcbBarMsg::CommandPicked(command) => {

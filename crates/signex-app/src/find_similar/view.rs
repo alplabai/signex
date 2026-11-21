@@ -76,7 +76,7 @@ pub(super) fn select_message(state: &FindSimilarState) -> Option<FindSimilarMsg>
 
 fn segmented_look(tokens: &ThemeTokens, size: f32) -> SegmentedStyle {
     let r = tokens::resolve(tokens);
-    SegmentedStyle::new(r.sunken, r.raised, r.shadow, r.ink3, ti(tokens.text), size)
+    r.segmented(size)
 }
 
 fn mono() -> Font {

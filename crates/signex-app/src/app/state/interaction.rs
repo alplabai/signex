@@ -85,6 +85,8 @@ pub struct InteractionState {
     pub tab_drag_origin: Option<(f32, f32)>,
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
+    /// The undocked window the wire being drawn started in; `None`: main.
+    pub wire_window: Option<iced::window::Id>,
     /// Width and colour of the wire the route being drawn started on, which
     /// its wires take; `None` when it started on no wire.
     pub(crate) wire_start_style: Option<(f64, Option<signex_types::theme::Color>)>,
@@ -179,6 +181,9 @@ pub struct InteractionState {
     pub active_bar_menu_window: Option<iced::window::Id>,
     /// The open dropdown of the main window's PCB Active Bar (#2352).
     pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
+    /// An Active Bar took the last right press, so the canvas ignores its
+    /// release. Cleared by that release or the next right press on a canvas.
+    pub swallow_right_release: bool,
     /// The open right-click menu of a layer tab under a board canvas (#2379).
     pub pcb_layer_tab_menu: Option<crate::app::LayerTabMenu>,
     /// The open menu of the layer set button under a board canvas (#2394).

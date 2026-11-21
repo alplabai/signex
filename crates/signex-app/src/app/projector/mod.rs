@@ -15,7 +15,7 @@ mod panel;
 mod replaced_engine;
 mod slots;
 
-pub(crate) use notice::log_notice;
+pub(crate) use notice::{log_notice, log_notices};
 pub(crate) use panel::effective_paper_size;
 
 use crate::app::Signex;
@@ -35,6 +35,10 @@ pub(crate) enum RefreshScope {
     /// The by-path tail's: every slot showing the sheet, and when it is the
     /// active one its selection and ERC markers.
     Sheet,
+    /// A member of a multi-sheet step other than the active sheet: only the
+    /// windows and tile pane showing it; the wrapper re-derives the panel
+    /// context once for the whole step.
+    Member,
 }
 
 impl Signex {

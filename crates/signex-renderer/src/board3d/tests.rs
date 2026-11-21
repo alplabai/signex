@@ -9,6 +9,8 @@ use uuid::Uuid;
 
 use super::*;
 
+mod layer_stack;
+
 const U1: Uuid = Uuid::from_u128(1);
 const U2: Uuid = Uuid::from_u128(2);
 const U3: Uuid = Uuid::from_u128(3);
@@ -23,13 +25,19 @@ fn grey(level: f32) -> [f32; 4] {
 
 const OPAQUE: f32 = 1.0;
 
+/// `color` as translucent as solder mask.
+fn see_through(mut color: [f32; 4]) -> [f32; 4] {
+    color[3] = 0.88;
+    color
+}
+
 fn colors() -> Board3dColors {
     Board3dColors {
-        mask: grey(0.3),
-        edge: grey(0.2),
-        top_copper: grey(0.8),
-        bottom_copper: grey(0.7),
-        multi_layer: grey(0.6),
+        mask: see_through(grey(0.3)),
+        substrate: grey(0.2),
+        copper: grey(0.8),
+        finish: grey(0.7),
+        silk: grey(0.95),
         body: grey(0.5),
     }
 }
@@ -163,6 +171,48 @@ fn the_board_is_its_outline_extruded_to_its_thickness() {
         .scene
         .ray_hit(scene.board.clone(), [5.0, -5.0, 10.0], DOWN);
     assert!(into_board.is_some_and(|t| close(t, 10.0 - 1.6)));
+}
+
+/// The active layer's size is a flat-view aid: 3D keeps the stored size.
+#[test]
+fn the_3d_copper_keeps_its_own_size_whatever_layer_is_active() {
+    use signex_types::pcb::{DrillDef, LayerSizes};
+    use signex_types::pcb_layer::CopperLayer;
+    let mut board = board();
+    board.vias[0].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: 1.2,
+        middle: 0.5,
+        bottom: 0.9,
+    });
+    let mut through = pad("TopCopper");
+    through.pad_type = PadType::Thru;
+    through.shape = PadShape::Circle;
+    through.size = Point::new(1.5, 1.5);
+    through.drill = Some(DrillDef {
+        diameter: 0.8,
+        shape: String::new(),
+    });
+    through.layers = vec!["TopCopper".into(), "BottomCopper".into()];
+    through.layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: Point::new(2.4, 2.4),
+        middle: Point::new(1.2, 1.2),
+        bottom: Point::new(1.8, 1.8),
+    });
+    board.footprints[0].pads.push(through);
+    let mut view = PcbLayerView::default();
+    view.set_active(CopperLayer::Top);
+    let through_size = |snapshot: &PcbSnapshot| {
+        let pad = snapshot.pads.iter().find(|p| p.pad_type == PadType::Thru);
+        pad.expect("the through-hole pad").size_mm
+    };
+
+    let flat = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(flat.vias[0].diameter_mm, 1.2, "the flat view's active size");
+    assert_eq!(through_size(&flat), [2.4, 2.4]);
+
+    let in_3d = PcbSnapshot::from_board_with_view(&board, &all_layers_of(&view));
+    assert_eq!(in_3d.vias[0].diameter_mm, 0.6);
+    assert_eq!(through_size(&in_3d), [1.5, 1.5]);
 }
 
 #[test]
@@ -371,7 +421,7 @@ fn z_span(scene: &BoardScene3d, layer: Layer3d) -> (f32, f32) {
 }
 
 /// Every vertex is tagged: the two mask faces at the faces' heights, the
-/// walls as core, copper by its face, parts by theirs.
+/// walls as core, copper by its face under its mask, parts by theirs.
 #[test]
 fn every_vertex_is_tagged_with_its_slice_of_the_board() {
     let scene = scene_of(&board());
@@ -379,10 +429,10 @@ fn every_vertex_is_tagged_with_its_slice_of_the_board() {
     assert_eq!(z_span(&scene, Layer3d::Mask(Face::Top)), (1.6, 1.6));
     assert_eq!(z_span(&scene, Layer3d::Mask(Face::Bottom)), (0.0, 0.0));
     assert_eq!(z_span(&scene, Layer3d::Core), (0.0, 1.6));
-    let (lo, _) = z_span(&scene, Layer3d::Copper(Face::Top));
-    assert!(lo > 1.6, "top copper above the top face");
-    let (_, hi) = z_span(&scene, Layer3d::Copper(Face::Bottom));
-    assert!(hi < 0.0, "bottom copper below the bottom face");
+    let (lo, hi) = z_span(&scene, Layer3d::Copper(Face::Top));
+    assert!(lo > 0.8 && hi < 1.6, "top copper under the top mask");
+    let (lo, hi) = z_span(&scene, Layer3d::Copper(Face::Bottom));
+    assert!(lo > 0.0 && hi < 0.8, "bottom copper under the bottom mask");
     assert!(close(z_span(&scene, Layer3d::Part(Face::Top)).0, 1.6));
     assert!(close(z_span(&scene, Layer3d::Part(Face::Bottom)).1, 0.0));
 }
@@ -408,9 +458,9 @@ fn assembled_the_scene_is_unchanged() {
     assert_eq!(scene.exploded(nothing_ticked), scene);
 }
 
-/// Fully apart, the core stays, the mask and copper of each face move off
-/// it on their side and the parts further; the mesh is the same mesh, so
-/// a click still picks a lifted part.
+/// Fully apart, the core stays and each face's copper, mask and parts move
+/// off it in stack order; the mesh is the same mesh, so a click still picks
+/// a lifted part.
 #[test]
 fn layers_apart_move_off_the_core_and_still_pick() {
     let scene = scene_of(&board());
@@ -432,23 +482,25 @@ fn layers_apart_move_off_the_core_and_still_pick() {
     // One step is 6% of the board's 50 mm side: 3 mm.
     assert_eq!(z_span(&apart, Layer3d::Core), (0.0, 1.6));
     let (_, top_mask) = z_span(&apart, Layer3d::Mask(Face::Top));
-    assert!(close(top_mask, 1.6 + 3.0), "{top_mask}");
-    let (top_copper, _) = z_span(&apart, Layer3d::Copper(Face::Top));
-    assert!(top_copper > top_mask, "top copper above the top face");
+    assert!(close(top_mask, 1.6 + 6.0), "{top_mask}");
+    let (_, top_copper) = z_span(&apart, Layer3d::Copper(Face::Top));
+    assert!(
+        top_copper > 1.6 && top_copper < top_mask,
+        "copper under mask"
+    );
     let (top_part, _) = z_span(&apart, Layer3d::Part(Face::Top));
-    let (_, top_copper_hi) = z_span(&apart, Layer3d::Copper(Face::Top));
-    assert!(top_part > top_copper_hi, "the top part above its copper");
+    assert!(top_part > top_mask, "the top part above its mask");
 
     let (bottom_mask, _) = z_span(&apart, Layer3d::Mask(Face::Bottom));
-    assert!(close(bottom_mask, -3.0), "{bottom_mask}");
+    assert!(close(bottom_mask, -6.0), "{bottom_mask}");
     let (bottom_copper, _) = z_span(&apart, Layer3d::Copper(Face::Bottom));
-    assert!(bottom_copper < bottom_mask);
+    assert!(bottom_copper < 0.0 && bottom_copper > bottom_mask);
     let (lo, hi) = apart
         .scene
         .bounds_of(apart.part(U2).unwrap().indices.clone())
         .unwrap();
-    assert!(hi[2] < bottom_copper, "the bottom part below its copper");
-    assert!(close(lo[2], -1.0 - 9.0), "{lo:?}");
+    assert!(hi[2] < bottom_mask, "the bottom part below its mask");
+    assert!(close(lo[2], -1.0 - 12.0), "{lo:?}");
 
     assert_eq!(apart.pick([10.0, -10.0, 50.0], DOWN), Some(U1));
     assert_eq!(apart.pick([30.0, -15.0, -50.0], UP), Some(U2));
@@ -469,7 +521,7 @@ fn the_amount_scales_the_gaps_and_stops_at_one() {
         });
         z_span(&apart, Layer3d::Mask(Face::Top)).0
     };
-    assert!(close(at(0.5), 1.6 + 1.5));
+    assert!(close(at(0.5), 1.6 + 3.0));
     assert_eq!(at(4.0), at(1.0));
 }
 

@@ -276,15 +276,7 @@ pub(in crate::panels) fn sunken_value_row<'a>(
 /// caption size of the mockup's small control, segments sharing the width.
 pub(in crate::panels) fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = crate::styles::tokens::resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        crate::styles::ti(tokens.text),
-        TS.caption,
-    )
-    .fill_width(true)
+    r.segmented(TS.caption).fill_width(true)
 }
 
 /// The Rotation control: 0° / 90° / 180° / 270°, the stored angle shown as

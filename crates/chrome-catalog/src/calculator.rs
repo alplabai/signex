@@ -45,10 +45,10 @@ pub(crate) fn look(tokens: &ThemeTokens) -> CalculatorLook<'static> {
         mono: Font::MONOSPACE,
         segmented: SegmentedStyle::new(
             palette.sunken,
-            ext(x.raised, tokens.paper),
-            ext(x.shadow, tokens.border),
+            ext(x.selected_segment.or(x.raised), tokens.paper),
+            ext(x.selected_segment_shadow.or(x.shadow), tokens.border),
             palette.ink3,
-            palette.ink,
+            ext(x.selected_segment_ink, tokens.text),
             TypeScale::DEFAULT.body,
         ),
         enable_section: crate::enable_section::style(tokens),

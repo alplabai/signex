@@ -778,6 +778,8 @@ impl Signex {
         // Same reason: the draft, discard and Save paths change the zoom
         // speed the PCB / symbol / footprint canvases hold a copy of.
         self.sync_zoom_step();
+        // Same reason: undocked windows hold their own copy of the tokens.
+        self.sync_window_panel_ctx_shared();
         task
     }
 

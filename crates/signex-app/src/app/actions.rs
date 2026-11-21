@@ -190,8 +190,21 @@ impl Signex {
     /// not survive into the next (a half-drawn wire turning into a
     /// polyline vertex, a Line anchor becoming a Rectangle corner).
     pub(crate) fn clear_drawing_buffers(&mut self) {
-        let was_drawing = std::mem::take(&mut self.interaction_state.wire_drawing);
+        self.clear_drawing_buffers_keeping(false);
+    }
+
+    /// Main's tab changed: its buffers go, but a wire being drawn in an
+    /// undocked window belongs to that window's sheet and stays.
+    pub(crate) fn clear_drawing_buffers_of_main(&mut self) {
+        let wire_in_a_window =
+            self.interaction_state.wire_drawing && self.interaction_state.wire_window.is_some();
+        self.clear_drawing_buffers_keeping(wire_in_a_window);
+    }
+
+    fn clear_drawing_buffers_keeping(&mut self, keep_wire: bool) {
+        let was_drawing = !keep_wire && self.interaction_state.wire_drawing;
         if was_drawing {
+            self.interaction_state.wire_drawing = false;
             self.interaction_state.wire_points.clear();
         }
         self.interaction_state.arc_points.clear();

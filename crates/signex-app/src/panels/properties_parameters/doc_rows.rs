@@ -43,15 +43,7 @@ pub(super) fn row_label<'a>(
 /// The Graphite segmented look on `tokens`, segments sharing the width.
 pub(super) fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = crate::styles::tokens::resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    )
-    .fill_width(true)
+    r.segmented(TS.body).fill_width(true)
 }
 
 /// A labelled segmented choice over `options`.

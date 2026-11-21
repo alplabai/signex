@@ -203,15 +203,7 @@ pub(in crate::panels::footprint_editor_properties) fn banner<'a>(
 /// The look of a segmented control on `tokens`, stretched to the width.
 fn segment_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    )
-    .fill_width(true)
+    r.segmented(TS.body).fill_width(true)
 }
 
 /// A segmented control stretched to its column (units in a row).

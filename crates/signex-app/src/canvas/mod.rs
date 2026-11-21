@@ -27,6 +27,7 @@ pub mod grid;
 mod halo_cache;
 mod hit_cache;
 mod input;
+pub(crate) mod middle_zoom;
 mod move_pick;
 mod net_highlight;
 pub(crate) mod pan_reuse;
@@ -76,15 +77,14 @@ use crate::toolbar::ToolMessage;
 
 #[derive(Debug, Default)]
 pub struct CanvasState {
-    /// Is the user currently panning (right-click or middle-click drag)?
+    /// Is the user currently panning (right-button drag)?
     panning: bool,
     /// Whether actual pan movement occurred (to distinguish click from drag).
     pan_moved: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
-    /// The right press landed on this canvas, so its release is a canvas
-    /// right-click. A press the Active Bar or an overlay took leaves it unset.
-    right_press_on_canvas: bool,
+    /// The middle-button drag zooming the view, while it is held.
+    middle_zoom: Option<middle_zoom::MiddleZoom>,
     /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
     /// Ctrl or Cmd held: a scroll zooms even with "Two-finger scroll pans" on.
@@ -629,6 +629,9 @@ pub struct CanvasViewPrefs<'a> {
     /// Full window width. The Active Bar is centred on the window, not on
     /// this canvas, so docked side panels do not move it.
     pub window_width: f32,
+    /// The Active Bar took the last right press, so its release is not a
+    /// canvas right-click.
+    pub swallow_right_release: bool,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Resolved net-class style per wire and junction, read from app state
     /// so the canvas never reaches into the project. See
@@ -924,6 +927,8 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
         // crosshair while a tool is armed (`cursor::tool_cursor`).
         if state.panning {
             mouse::Interaction::Grabbing
+        } else if state.middle_zoom.is_some() {
+            mouse::Interaction::ResizingVertically
         } else if state.move_dragging {
             mouse::Interaction::Move
         } else if cursor.is_over(bounds) {
@@ -1036,6 +1041,8 @@ mod halo_cache_tests;
 #[cfg(test)]
 mod hit_cache_tests;
 #[cfg(test)]
+mod middle_zoom_tests;
+#[cfg(test)]
 pub(crate) mod overlay_camera_tests;
 #[cfg(test)]
 mod pan_bench_tests;
@@ -1106,6 +1113,7 @@ mod tests {
             drag_wiring: Default::default(),
             current_tool: crate::app::Tool::Select,
             window_width: 1400.0,
+            swallow_right_release: false,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             wire_class_revision: 0,

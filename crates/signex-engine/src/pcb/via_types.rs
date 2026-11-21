@@ -1,9 +1,8 @@
 //! The via types of a board (mockup row 96): span, kind, size and
 //! protection, as the Via panel picks them. Derived from the board's own
 //! vias until the Layer Stack Manager stores via types (mockup row 105).
-//! Applying a type or resetting a via's size override is built from the
-//! `primitive_edit` via edits and returned as one command, so the app runs
-//! it as one undo step.
+//! Applying a type is built from the `primitive_edit` via edits and returned
+//! as one command, so the app runs it as one undo step.
 
 use std::collections::BTreeMap;
 
@@ -89,6 +88,17 @@ impl ViaTypeDef {
     /// [`VIA_PLATING_MM`], never below zero.
     pub fn finished_hole(drill: f64) -> f64 {
         (drill - 2.0 * VIA_PLATING_MM).max(0.0)
+    }
+
+    /// The drill that leaves a `finished` hole after plating, to the whole
+    /// nanometre the file stores. A finished hole that is not positive is
+    /// returned as it is, for the via edit to refuse.
+    pub fn drill_for_finished(finished: f64) -> f64 {
+        if finished > 0.0 {
+            ((finished + 2.0 * VIA_PLATING_MM) * 1e6).round() / 1e6
+        } else {
+            finished
+        }
     }
 }
 
@@ -215,17 +225,6 @@ pub fn apply_type_commands(
         ViaEdit::TentedBottom(t.protection.tented_bottom),
     ];
     folded_command(board, items, &edits, Some(t.kind))
-}
-
-/// The command putting the diameter and drill of every via of `items` back
-/// to type `t`'s.
-pub fn reset_override_commands(
-    board: &PcbBoard,
-    items: &[ItemRef],
-    t: &ViaTypeDef,
-) -> Result<Vec<BoardCommand>, PrimitiveEditRefusal> {
-    let edits = [ViaEdit::Diameter(t.diameter), ViaEdit::HoleSize(t.drill)];
-    folded_command(board, items, &edits, None)
 }
 
 /// `edits` run in turn on copies of the vias of `items`, each as

@@ -317,7 +317,8 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         // pill's `Translate`): a guard there took the wheel over the whole
         // canvas. The builders guard the bar, pill and dropdown themselves
         // (`overlays::scroll_guard`).
-        OverlayId::SchematicActiveBar
+        OverlayId::PlacementPaused
+        | OverlayId::SchematicActiveBar
         | OverlayId::FootprintActiveBar
         | OverlayId::SymbolEditorActiveBar => false,
 
@@ -329,7 +330,6 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::PrintPreview
         | OverlayId::BomPreview
         | OverlayId::NetColorCustom
-        | OverlayId::PlacementPaused
         | OverlayId::FootprintContextMenu
         | OverlayId::FootprintMoveBy
         | OverlayId::FootprintAlign
@@ -431,10 +431,7 @@ pub(crate) fn covers_canvas_hover(id: OverlayId) -> bool {
     swallows_scroll(id)
         && !matches!(
             id,
-            OverlayId::PlacementPaused
-                | OverlayId::TextEdit
-                | OverlayId::DockDragZone
-                | OverlayId::FloatingPanels
+            OverlayId::TextEdit | OverlayId::DockDragZone | OverlayId::FloatingPanels
         )
 }
 
@@ -573,7 +570,7 @@ impl Signex {
                 layers.extend(self.start_row_context_menu_overlay(window_id))
             }
             OverlayId::LayerTabContextMenu => layers.extend(self.layer_tab_menu_overlay(window_id)),
-            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay()),
+            OverlayId::GridPicker => layers.extend(self.grid_picker_overlay(window_id)),
             OverlayId::PanelList => layers.extend(self.panel_list_overlay()),
             OverlayId::ZoomPresets => layers.extend(self.zoom_presets_overlay(window_id)),
             OverlayId::GridSnapPopover => layers.extend(self.grid_snap_popover_overlay(window_id)),

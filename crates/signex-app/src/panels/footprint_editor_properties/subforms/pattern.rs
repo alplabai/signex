@@ -242,7 +242,7 @@ fn layout_rows<'a>(
         ArrayKindSummary::Polar {
             count_expr,
             sweep_angle_expr,
-            center_position_mm,
+            center_position_mm: _,
             mask_expr,
             suppressed_instances,
             count_value,
@@ -257,7 +257,7 @@ fn layout_rows<'a>(
             ));
             rows.push(field_row(
                 t!(i18n, ids::EDITORS_ROLE_PATTERN_CENTRE),
-                centre_row(pattern, *center_position_mm, i18n),
+                centre_row(pattern, pattern.center_shown_mm, i18n),
                 tokens,
             ));
             rows.push(field_row(

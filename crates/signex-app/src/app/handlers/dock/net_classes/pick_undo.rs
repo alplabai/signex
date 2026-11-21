@@ -34,30 +34,6 @@ impl crate::app::Signex {
         self.document_state.sync_history_dirty(sheet);
     }
 
-    /// Whether `marker` is still the step its project's class history would
-    /// revert (`undoing`) or re-apply, in a project that is still open.
-    fn net_class_pick_is_live(&self, marker: ClassPickMarker, undoing: bool) -> bool {
-        let document = &self.document_state;
-        let Some(project) = document
-            .projects
-            .iter()
-            .find(|p| p.id.raw() == marker.project)
-        else {
-            return false;
-        };
-        document
-            .net_class_history
-            .get(&project.id)
-            .is_some_and(|history| {
-                let top = if undoing {
-                    history.top_undo_id()
-                } else {
-                    history.top_redo_id()
-                };
-                top == Some(marker.step)
-            })
-    }
-
     /// Whether the sheet at `path` has a step Ctrl+Z (`undoing`) or Ctrl+Y
     /// would move: an edit, or a pick that is still its project's newest
     /// class edit. Dead markers on the way are stepped over.
@@ -65,9 +41,9 @@ impl crate::app::Signex {
         let Some(engine) = self.document_state.engines.get(path) else {
             return false;
         };
-        engine
-            .steps_from_top(undoing)
-            .any(|marker| marker.is_none_or(|m| self.net_class_pick_is_live(m, undoing)))
+        engine.steps_from_top(undoing).any(|marker| {
+            marker.is_none_or(|m| self.document_state.net_class_pick_is_live(m, undoing))
+        })
     }
 
     /// Step the active sheet's timeline over the markers on top of it:
@@ -90,7 +66,7 @@ impl crate::app::Signex {
             .get(path)
             .and_then(|engine| engine.next_class_pick(undoing))
         {
-            let applied = self.net_class_pick_is_live(marker, undoing);
+            let applied = self.document_state.net_class_pick_is_live(marker, undoing);
             if applied {
                 self.apply_pick(marker, undoing);
             }
@@ -112,27 +88,8 @@ impl crate::app::Signex {
         false
     }
 
-    /// Pass the dead markers on top of the sheet at `path`'s timeline: a
-    /// project-wide step below them is then the sheet's next one. A live
-    /// marker stays and blocks it, like any later edit.
-    pub(crate) fn pass_dead_class_picks(&mut self, path: &std::path::Path, undoing: bool) {
-        while self
-            .document_state
-            .engines
-            .get(path)
-            .and_then(|engine| engine.next_class_pick(undoing))
-            .is_some_and(|marker| !self.net_class_pick_is_live(marker, undoing))
-        {
-            if let Some(engine) = self.document_state.engines.get_mut(path) {
-                engine.pass_dead_class_pick(undoing);
-            }
-        }
-        // A pass can push the saved step off a full stack.
-        self.document_state.sync_history_dirty(path);
-    }
-
     /// Revert (`undoing`) or re-apply the class-table step `marker` names.
-    /// Only for a live marker ([`Self::net_class_pick_is_live`]): its project
+    /// Only for a live marker (`DocumentState::net_class_pick_is_live`): its project
     /// is open and its history's next step is the one named.
     fn apply_pick(&mut self, marker: ClassPickMarker, undoing: bool) {
         let document = &mut self.document_state;
@@ -155,5 +112,25 @@ impl crate::app::Signex {
         for id in stepped {
             document.sync_project_history_dirty(id, false);
         }
+    }
+}
+
+impl crate::app::state::DocumentState {
+    /// Whether `marker` is still the step its project's class history would
+    /// revert (`undoing`) or re-apply, in a project that is still open.
+    pub(crate) fn net_class_pick_is_live(&self, marker: ClassPickMarker, undoing: bool) -> bool {
+        let Some(project) = self.projects.iter().find(|p| p.id.raw() == marker.project) else {
+            return false;
+        };
+        self.net_class_history
+            .get(&project.id)
+            .is_some_and(|history| {
+                let top = if undoing {
+                    history.top_undo_id()
+                } else {
+                    history.top_redo_id()
+                };
+                top == Some(marker.step)
+            })
     }
 }

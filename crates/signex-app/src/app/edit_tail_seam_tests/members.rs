@@ -41,7 +41,7 @@ fn a_font_or_paper_edit_by_path_bumps_the_erc_epoch_and_a_colour_does_not() {
     }
 }
 
-// ---- The grouped step's own epoch bump (`apply_grouped_step`).
+// ---- The grouped step's own epoch bump (`DocumentState::step_undo_group`).
 
 /// A colour on `a` (active) and `b` under one group: every member's patch is
 /// display-only, so the active tail bumps nothing and the epoch moves only

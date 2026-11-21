@@ -28,8 +28,11 @@ pub(super) struct Gesture {
     /// The press has passed the drag threshold and owns the canvas marquee,
     /// or (with `carrying`) drags the selected footprints.
     dragging: bool,
-    /// The press landed on a footprint: a drag moves it (#2240, #2358).
+    /// The press landed on a footprint or via: a drag moves it (#2240, #2358).
     carrying: bool,
+    /// Ctrl has been down during this carrying press: its tracks stay until
+    /// the drop, even once Ctrl is released (Caner, 2026-11-21).
+    leaves_tracks: bool,
     /// A tool or a carry waited for clicks at the press: its release is a
     /// click wherever it lands (#2396).
     clicks_only: bool,
@@ -51,8 +54,9 @@ impl Gesture {
         match event {
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 self.modifiers = *mods;
-                // Ctrl pressed or released mid-drag switches whether the
-                // tracks follow at once, not at the next pointer move.
+                self.leaves_tracks |= self.carrying && ctrl_down(*mods);
+                // Ctrl pressed mid-drag leaves the tracks at once, not at
+                // the next pointer move.
                 if !(self.carrying && self.dragging && canvas.carry.get()) {
                     return None;
                 }
@@ -84,6 +88,7 @@ impl Gesture {
                 self.carrying = !self.clicks_only
                     && (self.modifiers.is_empty() || leaves_tracks(self.modifiers))
                     && canvas.grabs(at, hover_reach_mm(canvas.scale()));
+                self.leaves_tracks = self.carrying && ctrl_down(self.modifiers);
                 Some(canvas::Action::publish(message).and_capture())
             }
             // The focus left: a modifier released in another window never
@@ -224,7 +229,7 @@ impl Gesture {
             from: canvas.screen_to_world(press, bounds),
             to: canvas.screen_to_world(pos, bounds),
             tolerance_mm: hover_reach_mm(canvas.scale()),
-            leaves_tracks: leaves_tracks(self.modifiers),
+            leaves_tracks: self.leaves_tracks,
         }
     }
 
@@ -232,6 +237,7 @@ impl Gesture {
         self.press = None;
         self.dragging = false;
         self.carrying = false;
+        self.leaves_tracks = false;
         self.clicks_only = false;
         canvas.marquee.set(None);
         canvas.carry.set(false);
@@ -270,10 +276,15 @@ fn click_mode(mods: Modifiers) -> ClickMode {
     }
 }
 
-/// A footprint drag with Ctrl (Cmd on macOS) and no other modifier leaves
-/// the tracks on its pads in place (Caner, 2026-11-21).
+/// A press with Ctrl (Cmd on macOS) and no other modifier drags what it
+/// lands on, leaving its tracks in place (Caner, 2026-11-21).
 fn leaves_tracks(mods: Modifiers) -> bool {
-    (mods.control() || mods.command()) && !mods.shift() && !mods.alt()
+    ctrl_down(mods) && !mods.shift() && !mods.alt()
+}
+
+/// Ctrl (Cmd on macOS) is down.
+fn ctrl_down(mods: Modifiers) -> bool {
+    mods.control() || mods.command()
 }
 
 /// A box: Shift adds, Ctrl or Cmd toggles, a plain box replaces.

@@ -94,6 +94,7 @@ impl Signex {
             drc,
             selected,
             open,
+            grid_extra: self.status_grid(window).extra,
         })
     }
 
@@ -113,9 +114,11 @@ impl Signex {
             BoardPopoverKind::Layer if !self.shows_pcb_layer_strip() => {
                 BoardPopoverModel::LayerDropdown(self.layer_dropdown(&path, board))
             }
-            BoardPopoverKind::Layer => BoardPopoverModel::Layer(self.layer_list(&path, board)),
+            BoardPopoverKind::Layer | BoardPopoverKind::ActiveLayer => {
+                BoardPopoverModel::Layer(self.layer_list(&path, board))
+            }
             BoardPopoverKind::Grid => BoardPopoverModel::Grid(GridChoice {
-                current_mm: self.ui_state.grid_size_mm,
+                current_mm: self.status_grid(window).size_mm,
                 custom: popover.custom_grid.clone(),
                 refused: popover.custom_refused,
                 snap: self.ui_state.snap_enabled,
@@ -276,31 +279,19 @@ impl Signex {
         let board = self.status_board(window)?;
         let ui = &self.ui_state;
         let tokens = &self.document_state.panel_ctx.tokens;
-        let grid = self.status_grid(window);
-        let angle = self.status_view_angle(window);
-        let window_width = if ui.main_window_id == Some(window) {
-            ui.window_size.0
-        } else {
-            ui.undocked_window_sizes
-                .get(&window)
-                .map_or(ui.window_size.0, |size| size.0)
-        };
-        let bar = AnchorBar {
-            grid_value: crate::status_bar::board_grid_value(
-                &ui.i18n,
-                grid.visible,
-                grid.size_mm,
-                grid.unit,
-            ),
-            snap_enabled: ui.snap_enabled,
-            zoom: self.status_zoom(window),
-            view_angle: angle.as_ref(),
-            board: &board,
-            window_width,
-        };
-        let left = crate::status_bar::board_popover_left(model.kind(), &bar, &ui.i18n);
+        let left = self.status_popover_left(window, model.kind(), &board);
         let card = crate::status_bar::board_popover_view(&model, tokens, &ui.i18n)
-            .map(|event| Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))));
+            .map(|event| Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))))
+            .boxed();
+        // The strip and its set button are hidden under Dropdown, so the
+        // layer list carries the layer sets.
+        let card: Element<'_, Message> = if matches!(model, BoardPopoverModel::LayerDropdown(_)) {
+            iced::widget::column![self.layer_dropdown_sets(window), card]
+                .spacing(crate::status_bar::POPUP_GAP)
+                .boxed()
+        } else {
+            card
+        };
         // The card claims the pointer over itself, so a press on its padding
         // does not reach the click-outside layer.
         let card = iced::widget::mouse_area(card).interaction(iced::mouse::Interaction::Idle);
@@ -319,6 +310,51 @@ impl Signex {
                 .align_y(iced::alignment::Vertical::Bottom)
                 .boxed(),
         )
+    }
+
+    /// Where a layer set card opened from the layer dropdown goes: its left
+    /// edge at the dropdown's, its bottom just above the status bar.
+    pub(crate) fn layer_set_card_anchor(&self, window: iced::window::Id) -> (f32, f32) {
+        let left = self.status_board(window).map_or(0.0, |board| {
+            self.status_popover_left(window, BoardPopoverKind::Layer, &board)
+        });
+        let status_h = crate::status_bar::status_bar_height(&self.document_state.panel_ctx.tokens);
+        let (_, height) = self.ui_state.size_of_window(window);
+        (left, height - status_h - crate::status_bar::POPUP_GAP)
+    }
+
+    /// The left edge of the `kind` card in `window`'s bar.
+    fn status_popover_left(
+        &self,
+        window: iced::window::Id,
+        kind: BoardPopoverKind,
+        board: &BoardReadout,
+    ) -> f32 {
+        let ui = &self.ui_state;
+        let grid = self.status_grid(window);
+        let angle = self.status_view_angle(window);
+        let window_width = if ui.main_window_id == Some(window) {
+            ui.window_size.0
+        } else {
+            ui.undocked_window_sizes
+                .get(&window)
+                .map_or(ui.window_size.0, |size| size.0)
+        };
+        let bar = AnchorBar {
+            grid_value: crate::status_bar::board_grid_value(
+                &ui.i18n,
+                grid.visible,
+                grid.size_mm,
+                grid.unit,
+                grid.extra,
+            ),
+            snap_enabled: ui.snap_enabled,
+            zoom: self.status_zoom(window),
+            view_angle: angle.as_ref(),
+            board,
+            window_width,
+        };
+        crate::status_bar::board_popover_left(kind, &bar, &ui.i18n)
     }
 }
 

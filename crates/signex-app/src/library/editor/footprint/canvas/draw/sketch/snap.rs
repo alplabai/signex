@@ -137,7 +137,7 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_sketch_snap_glyp
             frame.stroke(&Path::circle(Point::new(p.x, p.y), 6.0), stroke);
             frame.fill(&Path::circle(Point::new(p.x, p.y), 2.0), c);
         }
-        SnapKind::Guide | SnapKind::Grid | SnapKind::Raw => {}
+        SnapKind::Guide | SnapKind::Grid | SnapKind::Raw | SnapKind::Object => {}
     }
 }
 
@@ -233,7 +233,7 @@ pub(crate) fn snap_badge_label(
         })),
         SnapKind::Midpoint(_) => Some(named(words.midpoint)),
         SnapKind::Centre(_) => Some(named(words.centre)),
-        SnapKind::Grid | SnapKind::Raw => None,
+        SnapKind::Grid | SnapKind::Raw | SnapKind::Object => None,
     }
 }
 

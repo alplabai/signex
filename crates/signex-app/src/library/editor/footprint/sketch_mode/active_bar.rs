@@ -27,7 +27,7 @@ use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::active_bar::{ActiveBarButton, ActiveBarIcon, ActiveBarItem};
 use signex_widgets::theme_ext;
-use signex_widgets::{SegmentedStyle, raw, segmented, text, text_input};
+use signex_widgets::{raw, segmented, text, text_input};
 
 use super::SketchLinetype;
 use crate::app::FootprintDocument;
@@ -303,15 +303,7 @@ fn linetype_segments(
 ) -> Element<'static, LibraryMessage> {
     let path = editor.path.clone();
     let r = crate::styles::tokens::resolve(tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        theme_ext::text_primary(tokens),
-        TS.body,
-    )
-    .fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     let glyph = |linetype| match linetype {
         SketchLinetype::Normal => ids::EDITORS_SKETCH_LINETYPE_NORMAL,
         SketchLinetype::Construction => ids::EDITORS_SKETCH_LINETYPE_CONSTRUCTION,

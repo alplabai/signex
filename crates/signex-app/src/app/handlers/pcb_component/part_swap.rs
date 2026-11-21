@@ -19,6 +19,7 @@ use signex_types::part_swap::SwapGroups;
 use signex_types::schematic::{LibSymbol, SchematicSheet, Symbol};
 use uuid::Uuid;
 
+use crate::app::command::{CommandOutcome, OperandValue, translator};
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, PartSwapMsg, Signex, UndoGroupKind};
 
@@ -79,14 +80,14 @@ impl Signex {
         match msg {
             PartSwapMsg::Requested(kind) => self.swap_selected_pads(kind),
         }
-        Task::none()
     }
 
     /// `swap_pins` / `swap_gates` without operands: the two pads selected on
-    /// the board in view.
-    fn swap_selected_pads(&mut self, kind: SwapKind) {
+    /// the board in view name the component and the pins, or the gates they
+    /// belong to.
+    fn swap_selected_pads(&mut self, kind: SwapKind) -> Task<Message> {
         let Some(board) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
-            return;
+            return Task::none();
         };
         let pair = self
             .with_pcb_selection(|state, _| {
@@ -95,7 +96,7 @@ impl Signex {
             .flatten();
         let Some((footprint, pad_a, pad_b)) = pair else {
             self.refuse_part_swap(kind, "select two pads of one component on the board");
-            return;
+            return Task::none();
         };
         let numbers = self.document_state.pcb_board(&board).and_then(|b| {
             let fp = b.footprints.iter().find(|fp| fp.uuid == footprint)?;
@@ -108,19 +109,62 @@ impl Signex {
             Some((number(pad_a)?, number(pad_b)?))
         });
         let Some((a, b)) = numbers else {
-            return;
+            return Task::none();
         };
         let request = match kind {
             SwapKind::Pins => SwapRequest::Pins(a, b),
             SwapKind::Gates => SwapRequest::GatesOfPins(a, b),
         };
-        // A refusal is said in Messages by `swap_part` itself; the board and
-        // the sheet stay as they were.
-        let _report = self.swap_part(&board, footprint, &request);
+        self.translate_part_swap(&board, footprint, &request)
+    }
+
+    /// Run the swap `request` of the menu through the command's operand
+    /// handler (`command::translator`), on the clicked component by its uuid
+    /// (`ids`) and by pad or unit numbers. It is planned here first, so a
+    /// refusal reads as the menu's always did and the gates of two pads are
+    /// known as units.
+    /// shortcut: the plan is built twice, here and in the handler; drop
+    /// this one if the handler ever takes pads.
+    fn translate_part_swap(
+        &mut self,
+        board: &Path,
+        footprint: Uuid,
+        request: &SwapRequest,
+    ) -> Task<Message> {
+        let kind = request.kind();
+        let plan = match self.plan_part_swap(board, footprint, request) {
+            Ok(plan) => plan,
+            Err(why) => {
+                self.refuse_part_swap(kind, &why);
+                return Task::none();
+            }
+        };
+        let (command, pair) = match kind {
+            SwapKind::Pins => ("swap_pins", "pins"),
+            SwapKind::Gates => ("swap_gates", "units"),
+        };
+        let operands = vec![
+            ("ids", OperandValue::Targets(vec![footprint])),
+            (pair, OperandValue::Text(plan.swapped.join(","))),
+        ];
+        let (outcome, task) = translator::run(self, command, board, operands);
+        self.say_part_swap_refusal(kind, &outcome);
+        task
+    }
+
+    /// Say in Messages why the menu's swap did nothing, when `outcome` is a
+    /// refusal: of its operands, or of the board or the schematic, which
+    /// `swap_part` leaves to the menu.
+    pub(super) fn say_part_swap_refusal(&self, kind: SwapKind, outcome: &CommandOutcome) {
+        if let CommandOutcome::Disabled { reason } = outcome {
+            let why = reason.render(&self.ui_state.i18n);
+            self.refuse_part_swap(kind, &why);
+        }
     }
 
     /// Swap `request` on `footprint` of `board` and its schematic part, as
-    /// one undo step. A refusal is said in Messages and returned.
+    /// one undo step. A refusal is returned, and said in Messages unless the
+    /// board menu runs it (`agent.from_view`), which says it itself.
     pub(crate) fn swap_part(
         &mut self,
         board: &Path,
@@ -129,7 +173,9 @@ impl Signex {
     ) -> Result<PartSwapReport, String> {
         let kind = request.kind();
         let result = self.run_part_swap(board, footprint, request);
-        if let Err(why) = &result {
+        if let Err(why) = &result
+            && !self.agent.from_view
+        {
             self.refuse_part_swap(kind, why);
         }
         result

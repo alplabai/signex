@@ -108,9 +108,13 @@ fn every_properties_message_that_writes_the_shown_sheet_or_its_context_is_scoped
         )),
         P::SelectionForm(crate::panels::SelectionFormMsg::SheetFileBrowseClicked(id)),
         P::SelectionForm(crate::panels::SelectionFormMsg::SheetFileBrowsed(id, None)),
-        // The ⋯ menu toggle and both illustration hovers are window state.
+        // The ⋯ menu toggle and the illustration hover are window state.
         P::Part(crate::panels::PartPanelMsg::MenuToggled(id)),
-        P::Illustration(signex_widgets::property_illustration::IllustrationMsg::CalloutLeft),
+        P::Illustration(
+            signex_widgets::property_illustration::IllustrationMsg::FieldLeft(
+                signex_widgets::property_illustration::FieldId::new("x"),
+            ),
+        ),
         P::SetPrePlacementText(String::new()),
         P::SetPrePlacementDesignator(String::new()),
         P::SetPrePlacementRotation(0.0),

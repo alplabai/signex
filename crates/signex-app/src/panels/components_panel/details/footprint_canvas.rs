@@ -297,6 +297,7 @@ impl FootprintPreview<'_> {
                 grid: BACKDROP_GRID,
                 sketch: false,
                 snap: &snap,
+                grid_origin: None,
             };
             draw_backdrop(frame, &camera, area, look);
             // The legacy yellow crosshair does not read on the paper ground.

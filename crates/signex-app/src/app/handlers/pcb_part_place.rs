@@ -15,17 +15,17 @@ use std::path::{Path, PathBuf};
 
 use iced::Task;
 use signex_engine::pcb::part_place::PartToPlace;
-use signex_engine::pcb::placement::grid_for;
 use signex_i18n::{ids, t};
 use signex_library::RowId;
 use signex_library::primitive::PrimitiveRef;
 use signex_renderer::pcb::PcbSnapshot;
-use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb::Point;
+use signex_types::pcb_options::GridUse;
 
 use crate::app::{Message, Signex};
 use crate::library::messages::{BoardPartError, LibraryMessage, ResolvedBoardPart};
 use crate::library::place::resolve_board_part;
-use crate::pcb_canvas::{CarryKind, PcbCarry};
+use crate::pcb_canvas::{CarryKind, PcbCarry, snap_point_on};
 
 impl Signex {
     /// Start placing the row on the board in view: read it off the update
@@ -163,7 +163,8 @@ impl Signex {
         let (Some(_), Some(board)) = (self.own_place_carry(), self.active_pcb()) else {
             return;
         };
-        let at = on_grid(board, at);
+        let view = self.pcb_snap_view().without_objects();
+        let at = snap_point_on(board, at, GridUse::Components, view);
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.anchor != Some(at)
         {
@@ -182,7 +183,8 @@ impl Signex {
         let Some(part) = carry.part.as_deref() else {
             return false;
         };
-        let at = on_grid(board, at);
+        let view = self.pcb_snap_view().without_objects();
+        let at = snap_point_on(board, at, GridUse::Components, view);
         let command = part.place_command(board, uuid::Uuid::now_v7(), at);
         self.run_placement("Place", Ok(vec![command]));
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut() {
@@ -251,11 +253,6 @@ impl Signex {
         let board = self.document_state.pcb_board(&carry.path)?;
         Some(self.pcb_snapshot_for(&carry.path, &part.preview_board(board, at)))
     }
-}
-
-/// `at` moved to the nearest point of `board`'s grid.
-fn on_grid(board: &PcbBoard, at: Point) -> Point {
-    grid_for(board, signex_types::pcb_options::GridUse::Components).snap(at)
 }
 
 #[cfg(test)]

@@ -427,10 +427,11 @@ fn a_ctrl_drag_leaves_the_tracks_and_a_plain_drag_takes_them_along() {
         "{end:?}"
     );
 
-    // Ctrl pressed mid-drag switches before the drop.
+    // Ctrl pressed mid-drag latches: a later step without it changes nothing.
     let mut f = open_board_with(with_track);
     send(&mut f.app, drag(false));
     send(&mut f.app, drag(true));
+    send(&mut f.app, drag(false));
     let edited = one_step(&mut f, dropped());
     assert_eq!(
         track(&edited),
@@ -454,8 +455,12 @@ fn a_drag_previews_then_drops_the_footprint_on_the_grid() {
         }),
     );
     assert_eq!(snapshot(&f.app), before, "a drag in progress edits nothing");
-    let ghost = &f.app.interaction_state.pcb_canvas.highlight().ghost;
-    assert_eq!(ghost.len(), 3, "the body and both pads are previewed");
+    let canvas = &f.app.interaction_state.pcb_canvas;
+    assert!(canvas.highlight().ghost.is_empty(), "a move has no ghost");
+    assert!(
+        canvas.drag_preview_scene().is_some(),
+        "the part moves itself"
+    );
     let dropped = Message::PcbCanvas(PcbCanvasMsg::FootprintDropped { from, to });
     let edited = one_step(&mut f, dropped);
     // The origin snaps to the 1.27 mm PCB default grid: (12.7, 10.16).
@@ -464,14 +469,7 @@ fn a_drag_previews_then_drops_the_footprint_on_the_grid() {
         (at.x - 12.7).abs() < 1e-9 && (at.y - 10.16).abs() < 1e-9,
         "{at:?}"
     );
-    assert!(
-        f.app
-            .interaction_state
-            .pcb_canvas
-            .highlight()
-            .ghost
-            .is_empty()
-    );
+    assert!(!f.app.interaction_state.pcb_canvas.previews_drag());
 }
 
 #[test]

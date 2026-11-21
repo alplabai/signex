@@ -18,7 +18,8 @@
 #             line is removed and both values are lowered with it. Each wrapper
 #             is removed by the slice #2704 names for it.
 #   gui_names The module names no GUI state and not the diagnostics log (M6):
-#             no `diagnostics`, `ui_state`, `interaction_state`, `panel_ctx` or
+#             no `diagnostics`, `projector`, `log_notice`, `tracing`,
+#             `ui_state`, `interaction_state`, `panel_ctx` or
 #             `window_panel_ctx` identifier. A line for Messages is a Notice.
 #   no_traits The module declares no `trait` and no `impl .. for ..`: a trait
 #             method calling a core half would be reachable by another name.

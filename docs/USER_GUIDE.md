@@ -199,10 +199,13 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
 ## 4. Canvas basics
 
-- **Pan:** hold the right mouse button and drag. The middle button also pans.
+- **Pan:** hold the right mouse button and drag.
   A right-click without dragging opens the context menu, unless you are in the
   middle of drawing a wire, where it cancels the wire.
-- **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer.
+- **Zoom:** scroll the mouse wheel. Zoom is centred on the pointer. Or hold the
+  middle mouse button (the wheel button) and drag: up zooms in, down zooms out,
+  about the point you pressed. A tool you have armed stays armed. In the 3D
+  view the middle button still slides the view.
 - **Fit the sheet:** **View ▸ Fit All**.
 - **Grid:** the status bar at the bottom shows the grid size with its unit
   (**Grid 1.270 mm**) and whether snapping is on (**Snap on**) or off
@@ -240,9 +243,10 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   them is a button that opens a popover above it. The active layer pill is
   a plain label under the **Strip** layer switcher; under **Dropdown**
   (**Preferences ▸ Appearance ▸ Layer switcher**) the layer tabs are hidden
-  and a click on the pill lists the visible layers by group. A click on the
-  grid value still shows or hides the grid; right-click it or the pill to
-  open its popover. Esc or a click elsewhere closes a popover:
+  and a click on the pill lists the visible layers by group, with the layer
+  sets above them. A click on the grid value still shows or hides the grid;
+  right-click it or the pill to open its popover. Esc or a click elsewhere
+  closes a popover:
   - **Active layer:** the board's shown layers; click one to make it the
     active layer. **Layers panel** opens the panel. The `+` and `-` keys
     (**View ▸ Next Layer** and **Previous Layer**) step the layer too.
@@ -283,7 +287,8 @@ Esc cancels), or drag its handle; the field follows, and the other way round.
 
 **How the canvas looks.** **Tools ▸ Preferences… ▸ Appearance** holds the
 theme (Graphite Light or Graphite Dark), the UI font, the interface scale,
-the grid style of the schematic and of the symbol editor (dots, lines or
+**Selected option** (how the picked option of an Off / On / Mono style switch
+looks in the dark theme: Neutral, the default, or Accent), the grid style of the schematic and of the symbol editor (dots, lines or
 small crosses, shown side by side in the grid preview), the symbol editor's
 default grid, pin selection, the GPU render and anti-aliasing, the mouse
 wheel (Zoom or Scroll), two-finger scroll panning and zoom speed. A setting

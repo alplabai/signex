@@ -186,7 +186,7 @@ mod tests {
             pre_placement: Some(PrePlacementKind::Wire),
         };
         let mut state = PanelIllustrationHover::default();
-        state.update(form, IllustrationMsg::CalloutHovered(X));
+        state.update(form, IllustrationMsg::FieldHovered(X));
         assert!(state.for_subject(form).is_some());
         assert!(state.for_subject(HoverSubject::default()).is_none());
     }

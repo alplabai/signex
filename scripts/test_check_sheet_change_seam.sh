@@ -115,6 +115,10 @@ run_case core_reads_window_panel_ctx fail "$CORE_OK
 fn f(s: &Signex) { let _ = s.window_panel_ctx(); }" "$LIST_OK" "$WRAPPER"
 run_case core_reads_interaction fail "$CORE_OK
 fn f(s: &Signex) { let _ = &s.interaction_state; }" "$LIST_OK" "$WRAPPER"
+run_case core_logs_through_projector fail "$CORE_OK
+fn f(n: &Notice) { crate::app::projector::log_notice(n); }" "$LIST_OK" "$WRAPPER"
+run_case core_tracing fail "$CORE_OK
+fn f() { tracing::warn!(\"x\"); }" "$LIST_OK" "$WRAPPER"
 run_case core_comment_only pass "// ui_state, panel_ctx and crate::diagnostics are named in prose only.
 $CORE_OK" "$LIST_OK" "$WRAPPER"
 

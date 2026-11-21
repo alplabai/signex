@@ -34,8 +34,11 @@ pub(crate) use layer_dropdown::{LayerDropdownGroup, group_layers};
 /// A board counter of the status bar; each opens a popover.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardCounter {
-    /// The active layer pill.
+    /// A click on the active layer pill: the layer list of the switcher.
     Layer,
+    /// A right-click on the pill: the Active layer popover, under either
+    /// switcher.
+    ActiveLayer,
     /// The Grid read-out.
     Grid,
     Routed,
@@ -49,6 +52,7 @@ impl BoardCounter {
     pub fn popover(self) -> BoardPopoverKind {
         match self {
             Self::Layer => BoardPopoverKind::Layer,
+            Self::ActiveLayer => BoardPopoverKind::ActiveLayer,
             Self::Grid => BoardPopoverKind::Grid,
             Self::Routed | Self::Unrouted => BoardPopoverKind::Unrouted,
             Self::Drc => BoardPopoverKind::Drc,
@@ -57,10 +61,14 @@ impl BoardCounter {
     }
 }
 
-/// One of the five board popovers.
+/// One of the board popovers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardPopoverKind {
+    /// The pill's click: the dropdown under the Dropdown switcher, else the
+    /// Active layer popover.
     Layer,
+    /// The pill's right-click: the Active layer popover.
+    ActiveLayer,
     Grid,
     Unrouted,
     Drc,
@@ -107,6 +115,8 @@ pub enum BoardPopoverEvent {
     Dismissed,
     /// A row of the Active layer popover was picked.
     LayerPicked(PcbLayer),
+    /// A layer set row of the layer dropdown was picked.
+    LayerSetMenu(crate::app::LayerSetMenuMsg),
     LayersPanelOpened,
     /// A grid preset row was picked, in mm.
     GridPresetPicked(f32),
@@ -143,6 +153,8 @@ pub(crate) struct BoardReadout {
     pub selected: usize,
     /// The popover open in this window, so its counter reads as pressed.
     pub open: Option<BoardPopoverKind>,
+    /// The grid in effect is one of the board's extra grids.
+    pub grid_extra: bool,
 }
 
 /// Routed and unrouted connections.

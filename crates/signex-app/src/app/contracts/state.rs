@@ -119,6 +119,10 @@ pub struct ContextMenuState {
 pub struct GridPickerState {
     pub x: f32,
     pub y: f32,
+    /// The footprint its rows and Grid Properties act on.
+    pub target: std::path::PathBuf,
+    /// The undocked window it opened in; `None` for the main window.
+    pub owner: Option<iced::window::Id>,
 }
 
 /// Grid Properties dialog draft (Ctrl+G in a footprint editor): the step
@@ -135,6 +139,8 @@ pub struct GridPropertiesState {
     pub preview_expanded: bool,
     /// The step and coarse labels on the preview: which one is open.
     pub preview_labels: signex_widgets::dimension_label::DimensionLabels,
+    /// The document Apply writes to: the one it was opened on.
+    pub target: std::path::PathBuf,
 }
 
 /// v0.18.14.1 — Custom Selection Filter modal draft state. Mirrors
@@ -157,6 +163,8 @@ pub struct SelectionFilterCustomState {
     pub other: bool,
     /// The name Apply saves the filter under as a preset; blank = "Filter N".
     pub preset_name: String,
+    /// The document Apply writes to: the one it was opened on.
+    pub target: std::path::PathBuf,
 }
 
 /// State for the Projects-panel tree-view right-click menu. The menu's

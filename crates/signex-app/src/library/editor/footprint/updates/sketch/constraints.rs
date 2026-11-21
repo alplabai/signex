@@ -79,7 +79,7 @@ fn add_constraint_for_selection(
     // the dim-input field is degrees, so convert here.
     let angle_target = parse_dimension_input(&editor.state.dimension_input)
         .ok()
-        .map(|deg| DimTarget::Literal(deg.to_radians()));
+        .map(|deg| DimTarget::Literal(editor.state.angle_deg_mirrored(deg).to_radians()));
 
     let new_kind: Option<ConstraintKind> = match (tag, p_kind, s_kind, primary, secondary) {
         (SketchConstraintTag::Fixed, Some("Point"), _, Some(p), _) => {

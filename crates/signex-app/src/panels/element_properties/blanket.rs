@@ -205,14 +205,9 @@ fn pour_switch<'a>(
     on_pick: impl Fn(BlanketPour) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
     let r = crate::styles::tokens::resolve(&ctx.tokens);
-    let style = signex_widgets::segmented::SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        crate::styles::ti(ctx.tokens.text_secondary),
-        crate::styles::ti(ctx.tokens.text),
-        TS.body,
-    );
+    let style = r
+        .segmented(TS.body)
+        .resting_ink(crate::styles::ti(ctx.tokens.text_secondary));
     let i18n = &ctx.i18n;
     signex_widgets::segmented::segmented(
         [

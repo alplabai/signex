@@ -120,6 +120,75 @@ fn the_strip_lays_out_every_visible_tab_inside_its_scrollable() {
     assert_eq!(size.height, STRIP_HEIGHT);
 }
 
+/// The strip keeps its height and its tabs sit above the scrollbar's lane,
+/// whether or not the tabs overflow.
+#[test]
+fn the_strip_keeps_a_lane_for_the_scrollbar_under_the_tabs() {
+    let board = board(&[
+        "TopCopper",
+        "BottomCopper",
+        "TopSilkscreen",
+        "BottomSilkscreen",
+    ]);
+    let view = PcbLayerView::default();
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    for width in [1200.0, 120.0] {
+        let window = Size::new(width, STRIP_HEIGHT);
+        let texts = lay_out_texts(strip(&board, &view, false, &tokens), window);
+        let tab = texts
+            .iter()
+            .find(|t| t.text == "Top Layer")
+            .expect("the first tab");
+        assert!(
+            tab.bounds.center_y() <= STRIP_HEIGHT / 2.0 - SCROLLBAR_GAP / 2.0,
+            "width {width}: tab centre {}",
+            tab.bounds.center_y()
+        );
+        let size = root_size(strip(&board, &view, false, &tokens), window);
+        assert_eq!(size.height, STRIP_HEIGHT);
+    }
+}
+
+/// Selecting a layer does not change the width of its tab or move the next.
+#[test]
+fn the_selected_tab_keeps_the_width_of_its_name() {
+    let board = board(&["TopCopper", "BottomCopper", "TopSilkscreen"]);
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let window = Size::new(1200.0, STRIP_HEIGHT);
+    let at = |active: PcbLayer, name: &str| {
+        let mut view = PcbLayerView::default();
+        view.set_active(active);
+        let texts = lay_out_texts(strip(&board, &view, false, &tokens), window);
+        texts.iter().find(|t| t.text == name).expect(name).bounds
+    };
+    let top = PcbLayer::Copper(CopperLayer::Top);
+    assert_eq!(at(top, "Bottom Layer"), at(BOTTOM, "Bottom Layer"));
+    assert_eq!(at(top, "Top Layer"), at(BOTTOM, "Top Layer"));
+}
+
+/// A line divides two neighbouring tabs, in both Graphite themes.
+#[test]
+fn a_visible_line_divides_neighbouring_tabs() {
+    let board = board(&["TopCopper", "BottomCopper", "TopPaste"]);
+    let view = PcbLayerView::default();
+    let window = Size::new(900.0, STRIP_HEIGHT.ceil());
+    for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(theme);
+        let texts = lay_out_texts(strip(&board, &view, false, &tokens), window);
+        let at = |name: &str| texts.iter().find(|t| t.text == name).expect(name).bounds;
+        let (left, right) = (at("Bottom Layer"), at("Top Paste"));
+        let pixels = draw_pixels(strip(&board, &view, false, &tokens), window);
+        let row = 3 * window.width as usize * 4;
+        let pixel = |x: usize| &pixels[row + x * 4..row + x * 4 + 3];
+        let from = (left.x + left.width).ceil() as usize + 1;
+        let ground = pixel(from).to_vec();
+        assert!(
+            (from..right.x.floor() as usize).any(|x| pixel(x) != ground.as_slice()),
+            "{theme:?}: no divider between the tabs"
+        );
+    }
+}
+
 /// mockup row 104: a hidden layer has no tab; showing every layer brings it back.
 /// A layer token this build does not know has no tab: the strip lists what
 /// the Layers panel shows (Caner, 2026-11-20).

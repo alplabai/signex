@@ -8,14 +8,30 @@
 use std::collections::BTreeSet;
 
 use iced::Task;
-use pcb_geom::ItemRef;
+use pcb_geom::{ItemRef, PickKind};
 use signex_engine::pcb::placement::{self, PlacementRefusal, PlacementTransform};
 use signex_engine::pcb::{BoardCommand, BoardItemId};
+use signex_renderer::pcb::{BOARD_OUTLINE, BoardObject, board_layers};
 use signex_types::pcb::Point;
+use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_options::GridUse;
 use uuid::Uuid;
 
 use crate::app::{Message, Signex};
-use crate::pcb_canvas::{CarryKind, PcbCarry, carry_delta};
+use crate::pcb_canvas::{CarryKind, PcbCarry, SnapView, carry_delta};
+
+/// The View Options rows that hide something object snapping targets.
+const SNAP_OBJECT_KINDS: [(BoardObject, PickKind); 9] = [
+    (BoardObject::Pads, PickKind::Pads),
+    (BoardObject::Vias, PickKind::Vias),
+    (BoardObject::Arcs, PickKind::Arcs),
+    (BoardObject::Tracks, PickKind::Tracks),
+    (BoardObject::Polygons, PickKind::Polygons),
+    (BoardObject::Regions, PickKind::Regions),
+    (BoardObject::Fills, PickKind::Fills),
+    (BoardObject::Keepouts, PickKind::Keepouts),
+    (BoardObject::Texts, PickKind::Texts),
+];
 
 impl Signex {
     /// Rotate or mirror the board selection when the active tab is a PCB.
@@ -28,7 +44,8 @@ impl Signex {
         let Some(board) = self.active_pcb() else {
             return false;
         };
-        let built = placement::transform_commands(board, &footprints, transform);
+        let on_grid = self.ui_state.snap_enabled;
+        let built = placement::transform_commands_with(board, &footprints, transform, on_grid);
         let what = match transform {
             PlacementTransform::Rotate { .. } => "Rotate",
             PlacementTransform::FlipLeftRight | PlacementTransform::FlipTopBottom => "Flip",
@@ -143,9 +160,8 @@ impl Signex {
 
     /// A drag pressed at `from` reached `to`: preview it. A press on the
     /// selection carries it; a press on an unselected footprint selects and
-    /// carries that one (#2358). With `leaves_tracks` (Ctrl held) the tracks
-    /// on their pads stay where they are; it is read on every step, so Ctrl
-    /// switches it mid-drag.
+    /// carries that one (#2358). Once `leaves_tracks` (Ctrl down) arrives,
+    /// the tracks on them stay where they are until the carry ends.
     pub(crate) fn pcb_footprints_dragged(
         &mut self,
         from: Point,
@@ -154,16 +170,19 @@ impl Signex {
         leaves_tracks: bool,
     ) {
         self.follow_pcb_drag(from, to, Some(tolerance_mm));
-        let switched = self
-            .live_carry(CarryKind::Drag)
-            .is_some_and(|carry| carry.leaves_tracks != leaves_tracks);
+        let latched = leaves_tracks
+            && self
+                .live_carry(CarryKind::Drag)
+                .is_some_and(|carry| !carry.leaves_tracks);
         if let Some(carry) = self
             .interaction_state
             .pcb_carry
             .as_mut()
-            .filter(|_| switched)
+            .filter(|_| latched)
         {
-            carry.leaves_tracks = leaves_tracks;
+            carry.leaves_tracks = true;
+            // A via's snap counts its tracks only while they stay.
+            self.carry_to(from, to);
             self.refresh_pcb_highlight();
         }
     }
@@ -185,6 +204,12 @@ impl Signex {
             };
             if let Some(reach) = pick
                 && self.start_text_drag(&path, from, reach)
+            {
+                self.carry_to(from, to);
+                return;
+            }
+            if let Some(reach) = pick
+                && self.start_via_drag(&path, from, reach)
             {
                 self.carry_to(from, to);
                 return;
@@ -214,11 +239,12 @@ impl Signex {
         self.carry_to(from, to);
     }
 
-    /// What the status bar says while this window drags footprints: whether
-    /// their tracks follow, and the key that switches it.
+    /// What the status bar says while this window drags footprints, or vias
+    /// with tracks on them: whether the tracks follow, and the key that
+    /// leaves them.
     pub(crate) fn board_drag_status(&self) -> Option<String> {
         let carry = self.live_carry(CarryKind::Drag)?;
-        if carry.footprints.is_empty() || carry.anchor.is_none() {
+        if (carry.footprints.is_empty() && !carry.via_tracks) || carry.anchor.is_none() {
             return None;
         }
         let id = if carry.leaves_tracks {
@@ -328,6 +354,117 @@ impl Signex {
         (carry.kind == kind && self.has_own_pcb_carry()).then(|| carry.clone())
     }
 
+    /// `at` on the grid for `what`, or as it is with the status bar's Snap
+    /// off: for a point that takes the grid alone (an origin, a guide).
+    pub(crate) fn board_grid_point(
+        &self,
+        board: &signex_types::pcb::PcbBoard,
+        what: GridUse,
+        at: Point,
+    ) -> Point {
+        if self.ui_state.snap_enabled {
+            placement::grid_for(board, what).snap(at)
+        } else {
+            at
+        }
+    }
+
+    /// Which grid applies on the board at `path` in the window `owner`
+    /// (`None`: the main one): what its carry or armed tool snaps to, by the
+    /// same use `grid_for` is asked with. With nothing armed, Components:
+    /// the Select tool's drag of a part is what the grid then acts on.
+    pub(crate) fn pcb_grid_use(
+        &self,
+        path: &std::path::Path,
+        owner: Option<iced::window::Id>,
+    ) -> GridUse {
+        let state = &self.interaction_state;
+        if let Some(carry) = state
+            .pcb_carry
+            .as_ref()
+            .filter(|carry| carry.is_for(Some(path), owner))
+        {
+            return match &carry.paste {
+                Some(load) => load.copy.grid_use(),
+                None if !carry.vias.is_empty() => GridUse::NonComponents,
+                None => GridUse::Components,
+            };
+        }
+        let tool = state
+            .pcb_tool
+            .as_ref()
+            .is_some_and(|session| session.is_for(Some(path), owner));
+        let measure = state
+            .pcb_query
+            .measure
+            .as_ref()
+            .is_some_and(|measure| measure.is_for(Some(path), owner));
+        let guide = state
+            .pcb_guide_place
+            .as_ref()
+            .is_some_and(|(armed, _)| armed == path);
+        let origin = state.pcb_origin_place.as_deref() == Some(path);
+        let arrange = state
+            .pcb_arrange_box
+            .as_ref()
+            .is_some_and(|armed| armed.path == path);
+        if tool || measure || guide || origin || arrange {
+            GridUse::NonComponents
+        } else {
+            GridUse::Components
+        }
+    }
+
+    /// What a snap reads for the canvas in view: the panel's options, the
+    /// status bar's Snap, the zoom and the layers shown.
+    pub(crate) fn pcb_snap_view(&self) -> SnapView<'_> {
+        let state = &self.interaction_state;
+        let tile = || {
+            let path = self.active_tab_path()?;
+            state.tile_panes.board.get(&path)
+        };
+        let canvas = match state.acting_window {
+            Some(window) => state.pcb_canvas_for_window(window),
+            None => tile().unwrap_or(&state.pcb_canvas),
+        };
+        let mut view = SnapView::new(
+            &self.ui_state.pcb_snap,
+            self.pcb_active_layer(),
+            f64::from(canvas.camera_ref().scale()),
+        );
+        view.snap_on = self.ui_state.snap_enabled;
+        if let Some((path, board)) = self.active_tab_path().zip(self.active_pcb()) {
+            let shown = self.pcb_layer_view(&path);
+            view.through_hidden = !shown.multi_layer_visible();
+            // Start from all shown, so a layer the stack does not list
+            // stays shown, and clear the hidden ones.
+            let mut any_copper_shown = false;
+            for layer in board_layers(&board.layers) {
+                match layer {
+                    PcbLayer::Copper(_) if shown.is_visible(layer) => any_copper_shown = true,
+                    PcbLayer::Copper(copper) => {
+                        view.shown_copper &= !(1 << pcb_geom::layer_bit(copper));
+                    }
+                    _ if !shown.is_visible(layer) => view.hidden.push(layer),
+                    _ => {}
+                }
+            }
+            // A through pad reaches every bit: with no copper shown, none.
+            if !any_copper_shown {
+                view.shown_copper = 0;
+            }
+            if !shown.is_visible(BOARD_OUTLINE) && !view.hidden.contains(&BOARD_OUTLINE) {
+                view.hidden.push(BOARD_OUTLINE);
+            }
+            view.hidden_kinds = SNAP_OBJECT_KINDS
+                .into_iter()
+                .filter(|(object, _)| !shown.shows_object(*object))
+                .map(|(_, kind)| kind)
+                .collect();
+        }
+        view
+    }
+
     fn carry_to(&mut self, from: Point, to: Point) {
         let Some(board) = self.active_pcb() else {
             return;
@@ -343,14 +480,20 @@ impl Signex {
         let delta = if carry.text.is_some() {
             // A text follows the pointer exactly (#2368).
             Point::new(to.x - from.x, to.y - from.y)
+        } else if !carry.vias.is_empty() {
+            let Some(delta) = self.via_preview_delta(carry, from, to) else {
+                return;
+            };
+            delta
         } else {
+            let skip = carry.snap_skip(board);
             carry_delta(
                 board,
                 &carry.footprints,
+                &skip,
                 from,
                 to,
-                &self.ui_state.pcb_snap,
-                self.pcb_active_layer(),
+                self.pcb_snap_view(),
             )
         };
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
@@ -375,21 +518,19 @@ impl Signex {
             self.drop_text_carry(&carry);
             return;
         }
+        if !carry.vias.is_empty() {
+            self.drop_via_carry(&carry, from, to);
+            return;
+        }
         if carry.footprints.is_empty() {
             // A drag refused at its start: the notice is already out.
             self.end_pcb_carry();
             return;
         }
-        let active = self.pcb_active_layer();
         let built = self.active_pcb().map(|board| {
-            let delta = carry_delta(
-                board,
-                &carry.footprints,
-                from,
-                to,
-                &self.ui_state.pcb_snap,
-                active,
-            );
+            let skip = carry.snap_skip(board);
+            let view = self.pcb_snap_view();
+            let delta = carry_delta(board, &carry.footprints, &skip, from, to, view);
             if carry.leaves_tracks {
                 placement::move_footprints_only(board, &carry.footprints, delta)
             } else {
@@ -572,6 +713,6 @@ pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemI
     items
 }
 
-fn refuse(what: &str, refusal: &PlacementRefusal) {
+pub(super) fn refuse(what: &str, refusal: &PlacementRefusal) {
     crate::diagnostics::log_warning(format!("{what}: {refusal}; nothing changed"));
 }

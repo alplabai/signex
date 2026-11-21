@@ -148,24 +148,22 @@ impl Signex {
                 // v0.18.10 — only mount the picker when the active
                 // tab is a Footprint editor; the schematic / PCB
                 // grid systems aren't wired through this picker yet.
-                let active_tab_kind = self
-                    .document_state
-                    .tabs
-                    .get(self.document_state.active_tab)
-                    .map(|t| t.kind.clone());
-                let footprint_active = matches!(
-                    active_tab_kind,
-                    Some(crate::app::TabKind::FootprintEditor(_))
-                );
+                let footprint = self.active_footprint_editor_path();
                 tracing::info!(
                     target: "signex::ui",
-                    footprint_active = footprint_active,
+                    footprint_active = footprint.is_some(),
                     last_mouse_pos = ?self.interaction_state.last_mouse_pos,
                     "GridPickerOpen received",
                 );
-                if footprint_active {
+                if let Some(target) = footprint {
                     let (x, y) = self.interaction_state.last_mouse_pos;
-                    self.interaction_state.grid_picker = Some(crate::app::GridPickerState { x, y });
+                    let owner = self.interaction_state.acting_window;
+                    self.interaction_state.grid_picker = Some(crate::app::GridPickerState {
+                        x,
+                        y,
+                        target,
+                        owner,
+                    });
                 }
                 self.finish_update()
             }
@@ -174,8 +172,15 @@ impl Signex {
                 self.finish_update()
             }
             UiMsg::GridPickerSelect(step_mm) => {
-                self.interaction_state.grid_picker = None;
-                if let Some(editor) = self.active_footprint_editor_mut()
+                let picker = self.interaction_state.grid_picker.take();
+                let target = picker
+                    .map(|picker| picker.target)
+                    .or_else(|| self.footprint_dialog_target());
+                let editor = match target.as_deref() {
+                    Some(target) => self.footprint_editor_at_mut(target),
+                    None => None,
+                };
+                if let Some(editor) = editor
                     && step_mm > 0.0
                     && step_mm.is_finite()
                 {
@@ -313,10 +318,12 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             SelectionFilterMsg::OpenCustom => {
-                if let Some(editor) = self.active_footprint_editor() {
-                    let filter = editor.state.selection_filter;
+                let filter = self
+                    .active_footprint_editor()
+                    .map(|editor| editor.state.selection_filter);
+                if let (Some(filter), Some(target)) = (filter, self.footprint_dialog_target()) {
                     self.ui_state.selection_filter_custom = Some(Box::new(
-                        crate::app::SelectionFilterCustomState::from_filter(filter),
+                        crate::app::SelectionFilterCustomState::from_filter(filter, target),
                     ));
                 }
                 self.finish_update()
@@ -351,7 +358,8 @@ impl Signex {
         }
     }
 
-    /// Apply: the draft becomes the active footprint editor's filter and is
+    /// Apply: the draft becomes the filter of the document it was opened on
+    /// (closed by now: nothing applies, and Messages says so) and is
     /// saved as a preset under its typed name, or "Filter N" when none is
     /// typed. The filter always applies; no preset is added when one already
     /// holds the same kinds, or at the preset limit (a typed name dropped
@@ -366,7 +374,11 @@ impl Signex {
         let presets = self.interaction_state.footprint_filter_presets.clone();
         let typed = !draft.preset_name.trim().is_empty();
         let name = draft.preset_name_or_numbered(presets.len());
-        let Some(editor) = self.active_footprint_editor_mut() else {
+        let Some(editor) = self.footprint_editor_at_mut(&draft.target) else {
+            crate::diagnostics::log_warning(format!(
+                "Selection filter not applied: {} is no longer open for editing.",
+                draft.target.display()
+            ));
             return Task::none();
         };
         editor.state.selection_filter = draft.to_filter();
@@ -399,36 +411,49 @@ impl Signex {
         })
     }
 
+    /// Open Grid Properties on `target`, seeded from its current step. No-op
+    /// for anything but a footprint (the modal would have nothing to drive).
+    fn open_grid_properties_on(&mut self, target: Option<std::path::PathBuf>) {
+        let editor_snap = target
+            .as_deref()
+            .and_then(|target| self.footprint_editor_at(target))
+            .map(|e| e.state.snap_options);
+        tracing::info!(
+            target: "signex::ui",
+            has_snap = editor_snap.is_some(),
+            "GridPropertiesOpen received",
+        );
+        if let (Some(opts), Some(target)) = (editor_snap, target) {
+            let step = opts.grid_step_mm;
+            self.ui_state.grid_properties = Some(Box::new(crate::app::GridPropertiesState {
+                step_mm: format!("{step:.4}"),
+                fine_display: opts.fine_grid_display,
+                coarse_display: opts.coarse_grid_display,
+                multiplier: opts.coarse_multiplier,
+                target,
+                ..crate::app::GridPropertiesState::default()
+            }));
+        }
+    }
+
     /// Grid Properties dialog handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_grid_properties_message(
         &mut self,
         msg: GridPropertiesMsg,
     ) -> Task<Message> {
         match msg {
+            // The command: the footprint in view of the window it ran in.
+            // An open picker closes behind it and lends it nothing.
             GridPropertiesMsg::Open => {
-                // The grid picker's last row opens this dialog; the picker
-                // closes behind it.
                 self.interaction_state.grid_picker = None;
-                // Pre-populate from the active footprint editor's
-                // current step. No-op for non-footprint tabs (the
-                // modal would have nothing to drive).
-                let editor_snap = self.active_footprint_editor().map(|e| e.state.snap_options);
-                tracing::info!(
-                    target: "signex::ui",
-                    has_snap = editor_snap.is_some(),
-                    "GridPropertiesOpen received",
-                );
-                if let Some(opts) = editor_snap {
-                    let step = opts.grid_step_mm;
-                    self.ui_state.grid_properties =
-                        Some(Box::new(crate::app::GridPropertiesState {
-                            step_mm: format!("{step:.4}"),
-                            fine_display: opts.fine_grid_display,
-                            coarse_display: opts.coarse_grid_display,
-                            multiplier: opts.coarse_multiplier,
-                            ..crate::app::GridPropertiesState::default()
-                        }));
-                }
+                let target = self.footprint_dialog_target();
+                self.open_grid_properties_on(target);
+                self.finish_update()
+            }
+            // The picker's own row: the footprint the picker was for.
+            GridPropertiesMsg::OpenFromPicker => {
+                let picked = self.interaction_state.grid_picker.take();
+                self.open_grid_properties_on(picked.map(|picker| picker.target));
                 self.finish_update()
             }
             GridPropertiesMsg::SetFineDisplay(d) => {
@@ -529,7 +554,11 @@ impl Signex {
                     }
                     None => None,
                 };
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                let editor = match &draft {
+                    Some(d) => self.footprint_editor_at_mut(&d.target),
+                    None => None,
+                };
+                if let (Some(d), Some(editor)) = (&draft, editor) {
                     let opts = &mut editor.state.snap_options;
                     if let Some(step) = step {
                         opts.grid_step_mm = step;
@@ -550,6 +579,11 @@ impl Signex {
                         row.coarse_multiplier = opts.coarse_multiplier;
                     }
                     editor.canvas_cache.clear();
+                } else if let Some(d) = &draft {
+                    crate::diagnostics::log_warning(format!(
+                        "Grid not applied: {} is no longer open for editing.",
+                        d.target.display()
+                    ));
                 }
                 self.ui_state.grid_properties = None;
                 self.refresh_panel_ctx();
@@ -809,6 +843,12 @@ impl Signex {
             if window_alive {
                 self.interaction_state.pcb_canvases.insert(window_id, pcb);
             }
+            // The main canvas sat in a local while the handler ran, out of
+            // reach of a change to the right-release hold.
+            let swallow = self.interaction_state.swallow_right_release;
+            self.interaction_state
+                .pcb_canvas
+                .set_swallow_right_release(swallow);
         }
         if let Some(mut selection) = swapped_pcb_selection {
             std::mem::swap(&mut self.interaction_state.pcb_selection, &mut selection);

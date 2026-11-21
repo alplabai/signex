@@ -177,7 +177,7 @@ pub enum PcbPrimitiveMsg {
     },
     /// The armed Arc tool's Placement was picked: how the next arc is drawn.
     ArcModePicked(ArcMode),
-    /// The Via panel's via type, Override and layer chips (mockup row 96).
+    /// The Via panel's via type, reset arrows and layer chips (mockup row 96).
     Via(ViaMsg),
     /// A pour's Copper card: Repour, Shelve and the board-wide menu (#2523).
     Pour(PourMsg),

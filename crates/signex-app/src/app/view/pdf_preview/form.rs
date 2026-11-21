@@ -40,8 +40,7 @@ pub(super) struct Look {
     pub accent: Color,
     pub panel: Color,
     pub sunken: Color,
-    pub raised: Color,
-    pub shadow: Color,
+    pub segment: SegmentedStyle,
     pub line_soft: Color,
     pub line_strong: Color,
 }
@@ -57,8 +56,7 @@ impl Look {
             accent: crate::styles::ti(tokens.accent),
             panel: crate::styles::ti(tokens.panel_bg),
             sunken: r.sunken,
-            raised: r.raised,
-            shadow: r.shadow,
+            segment: r.segmented(TS.body),
             line_soft: r.line_soft,
             line_strong: r.line_strong,
         }
@@ -66,15 +64,7 @@ impl Look {
 
     /// The segmented switch of a settings row, sharing the row's width.
     pub(super) fn segmented(&self) -> SegmentedStyle {
-        SegmentedStyle::new(
-            self.sunken,
-            self.raised,
-            self.shadow,
-            self.ink3,
-            self.ink,
-            TS.body,
-        )
-        .fill_width(true)
+        self.segment.fill_width(true)
     }
 }
 

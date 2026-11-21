@@ -285,6 +285,7 @@ impl Signex {
     /// The first click of a wire or bus: anchor it at `pt`.
     fn start_wire_drawing(&mut self, pt: signex_types::schematic::Point) {
         self.interaction_state.wire_drawing = true;
+        self.interaction_state.wire_window = self.interaction_state.acting_window;
         self.interaction_state.wire_points.clear();
         self.interaction_state.wire_points.push(pt);
         self.interaction_state.wire_start_style = self.wire_style_at(pt);

@@ -7,6 +7,7 @@
 //! re-solved; a refused edit changes nothing and records nothing.
 
 use signex_sketch::SketchData;
+use signex_sketch::mirrored_angle::parameter_from_mirrored_angle;
 use signex_sketch::parameter_refs::{
     DeleteParameterError, DeletePolicy, delete_parameter, parameter_from_dimension,
     rename_parameter, resolve_rows, unique_name, used_by,
@@ -156,10 +157,21 @@ fn delete(editor: &mut FootprintDocument, name: &str, policy: DeletePolicy) {
 }
 
 /// Make parameter on a dimension: a parameter holds its value and the
-/// dimension reads it, one undo step; the table opens on that row.
+/// dimension reads it, one undo step; the table opens on that row. On a
+/// board sketch a literal angle's parameter holds the value the user reads.
 fn make_parameter(editor: &mut FootprintDocument, constraint: signex_sketch::id::ConstraintId) {
     let mut sketch = current_sketch(editor);
-    match parameter_from_dimension(&mut sketch, constraint) {
+    let mirrored = editor
+        .state
+        .board_backdrop
+        .is_some()
+        .then(|| parameter_from_mirrored_angle(&mut sketch, constraint))
+        .flatten();
+    let made = match mirrored {
+        Some(name) => Ok(name),
+        None => parameter_from_dimension(&mut sketch, constraint),
+    };
+    match made {
         Ok(name) => {
             if editor.primitive().sketch.as_ref() != Some(&sketch) {
                 commit(editor, sketch);

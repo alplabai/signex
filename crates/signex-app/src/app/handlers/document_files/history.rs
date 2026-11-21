@@ -702,7 +702,9 @@ impl Signex {
             );
             installed
         } else {
-            self.install_schematic_at(path, sheet)
+            let result = self.engine_for_sheet_behind_tab(path, sheet);
+            let install = self.document_state.replace_engine_at(path, result);
+            self.project_replaced_engine(path, install)
         };
         self.settle_restored_schematic(path, installed, commit, restored_bytes);
         // The file still holds what was repaired: not what the engine holds.

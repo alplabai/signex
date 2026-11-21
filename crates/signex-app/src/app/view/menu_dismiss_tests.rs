@@ -159,6 +159,39 @@ fn a_right_press_outside_the_projects_menu_closes_it_and_reaches_the_canvas() {
     );
 }
 
+/// A paused placement leaves the window chrome working: only the banner
+/// takes the pointer, so the minimize button still answers.
+#[test]
+fn a_paused_placement_leaves_the_window_buttons_working() {
+    let (mut app, main) = app();
+    app.interaction_state.active_canvas_mut().placement_paused = true;
+    assert!(app.placement_paused_overlay(main).is_some());
+    let minimizes = |point: Point| {
+        messages_for_events(
+            app.view(main),
+            WINDOW,
+            point,
+            &[press(Button::Left), release(Button::Left)],
+        )
+        .iter()
+        .any(|m| {
+            matches!(
+                m,
+                Message::Window(crate::app::WindowMsg::MinimizeMainWindow)
+            )
+        })
+    };
+    // The whole bar: the window buttons sit on the left on macOS.
+    let along_the_title_bar = (0..(WINDOW.width as u32 / 4)).flat_map(|step| {
+        let x = 2.0 + step as f32 * 4.0;
+        [8.0, 16.0, 24.0].map(|y| Point::new(x, y))
+    });
+    assert!(
+        along_the_title_bar.into_iter().any(minimizes),
+        "no point on the title bar reached the minimize button"
+    );
+}
+
 /// An open Active Bar dropdown closes on a left click on the canvas beside
 /// it, and the canvas never sees that click.
 #[test]

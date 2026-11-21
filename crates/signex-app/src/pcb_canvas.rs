@@ -19,6 +19,9 @@ mod grid;
 mod highlight;
 pub mod layer_style;
 mod marks;
+mod middle_zoom;
+#[cfg(test)]
+mod middle_zoom_tests;
 mod msg;
 mod panel_preview;
 mod part_ghost;
@@ -31,16 +34,18 @@ mod viewport_resize;
 pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{
-    CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, carried_board, carry_delta,
-    snap_point,
+    CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, board_without_text,
+    carried_board, carried_text_board, carry_delta, followed_arcs, snap_point, snap_point_on,
+    via_carry_delta, with_arcs_replaced,
 };
 pub use content::BoardContentLayer;
+pub(crate) use grid::stroke_origin_marker;
 pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
 pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
 pub use rooms::{RoomMark, RoomsOverlay};
 pub use select::PcbSelectionState;
-pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope};
+pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope, SnapView};
 
 use crate::scene_generation::next_scene_generation;
 use iced::event::Event;
@@ -60,9 +65,11 @@ use cull::SceneBounds;
 #[derive(Debug, Default)]
 pub struct PcbCanvasState {
     panning: bool,
-    /// The right or middle press moved the view, so its release opens no menu.
+    /// The right press moved the view, so its release opens no menu.
     pan_moved: bool,
     last_pan_pos: Option<iced::Point>,
+    /// The middle-button drag zooming the view, while it is held.
+    middle_zoom: Option<crate::canvas::middle_zoom::MiddleZoom>,
     /// Ctrl/Cmd held, tracked from `ModifiersChanged` (mouse events carry no
     /// modifiers); keeps a modified scroll zooming under "Two-finger scroll pans".
     zoom_modifier: bool,
@@ -157,6 +164,9 @@ pub struct PcbCanvas {
     /// A tool, Move, paste or part on the cursor waits for clicks: every
     /// press is a click, never a drag or a box (#2396).
     clicks_only: bool,
+    /// The Active Bar took the last right press, so its release is not a
+    /// board right-click. Set by `Signex::set_swallow_right_release`.
+    swallow_right_release: bool,
     /// The board without the carried footprints, and them at their offset.
     drag_preview: Option<drag_preview::DragPreview>,
     /// What the next click adds, set by the app (#2364), and the share of
@@ -168,6 +178,14 @@ pub struct PcbCanvas {
     text_key: std::cell::Cell<Option<board_text::TextKey>>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
+}
+
+/// Ends the hold on a right release the Active Bar's press owned.
+fn right_release_swallowed() -> canvas::Action<Message> {
+    canvas::Action::publish(Message::ActiveBar(
+        crate::active_bar::ActiveBarMsg::RightReleaseSwallowed,
+    ))
+    .and_capture()
 }
 
 impl Default for PcbCanvas {
@@ -206,6 +224,7 @@ impl PcbCanvas {
             grab: Vec::new(),
             carry: std::cell::Cell::new(false),
             clicks_only: false,
+            swallow_right_release: false,
             drag_preview: None,
             part_ghost: None,
             text_cache: canvas::Cache::default(),
@@ -238,6 +257,17 @@ impl PcbCanvas {
         self.clicks_only
     }
 
+    /// Hold back the next right release, or stop holding it back.
+    pub fn set_swallow_right_release(&mut self, swallow: bool) {
+        self.swallow_right_release = swallow;
+    }
+
+    /// Whether the next right release is held back.
+    #[cfg(test)]
+    pub fn swallows_right_release(&self) -> bool {
+        self.swallow_right_release
+    }
+
     /// Whether a press at `at` (board mm) lands on a grabbed footprint.
     pub fn grabs(&self, at: signex_types::pcb::Point, reach_mm: f64) -> bool {
         let (Ok(p), Ok(reach)) = (
@@ -265,7 +295,7 @@ impl PcbCanvas {
         HighlightLayer(self)
     }
 
-    fn camera_ref(&self) -> std::cell::Ref<'_, BoardCamera> {
+    pub(crate) fn camera_ref(&self) -> std::cell::Ref<'_, BoardCamera> {
         self.camera.borrow()
     }
 
@@ -625,6 +655,9 @@ impl canvas::Program<Message> for PcbCanvas {
     ) -> Option<canvas::Action<Message>> {
         // Remember the bounds so menu zoom (no cursor) can find the view centre.
         self.viewport.set(bounds);
+        if let Some(action) = self.middle_zoom_event(state, event, bounds, cursor) {
+            return Some(action);
+        }
         if self.resolve_pending_fit(bounds) {
             return Some(canvas::Action::publish(Message::CanvasEvent(
                 CanvasEvent::CursorMoved,
@@ -690,26 +723,29 @@ impl canvas::Program<Message> for PcbCanvas {
             Event::Mouse(mouse::Event::ButtonPressed(button)) => {
                 // A press outside the board belongs to the widget under it:
                 // the layer tabs under the canvas open their menu (#2379).
-                if matches!(button, mouse::Button::Right | mouse::Button::Middle)
+                if *button == mouse::Button::Right
                     && let Some(pos) = cursor.position_in(bounds)
                 {
                     state.panning = true;
                     state.pan_moved = false;
                     state.last_pan_pos = Some(pos);
+                    // A held-back release was lost: this press ends the hold.
+                    if self.swallow_right_release {
+                        return Some(right_release_swallowed());
+                    }
                     return Some(canvas::Action::capture());
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(button)) => {
-                if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
+                if *button == mouse::Button::Right {
                     let moved = std::mem::take(&mut state.pan_moved);
-                    // Only a press on this canvas starts a pan: the release
-                    // of one the Active Bar took is not a board right-click.
-                    let pressed_here = std::mem::take(&mut state.panning);
+                    state.panning = false;
                     state.last_pan_pos = None;
+                    if self.swallow_right_release {
+                        return Some(right_release_swallowed());
+                    }
                     // A right click that did not pan opens the board's menu (#2240).
-                    if *button == mouse::Button::Right
-                        && pressed_here
-                        && !moved
+                    if !moved
                         && self.selectable
                         && let Some(pos) = cursor.position_in(bounds)
                     {
@@ -736,22 +772,9 @@ impl canvas::Program<Message> for PcbCanvas {
                         );
                     }
 
-                    if self.selectable {
-                        return Some(canvas::Action::publish(Message::PcbCanvas(
-                            gesture::pointer_moved(self, cursor_pos, bounds),
-                        )));
-                    }
-                    let (world, zoom_pct) = {
-                        let camera = self.camera.borrow();
-                        (camera.screen_to_world(cursor_pos), camera.zoom_percent())
-                    };
-                    return Some(canvas::Action::publish(Message::CanvasEvent(
-                        CanvasEvent::CursorAt {
-                            x: world.x,
-                            y: world.y,
-                            zoom_pct,
-                        },
-                    )));
+                    return Some(canvas::Action::publish(
+                        self.pointer_report(cursor_pos, bounds),
+                    ));
                 }
             }
             _ => {}
@@ -826,6 +849,9 @@ impl canvas::Program<Message> for PcbCanvas {
     ) -> mouse::Interaction {
         if state.panning {
             return mouse::Interaction::Grabbing;
+        }
+        if state.middle_zoom.is_some() {
+            return mouse::Interaction::ResizingVertically;
         }
         if self.carry.get() {
             return mouse::Interaction::Move;

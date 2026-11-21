@@ -122,6 +122,94 @@ fn measure_marks_the_part_under_its_designator() {
     assert_eq!(first.item, Some(ItemRef::Footprint(R1)));
 }
 
+fn drag(app: &mut Signex, from: Point, to: Point) {
+    let _ = app.update(Message::PcbCanvas(PcbCanvasMsg::FootprintDragged {
+        from,
+        to,
+        tolerance_mm: 0.05,
+        leaves_tracks: false,
+    }));
+}
+
+#[test]
+fn a_dragged_designator_moves_itself_with_no_ghost() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_with_board(dir.path());
+    drag(&mut app, Point::new(10.0, 10.0), Point::new(13.0, 12.0));
+    let carry = app.interaction_state.pcb_carry.as_ref().expect("a carry");
+    assert_eq!(carry.text, Some((R1, BoardTextField::Designator)));
+    let canvas = &app.interaction_state.pcb_canvas;
+    assert!(canvas.highlight().ghost.is_empty(), "no ghost");
+    assert!(
+        canvas.highlight().selected.is_empty(),
+        "no mark left behind"
+    );
+    let base = canvas.active_renderer_snapshot().expect("a board");
+    assert!(base.texts.is_empty(), "the text left its old place");
+    assert_eq!(base.pads.len(), 2, "the part stays");
+    let moving = canvas.drag_preview_texts();
+    assert_eq!(moving.len(), 1);
+    assert_eq!(moving[0].content, "R1");
+    assert_eq!(moving[0].position, [13.0, 12.0]);
+    let scene = canvas.drag_preview_scene().expect("a moving scene");
+    assert!(scene.top_polygons.is_empty(), "its pads do not move");
+}
+
+/// No counter sees the fill or ratsnest code, so a marker line stands in: a
+/// recomputed board would lose it.
+#[test]
+fn a_text_drag_keeps_the_ratsnest_and_fills_it_had() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_with_board(dir.path());
+    let canvas = &mut app.interaction_state.pcb_canvas;
+    let mut shown = canvas.active_renderer_snapshot().expect("a board").clone();
+    shown
+        .ratsnest_lines
+        .push(signex_renderer::pcb::RatsnestInput {
+            p0: [1.0, 2.0],
+            p1: [3.0, 4.0],
+            net: 77,
+        });
+    canvas.set_renderer_snapshot(Some(shown));
+    drag(&mut app, Point::new(10.0, 10.0), Point::new(13.0, 12.0));
+    drag(&mut app, Point::new(10.0, 10.0), Point::new(14.0, 12.5));
+    let canvas = &app.interaction_state.pcb_canvas;
+    assert_eq!(canvas.drag_preview_texts()[0].position, [14.0, 12.5]);
+    let base = canvas.active_renderer_snapshot().expect("a board");
+    assert!(base.texts.is_empty(), "the text left its old place");
+    assert_eq!(
+        base.ratsnest_lines.len(),
+        1,
+        "the ratsnest is the one shown"
+    );
+    assert_eq!(base.ratsnest_lines[0].net, 77);
+}
+
+#[test]
+fn a_dragged_footprint_moves_itself_with_no_ghost() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_with_board(dir.path());
+    drag(&mut app, Point::new(10.0, 11.0), Point::new(13.0, 11.0));
+    let carry = app.interaction_state.pcb_carry.as_ref().expect("a carry");
+    assert!(carry.footprints.contains(&R1));
+    let delta = carry.delta;
+    let canvas = &app.interaction_state.pcb_canvas;
+    assert!(canvas.highlight().ghost.is_empty(), "no ghost");
+    let base = canvas.active_renderer_snapshot().expect("a board");
+    assert!(
+        base.pads.is_empty() && base.texts.is_empty(),
+        "nothing left"
+    );
+    let moving = canvas.drag_preview_texts();
+    assert_eq!(moving.len(), 1, "its designator goes with it");
+    assert_eq!(
+        moving[0].position,
+        [(10.0 + delta.x) as f32, (10.0 + delta.y) as f32]
+    );
+    let scene = canvas.drag_preview_scene().expect("a moving scene");
+    assert_eq!(scene.top_polygons.len(), 2, "both pads are drawn");
+}
+
 #[test]
 fn with_texts_filtered_out_a_designator_is_not_grabbed() {
     let dir = tempfile::tempdir().unwrap();

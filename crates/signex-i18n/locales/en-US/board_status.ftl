@@ -5,6 +5,8 @@ board-status-grid = Grid
 board-status-grid-off = OFF
 # { $value } is a grid pitch with its unit.
 board-status-value = { $value }
+# The same, when the pitch is one of the board's extra grids.
+board-status-value-extra = { $value } (extra)
 board-status-routed = Routed
 # { $routed } of { $total } connections are routed.
 board-status-routed-count = { $routed }/{ $total }
@@ -114,4 +116,4 @@ board-status-kind-other = Other object
 
 ## A footprint drag (Caner, 2026-11-21); { $key } is Ctrl, or Cmd on macOS.
 board-status-drag-with-tracks = Dragging with tracks ({ $key }: leave the tracks)
-board-status-drag-without-tracks = Moving without tracks (release { $key }: drag the tracks)
+board-status-drag-without-tracks = Moving without tracks ({ $key } pressed: they stay until the drop)

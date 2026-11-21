@@ -29,6 +29,104 @@ impl Signex {
             .collect()
     }
 
+    /// `path` moved to a window of its own: if it was main's active tab,
+    /// main shows the nearest docked tab instead. With none left it stays.
+    pub(crate) fn leave_undocked_active_tab(&mut self, path: &std::path::Path) {
+        let active = self.document_state.active_tab;
+        let shown = self.document_state.tabs.get(active);
+        if shown.is_none_or(|tab| tab.path != path) {
+            return;
+        }
+        let nearest = self
+            .docked_tab_indices()
+            .into_iter()
+            .min_by_key(|index| index.abs_diff(active));
+        if let Some(next) = nearest {
+            self.end_main_work_on(path);
+            self.park_active_schematic_session();
+            self.document_state.active_tab = next;
+            self.sync_active_tab();
+        }
+    }
+
+    /// What the main window had under way on `path`, which it no longer
+    /// shows, ends: a route lands, a carry drops, a wire main is drawing is
+    /// discarded (one drawn in another window stays). Called while `path`
+    /// is still the active tab.
+    fn end_main_work_on(&mut self, path: &std::path::Path) {
+        if self.own_board_tool().is_some() {
+            self.release_board_tool();
+        }
+        if self.has_own_pcb_carry() {
+            self.end_pcb_carry();
+        }
+        let state = &mut self.interaction_state;
+        if state
+            .pcb_query
+            .measure
+            .as_ref()
+            .is_some_and(|measure| measure.is_for(Some(path), None))
+        {
+            state.pcb_query.measure = None;
+        }
+        if state
+            .pcb_guide_place
+            .as_ref()
+            .is_some_and(|(armed, _)| armed == path)
+        {
+            state.pcb_guide_place = None;
+        }
+        if state.pcb_origin_place.as_deref() == Some(path) {
+            state.pcb_origin_place = None;
+        }
+        if state
+            .pcb_arrange_box
+            .as_ref()
+            .is_some_and(|armed| armed.path == path)
+        {
+            state.pcb_arrange_box = None;
+        }
+        if state.wire_drawing && state.wire_window.is_none() {
+            state.wire_drawing = false;
+            state.wire_points.clear();
+            let canvas = state.active_canvas_mut();
+            canvas.wire_preview.clear();
+            canvas.drawing_mode = false;
+            canvas.tool_preview = None;
+            state.current_tool = crate::app::Tool::Select;
+        }
+    }
+
+    /// A wire being drawn in `window`, which is closing, ends with it: it
+    /// must not continue on the sheet main shows.
+    pub(crate) fn end_wire_of_window(&mut self, window: iced::window::Id) {
+        let state = &mut self.interaction_state;
+        if state.wire_drawing && state.wire_window == Some(window) {
+            state.wire_drawing = false;
+            state.wire_points.clear();
+            state.current_tool = crate::app::Tool::Select;
+        }
+    }
+
+    /// `path` came back from its own window: main shows it, as it did
+    /// before the window took it, and ends what it had under way on the tab
+    /// it leaves. A closed document has no tab to show.
+    pub(crate) fn show_redocked_tab(&mut self, path: &std::path::Path) {
+        let index = self
+            .document_state
+            .tabs
+            .iter()
+            .position(|tab| tab.path == path);
+        if let Some(index) = index.filter(|index| *index != self.document_state.active_tab) {
+            if let Some(leaving) = self.active_tab_path() {
+                self.end_main_work_on(&leaving);
+            }
+            self.park_active_schematic_session();
+            self.document_state.active_tab = index;
+            self.sync_active_tab();
+        }
+    }
+
     /// Two documents or more can share the main window in panes.
     pub(crate) fn can_tile_documents(&self) -> bool {
         self.docked_tab_indices().len() >= 2

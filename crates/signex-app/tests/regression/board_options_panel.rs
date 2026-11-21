@@ -105,15 +105,4 @@ fn a_hovered_tile_lights_its_callout_and_the_callout_its_tile() {
         PcbBoardMsg::IllustrationHovered(IllustrationMsg::FieldLeft(BOARD_WIDTH)),
     );
     assert!(!lit(&f));
-    // The width callout reports the field; the Width tile reads it.
-    properties(
-        &mut f,
-        PcbBoardMsg::IllustrationHovered(IllustrationMsg::CalloutHovered(BOARD_WIDTH)),
-    );
-    assert!(lit(&f));
-    properties(
-        &mut f,
-        PcbBoardMsg::IllustrationHovered(IllustrationMsg::CalloutLeft),
-    );
-    assert!(!lit(&f));
 }

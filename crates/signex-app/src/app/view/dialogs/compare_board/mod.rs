@@ -12,7 +12,7 @@ use signex_engine::pcb::eco::{CompareKind, CompareReport, Direction};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
-use signex_widgets::{Label, SegmentedStyle, button, segmented, text};
+use signex_widgets::{Label, button, segmented, text};
 
 use crate::app::compare_board::CompareBoardState;
 use crate::app::{CompareBoardMsg, Message, Signex};
@@ -399,23 +399,11 @@ fn chips_bar<'a>(
     }
     let r = tokens::resolve(tokens);
     let choices = Direction::ALL.map(|d| (Some(d), Label::from(t!(i18n, direction_id(d)))));
-    let shown = segmented(
-        choices,
-        state.shown_choice,
-        SegmentedStyle::new(
-            r.sunken,
-            r.raised,
-            r.shadow,
-            r.ink3,
-            ti(tokens.text),
-            TS.caption,
-        ),
-        |d| {
-            cb(CompareBoardMsg::ShownRowsDirectionPicked(
-                d.unwrap_or(Direction::Skip),
-            ))
-        },
-    );
+    let shown = segmented(choices, state.shown_choice, r.segmented(TS.caption), |d| {
+        cb(CompareBoardMsg::ShownRowsDirectionPicked(
+            d.unwrap_or(Direction::Skip),
+        ))
+    });
     let line = chips
         .push(Space::new().width(Length::Fill).boxed())
         .push(

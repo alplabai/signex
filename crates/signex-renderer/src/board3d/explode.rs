@@ -1,15 +1,14 @@
-//! The board taken apart along z for the 3D view's explode: the core
-//! stays, each face's mask and copper move away from it on their side, and
-//! the parts lift further. Only vertex heights change, so the triangles,
-//! the board range and the parts' ranges still pick and highlight.
+//! The board taken apart along z for the 3D view's explode, in stack order:
+//! the core stays; on each side the inner copper, the outer copper, the
+//! mask and the silkscreen move away from it in that order, and the parts
+//! lift further. Only vertex heights change, so the triangles, the board
+//! range and the parts' ranges still pick and highlight.
 //!
 //! CLEAN ROOM DECLARATION
 //! This module was written without reference to GPL-licensed software.
 //! Sources: wgpu/WGSL public docs.
 
-use std::ops::Range;
-
-use signex_gfx::scene3d::{MeshVertex, Scene3d};
+use signex_gfx::scene3d::Scene3d;
 
 use super::{BoardScene3d, Face};
 
@@ -23,11 +22,11 @@ pub struct Explode {
     /// 0 is assembled, 1 is layers apart; clamped to that, and not a
     /// number counts as 0.
     pub amount: f32,
-    /// Move each face's solder mask one step and its copper two steps away
-    /// from the core. Off, both stay on the core.
+    /// Move each real layer its own step away from the core, in stack
+    /// order. Off, they all stay on the core.
     pub separate_copper_and_mask: bool,
-    /// Lift the parts one step further than the copper they sit on. Off,
-    /// they stay on their copper.
+    /// Lift the parts one step further than the silkscreen they sit on.
+    /// Off, they stay on it.
     pub lift_components: bool,
 }
 
@@ -54,20 +53,30 @@ impl Explode {
     }
 
     /// How many steps a vertex of `layer` moves, signed: up on the top
-    /// side, down on the bottom.
-    fn steps(&self, layer: Layer3d) -> f32 {
+    /// side, down on the bottom. `inner` is how many inner copper layers
+    /// move out on the top and on the bottom side.
+    fn steps(&self, layer: Layer3d, inner: [u8; 2]) -> f32 {
         let separate = if self.separate_copper_and_mask {
             1.0
         } else {
             0.0
         };
+        let copper_step = |face: Face| {
+            let count = match face {
+                Face::Top => inner[0],
+                Face::Bottom => inner[1],
+            };
+            f32::from(count) + 1.0
+        };
         let (face, steps) = match layer {
             Layer3d::Core => return 0.0,
-            Layer3d::Mask(face) => (face, separate),
-            Layer3d::Copper(face) => (face, 2.0 * separate),
+            Layer3d::InnerCopper { face, rank } => (face, separate * f32::from(rank)),
+            Layer3d::Copper(face) => (face, separate * copper_step(face)),
+            Layer3d::Mask(face) => (face, separate * (copper_step(face) + 1.0)),
+            Layer3d::Silk(face) => (face, separate * (copper_step(face) + 2.0)),
             Layer3d::Part(face) => {
                 let lift = if self.lift_components { 1.0 } else { 0.0 };
-                (face, 2.0 * separate + lift)
+                (face, separate * (copper_step(face) + 2.0) + lift)
             }
         };
         match face {
@@ -86,13 +95,18 @@ impl Default for Explode {
 /// Which slice of the board a scene vertex belongs to, for the explode.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Layer3d {
-    /// The board edge and the hole walls; never moves.
+    /// The laminate, the board edge and the hole walls; never moves.
     #[default]
     Core,
-    /// A face of the slab, in the solder mask colour.
-    Mask(Face),
-    /// Copper on a face.
+    /// An inner copper layer, moving out on `face`'s side, `rank` steps
+    /// from the core.
+    InnerCopper { face: Face, rank: u8 },
+    /// A face's outer copper and its finish.
     Copper(Face),
+    /// A face's solder mask.
+    Mask(Face),
+    /// A face's silkscreen.
+    Silk(Face),
     /// A component on a face.
     Part(Face),
 }
@@ -102,9 +116,10 @@ impl BoardScene3d {
     /// change: the indices, `board`, `parts` and `thickness_mm` stay, so
     /// [`Self::pick`] and [`Self::highlight_ranges`] work on the result.
     /// One step is 6% of the board's larger side (its body, else the whole
-    /// scene); at amount 1 the mask is one step off the core, the copper
-    /// two, and a lifted part three (one with the copper and mask kept on
-    /// the core). Assembled, it is an identical clone.
+    /// scene). At amount 1 on a two-layer board the copper is one step off
+    /// the core, the mask two, the silkscreen three and a lifted part four
+    /// (one with the layers kept on the core); each inner copper layer on a
+    /// side adds a step. Assembled, it is an identical clone.
     pub fn exploded(&self, explode: Explode) -> BoardScene3d {
         let mut out = self.clone();
         let amount = explode.clamped_amount();
@@ -113,7 +128,7 @@ impl BoardScene3d {
         }
         let step = amount * self.explode_step_mm();
         for (vertex, layer) in out.scene.vertices.iter_mut().zip(&self.vertex_layers) {
-            vertex.position[2] += explode.steps(*layer) * step;
+            vertex.position[2] += explode.steps(*layer, self.inner_copper) * step;
         }
         out
     }
@@ -135,58 +150,7 @@ impl BoardScene3d {
     }
 }
 
-/// Tag the slab's vertices appended since `layers` was last filled: those
-/// of a level triangle in `slab` are the mask of the face they lie on
-/// (above half of `thickness` is the top), the rest (edge and hole walls)
-/// are the core.
-pub(super) fn tag_slab(
-    layers: &mut Vec<Layer3d>,
-    scene: &Scene3d,
-    slab: Range<u32>,
-    thickness: f32,
-) {
-    let start = layers.len();
-    layers.resize(scene.vertices.len(), Layer3d::Core);
-    let indices = scene
-        .indices
-        .get(slab.start as usize..slab.end as usize)
-        .unwrap_or_default();
-    for tri in indices.chunks_exact(3) {
-        let z = |k: usize| scene.vertices.get(tri[k] as usize).map(|v| v.position[2]);
-        let (Some(a), Some(b), Some(c)) = (z(0), z(1), z(2)) else {
-            continue;
-        };
-        if a != b || b != c {
-            continue;
-        }
-        let layer = Layer3d::Mask(face_of(a, thickness));
-        for &i in tri {
-            let i = i as usize;
-            if i >= start
-                && let Some(slot) = layers.get_mut(i)
-            {
-                *slot = layer;
-            }
-        }
-    }
-}
-
-/// Tag the vertices appended since `layers` was last filled with
-/// `layer_of` each.
-pub(super) fn tag_new(
-    layers: &mut Vec<Layer3d>,
-    scene: &Scene3d,
-    layer_of: impl Fn(&MeshVertex) -> Layer3d,
-) {
-    let start = layers.len().min(scene.vertices.len());
-    layers.extend(scene.vertices[start..].iter().map(layer_of));
-}
-
-/// The face a point at height `z` lies on, for a board `thickness` thick.
-pub(super) fn face_of(z: f32, thickness: f32) -> Face {
-    if z > thickness * 0.5 {
-        Face::Top
-    } else {
-        Face::Bottom
-    }
+/// Tag the vertices appended since `layers` was last filled as `layer`.
+pub(super) fn tag_new(layers: &mut Vec<Layer3d>, scene: &Scene3d, layer: Layer3d) {
+    layers.resize(scene.vertices.len(), layer);
 }

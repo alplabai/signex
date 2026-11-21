@@ -481,31 +481,72 @@ fn is_flat(pixels: &[u8], window: iced::Size, area: iced::Rectangle) -> bool {
     })
 }
 
-/// Mockup row 1: a recent row draws nothing where its Pin button goes until
-/// the pointer is on the row, and then the button pins the project.
-#[test]
-fn a_recent_row_shows_pin_only_on_hover() {
-    let recent = paths(1);
-    let fx = Fixture::new(&recent);
-    let texts = fx.texts(MOCK_WINDOW);
-    let label = find(&texts, "Pin").bounds;
-    // The label and the glyph before it, inside the button's padding.
-    let button = iced::Rectangle {
-        x: label.x - 2.0 * BASE,
-        width: label.width + 2.0 * BASE,
-        ..label
-    };
-    let unhovered = crate::layout_probe::draw_pixels(fx.view(), MOCK_WINDOW);
-    assert!(
-        is_flat(&unhovered, MOCK_WINDOW, button),
-        "the unhovered row draws something in {button:?}"
-    );
+/// How far the pixels of `area` reach from its first pixel towards `ink`,
+/// 1.0 being all the way. Panics on a pixel off that line: another colour.
+fn reach_towards(
+    pixels: &[u8],
+    window: iced::Size,
+    area: iced::Rectangle,
+    ink: iced::Color,
+) -> f32 {
+    let stride = window.width as usize * 4;
+    let (left, right) = (area.x as usize, (area.x + area.width) as usize);
+    let (top, bottom) = (area.y as usize, (area.y + area.height) as usize);
+    let channels = |p: &[u8]| [f32::from(p[0]), f32::from(p[1]), f32::from(p[2])];
+    let back = channels(&pixels[top * stride + left * 4..]);
+    let target = channels(&ink.into_rgba8());
+    let to_ink = [0, 1, 2].map(|i| target[i] - back[i]);
+    let length: f32 = to_ink.iter().map(|d| d * d).sum();
+    let mut reach = 0.0_f32;
+    for y in top..bottom {
+        for x in left..right {
+            let pixel = channels(&pixels[y * stride + x * 4..]);
+            let delta = [0, 1, 2].map(|i| pixel[i] - back[i]);
+            let t = (0..3).map(|i| delta[i] * to_ink[i]).sum::<f32>() / length;
+            assert!(
+                (0..3).all(|i| (delta[i] - t * to_ink[i]).abs() <= 16.0) && t > -0.1,
+                "pixel ({x}, {y}) is {pixel:?}, not between {back:?} and {target:?}"
+            );
+            reach = reach.max(t);
+        }
+    }
+    reach
+}
 
-    let clicked = fx.click(MOCK_WINDOW, "Pin");
-    assert!(sent(
-        &clicked,
-        &StartScreenMsg::ProjectPinned(recent[0].clone())
-    ));
+/// Decided by Caner (2026-11-21, `docs/DECISIONS.md`): a recent row keeps a
+/// quiet pin in the date's ink; on hover the Pin button lands on the same
+/// place and pins the project.
+#[test]
+fn a_recent_row_keeps_a_quiet_pin_and_shows_the_button_on_hover() {
+    use signex_types::theme::{ThemeId, theme_tokens};
+    let recent = paths(1);
+    for theme in [ThemeId::GraphiteDark, ThemeId::GraphiteLight] {
+        let fx = Fixture::new(&recent).in_theme(theme);
+        let texts = fx.texts(MOCK_WINDOW);
+        let labels: Vec<_> = texts.iter().filter(|t| t.text == "Pin").collect();
+        let [resting, hovered] = labels[..] else {
+            panic!("the reserved room and the hover button: {labels:#?}");
+        };
+        assert!((resting.bounds.x - hovered.bounds.x).abs() < 1.0);
+        assert!((resting.bounds.y - hovered.bounds.y).abs() < 1.0);
+
+        // The glyph before the label, inside the button's padding.
+        let glyph = iced::Rectangle {
+            x: resting.bounds.x - 2.0 * BASE,
+            width: 2.0 * BASE,
+            ..resting.bounds
+        };
+        let pixels = crate::layout_probe::draw_pixels(fx.view(), MOCK_WINDOW);
+        let quiet = crate::styles::tokens::resolve(&theme_tokens(theme)).ink4;
+        let reach = reach_towards(&pixels, MOCK_WINDOW, glyph, quiet);
+        assert!(reach >= 0.3, "{theme:?}: the pin reaches {reach}");
+
+        let clicked = fx.click(MOCK_WINDOW, "Pin");
+        assert!(sent(
+            &clicked,
+            &StartScreenMsg::ProjectPinned(recent[0].clone())
+        ));
+    }
 }
 
 /// Mockup row 1: a pinned project carries a pin mark right after its name;

@@ -382,10 +382,10 @@ fn a_click_on_a_grabbed_footprint_or_a_modified_press_still_selects() {
 }
 
 /// Caner, 2026-11-21: Ctrl on a footprint still drags it, leaving its
-/// tracks; letting Ctrl go mid-drag lets them follow again at once, and a
-/// Ctrl click without a drag still toggles.
+/// tracks until the drop, even once Ctrl is let go; the next drag starts
+/// unlatched, and a Ctrl click without a drag still toggles.
 #[test]
-fn a_ctrl_drag_on_a_footprint_leaves_the_tracks_and_ctrl_switches_live() {
+fn a_ctrl_drag_on_a_footprint_leaves_the_tracks_until_the_drop() {
     let mut rig = rig();
     grabbing(&mut rig);
     rig.mods(Modifiers::CTRL);
@@ -410,12 +410,26 @@ fn a_ctrl_drag_on_a_footprint_leaves_the_tracks_and_ctrl_switches_live() {
         matches!(
             msg,
             Some(PcbCanvasMsg::FootprintDragged {
-                leaves_tracks: false,
+                leaves_tracks: true,
                 to: t,
                 ..
             }) if t == to
         ),
         "{msg:?}"
+    );
+    rig.release(160.0, 140.0);
+
+    rig.press(100.0, 80.0);
+    let msg = rig.move_to(160.0, 140.0);
+    assert!(
+        matches!(
+            msg,
+            Some(PcbCanvasMsg::FootprintDragged {
+                leaves_tracks: false,
+                ..
+            })
+        ),
+        "the next drag is unlatched: {msg:?}"
     );
     rig.release(160.0, 140.0);
 

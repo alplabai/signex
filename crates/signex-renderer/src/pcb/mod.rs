@@ -52,6 +52,10 @@ pub struct ViaInput {
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
     pub ink: CopperInk,
+    /// The active copper layer when the via has copper there: its ring is
+    /// painted in that layer's colour. View-time only; `ink` stays the
+    /// via's own (the draw order and the 3D view read it).
+    pub shown_on: Option<CopperLayer>,
 }
 
 #[derive(Clone, Debug)]
@@ -67,6 +71,9 @@ pub struct PadInput {
     /// Copper off the active layer, drawn faint.
     pub dimmed: bool,
     pub ink: CopperInk,
+    /// The active copper layer for a plated through-hole pad: its copper is
+    /// painted in that layer's colour. View-time only, as on [`ViaInput`].
+    pub shown_on: Option<CopperLayer>,
 }
 
 #[derive(Clone, Debug)]
@@ -114,6 +121,11 @@ impl CopperInk {
             Self::MultiLayer => ColorSlot::MultiLayer,
             Self::Unknown => fallback,
         }
+    }
+
+    /// The ink to paint with: the copper of `shown_on`, else this one.
+    pub fn painted(self, shown_on: Option<CopperLayer>) -> Self {
+        shown_on.map_or(self, Self::Layer)
     }
 }
 
@@ -199,6 +211,7 @@ pub use board_features::{BoardFeaturesInput, HoleInput};
 pub use board_paint::{BoardObject, BoardPaint};
 use emit::*;
 pub use footprint_text::FootprintTextInput;
+pub(crate) use graphics::arc_points;
 pub use graphics::{GraphicInput, GraphicShapeInput};
 pub use layer_pairs::{LayerPair, SINGLE_TECHNICAL_LAYERS, panel_order_layers};
 pub use layer_rows::{
@@ -587,6 +600,7 @@ mod tests {
                     net: 1,
                     dimmed: false,
                     ink: CopperInk::Unknown,
+                    shown_on: None,
                 }],
                 ..PcbSnapshot::default()
             };
@@ -622,6 +636,7 @@ mod tests {
                     net: 1,
                     dimmed: false,
                     ink: CopperInk::Unknown,
+                    shown_on: None,
                 }],
                 ..PcbSnapshot::default()
             };

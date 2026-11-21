@@ -21,3 +21,8 @@ pub(crate) fn log_notice(notice: &Notice) {
         NoticeLevel::Error => crate::diagnostics::log_error_line(&line),
     }
 }
+
+/// Write each of `notices` to the Messages panel, in order.
+pub(crate) fn log_notices(notices: &[Notice]) {
+    notices.iter().for_each(log_notice);
+}

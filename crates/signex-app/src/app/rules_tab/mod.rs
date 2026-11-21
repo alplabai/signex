@@ -238,6 +238,13 @@ pub enum RulesTabMsg {
     OpenRequested {
         project: Option<ProjectId>,
     },
+    /// A DRC link: open the tab of `project_id` on `domain`, with `rule`
+    /// selected. Runs on the main window, whichever window sent it.
+    OpenedAt {
+        project_id: ProjectId,
+        domain: Domain,
+        rule: Option<String>,
+    },
     DomainPicked {
         project_id: ProjectId,
         domain: Domain,

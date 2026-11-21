@@ -6,7 +6,7 @@
 use iced::Task;
 
 use super::super::*;
-use crate::status_bar::{BoardCounter, BoardPopoverEvent, BoardStatusPopover};
+use crate::status_bar::{BoardCounter, BoardPopoverEvent, BoardPopoverKind, BoardStatusPopover};
 
 /// How often the DRC counter's "N min ago" is read against the clock.
 pub(crate) const BOARD_CLOCK_TICK: std::time::Duration = std::time::Duration::from_secs(30);
@@ -60,10 +60,31 @@ impl Signex {
                     event: PcbViewMsg::ActiveLayerPicked(layer),
                 });
                 // The dropdown closes on a pick; the Active layer popover stays.
-                if !self.shows_pcb_layer_strip() {
+                let is_dropdown = self
+                    .ui_state
+                    .board_status
+                    .popover
+                    .as_ref()
+                    .is_some_and(|p| p.kind == BoardPopoverKind::Layer);
+                if is_dropdown && !self.shows_pcb_layer_strip() {
                     self.close_board_popover();
                 }
                 task
+            }
+            E::LayerSetMenu(picked) => {
+                // The layer set menu takes over from the dropdown, so a row
+                // runs exactly as it does from the strip's set button.
+                let (x, y) = self.layer_set_card_anchor(window);
+                let owner = self.overlay_owner(window);
+                self.close_board_popover();
+                self.close_all_context_menus();
+                self.interaction_state.pcb_layer_set_menu = Some(crate::app::LayerSetMenu {
+                    x,
+                    y,
+                    window: owner,
+                    card: crate::app::LayerSetCard::Sets,
+                });
+                self.handle_layer_set_menu(picked)
             }
             E::LayersPanelOpened => {
                 self.close_board_popover();
@@ -71,7 +92,9 @@ impl Signex {
                     crate::panels::PanelKind::Layers,
                 )))
             }
-            E::GridPresetPicked(mm) => self.set_snap_grid(mm),
+            E::GridPresetPicked(mm) => {
+                self.run_in_window(window, true, |app| app.set_snap_grid(mm))
+            }
             E::CustomGridEdited(entry) => {
                 if let Some(popover) = self.ui_state.board_status.popover.as_mut() {
                     popover.custom_grid = entry;
@@ -79,7 +102,7 @@ impl Signex {
                 }
                 Task::none()
             }
-            E::CustomGridSubmitted => self.custom_grid_submitted(),
+            E::CustomGridSubmitted => self.custom_grid_submitted(window),
             E::SnapToggled => {
                 self.update(Message::Ui(UiMsg::StatusBar(StatusBarRequest::ToggleSnap)))
             }
@@ -140,15 +163,18 @@ impl Signex {
     }
 
     /// Enter in the Grid popover's Custom… field: a pitch above 0 mm becomes
-    /// the grid; anything else is refused and changes nothing.
-    fn custom_grid_submitted(&mut self) -> Task<Message> {
+    /// the grid of `window`'s board; anything else, or a pitch below the
+    /// nanometre a board stores, is refused and changes nothing.
+    fn custom_grid_submitted(&mut self, window: iced::window::Id) -> Task<Message> {
         let Some(popover) = self.ui_state.board_status.popover.as_mut() else {
             return Task::none();
         };
-        match crate::status_bar::custom_pitch(&popover.custom_grid) {
+        let pitch = crate::status_bar::custom_pitch(&popover.custom_grid)
+            .filter(|mm| Self::board_grid_step(f64::from(*mm)).is_some());
+        match pitch {
             Some(mm) => {
                 popover.custom_refused = false;
-                self.set_snap_grid(mm)
+                self.run_in_window(window, true, |app| app.set_snap_grid(mm))
             }
             None => {
                 popover.custom_refused = true;

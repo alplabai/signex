@@ -325,7 +325,6 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        state.right_press_on_canvas = false;
         // Abort a floating move or in-progress drag — matches Altium / Esc.
         // `pan_moved` makes the matching right-release read as a drag, so the
         // press that cancelled does not also open the context menu.
@@ -356,19 +355,19 @@ impl SchematicCanvas<'_> {
                     crate::active_bar::bar_left_in_window(tool, self.prefs.window_width, &metrics)
                         - bounds.x;
                 let rel_x = pos.x - bar_x;
-                if rel_x >= 0.0 && rel_x < bar_width {
-                    if let Some(menu) = crate::active_bar::menu_at(tool, rel_x, &metrics) {
-                        return Some(canvas::Action::publish(Message::ActiveBar(
-                            crate::active_bar::ActiveBarMsg::ToggleMenu(menu),
-                        )));
-                    }
-                    return Some(canvas::Action::capture());
+                if rel_x >= 0.0
+                    && rel_x < bar_width
+                    && let Some(menu) = crate::active_bar::menu_at(tool, rel_x, &metrics)
+                {
+                    // Read as a drag, so this press's release leaves the tool.
+                    state.pan_moved = true;
+                    return Some(canvas::Action::publish(Message::ActiveBar(
+                        crate::active_bar::ActiveBarMsg::ToggleMenu(menu),
+                    )));
                 }
-                // Beside the bar: no pan, but still a canvas right-click.
-                state.right_press_on_canvas = true;
+                // Prevent panning when right-clicking in the Active Bar zone
                 return Some(canvas::Action::capture());
             }
-            state.right_press_on_canvas = true;
             state.panning = true;
             state.pan_moved = false;
             state.last_pan_pos = Some(pos);
@@ -376,19 +375,18 @@ impl SchematicCanvas<'_> {
         Some(canvas::Action::capture())
     }
 
-    /// Middle-press: start pan.
-    pub(in crate::canvas) fn update_middle_pressed(
-        &self,
-        state: &mut CanvasState,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
+    /// `action` for a right press on the canvas while a release is held back:
+    /// that release was lost, so this press ends the hold.
+    pub(in crate::canvas) fn ending_release_hold(
+        action: Option<canvas::Action<Message>>,
     ) -> Option<canvas::Action<Message>> {
-        if let Some(pos) = cursor.position_in(bounds) {
-            state.panning = true;
-            state.pan_moved = false;
-            state.last_pan_pos = Some(pos);
-        }
-        Some(canvas::Action::capture())
+        let message = action.and_then(|action| action.into_inner().0);
+        Some(
+            canvas::Action::publish(message.unwrap_or(Message::ActiveBar(
+                crate::active_bar::ActiveBarMsg::RightReleaseSwallowed,
+            )))
+            .and_capture(),
+        )
     }
 
     /// Right-release: stop pan, context menu, or cancel drawing.
@@ -402,9 +400,15 @@ impl SchematicCanvas<'_> {
         state.panning = false;
         state.pan_moved = false;
         state.last_pan_pos = None;
-        // The release of a press made elsewhere is not a canvas right-click.
-        let pressed_here = std::mem::take(&mut state.right_press_on_canvas);
-        if pressed_here && !did_pan {
+        if self.prefs.swallow_right_release {
+            return Some(
+                canvas::Action::publish(Message::ActiveBar(
+                    crate::active_bar::ActiveBarMsg::RightReleaseSwallowed,
+                ))
+                .and_capture(),
+            );
+        }
+        if !did_pan {
             if self.drawing_mode {
                 // Right-click cancels wire drawing (Altium behavior)
                 return Some(canvas::Action::publish(Message::Tool(
@@ -420,16 +424,6 @@ impl SchematicCanvas<'_> {
                 )));
             }
         }
-        Some(canvas::Action::capture())
-    }
-
-    /// Middle-release: stop pan.
-    pub(in crate::canvas) fn update_middle_released(
-        &self,
-        state: &mut CanvasState,
-    ) -> Option<canvas::Action<Message>> {
-        state.panning = false;
-        state.last_pan_pos = None;
         Some(canvas::Action::capture())
     }
 
@@ -449,7 +443,7 @@ impl SchematicCanvas<'_> {
             )));
         }
         if let Some(cursor_pos) = cursor.position_in(bounds) {
-            // Pan if right/middle button held
+            // Pan if the right button is held
             if state.panning {
                 let mut pan_just_started = false;
                 if let Some(last) = state.last_pan_pos {

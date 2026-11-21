@@ -121,18 +121,26 @@ impl Signex {
         Some(files)
     }
 
-    /// Export Assembly SVG: the folder dialog, for the open dialog's board
-    /// and options, else the board in view with the options last used.
+    /// What an Assembly SVG export writes: Board Print's board and options;
+    /// with Board Reports open, its board with the options last used; else
+    /// the board in view with them.
+    pub(crate) fn assembly_svg_source(&self) -> Option<(PathBuf, BoardPrintOptions)> {
+        let last_used = || self.ui_state.board_output.print_options.clone();
+        match self.ui_state.board_output.dialog.as_deref() {
+            Some(BoardOutputDialog::Print(state)) => {
+                Some((state.board.clone(), state.options.clone()))
+            }
+            Some(BoardOutputDialog::Reports(state)) => Some((state.board.clone(), last_used())),
+            None => self.board_in_view().map(|(board, _)| (board, last_used())),
+        }
+    }
+
+    /// Export Assembly SVG: the folder dialog for
+    /// [`Self::assembly_svg_source`].
     pub(super) fn request_assembly_svg(&mut self) -> Task<Message> {
-        let (board, options) = match self.ui_state.board_output.dialog.as_deref() {
-            Some(BoardOutputDialog::Print(state)) => (state.board.clone(), state.options.clone()),
-            _ => match self.board_in_view() {
-                Some((board, _)) => (board, self.ui_state.board_output.print_options.clone()),
-                None => {
-                    self.explain_no_board();
-                    return Task::none();
-                }
-            },
+        let Some((board, options)) = self.assembly_svg_source() else {
+            self.explain_no_board();
+            return Task::none();
         };
         let target = self.save_target(Some(&board));
         let picker = self.ui_state.io.picker.clone();

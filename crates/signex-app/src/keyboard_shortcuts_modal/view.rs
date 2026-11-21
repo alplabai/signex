@@ -8,9 +8,7 @@ use iced::widget::{Column, Row, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{
-    Label, SegmentedStyle, button, raw, rich_text, segmented, span, text, text_input,
-};
+use signex_widgets::{Label, button, raw, rich_text, segmented, span, text, text_input};
 
 use super::filter::{
     Listing, ShownSection, cap_matches, column_split, label_runs, listing, trigger_caps,
@@ -248,8 +246,7 @@ fn toolbar<'a>(
         .width(Length::Fill)
         .style(styles::field(tokens, sheet.is_filtered()));
 
-    let style =
-        SegmentedStyle::new(r.sunken, r.raised, r.shadow, r.ink3, ink, TS.body).fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     let options = ShortcutScope::ALL.map(|scope| (scope, Label::from(scope_label(i18n, scope))));
     let scope = container(segmented(options, sheet.scope, style, |scope| {
         Message::Overlay(OverlayMsg::ShortcutsScopePicked(scope))

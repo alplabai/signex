@@ -75,10 +75,8 @@ impl Signex {
                 let mut common = self.primitive_common(board, target, lock)?;
                 common.locked_count = mixed_lock(vias.iter().map(|v| v.locked));
                 let mut facts = via_facts(board, common, &vias, i18n);
-                // Override and the shown layer are the panel's state
-                // (mockup row 96).
+                // The shown layer is the panel's state (mockup row 96).
                 let panel = &self.interaction_state.pcb_primitive;
-                facts.override_open = panel.via_override.as_ref() == Some(&facts.common.target);
                 facts.view_layer = panel
                     .via_view_layer
                     .filter(|_| panel.is_showing(&facts.common.target));
@@ -405,7 +403,6 @@ pub(super) fn via_facts(
         via_type: None,
         type_size: None,
         overridden: None,
-        override_open: false,
         protection: None,
         drill_pair: None,
         finished_hole: None,

@@ -67,13 +67,23 @@ impl Signex {
             .position(|item| opens(item, PcbBarMenu::Filter))
             .map(|slot| offsets[slot]);
         let bar = badge::with_filter_badge(
-            signex_widgets::active_bar::view(items, tokens),
+            signex_widgets::active_bar::view(holding_right_release(items), tokens),
             filter_x,
             badge::off_count(&self.ui_state.pcb_pick_filter),
             tokens,
             &self.ui_state.i18n,
             &self.document_state.panel_ctx.ui_font_name,
         );
+        // Buttons take their own right press first. The rest of the bar
+        // holds the release; with a dropdown open it counts as outside it.
+        let bar_right_press = if open.is_some() {
+            PcbBarMsg::FlyoutRightPressed
+        } else {
+            PcbBarMsg::RightPressTaken
+        };
+        let bar = iced::widget::mouse_area(bar)
+            .on_right_press(bar_message(bar_right_press))
+            .boxed();
         let top = Space::new().height(crate::active_bar::bar_top_margin());
         let Some((menu, trigger_x)) = anchor else {
             return column![
@@ -100,7 +110,12 @@ impl Signex {
                 &self.document_state.panel_ctx.ui_font_name,
             )
         });
-        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, panel_width);
+        let panel = iced::widget::mouse_area(signex_widgets::active_bar_dropdown::view(
+            entries,
+            tokens,
+            panel_width,
+        ))
+        .on_right_press(bar_message(PcbBarMsg::RightPressTaken));
         // The panel stays inside the bar's width, so the centred bar does not
         // move while its dropdown is open.
         let panel_x = trigger_x
@@ -114,6 +129,7 @@ impl Signex {
         .width(bar_width);
         let dismiss = Self::flyout_dismiss_layer(
             bar_message(PcbBarMsg::MenuDismissed),
+            bar_message(PcbBarMsg::FlyoutRightPressed),
             iced::Color::TRANSPARENT,
         );
         stack![
@@ -160,6 +176,20 @@ fn opens(item: &ActiveBarItem<Message>, menu: PcbBarMenu) -> bool {
         &button.on_right_press,
         Some(Message::Pcb(PcbMsg::Bar(PcbBarMsg::MenuToggled(m)))) if *m == menu
     )
+}
+
+/// `items` as drawn: a right press on a dropdown button also holds its
+/// release off the canvas.
+fn holding_right_release(mut items: Vec<ActiveBarItem<Message>>) -> Vec<ActiveBarItem<Message>> {
+    for item in &mut items {
+        if let ActiveBarItem::Button(button) = item
+            && let Some(Message::Pcb(PcbMsg::Bar(PcbBarMsg::MenuToggled(menu)))) =
+                button.on_right_press
+        {
+            button.on_right_press = Some(bar_message(PcbBarMsg::MenuRightPressed(menu)));
+        }
+    }
+    items
 }
 
 /// A button that runs `command`.

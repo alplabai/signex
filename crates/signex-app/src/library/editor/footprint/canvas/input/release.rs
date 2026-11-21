@@ -96,7 +96,7 @@ impl FootprintCanvas<'_> {
             let anchor = drag.grab_offset_mm;
             let release_world = cursor
                 .position_in(bounds)
-                .map(|p| cstate.screen_to_world(p))
+                .map(|p| self.pointer_move_world(cstate, p))
                 .unwrap_or(anchor);
             let x_mm = anchor.0.min(release_world.0);
             let y_mm = anchor.1.min(release_world.1);
@@ -321,9 +321,17 @@ impl FootprintCanvas<'_> {
             self.state,
             cstate.current_modifiers.command(),
         );
+        // A drawing click lands where its snap showed: a grid or axis
+        // position that merely lies near a Point does not reuse it.
+        let snapped_off_point = self.state.active_tool.is_drawing()
+            && cstate.last_snap.is_some_and(|s| {
+                (s.pos.0 - click_world.0).abs() < 1e-9
+                    && (s.pos.1 - click_world.1).abs() < 1e-9
+                    && !matches!(s.kind, snap::SnapKind::Point(_))
+            });
         let snap_id = match inference {
-            Some(SketchInference::Off) | None => snap_id,
-            Some(_) => None,
+            Some(SketchInference::Off) | None if !snapped_off_point => snap_id,
+            _ => None,
         };
         let msg = match self.state.active_tool {
             SketchTool::Select => EditorMsg::Footprint(FootprintEditorMsg::SketchSelect {

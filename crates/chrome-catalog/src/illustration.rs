@@ -228,11 +228,11 @@ fn sample<'a>(
 }
 
 /// Top row: track idle, then with the Width field hovered. Bottom row: pad
-/// with the X callout hovered, then with Paste switched off.
+/// with the X field hovered, then with Paste switched off.
 pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let idle = IllustrationHover::default();
     let field = hovered(IllustrationMsg::FieldHovered(FieldId::new("w")));
-    let callout = hovered(IllustrationMsg::CalloutHovered(FieldId::new("sx")));
+    let pad_field = hovered(IllustrationMsg::FieldHovered(FieldId::new("sx")));
     column![
         row![
             sample(tokens, track(), &idle),
@@ -240,7 +240,7 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         ]
         .spacing(CAPTION * 2.0),
         row![
-            sample(tokens, pad(true), &callout),
+            sample(tokens, pad(true), &pad_field),
             sample(tokens, pad(false), &idle),
         ]
         .spacing(CAPTION * 2.0),

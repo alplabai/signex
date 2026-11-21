@@ -17,8 +17,8 @@ impl SelectionFilterCustomState {
         SelectionFilterKind::Texts,
     ];
 
-    /// A draft of `filter`, with no preset name typed.
-    pub fn from_filter(f: SelectionFilter) -> Self {
+    /// A draft of `f` for the document at `target`, with no preset name.
+    pub fn from_filter(f: SelectionFilter, target: std::path::PathBuf) -> Self {
         Self {
             pads: f.pads,
             tracks: f.tracks,
@@ -33,6 +33,7 @@ impl SelectionFilterCustomState {
             fills: f.fills,
             other: f.other,
             preset_name: String::new(),
+            target,
         }
     }
 
@@ -111,7 +112,7 @@ mod tests {
     use super::{SelectionFilter, SelectionFilterCustomState as Draft, SelectionFilterKind};
 
     fn draft() -> Draft {
-        Draft::from_filter(SelectionFilter::default())
+        Draft::from_filter(SelectionFilter::default(), "part.snxfpt".into())
     }
 
     /// None turns all eight shown kinds off, All turns them back on; the
@@ -166,6 +167,7 @@ mod tests {
     fn the_draft_round_trips_the_filter() {
         let mut f = SelectionFilter::default();
         f.toggle(SelectionFilterKind::Pours);
-        assert_eq!(Draft::from_filter(f).to_filter(), f);
+        let draft = Draft::from_filter(f, "part.snxfpt".into());
+        assert_eq!(draft.to_filter(), f);
     }
 }

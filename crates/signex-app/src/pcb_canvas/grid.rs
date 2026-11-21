@@ -1,7 +1,8 @@
 //! The board backdrop behind the PCB canvas (#2351): a mid-grey workspace,
 //! the board area in the dark board colour, the grid on the board area only,
-//! and the origin marker. Grid lines sit on board multiples of the pitch, so
-//! on a turned view (#2316) they turn with the board. Every fifth line is a
+//! and the origin marker. Grid lines sit on multiples of the pitch from the
+//! board origin, where placement snap steps from, so on a turned view
+//! (#2316) they turn with the board. Every fifth line from the origin is a
 //! brighter major line; when the fine lines get too close they fade out and
 //! the grid steps to the next coarser level, so a zoomed-out view never
 //! turns into noise. Colours come from the board palette.
@@ -154,20 +155,14 @@ pub(super) fn draw_grid(
     let Some(view) = camera.visible_world_bounds(size) else {
         return;
     };
-    let [ox, oy] = origin;
-    let region: Vec<[f32; 2]> = region.iter().map(|p| [p[0] - ox, p[1] - oy]).collect();
-    let view = (
-        [view.0[0] - ox, view.0[1] - oy],
-        [view.1[0] - ox, view.1[1] - oy],
-    );
-    let at = |p: Point| camera.world_to_screen(Point::new(p.x + ox, p.y + oy));
     // One pass over the lines feeds both paths.
     let draw_fine = paint.fine.a > 0.0;
     let mut fine = Builder::new();
     let mut major = Builder::new();
     let mut scratch = Vec::with_capacity(8);
-    each_segment(
-        &region,
+    each_segment_from(
+        origin,
+        region,
         view,
         level.pitch_mm,
         &mut scratch,
@@ -179,8 +174,8 @@ pub(super) fn draw_grid(
             } else {
                 return;
             };
-            path.move_to(at(from));
-            path.line_to(at(to));
+            path.move_to(camera.world_to_screen(from));
+            path.line_to(camera.world_to_screen(to));
         },
     );
     let stroke = |color: Color| Stroke::default().with_color(color).with_width(GRID_LINE_PX);
@@ -203,6 +198,12 @@ pub(super) fn draw_origin(
     if at.x < -reach || at.y < -reach || at.x > size.width + reach || at.y > size.height + reach {
         return;
     }
+    stroke_origin_marker(frame, at, color);
+}
+
+/// The board origin marker at canvas pixel `at`: a circle with an X through
+/// it. The board sketch draws the same one.
+pub(crate) fn stroke_origin_marker(frame: &mut Frame, at: Point, color: Color) {
     let arm = ORIGIN_RADIUS_PX * std::f32::consts::FRAC_1_SQRT_2;
     let marker = Path::new(|b| {
         b.circle(at, ORIGIN_RADIUS_PX);
@@ -217,9 +218,31 @@ pub(super) fn draw_origin(
     );
 }
 
-/// Call `segment(index, from, to)` (board mm) for every piece of a grid line
-/// inside `region` and the visible `view` box. `index` counts pitches from
-/// the board origin along the line's axis; `scratch` holds the crossings.
+/// [`each_segment`] for a grid through `origin` (board mm): `region`, `view`
+/// and the segments are all in board mm, and `index` counts from `origin`.
+pub(super) fn each_segment_from(
+    origin: [f32; 2],
+    region: &[[f32; 2]],
+    view: ([f32; 2], [f32; 2]),
+    pitch_mm: f32,
+    scratch: &mut Vec<f32>,
+    mut segment: impl FnMut(i64, Point, Point),
+) {
+    let [ox, oy] = origin;
+    let shifted: Vec<[f32; 2]> = region.iter().map(|p| [p[0] - ox, p[1] - oy]).collect();
+    let view = (
+        [view.0[0] - ox, view.0[1] - oy],
+        [view.1[0] - ox, view.1[1] - oy],
+    );
+    let back = |p: Point| Point::new(p.x + ox, p.y + oy);
+    each_segment(&shifted, view, pitch_mm, scratch, |i, from, to| {
+        segment(i, back(from), back(to));
+    });
+}
+
+/// Call `segment(index, from, to)` for every piece of a grid line through
+/// (0, 0) inside `region` and the visible `view` box. `index` counts pitches
+/// from (0, 0) along the line's axis; `scratch` holds the crossings.
 pub(super) fn each_segment(
     region: &[[f32; 2]],
     view: ([f32; 2], [f32; 2]),

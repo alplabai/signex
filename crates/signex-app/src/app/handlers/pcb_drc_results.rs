@@ -166,6 +166,31 @@ impl Signex {
             crate::diagnostics::log_info("Rules: no project is open");
             return Task::none();
         };
+        // A window cannot open a tab inside its swap: its board named the
+        // project, and the tab opens on the main window.
+        if self.interaction_state.acting_window.is_some() {
+            let open = crate::app::RulesTabMsg::OpenedAt {
+                project_id,
+                domain,
+                rule,
+            };
+            return Task::done(Message::Project(crate::app::ProjectMsg::Rules(open)));
+        }
+        self.open_rules_on(project_id, domain, rule)
+    }
+
+    /// [`Self::open_rules_at`] for a known project. One closed meanwhile
+    /// opens nothing.
+    pub(crate) fn open_rules_on(
+        &mut self,
+        project_id: crate::app::state::ProjectId,
+        domain: Domain,
+        rule: Option<String>,
+    ) -> Task<Message> {
+        if self.document_state.project_by_id(project_id).is_none() {
+            crate::diagnostics::log_info("Rules: that project is no longer open");
+            return Task::none();
+        }
         self.open_rules_tab(project_id);
         let task = self.dispatch_rules_tab_message(crate::app::RulesTabMsg::DomainPicked {
             project_id,

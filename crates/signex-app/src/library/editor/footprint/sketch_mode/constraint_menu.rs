@@ -160,15 +160,36 @@ fn bound_name(kind: &ConstraintKind, sketch: &SketchData) -> Option<String> {
     }
 }
 
+/// [`bound_name`] of a dimension as shown: a board angle reads its
+/// parameter plainly or negated.
+fn shown_bound_name(
+    state: &FootprintEditorState,
+    shown: &ConstraintKind,
+    sketch: &SketchData,
+) -> Option<String> {
+    let ConstraintKind::Angle {
+        target: DimTarget::Expr(source),
+        ..
+    } = shown
+    else {
+        return bound_name(shown, sketch);
+    };
+    if state.board_backdrop.is_none() {
+        return bound_name(shown, sketch);
+    }
+    let name = signex_sketch::mirrored_angle::shown_parameter(source)?;
+    value_edit::bound_parameter(name, sketch).map(str::to_owned)
+}
+
 /// The value rows of a driving dimension: Edit value, Make parameter,
-/// Convert to reference.
-fn driving_rows(id: ConstraintId, kind: &ConstraintKind, sketch: &SketchData) -> [MenuRow; 3] {
+/// Convert to reference. `bound`: the parameter it already reads.
+fn driving_rows(id: ConstraintId, bound: Option<String>) -> [MenuRow; 3] {
     let mut edit = MenuRow::new(
         ids::SKETCH_CANVAS_MENU_EDIT_VALUE,
         SketchCanvasMsg::ValueEditOpened(ValueTarget::Constraint(id)),
     );
     edit.hint = Some(ids::SKETCH_CANVAS_MENU_EDIT_VALUE_HINT);
-    let make_parameter = match bound_name(kind, sketch) {
+    let make_parameter = match bound {
         Some(name) => MenuRow::greyed(
             ids::SKETCH_CANVAS_MENU_MAKE_PARAMETER,
             Why {
@@ -210,12 +231,23 @@ pub fn constraint_rows(
     sketch: &SketchData,
     in_conflict: bool,
 ) -> Vec<MenuRow> {
+    rows_bound_to(id, kind, sketch, in_conflict, bound_name(kind, sketch))
+}
+
+/// [`constraint_rows`] for a dimension reading the parameter `bound`.
+fn rows_bound_to(
+    id: ConstraintId,
+    kind: &ConstraintKind,
+    sketch: &SketchData,
+    in_conflict: bool,
+    bound: Option<String>,
+) -> Vec<MenuRow> {
     let mut rows = Vec::new();
     if kind.dim_target().is_some() {
         if sketch.is_driven(id) {
             rows.extend(driven_rows(id));
         } else {
-            rows.extend(driving_rows(id, kind, sketch));
+            rows.extend(driving_rows(id, bound));
         }
     }
     rows.push(MenuRow::greyed(
@@ -295,14 +327,19 @@ fn open_menu(
             let c = sketch.constraints.iter().find(|c| c.id == id)?;
             let in_conflict = value_edit::conflicting_constraints(state).contains(&id);
             let kind = t!(i18n, kind_name(&c.kind)).into_string();
-            let header = match bound_name(&c.kind, sketch) {
+            let shown = state.shown_constraint(&c.kind);
+            let bound = shown_bound_name(state, &shown, sketch);
+            let header = match bound.clone() {
                 Some(name) => i18n.message_plain(
                     ids::SKETCH_CANVAS_MENU_HEADER_BOUND,
                     &[("kind", Arg::from(kind)), ("name", Arg::from(name))],
                 ),
                 None => kind,
             };
-            Some((header, constraint_rows(id, &c.kind, sketch, in_conflict)))
+            Some((
+                header,
+                rows_bound_to(id, &shown, sketch, in_conflict, bound),
+            ))
         }
         MenuTarget::Pattern(array) => {
             if sketch.pattern_mirrors.iter().any(|m| m.id == array) {

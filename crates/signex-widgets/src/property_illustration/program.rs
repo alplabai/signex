@@ -1,13 +1,12 @@
 //! The canvas program and the view function of the widget.
 
-use iced::widget::canvas::{self, Canvas, Event};
+use iced::widget::canvas::{self, Canvas};
 use iced::{Element, Length, Rectangle, Renderer, Theme, Widget, mouse};
 use signex_types::theme::ThemeTokens;
 
 use super::draw::Painter;
 use super::geometry::Fit;
-use super::hit::held_hit_test;
-use super::hover::{IllustrationHover, IllustrationMsg, hover_transition};
+use super::hover::{IllustrationHover, IllustrationMsg};
 use super::illustration::Illustration;
 use super::metrics::Metrics;
 use super::palette::Palette;
@@ -28,35 +27,13 @@ impl IllustrationProgram {
 }
 
 impl canvas::Program<IllustrationMsg> for IllustrationProgram {
-    /// Whether the pointer was on one of this drawing's parts at the last
-    /// move, so this drawing owns the model's callout hover.
-    type State = bool;
-
-    fn update(
-        &self,
-        is_owner: &mut bool,
-        event: &Event,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> Option<canvas::Action<IllustrationMsg>> {
-        if !matches!(
-            event,
-            Event::Mouse(mouse::Event::CursorMoved { .. } | mouse::Event::CursorLeft)
-        ) {
-            return None;
-        }
-        let held = self.hover.hovered_callout();
-        let fit = self.fit(bounds);
-        let under_pointer = cursor
-            .position_in(bounds)
-            .and_then(|p| held_hit_test(&self.illustration, &fit, &self.metrics, p, held));
-        let was_owner = std::mem::replace(is_owner, under_pointer.is_some());
-        hover_transition(held, under_pointer, was_owner).map(canvas::Action::publish)
-    }
+    /// The drawing does not follow the pointer: only a hovered field row
+    /// lights its parts.
+    type State = ();
 
     fn draw(
         &self,
-        _state: &bool,
+        _state: &(),
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
@@ -107,7 +84,7 @@ pub fn property_illustration<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::property_illustration::{FieldId, Part, Primitive, Style};
+    use crate::property_illustration::{Part, Primitive, Style};
     use iced::widget::canvas::Program;
     use iced::{Point, Radians};
     use signex_types::theme::{ThemeId, theme_tokens};
@@ -134,43 +111,20 @@ mod tests {
         }
     }
 
-    /// Two drawings on one hover (Document Options: the grid and the
-    /// sheet): moving over a part of the first keeps its callout steady,
-    /// and the second, away from the pointer, publishes nothing.
+    /// Moving over a drawn part publishes nothing, so no field row lights.
     #[test]
-    fn a_second_drawing_on_the_same_hover_does_not_flicker_the_callout() {
-        let first = Rectangle::new(Point::ORIGIN, iced::Size::new(100.0, 100.0));
-        let second = Rectangle::new(Point::new(0.0, 200.0), iced::Size::new(100.0, 100.0));
-        let (mut first_owner, mut second_owner) = (false, false);
-        let mut hover = IllustrationHover::default();
-        let mut published = Vec::new();
+    fn the_pointer_over_a_drawing_publishes_nothing() {
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(100.0, 100.0));
+        let hover = IllustrationHover::default();
         for x in [50.0, 50.5, 51.0, 50.5, 50.0] {
             let position = Point::new(x, 70.0);
-            let event = Event::Mouse(mouse::Event::CursorMoved { position });
+            let event = canvas::Event::Mouse(mouse::Event::CursorMoved { position });
             let cursor = mouse::Cursor::Available(position);
-            let messages = [
-                program("grid", &hover).update(&mut first_owner, &event, first, cursor),
-                program("sheet", &hover).update(&mut second_owner, &event, second, cursor),
-            ];
-            for action in messages.into_iter().flatten() {
-                let (message, _, _) = action.into_inner();
-                let message = message.expect("a hover action publishes");
-                published.push(message.clone());
-                hover.update(message);
-            }
-            assert_eq!(hover.hovered_callout(), Some(&FieldId::new("grid")));
+            assert!(
+                program("grid", &hover)
+                    .update(&mut (), &event, bounds, cursor)
+                    .is_none()
+            );
         }
-        assert_eq!(
-            published,
-            vec![IllustrationMsg::CalloutHovered(FieldId::new("grid"))],
-            "one enter, then nothing while the pointer stays on the part"
-        );
-        // Leaving the first drawing clears its own callout once.
-        let position = Point::new(50.0, 150.0);
-        let event = Event::Mouse(mouse::Event::CursorMoved { position });
-        let cursor = mouse::Cursor::Available(position);
-        let left = program("grid", &hover).update(&mut first_owner, &event, first, cursor);
-        let message = left.and_then(|a| a.into_inner().0);
-        assert_eq!(message, Some(IllustrationMsg::CalloutLeft));
     }
 }

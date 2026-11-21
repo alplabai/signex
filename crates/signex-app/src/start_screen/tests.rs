@@ -60,6 +60,11 @@ impl Fixture {
         self
     }
 
+    pub(super) fn in_theme(mut self, theme: signex_types::theme::ThemeId) -> Self {
+        self.tokens = signex_types::theme::theme_tokens(theme);
+        self
+    }
+
     pub(super) fn view(&self) -> Element<'_, Message> {
         view(
             &self.tokens,

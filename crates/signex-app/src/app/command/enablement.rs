@@ -260,6 +260,18 @@ impl Signex {
         } else {
             main_has_schematic
         };
+        // So is an undocked editor window, by the document it shows.
+        let shown_kind = match window
+            .filter(|id| self.is_document_window(*id))
+            .and_then(|id| self.ui_state.windows.get(&id))
+        {
+            Some(crate::app::state::WindowKind::UndockedTab { path, .. }) => document
+                .tabs
+                .iter()
+                .find(|t| t.path == *path)
+                .map(|t| &t.kind),
+            _ => active_kind,
+        };
         CommandContext {
             has_schematic,
             // An undocked PCB window is enabled by the board it shows (#2223).
@@ -271,8 +283,8 @@ impl Signex {
             document_is_editor: own.is_editor,
             document_is_dirty_board: own.is_dirty_board,
             has_sheets: document.active_project.is_some() || !document.engines.is_empty(),
-            has_symbol_editor,
-            has_footprint_editor,
+            has_symbol_editor: matches!(shown_kind, Some(TabKind::SymbolEditor(_))),
+            has_footprint_editor: matches!(shown_kind, Some(TabKind::FootprintEditor(_))),
             has_selection: !shown_canvas.selected.is_empty(),
             selection_all_locked: shown_engine
                 .is_some_and(|engine| engine.all_locked(&shown_canvas.selected)),

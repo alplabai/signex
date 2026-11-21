@@ -17,7 +17,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, SegmentedStyle, segmented};
 
 use super::{FindReplaceMsg, FindReplaceState};
-use crate::styles::{Spacing, TypeScale, chrome_px, ti, tokens};
+use crate::styles::{Spacing, TypeScale, chrome_px, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -70,14 +70,7 @@ fn mode_switch<'a>(
 /// The Graphite segmented look, from the tokens.
 fn segmented_style(theme_tokens: &ThemeTokens, text_size: f32) -> SegmentedStyle {
     let r = tokens::resolve(theme_tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(theme_tokens.text),
-        text_size,
-    )
+    r.segmented(text_size)
 }
 
 fn build<'a>(

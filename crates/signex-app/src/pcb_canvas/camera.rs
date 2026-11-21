@@ -13,6 +13,10 @@ use signex_gfx::view_rotation::ViewRotation;
 
 use crate::canvas::{Camera, ScrollIntent};
 
+/// The closest board zoom, in pixels per mm: fine pitch copper needs far more
+/// than a sheet does. The footprint editor uses the same limit.
+pub const MAX_BOARD_SCALE: f32 = 400.0;
+
 #[derive(Debug, Clone, Default)]
 pub struct BoardCamera {
     camera: Camera,
@@ -83,12 +87,16 @@ impl BoardCamera {
         self.camera.pan(dx, dy);
     }
 
-    pub fn zoom_at(&mut self, at: Point, notches: f32, step: f32, bounds: Rectangle) -> bool {
-        self.camera.zoom_at(at, notches, step, bounds)
+    pub fn zoom_at(&mut self, at: Point, notches: f32, step: f32, _bounds: Rectangle) -> bool {
+        if notches == 0.0 {
+            return false;
+        }
+        self.zoom_by_factor(at, Camera::zoom_factor_for_scroll(step, notches))
     }
 
     pub fn zoom_by_factor(&mut self, at: Point, factor: f32) -> bool {
-        self.camera.zoom_by_factor(at, factor)
+        self.camera
+            .zoom_by_factor_up_to(at, factor, MAX_BOARD_SCALE)
     }
 
     pub fn apply_scroll(
@@ -98,7 +106,10 @@ impl BoardCamera {
         step: f32,
         bounds: Rectangle,
     ) -> bool {
-        self.camera.apply_scroll(at, intent, step, bounds)
+        match intent {
+            ScrollIntent::Zoom { notches } => self.zoom_at(at, notches, step, bounds),
+            pan => self.camera.apply_scroll(at, pan, step, bounds),
+        }
     }
 
     /// Pan so board point `world` sits at the viewport centre.
@@ -213,6 +224,28 @@ mod tests {
         width: 800.0,
         height: 600.0,
     };
+
+    /// The board zooms past the sheet limit, up to its own, and the point
+    /// under the cursor stays put. The sheet camera keeps its limit.
+    #[test]
+    fn the_board_zooms_past_the_sheet_limit_up_to_its_own() {
+        let at = Point::new(300.0, 200.0);
+        let mut camera = camera_at(0.0);
+        let before = camera.screen_to_world(at);
+        for _ in 0..200 {
+            camera.zoom_at(at, 1.0, 1.1, VIEW);
+        }
+        assert_eq!(camera.scale(), MAX_BOARD_SCALE);
+        const { assert!(MAX_BOARD_SCALE > Camera::MAX_SCALE) };
+        let after = camera.screen_to_world(at);
+        assert!((after.x - before.x).abs() < 1e-2 && (after.y - before.y).abs() < 1e-2);
+
+        let mut sheet = Camera::default();
+        for _ in 0..200 {
+            sheet.zoom_at(at, 1.0, 1.1, VIEW);
+        }
+        assert_eq!(sheet.scale, Camera::MAX_SCALE);
+    }
 
     fn camera_at(deg: f32) -> BoardCamera {
         let mut camera = BoardCamera::from(Camera {

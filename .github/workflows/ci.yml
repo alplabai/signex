@@ -598,6 +598,18 @@ jobs:
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_sheet_change_seam.sh
 
+      # The load seam (#2326 slice 3, #2704): only the load wrappers call the
+      # core half in app/state/document_load/, which names no GUI state, takes
+      # no closure and removes an engine in one place. Rules and blind spots
+      # live in the script. Hard gate.
+      - name: Load seam guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_document_load_seam.sh
+
+      - name: Load seam guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_document_load_seam.sh
+
       # A panic in the app must not leave a value taken out (#2651, ADR-0006):
       # production catch_unwind calls under crates/signex-app/src/app may only
       # get fewer. Rules and blind spots live in the script. Hard gate.

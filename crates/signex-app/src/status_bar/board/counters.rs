@@ -94,16 +94,22 @@ fn figure_width(s: &Localized) -> f32 {
 }
 
 /// The value of the board's Grid read-out: the pitch in the bar's unit, or
-/// OFF while the grid is hidden.
+/// OFF while the grid is hidden. `extra`: the pitch is an extra grid's.
 pub(crate) fn grid_value(
     i18n: &I18n,
     visible: bool,
     size_mm: f32,
     unit: signex_types::coord::Unit,
+    extra: bool,
 ) -> Localized {
     if visible {
         let value = super::super::graphite::grid_value(size_mm, unit);
-        t!(i18n, ids::BOARD_STATUS_VALUE, "value" => value)
+        let id = if extra {
+            ids::BOARD_STATUS_VALUE_EXTRA
+        } else {
+            ids::BOARD_STATUS_VALUE
+        };
+        t!(i18n, id, "value" => value)
     } else {
         t!(i18n, ids::BOARD_STATUS_GRID_OFF)
     }
@@ -342,7 +348,7 @@ fn counter_parts<'a>(
             badge(b.selected, Tone::Accent, tokens, i18n),
         ],
         // The pill and the Grid read-out are drawn by the w3a clusters.
-        BoardCounter::Layer | BoardCounter::Grid => Vec::new(),
+        BoardCounter::Layer | BoardCounter::ActiveLayer | BoardCounter::Grid => Vec::new(),
     }
 }
 
@@ -384,7 +390,7 @@ pub(super) fn counter_widths(b: &BoardReadout, i18n: &I18n) -> Vec<(BoardCounter
                     let inner = BAR_GLYPH + label_width(&name) + badge_of(b.selected);
                     segment_width(inner, 2, last)
                 }
-                BoardCounter::Layer | BoardCounter::Grid => 0.0,
+                BoardCounter::Layer | BoardCounter::ActiveLayer | BoardCounter::Grid => 0.0,
             };
             (counter, width)
         })

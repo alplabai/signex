@@ -324,6 +324,9 @@ pub struct ArraySummary {
     pub source_number: String,
     /// Position of the source point in mm; `None` when it is not a Point.
     pub source_position_mm: Option<[f64; 2]>,
+    /// A polar pattern's centre as the user reads it: on a board sketch from
+    /// the board origin with Y up.
+    pub center_shown_mm: Option<[f64; 2]>,
     /// Copper size of the source pad in mm, from the editor's pad list.
     pub source_size_mm: Option<[f64; 2]>,
 }

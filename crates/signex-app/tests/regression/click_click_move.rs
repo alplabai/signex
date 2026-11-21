@@ -447,6 +447,7 @@ fn deliver(
                 .then(|| app.interaction_state.placement.as_ref().map(|s| &s.ghost))
                 .flatten(),
             power_port_pending: false,
+            swallow_right_release: false,
             unions: signex_app::schematic_runtime::unions::UnionView {
                 hidden: &[],
                 ink: signex_app::schematic_runtime::unions::UnionInk::from_tokens(

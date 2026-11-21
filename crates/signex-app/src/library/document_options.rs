@@ -23,8 +23,7 @@ use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::enable_section::dependents_veil;
 use signex_widgets::inert::Inert;
 use signex_widgets::{
-    Label, LengthFormat, SegmentedStyle, ToggleSwitchStyle, button, segmented, text, theme_ext,
-    toggle_switch,
+    Label, LengthFormat, ToggleSwitchStyle, button, segmented, text, theme_ext, toggle_switch,
 };
 
 use super::messages::LibraryMessage;
@@ -316,15 +315,7 @@ fn unit_segmented<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    )
-    .fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     let options = UNITS
         .iter()
         .map(|&u| (u, Label::from(t!(i18n, unit_label(u)))));

@@ -395,6 +395,29 @@ pub fn write_layer_switcher_pref_at(
     })
 }
 
+/// Read "Selected option". Defaults to Neutral when the key is missing or
+/// not a known value.
+pub fn read_selected_segment_pref_from(
+    json: Option<&serde_json::Value>,
+) -> signex_types::theme::SelectedSegmentLook {
+    json.and_then(|json| json["selected_segment"].as_str())
+        .map(signex_types::theme::SelectedSegmentLook::from_pref)
+        .unwrap_or_default()
+}
+
+pub fn write_selected_segment_pref(look: signex_types::theme::SelectedSegmentLook) {
+    write_selected_segment_pref_at(&prefs_path(), look)
+}
+
+pub fn write_selected_segment_pref_at(path: &Path, look: signex_types::theme::SelectedSegmentLook) {
+    update_prefs_json(path, "selected_segment", |prefs| {
+        prefs.insert(
+            "selected_segment".to_string(),
+            serde_json::json!(look.as_pref()),
+        );
+    })
+}
+
 /// Read "Remember window size and position" (opt-in). Defaults to off when
 /// the key is missing or not a boolean.
 pub fn read_remember_window_geometry_pref_from(json: Option<&serde_json::Value>) -> bool {

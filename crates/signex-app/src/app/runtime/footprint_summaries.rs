@@ -161,7 +161,7 @@ pub(super) fn build_sketch_entity_summary(
     let sketch = editor.primitive().sketch.as_ref()?;
     let entity = sketch.entities.iter().find(|e| e.id == id)?;
     let (kind_label, position_mm) = match entity.kind {
-        EntityKind::Point { x, y } => ("Point", Some([x, y])),
+        EntityKind::Point { x, y } => ("Point", Some(editor.state.shown_mm([x, y]))),
         EntityKind::Line { .. } => ("Line", None),
         EntityKind::Arc { .. } => ("Arc", None),
         EntityKind::Circle { .. } => ("Circle", None),

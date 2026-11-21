@@ -32,7 +32,11 @@ mod chrome_fit_tests;
 #[cfg(test)]
 mod layout_keys_tests;
 #[cfg(test)]
+mod middle_zoom_tests;
+#[cfg(test)]
 mod resize_tests;
+#[cfg(test)]
+mod snap_path_tests;
 #[cfg(test)]
 mod tests;
 
@@ -103,6 +107,8 @@ pub struct FootprintCanvasState {
     /// stay quiet" (motion crossed the threshold). Reset on every
     /// right-press.
     pan_moved: bool,
+    /// The middle-button drag zooming the view, while it is held.
+    middle_zoom: Option<crate::canvas::middle_zoom::MiddleZoom>,
     /// v0.26-I — rubber-band selection state. `Some` while the user
     /// is left-dragging on empty canvas with the Select tool active.
     /// Stores the press position (screen-space) so the draw pass can
@@ -180,6 +186,7 @@ impl Default for FootprintCanvasState {
             panning: false,
             last_pan_pos: None,
             pan_moved: false,
+            middle_zoom: None,
             box_select_anchor_screen: None,
             box_select_current_screen: None,
             drag: None,
@@ -305,6 +312,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<LibraryMessage>> {
+        if let Some(action) = self.end_middle_zoom_on(cstate, event) {
+            return Some(action);
+        }
         // A resize refit, first-draw camera placement + one-shot Fit-to-Window (see
         // `input::camera`). Both mutate the camera and publish the scale
         // they settled on, consuming the event tick. That is the canvas's
@@ -411,6 +421,9 @@ impl<'a> canvas::Program<LibraryMessage> for FootprintCanvas<'a> {
     ) -> mouse::Interaction {
         if cstate.panning {
             return mouse::Interaction::Grabbing;
+        }
+        if cstate.middle_zoom.is_some() {
+            return mouse::Interaction::ResizingVertically;
         }
         if cstate.drag.is_some() {
             return mouse::Interaction::Grab;

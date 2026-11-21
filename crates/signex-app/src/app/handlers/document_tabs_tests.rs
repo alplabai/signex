@@ -290,9 +290,11 @@ fn revealed_key(task: iced::Task<Message>) -> Option<TreeKey> {
 // hand-made tree from the (sheet-less) project, which is not under test.
 #[test]
 fn reveal_in_projects_opens_the_folders_above_the_row_and_selects_it() {
-    let mut app = app_with_project_tree("/w/proj/b.snxsch", CaseFold::PRESERVE);
+    // Joined as the tree joins it, so the separator is the platform's.
+    let file = Path::new("/w/proj").join("b.snxsch");
+    let mut app = app_with_project_tree(&file.to_string_lossy(), CaseFold::PRESERVE);
     let key = app
-        .project_tree_key_of_file(Path::new("/w/proj/b.snxsch"))
+        .project_tree_key_of_file(&file)
         .expect("the project lists b");
     let tree = app.document_state.panel_ctx.project_tree.as_slice();
     let row = resolve_path(tree, &key).expect("key resolves");

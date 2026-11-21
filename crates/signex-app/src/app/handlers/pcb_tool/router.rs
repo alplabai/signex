@@ -22,7 +22,7 @@ use signex_engine::pcb::route::{
 use signex_i18n::{MessageId, ids, t};
 use signex_types::corner::CornerRule;
 use signex_types::net_class::{NetClass, first_matching_class};
-use signex_types::pcb::{PcbBoard, Point, Segment, Via};
+use signex_types::pcb::{PCB_GRID_MM, PcbBoard, Point, Segment, Via};
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
@@ -122,7 +122,7 @@ impl Signex {
             self.start_route(at, layer);
             return;
         };
-        if at == anchor {
+        if self.clicks_run_end(at, anchor) {
             // A second click on the route's end finishes it.
             self.end_route_shape();
             return;
@@ -145,7 +145,15 @@ impl Signex {
         let classes = self.board_net_classes(&session.path);
         let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
         let i18n = &self.ui_state.i18n;
-        let end = match leg_end(i18n, board, defaults, &router.rules, at, style) {
+        let end = match leg_end(
+            i18n,
+            board,
+            defaults,
+            &router.rules,
+            at,
+            via.as_ref(),
+            style,
+        ) {
             Ok(end) => end,
             Err(line) => {
                 self.note_board_tool(line);
@@ -462,7 +470,15 @@ impl Signex {
             board, session, defaults, key.anchor, key.cursor, key.layer, classes,
         );
         let i18n = &self.ui_state.i18n;
-        let why = match leg_end(i18n, board, defaults, &router.rules, key.cursor, style) {
+        let why = match leg_end(
+            i18n,
+            board,
+            defaults,
+            &router.rules,
+            key.cursor,
+            via.as_ref(),
+            style,
+        ) {
             Err(line) => line,
             Ok(end) => {
                 let leg = LegRequest {
@@ -564,10 +580,17 @@ fn route_on(
         reach: rules.widest_clearance(),
         corner,
         mode,
-        grid_mm: grid_step_mm(board),
+        grid_mm: search_grid_mm(board),
         budget,
     };
     route_leg(board, &router.draft, leg, &route, ids)
+}
+
+/// The step a route's walkaround searches on: the board's grid, but never
+/// coarser than the default, so a coarse view grid cannot close a gap the
+/// route fits through. The route's ends stay where snap put them.
+pub(super) fn search_grid_mm(board: &PcbBoard) -> f64 {
+    grid_step_mm(board).min(PCB_GRID_MM)
 }
 
 /// The rules a pair or bus leg is routed by on `board`: `rules`'s
@@ -583,7 +606,7 @@ pub(super) fn walk_rules<'a>(
         reach: rules.widest_clearance(),
         corner,
         mode: RouteMode::Walkaround,
-        grid_mm: grid_step_mm(board),
+        grid_mm: search_grid_mm(board),
         budget: SEARCH_BUDGET,
     }
 }

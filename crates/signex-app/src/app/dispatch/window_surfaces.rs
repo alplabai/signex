@@ -22,6 +22,10 @@ impl Signex {
             self.ui_state.command_palette.window = None;
         }
         let interaction = &mut self.interaction_state;
+        let picker = interaction.grid_picker.as_ref();
+        if picker.is_some_and(|picker| picker.owner == Some(window)) {
+            interaction.grid_picker = None;
+        }
         if interaction
             .project_tree_context_menu
             .as_ref()

@@ -218,19 +218,23 @@ fn the_board_grid_popover_sets_the_grid() {
         Some((rig.main, BoardPopoverKind::Grid))
     );
     popover_event(&mut rig.app, BoardPopoverEvent::GridPresetPicked(0.25));
-    assert_eq!(rig.app.ui_state.grid_size_mm, 0.25);
+    assert_eq!(rig.app.status_grid(rig.main).size_mm, 0.25);
     popover_event(
         &mut rig.app,
         BoardPopoverEvent::CustomGridEdited("0.2".into()),
     );
     popover_event(&mut rig.app, BoardPopoverEvent::CustomGridSubmitted);
-    assert_eq!(rig.app.ui_state.grid_size_mm, 0.2);
+    assert_eq!(rig.app.status_grid(rig.main).size_mm, 0.2);
     popover_event(
         &mut rig.app,
         BoardPopoverEvent::CustomGridEdited("-3".into()),
     );
     popover_event(&mut rig.app, BoardPopoverEvent::CustomGridSubmitted);
-    assert_eq!(rig.app.ui_state.grid_size_mm, 0.2, "refused, unchanged");
+    assert_eq!(
+        rig.app.status_grid(rig.main).size_mm,
+        0.2,
+        "refused, unchanged"
+    );
     // A left click on the read-out (and View ▸ Toggle Grid) still shows and
     // hides it.
     send(
@@ -238,6 +242,20 @@ fn the_board_grid_popover_sets_the_grid() {
         Message::Ui(UiMsg::StatusBar(StatusBarRequest::ToggleGrid)),
     );
     assert_eq!(rig.app.ui_state.grid_visible, !shown);
+}
+
+/// Caner, 2026-11-21: an undocked board shows its own grid, not the main
+/// window's.
+#[test]
+fn an_undocked_board_shows_its_own_grid() {
+    let mut rig = rig();
+    let window = undock_a(&mut rig);
+    let own = rig.app.status_grid(window).size_mm;
+    click(&mut rig.app, rig.main, BoardCounter::Grid);
+    let other = if own == 0.25 { 0.5 } else { 0.25 };
+    popover_event(&mut rig.app, BoardPopoverEvent::GridPresetPicked(other));
+    assert_eq!(rig.app.status_grid(rig.main).size_mm, other);
+    assert_eq!(rig.app.status_grid(window).size_mm, own);
 }
 
 #[test]

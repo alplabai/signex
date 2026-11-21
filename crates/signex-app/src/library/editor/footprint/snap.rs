@@ -88,6 +88,9 @@ pub enum SnapKind {
     Midpoint(SketchEntityId),
     /// The centre of the sketch Circle or Arc with this id (mockup row 188).
     Centre(SketchEntityId),
+    /// A pad centre, track vertex, arc centre or the origin, in Pads mode.
+    /// See [`super::snap_objects`].
+    Object,
 }
 
 /// The constraint a drawing-tool click lands from the snap it took
@@ -214,6 +217,19 @@ pub fn snap_cursor_with(
     point_hit: Option<SketchEntityId>,
     infer: bool,
 ) -> SnapResult {
+    snap_cursor_among(raw, sketch, state, point_hit, infer, None)
+}
+
+/// [`snap_cursor_with`] that also reaches the footprint's own objects in
+/// Pads mode, the canvas's snap.
+pub fn snap_cursor_among(
+    raw: (f64, f64),
+    sketch: Option<&SketchData>,
+    state: &FootprintEditorState,
+    point_hit: Option<SketchEntityId>,
+    infer: bool,
+    objects: Option<super::snap_objects::ObjectTargets<'_>>,
+) -> SnapResult {
     // Snapping Off, or the status bar's global Snap toggle
     // (`global_snap_disabled`), turns every priority off.
     // `CurrentLayer` behaves as `AllLayers` until a layer-aware filter.
@@ -227,6 +243,8 @@ pub fn snap_cursor_with(
     // workflow).
     let opts = state.snap_options;
     let drawing = infer && draws_with_inference(state);
+    // A board sketch's grid steps from the board origin.
+    let grid_from = state.grid_origin_mm().unwrap_or((0.0, 0.0));
 
     // Priority 1 — Point snap.
     if opts.point_hit
@@ -251,6 +269,11 @@ pub fn snap_cursor_with(
     // Priority 1.2 — the board under a board sketch (#2518). `None` on
     // a footprint sketch, which has no board.
     if let Some(hit) = super::snap_board::board_feature_snap(raw, state) {
+        return hit;
+    }
+
+    // Priority 1.25 — the footprint's own objects, in Pads mode only.
+    if let Some(hit) = objects.and_then(|o| super::snap_objects::object_snap(raw, state, o)) {
         return hit;
     }
 
@@ -331,9 +354,9 @@ pub fn snap_cursor_with(
             // The free axis (H / V) and the ray distance (angle) snap to
             // the grid too, so a snapped point is on the axis and on the
             // grid at once. No-op when grid snap is disabled.
-            let grid_snap = |v: f64| -> f64 {
-                if opts.grid && opts.grid_step_mm > 1e-9 {
-                    (v / opts.grid_step_mm).round() * opts.grid_step_mm
+            let grid_snap = |v: f64, from: f64| -> f64 {
+                if opts.snaps_to_grid() {
+                    on_grid(v, from, opts.grid_step_mm)
                 } else {
                     v
                 }
@@ -343,7 +366,7 @@ pub fn snap_cursor_with(
                 // axis to grid. Using the cursor's own X (not
                 // anchor + hypotenuse) avoids the perpendicular
                 // component leaking into the length.
-                let pos = (grid_snap(raw.0), anchor.1);
+                let pos = (grid_snap(raw.0, grid_from.0), anchor.1);
                 return SnapResult {
                     pos,
                     kind: SnapKind::Horizontal,
@@ -351,7 +374,7 @@ pub fn snap_cursor_with(
             }
             if opts.horizontal_vertical && angle.cos().abs() < axis_thresh {
                 // Vertical: lock X to the anchor, snap the free Y.
-                let pos = (anchor.0, grid_snap(raw.1));
+                let pos = (anchor.0, grid_snap(raw.1, grid_from.1));
                 return SnapResult {
                     pos,
                     kind: SnapKind::Vertical,
@@ -370,7 +393,7 @@ pub fn snap_cursor_with(
                     // the endpoint lands on a grid-multiple radius
                     // (a true diagonal can't sit on both the ray
                     // and an XY grid node, so grid the distance).
-                    let snapped_dist = grid_snap(dist);
+                    let snapped_dist = grid_snap(dist, 0.0);
                     let pos = (
                         anchor.0 + snapped_dist * snapped_angle.cos(),
                         anchor.1 + snapped_dist * snapped_angle.sin(),
@@ -390,15 +413,27 @@ pub fn snap_cursor_with(
     // a hardcoded constant. Defends against zero/negative steps by
     // falling through to raw — a misconfigured step shouldn't crash
     // the canvas or move pads to the origin.
-    if opts.grid && opts.grid_step_mm > 1e-9 {
+    if opts.snaps_to_grid() {
         let step = opts.grid_step_mm;
-        let snapped = ((raw.0 / step).round() * step, (raw.1 / step).round() * step);
+        let snapped = (
+            on_grid(raw.0, grid_from.0, step),
+            on_grid(raw.1, grid_from.1, step),
+        );
         SnapResult {
             pos: snapped,
             kind: SnapKind::Grid,
         }
     } else {
         SnapResult::raw(raw)
+    }
+}
+
+/// The point of the grid through `from`, of pitch `step`, nearest `v`.
+fn on_grid(v: f64, from: f64, step: f64) -> f64 {
+    if from == 0.0 {
+        (v / step).round() * step
+    } else {
+        from + ((v - from) / step).round() * step
     }
 }
 

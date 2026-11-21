@@ -3,8 +3,16 @@
 //! its snaps reach (#2518). Read once when sketch mode starts; it is a
 //! picture, never edited.
 
+use std::borrow::Cow;
+
 use pcb_geom::{GraphicShape, PointNm};
-use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard};
+use signex_sketch::constraint::{ConstraintKind, DimTarget};
+use signex_sketch::mirrored_angle::{mirror, retypes_shown};
+use signex_sketch::solver::residual::ResolvedParams;
+use signex_types::pcb::{Footprint, Pad, PadShape, PadType, PcbBoard, Point};
+use signex_types::pcb_origin::BoardOrigin;
+
+use super::{GuideAxis, PlacementInputKind};
 
 /// A track as drawn under the sketch, in board mm.
 #[derive(Debug, Clone, PartialEq)]
@@ -65,6 +73,120 @@ pub struct BoardBackdrop {
     /// Component courtyards drawn as lines, rectangles or polygons; a
     /// courtyard arc or circle is not carried.
     pub courtyards: Vec<BackdropCourtyard>,
+    /// Where the board's coordinates count from, kept with the board.
+    pub origin: BoardOrigin,
+    /// The board view hides its origin marker.
+    pub hides_origin_marker: bool,
+}
+
+impl super::FootprintEditorState {
+    /// Where the origin marker goes, in model mm: the board's origin on a
+    /// board sketch (`None` while its view hides it), else the footprint's
+    /// (0, 0).
+    pub fn origin_marker_mm(&self) -> Option<(f64, f64)> {
+        match self.board_backdrop.as_deref() {
+            Some(board) if board.hides_origin_marker => None,
+            Some(board) => Some((board.origin.at.x, board.origin.at.y)),
+            None => Some((0.0, 0.0)),
+        }
+    }
+
+    /// A model point as the user reads it: on a board sketch from the board
+    /// origin with Y up, as the PCB view shows it; a footprint's as stored.
+    pub fn shown_mm(&self, [x, y]: [f64; 2]) -> [f64; 2] {
+        match self.board_backdrop.as_deref() {
+            Some(board) => {
+                let shown = board.origin.to_user(Point::new(x, y));
+                [shown.x, shown.y]
+            }
+            None => [x, y],
+        }
+    }
+
+    /// The model point a board sketch's grid steps from: the board origin.
+    /// `None` on a footprint, whose grid steps from (0, 0).
+    pub fn grid_origin_mm(&self) -> Option<(f64, f64)> {
+        let board = self.board_backdrop.as_deref()?;
+        Some((board.origin.at.x, board.origin.at.y))
+    }
+
+    /// A guide's stored position as the user reads it.
+    pub fn guide_shown_mm(&self, axis: GuideAxis, position_mm: f64) -> f64 {
+        match (self.board_backdrop.as_deref(), axis) {
+            (Some(board), GuideAxis::Vertical) => board.origin.user_x(position_mm),
+            (Some(board), GuideAxis::Horizontal) => board.origin.user_y(position_mm),
+            (None, _) => position_mm,
+        }
+    }
+
+    /// The position to store for a guide the user placed at `shown_mm`.
+    pub fn guide_model_mm(&self, axis: GuideAxis, shown_mm: f64) -> f64 {
+        match (self.board_backdrop.as_deref(), axis) {
+            (Some(board), GuideAxis::Vertical) => board.origin.board_x(shown_mm),
+            (Some(board), GuideAxis::Horizontal) => board.origin.board_y(shown_mm),
+            (None, _) => shown_mm,
+        }
+    }
+
+    /// A model angle in degrees as the user reads it. The model's y runs
+    /// down the screen, so a board's Y-up sense is its negative. The mirror
+    /// is its own inverse, so it also takes a typed angle to the model.
+    pub fn angle_deg_mirrored(&self, deg: f64) -> f64 {
+        if self.board_backdrop.is_some() {
+            0.0 - deg
+        } else {
+            deg
+        }
+    }
+
+    /// `kind` as the user reads it: a board angle through the mirror.
+    pub fn shown_constraint<'k>(&self, kind: &'k ConstraintKind) -> Cow<'k, ConstraintKind> {
+        let ConstraintKind::Angle { l1, l2, target } = kind else {
+            return Cow::Borrowed(kind);
+        };
+        if self.board_backdrop.is_none() {
+            return Cow::Borrowed(kind);
+        }
+        Cow::Owned(ConstraintKind::Angle {
+            l1: *l1,
+            l2: *l2,
+            target: mirror(target),
+        })
+    }
+
+    /// The target to store for `kind` when the user entered `shown`: a board
+    /// angle through the mirror.
+    pub fn stored_target(&self, kind: &ConstraintKind, shown: DimTarget) -> DimTarget {
+        if self.board_backdrop.is_none() || !matches!(kind, ConstraintKind::Angle { .. }) {
+            return shown;
+        }
+        mirror(&shown)
+    }
+
+    /// Whether `typed` on a board angle is what it already shows, so
+    /// committing it is no edit. Always false on a footprint.
+    pub fn retypes_shown_angle(
+        &self,
+        kind: &ConstraintKind,
+        typed: &DimTarget,
+        params: &ResolvedParams,
+    ) -> bool {
+        let ConstraintKind::Angle { target, .. } = kind else {
+            return false;
+        };
+        self.board_backdrop.is_some() && retypes_shown(&mirror(target), typed, params)
+    }
+
+    /// The turn of the arc the Arc tool commits now. A positive sweep typed
+    /// on a board runs counter-clockwise on screen, clockwise in the model.
+    pub fn arc_tool_sweeps_ccw(&self) -> bool {
+        let typed = self
+            .placement_input
+            .as_ref()
+            .filter(|input| input.kind == PlacementInputKind::ArcSweep)
+            .and_then(|input| crate::numeric_field::parse_field_f64(&input.buffer));
+        !(self.board_backdrop.is_some() && typed.is_some_and(|deg| deg > 0.0))
+    }
 }
 
 /// Where one pad sits, before its copper and drill are read.
@@ -111,6 +233,7 @@ impl BoardBackdrop {
                 .iter()
                 .map(|v| ((v.position.x, v.position.y), v.diameter))
                 .collect(),
+            origin: board.options.origin,
             ..Self::default()
         };
         for footprint in &board.footprints {

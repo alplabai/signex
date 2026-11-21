@@ -85,14 +85,7 @@ impl Shown {
 /// The segmented control look of the pad form, from the theme tokens.
 pub(super) fn segment_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.caption,
-    )
+    r.segmented(TS.caption)
 }
 
 /// A number field showing `shown`, outlined in the error ink while its

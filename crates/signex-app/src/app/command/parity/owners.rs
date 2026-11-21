@@ -122,13 +122,22 @@ fn direct(form: Form, arms: bool) -> Option<Owner> {
         Form::Bridge | Form::ActiveBar if arms => Some(Owner::Gui),
         // The core command behind a split router.
         Form::SplitCore => Some(Owner::Core),
+        // Reads the selection into operands and writes nothing itself: the
+        // write is the id's `operand_handler` row, the core's.
+        Form::Translator => Some(Owner::Gui),
         _ => None,
     }
 }
 
 /// The routes a refusal or a headless row stands in front of, in order.
 fn inherited(form: Form) -> Option<&'static [Form]> {
-    const GATED: &[Form] = &[Form::Bridge, Form::ActiveBar, Form::Operand, Form::Query];
+    const GATED: &[Form] = &[
+        Form::Bridge,
+        Form::Translator,
+        Form::ActiveBar,
+        Form::Operand,
+        Form::Query,
+    ];
     const HEADLESS: &[Form] = &[
         Form::Operand,
         Form::Query,
@@ -249,7 +258,6 @@ const MENU_DOCUMENT: &[&str] = &[
     "align_vertical_centers",
     "annotate_schematic_quietly",
     "autoplace_fields",
-    "board_shape_from_selection",
     "break_union",
     "bring_drawings_forward",
     "bring_drawings_to_front",
@@ -263,8 +271,6 @@ const MENU_DOCUMENT: &[&str] = &[
     "distribute_vertically",
     "footprint_recompute_courtyard_outline",
     "force_annotate_all_schematics",
-    "gloss_selected_routes",
-    "keepout_from_selection",
     "lock_board_items",
     "move_to_front",
     "panelize_board",
@@ -279,15 +285,12 @@ const MENU_DOCUMENT: &[&str] = &[
     "reset_layer_colors",
     "run_drc",
     "run_erc",
-    "save_board_reuse_block",
     "save_document",
     "send_drawings_backward",
     "send_drawings_to_back",
     "send_to_back",
     "snap_board_origin_to_corner",
     "stitch_vias",
-    "swap_gates",
-    "swap_pins",
     "sync_sheet_pins",
     "tune_diff_pair",
     "tune_net_length",

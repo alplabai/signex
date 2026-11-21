@@ -14,7 +14,7 @@ pub fn preferred_backend(user_chose: bool, has_dx12_hardware: bool) -> Option<&'
     (!user_chose && has_dx12_hardware).then_some("dx12")
 }
 
-/// Call first in `main`, before any thread starts.
+/// Call in `main` before iced starts, so iced reads the choice.
 #[cfg(windows)]
 pub fn prefer_dx12_on_windows() {
     let user_chose = std::env::var_os(BACKEND_ENV).is_some();
@@ -22,8 +22,11 @@ pub fn prefer_dx12_on_windows() {
         return;
     }
     if let Some(backend) = preferred_backend(user_chose, has_dx12_hardware_adapter()) {
-        // SAFETY: called at the start of `main`, before any other thread
-        // exists, so nothing reads the environment concurrently.
+        // SAFETY: this function only exists on Windows, where the standard
+        // library documents `set_var` as always sound, multi-threaded
+        // included. That matters here: the value depends on the adapter
+        // probe above, so it cannot be set before wgpu has run, and the probe
+        // may have left driver threads behind.
         unsafe { std::env::set_var(BACKEND_ENV, backend) };
     }
 }

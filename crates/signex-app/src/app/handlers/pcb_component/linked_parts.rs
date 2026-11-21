@@ -182,23 +182,22 @@ impl Signex {
             boards: vec![board],
             ..Default::default()
         };
-        let mut in_view = None;
+        let (mut in_view, mut members) = (None, Vec::new());
         for sheet in changed {
             if active.as_ref() == Some(&sheet.path) {
                 in_view = sheet.patch;
             } else {
-                self.document_state.mark_history_edit_dirty(&sheet.path);
                 let patch = sheet.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
-                self.repaint_member_sheet(&sheet.path, patch);
+                members.push((sheet.path.clone(), patch));
             }
             recorded.live.push(sheet.path);
         }
-        self.set_undo_group_sheets(group, recorded);
-        match in_view {
-            Some(patch) => {
-                self.finish_schematic_mutation(patch, true, true);
-            }
-            None => self.document_state.note_sheet_edit(),
-        }
+        let run = crate::app::state::sheet_change::SheetRun {
+            group,
+            recorded,
+            members,
+            notes_edit: true,
+        };
+        self.finish_schematic_mutation(in_view, Some(run), true, true);
     }
 }

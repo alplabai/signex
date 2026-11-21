@@ -83,6 +83,8 @@ pub(crate) mod pcb_item_edits;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
 mod pcb_layers_panel;
+#[cfg(test)]
+mod pcb_one_grid_tests;
 mod pcb_origin;
 #[cfg(test)]
 mod pcb_origin_tests;
@@ -99,6 +101,8 @@ pub(crate) mod pcb_query;
 pub mod pcb_select;
 #[cfg(test)]
 mod pcb_select_tests;
+#[cfg(test)]
+mod pcb_snap_options_tests;
 mod pcb_text_move;
 #[cfg(test)]
 mod pcb_text_pick_tests;
@@ -106,6 +110,9 @@ pub(crate) mod pcb_tool;
 pub(crate) mod pcb_tune;
 #[cfg(test)]
 mod pcb_tune_tests;
+mod pcb_via_move;
+#[cfg(test)]
+mod pcb_via_move_tests;
 pub mod pcb_view;
 pub mod pcb_view_rotation;
 pub mod placed_part;

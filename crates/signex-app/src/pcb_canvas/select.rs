@@ -37,6 +37,32 @@ pub struct PcbSelectionState {
     filter: PickFilter,
 }
 
+/// What a drag or Move is carrying: it is drawn where it is going, so
+/// nothing of it is marked at its old place.
+#[derive(Debug, Default)]
+struct MovingItems {
+    /// Footprints, vias, and the tracks and arcs following them.
+    ids: BTreeSet<Uuid>,
+    /// A footprint text moved on its own.
+    text: Option<(Uuid, BoardTextField)>,
+}
+
+impl MovingItems {
+    fn holds(&self, item: ItemRef) -> bool {
+        match item {
+            ItemRef::Footprint(id)
+            | ItemRef::Pad { footprint: id, .. }
+            | ItemRef::Via(id)
+            | ItemRef::Track(id)
+            | ItemRef::Arc(id) => self.ids.contains(&id),
+            ItemRef::FootprintText { footprint, field } => {
+                self.ids.contains(&footprint) || self.text == Some((footprint, field))
+            }
+            _ => false,
+        }
+    }
+}
+
 /// What [`PcbSelectionState::select_items`] did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ItemsSelected {
@@ -247,12 +273,12 @@ impl PcbSelectionState {
     /// The copper to paint for the selection and the hover. A selected
     /// footprint paints its body outline and all its pads.
     pub fn highlight(&mut self, board: &PcbBoard) -> Highlight {
-        self.highlight_except(board, &BTreeSet::new())
+        self.highlight_except(board, &MovingItems::default())
     }
 
-    /// [`Self::highlight`] without the footprints in `moving`: a drag or
-    /// Move draws them, and their outline, where they are going (#2358).
-    fn highlight_except(&mut self, board: &PcbBoard, moving: &BTreeSet<Uuid>) -> Highlight {
+    /// [`Self::highlight`] without what is `moving`: nothing of it stays
+    /// marked at its old place (#2358).
+    fn highlight_except(&mut self, board: &PcbBoard, moving: &MovingItems) -> Highlight {
         if self.selection.is_empty() && self.hover.is_none() {
             return Highlight::default();
         }
@@ -269,10 +295,7 @@ impl PcbSelectionState {
             })
             .collect();
         let mut highlight = Highlight::default();
-        let is_moving = |item: ItemRef| match item {
-            ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
-            _ => false,
-        };
+        let is_moving = |item: ItemRef| moving.holds(item);
         for indexed in index.items().filter(|i| !is_moving(i.item)) {
             match indexed.item {
                 ItemRef::Footprint(id) if whole.contains(&id) => {
@@ -308,10 +331,26 @@ impl PcbSelectionState {
         board: &PcbBoard,
         carry: Option<&super::PcbCarry>,
     ) -> (Highlight, Vec<pcb_geom::Shape>) {
-        let anchored = carry.filter(|c| c.anchor.is_some());
-        let none = BTreeSet::new();
-        let carried = anchored.map_or(&none, |c| &c.footprints);
-        let mut highlight = self.highlight_except(board, carried);
+        let moving = carry
+            .filter(|c| c.anchor.is_some() && c.previews_on_board())
+            .map_or_else(MovingItems::default, |c| {
+                // Following tracks are searched only if one is marked: this
+                // runs on every pointer step.
+                let track_marked = self
+                    .hover
+                    .into_iter()
+                    .chain(self.selection.items())
+                    .any(|item| matches!(item, ItemRef::Track(_) | ItemRef::Arc(_)));
+                MovingItems {
+                    ids: if track_marked {
+                        c.moving_ids(board)
+                    } else {
+                        c.carried()
+                    },
+                    text: c.text,
+                }
+            });
+        let mut highlight = self.highlight_except(board, &moving);
         // A Move, a paste or a Place waits for clicks: nothing is grabbed.
         let waiting = carry.is_some_and(super::PcbCarry::waits_for_clicks);
         let grab = if waiting {
@@ -324,37 +363,24 @@ impl PcbSelectionState {
             if self.filter.is_on(pcb_geom::PickKind::Texts) {
                 grab.extend(self.shapes_of(|item| matches!(item, ItemRef::FootprintText { .. })));
             }
+            // A via is grabbed unless the filter turns vias off.
+            if self.filter.is_on(pcb_geom::PickKind::Vias) {
+                grab.extend(self.shapes_of(|item| matches!(item, ItemRef::Via(_))));
+            }
             grab
         };
+        // Only what is not on the board yet has a ghost: a paste.
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
+            && let Some(load) = &carry.paste
             && let Ok(by) = PointNm::from_mm(carry.delta, "carry")
         {
-            let shapes = match (&carry.paste, carry.text) {
-                (Some(load), _) => load.ghost.clone(),
-                (None, Some((footprint, field))) => {
-                    self.shapes_of(|item| item == ItemRef::FootprintText { footprint, field })
-                }
-                (None, None) => self.footprint_shapes(board, &carry.footprints),
-            };
-            highlight.ghost = shapes
-                .into_iter()
-                .map(|shape| shape.translated(by))
+            highlight.ghost = load
+                .ghost
+                .iter()
+                .map(|shape| shape.clone().translated(by))
                 .collect();
         }
         (highlight, grab)
-    }
-
-    /// The body and pads of each footprint in `footprints`: what the drag
-    /// preview paints.
-    pub fn footprint_shapes(
-        &mut self,
-        board: &PcbBoard,
-        footprints: &BTreeSet<Uuid>,
-    ) -> Vec<pcb_geom::Shape> {
-        if footprints.is_empty() {
-            return Vec::new();
-        }
-        self.shapes_of_footprints(board, |id| footprints.contains(&id))
     }
 
     /// The footprints a drag pressed at `at` carries (#2358). A press on a
@@ -415,6 +441,56 @@ impl PcbSelectionState {
             self.selection.apply_click(Some(item), ClickMode::Replace);
         }
         Some((footprint, field))
+    }
+
+    /// The vias a press at `at` grabs to drag: the via a click there picks,
+    /// with the other selected vias when the selection is only vias and holds
+    /// it; otherwise it becomes the selection. `None` off a via, and on a via
+    /// over a footprint unless a click has already picked that via: the
+    /// press then carries the footprint (#2358).
+    pub fn grab_vias_for_drag(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+    ) -> Option<BTreeSet<Uuid>> {
+        let (item, _) = self.pick_at(board, at, tolerance_mm)?;
+        let ItemRef::Via(id) = item else {
+            return None;
+        };
+        let p = PointNm::from_mm(at, "press").ok()?;
+        let selected = self.selection.footprints();
+        // Exactly under the press: a via merely near a part is not on it.
+        let under: Vec<Uuid> = self
+            .index
+            .as_ref()?
+            .items_at(p, 0)
+            .iter()
+            .filter_map(|i| match i.item {
+                ItemRef::Footprint(fp) | ItemRef::Pad { footprint: fp, .. } => Some(fp),
+                _ => None,
+            })
+            .collect();
+        if under.iter().any(|fp| selected.contains(fp))
+            || (!under.is_empty() && !self.selection.contains(item))
+        {
+            return None;
+        }
+        let vias: Option<BTreeSet<Uuid>> = self
+            .selection
+            .items()
+            .map(|item| match item {
+                ItemRef::Via(via) => Some(via),
+                _ => None,
+            })
+            .collect();
+        match vias.filter(|vias| vias.contains(&id)) {
+            Some(vias) => Some(vias),
+            None => {
+                self.selection.apply_click(Some(item), ClickMode::Replace);
+                Some(BTreeSet::from([id]))
+            }
+        }
     }
 
     /// The shapes of the indexed items `keep` accepts; the index must be

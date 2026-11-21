@@ -128,6 +128,7 @@ bash scripts/check_layer_ratchet.sh   # layer-crossing counts vs scripts/layer-r
 bash scripts/check_engine_ids.sh      # engine id minting only at scripts/engine-ids-allowlist.txt
 bash scripts/check_app_catch_unwind.sh # app catch_unwind count may only fall (needs ast-grep, jq)
 bash scripts/check_projector_writes.sh # app/projector writes no core state and calls no wrapper (needs ast-grep, jq)
+bash scripts/check_document_load_seam.sh # only the load wrappers call app/state/document_load (needs ast-grep, jq)
 bash scripts/changelog_assemble.sh --check   # changelog.d fragments
 ```
 
