@@ -837,7 +837,8 @@ fn a_blankets_sections_keep_their_titles() {
         "power_in.snxsch",
         vec!["PWR".to_string()],
         Vec::new(),
-    );
+    )
+    .map(Box::new);
     let shown = texts(&ctx);
     let all = plain(&shown);
     let at = |text: &str| all.iter().position(|t| *t == text);

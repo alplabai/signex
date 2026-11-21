@@ -142,6 +142,6 @@ impl Signex {
                 .pcb_primitive
                 .keep_only(board, target);
         }
-        self.document_state.panel_ctx.pcb_board = summary;
+        self.document_state.panel_ctx.pcb_board = summary.map(Box::new);
     }
 }

@@ -120,7 +120,7 @@ impl Signex {
                 .draft
                 .filter(|draft| draft_still_true(&panel.directive, panel.page, draft));
         }
-        self.document_state.panel_ctx.directive_panel = Some(panel);
+        self.document_state.panel_ctx.directive_panel = Some(Box::new(panel));
     }
 
     /// A Net Blanket edit from its Properties.

@@ -91,7 +91,9 @@ fn context(facts: PcbComponentFacts, tab: usize, opened: &[&str]) -> PanelContex
     for key in opened {
         ctx.collapsed_sections.insert((*key).to_string());
     }
-    ctx.pcb_board = Some(PcbBoardSummary::default().with_component(Some(facts)));
+    ctx.pcb_board = Some(Box::new(
+        PcbBoardSummary::default().with_component(Some(facts)),
+    ));
     ctx
 }
 

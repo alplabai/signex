@@ -748,14 +748,14 @@ impl Signex {
             // Kept: `sync_unions_panel` and `refresh_harness_panel` own these.
             unions: self.document_state.panel_ctx.unions.clone(),
             harness: self.document_state.panel_ctx.harness.clone(),
-            compiled_design: self.compiled_design_view(),
+            compiled_design: Box::new(self.compiled_design_view()),
             // Kept in step with the documents by `sync_object_list`.
             object_list: self.document_state.panel_ctx.object_list.clone(),
             // Replaced by `sync_command_log_panel_ctx` after each change.
             command_log: std::sync::Arc::clone(&self.document_state.panel_ctx.command_log),
             // Kept in step with the scan and filters by `handlers/annotations.rs`.
             annotations: std::sync::Arc::clone(&self.document_state.panel_ctx.annotations),
-            pcb_board: self.pcb_board_summary(),
+            pcb_board: self.pcb_board_summary().map(Box::new),
             layer_stack: self.layer_stack_facts(),
             selection_count,
             selected_uuid,
@@ -821,7 +821,7 @@ impl Signex {
                 active_schematic_snapshot.and_then(|snapshot| snapshot.page.color),
             ),
             symbol_editor: build_symbol_editor_panel_ctx(self),
-            footprint_editor: build_footprint_editor_panel_ctx(self),
+            footprint_editor: build_footprint_editor_panel_ctx(self).map(Box::new),
             history: self.document_state.history.clone(),
             selection_filter: self.selection_filter_facts(),
             illustration_hover: self.document_state.panel_ctx.illustration_hover.clone(),

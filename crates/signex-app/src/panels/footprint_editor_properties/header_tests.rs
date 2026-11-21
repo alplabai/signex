@@ -30,7 +30,8 @@ fn panel_ctx(app: &Signex) -> FootprintEditorPanelContext {
     app.document_state
         .panel_ctx
         .footprint_editor
-        .clone()
+        .as_deref()
+        .cloned()
         .expect("the footprint editor panel context is built")
 }
 

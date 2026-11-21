@@ -96,7 +96,8 @@ fn ctx_with(sketch: SketchData, selected: SketchEntityId) -> FootprintEditorPane
     app.document_state
         .panel_ctx
         .footprint_editor
-        .clone()
+        .as_deref()
+        .cloned()
         .expect("the footprint editor panel context is built")
 }
 

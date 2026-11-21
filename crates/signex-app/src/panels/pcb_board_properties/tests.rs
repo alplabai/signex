@@ -47,11 +47,11 @@ fn context(selected: usize) -> PanelContext {
     let mut ctx = app.document_state.panel_ctx.clone();
     ctx.has_pcb = true;
     ctx.unit = Unit::Mm;
-    ctx.pcb_board = Some(PcbBoardSummary::of(
+    ctx.pcb_board = Some(Box::new(PcbBoardSummary::of(
         &board(),
         "mixed-tht-smd".into(),
         selected,
-    ));
+    )));
     ctx
 }
 
@@ -180,8 +180,10 @@ fn footprint_context(
     };
     let component = super::super::pcb_component::tests::one_component("R7", "R_0603");
     ctx.pcb_board = ctx.pcb_board.map(|b| {
-        b.with_footprint(Some(facts))
-            .with_component(Some(component))
+        Box::new(
+            b.with_footprint(Some(facts))
+                .with_component(Some(component)),
+        )
     });
     ctx
 }
@@ -434,7 +436,7 @@ fn an_outline_less_board_says_so_on_one_line() {
     let mut ctx = context(0);
     let mut no_outline = board();
     no_outline.outline.clear();
-    ctx.pcb_board = Some(PcbBoardSummary::of(&no_outline, "b".into(), 0));
+    ctx.pcb_board = Some(Box::new(PcbBoardSummary::of(&no_outline, "b".into(), 0)));
     let texts = laid_out(&ctx, DEFAULT_DOCK);
     let line = crate::layout_probe::find(&texts, "No board outline");
     let thickness = crate::layout_probe::find(&texts, "Thickness");
@@ -722,7 +724,7 @@ fn a_shaped_outline_reads_as_a_bounding_box() {
     let summary = PcbBoardSummary::of(&shaped, "b".into(), 0);
     assert!(!summary.outline_is_rectangle);
     let mut ctx = context(0);
-    ctx.pcb_board = Some(summary);
+    ctx.pcb_board = Some(Box::new(summary));
     let shown = texts(&ctx);
     assert!(
         shown.iter().any(|t| t == "Bounding box 50.000 × 40.000 mm"),

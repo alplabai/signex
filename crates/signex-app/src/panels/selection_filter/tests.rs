@@ -178,7 +178,7 @@ fn all_none_and_a_toggle_in_the_filter_panel_edit_the_schematic_filter() {
 /// filter's own messages.
 fn board_ctx(app: &Signex) -> PanelContext {
     let mut ctx = app.document_state.panel_ctx.clone();
-    ctx.pcb_board = Some(PcbBoardSummary::default());
+    ctx.pcb_board = Some(Box::new(PcbBoardSummary::default()));
     ctx.selection_filter.editor = FilterEditor::Board;
     ctx.selection_filter.board = KindCounts::of([PickKind::Vias, PickKind::Vias]);
     ctx

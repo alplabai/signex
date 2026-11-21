@@ -5,6 +5,8 @@ use super::*;
 /// Collapse key of the Pins section of a placed symbol's Properties.
 pub const PINS_SECTION_KEY: &str = "sel_pins";
 
+/// The large views only one tab kind or selection fills are boxed, so the
+/// app fits a debug boot's stack (#2325).
 #[derive(Clone)]
 pub struct PanelContext {
     /// Multi-project workspace — one entry per `LoadedProject`. Every
@@ -118,9 +120,9 @@ pub struct PanelContext {
     pub net_inspector: super::NetInspectorView,
     /// The Compiled Design panel, and the multi-channel rows of a sheet
     /// symbol and a channel tab in Properties (#1279, #1308).
-    pub compiled_design: super::compiled_design::CompiledDesignView,
+    pub compiled_design: Box<super::compiled_design::CompiledDesignView>,
     /// The Unions panel's rows and foot; filled only while it is open (mockup row 158).
-    pub unions: crate::app::unions::UnionsPanelView,
+    pub unions: Box<crate::app::unions::UnionsPanelView>,
     /// The Object List's rows and picks; filled only while that panel is open
     /// (#1259).
     pub object_list: super::ObjectListView,
@@ -131,7 +133,7 @@ pub struct PanelContext {
     /// scan or filters change.
     pub annotations: std::sync::Arc<super::AnnotationsView>,
     /// The active PCB tab's board facts, for the Properties panel.
-    pub pcb_board: Option<super::PcbBoardSummary>,
+    pub pcb_board: Option<Box<super::PcbBoardSummary>>,
     /// The active PCB tab's layer stack, for the Layer Stack manager (#2401).
     pub layer_stack: Option<super::LayerStackFacts>,
     // Selection info for Properties panel
@@ -186,7 +188,7 @@ pub struct PanelContext {
     pub selected_child_sheet: Option<signex_types::schematic::ChildSheet>,
     /// The selected Net Parameters directive or Net Blanket, as its
     /// Properties read it (#1281, #1489).
-    pub directive_panel: Option<super::DirectivePanel>,
+    pub directive_panel: Option<Box<super::DirectivePanel>>,
     /// Whether the border-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_border_picker_open: bool,
@@ -194,7 +196,7 @@ pub struct PanelContext {
     pub wire_color_picker: super::WireColorPicker,
     /// What the harness Properties and the harness definitions view show
     /// (#1280).
-    pub harness: super::HarnessPanel,
+    pub harness: Box<super::HarnessPanel>,
     /// Width preset and colour of the single selected wire, if one is.
     pub selected_wire_style: Option<(
         signex_types::schematic::WireWidthPreset,
@@ -301,7 +303,7 @@ pub struct PanelContext {
     /// selection so the panel can switch its body between pad
     /// properties, sketch entity properties, or footprint defaults.
     /// `None` for any other tab kind.
-    pub footprint_editor: Option<FootprintEditorPanelContext>,
+    pub footprint_editor: Option<Box<FootprintEditorPanelContext>>,
     /// Per-file Git history snapshot for the right-dock History
     /// panel. Mirrored from [`crate::app::DocumentState::history`]
     /// each refresh; the panel reads it directly without holding a

@@ -479,6 +479,6 @@ impl Signex {
         let selected = &self.interaction_state.active_canvas().selected;
         let mut view = panel_view(state, &sheets, active.as_deref(), selected);
         view.built_from = Some(key);
-        self.document_state.panel_ctx.unions = view;
+        self.document_state.panel_ctx.unions = Box::new(view);
     }
 }
