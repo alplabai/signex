@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn the_handle_paints_a_visible_line_and_grip_that_change_when_active() {
         const WINDOW: iced::Size = iced::Size::new(200.0, 8.0);
-        assert!(GRIP_WIDTH > 0.0 && GRIP_HEIGHT > 0.0 && HANDLE_HEIGHT > GRIP_HEIGHT);
+        const { assert!(GRIP_WIDTH > 0.0 && GRIP_HEIGHT > 0.0 && HANDLE_HEIGHT > GRIP_HEIGHT) };
         for id in ThemeId::BUILTINS {
             let tokens = theme_tokens(*id);
             let rest = crate::layout_probe::draw_pixels(handle(false, false, &tokens), WINDOW);
