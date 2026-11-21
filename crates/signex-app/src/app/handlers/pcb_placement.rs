@@ -375,13 +375,7 @@ impl Signex {
             };
             delta
         } else {
-            carry_delta(
-                board,
-                &carry.footprints,
-                from,
-                to,
-                self.pcb_snap_view(),
-            )
+            carry_delta(board, &carry.footprints, from, to, self.pcb_snap_view())
         };
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.delta != delta

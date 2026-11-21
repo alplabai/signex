@@ -51,9 +51,10 @@ impl Signex {
     /// The snap grid of the document in view: a board's own, else the
     /// app-wide one.
     fn snap_grid_in_view(&self) -> f32 {
-        self.active_pcb().map_or(self.ui_state.grid_size_mm, |board| {
-            signex_engine::pcb::placement::grid_step_mm(board) as f32
-        })
+        self.active_pcb()
+            .map_or(self.ui_state.grid_size_mm, |board| {
+                signex_engine::pcb::placement::grid_step_mm(board) as f32
+            })
     }
 
     /// Set the snap grid. On a board it is the board's own, one undo step.

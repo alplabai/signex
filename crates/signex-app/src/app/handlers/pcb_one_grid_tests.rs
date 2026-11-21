@@ -86,7 +86,9 @@ impl Rig {
 
     fn run(&mut self, id: &str) {
         let command = AppCommandId::new(id).expect("a catalog id");
-        let _ = self.app.dispatch_command(&command, CommandArgs::none(), None);
+        let _ = self
+            .app
+            .dispatch_command(&command, CommandArgs::none(), None);
     }
 
     fn status(&self) -> f32 {

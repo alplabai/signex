@@ -219,7 +219,9 @@ impl Rig {
 
     fn run(&mut self, id: &str) {
         let command = AppCommandId::new(id).expect("a catalog id");
-        let _ = self.app.dispatch_command(&command, CommandArgs::none(), None);
+        let _ = self
+            .app
+            .dispatch_command(&command, CommandArgs::none(), None);
     }
 
     /// Place a via with the tool at `at`; where it landed. Undone after.
@@ -269,9 +271,15 @@ fn each_object_toggle_pulls_only_while_it_is_on() {
         let pointer = Point::new(x, y + rig.mm(4.0));
 
         let off = rig.drag_u1(pointer);
-        assert!(!close(off, target) && on_grid(off, 0.1), "{object:?} off: {off:?}");
+        assert!(
+            !close(off, target) && on_grid(off, 0.1),
+            "{object:?} off: {off:?}"
+        );
         let off = rig.via_tool_at(pointer);
-        assert!(!close(off, target) && on_grid(off, 0.1), "{object:?} tool: {off:?}");
+        assert!(
+            !close(off, target) && on_grid(off, 0.1),
+            "{object:?} tool: {off:?}"
+        );
 
         rig.toggle(object);
         let on = rig.drag_u1(pointer);
@@ -336,7 +344,10 @@ fn current_layer_sees_a_through_pad_but_not_a_bottom_pad() {
     let reach = rig.mm(4.0);
     let bottom = Point::new(25.03, 10.03);
     let at = rig.drag_u1(Point::new(bottom.x, bottom.y + reach));
-    assert!(!close(at, bottom), "a bottom pad is off the top layer: {at:?}");
+    assert!(
+        !close(at, bottom),
+        "a bottom pad is off the top layer: {at:?}"
+    );
     let through = Point::new(25.03, 15.03);
     let at = rig.drag_u1(Point::new(through.x, through.y + reach));
     assert!(close(at, through), "{at:?}");
@@ -362,7 +373,10 @@ fn grids_off_leaves_the_pointer_free() {
     rig.panel(PcbBoardMsg::SnapToGridsToggled);
     let to = Point::new(33.333, 22.222);
     let at = rig.drag_u1(to);
-    assert!((at.x - to.x).abs() < 0.01 && (at.y - to.y).abs() < 0.01, "{at:?}");
+    assert!(
+        (at.x - to.x).abs() < 0.01 && (at.y - to.y).abs() < 0.01,
+        "{at:?}"
+    );
     assert!(!on_grid(at, 0.1), "{at:?}");
 }
 

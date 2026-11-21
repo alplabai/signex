@@ -83,6 +83,8 @@ pub(crate) mod pcb_item_edits;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
 mod pcb_layers_panel;
+#[cfg(test)]
+mod pcb_one_grid_tests;
 mod pcb_origin;
 #[cfg(test)]
 mod pcb_origin_tests;
@@ -93,8 +95,6 @@ pub(crate) mod pcb_placement;
 mod pcb_placement_tests;
 #[cfg(test)]
 mod pcb_placement_window_tests;
-#[cfg(test)]
-mod pcb_one_grid_tests;
 pub(crate) mod pcb_pour;
 pub(crate) mod pcb_primitive;
 pub(crate) mod pcb_query;
