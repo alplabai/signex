@@ -325,6 +325,7 @@ impl Signex {
         if self.interaction_state.dragging.is_some() {
             crate::diagnostics::log_debug("[drag] END");
             self.interaction_state.dragging = None;
+            self.library.components_panel.split_dragging = false;
             self.interaction_state.drag_start_pos = None;
             self.ui_state.tab_dragging = None;
             return;

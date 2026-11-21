@@ -873,6 +873,10 @@ pub struct ComponentsPanelState {
     pub selected: Option<ComponentsPanelRowKey>,
     /// Height of the list above the details section; the divider drags it.
     pub list_height: f32,
+    /// The pointer is over the divider.
+    pub split_hovered: bool,
+    /// The divider is being dragged.
+    pub split_dragging: bool,
     /// The selected row's details, or the load that is filling them.
     pub details: crate::panels::components_panel::details::DetailsState,
     /// The footprint picked in the details view, with the row it was picked
@@ -909,6 +913,8 @@ impl Default for ComponentsPanelState {
             rows: PanelRows::default(),
             selected: None,
             list_height: crate::panels::components_panel::split::DEFAULT_LIST_HEIGHT,
+            split_hovered: false,
+            split_dragging: false,
             details: Default::default(),
             footprint_pick: None,
             drag: None,
