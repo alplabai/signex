@@ -163,11 +163,13 @@ fn a_text_drag_keeps_the_ratsnest_and_fills_it_had() {
     let (mut app, _) = app_with_board(dir.path());
     let canvas = &mut app.interaction_state.pcb_canvas;
     let mut shown = canvas.active_renderer_snapshot().expect("a board").clone();
-    shown.ratsnest_lines.push(signex_renderer::pcb::RatsnestInput {
-        p0: [1.0, 2.0],
-        p1: [3.0, 4.0],
-        net: 77,
-    });
+    shown
+        .ratsnest_lines
+        .push(signex_renderer::pcb::RatsnestInput {
+            p0: [1.0, 2.0],
+            p1: [3.0, 4.0],
+            net: 77,
+        });
     canvas.set_renderer_snapshot(Some(shown));
     drag(&mut app, Point::new(10.0, 10.0), Point::new(13.0, 12.0));
     drag(&mut app, Point::new(10.0, 10.0), Point::new(14.0, 12.5));
@@ -175,7 +177,11 @@ fn a_text_drag_keeps_the_ratsnest_and_fills_it_had() {
     assert_eq!(canvas.drag_preview_texts()[0].position, [14.0, 12.5]);
     let base = canvas.active_renderer_snapshot().expect("a board");
     assert!(base.texts.is_empty(), "the text left its old place");
-    assert_eq!(base.ratsnest_lines.len(), 1, "the ratsnest is the one shown");
+    assert_eq!(
+        base.ratsnest_lines.len(),
+        1,
+        "the ratsnest is the one shown"
+    );
     assert_eq!(base.ratsnest_lines[0].net, 77);
 }
 

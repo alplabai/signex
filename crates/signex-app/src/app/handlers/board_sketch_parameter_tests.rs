@@ -194,7 +194,9 @@ fn changing_the_parameter_turns_the_line_counter_clockwise_on_screen() {
 /// Open the angle's value edit, replace its text with `text`, press Enter.
 fn type_on(app: &mut Signex, path: &std::path::Path, id: ConstraintId, text: &str) {
     let mut canvas = |msg| sketch_edit(app, path, FootprintEditorMsg::SketchCanvas(msg));
-    canvas(SketchCanvasMsg::ValueEditOpened(ValueTarget::Constraint(id)));
+    canvas(SketchCanvasMsg::ValueEditOpened(ValueTarget::Constraint(
+        id,
+    )));
     for _ in 0..32 {
         canvas(SketchCanvasMsg::ValueErased);
     }
@@ -217,8 +219,7 @@ fn reads(app: &Signex, id: ConstraintId) -> (String, String) {
         .kind;
     let shown = state.shown_constraint(kind);
     let params = resolved_params(&data, state);
-    let (_, value) =
-        dimension_label(&shown, &data, &params, &state.canvas_text).expect("a label");
+    let (_, value) = dimension_label(&shown, &data, &params, &state.canvas_text).expect("a label");
     (constraint_buffer(&shown).expect("a value"), value)
 }
 
@@ -255,7 +256,10 @@ fn a_typed_expression_keeps_the_sense_it_shows() {
 
         let (text, value) = reads(&app, sketch.angle);
         assert_eq!(text, typed);
-        assert!(value.starts_with(&format!("{degrees:.0}")), "{typed}: {value}");
+        assert!(
+            value.starts_with(&format!("{degrees:.0}")),
+            "{typed}: {value}"
+        );
         let (x, y) = solved_board_point(&app, sketch.arm_end);
         let rad = degrees.to_radians();
         let close = |a: f64, b: f64| (a - b).abs() < 1e-3;
@@ -287,7 +291,10 @@ fn the_same_number_on_a_bound_angle_changes_nothing() {
     type_on(&mut app, &path, sketch.angle, "30");
     assert_eq!(board_sketch_data(&app), bound);
     send(&mut app, Message::Edit(EditMsg::Undo));
-    assert_eq!(angle_target(&board_sketch_data(&app), sketch.angle), literal);
+    assert_eq!(
+        angle_target(&board_sketch_data(&app), sketch.angle),
+        literal
+    );
 }
 
 /// An older dimension stored as `slope` reads its stored sense: its number
