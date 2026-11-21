@@ -188,6 +188,23 @@ impl Signex {
                     self.continue_wire_drawing(end_pt);
                 }
             }
+            // #1280: a harness wire is drawn like a bus.
+            Tool::HarnessWire => {
+                let pt = signex_types::schematic::Point::new(wx, wy);
+                if !self.interaction_state.wire_drawing {
+                    self.start_wire_drawing(pt);
+                } else if let Some(&start) = self.interaction_state.wire_points.last() {
+                    let (end_pt, _) =
+                        self.place_harness_wire_at(start, pt, self.interaction_state.corner_rule);
+                    self.continue_wire_drawing(end_pt);
+                }
+            }
+            Tool::HarnessConnector => {
+                self.harness_connector_click(signex_types::schematic::Point::new(wx, wy));
+            }
+            Tool::HarnessEntry => {
+                self.harness_entry_click(signex_types::schematic::Point::new(wx, wy));
+            }
             Tool::Component if self.interaction_state.pending_power.is_some() => {
                 if let Some((net_name, lib_id)) = self.interaction_state.pending_power.clone() {
                     self.place_power_at(
@@ -214,6 +231,12 @@ impl Signex {
                 let p = signex_types::schematic::Point::new(wx, wy);
                 self.shape_tool_point(tool, p, ClickKind::Click);
             }
+            // #1267 / #1300: the Bezier and dimension tools take one point
+            // per click; the Table tool places on its first.
+            tool
+            @ (Tool::Bezier | Tool::LinearDimension | Tool::AlignedDimension | Tool::Table) => {
+                self.annotation_tool_point(tool, signex_types::schematic::Point::new(wx, wy));
+            }
             Tool::Sheet => return self.place_sheet_click(wx, wy),
             Tool::SheetEntry => self.place_sheet_entry_click(wx, wy),
             Tool::Measure => self.measure_click(wx, wy),
@@ -223,6 +246,9 @@ impl Signex {
                 self.directive_region_point(tool, p, ClickKind::Click);
             }
             Tool::DiffPair => self.diff_pair_click(signex_types::schematic::Point::new(wx, wy)),
+            Tool::NetParameters => {
+                self.net_parameters_click(signex_types::schematic::Point::new(wx, wy));
+            }
             Tool::Text => {
                 let note_text = self
                     .document_state

@@ -172,6 +172,12 @@ pub enum ActiveBarAction {
     DrawPolygon,
     DrawBezier,
     PlaceGraphic,
+    /// A table on the sheet (#1300).
+    DrawTable,
+    /// A horizontal or vertical dimension (#1267).
+    PlaceLinearDimension,
+    /// A dimension along its two points (#1267).
+    PlaceAlignedDimension,
     // Net Color
     NetColorBlue,
     NetColorLightGreen,

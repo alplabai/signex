@@ -51,6 +51,9 @@ pub enum ContextSubmenu {
     /// Project-tree → "Add New to Project ›" launcher. Items are
     /// version-tagged placeholders today; they do not create documents yet.
     AddNewToProject,
+    /// "Unions ›": create a union from the selection, add or remove the
+    /// selection, break the union (mockup row 158). Shown with a selection.
+    Unions,
     /// The greyed "Planned (N) ›" launcher of the sheet menu: the features
     /// not built yet, each row with what it will do (Graphite mockup #62).
     Planned,

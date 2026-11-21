@@ -87,6 +87,7 @@ define_ids! {
     RULES_PRESET_NO_CHANGE = "rules-preset-no-change";
     RULES_PRESET_APPLY = "rules-preset-apply";
     RULES_PRESET_CANCEL = "rules-preset-cancel";
+    RULES_FROM_SCHEMATIC = "rules-from-schematic";
     RULES_PREVIEW_HEADING = "rules-preview-heading";
     RULES_PREVIEW_EXPAND = "rules-preview-expand";
     RULES_PREVIEW_COLLAPSE = "rules-preview-collapse";

@@ -134,6 +134,9 @@ fn kind_word(item: &SelectedItem, power: bool) -> &'static str {
         SelectedKind::NoConnect => "no_connect",
         SelectedKind::NoErcDirective => "no_erc",
         SelectedKind::Directive => "directive",
+        SelectedKind::HarnessConnector => "harness_connector",
+        SelectedKind::HarnessEntry => "harness_entry",
+        SelectedKind::HarnessWire => "harness_wire",
         SelectedKind::TextNote => "text",
         SelectedKind::SymbolRefField | SelectedKind::SymbolValField | SelectedKind::Drawing => {
             "other"

@@ -68,6 +68,10 @@ set_symbol_parameter	edit	Set a parameter of a placed part	-	Schematic	-	-	Requi
 set_sheet_variable	edit	Set a sheet variable	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	name:text,value:text?,remove:bool?,document:document?
 lock_board_items	modify	Lock the selected tracks and vias	Lock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
 unlock_board_items	modify	Unlock the selected tracks and vias	Unlock	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,ids:text
+create_union	edit	Create a union from the selection	Create Union…	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
+add_to_union	edit	Add the selection to the selected union	Add Selection to Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
+remove_from_union	edit	Remove the selection from its union	Remove Selection from Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
+break_union	edit	Break the selected union	Break Union	Schematic	-	-	RequiresSelection	gui_only,mutates_doc,undoable	-
 bring_drawings_forward	edit	Bring drawings forward	Bring Forward	General	-	-	RequiresSelection	mutates_doc,undoable	-
 bring_drawings_to_front	edit	Bring drawings to front	Bring to Front	General	-	-	RequiresSelection	mutates_doc,undoable	-
 send_drawings_backward	edit	Send drawings backward	Send Backward	General	-	-	RequiresSelection	mutates_doc,undoable	-
@@ -113,9 +117,9 @@ place_no_erc	place	Place Generic No ERC directive	Generic No ERC	Schematic	-	-	R
 place_compile_mask	place	Place Compile Mask directive	Compile Mask	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,document:document?
 place_design_block	place	Place design block	Design Block...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
 place_reuse_block	place	Place reuse block	Reuse Block...	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
-place_parameter_set	place	Place parameter set	Parameter Set	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_parameter_set	place	Place net parameters	Net Parameters	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,class:text?,diff_pair_class:text?,width:text?,clearance:text?,via_diameter:text?,via_hole:text?,current:text?,document:document?
 place_diff_pair	place	Place diff pair	Differential Pair	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,document:document?
-place_blanket	place	Place blanket	Blanket	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,class:text?,exclude:text?,document:document?
+place_blanket	place	Place net blanket	Net Blanket	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	start:point/mm,end:point/mm,class:text?,exclude:text?,document:document?
 place_text	place	Place text	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,document:document?
 place_text_string	place	Place text string	Text String	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	at:point/mm,text:text,document:document?
 place_text_frame	place	Place text frame	Text Frame	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
@@ -165,8 +169,11 @@ draw_rectangle	place	Draw rectangle	Rectangle	Schematic	-	-	RequiresDocument(Sch
 draw_round_rectangle	place	Draw round rectangle	Round Rectangle	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_polygon	place	Draw polygon	Polygon	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 draw_bezier	place	Draw bezier	Bezier	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_table	place	Place table	Table	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_linear_dimension	place	Place linear dimension	Linear	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
+place_aligned_dimension	place	Place aligned dimension	Aligned	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 import_graphics	place	Import graphics	Import Graphics...	General	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm,document:document?
-edit_blanket	place	Edit blanket parameters	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,start:point/mm?,end:point/mm?,class:text?,exclude:text?,document:document?
+edit_blanket	place	Edit net blanket parameters	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,start:point/mm?,end:point/mm?,class:text?,exclude:text?,document:document?
 edit_no_erc_rules	place	Edit No ERC rules	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,rules:text?,document:document?
 place_board_arc	place	Draw an arc on the active layer	Arc	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
 place_board_string	place	Place a string on the active silkscreen, mechanical or documentation layer	String	PCB	-	-	RequiresDocument(Pcb)	gui_only,mutates_doc,undoable	-
@@ -199,6 +206,7 @@ sync_sheet_pins	design	Sync the selected sheet symbol's pins with its child shee
 create_sheet_symbol_from_sheet	design	Create a sheet symbol from a sheet file, with an entry for every port	Create Sheet Symbol From Sheet...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	path:path,at:point/mm?,allow_merge:bool?,document:document?
 sync_sheet_entries	design	Synchronize the selected sheet symbol's entries and its sheet's ports, with a preview	Synchronize Sheet Entries and Ports...	Schematic	-	-	RequiresSelection	mutates_doc,undoable	symbol:text,direction:text,document:document?
 number_schematic_sheets	design	Number schematic sheets	Number Schematic Sheets...	Schematic	-	-	Always	gui_only	-
+compile_project	design	Compile the project	Compile Project	Schematic	-	-	Always	gui_only	-
 open_child_sheet	navigation	Open the selected sheet symbol's child sheet	Open Child Sheet	Schematic	-	-	RequiresSelection	gui_only	-
 leave_sheet	navigation	Leave sheet / go to parent sheet	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 navigate_up_hierarchy	navigation	Navigate up hierarchy	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
@@ -207,6 +215,7 @@ previous_sheet	navigation	Previous sheet	-	Schematic	-	-	RequiresDocument(Schema
 sheet_navigation_back	navigation	Sheet navigation back	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 sheet_navigation_forward	navigation	Sheet navigation forward	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 set_sheet_symbol_size	edit	Set the size of a sheet symbol	-	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	id:text,size:point/mm,document:document?
+add_table_of_contents	design	Add table of contents sheet	Add Table of Contents Sheet	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 annotate_schematic	design	Annotate schematic	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only,mutates_doc,undoable	-
 annotate_schematic_quietly	design	Annotate schematic quietly	Annotate Schematics Quietly	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
 force_annotate_all_schematics	design	Force annotate all schematics	Force Annotate All Schematics	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	-
@@ -302,9 +311,12 @@ clear_net_color	view	Clear net color	Clear Net Color	Schematic	-	-	RequiresDocum
 clear_all_net_colors	view	Clear all net colors	Clear All Net Colors	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document
 open_net_color_palette	view	Open net color palette	Net Color...	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
 open_net_inspector	panels	Open Net Inspector panel	Net Inspector	General	-	-	Always	gui_only	-
+open_compiled_design	panels	Open Compiled Design panel	Compiled Design	General	-	-	Always	gui_only	-
 assign_net_class	design	Assign net to class	Assign Net Class...	Schematic	-	-	RequiresDocument(Schematic)	mutates_doc,undoable	document:document,net_name:text,class:text?
 open_net_classes	design	Open the project's Net Classes panel	Net Classes	General	-	-	Always	gui_only	-
 open_net_classes_panel	design	Open the Net Classes panel of the project	Net Classes	General	-	-	Always	gui_only	-
+open_harness_definitions	design	Open the harness definitions	-	Schematic	-	-	RequiresDocument(Schematic)	gui_only	-
+open_diff_pair_classes	design	Open the project's differential pair classes	Differential Pair Classes…	General	-	-	Always	gui_only	-
 add_net_class	design	Add a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,name:text?
 rename_net_class	design	Rename a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text,name:text
 delete_net_class	design	Delete a net class	-	PCB	-	-	RequiresDocument(Pcb)	mutates_doc,undoable	document:document,class:text

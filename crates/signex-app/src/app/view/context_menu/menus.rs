@@ -133,6 +133,14 @@ impl Signex {
                     crate::app::handlers::placed_part::selected_placed_symbol(engine, canvas)
                         .is_some()
                 }),
+            // Mockup row 158: the selection holds a member of a union.
+            union_selected: self
+                .document_state
+                .engine_for_window(window_id, &self.ui_state)
+                .is_some_and(|engine| {
+                    !signex_engine::unions::unions_of_items(engine.document(), &canvas.selected)
+                        .is_empty()
+                }),
             // The window's own facts, so a row greys exactly when the menu
             // bar's row and the keystroke for the same command would.
             commands: self.command_context(Some(window_id)),
@@ -280,6 +288,9 @@ pub(super) struct CanvasSelection {
     pub(super) drawing_selected: bool,
     /// One non-power symbol: the placed-part actions apply (#1260).
     pub(super) placed_part_selected: bool,
+    /// The selection holds a member of a union: Add / Remove / Break apply
+    /// (mockup row 158).
+    pub(super) union_selected: bool,
     /// The window's command facts: every command row is live exactly when
     /// its own enablement rule allows it here (#2419).
     pub(super) commands: CommandContext,
@@ -475,9 +486,9 @@ impl SheetRows<'_> {
     }
 
     /// The menu of a selection: Properties (the default row), Find Similar
-    /// and Cross Probe; the edits; the transforms and Align; the Part, Sheet
-    /// and Place flyouts; the net rows; Undo; then the planned features
-    /// gathered in one greyed flyout.
+    /// and Cross Probe; the edits; the transforms, Align and Unions; the
+    /// Part, Sheet and Place flyouts; the net rows; Undo; then the planned
+    /// features gathered in one greyed flyout.
     fn selection_menu(&self, s: CanvasSelection) -> Vec<DropdownEntry<Message>> {
         let tid = self.tid;
         let properties = match self.ruled(
@@ -516,6 +527,12 @@ impl SheetRows<'_> {
                 ContextSubmenu::Arrange,
             ));
         }
+        // Mockup row 158: right-click ▸ Unions ▸ Create Union… (it left the Planned flyout).
+        v.push(self.launcher(
+            ic::icon_dd_unions(tid),
+            menu_ids::CTX_UNIONS,
+            ContextSubmenu::Unions,
+        ));
         v.extend([
             DropdownEntry::Separator,
             self.launcher(
@@ -604,6 +621,27 @@ impl SheetRows<'_> {
                 .active(self.active_submenu == Some(kind)),
         )
     }
+}
+
+/// Unions submenu (mockup row 158): Create Union… and Add Selection to Union (the
+/// union picked in the Unions panel) with a selection; Remove and Break
+/// while the selection holds a member of a union. Each row is also gated by
+/// its command's own rule.
+pub(super) fn unions_entries(
+    i18n: &I18n,
+    selection: CanvasSelection,
+    hint: &dyn Fn(&str) -> String,
+) -> Vec<DropdownEntry<Message>> {
+    let row = |id: &'static str, applies: bool| {
+        dd_ruled(i18n, None, id, &hint(id), &selection.commands, applies)
+    };
+    vec![
+        row("create_union", selection.has_selection),
+        row("add_to_union", selection.has_selection),
+        row("remove_from_union", selection.union_selected),
+        DropdownEntry::Separator,
+        row("break_union", selection.union_selected),
+    ]
 }
 
 /// The board canvas menu of a project with no reuse block, for the tests

@@ -591,6 +591,9 @@ pub struct PasteRequest {
     pub path: Option<PathBuf>,
     /// The Paste Array dialog an `ArraySeed` read is for; 0 otherwise.
     pub dialog: u64,
+    /// An agent asked (`Origin::Agent` when the request was made): Paste
+    /// Special pastes at once rather than opening a dialog no one answers.
+    pub from_agent: bool,
 }
 
 /// Edit-command message family (ADR-0001 D3). Namespaced under
@@ -658,6 +661,13 @@ pub enum EditMsg {
     /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
     /// sheet entry sync with its preview.
     SheetSync(crate::app::SheetSyncMsg),
+    /// Schematic tables (#1300): contents sheet, CSV, cell edits.
+    Tables(crate::app::TablesMsg),
+    /// Named unions (mockup row 158): the canvas menu rows, the keymap and the Create
+    /// Union popover.
+    Unions(crate::app::unions::UnionsMsg),
+    /// A Smart Paste dialog event (mockup row 155).
+    SmartPasteDialog(crate::smart_paste::SmartPasteMsg),
 }
 
 /// Per-shape edit descriptor. The Properties panel dispatches one of

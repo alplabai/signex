@@ -3,7 +3,9 @@
 # removing a line removes a command and needs a maintainer decision.
 add_board_graphic
 add_net_class
+add_table_of_contents
 add_teardrops
+add_to_union
 align_bottom
 align_horizontal_centers
 align_left
@@ -30,6 +32,7 @@ board_report_net_length
 board_report_netlist
 board_shape_from_selection
 board_sketch
+break_union
 break_wire
 bring_drawings_forward
 bring_drawings_to_front
@@ -49,10 +52,12 @@ clear_net_highlighting
 close_active_document
 close_all_documents
 color_net
+compile_project
 copy
 copy_attributes_or_add_vertex
 create_sheet_from_sheet_symbol
 create_sheet_symbol_from_sheet
+create_union
 cross_probe
 cut
 cycle_arc_mode
@@ -161,13 +166,16 @@ next_signal_layer
 number_schematic_sheets
 open_child_sheet
 open_command_palette
+open_compiled_design
 open_components_panel
 open_datasheet
+open_diff_pair_classes
 open_document
 open_drc_panel
 open_erc_dialog
 open_grid_picker
 open_grid_properties
+open_harness_definitions
 open_library_browser
 open_net_classes
 open_net_classes_panel
@@ -183,6 +191,7 @@ panelize_board
 paste
 paste_array
 paste_special
+place_aligned_dimension
 place_blanket
 place_board_arc
 place_board_circle
@@ -219,6 +228,7 @@ place_harness_connector
 place_harness_entry
 place_hierarchical_label
 place_junction
+place_linear_dimension
 place_local_net_label
 place_net_label
 place_no_connect
@@ -233,6 +243,7 @@ place_sheet_entry
 place_sheet_symbol
 place_signal_harness
 place_symbol
+place_table
 place_text
 place_text_frame
 place_text_string
@@ -267,6 +278,7 @@ reannotate_board
 redo
 refresh_view
 remove_board_panel
+remove_from_union
 remove_last_vertex
 remove_teardrops
 rename_net_class

@@ -27,7 +27,7 @@ use crate::app::command::{CommandArgs, CommandContext, InvocationContext, bridge
 use crate::keymap::{AppCommandId, CatalogTextExt};
 use std::collections::BTreeSet;
 
-use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries};
+use super::menus::{CanvasSelection, CanvasShortcuts, canvas_menu_entries, unions_entries};
 use super::project_tree::library::library_add_new_entries;
 use super::project_tree::planned::planned_entries as project_planned_entries;
 use super::submenu::{
@@ -50,15 +50,15 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("VCC", "power-port family, awaiting place_power_port(style)"),
     ("+5", "power-port family, awaiting place_power_port(style)"),
     ("+12", "power-port family, awaiting place_power_port(style)"),
-    // Place flyout: the greyed row standing for the planned tools (Graphite mockup #62).
-    ("5 planned tools…", "planned tools, no behaviour"),
+    // Place flyout: the greyed row standing for the planned tools (mockup row
+    // 62); Device Sheet Symbol is the one left.
+    ("1 planned tool…", "planned tools, no behaviour"),
     // Project tree: the Print row keeps its own wording (menu text per
     // surface is a later concern).
     ("Print...", "tree-addressed wording, no per-surface id"),
     // Canvas: planned rows that run nothing yet, in the "Planned (N)"
     // flyout (docs/MENU_BAR.md, "Sheet right-click menu").
     ("References", "planned submenu stub"),
-    ("Unions", "planned submenu stub"),
     ("Snippets", "planned submenu stub"),
     ("Comment...", "planned, no behaviour"),
     ("Pin Mapping...", "planned, no behaviour"),
@@ -339,6 +339,8 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     "sheet actions",
                     sheet_actions_entries(i18n, TID, selection, &hint),
                 ),
+                // Mockup row 158: the Unions flyout.
+                ("unions", unions_entries(i18n, selection, &hint)),
             ];
             for (name, rows) in flyouts {
                 check_rows(

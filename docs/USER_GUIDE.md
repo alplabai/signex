@@ -368,9 +368,29 @@ copy carries the library symbols its parts use, so it can be pasted into another
 sheet; if that sheet already holds a different version of one of those symbols,
 Signex says so in the Messages panel and the pasted parts use the sheet's
 version. A group of more than 60 items follows the cursor as an outline.
-**Edit ▸ Paste Special** skips the cursor and places the copy at once, to the
-right of the sheet's content. A sheet written by a newer Signex is read-only in
-this build, so nothing is pasted into it.
+**Edit ▸ Paste Special** (`Ctrl+Shift+V`) opens the **Smart Paste** dialog:
+place one copy at an offset (in mm) or an array of copies with a step, give the
+parts the next free designators or keep theirs unless the project already
+uses one (a taken designator takes the next free number), and keep the
+net labels (the pasted nets join the originals) or rewrite them with a pattern
+such as `${Net}_${n}`; power nets are never rewritten. The drawing on the right
+shows where the copies land, and you can drag the first copy to set the
+offset. **Paste** puts every copy on the cursor; one click places them all as
+one **Undo** step, and `Esc` cancels. A sheet written by a newer Signex is
+read-only in this build, so nothing is pasted into it.
+
+### Unions
+
+A union is a named group of objects on one sheet. Select the objects and press
+`Ctrl+G` (or right-click ▸ **Unions ▸ Create Union…**), type a name and any
+tags, and press **Create**. On the sheet a union shows as a dashed outline with
+its name on a tab; clicking any member selects the whole union. The **Unions**
+panel (**View ▸ Unions**) lists the unions of the sheet or of the whole
+project, filtered by name or `#tag`; each row selects, locks or hides its
+union. A locked union's members cannot be moved, turned, edited or deleted
+until you unlock it. Hiding fades the members on the canvas only: printing and
+exporting are unchanged, and hiding is not an undo step. Details:
+[SCHEMATIC_UNIONS.md](SCHEMATIC_UNIONS.md).
 
 **Paste array** (from the command palette, `Ctrl+Shift+P`) places many copies
 of what you copied in a row or grid. Set **Copies** (up to 1000) and the X and

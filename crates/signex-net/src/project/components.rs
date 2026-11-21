@@ -6,10 +6,12 @@ use std::collections::{HashMap, HashSet};
 
 use signex_types::designator::compare_references;
 use signex_types::part_fields::evaluated_value;
+use signex_types::project::ChannelNaming;
 use signex_types::schematic::{InstancePath, instance_pins};
 use signex_types::variables::{Resolver, TextTable};
 use uuid::Uuid;
 
+use super::channels::channel_designator;
 use super::members::NetMemberKind;
 use super::net_index::{NetAnchor, NetIndex};
 use super::{Occ, SheetKey};
@@ -105,8 +107,9 @@ impl ComponentReport {
     }
 }
 
-/// Every non-power symbol of `occs`, in walk then document order.
-pub(super) fn placed_symbols(occs: &[Occ<'_>]) -> Vec<PlacedSymbol> {
+/// Every non-power symbol of `occs`, in walk then document order. A symbol in
+/// a channel of a repeated sheet carries its channel designator (#1279).
+pub(super) fn placed_symbols(occs: &[Occ<'_>], naming: &ChannelNaming) -> Vec<PlacedSymbol> {
     let mut out = Vec::new();
     for occ in occs {
         // The value as shown: an `=` value evaluated on its sheet (#1986).
@@ -130,7 +133,9 @@ pub(super) fn placed_symbols(occs: &[Occ<'_>]) -> Vec<PlacedSymbol> {
                 sheet: occ.key.clone(),
                 occurrence: occ.path.clone(),
                 id: s.uuid,
-                designator: s.designator_in(&occ.path).trim().to_string(),
+                designator: channel_designator(s.designator_in(&occ.path), &occ.channels, naming)
+                    .trim()
+                    .to_string(),
                 value: evaluated_value(symbols, s, &variables, false),
                 footprint: s.footprint.clone(),
                 pins,

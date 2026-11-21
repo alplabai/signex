@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use signex_types::schematic::{
     Bus, BusEntry, ChildSheet, Junction, Label, NoConnect, NoErcDirective, SchDirective,
-    SchDrawing, SchematicSheet, Symbol, TextNote, Wire,
+    SchDrawing, SchUnion, SchematicSheet, Symbol, TextNote, Wire,
 };
 
 macro_rules! shared_collections {
@@ -73,6 +73,7 @@ shared_collections! {
     drawings: SchDrawing,
     no_erc_directives: NoErcDirective,
     directives: SchDirective,
+    unions: SchUnion,
 }
 
 fn share_or_wrap<T: PartialEq>(items: Vec<T>, previous: Option<&Arc<Vec<T>>>) -> Arc<Vec<T>> {

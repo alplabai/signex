@@ -5,7 +5,7 @@
 //! the validation result on the left, Close, Validate and Execute on the
 //! right. State and rules: `app/update_pcb/`.
 
-use iced::widget::{Column, Space, container, row, scrollable};
+use iced::widget::{Column, Space, column, container, row, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::UserText;
 use signex_i18n::{I18n, Localized, ids, t};
@@ -21,6 +21,7 @@ use crate::styles::{
 
 pub(super) mod change_rows;
 mod problems;
+mod schematic_rules;
 mod summary;
 mod table;
 #[cfg(test)]
@@ -92,11 +93,20 @@ impl Signex {
             body = body.push(summary::bar(list, &state.table, i18n, tokens));
         }
         body = body.push(self.update_pcb_banner(state, i18n, tokens));
+        // #1489: the rules the schematic asks for, below the board's rows.
+        let rules = schematic_rules::section(&self.update_pcb_rule_rows(state), i18n, tokens);
         if let Some(list) = state.list.as_ref().filter(|l| !l.rows.is_empty()) {
             if let Some(card) = problems::card(list, i18n, tokens) {
                 body = body.push(card);
             }
-            body = body.push(list_frame(table::body(state, list, i18n, tokens), tokens));
+            let rows = table::body(state, list, i18n, tokens);
+            let framed = match rules {
+                Some(rules) => column![rows, rules].boxed(),
+                None => rows,
+            };
+            body = body.push(list_frame(framed, tokens));
+        } else if let Some(rules) = rules {
+            body = body.push(list_frame(rules, tokens));
         } else {
             body = body.push(Space::new().height(Length::Fill).boxed());
         }
@@ -198,7 +208,10 @@ impl Signex {
         tokens: &ThemeTokens,
     ) -> Vec<Element<'a, Message>> {
         let ready = state.ready_list();
-        let count = state.execute_count();
+        let count = state.execute_count()
+            + crate::app::update_pcb::rules_from_schematic::pending(
+                &self.update_pcb_rule_rows(state),
+            );
         let can_execute = ready.is_some() && count > 0 && self.update_pcb_execute_block().is_none();
         let execute = match ready {
             Some(_) => t!(i18n, ids::UPDATE_PCB_EXECUTE_COUNT, "count" => count),

@@ -146,6 +146,22 @@ new-pcb-check-failed = Could not check whether { $file } is already in the proje
 new-pcb-no-project = Open a project to add a PCB to it.
 new-pcb-created = Created { $board } in { $project }. It is written when you save it.
 
+## Update PCB: the rules the schematic's Net Parameters directives ask for (#1489).
+
+update-pcb-schematic-rules = Rules from the schematic
+# Execute rewrites a rule of that name edited in the Rules tab: the schematic wins.
+update-pcb-rule-changed = differs · schematic wins
+update-pcb-rule-added = new rule
+update-pcb-rule-unchanged = up to date
+# The rule as the Rules tab has it now. $text is a line of rule text.
+update-pcb-rule-was = now: { $text }
+update-pcb-rules-note = Execute writes these into the project's design rules, marked "from schematic" in the Rules tab.
+# Messages: a Net Parameters directive with no class whose net is not a board net
+# by that name (it sits on a placed or repeated sheet). $net is the sheet's net name.
+update-pcb-rule-net-not-on-board = Update PCB: no rule for net { $net }: that name is not a board net (a net on a placed or repeated sheet takes another name on the board). Give its Net Parameters directive a net class to make a rule.
+# Messages: two scopes give one rule name. $rule is the rule, $kept and $dropped the class or net names.
+update-pcb-rule-name-clash = Update PCB: { $kept } and { $dropped } both make rule { $rule }; it is kept for { $kept } and nothing is made for { $dropped }. Rename one of them.
+
 # The change-list rows and group headers Update PCB and Back Annotate share
 # (#2533). Status icons; their words are the row's tooltip.
 change-row-icon-skipped = –

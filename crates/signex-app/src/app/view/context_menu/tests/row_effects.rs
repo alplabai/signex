@@ -269,14 +269,44 @@ fn paste_row_puts_the_copy_on_the_cursor() {
     assert_eq!(doc(&app).symbols.len(), 1, "a paste is placed by a click");
 }
 
+/// Mockup row 155: the row opens the Smart Paste dialog (it used to place the copy at
+/// once); its Paste puts the copy on the cursor and a click places it as one
+/// undo step.
 #[test]
-fn smart_paste_row_places_the_copy_at_once() {
+fn smart_paste_row_opens_the_smart_paste_dialog() {
     let (mut app, text) = app_that_copied();
     select(&mut app, Vec::new());
     let task = press(&mut app, "smart_paste");
     assert_menu_closed(&app, "smart paste");
     settle_answering_clipboard(&mut app, task, &text);
-    assert_eq!(doc(&app).symbols.len(), 2, "the copy was not placed");
+    assert!(
+        app.ui_state.smart_paste.is_some(),
+        "the dialog did not open"
+    );
+    assert_eq!(doc(&app).symbols.len(), 1, "nothing lands before Paste");
+
+    let _ = app.update(Message::Edit(EditMsg::SmartPasteDialog(
+        crate::smart_paste::SmartPasteMsg::PasteConfirmed,
+    )));
+    assert!(
+        app.ui_state.smart_paste.is_none(),
+        "Paste closes the dialog"
+    );
+    assert!(
+        app.interaction_state
+            .placement
+            .as_ref()
+            .is_some_and(|s| s.kind.is_paste()),
+        "the copy is on the cursor"
+    );
+    let steps = app.document_state.active_engine().unwrap().undo_position();
+    let _ = app.handle_placement_click(40.64, 40.64);
+    assert_eq!(doc(&app).symbols.len(), 2, "the click placed the copy");
+    assert_eq!(
+        app.document_state.active_engine().unwrap().undo_position(),
+        steps + 1,
+        "one undo step"
+    );
     assert!(app.interaction_state.placement.is_none());
 }
 
@@ -513,6 +543,10 @@ fn place_rows_arm_the_expected_tools() {
         ("place_compile_mask", Tool::CompileMask),
         ("place_diff_pair", Tool::DiffPair),
         ("place_text_string", Tool::Text),
+        // #1280: the harness rows are live.
+        ("place_signal_harness", Tool::HarnessWire),
+        ("place_harness_connector", Tool::HarnessConnector),
+        ("place_harness_entry", Tool::HarnessEntry),
     ] {
         let mut app = one_symbol();
         open_menu(&mut app);
@@ -647,6 +681,7 @@ fn loaded_project(app: &mut Signex, file: &str, owns_sheet: bool) -> usize {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
             requirements: Default::default(),
             parameters: Default::default(),

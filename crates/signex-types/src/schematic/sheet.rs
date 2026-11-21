@@ -305,6 +305,12 @@ pub enum SchDrawing {
         #[serde(default, skip_serializing_if = "is_false")]
         locked: bool,
     },
+    /// A cubic Bezier curve (#1267); see `drawing_bezier.rs`.
+    Bezier(super::SchBezier),
+    /// A measured dimension (#1267); see `drawing_dimension.rs`.
+    Dimension(super::SchDimension),
+    /// A table (#1300); see `sch_table.rs`.
+    Table(super::SchTable),
 }
 
 // ---------------------------------------------------------------------------
@@ -362,6 +368,9 @@ impl SchDrawing {
             | Self::Circle { uuid, .. }
             | Self::Arc { uuid, .. }
             | Self::Polyline { uuid, .. } => *uuid,
+            Self::Bezier(b) => b.uuid,
+            Self::Dimension(d) => d.uuid,
+            Self::Table(t) => t.uuid,
         }
     }
 
@@ -373,6 +382,9 @@ impl SchDrawing {
             | Self::Circle { uuid, .. }
             | Self::Arc { uuid, .. }
             | Self::Polyline { uuid, .. } => *uuid = id,
+            Self::Bezier(b) => b.uuid = id,
+            Self::Dimension(d) => d.uuid = id,
+            Self::Table(t) => t.uuid = id,
         }
     }
 
@@ -384,6 +396,9 @@ impl SchDrawing {
             | Self::Circle { locked, .. }
             | Self::Arc { locked, .. }
             | Self::Polyline { locked, .. } => *locked,
+            Self::Bezier(b) => b.locked,
+            Self::Dimension(d) => d.locked,
+            Self::Table(t) => t.locked,
         }
     }
 
@@ -395,7 +410,33 @@ impl SchDrawing {
             | Self::Circle { locked, .. }
             | Self::Arc { locked, .. }
             | Self::Polyline { locked, .. } => *locked = value,
+            Self::Bezier(b) => b.locked = value,
+            Self::Dimension(d) => d.locked = value,
+            Self::Table(t) => t.locked = value,
         }
+    }
+
+    /// Whether a sheet holding this drawing needs format `snxsch/1.3`: the
+    /// Bezier, dimension and table kinds are new in it (#1267, #1300).
+    pub fn needs_format_1_3(&self) -> bool {
+        matches!(self, Self::Bezier(_) | Self::Dimension(_) | Self::Table(_))
+    }
+
+    /// Map an annotation kind's points through `f` (move, rotate, mirror);
+    /// `false` for the classic shapes, which their callers move point by
+    /// point.
+    pub fn map_annotation_points(&mut self, f: impl Fn(Point) -> Point) -> bool {
+        match self {
+            Self::Bezier(b) => b.map_points(f),
+            Self::Dimension(d) => d.map_points(f),
+            Self::Table(t) => t.map_points(f),
+            Self::Line { .. }
+            | Self::Rect { .. }
+            | Self::Circle { .. }
+            | Self::Arc { .. }
+            | Self::Polyline { .. } => return false,
+        }
+        true
     }
 }
 
@@ -472,6 +513,14 @@ pub struct SchematicSheet {
     /// Blankets, Compile Masks and Differential Pair directives (#2420).
     #[serde(default)]
     pub directives: Vec<super::SchDirective>,
+    /// Harness connectors, harness wires and harness-typed sheet entries
+    /// (#1280). Saved in `[extras.sheet]` only when not empty.
+    #[serde(default, skip_serializing_if = "super::SheetHarness::is_empty")]
+    pub harness: super::SheetHarness,
+    /// Unions of sheet objects (mockup row 158). Saved in `[extras.sheet]` only when
+    /// not empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unions: Vec<super::SchUnion>,
     #[serde(default)]
     pub title_block: HashMap<String, String>,
     /// Sheet variables (#1987): name to source text, shadowing the project
@@ -548,6 +597,8 @@ impl Default for SchematicSheet {
             drawings: Vec::new(),
             no_erc_directives: Vec::new(),
             directives: Vec::new(),
+            harness: Default::default(),
+            unions: Vec::new(),
             title_block: HashMap::new(),
             variables: BTreeMap::new(),
             lib_symbols: LibSymbolTable::default(),
@@ -619,6 +670,12 @@ pub enum SelectedKind {
     SymbolRefField,
     /// Symbol value field ("100n", "10k", …). UUID = symbol UUID.
     SymbolValField,
+    /// A signal harness connector (#1280, `SheetHarness::connectors`).
+    HarnessConnector,
+    /// One entry of a harness connector. UUID = the entry's uuid.
+    HarnessEntry,
+    /// A harness wire segment (`SheetHarness::wires`).
+    HarnessWire,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

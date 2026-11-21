@@ -618,6 +618,10 @@ mod schematic_field_drag;
 #[path = "regression/schematic_directives.rs"]
 mod schematic_directives;
 
+// #1280 — signal harnesses.
+#[path = "regression/signal_harness.rs"]
+mod signal_harness;
+
 #[path = "regression/surface_failures.rs"]
 mod surface_failures;
 #[path = "regression/text_font_family.rs"]
@@ -755,10 +759,14 @@ mod illustration_hover;
 mod setup_profile_cards;
 #[path = "regression/sketch_host.rs"]
 mod sketch_host;
+#[path = "regression/smart_paste_dialog.rs"]
+mod smart_paste_dialog;
 #[path = "regression/stroke_law_source_guard.rs"]
 mod stroke_law_source_guard;
 #[path = "regression/stroke_zoom_law.rs"]
 mod stroke_zoom_law;
+#[path = "regression/unions.rs"]
+mod unions;
 #[path = "regression/validation_panels_graphite.rs"]
 mod validation_panels_graphite;
 #[path = "regression/wire_tab_options.rs"]
@@ -785,6 +793,13 @@ mod preferences_keymap_page;
 #[path = "regression/preferences_library_pages.rs"]
 mod preferences_library_pages;
 
+// #1267, #1300: Bezier, dimension and table tools; schematic tables.
+#[path = "regression/drawing_tools.rs"]
+mod drawing_tools;
+#[path = "regression/multi_channel.rs"]
+mod multi_channel;
+#[path = "regression/schematic_tables.rs"]
+mod schematic_tables;
 // Graphite mockup #55: the Filter panel edits the filter a box select picks with.
 #[path = "regression/selection_filter_panels.rs"]
 mod selection_filter_panels;

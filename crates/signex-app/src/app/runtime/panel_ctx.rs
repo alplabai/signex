@@ -529,6 +529,8 @@ impl Signex {
         let tree_unchanged = previous_projects == projects_panel
             && (project_tree_builds > 0 || projects_panel.is_empty());
         let kept_project_tree = if tree_unchanged { kept_tree } else { vec![] };
+        // Taken before the snapshot below borrows `self`.
+        let directive_panel = self.document_state.panel_ctx.directive_panel.take();
         let active_schematic_snapshot = self.active_render_snapshot();
         let active_pcb_snapshot = self.active_pcb_snapshot();
 
@@ -558,6 +560,7 @@ impl Signex {
         let drawing_edit_buf_for = self.document_state.panel_ctx.drawing_edit_buf_for;
         let selected_drawing = self.document_state.panel_ctx.selected_drawing.clone();
         let selected_drawing_placement = self.document_state.panel_ctx.selected_drawing_placement;
+        let annotation = self.annotation_panel_state();
         let selected_child_sheet = self.document_state.panel_ctx.selected_child_sheet.clone();
         let child_sheet_border_picker_open =
             self.document_state.panel_ctx.child_sheet_border_picker_open;
@@ -715,6 +718,10 @@ impl Signex {
                 .map(crate::panels::PcbNetsSummary::of),
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
+            // Kept: `sync_unions_panel` and `harness_panel_facts` own these.
+            unions: self.document_state.panel_ctx.unions.clone(),
+            harness: self.document_state.panel_ctx.harness.clone(),
+            compiled_design: self.compiled_design_view(),
             // Kept in step with the documents by `sync_object_list`.
             object_list: self.document_state.panel_ctx.object_list.clone(),
             pcb_board: self.pcb_board_summary(),
@@ -734,7 +741,9 @@ impl Signex {
             drawing_edit_buf_page,
             selected_drawing,
             selected_drawing_placement,
+            annotation,
             selected_child_sheet,
+            directive_panel,
             child_sheet_border_picker_open,
             child_sheet_fill_picker_open,
             child_sheet_border_advanced_open,

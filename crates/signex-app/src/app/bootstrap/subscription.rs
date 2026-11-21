@@ -29,6 +29,10 @@ struct OpenOverlays {
     find_replace_open: bool,
     find_similar_open: bool,
     paste_array_open: bool,
+    /// The Create Union popover (mockup row 158).
+    union_popover_open: bool,
+    /// The Smart Paste dialog (mockup row 155).
+    smart_paste_open: bool,
     kbd_shortcuts_open: bool,
     about_open: bool,
     first_run_tour_open: bool,
@@ -63,6 +67,7 @@ struct OpenOverlays {
     sheet_sync_open: bool,
     board_reannotate_open: bool,
     fab_outputs_open: bool,
+    diff_pair_classes_open: bool,
     board_output_open: bool,
     back_annotate_open: bool,
     library_picker_open: bool,
@@ -306,6 +311,18 @@ impl OpenOverlays {
                     crate::paste_array::PasteArrayMsg::Closed,
                 ))
             }),
+            OverlayId::UnionPopover => self.union_popover_open.then(|| {
+                Message::Edit(crate::app::EditMsg::Unions(
+                    crate::app::unions::UnionsMsg::Popover(
+                        crate::app::unions::UnionPopoverMsg::Cancelled,
+                    ),
+                ))
+            }),
+            OverlayId::SmartPaste => self.smart_paste_open.then(|| {
+                Message::Edit(crate::app::EditMsg::SmartPasteDialog(
+                    crate::smart_paste::SmartPasteMsg::Cancelled,
+                ))
+            }),
             OverlayId::KeyboardShortcuts => self
                 .kbd_shortcuts_open
                 .then(|| Message::Overlay(OverlayMsg::CloseKeyboardShortcuts)),
@@ -362,6 +379,9 @@ impl OpenOverlays {
             OverlayId::FabOutputs => self
                 .fab_outputs_open
                 .then(|| Message::from(crate::app::FabOutputsMsg::CancelRequested)),
+            OverlayId::DiffPairClasses => self
+                .diff_pair_classes_open
+                .then(|| Message::from(crate::app::DiffPairClassesMsg::CancelRequested)),
             OverlayId::BoardOutput => self
                 .board_output_open
                 .then(|| Message::from(crate::app::BoardOutputMsg::Closed)),
@@ -635,6 +655,8 @@ impl Signex {
                 && !modal_detached(crate::app::state::ModalId::FindReplace),
             find_similar_open: self.ui_state.find_similar.is_some(),
             paste_array_open: self.ui_state.paste_array.is_some(),
+            union_popover_open: self.ui_state.unions.popover.is_some(),
+            smart_paste_open: self.ui_state.smart_paste.is_some(),
             kbd_shortcuts_open: self.ui_state.keyboard_shortcuts_open
                 && !modal_detached(crate::app::state::ModalId::KeyboardShortcuts),
             about_open: self.ui_state.about_open
@@ -677,6 +699,7 @@ impl Signex {
             sheet_sync_open: self.ui_state.sheet_sync.is_some(),
             board_reannotate_open: self.ui_state.board_reannotate.is_some(),
             fab_outputs_open: self.ui_state.fab_outputs.is_some(),
+            diff_pair_classes_open: self.ui_state.diff_pair_classes.is_some(),
             board_output_open: self.ui_state.board_output.dialog.is_some(),
             back_annotate_open: self.ui_state.back_annotate.is_some(),
             library_picker_open: self.library.picker.is_some()
@@ -1199,6 +1222,20 @@ mod tests {
             only(|o| o.paste_array_open = true),
             Some(Message::Edit(crate::app::EditMsg::PasteArray(
                 crate::paste_array::PasteArrayMsg::Closed
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.union_popover_open = true),
+            Some(Message::Edit(crate::app::EditMsg::Unions(
+                crate::app::unions::UnionsMsg::Popover(
+                    crate::app::unions::UnionPopoverMsg::Cancelled
+                )
+            )))
+        ));
+        assert!(matches!(
+            only(|o| o.smart_paste_open = true),
+            Some(Message::Edit(crate::app::EditMsg::SmartPasteDialog(
+                crate::smart_paste::SmartPasteMsg::Cancelled
             )))
         ));
         assert!(matches!(
@@ -1768,6 +1805,8 @@ mod tests {
             find_replace_open,
             find_similar_open,
             paste_array_open,
+            union_popover_open,
+            smart_paste_open,
             kbd_shortcuts_open,
             about_open,
             first_run_tour_open,
@@ -1797,6 +1836,7 @@ mod tests {
             sheet_sync_open,
             board_reannotate_open,
             fab_outputs_open,
+            diff_pair_classes_open,
             board_output_open,
             back_annotate_open,
             library_picker_open,
@@ -1830,6 +1870,8 @@ mod tests {
             ("find_replace_open", |o| o.find_replace_open = true),
             ("find_similar_open", |o| o.find_similar_open = true),
             ("paste_array_open", |o| o.paste_array_open = true),
+            ("union_popover_open", |o| o.union_popover_open = true),
+            ("smart_paste_open", |o| o.smart_paste_open = true),
             ("kbd_shortcuts_open", |o| o.kbd_shortcuts_open = true),
             ("about_open", |o| o.about_open = true),
             ("first_run_tour_open", |o| o.first_run_tour_open = true),
@@ -1874,6 +1916,9 @@ mod tests {
             ("sheet_sync_open", |o| o.sheet_sync_open = true),
             ("board_reannotate_open", |o| o.board_reannotate_open = true),
             ("fab_outputs_open", |o| o.fab_outputs_open = true),
+            ("diff_pair_classes_open", |o| {
+                o.diff_pair_classes_open = true
+            }),
             ("board_output_open", |o| o.board_output_open = true),
             ("back_annotate_open", |o| o.back_annotate_open = true),
             ("selection_filter_custom_open", |o| {

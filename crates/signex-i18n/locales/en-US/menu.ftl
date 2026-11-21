@@ -223,6 +223,9 @@ ctx-fp-silk-unknown = Silk graphic { $index }
 ctx-fp-silk-string = String
 ctx-fp-silk-region = Region
 
+# Place > Graphics > Dimension, and the Drawing Tools group header of the same name.
+menu-place-dimension = Dimension
+
 ## Active Bar Power menu and the Place flyout's power rows (Graphite
 ## mockup #61, Graphite mockup #62): the short port names; the full
 ## "Place … power port" text is the tooltip.
@@ -260,7 +263,10 @@ ctx-place-group-ports-power = Ports and power
 ctx-place-group-parts-sheets = Parts and sheets
 ctx-place-group-directives-text = Directives and text
 # Greyed row of the Place flyout standing for the planned tools.
-ctx-place-planned-tools = { $count } planned tools…
+ctx-place-planned-tools = { $count ->
+    [one] { $count } planned tool…
+   *[other] { $count } planned tools…
+}
 # { $names } lists the planned tools.
 ctx-place-planned-tools-tooltip = Planned: { $names }
 

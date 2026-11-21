@@ -19,7 +19,15 @@ pub use parts::{DesignPart, design_parts};
 pub mod cross_probe;
 
 mod directives;
+pub use directives::{
+    BlanketCatch, BlanketNet, NetParametersOn, blanket_nets, directive_net_classes,
+    fill_pattern_classes, net_parameters,
+};
 pub use directives::{DiffPair, blanket_net_classes, compile_masked, diff_pairs};
+mod diff_pair_classes;
+pub use diff_pair_classes::{
+    ClassMember, class_members, diff_pairs_with_classes, pair_count, pairs_by_every_suffix,
+};
 
 mod net_class;
 pub use net_class::{
@@ -61,4 +69,20 @@ pub use project::{
     build_project_netlist_indexed, instance_entry_designators, is_auto_name, multi_named_nets,
     number_issues, parse_page_number, project_name_changes, project_occurrences, sheet_numbering,
     with_page_number,
+};
+pub use project::{
+    EntryBuses, build_project_netlist_indexed_named, build_project_netlist_named, channel_uuid,
+};
+
+mod compiled;
+#[cfg(test)]
+mod compiled_tests;
+pub use compiled::{CompiledDesign, CompiledNet, CompiledSheet, compile_design};
+
+mod harness;
+#[cfg(test)]
+mod harness_fixture;
+pub use harness::{
+    HarnessBundle, HarnessMismatch, HarnessPort, HarnessSheetEntry, harness_bundles,
+    harness_mismatches, harness_segments_touch, on_harness,
 };

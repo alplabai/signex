@@ -116,6 +116,11 @@ pub struct PanelContext {
     /// The active project's nets, for the Net Inspector panel; filled only
     /// while that panel is open.
     pub net_inspector: super::NetInspectorView,
+    /// The Compiled Design panel, and the multi-channel rows of a sheet
+    /// symbol and a channel tab in Properties (#1279, #1308).
+    pub compiled_design: super::compiled_design::CompiledDesignView,
+    /// The Unions panel's rows and foot; filled only while it is open (mockup row 158).
+    pub unions: crate::app::unions::UnionsPanelView,
     /// The Object List's rows and picks; filled only while that panel is open
     /// (#1259).
     pub object_list: super::ObjectListView,
@@ -167,15 +172,23 @@ pub struct PanelContext {
     pub selected_drawing: Option<signex_types::schematic::SchDrawing>,
     /// Where that drawing sits against the circuit (#1583).
     pub selected_drawing_placement: signex_types::schematic::DrawingPlacement,
+    /// The Properties state of a selected Bezier, dimension or table.
+    pub annotation: super::AnnotationPanelState,
     /// The live ChildSheet matching `selected_uuid` when a single
     /// hierarchical sheet is selected. Powers the editable
     /// border/fill colour pickers and stroke-width input.
     pub selected_child_sheet: Option<signex_types::schematic::ChildSheet>,
+    /// The selected Net Parameters directive or Net Blanket, as its
+    /// Properties read it (#1281, #1489).
+    pub directive_panel: Option<super::DirectivePanel>,
     /// Whether the border-colour picker overlay is open for the
     /// currently-selected child sheet.
     pub child_sheet_border_picker_open: bool,
     /// State of the wire colour picker (Tab form or selected wire).
     pub wire_color_picker: super::WireColorPicker,
+    /// What the harness Properties and the harness definitions view show
+    /// (#1280).
+    pub harness: super::HarnessPanel,
     /// Width preset and colour of the single selected wire, if one is.
     pub selected_wire_style: Option<(
         signex_types::schematic::WireWidthPreset,

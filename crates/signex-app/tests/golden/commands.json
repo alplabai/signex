@@ -10,9 +10,19 @@
     "category": "design"
   },
   {
+    "id": "add_table_of_contents",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "add_teardrops",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "add_to_union",
+    "group": "Schematic",
+    "category": "edit"
   },
   {
     "id": "align_bottom",
@@ -145,6 +155,11 @@
     "category": "design"
   },
   {
+    "id": "break_union",
+    "group": "Schematic",
+    "category": "edit"
+  },
+  {
     "id": "break_wire",
     "group": "General",
     "category": "modify"
@@ -240,6 +255,11 @@
     "category": "view"
   },
   {
+    "id": "compile_project",
+    "group": "Schematic",
+    "category": "design"
+  },
+  {
     "id": "copy",
     "group": "General",
     "category": "edit"
@@ -258,6 +278,11 @@
     "id": "create_sheet_symbol_from_sheet",
     "group": "Schematic",
     "category": "design"
+  },
+  {
+    "id": "create_union",
+    "group": "Schematic",
+    "category": "edit"
   },
   {
     "id": "cross_probe",
@@ -800,6 +825,11 @@
     "category": "commands"
   },
   {
+    "id": "open_compiled_design",
+    "group": "General",
+    "category": "panels"
+  },
+  {
     "id": "open_components_panel",
     "group": "Schematic",
     "category": "panels"
@@ -808,6 +838,11 @@
     "id": "open_datasheet",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "open_diff_pair_classes",
+    "group": "General",
+    "category": "design"
   },
   {
     "id": "open_document",
@@ -833,6 +868,11 @@
     "id": "open_grid_properties",
     "group": "General",
     "category": "view"
+  },
+  {
+    "id": "open_harness_definitions",
+    "group": "Schematic",
+    "category": "design"
   },
   {
     "id": "open_library_browser",
@@ -908,6 +948,11 @@
     "id": "paste_special",
     "group": "General",
     "category": "edit"
+  },
+  {
+    "id": "place_aligned_dimension",
+    "group": "Schematic",
+    "category": "place"
   },
   {
     "id": "place_blanket",
@@ -1090,6 +1135,11 @@
     "category": "place"
   },
   {
+    "id": "place_linear_dimension",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
     "id": "place_local_net_label",
     "group": "Schematic",
     "category": "place"
@@ -1156,6 +1206,11 @@
   },
   {
     "id": "place_symbol",
+    "group": "Schematic",
+    "category": "place"
+  },
+  {
+    "id": "place_table",
     "group": "Schematic",
     "category": "place"
   },
@@ -1328,6 +1383,11 @@
     "id": "remove_board_panel",
     "group": "Pcb",
     "category": "pcb"
+  },
+  {
+    "id": "remove_from_union",
+    "group": "Schematic",
+    "category": "edit"
   },
   {
     "id": "remove_last_vertex",

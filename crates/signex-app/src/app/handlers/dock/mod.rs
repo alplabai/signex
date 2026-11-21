@@ -6,6 +6,7 @@ use super::super::*;
 
 mod child_sheet_identity;
 mod floating_layout;
+mod harness_panel;
 mod layout_persist;
 mod library_browser;
 mod multi_edit;
@@ -72,6 +73,13 @@ impl Signex {
                 let task = self.handle_net_inspector_message(inspector_msg.clone());
                 return Task::batch([task, self.finish_update()]);
             }
+            if let crate::panels::PanelMsg::CompiledDesign(msg) = panel_msg {
+                return self.dispatch_compiled_design_message(msg.clone());
+            }
+            if let crate::panels::PanelMsg::Unions(unions_msg) = panel_msg {
+                let task = self.handle_unions_message(unions_msg.clone());
+                return Task::batch([task, self.finish_update()]);
+            }
             if let crate::panels::PanelMsg::ObjectList(list_msg) = panel_msg {
                 let task = self.handle_object_list_message(list_msg.clone());
                 return Task::batch([task, self.finish_update()]);
@@ -123,6 +131,9 @@ impl Signex {
             if let crate::panels::PanelMsg::LayerStack(msg) = panel_msg {
                 self.handle_layer_stack(msg);
                 return self.finish_update();
+            }
+            if let Some(task) = self.handle_dock_harness_message(panel_msg) {
+                return Task::batch([task, self.finish_update()]);
             }
             if self.handle_dock_library_browser_message(panel_msg)
                 || self.handle_dock_multi_edit_message(panel_msg)

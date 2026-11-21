@@ -519,6 +519,9 @@ fn current_color(drawing: Option<&SchDrawing>) -> Option<StrokeColor> {
         | SchDrawing::Circle { stroke_color, .. }
         | SchDrawing::Arc { stroke_color, .. }
         | SchDrawing::Polyline { stroke_color, .. } => *stroke_color,
+        SchDrawing::Bezier(b) => b.stroke_color,
+        SchDrawing::Dimension(d) => d.stroke_color,
+        SchDrawing::Table(_) => None,
     })
 }
 

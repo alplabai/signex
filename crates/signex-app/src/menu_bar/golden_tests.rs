@@ -417,6 +417,8 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("assign_footprints", "AssignFootprints"),
     ("repair_pin_junctions", "RepairPinJunctions"),
     ("open_net_inspector", "OpenNetInspector"),
+    // #1308: fixture name only.
+    ("open_compiled_design", "OpenCompiledDesign"),
     // #2408, #2409: fixture names only.
     ("stitch_vias", "StitchVias"),
     ("add_teardrops", "AddTeardrops"),
@@ -461,6 +463,20 @@ const COMMAND_ROW_NAMES: &[(&str, &str)] = &[
     ("place_blanket", "PlaceBlanket"),
     ("place_compile_mask", "PlaceCompileMask"),
     ("place_diff_pair", "PlaceDiffPair"),
+    // #1267, #1300: the Bezier, table and dimension tools, and the contents
+    // sheet, fixture names only.
+    ("draw_bezier", "DrawBezier"),
+    ("place_table", "PlaceTable"),
+    ("place_linear_dimension", "PlaceLinearDimension"),
+    ("place_aligned_dimension", "PlaceAlignedDimension"),
+    ("add_table_of_contents", "AddTableOfContents"),
+    // #1280: the harness tools, fixture names only.
+    ("place_signal_harness", "PlaceSignalHarness"),
+    ("place_harness_connector", "PlaceHarnessConnector"),
+    ("place_harness_entry", "PlaceHarnessEntry"),
+    // #1489, #1282: Net Parameters goes live; the diff-pair class dialog.
+    ("place_parameter_set", "PlaceParameterSet"),
+    ("open_diff_pair_classes", "OpenDiffPairClasses"),
 ];
 
 fn action_name(action: &MenuMessage) -> String {

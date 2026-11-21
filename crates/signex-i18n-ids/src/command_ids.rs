@@ -651,5 +651,31 @@ define_ids! {
         CMD_CATEGORY_PCB = "cmd-category-pcb";
         CMD_CATEGORY_UNCATEGORIZED = "cmd-category-uncategorized";
         CMD_UNNAMED = "cmd-unnamed";
+        CMD_PLACE_TABLE = "cmd-place-table";
+        CMD_MENU_PLACE_TABLE = "cmd-menu-place-table";
+        CMD_PLACE_LINEAR_DIMENSION = "cmd-place-linear-dimension";
+        CMD_MENU_PLACE_LINEAR_DIMENSION = "cmd-menu-place-linear-dimension";
+        CMD_PLACE_ALIGNED_DIMENSION = "cmd-place-aligned-dimension";
+        CMD_MENU_PLACE_ALIGNED_DIMENSION = "cmd-menu-place-aligned-dimension";
+        CMD_ADD_TABLE_OF_CONTENTS = "cmd-add-table-of-contents";
+        CMD_MENU_ADD_TABLE_OF_CONTENTS = "cmd-menu-add-table-of-contents";
+        // Multi-channel sheets and the Compiled Design panel (#1279, #1308).
+        CMD_COMPILE_PROJECT = "cmd-compile-project";
+        CMD_MENU_COMPILE_PROJECT = "cmd-menu-compile-project";
+        CMD_OPEN_COMPILED_DESIGN = "cmd-open-compiled-design";
+        CMD_MENU_OPEN_COMPILED_DESIGN = "cmd-menu-open-compiled-design";
+        // Signal harnesses (#1280) and differential pair classes (#1282).
+        CMD_OPEN_HARNESS_DEFINITIONS = "cmd-open-harness-definitions";
+        CMD_OPEN_DIFF_PAIR_CLASSES = "cmd-open-diff-pair-classes";
+        CMD_MENU_OPEN_DIFF_PAIR_CLASSES = "cmd-menu-open-diff-pair-classes";
+        // Named unions (mockup row 158).
+        CMD_CREATE_UNION = "cmd-create-union";
+        CMD_MENU_CREATE_UNION = "cmd-menu-create-union";
+        CMD_ADD_TO_UNION = "cmd-add-to-union";
+        CMD_MENU_ADD_TO_UNION = "cmd-menu-add-to-union";
+        CMD_REMOVE_FROM_UNION = "cmd-remove-from-union";
+        CMD_MENU_REMOVE_FROM_UNION = "cmd-menu-remove-from-union";
+        CMD_BREAK_UNION = "cmd-break-union";
+        CMD_MENU_BREAK_UNION = "cmd-menu-break-union";
     }
 }

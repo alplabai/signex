@@ -581,6 +581,7 @@ mod tests {
                 schematic_defaults: Default::default(),
                 project_defaults: Default::default(),
                 agent_journal: Default::default(),
+                schematic_design: Default::default(),
                 fab_outputs: None,
                 requirements: Default::default(),
                 parameters: Default::default(),
@@ -763,6 +764,11 @@ mod tests {
             // #2416: the sheet's selection filter and the Net Classes panel.
             "open_selection_filter",
             "open_net_classes",
+            // #1280: the harness tools and the definitions view.
+            "place_signal_harness",
+            "place_harness_connector",
+            "place_harness_entry",
+            "open_harness_definitions",
         ] {
             assert!(!is_enabled(&id(name), &off), "{name} without a schematic");
             assert!(is_enabled(&id(name), &on), "{name} with a schematic");
@@ -1113,7 +1119,9 @@ mod tests {
     #[test]
     fn planned_tool_commands_are_never_enabled_but_always_explain() {
         let ids = planned_ids();
-        assert!(ids.contains(&"place_signal_harness"), "{ids:?}");
+        assert!(ids.contains(&"place_device_sheet_symbol"), "{ids:?}");
+        // #1280: the harness tools are built.
+        assert!(!ids.contains(&"place_signal_harness"), "{ids:?}");
         let with_command = crate::active_bar::PLANNED_TOOLS
             .iter()
             .filter(|(planned, _)| {
@@ -1154,11 +1162,15 @@ mod tests {
     fn a_planned_tool_keystroke_still_logs_the_refusal() {
         let _ = crate::diagnostics::init_logging();
         let (mut app, _t) = Signex::new();
-        let _ = app.dispatch_command(&id("place_signal_harness"), CommandArgs::default(), None);
+        let _ = app.dispatch_command(
+            &id("place_device_sheet_symbol"),
+            CommandArgs::default(),
+            None,
+        );
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e
                 .message
-                .starts_with("Planned, not available yet: Signal Harness")),
+                .starts_with("Planned, not available yet: Device Sheet Symbol")),
             "the refusal must reach the Messages panel, not be dropped"
         );
     }

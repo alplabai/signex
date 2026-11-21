@@ -23,6 +23,7 @@ mod rule_file;
 mod rule_profile;
 mod rules;
 mod schematic_defaults;
+mod schematic_design;
 mod setup;
 mod setup_profile;
 #[cfg(test)]
@@ -60,6 +61,10 @@ pub use rules::{
 pub use schematic_defaults::{
     MAX_BUS_WIDTH_MM, MAX_DEFAULT_WIDTH_MM, MIN_TEXT_SIZE_PT, SchematicDefaultField,
     SchematicDefaultOverrides,
+};
+pub use schematic_design::{
+    ChannelNaming, DEFAULT_CHANNEL_DESIGNATOR_FORMAT, DEFAULT_CHANNEL_NET_FORMAT,
+    SchematicDesignSettings,
 };
 pub use setup::{
     COPPER_LAYERS, DEFAULT_DESIGNATORS, NEW_BOARD_GRID_MM, PcbDefaults, PcbField, PcbValueError,
@@ -299,6 +304,12 @@ pub struct ProjectData {
     /// build keeps the key in `unknown`. No format token changes.
     #[serde(default, skip_serializing_if = "AgentJournalSettings::is_default")]
     pub agent_journal: AgentJournalSettings,
+    /// Channel naming, harness definitions and differential pair classes
+    /// (Schematic Refinement). Skipped on save at the defaults, so an old
+    /// file re-saves byte-identical, and an old build keeps the key in
+    /// `unknown`. No format token changes.
+    #[serde(default, skip_serializing_if = "SchematicDesignSettings::is_default")]
+    pub schematic_design: SchematicDesignSettings,
     /// The kinds of file Fabrication Outputs writes (#2489). `None` is the
     /// defaults and is skipped on save, so a project whose ticks were never
     /// changed re-saves byte-identical. An unreadable value reads as `None`.
@@ -365,6 +376,8 @@ mod parameters_tests;
 mod requirements_tests;
 #[cfg(test)]
 mod schematic_defaults_tests;
+#[cfg(test)]
+mod schematic_design_tests;
 #[cfg(test)]
 mod unknown_tests;
 
@@ -556,6 +569,7 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
             requirements: Default::default(),
             parameters: Default::default(),
@@ -593,6 +607,7 @@ mod tests {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
             requirements: Default::default(),
             parameters: Default::default(),
@@ -755,9 +770,15 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         let requirements = value
             .as_object_mut()
             .and_then(|map| map.remove(requirements::REQUIREMENTS_KEY));
+        let design = value
+            .as_object_mut()
+            .and_then(|map| map.remove(schematic_design::SCHEMATIC_DESIGN_KEY));
         let mut data = serde_json::from_value::<ProjectData>(value).map_err(corrupt)?;
         if let Some(raw) = requirements {
             requirements::take_requirements(&mut data, raw);
+        }
+        if let Some(raw) = design {
+            schematic_design::take_schematic_design(&mut data, raw);
         }
         if let Some(raw) = journal {
             crate::agent_journal::take_agent_journal(&mut data, raw);
@@ -828,6 +849,7 @@ pub fn parse_project_bytes(path: &Path, bytes: &[u8]) -> Result<ProjectData, Pro
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
         requirements: Vec::new(),
         parameters: Default::default(),
@@ -898,6 +920,13 @@ pub fn encode_project(data: &ProjectData) -> Result<Vec<u8>, serde_json::Error> 
         stamped.insert(
             crate::agent_journal::AGENT_JOURNAL_KEY.into(),
             crate::agent_journal::merged_value(data)?,
+        );
+    }
+    // Settings made in this session replace an unreadable section kept.
+    if !data.schematic_design.is_default() {
+        stamped.insert(
+            schematic_design::SCHEMATIC_DESIGN_KEY.into(),
+            serde_json::to_value(&data.schematic_design)?,
         );
     }
     serde_json::to_vec_pretty(&Value::Object(stamped))

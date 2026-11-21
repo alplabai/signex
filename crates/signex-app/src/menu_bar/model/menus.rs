@@ -294,9 +294,19 @@ pub(super) fn view(ctx: &MenuContext) -> Vec<MenuEntry> {
             PanelKind::Layers,
             MenuMessage::OpenLayersPanel,
         ),
+        // Mockup row 158: the Unions panel (every dock panel is listed,
+        // DECISIONS 2026-11-19).
+        panel_item(
+            ctx,
+            ids::PANELS_KIND_UNIONS,
+            PanelKind::Unions,
+            MenuMessage::OpenUnionsPanel,
+        ),
         // #2416: the Net Inspector panel (docs/MENU_BAR.md#view-net-inspector),
         // and the Active Bar's selection filter of the sheet in view.
         cmd_item_gated(ctx, cmd("open_net_inspector", "")),
+        // The Compiled Design panel (#1308, docs/MENU_BAR.md#view-compiled-design).
+        cmd_item_gated(ctx, cmd("open_compiled_design", "")),
         cmd_item_gated(ctx, cmd("open_selection_filter", "")),
     ]
 }
@@ -385,6 +395,8 @@ pub(super) fn design(ctx: &MenuContext) -> Vec<MenuEntry> {
         cmd_item_gated(ctx, cmd("open_parameter_manager", "")),
         // #2416: the project's net-class table, in its own panel.
         cmd_item_gated(ctx, cmd("open_net_classes", "")),
+        // #1282: the project's differential pair classes, in a dialog.
+        cmd_item_gated(ctx, cmd("open_diff_pair_classes", "")),
         // #2398: the project's design rules as a document tab; greyed with
         // no project open.
         cmd_item_gated(ctx, cmd("open_rules", "")),
@@ -439,6 +451,8 @@ pub(super) fn project(ctx: &MenuContext) -> Vec<MenuEntry> {
     vec![
         // F8 (`run_erc`) runs ERC at once; this row opens the dialog.
         cmd_item_gated(ctx, cmd("open_erc_dialog", "")),
+        // #1300: writes contents.snxsch and adds it to the project.
+        cmd_item_gated(ctx, cmd("add_table_of_contents", "")),
         SEP,
         // Gated like Close Project: with no project there is no tab to open.
         item_if_command(

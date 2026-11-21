@@ -113,8 +113,20 @@ impl Signex {
         let (Some(list), Some(board)) = (state.ready_list().cloned(), state.board.clone()) else {
             return Task::none();
         };
+        // #1489: the rules the schematic asks for go with the board's rows.
+        let project = state.project;
+        let rule_rows = self.update_pcb_rule_rows(state);
+        let rules_pending = super::rules_from_schematic::pending(&rule_rows);
         // The dialog's Execute is off with nothing ticked; Enter is too.
-        if !state.apply && state.execute_count() == 0 {
+        if !state.apply && state.execute_count() == 0 && rules_pending == 0 {
+            return Task::none();
+        }
+        if state.execute_count() == 0 {
+            if let Err(why) = self.apply_update_pcb_rules(project, &rule_rows) {
+                self.refuse_execute(why);
+                return Task::none();
+            }
+            self.ui_state.update_pcb = None;
             return Task::none();
         }
         if let Some(why) = self.update_pcb_execute_block() {
@@ -136,6 +148,10 @@ impl Signex {
         };
         match self.execute_board_commands(&board, commands, Some(step)) {
             Ok(_) => {
+                if let Err(why) = self.apply_update_pcb_rules(project, &rule_rows) {
+                    // The board step landed; say why the rules did not.
+                    crate::diagnostics::log_warning(why);
+                }
                 self.ui_state.update_pcb = None;
                 crate::diagnostics::log_info(
                     t!(

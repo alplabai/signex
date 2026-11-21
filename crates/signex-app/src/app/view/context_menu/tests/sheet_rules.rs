@@ -249,13 +249,10 @@ fn unbuilt_rows_are_greyed_and_say_why() {
     open_menu(&mut app);
     let i18n = signex_i18n::I18n::en_us_ref();
     let top = canvas_rows(&app);
-    // The planned rows sit in the "Planned (N)" flyout, not the menu (Graphite mockup #62).
-    for label in [
-        "References",
-        "Unions",
-        "Pin Mapping...",
-        "Supplier Links...",
-    ] {
+    // The planned rows sit in the "Planned (N)" flyout, not the menu (mockup
+    // row 62); Unions is live (mockup row 158),
+    // `the_unions_row_opens_a_live_submenu`.
+    for label in ["References", "Pin Mapping...", "Supplier Links..."] {
         assert!(
             !top.iter()
                 .any(|e| matches!(e, DropdownEntry::Item(it) if it.label == label)),
@@ -266,7 +263,6 @@ fn unbuilt_rows_are_greyed_and_say_why() {
     rows.extend(super::super::submenu::planned_entries(i18n, TID));
     for (label, reason) in [
         ("References", menu_ids::CTX_REFERENCES_PLANNED),
-        ("Unions", menu_ids::CTX_UNIONS_PLANNED),
         ("Pin Mapping...", menu_ids::CTX_PIN_MAPPING_PLANNED),
         ("Supplier Links...", menu_ids::CTX_SUPPLIER_LINKS_PLANNED),
         (
@@ -279,6 +275,59 @@ fn unbuilt_rows_are_greyed_and_say_why() {
         let expected = i18n.message(reason, &[]).into_string();
         assert_eq!(row.tooltip.as_deref(), Some(expected.as_str()), "{label}");
     }
+}
+
+/// Mockup row 158: Unions is a live launcher now (it was a planned stub), and its
+/// flyout lists Create, Add, Remove and Break; Create is live with a
+/// selection and runs the command, which opens the Create Union popover.
+#[test]
+fn the_unions_row_opens_a_live_submenu() {
+    let mut app = one_symbol();
+    open_menu(&mut app);
+    let rows = canvas_rows(&app);
+    let unions = item(&rows, "Unions");
+    assert!(
+        unions.submenu && unions.on_hover.is_some(),
+        "Unions is a launcher"
+    );
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::SubmenuOpen(
+        ContextSubmenu::Unions,
+    )));
+    assert_eq!(
+        app.interaction_state.context_submenu,
+        Some(ContextSubmenu::Unions)
+    );
+    let (selection, _) = app.canvas_menu_inputs(app.ui_state.main_window_id.expect("main"));
+    let hint = |_: &str| String::new();
+    let flyout =
+        super::super::menus::unions_entries(signex_i18n::I18n::en_us_ref(), selection, &hint);
+    let labels: Vec<&str> = flyout
+        .iter()
+        .filter_map(|e| match e {
+            DropdownEntry::Item(it) => Some(it.label.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            "Create Union…",
+            "Add Selection to Union",
+            "Remove Selection from Union",
+            "Break Union"
+        ]
+    );
+    let create = item(&flyout, "Create Union…");
+    assert!(!create.disabled, "a selection can become a union");
+    let remove = item(&flyout, "Remove Selection from Union");
+    assert!(remove.disabled, "the selection is in no union");
+    let pressed = create.on_press.clone().expect("live row");
+    let _ = app.update(pressed);
+    // The command goes round the loop once more before the popover opens.
+    let _ = app.update(Message::Edit(crate::app::EditMsg::Unions(
+        crate::app::unions::UnionsMsg::CreateRequested,
+    )));
+    assert!(app.ui_state.unions.popover.is_some(), "the popover opened");
 }
 
 #[test]

@@ -42,6 +42,7 @@ impl Signex {
                 Some(self.show_panel(crate::panels::PanelKind::Messages))
             }
             MenuMessage::OpenLayersPanel => Some(self.show_panel(crate::panels::PanelKind::Layers)),
+            MenuMessage::OpenUnionsPanel => Some(self.show_panel(crate::panels::PanelKind::Unions)),
             MenuMessage::AscendToParentSheet => Some(self.ascend_to_parent_sheet()),
             MenuMessage::NextSheet => Some(self.step_schematic_sheet(true)),
             MenuMessage::NextDocumentTab => Some(self.step_document_tab(true)),

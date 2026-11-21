@@ -32,6 +32,7 @@ pub(crate) fn empty() -> ErcContext {
         nets: Vec::new(),
         children: HashMap::new(),
         key: None,
+        harness: Default::default(),
     }
 }
 
@@ -288,8 +289,134 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
             c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));
             c.labels.push(label("N", pt(0.0, 0.0), LabelType::Net));
         }
+        RuleKind::RepeatEntryNeedsBus => c.child_sheets.push(ErcChildSheet {
+            uuid: Uuid::now_v7(),
+            name: "Repeat(CH, 1, 4)".into(),
+            filename: "channel.snxsch".into(),
+            position: pt(0.0, 0.0),
+            pins: vec![sheet_pin("Repeat(VOUT)")],
+        }),
+        RuleKind::HarnessEntryMismatch | RuleKind::HarnessTypeConflict => {
+            return harness_context(kind);
+        }
     }
     c
+}
+
+/// A harness connector of type `ty` at `at` with entries `names` (#1280).
+pub(crate) fn harness_connector(
+    ty: &str,
+    at: Point,
+    names: &[&str],
+) -> signex_types::schematic::HarnessConnector {
+    signex_types::schematic::HarnessConnector {
+        uuid: Uuid::now_v7(),
+        harness_type: ty.into(),
+        position: at,
+        width: 10.16,
+        entry_pitch: 2.54,
+        rotation: 0.0,
+        entries: names
+            .iter()
+            .map(|n| signex_types::schematic::HarnessEntry {
+                uuid: Uuid::now_v7(),
+                name: (*n).into(),
+            })
+            .collect(),
+        locked: false,
+    }
+}
+
+/// A definition `name` listing `entries`.
+pub(crate) fn harness_definition(
+    name: &str,
+    entries: &[&str],
+) -> signex_types::schematic::HarnessDefinition {
+    signex_types::schematic::HarnessDefinition {
+        name: name.into(),
+        description: String::new(),
+        entries: entries
+            .iter()
+            .map(|e| signex_types::schematic::HarnessDefinitionEntry {
+                name: (*e).into(),
+                harness: None,
+            })
+            .collect(),
+    }
+}
+
+fn harness_wire(a: Point, b: Point) -> signex_types::schematic::HarnessWire {
+    signex_types::schematic::HarnessWire {
+        uuid: Uuid::now_v7(),
+        start: a,
+        end: b,
+        locked: false,
+    }
+}
+
+/// The harness rules' fixtures: a harness whose child side expects an entry
+/// this side lacks, and two types on one harness.
+fn harness_context(kind: RuleKind) -> ErcContext {
+    use signex_types::schematic::{Label, SchematicSheet};
+    let mut sheet = SchematicSheet::default();
+    let a = harness_connector("SPI_BUS", pt(10.0, 10.0), &["SCK", "CS"]);
+    if kind == RuleKind::HarnessTypeConflict {
+        let b = harness_connector("UART", pt(40.0, 40.0), &["TX"]);
+        sheet
+            .harness
+            .wires
+            .push(harness_wire(a.tip_point(), b.tip_point()));
+        sheet.harness.connectors.extend([a, b]);
+        return ErcContext::from_snapshot(&sheet);
+    }
+    // `a` runs to the typed entry SPI_BUS of the sheet symbol `Sub`.
+    let to = pt(60.0, 20.0);
+    sheet.harness.wires.push(harness_wire(a.tip_point(), to));
+    let pin = signex_types::schematic::SheetPin {
+        uuid: Uuid::now_v7(),
+        name: "SPI_BUS".into(),
+        direction: String::new(),
+        position: to,
+        rotation: 0.0,
+        auto_generated: false,
+        user_moved: false,
+    };
+    sheet.harness.entry_types.insert(pin.uuid, "SPI_BUS".into());
+    sheet
+        .child_sheets
+        .push(signex_types::schematic::ChildSheet {
+            uuid: Uuid::now_v7(),
+            name: "Sub".into(),
+            filename: "sub.snxsch".into(),
+            position: pt(60.0, 10.0),
+            size: (20.0, 20.0),
+            stroke_width: 0.0,
+            fill: signex_types::schematic::FillType::None,
+            stroke_color: None,
+            fill_color: None,
+            fields_autoplaced: false,
+            pins: vec![pin],
+            instances: Vec::new(),
+        });
+    sheet.harness.connectors.push(a);
+    // The child's port SPI_BUS runs to a connector expecting CS_ADC.
+    let mut child = SchematicSheet::default();
+    let far = harness_connector("SPI_BUS", pt(30.0, 10.0), &["SCK", "CS_ADC"]);
+    let port = pt(5.0, 5.0);
+    child
+        .harness
+        .wires
+        .push(harness_wire(port, far.tip_point()));
+    child
+        .labels
+        .push(Label::new("SPI_BUS", port, LabelType::Hierarchical));
+    child.harness.connectors.push(far);
+    let mut ctx = ErcContext::from_snapshot(&sheet);
+    ctx.children.insert(
+        "sub.snxsch".into(),
+        std::sync::Arc::new(ErcContext::from_snapshot(&child)),
+    );
+    ctx
 }
 
 /// A part `reference` with one connected pin of `direction` at `at`.

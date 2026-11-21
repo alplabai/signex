@@ -57,6 +57,10 @@ enablement; no command left the app.
 **Project** (project-wide actions):
 
 - Electrical Rules Check (`open_erc_dialog`; F8 `run_erc` runs at once)
+- Add Table of Contents Sheet (`add_table_of_contents`, #1300): writes
+  `contents.snxsch` next to the root sheet (refused, and said so, when that
+  file is there) and adds it to the project; gated like Electrical Rules
+  Check. See `SCHEMATIC_TABLES.md`.
 - Project Options... (greyed with no project, like Close Project)
 - Close Project
 
@@ -91,7 +95,11 @@ PDF pages are Board Print / PDF's Assembly Drawing sets. Rules:
 [Design ▸ Board Sketch](#design-board-sketch)), Layer Stack Manager... (see
 [Design ▸ Layer Stack Manager](#design-layer-stack)), a separator, then
 Parameter Manager..., Net Classes (see
-[below](#find-similar-filter-net-classes)) and Rules... (the project's design rules as a document tab,
+[below](#find-similar-filter-net-classes)), Differential Pair Classes…
+(`open_diff_pair_classes`, #1282: the project's differential pair classes in
+a dialog, greyed with no project open; see
+[SCHEMATIC_DIRECTIVES.md](SCHEMATIC_DIRECTIVES.md#differential-pair-classes))
+and Rules... (the project's design rules as a document tab,
 greyed with no project open; see [DRC_RULES.md](DRC_RULES.md#rules-manager), #2398),
 then, after a separator, Create Sheet Symbol From Sheet... and Synchronize
 Sheet Entries and Ports..., greyed with no sheet in view (see
@@ -463,10 +471,15 @@ buttons (`menu_bar/model/sheet_place.rs`):
 
 - **Ports & Connectors**: Port, Off Sheet Connector; Sheet Symbol, Device
   Sheet Symbol, Reuse Block; Signal Harness, Harness Connector, Harness Entry.
-- **Directives**: Parameter Set, Generic No ERC, Differential Pair, Blanket,
-  Compile Mask.
+- **Directives**: Net Parameters, Generic No ERC, Differential Pair, Net
+  Blanket, Compile Mask (#1489: Net Parameters was the planned Parameter Set
+  row; the commands keep their ids `place_parameter_set` and
+  `place_blanket`).
 - **Graphics**: Arc, Full Circle, Elliptical Arc, Ellipse; Line, Rectangle,
-  Round Rectangle, Polygon, Bezier; Graphic.
+  Round Rectangle, Polygon, Bezier, Table, then the **Dimension** submenu
+  (Linear, Aligned); Graphic. Bezier (`draw_bezier`) went live and Table
+  (`place_table`), Linear (`place_linear_dimension`) and Aligned
+  (`place_aligned_dimension`) were added with #1267 / #1300.
 
 A live row runs its catalog command, the one the Active Bar's row names, and
 is gated by it (`Needs::Schematic`: greyed without a sheet). Its shortcut is
@@ -631,6 +644,40 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   net is routed (or how many connections are still open). Each row's Select
   and Highlight run what Select Net and Highlight Net run, for that net.
 
+## View ▸ Unions {#view-unions}
+
+Opens (or reveals) the Unions panel (`PanelKind::Unions`, named unions),
+docked on the right. The row sits after Layers, among the panel rows, and
+behaves like them; the panel is also in the status bar's Panels list
+(DECISIONS 2026-11-19: every dock panel is listed in both). No key is bound
+and there is no command id: the row sends `OpenUnionsPanel`, as the other
+panel rows do. Always available.
+
+- The panel lists the unions of the sheet in view (This sheet) or of every
+  open sheet of the project (Project), filters by name or `#tag`, and locks,
+  hides, renames, adds or removes members and breaks a union. Rules:
+  `docs/SCHEMATIC_UNIONS.md`.
+
+## View ▸ Compiled Design {#view-compiled-design}
+
+Runs `open_compiled_design` (#1308), which opens (or reveals) the Compiled
+Design panel, docked on the left as a tab beside Projects. The row sits under
+Net Inspector; the panel is also in the status bar's Panels list. No key is
+bound. Always available; with no sheet of a project open the panel says so.
+
+- The panel shows the last compile of the active document's project: its
+  hierarchy with every repeated sheet expanded into its channels (CH1, CH2,
+  ...), each row with the parts and nets of that sheet occurrence, and a
+  Nets mode listing every compiled net with the number of sheets it crosses.
+  Rules and states: `docs/MULTI_CHANNEL.md`, "Compiled Design panel".
+- `compile_project` (palette only, no menu row; Design category) compiles the
+  project off the UI thread with the project's channel naming. It needs a
+  sheet of a project (`Needs::ProjectSheet`, as Number Schematic Sheets). The
+  panel's Recompile button and its Compile project button run it too. The
+  result lives in memory until the project closes; nothing is written.
+  Recompile is never automatic: an edit to a compiled sheet only marks its
+  rows out of date.
+
 ## Tools: board edits {#tools-board-edits}
 
 Seven rows under Net Inspector (#2408, #2409) edit the board in view, each
@@ -736,7 +783,7 @@ Project Options, Preferences.
 
 With a selection: Properties (bold, the default row), Find Similar Objects,
 Cross Probe; Cut, Copy, Duplicate, Delete; Rotate, Mirror X, Mirror Y, the
-Align submenu and Arrange (a drawing selected); the Part Actions, Sheet Actions
+Align submenu, Arrange (a drawing selected) and the Unions submenu; the Part Actions, Sheet Actions
 and Place submenus; Highlight Net, Net Color..., Assign Net Class..., Clear
 Filter while a net highlight is on; Undo; then a greyed "Planned (N)" submenu
 that opens on hover and lists the planned rows below.
@@ -754,6 +801,20 @@ over, else the selected part. Sheet Actions holds Open Child Sheet, Create Sheet
 From Sheet Symbol, Sync Sheet Pins and Synchronize Sheet Entries and Ports...,
 live with a sheet symbol selected, then Create Sheet Symbol From Sheet... and
 Number Schematic Sheets (#1276).
+
+Unions (mockup row 158) holds Create Union… (`create_union`, live with a selection,
+`Ctrl+G` in the default profile), Add Selection to Union (`add_to_union`, the
+union picked in the Unions panel), Remove Selection from Union
+(`remove_from_union`) and Break Union (`break_union`), the last two live when
+the selection holds a member of a union. See
+[SCHEMATIC_UNIONS.md](SCHEMATIC_UNIONS.md).
+
+Paste Special (`smart_paste`, mockup row 155) opens the Smart Paste dialog in a window:
+one copy at an offset or an array of copies, the designators Next free or
+kept, the net labels kept or rewritten with a pattern (power nets never). Its
+Paste puts every copy on the cursor and one click places them as one undo
+step; Esc cancels. A headless run of `smart_paste` places the copy at once
+beside the sheet's content, as before. Duplicate keeps its fixed offset.
 
 ## Bottom-up hierarchy {#bottom-up-hierarchy}
 
@@ -797,7 +858,6 @@ with the shared planned tooltip, and these rows, greyed with a tooltip saying
 what each will do:
 
 - **References**: list where the selected objects are used across the project (designators, net labels, sheet entries).
-- **Unions**: group the selected objects into a union that selects, moves and copies as one, stored on the sheet.
 - **Pin Mapping**: edit the selected part's symbol-pin to footprint-pad map, the map Update PCB reads.
 - **Supplier Links**: link the selected part to supplier part numbers and prices through the library's distributor adapter.
 
@@ -806,22 +866,20 @@ what each will do:
 Every other menu row runs a command (#2247). The only greyed tool rows are the
 planned tools of Place on a sheet and on a board, each with its reason.
 
-Place on a sheet has eleven planned commands (#2415), greyed with the planned
+Place on a sheet has six planned commands (#2415; Bezier left the list with
+#1267 and Parameter Set with #1489), greyed with the planned
 tooltip in every state until their tools are built
-(`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`):
+(`menu_bar/model/sheet_place.rs`, `active_bar::PLANNED_TOOLS`). The three
+harness rows went live with the harness tools (#1280, see
+`docs/SIGNAL_HARNESSES.md`):
 
 | Submenu | Row | Command |
 |---|---|---|
 | Ports & Connectors | Device Sheet Symbol | `place_device_sheet_symbol` |
 | Ports & Connectors | Reuse Block... | `place_reuse_block` |
-| Ports & Connectors | Signal Harness | `place_signal_harness` |
-| Ports & Connectors | Harness Connector | `place_harness_connector` |
-| Ports & Connectors | Harness Entry | `place_harness_entry` |
-| Directives | Parameter Set | `place_parameter_set` |
 | Graphics | Elliptical Arc | `draw_elliptical_arc` |
 | Graphics | Ellipse | `draw_ellipse` |
 | Graphics | Round Rectangle | `draw_round_rectangle` |
-| Graphics | Bezier | `draw_bezier` |
 | Graphics | Graphic... | `place_graphic` |
 
 Each one is the row of a planned Active Bar tool. It is not a

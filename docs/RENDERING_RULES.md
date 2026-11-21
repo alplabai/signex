@@ -622,6 +622,51 @@ Checks: `signex_gfx::scene3d::tests`, `signex_gfx::ring_fill::tests`, `signex_gf
 `pcb_board_3d_toolbar`, `styles::board_palette::tests`,
 `app::handlers::board_3d_screenshot::tests`.
 
+## sch-annotations — Bezier, dimension and table drawings (#1267, #1300)
+
+Three drawing kinds that are annotation only: no connectivity, no ERC, drawn
+and exported like the other drawings and ordered with them (Behind / Above,
+Arrange). Their geometry is computed once in `signex-types`, so the canvas,
+the hit box, SVG and PDF place every line and cell at the same spot.
+
+**Bezier.** `SchBezier::flatten` gives 32 straight segments (both ends exact);
+the canvas strokes them in the line style (`LineSegment` dash and dot bits),
+SVG writes one cubic path when solid and the flattened dash marks otherwise.
+`arrow_heads` gives a filled head per end `ends` asks for, pointing along the
+end tangent (towards the control point). With no own colour the curve takes
+the sheet's drawing colour (DECISIONS 2026-11-19).
+
+**Dimensions.** `SchDimension::geometry` holds the dimension line (offset from
+the measured points along the dimension's normal: `(0, 1)` horizontal, `(1, 0)`
+vertical, the axis turned a quarter when aligned), the two extension lines
+(0.5 mm gap at the point, 1 mm past the line), the heads (filled inside,
+filled outside with tails past the extension lines, or open) and the text
+anchor: the line's middle, 0.5 mm out on the side away from the points, the
+text turned to read left to right or bottom to top. The text is the measured
+value in the dimension's unit and decimals with the unit symbol (`12.70 mm`),
+or the override. A turn maps the line with the points, so a horizontal
+dimension turned a quarter becomes a vertical one of the same length.
+
+**Tables.** `SchTable::layout` places the cells: a monospace advance of 0.6 em
+per character, a column as wide as its longest cell or title (three
+characters at least) plus the padding on both sides, every row `text size +
+2 × padding` high, the title line above the grid. Hidden columns are left
+out. The header row is filled with the sheet's net-label colour mixed 18 %
+over the paper (`table_header_fill`) when Header fill is on; All draws every
+cell edge, Outer the outline and the header rule, None no lines. Cell text is
+in the value colour, a bound pin table's net cell that names a power port's
+net in the power colour. A table never turns or mirrors: its centre follows
+the transform.
+
+**While placing.** The Bezier tool draws the clicked points, the control
+lines and the curve through the cursor; a dimension tool draws the dimension
+the cursor would place with its value in an accent tag set off the line on
+its outer side (so it clears text next to the line), and a hint bar at the
+canvas's bottom-left names the tool and the next click.
+
+Checks: `schematic::drawing_kinds_tests`, `signex_output::svg::annotation_drawing_tests`,
+`annotation_drawing_tests` (engine), `app::sch_tables::tests`.
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's

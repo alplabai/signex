@@ -29,7 +29,10 @@ impl Signex {
     /// sheet. Paste Array reads them only when its dialog opens on Next free;
     /// a later choice of Next free asks for them with `ArraySeed`.
     pub(crate) fn paste_seed_task(&self, request: &PasteRequest) -> Option<Task<Message>> {
+        // The Smart Paste dialog offers Next free whatever the preference.
         let needs = request.intent == PasteIntent::ArraySeed
+            || (request.intent == PasteIntent::SmartPaste
+                && self.smart_paste_opens_dialog(request))
             || self.ui_state.paste_designators.reads_project();
         if !needs {
             return None;
@@ -107,6 +110,7 @@ mod tests {
             epoch: 0,
             path: Some(PathBuf::from(path)),
             dialog: 0,
+            from_agent: false,
         }
     }
 

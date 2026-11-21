@@ -97,10 +97,13 @@ View/Properties	item	Properties	-	-	OpenPropertiesPanel	11111111	always
 View/ERC	item	ERC	-	-	OpenErcPanel	11111111	always
 View/Messages	item	Messages	-	-	OpenMessagesPanel	11111111	always
 View/Layers	item	Layers	-	-	OpenLayersPanel	11111111	always
+View/Unions	item	Unions	-	-	OpenUnionsPanel	11111111	always
 View/Net Inspector	item	Net Inspector	-	-	OpenNetInspector	11111111	cmd:open_net_inspector
+View/Compiled Design	item	Compiled Design	-	-	OpenCompiledDesign	11111111	cmd:open_compiled_design
 View/Selection Filter	item	Selection Filter	-	-	OpenSelectionFilter	01000000	cmd:open_selection_filter
 Project	menu	Project	-	-	-	-	-
 Project/Electrical Rules Check	item	Electrical Rules Check	-	-	OpenErcDialog	01001000	cmd:open_erc_dialog
+Project/Add Table of Contents Sheet	item	Add Table of Contents Sheet	-	-	AddTableOfContents	01001000	cmd:add_table_of_contents
 Project/---	separator	-	-	-	-	-	-
 Project/Project Options...	item	Project Options...	-	-	OpenProjectOptions	01001001	project
 Project/---	separator	-	-	-	-	-	-
@@ -132,14 +135,14 @@ Place/Ports & Connectors/Sheet Symbol	item	Sheet Symbol	-	-	PlaceSheetSymbol	01-
 Place/Ports & Connectors/Device Sheet Symbol	stub	Device Sheet Symbol	-	-	-	00-00000	never
 Place/Ports & Connectors/Reuse Block...	stub	Reuse Block...	-	-	-	00-00000	never
 Place/Ports & Connectors/---	separator	-	-	-	-	-	-
-Place/Ports & Connectors/Signal Harness	stub	Signal Harness	-	-	-	00-00000	never
-Place/Ports & Connectors/Harness Connector	stub	Harness Connector	-	-	-	00-00000	never
-Place/Ports & Connectors/Harness Entry	stub	Harness Entry	-	-	-	00-00000	never
+Place/Ports & Connectors/Signal Harness	item	Signal Harness	-	-	PlaceSignalHarness	01-00000	cmd:place_signal_harness
+Place/Ports & Connectors/Harness Connector	item	Harness Connector	-	-	PlaceHarnessConnector	01-00000	cmd:place_harness_connector
+Place/Ports & Connectors/Harness Entry	item	Harness Entry	-	-	PlaceHarnessEntry	01-00000	cmd:place_harness_entry
 Place/Directives	submenu	Directives	-	-	-	-	-
-Place/Directives/Parameter Set	stub	Parameter Set	-	-	-	00-00000	never
+Place/Directives/Net Parameters	item	Net Parameters	-	-	PlaceParameterSet	01-00000	cmd:place_parameter_set
 Place/Directives/Generic No ERC	item	Generic No ERC	-	-	PlaceNoErc	01-00000	cmd:place_no_erc
 Place/Directives/Differential Pair	item	Differential Pair	-	-	PlaceDiffPair	01-00000	cmd:place_diff_pair
-Place/Directives/Blanket	item	Blanket	-	-	PlaceBlanket	01-00000	cmd:place_blanket
+Place/Directives/Net Blanket	item	Net Blanket	-	-	PlaceBlanket	01-00000	cmd:place_blanket
 Place/Directives/Compile Mask	item	Compile Mask	-	-	PlaceCompileMask	01-00000	cmd:place_compile_mask
 Place/Graphics	submenu	Graphics	-	-	-	-	-
 Place/Graphics/Arc	item	Arc	-	-	DrawArc	01-00000	cmd:draw_arc
@@ -151,7 +154,11 @@ Place/Graphics/Line	item	Line	-	-	DrawLine	01-00000	cmd:draw_line
 Place/Graphics/Rectangle	item	Rectangle	-	-	DrawRectangle	01-00000	cmd:draw_rectangle
 Place/Graphics/Round Rectangle	stub	Round Rectangle	-	-	-	00-00000	never
 Place/Graphics/Polygon	item	Polygon	-	-	DrawPolygon	01-00000	cmd:draw_polygon
-Place/Graphics/Bezier	stub	Bezier	-	-	-	00-00000	never
+Place/Graphics/Bezier	item	Bezier	-	-	DrawBezier	01-00000	cmd:draw_bezier
+Place/Graphics/Table	item	Table	-	-	PlaceTable	01-00000	cmd:place_table
+Place/Graphics/Dimension	submenu	Dimension	-	-	-	-	-
+Place/Graphics/Dimension/Linear	item	Linear	-	-	PlaceLinearDimension	01-00000	cmd:place_linear_dimension
+Place/Graphics/Dimension/Aligned	item	Aligned	-	-	PlaceAlignedDimension	01-00000	cmd:place_aligned_dimension
 Place/Graphics/---	separator	-	-	-	-	-	-
 Place/Graphics/Graphic...	stub	Graphic...	-	-	-	00-00000	never
 Design	menu	Design	-	-	-	-	-
@@ -162,6 +169,7 @@ Design/Layer Stack Manager...	item	Layer Stack Manager...	-	-	BoardLayerStack	01
 Design/---	separator	-	-	-	-	-	-
 Design/Parameter Manager...	item	Parameter Manager...	-	-	OpenParameterManager	01000000	cmd:open_parameter_manager
 Design/Net Classes	item	Net Classes	-	-	OpenNetClasses	01100000	cmd:open_net_classes
+Design/Differential Pair Classes…	item	Differential Pair Classes…	-	-	OpenDiffPairClasses	01001001	cmd:open_diff_pair_classes
 Design/Rules...	item	Rules...	-	-	OpenRules	01001001	cmd:open_rules
 Design/---	separator	-	-	-	-	-	-
 Design/Create Sheet Symbol From Sheet...	item	Create Sheet Symbol From Sheet...	-	-	CreateSheetSymbolFromSheet	01000000	cmd:create_sheet_symbol_from_sheet

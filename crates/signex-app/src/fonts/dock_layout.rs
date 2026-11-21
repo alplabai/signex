@@ -121,6 +121,8 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         PcbNets => "pcb_nets",
         History => "history",
         NetInspector => "net_inspector",
+        Unions => "unions",
+        CompiledDesign => "compiled_design",
     }
 }
 
@@ -156,6 +158,8 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "pcb_nets" => PcbNets,
         "history" => History,
         "net_inspector" => NetInspector,
+        "unions" => Unions,
+        "compiled_design" => CompiledDesign,
         _ => return None,
     })
 }

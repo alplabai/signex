@@ -9,6 +9,7 @@ use signex_widgets::theme_ext;
 use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use signex_widgets::{button, raw, text};
 
+pub mod compiled_design;
 pub mod components_panel;
 mod element_properties;
 mod footprint_editor_properties;
@@ -95,6 +96,7 @@ pub use selection_filter::{
 };
 pub(crate) mod rotation_steps;
 mod symbol_context;
+pub(crate) mod unions;
 mod widgets;
 mod wire_style_rows;
 
@@ -103,6 +105,7 @@ mod contrast_tests;
 #[cfg(test)]
 mod planned_tests;
 
+pub use element_properties::{AnnotationField, AnnotationPanelMsg, AnnotationPanelState};
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,
 };
@@ -110,8 +113,14 @@ pub use element_properties::{
     BlanketEdit, FootprintCardFacts, FootprintCardKey, FootprintCardStatus, FootprintCardView,
     FootprintCards, FootprintThumb, NoErcRuleEdit, PartPanelEffect, PartPanelMsg, PartPanelState,
 };
+pub use element_properties::{
+    BlanketNetRow, DirectivePanel, DirectivePanelMsg, DraftField, NetParametersEdit, NetRule,
+    OutlineField,
+};
+pub use element_properties::{HarnessField, HarnessMismatchRow, HarnessPanel, HarnessPanelMsg};
 use element_properties::{
-    view_child_sheet_properties, view_drawing_properties, view_selected_element_properties,
+    view_child_sheet_properties, view_drawing_properties, view_harness_definitions,
+    view_selected_element_properties,
 };
 use footprint_editor_properties::view_footprint_editor_properties;
 // HI-22: re-export the form / layout helpers extracted into
@@ -267,6 +276,11 @@ pub enum PanelKind {
     /// netlist, filterable, each expandable to its pins, labels, ports and
     /// sheets; a click goes to the member (#1269).
     NetInspector,
+    /// The compiled hierarchy: repeated sheets expanded into channels, with
+    /// part and net counts per sheet (#1308).
+    CompiledDesign,
+    /// Named unions of the sheet in view or the project (mockup row 158).
+    Unions,
 }
 
 /// All available panel kinds for the panel list button.
@@ -298,6 +312,8 @@ pub const ALL_PANELS: &[PanelKind] = &[
     PanelKind::PcbNets,
     PanelKind::History,
     PanelKind::NetInspector,
+    PanelKind::CompiledDesign,
+    PanelKind::Unions,
 ];
 
 impl PanelKind {
@@ -356,6 +372,8 @@ impl PanelKind {
             PanelKind::PcbNets => ids::PANELS_KIND_PCB_NETS,
             PanelKind::History => ids::PANELS_KIND_HISTORY,
             PanelKind::NetInspector => ids::PANELS_KIND_NET_INSPECTOR,
+            PanelKind::CompiledDesign => ids::PANELS_KIND_COMPILED_DESIGN,
+            PanelKind::Unions => ids::PANELS_KIND_UNIONS,
         }
     }
 
@@ -388,6 +406,8 @@ impl PanelKind {
             PanelKind::PcbNets => "PCB",
             PanelKind::History => "History",
             PanelKind::NetInspector => "Net Inspector",
+            PanelKind::CompiledDesign => "Compiled Design",
+            PanelKind::Unions => "Unions",
         }
     }
 }
@@ -483,6 +503,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::PcbNets => pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),
+        PanelKind::CompiledDesign => return compiled_design::view(ctx),
+        PanelKind::Unions => return unions::view(ctx),
     };
 
     panel_scrollable(content).boxed()

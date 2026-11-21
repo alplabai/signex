@@ -46,13 +46,28 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     let palette = PanelPalette::from_tokens(&ctx.tokens);
     let missing = sheet_file_missing(&ctx.projects, &sheet.filename);
     let mut col: Column<Element<'a, PanelMsg>> = Column::new().spacing(0).width(Length::Fill);
+    // The multi-channel view of the symbol (#1279): its caption, its stacked
+    // illustration and its Repeat, Channel naming and Entries sections.
+    let repeat_view = ctx
+        .compiled_design
+        .sheet_symbol
+        .as_ref()
+        .filter(|view| view.sheet_symbol == sheet.uuid);
     if missing {
         col = col.push(missing_banner(ctx, sheet));
     }
-    col = col.push(illustration_view(
-        ctx,
-        sheet_symbol_illustration(sheet, &ctx.i18n),
-    ));
+    match repeat_view {
+        Some(view) => {
+            col = col.push(super::child_sheet_repeat::caption(ctx, view));
+            col = col.push(super::child_sheet_repeat::illustration(ctx, view));
+        }
+        None => {
+            col = col.push(illustration_view(
+                ctx,
+                sheet_symbol_illustration(sheet, &ctx.i18n),
+            ));
+        }
+    }
     col = col.push(
         container(
             text(t!(ctx.i18n, ids::PROPERTIES_SHEET_ENTRIES_NOTE))
@@ -68,9 +83,19 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
         input_bg: palette.input_bg,
     };
     col = push_location_section(col, ctx, look);
-    col = col.push(properties_section(ctx, sheet, missing, muted));
+    col = col.push(properties_section(
+        ctx,
+        sheet,
+        missing,
+        repeat_view.is_some(),
+        muted,
+    ));
     col = col.push(style_section(ctx, sheet, palette));
-    col = col.push(entries_section(ctx, sheet, muted));
+    col = col.push(match repeat_view {
+        // Repeat, Channel naming and the per-channel Entries (#1279).
+        Some(view) => super::child_sheet_repeat::sections(ctx, view),
+        None => entries_section(ctx, sheet, muted),
+    });
     col.boxed()
 }
 
@@ -177,6 +202,7 @@ fn properties_section<'a>(
     ctx: &'a PanelContext,
     sheet: &ChildSheet,
     missing: bool,
+    repeat: bool,
     muted: Color,
 ) -> Element<'a, PanelMsg> {
     let id = sheet.uuid;
@@ -209,16 +235,27 @@ fn properties_section<'a>(
                 .padding([SP.s, SP.m])
                 .on_press(PanelMsg::CommandButtonPressed(OPEN_SHEET_COMMAND))
                 .style(form_look::ghost_button);
-            let name_label = t!(i18n, ids::PANELS_CHILD_SHEET_NAME);
             let file_label = t!(i18n, ids::PANELS_CHILD_SHEET_FILE);
+            // With the multi-channel view the name is the designator, where
+            // `Repeat(CH, 1, 4)` repeats the sheet (#1279).
+            let name_row = if repeat {
+                let label = t!(i18n, ids::PROPERTIES_SHEET_SYMBOL_DESIGNATOR);
+                super::child_sheet_repeat::linked(
+                    super::child_sheet_repeat::FIELD_DESIGNATOR,
+                    control_row(label, name_input.boxed(), muted),
+                )
+            } else {
+                let label = t!(i18n, ids::PANELS_CHILD_SHEET_NAME);
+                hover_linked(
+                    ctx,
+                    SHEET_NAME,
+                    control_row(label, name_input.boxed(), muted),
+                )
+            };
             Column::new()
                 .spacing(0)
                 .width(Length::Fill)
-                .push(hover_linked(
-                    ctx,
-                    SHEET_NAME,
-                    control_row(name_label, name_input.boxed(), muted),
-                ))
+                .push(name_row)
                 .push(hover_linked(
                     ctx,
                     SHEET_FILE,

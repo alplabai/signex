@@ -33,6 +33,11 @@ pub(crate) struct DesignSnapshot {
     /// Libraries whose adapter did not open, with why: their parts resolve
     /// to no footprint, and the update thread logs each to Messages.
     pub library_errors: Vec<(PathBuf, String)>,
+    /// The rules the schematic's Net Parameters directives ask for (#1489).
+    pub schematic_rules: Vec<super::rules_from_schematic::SchematicRule>,
+    /// The rules they ask for that are left out, with why; logged to
+    /// Messages like `library_errors`.
+    pub rule_problems: Vec<super::rules_from_schematic::RuleProblem>,
 }
 
 impl DesignSnapshot {
@@ -70,6 +75,13 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
     let resolver = Resolver::open(&request.libraries);
     let parts = design_eco_parts(&sheets, |_, symbol| resolver.resolve(symbol));
     let open: HashMap<PathBuf, u64> = request.open_revisions.into_iter().collect();
+    let net_names: std::collections::HashSet<&str> =
+        netlist.nets.iter().map(|n| n.name.as_str()).collect();
+    let (schematic_rules, rule_problems) = super::rules_from_schematic::schematic_rules(
+        sheets.iter().map(|(path, sheet)| (path, *sheet)),
+        &net_names,
+    );
+    drop(net_names);
     let snapshot = DesignSnapshot {
         board: request.board,
         revision: request.revision,
@@ -78,6 +90,8 @@ pub(crate) fn compute(request: DesignRequest) -> Result<Arc<Computed>, String> {
         unreadable: design.unreadable.clone(),
         sheet_revisions: design.sheet_revisions(&open),
         library_errors: resolver.errors,
+        schematic_rules,
+        rule_problems,
     };
     let mut list = diff_board(&snapshot.input());
     if let Some(previous) = &request.previous {

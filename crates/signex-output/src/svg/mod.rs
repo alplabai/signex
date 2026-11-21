@@ -20,11 +20,17 @@ mod family;
 mod geometry;
 #[cfg(test)]
 mod glyph_height_tests;
+mod harness;
 mod labels;
 mod markers;
+mod repeat_stack;
+mod sch_table;
 mod symbols;
 mod text;
 mod wire_style;
+pub(crate) use drawings::annotation_extent;
+#[cfg(test)]
+mod annotation_drawing_tests;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SvgTextAlign {

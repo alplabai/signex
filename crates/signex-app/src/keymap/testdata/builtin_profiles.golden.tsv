@@ -86,6 +86,7 @@ altium	bind	Global	V N	command:open_net_inspector
 altium	bind	Global	W H	command:tile_windows_horizontally
 altium	bind	Global	W U	command:untile_documents
 altium	bind	Global	W V	command:tile_windows_vertically
+altium	bind	Schematic	Mod+G	command:create_union
 altium	bind	Schematic	P C	command:place_off_sheet_connector
 altium	bind	Schematic	P R	command:place_port
 altium	bind	Schematic	P S	command:place_sheet_symbol
@@ -182,6 +183,10 @@ altium	hint	-	-	set_symbol_parameter
 altium	hint	-	-	set_sheet_variable
 altium	hint	-	-	lock_board_items
 altium	hint	-	-	unlock_board_items
+altium	hint	-	Ctrl+G	create_union
+altium	hint	-	-	add_to_union
+altium	hint	-	-	remove_from_union
+altium	hint	-	-	break_union
 altium	hint	-	-	bring_drawings_forward
 altium	hint	-	-	bring_drawings_to_front
 altium	hint	-	-	send_drawings_backward
@@ -279,6 +284,9 @@ altium	hint	-	-	draw_rectangle
 altium	hint	-	-	draw_round_rectangle
 altium	hint	-	-	draw_polygon
 altium	hint	-	-	draw_bezier
+altium	hint	-	-	place_table
+altium	hint	-	-	place_linear_dimension
+altium	hint	-	-	place_aligned_dimension
 altium	hint	-	-	import_graphics
 altium	hint	-	-	edit_blanket
 altium	hint	-	-	edit_no_erc_rules
@@ -313,6 +321,7 @@ altium	hint	-	-	sync_sheet_pins
 altium	hint	-	-	create_sheet_symbol_from_sheet
 altium	hint	-	-	sync_sheet_entries
 altium	hint	-	-	number_schematic_sheets
+altium	hint	-	-	compile_project
 altium	hint	-	-	open_child_sheet
 altium	hint	-	-	leave_sheet
 altium	hint	-	-	navigate_up_hierarchy
@@ -321,6 +330,7 @@ altium	hint	-	-	previous_sheet
 altium	hint	-	-	sheet_navigation_back
 altium	hint	-	-	sheet_navigation_forward
 altium	hint	-	-	set_sheet_symbol_size
+altium	hint	-	-	add_table_of_contents
 altium	hint	-	T A	annotate_schematic
 altium	hint	-	Alt+A	annotate_schematic_quietly
 altium	hint	-	Alt+Shift+A	force_annotate_all_schematics
@@ -416,9 +426,12 @@ altium	hint	-	-	clear_net_color
 altium	hint	-	-	clear_all_net_colors
 altium	hint	-	F5	open_net_color_palette
 altium	hint	-	V N	open_net_inspector
+altium	hint	-	-	open_compiled_design
 altium	hint	-	-	assign_net_class
 altium	hint	-	-	open_net_classes
 altium	hint	-	-	open_net_classes_panel
+altium	hint	-	-	open_harness_definitions
+altium	hint	-	-	open_diff_pair_classes
 altium	hint	-	-	add_net_class
 altium	hint	-	-	rename_net_class
 altium	hint	-	-	delete_net_class
@@ -690,6 +703,10 @@ classic	hint	-	-	set_symbol_parameter
 classic	hint	-	-	set_sheet_variable
 classic	hint	-	-	lock_board_items
 classic	hint	-	-	unlock_board_items
+classic	hint	-	-	create_union
+classic	hint	-	-	add_to_union
+classic	hint	-	-	remove_from_union
+classic	hint	-	-	break_union
 classic	hint	-	-	bring_drawings_forward
 classic	hint	-	-	bring_drawings_to_front
 classic	hint	-	-	send_drawings_backward
@@ -787,6 +804,9 @@ classic	hint	-	-	draw_rectangle
 classic	hint	-	-	draw_round_rectangle
 classic	hint	-	-	draw_polygon
 classic	hint	-	-	draw_bezier
+classic	hint	-	-	place_table
+classic	hint	-	-	place_linear_dimension
+classic	hint	-	-	place_aligned_dimension
 classic	hint	-	Ctrl+Shift+F	import_graphics
 classic	hint	-	-	edit_blanket
 classic	hint	-	-	edit_no_erc_rules
@@ -821,6 +841,7 @@ classic	hint	-	-	sync_sheet_pins
 classic	hint	-	-	create_sheet_symbol_from_sheet
 classic	hint	-	-	sync_sheet_entries
 classic	hint	-	-	number_schematic_sheets
+classic	hint	-	-	compile_project
 classic	hint	-	-	open_child_sheet
 classic	hint	-	Alt+BACKSPACE	leave_sheet
 classic	hint	-	Alt+UP	navigate_up_hierarchy
@@ -829,6 +850,7 @@ classic	hint	-	PGUP	previous_sheet
 classic	hint	-	Alt+LEFT	sheet_navigation_back
 classic	hint	-	Alt+RIGHT	sheet_navigation_forward
 classic	hint	-	-	set_sheet_symbol_size
+classic	hint	-	-	add_table_of_contents
 classic	hint	-	-	annotate_schematic
 classic	hint	-	Alt+A	annotate_schematic_quietly
 classic	hint	-	Alt+Shift+A	force_annotate_all_schematics
@@ -924,9 +946,12 @@ classic	hint	-	-	clear_net_color
 classic	hint	-	-	clear_all_net_colors
 classic	hint	-	-	open_net_color_palette
 classic	hint	-	Shift+I	open_net_inspector
+classic	hint	-	-	open_compiled_design
 classic	hint	-	-	assign_net_class
 classic	hint	-	-	open_net_classes
 classic	hint	-	-	open_net_classes_panel
+classic	hint	-	-	open_harness_definitions
+classic	hint	-	-	open_diff_pair_classes
 classic	hint	-	-	add_net_class
 classic	hint	-	-	rename_net_class
 classic	hint	-	-	delete_net_class

@@ -4,9 +4,11 @@
 //! the evidence so ERC can say which names a net has across sheets and which
 //! one won. The naming rule is in `docs/NET_NAMING.md`.
 
+use signex_types::project::ChannelNaming;
 use signex_types::schematic::{LabelType, Point};
 use uuid::Uuid;
 
+use super::channels::scoped_name;
 use super::{Analysis, L2, Occ, SheetKey};
 use crate::build::pt_key;
 use signex_types::net::Net;
@@ -27,21 +29,16 @@ pub struct NetNameSource {
     /// The label's uuid, or the power-port symbol's uuid when `label_type` is
     /// `None`.
     pub uuid: Uuid,
+    /// The name as the export would write it if this source won.
+    pub exported: String,
 }
 
 impl NetNameSource {
     /// The name as the export would write it if this source won: a
-    /// Hierarchical or local name off the root is prefixed by its sheet chain.
+    /// Hierarchical or local name off the root is prefixed by its sheet chain,
+    /// and one in a channel of a repeated sheet takes the channel net format.
     pub fn exported_text(&self) -> String {
-        let scoped = matches!(
-            self.label_type,
-            Some(LabelType::Hierarchical | LabelType::Net)
-        );
-        if scoped && !self.sheet_path.is_empty() {
-            format!("{}/{}", self.sheet_path.join("/"), self.name)
-        } else {
-            self.name.clone()
-        }
+        self.exported.clone()
     }
 }
 
@@ -105,17 +102,22 @@ pub(super) fn multi_name_sources(
     occs: &[Occ],
     analyses: &[Analysis],
     winner: Option<&str>,
+    naming: &ChannelNaming,
 ) -> Option<NameReport> {
     let mut out: Vec<NetNameSource> = Vec::new();
     for &(oid, root) in members {
         let occ = &occs[oid];
-        let source = |name: &str, label_type, at, uuid| NetNameSource {
-            name: name.to_string(),
-            label_type,
-            sheet: occ.key.clone(),
-            sheet_path: occ.name_chain.clone(),
-            at,
-            uuid,
+        let source = |name: &str, label_type: Option<LabelType>, at, uuid| {
+            let scoped = matches!(label_type, Some(LabelType::Hierarchical | LabelType::Net));
+            NetNameSource {
+                name: name.to_string(),
+                label_type,
+                sheet: occ.key.clone(),
+                sheet_path: occ.name_chain.clone(),
+                at,
+                uuid,
+                exported: scoped_name(occ, scoped, name, naming),
+            }
         };
         for l in analyses[oid].net_labels.get(&root).into_iter().flatten() {
             if !l.text.is_empty() {

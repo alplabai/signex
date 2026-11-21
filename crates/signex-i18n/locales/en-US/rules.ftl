@@ -115,6 +115,9 @@ rules-preset-no-change = Nothing changes.
 rules-preset-apply = Apply
 rules-preset-cancel = Cancel
 
+# Under a rule Update PCB wrote from the schematic's Net Parameters directives (#1489).
+rules-from-schematic = from schematic
+
 # Rule drawings (#2530): the live preview under the grid and the matrix.
 rules-preview-heading = Preview
 rules-preview-expand = Expand preview

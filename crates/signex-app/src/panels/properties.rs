@@ -84,6 +84,10 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if let Some(sheet) = ctx.component_sheet.as_ref() {
         return super::view_component_sheet(sheet, &ctx.tokens, &ctx.i18n);
     }
+    // A channel tab of a repeated sheet shows its channel, read-only (#1279).
+    if let Some(channel) = super::element_properties::channel_view_properties(ctx) {
+        return channel;
+    }
     if let Some(detail) = ctx.library_row_detail.as_ref() {
         return view_library_row_properties(
             detail,
@@ -160,6 +164,11 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     // with (#2532).
     if let Some(ref pp) = ctx.pre_placement {
         return super::pre_placement::view(pp, ctx);
+    }
+
+    // #1280: the harness definitions view, while it is open.
+    if ctx.harness.definitions_open {
+        return super::view_harness_definitions(ctx, muted, primary);
     }
 
     // ── Context-aware: if something is selected, show element properties (Altium style) ──

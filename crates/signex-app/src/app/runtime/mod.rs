@@ -54,6 +54,7 @@ impl Signex {
             canvas.set_grid(visible, visible_grid_mm);
         }
         self.sync_zoom_step();
+        self.sync_unions_panel();
     }
 
     /// Push the effective "Zoom speed" into the canvases that hold their
@@ -275,6 +276,7 @@ impl Signex {
         self.sync_focused_pin(clicked_pin.clone());
         self.sync_pin_focus_sections(clicked_pin.is_some());
         self.sync_placed_panel();
+        self.refresh_directive_panel();
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();
@@ -503,6 +505,7 @@ impl Signex {
             }
         }
         self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();
+        self.document_state.panel_ctx.harness = self.harness_panel_facts();
     }
 
     /// Canvas colours for a given theme id — the one derivation shared by
@@ -633,6 +636,11 @@ impl Signex {
             selection_filters: &self.interaction_state.selection_filters,
             placement: None,
             power_port_pending: self.interaction_state.pending_power.is_some(),
+            unions: self.union_view(
+                self.document_state
+                    .sheet_path_for_window(window, &self.ui_state)
+                    .map(std::path::PathBuf::as_path),
+            ),
             device_px_per_logical_px: self.ui_state.device_px_per_logical_px(window),
         }
     }

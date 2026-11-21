@@ -12,6 +12,8 @@ mod grid_preview;
 mod grid_toolbar;
 mod matrix;
 mod presets;
+// #1489: "from schematic" under a rule Update PCB wrote.
+mod schematic_source;
 mod sets;
 mod table;
 mod text_view;

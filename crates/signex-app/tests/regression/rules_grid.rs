@@ -36,6 +36,7 @@ fn project(app: &mut Signex, dir: &std::path::Path) -> signex_app::app::ProjectI
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
         requirements: Default::default(),
         unknown: Default::default(),

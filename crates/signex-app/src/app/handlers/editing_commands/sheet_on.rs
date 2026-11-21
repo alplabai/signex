@@ -110,6 +110,7 @@ impl Signex {
         if !display_only {
             self.document_state.note_sheet_edit();
         }
+        self.mark_compiled_stale(path, patch);
         self.document_state.sync_history_dirty(path);
         let is_active = self.document_state.active_path.as_deref() == Some(path);
         self.refresh_slots_from_engine(path, is_active, patch.into(), false);

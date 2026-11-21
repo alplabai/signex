@@ -372,14 +372,15 @@ cmd-place-port = Place port
 cmd-menu-place-port = Port
 cmd-place-off-sheet-connector = Place off sheet connector
 cmd-menu-place-off-sheet-connector = Off Sheet Connector
-cmd-place-parameter-set = Place parameter set
-cmd-menu-place-parameter-set = Parameter Set
+cmd-place-parameter-set = Place net parameters
+# Noun: a directive flag on one wire that sets its net's class and rules.
+cmd-menu-place-parameter-set = Net Parameters
 cmd-place-diff-pair = Place diff pair
 cmd-menu-place-diff-pair = Differential Pair
-cmd-place-blanket = Place blanket
+cmd-place-blanket = Place net blanket
 # Noun: a directive that covers an area of the sheet.
-cmd-menu-place-blanket = Blanket
-cmd-edit-blanket = Edit blanket parameters
+cmd-menu-place-blanket = Net Blanket
+cmd-edit-blanket = Edit net blanket parameters
 cmd-edit-no-erc-rules = Edit No ERC rules
 cmd-place-text-string = Place text string
 cmd-menu-place-text-string = Text String
@@ -674,3 +675,38 @@ cmd-category-uncategorized = Uncategorized
 
 # The placeholder label of a command row that has none (never shown for a catalog command).
 cmd-unnamed = Unnamed command
+
+## Bezier, dimension and table drawings (#1267, #1300).
+cmd-place-table = Place table
+cmd-menu-place-table = Table
+cmd-place-linear-dimension = Place linear dimension
+cmd-menu-place-linear-dimension = Linear
+cmd-place-aligned-dimension = Place aligned dimension
+cmd-menu-place-aligned-dimension = Aligned
+cmd-add-table-of-contents = Add table of contents sheet
+cmd-menu-add-table-of-contents = Add Table of Contents Sheet
+
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
+
+cmd-compile-project = Compile the project
+cmd-menu-compile-project = Compile Project
+cmd-open-compiled-design = Open Compiled Design panel
+cmd-menu-open-compiled-design = Compiled Design
+
+## Signal harnesses (#1280).
+
+cmd-open-harness-definitions = Open the harness definitions
+
+## Differential pair classes (#1282).
+cmd-open-diff-pair-classes = Open the project's differential pair classes
+cmd-menu-open-diff-pair-classes = Differential Pair Classes…
+
+## Named unions (mockup row 158).
+cmd-create-union = Create a union from the selection
+cmd-menu-create-union = Create Union…
+cmd-add-to-union = Add the selection to the selected union
+cmd-menu-add-to-union = Add Selection to Union
+cmd-remove-from-union = Remove the selection from its union
+cmd-menu-remove-from-union = Remove Selection from Union
+cmd-break-union = Break the selected union
+cmd-menu-break-union = Break Union

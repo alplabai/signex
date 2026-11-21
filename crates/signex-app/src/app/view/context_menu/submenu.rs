@@ -222,13 +222,6 @@ pub(super) fn planned_entries(i18n: &I18n, tid: ThemeId) -> Vec<DropdownEntry<Me
             menu_ids::CTX_REFERENCES_PLANNED,
             false,
         ),
-        dd_planned_because(
-            i18n,
-            Some(ic::icon_dd_unions(tid)),
-            menu_ids::CTX_UNIONS,
-            menu_ids::CTX_UNIONS_PLANNED,
-            false,
-        ),
         dd_planned(
             i18n,
             Some(ic::icon_dd_snippets(tid)),
@@ -537,6 +530,9 @@ impl Signex {
             }
             ContextSubmenu::SheetActions => {
                 sheet_actions_entries(i18n, tid, self.canvas_menu_inputs(window_id).0, &hint)
+            }
+            ContextSubmenu::Unions => {
+                super::menus::unions_entries(i18n, self.canvas_menu_inputs(window_id).0, &hint)
             }
             ContextSubmenu::AddNewToProject => {
                 // The right-clicked project lives at `tree_path[0]` —

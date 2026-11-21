@@ -297,6 +297,13 @@ impl SchematicCanvas<'_> {
                                         push_pt(p.x, p.y, 1.0);
                                     }
                                 }
+                                SchDrawing::Bezier(_)
+                                | SchDrawing::Dimension(_)
+                                | SchDrawing::Table(_) => {
+                                    let b = crate::schematic_runtime::annotation_aabb(d);
+                                    push_pt(b.min_x, b.min_y, 1.0);
+                                    push_pt(b.max_x, b.max_y, 1.0);
+                                }
                             }
                         }
                     }
@@ -313,6 +320,18 @@ impl SchematicCanvas<'_> {
                                     push_pt(at.x, at.y, 1.0);
                                 }
                             }
+                        }
+                    }
+                    SelectedKind::HarnessConnector => {
+                        if let Some(c) = snapshot.harness.connector(item.uuid) {
+                            let b = c.bounds();
+                            push_pt(b.min_x, b.min_y, 1.0);
+                            push_pt(b.max_x, b.max_y, 1.0);
+                        }
+                    }
+                    SelectedKind::HarnessEntry | SelectedKind::HarnessWire => {
+                        if let Some(at) = snapshot.harness.item_anchor(item) {
+                            push_pt(at.x, at.y, 2.0);
                         }
                     }
                     _ => {}
@@ -390,7 +409,8 @@ impl SchematicCanvas<'_> {
         // Locked objects carry a padlock, so they need the layer too (#1250, #1573).
         if let Some(snapshot) = effective_snapshot
             && (self.selection_layer_needed()
-                || crate::schematic_runtime::lock_indicator::has_locked_item(snapshot))
+                || crate::schematic_runtime::lock_indicator::has_locked_item(snapshot)
+                || crate::schematic_runtime::unions::has_unions(snapshot))
         {
             // During a drag we can't rely on overlay_cache — it must redraw
             // with the shifted positions every frame.
@@ -471,6 +491,16 @@ impl SchematicCanvas<'_> {
         bounds: Rectangle,
         transform: &crate::schematic_runtime::ScreenTransform,
     ) {
+        // Unions first: a hidden union's veil lies under the grips and pads.
+        crate::schematic_runtime::unions::draw_unions(
+            frame,
+            snapshot,
+            &self.selected,
+            self.prefs.unions,
+            transform,
+            &self.designators,
+            self.wire_widths(),
+        );
         self.draw_focused_pin(frame, snapshot, bounds);
         self.draw_wire_grips(frame, snapshot, bounds);
         crate::schematic_runtime::lock_indicator::draw_lock_indicators(

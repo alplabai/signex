@@ -143,7 +143,9 @@ impl PanelPosition {
             PanelKind::Projects
             | PanelKind::Components
             | PanelKind::Library
-            | PanelKind::PcbNets => PanelPosition::Left,
+            | PanelKind::PcbNets
+            // A sibling tab of Projects (#1308, DECISIONS 2026-11-19).
+            | PanelKind::CompiledDesign => PanelPosition::Left,
             PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
             PanelKind::Navigator
             | PanelKind::Properties
@@ -165,7 +167,8 @@ impl PanelPosition {
             | PanelKind::SchLibrary
             | PanelKind::FootprintLibrary
             | PanelKind::History
-            | PanelKind::NetInspector => PanelPosition::Right,
+            | PanelKind::NetInspector
+            | PanelKind::Unions => PanelPosition::Right,
         }
     }
 }

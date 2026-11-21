@@ -152,6 +152,12 @@ pub struct DrcRuleSet {
     /// rules in step when a set changes.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub sets: BTreeMap<String, NamedRuleSet>,
+    /// The names of the rules in `dsl` that Update PCB wrote from the
+    /// schematic's directives (#1489), so the Rules tab shows their source.
+    /// Not written while empty; a build without the key keeps it in
+    /// `unknown`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub from_schematic: Vec<String>,
     #[serde(default, flatten, skip_serializing_if = "UnknownJson::is_empty")]
     pub unknown: UnknownJson,
 }
@@ -186,12 +192,19 @@ pub struct RuleSetUse {
 }
 
 impl DrcRuleSet {
-    /// No severities, no rule text, no rule sets and no foreign keys.
+    /// No severities, no rule text, no rule sets, no schematic sources and
+    /// no foreign keys.
     pub fn is_empty(&self) -> bool {
         self.severity.is_empty()
             && self.dsl.is_none()
             && self.sets.is_empty()
+            && self.from_schematic.is_empty()
             && self.unknown.is_empty()
+    }
+
+    /// Whether Update PCB wrote rule `name` from the schematic.
+    pub fn is_from_schematic(&self, name: &str) -> bool {
+        self.from_schematic.iter().any(|n| n == name)
     }
 
     /// Lower-case hex SHA-256 of the section's canonical JSON alone. Profile

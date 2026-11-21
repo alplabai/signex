@@ -243,6 +243,186 @@ properties-value-shows = Shows { $value }
 # Why a part value's `=` expression does not evaluate. $error is the reason.
 properties-value-error = Error: { $error }
 
+# Bezier and dimension tools (#1267): the hint bar at the canvas's bottom-left,
+# after the tool's name.
+properties-annotation-hint-bezier-start = click the start point
+properties-annotation-hint-bezier-c1 = click control point C1
+properties-annotation-hint-bezier-c2 = click control point C2
+properties-annotation-hint-bezier-end = click the end point · Esc cancels
+properties-annotation-hint-dimension-first = click the first point
+properties-annotation-hint-dimension-second = click the second point
+properties-annotation-hint-dimension-line = click to place the dimension line · Esc cancels
+properties-annotation-section-points = Points
+properties-annotation-section-line = Line
+properties-annotation-mm = mm
+properties-annotation-x = X
+properties-annotation-y = Y
+properties-annotation-width = Width
+properties-annotation-style = Style
+properties-annotation-style-solid = Solid
+properties-annotation-style-dash = Dash
+properties-annotation-style-dot = Dot
+properties-annotation-colour = Colour
+# A drawing with no colour of its own takes the sheet's drawing colour.
+properties-annotation-colour-sheet = Sheet drawing colour
+properties-annotation-colour-own = Own colour
+properties-annotation-ends = Ends
+properties-annotation-ends-none = None
+properties-annotation-ends-start = Start
+properties-annotation-ends-end = End
+properties-annotation-ends-both = Both
+properties-bezier-title = Bezier
+properties-bezier-caption = cubic · 4 points
+properties-bezier-start = Start
+properties-bezier-control-1 = Control 1
+properties-bezier-control-2 = Control 2
+properties-bezier-end = End
+# The control points' names on the illustration.
+properties-bezier-c1 = C1
+properties-bezier-c2 = C2
+properties-bezier-note = The drawing above only illustrates; the fields edit.
+properties-dimension-linear = Linear dimension
+properties-dimension-aligned = Aligned dimension
+properties-dimension-section-measure = Measure
+properties-dimension-section-text = Text
+properties-dimension-from = From
+properties-dimension-to = To
+properties-dimension-length = Length
+properties-dimension-direction = Direction
+properties-dimension-horizontal = Horizontal
+properties-dimension-vertical = Vertical
+properties-dimension-aligned-direction = Aligned
+properties-dimension-units = Units
+properties-dimension-unit-mm = mm
+properties-dimension-unit-mil = mil
+properties-dimension-unit-in = in
+properties-dimension-precision = Precision
+# The precision choices show how a value is written.
+properties-dimension-precision-0 = 0
+properties-dimension-precision-1 = 0.0
+properties-dimension-precision-2 = 0.00
+properties-dimension-precision-3 = 0.000
+properties-dimension-arrows = Arrows
+properties-dimension-arrows-inside = Filled, inside
+properties-dimension-arrows-outside = Filled, outside
+properties-dimension-arrows-open = Open
+properties-dimension-override = Override text
+properties-dimension-override-text = Text
+properties-table-title = Table
+properties-table-caption =
+    { $rows ->
+        [one] 1 row
+       *[other] { $rows } rows
+    } · { $columns ->
+        [one] 1 column
+       *[other] { $columns } columns
+    }
+properties-table-section-source = Data source
+properties-table-section-columns = Columns
+properties-table-section-style = Style
+properties-table-source = Source
+properties-table-source-pins = Component pins
+properties-table-source-typed = Typed / CSV
+properties-table-source-sheets = Project sheets
+properties-table-component = Component
+properties-table-component-none = Pick a part
+properties-table-sort = Sort
+properties-table-sort-number = Pin number
+properties-table-sort-name = Pin name
+properties-table-refresh = Refresh
+properties-table-refresh-on-compile = On compile
+properties-table-refresh-off = Off
+properties-table-csv = CSV
+properties-table-csv-import = Import…
+properties-table-csv-export = Export…
+properties-table-channels = Channels
+properties-table-per-channel = One row per channel
+properties-table-per-sheet = One row per sheet
+properties-table-text-size = Text size
+properties-table-cell-padding = Cell padding
+properties-table-borders = Borders
+properties-table-borders-all = All
+properties-table-borders-outer = Outer
+properties-table-borders-none = None
+properties-table-header-fill = Header fill
+properties-table-header-colour = Colour
+properties-table-header-colour-note = sheet style · info tint
+properties-table-source-missing = The part is not on this sheet any more; the rows stay as they were.
+# A column checkbox whose column has no title yet. $index counts from 1.
+properties-table-untitled-column = Column { $index }
+properties-table-csv-import-title = Import table from CSV
+properties-table-csv-export-title = Export table as CSV
+properties-table-csv-import-failed = Table import: { $file } was not read: { $why }
+properties-table-csv-exported = Table exported: { $file }
+properties-table-csv-export-failed = Table export: { $file } was not written: { $why }
+properties-table-toc-no-project = Add Table of Contents Sheet: the sheet belongs to no project
+properties-table-toc-written = Contents sheet written: { $file }
+properties-table-toc-exists = Add Table of Contents Sheet: { $file } is there already and was kept
+properties-table-toc-failed = Add Table of Contents Sheet: { $file } was not written: { $why }
+properties-table-toc-not-serialised = Add Table of Contents Sheet: the contents sheet could not be written as text
+# The word after the project's name in the contents sheet's heading
+# ("dcdc-buck · Contents"). No placeable: the heading is sheet text, so it
+# must not carry the bidi isolation marks a placeable gets.
+properties-table-toc-heading = Contents
+# $file is the sheet the bound tables are on; $reason is why the edit was refused.
+properties-table-refresh-failed = Table refresh failed on { $file }: { $reason }
+# The $reason above when the sheet gave none.
+properties-table-refresh-no-reason = the sheet refused the edit
+# A CSV import or cell edit answered after its table left the sheet. $file is the sheet.
+properties-table-csv-table-gone = Table import: the table is no longer on { $file }; nothing was changed
+
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
+
+# The sheet symbol's designator row (it was "Name").
+properties-sheet-symbol-designator = Designator
+properties-sheet-symbol-title = Sheet Symbol
+# Caption under the title: the sheet file, then whether it is repeated.
+properties-sheet-symbol-repeated = { $file } · repeated ×{ $count }
+properties-sheet-symbol-one-sheet = { $file } · one sheet
+properties-sheet-symbol-width = Width
+properties-sheet-symbol-height = Height
+# The section whose header is the Repeat switch.
+properties-sheet-symbol-repeat = Repeat
+properties-sheet-symbol-repeat-tip = Repeat this sheet
+properties-sheet-symbol-channel-name = Channel name
+properties-sheet-symbol-from-to = From / To
+# The channels a repeat compiles to. $names lists them (CH1, CH2, CH3, CH4).
+properties-sheet-symbol-channels =
+    { $count ->
+        [one] 1 channel: { $names }
+       *[other] { $count } channels: { $names }
+    }
+properties-sheet-symbol-channel-naming = Channel naming
+properties-sheet-symbol-designators = Designators
+properties-sheet-symbol-local-nets = Local nets
+# The live preview of the naming formats: R5 → CH1_R5 · VOUT_3V3 → VOUT_3V3_CH1.
+properties-sheet-symbol-naming-preview = { $designator } → { $channel-designator } · { $net } → { $channel-net }
+properties-sheet-symbol-entries = Entries
+properties-sheet-symbol-entry = Entry
+properties-sheet-symbol-per-channel = Per channel
+# A plain entry: every channel shares its net.
+properties-sheet-symbol-shared = shared
+# The pill of a Repeat(…) entry: one net per channel.
+properties-sheet-symbol-repeat-pill = Repeat
+# The naming format menus.
+properties-channel-naming-designator-format = Designator format
+properties-channel-naming-net-format = Local net format
+properties-channel-naming-custom = Custom format…
+# The token help line; each variable is a token as typed.
+properties-channel-naming-tokens = Tokens: { $channel } (CH1), { $index } (1), { $alpha } (A), { $base } ({ $example }).
+properties-channel-naming-error-empty = Type a format.
+properties-channel-naming-error-whitespace = A format cannot contain spaces.
+properties-channel-naming-error-unclosed = A token is not closed with a brace.
+properties-channel-naming-error-unknown = Unknown token { $token }.
+properties-channel-naming-error-no-channel = Add a channel token, or every channel gets the same name.
+properties-channel-naming-error-no-base = Add the designator or net token.
+# The Properties header of a channel tab. $channel is CH1.
+properties-channel-title = Channel { $channel }
+# $index is the channel's position, $count the number of channels.
+properties-channel-caption = { $file } · { $index } of { $count } · read-only view
+properties-channel-designator-map = Designator map
+properties-channel-logical = Logical
+
 ## Shared Properties rows (#2523)
 
 # One step of the Rotation control. $degrees is 0, 90, 180 or 270.
@@ -546,4 +726,16 @@ properties-count-drawings = { $count ->
 properties-count-directives = { $count ->
     [one] 1 directive
    *[other] { $count } directives
+}
+properties-count-harness-connectors = { $count ->
+    [one] 1 harness connector
+   *[other] { $count } harness connectors
+}
+properties-count-harness-entries = { $count ->
+    [one] 1 harness entry
+   *[other] { $count } harness entries
+}
+properties-count-harness-wires = { $count ->
+    [one] 1 signal harness
+   *[other] { $count } signal harnesses
 }

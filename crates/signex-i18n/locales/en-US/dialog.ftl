@@ -335,6 +335,123 @@ dialog-title-net-color-custom = Custom Net Colour
 # $path is the parent sheet's file.
 dialog-create-child-sheet-not-focused = The sheet's File field was not updated: { $path } could not be focused
 
+## Design ▸ Differential Pair Classes… (#1282).
+
+dialog-dpc-title = Differential Pair Classes
+# $project is the project name; $classes and $pairs are whole numbers.
+dialog-dpc-subtitle = { $project } · { $classes ->
+        [one] { $classes } class
+       *[other] { $classes } classes
+    } · { $pairs ->
+        [one] { $pairs } pair
+       *[other] { $pairs } pairs
+    }
+# Under a class name: how many pairs use it. $count is a whole number.
+dialog-dpc-pairs = { $count ->
+        [one] { $count } pair
+       *[other] { $count } pairs
+    }
+# The button that opens a class row's menu.
+dialog-dpc-menu = ⋯
+dialog-dpc-rename = Rename
+dialog-dpc-duplicate = Duplicate
+dialog-dpc-delete = Delete
+dialog-dpc-new-class = New class
+dialog-dpc-pairs-from = Pairs come from Differential Pair directives on the schematic, or from Create Pair from Nets in the PCB panel.
+dialog-dpc-class = Class
+dialog-dpc-name = Name
+dialog-dpc-impedance = Impedance
+dialog-dpc-width-gap = Width / Gap
+dialog-dpc-on-top = on Top, from the stack
+dialog-dpc-max-skew = Max skew
+dialog-dpc-max-uncoupled = Max uncoupled
+# A limit the Rules tab owns and no rule sets yet.
+dialog-dpc-not-set = —
+dialog-dpc-edit-in-rules = Edit in Rules ▸ High Speed
+dialog-dpc-unit-mm = mm
+dialog-dpc-unit-ohm = Ω
+dialog-dpc-unit-pct = %
+dialog-dpc-plus-minus = ±
+dialog-dpc-members = Members
+dialog-dpc-col-pair = Pair
+dialog-dpc-col-p = P net
+dialog-dpc-col-n = N net
+dialog-dpc-col-source = Source
+# Where a pair comes from. $sheet is the sheet file.
+dialog-dpc-source-directive = directive · { $sheet }
+dialog-dpc-no-members = No pair on the open sheets uses this class.
+dialog-dpc-pairing = Pairing
+dialog-dpc-pair-by-suffix = Pair nets by suffix _P/_N, DP/DN, +/-
+dialog-dpc-no-class = The project has no differential pair class. Add one with New class.
+dialog-dpc-footer = Shown in PCB panel ▸ Differential Pairs mode.
+dialog-dpc-cancel = Cancel
+dialog-dpc-ok = OK
+dialog-dpc-blank-name = Every class needs a name.
+dialog-dpc-duplicate-name = Two classes have the same name.
+# Callouts of the preview. $value is a length in mm, or —.
+dialog-dpc-width-label = Width { $value } mm
+dialog-dpc-gap-label = Gap { $value } mm
+dialog-dpc-zdiff-label = Zdiff { $ohm } Ω ± { $pct } %
+dialog-dpc-p-net = P net
+dialog-dpc-n-net = N net
+dialog-dpc-no-project = Differential Pair Classes: open a project first.
+dialog-dpc-project-closed = Differential Pair Classes: the project was closed; nothing was applied.
+# Why a class's name and Delete are greyed. $count is a whole number.
+dialog-dpc-locked-by-pairs = { $count ->
+        [one] { $count } pair uses this class: it keeps its name and cannot be deleted.
+       *[other] { $count } pairs use this class: it keeps its name and cannot be deleted.
+    }
+dialog-dpc-locked-by-closed-sheets = Some sheets of the project are not open, so their pairs cannot be counted. Open every sheet to rename or delete a class.
+# The name a new class starts with (a net-class style name, not a sentence).
+dialog-dpc-new-class-name = DIFF
+
+## Smart Paste (mockup row 155).
+
+# The Smart Paste dialog (mockup row 155).
+dialog-smart-paste-title = Smart Paste
+# $parts lists the copied designators; $wires and $labels count the rest.
+dialog-smart-paste-subtitle = Clipboard: { $parts } · { $wires ->
+    [one] 1 wire
+   *[other] { $wires } wires
+} · { $labels ->
+    [one] 1 net label
+   *[other] { $labels } net labels
+}
+dialog-smart-paste-close = ×
+dialog-smart-paste-place = Place
+dialog-smart-paste-once = Once, with offset
+dialog-smart-paste-array = Array
+dialog-smart-paste-offset = Offset X / Y
+dialog-smart-paste-copies = Copies
+dialog-smart-paste-step = Step X / Y
+dialog-smart-paste-mm = mm
+dialog-smart-paste-designators = Designators
+# $mapping is "R4 → R6, R5 → R7" (one copy) or "R4 → R6, R8; R5 → R7, R9" (several).
+dialog-smart-paste-next-free = Next free ({ $mapping })
+dialog-smart-paste-next-free-plain = Next free
+dialog-smart-paste-keep-designators = Keep unless taken
+dialog-smart-paste-net-names = Net names
+dialog-smart-paste-keep-nets = Keep (pasted nets join the originals)
+dialog-smart-paste-rewrite-nets = Rewrite with a pattern
+dialog-smart-paste-pattern = Pattern
+dialog-smart-paste-start = Start n at
+dialog-smart-paste-net = Net
+dialog-smart-paste-after = After paste
+dialog-smart-paste-kept-power = kept · power net
+# $net is the copied net's name.
+dialog-smart-paste-joins = { $net } (joins original)
+dialog-smart-paste-preview = Preview
+dialog-smart-paste-copy-count = { $count ->
+    [one] 1 copy
+   *[other] { $count } copies
+}
+dialog-smart-paste-drag-hint = Ghosts show where the copies land; drag the first copy to set the offset (1.27 mm grid).
+dialog-smart-paste-footer = Paste places at the cursor; Esc cancels.
+dialog-smart-paste-paste = Paste
+dialog-smart-paste-paste-copies = Paste { $count } copies
+dialog-smart-paste-nothing-copied = Smart Paste: nothing to paste yet; copy a selection first.
+dialog-smart-paste-sheet-changed = Smart Paste closed: the active sheet changed.
+
 ## ERC dialog (#2413): where the rules come from, and the Profile menu
 # Pill under the title: the dialog edits the rules stored in the project.
 dialog-erc-source-project = Rules: this project

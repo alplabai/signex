@@ -1000,6 +1000,23 @@ pub enum Tool {
     CompileMask,
     /// One click on a `_P` or `_N` net marks the differential pair (#2420).
     DiffPair,
+    /// Four clicks draw a cubic Bezier: start, C1, C2, end (#1267).
+    Bezier,
+    /// Two points, then the line: a horizontal or vertical dimension, by
+    /// the drag direction (#1267).
+    LinearDimension,
+    /// Two points, then the line: a dimension along the two points (#1267).
+    AlignedDimension,
+    /// One click places a typed table (#1300).
+    Table,
+    /// Click by click draws harness wire segments, like the wire tool (#1280).
+    HarnessWire,
+    /// Two clicks place a harness connector body (#1280).
+    HarnessConnector,
+    /// One click on a connector's flat side adds an entry there (#1280).
+    HarnessEntry,
+    /// One click on a wire places a Net Parameters flag there (#1489).
+    NetParameters,
 }
 
 impl std::fmt::Display for Tool {
@@ -1024,9 +1041,17 @@ impl std::fmt::Display for Tool {
             Tool::SheetEntry => write!(f, "Place Sheet Entry"),
             Tool::Measure => write!(f, "Measure Distance"),
             Tool::BreakWire => write!(f, "Break Wire"),
-            Tool::Blanket => write!(f, "Place Blanket"),
+            Tool::Blanket => write!(f, "Place Net Blanket"),
             Tool::CompileMask => write!(f, "Place Compile Mask"),
             Tool::DiffPair => write!(f, "Place Differential Pair"),
+            Tool::Bezier => write!(f, "Draw Bezier"),
+            Tool::LinearDimension => write!(f, "Place Linear Dimension"),
+            Tool::AlignedDimension => write!(f, "Place Aligned Dimension"),
+            Tool::Table => write!(f, "Place Table"),
+            Tool::HarnessWire => write!(f, "Draw Signal Harness"),
+            Tool::HarnessConnector => write!(f, "Place Harness Connector"),
+            Tool::HarnessEntry => write!(f, "Place Harness Entry"),
+            Tool::NetParameters => write!(f, "Place Net Parameters"),
         }
     }
 }

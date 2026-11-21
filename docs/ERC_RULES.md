@@ -15,6 +15,8 @@ waivable like any other finding.
 | Rule (key) | Default | What fires |
 |---|---|---|
 | `sheet_pin_unconnected` | Warning | A sheet symbol pin that joins nothing: no wire (end or interior), label, junction, No-Connect, power-port tip, bus end, or another sheet symbol's pin on the same point (the contacts `signex_net::SheetPinContacts` takes from the netlist). The child's port of that name floats. A bus-typed pin mid-bus is reported. |
+| `harness_entry_mismatch` | Warning | A harness connector entry its type's definition does not list, a definition entry it lacks, or an entry the far side of the harness carries and this side lacks (`sensor expects entry CS_ADC; this harness has CS`). See `docs/SIGNAL_HARNESSES.md`. |
+| `harness_type_conflict` | Warning | Connectors or harness-typed sheet entries of two types on one harness. |
 | `sheet_pin_direction_conflict` | Warning | Two or more `output` sheet pins on one net of the sheet. Scope is that one sheet: wires, junctions, same-name Global / local labels and power ports join nets; buses, hierarchical ports and other sheets do not. |
 
 `bad_hier_sheet_pin` also reports a hierarchical label in the child that no
@@ -24,6 +26,18 @@ child placed by several symbols gets one finding per symbol.
 
 Sync Sheet Pins gives a new pin the direction of its child label's shape, so
 `sheet_pin_direction_conflict` only sees what the labels' shapes say.
+
+## Repeated sheets
+
+Added for #1279 (`docs/MULTI_CHANNEL.md`). A `Repeat(<net>)` sheet entry of
+a repeated sheet symbol joins channel k to member k of the bus it meets.
+
+| Rule (key) | Default | What fires |
+|---|---|---|
+| `repeat_entry_needs_bus` | Error | A `Repeat(<net>)` entry of a sheet symbol named `Repeat(CH, 1, N)` meets no bus on the sheet, or a bus whose names carry fewer than N members (a bus-named entry on the bus names it too). Message: "Repeat entry X needs a bus of N members on the parent sheet". |
+
+`bad_hier_sheet_pin` matches a `Repeat(<net>)` entry with the child's port
+`<net>`.
 
 ## Completeness rules
 

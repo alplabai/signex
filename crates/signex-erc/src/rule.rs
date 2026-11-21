@@ -51,6 +51,9 @@ impl RuleId {
             RuleKind::LabelsOnlyNet => "builtin::net_carries_only_labels",
             RuleKind::SheetPinUnconnected => "builtin::sheet_pin_not_connected",
             RuleKind::SheetPinDirectionConflict => "builtin::sheet_pin_direction_conflict",
+            RuleKind::RepeatEntryNeedsBus => "builtin::repeat_entry_needs_bus",
+            RuleKind::HarnessEntryMismatch => "builtin::harness_entry_mismatch",
+            RuleKind::HarnessTypeConflict => "builtin::harness_type_conflict",
         };
         RuleId(id.to_string())
     }
@@ -168,7 +171,7 @@ mod tests {
 
     /// Every built-in id string is persisted in saved profiles and project
     /// rule sets, so it must never follow a label rewording.
-    const PINNED_IDS: [(RuleKind, &str); 33] = [
+    const PINNED_IDS: [(RuleKind, &str); 36] = [
         (RuleKind::UnusedPin, "builtin::unused_pin"),
         (
             RuleKind::DuplicateRefDesignator,
@@ -249,6 +252,18 @@ mod tests {
         (
             RuleKind::SheetPinDirectionConflict,
             "builtin::sheet_pin_direction_conflict",
+        ),
+        (
+            RuleKind::RepeatEntryNeedsBus,
+            "builtin::repeat_entry_needs_bus",
+        ),
+        (
+            RuleKind::HarnessEntryMismatch,
+            "builtin::harness_entry_mismatch",
+        ),
+        (
+            RuleKind::HarnessTypeConflict,
+            "builtin::harness_type_conflict",
         ),
     ];
 

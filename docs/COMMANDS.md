@@ -129,7 +129,9 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `next_document_tab` | Next open document tab | window | `Ctrl+Tab` | — |
 | `next_grid` | Next grid | view | — | `N` |
 | `open_command_palette` | Open command palette | commands | `Mod+Shift+P` | `Ctrl+K`, `Mod+Shift+P` |
+| `open_compiled_design` | Open Compiled Design panel | panels | — | — |
 | `open_datasheet` | Open datasheet | edit | — | `D` |
+| `open_diff_pair_classes` | Open the project's differential pair classes | design | — | — |
 | `open_document` | Open document | file | `Mod+O` | `Mod+O` |
 | `open_grid_picker` | Open grid picker | view | — | — |
 | `open_grid_properties` | Open grid properties | view | — | — |
@@ -210,6 +212,8 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 | command id | label | category | Altium | Classic |
 | --- | --- | --- | --- | --- |
+| `add_table_of_contents` | Add table of contents sheet | design | — | — |
+| `add_to_union` | Add the selection to the selected union | edit | — | — |
 | `align_bottom` | Align bottom | modify | — | — |
 | `align_horizontal_centers` | Align horizontal centers | modify | — | — |
 | `align_left` | Align left | modify | — | — |
@@ -223,6 +227,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `assign_footprints` | Assign footprints | design | — | — |
 | `assign_net_class` | Assign net to class | design | — | — |
 | `back_annotate_schematics` | Back-annotate the board's designators and values to the schematic | pcb_sync | — | — |
+| `break_union` | Break the selected union | edit | — | — |
 | `bring_to_front` | Bring to front | modify | — | — |
 | `bring_to_front_of` | Bring to front of | modify | — | — |
 | `change_component` | Change the selected part's component | edit | — | — |
@@ -230,8 +235,10 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `clear_net_color` | Clear net color | view | — | — |
 | `clear_net_highlighting` | Clear net highlighting | select | — | `~` |
 | `color_net` | Color net | view | — | — |
+| `compile_project` | Compile the project | design | — | — |
 | `create_sheet_from_sheet_symbol` | Create a child sheet from the selected sheet symbol | design | — | — |
 | `create_sheet_symbol_from_sheet` | Create a sheet symbol from a sheet file, with an entry for every port | design | — | — |
+| `create_union` | Create a union from the selection | edit | `Mod+G` | — |
 | `distribute_horizontally` | Distribute horizontally | modify | — | — |
 | `distribute_vertically` | Distribute vertically | modify | — | — |
 | `drag` | Drag | modify | — | — |
@@ -249,7 +256,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `draw_rectangle` | Draw rectangle | place | — | — |
 | `draw_round_rectangle` | Draw round rectangle | place | — | — |
 | `draw_wire` | Draw wire | place | — | — |
-| `edit_blanket` | Edit blanket parameters | place | — | — |
+| `edit_blanket` | Edit net blanket parameters | place | — | — |
 | `edit_no_erc_rules` | Edit No ERC rules | place | — | — |
 | `flip_selected_x` | Flip selected x | modify | — | — |
 | `flip_selected_y` | Flip selected y | modify | — | — |
@@ -269,11 +276,13 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `open_child_sheet` | Open the selected sheet symbol's child sheet | navigation | — | — |
 | `open_components_panel` | Open Components panel / place components | panels | `P P` | — |
 | `open_erc_dialog` | Open electrical rules check dialog | validation | — | — |
+| `open_harness_definitions` | Open the harness definitions | design | — | — |
 | `open_net_color_palette` | Open net color palette | view | `F5` | — |
 | `open_parameter_manager` | Open Parameter Manager | design | — | — |
 | `open_project_options` | Open Project Options for the active project | file | — | — |
 | `open_selection_filter` | Open the selection filter of the sheet | select | — | — |
-| `place_blanket` | Place blanket | place | — | — |
+| `place_aligned_dimension` | Place aligned dimension | place | — | — |
+| `place_blanket` | Place net blanket | place | — | — |
 | `place_bus` | Draw bus | place | `P B` | `B` |
 | `place_bus_entry` | Place bus entry | place | `P U` | `Z` |
 | `place_compile_mask` | Place Compile Mask directive | place | `P V K` | — |
@@ -287,13 +296,14 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_harness_entry` | Place harness entry | place | — | — |
 | `place_hierarchical_label` | Place hierarchical label | place | — | — |
 | `place_junction` | Place junction | place | — | `J` |
+| `place_linear_dimension` | Place linear dimension | place | — | — |
 | `place_local_net_label` | Place local net label | place | — | `L` |
 | `place_net_label` | Place net label | place | `P N` | — |
 | `place_no_connect` | Place no-connect flag | place | `P X` | `Q` |
 | `place_no_erc` | Place Generic No ERC directive | place | `P V N` | — |
 | `place_note` | Place note | place | — | — |
 | `place_off_sheet_connector` | Place off sheet connector | place | `P C` | `H` |
-| `place_parameter_set` | Place parameter set | place | — | — |
+| `place_parameter_set` | Place net parameters | place | — | — |
 | `place_port` | Place port | place | `P R` | `Mod+L` |
 | `place_power_symbol` | Place power symbol | place | — | `P` |
 | `place_reuse_block` | Place reuse block | place | — | — |
@@ -301,6 +311,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_sheet_symbol` | Place sheet symbol | place | `P S` | `S` |
 | `place_signal_harness` | Place signal harness | place | — | — |
 | `place_symbol` | Place symbol | place | — | `A` |
+| `place_table` | Place table | place | — | — |
 | `place_text` | Place text | place | — | `T` |
 | `place_text_frame` | Place text frame | place | — | — |
 | `place_text_string` | Place text string | place | — | — |
@@ -308,6 +319,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 | `place_wire_to_bus_entry` | Place wire-to-bus entry | place | — | — |
 | `previous_highlighted_net_item` | Previous item on highlighted net | select | — | `Shift+Tab` |
 | `previous_sheet` | Previous sheet | navigation | — | `PageUp` |
+| `remove_from_union` | Remove the selection from its union | edit | — | — |
 | `repair_pin_junctions` | Add a junction where a pin end touches a wire | validation | — | — |
 | `reset_schematic_designators` | Reset schematic designators | design | `T A E` | — |
 | `rotate_selection` | Rotate selection counter-clockwise | modify | — | — |

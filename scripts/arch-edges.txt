@@ -41,6 +41,7 @@ signex-drc -> pcb-geom
 signex-drc -> signex-types
 signex-drc-dsl -> pcb-geom
 signex-drc-dsl -> signex-drc
+signex-drc-dsl -> signex-net
 signex-drc-dsl -> signex-types
 signex-engine -> pcb-geom
 signex-engine -> signex-history

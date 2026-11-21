@@ -48,7 +48,9 @@ mod pcb_footprints;
 mod pcb_row_columns;
 mod pcb_rows;
 mod pcb_uuid_repair;
+mod refinement_extras;
 mod sch_rows;
+mod sch_token;
 mod stackup;
 mod text_extents_extras;
 mod text_size_repair;
@@ -110,6 +112,8 @@ mod pcb_stack_tests;
 #[cfg(test)]
 mod pcb_uuid_repair_tests;
 #[cfg(test)]
+mod refinement_tests;
+#[cfg(test)]
 mod sheet_frame_tests;
 #[cfg(test)]
 mod sheet_page_tests;
@@ -140,6 +144,10 @@ pub use pcb_rows::{
     PcbFootprintRow, PcbPadRow, PcbTrackRow, PcbViaRow, parse_pcb_layer, pcb_layer_token,
 };
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
+pub use sch_token::{
+    SNXSCH_FORMAT_NO_ERC_RULES, SNXSCH_FORMAT_REFINEMENT, SNXSCH_FORMAT_V1, SNXSCH_VERSION,
+    snxsch_token,
+};
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};
 pub use units::{NonFiniteField, mm_as_stored_nm};
@@ -161,22 +169,8 @@ use sch_rows::{
 use tsv::{parse_optional_block, write_tsv_section};
 
 // ---------------------------------------------------------------------------
-// Format version tokens
+// Format version tokens (the `.snxsch` ones are in `sch_token`)
 // ---------------------------------------------------------------------------
-
-/// The `.snxsch` token a sheet without No-ERC rule lists writes; the policy
-/// is [`SNXSCH_VERSION`] (`docs/FORMAT_VERSIONS.md`). 1.1 (#2209):
-/// `lib_symbols` is keyed by body ref (`<lib_id>#<hash>`) and a symbol names
-/// its body in `body_ref`. A 1.0 build reads that table by `lib_id` and would
-/// show parts without pins, so 1.0 builds open 1.1 files read-only
-/// (`is_newer_minor`) instead.
-pub const SNXSCH_FORMAT_V1: &str = "snxsch/1.1";
-
-/// Written instead of [`SNXSCH_FORMAT_V1`] when a No-ERC directive names the
-/// rules it silences (#1699). A 1.1 build would drop the list on its next
-/// save and the marker would silence every rule, so it opens 1.2 read-only.
-/// A sheet without lists stays 1.1, byte for byte.
-pub const SNXSCH_FORMAT_NO_ERC_RULES: &str = "snxsch/1.2";
 
 /// Current `.snxpcb` format version. 1.1: pads are keyed to their footprint
 /// by uuid (1.0 keyed by reference designator) and the stackup carries
@@ -188,31 +182,6 @@ pub const SNXSCH_FORMAT_NO_ERC_RULES: &str = "snxsch/1.2";
 /// `custom_outline` pad columns, and a parameter that cannot make copper is
 /// a load error. The policy is [`SNXPCB_VERSION`].
 pub const SNXPCB_FORMAT_V1: &str = "snxpcb/1.4";
-
-/// `.snxsch` version policy: a newer minor opens read-only. A save writes the
-/// lowest token its content needs ([`snxsch_token`]).
-pub const SNXSCH_VERSION: FormatVersion = FormatVersion {
-    current: SNXSCH_FORMAT_NO_ERC_RULES,
-    readable: &["snxsch/1", SNXSCH_FORMAT_V1, SNXSCH_FORMAT_NO_ERC_RULES],
-    newer_minor: NewerMinor::ReadOnly,
-    missing: MissingToken::Refused,
-};
-
-/// The token a save of `sheet` writes: [`SNXSCH_FORMAT_NO_ERC_RULES`] when a
-/// No-ERC directive names rules, else [`SNXSCH_FORMAT_V1`]. From content, not
-/// the token the file loaded with, so a sheet whose last list is cleared
-/// goes back to 1.1.
-pub fn snxsch_token(sheet: &SchematicSheet) -> &'static str {
-    if sheet
-        .no_erc_directives
-        .iter()
-        .any(|directive| !directive.rules.is_empty())
-    {
-        SNXSCH_FORMAT_NO_ERC_RULES
-    } else {
-        SNXSCH_FORMAT_V1
-    }
-}
 
 /// Written instead of [`SNXPCB_FORMAT_V1`] when the board carries layer
 /// colours (`[board_options.layer_colors]`, 2026-11-18): a build that knows
@@ -382,6 +351,9 @@ pub enum FormatError {
     NonFiniteTomlField { path: String },
     #[error("TSV block {block:?}: TSV body is empty — at minimum a header row is required")]
     TsvEmpty { block: String },
+    /// A table keyed by object uuid holds a key that is not one.
+    #[error("[{table}] key {key:?} is not a uuid; fix or remove the entry to open this file")]
+    KeyNotAUuid { table: &'static str, key: String },
 }
 
 impl From<crate::numeric::TomlFiniteError> for FormatError {
@@ -663,6 +635,8 @@ impl SnxSchematic {
                  they are measured again on the next save"
             );
         }
+        let entry_types =
+            refinement_extras::entry_types_from_read(sheet_extras.harness_entry_types)?;
         let mut sheet = SchematicSheet {
             uuid: raw.schematic_id,
             version: raw.version,
@@ -705,6 +679,12 @@ impl SnxSchematic {
                 .collect(),
             no_erc_directives: sheet_extras.no_erc_directives,
             directives: sheet_extras.directives,
+            harness: crate::schematic::SheetHarness {
+                connectors: sheet_extras.harness_connectors,
+                wires: sheet_extras.harness_wires,
+                entry_types,
+            },
+            unions: sheet_extras.unions,
             title_block: sheet_extras.title_block.into_iter().collect(),
             variables: sheet_extras.variables,
             lib_symbols: sheet_extras.lib_symbols.into_iter().collect(),
@@ -737,6 +717,8 @@ impl SnxSchematic {
         let body_repairs = sheet.repair_dangling_body_refs();
         sheet.unknown.load_repairs = uuid_repair::repair_duplicate_uuids(&mut sheet);
         sheet.unknown.load_repairs.splice(0..0, body_repairs);
+        let dangling = refinement_extras::drop_dangling_references(&mut sheet);
+        sheet.unknown.load_repairs.extend(dangling);
         let size_repairs = text_size_repair::clamp_oversize_text(&mut sheet);
         sheet.unknown.load_repairs.extend(size_repairs);
         sheet

@@ -93,6 +93,10 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
     ("move_selection", ActiveBarAction::MoveSelection),
     ("move_selection_xy", ActiveBarAction::MoveSelectionXY),
     ("move_to_front", ActiveBarAction::MoveToFront),
+    (
+        "place_aligned_dimension",
+        ActiveBarAction::PlaceAlignedDimension,
+    ),
     ("place_blanket", ActiveBarAction::PlaceBlanket),
     ("place_bus_entry", ActiveBarAction::PlaceBusEntry),
     ("place_compile_mask", ActiveBarAction::PlaceCompileMask),
@@ -109,6 +113,10 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
     ),
     ("place_harness_entry", ActiveBarAction::PlaceHarnessEntry),
     ("place_junction", ActiveBarAction::PlaceJunction),
+    (
+        "place_linear_dimension",
+        ActiveBarAction::PlaceLinearDimension,
+    ),
     ("place_net_label", ActiveBarAction::PlaceNetLabel),
     ("place_no_erc", ActiveBarAction::PlaceNoERC),
     ("place_note", ActiveBarAction::PlaceNote),
@@ -122,6 +130,7 @@ pub(crate) const ACTIVE_BAR_COMMANDS: &[(&str, ActiveBarAction)] = &[
     ("place_sheet_entry", ActiveBarAction::PlaceSheetEntry),
     ("place_sheet_symbol", ActiveBarAction::PlaceSheetSymbol),
     ("place_signal_harness", ActiveBarAction::PlaceSignalHarness),
+    ("place_table", ActiveBarAction::DrawTable),
     ("place_text_frame", ActiveBarAction::PlaceTextFrame),
     ("place_text_string", ActiveBarAction::PlaceTextString),
     ("rotate_selection", ActiveBarAction::RotateSelection),
@@ -460,8 +469,8 @@ mod tests {
         let accounted = ACTIVE_BAR_COMMANDS.len() + PARAMETERISED.len() + MAPPED_ELSEWHERE.len();
         assert_eq!(
             accounted,
-            87,
-            "ActiveBarAction accounted for {accounted} actions but held 87 \
+            90,
+            "ActiveBarAction accounted for {accounted} actions but held 90 \
              when this table was written ({} with ids, {} parameterised, {} \
              mapped elsewhere) — a new variant needs an id here, a slot in \
              PARAMETERISED, or a slot in MAPPED_ELSEWHERE",

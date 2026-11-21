@@ -124,7 +124,12 @@ impl Signex {
             project_dir: ds.active_document_project().map(|p| p.dir().to_path_buf()),
             overrides,
             rule_set,
-            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides),
+            config: signex_erc::ErcConfig::with_pin_matrix_overrides(&pin_matrix_overrides)
+                .with_harness_definitions(
+                    ds.active_document_project()
+                        .map(|p| p.data.schematic_design.harness_definitions.as_slice())
+                        .unwrap_or_default(),
+                ),
             net_waivers: ds
                 .active_document_project()
                 .and_then(|p| p.data.rules.as_ref())

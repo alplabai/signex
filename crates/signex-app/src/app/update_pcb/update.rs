@@ -315,6 +315,14 @@ impl Signex {
                         .into_string(),
                     );
                 }
+                for problem in &computed.snapshot.rule_problems {
+                    if state.logged_rule_problems.insert(problem.clone()) {
+                        crate::diagnostics::log_warning(
+                            super::rules_from_schematic::problem_line(&self.ui_state.i18n, problem)
+                                .into_string(),
+                        );
+                    }
+                }
                 state.snapshot = Some(Arc::clone(&computed.snapshot));
                 state.list = Some(computed.list.clone());
                 state.phase = Phase::Ready;

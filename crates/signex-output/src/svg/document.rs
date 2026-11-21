@@ -209,6 +209,7 @@ impl SvgRenderContext {
                 },
             });
         }
+        super::harness::push_harness(&mut elements, &sheet.schematic, &xform, palette, opts);
 
         let from_wires = signex_types::schematic::junction_wire_colors(&sheet.schematic, |wire| {
             wire_style::wire_color(wire, &sheet.schematic.net_colors, &opts.net_class_styles)
@@ -324,6 +325,10 @@ impl SvgRenderContext {
             let y = xform.px_y(child.position.y);
             let w = (child.size.0 * xform.mm_to_unit) as f32;
             let h = (child.size.1 * xform.mm_to_unit) as f32;
+            let outline = (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
+                * xform.mm_to_unit) as f32;
+            // A repeated sheet prints as a stack with a ×N pill (#1279).
+            super::repeat_stack::push_repeat_stack(&mut elements, child, &xform, palette, outline);
             elements.push(rect_path(
                 x,
                 y,
@@ -333,8 +338,7 @@ impl SvgRenderContext {
                     stroke_alpha: 1.0,
                     stroke_rgb: Some(palette.child_sheet_stroke),
                     fill_rgb: None,
-                    stroke_width: (opts.schematic_defaults.shape_stroke_mm(child.stroke_width)
-                        * xform.mm_to_unit) as f32,
+                    stroke_width: outline,
                 },
             ));
             if !child.name.is_empty() {

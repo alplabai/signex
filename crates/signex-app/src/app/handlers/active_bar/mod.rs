@@ -96,6 +96,9 @@ impl Signex {
             | ActiveBarAction::DrawRoundRectangle
             | ActiveBarAction::DrawPolygon
             | ActiveBarAction::DrawBezier
+            | ActiveBarAction::DrawTable
+            | ActiveBarAction::PlaceLinearDimension
+            | ActiveBarAction::PlaceAlignedDimension
             | ActiveBarAction::PlaceGraphic => Some("shapes"),
             ActiveBarAction::PlaceSignalHarness
             | ActiveBarAction::PlaceHarnessConnector

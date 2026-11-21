@@ -567,6 +567,7 @@ pub struct DocumentState {
     /// Sheet history, net highlight, hover insight and the project net index
     /// they read (#1270, #1271, #1272).
     pub net_nav: net_nav::NetNavState,
+    pub compiled_design: crate::app::core::compiled_design::CompiledDesigns,
     /// Generation counter and in-flight job of the preview renderer.
     pub raster_queue: RasterQueue,
     /// The app's one user-visible error card. `Some` while it is shown;

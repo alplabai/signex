@@ -19,6 +19,8 @@ pub(in crate::app) use bom::{default_column_width as bom_default_column_width, s
 mod close_project;
 mod confirms;
 mod create_child_sheet;
+// #1282: Design ▸ Differential Pair Classes….
+mod diff_pair_classes;
 mod erc;
 mod fab_outputs;
 mod graphite;

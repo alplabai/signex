@@ -74,6 +74,7 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
     let board_tools = |event| Message::Pcb(PcbMsg::Tools(event));
     let part_swap = |kind| Message::Pcb(PcbMsg::PartSwap(crate::app::PartSwapMsg::Requested(kind)));
     let extras = |msg| Message::Edit(EditMsg::Extras(msg));
+    let unions = |msg| Message::Edit(EditMsg::Unions(msg));
     let message = match command.as_str() {
         "annotate_schematic" => Message::Annotate(AnnotateMsg::OpenDialog),
         "annotate_schematic_quietly" => {
@@ -183,6 +184,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         }
         "sync_sheet_entries" => Message::from(crate::app::SheetSyncMsg::Requested),
         "change_component" => placed_part(PlacedPartAction::ChangeComponent),
+        // Mockup row 158: named unions of the sheet in view.
+        "create_union" => unions(crate::app::unions::UnionsMsg::CreateRequested),
+        "add_to_union" => unions(crate::app::unions::UnionsMsg::AddSelectionRequested),
+        "remove_from_union" => unions(crate::app::unions::UnionsMsg::RemoveSelectionRequested),
+        "break_union" => unions(crate::app::unions::UnionsMsg::BreakRequested),
         // Opens the options tab of the project the call names (`args.project`,
         // a project-tree row), else of the active document's project.
         "open_project_options" => match &args.context.project {
@@ -297,6 +303,11 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_net_inspector" => Message::Overlay(OverlayMsg::OpenPanel(
             crate::panels::PanelKind::NetInspector,
         )),
+        // Design ▸ Compile Project and View ▸ Compiled Design (#1279, #1308).
+        "compile_project" => Message::from(crate::app::CompiledDesignMsg::CompileRequested),
+        "open_compiled_design" => Message::Overlay(OverlayMsg::OpenPanel(
+            crate::panels::PanelKind::CompiledDesign,
+        )),
         // #2416: View ▸ Selection Filter opens the Active Bar's filter.
         "open_selection_filter" => Message::ActiveBar(crate::active_bar::ActiveBarMsg::ToggleMenu(
             crate::active_bar::ActiveBarMenu::Filter,
@@ -306,6 +317,10 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_net_classes" | "open_net_classes_panel" => {
             Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::NetClasses))
         }
+        // #1280: the harness definitions view, in Properties.
+        "open_harness_definitions" => Message::Dock(crate::dock::DockMessage::Panel(
+            crate::panels::PanelMsg::Harness(crate::panels::HarnessPanelMsg::DefinitionsOpened),
+        )),
         // `ExportBom` reaches `handle_bom_preview_open`, the BOM dialog;
         // Reports > Bill of Materials opens the same one.
         "report_manager_bom" => Message::Menu(MenuMessage::ExportBom),
@@ -314,6 +329,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "rotate_counterclockwise" => Message::Edit(EditMsg::RotateSelectedCounterclockwise),
         "open_erc_dialog" => Message::Erc(ErcMsg::OpenDialog),
         "repair_pin_junctions" => Message::Erc(ErcMsg::PinJunctionRepairRequested),
+        // #1300: the contents sheet of the active document's project.
+        "add_table_of_contents" => Message::from(crate::app::TablesMsg::TableOfContentsRequested),
         "run_drc" => Message::Pcb(PcbMsg::DrcRequested),
         // Design ▸ Rules (#2398): the active document's project.
         "open_rules" => {
@@ -325,6 +342,8 @@ pub(super) fn resolve(command: &AppCommandId, args: &CommandArgs) -> Option<Mess
         "open_drc_panel" => Message::Overlay(OverlayMsg::OpenPanel(crate::panels::PanelKind::Drc)),
         "reannotate_board" => Message::from(crate::app::BoardReannotateMsg::Requested),
         "fabrication_outputs" => Message::from(crate::app::FabOutputsMsg::Requested),
+        // #1282: Design ▸ Differential Pair Classes….
+        "open_diff_pair_classes" => Message::from(crate::app::DiffPairClassesMsg::Requested),
         // #2404, #2402, #2488: Board Reports on a table, its CSV, Board Print /
         // PDF, the STEP model.
         "board_report_bom" => board_report(signex_output::BoardReportKind::Bom),

@@ -91,6 +91,9 @@ pub struct InteractionState {
     /// Freehand polygon placement buffer. Accumulates clicks until
     /// the user presses Enter / double-clicks / right-clicks.
     pub polyline_points: Vec<signex_types::schematic::Point>,
+    /// The Bezier and dimension tools' clicked points and the text the next
+    /// dimension takes (#1267).
+    pub(crate) annotation_tool: crate::app::handlers::canvas::AnnotationTool,
     /// Two-click shape placement: first click sets the anchor, second
     /// click commits. Used by Tool::Line, Tool::Rectangle, Tool::Circle.
     pub shape_anchor: Option<signex_types::schematic::Point>,
@@ -219,6 +222,10 @@ pub struct InteractionState {
     /// Designator numbers for pasted parts (Next free), seeded when a paste
     /// starts.
     pub paste_counters: Option<super::PasteCounters>,
+    /// The designator rule of the Smart Paste on the cursor (mockup row 155): its
+    /// dialog's choice, used instead of the preference until the next paste
+    /// starts.
+    pub paste_designators_override: Option<crate::paste_prefs::PasteDesignators>,
     /// Token for library reads. Every pick takes a new value and carries it,
     /// so only the LATEST pick may arm a session; Esc, a right-click and any
     /// tool change bump it too, so a read that finishes after a cancel arms
@@ -229,6 +236,9 @@ pub struct InteractionState {
     /// while the Bus Entry tool is armed). The signs are the orientation; see
     /// `signex_types::schematic::BusEntry`.
     pub bus_entry_size: (f64, f64),
+    /// The harness type the last Harness Connector click placed; the next
+    /// connector takes it (#1280).
+    pub last_harness_type: Option<String>,
     /// Uuid of the placed symbol the cursor is currently hovering over,
     /// if any. Set/cleared by the canvas `CursorAt` handler. Drives the
     /// hover tooltip overlay (designator + value + footprint + lib_id).

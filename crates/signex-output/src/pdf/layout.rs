@@ -78,6 +78,16 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
     for cs in &sch.child_sheets {
         extend(cs.position.x, cs.position.y);
         extend(cs.position.x + cs.size.0, cs.position.y + cs.size.1);
+        // The stack behind a repeated sheet symbol (#1279) is part of it.
+        if let Some(stack) = signex_types::schematic::RepeatStack::of(cs) {
+            let [_, _, x1, y1] = stack.layers[0].rect;
+            extend(x1, y1);
+        }
+    }
+    // Signal harness connectors and wires (#1280).
+    if let Some(b) = sch.harness.extent() {
+        extend(b.min_x, b.min_y);
+        extend(b.max_x, b.max_y);
     }
 
     for drawing in &sch.drawings {
@@ -120,6 +130,11 @@ pub fn schematic_bbox(sheet: &SheetSnapshot) -> (f64, f64, f64, f64) {
                 for p in points {
                     extend(p.x - h, p.y - h);
                     extend(p.x + h, p.y + h);
+                }
+            }
+            SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
+                for p in crate::svg::annotation_extent(drawing) {
+                    extend(p.x, p.y);
                 }
             }
         }

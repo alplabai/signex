@@ -20,8 +20,10 @@ pub(crate) mod board_reannotate;
 pub(crate) mod board_reuse;
 pub(crate) mod board_tools;
 mod bootstrap;
+pub(crate) mod channel_view;
 pub(crate) mod command;
 pub mod command_palette;
+pub(crate) mod compiled_design;
 pub mod contracts;
 pub(crate) mod core;
 mod dir_listing;
@@ -32,6 +34,11 @@ pub mod document_read;
 mod documents;
 pub(crate) mod engine_notices;
 pub(crate) mod fab_outputs;
+// #1282: Design ▸ Differential Pair Classes….
+pub(crate) mod diff_pair_classes;
+pub use diff_pair_classes::{
+    DiffPairClassesMsg, DiffPairClassesState, PairClassField, PairClassProblem, PairMemberRow,
+};
 pub(crate) mod file_extension;
 pub mod gerber_read;
 mod handlers;
@@ -49,12 +56,15 @@ pub(crate) mod pin_junction_repair;
 pub mod project_entry_disk;
 mod project_tab;
 mod rules_tab;
+pub(crate) mod sch_tables;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
+pub mod unions;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub use rules_tab::{RulesTabMsg, RulesTabState};
+pub use sch_tables::TablesMsg;
 pub(crate) mod design_read;
 pub(crate) mod designator_scan;
 #[cfg(test)]
@@ -107,6 +117,7 @@ pub use board_output::{
 pub use board_panel::BoardPanelMsg;
 pub use board_reannotate::{BoardReannotateMsg, BoardReannotateState, ReannotateProblem};
 pub use board_reuse::ReuseBlockMsg;
+pub use compiled_design::CompiledDesignMsg;
 pub use contracts::Board3dShot;
 pub use contracts::ErcProfileAction;
 pub use contracts::{

@@ -351,6 +351,13 @@ pub struct CanvasColors {
     /// workspace colour.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_sheet: Option<Color>,
+    /// Signal harness wires, connector outlines and harness names (#1280,
+    /// one project colour); `None` uses the bus colour.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<Color>,
+    /// Harness connector and entry fill; `None` uses the paper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_soft: Option<Color>,
 }
 
 /// The colour each PCB layer family is listed with. The board edge and
@@ -457,6 +464,18 @@ impl CanvasColors {
         self.board_sheet
             .unwrap_or_else(|| self.board_workspace_color())
     }
+
+    /// The colour of signal harnesses (#1280).
+    #[must_use]
+    pub fn harness_color(&self) -> Color {
+        self.harness.unwrap_or(self.bus)
+    }
+
+    /// The fill of harness connectors and entries.
+    #[must_use]
+    pub fn harness_soft_color(&self) -> Color {
+        self.harness_soft.unwrap_or(self.paper)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -556,6 +575,8 @@ const GRAPHITE_LIGHT_CANVAS: CanvasColors = CanvasColors {
     board_grid_major: None,
     board_workspace: None,
     board_sheet: None,
+    harness: s(0x6B, 0x4F, 0xA0),
+    harness_soft: s(0xEF, 0xEA, 0xF8),
 };
 
 const GRAPHITE_DARK_TOKENS: ThemeTokens = ThemeTokens {
@@ -635,6 +656,8 @@ const GRAPHITE_DARK_CANVAS: CanvasColors = CanvasColors {
     board_workspace: s(0x5C, 0x5E, 0x63),
     // A step lighter than the workspace, so the sheet reads as paper.
     board_sheet: s(0x6E, 0x70, 0x75),
+    harness: s(0xB7, 0x9C, 0xF0),
+    harness_soft: s(0x26, 0x1F, 0x36),
 };
 
 /// Red top and blue bottom copper, as Altium lists them.

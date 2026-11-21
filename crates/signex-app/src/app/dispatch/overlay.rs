@@ -107,6 +107,7 @@ impl Signex {
             ProjectMsg::SheetNumbering(msg) => self.dispatch_sheet_numbering_message(msg),
             ProjectMsg::CloseConfirm(choice) => self.handle_project_close_confirm(choice),
             ProjectMsg::AssignFootprints(msg) => self.dispatch_assign_footprints_message(msg),
+            ProjectMsg::CompiledDesign(msg) => self.dispatch_compiled_design_message(msg),
             ProjectMsg::CloseRefsResolved { project_id, result } => {
                 self.handle_close_refs_resolved(project_id, result)
             }

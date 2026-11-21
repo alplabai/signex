@@ -23,6 +23,7 @@ mod structure;
 mod symbol_body;
 mod text_note_props;
 pub(crate) mod transaction;
+mod unions;
 mod wire_end;
 
 #[cfg(test)]
@@ -39,6 +40,9 @@ mod drawings_tests;
 mod font_family_tests;
 #[cfg(test)]
 mod footprint_binding_tests;
+mod harness;
+#[cfg(test)]
+mod harness_tests;
 #[cfg(test)]
 mod patch_exactness_tests;
 #[cfg(test)]
@@ -53,3 +57,5 @@ mod sheet_page_tests;
 mod sheet_variable_tests;
 #[cfg(test)]
 mod symbol_body_tests;
+#[cfg(test)]
+mod unions_tests;

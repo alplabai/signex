@@ -106,6 +106,19 @@ pub enum EngineError {
     DirectiveNotFound { kind: &'static str, id: uuid::Uuid },
     #[error("a directive region needs two different corners with finite coordinates")]
     InvalidDirectiveRegion,
+    #[error("no harness {kind} {id} is on this sheet")]
+    HarnessNotFound { kind: &'static str, id: uuid::Uuid },
+    #[error(
+        "a harness connector needs a type name, a finite place, a width and entry pitch above 0 mm and a quarter turn"
+    )]
+    InvalidHarnessConnector,
+    #[error("a harness wire needs two different ends with finite coordinates")]
+    InvalidHarnessWire,
+    #[error("a harness entry needs a name")]
+    EmptyHarnessEntryName,
+    /// A named-union command refused (mockup row 158).
+    #[error(transparent)]
+    Union(#[from] crate::unions::UnionRefusal),
 }
 
 fn locked_message(references: &[String], action: &str) -> String {

@@ -728,6 +728,11 @@ pub enum PanelMsg {
     SwitchFootprintChoice(uuid::Uuid, String),
     /// The Net Inspector panel (#1269).
     NetInspector(super::NetInspectorMsg),
+    /// The Compiled Design panel and the multi-channel Properties rows
+    /// (#1279, #1308).
+    CompiledDesign(crate::app::CompiledDesignMsg),
+    /// The Unions panel (mockup row 158).
+    Unions(crate::app::unions::UnionsMsg),
     /// The Object List panel (#1259).
     ObjectList(super::ObjectListMsg),
     /// Toggle a symbol's mirror_x.
@@ -762,6 +767,8 @@ pub enum PanelMsg {
     EditLabelFontSizePt(uuid::Uuid, u32),
     /// Edit a Blanket's net class or ERC exclusions (#2420).
     EditBlanket(uuid::Uuid, super::BlanketEdit),
+    /// A Net Parameters edit or a hover in a directive's Properties (#1489).
+    Directive(super::DirectivePanelMsg),
     /// Edit the rules a No-ERC directive silences (#1699).
     EditNoErcRules(uuid::Uuid, super::NoErcRuleEdit),
     /// Set (`Some`) or clear (`None`, inherit the sheet default) the font
@@ -1004,6 +1011,8 @@ pub enum PanelMsg {
     /// best-effort and fires UpdateDrawingEdit when the value is a
     /// valid f64.
     DrawingFieldTyping(DrawingFieldId, String),
+    /// The Properties of a Bezier, dimension or table (#1267, #1300).
+    Annotation(super::AnnotationPanelMsg),
     /// Open / close the border-colour picker overlay for a child sheet.
     ToggleChildSheetBorderPicker(uuid::Uuid),
     /// Open / close the fill-colour picker overlay for a child sheet.
@@ -1111,6 +1120,8 @@ pub enum PanelMsg {
     /// The Position, Rotation, Size and Parameters rows of one placed
     /// object (#2418).
     PlacedEdit(super::PlacedEditMsg),
+    /// The harness Properties and the harness definitions view (#1280).
+    Harness(super::HarnessPanelMsg),
     Illustration(signex_widgets::property_illustration::IllustrationMsg),
     /// Document Options view events: Parameters filter, zone counts and the
     /// illustration hover (#2531).

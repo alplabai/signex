@@ -85,6 +85,10 @@ pub(crate) enum OverlayId {
     FindReplace,
     FindSimilar,
     PasteArray,
+    /// The Create Union popover (mockup row 158).
+    UnionPopover,
+    /// Edit ▸ Paste Special (mockup row 155).
+    SmartPaste,
     KeyboardShortcuts,
     About,
     PassiveCalculator,
@@ -110,6 +114,8 @@ pub(crate) enum OverlayId {
     BoardReannotate,
     /// File ▸ Fabrication Outputs (#2388).
     FabOutputs,
+    /// Design ▸ Differential Pair Classes… (#1282).
+    DiffPairClasses,
     /// Board Reports and Board Print / PDF (#2404, #2402).
     BoardOutput,
     /// Tools ▸ Annotation ▸ Back Annotate Schematics (#1312).
@@ -155,7 +161,7 @@ const PRE_BLOCKING: usize = 5;
 /// behaviour change to both the paint stack and the Esc precedence, and
 /// `paint_order_is_exhaustive_and_unique` keeps it honest about covering
 /// every [`OverlayId`] exactly once.
-pub(crate) const PAINT_ORDER: [OverlayId; 71] = [
+pub(crate) const PAINT_ORDER: [OverlayId; 74] = [
     OverlayId::ErrorNotice,
     OverlayId::NetlistIncompletePrompt,
     OverlayId::PrintPreview,
@@ -190,6 +196,8 @@ pub(crate) const PAINT_ORDER: [OverlayId; 71] = [
     OverlayId::FindReplace,
     OverlayId::FindSimilar,
     OverlayId::PasteArray,
+    OverlayId::UnionPopover,
+    OverlayId::SmartPaste,
     OverlayId::KeyboardShortcuts,
     OverlayId::About,
     OverlayId::PassiveCalculator,
@@ -210,6 +218,7 @@ pub(crate) const PAINT_ORDER: [OverlayId; 71] = [
     OverlayId::SheetSync,
     OverlayId::BoardReannotate,
     OverlayId::FabOutputs,
+    OverlayId::DiffPairClasses,
     OverlayId::BoardOutput,
     OverlayId::BackAnnotate,
     OverlayId::AnnotateDialog,
@@ -320,6 +329,8 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::FindReplace
         | OverlayId::FindSimilar
         | OverlayId::PasteArray
+        | OverlayId::UnionPopover
+        | OverlayId::SmartPaste
         | OverlayId::KeyboardShortcuts
         | OverlayId::About
         | OverlayId::PassiveCalculator
@@ -339,6 +350,7 @@ pub(crate) fn swallows_scroll(id: OverlayId) -> bool {
         | OverlayId::SheetSync
         | OverlayId::BoardReannotate
         | OverlayId::FabOutputs
+        | OverlayId::DiffPairClasses
         | OverlayId::BoardOutput
         | OverlayId::BackAnnotate
         | OverlayId::AnnotateDialog
@@ -378,6 +390,7 @@ pub(crate) fn has_menu_backdrop(id: OverlayId) -> bool {
             | OverlayId::StartRowContextMenu
             | OverlayId::LayerTabContextMenu
             | OverlayId::GridPicker
+            | OverlayId::UnionPopover
             | OverlayId::ZoomPresets
     )
 }
@@ -543,6 +556,8 @@ impl Signex {
             OverlayId::FindReplace => layers.extend(self.find_replace_overlay(window_id)),
             OverlayId::FindSimilar => layers.extend(self.find_similar_overlay()),
             OverlayId::PasteArray => layers.extend(self.paste_array_overlay()),
+            OverlayId::UnionPopover => layers.extend(self.union_popover_overlay()),
+            OverlayId::SmartPaste => layers.extend(self.smart_paste_overlay()),
             OverlayId::KeyboardShortcuts => layers.extend(self.keyboard_shortcuts_overlay()),
             OverlayId::About => layers.extend(self.about_overlay()),
             OverlayId::PassiveCalculator => layers.extend(self.passive_calculator_overlay()),
@@ -566,6 +581,7 @@ impl Signex {
             OverlayId::SheetSync => layers.extend(self.sheet_sync_overlay()),
             OverlayId::BoardReannotate => layers.extend(self.board_reannotate_overlay()),
             OverlayId::FabOutputs => layers.extend(self.fab_outputs_overlay()),
+            OverlayId::DiffPairClasses => layers.extend(self.diff_pair_classes_overlay()),
             OverlayId::BoardOutput => layers.extend(self.board_output_overlay()),
             OverlayId::BackAnnotate => layers.extend(self.back_annotate_overlay()),
             OverlayId::AnnotateDialog => layers.extend(self.annotate_dialog_overlay()),

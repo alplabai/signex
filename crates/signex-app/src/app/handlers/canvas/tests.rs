@@ -53,6 +53,7 @@ fn app_focused_on(focused: &str) -> Signex {
             schematic_defaults: Default::default(),
             project_defaults: Default::default(),
             agent_journal: Default::default(),
+            schematic_design: Default::default(),
             fab_outputs: None,
             requirements: Default::default(),
             parameters: Default::default(),

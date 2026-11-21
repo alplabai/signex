@@ -30,6 +30,7 @@ pub mod engine;
 #[cfg(test)]
 mod fixtures;
 mod group;
+mod harness_snapshot;
 mod hierarchy;
 mod net_finding;
 mod overrides;
@@ -144,6 +145,16 @@ pub enum RuleKind {
     SheetPinUnconnected,
     /// Two or more sheet pins set to `output` drive one net.
     SheetPinDirectionConflict,
+    /// A `Repeat(<net>)` entry on a repeated sheet symbol meets no bus, or a
+    /// bus with fewer members than the symbol has channels (#1279).
+    RepeatEntryNeedsBus,
+    /// A harness connector entry its type's definition does not list, or an
+    /// entry the far side of the harness carries and this side lacks, so one
+    /// signal would not connect (#1280).
+    HarnessEntryMismatch,
+    /// Connectors or sheet entries of two harness types share one harness
+    /// (#1280).
+    HarnessTypeConflict,
 }
 
 impl RuleKind {
@@ -183,6 +194,9 @@ impl RuleKind {
             RuleKind::LabelsOnlyNet => "Net carries only labels",
             RuleKind::SheetPinUnconnected => "Sheet pin not connected",
             RuleKind::SheetPinDirectionConflict => "Sheet pin direction conflict",
+            RuleKind::RepeatEntryNeedsBus => "Repeat entry needs a bus",
+            RuleKind::HarnessEntryMismatch => "Harness entry mismatch",
+            RuleKind::HarnessTypeConflict => "Harness type conflict",
         }
     }
 
@@ -206,7 +220,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 33] = [
+    pub const ALL: [RuleKind; 36] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -240,6 +254,9 @@ impl RuleKind {
         RuleKind::LabelsOnlyNet,
         RuleKind::SheetPinUnconnected,
         RuleKind::SheetPinDirectionConflict,
+        RuleKind::RepeatEntryNeedsBus,
+        RuleKind::HarnessEntryMismatch,
+        RuleKind::HarnessTypeConflict,
     ];
 
     /// The one source of truth for a rule's severity: [`Diagnostic::new`]
@@ -252,6 +269,7 @@ impl RuleKind {
     pub fn default_severity(self) -> Severity {
         match self {
             RuleKind::DuplicateRefDesignator
+            | RuleKind::RepeatEntryNeedsBus
             | RuleKind::BusBitWidthMismatch
             | RuleKind::BadHierSheetPin
             | RuleKind::PowerPortShort
@@ -276,7 +294,9 @@ impl RuleKind {
             | RuleKind::UnitsNotPlaced
             | RuleKind::LabelsOnlyNet
             | RuleKind::SheetPinUnconnected
-            | RuleKind::SheetPinDirectionConflict => Severity::Warning,
+            | RuleKind::SheetPinDirectionConflict
+            | RuleKind::HarnessEntryMismatch
+            | RuleKind::HarnessTypeConflict => Severity::Warning,
             RuleKind::NetMultipleNames => Severity::Info,
             RuleKind::MissingPowerFlag | RuleKind::SymbolOutsideSheet => Severity::Info,
             RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::OffGrid => {

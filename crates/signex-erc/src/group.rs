@@ -14,7 +14,8 @@ pub enum RuleGroup {
     Labels,
     /// Buses, bus entries and bus names.
     Buses,
-    /// Sheet symbols, sheet pins and hierarchical ports.
+    /// Sheet symbols, sheet pins, hierarchical ports, and the entries of a
+    /// repeated sheet or a harness.
     Hierarchy,
     /// Parts: designators, fields, units and placement on the sheet.
     Parts,
@@ -68,7 +69,11 @@ impl RuleKind {
             RuleKind::HierPortDisconnected
             | RuleKind::BadHierSheetPin
             | RuleKind::SheetPinUnconnected
-            | RuleKind::SheetPinDirectionConflict => RuleGroup::Hierarchy,
+            | RuleKind::SheetPinDirectionConflict
+            // A repeated sheet's entries (#1279) and harness entries (#1280).
+            | RuleKind::RepeatEntryNeedsBus
+            | RuleKind::HarnessEntryMismatch
+            | RuleKind::HarnessTypeConflict => RuleGroup::Hierarchy,
             RuleKind::DuplicateRefDesignator
             | RuleKind::UnannotatedDesignator
             | RuleKind::PartWithoutFootprint
@@ -100,7 +105,7 @@ mod tests {
     #[test]
     fn every_group_holds_its_rules() {
         let sizes: Vec<usize> = RuleGroup::ALL.iter().map(|g| g.rules().count()).collect();
-        assert_eq!(sizes, [4, 8, 4, 6, 4, 7]);
+        assert_eq!(sizes, [4, 8, 4, 6, 7, 7]);
     }
 
     #[test]
@@ -140,6 +145,9 @@ mod tests {
             (RuleKind::LabelsOnlyNet, Nets),
             (RuleKind::SheetPinUnconnected, Hierarchy),
             (RuleKind::SheetPinDirectionConflict, Hierarchy),
+            (RuleKind::RepeatEntryNeedsBus, Hierarchy),
+            (RuleKind::HarnessEntryMismatch, Hierarchy),
+            (RuleKind::HarnessTypeConflict, Hierarchy),
         ];
         assert_eq!(expected.len(), RuleKind::ALL.len());
         for (rule, group) in expected {

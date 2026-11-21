@@ -500,6 +500,9 @@ pub struct UiState {
     /// File ▸ Fabrication Outputs (#2388), while open. Nothing is written
     /// until Generate.
     pub fab_outputs: Option<Box<crate::app::FabOutputsState>>,
+    /// Design ▸ Differential Pair Classes… (#1282), while open: a copy of
+    /// the project's classes until OK.
+    pub diff_pair_classes: Option<Box<crate::app::DiffPairClassesState>>,
     /// Generation of the newest Fabrication Outputs write, outside the
     /// dialog so a reopened dialog never takes an older answer.
     pub fab_outputs_writes: u64,
@@ -528,6 +531,14 @@ pub struct UiState {
     pub net_inspector: Box<crate::panels::NetInspectorState>,
     /// The Object List panel's picks and rows (#1259); boxed as above.
     pub object_list: Box<crate::panels::ObjectListState>,
+    /// The Compiled Design panel, channel tabs and Repeat rows (#1279, #1308).
+    /// Boxed: the `UiState` size ceiling.
+    pub compiled_design: Box<crate::app::compiled_design::CompiledDesignUi>,
+    /// Named unions: hidden per sheet, the panel and the popover (mockup row 158).
+    /// Boxed: the `UiState` size ceiling.
+    pub unions: Box<crate::app::unions::UnionsState>,
+    /// The open Smart Paste dialog (mockup row 155).
+    pub smart_paste: Option<Box<crate::smart_paste::SmartPasteState>>,
     /// The open Paste Array dialog (#1264); boxed as `find_similar`.
     pub paste_array: Option<Box<crate::paste_array::PasteArrayState>>,
     /// How many Paste Array dialogs were opened: tags each one so a numbers

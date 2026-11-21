@@ -53,6 +53,10 @@ impl Signex {
         if let Some(reason) = self.refuse_if_active_read_only() {
             return Err(reason);
         }
+        // A channel tab of a repeated sheet is a compiled view (#1279).
+        if let Some(reason) = self.refuse_if_channel_view() {
+            return Err(reason);
+        }
         self.document_state
             .edit_engine_mut()
             .ok_or_else(|| "There is no active schematic.".to_string())
@@ -308,6 +312,10 @@ impl Signex {
     }
 
     fn apply_engine_step(&mut self, direction: StepDirection, update_selection_info: bool) -> bool {
+        // Undo and redo do not reach past a channel tab either (#1279).
+        if self.refuse_if_channel_view().is_some() {
+            return false;
+        }
         if let Some(group) = self
             .document_state
             .active_engine()
@@ -384,6 +392,13 @@ impl Signex {
         let display_only = patch.is_display_only();
         if !display_only {
             self.document_state.note_sheet_edit();
+        }
+        if let Some(path) = self
+            .document_state
+            .edit_path()
+            .map(std::path::Path::to_path_buf)
+        {
+            self.mark_compiled_stale(&path, patch);
         }
         if !self.sync_active_history_dirty() {
             return false;

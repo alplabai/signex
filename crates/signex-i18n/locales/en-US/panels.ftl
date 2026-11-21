@@ -655,10 +655,10 @@ panels-placed-name = Name
 panels-placed-direction = Direction
 panels-placed-sheet = Sheet
 panels-placed-sheet-file = Sheet File
-# Properties section of a selected Blanket directive: a drawn region whose
-# parameters apply to every net inside it.
-panels-directive-blanket = Blanket
-panels-directive-net-class = Net Class
+# The UI name of a Blanket directive: a drawn region whose parameters apply
+# to every net inside it.
+panels-directive-blanket = Net Blanket
+panels-directive-net-class = Net class
 
 ## Net Inspector panel (Graphite mockup #58): the By Net / By Component modes, the part
 ## list, the empty-state cards and the footer. Column headings are shown in
@@ -820,6 +820,7 @@ panels-object-list-noun-drawing = Drawing
 panels-object-list-noun-blanket = Blanket
 panels-object-list-noun-compile-mask = Compile mask
 panels-object-list-noun-diff-pair = Differential pair
+panels-object-list-noun-net-parameters = Net parameters
 # Value column words.
 panels-object-list-value-net-label = net label
 panels-object-list-value-power-port = power port
@@ -941,3 +942,240 @@ panels-messages-pin-dot-refused-entry = { $pin } ({ $through }, { $other })
 panels-messages-unnamed-net = an unnamed net
 # The end of a list cut after its first few entries.
 panels-messages-list-more = { $names } and { $count } more
+
+## Multi-channel sheets and the Compiled Design panel (#1279, #1308).
+
+panels-kind-compiled-design = Compiled Design
+# Tooltip of the panel's title-row button and the out-of-date banner's button.
+panels-compiled-design-recompile = Recompile
+# The panel's mode switch.
+panels-compiled-design-mode-sheets = Sheets
+panels-compiled-design-mode-nets = Nets
+panels-compiled-design-find = Find sheet, channel or net
+panels-compiled-design-column-sheet = Sheet / channel
+panels-compiled-design-column-parts = Parts
+panels-compiled-design-column-nets = Nets
+panels-compiled-design-column-net = Net
+panels-compiled-design-column-sheets = Sheets
+# The out-of-date banner. $count is the number of changed sheets, $time the
+# time of the last compile (12:41).
+panels-compiled-design-stale =
+    { $count ->
+        [one] 1 sheet changed since { $time }. Counts may be wrong.
+       *[other] { $count } sheets changed since { $time }. Counts may be wrong.
+    }
+# Tooltip of the amber dot on a changed row.
+panels-compiled-design-stale-row = Changed since the last compile ({ $time })
+panels-compiled-design-empty-title = Not compiled yet
+panels-compiled-design-empty-body = Compile the project to see repeated sheets as channels, with part and net counts per sheet.
+panels-compiled-design-compile = Compile project
+panels-compiled-design-empty-note = Nothing is written to disk; the result lives in memory until the project closes.
+panels-compiled-design-compiling = Compiling…
+panels-compiled-design-no-project = Open a sheet of a project to compile it.
+panels-compiled-design-no-match = No sheet, channel or net matches.
+# The footer after a compile.
+panels-compiled-design-footer = { $parts } parts · { $nets } nets · { $sheets } sheets ({ $channels } channels)
+# The footer before the first compile. $files is the number of sheet files.
+panels-compiled-design-footer-none = { $files } sheet files · not compiled
+# The strip under a repeated sheet's canvas: the editable sheet, then one tab
+# per channel.
+panels-channel-strip-editor = Editor
+# The selected channel tab's count; $count is its parts.
+panels-channel-strip-parts = { $count } parts
+# The count of a channel tab that is not selected.
+panels-channel-strip-count = { $count }
+# The caption of a channel card in the compiled view.
+panels-channel-card-caption = { $parts } parts · { $nets } nets
+# Shown in the compiled view before the project is compiled.
+panels-channel-view-not-compiled = Compile the project to fill the channels with their parts and nets.
+# The Messages line when an edit is tried in a channel tab. $channel is CH1.
+panels-channel-read-only = Channel { $channel } is a compiled view; switch to Editor to edit
+# The compile result in Messages.
+panels-compiled-design-failed = Compile project: { $reason }
+
+## Signal harnesses (#1280).
+
+# Caption under the Harness Connector header: the sheet file and how many entries the connector has.
+panels-harness-caption = { $sheet } · { $count ->
+    [one] 1 entry
+   *[other] { $count } entries
+}
+# Warn banner: the child sheet $far expects an entry this harness names differently.
+panels-harness-mismatch = { $far } expects entry { $expects }; this harness has { $has }. One signal would not connect.
+panels-harness-rename = Rename { $from } to { $to }
+panels-harness-go-to = Go to { $sheet }
+panels-harness-section = Harness
+panels-harness-type = Type
+panels-harness-definition = Definition
+# A link that opens the harness definitions view.
+panels-harness-definition-link = { $type } · { $count } entries · edit…
+panels-harness-colour = Colour
+panels-harness-colour-default = harness default
+panels-harness-placement = Placement
+panels-harness-x = X
+panels-harness-y = Y
+panels-harness-width = Width
+panels-harness-pitch = Entry pitch
+panels-harness-entries = Entries
+panels-harness-entry = Entry
+panels-harness-net = Net on this sheet
+panels-harness-expects-pill = { $far } expects { $expects }
+# $example is a compiled net name such as SPI_BUS.SCK.
+panels-harness-compiled = Compiled net names: { $example } … unless a net label names them.
+panels-harness-start = Start
+panels-harness-end = End
+panels-harness-entry-type = Harness type
+# The Harness type choice of a plain signal sheet entry.
+panels-harness-no-type = None (signal)
+panels-harness-defs-title = Harness definitions
+panels-harness-defs-caption = project { $project } · { $count ->
+    [one] 1 type
+   *[other] { $count } types
+}
+# $entries is the entry count, nested types named, such as "2 + UART".
+panels-harness-defs-uses = { $entries } entries · { $uses ->
+    [one] 1 use
+   *[other] { $uses } uses
+}
+panels-harness-defs-name = Name
+panels-harness-defs-description = Description
+panels-harness-defs-kind = Kind
+panels-harness-defs-signal = signal
+panels-harness-defs-nested = harness · { $entries }
+panels-harness-defs-nested-section = { $type } (nested)
+panels-harness-defs-new = New harness type
+panels-harness-defs-back = Back
+
+## Properties of a Net Parameters directive (#1489): a flag on one wire that
+## sets its net's class, diff-pair class and routing rules.
+
+# Caption under the header: the net the flag sits on and the sheet file.
+panels-np-caption = on { $net } · { $sheet }
+# Caption when the flag sits on no wire.
+panels-np-caption-no-net = on no wire · { $sheet }
+panels-np-classes = Classes
+panels-np-diff-pair-class = Diff-pair class
+# A class dropdown entry: no class.
+panels-np-none = None
+# The diff-pair class dropdown while the net is not half of a pair.
+panels-np-single-net = None (single net)
+panels-np-rules = Rules
+# Column headings of the rule list.
+panels-np-rule = Rule
+panels-np-value = Value
+panels-np-width = Width
+panels-np-clearance = Clearance
+# Two inputs: the via diameter and the via hole.
+panels-np-via = Via dia / hole
+# The via on the flag and its illustration callout.
+panels-np-via-short = Via
+panels-np-current = Current
+# Beside Current: the value is information only, no rule is made.
+panels-np-info = info
+panels-np-unit-mm = mm
+# Unit of current: ampere.
+panels-np-unit-a = A
+panels-np-becomes-rules = Becomes PCB rules Width_{ $class } and Clearance_{ $class } on Update PCB.
+panels-np-display = Display
+panels-np-show-on-flag = Show parameters on the flag
+# The first line of the flag on the sheet and in the illustration.
+panels-np-flag-class = Net Class = { $class }
+panels-np-flag-no-class = Net Parameters
+panels-np-flag-hidden = parameters hidden on the flag
+panels-np-current-info = current (info) { $current } A
+
+## Properties of a Net Blanket (#1281).
+
+# Caption under the header: the sheet file and the outline size.
+panels-blanket-caption = { $sheet } · { $width } × { $height } mm
+panels-blanket-outline = Outline
+panels-blanket-xy = X / Y
+panels-blanket-size = Width / Height
+panels-blanket-directive = Directive
+# The width of the tracks of the caught nets, not of the outline.
+panels-blanket-track-width = Track width
+# How copper pours treat the nets under this blanket.
+panels-blanket-pour = Pour on nets
+panels-blanket-pour-normal = Normal
+panels-blanket-pour-keep-short = Keep short
+# Section title with the number of nets the blanket catches.
+panels-blanket-nets = Nets under the blanket · { $count }
+# A net row whose wires only cross the outline, left out.
+panels-blanket-edge-only = edge only
+# A net row whose wires only cross the outline, included.
+panels-blanket-edge-included = edge · included
+panels-blanket-no-nets = No net is under the blanket.
+panels-blanket-include-edge = Include nets that only cross the edge
+panels-blanket-hover-hint = Hover a net row to highlight it on the sheet. Power nets (GND) are never caught.
+# Note under the illustration.
+panels-blanket-caught-note = accent = caught by the blanket
+# Messages line: the Net Parameters tool was clicked away from a wire.
+panels-np-off-wire = Net Parameters sit on a wire: click on a wire. Nothing was placed.
+
+## Named unions (mockup row 158).
+
+# The Unions dock panel and the Create Union popover (mockup row 158).
+panels-kind-unions = Unions
+panels-unions-empty-title = No schematic sheet in view
+panels-unions-empty-body = Open a sheet to list its unions.
+panels-unions-filter = Filter by name or #tag
+panels-unions-create = Create from selection
+panels-unions-this-sheet = This sheet
+panels-unions-project = Project
+panels-unions-tags = Tags
+panels-unions-none = No unions here. Select objects and use Create Union to group them.
+panels-unions-select-members = Select members
+panels-unions-lock = Lock
+panels-unions-unlock = Unlock
+panels-unions-hide = Hide
+panels-unions-show = Show
+# The panel foot of a hidden union; $name is the union's name.
+panels-unions-foot-hidden = { $name } is hidden
+panels-unions-foot-hidden-note = Hidden on the canvas only. Show it to add, remove or rename members. Not an undo step.
+panels-unions-foot-members = { $count ->
+    [one] 1 member
+   *[other] { $count } members
+}
+panels-unions-foot-wires = { $count ->
+    [one] + 1 wire
+   *[other] + { $count } wires
+}
+panels-unions-foot-others = { $count ->
+    [one] + 1 other object
+   *[other] + { $count } other objects
+}
+panels-unions-foot-add = Add selection
+panels-unions-foot-remove = Remove selection
+panels-unions-foot-break = Break union
+# The popover title; $count is how many objects the union groups.
+panels-unions-create-title = { $count ->
+    [one] Create union · 1 object
+   *[other] Create union · { $count } objects
+}
+panels-unions-create-name = Name
+panels-unions-create-tags = Tags
+panels-unions-create-add-tag = add tag
+panels-unions-create-lock = Lock after creating
+panels-unions-create-confirm = Create
+# Removes a tag pill.
+panels-unions-tag-remove = ×
+
+## Messages lines of the unions, harness and compile slices.
+
+panels-unions-msg-not-a-sheet = Create Union works on a schematic sheet.
+panels-unions-msg-no-selection = Create Union: select the objects to group first.
+panels-unions-msg-sheet-changed = Create Union closed: the active sheet changed.
+# $reason is the engine's sentence saying why the union command was refused.
+panels-unions-msg-refused = Unions: { $reason }.
+panels-unions-msg-add-no-union = Add Selection to Union: pick a union in the Unions panel first.
+panels-unions-msg-remove-no-members = Remove Selection from Union: select members of a union first.
+panels-unions-msg-break-no-union = Break Union: select a union first.
+panels-harness-msg-defs-no-project = Harness definitions not changed: the sheet is in no open project
+# $why says why the project refused the edit.
+panels-harness-msg-defs-refused = Harness definitions not changed: { $why }
+# $file is the sheet, $why the engine's reason.
+panels-harness-msg-rename-failed = Harness type not renamed on { $file }: { $why }
+panels-harness-msg-entry-off-connector = Harness entry not placed: click on a harness connector
+panels-compiled-design-msg-no-project = Compile project: open a sheet of a project first; a sheet outside a project has no compiled design.
+# $why says why the project refused the edit.
+panels-compiled-design-naming-refused = Channel naming not changed: { $why }

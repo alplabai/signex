@@ -838,6 +838,9 @@ pub use directive::{
     ALL_ERC_RULES, DIFF_PAIR_SUFFIXES, DirectiveKind, SchDirective, diff_pair_base,
     parse_erc_exclusions,
 };
+pub use directive::{
+    BlanketPour, DIFF_PAIR_SUFFIX_PAIRS, DiffPairHalves, NetRules, diff_pair_halves,
+};
 mod no_erc;
 pub use no_erc::{NoErcDirective, canonical_no_erc_rules, no_erc_rules_suppress};
 mod sheet;
@@ -892,6 +895,42 @@ pub use text_extents::{
     StoredTextExtent, TextExtents, TextProbe, decide_width_mm, face_is_available, probes, text_hash,
 };
 pub use text_widths::{MeasuredText, TextField, TextWidths};
+mod harness;
+#[cfg(test)]
+mod harness_tests;
+pub use harness::{
+    DEFAULT_HARNESS_ENTRY_PITCH_MM, HARNESS_TIP_MM, HarnessConnector, HarnessDefinition,
+    HarnessDefinitionEntry, HarnessEntry, HarnessWire, SheetHarness,
+};
+mod union;
+pub use union::{SchUnion, union_member_kinds};
+mod drawing_bezier;
+mod drawing_dimension;
+mod sch_table;
+pub use drawing_bezier::{
+    BEZIER_FLATTEN_SEGMENTS, LINE_END_ARROW_HALF_WIDTH_MM, LINE_END_ARROW_LENGTH_MM, LineEnds,
+    SchBezier,
+};
+pub use drawing_dimension::{
+    DIMENSION_MAX_PRECISION, DIMENSION_TEXT_MM, DimensionArrows, DimensionDirection,
+    DimensionGeometry, DimensionUnits, SchDimension,
+};
+pub use sch_table::{
+    PinSort, SchTable, TABLE_ADVANCE_EM, TABLE_HEADER_TINT_SHARE, TABLE_TITLE_GAP_EM, TableBorders,
+    TableCell, TableColumn, TableLayout, TableRefresh, TableSource, TableStyle, pin_columns,
+    power_net_names, sheet_columns, table_header_fill,
+};
+#[cfg(test)]
+mod drawing_kinds_tests;
+mod repeat;
+#[cfg(test)]
+mod repeat_tests;
+pub use repeat::{
+    ChannelFormatError, ChannelOccurrence, ChannelRepeat, MAX_CHANNELS, RepeatStack, StackLayer,
+    channel_alpha, check_format, repeated_entry_name,
+};
+mod harness_ops;
+pub use harness_ops::*;
 
 #[cfg(test)]
 mod default_tests;

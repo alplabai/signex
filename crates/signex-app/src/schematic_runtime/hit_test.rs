@@ -144,6 +144,10 @@ fn hit_test_items(
                 hit_bus(&snapshot.buses[bus_index], point, widths)
             }
             SelectedKind::Directive => super::directives::hit(snapshot, item.item.uuid, point),
+            SelectedKind::HarnessWire => super::harness::wire_segment(snapshot, item.item.uuid)
+                .is_some_and(|(a, b, tolerance)| {
+                    point_to_segment_distance(point, a, b) <= tolerance
+                }),
             _ => item.bbox.expand(0.25).contains(point.x, point.y),
         };
         if hit {

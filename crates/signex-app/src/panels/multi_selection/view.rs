@@ -456,6 +456,9 @@ pub(super) fn kind_count_id(kind: SelectedKind) -> MessageId {
         SelectedKind::ChildSheet => ids::PROPERTIES_COUNT_SHEET_SYMBOLS,
         SelectedKind::Drawing => ids::PROPERTIES_COUNT_DRAWINGS,
         SelectedKind::Directive => ids::PROPERTIES_COUNT_DIRECTIVES,
+        SelectedKind::HarnessConnector => ids::PROPERTIES_COUNT_HARNESS_CONNECTORS,
+        SelectedKind::HarnessEntry => ids::PROPERTIES_COUNT_HARNESS_ENTRIES,
+        SelectedKind::HarnessWire => ids::PROPERTIES_COUNT_HARNESS_WIRES,
     }
 }
 

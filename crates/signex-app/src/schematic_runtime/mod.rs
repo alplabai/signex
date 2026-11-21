@@ -21,18 +21,24 @@ use signex_types::schematic::{
 use signex_types::theme::{CanvasColors, Color as ThemeColor};
 use std::collections::{HashMap, HashSet};
 
+mod bezier;
 mod cache_copy;
+mod dimension;
 mod directives;
 mod drawings;
+pub(crate) use drawings::annotation_aabb;
 mod drawn_value;
+mod harness;
 pub mod hit_index;
 pub mod hit_test;
 mod invalidation;
 pub(crate) use cache_copy::copy_invalidated;
+mod sch_table;
 pub use invalidation::RenderInvalidation;
 pub mod label;
 pub mod lock_indicator;
 pub mod overlay;
+mod repeat_stack;
 mod scene_cache;
 pub mod selection;
 mod snapshot;
@@ -41,6 +47,7 @@ pub(crate) mod text_width;
 pub(crate) use symbol::{symbol_bounds, symbols_without_geometry};
 use text_width::{WidthSlot, WidthSources};
 pub mod text;
+pub mod unions;
 mod wire_style;
 
 pub use scene_cache::ContentSceneCache;
@@ -737,6 +744,7 @@ fn collect_item_bounds_with(
         });
     }
     directives::push_item_bounds(snapshot, &mut out);
+    harness::push_item_bounds(snapshot, &mut out);
     out
 }
 
@@ -991,6 +999,9 @@ fn drawing_aabb(drawing: &SchDrawing) -> Aabb {
             } else {
                 Aabb::new(0.0, 0.0, 0.0, 0.0)
             }
+        }
+        SchDrawing::Bezier(_) | SchDrawing::Dimension(_) | SchDrawing::Table(_) => {
+            annotation_aabb(drawing)
         }
     }
 }

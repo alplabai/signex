@@ -280,9 +280,10 @@ fn canvas_menu_grows_and_gates_on_selection() {
         assert!(has_row(&with, row), "{row} with a selection");
     }
     // Place and Sheet Actions on an empty spot; with a selection Align,
-    // Part Actions and the Planned flyout join them (Graphite mockup #62).
+    // Unions (mockup row 158), Part Actions and the Planned flyout join them
+    // (mockup row 62).
     assert_eq!(launchers(&without), 2);
-    assert_eq!(launchers(&with), 5);
+    assert_eq!(launchers(&with), 6);
 }
 
 /// The rows of `entries` in order, separators as "-", subheads as "#…".
@@ -382,7 +383,7 @@ fn a_hit_and_a_net_highlight_add_their_rows_to_the_empty_spot_menu() {
 
 /// Graphite mockup #62: with a selection the menu opens on Properties (bold, the default
 /// row), keeps the drawn order, and ends with Undo and the greyed
-/// "Planned (6)" flyout launcher.
+/// "Planned (5)" flyout launcher. Unions is live (mockup row 158) and sits with Align.
 #[test]
 fn the_selection_menu_keeps_the_drawn_order_and_ends_with_planned() {
     let i18n = signex_i18n::I18n::en_us_ref();
@@ -402,6 +403,7 @@ fn the_selection_menu_keeps_the_drawn_order_and_ends_with_planned() {
         label("mirror_x"),
         label("mirror_y"),
         "Align".into(),
+        "Unions".into(),
         "-".into(),
         "Part Actions".into(),
         "Sheet Actions".into(),
@@ -412,7 +414,7 @@ fn the_selection_menu_keeps_the_drawn_order_and_ends_with_planned() {
         label("assign_net_class"),
         "-".into(),
         label("undo"),
-        "Planned (6)".into(),
+        "Planned (5)".into(),
     ]
     .to_vec();
     assert_eq!(shape(&rows), expected);
@@ -425,9 +427,9 @@ fn the_selection_menu_keeps_the_drawn_order_and_ends_with_planned() {
     };
     assert!(planned.disabled && planned.submenu && planned.on_hover.is_some());
     assert!(planned.on_press.is_none(), "a click does nothing");
-    // The flyout holds the six planned rows, each with its tooltip.
+    // The flyout holds the five planned rows, each with its tooltip.
     let flyout = super::submenu::planned_entries(i18n, TID);
-    assert_eq!(flyout.len(), 6);
+    assert_eq!(flyout.len(), 5);
     for entry in &flyout {
         let DropdownEntry::Item(item) = entry else {
             panic!("planned row");
@@ -647,24 +649,19 @@ fn place_menu_greys_only_the_planned_tools() {
     assert!(has_row(&e, "Part"));
     // Placement actions are always available; the planned tools (#1249) are
     // gathered in one greyed row that names them (Graphite mockup #62).
-    let planned = [
-        "Parameter Set",
-        "Signal Harness",
-        "Harness Connector",
-        "Harness Entry",
-        "Device Sheet Symbol",
-    ];
+    // Net Parameters and the harness tools are live (#1489, #1280).
+    let planned = ["Device Sheet Symbol"];
     for entry in &e {
         if let DropdownEntry::Item(it) = entry {
             assert!(!planned.contains(&it.label.as_str()), "{}", it.label);
-            let is_planned_row = it.label == "5 planned tools…";
+            let is_planned_row = it.label == "1 planned tool…";
             assert_eq!(it.disabled, is_planned_row, "{}", it.label);
         }
     }
     let DropdownEntry::Item(row) = e.last().expect("rows") else {
         panic!("the planned row ends the flyout");
     };
-    assert_eq!(row.label, "5 planned tools…");
+    assert_eq!(row.label, "1 planned tool…");
     assert!(row.on_press.is_none());
     let tip = row.tooltip.as_deref().expect("names the tools");
     for name in planned {
@@ -812,17 +809,21 @@ fn place_and_align_row_text_is_byte_identical_to_the_old_literals() {
             "VCC",
             "+5",
             "+12",
+            "Signal Harness",
+            "Harness Connector",
+            "Harness Entry",
             "Part",
             "Sheet Symbol",
             "Sheet Entry",
+            "Net Parameters",
             "Generic No ERC",
             "Differential Pair",
-            "Blanket",
+            "Net Blanket",
             "Compile Mask",
             "Text String",
             "Text Frame",
             "Note",
-            "5 planned tools…",
+            "1 planned tool…",
         ]
     );
     assert_eq!(
