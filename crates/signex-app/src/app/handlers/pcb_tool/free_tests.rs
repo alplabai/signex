@@ -158,7 +158,7 @@ fn cycle_arc_mode_draws_by_edge_on_the_net_under_the_start() {
 }
 
 #[test]
-fn a_dimension_measures_its_two_points_and_stands_off_at_the_third() {
+fn a_dimension_measures_its_two_points_and_stands_off_at_the_third_on_the_active_layer() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
     let before = live(&app, &path);
@@ -173,11 +173,36 @@ fn a_dimension_measures_its_two_points_and_stands_off_at_the_third() {
     assert!(close(dims[0].offset.abs(), 2.0), "{}", dims[0].offset);
     assert_eq!(
         parse_pcb_layer(&dims[0].layer),
-        Some(PcbLayer::Technical(TechnicalLayer::Dimensions)),
-        "copper takes no dimension, so it goes on the Dimensions layer"
+        Some(PcbLayer::Copper(CopperLayer::Top)),
+        "the active layer, Top Layer by default (Caner 2026-11-21)"
     );
     undo(&mut app);
     assert_eq!(live(&app, &path), before, "one undo step");
+}
+
+/// Caner 2026-11-21: a dimension goes on the active layer, copper
+/// included; the preview agrees.
+#[test]
+fn a_dimension_placed_with_top_layer_active_is_on_top_layer() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let mech = PcbLayer::Mechanical(signex_types::pcb_layer::MechanicalLayer::new(1).unwrap());
+    for layer in [
+        PcbLayer::Copper(CopperLayer::Top),
+        PcbLayer::Copper(CopperLayer::Bottom),
+        mech,
+    ] {
+        make_active(&mut app, layer);
+        run(&mut app, "place_board_dimension");
+        click(&mut app, 1.0, 3.0);
+        hover(&mut app, 6.0, 3.0);
+        let ghost = app.board_tool_preview().expect("a preview");
+        assert_eq!(parse_pcb_layer(&ghost.free.dimensions[0].layer), Some(layer));
+        click(&mut app, 6.0, 3.0);
+        click(&mut app, 6.0, 5.0);
+        let placed = board_of(&app, &path).free.dimensions.last().expect("placed");
+        assert_eq!(parse_pcb_layer(&placed.layer), Some(layer), "{layer:?}");
+    }
 }
 
 #[test]

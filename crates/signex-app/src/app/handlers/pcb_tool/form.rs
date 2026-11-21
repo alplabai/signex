@@ -336,7 +336,8 @@ impl Signex {
         if let Some(layer) = layer {
             // What the tool draws goes on the active layer.
             let area = self.active_pcb().and_then(|b| self.next_board_area(b));
-            let text_tool = matches!(tool, BoardPlaceTool::TextString | BoardPlaceTool::Dimension);
+            // A dimension takes any layer, copper included (Caner, 2026-11-21).
+            let text_tool = tool == BoardPlaceTool::TextString;
             if area.is_some_and(|zone| !zone_layer_allowed(&zone, layer))
                 || (text_tool && !layer.takes_text())
             {

@@ -137,14 +137,15 @@ fn a_free_pad_on_outer_copper_is_a_surface_pad_of_that_side() {
 }
 
 #[test]
-fn a_dimension_stands_off_through_its_third_click_on_a_text_layer() {
+fn a_dimension_stands_off_through_its_third_click_on_the_given_layer() {
     let id = Uuid::from_u128(0x40);
     let mech = PcbLayer::Mechanical(signex_types::pcb_layer::MechanicalLayer::new(1).unwrap());
     let d = new_dimension(id, p(0.0, 0.0), p(10.0, 0.0), p(4.0, 3.0), mech).unwrap();
     assert_eq!((d.offset, d.layer.as_str()), (3.0, "Mechanical1"));
+    // Caner 2026-11-21: copper included.
     let top = PcbLayer::Copper(CopperLayer::Top);
     let on_copper = new_dimension(id, p(0.0, 0.0), p(10.0, 0.0), p(4.0, -2.0), top).unwrap();
-    assert_eq!(on_copper.layer, "Dimensions", "copper takes no text");
+    assert_eq!(on_copper.layer, "TopCopper", "the given copper layer");
     assert_eq!(on_copper.offset, -2.0);
     assert!(new_dimension(id, p(1.0, 1.0), p(1.0, 1.0), p(4.0, 3.0), mech).is_none());
 }

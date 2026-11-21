@@ -228,8 +228,8 @@ fn pad_net(board: &PcbBoard, number: u32) -> PadNet {
 
 /// A linear dimension from `start` to `end`, its line through `through`
 /// (the offset is how far `through` stands off the measured line), on
-/// `layer` when it takes text, else on the Dimensions layer. `None` when
-/// `start` and `end` are the same point.
+/// `layer`, whichever layer it is, copper included (Caner, 2026-11-21).
+/// `None` when `start` and `end` are the same point.
 pub fn new_dimension(
     id: Uuid,
     start: Point,
@@ -246,11 +246,6 @@ pub fn new_dimension(
     // `LinearDimension::offset` reads it.
     let offset = ((through.x - start.x) * -dy + (through.y - start.y) * dx) / length;
     let mut dimension = LinearDimension::new(id, start, end, offset);
-    let layer = if layer.takes_text() {
-        layer
-    } else {
-        PcbLayer::Technical(TechnicalLayer::Dimensions)
-    };
     dimension.layer = pcb_layer_token(layer);
     Some(dimension)
 }

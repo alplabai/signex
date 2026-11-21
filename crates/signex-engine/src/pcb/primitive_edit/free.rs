@@ -222,10 +222,8 @@ pub fn apply_dimension(
         DimensionEdit::TextHeight(v) => dimension.text_height = finite(v)?,
         DimensionEdit::Precision(p) if p <= DIMENSION_MAX_PRECISION => dimension.precision = p,
         DimensionEdit::Precision(_) => return Err(PrimitiveEditRefusal::OutOfRange),
-        DimensionEdit::Layer(layer) if layer.takes_text() => {
-            dimension.layer = pcb_layer_token(layer);
-        }
-        DimensionEdit::Layer(_) => return Err(PrimitiveEditRefusal::LayerNotAllowed),
+        // Any layer, copper included (Caner, 2026-11-21).
+        DimensionEdit::Layer(layer) => dimension.layer = pcb_layer_token(layer),
     }
     if dimension.start == dimension.end {
         return Err(PrimitiveEditRefusal::NoLength);

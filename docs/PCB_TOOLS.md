@@ -595,8 +595,12 @@ and the shape rows and Net Information are left out.
 `place_board_dimension` (no default key) places a linear dimension: two
 clicks for the points it measures, a third for where its line stands (the
 offset is how far the third point stands off the measured line). It goes on
-the active layer when that takes text, else on the Dimensions layer. The
-model is `signex_types::pcb_dimension::LinearDimension`, kept in
+the active layer, whichever layer it is, copper included (Caner,
+2026-11-21; this replaced "the active layer when that takes text, else the
+Dimensions layer"). A dimension on copper is a drawing only: the copper
+list, ratsnest, design rule check and the Gerber, drill and IPC-356 outputs
+do not read dimensions on any layer, so it is drawn by the board renderer
+but never fabricated. The model is `signex_types::pcb_dimension::LinearDimension`, kept in
 `PcbBoard::free.dimensions`: two extension lines, the dimension line, an
 arrow at each end and the value (`value_text`, to `precision` decimals, at
 most 6), drawn by the board renderer and picked by its strokes and the box
@@ -605,7 +609,8 @@ of its value. Two equal points add nothing and say so.
 The Dimension panel (#2523) shows the illustration (the two points, the
 extension lines, the Offset and the value), the measured Value on a card
 under it, then Start and End (X and Y on one row each), Offset, and under
-Style: Line Width, Text Height, Precision and Layer (layers that take text).
+Style: Line Width, Text Height, Precision and Layer (every board layer,
+copper included).
 Precision is a 0 to 6 segmented control, so a precision outside that range
 cannot be entered from the panel. Each edit is one undo step. There is no
 Type row: angular, radial, diameter, leader, baseline and centre-mark
