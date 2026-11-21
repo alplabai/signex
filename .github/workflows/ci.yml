@@ -609,6 +609,17 @@ jobs:
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_app_catch_unwind.sh
 
+      # The projector draws documents and writes none (#2326 slice 3, #2705):
+      # no core-state write and no wrapper call under app/projector.
+      # Rules and blind spots live in the script. Hard gate.
+      - name: Projector write guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_projector_writes.sh
+
+      - name: Projector write guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_projector_writes.sh
+
       # `signex-app` cannot say `[lints] workspace = true` — cargo rejects
       # mixing inheritance with per-lint overrides, and that crate carries its
       # own `[lints.clippy] let_underscore_must_use` that the workspace

@@ -1,0 +1,105 @@
+# ast-grep rule for scripts/check_projector_writes.sh, run on app/projector
+# only: a write to the engine map, the active path, the whole document state
+# or any field reached through it but `panel_ctx`. The script adds the names
+# of the marks and wrappers, part of them read from
+# scripts/sheet-change-wrappers.txt. Code nodes only, so a comment never
+# matches. Kept out of ast-grep/rules on purpose, like
+# scripts/app-catch-unwind.yml.
+id: projector-write
+language: rust
+rule:
+  any:
+    # `<..>.engines.<m>(..)` with `m` not a read.
+    - kind: call_expression
+      has:
+        field: function
+        kind: field_expression
+        all:
+          - has:
+              field: value
+              kind: field_expression
+              has: {field: field, regex: '^engines$'}
+          - not:
+              has: {field: field, regex: '^(get|contains_key|keys|values|iter|len|is_empty)$'}
+    # `<..>.active_path.<m>(..)` with `m` not a read.
+    - kind: call_expression
+      has:
+        field: function
+        kind: field_expression
+        all:
+          - has:
+              field: value
+              kind: field_expression
+              has: {field: field, regex: '^active_path$'}
+          - not:
+              has: {field: field, regex: '^(clone|as_deref|as_ref|is_some|is_none)$'}
+    # `&mut <..>.engines`: mem::take/replace, `HashMap::insert(&mut ..)`, an
+    # alias written through later.
+    - kind: reference_expression
+      all:
+        - has: {kind: mutable_specifier}
+        - has:
+            field: value
+            kind: field_expression
+            has: {field: field, regex: '^(engines|active_path|document_state)$'}
+    # `<..>.engines = ..`; a local binding of that name is a read.
+    - kind: assignment_expression
+      has:
+        field: left
+        kind: field_expression
+        has: {field: field, regex: '^(engines|active_path|document_state)$'}
+    # Any other field reached through `document_state`, except the GUI's own
+    # `panel_ctx`: a method that is not a read ...
+    - kind: call_expression
+      has:
+        field: function
+        kind: field_expression
+        all:
+          - has:
+              field: value
+              kind: field_expression
+              all:
+                - not:
+                    has: {field: field, regex: '^(document_state|panel_ctx|engines|active_path)$'}
+                - has: {stopBy: end, kind: field_identifier, regex: '^document_state$'}
+                - not:
+                    has: {stopBy: end, kind: field_identifier, regex: '^panel_ctx$'}
+          - not:
+              has:
+                field: field
+                regex: '^(get|contains_key|keys|values|iter|len|is_empty|clone|as_deref|as_ref|is_some|is_none|copied|cloned|first|last)$'
+    # ... a `&mut` of it ...
+    - kind: reference_expression
+      all:
+        - has: {kind: mutable_specifier}
+        - has:
+            field: value
+            all:
+              - has: {stopBy: end, kind: field_identifier, regex: '^document_state$'}
+              - not:
+                  has: {stopBy: end, kind: field_identifier, regex: '^panel_ctx$'}
+    # ... or an assignment to it, plain or compound.
+    - any:
+        - kind: assignment_expression
+        - kind: compound_assignment_expr
+      has:
+        field: left
+        all:
+          - has: {stopBy: end, kind: field_identifier, regex: '^document_state$'}
+          - not:
+              has: {stopBy: end, kind: field_identifier, regex: '^panel_ctx$'}
+  not:
+    inside:
+      stopBy: end
+      any:
+        - kind: mod_item
+        - kind: function_item
+        - kind: impl_item
+      follows:
+        stopBy:
+          not:
+            any:
+              - kind: attribute_item
+              - kind: line_comment
+              - kind: block_comment
+        pattern: '#[cfg(test)]'
