@@ -73,8 +73,9 @@ pub struct PcbCarry {
     /// Tracks or copper arcs end on the carried `vias`, read when the drag
     /// starts.
     pub via_tracks: bool,
-    /// A drag with Ctrl held moves the footprints or vias alone: the tracks
-    /// on them stay where they are (Caner, 2026-11-21).
+    /// Ctrl has been down during this drag: the footprints or vias move
+    /// alone and their tracks stay. One-way until the carry ends, so
+    /// releasing Ctrl never reattaches them (Caner, 2026-11-21).
     pub leaves_tracks: bool,
 }
 

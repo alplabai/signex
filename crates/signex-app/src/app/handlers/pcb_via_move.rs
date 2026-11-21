@@ -1,7 +1,7 @@
 //! Vias moved by a drag: a press on a via carries it, the release moves it
 //! as one board undo step through `signex_engine::pcb::placement`, which
 //! refuses a locked via. The track ends on it follow as they do for a
-//! footprint's pads (#2379); with Ctrl held they stay.
+//! footprint's pads (#2379); once Ctrl has been down in the drag they stay.
 
 use std::collections::BTreeSet;
 use std::path::Path;

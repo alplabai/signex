@@ -143,9 +143,8 @@ impl Signex {
 
     /// A drag pressed at `from` reached `to`: preview it. A press on the
     /// selection carries it; a press on an unselected footprint selects and
-    /// carries that one (#2358). With `leaves_tracks` (Ctrl held) the tracks
-    /// on their pads stay where they are; it is read on every step, so Ctrl
-    /// switches it mid-drag.
+    /// carries that one (#2358). Once `leaves_tracks` (Ctrl down) arrives,
+    /// the tracks on them stay where they are until the carry ends.
     pub(crate) fn pcb_footprints_dragged(
         &mut self,
         from: Point,
@@ -154,16 +153,17 @@ impl Signex {
         leaves_tracks: bool,
     ) {
         self.follow_pcb_drag(from, to, Some(tolerance_mm));
-        let switched = self
-            .live_carry(CarryKind::Drag)
-            .is_some_and(|carry| carry.leaves_tracks != leaves_tracks);
+        let latched = leaves_tracks
+            && self
+                .live_carry(CarryKind::Drag)
+                .is_some_and(|carry| !carry.leaves_tracks);
         if let Some(carry) = self
             .interaction_state
             .pcb_carry
             .as_mut()
-            .filter(|_| switched)
+            .filter(|_| latched)
         {
-            carry.leaves_tracks = leaves_tracks;
+            carry.leaves_tracks = true;
             // A via's snap counts its tracks only while they stay.
             self.carry_to(from, to);
             self.refresh_pcb_highlight();
@@ -224,7 +224,7 @@ impl Signex {
 
     /// What the status bar says while this window drags footprints, or vias
     /// with tracks on them: whether the tracks follow, and the key that
-    /// switches it.
+    /// leaves them.
     pub(crate) fn board_drag_status(&self) -> Option<String> {
         let carry = self.live_carry(CarryKind::Drag)?;
         if (carry.footprints.is_empty() && !carry.via_tracks) || carry.anchor.is_none() {

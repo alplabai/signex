@@ -427,10 +427,11 @@ fn a_ctrl_drag_leaves_the_tracks_and_a_plain_drag_takes_them_along() {
         "{end:?}"
     );
 
-    // Ctrl pressed mid-drag switches before the drop.
+    // Ctrl pressed mid-drag latches: a later step without it changes nothing.
     let mut f = open_board_with(with_track);
     send(&mut f.app, drag(false));
     send(&mut f.app, drag(true));
+    send(&mut f.app, drag(false));
     let edited = one_step(&mut f, dropped());
     assert_eq!(
         track(&edited),
