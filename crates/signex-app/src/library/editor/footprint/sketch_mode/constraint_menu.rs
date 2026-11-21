@@ -336,7 +336,10 @@ fn open_menu(
                 ),
                 None => kind,
             };
-            Some((header, rows_bound_to(id, &shown, sketch, in_conflict, bound)))
+            Some((
+                header,
+                rows_bound_to(id, &shown, sketch, in_conflict, bound),
+            ))
         }
         MenuTarget::Pattern(array) => {
             if sketch.pattern_mirrors.iter().any(|m| m.id == array) {

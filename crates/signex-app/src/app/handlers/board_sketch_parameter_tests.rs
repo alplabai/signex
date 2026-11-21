@@ -435,7 +435,15 @@ fn inlining_a_parameter_keeps_the_number_shown() {
 /// A footprint sketch stores every form exactly as typed.
 #[test]
 fn a_typed_expression_on_a_footprint_angle_is_stored_as_typed() {
-    for typed in ["30deg", "-30deg", "slope", "-slope", "-(-slope)", "(a+b)", "-a+b"] {
+    for typed in [
+        "30deg",
+        "-30deg",
+        "slope",
+        "-slope",
+        "-(-slope)",
+        "(a+b)",
+        "-a+b",
+    ] {
         let (mut app, path) = footprint_sketching();
         let mut sketch = angle_sketch(-10.0);
         for (name, value) in [("slope", "25deg"), ("a", "10deg"), ("b", "15deg")] {
