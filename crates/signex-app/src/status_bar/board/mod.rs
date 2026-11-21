@@ -19,6 +19,7 @@ mod counters;
 mod drc_popover;
 mod grid_popover;
 mod kit;
+mod layer_dropdown;
 mod layer_popover;
 mod selection_popover;
 mod unrouted_popover;
@@ -28,6 +29,7 @@ pub(crate) use counters::grid_value as board_grid_value;
 pub(super) use counters::{board_counters, board_grid_readout, layer_chevron, layer_swatch};
 pub(crate) use grid_popover::custom_pitch;
 pub(crate) use kit::popover_view;
+pub(crate) use layer_dropdown::{LayerDropdownGroup, group_layers};
 
 /// A board counter of the status bar; each opens a popover.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -200,6 +202,8 @@ pub(crate) const BOARD_GRID_PRESETS_MM: [f32; 4] = [0.1, 0.25, 0.5, 1.27];
 #[derive(Debug, Clone)]
 pub(crate) enum BoardPopoverModel {
     Layer(LayerList),
+    /// The Layer pill's list under the Dropdown layer switcher.
+    LayerDropdown(Vec<LayerDropdownGroup>),
     Grid(GridChoice),
     Unrouted(UnroutedList),
     Drc(DrcList),
@@ -209,7 +213,7 @@ pub(crate) enum BoardPopoverModel {
 impl BoardPopoverModel {
     pub fn kind(&self) -> BoardPopoverKind {
         match self {
-            Self::Layer(_) => BoardPopoverKind::Layer,
+            Self::Layer(_) | Self::LayerDropdown(_) => BoardPopoverKind::Layer,
             Self::Grid(_) => BoardPopoverKind::Grid,
             Self::Unrouted(_) => BoardPopoverKind::Unrouted,
             Self::Drc(_) => BoardPopoverKind::Drc,

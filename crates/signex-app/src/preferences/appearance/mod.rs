@@ -57,6 +57,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         wheel_mode_row(v),
         trackpad_pan_row(v),
         zoom_speed_row(v),
+        layer_switcher_row(v),
         section(ids::PREFERENCES_APPEARANCE_SECTION_WINDOW),
         window_buttons_row(v),
         remember_geometry_row(v),
@@ -305,6 +306,33 @@ fn wheel_mode_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         t!(i18n, ids::PREFERENCES_WHEEL_MODE_LABEL),
         Vec::new(),
         t!(i18n, ids::PREFERENCES_WHEEL_MODE_SHORT_HELP),
+        control,
+        t,
+    )
+}
+
+fn layer_switcher_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    use crate::layer_strip_prefs::LayerSwitcher;
+    let (t, i18n) = (v.panel_tokens, v.i18n);
+    let control = segmented_choice(
+        vec![
+            (
+                LayerSwitcher::Strip,
+                t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_STRIP),
+            ),
+            (
+                LayerSwitcher::Dropdown,
+                t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_DROPDOWN),
+            ),
+        ],
+        v.draft_layer_switcher,
+        t,
+        PrefMsg::DraftLayerSwitcher,
+    );
+    row_with(
+        t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_LABEL),
+        Vec::new(),
+        t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_HELP),
         control,
         t,
     )

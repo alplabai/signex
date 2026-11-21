@@ -13,8 +13,8 @@ use signex_types::pcb::PcbBoard;
 use super::super::super::super::*;
 use crate::status_bar::{
     AnchorBar, BoardPopoverKind, BoardPopoverModel, BoardReadout, ConnectionTally, DrcAge, DrcList,
-    DrcTally, GridChoice, LayerChoice, LayerList, NetRow, SelectedRow, SelectedWhat, SelectionList,
-    UnroutedList,
+    DrcTally, GridChoice, LayerChoice, LayerDropdownGroup, LayerList, NetRow, SelectedRow,
+    SelectedWhat, SelectionList, UnroutedList, group_layers,
 };
 
 /// Rows the Selection and DRC popovers list; the rest are counted.
@@ -110,6 +110,9 @@ impl Signex {
         let (path, board) = self.status_board_target(window)?;
         let keymap = &self.ui_state.active_keymap;
         Some(match popover.kind {
+            BoardPopoverKind::Layer if !self.shows_pcb_layer_strip() => {
+                BoardPopoverModel::LayerDropdown(self.layer_dropdown(&path, board))
+            }
             BoardPopoverKind::Layer => BoardPopoverModel::Layer(self.layer_list(&path, board)),
             BoardPopoverKind::Grid => BoardPopoverModel::Grid(GridChoice {
                 current_mm: self.ui_state.grid_size_mm,
@@ -149,6 +152,23 @@ impl Signex {
             next_key: keymap.shortcut_label_for_id(NEXT_LAYER),
             prev_key: keymap.shortcut_label_for_id(PREV_LAYER),
         }
+    }
+
+    /// The Layer pill's dropdown: the layers the strip would list, by group.
+    fn layer_dropdown(&self, path: &Path, board: &PcbBoard) -> Vec<LayerDropdownGroup> {
+        let view = self.pcb_layer_view(path);
+        let i18n = &self.ui_state.i18n;
+        let active = view.shown_active();
+        let rows = crate::app::view::pcb_strip::strip_layers(board, &view)
+            .into_iter()
+            .map(|layer| LayerChoice {
+                layer,
+                name: crate::pcb_canvas::layer_style::layer_name(i18n, layer),
+                colour: crate::pcb_canvas::layer_style::painted_layer_colour(view.paint(), layer),
+                active: active == Some(layer),
+            })
+            .collect();
+        group_layers(rows)
     }
 
     /// The unrouted connections of the board, most unrouted net first.

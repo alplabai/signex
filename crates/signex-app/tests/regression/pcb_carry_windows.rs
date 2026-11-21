@@ -1,16 +1,16 @@
 //! #2271 review — a footprint drag ends when its window loses focus or
 //! closes, a locked footprint refuses at the start of a drag, and the
-//! status-bar layer pill of a board window acts on that window's board
-//! (#2272): a click steps it, a right-click opens the Active layer popover
-//! there (#2460).
+//! layer step and the status-bar layer pill of a board window act on that
+//! window's board (#2272): a right-click on the pill opens the Active layer
+//! popover there (#2460).
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use pcb_geom::ClickMode;
 use signex_app::app::{
-    ContextMenuMsg, FileMsg, Message, PcbMsg, Signex, StatusBarRequest, TabDocument, UiMsg,
-    WindowMsg,
+    ContextMenuMsg, FileMsg, Message, PcbMsg, PcbViewMsg, Signex, StatusBarRequest, TabDocument,
+    UiMsg, WindowMsg,
 };
 use signex_app::diagnostics;
 use signex_app::keymap::AppCommandId;
@@ -368,25 +368,25 @@ fn pick_layer(app: &mut Signex, layer: PcbLayer) {
 }
 
 #[test]
-fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
+fn the_layer_step_of_a_board_window_steps_that_windows_board() {
     let mut rig = rig();
     let window = undock_a(&mut rig);
     let b_before = active_layer(&rig.app, &rig.b);
-    let pill = StatusBarRequest::ActiveLayerStepRequested;
-    send(
-        &mut rig.app,
-        Signex::status_bar_message(window, None, pill.clone()),
-    );
+    let step = |window| {
+        Message::Pcb(PcbMsg::ViewInWindow {
+            window,
+            event: PcbViewMsg::ActiveLayerStepped { forward: true },
+        })
+    };
+    send(&mut rig.app, step(window));
     assert_eq!(
         active_layer(&rig.app, &rig.a),
         Some(PcbLayer::Copper(CopperLayer::Bottom))
     );
     assert_eq!(active_layer(&rig.app, &rig.b), b_before, "B untouched");
 
-    send(
-        &mut rig.app,
-        Signex::status_bar_message(rig.main, None, pill),
-    );
+    let main = rig.main;
+    send(&mut rig.app, step(main));
     assert_eq!(
         active_layer(&rig.app, &rig.b),
         Some(PcbLayer::Copper(CopperLayer::Bottom))
@@ -394,7 +394,7 @@ fn the_layer_pill_of_a_board_window_steps_that_windows_board() {
     assert_eq!(
         active_layer(&rig.app, &rig.a),
         Some(PcbLayer::Copper(CopperLayer::Bottom)),
-        "the main pill leaves A"
+        "the main window's step leaves A"
     );
 }
 

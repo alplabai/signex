@@ -152,6 +152,21 @@ pub fn layer_pill(
     }
 }
 
+/// The active-layer pill as a plain label: the pill's fill, no hover.
+pub fn layer_label(tokens: &ThemeTokens) -> impl Fn(&Theme) -> container::Style + 'static {
+    let r = resolve(tokens);
+    let (fill, ink) = (r.accent_soft, r.accent_soft_ink);
+    move |_| container::Style {
+        background: Some(Background::Color(fill)),
+        text_color: Some(ink),
+        border: Border {
+            radius: BAR_CONTROL_RADIUS.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
 /// The selection summary as a button: a sunken pill in the text ink, since
 /// a click opens Properties.
 pub fn selection_pill(

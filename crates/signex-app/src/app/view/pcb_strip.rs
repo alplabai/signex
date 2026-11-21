@@ -111,6 +111,13 @@ fn describe(
     }
 }
 
+impl Signex {
+    /// Whether boards show the layer strip: the Strip layer switcher.
+    pub(crate) fn shows_pcb_layer_strip(&self) -> bool {
+        self.ui_state.layer_switcher == crate::layer_strip_prefs::LayerSwitcher::Strip
+    }
+}
+
 /// The board the strip belongs to and how its view stands.
 pub(super) struct StripBoard<'b> {
     pub board: &'b PcbBoard,

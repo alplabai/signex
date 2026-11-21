@@ -369,6 +369,32 @@ pub fn write_wheel_mode_pref_at(path: &Path, mode: crate::canvas::WheelMode) {
     })
 }
 
+/// Read "Layer switcher". Defaults to the strip when the key is missing or
+/// not a known value.
+pub fn read_layer_switcher_pref_from(
+    json: Option<&serde_json::Value>,
+) -> crate::layer_strip_prefs::LayerSwitcher {
+    json.and_then(|json| json["pcb_layer_switcher"].as_str())
+        .map(crate::layer_strip_prefs::LayerSwitcher::from_pref)
+        .unwrap_or_default()
+}
+
+pub fn write_layer_switcher_pref(switcher: crate::layer_strip_prefs::LayerSwitcher) {
+    write_layer_switcher_pref_at(&prefs_path(), switcher)
+}
+
+pub fn write_layer_switcher_pref_at(
+    path: &Path,
+    switcher: crate::layer_strip_prefs::LayerSwitcher,
+) {
+    update_prefs_json(path, "pcb_layer_switcher", |prefs| {
+        prefs.insert(
+            "pcb_layer_switcher".to_string(),
+            serde_json::json!(switcher.as_pref()),
+        );
+    })
+}
+
 /// Read "Remember window size and position" (opt-in). Defaults to off when
 /// the key is missing or not a boolean.
 pub fn read_remember_window_geometry_pref_from(json: Option<&serde_json::Value>) -> bool {
