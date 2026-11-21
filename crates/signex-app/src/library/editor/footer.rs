@@ -68,7 +68,7 @@ pub(super) fn view<'a>(
 
 /// "Read-only library - this component cannot be changed." and Copy to
 /// Library…, disabled with a "not available yet" tooltip: no component
-/// row copy exists (#134), and the symbol-only stock copy is another flow.
+/// row copy exists (mockup row 134), and the symbol-only stock copy is another flow.
 fn read_only_line<'a>(
     tokens: &'a signex_types::theme::ThemeTokens,
     i18n: &I18n,

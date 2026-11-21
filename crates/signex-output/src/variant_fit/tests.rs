@@ -229,7 +229,7 @@ fn an_expression_value_shows_evaluated_in_the_matrix_as_in_the_bom() {
 }
 
 /// The parts filter matches the designator, the value as written and the
-/// value shown (maintainer answer 2026-11-20).
+/// value shown (Caner, 2026-11-20).
 #[test]
 fn the_filter_matches_an_expression_value_as_written_and_as_shown() {
     let ctx = context(vec![part("R1", "= Rbase * 2", &[("Rbase", "10kΩ")])]);

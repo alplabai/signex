@@ -147,14 +147,8 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "layers" => Layers,
         "net_classes" => NetClasses,
         "library" => Library,
-        // The SCH Library and Footprint Library panels, merged into the
-        // Library panel (mockup rows 120 and 121); a region holding both
-        // keeps one.
-        "sch_library" | "footprint_library" => Library,
         // The footprint editor's own Layers panel, merged into Layers (#2359).
         "footprint_layers" => Layers,
-        // The symbol editor's Pins panel, folded into Properties (mockup row 122).
-        "symbol_pins" => return None,
         "pcb_nets" => PcbNets,
         "history" => History,
         "net_inspector" => NetInspector,
@@ -249,26 +243,23 @@ mod tests {
         );
     }
 
-    /// Mockup rows 119-122: a layout saved with the SCH Library, Footprint Library and
-    /// Pins panels loads with one Library panel where the first of them sat,
-    /// and without Pins; saving it again writes no alias name.
+    /// Mockup rows 119-122: the old SCH Library, Footprint Library and Pins
+    /// keys of a saved layout are dropped with no alias (no-legacy rule), the
+    /// rest of the layout loads, and no panel saves under those keys.
     #[test]
-    fn a_saved_layout_with_the_merged_library_panels_loads_one_library_panel() {
+    fn a_saved_layout_drops_the_merged_library_panel_keys() {
         let json = serde_json::json!({
             "dock": {
                 "left": {
-                    "panels": ["projects", "sch_library", "footprint_library", "library"],
+                    "panels": ["projects", "sch_library", "footprint_library"],
                     "collapsed": false
                 },
                 "right": { "panels": ["properties"], "collapsed": false },
                 "bottom": { "panels": ["messages", "symbol_pins", "erc"], "collapsed": false },
             }
         });
-        let dock = read_dock_layout_from(Some(&json)).expect("the old layout loads");
-        assert_eq!(
-            dock.panel_kinds(PanelPosition::Left),
-            [PanelKind::Projects, PanelKind::Library]
-        );
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Projects]);
         assert_eq!(
             dock.panel_kinds(PanelPosition::Bottom),
             [PanelKind::Messages, PanelKind::Erc]
