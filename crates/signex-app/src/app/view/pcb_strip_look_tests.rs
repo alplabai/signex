@@ -120,6 +120,29 @@ fn the_strip_lays_out_every_visible_tab_inside_its_scrollable() {
     assert_eq!(size.height, STRIP_HEIGHT);
 }
 
+/// A line divides two neighbouring tabs, in both Graphite themes.
+#[test]
+fn a_visible_line_divides_neighbouring_tabs() {
+    let board = board(&["TopCopper", "BottomCopper", "TopPaste"]);
+    let view = PcbLayerView::default();
+    let window = Size::new(900.0, STRIP_HEIGHT.ceil());
+    for theme in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(theme);
+        let texts = lay_out_texts(strip(&board, &view, false, &tokens), window);
+        let at = |name: &str| texts.iter().find(|t| t.text == name).expect(name).bounds;
+        let (left, right) = (at("Bottom Layer"), at("Top Paste"));
+        let pixels = draw_pixels(strip(&board, &view, false, &tokens), window);
+        let row = 3 * window.width as usize * 4;
+        let pixel = |x: usize| &pixels[row + x * 4..row + x * 4 + 3];
+        let from = (left.x + left.width).ceil() as usize + 1;
+        let ground = pixel(from).to_vec();
+        assert!(
+            (from..right.x.floor() as usize).any(|x| pixel(x) != ground.as_slice()),
+            "{theme:?}: no divider between the tabs"
+        );
+    }
+}
+
 /// mockup row 104: a hidden layer has no tab; showing every layer brings it back.
 /// A layer token this build does not know has no tab: the strip lists what
 /// the Layers panel shows (Caner, 2026-11-20).

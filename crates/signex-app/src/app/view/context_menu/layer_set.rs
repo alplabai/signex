@@ -220,10 +220,9 @@ impl Signex {
             LayerSetCard::Managing => managing_entries(i18n, prefs, tokens),
         };
         let card = super::placement::menu_card(entries, tokens, &panel_ctx.ui_font_name);
-        Self::menu_overlay(
+        Self::anchored_layers(
             set_msg(LayerSetMenuMsg::Dismissed),
-            card.element,
-            (menu.x, menu.y),
+            super::anchored::AnchoredMenu::above(card.element, (menu.x, menu.y)),
         )
     }
 }

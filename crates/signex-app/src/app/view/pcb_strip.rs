@@ -35,7 +35,7 @@ const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
 const SP: crate::styles::Spacing = crate::styles::Spacing::DEFAULT;
 
 /// Height of the strip.
-const STRIP_HEIGHT: f32 = chrome_px(28.0 * 11.0 / 12.0);
+pub(in crate::app) const STRIP_HEIGHT: f32 = chrome_px(28.0 * 11.0 / 12.0);
 /// Side padding of the layer set button.
 const SET_PAD_X: f32 = chrome_px(8.0 * 11.0 / 12.0);
 /// Side padding of a tab.
@@ -188,7 +188,9 @@ pub(super) fn layer_strip<'a>(
         // The colour the view gave the layer (Layer colour..., #2363).
         let swatch = layer_style::painted_layer_colour(&paint, layer);
         let selected = active == Some(layer);
-        tabs = tabs.push(layer_tab(label, swatch, tokens, selected, messages));
+        tabs = tabs
+            .push(layer_tab(label, swatch, tokens, selected, messages))
+            .push(tab_divider(tokens));
     }
     // Vias and through-hole pads: shown while the Multi-Layer row is, and
     // never in a layer set.
@@ -199,7 +201,9 @@ pub(super) fn layer_strip<'a>(
             menu: None,
         };
         let swatch = layer_style::multi_layer_colour();
-        tabs = tabs.push(layer_tab(label, swatch, tokens, false, messages));
+        tabs = tabs
+            .push(layer_tab(label, swatch, tokens, false, messages))
+            .push(tab_divider(tokens));
     }
     // A long strip scrolls inside the window instead of widening it.
     let tabs = scrollable(tabs)
@@ -209,6 +213,7 @@ pub(super) fn layer_strip<'a>(
         .height(Length::Fill);
     let content = row![
         layer_set_button(i18n, view, window, set_menu_open, tokens),
+        tab_divider(tokens),
         tabs.boxed(),
     ]
     .height(Length::Fill);
@@ -264,10 +269,7 @@ fn layer_set_button<'a>(
 ) -> Element<'a, Message> {
     let r = resolve(tokens);
     let (fill, ink) = set_button_look(tokens, open);
-    let (wash, line) = (
-        crate::styles::tokens::hover_overlay(tokens),
-        ti(tokens.border),
-    );
+    let wash = crate::styles::tokens::hover_overlay(tokens);
     let content = row![
         text(layer_set_label(i18n, view))
             .size(TS.body)
@@ -286,10 +288,6 @@ fn layer_set_button<'a>(
             background: fill
                 .or_else(|| matches!(status, Status::Hovered | Status::Pressed).then_some(wash))
                 .map(Background::Color),
-            border: Border {
-                right: Side::default().color(line).width(HAIRLINE),
-                ..Border::default()
-            },
             ..ButtonStyle::default()
         })
         .on_press(opened);
@@ -306,7 +304,20 @@ fn layer_set_button<'a>(
     signex_widgets::tooltip(set_button, tip, signex_widgets::tooltip::Position::Top).boxed()
 }
 
-/// One tab: swatch and name with a divider on its right; the active layer's
+/// The full-height line between two tabs.
+fn tab_divider<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
+    let line = resolve(tokens).line_strong;
+    container(Space::new())
+        .width(1.0)
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(line)),
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// One tab: swatch and name; the active layer's
 /// tab is filled accent-soft, in medium weight, with the accent bar along
 /// its top.
 fn layer_tab<'a>(
@@ -352,11 +363,10 @@ fn layer_tab<'a>(
     ]
     .spacing(TAB_GAP)
     .align_y(iced::Alignment::Center);
-    let (fill, wash, accent, line) = (
+    let (fill, wash, accent) = (
         r.accent_soft,
         crate::styles::tokens::hover_overlay(tokens),
         ti(tokens.accent),
-        r.line_strong,
     );
     let TabMessages { press, menu } = messages;
     let tab = button(container(content).center_y(Length::Fill))
@@ -368,10 +378,7 @@ fn layer_tab<'a>(
             } else {
                 matches!(status, Status::Hovered | Status::Pressed).then_some(wash)
             };
-            let mut border = Border {
-                right: Side::default().color(line).width(HAIRLINE),
-                ..Border::default()
-            };
+            let mut border = Border::default();
             if selected {
                 border.top = Side::default().color(accent).width(ACCENT_BAR);
             }

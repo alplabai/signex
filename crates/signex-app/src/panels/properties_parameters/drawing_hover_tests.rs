@@ -1,26 +1,20 @@
-//! The Grid and snap drawing holds one steady highlight under the pointer.
+//! The Grid and snap drawing does not follow the pointer.
 //!
 //! Driven as the app runs: the real General tab through `UserInterface`,
 //! keeping its cache between frames, with every message applied through
-//! `Signex::update`. Calling `canvas::Program::update` alone cannot see this
-//! bug, which lives in the hit regions the pointer crosses.
-//!
-//! Before the fix each dot was its own small target with a dead gap around
-//! it, and the labels touched the ticks, so a walk down the drawing lit and
-//! unlit Visible Grid once per dot row and a one-pixel jitter on any edge
-//! flipped the highlight. Both assertions below fail on that code.
+//! `Signex::update`. Calling `canvas::Program::update` alone cannot see a
+//! highlight that jumps between fields while the pointer crosses a drawing.
 
 use iced::mouse::Event as MouseEvent;
 use iced::{Point, Size, Widget};
 use iced_runtime::UserInterface;
 use iced_runtime::user_interface::Cache;
 use signex_i18n::ids;
-use signex_widgets::property_illustration::{FieldId, IllustrationMsg};
+use signex_widgets::property_illustration::IllustrationMsg;
 
 use super::super::{PROPERTY_ROW_PAD_X, PanelMsg};
 use super::document_options::DocumentOptionsMsg;
 use super::general::view_properties_general;
-use super::grid_illustration::{SNAP_GRID, VISIBLE_GRID};
 use crate::app::{Message, Signex};
 use crate::dock::DockMessage;
 use crate::layout_probe::{find, headless_renderer, lay_out_texts};
@@ -93,46 +87,19 @@ impl PanelLoop {
         }
     }
 
-    fn lit(&self) -> Option<FieldId> {
+    fn is_lit(&self) -> bool {
         let hover = &self.app.document_state.panel_ctx.document_options.hover;
-        hover.hovered().cloned()
+        hover.hovered().is_some()
     }
 }
 
 #[test]
-fn walking_down_the_grid_drawing_lights_each_callout_once_and_holds_it() {
+fn walking_down_the_grid_drawing_lights_no_field() {
     let mut panel = PanelLoop::new();
     let end = panel.drawing_end().floor() as i32;
-    let mut lit = None;
-    let mut sequence = Vec::new();
     for y in 0..end {
-        let at = Point::new(DOT_COLUMN_X, y as f32);
-        panel.move_to(at);
-        let now = panel.lit();
-        if now == lit {
-            continue;
-        }
-        if let Some(field) = &now {
-            sequence.push(field.clone());
-        }
-        lit = now;
-        // A one-pixel jitter over the edge just crossed changes nothing.
-        let before = panel.published.len();
-        for jitter in [y - 1, y, y - 1, y, y - 1, y] {
-            panel.move_to(Point::new(DOT_COLUMN_X, jitter as f32));
-            assert_eq!(panel.lit(), lit, "the highlight flipped at y = {jitter}");
-        }
-        assert_eq!(panel.published.len(), before, "jitter at y = {y} published");
+        panel.move_to(Point::new(DOT_COLUMN_X, y as f32));
+        assert!(!panel.is_lit(), "a field lit at y = {y}");
     }
-    assert_eq!(
-        sequence,
-        vec![VISIBLE_GRID, SNAP_GRID],
-        "each callout lights once, top to bottom"
-    );
-    assert_eq!(
-        panel.published.len(),
-        4,
-        "one enter and one leave per callout: {:?}",
-        panel.published
-    );
+    assert!(panel.published.is_empty(), "{:?}", panel.published);
 }

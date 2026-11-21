@@ -18,6 +18,8 @@ pub(crate) struct AnchoredMenu<'a, Message> {
     /// The card, then the flyout when there is one.
     children: Vec<Element<'a, Message>>,
     anchor: (f32, f32),
+    /// The card's bottom edge, not its top, sits at the anchor.
+    opens_upward: bool,
     /// Where the flyout's top sits below the card's top.
     flyout_offset: f32,
 }
@@ -28,7 +30,17 @@ impl<'a, Message: 'a> AnchoredMenu<'a, Message> {
         Self {
             children: vec![card],
             anchor,
+            opens_upward: false,
             flyout_offset: 0.0,
+        }
+    }
+
+    /// `card` with its left edge at `anchor.0` and its bottom at `anchor.1`,
+    /// for a control along the bottom of the window.
+    pub fn above(card: Element<'a, Message>, anchor: (f32, f32)) -> Self {
+        Self {
+            opens_upward: true,
+            ..Self::new(card, anchor)
         }
     }
 
@@ -72,7 +84,12 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for AnchoredMenu<'_, 
             let size = (child_tree.size.width, child_tree.size.height);
             let at = if i == 0 {
                 card = size;
-                origin = clamp_menu_origin(self.anchor, size, window);
+                let wanted = if self.opens_upward {
+                    (self.anchor.0, self.anchor.1 - size.1)
+                } else {
+                    self.anchor
+                };
+                origin = clamp_menu_origin(wanted, size, window);
                 origin
             } else {
                 submenu_origin(origin, card.0, size, self.flyout_offset, window)
