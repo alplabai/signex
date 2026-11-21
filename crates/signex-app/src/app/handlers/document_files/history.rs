@@ -709,20 +709,7 @@ impl Signex {
             }
             let result = signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()));
             let install = self.document_state.replace_engine_at(path, result);
-            install
-                .notices
-                .iter()
-                .for_each(crate::app::projector::log_notice);
-            if install.installed {
-                // An undocked window on this sheet must not keep drawing the
-                // replaced engine, nor select its objects.
-                self.refresh_slots_from_engine(
-                    path,
-                    false,
-                    crate::schematic_runtime::RenderInvalidation::FULL,
-                    true,
-                );
-            }
+            self.project_replaced_engine(path, install.installed, &install.notices);
             install.installed
         };
         self.settle_restored_schematic(path, installed, commit, restored_bytes);

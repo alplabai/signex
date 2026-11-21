@@ -15,18 +15,23 @@
 #             or swapping one name for another needs a visible edit here. A
 #             listed wrapper that no longer calls the core half directly fails
 #             until its line is removed and both values are lowered with it.
-#   gui_names The module names no GUI state, not the diagnostics log, not
-#             `catch_unwind`, and none of the helpers that log directly
-#             (`log_sheet_repairs`, `report_bare_pin_taps`,
-#             `report_unrecognized_sheet_size`, `warn_if_read_only`). A line
-#             for Messages is a Notice.
+#   gui_names The module names no GUI state, not the diagnostics log (nor
+#             `projector`, `log_notice` or `tracing`), not `catch_unwind`, and
+#             none of the helpers that log directly (`log_sheet_repairs`,
+#             `report_bare_pin_taps`, `report_unrecognized_sheet_size`,
+#             `warn_if_read_only`). A line for Messages is a Notice.
 #   no_traits The module declares no `trait` and no `impl .. for ..`.
 #   closures  No closure or fn-pointer type (`impl FnOnce(..)`, `F: Fn(..)`,
 #             `fn(..)`): wrapper code never runs inside the core half.
-#   removal   `<map>.engines.remove(..)` appears exactly once, inside an
-#             `Err(..)` match arm: a failed install behind a tab drops the
-#             stale engine (#2326 D5). Every other engine goes through the
-#             existing DocumentState helpers.
+#   removal   The module drops an engine in exactly two places (#2326 D5):
+#             `<map>.engines.remove(..)` inside an `Err(..)` match arm (a
+#             failed install behind a tab drops the stale engine), and the
+#             fallback `self.clear_active_engine()` of
+#             `sync_engine_from_schematic`. Any other drop fails: a removing
+#             map method (`remove`, `remove_entry`, `retain`, `drain`, `clear`,
+#             `extract_if`, `entry`), a `&mut` borrow of the map (UFCS,
+#             `mem::take`, a rebinding), a write to the field, or a call of
+#             `remove_engine` / `clear_active_engine`.
 #
 # All read the code through ast-grep, so comments do not count. Test code is
 # left out: files named `tests.rs` or `*_tests.rs`, anything under a `tests/`
@@ -36,8 +41,8 @@
 # caught at the import only; a macro-generated method is not guarded; a second
 # fn of a listed name in that file counts as the wrapper; a local binding named
 # like a core function counts as a use; a production file named like a test is
-# skipped). The removal rule counts the literal `.engines.remove` only: a
-# helper that removes inside (`clear_active_engine`) is not counted.
+# skipped). The removal rule reads the `engines` field by name: a destructured
+# `let Self { engines, .. } = self` or a write over all of `*self` is not seen.
 #
 # Usage: scripts/check_document_load_seam.sh   (DOCUMENT_LOAD_SEAM_ROOT
 # overrides the tree, for scripts/test_check_document_load_seam.sh)
@@ -179,8 +184,9 @@ hits() {
 gui="$(hits document-load-gui-name)"
 traits="$(hits document-load-trait)"
 closures="$(hits document-load-closure)"
-removals="$(hits document-load-engines-remove)"
+drops="$(hits document-load-engine-drop)"
 in_err="$(hits document-load-engines-remove-err)"
+sync_clear="$(hits document-load-sync-clear)"
 if [[ -n "$traits" ]]; then
   echo "Load seam guard: FAIL — $CORE declares a trait or a trait impl:"
   printf '%s\n' "$traits" | awk '{ print "  " $0 }'
@@ -199,15 +205,22 @@ if [[ -n "$closures" ]]; then
   echo "  The wrapper runs its GUI steps around the core half, never inside it."
   fail=1
 fi
-n_removals="$(printf '%s' "$removals" | grep -c . || true)"
 n_in_err="$(printf '%s' "$in_err" | grep -c . || true)"
-if (( n_removals != 1 || n_in_err != 1 )); then
-  echo "Load seam guard: FAIL — $CORE must remove from the engine map exactly once, in the Err arm of a failed install behind a tab (found $n_removals, $n_in_err in an Err arm):"
-  printf '%s\n' "$removals" | sed '/^$/d' | awk '{ print "  " $0 }'
+n_sync_clear="$(printf '%s' "$sync_clear" | grep -c . || true)"
+other_drops="$(comm -23 <(printf '%s\n' "$drops" | sed '/^$/d') \
+  <(printf '%s\n%s\n' "$in_err" "$sync_clear" | sed '/^$/d' | sort))"
+if [[ -n "$other_drops" ]]; then
+  echo "Load seam guard: FAIL — $CORE drops an engine outside its two allowed places (#2326 D5):"
+  printf '%s\n' "$other_drops" | awk '{ print "  " $0 }'
+  echo "  Only the Err arm of a failed install behind a tab removes; only sync_engine_from_schematic clears the active engine."
+  fail=1
+fi
+if (( n_in_err != 1 || n_sync_clear != 1 )); then
+  echo "Load seam guard: FAIL — $CORE must remove from the engine map once, in the Err arm of a failed install behind a tab, and clear the active engine once, in sync_engine_from_schematic (found $n_in_err and $n_sync_clear)."
   fail=1
 fi
 
 if (( fail )); then
   exit 1
 fi
-echo "Load seam guard: OK — the core half is called only by the $count listed wrappers (#2704); no GUI names, traits or closures in $CORE; one engine removal, in its Err arm."
+echo "Load seam guard: OK — the core half is called only by the $count listed wrappers (#2704); no GUI names, traits or closures in $CORE; engines dropped only in the Err arm and the sync fallback."

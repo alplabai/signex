@@ -26,11 +26,7 @@ impl DocumentState {
     /// its recovery check queued (#1208); the per-placement designator note
     /// is due.
     pub(crate) fn settle_opened_sheet(&mut self, path: &Path, installed: bool, repaired: bool) {
-        // A failed install leaves the older engine at `path`, which is not
-        // known to equal the file.
-        if installed && let Some(engine) = self.engines.get_mut(path) {
-            engine.mark_saved();
-        }
+        self.mark_installed_engine_saved(path, installed);
         if repaired && installed {
             self.mark_document_dirty(path);
         }

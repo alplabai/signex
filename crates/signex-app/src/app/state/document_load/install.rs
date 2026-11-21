@@ -6,7 +6,7 @@ use signex_engine::{Engine, EngineError};
 use signex_types::schematic::SchematicSheet;
 
 use super::SheetInstall;
-use crate::app::core::event::legacy_warning;
+use crate::app::core::event::{Notice, NoticeLevel};
 use crate::app::state::DocumentState;
 
 impl DocumentState {
@@ -43,10 +43,13 @@ impl DocumentState {
                 self.active_path = Some(p);
                 SheetInstall::installed()
             }
-            Err(error) => SheetInstall::failed(Some(legacy_warning(format!(
-                "{} could not be loaded into the editor ({error}); the sheet already open was kept",
-                p.display()
-            )))),
+            Err(error) => SheetInstall::failed(Some(Notice::legacy_english(
+                NoticeLevel::Warning,
+                format!(
+                    "{} could not be loaded into the editor ({error}); the sheet already open was kept",
+                    p.display()
+                ),
+            ))),
         }
     }
 
@@ -66,10 +69,13 @@ impl DocumentState {
             }
             Err(error) => {
                 self.engines.remove(path);
-                SheetInstall::failed(Some(legacy_warning(format!(
-                    "[git] restore: {} was restored but its engine could not start: {error}",
-                    path.display()
-                ))))
+                SheetInstall::failed(Some(Notice::legacy_english(
+                    NoticeLevel::Warning,
+                    format!(
+                        "[git] restore: {} was restored but its engine could not start: {error}",
+                        path.display()
+                    ),
+                )))
             }
         }
     }

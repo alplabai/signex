@@ -120,17 +120,22 @@ impl Signex {
     /// Install a reloaded `sheet` as the engine of the (non-active) schematic
     /// at `path`, leaving the canvas and the user's tool alone. A sheet the
     /// engine rejects drops the stale engine, so a save cannot undo it.
-    /// Returns whether the new engine was installed. Production reaches this
-    /// arm through `install_reloaded_schematic`, which this runs.
+    /// Returns whether the new engine was installed.
     #[cfg(test)]
     pub(crate) fn install_schematic_at(
         &mut self,
         path: &std::path::Path,
         sheet: SchematicSheet,
     ) -> bool {
-        // No tab has this index, so the wrapper takes its non-active arm.
-        self.install_reloaded_schematic(usize::MAX, path, sheet, false, None)
-            .0
+        // The non-active arm of `install_reloaded_schematic`, without its
+        // repair reports and settle steps, as on trunk.
+        if self.text_edit_targets_sheet_at(path) {
+            self.interaction_state.editing_text = None;
+        }
+        let result = signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()));
+        let install = self.document_state.replace_engine_at(path, result);
+        self.project_replaced_engine(path, install.installed, &install.notices);
+        install.installed
     }
 
     /// Make `result` the engine of the active tab at `p`; a failure reaches
@@ -143,10 +148,7 @@ impl Signex {
         result: Result<signex_engine::Engine, signex_engine::EngineError>,
     ) -> bool {
         let install = self.document_state.install_active(p, result);
-        install
-            .notices
-            .iter()
-            .for_each(super::projector::log_notice);
+        super::projector::log_notices(&install.notices);
         install.installed
     }
 
@@ -154,9 +156,8 @@ impl Signex {
     /// position is the clean point. Only when `installed`: a failed install
     /// leaves the older engine at `path`, which is not known to equal the file.
     pub(crate) fn mark_installed_engine_saved(&mut self, path: &std::path::Path, installed: bool) {
-        if installed && let Some(engine) = self.document_state.engines.get_mut(path) {
-            engine.mark_saved();
-        }
+        self.document_state
+            .mark_installed_engine_saved(path, installed);
     }
 
     /// The board shown in `window_id`: the active tab's in the main window,
@@ -440,10 +441,7 @@ impl Signex {
                 let install = self
                     .document_state
                     .sync_engine_from_schematic(Some(schematic));
-                install
-                    .notices
-                    .iter()
-                    .for_each(super::projector::log_notice);
+                super::projector::log_notices(&install.notices);
                 install.installed
             }
             None => false,

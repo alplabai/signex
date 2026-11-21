@@ -20,11 +20,15 @@ DROP_ARM='fn drop_stale(s: &mut DocumentState, r: Result<u8, u8>) {
         }
     }
 }'
+SYNC_CLEAR='impl DocumentState {
+    fn sync_engine_from_schematic(&mut self) { self.clear_active_engine(); }
+}'
 CORE_OK="pub(crate) fn install_active(&mut self) -> bool { true }
 pub(super) fn helper_notice() {}
 pub(self) fn self_only() {}
 fn private_step() {}
-$DROP_ARM"
+$DROP_ARM
+$SYNC_CLEAR"
 LIST_OK='# the exception
 load_gateway.rs apply_loaded_schematic'
 WRAPPER='impl Signex {
@@ -109,6 +113,12 @@ for helper in log_sheet_repairs report_bare_pin_taps report_unrecognized_sheet_s
   run_case "core_calls_$helper" fail "$CORE_OK
 fn f(p: &Path) { crate::app::$helper(p); }" "$LIST_OK" "$WRAPPER"
 done
+run_case core_logs_through_projector fail "$CORE_OK
+fn f(n: &Notice) { crate::app::projector::log_notice(n); }" "$LIST_OK" "$WRAPPER"
+run_case core_imports_log_notice fail "$CORE_OK
+use super::super::projector_alias::log_notice;" "$LIST_OK" "$WRAPPER"
+run_case core_tracing fail "$CORE_OK
+fn f() { tracing::warn!(\"x\"); }" "$LIST_OK" "$WRAPPER"
 run_case core_comment_only pass "// ui_state, catch_unwind and log_sheet_repairs are named in prose only.
 $CORE_OK" "$LIST_OK" "$WRAPPER"
 # No closure parameter.
@@ -129,11 +139,28 @@ fn drop_stale(s: &mut DocumentState, r: Result<u8, u8>) {
         }
         Err(_) => {}
     }
-}' "$LIST_OK" "$WRAPPER"
-run_case no_removal fail 'pub(crate) fn install_active(&mut self) -> bool { true }' "$LIST_OK" "$WRAPPER"
+}
+'"$SYNC_CLEAR" "$LIST_OK" "$WRAPPER"
+run_case no_removal fail "pub(crate) fn install_active(&mut self) -> bool { true }
+$SYNC_CLEAR" "$LIST_OK" "$WRAPPER"
 run_case removal_in_test pass "$CORE_OK
 #[cfg(test)]
 mod tests { fn t(s: &mut DocumentState) { s.engines.remove(&3); } }" "$LIST_OK" "$WRAPPER"
+# Any other way to drop an engine (#2326 D5).
+for drop in 'self.engines.retain(|k, _| k != p)' 'std::collections::HashMap::remove(&mut self.engines, p)' \
+  'let _ = self.engines.drain()' 'self.engines.clear()' 'let _ = self.engines.remove_entry(p)' \
+  'let _ = self.engines.entry(p.to_path_buf())' 'let _ = std::mem::take(&mut self.engines)' \
+  'let m = &mut self.engines; m.remove(p)' 'self.engines = HashMap::new()' \
+  'self.remove_engine(p)' 'self.clear_active_engine()' 'DocumentState::clear_active_engine(self)'; do
+  n_drop=$((${n_drop:-0} + 1))
+  echo "      drop_$n_drop: $drop"
+  run_case "drop_$n_drop" fail "$CORE_OK
+impl DocumentState { fn probe_drop(&mut self, p: &Path) { $drop; } }" "$LIST_OK" "$WRAPPER"
+done
+run_case no_sync_clear fail "pub(crate) fn install_active(&mut self) -> bool { true }
+$DROP_ARM" "$LIST_OK" "$WRAPPER"
+run_case insert_and_read pass "$CORE_OK
+impl DocumentState { fn put(&mut self, p: &Path, e: Engine) { self.engines.insert(p.to_path_buf(), e); let _ = self.engines.get_mut(p); } }" "$LIST_OK" "$WRAPPER"
 
 # A tree without the core module is an error, never a pass.
 mkdir -p "$TMP/no_core/$APP" "$TMP/no_core/scripts"

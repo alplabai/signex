@@ -6,8 +6,7 @@ mod notice;
 
 pub(crate) use document_changed::{ChangeCause, DocumentChanged};
 pub(crate) use notice::{
-    Notice, NoticeBody, NoticeLevel, engine_notices, legacy_warning, locked_skips_line,
-    read_only_refusal_message,
+    Notice, NoticeBody, NoticeLevel, engine_notices, locked_skips_line, read_only_refusal_message,
 };
 
 /// One thing the core reports, in the order it happened.

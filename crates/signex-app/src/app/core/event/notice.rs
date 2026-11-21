@@ -44,12 +44,6 @@ impl Notice {
     }
 }
 
-/// A warning in app-authored English: the one constructor the edit tails and
-/// the load path share for a plain warning line.
-pub(crate) fn legacy_warning(text: impl Into<String>) -> Notice {
-    Notice::legacy_english(NoticeLevel::Warning, text)
-}
-
 /// The notices `engine` holds from its last command, taken: its older
 /// English warnings first, then its typed notices, all at warning level.
 pub(crate) fn engine_notices(engine: &mut Engine) -> Vec<Notice> {
