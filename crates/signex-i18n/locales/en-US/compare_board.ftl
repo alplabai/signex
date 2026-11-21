@@ -69,6 +69,7 @@ compare-board-action-waits = Skipped: a row it needs is skipped
 # Tooltips of a direction that cannot be chosen.
 compare-board-unavailable-no-board-change = Update PCB has nothing to change for this row.
 compare-board-unavailable-schematic-later = Taking this difference into the schematic is not available yet.
+compare-board-unavailable-footprint-later = Taking the board's footprint into the schematic is not available yet (#2653).
 
 compare-board-export = Export report…
 # Title of the save dialog.

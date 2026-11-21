@@ -468,7 +468,7 @@ fn a_blocked_side_keeps_its_reason_and_is_never_chosen() {
     assert_eq!(report.rows[0].direction, Direction::Skip);
     assert!(!report.eco().rows[0].on);
 
-    // The footprint mismatch's board side is not wired yet (a follow-up issue).
+    // The footprint mismatch's board side is not wired yet (#2653).
     let report = sample();
     let footprint = by_pcb(&report, &EcoKey::ChangeFootprint(u(0xa2)));
     assert_eq!(

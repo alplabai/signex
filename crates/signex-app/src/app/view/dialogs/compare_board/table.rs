@@ -10,8 +10,8 @@ use iced::widget::{Column, Row, Space, container, row, scrollable, tooltip as ti
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Shadow, Theme, Vector};
 use iced::{Widget as _, widget::text::Wrapping};
 use signex_engine::pcb::eco::{
-    CompareAction, CompareKind, CompareObject, CompareReport, CompareRow, CompareValue, Direction,
-    Unavailable,
+    BackBlock, CompareAction, CompareKind, CompareObject, CompareReport, CompareRow, CompareValue,
+    Direction, Unavailable,
 };
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
@@ -87,6 +87,10 @@ fn unavailable_text(i18n: &I18n, why: &Unavailable) -> Localized {
         Unavailable::NoBoardChange => t!(i18n, ids::COMPARE_BOARD_UNAVAILABLE_NO_BOARD_CHANGE),
         Unavailable::Board(block) => super::super::update_pcb::texts::blocked(i18n, block),
         Unavailable::SchematicLater => t!(i18n, ids::COMPARE_BOARD_UNAVAILABLE_SCHEMATIC_LATER),
+        // Taking a board footprint into the schematic is follow-up #2653.
+        Unavailable::Schematic(BackBlock::FootprintFromBoard) => {
+            t!(i18n, ids::COMPARE_BOARD_UNAVAILABLE_FOOTPRINT_LATER)
+        }
         Unavailable::Schematic(block) => super::super::back_annotate::block_text(i18n, block),
     }
 }
@@ -558,4 +562,20 @@ fn hint<'a>(label: Localized, tokens: &ThemeTokens) -> Element<'a, Message> {
             r.line_strong,
         ))
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_engine::pcb::eco::{BackBlock, Unavailable};
+    use signex_i18n::I18n;
+
+    use super::unavailable_text;
+
+    #[test]
+    fn a_footprint_mismatch_names_its_open_follow_up() {
+        let why = Unavailable::Schematic(BackBlock::FootprintFromBoard);
+        let text = unavailable_text(I18n::en_us_ref(), &why).into_string();
+        assert!(text.contains("#2653"), "{text}");
+        assert!(!text.contains("#2248"), "{text}");
+    }
 }

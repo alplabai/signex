@@ -54,6 +54,7 @@ define_ids! {
     COMPARE_BOARD_ACTION_WAITS = "compare-board-action-waits";
     COMPARE_BOARD_UNAVAILABLE_NO_BOARD_CHANGE = "compare-board-unavailable-no-board-change";
     COMPARE_BOARD_UNAVAILABLE_SCHEMATIC_LATER = "compare-board-unavailable-schematic-later";
+    COMPARE_BOARD_UNAVAILABLE_FOOTPRINT_LATER = "compare-board-unavailable-footprint-later";
     COMPARE_BOARD_EXPORT = "compare-board-export";
     COMPARE_BOARD_EXPORT_TITLE = "compare-board-export-title";
     COMPARE_BOARD_FOOTER = "compare-board-footer";
