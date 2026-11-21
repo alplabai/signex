@@ -24,7 +24,7 @@ WRAPPER='impl Signex {
 CALL='fn f(app: &mut Signex) { let _ = app.document_state.settle_sheet_at(); }'
 
 # run_case <name> <expected: fail|pass> <core mod.rs> <allowlist> <sheet_on.rs> [<file under app> <body>]
-# The trees allow one wrapper (SHEET_CHANGE_SEAM_MAX=1).
+# The trees allow one wrapper, the one LIST_OK names (its `cksum` below).
 run_case() {
   local name="$1" expect="$2" tree="$TMP/$1" status=0
   mkdir -p "$tree/$APP/state/sheet_change" "$tree/$APP/handlers/editing_commands" "$tree/scripts"
@@ -35,7 +35,8 @@ run_case() {
     mkdir -p "$tree/$APP/$(dirname "$6")"
     printf '%s\n' "$7" > "$tree/$APP/$6"
   fi
-  SHEET_CHANGE_SEAM_MAX=1 SHEET_CHANGE_SEAM_ROOT="$tree" bash "$GATE" >/dev/null 2>&1 || status=$?
+  SHEET_CHANGE_SEAM_MAX=1 SHEET_CHANGE_SEAM_CKSUM=2413533166 SHEET_CHANGE_SEAM_ROOT="$tree" \
+    bash "$GATE" >/dev/null 2>&1 || status=$?
   if [[ "$expect" == fail && $status -ne 1 ]] || [[ "$expect" == pass && $status -ne 0 ]]; then
     echo "FAIL  $name — expected $expect, gate exit $status"
     failures=$((failures + 1))
@@ -65,11 +66,30 @@ run_case in_assert_macro fail "$CORE_OK" "$LIST_OK" "$WRAPPER" handlers/net_colo
 run_case macro_in_wrapper pass "$CORE_OK" "$LIST_OK" 'impl Signex {
     fn after_sheet_change(&mut self) { let _ = vec![self.document_state.settle_sheet_at()]; }
 }'
+# A core function named as a value, or imported, counts as a use.
+run_case path_as_value fail "$CORE_OK" "$LIST_OK" "$WRAPPER" handlers/net_colors.rs 'fn f(v: Vec<DocumentState>) { let _ = v.into_iter().map(DocumentState::settle_sheet_at); }'
+run_case bare_value fail "$CORE_OK" "$LIST_OK" "$WRAPPER" handlers/net_colors.rs 'fn f() { let g = settle_sheet_at; }'
+run_case import fail "$CORE_OK" "$LIST_OK" "$WRAPPER" handlers/net_colors.rs 'use crate::app::state::sheet_change::settle_sheet_at;'
+run_case field_of_that_name pass "$CORE_OK" "$LIST_OK" "$WRAPPER" handlers/net_colors.rs 'fn f(s: &S) -> u8 { s.settle_sheet_at }'
+# No trait and no trait impl in the core module.
+run_case trait_in_core fail "$CORE_OK
+pub(crate) trait Reach { fn reach(&mut self) { let _ = self.settle_sheet_at(); } }" "$LIST_OK" "$WRAPPER"
+run_case trait_impl_in_core fail "$CORE_OK
+impl Reach for DocumentState { fn reach(&mut self) {} }" "$LIST_OK" "$WRAPPER"
+run_case generic_trait_impl_in_core fail "$CORE_OK
+impl From<u8> for SheetEdit { fn from(_: u8) -> Self { todo!() } }" "$LIST_OK" "$WRAPPER"
+run_case inherent_impl_in_core pass "$CORE_OK
+impl DocumentState { fn helper(&self) {} }" "$LIST_OK" "$WRAPPER"
 # Any pub(...) but pub(self) counts as visible.
 run_case pub_in_path fail "$CORE_OK
 pub(in crate::app) fn probe_hidden() {}" "$LIST_OK" "$WRAPPER" handlers/net_colors.rs 'fn f() { probe_hidden(); }'
 run_case pub_super fail "$CORE_OK" "$LIST_OK" "$WRAPPER" state/other.rs 'fn f() { warning_notice(); }'
 run_case pub_self pass "$CORE_OK" "$LIST_OK" "$WRAPPER" handlers/net_colors.rs 'fn f() { self_only(); private_step(); }'
+# The name set is pinned: swapping the one wrapper for another fails, even
+# with the count unchanged and the call inside the new wrapper.
+run_case list_swaps_a_name fail "$CORE_OK" 'handlers/editing_commands/sheet_on.rs other_fn' 'impl Signex {
+    fn other_fn(&mut self) { let _ = self.document_state.settle_sheet_at(); }
+}'
 # Shrink-only: a line beyond MAX_WRAPPERS fails, even with a caller behind it.
 run_case list_grows fail "$CORE_OK" "$LIST_OK
 handlers/net_colors.rs f" "$WRAPPER" handlers/net_colors.rs "$CALL"

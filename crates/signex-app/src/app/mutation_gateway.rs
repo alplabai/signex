@@ -14,20 +14,12 @@ impl Signex {
     /// Surface the notices a command raised (a rubber-band pin that could
     /// not be kept connected) in the Messages panel: the engine's older
     /// English lines as they are, its typed notices worded through the
-    /// catalog (`app::engine_notices`).
+    /// catalog (`app::engine_notices`). A GUI log helper for engine calls
+    /// outside the edit tails, not a tail wrapper.
     pub(crate) fn report_engine_warnings(engine: &mut signex_engine::Engine) {
         for notice in core::event::engine_notices(engine) {
             super::projector::log_notice(&notice);
         }
-    }
-
-    /// `commands` without what the lock would refuse (see
-    /// `Engine::without_locked`), and the references skipped.
-    pub(crate) fn without_locked_items(
-        engine: &signex_engine::Engine,
-        commands: Vec<signex_engine::Command>,
-    ) -> (Vec<signex_engine::Command>, Vec<String>) {
-        core::locked_items::locked_items_pruned(engine, commands)
     }
 
     pub(crate) fn apply_engine_commands(
