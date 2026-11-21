@@ -1599,6 +1599,11 @@ More: [PCB_ROOMS.md](PCB_ROOMS.md).
 The width comes from the net's class (**Design ▸ Net Classes**), else the
 board's setup.
 
+Press `Tab` while routing, or while any board tool is armed, to pause it and
+edit its values in **Properties**. The route on the cursor stays where it was
+and the Placement Paused banner shows, as on a sheet. **Resume**, `Enter` or
+`Tab` goes on with your edits; `Esc` goes on without them.
+
 <!-- screenshot: Interactive Routing between two pads, the route preview on the cursor -->
 
 **Push and shove**

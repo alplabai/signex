@@ -53,6 +53,8 @@ mod graphic_tests;
 #[cfg(test)]
 mod layer_tests;
 #[cfg(test)]
+mod pause_tests;
+#[cfg(test)]
 mod pour_cut_tests;
 #[cfg(test)]
 mod pour_tests;
@@ -284,9 +286,14 @@ impl Signex {
         snap_point(board, at, &self.ui_state.pcb_snap, self.pcb_active_layer())
     }
 
-    /// The pointer moved over the board: what the next click adds follows.
+    /// The pointer moved over the board: what the next click adds follows,
+    /// unless Tab paused the tool, which holds it where it was.
     pub(crate) fn board_tool_followed(&mut self, at: Point) {
-        let Some(board) = self.own_board_tool().and(self.active_pcb()) else {
+        let Some(board) = self
+            .own_board_tool()
+            .filter(|s| s.paused.is_none())
+            .and(self.active_pcb())
+        else {
             return;
         };
         let at = self.board_tool_point(board, at);

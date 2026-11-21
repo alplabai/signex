@@ -59,6 +59,17 @@ the same lines. Arming a tool with a form brings Properties to the front on
 what the next click places; the canvas keeps the keyboard, so a Properties
 window of its own is left where it is.
 
+Tab pauses every board tool with a form the way it pauses a sheet placement
+(Caner, 2026-11-21). While paused, what the next click adds (the route or
+run on the pointer, the via, pad, area, drawing, string or dimension) stays
+where it was: pointer moves and canvas clicks do nothing
+(`board_tool_followed` and `board_tool_clicked` skip a paused session), and
+the sheet's Placement Paused banner shows over the board
+(`view/overlays/placement_paused.rs`, `board_tool_paused_in_window`). Tab,
+Enter or the banner's Resume goes on with the edited values; Esc puts back
+the values, the active layer and the width and net of a run being drawn as
+they were when Tab was pressed, and goes on placing.
+
 - A run started on netted copper that does not reach the active copper
   layer (a surface pad on Top with an inner layer active) takes that
   copper's net and starts with a via there (the via of a layer change, in

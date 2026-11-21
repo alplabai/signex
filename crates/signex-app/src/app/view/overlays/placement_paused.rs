@@ -21,8 +21,8 @@ static PAUSE_GLYPH: std::sync::LazyLock<iced::widget::svg::Handle> = std::sync::
 );
 
 impl Signex {
-    /// The banner while the canvas of `window_id`, or the footprint editor
-    /// it shows, has its placement paused. Resume goes on placing with the
+    /// The banner while the canvas of `window_id`, the footprint editor it
+    /// shows, or the board tool armed on its board has placement paused. Resume goes on placing with the
     /// edited values; Esc goes back to placing without them
     /// (`dispatch/escape.rs`). Only the banner takes the pointer: the layer
     /// around it is empty space, so the canvas keeps its hit-testing.
@@ -37,7 +37,8 @@ impl Signex {
             .interaction_state
             .canvas_for_window(window_id)
             .placement_paused;
-        if !(canvas_paused || footprint_paused) {
+        let board_paused = self.board_tool_paused_in_window(window_id);
+        if !(canvas_paused || footprint_paused || board_paused) {
             return None;
         }
         let tokens = &self.document_state.panel_ctx.tokens;
