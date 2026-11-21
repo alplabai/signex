@@ -244,11 +244,16 @@ impl Effects {
 
     fn clipboard(&mut self, action: iced_runtime::clipboard::Action) {
         use iced_runtime::clipboard::Action as Clip;
+        // shortcut: the standard clipboard and the primary selection
+        // (`clipboard_kind`, alplabai/iced#102) share one fake store; split
+        // them when a test drives the primary selection.
         match action {
-            Clip::Read { kind, channel } => {
+            Clip::Read { kind, channel, .. } => {
                 channel.send(self.read(kind)).ignore(UNANSWERED);
             }
-            Clip::Write { content, channel } => {
+            Clip::Write {
+                content, channel, ..
+            } => {
                 self.clipboard = Some(content);
                 channel.send(Ok(())).ignore(UNANSWERED);
             }
