@@ -49,6 +49,7 @@ pub(super) fn via_from_board_via(
         net: via.net,
         dimmed: false,
         ink: CopperInk::Unknown,
+        shown_on: None,
     }
 }
 
@@ -88,6 +89,7 @@ pub(super) fn pad_from_footprint(
         drill_mm: pad_drill_mm(pad),
         dimmed: false,
         ink: CopperInk::Unknown,
+        shown_on: None,
     })
 }
 
@@ -280,7 +282,7 @@ pub(super) fn emit_vias(snapshot: &PcbSnapshot, theme: &ResolvedTheme, scene: &m
         let color = faded(
             theme,
             BoardObject::Vias,
-            copper_color(theme, via.ink, ColorSlot::Junction),
+            copper_color(theme, via.ink.painted(via.shown_on), ColorSlot::Junction),
         );
 
         // A drill as wide as the via leaves no copper: all of it is hole.
@@ -368,7 +370,7 @@ pub(super) fn emit_static_polygons(
         let copper = faded(
             theme,
             BoardObject::Pads,
-            copper_color(theme, pad.ink, ColorSlot::Pin),
+            copper_color(theme, pad.ink.painted(pad.shown_on), ColorSlot::Pin),
         );
         let fill_color = dim_if(
             with_alpha_mul(copper, pad_alpha_mul(pad.pad_type)),
