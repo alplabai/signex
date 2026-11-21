@@ -48,21 +48,25 @@ impl Signex {
         self.set_snap_grid(fast[next])
     }
 
-    /// The snap grid of the document in view: a board's own, else the
-    /// app-wide one.
+    /// The snap grid of the document in view: a board's grid in effect, else
+    /// the app-wide one.
     fn snap_grid_in_view(&self) -> f32 {
-        self.active_pcb()
-            .map_or(self.ui_state.grid_size_mm, |board| {
-                signex_engine::pcb::placement::grid_step_mm(board) as f32
-            })
+        let owner = self.interaction_state.acting_window;
+        match self.active_tab_path().zip(self.active_pcb()) {
+            Some((path, board)) => {
+                let what = self.pcb_grid_use(&path, owner);
+                signex_engine::pcb::placement::grid_for(board, what).step_mm as f32
+            }
+            None => self.ui_state.grid_size_mm,
+        }
     }
 
-    /// Set the snap grid. On a board it is the board's own, one undo step.
-    /// Elsewhere the visible grid follows unless the user set the two apart.
-    /// The board's Grid popover picks through it too (#2460).
+    /// Set the snap grid. On a board it is the grid in effect, one undo
+    /// step. Elsewhere the visible grid follows unless the user set the two
+    /// apart. The board's Grid popover picks through it too (#2460).
     pub(crate) fn set_snap_grid(&mut self, next: f32) -> Task<Message> {
         if self.has_active_pcb() {
-            self.set_pcb_grid_preset(next);
+            self.set_pcb_grid_in_effect(next);
             return Task::none();
         }
         let current = self.ui_state.grid_size_mm;

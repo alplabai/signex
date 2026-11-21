@@ -119,7 +119,7 @@ impl Signex {
             PcbBoardMsg::SheetFromBoardToggled => self.toggle_pcb_sheet_from_board(),
             // #2410: the Panel section's button runs the menu row's command.
             PcbBoardMsg::PanelRemoveClicked => {
-                task = run_menu_command("remove_board_panel");
+                task = self.run_board_panel_command("remove_board_panel");
             }
             PcbBoardMsg::PanelSeparationPicked(separation) => {
                 let separation = *separation;
@@ -134,7 +134,9 @@ impl Signex {
                 task = Task::done(Message::Overlay(OverlayMsg::OpenPanel(PanelKind::Messages)));
             }
             // The button runs the BOM report's command, as its menu row does.
-            PcbBoardMsg::ReportsOpened => task = run_menu_command("board_report_bom"),
+            PcbBoardMsg::ReportsOpened => {
+                task = self.run_board_panel_command("board_report_bom");
+            }
             // #2523: a field row or a callout of the board illustration.
             // Only the hover changes: patch the shown summary instead of
             // rebuilding it on every pointer crossing.
@@ -148,11 +150,15 @@ impl Signex {
             }
             // #2523: the size follows the board shape; edit it in Board
             // sketch, as Design ▸ Board Sketch does.
-            PcbBoardMsg::BoardShapeEditPressed => task = run_menu_command("board_sketch"),
+            PcbBoardMsg::BoardShapeEditPressed => {
+                task = self.run_board_panel_command("board_sketch");
+            }
             // #2523, mockup row 176: the board's materials live in the Layer
             // Stack.
             PcbBoardMsg::LayerStackOpened => {
-                task = run_menu_command(crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND);
+                task = self.run_board_panel_command(
+                    crate::app::handlers::pcb_layer_strip::LAYER_STACK_COMMAND,
+                );
             }
         }
         self.sync_pcb_board_summary();
@@ -222,6 +228,39 @@ impl Signex {
         }
     }
 
+    /// A status-bar pick or grid key: the extra grid in effect takes it,
+    /// else the board's own step. One undo step.
+    pub(crate) fn set_pcb_grid_in_effect(&mut self, mm: f32) {
+        let owner = self.interaction_state.acting_window;
+        let Some((path, board)) = self.active_tab_path().zip(self.active_pcb()) else {
+            return;
+        };
+        let what = self.pcb_grid_use(&path, owner);
+        let extra = board
+            .options
+            .grids
+            .iter()
+            .find(|grid| grid.applies_to(what))
+            .map(|grid| grid.uuid);
+        let Some(id) = extra else {
+            self.set_pcb_grid_preset(mm);
+            return;
+        };
+        let Some(step) = Self::board_grid_step(f64::from(mm)) else {
+            self.say_pcb_grid_refused(t!(self.ui_state.i18n, ids::PCB_BOARD_GRID_INVALID));
+            return;
+        };
+        self.edit_pcb_board_options(|options| {
+            match options.grids.iter_mut().find(|grid| grid.uuid == id) {
+                Some(grid) if grid.step_mm != step => {
+                    grid.step_mm = step;
+                    true
+                }
+                _ => false,
+            }
+        });
+    }
+
     /// `mm` to the nanometre, or `None` when that leaves no step.
     pub(crate) fn board_grid_step(mm: f64) -> Option<f64> {
         let nm = (mm * 1e6).round();
@@ -255,13 +294,18 @@ impl Signex {
             self.say_pcb_grid_refused(error);
         }
     }
-}
 
-/// The task that runs catalog command `id` as its menu row does.
-fn run_menu_command(id: &str) -> Task<Message> {
-    match crate::keymap::AppCommandId::new(id) {
-        Ok(id) => Task::done(Message::Menu(crate::menu_bar::MenuMessage::Command(id))),
-        Err(_) => Task::none(),
+    /// Run catalog command `id` as its menu row does. Inside an undocked
+    /// window's swap it runs now, on that window's board: a task would land
+    /// on the main window.
+    fn run_board_panel_command(&mut self, id: &str) -> Task<Message> {
+        let Ok(id) = crate::keymap::AppCommandId::new(id) else {
+            return Task::none();
+        };
+        if self.interaction_state.acting_window.is_some() {
+            return self.run_menu_command(&id, None);
+        }
+        Task::done(Message::Menu(crate::menu_bar::MenuMessage::Command(id)))
     }
 }
 

@@ -294,6 +294,7 @@ fn snapped_delta(
         copper: view.shown_copper,
         hidden: &view.hidden,
         through_hidden: view.through_hidden,
+        hidden_kinds: &view.hidden_kinds,
     };
     let query = snap.layer_mask(view.active).map(|layers| SnapQuery {
         objects,

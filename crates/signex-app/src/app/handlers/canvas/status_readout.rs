@@ -17,6 +17,8 @@ pub struct StatusGrid {
     pub visible: bool,
     pub size_mm: f32,
     pub unit: Unit,
+    /// On a board: the grid in effect is one of its extra grids.
+    pub extra: bool,
 }
 
 /// The surface a window's canvas area is showing.
@@ -119,7 +121,8 @@ impl Signex {
     }
 
     /// The grid and unit the status bar of `window_id` shows: a symbol
-    /// tab's library settings, a board's own snap grid, or the app-wide ones.
+    /// tab's library settings, the grid in effect on a board, or the
+    /// app-wide ones.
     pub fn status_grid(&self, window_id: iced::window::Id) -> StatusGrid {
         if let Surface::SymbolEditor(editor) = self.status_surface(window_id) {
             let display = self.symbol_display(&editor.path);
@@ -127,18 +130,25 @@ impl Signex {
                 visible: display.grid_visible,
                 size_mm: display.grid_size_mm,
                 unit: display.unit,
+                extra: false,
             };
         }
         let ui = &self.ui_state;
-        let size_mm = self
-            .status_board_target(window_id)
-            .map_or(ui.grid_size_mm, |(_, board)| {
-                signex_engine::pcb::placement::grid_step_mm(board) as f32
-            });
+        let owner = (ui.main_window_id != Some(window_id)).then_some(window_id);
+        let (size_mm, extra) = self.status_board_target(window_id).map_or(
+            (ui.grid_size_mm, false),
+            |(path, board)| {
+                let what = self.pcb_grid_use(&path, owner);
+                let extra = board.options.grids.iter().any(|g| g.applies_to(what));
+                let step = signex_engine::pcb::placement::grid_for(board, what).step_mm;
+                (step as f32, extra)
+            },
+        );
         StatusGrid {
             visible: ui.grid_visible,
             size_mm,
             unit: ui.unit,
+            extra,
         }
     }
 

@@ -249,7 +249,7 @@ impl Signex {
             origin.x + DEFAULT_PASTE_OFFSET_MM,
             origin.y + DEFAULT_PASTE_OFFSET_MM,
         );
-        let at = placement::grid_for(board, copy.grid_use()).snap(shifted);
+        let at = self.board_grid_point(board, copy.grid_use(), shifted);
         self.place_board_copy(what, copy, at);
     }
 

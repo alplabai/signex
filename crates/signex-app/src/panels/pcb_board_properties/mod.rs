@@ -214,6 +214,65 @@ pub enum PcbBoardMsg {
     PanelSeparationPicked(PanelSeparation),
 }
 
+impl PcbBoardMsg {
+    /// Whether this acts on the board in view, so an undocked window's
+    /// panel runs it on that window's board. The rest are session settings
+    /// or the panel's own state. No wildcard: a new message must say which.
+    pub fn acts_on_board(&self) -> bool {
+        match self {
+            Self::ComponentsSelected(_)
+            | Self::ReportsOpened
+            | Self::BoardShapeEditPressed
+            | Self::LayerStackOpened
+            | Self::GridStepSubmitted
+            | Self::FieldSubmitted(_)
+            | Self::GuideAdded(_)
+            | Self::GuidePlaceArmed(_)
+            | Self::GuideEnabledToggled(_)
+            | Self::GuideColorStepped(_)
+            | Self::GuideDeleted(_)
+            | Self::GridAdded
+            | Self::GridMoved(..)
+            | Self::GridDeleted(_)
+            | Self::GridComponentsToggled(_)
+            | Self::GridNonComponentsToggled(_)
+            | Self::GridColorStepped(_)
+            | Self::PolygonNamingPicked(_)
+            | Self::DesignatorDisplayPicked(_)
+            | Self::FastGridApplied(_)
+            | Self::SheetFromBoardToggled
+            | Self::PanelRemoveClicked
+            | Self::PanelSeparationPicked(_) => true,
+            Self::TabPicked(_)
+            | Self::SearchChanged(_)
+            | Self::FilterMenuToggled
+            | Self::FilterKindToggled(_)
+            | Self::FilterAllToggled
+            | Self::FilterAllSet(_)
+            | Self::FilterPresetAdded
+            | Self::FilterPresetApplied(_)
+            | Self::FilterPresetRenamed(..)
+            | Self::FilterPresetUpdated(_)
+            | Self::FilterPresetRemoved(_)
+            | Self::SnapToGridsToggled
+            | Self::SnapScopePicked(_)
+            | Self::SnapObjectToggled(_)
+            | Self::SnapDistancePicked(_)
+            | Self::DrcResultsOpened
+            | Self::IllustrationHovered(_)
+            | Self::GridStepTyped(_)
+            | Self::SnapToGuidesToggled
+            | Self::SnapToAxesToggled
+            | Self::FieldTyped(..)
+            | Self::GuideMenuToggled(_)
+            | Self::GuideAddMenuToggled
+            | Self::GuidePlaceModeToggled
+            | Self::GridMenuToggled(_)
+            | Self::GridEditToggled(_) => false,
+        }
+    }
+}
+
 /// The board facts and editor settings the panel shows.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PcbBoardSummary {

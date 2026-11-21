@@ -6,7 +6,7 @@
 use std::f64::consts::TAU;
 
 use pcb_geom::{
-    Placement, PointNm, Shape, Side, layer_bit, layer_mask, pad_layers, pad_shape,
+    PickKind, Placement, PointNm, Shape, Side, layer_bit, layer_mask, pad_layers, pad_shape,
     pad_world_center, via_layers,
 };
 use signex_types::format::parse_pcb_layer;
@@ -47,7 +47,7 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
                 Side::Top => CopperLayer::Top,
                 Side::Bottom => CopperLayer::Bottom,
             };
-            if on(1 << layer_bit(side)) {
+            if on(1 << layer_bit(side)) && origin_on_net(query, footprint) {
                 out.push(footprint.position);
             }
         }
@@ -80,7 +80,10 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
     {
         pad_points(query, &frame, pad, at, &mut out);
     }
-    if wants(SnapObject::ViaCenters) && !query.shown.through_hidden {
+    if wants(SnapObject::ViaCenters)
+        && !query.shown.through_hidden
+        && query.shown.shows(PickKind::Vias)
+    {
         out.extend(
             board
                 .vias
@@ -93,6 +96,7 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
     let tracks: Vec<(Point, Point)> = board
         .segments
         .iter()
+        .filter(|_| query.shown.shows(PickKind::Tracks))
         .filter(|s| !query.skip.contains(&s.uuid))
         .filter(|s| on(layer_mask(std::iter::once(s.layer.as_str()))))
         .filter(|s| net_on(s.net))
@@ -130,6 +134,7 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
         .free
         .arcs
         .iter()
+        .filter(|_| query.shown.shows(PickKind::Arcs))
         .filter(|a| !query.skip.contains(&a.uuid))
         .filter(|a| layer_on(&a.layer) && net_on(a.net))
         .collect();
@@ -157,7 +162,8 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
     if wants(SnapObject::Regions) {
         for zone in &board.zones {
             // A region off copper (a keepout, a silk fill) counts on All Layers.
-            if layer_on(&zone.layer) && net_on(zone.net) {
+            let kind = PickKind::of_zone(zone).unwrap_or(PickKind::Polygons);
+            if query.shown.shows(kind) && layer_on(&zone.layer) && net_on(zone.net) {
                 out.extend(zone.outline.iter().copied());
             }
         }
@@ -166,7 +172,7 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
     if wants(SnapObject::BoardShape) && !query.shown.hidden.contains(&edge) {
         out.extend(board.outline.iter().copied());
     }
-    if wants(SnapObject::Texts) && every_layer {
+    if wants(SnapObject::Texts) && every_layer && query.shown.shows(PickKind::Texts) {
         out.extend(
             board
                 .texts
@@ -183,6 +189,22 @@ fn copper_on(query: &SnapQuery, mask: u32) -> bool {
     mask & query.layers & query.shown.copper != 0
 }
 
+/// Whether a running route may snap to `footprint`'s origin: the part has a
+/// pad on the route's net, or no pad on any net.
+fn origin_on_net(query: &SnapQuery, footprint: &Footprint) -> bool {
+    let Some(own) = query.net else {
+        return true;
+    };
+    let mut nets = footprint
+        .pads
+        .iter()
+        .filter_map(|pad| pad.net.as_ref())
+        .map(|net| net.number)
+        .filter(|net| *net != 0)
+        .peekable();
+    nets.peek().is_none() || nets.any(|net| net == own)
+}
+
 /// The asked-for points of `pad` of `footprint`, if it is in the scope, on
 /// a shown layer and on the route's net.
 fn pad_points(
@@ -193,8 +215,10 @@ fn pad_points(
     out: &mut Vec<Point>,
 ) {
     let net = pad.net.as_ref().map_or(0, |net| net.number);
-    if !copper_on(query, pad_layers(footprint, pad))
-        || (query.shown.through_hidden && pad.pad_type == PadType::Thru)
+    let through = matches!(pad.pad_type, PadType::Thru | PadType::NpThru);
+    if !query.shown.shows(PickKind::Pads)
+        || !copper_on(query, pad_layers(footprint, pad))
+        || (query.shown.through_hidden && through)
         || query.net.is_some_and(|own| net != 0 && net != own)
     {
         return;

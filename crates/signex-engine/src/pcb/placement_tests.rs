@@ -92,6 +92,27 @@ fn a_lone_footprint_turns_in_place() {
     );
 }
 
+/// With snapping off a group turns about the exact centre of its origins.
+#[test]
+fn a_group_with_snap_off_turns_about_its_exact_centre() {
+    let mut b = board();
+    b.footprints[0].position = Point::new(1.03, 2.0);
+    b.footprints[1].position = Point::new(3.03, 2.0);
+    let first = b.footprints[0].uuid;
+    let group: BTreeSet<Uuid> = [first, b.footprints[1].uuid].into_iter().collect();
+    let half_turn = PlacementTransform::Rotate { quarter_turns: 2 };
+    let commands = transform_commands_with(&b, &group, half_turn, false).unwrap();
+    let moved = commands.iter().find_map(|command| match command {
+        BoardCommand::MoveFootprint { footprint, to } if *footprint == first => Some(*to),
+        _ => None,
+    });
+    let to = moved.expect("the first part moves");
+    assert!(
+        (to.x - 3.03).abs() < 1e-9 && (to.y - 2.0).abs() < 1e-9,
+        "{to:?}"
+    );
+}
+
 #[test]
 fn a_group_turns_about_its_grid_centre() {
     let b = board();

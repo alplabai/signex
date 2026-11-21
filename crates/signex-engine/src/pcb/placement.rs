@@ -257,8 +257,19 @@ pub fn transform_commands(
     ids: &BTreeSet<Uuid>,
     transform: PlacementTransform,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    transform_commands_with(board, ids, transform, true)
+}
+
+/// [`transform_commands`], the group's centre put on the grid only when
+/// `on_grid`: with snapping off it is the exact centre of their origins.
+pub fn transform_commands_with(
+    board: &PcbBoard,
+    ids: &BTreeSet<Uuid>,
+    transform: PlacementTransform,
+    on_grid: bool,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
     let footprints = editable_footprints(board, ids)?;
-    let pivot = pivot(&footprints, grid_step_mm(board));
+    let pivot = pivot(&footprints, on_grid.then(|| grid_step_mm(board)));
     let mut commands = Vec::new();
     for fp in footprints {
         let id = fp.uuid;
@@ -325,8 +336,9 @@ pub fn delete_commands(
 }
 
 /// Where a group turns: one footprint's origin, else the centre of the
-/// origins' bounds snapped to the grid, so on-grid parts stay on the grid.
-fn pivot(footprints: &[&Footprint], grid_mm: f64) -> Point {
+/// origins' bounds, snapped to `grid_mm` when given so on-grid parts stay on
+/// the grid.
+fn pivot(footprints: &[&Footprint], grid_mm: Option<f64>) -> Point {
     if let [only] = footprints {
         return only.position;
     }
@@ -339,6 +351,9 @@ fn pivot(footprints: &[&Footprint], grid_mm: f64) -> Point {
         hi = Point::new(hi.x.max(fp.position.x), hi.y.max(fp.position.y));
     }
     let centre = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+    let Some(grid_mm) = grid_mm else {
+        return centre;
+    };
     let snapped = snap_delta(Point::new(0.0, 0.0), centre, grid_mm);
     if snapped.x.is_finite() && snapped.y.is_finite() {
         snapped

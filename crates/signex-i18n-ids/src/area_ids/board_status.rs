@@ -5,6 +5,7 @@ define_ids! {
     BOARD_STATUS_GRID = "board-status-grid";
     BOARD_STATUS_GRID_OFF = "board-status-grid-off";
     BOARD_STATUS_VALUE = "board-status-value";
+    BOARD_STATUS_VALUE_EXTRA = "board-status-value-extra";
     BOARD_STATUS_ROUTED = "board-status-routed";
     BOARD_STATUS_ROUTED_COUNT = "board-status-routed-count";
     BOARD_STATUS_ROUTED_PERCENT = "board-status-routed-percent";

@@ -38,6 +38,8 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
         DockMessage::Panel(P::Tree(TreeMsg::ContextMenu(_) | TreeMsg::BackgroundContextMenu)) => {
             true
         }
+        // The board Properties' edits and commands act on the window's board.
+        DockMessage::Panel(P::PcbBoard(board)) => board.acts_on_board(),
         DockMessage::Panel(panel) => matches!(
             panel,
             P::PropertiesTab(_)
@@ -45,11 +47,6 @@ fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
                 | P::EditSymbolDesignator(..)
                 // A board window's footprint fields edit that window's board (#1312).
                 | P::PcbFootprintText(..)
-                // Its Grid Manager step edits that window's board.
-                | P::PcbBoard(
-                    crate::panels::PcbBoardMsg::GridStepSubmitted
-                        | crate::panels::PcbBoardMsg::FastGridApplied(_)
-                )
                 // And its Component view's edits (#2354).
                 | P::PcbComponent(..)
                 | P::PcbPrimitive(..)

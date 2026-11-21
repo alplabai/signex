@@ -169,7 +169,7 @@ impl Signex {
         });
     }
 
-    /// Place: the next click on the main window's board sets a guide.
+    /// Place: the next click on this window's board sets a guide.
     pub(crate) fn arm_pcb_guide_place(&mut self, kind: GuideKind) {
         let Some(path) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return;
@@ -188,8 +188,7 @@ impl Signex {
         let Some((path, kind)) = armed else {
             return false;
         };
-        let main_window = self.interaction_state.acting_window.is_none();
-        if !main_window || self.active_tab_path().as_deref() != Some(path.as_path()) {
+        if self.active_tab_path().as_deref() != Some(path.as_path()) {
             return false;
         }
         self.interaction_state.pcb_guide_place = None;

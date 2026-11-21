@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 
+use pcb_geom::PickKind;
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::pcb_options::{BoardGuide, GuideKind};
@@ -86,15 +87,23 @@ pub struct ShownLayers<'a> {
     pub hidden: &'a [PcbLayer],
     /// The Multi-Layer row is off: no vias or through-hole pads.
     pub through_hidden: bool,
+    /// The kinds of object the view hides.
+    pub hidden_kinds: &'a [PickKind],
 }
 
 impl ShownLayers<'_> {
-    /// Every layer shown.
+    /// Every layer and kind shown.
     pub const ALL: ShownLayers<'static> = ShownLayers {
         copper: u32::MAX,
         hidden: &[],
         through_hidden: false,
+        hidden_kinds: &[],
     };
+
+    /// Whether objects of `kind` are shown.
+    pub(super) fn shows(&self, kind: PickKind) -> bool {
+        !self.hidden_kinds.contains(&kind)
+    }
 }
 
 fn usable(radius: f64) -> bool {

@@ -197,7 +197,13 @@ fn grid_snap_cluster<'a>(
         StatusBarRequest::ToggleGrid,
     );
     let grid: Element<'a, StatusBarRequest> = if let Some(board) = &r.surface.board {
-        let value = super::board::board_grid_value(i18n, r.grid_visible, r.grid_size_mm, r.unit);
+        let value = super::board::board_grid_value(
+            i18n,
+            r.grid_visible,
+            r.grid_size_mm,
+            r.unit,
+            board.grid_extra,
+        );
         let open = board.open == Some(super::BoardPopoverKind::Grid);
         super::board::board_grid_readout(value, open, tokens, i18n)
     } else if r.surface.opens_grid_popover {

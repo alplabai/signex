@@ -122,7 +122,7 @@ impl Signex {
             self.start_route(at, layer);
             return;
         };
-        if at == anchor {
+        if self.clicks_run_end(at, anchor) {
             // A second click on the route's end finishes it.
             self.end_route_shape();
             return;

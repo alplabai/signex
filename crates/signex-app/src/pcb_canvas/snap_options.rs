@@ -151,6 +151,8 @@ pub struct SnapView<'a> {
     pub hidden: Vec<PcbLayer>,
     /// The Multi-Layer row is off.
     pub through_hidden: bool,
+    /// The kinds of object the view hides.
+    pub hidden_kinds: Vec<pcb_geom::PickKind>,
     /// A running route's net: other nets give no object points.
     pub net: Option<u32>,
 }
@@ -167,6 +169,7 @@ impl<'a> SnapView<'a> {
             shown_copper: u32::MAX,
             hidden: Vec::new(),
             through_hidden: false,
+            hidden_kinds: Vec::new(),
             net: None,
         }
     }

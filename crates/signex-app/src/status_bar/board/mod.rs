@@ -153,6 +153,8 @@ pub(crate) struct BoardReadout {
     pub selected: usize,
     /// The popover open in this window, so its counter reads as pressed.
     pub open: Option<BoardPopoverKind>,
+    /// The grid in effect is one of the board's extra grids.
+    pub grid_extra: bool,
 }
 
 /// Routed and unrouted connections.

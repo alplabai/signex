@@ -94,16 +94,22 @@ fn figure_width(s: &Localized) -> f32 {
 }
 
 /// The value of the board's Grid read-out: the pitch in the bar's unit, or
-/// OFF while the grid is hidden.
+/// OFF while the grid is hidden. `extra`: the pitch is an extra grid's.
 pub(crate) fn grid_value(
     i18n: &I18n,
     visible: bool,
     size_mm: f32,
     unit: signex_types::coord::Unit,
+    extra: bool,
 ) -> Localized {
     if visible {
         let value = super::super::graphite::grid_value(size_mm, unit);
-        t!(i18n, ids::BOARD_STATUS_VALUE, "value" => value)
+        let id = if extra {
+            ids::BOARD_STATUS_VALUE_EXTRA
+        } else {
+            ids::BOARD_STATUS_VALUE
+        };
+        t!(i18n, id, "value" => value)
     } else {
         t!(i18n, ids::BOARD_STATUS_GRID_OFF)
     }

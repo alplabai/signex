@@ -8,16 +8,30 @@
 use std::collections::BTreeSet;
 
 use iced::Task;
-use pcb_geom::ItemRef;
+use pcb_geom::{ItemRef, PickKind};
 use signex_engine::pcb::placement::{self, PlacementRefusal, PlacementTransform};
 use signex_engine::pcb::{BoardCommand, BoardItemId};
-use signex_renderer::pcb::{BOARD_OUTLINE, board_layers};
+use signex_renderer::pcb::{BOARD_OUTLINE, BoardObject, board_layers};
 use signex_types::pcb::Point;
 use signex_types::pcb_layer::PcbLayer;
+use signex_types::pcb_options::GridUse;
 use uuid::Uuid;
 
 use crate::app::{Message, Signex};
 use crate::pcb_canvas::{CarryKind, PcbCarry, SnapView, carry_delta};
+
+/// The View Options rows that hide something object snapping targets.
+const SNAP_OBJECT_KINDS: [(BoardObject, PickKind); 9] = [
+    (BoardObject::Pads, PickKind::Pads),
+    (BoardObject::Vias, PickKind::Vias),
+    (BoardObject::Arcs, PickKind::Arcs),
+    (BoardObject::Tracks, PickKind::Tracks),
+    (BoardObject::Polygons, PickKind::Polygons),
+    (BoardObject::Regions, PickKind::Regions),
+    (BoardObject::Fills, PickKind::Fills),
+    (BoardObject::Keepouts, PickKind::Keepouts),
+    (BoardObject::Texts, PickKind::Texts),
+];
 
 impl Signex {
     /// Rotate or mirror the board selection when the active tab is a PCB.
@@ -30,7 +44,8 @@ impl Signex {
         let Some(board) = self.active_pcb() else {
             return false;
         };
-        let built = placement::transform_commands(board, &footprints, transform);
+        let on_grid = self.ui_state.snap_enabled;
+        let built = placement::transform_commands_with(board, &footprints, transform, on_grid);
         let what = match transform {
             PlacementTransform::Rotate { .. } => "Rotate",
             PlacementTransform::FlipLeftRight | PlacementTransform::FlipTopBottom => "Flip",
@@ -344,13 +359,59 @@ impl Signex {
     pub(crate) fn board_grid_point(
         &self,
         board: &signex_types::pcb::PcbBoard,
-        what: signex_types::pcb_options::GridUse,
+        what: GridUse,
         at: Point,
     ) -> Point {
         if self.ui_state.snap_enabled {
             placement::grid_for(board, what).snap(at)
         } else {
             at
+        }
+    }
+
+    /// Which grid applies on the board at `path` in the window `owner`
+    /// (`None`: the main one): what its carry or armed tool snaps to, by the
+    /// same use `grid_for` is asked with. With nothing armed, Components:
+    /// the Select tool's drag of a part is what the grid then acts on.
+    pub(crate) fn pcb_grid_use(
+        &self,
+        path: &std::path::Path,
+        owner: Option<iced::window::Id>,
+    ) -> GridUse {
+        let state = &self.interaction_state;
+        if let Some(carry) = state
+            .pcb_carry
+            .as_ref()
+            .filter(|carry| carry.is_for(Some(path), owner))
+        {
+            return match &carry.paste {
+                Some(load) => load.copy.grid_use(),
+                None if !carry.vias.is_empty() => GridUse::NonComponents,
+                None => GridUse::Components,
+            };
+        }
+        let tool = state
+            .pcb_tool
+            .as_ref()
+            .is_some_and(|session| session.is_for(Some(path), owner));
+        let measure = state
+            .pcb_query
+            .measure
+            .as_ref()
+            .is_some_and(|measure| measure.is_for(Some(path), owner));
+        let guide = state
+            .pcb_guide_place
+            .as_ref()
+            .is_some_and(|(armed, _)| armed == path);
+        let origin = state.pcb_origin_place.as_deref() == Some(path);
+        let arrange = state
+            .pcb_arrange_box
+            .as_ref()
+            .is_some_and(|armed| armed.path == path);
+        if tool || measure || guide || origin || arrange {
+            GridUse::NonComponents
+        } else {
+            GridUse::Components
         }
     }
 
@@ -375,20 +436,31 @@ impl Signex {
         if let Some((path, board)) = self.active_tab_path().zip(self.active_pcb()) {
             let shown = self.pcb_layer_view(&path);
             view.through_hidden = !shown.multi_layer_visible();
-            view.shown_copper = 0;
+            // Start from all shown, so a layer the stack does not list
+            // stays shown, and clear the hidden ones.
+            let mut any_copper_shown = false;
             for layer in board_layers(&board.layers) {
                 match layer {
-                    PcbLayer::Copper(copper) if shown.is_visible(layer) => {
-                        view.shown_copper |= 1 << pcb_geom::layer_bit(copper);
+                    PcbLayer::Copper(_) if shown.is_visible(layer) => any_copper_shown = true,
+                    PcbLayer::Copper(copper) => {
+                        view.shown_copper &= !(1 << pcb_geom::layer_bit(copper));
                     }
-                    PcbLayer::Copper(_) => {}
                     _ if !shown.is_visible(layer) => view.hidden.push(layer),
                     _ => {}
                 }
             }
+            // A through pad reaches every bit: with no copper shown, none.
+            if !any_copper_shown {
+                view.shown_copper = 0;
+            }
             if !shown.is_visible(BOARD_OUTLINE) && !view.hidden.contains(&BOARD_OUTLINE) {
                 view.hidden.push(BOARD_OUTLINE);
             }
+            view.hidden_kinds = SNAP_OBJECT_KINDS
+                .into_iter()
+                .filter(|(object, _)| !shown.shows_object(*object))
+                .map(|(_, kind)| kind)
+                .collect();
         }
         view
     }

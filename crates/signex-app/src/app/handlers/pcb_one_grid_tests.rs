@@ -227,11 +227,8 @@ fn a_board_without_a_setup_takes_a_pick_and_undo_gives_none() {
     assert!(board.setup.is_none(), "undo gives back no setup");
 }
 
-/// A pick or a grid command in an undocked board's window changes that
-/// board only: the main window's board, its undo and a sheet's grid stay.
-#[test]
-fn an_undocked_window_edits_its_own_boards_grid() {
-    let mut rig = rig();
+/// Board B in its own window, board A back in the main one.
+fn undock_b(rig: &mut Rig) -> (PathBuf, iced::window::Id) {
     let b = PathBuf::from("/w/b.snxpcb");
     let index = rig
         .app
@@ -263,6 +260,125 @@ fn an_undocked_window_edits_its_own_boards_grid() {
         .position(|t| t.path == rig.a)
         .expect("tab A");
     rig.select(a_tab);
+    (b, window)
+}
+
+/// Every board edit of an undocked window's panel lands on its board: A
+/// keeps its revision, so it took no edit and no undo step.
+#[test]
+fn an_undocked_panel_edits_only_its_own_board() {
+    use signex_types::pcb_options::GuideKind;
+    let mut rig = rig();
+    let (b, window) = undock_b(&mut rig);
+    let revision = |app: &Signex, path: &PathBuf| {
+        app.document_state
+            .board_engine(path)
+            .expect("the board")
+            .revision()
+    };
+    let main_before = revision(&rig.app, &rig.a);
+    let send = |rig: &mut Rig, msg: PcbBoardMsg| {
+        let dock = Message::Dock(DockMessage::Panel(PanelMsg::PcbBoard(msg)));
+        let scoped = rig.app.scope_dock_message(window, dock);
+        let _ = rig.app.update(scoped);
+    };
+    let options = |app: &Signex, path: &PathBuf| {
+        app.document_state
+            .pcb_board(path)
+            .expect("the board")
+            .options
+            .clone()
+    };
+
+    send(&mut rig, PcbBoardMsg::GridAdded);
+    let grid = options(&rig.app, &b).grids.first().expect("a grid").uuid;
+    send(&mut rig, PcbBoardMsg::GridColorStepped(grid));
+    send(&mut rig, PcbBoardMsg::GridDeleted(grid));
+    assert!(options(&rig.app, &b).grids.is_empty());
+    send(&mut rig, PcbBoardMsg::GuideAdded(GuideKind::Vertical));
+    let guide = options(&rig.app, &b).guides.first().expect("a guide").uuid;
+    send(&mut rig, PcbBoardMsg::GuideEnabledToggled(guide));
+    assert!(!options(&rig.app, &b).guides[0].enabled);
+
+    assert!(options(&rig.app, &rig.a).grids.is_empty());
+    assert!(options(&rig.app, &rig.a).guides.is_empty());
+    assert_eq!(revision(&rig.app, &rig.a), main_before, "A took no edit");
+}
+
+/// No wildcard hides a message from the window scope: the session's
+/// settings stay app-wide, a document edit does not.
+#[test]
+fn only_the_board_edits_of_the_panel_are_scoped() {
+    assert!(PcbBoardMsg::GridAdded.acts_on_board());
+    assert!(PcbBoardMsg::PanelRemoveClicked.acts_on_board());
+    assert!(!PcbBoardMsg::SnapToGridsToggled.acts_on_board());
+    assert!(!PcbBoardMsg::GuideAddMenuToggled.acts_on_board());
+}
+
+/// Caner, 2026-11-21: with an extra grid in effect the status bar names it,
+/// and a pick edits that grid as one undo step on that board.
+#[test]
+fn the_status_bar_shows_and_edits_the_extra_grid_in_effect() {
+    let mut rig = rig();
+    let mut options = rig
+        .app
+        .document_state
+        .pcb_board(&rig.a)
+        .expect("board")
+        .options
+        .clone();
+    options.grids.push(
+        serde_json::from_value(json!({
+            "uuid": Uuid::from_u128(0xC0), "name": "Parts", "step_mm": 10.0,
+            "origin": {"x": 0.0, "y": 0.0}, "color": {"r": 0, "g": 0, "b": 0, "a": 255},
+            "components": true, "non_components": false
+        }))
+        .unwrap(),
+    );
+    let a = rig.a.clone();
+    let command = signex_engine::pcb::BoardCommand::SetBoardOptions {
+        options: Box::new(options),
+    };
+    rig.app
+        .execute_board_commands(&a, vec![command], None)
+        .expect("the grid");
+    let status = rig.app.status_grid(rig.main);
+    assert!(status.extra, "idle, the Components grid applies");
+    assert_eq!(status.size_mm, 10.0);
+    let text = crate::status_bar::board_grid_value(
+        &signex_i18n::I18n::en_us(),
+        true,
+        status.size_mm,
+        signex_types::coord::Unit::Mm,
+        status.extra,
+    )
+    .to_string();
+    assert!(text.contains("10") && text.contains("(extra)"), "{text}");
+
+    let extra = |rig: &Rig| {
+        let board = rig.app.document_state.pcb_board(&rig.a).expect("board");
+        board.options.grids[0].step_mm
+    };
+    rig.open_popover();
+    rig.popover(BoardPopoverEvent::GridPresetPicked(1.27));
+    assert_eq!(extra(&rig), 1.27, "the extra grid takes the pick");
+    assert_eq!(rig.board_grid(), 0.5, "the board's own step stays");
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(extra(&rig), 10.0, "one undo step");
+
+    // A tool snaps to the Non-Components grid, which no extra grid serves.
+    rig.run("place_board_via");
+    let status = rig.app.status_grid(rig.main);
+    assert!(!status.extra);
+    assert_eq!(status.size_mm, 0.5);
+}
+
+/// A pick or a grid command in an undocked board's window changes that
+/// board only: the main window's board, its undo and a sheet's grid stay.
+#[test]
+fn an_undocked_window_edits_its_own_boards_grid() {
+    let mut rig = rig();
+    let (b, window) = undock_b(&mut rig);
     let of = |app: &Signex, path: &PathBuf| {
         grid_step_mm(app.document_state.pcb_board(path).expect("board"))
     };

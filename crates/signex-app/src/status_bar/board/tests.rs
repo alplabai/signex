@@ -259,7 +259,13 @@ fn every_popover_draws() {
 
 fn anchor_bar(board: &BoardReadout) -> AnchorBar<'_> {
     AnchorBar {
-        grid_value: board_grid_value(&I18n::en_us(), true, 0.25, signex_types::coord::Unit::Mm),
+        grid_value: board_grid_value(
+            &I18n::en_us(),
+            true,
+            0.25,
+            signex_types::coord::Unit::Mm,
+            false,
+        ),
         snap_enabled: true,
         zoom: 100.0,
         view_angle: None,
@@ -286,6 +292,7 @@ fn each_card_opens_over_its_segment() {
         },
         selected: 2,
         open: None,
+        grid_extra: false,
     };
     let bar = anchor_bar(&board);
     let left = |kind| popover_left(kind, &bar, &i18n);

@@ -89,7 +89,7 @@ impl Signex {
             self.set_route(vec![at], Some(style));
             return;
         };
-        if at == anchor {
+        if self.clicks_run_end(at, anchor) {
             // A second click on the run's end finishes the run.
             self.set_route(Vec::new(), None);
             return;

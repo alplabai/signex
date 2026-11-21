@@ -94,6 +94,7 @@ impl Signex {
             drc,
             selected,
             open,
+            grid_extra: self.status_grid(window).extra,
         })
     }
 
@@ -117,7 +118,7 @@ impl Signex {
                 BoardPopoverModel::Layer(self.layer_list(&path, board))
             }
             BoardPopoverKind::Grid => BoardPopoverModel::Grid(GridChoice {
-                current_mm: signex_engine::pcb::placement::grid_step_mm(board) as f32,
+                current_mm: self.status_grid(window).size_mm,
                 custom: popover.custom_grid.clone(),
                 refused: popover.custom_refused,
                 snap: self.ui_state.snap_enabled,
@@ -345,6 +346,7 @@ impl Signex {
                 grid.visible,
                 grid.size_mm,
                 grid.unit,
+                grid.extra,
             ),
             snap_enabled: ui.snap_enabled,
             zoom: self.status_zoom(window),

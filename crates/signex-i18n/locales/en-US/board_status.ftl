@@ -5,6 +5,8 @@ board-status-grid = Grid
 board-status-grid-off = OFF
 # { $value } is a grid pitch with its unit.
 board-status-value = { $value }
+# The same, when the pitch is one of the board's extra grids.
+board-status-value-extra = { $value } (extra)
 board-status-routed = Routed
 # { $routed } of { $total } connections are routed.
 board-status-routed-count = { $routed }/{ $total }

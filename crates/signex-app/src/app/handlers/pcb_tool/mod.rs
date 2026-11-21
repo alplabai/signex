@@ -22,6 +22,10 @@ use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
 use crate::pcb_canvas::{carried_board, snap_point};
 
+/// With Snap off, how near the run's last point (screen px) a click counts
+/// as on it and ends the run.
+const END_RUN_PX: f64 = 2.0;
+
 mod area;
 mod form;
 mod free;
@@ -291,12 +295,25 @@ impl Signex {
         (!session.is_routing()).then(|| self.board_tool_hint(session.tool))
     }
 
+    /// Whether a click at `at` is on the run's last point `anchor`, which
+    /// ends the run. With Snap off a hand's click never repeats a point
+    /// exactly, so [`END_RUN_PX`] of the screen counts as on it.
+    fn clicks_run_end(&self, at: Point, anchor: Point) -> bool {
+        if at == anchor {
+            return true;
+        }
+        !self.ui_state.snap_enabled
+            && (at.x - anchor.x).hypot(at.y - anchor.y) * self.pcb_snap_view().px_per_mm
+                <= END_RUN_PX
+    }
+
     /// Where a tool click at `at` lands on the board in view. A running
     /// pair or multi-track route places its centre line, which runs between
     /// its tracks: an object point would put one member on that object, so
-    /// only the grid, guides and axes hold it. A running single route snaps
-    /// to its own net only (Caner, 2026-11-21); its first click still finds
-    /// its net from whatever is there.
+    /// only the grid, guides and axes hold it. A running single route with
+    /// a net snaps to that net only; one with no net snaps to any pad and
+    /// takes its net (Caner, 2026-11-21). Its first click still finds its
+    /// net from whatever is there.
     fn board_tool_point(&self, board: &PcbBoard, at: Point) -> Point {
         let mut view = self.pcb_snap_view();
         if let Some(session) = self
@@ -310,7 +327,11 @@ impl Signex {
                 BoardPlaceTool::Track
                 | BoardPlaceTool::InteractiveRouting
                 | BoardPlaceTool::QuickRoute => {
-                    view.net = session.route.as_ref().map(|style| style.net);
+                    view.net = session
+                        .route
+                        .as_ref()
+                        .map(|style| style.net)
+                        .filter(|net| *net != 0);
                 }
                 _ => {}
             }
