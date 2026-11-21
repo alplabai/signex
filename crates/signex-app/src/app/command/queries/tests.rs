@@ -161,7 +161,7 @@ pub(in crate::app) fn answer(app: &mut Signex, name: &str, args: &[&str]) -> Val
     }
 }
 
-fn refusal(app: &mut Signex, name: &str, args: &[&str]) -> String {
+pub(in crate::app) fn refusal(app: &mut Signex, name: &str, args: &[&str]) -> String {
     match run(app, name, args) {
         CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{name} {args:?} was not refused: {other:?}"),
