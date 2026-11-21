@@ -102,3 +102,7 @@ board-status-kind-fill = Fill
 board-status-kind-text = Text
 board-status-kind-room = Room
 board-status-kind-other = Other object
+
+## A footprint drag (Caner, 2026-11-21); { $key } is Ctrl, or Cmd on macOS.
+board-status-drag-with-tracks = Dragging with tracks ({ $key }: leave the tracks)
+board-status-drag-without-tracks = Moving without tracks (release { $key }: drag the tracks)

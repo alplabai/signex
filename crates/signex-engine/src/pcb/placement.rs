@@ -132,17 +132,10 @@ pub fn move_commands(
     ids: &BTreeSet<Uuid>,
     delta: Point,
 ) -> Result<Vec<BoardCommand>, PlacementRefusal> {
-    let footprints = editable_footprints(board, ids)?;
-    if delta.x == 0.0 && delta.y == 0.0 {
-        return Ok(Vec::new());
+    let mut commands = move_footprints_only(board, ids, delta)?;
+    if commands.is_empty() {
+        return Ok(commands);
     }
-    let mut commands: Vec<BoardCommand> = footprints
-        .iter()
-        .map(|fp| BoardCommand::MoveFootprint {
-            footprint: fp.uuid,
-            to: Point::new(fp.position.x + delta.x, fp.position.y + delta.y),
-        })
-        .collect();
     let tracks: Vec<BoardItem> = pcb_geom::tracks_on_pads(board, ids)
         .iter()
         .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta)))
@@ -151,6 +144,26 @@ pub fn move_commands(
         commands.push(BoardCommand::ReplaceItems { items: tracks });
     }
     Ok(commands)
+}
+
+/// Move every footprint in `ids` by `delta` and leave the tracks on their
+/// pads where they are (a Ctrl drag): their ends no longer touch the pads.
+pub fn move_footprints_only(
+    board: &PcbBoard,
+    ids: &BTreeSet<Uuid>,
+    delta: Point,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    let footprints = editable_footprints(board, ids)?;
+    if delta.x == 0.0 && delta.y == 0.0 {
+        return Ok(Vec::new());
+    }
+    Ok(footprints
+        .iter()
+        .map(|fp| BoardCommand::MoveFootprint {
+            footprint: fp.uuid,
+            to: Point::new(fp.position.x + delta.x, fp.position.y + delta.y),
+        })
+        .collect())
 }
 
 /// Turn or mirror the footprints in `ids`. One footprint turns about its

@@ -1547,7 +1547,11 @@ Parts come from the schematic through Update PCB. **Place ▸ Component** on a
 board is greyed with the reason "not available on boards yet".
 
 - **Move:** drag a footprint, or select it and choose **Edit ▸ Move ▸
-  Move**. Tracks joined to its pads come along. The move is one undo step.
+  Move**. Tracks joined to its pads come along. Hold `Ctrl` (`Cmd` on macOS)
+  while you drag to move the part alone: its tracks stay where they are, so
+  their ends no longer reach the pads and DRC and the ratsnest show the open
+  connections. Press or release `Ctrl` during the drag to switch; the status
+  bar says which. The move is one undo step.
 - **Turn:** `Space` turns the selection 90° counter-clockwise, `Shift+Space`
   clockwise.
 - **Other side:** `L` (**Edit ▸ Move ▸ Flip Selection**) puts the part on the

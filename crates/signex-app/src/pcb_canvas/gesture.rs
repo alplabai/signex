@@ -51,7 +51,14 @@ impl Gesture {
         match event {
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(mods)) => {
                 self.modifiers = *mods;
-                None
+                // Ctrl pressed or released mid-drag switches whether the
+                // tracks follow at once, not at the next pointer move.
+                if !(self.carrying && self.dragging && canvas.carry.get()) {
+                    return None;
+                }
+                let (press, pos) = (self.press?, cursor.position_in(bounds)?);
+                let msg = self.drag_message(canvas, press, pos, bounds);
+                Some(canvas::Action::publish(Message::PcbCanvas(msg)))
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 // A release lost outside the window leaves a stale press;
@@ -72,8 +79,10 @@ impl Gesture {
                 self.press = Some(pos);
                 self.clicks_only = canvas.is_clicks_only();
                 let at = canvas.screen_to_world(pos, bounds);
+                // Ctrl alone still drags, leaving the tracks; Shift (or
+                // Ctrl+Shift) draws a box from a footprint too.
                 self.carrying = !self.clicks_only
-                    && self.modifiers.is_empty()
+                    && (self.modifiers.is_empty() || leaves_tracks(self.modifiers))
                     && canvas.grabs(at, hover_reach_mm(canvas.scale()));
                 Some(canvas::Action::publish(message).and_capture())
             }
@@ -99,11 +108,7 @@ impl Gesture {
                 }
                 self.dragging = true;
                 canvas.carry.set(true);
-                let msg = PcbCanvasMsg::FootprintDragged {
-                    from: canvas.screen_to_world(press, bounds),
-                    to: canvas.screen_to_world(pos, bounds),
-                    tolerance_mm: hover_reach_mm(canvas.scale()),
-                };
+                let msg = self.drag_message(canvas, press, pos, bounds);
                 Some(canvas::Action::publish(Message::PcbCanvas(msg)).and_capture())
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
@@ -207,6 +212,22 @@ impl Gesture {
         double
     }
 
+    /// The drag pressed at `press` (canvas pixels) is at `pos`.
+    fn drag_message(
+        &self,
+        canvas: &PcbCanvas,
+        press: iced::Point,
+        pos: iced::Point,
+        bounds: Rectangle,
+    ) -> PcbCanvasMsg {
+        PcbCanvasMsg::FootprintDragged {
+            from: canvas.screen_to_world(press, bounds),
+            to: canvas.screen_to_world(pos, bounds),
+            tolerance_mm: hover_reach_mm(canvas.scale()),
+            leaves_tracks: leaves_tracks(self.modifiers),
+        }
+    }
+
     fn drop_press(&mut self, canvas: &PcbCanvas) {
         self.press = None;
         self.dragging = false;
@@ -247,6 +268,12 @@ fn click_mode(mods: Modifiers) -> ClickMode {
     } else {
         ClickMode::Replace
     }
+}
+
+/// A footprint drag with Ctrl (Cmd on macOS) and no other modifier leaves
+/// the tracks on its pads in place (Caner, 2026-11-21).
+fn leaves_tracks(mods: Modifiers) -> bool {
+    (mods.control() || mods.command()) && !mods.shift() && !mods.alt()
 }
 
 /// A box: Shift adds, Ctrl or Cmd toggles, a plain box replaces.

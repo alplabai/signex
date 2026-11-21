@@ -35,14 +35,23 @@ pub enum PcbCanvasMsg {
     /// A press on a footprint is being dragged from `from` to `to` (#2240).
     /// An unselected one is selected by the drag (#2358); `tolerance_mm` is
     /// the reach the press grabbed it with. The board is untouched until
-    /// the drop.
+    /// the drop. `leaves_tracks`: Ctrl is held, so the footprints move
+    /// alone and the tracks on their pads stay (Caner, 2026-11-21).
     FootprintDragged {
         from: Point,
         to: Point,
         tolerance_mm: f64,
+        leaves_tracks: bool,
     },
     /// That drag was released at `to`: the footprints move as one step.
     FootprintDropped { from: Point, to: Point },
     /// The pointer left the canvas mid-drag: nothing moves.
     FootprintDragCancelled,
 }
+
+/// The key that, held during a footprint drag, leaves the tracks in place.
+pub const LEAVE_TRACKS_KEY: &str = if cfg!(target_os = "macos") {
+    "Cmd"
+} else {
+    "Ctrl"
+};

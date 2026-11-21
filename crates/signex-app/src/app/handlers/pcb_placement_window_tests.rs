@@ -117,6 +117,7 @@ fn dragged(from: Point, to: Point) -> PcbCanvasMsg {
         from,
         to,
         tolerance_mm: 0.05,
+        leaves_tracks: false,
     }
 }
 

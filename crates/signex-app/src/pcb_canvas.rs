@@ -37,7 +37,7 @@ pub use carry::{
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
 pub use marks::BoardMarks;
-pub use msg::PcbCanvasMsg;
+pub use msg::{LEAVE_TRACKS_KEY, PcbCanvasMsg};
 pub use rooms::{RoomMark, RoomsOverlay};
 pub use select::PcbSelectionState;
 pub use snap_options::{PcbSnapOptions, SnapDistance, SnapScope};

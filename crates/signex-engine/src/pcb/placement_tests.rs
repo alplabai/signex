@@ -194,6 +194,25 @@ fn a_move_takes_the_track_ends_on_its_pads_along_in_one_step() {
     assert_eq!(fp(engine.board(), 2).position, fp(&before, 2).position);
 }
 
+/// A Ctrl drag (Caner, 2026-11-21) moves the footprint alone: the track on
+/// its pad keeps both ends.
+#[test]
+fn a_move_of_the_footprints_only_leaves_the_tracks_in_place() {
+    let mut b = board();
+    b.segments = vec![
+        serde_json::from_value(serde_json::json!({
+            "uuid": id(900), "start": {"x": 25.0, "y": 10.0}, "end": {"x": 21.0, "y": 10.0},
+            "width": 0.25, "layer": "TopCopper", "net": 0
+        }))
+        .unwrap(),
+    ];
+    let commands = move_footprints_only(&b, &ids(&[2]), Point::new(2.0, 1.0)).unwrap();
+    assert_eq!(commands.len(), 1, "{commands:?}");
+    let moved = run(b.clone(), commands);
+    assert_eq!(moved.segments, b.segments);
+    assert_eq!(fp(&moved, 2).position, Point::new(22.0, 11.0));
+}
+
 /// #2410: a command names a component by its designator; a missing or
 /// shared one is refused with the reason.
 #[test]
