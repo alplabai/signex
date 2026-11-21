@@ -1,5 +1,4 @@
-//! The visible board (or no document), drawn into the PCB canvases and the
-//! panel context.
+//! The visible board, drawn into the PCB canvases.
 
 use crate::app::Signex;
 
@@ -73,45 +72,5 @@ impl Signex {
         main.set_origin_marker_visible(origin_marker);
         main.set_view_flipped(flipped);
         self.note_pcb_board_changed();
-    }
-
-    pub(crate) fn apply_loaded_pcb_document(
-        &mut self,
-        fit_to_board: bool,
-        refresh_panel_ctx: bool,
-    ) {
-        self.clear_schematic_ui_state();
-        self.sync_pcb_canvas_from_visible_board();
-        if fit_to_board {
-            // A board opened into the tab starts upright (#2316).
-            if self.interaction_state.pcb_canvas.set_view_rotation(0.0) {
-                self.close_view_angle_entry_in(None);
-            }
-            self.interaction_state.pcb_canvas.fit_to_board();
-        }
-        self.interaction_state.pcb_canvas.clear_bg_cache();
-        self.interaction_state.pcb_canvas.clear_content_cache();
-
-        if refresh_panel_ctx {
-            self.refresh_panel_ctx();
-        } else {
-            self.sync_panel_ctx_from_visible_document();
-        }
-    }
-
-    pub(crate) fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
-        self.clear_schematic_ui_state();
-        self.interaction_state
-            .pcb_canvas
-            .set_renderer_snapshot(None);
-        self.note_pcb_board_changed();
-        self.interaction_state.pcb_canvas.clear_bg_cache();
-        self.interaction_state.pcb_canvas.clear_content_cache();
-
-        if refresh_panel_ctx {
-            self.refresh_panel_ctx();
-        } else {
-            self.sync_panel_ctx_from_visible_document();
-        }
     }
 }

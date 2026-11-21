@@ -445,7 +445,7 @@ impl Signex {
         }
     }
 
-    pub(super) fn clear_schematic_ui_state(&mut self) {
+    fn clear_schematic_ui_state(&mut self) {
         // Detach from the currently-visible schematic engine, but
         // leave its entry in `document_state.engines` untouched — the
         // engine should outlive a tab switch so switching back to a
@@ -472,6 +472,46 @@ impl Signex {
             .active_canvas_mut()
             .clear_overlay_cache();
         self.interaction_state.current_tool = Tool::Select;
+    }
+
+    pub(crate) fn apply_loaded_pcb_document(
+        &mut self,
+        fit_to_board: bool,
+        refresh_panel_ctx: bool,
+    ) {
+        self.clear_schematic_ui_state();
+        self.sync_pcb_canvas_from_visible_board();
+        if fit_to_board {
+            // A board opened into the tab starts upright (#2316).
+            if self.interaction_state.pcb_canvas.set_view_rotation(0.0) {
+                self.close_view_angle_entry_in(None);
+            }
+            self.interaction_state.pcb_canvas.fit_to_board();
+        }
+        self.interaction_state.pcb_canvas.clear_bg_cache();
+        self.interaction_state.pcb_canvas.clear_content_cache();
+
+        if refresh_panel_ctx {
+            self.refresh_panel_ctx();
+        } else {
+            self.sync_panel_ctx_from_visible_document();
+        }
+    }
+
+    pub(crate) fn apply_loaded_empty_document(&mut self, refresh_panel_ctx: bool) {
+        self.clear_schematic_ui_state();
+        self.interaction_state
+            .pcb_canvas
+            .set_renderer_snapshot(None);
+        self.note_pcb_board_changed();
+        self.interaction_state.pcb_canvas.clear_bg_cache();
+        self.interaction_state.pcb_canvas.clear_content_cache();
+
+        if refresh_panel_ctx {
+            self.refresh_panel_ctx();
+        } else {
+            self.sync_panel_ctx_from_visible_document();
+        }
     }
 
     /// Refresh the canvas and panel context against the active schematic
