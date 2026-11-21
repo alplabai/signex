@@ -10,6 +10,8 @@ mod commit_bytes_tests;
 mod dir_case;
 mod disk_poll;
 mod external_change;
+#[cfg(test)]
+mod external_change_tests;
 pub(crate) use dir_case::FoldAnswer;
 pub(crate) use disk_poll::{DiskPoll, DiskRead};
 pub(crate) use external_change::ReloadedFile;
@@ -36,6 +38,8 @@ mod recent;
 mod restore_cancel_tests;
 #[cfg(test)]
 pub(crate) mod restore_commit_tests;
+#[cfg(test)]
+mod restore_epoch_tests;
 mod restore_fingerprint;
 #[cfg(test)]
 mod restore_library_tests;
