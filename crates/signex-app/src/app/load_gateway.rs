@@ -368,6 +368,8 @@ impl Signex {
         // (`close_tab_at_index` in `handlers/document_tabs.rs`, #51).
         self.document_state.detach_active_schematic();
         self.cancel_placement_session();
+        // The tool goes back to Select here, so no wire can go on, in any window.
+        self.clear_drawing_buffers();
         self.interaction_state
             .active_canvas_mut()
             .set_render_cache(None);
