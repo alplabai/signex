@@ -82,8 +82,6 @@ project-variants-help = A variant decides which parts are fitted. The BOM and th
 project-variants-col-active = Active
 project-variants-col-name = Name
 project-variants-base = Base
-project-variants-new = New variant name
-project-variants-add = Add
 project-variants-remove = Remove
 project-variant-empty = Enter a variant name.
 project-variant-too-long = A variant name is at most { $max } characters.
@@ -91,6 +89,78 @@ project-variant-invalid = A variant name cannot contain line breaks or control c
 project-variant-reserved = Base is the variant every project has; choose another name.
 project-variant-taken = The project already has a variant named { $name }.
 project-variant-unknown = The project has no variant named { $name }.
+
+# Variants section in the Variant Manager layout (#1293).
+# The name `+` gives a new variant. $n counts from 1.
+project-variants-new-name = Variant { $n }
+project-variants-active-caption = Active variant
+project-variants-filter = Filter parts (R5, U*, 10k)
+project-variants-only-differ = Only rows that differ
+project-variants-list-title = Variants
+# How many variants the list holds, Base included.
+project-variants-count = { $count }
+# Pill on the active variant's row, card and column.
+project-variants-active = active
+project-variants-row-base = { $fitted } / { $total } fitted · reference
+project-variants-row =
+    { $changes ->
+        [one] { $fitted } / { $total } fitted · 1 change
+       *[other] { $fitted } / { $total } fitted · { $changes } changes
+    }
+project-variants-selected = Selected: { $name }
+project-variants-rename = Rename
+project-variants-delete = Delete
+project-variants-base-note = Base is the reference: it cannot be renamed or deleted. Double-click a name to rename it in place.
+project-variants-card-parts = Parts
+project-variants-card-cost = Cost
+project-variants-card-vs-base = vs Base
+project-variants-card-fitted = { $fitted } / { $total }
+# A card value with no source yet (the cost: no prices).
+project-variants-no-value = —
+project-variants-reference = reference
+project-variants-changes =
+    { $changes ->
+        [one] 1 change
+       *[other] { $changes } changes
+    }
+project-variants-col-part = Part
+project-variants-col-value = Value · Footprint
+# After a part's value in the matrix.
+project-variants-footprint = · { $footprint }
+project-variants-fitted = Fitted
+project-variants-not-fitted = Not fitted
+project-variants-legend = Cells that match Base stay quiet; only differences are coloured.
+project-variants-hidden-rows =
+    { $hidden ->
+        [one] { $differ } of { $total } parts differ in at least one variant. 1 row is hidden by Only rows that differ.
+       *[other] { $differ } of { $total } parts differ in at least one variant. { $hidden } rows are hidden by Only rows that differ.
+    }
+project-variants-no-match = No parts match the filter.
+project-variants-no-parts = The project's sheets place no parts.
+project-variants-status =
+    { $parts ->
+        [one] 1 part
+       *[other] { $parts } parts
+    } · { $variants } variants · { $cells ->
+        [one] 1 cell differs
+       *[other] { $cells } cells differ
+    } from Base
+project-variants-status-base =
+    { $parts ->
+        [one] 1 part · 1 variant
+       *[other] { $parts } parts · 1 variant
+    }
+project-variants-reading = Reading the project's parts…
+# $reason is the system's own text for why the read stopped.
+project-variants-read-failed = The parts could not be read: { $reason }
+project-variants-read-no-root = The parts could not be read: the project has no root sheet.
+# $path is the root sheet's file path.
+project-variants-read-root-unreadable = The parts could not be read: the root sheet { $path } could not be read.
+project-variants-stale = The sheets changed since the parts were read.
+project-variants-read-again = Read again
+project-variants-empty-title = This project has one variant, Base
+project-variants-empty-body = Base fits every part with the values on the schematic. A variant records only what differs from Base: parts not fitted, alternate parts and per-variant values.
+project-variants-new-from-base = New variant from Base
 
 # Libraries section (#1691).
 project-libraries-help = The libraries this project mounts, in the order the project tree lists them. A read-only library cannot be edited from this project.

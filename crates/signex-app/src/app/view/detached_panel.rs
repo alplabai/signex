@@ -170,19 +170,22 @@ impl Signex {
     ) -> Element<'_, Message> {
         let ctx = &self.document_state.panel_ctx;
         let i18n = &self.ui_state.i18n;
-        let panel = if kind == PanelKind::Components {
-            crate::panels::components_panel::view(
+        let panel = match kind {
+            PanelKind::Components => crate::panels::components_panel::view(
                 &self.library,
                 ctx,
                 &ctx.tokens,
                 self.sheet_grid(),
             )
             .map(crate::dock::DockMessage::Library)
-            .boxed()
-        } else {
-            crate::panels::view_panel(kind, ctx)
+            .boxed(),
+            // The same surface as the docked and floating Library panel.
+            PanelKind::Library | PanelKind::SchLibrary | PanelKind::FootprintLibrary => {
+                crate::library::panel::view(&self.library, ctx)
+            }
+            other => crate::panels::view_panel(other, ctx)
                 .map(crate::dock::DockMessage::Panel)
-                .boxed()
+                .boxed(),
         }
         .map(Message::Dock);
         let document = &self.document_state;

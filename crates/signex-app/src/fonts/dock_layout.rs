@@ -114,10 +114,9 @@ fn panel_kind_key(k: crate::panels::PanelKind) -> &'static str {
         LayerStack => "layer_stack",
         Layers => "layers",
         NetClasses => "net_classes",
-        Library => "library",
-        SchLibrary => "sch_library",
-        FootprintLibrary => "footprint_library",
-        SymbolPins => "symbol_pins",
+        // The alias rows are never docked; should one be, it saves as the
+        // Library panel it stands for (mockup row 119).
+        Library | SchLibrary | FootprintLibrary => "library",
         PcbNets => "pcb_nets",
         History => "history",
         NetInspector => "net_inspector",
@@ -150,11 +149,8 @@ fn parse_panel_kind(s: &str) -> Option<crate::panels::PanelKind> {
         "layers" => Layers,
         "net_classes" => NetClasses,
         "library" => Library,
-        "sch_library" => SchLibrary,
-        "footprint_library" => FootprintLibrary,
         // The footprint editor's own Layers panel, merged into Layers (#2359).
         "footprint_layers" => Layers,
-        "symbol_pins" => SymbolPins,
         "pcb_nets" => PcbNets,
         "history" => History,
         "net_inspector" => NetInspector,
@@ -275,6 +271,38 @@ mod tests {
             dock.panel_kinds(PanelPosition::Right),
             [PanelKind::Properties]
         );
+    }
+
+    /// Mockup rows 119-122: the old SCH Library, Footprint Library and Pins
+    /// keys of a saved layout are dropped with no alias (no-legacy rule), the
+    /// rest of the layout loads, and no panel saves under those keys.
+    #[test]
+    fn a_saved_layout_drops_the_merged_library_panel_keys() {
+        let json = serde_json::json!({
+            "dock": {
+                "left": {
+                    "panels": ["projects", "sch_library", "footprint_library"],
+                    "collapsed": false
+                },
+                "right": { "panels": ["properties"], "collapsed": false },
+                "bottom": { "panels": ["messages", "symbol_pins", "erc"], "collapsed": false },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        assert_eq!(dock.panel_kinds(PanelPosition::Left), [PanelKind::Projects]);
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Bottom),
+            [PanelKind::Messages, PanelKind::Erc]
+        );
+        for kind in crate::panels::ALL_PANELS {
+            let key = panel_kind_key(*kind);
+            assert!(
+                !matches!(key, "sch_library" | "footprint_library" | "symbol_pins"),
+                "{kind:?} saves as {key}"
+            );
+        }
+        assert_eq!(panel_kind_key(PanelKind::SchLibrary), "library");
+        assert_eq!(panel_kind_key(PanelKind::FootprintLibrary), "library");
     }
 
     #[test]

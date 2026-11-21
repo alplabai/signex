@@ -121,16 +121,42 @@ impl Signex {
             None => t!(i18n, ids::LIBRARY_ROW_NO_FOOTPRINT),
         };
 
+        // An unbound, unresolved or unreadable binding turns its card amber
+        // (mockup row 127); one still being read does not.
+        let symbol_warn = row.is_symbol_unbound()
+            || matches!(
+                summaries.and_then(|s| s.symbol.as_ref()),
+                Some(SymbolOutcome::Absent | SymbolOutcome::Failed(_))
+            );
+        let footprint_warn = row.footprint_ref.is_none()
+            || row.is_footprint_unbound()
+            || matches!(
+                summaries.and_then(|s| s.footprint.as_ref()),
+                Some(FootprintOutcome::Absent | FootprintOutcome::Failed(_))
+            );
+        let open = self.library.library_at(&library_path);
+        let position = open
+            .and_then(|lib| lib.tables.get(&table))
+            .and_then(|rows| rows.iter().position(|r| r.row_id == row.row_id))
+            .map(|index| index + 1);
+        let library = open.map(|lib| lib.display_name.clone()).unwrap_or_default();
         let read_only = self.library.is_read_only(&library_path);
         Some(crate::panels::LibraryRowDetail {
             library_path,
+            library,
             table,
             row_id: row.row_id,
+            position,
             internal_pn: row.internal_pn.as_str().to_string(),
             class: row.class.as_str().to_string(),
-            lifecycle_label: format!("{:?}", row.state),
-            symbol_unbound: row.is_symbol_unbound(),
-            footprint_unbound: row.is_footprint_unbound(),
+            lifecycle: crate::library::editor::kit::lifecycle_label(row.state).to_string(),
+            lifecycle_tone: crate::library::editor::kit::lifecycle_tone(row.state),
+            version: row.version.clone(),
+            mpn: row.primary_mpn.mpn.clone(),
+            manufacturer: row.primary_mpn.manufacturer.clone(),
+            updated: row.updated.format("%Y-%m-%d %H:%M").to_string(),
+            symbol_warn,
+            footprint_warn,
             symbol_summary,
             footprint_summary,
             read_only,
@@ -428,8 +454,7 @@ impl Signex {
                         let missing = fs_facts.is_missing(&resolved);
                         // F30 — list `.snxsym` / `.snxfpt` FILES, not
                         // individual primitives. Each file can hold
-                        // hundreds-to-thousands of symbols (Altium
-                        // parity: one `.SchLib` ≡ one `.snxsym`), so
+                        // hundreds-to-thousands of symbols, so
                         // enumerating cached_symbols would explode the
                         // tree. The user opens a `.snxsym` file to
                         // browse the symbols inside it via the SCH

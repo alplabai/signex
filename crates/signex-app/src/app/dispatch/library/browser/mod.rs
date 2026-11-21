@@ -13,6 +13,7 @@ mod cell_commit;
 mod grid;
 mod modal_reload;
 mod param_commit;
+mod preview_load;
 mod row_delete;
 mod row_save;
 mod slot_param;
@@ -311,6 +312,8 @@ impl Signex {
             .map(|r| r.internal_pn.as_str().to_string())
             .unwrap_or_else(|| format!("row {row_id}"));
         if let Some(state) = self.library.library_browsers.get_mut(&library_path) {
+            // Delete Selected is an item of the preview's ⋯ menu (mockup row 118).
+            state.more_menu_open = false;
             state.delete_confirm = Some(DeleteConfirmState {
                 table,
                 row_id,

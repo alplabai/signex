@@ -1129,6 +1129,9 @@ pub enum PanelMsg {
     /// The placed part's ⋯ menu, its focused pin and its illustration
     /// hover (mockup rows 42, 50).
     Part(super::PartPanelMsg),
+    /// The symbol editor's Properties panel: its tabs, the Pins tab and the
+    /// illustration hover (mockup rows 122 and 123).
+    SymbolProps(crate::library::editor::symbol::SymbolPropsMsg),
 }
 
 /// One change to the active sheet's frame settings (#1134).

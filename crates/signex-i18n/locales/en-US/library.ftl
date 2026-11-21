@@ -167,6 +167,60 @@ library-panel-open-library = + Open Library…
 library-panel-no-tables = No tables in this library.
 # Row-count pill of a library. $count is a whole number.
 library-panel-rows = { $count } rows
+# Kind chips at the top of the Library panel (mockup row 119), with their tooltips.
+library-panel-kind-symbols = Symbols
+library-panel-kind-footprints = Footprints
+library-panel-kind-parts = Parts
+library-panel-show-symbols = Show symbols
+library-panel-show-footprints = Show footprints
+library-panel-show-parts = Show parts
+# Tooltip of a kind chip while nothing is open to browse.
+library-panel-open-first = Open a library first
+# Breadcrumb under the chips: "<library> › <file> · <count>". $library is a
+# library name; the file name sits between this and the count.
+library-panel-crumb-library = { $library } ›
+# $count is a whole number.
+library-panel-crumb-symbols = · { $count ->
+        [one] { $count } symbol
+       *[other] { $count } symbols
+    }
+library-panel-crumb-footprints = · { $count ->
+        [one] { $count } footprint
+       *[other] { $count } footprints
+    }
+library-panel-crumb-parts = · { $count ->
+        [one] { $count } part
+       *[other] { $count } parts
+    }
+library-panel-no-library = No library open
+library-panel-no-symbol-file = No symbol file open
+library-panel-no-footprint-file = No footprint file open
+library-panel-filter-symbols = Filter symbols
+library-panel-filter-footprints = Filter footprints
+library-panel-filter-parts = Filter parts
+# Toolbar of the Library panel.
+library-panel-place = Place
+library-panel-add = Add
+library-panel-edit = Edit
+library-panel-delete = Delete
+# Tooltip on the disabled Delete of the Parts kind: the delete confirmation
+# runs in the library's Library Browser tab.
+library-panel-delete-needs-browser = Open the library in the Library Browser to delete a row
+# Section under the symbol list. $symbol is the active symbol's name.
+library-panel-parts-of = Parts of { $symbol }
+# Pad count of a footprint row. $count is a whole number.
+library-panel-pads = { $count ->
+        [one] { $count } pad
+       *[other] { $count } pads
+    }
+# A bare count beside a table name. $count is a whole number.
+library-panel-count = { $count }
+library-panel-no-matches = Nothing matches the filter.
+# Empty state of the Library panel.
+library-panel-empty-title = No libraries open
+library-panel-empty-body = Open a *.snxlib to browse its parts, symbols and footprints here.
+# Empty-state button and the title-bar folder button's tooltip.
+library-panel-open-library-action = Open Library…
 
 ## Library Browser row in the Properties panel: what the row binds
 library-row-no-symbol = No symbol bound
@@ -601,3 +655,39 @@ library-updates-field-footprint = Footprint
 library-updates-field-manufacturer = Manufacturer
 # Conflict line: the field that differs, the manufacturer part number.
 library-updates-field-mpn = MPN
+
+## Library Browser tab, Graphite (mockup row 118)
+
+# Shown in place of the tab when its library is not mounted. $path is the
+# library folder.
+library-browser-not-mounted = Library not mounted: { $path }
+# Hint under that line.
+library-browser-reopen-hint = Re-open the library through File ▸ Library ▸ Open Library… or via the project tree.
+# Header of the narrow column that marks a row without a bound symbol.
+library-browser-column-sym = Sym
+# Tooltip of that column header.
+library-browser-column-sym-tip = Symbol bound
+# Header of the narrow column that marks a row without a bound footprint.
+library-browser-column-fpt = Fpt
+# Tooltip of that column header.
+library-browser-column-fpt-tip = Footprint bound
+# Tooltip of the red mark of a row whose bound symbol cannot be found.
+library-browser-symbol-missing = The bound symbol is missing
+# Tooltip of the red mark of a row whose bound footprint cannot be found.
+library-browser-footprint-missing = The bound footprint is missing
+# Preview pane button: edit the selected row's fields.
+library-browser-edit-details = Edit Details
+# Preview pane button: bind a symbol to the selected row.
+library-browser-pick-symbol = Pick Symbol…
+# Preview pane button: bind a footprint to the selected row.
+library-browser-pick-footprint = Pick Footprint…
+# Tooltip of the preview pane's ⋯ button.
+library-browser-more-actions = More actions
+# Item of the ⋯ menu: delete the selected row (asks first).
+library-browser-delete-selected = Delete Selected
+# Note in the preview pane of a library that cannot be edited.
+library-browser-read-only-note = This library ships with Signex and is not editable.
+# A preview tile while its drawing is read.
+library-browser-preview-loading = Loading…
+# A preview tile whose drawing could not be read.
+library-browser-preview-unreadable = Could not be read

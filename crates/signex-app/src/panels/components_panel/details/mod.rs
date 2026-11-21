@@ -198,6 +198,16 @@ impl DetailsState {
         }
         true
     }
+
+    /// End the read of `key` with no data and no reader text, for a caller
+    /// that keeps its own typed reason. Dropped like [`Self::finish`].
+    pub fn end_read(&mut self, key: &ComponentsPanelRowKey, generation: u64) -> bool {
+        if self.key.as_ref() != Some(key) || self.generation != generation {
+            return false;
+        }
+        self.reloading = false;
+        true
+    }
 }
 
 /// The details section for the panel's selected row.

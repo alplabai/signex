@@ -25,6 +25,7 @@ mod reference_display;
 pub mod substitution;
 pub mod svg;
 pub mod template;
+pub mod variant_fit;
 
 pub use assembly::{AssemblyDrawing, AssemblyInk, AssemblyMark, assembly_drawing, assembly_ink};
 pub use board_report::{
@@ -60,6 +61,7 @@ pub use reference_display::show_board_references;
 pub use substitution::{SubstitutionContext, resolve, resolve_text};
 pub use svg::board::{AssemblySvgOptions, assembly_svg};
 pub use template::{Template, TemplateError, TemplateId, TitleBlockField};
+pub use variant_fit::{VariantMatrix, VariantRow, is_fitted, part_is_fitted, variant_matrix};
 
 /// The universal exporter trait — one impl per output format.
 pub trait Exporter {

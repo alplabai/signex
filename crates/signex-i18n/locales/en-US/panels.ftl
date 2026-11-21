@@ -188,8 +188,6 @@ panels-kind-library = Library
 # Schematic symbol library.
 panels-kind-sch-library = SCH Library
 panels-kind-footprint-library = Footprint Library
-# The symbol editor's pin table.
-panels-kind-symbol-pins = Pins
 # The board's net list.
 panels-kind-pcb-nets = PCB
 panels-kind-layers = Layers
@@ -702,6 +700,14 @@ panels-library-row-symbol = Symbol
 panels-library-row-footprint = Footprint
 panels-library-row-pick-symbol = Pick Symbol…
 panels-library-row-pick-footprint = Pick Footprint…
+# Caption under the row's part number (mockup row 127). $table is the table name; $row
+# is the row's place in its table, or a short row id.
+panels-library-row-heading = Library Row · { $table } · row { $row }
+# After the lifecycle in the row's pill line. $version is the row's version.
+panels-library-row-version = · v{ $version }
+panels-library-row-section-bindings = Bindings
+# Button of a bound Symbol or Footprint card.
+panels-library-row-pick = Pick…
 
 ## Drawing properties (lines, rectangles, circles, arcs, polygons)
 panels-drawing-color = Color

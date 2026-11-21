@@ -110,6 +110,7 @@ pub fn field_state(
 /// The scalar a graphic's numeric box shows, `None` when the field does
 /// not apply to that kind of graphic.
 fn graphic_scalar(g: &GraphicSummary, field: GraphicFieldId) -> Option<f64> {
+    use crate::library::editor::symbol::rect_extent;
     use GraphicFieldId as F;
     use GraphicKindSummary as K;
     match (&g.kind, field) {
@@ -118,6 +119,8 @@ fn graphic_scalar(g: &GraphicSummary, field: GraphicFieldId) -> Option<f64> {
         (K::Rectangle { from, .. } | K::Line { from, .. }, F::FromY) => Some(from[1]),
         (K::Rectangle { to, .. } | K::Line { to, .. }, F::ToX) => Some(to[0]),
         (K::Rectangle { to, .. } | K::Line { to, .. }, F::ToY) => Some(to[1]),
+        (K::Rectangle { from, to }, F::Width) => Some(rect_extent(from[0], to[0])),
+        (K::Rectangle { from, to }, F::Height) => Some(rect_extent(from[1], to[1])),
         (K::Circle { center, .. } | K::Arc { center, .. }, F::CenterX) => Some(center[0]),
         (K::Circle { center, .. } | K::Arc { center, .. }, F::CenterY) => Some(center[1]),
         (K::Circle { radius, .. } | K::Arc { radius, .. }, F::Radius) => Some(*radius),

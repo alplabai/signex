@@ -316,6 +316,9 @@ pub enum EditorMsg {
     },
     /// Fire-and-forget save of the active SimModel primitive.
     SaveSim(uuid::Uuid, Box<SimModel>),
+    /// The header's "N fields do not parse" pill was pressed: show the tab
+    /// holding the first field that does not parse and focus it.
+    UnparsedFieldsPillPressed,
 }
 
 /// Pure-data alias for `ParamKind` so messages don't depend on
@@ -519,6 +522,8 @@ pub enum PickerMsg {
     PlaceSelected,
     /// A range filter on a parameter column of the picker's list.
     RangeFilter(RangeFilterMsg),
+    /// A kind chip of the Library panel was pressed (mockup row 119).
+    PanelKindPicked(super::state::LibraryPanelKind),
 }
 
 /// Edit Component Details modal sub-message tree — keeps

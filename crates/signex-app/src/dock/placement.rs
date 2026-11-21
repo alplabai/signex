@@ -143,10 +143,12 @@ impl PanelPosition {
             PanelKind::Projects
             | PanelKind::Components
             | PanelKind::Library
+            | PanelKind::SchLibrary
+            | PanelKind::FootprintLibrary
             | PanelKind::PcbNets
             // A sibling tab of Projects (#1308, DECISIONS 2026-11-19).
             | PanelKind::CompiledDesign => PanelPosition::Left,
-            PanelKind::Erc | PanelKind::SymbolPins => PanelPosition::Bottom,
+            PanelKind::Erc => PanelPosition::Bottom,
             PanelKind::Navigator
             | PanelKind::Properties
             | PanelKind::Messages
@@ -164,8 +166,6 @@ impl PanelPosition {
             | PanelKind::Snippets
             | PanelKind::Todo
             | PanelKind::Wiki
-            | PanelKind::SchLibrary
-            | PanelKind::FootprintLibrary
             | PanelKind::History
             | PanelKind::NetInspector
             | PanelKind::Unions => PanelPosition::Right,
@@ -175,24 +175,23 @@ impl PanelPosition {
 
 impl DockArea {
     /// Give a fresh Graphite layout the panels an editor tab needs: the
-    /// footprint editor gets Footprint Library and Layers on the left, the
-    /// board editor its Nets on the left and a DRC tab on the right, the
-    /// symbol editor SCH Library on the left and the Pins table at the
-    /// bottom, the component editor folds the left dock to its rail.
-    /// Runs once per context and
-    /// only for a layout `graphite_first_run` built; a saved layout (the
-    /// user's own arrangement) never has a seed owed, so it is never touched.
+    /// footprint editor gets Layers and the Library panel (in front) on the
+    /// left, the symbol editor the Library panel in front on the left (it
+    /// opens on that editor's kind, mockup row 119), the board editor its Nets on the
+    /// left and a DRC tab on the right, the component editor folds the left
+    /// dock to its rail. Runs once per context and only for a layout
+    /// `graphite_first_run` built; a saved layout (the user's own
+    /// arrangement) never has a seed owed, so it is never touched.
     pub fn seed_for_editor(&mut self, context: EditorContext) {
         match context {
             EditorContext::Footprint if self.editor_seeds.footprint => {
                 self.editor_seeds.footprint = false;
                 self.add_panel(PanelPosition::Left, PanelKind::Layers);
-                self.show_panel_at(PanelPosition::Left, PanelKind::FootprintLibrary);
+                self.show_panel_at(PanelPosition::Left, PanelKind::Library);
             }
             EditorContext::Symbol if self.editor_seeds.symbol => {
                 self.editor_seeds.symbol = false;
-                self.show_panel_at(PanelPosition::Left, PanelKind::SchLibrary);
-                self.show_panel_at(PanelPosition::Bottom, PanelKind::SymbolPins);
+                self.show_panel_at(PanelPosition::Left, PanelKind::Library);
             }
             EditorContext::Pcb if self.editor_seeds.pcb => {
                 self.editor_seeds.pcb = false;
@@ -365,26 +364,34 @@ mod tests {
     #[test]
     fn a_fresh_layout_seeds_each_editor_dock_once() {
         let mut dock = crate::dock::graphite_first_run();
+        let bottom = dock.panel_kinds(PanelPosition::Bottom).to_vec();
         dock.seed_for_editor(EditorContext::Footprint);
         assert!(matches!(
             dock.locate(PanelKind::Layers),
             Some(crate::dock::PanelSite::Docked(PanelPosition::Left, _))
         ));
-        dock.seed_for_editor(EditorContext::Symbol);
+        // Mockup row 119: the footprint editor opens with the Library panel in front.
         assert!(matches!(
-            dock.locate(PanelKind::SymbolPins),
-            Some(crate::dock::PanelSite::Docked(PanelPosition::Bottom, _))
-        ));
-        // #2262: the symbol editor opens with SCH Library as the left tab.
-        assert!(matches!(
-            dock.locate(PanelKind::SchLibrary),
+            dock.locate(PanelKind::Library),
             Some(crate::dock::PanelSite::Docked(PanelPosition::Left, _))
         ));
-        assert!(dock.is_frontmost(PanelKind::SchLibrary));
-        // A panel the user closed stays closed on the next tab switch.
-        assert!(dock.close_panel(PanelKind::SymbolPins));
+        assert!(dock.is_frontmost(PanelKind::Library));
+        // The user brings Layers to the front, then opens a symbol tab.
+        dock.show_panel(PanelKind::Layers);
         dock.seed_for_editor(EditorContext::Symbol);
-        assert!(dock.locate(PanelKind::SymbolPins).is_none());
+        // #2262, mockup row 119: the symbol editor opens with the Library
+        // panel as the left tab, and docks nothing at the bottom (mockup row
+        // 122: no Pins panel).
+        assert!(dock.is_frontmost(PanelKind::Library));
+        assert_eq!(dock.panel_kinds(PanelPosition::Bottom), bottom.as_slice());
+        // The aliases are never docked.
+        assert!(dock.locate(PanelKind::SchLibrary).is_none());
+        assert!(dock.locate(PanelKind::FootprintLibrary).is_none());
+        // A panel the user closed stays closed on the next tab switch.
+        assert!(dock.close_panel(PanelKind::Library));
+        dock.seed_for_editor(EditorContext::Symbol);
+        dock.seed_for_editor(EditorContext::Footprint);
+        assert!(dock.locate(PanelKind::Library).is_none());
     }
 
     /// #2262: the first component tab of a fresh layout folds the left
@@ -412,7 +419,7 @@ mod tests {
         dock.seed_for_editor(EditorContext::Footprint);
         dock.seed_for_editor(EditorContext::Symbol);
         assert!(dock.locate(PanelKind::Layers).is_none());
-        assert!(dock.locate(PanelKind::SymbolPins).is_none());
+        assert!(dock.locate(PanelKind::Library).is_none());
         assert!(dock.locate(PanelKind::SchLibrary).is_none());
     }
 

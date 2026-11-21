@@ -75,12 +75,10 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         ..
     } = palette;
 
-    // Library Browser tab — Properties panel surfaces the selected
-    // row's metadata + Pick Symbol / Pick Footprint. F15 (2026-05-03
-    // library polish): "right pane can be opened on properties
-    // instead." Takes precedence over the schematic / pre-placement /
-    // symbol-editor branches so when a Library Browser tab is active
-    // the panel stays focused on it.
+    // A Component editor tab or a Library Browser row (mockup row 127) takes
+    // precedence over the schematic / pre-placement / symbol-editor
+    // branches, so the panel stays on the library row while its tab is
+    // active.
     if let Some(sheet) = ctx.component_sheet.as_ref() {
         return super::view_component_sheet(sheet, &ctx.tokens, &ctx.i18n);
     }
@@ -89,14 +87,7 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         return channel;
     }
     if let Some(detail) = ctx.library_row_detail.as_ref() {
-        return view_library_row_properties(
-            detail,
-            muted,
-            primary,
-            border_c,
-            theme_ext::warning_color(&ctx.tokens),
-            &ctx.i18n,
-        );
+        return view_library_row_properties(detail, &ctx.tokens, &ctx.i18n);
     }
 
     // Symbol-editor tab takes precedence — when the user is editing a
@@ -107,9 +98,8 @@ pub fn view_properties<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if let Some(sym) = ctx.symbol_editor.as_ref() {
         return view_symbol_editor_properties(
             sym,
+            &ctx.collapsed_sections,
             ctx.numeric_draft.as_ref(),
-            muted,
-            primary,
             border_c,
             &ctx.tokens,
             &ctx.i18n,

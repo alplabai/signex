@@ -69,6 +69,7 @@ impl Default for LibraryState {
             panel_expanded: Default::default(),
             panel_selected: None,
             panel_last_click: Default::default(),
+            library_panel: Default::default(),
             close_library_confirm: None,
             batch_row_failures: HashMap::new(),
             batch_rows_in_flight: HashMap::new(),
@@ -118,6 +119,7 @@ impl Default for LibraryState {
             stock_copy: None,
             stock_copy_target: None,
             stock_copies_in_flight: Default::default(),
+            symbol_props: HashMap::new(),
         }
     }
 }

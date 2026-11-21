@@ -167,6 +167,80 @@ pub(crate) fn card<'a, M: 'a>(content: Element<'a, M>, tokens: &ThemeTokens) -> 
         .boxed()
 }
 
+/// A surface that keeps at least `min_width`: on a narrower window it
+/// scrolls sideways inside its own frame instead of squeezing or clipping
+/// (mockup rows 118 and 128). `build` is called per layout.
+pub(crate) fn sideways_frame<'a, M: 'a>(
+    min_width: f32,
+    tokens: &ThemeTokens,
+    build: impl Fn() -> Element<'a, M> + 'a,
+) -> Element<'a, M> {
+    let tokens = *tokens;
+    iced::widget::responsive(move |size: iced::Size| -> Element<'a, M> {
+        if size.width >= min_width {
+            return build();
+        }
+        iced::widget::scrollable(
+            container(build())
+                .width(Length::Fixed(min_width))
+                .height(Length::Fixed(size.height)),
+        )
+        .direction(iced::widget::scrollable::Direction::Horizontal(
+            styles::thin_scrollbar(),
+        ))
+        .style(styles::scrollbar_style(&tokens))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .boxed()
+    })
+    .boxed()
+}
+
+/// A symbol or footprint preview tile `height` tall: sunken fill (or
+/// `ground`, the board ground for a footprint), soft border, the drawing
+/// centred, an optional small capitals `tag` at the top left.
+pub(crate) fn preview_tile<'a, M: 'a>(
+    content: Element<'a, M>,
+    height: f32,
+    ground: Option<Color>,
+    tag: Option<signex_i18n::Localized>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let r = resolve(tokens);
+    let (fill, line, tag_ink) = (ground.unwrap_or(r.sunken), r.line_soft, r.ink4);
+    let body = container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill);
+    let layered: Element<'a, M> = match tag {
+        Some(tag) => iced::widget::stack![
+            body.boxed(),
+            container(text(tag).size(TS.caption).color(tag_ink).boxed())
+                .padding([SP.xs, SP.m])
+                .boxed(),
+        ]
+        .boxed(),
+        None => body.boxed(),
+    };
+    container(layered)
+        .width(Length::Fill)
+        .height(Length::Fixed(height))
+        .padding(HAIRLINE)
+        .clip(true)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                width: HAIRLINE,
+                radius: Radii::GRAPHITE.button.into(),
+                color: line,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
 /// A table column: its heading (written in capitals in the catalog; `None`
 /// for an untitled action column) and its width.
 pub(crate) type TableColumn = (Option<signex_i18n::MessageId>, Length);
@@ -278,6 +352,45 @@ pub(crate) fn secondary_button<'a, M: Clone + 'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, M> {
     labelled(label, on_press, graphite_outline(tokens))
+}
+
+/// [`primary_button`] with catalog text.
+pub(crate) fn primary_action<'a, M: Clone + 'a>(
+    label: signex_i18n::Localized,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    button(text(label).size(TS.body).boxed())
+        .padding([SP.xs, SP.m])
+        .on_press_maybe(on_press)
+        .style(styles::primary_button(tokens))
+        .boxed()
+}
+
+/// [`secondary_button`] with catalog text.
+pub(crate) fn secondary_action<'a, M: Clone + 'a>(
+    label: signex_i18n::Localized,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    button(text(label).size(TS.body).boxed())
+        .padding([SP.xs, SP.m])
+        .on_press_maybe(on_press)
+        .style(graphite_outline(tokens))
+        .boxed()
+}
+
+/// Small outline button in caption text (a "Change…" beside a caption).
+pub(crate) fn small_action<'a, M: Clone + 'a>(
+    label: signex_i18n::Localized,
+    on_press: Option<M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    button(text(label).size(TS.caption).boxed())
+        .padding([SP.xs, SP.m])
+        .on_press_maybe(on_press)
+        .style(graphite_outline(tokens))
+        .boxed()
 }
 
 /// Graphite secondary button: the outline look at the button radius.

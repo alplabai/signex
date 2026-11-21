@@ -1,12 +1,10 @@
 # Library editors: the symbol and footprint editors and their panels (#2225).
 
-## Symbol Pins panel: a table of the open symbol's pins. The column headings
-## are shown in capitals, so they are written in capitals here.
+## Pins tab of the symbol editor's Properties panel: a list of the open
+## symbol's pins. The column headings are shown in capitals, so they are
+## written in capitals here.
 
-# Shown when no symbol editor is open.
-editors-pins-no-symbol = Open a `.snxsym` to see its pins here.
-
-# Line above the table. $pins, $hidden and $parts are whole numbers: the
+# Line above the list. $pins, $hidden and $parts are whole numbers: the
 # symbol's pins, how many of them are hidden, and its number of parts.
 editors-pins-summary =
     { $pins ->
@@ -23,31 +21,31 @@ editors-pins-column-number = #
 # Column heading: the pin name.
 editors-pins-column-name = NAME
 
-# Column heading: the pin's electrical type.
+# Pin table column heading: the pin's electrical type.
 editors-pins-column-electrical = ELECTRICAL TYPE
 
-# Column heading: which part of a multi-part symbol the pin belongs to.
+# Pin table column heading: which part of a multi-part symbol the pin belongs to.
 editors-pins-column-part = PART
 
-# Column heading: whether the pin is hidden.
+# Pin table column heading: whether the pin is hidden.
 editors-pins-column-hidden = HIDDEN
 
-# Column heading: the pin length in millimetres.
+# Pin table column heading: the pin length in millimetres.
 editors-pins-column-length = LENGTH (mm)
 
-# Column heading: the direction the pin points.
+# Pin table column heading: the direction the pin points.
 editors-pins-column-orientation = ORIENTATION
 
-# Placeholder of the pin name field.
+# Placeholder of the pin table's name field.
 editors-pins-name-placeholder = name
 
-# Toggle in the Hidden column: the pin is hidden.
+# Toggle in the pin table's Hidden column: the pin is hidden.
 editors-pins-hidden = Hidden
 
-# Toggle in the Hidden column: the pin is shown.
+# Toggle in the pin table's Hidden column: the pin is shown.
 editors-pins-shown = Shown
 
-## Pin electrical types (the Pins panel and the Pin Map tab).
+## Pin electrical types (the Pins tab, Pin properties and the Pin Map tab).
 
 editors-pin-type-input = Input
 editors-pin-type-output = Output
@@ -387,6 +385,222 @@ editors-wire-corner-vertical-first = Corner: 90°, vertical first
 editors-wire-corner-diagonal-first = Corner: 45°, diagonal first
 editors-wire-corner-diagonal-last = Corner: 45°, diagonal last
 editors-wire-corner-any-angle = Corner: any angle
+
+## Symbol editor Properties panel (mockup rows 122 and 123): the Symbol and Pins tabs with
+## nothing selected, Pin properties and graphic properties. Section titles are
+## shown in capitals by the panel.
+
+# Header title and tab with nothing selected.
+editors-symprops-title = Symbol
+editors-symprops-tab-symbol = Symbol
+editors-symprops-tab-pins = Pins
+# Header pill and Part stepper: the shared part, drawn on every part.
+editors-symprops-part-shared = Part 0 (shared)
+# Header pill and Part stepper. $part is the part number, $letter its letter (A for part 1).
+editors-symprops-part-lettered = Part { $part } ({ $letter })
+# A part past Z, and a part chip of the Pins tab. $part is the part number.
+editors-symprops-part-numbered = Part { $part }
+# Caption under the title. $file is the .snxsym file name, $symbol the symbol name.
+editors-symprops-file-symbol = { $file } · { $symbol }
+editors-symprops-section-general = General
+editors-symprops-symbol-name = Symbol name
+editors-symprops-uuid = UUID
+# The number of graphics (lines, shapes, text) the symbol holds.
+editors-symprops-graphics = Graphics
+editors-symprops-section-parts = Parts
+editors-symprops-part = Part
+# Part stepper buttons.
+editors-symprops-previous-part = ‹
+editors-symprops-next-part = ›
+editors-symprops-previous-part-tip = Previous part
+editors-symprops-next-part-tip = Next part
+editors-symprops-add-part-tip = Add part
+editors-symprops-remove-part-tip = Remove part
+editors-symprops-section-graphical = Graphical
+editors-symprops-mirrored = Mirrored
+editors-symprops-local-colors = Local Colors
+editors-symprops-fills = Fills
+editors-symprops-lines = Lines
+editors-symprops-pins = Pins
+# A local colour that is not set: the symbol uses the sheet colours.
+editors-symprops-inherit = Inherit
+editors-symprops-section-fields = Fields
+editors-symprops-reference = Reference
+editors-symprops-value = Value
+editors-symprops-value-bound = Bound to the host Component's value at place-time.
+editors-symprops-reference-bound = Bound to the host Component's designator at place-time.
+# Header title while the Reference or Value field is selected on the canvas.
+editors-symprops-reference-field = Reference field
+editors-symprops-value-field = Value field
+editors-symprops-select-hint = Click on the canvas to select a pin or a graphic, or use the Pins tab.
+
+# Pins tab.
+editors-symprops-pin-filter = Filter by number or name
+editors-symprops-add-pin = + Pin
+# Pins tab: switch the compact list to the pin table (name and hidden
+# edited in place for every listed pin), and back.
+editors-symprops-pin-table-open = Edit pins in table…
+editors-symprops-pin-table-close = Back to the pin list
+editors-symprops-add-pin-tip = Add a pin to the current part
+# Part chip: every pin.
+editors-symprops-chip-all = All
+# After the pin summary, in the error colour. $count is the number of pins with a
+# duplicate or empty number or no name.
+editors-symprops-pins-issues = · { $count } with issues
+# Column headings, in capitals: the electrical type and the part number.
+editors-symprops-column-type = TYPE
+editors-symprops-column-part = PT
+editors-symprops-no-match = No pins match
+editors-symprops-no-match-hint = Clear the filter or pick another part chip.
+editors-symprops-no-pins = No pins yet
+editors-symprops-no-pins-hint = Add one with + Pin.
+# A pin row whose pin has no name.
+editors-symprops-no-name = no name
+# A pin row whose pin has no number.
+editors-symprops-no-number = ?
+
+# Pin properties.
+editors-symprops-back-to-pins = ‹ Pins
+editors-symprops-back-to-pins-tip = Clear the selection and show the Pins tab
+# Header title. $number is the pin number.
+editors-symprops-pin-title = Pin { $number }
+# Caption under a pin or graphic title. $symbol is the symbol name, $part the part number.
+editors-symprops-object-context = { $symbol } · Part { $part }
+editors-symprops-section-pin = Pin
+editors-symprops-designator-name = Designator / Name
+# Placeholder of the pin number field.
+editors-symprops-designator-placeholder = number
+# Placeholder of the pin name field.
+editors-symprops-name-placeholder = name
+editors-symprops-electrical = Electrical
+editors-symprops-description = Description
+editors-symprops-description-placeholder = free text
+editors-symprops-function = Function
+editors-symprops-function-placeholder = alt-names, comma-separated
+editors-symprops-part-number = Part Number
+# Unit hint beside the Part Number field.
+editors-symprops-part-number-unit = 0 = shared
+editors-symprops-section-location = Location
+editors-symprops-x-y = X / Y
+editors-symprops-length = Length
+editors-symprops-orientation = Orientation
+# Millimetres, beside a length field.
+editors-symprops-unit-mm = mm
+editors-symprops-section-visibility = Visibility
+editors-symprops-name-visible = Name visible
+editors-symprops-designator-visible = Designator visible
+editors-symprops-hidden = Hidden (Pin Hide)
+editors-symprops-locked = Locked
+editors-symprops-section-symbols = Symbols
+editors-symprops-inside = Inside
+editors-symprops-inside-edge = Inside Edge
+editors-symprops-outside-edge = Outside Edge
+editors-symprops-outside = Outside
+
+## Pin symbols: the glyphs a pin can carry inside, on the edge of, or outside
+## the symbol body.
+
+editors-pin-symbol-none = None
+editors-pin-symbol-dot = Dot (active-low bubble)
+editors-pin-symbol-clock-edge = Clock edge
+editors-pin-symbol-active-low-input = Active-low input
+editors-pin-symbol-active-low-output = Active-low output
+editors-pin-symbol-schmitt-trigger = Schmitt trigger
+editors-pin-symbol-analog = Analog (≈)
+editors-pin-symbol-digital = Digital (square wave)
+editors-pin-symbol-shift-right = Shift-right (▷)
+editors-pin-symbol-shift-left = Shift-left (◁)
+editors-pin-symbol-pi = Pi (π)
+editors-pin-symbol-sigma = Sigma (Σ)
+editors-pin-symbol-open-collector = Open collector
+editors-pin-symbol-open-emitter = Open emitter
+editors-pin-symbol-hi-z = Hi-Z (tri-state)
+
+## Graphic properties of the symbol editor.
+
+editors-symprops-rectangle = Rectangle
+editors-symprops-line = Line
+editors-symprops-circle = Circle
+editors-symprops-arc = Arc
+editors-symprops-text = Text
+editors-symprops-polygon = Polygon
+editors-symprops-section-geometry = Geometry
+editors-symprops-section-style = Style
+editors-symprops-start-x-y = Start X / Y
+editors-symprops-end-x-y = End X / Y
+editors-symprops-width-height = Width / Height
+editors-symprops-center-x-y = Center X / Y
+editors-symprops-radius = Radius
+editors-symprops-start-angle = Start °
+editors-symprops-end-angle = End °
+# Text height in millimetres.
+editors-symprops-size = Size
+editors-symprops-content = Content
+# Placeholder of the text content field.
+editors-symprops-content-placeholder = text
+editors-symprops-vertices = Vertices
+editors-symprops-stroke = Stroke (mm)
+editors-symprops-fill = Fill
+# Fill colour that is not set: the shape is drawn as an outline.
+editors-symprops-fill-none = None
+# Callout labels of the illustration above the fields.
+editors-symprops-callout-width = Width
+editors-symprops-callout-height = Height
+editors-symprops-callout-start = Start
+editors-symprops-callout-end = End
+editors-symprops-callout-stroke = Stroke
+## Component editor window, Graphite (mockup row 128)
+
+# Tooltip of the header's close button.
+editors-component-close = Close
+# Small button beside the Symbol or Footprint caption: bind another one.
+editors-component-change = Change…
+# Small button beside the Symbol or Footprint caption: open it in its editor.
+editors-component-open-primitive = Open
+# Caption under the symbol tile: the file and the symbol in it.
+editors-component-symbol-caption = { $file } · { $symbol }
+# The same for a symbol of several parts. $part and $parts are whole numbers.
+editors-component-symbol-part-caption = { $file } · { $symbol } · Part { $part } of { $parts }
+# Caption under the footprint tile: the file and the footprint in it.
+editors-component-footprint-caption = { $file } · { $footprint }
+# Pill beside PIN TO PAD: pins that land on a pad, of all pins.
+editors-component-pin-to-pad-matched = { $mapped } / { $total } matched
+# Hint under the pin-to-pad table. $pin is the first pin's number.
+editors-component-pin-to-pad-hint = Click a pad cell to override: "Override pin { $pin } → pad number…"
+# Match cell of the pin-to-pad table: the pin has a pad of its number.
+editors-component-match-ok = ok
+# Match cell: the pin is overridden to another pad.
+editors-component-match-override = override
+# Match cell: the footprint has no pad for the pin.
+editors-component-match-no-pad = no pad
+# Footer button: replace the working copy with the stored row.
+editors-component-reload-saved = Reload saved version
+# Confirm button of that reload.
+editors-component-reload = Reload
+# Keep the working copy instead of reloading.
+editors-component-keep-editing = Keep editing
+# Shortcut hint beside Save.
+editors-component-save-shortcut = Ctrl+S
+# Footer button (not available yet): release the component.
+editors-component-release = Release…
+# Footer button: save and close the editor.
+editors-component-save-and-close = Save & Close
+# Footer button: close the editor (asks first when there are unsaved edits).
+editors-component-cancel = Cancel
+# Footer button: save the row.
+editors-component-save = Save
+# Tooltip of the disabled Save. $field is the parameter that does not parse.
+editors-component-save-blocked = { $field } does not parse. Fix it to save.
+# Footer summary of the fields that do not parse. $count is a whole number,
+# $field the first such parameter and $reason why it was refused (English).
+editors-component-footer-unparsed = { $count ->
+    [one] { $field } does not parse: { $reason }
+   *[other] { $count } fields do not parse. { $field }: { $reason }
+}
+# Read-only footer button: copy the component row into a writable library.
+editors-component-copy-to-library = Copy to Library…
+# Tooltip on the disabled Copy to Library… until a component row copy exists.
+editors-component-copy-to-library-unavailable = Copying a component to another library is not available yet.
 
 ## Sketch tools shared by the footprint and board sketch (#2518).
 

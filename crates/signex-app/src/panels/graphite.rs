@@ -115,11 +115,6 @@ pub fn wash_fn(tokens: &ThemeTokens) -> impl Fn(f32) -> Color + Copy + 'static {
     move |alpha| Color { a: alpha, ..base }
 }
 
-/// Corner radius of a small panel button.
-pub fn button_radius(_tokens: &ThemeTokens) -> f32 {
-    PROPERTY_FIELD_RADIUS
-}
-
 /// "2 h ago" style age of a commit.
 fn age(i18n: &I18n, time: chrono::DateTime<chrono::Utc>) -> Localized {
     let secs = (chrono::Utc::now() - time).num_seconds().max(0);

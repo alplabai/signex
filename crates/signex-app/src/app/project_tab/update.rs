@@ -25,10 +25,28 @@ impl Signex {
             ProjectTabMsg::ErcDialogRequested { project_id } => {
                 return self.open_erc_from_tab(project_id);
             }
+            ProjectTabMsg::VariantPartsReadRequested { project_id } => {
+                return self.read_variant_parts(project_id, true);
+            }
             _ => {}
         }
+        // Showing the Variants section reads its parts; a variant edit that
+        // changed the columns reads them again (#1293).
+        let parts_read = match &msg {
+            ProjectTabMsg::SectionSelected {
+                project_id,
+                section: ProjectSection::Variants,
+            } => Some((*project_id, true)),
+            ProjectTabMsg::NewVariantRequested { project_id }
+            | ProjectTabMsg::VariantRenameSubmitted { project_id }
+            | ProjectTabMsg::VariantRemoved { project_id, .. } => Some((*project_id, false)),
+            _ => None,
+        };
         self.apply_project_tab_message(msg);
-        iced::Task::none()
+        match parts_read {
+            Some((project_id, force)) => self.read_variant_parts(project_id, force),
+            None => iced::Task::none(),
+        }
     }
 
     fn apply_project_tab_message(&mut self, msg: ProjectTabMsg) {
@@ -186,7 +204,9 @@ impl Signex {
                 self.open_project_rename_from_tab(project_id);
             }
             // Routed by `dispatch_project_tab_message`, which returns their task.
-            ProjectTabMsg::SetupEdited { .. } | ProjectTabMsg::Requirements { .. } => {}
+            ProjectTabMsg::SetupEdited { .. }
+            | ProjectTabMsg::Requirements { .. }
+            | ProjectTabMsg::VariantPartsReadRequested { .. } => {}
             // Routed by `dispatch_project_tab_message`: they open a dialog.
             ProjectTabMsg::AddSchematicRequested { .. }
             | ProjectTabMsg::ErcDialogRequested { .. } => {}
@@ -195,10 +215,6 @@ impl Signex {
                 filename,
                 step,
             } => self.move_project_sheet(project_id, filename, step),
-            ProjectTabMsg::NewVariantNameEdited { project_id, text } => {
-                self.edit_new_variant_name(project_id, text);
-            }
-            ProjectTabMsg::VariantAdded { project_id } => self.add_typed_variant(project_id),
             ProjectTabMsg::VariantRenameEdited {
                 project_id,
                 from,
@@ -213,6 +229,29 @@ impl Signex {
             ProjectTabMsg::ActiveVariantPicked { project_id, name } => {
                 self.pick_active_variant(project_id, name);
             }
+            ProjectTabMsg::NewVariantRequested { project_id } => self.add_new_variant(project_id),
+            ProjectTabMsg::VariantSelected { project_id, name } => {
+                self.select_variant(project_id, name);
+            }
+            ProjectTabMsg::VariantRenameStarted { project_id, name } => {
+                self.start_variant_rename(project_id, name);
+            }
+            ProjectTabMsg::VariantFilterEdited { project_id, text } => {
+                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                    tab.variant_filter = text;
+                }
+            }
+            ProjectTabMsg::VariantDifferingToggled { project_id } => {
+                if let Some(tab) = self.document_state.project_tabs.get_mut(&project_id) {
+                    tab.variants_only_differ = !tab.variants_only_differ;
+                }
+            }
+            ProjectTabMsg::VariantPartsRead {
+                project_id,
+                generation,
+                epoch,
+                parts,
+            } => self.install_variant_parts(project_id, generation, epoch, parts),
             ProjectTabMsg::LibraryMoved {
                 project_id,
                 path,

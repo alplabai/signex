@@ -211,6 +211,15 @@ pub struct LibraryBrowserState {
     /// Where the grid is scrolled to, as reported by its scrollable. The
     /// grid builds only the rows in this window (#1355).
     pub grid_scroll: super::browser::GridScroll,
+    /// The selected row's symbol and footprint drawings for the preview
+    /// pane (mockup row 118), read off-thread with the Components panel's
+    /// loader.
+    pub preview: crate::panels::components_panel::details::DetailsState,
+    /// Why the last preview read of the selected row gave no drawing;
+    /// cleared when a new read starts.
+    pub preview_error: Option<BrowserPreviewError>,
+    /// The preview pane's ⋯ menu (Delete Selected) is open.
+    pub more_menu_open: bool,
 }
 
 /// Active sort key + direction for the Library Browser grid.
@@ -242,6 +251,9 @@ impl LibraryBrowserState {
             rename_saving: false,
             view_cache: None,
             grid_scroll: super::browser::GridScroll::default(),
+            preview: Default::default(),
+            preview_error: None,
+            more_menu_open: false,
         }
     }
 
@@ -520,6 +532,9 @@ pub struct LibraryState {
     /// The Library panel's last component click, for the double-click
     /// window that opens the component.
     pub panel_last_click: crate::double_click::DoubleClick<ComponentsPanelRowKey>,
+    /// The Library panel's kind pick and filtered Parts rows (mockup row
+    /// 119).
+    pub library_panel: LibraryPanelState,
     /// "Close Library — Unsaved Drafts" modal state — `None` while closed.
     pub close_library_confirm: Option<CloseLibraryConfirmState>,
     /// `(label, reason)` of each Save-All row whose off-thread datasheet
@@ -724,6 +739,11 @@ pub struct LibraryState {
     /// Stock files whose copy is being written, so a second open of the
     /// same file does not start a second copy.
     pub stock_copies_in_flight: std::collections::HashSet<PathBuf>,
+    /// The Properties panel state of each symbol editor (mockup rows 122
+    /// and 123): its tab, Pins filter, part chip and illustration hover, by
+    /// `.snxsym` path. Session only; an entry outlives its tab so a
+    /// reopened file shows the same tab.
+    pub symbol_props: HashMap<PathBuf, crate::library::editor::symbol::state::SymbolPropsUi>,
 }
 
 /// Three mount sources surfaced as collapsible sections inside the
@@ -990,12 +1010,14 @@ pub struct LibraryCreateOptionsState {
     pub refusal: Option<String>,
 }
 
+mod browser_preview;
 mod closing;
 mod id_precedence;
 mod methods;
 mod missing_queue;
 mod new_library_defaults;
 pub mod owed_cascades;
+mod panel_kind;
 mod panel_rows;
 #[cfg(test)]
 mod panel_rows_tests;
@@ -1018,8 +1040,10 @@ mod uncommitted;
 mod under_folder;
 
 pub use crate::app::core::new_library_defaults::NewLibraryDefaults;
+pub use browser_preview::BrowserPreviewError;
 pub use id_precedence::IdClashNotice;
 pub use methods::*;
+pub use panel_kind::{LibraryPanelKind, LibraryPanelPick, LibraryPanelState, LibraryPanelTab};
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
 pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};

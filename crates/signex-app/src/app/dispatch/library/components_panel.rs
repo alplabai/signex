@@ -100,8 +100,9 @@ impl Signex {
             .find(|r| r.row_id == key.row_id.0)
     }
 
-    /// The saved state of the row `key` names, for the staleness check.
-    fn components_row_stamp(
+    /// The saved state of the row `key` names, for the staleness check
+    /// (also the Library Browser preview's, mockup row 118).
+    pub(super) fn components_row_stamp(
         &self,
         key: &crate::library::state::ComponentsPanelRowKey,
     ) -> Option<crate::panels::components_panel::details::RowStamp> {
@@ -147,6 +148,7 @@ impl Signex {
                         own.as_ref(),
                         &libraries,
                     )
+                    .map_err(|e| e.to_string())
                 })
                 .await
                 .unwrap_or_else(|e| Err(format!("details worker failed: {e}")))

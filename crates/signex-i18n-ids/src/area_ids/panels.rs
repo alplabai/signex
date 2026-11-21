@@ -234,6 +234,10 @@ define_ids! {
     START_HINT_NEW_SHEET = "start-hint-new-sheet";
     START_HINT_NEW_PCB = "start-hint-new-pcb";
     START_HINT_PROJECT_OPTIONS = "start-hint-project-options";
+    PANELS_LIBRARY_ROW_HEADING = "panels-library-row-heading";
+    PANELS_LIBRARY_ROW_VERSION = "panels-library-row-version";
+    PANELS_LIBRARY_ROW_SECTION_BINDINGS = "panels-library-row-section-bindings";
+    PANELS_LIBRARY_ROW_PICK = "panels-library-row-pick";
     PANELS_ERC_RUN_BUTTON = "panels-erc-run-button";
     PANELS_ERC_CLEAR_TOOLTIP = "panels-erc-clear-tooltip";
     PANELS_ERC_STALE_BANNER = "panels-erc-stale-banner";

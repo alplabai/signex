@@ -21,7 +21,15 @@ impl Signex {
     /// Every open gesture routes through here: the View menu, the
     /// status-bar panel list, an ERC run surfacing its results, TAB
     /// during placement surfacing Properties.
+    ///
+    /// The SCH Library and Footprint Library rows are aliases (kept by
+    /// Caner, 2026-11-20): they open the Library panel in their kind (mockup
+    /// rows 120 and 121).
     pub(crate) fn show_panel(&mut self, kind: PanelKind) -> Task<Message> {
+        if let Some(alias_kind) = kind.library_alias() {
+            self.pick_library_panel_kind(alias_kind);
+            return self.show_panel(PanelKind::Library);
+        }
         if let Some(window_id) = self.detached_panel_window(kind) {
             // The panel is a window of its own. Docking a second copy
             // would render the same panel twice on two screens.
@@ -37,7 +45,13 @@ impl Signex {
     /// Whether `kind` is open anywhere: docked, floating, or detached.
     /// The one answer both the toggle shortcuts and the status-bar
     /// panel list's check marks read, so they cannot disagree.
+    /// An alias row counts as open while the Library panel is open in its
+    /// kind.
     pub(crate) fn is_panel_open(&self, kind: PanelKind) -> bool {
+        if let Some(alias_kind) = kind.library_alias() {
+            return self.is_panel_open(PanelKind::Library)
+                && self.library_panel_kind() == alias_kind;
+        }
         self.document_state.dock.locate(kind).is_some()
             || self.detached_panel_window(kind).is_some()
     }
@@ -56,7 +70,15 @@ impl Signex {
     /// the front when it is open but hidden behind another tab or a
     /// collapsed region. A detached panel is a window of its own and is
     /// only ever raised: this has no way to know whether it has focus.
+    /// An alias row toggles the Library panel while it shows the alias's
+    /// kind, and switches it to that kind otherwise.
     pub(crate) fn toggle_panel(&mut self, kind: PanelKind) -> Task<Message> {
+        if let Some(alias_kind) = kind.library_alias() {
+            if self.library_panel_kind() != alias_kind {
+                return self.show_panel(kind);
+            }
+            return self.toggle_panel(PanelKind::Library);
+        }
         let in_front = self.detached_panel_window(kind).is_none()
             && self.document_state.dock.is_frontmost(kind);
         if !in_front {
@@ -64,6 +86,21 @@ impl Signex {
         }
         self.document_state.dock.close_panel(kind);
         self.persist_dock_layout_soon()
+    }
+
+    /// The kind the Library panel shows for the main window's active tab.
+    pub(crate) fn library_panel_kind(&self) -> crate::library::state::LibraryPanelKind {
+        crate::library::panel::shown_kind(&self.library, &self.document_state.panel_ctx)
+    }
+
+    /// Show `kind` in the Library panel while the active tab stays active
+    /// (a kind chip, or an alias row of the panel list).
+    pub(crate) fn pick_library_panel_kind(
+        &mut self,
+        kind: crate::library::state::LibraryPanelKind,
+    ) {
+        let tab = crate::library::panel::panel_tab(&self.document_state.panel_ctx);
+        self.library.library_panel.pick(kind, tab);
     }
 
     /// The OS window hosting `kind` as a detached panel, if any.
@@ -77,3 +114,7 @@ impl Signex {
             .map(|(id, _)| *id)
     }
 }
+
+#[cfg(test)]
+#[path = "panel_open_tests.rs"]
+mod tests;

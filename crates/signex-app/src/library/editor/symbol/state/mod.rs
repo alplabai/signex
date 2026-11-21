@@ -585,6 +585,8 @@ mod fields;
 mod hit_test;
 mod movement;
 mod part_view;
+mod props_ui;
+mod rect_extent;
 mod rotation;
 #[cfg(test)]
 mod tests;
@@ -595,4 +597,6 @@ pub use fields::*;
 pub use hit_test::*;
 pub use movement::*;
 pub use part_view::PartView;
+pub use props_ui::{PartChip, PartStep, SymbolPropsMsg, SymbolPropsTab, SymbolPropsUi};
+pub use rect_extent::{rect_end_for_extent, rect_extent};
 pub use rotation::*;

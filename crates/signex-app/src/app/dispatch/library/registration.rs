@@ -308,6 +308,10 @@ impl Signex {
             PickerMsg::PanelComponentClicked(key) => {
                 return self.handle_panel_component_clicked(key);
             }
+            PickerMsg::PanelKindPicked(kind) => {
+                self.pick_library_panel_kind(kind);
+                return Task::none();
+            }
             _ => {}
         }
         let Some(picker) = self.library.picker.as_mut() else {
@@ -316,7 +320,8 @@ impl Signex {
         match msg {
             PickerMsg::PanelSearchChanged(_)
             | PickerMsg::PanelLibraryToggled(_)
-            | PickerMsg::PanelComponentClicked(_) => {}
+            | PickerMsg::PanelComponentClicked(_)
+            | PickerMsg::PanelKindPicked(_) => {}
             // A filter that hides the selected row drops the selection, so
             // Enter and Place never act on a row the list does not show.
             PickerMsg::FilterChanged(s) => {

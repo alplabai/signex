@@ -10,6 +10,7 @@ pub(crate) mod document_times;
 pub(crate) mod editor_address;
 pub(crate) mod new_library_defaults;
 pub(crate) mod origin;
+pub(crate) mod parts_read_error;
 pub(crate) mod pin_selection_mode;
 pub(crate) mod project_id;
 pub(crate) mod resolved_placement;

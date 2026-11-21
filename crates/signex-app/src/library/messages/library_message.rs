@@ -660,6 +660,22 @@ pub enum LibraryMessage {
     ),
     /// The empty Components panel's "Open Project…" was pressed (#2535).
     ComponentsPanelOpenProjectClicked,
+    /// The off-thread read behind a Library Browser preview pane finished
+    /// (mockup row 118). A result for a row that is no longer selected, or
+    /// from an older read, is dropped.
+    BrowserPreviewLoaded {
+        key: super::super::state::ComponentsPanelRowKey,
+        /// Which read of the row this is; an older one is dropped.
+        generation: u64,
+        result: Result<
+            Box<crate::panels::components_panel::details::ComponentDetails>,
+            super::super::state::BrowserPreviewError,
+        >,
+    },
+    /// The preview pane's ⋯ button was pressed: its menu opened or closed.
+    BrowserMoreMenuToggled {
+        library_path: PathBuf,
+    },
 }
 
 /// The drawing a placed symbol is switched to, read off-thread: the

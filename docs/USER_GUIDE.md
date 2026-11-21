@@ -278,6 +278,21 @@ panel header asks where to add a library (**Project**, **Installed** or
 library. Type in **Filter components…** to narrow the components. Clicking a
 part row opens its Component Preview tab.
 
+**The Library panel.** One panel browses what the open libraries hold. Its
+chips switch between **Symbols** (the symbols of the `.snxsym` open in the
+symbol editor), **Footprints** (the footprints of the `.snxfpt` open in the
+footprint editor) and **Parts** (the rows of every open library), each with
+its count. It opens on the kind of the editor tab in front: Symbols in the
+symbol editor, Footprints in the footprint editor, Parts anywhere else; a chip
+you click holds while that tab stays in front. Under the chips sit the
+breadcrumb (library, file and count), one filter and the toolbar: **Place**,
+**Add**, **Edit** and, at the right end, **Delete**. In Parts the filter
+matches part numbers, MPNs and manufacturers and opens each library with a
+match, and the toolbar acts on the highlighted row (a greyed tool has nothing
+it can do there). The folder button in the panel's title bar is **Open
+Library…**. The **SCH Library** and **Footprint Library** rows of the panel
+list open this panel in Symbols or Footprints.
+
 The stock library is read-only. Opening one of its **symbols** or
 **footprints** for editing does not open the original: the first time, a
 **Copy to Library** dialog lists the writable libraries. A click on a library
@@ -313,6 +328,30 @@ filters a measurement column with an operator (`≥`, `≤`, `=` or `between`), 
 number and a prefix, compared in base units, so 4.7 kΩ and 4700 Ω match. Rows
 whose cell is not a measurement in that unit are left out, and the filter says
 how many ("N excluded: not a measurement in Ω."). **✕** removes the filter.
+
+**The Library Browser tab.** The header line shows the library with its
+component and table counts, the search field, the **Show** lifecycle filter
+and **Add Component**. Saved changes that git does not hold yet show in a
+warning banner under it with **Commit now**. The left column lists the open libraries and the
+library's tables (**+ Class** adds a table). The grid's narrow **Sym** and
+**Fpt** columns mark a row with an amber dot when it has no symbol or
+footprint bound (a red dot when the bound one is missing; clicking an amber
+dot opens the picker). Selecting a row opens its preview on the right: the
+symbol and footprint drawings, **Edit Details**, **Pick Symbol…**,
+**Pick Footprint…** and, under **⋯**, **Delete Selected** (which asks first).
+In a narrow window the tab scrolls sideways.
+
+**The component editor.** Opening a row shows its internal PN, version and
+location, with the tabs General, Parameters, Supply, Datasheet, Simulation,
+Pin Map and Alternates. General shows the symbol and the footprint (each with
+**Change…**) beside the pin-to-pad table; clicking a pad cell overrides the
+pad that pin lands on. The footer has **Reload saved version**, **Release…**
+(not available yet), **Save & Close**, **Cancel** and **Save** (`Ctrl+S`).
+While a typed value does not parse, the header says how many fields do not
+parse (click it to jump to the first one), the field is outlined with its
+error under it, and **Save** stays disabled with a tooltip naming the field.
+A component of a read-only library shows a read-only footer with **Copy to
+Library…**, disabled until copying a component to another library exists.
 
 To place a part, open a schematic sheet, then either:
 
@@ -383,6 +422,24 @@ choose which body is shown and which body new pins and shapes are added to.
 pins it to the body shown. Updating a library symbol from its library never
 silently drops a placed symbol's Alternate choice: the update is refused when
 it would disturb a wired pin, and otherwise the choice is kept.
+
+With nothing selected, the symbol editor's **Properties** panel has two tabs.
+**Symbol** shows a drawing of the current part and the symbol's name, UUID,
+parts (the part stepper and the **Body** choice), Mirrored, the local colours
+and the Reference field. **Pins** lists every pin with its number, name, type
+and part: type in the filter to find a pin by number or name, pick a part
+chip to list one part, and **+ Pin** arms the Add Pin tool. A row whose number
+is empty or used twice shows the number in red; a pin with no name reads
+*no name*. Click a row to select that pin: Properties shows its fields, under
+a drawing of the pin whose labels light up as you point at the fields.
+**‹ Pins** clears the selection and goes back to the list. Pin names and the
+Hidden flag are edited in the pin's fields, or for many pins at once with
+**Edit pins in table…**, which turns the list into a table (number, name,
+electrical type, part, hidden, length, orientation) where each name is typed
+in place and **Shown / Hidden** toggles; **Back to the pin list** returns.
+A selected rectangle has a
+**Width / Height** pair next to its Start and End corners; changing it moves
+the End corner.
 
 **Datasheets.** A part's Component Preview tab has a **Datasheet** tab that
 holds one or more documents: a datasheet per manufacturer, an errata, an

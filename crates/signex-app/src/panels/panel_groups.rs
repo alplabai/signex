@@ -55,18 +55,19 @@ pub fn panel_group(kind: PanelKind) -> PanelGroup {
         | PanelKind::BomStudio
         | PanelKind::OutputJobs
         | PanelKind::Wiki
-        | PanelKind::Todo => PanelGroup::Project,
+        | PanelKind::Todo
+        // A sibling tab of Projects (#1308).
+        | PanelKind::CompiledDesign => PanelGroup::Project,
         PanelKind::Properties
         | PanelKind::Filter
         | PanelKind::SchFilter
-        | PanelKind::SchList
-        | PanelKind::NetInspector => PanelGroup::Inspect,
+        | PanelKind::ObjectList
+        | PanelKind::NetInspector
+        | PanelKind::Unions => PanelGroup::Inspect,
         PanelKind::Messages | PanelKind::Erc | PanelKind::Drc | PanelKind::History => {
             PanelGroup::Verify
         }
-        PanelKind::SchLibrary | PanelKind::FootprintLibrary | PanelKind::SymbolPins => {
-            PanelGroup::Library
-        }
+        PanelKind::SchLibrary | PanelKind::FootprintLibrary => PanelGroup::Library,
         PanelKind::Layers | PanelKind::LayerStack | PanelKind::NetClasses | PanelKind::PcbNets => {
             PanelGroup::Pcb
         }
@@ -140,6 +141,7 @@ mod tests {
                 K::OutputJobs,
                 K::Todo,
                 K::Wiki,
+                K::CompiledDesign,
             ]
         );
         assert_eq!(
@@ -148,8 +150,9 @@ mod tests {
                 K::Properties,
                 K::Filter,
                 K::SchFilter,
-                K::SchList,
-                K::NetInspector
+                K::ObjectList,
+                K::NetInspector,
+                K::Unions,
             ]
         );
         assert_eq!(
@@ -158,7 +161,7 @@ mod tests {
         );
         assert_eq!(
             members(PanelGroup::Library),
-            [K::SchLibrary, K::FootprintLibrary, K::SymbolPins]
+            [K::SchLibrary, K::FootprintLibrary]
         );
         assert_eq!(
             members(PanelGroup::Pcb),

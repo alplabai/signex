@@ -135,6 +135,13 @@ pub(super) fn build_symbol_editor_panel_ctx(
         None => SymbolDisplayOptions::default(),
     };
 
+    let props = app
+        .library
+        .symbol_props
+        .get(&path)
+        .cloned()
+        .unwrap_or_default();
+
     Some(SymbolEditorPanelContext {
         path,
         symbol_name: sym.name.clone(),
@@ -163,6 +170,13 @@ pub(super) fn build_symbol_editor_panel_ctx(
         active_part: editor.active_part,
         active_max_part,
         active_has_part_zero,
+        active_body: editor.active_body,
+        part_drawing: SymbolEditorPanelContext::part_drawing_of(
+            sym,
+            |g| sym_state::graphic_on_part(g, editor.view()),
+            |p| sym_state::pin_on_part(p, editor.view()),
+        ),
+        props,
         display,
     })
 }
