@@ -424,7 +424,44 @@ fn parts_below_the_board_are_packed_into_their_room_in_one_step() {
     assert_eq!(engine.undo_len(), 1, "one undo step");
     assert_eq!(engine.board().rooms.len(), 2);
     assert_eq!(position(engine.board(), 5), to);
+    assert!(members_outside(&engine.board().rooms[1], engine.board()).is_empty());
     engine.undo().expect("undo");
     assert!(engine.board().rooms.is_empty());
     assert_eq!(position(engine.board(), 5), Point::new(3.0, 55.0));
+}
+
+/// A room round R3 has no free space, so the parts staged below the board
+/// go in rows below R3 and the room grows over them.
+#[test]
+fn a_room_round_its_parts_grows_over_the_rows_packed_below_it() {
+    let mut b = board();
+    for n in 5..9u128 {
+        let staged: signex_types::pcb::Footprint =
+            serde_json::from_value(part(n, 3.0 + 2.0 * (n as f64), 55.0, Some(&[SHEET_B])))
+                .unwrap();
+        b.footprints.push(staged);
+    }
+    let b = with_extent(b);
+    let plan = plan_rooms_from_sheets(&b, &sheets(), &RoomOptions::default(), &mut counter());
+    let amp = room_box(&plan.rooms[1].room).unwrap();
+    let r3 = placed_box(&b, 3);
+    let around_r3 = BoxMm::of_rect(r3).inflate(plan.rooms[1].room.margin_mm);
+    assert!(
+        amp.max.y > around_r3.max.y + 1.0,
+        "{amp:?} grew below {around_r3:?}"
+    );
+    let mut engine = BoardEngine::new(b, 1);
+    engine
+        .execute_batch(plan.commands())
+        .expect("creates the rooms");
+    let board = engine.board();
+    assert!(members_outside(&board.rooms[1], board).is_empty());
+    let gap = pcb_geom::mm_to_nm(crate::pcb::board_tools::ARRANGE_GAP_MM, "gap").unwrap();
+    for n in 5..9u128 {
+        let packed = placed_box(board, n);
+        assert!(
+            !r3.inflate(gap - 1).intersects(&packed),
+            "R{n} {packed:?} keeps the gap to R3 {r3:?}"
+        );
+    }
 }
