@@ -525,9 +525,12 @@ impl Signex {
     }
 
     /// UI chrome tokens for a given theme id — the token twin of
-    /// [`Self::canvas_colors_for`].
+    /// [`Self::canvas_colors_for`]. The saved "Selected option" preference
+    /// sets the selected-segment tokens.
     pub(crate) fn tokens_for(&self, id: ThemeId) -> signex_types::theme::ThemeTokens {
-        signex_types::theme::theme_tokens(id)
+        self.ui_state
+            .selected_segment
+            .apply(id, signex_types::theme::theme_tokens(id))
     }
 
     /// Panel tokens and icon-tint theme for the effective theme: the

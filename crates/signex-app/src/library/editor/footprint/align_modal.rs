@@ -56,15 +56,7 @@ const LABEL_EM: f32 = 5.8;
 /// The segmented-control look from the theme tokens.
 fn segment_style(tokens: &ThemeTokens, text_size: f32) -> SegmentedStyle {
     let r = crate::styles::tokens::resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        text_size,
-    )
-    .fill_width(true)
+    r.segmented(text_size).fill_width(true)
 }
 
 /// Build the Align dialog card for the active footprint editor. Returns

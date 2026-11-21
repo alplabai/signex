@@ -50,15 +50,7 @@ static COLUMN_OPTIONS: [(BomColumn, MessageId); 14] = [
 /// Segmented-control colours of the sidebar.
 pub(super) fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    )
-    .fill_width(true)
+    r.segmented(TS.body).fill_width(true)
 }
 
 /// An uppercase section heading with a soft rule under it, and an optional

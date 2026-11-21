@@ -117,9 +117,10 @@ pub fn ink_colour(ink: Ink, board: &BoardPalette, sheet: &CanvasColors) -> Color
 
 /// The schematic canvas colours of the Graphite theme `tokens` belong to.
 pub fn sheet_canvas(tokens: &ThemeTokens) -> CanvasColors {
+    // By background: the selected-option preference changes other tokens.
     let id = [ThemeId::GraphiteLight, ThemeId::GraphiteDark]
         .into_iter()
-        .find(|id| theme_tokens(*id) == *tokens)
+        .find(|id| theme_tokens(*id).bg == tokens.bg)
         .unwrap_or(ThemeId::GraphiteLight);
     canvas_colors(id)
 }

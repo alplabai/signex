@@ -46,6 +46,7 @@ pub(super) fn content_appearance<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         super::theme_cards::theme_cards(v.draft_theme, t, i18n),
         font_row(v),
         ui_scale_row(v),
+        selected_segment_row(v),
         section(ids::PREFERENCES_APPEARANCE_SECTION_CANVAS),
         grid_style_row(v),
         grid_preview::grid_preview(v, false),
@@ -333,6 +334,33 @@ fn layer_switcher_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_LABEL),
         Vec::new(),
         t!(i18n, ids::PREFERENCES_LAYER_SWITCHER_HELP),
+        control,
+        t,
+    )
+}
+
+fn selected_segment_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
+    use signex_types::theme::SelectedSegmentLook;
+    let (t, i18n) = (v.panel_tokens, v.i18n);
+    let control = segmented_choice(
+        vec![
+            (
+                SelectedSegmentLook::Neutral,
+                t!(i18n, ids::PREFERENCES_SELECTED_SEGMENT_NEUTRAL),
+            ),
+            (
+                SelectedSegmentLook::Accent,
+                t!(i18n, ids::PREFERENCES_SELECTED_SEGMENT_ACCENT),
+            ),
+        ],
+        v.draft_selected_segment,
+        t,
+        PrefMsg::DraftSelectedSegment,
+    );
+    row_with(
+        t!(i18n, ids::PREFERENCES_SELECTED_SEGMENT_LABEL),
+        Vec::new(),
+        t!(i18n, ids::PREFERENCES_SELECTED_SEGMENT_HELP),
         control,
         t,
     )

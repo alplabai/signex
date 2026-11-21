@@ -182,14 +182,7 @@ pub(in crate::app::view::dialogs) fn status_pill<'a>(
 /// raised.
 pub(in crate::app::view::dialogs) fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
     let r = tokens::resolve(tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(tokens.text),
-        TS.body,
-    )
+    r.segmented(TS.body)
 }
 
 /// The form tick box at the body size; without `msg` it is drawn

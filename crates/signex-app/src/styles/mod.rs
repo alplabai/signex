@@ -61,6 +61,9 @@ pub const RADIUS: f32 = 3.0;
 mod graphite_tests;
 
 #[cfg(test)]
+mod selected_segment_tests;
+
+#[cfg(test)]
 mod tests;
 
 #[cfg(test)]

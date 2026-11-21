@@ -34,14 +34,8 @@ const HEAD_H: f32 = chrome_px(44.0 * 11.0 / 12.0);
 
 fn segmented_style(theme_tokens: &ThemeTokens) -> SegmentedStyle {
     let r = tokens::resolve(theme_tokens);
-    SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        ti(theme_tokens.text_secondary),
-        ti(theme_tokens.text),
-        TS.body,
-    )
+    r.segmented(TS.body)
+        .resting_ink(ti(theme_tokens.text_secondary))
 }
 
 fn group<'a>(label: Localized, theme_tokens: &ThemeTokens) -> Element<'a, SmartPasteMsg> {

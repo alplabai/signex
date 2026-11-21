@@ -120,6 +120,10 @@ define_ids! {
     PREFERENCES_LAYER_SWITCHER_STRIP = "preferences-layer-switcher-strip";
     PREFERENCES_LAYER_SWITCHER_DROPDOWN = "preferences-layer-switcher-dropdown";
     PREFERENCES_LAYER_SWITCHER_HELP = "preferences-layer-switcher-help";
+    PREFERENCES_SELECTED_SEGMENT_LABEL = "preferences-selected-segment-label";
+    PREFERENCES_SELECTED_SEGMENT_NEUTRAL = "preferences-selected-segment-neutral";
+    PREFERENCES_SELECTED_SEGMENT_ACCENT = "preferences-selected-segment-accent";
+    PREFERENCES_SELECTED_SEGMENT_HELP = "preferences-selected-segment-help";
     PREFERENCES_APPEARANCE_TRACKPAD_PAN_SHORT_HELP = "preferences-appearance-trackpad-pan-short-help";
     PREFERENCES_APPEARANCE_REMEMBER_GEOMETRY_SHORT_HELP = "preferences-appearance-remember-geometry-short-help";
     PREFERENCES_EDITING_HEADING = "preferences-editing-heading";

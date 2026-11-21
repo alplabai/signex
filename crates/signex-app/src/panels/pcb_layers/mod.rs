@@ -31,13 +31,13 @@ use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::Label;
-use signex_widgets::segmented::{SegmentedMetrics, SegmentedStyle, segmented};
+use signex_widgets::segmented::{SegmentedMetrics, segmented};
 
 use super::graphite::wash_fn;
 use super::{PanelContext, PanelMsg, empty_state_card};
 use crate::pcb_canvas::layer_style;
 use crate::styles::tokens::resolve;
-use crate::styles::{Radii, Spacing, TypeScale, ti};
+use crate::styles::{Radii, Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -447,15 +447,7 @@ fn tabs<'a>(
 ) -> Element<'a, PanelMsg> {
     let i18n = &panel.i18n;
     let r = resolve(&ctx.tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(ctx.tokens.text),
-        TS.body,
-    )
-    .fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     segmented(
         [
             (

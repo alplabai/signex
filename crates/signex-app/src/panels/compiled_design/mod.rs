@@ -16,7 +16,7 @@ use signex_i18n::{ids, t};
 use signex_types::project::ChannelNaming;
 use signex_types::schematic::{ChannelFormatError, ChannelOccurrence, ChannelRepeat};
 use signex_widgets::property_illustration::IllustrationHover;
-use signex_widgets::segmented::{SegmentedStyle, segmented};
+use signex_widgets::segmented::segmented;
 use signex_widgets::{text, text_input};
 use uuid::Uuid;
 
@@ -268,15 +268,7 @@ fn controls<'a>(
 ) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let r = resolve(&ctx.tokens);
-    let style = SegmentedStyle::new(
-        r.sunken,
-        r.raised,
-        r.shadow,
-        r.ink3,
-        ti(ctx.tokens.text),
-        TS.caption,
-    )
-    .fill_width(true);
+    let style = r.segmented(TS.caption).fill_width(true);
     let sheets: signex_widgets::Label<'a> =
         t!(i18n, ids::PANELS_COMPILED_DESIGN_MODE_SHEETS).into();
     let nets: signex_widgets::Label<'a> = t!(i18n, ids::PANELS_COMPILED_DESIGN_MODE_NETS).into();

@@ -8,7 +8,6 @@ use iced::{Element, Length};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::passive_calculator::{CalculatorControl, CalculatorLook, CalculatorPalette};
-use signex_widgets::segmented::SegmentedStyle;
 
 use crate::app::view::dialogs::modal_title_header;
 use crate::app::{Message, OverlayMsg};
@@ -72,14 +71,7 @@ pub(crate) fn calculator_look(tokens: &ThemeTokens) -> CalculatorLook<'static> {
     CalculatorLook {
         palette,
         mono: crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT),
-        segmented: SegmentedStyle::new(
-            r.sunken,
-            r.raised,
-            r.shadow,
-            r.ink3,
-            ti(tokens.text),
-            TypeScale::DEFAULT.body,
-        ),
+        segmented: r.segmented(TypeScale::DEFAULT.body),
         enable_section: enable_section_style(tokens),
     }
 }

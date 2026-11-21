@@ -14,7 +14,7 @@ use signex_widgets::chips::{
     ChipMetrics, ChipStyle, ChipTone, TabChip, TabChipStyle, chip, tab_chips,
 };
 use signex_widgets::constraint_grid::GridMessage;
-use signex_widgets::{SegmentedStyle, button, segmented, text, text_input};
+use signex_widgets::{button, segmented, text, text_input};
 
 use super::grid_icons::{Icon, icon};
 use super::{Checked, Frame, SP, TS, up, user};
@@ -92,15 +92,7 @@ pub(super) fn domains<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             (true, t!(i18n, ids::RULES_VIEW_TEXT).into()),
         ],
         in_text,
-        SegmentedStyle::new(
-            r.sunken,
-            r.raised,
-            r.shadow,
-            r.ink3,
-            ti(tokens.text),
-            TS.body,
-        )
-        .fill_width(true),
+        r.segmented(TS.body).fill_width(true),
         move |on| up(RulesTabMsg::TextViewToggled { project_id: id, on }),
     );
     let drc_label = if frame.running {

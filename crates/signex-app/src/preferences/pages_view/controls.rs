@@ -16,8 +16,7 @@ use iced::{
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{
-    Label, SegmentedStyle, ToggleSwitchStyle, button, rich_text, segmented, span, text,
-    toggle_switch, tooltip,
+    Label, ToggleSwitchStyle, button, rich_text, segmented, span, text, toggle_switch, tooltip,
 };
 
 const TS: styles::TypeScale = styles::TypeScale::DEFAULT;
@@ -119,8 +118,7 @@ where
     V: Copy + PartialEq + 'a,
 {
     let r = tokens::resolve(t);
-    let style = SegmentedStyle::new(r.sunken, r.raised, r.shadow, r.ink3, ti(t.text), TS.body)
-        .fill_width(true);
+    let style = r.segmented(TS.body).fill_width(true);
     segmented(
         options
             .into_iter()

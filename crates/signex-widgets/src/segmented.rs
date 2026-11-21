@@ -64,6 +64,12 @@ impl SegmentedStyle {
         self.fill_width = fill_width;
         self
     }
+
+    /// The same style with `ink` on the unselected segments.
+    pub fn resting_ink(mut self, ink: Color) -> Self {
+        self.ink = ink;
+        self
+    }
 }
 
 /// Sizes of a segmented control, derived from its text size.
