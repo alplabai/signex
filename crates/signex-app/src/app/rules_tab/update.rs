@@ -21,6 +21,11 @@ impl Signex {
                 }
                 Task::none()
             }
+            RulesTabMsg::OpenedAt {
+                project_id,
+                domain,
+                rule,
+            } => self.open_rules_on(project_id, domain, rule),
             RulesTabMsg::DrcRequested { project_id } => self.run_rules_drc(project_id),
             RulesTabMsg::GridActed { project_id, msg } => self.act_on_rules_grid(project_id, msg),
             RulesTabMsg::PreviewActed { project_id, msg } => {
@@ -148,6 +153,7 @@ impl Signex {
             | RulesTabMsg::MatrixPairPinned { .. }
             | RulesTabMsg::MatrixPairTyped { .. }) => self.apply_rules_panel_message(msg),
             RulesTabMsg::OpenRequested { .. }
+            | RulesTabMsg::OpenedAt { .. }
             | RulesTabMsg::PresetsListRequested { .. }
             | RulesTabMsg::DrcRequested { .. }
             | RulesTabMsg::GridActed { .. }

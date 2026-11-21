@@ -17,8 +17,8 @@ impl SelectionFilterCustomState {
         SelectionFilterKind::Texts,
     ];
 
-    /// A draft of `filter`, with no preset name typed.
-    pub fn from_filter(f: SelectionFilter) -> Self {
+    /// A draft of `f` for the document at `target`, with no preset name.
+    pub fn from_filter(f: SelectionFilter, target: std::path::PathBuf) -> Self {
         Self {
             pads: f.pads,
             tracks: f.tracks,
@@ -33,6 +33,7 @@ impl SelectionFilterCustomState {
             fills: f.fills,
             other: f.other,
             preset_name: String::new(),
+            target,
         }
     }
 

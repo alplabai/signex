@@ -313,10 +313,12 @@ impl Signex {
     ) -> Task<Message> {
         match msg {
             SelectionFilterMsg::OpenCustom => {
-                if let Some(editor) = self.active_footprint_editor() {
-                    let filter = editor.state.selection_filter;
+                let filter = self
+                    .active_footprint_editor()
+                    .map(|editor| editor.state.selection_filter);
+                if let (Some(filter), Some(target)) = (filter, self.footprint_dialog_target()) {
                     self.ui_state.selection_filter_custom = Some(Box::new(
-                        crate::app::SelectionFilterCustomState::from_filter(filter),
+                        crate::app::SelectionFilterCustomState::from_filter(filter, target),
                     ));
                 }
                 self.finish_update()
@@ -351,7 +353,8 @@ impl Signex {
         }
     }
 
-    /// Apply: the draft becomes the active footprint editor's filter and is
+    /// Apply: the draft becomes the filter of the document it was opened on
+    /// (closed by now: nothing applies, and Messages says so) and is
     /// saved as a preset under its typed name, or "Filter N" when none is
     /// typed. The filter always applies; no preset is added when one already
     /// holds the same kinds, or at the preset limit (a typed name dropped
@@ -366,7 +369,11 @@ impl Signex {
         let presets = self.interaction_state.footprint_filter_presets.clone();
         let typed = !draft.preset_name.trim().is_empty();
         let name = draft.preset_name_or_numbered(presets.len());
-        let Some(editor) = self.active_footprint_editor_mut() else {
+        let Some(editor) = self.footprint_editor_at_mut(&draft.target) else {
+            crate::diagnostics::log_warning(format!(
+                "Selection filter not applied: {} is no longer open for editing.",
+                draft.target.display()
+            ));
             return Task::none();
         };
         editor.state.selection_filter = draft.to_filter();
@@ -418,7 +425,7 @@ impl Signex {
                     has_snap = editor_snap.is_some(),
                     "GridPropertiesOpen received",
                 );
-                if let Some(opts) = editor_snap {
+                if let (Some(opts), Some(target)) = (editor_snap, self.footprint_dialog_target()) {
                     let step = opts.grid_step_mm;
                     self.ui_state.grid_properties =
                         Some(Box::new(crate::app::GridPropertiesState {
@@ -426,6 +433,7 @@ impl Signex {
                             fine_display: opts.fine_grid_display,
                             coarse_display: opts.coarse_grid_display,
                             multiplier: opts.coarse_multiplier,
+                            target,
                             ..crate::app::GridPropertiesState::default()
                         }));
                 }
@@ -529,7 +537,11 @@ impl Signex {
                     }
                     None => None,
                 };
-                if let (Some(d), Some(editor)) = (draft, self.active_footprint_editor_mut()) {
+                let editor = match &draft {
+                    Some(d) => self.footprint_editor_at_mut(&d.target),
+                    None => None,
+                };
+                if let (Some(d), Some(editor)) = (&draft, editor) {
                     let opts = &mut editor.state.snap_options;
                     if let Some(step) = step {
                         opts.grid_step_mm = step;
@@ -550,6 +562,11 @@ impl Signex {
                         row.coarse_multiplier = opts.coarse_multiplier;
                     }
                     editor.canvas_cache.clear();
+                } else if let Some(d) = &draft {
+                    crate::diagnostics::log_warning(format!(
+                        "Grid not applied: {} is no longer open for editing.",
+                        d.target.display()
+                    ));
                 }
                 self.ui_state.grid_properties = None;
                 self.refresh_panel_ctx();

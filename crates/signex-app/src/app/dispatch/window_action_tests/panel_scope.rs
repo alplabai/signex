@@ -192,12 +192,158 @@ fn a_redocked_tab_becomes_the_active_tab() {
 #[test]
 fn undocking_the_sheet_in_view_ends_a_wire_in_progress() {
     let (mut app, paths) = three_sheets();
-    app.interaction_state.wire_drawing = true;
-    app.interaction_state
-        .wire_points
-        .push(signex_types::schematic::Point::new(1.0, 1.0));
+    start_main_wire(&mut app);
     let _ = undock(&mut app, &paths[0]);
     assert_ne!(app.active_tab_path().as_ref(), Some(&paths[0]));
     assert!(!app.interaction_state.wire_drawing);
     assert!(app.interaction_state.wire_points.is_empty());
+}
+
+fn start_main_wire(app: &mut Signex) {
+    let state = &mut app.interaction_state;
+    state.wire_drawing = true;
+    state.canvas.drawing_mode = true;
+    state.wire_points.push(Point::new(1.0, 1.0));
+}
+
+/// Docking a tab back moves main off its sheet: main's wire must not go on
+/// and commit into the sheet that comes back.
+#[test]
+fn a_redocked_tab_ends_the_wire_main_was_drawing() {
+    let (mut app, paths) = three_sheets();
+    let window = undock(&mut app, &paths[2]);
+    start_main_wire(&mut app);
+    let _ = app.update(Message::Window(WindowMsg::ReattachTab(window)));
+    assert_eq!(app.active_tab_path().as_ref(), Some(&paths[2]));
+    assert!(!app.interaction_state.wire_drawing);
+    assert!(!app.interaction_state.canvas.drawing_mode);
+}
+
+/// A wire drawn in a window ends with that window, not on main's sheet.
+#[test]
+fn closing_a_window_ends_the_wire_drawn_in_it() {
+    let (mut app, paths) = three_sheets();
+    let window = undock(&mut app, &paths[2]);
+    let state = &mut app.interaction_state;
+    state.wire_drawing = true;
+    state.wire_points.push(Point::new(1.0, 1.0));
+    state.canvases.get_mut(&window).unwrap().drawing_mode = true;
+    let _ = app.update(Message::Window(WindowMsg::ReattachTab(window)));
+    assert!(!app.interaction_state.wire_drawing);
+    assert!(app.interaction_state.wire_points.is_empty());
+}
+
+/// Undocking main's tab leaves a wire another window is drawing alone.
+#[test]
+fn undocking_main_tab_keeps_a_wire_of_another_window() {
+    let (mut app, paths) = three_sheets();
+    let other = undock(&mut app, &paths[1]);
+    let state = &mut app.interaction_state;
+    state.wire_drawing = true;
+    state.wire_points.push(Point::new(1.0, 1.0));
+    let slot = state.canvases.get_mut(&other).unwrap();
+    slot.drawing_mode = true;
+    slot.wire_preview = vec![Point::new(1.0, 1.0)];
+    let _ = undock(&mut app, &paths[0]);
+    let state = &app.interaction_state;
+    assert!(state.wire_drawing);
+    assert_eq!(state.wire_points.len(), 1);
+    assert!(state.canvases[&other].drawing_mode);
+    assert_eq!(state.canvases[&other].wire_preview.len(), 1);
+}
+
+/// Two footprints, A in main and B in a window.
+fn two_footprints() -> (Signex, PathBuf, PathBuf, iced::window::Id) {
+    let mut app = app_with_main();
+    let (a, b) = (PathBuf::from("a.snxfpt"), PathBuf::from("b.snxfpt"));
+    for path in [&a, &b] {
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
+        app.document_state
+            .footprint_editors
+            .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+        app.document_state
+            .tabs
+            .push(tab_of(path, TabKind::FootprintEditor(path.clone())));
+    }
+    app.document_state.active_tab = app.document_state.tabs.len() - 2;
+    let window = window_over(&mut app, &b);
+    (app, a, b, window)
+}
+
+fn grid_step(app: &Signex, path: &Path) -> f64 {
+    app.document_state.footprint_editors[path]
+        .state
+        .snap_options
+        .grid_step_mm
+}
+
+#[test]
+fn grid_properties_opened_in_a_window_applies_to_its_footprint() {
+    use crate::app::GridPropertiesMsg as G;
+    let (mut app, a, b, window) = two_footprints();
+    let before = grid_step(&app, &a);
+    send_from(&mut app, window, PanelMsg::FpEditorGridManagerProperties);
+    let _ = app.update(Message::GridProperties(G::SetStep("2.5".into())));
+    let _ = app.update(Message::GridProperties(G::Apply));
+    assert_eq!(grid_step(&app, &b), 2.5);
+    assert_eq!(grid_step(&app, &a), before, "main's footprint is untouched");
+}
+
+#[test]
+fn a_custom_filter_opened_in_a_window_applies_to_its_footprint() {
+    use crate::app::SelectionFilterMsg as S;
+    use crate::library::editor::footprint::state::SelectionFilterKind;
+    let (mut app, a, b, window) = two_footprints();
+    send_from(&mut app, window, PanelMsg::FpEditorOpenSelectionFilterCustom);
+    let toggle = S::ToggleCustomKind(SelectionFilterKind::Pads);
+    let _ = app.update(Message::SelectionFilter(toggle));
+    let _ = app.update(Message::SelectionFilter(S::ApplyCustom));
+    let editors = &app.document_state.footprint_editors;
+    assert!(!editors[&b].state.selection_filter.pads);
+    assert!(editors[&a].state.selection_filter.pads, "main's stays");
+}
+
+/// The dialog's document closed first: Apply writes nothing, anywhere.
+#[test]
+fn grid_properties_apply_does_nothing_once_its_footprint_is_closed() {
+    use crate::app::GridPropertiesMsg as G;
+    let (mut app, a, b, window) = two_footprints();
+    let before = grid_step(&app, &a);
+    send_from(&mut app, window, PanelMsg::FpEditorGridManagerProperties);
+    app.document_state.footprint_editors.remove(&b);
+    let _ = app.update(Message::GridProperties(G::SetStep("2.5".into())));
+    let _ = app.update(Message::GridProperties(G::Apply));
+    assert_eq!(grid_step(&app, &a), before);
+    assert!(app.ui_state.grid_properties.is_none());
+}
+
+/// A DRC rule link in a window: its board names the project, and the Rules
+/// tab opens on the main window once the swap is over.
+#[test]
+fn a_drc_rule_link_in_a_window_opens_the_rules_tab_on_main() {
+    use crate::panels::{BaseRule, DrcPanelMsg};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_string_lossy().into_owned();
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(&root, &["t.snxsch"]);
+    app.ui_state.first_run_tour_open = false;
+    app.ui_state.main_window_id = Some(iced::window::Id::unique());
+    let board = dir.path().join("board.snxpcb");
+    app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
+    let data = serde_json::json!({"uuid": uuid::Uuid::now_v7()});
+    app.open_pcb_tab(
+        board.clone(),
+        "board".into(),
+        serde_json::from_value(data).unwrap(),
+    );
+    let id = app.document_state.projects[0].id;
+    let window = undock(&mut app, &board);
+
+    let link = PanelMsg::Drc(DrcPanelMsg::BaseRuleOpened(BaseRule::TrackWidth));
+    let sent = app.scope_dock_message(window, dock(link));
+    assert!(is_scoped(&sent, window));
+    let task = app.update(sent);
+    assert_eq!(app.rules_tab_in_window(true), None, "not inside the swap");
+    crate::app::path_ops::settle_task(&mut app, task);
+    assert_eq!(app.rules_tab_in_window(true), Some(id));
 }

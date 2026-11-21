@@ -377,6 +377,7 @@ impl Signex {
                         // canvas so we don't leak caches for a window
                         // that's gone.
                         WindowKind::UndockedTab { path, .. } => {
+                            self.end_wire_of_window(id);
                             self.interaction_state.canvases.remove(&id);
                             self.interaction_state.pcb_canvases.remove(&id);
                             self.interaction_state.pcb_selections.remove(&id);
@@ -521,6 +522,7 @@ impl Signex {
                 self.close_overlays_owned_by(id);
                 self.ui_state.forget_undocked_window_size(id);
                 let reattached = self.ui_state.windows.remove(&id);
+                self.end_wire_of_window(id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
                 self.interaction_state.pcb_selections.remove(&id);

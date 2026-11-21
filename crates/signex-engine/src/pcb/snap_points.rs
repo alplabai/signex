@@ -21,8 +21,14 @@ use super::snap::{SnapObject, SnapQuery};
 const EDGE_STEPS: usize = 8;
 
 /// Every point of the asked-for kinds on the asked-for layers, for a
-/// pointer at `at`.
-pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<Point> {
+/// pointer at `at`. The caller keeps those within `reach_mm`, so only those
+/// pay for the check of what covers them.
+pub(super) fn candidates(
+    board: &PcbBoard,
+    query: &SnapQuery,
+    at: Point,
+    reach_mm: f64,
+) -> Vec<Point> {
     let wants = |kind: SnapObject| query.objects.contains(&kind);
     let on = |mask: u32| copper_on(query, mask);
     // Graphics and texts sit on no copper layer: only All Layers sees them.
@@ -47,11 +53,13 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
                 Side::Top => CopperLayer::Top,
                 Side::Bottom => CopperLayer::Bottom,
             };
+            let origin = footprint.position;
+            let in_reach = (origin.x - at.x).hypot(origin.y - at.y) <= reach_mm;
             if on(1 << layer_bit(side))
                 && origin_on_net(query, footprint)
-                && !foreign_pad_covers(board, query, footprint.position, 1 << layer_bit(side))
+                && !(in_reach && foreign_pad_covers(board, query, origin))
             {
-                out.push(footprint.position);
+                out.push(origin);
             }
         }
         for pad in &footprint.pads {
@@ -209,27 +217,60 @@ fn origin_on_net(query: &SnapQuery, footprint: &Footprint) -> bool {
 }
 
 /// Whether a pad of a net other than the running route's covers `point` on
-/// a copper layer of `layers`, so a route landing there would short to it.
-fn foreign_pad_covers(board: &PcbBoard, query: &SnapQuery, point: Point, layers: u32) -> bool {
+/// the route's layer, so a route landing there would short to it.
+fn foreign_pad_covers(board: &PcbBoard, query: &SnapQuery, point: Point) -> bool {
     let Some(own) = query.net else {
         return false;
     };
     let Ok(at) = PointNm::from_mm(point, "footprint origin") else {
         return false;
     };
-    let covers = |footprint: &Footprint, pad: &Pad| {
+    any_pad_near(board, at, |footprint, pad| {
         let net = pad.net.as_ref().map_or(0, |net| net.number);
         net != 0
             && net != own
-            && pad_layers(footprint, pad) & layers != 0
+            && pad_layers(footprint, pad) & query.route_layer != 0
             && pad_shape(footprint, pad).is_ok_and(|shape| shape.contains(at, 0))
+    })
+}
+
+/// Whether `test` holds for a pad that can reach `at`. A far pad is ruled
+/// out on its centre and extent, so `test` sees only the near ones.
+pub(super) fn any_pad_near(
+    board: &PcbBoard,
+    at: PointNm,
+    mut test: impl FnMut(&Footprint, &Pad) -> bool,
+) -> bool {
+    let mut near = |footprint: &Footprint, pad: &Pad| {
+        pad_can_reach(footprint, pad, at) && test(footprint, pad)
     };
-    let frame = free_pad_frame();
-    board
+    if board
         .footprints
         .iter()
-        .any(|footprint| footprint.pads.iter().any(|pad| covers(footprint, pad)))
-        || board.free.pads.iter().any(|pad| covers(&frame, pad))
+        .any(|footprint| footprint.pads.iter().any(|pad| near(footprint, pad)))
+    {
+        return true;
+    }
+    let frame = free_pad_frame();
+    board.free.pads.iter().any(|pad| near(&frame, pad))
+}
+
+/// Whether `at` lies within the circle around `pad`'s centre that holds
+/// every shape it can have. A pad that cannot be placed is left to the
+/// shape test.
+fn pad_can_reach(footprint: &Footprint, pad: &Pad, at: PointNm) -> bool {
+    let Ok(center) = pad_world_center(footprint, pad) else {
+        return true;
+    };
+    let box_x = pad.size.x.abs() + pad.trapezoid_delta.x.abs();
+    let box_y = pad.size.y.abs() + pad.trapezoid_delta.y.abs();
+    let extent = pad
+        .custom_outline
+        .iter()
+        .map(|corner| corner.x.hypot(corner.y))
+        .fold(box_x.hypot(box_y) / 2.0, f64::max);
+    let reach_nm = (extent * 1e6).ceil() as i128 + 1;
+    center.distance_sq(at) <= reach_nm * reach_nm
 }
 
 /// The asked-for points of `pad` of `footprint`, if it is in the scope, on

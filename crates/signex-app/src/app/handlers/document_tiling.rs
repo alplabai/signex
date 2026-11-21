@@ -50,8 +50,9 @@ impl Signex {
     }
 
     /// What the main window had under way on `path`, which it no longer
-    /// shows, ends: a route lands, a carry drops, a wire being drawn is
-    /// discarded. Called while `path` is still the active tab.
+    /// shows, ends: a route lands, a carry drops, a wire main is drawing is
+    /// discarded (one drawn in another window stays). Called while `path`
+    /// is still the active tab.
     fn end_main_work_on(&mut self, path: &std::path::Path) {
         if self.own_board_tool().is_some() {
             self.release_board_tool();
@@ -85,7 +86,7 @@ impl Signex {
         {
             state.pcb_arrange_box = None;
         }
-        if state.wire_drawing {
+        if state.wire_drawing && state.canvas.drawing_mode {
             state.wire_drawing = false;
             state.wire_points.clear();
             let canvas = state.active_canvas_mut();
@@ -96,8 +97,21 @@ impl Signex {
         }
     }
 
+    /// A wire being drawn in `window`, which is closing, ends with it: it
+    /// must not continue on the sheet main shows.
+    pub(crate) fn end_wire_of_window(&mut self, window: iced::window::Id) {
+        let state = &mut self.interaction_state;
+        let drawing = state.canvases.get(&window).is_some_and(|c| c.drawing_mode);
+        if state.wire_drawing && drawing {
+            state.wire_drawing = false;
+            state.wire_points.clear();
+            state.current_tool = crate::app::Tool::Select;
+        }
+    }
+
     /// `path` came back from its own window: main shows it, as it did
-    /// before the window took it. A closed document has no tab to show.
+    /// before the window took it, and ends what it had under way on the tab
+    /// it leaves. A closed document has no tab to show.
     pub(crate) fn show_redocked_tab(&mut self, path: &std::path::Path) {
         let index = self
             .document_state
@@ -105,6 +119,9 @@ impl Signex {
             .iter()
             .position(|tab| tab.path == path);
         if let Some(index) = index.filter(|index| *index != self.document_state.active_tab) {
+            if let Some(leaving) = self.active_tab_path() {
+                self.end_main_work_on(&leaving);
+            }
             self.park_active_schematic_session();
             self.document_state.active_tab = index;
             self.sync_active_tab();

@@ -42,6 +42,7 @@ fn snap(objects: &[SnapObject], layers: u32, at: Point) -> Option<Point> {
         radius_mm: 0.5,
         shown: ShownLayers::ALL,
         net: None,
+        route_layer: u32::MAX,
     };
     object_snap_point(&board(), at, &query)
 }
@@ -93,6 +94,7 @@ fn a_carried_footprint_does_not_snap_to_itself() {
         radius_mm: 0.5,
         shown: ShownLayers::ALL,
         net: None,
+        route_layer: u32::MAX,
     };
     assert_eq!(
         object_snap_point(&board(), Point::new(12.0, 10.0), &query),

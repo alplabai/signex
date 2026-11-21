@@ -46,6 +46,7 @@ fn query<'a>(objects: &'a BTreeSet<SnapObject>, skip: &'a BTreeSet<Uuid>) -> Sna
         radius_mm: 0.6,
         shown: ShownLayers::ALL,
         net: None,
+        route_layer: u32::MAX,
     }
 }
 
@@ -143,4 +144,63 @@ fn guides_pull_to_a_crossing_before_a_line() {
     );
     // A disabled guide pulls nothing.
     assert_eq!(guide_snap(&guides, Point::new(1.0, 3.1), 0.5), None);
+}
+
+/// U1 at (10, 10) with a net 1 pad 3 mm off its origin and, over the origin,
+/// a top-only pad of net 2.
+fn board_with_covered_origin() -> PcbBoard {
+    let pad = |uuid: u128, x: f64, net: u32| {
+        serde_json::json!({
+            "uuid": id(uuid), "number": "1", "pad_type": "smd", "shape": "rect",
+            "position": {"x": x, "y": 0.0}, "size": {"x": 2.0, "y": 1.0},
+            "drill": null, "layers": ["TopCopper"],
+            "net": {"number": net, "name": format!("N{net}")}
+        })
+    };
+    serde_json::from_value(serde_json::json!({
+        "uuid": id(1),
+        "footprints": [{
+            "uuid": id(2), "position": {"x": 10.0, "y": 10.0}, "layer": "TopCopper",
+            "pads": [pad(3, 3.0, 1), pad(4, 0.0, 2)]
+        }]
+    }))
+    .unwrap()
+}
+
+#[test]
+fn a_foreign_pad_refuses_an_origin_only_on_the_routes_layer() {
+    use signex_types::pcb_layer::CopperLayer;
+    let board = board_with_covered_origin();
+    let objects: BTreeSet<SnapObject> = [SnapObject::FootprintOrigins].into();
+    let skip = BTreeSet::new();
+    let on = |layer: CopperLayer| SnapQuery {
+        net: Some(1),
+        route_layer: 1 << pcb_geom::layer_bit(layer),
+        ..query(&objects, &skip)
+    };
+    let at = Point::new(10.2, 10.0);
+    assert_eq!(object_snap_point(&board, at, &on(CopperLayer::Top)), None);
+    let hit = object_snap_point(&board, at, &on(CopperLayer::Bottom));
+    assert!(close(hit, Point::new(10.0, 10.0)), "{hit:?}");
+}
+
+/// The cover check of an origin looks at the pads around it, not the board.
+#[test]
+fn only_pads_near_the_point_are_examined() {
+    let mut board = board_with_covered_origin();
+    let far = board.footprints[0].clone();
+    for n in 0..100 {
+        let mut copy = far.clone();
+        copy.uuid = id(1000 + n);
+        copy.position = Point::new(100.0 + n as f64 * 10.0, 100.0);
+        board.footprints.push(copy);
+    }
+    let at = pcb_geom::PointNm::from_mm(Point::new(10.0, 10.0), "test").unwrap();
+    let mut seen = 0;
+    let found = crate::pcb::snap_points::any_pad_near(&board, at, |_, _| {
+        seen += 1;
+        false
+    });
+    assert!(!found);
+    assert_eq!(seen, 1, "only the pad over the point");
 }

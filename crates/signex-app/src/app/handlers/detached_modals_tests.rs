@@ -93,6 +93,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 fills: true,
                 other: true,
                 preset_name: String::new(),
+                target: std::path::PathBuf::new(),
             }))
         }
         ModalId::About => ui.about_open = true,
