@@ -129,11 +129,10 @@ impl Signex {
     ) -> bool {
         // The non-active arm of `install_reloaded_schematic`, without its
         // repair reports and settle steps, as on trunk; only the core call
-        // and the projection repeat the wrapper's lines.
+        // repeats the wrapper's line.
         let result = self.engine_for_sheet_behind_tab(path, sheet);
         let install = self.document_state.replace_engine_at(path, result);
-        self.project_replaced_engine(path, install.installed, &install.notices);
-        install.installed
+        self.project_replaced_engine(path, install)
     }
 
     /// The GUI pre-step of an install behind a tab not in view, and the engine
@@ -151,17 +150,15 @@ impl Signex {
     }
 
     /// Make `result` the engine of the active tab at `p`; a failure reaches
-    /// the Messages panel. The core half with its notices logged, as
-    /// `apply_loaded_schematic` runs it. Returns whether it was installed.
+    /// the Messages panel. The core half, then the step
+    /// `apply_loaded_schematic` ships. Returns whether it was installed.
     #[cfg(test)]
     fn install_active_engine(
         &mut self,
         p: PathBuf,
         result: Result<signex_engine::Engine, signex_engine::EngineError>,
     ) -> bool {
-        let install = self.document_state.install_active(p, result);
-        super::projector::log_notices(&install.notices);
-        install.installed
+        logged_active_install(self.document_state.install_active(p, result))
     }
 
     /// The engine at `path` holds what was just read from disk: its history
@@ -449,13 +446,10 @@ impl Signex {
         refresh_panel_ctx: bool,
     ) -> bool {
         let installed = match schematic {
-            Some(schematic) => {
-                let install = self
-                    .document_state
-                    .sync_engine_from_schematic(Some(schematic));
-                super::projector::log_notices(&install.notices);
-                install.installed
-            }
+            Some(schematic) => logged_active_install(
+                self.document_state
+                    .sync_engine_from_schematic(Some(schematic)),
+            ),
             None => false,
         };
         if !self.document_state.has_active_engine() {
@@ -553,6 +547,13 @@ fn warn_if_read_only(path: &std::path::Path, newer_minor_source: Option<&str>) {
             path.display()
         ));
     }
+}
+
+/// An install at the active tab with its notices sent to Messages; returns
+/// whether it went in. The test seam `install_active_engine` shares it.
+fn logged_active_install(install: super::state::SheetInstall) -> bool {
+    super::projector::log_notices(&install.notices);
+    install.installed
 }
 
 #[cfg(test)]

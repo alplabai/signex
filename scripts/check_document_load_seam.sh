@@ -43,6 +43,9 @@
 # like a core function counts as a use; a production file named like a test is
 # skipped). The removal rule reads the `engines` field by name: a destructured
 # `let Self { engines, .. } = self` or a write over all of `*self` is not seen.
+# An overwrite is not counted as a drop: `engines.insert(<path>, ..)` over a
+# path that already holds an engine (it returns `Some`), or a write through
+# `*engines.get_mut(p).. = e`, replaces the old engine unseen.
 #
 # Usage: scripts/check_document_load_seam.sh   (DOCUMENT_LOAD_SEAM_ROOT
 # overrides the tree, for scripts/test_check_document_load_seam.sh)
