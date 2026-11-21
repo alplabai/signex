@@ -346,7 +346,7 @@ impl Signex {
                         .active_canvas_mut()
                         .clear_overlay_cache();
                     // In-flight drawing buffers belong to the document too.
-                    self.clear_drawing_buffers();
+                    self.clear_drawing_buffers_of_main();
                     // So does a part on the cursor: it was armed for the
                     // sheet that is no longer showing.
                     self.cancel_placement_session();
