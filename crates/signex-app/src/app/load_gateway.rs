@@ -128,8 +128,8 @@ impl Signex {
         sheet: SchematicSheet,
     ) -> bool {
         // The non-active arm of `install_reloaded_schematic`, without its
-        // repair reports and settle steps, as on trunk; only the core call
-        // repeats the wrapper's line.
+        // repair reports and settle steps, as on trunk: the pre-step, the core
+        // call and the projection repeat the wrapper's three lines.
         let result = self.engine_for_sheet_behind_tab(path, sheet);
         let install = self.document_state.replace_engine_at(path, result);
         self.project_replaced_engine(path, install)
