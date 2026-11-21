@@ -250,13 +250,14 @@ pub(super) fn project_row<'a>(
         ));
         None
     } else if hover_action {
-        // The room is kept while the button is hidden, as the mock's
-        // `visibility: hidden` keeps it.
+        // The room is kept while the button is hidden, so the date never
+        // shifts. A recent row keeps its pin there, in the date's ink.
         entry = entry.push(reserved_button(
             tokens,
             look,
             glyph.clone(),
             t!(i18n, label),
+            (kind == RowKind::Recent).then_some(ink4),
         ));
         Some(action_button(
             tokens,
