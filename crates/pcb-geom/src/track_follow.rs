@@ -64,26 +64,27 @@ pub fn tracks_on_pads(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> Vec<Trac
     })
 }
 
-/// The tracks of `board` with an end at the position of one of `vias`, to
-/// the nanometre, on a copper layer the via reaches and on its net, in board
-/// order. A locked track is left out, as for [`tracks_on_pads`].
+/// The tracks of `board` with an end on the copper of one of `vias`, on a
+/// layer the via reaches and on its net, in board order. A locked track is left out, as for [`tracks_on_pads`].
 pub fn tracks_on_vias(board: &PcbBoard, vias: &BTreeSet<Uuid>) -> Vec<TrackEnds> {
-    let moved: Vec<(PointNm, u32, u32)> = board
+    let moved: Vec<(PointNm, i128, u32, u32)> = board
         .vias
         .iter()
         .filter(|via| vias.contains(&via.uuid))
         .filter_map(|via| {
             let at = PointNm::from_mm(via.position, "via").ok()?;
-            Some((at, via_layers(via), via.net))
+            let radius_nm = (via.diameter * 500_000.0).round() as i128;
+            Some((at, radius_nm * radius_nm, via_layers(via), via.net))
         })
         .collect();
     if moved.is_empty() {
         return Vec::new();
     }
     ends_where(board, |net, layers, p| {
-        moved
-            .iter()
-            .any(|(at, reach, via_net)| *via_net == net && reach & layers != 0 && *at == p)
+        moved.iter().any(|(at, radius_sq, reach, via_net)| {
+            let (dx, dy) = (i128::from(p.x - at.x), i128::from(p.y - at.y));
+            *via_net == net && reach & layers != 0 && dx * dx + dy * dy <= *radius_sq
+        })
     })
 }
 

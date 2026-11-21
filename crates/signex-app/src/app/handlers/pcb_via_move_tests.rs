@@ -74,15 +74,23 @@ fn rig_on(board: PcbBoard) -> Rig {
     app.ui_state.pcb_snap.objects.clear();
     app.ui_state.pcb_snap.to_guides = false;
     app.ui_state.pcb_snap.to_axes = false;
-    // Close enough that a via is several pixels wide.
-    app.interaction_state
-        .pcb_canvas
-        .zoom_by_factor_about_centre(4.0);
     app.refresh_pcb_highlight();
+    let mut state = PcbCanvasState::default();
+    // The first event settles the view's fit, so pixels read after it hold.
+    let settled = canvas::Program::update(
+        &app.interaction_state.pcb_canvas,
+        &mut state,
+        &Event::Mouse(mouse::Event::CursorLeft),
+        BOUNDS,
+        mouse::Cursor::Unavailable,
+    );
+    if let Some(message) = settled.and_then(|action| action.into_inner().0) {
+        let _ = app.update(message);
+    }
     Rig {
         app,
         path,
-        state: PcbCanvasState::default(),
+        state,
         _dir: dir,
     }
 }

@@ -106,7 +106,9 @@ fn parallel_runs_draw_the_same_triangles_in_the_same_order() {
 fn a_small_view_is_one_run() {
     let mut canvas = board_canvas(0.0);
     // Far in: a few primitives on screen.
-    canvas.camera.get_mut().zoom_by_factor(Point::ORIGIN, 40.0);
+    let camera = canvas.camera.get_mut();
+    let to_close_view = crate::canvas::Camera::MAX_SCALE / camera.scale();
+    camera.zoom_by_factor(Point::ORIGIN, to_close_view);
     let scene = canvas.gpu_scene().expect("a board");
     let extents = canvas.cull_bounds(&scene);
     let camera = canvas.camera_ref().clone();
