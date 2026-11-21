@@ -1228,6 +1228,8 @@ mod tests {
 
     /// ADR-0006 slice 7: no `CoreContext` fact is read from a panel or from
     /// the interaction state; resetting both leaves the core half as it was.
+    /// The one exception is the board sketch session (decision 8), pinned by
+    /// the next test.
     #[test]
     fn core_facts_ignore_panel_and_interaction_state() {
         let fixtures: [fn() -> Signex; 4] = [
@@ -1277,7 +1279,8 @@ mod tests {
                 ..after
             },
             before,
-            "the dirty-board fact is the only core fact the session moves"
+            "in this fixture the session moves only the dirty-board fact; its \
+             fresh history leaves can_undo / can_redo as the board has them"
         );
     }
 
