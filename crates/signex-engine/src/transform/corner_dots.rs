@@ -10,6 +10,23 @@ use signex_types::object_id::IdSource;
 use signex_types::schematic::{Junction, Point, SchematicSheet, SelectedItem, SelectedKind};
 
 use super::pin_junctions::{pin_dot, symbol_pin_tips};
+use super::stem_dots::stem_dots_for;
+
+/// Add to `dots` (the pin dots an edit mints) the corner dots of this module
+/// and the stem dots of `stem_dots`, one per point.
+pub(crate) fn add_meeting_dots(
+    sheet: &SchematicSheet,
+    items: &[SelectedItem],
+    ids: &mut dyn IdSource,
+    dots: &mut Vec<Junction>,
+) {
+    let mut taken: HashSet<Key> = dots.iter().map(|dot| pt_key(&dot.position)).collect();
+    let corners = corner_dots_for(sheet, items, ids);
+    let stems = stem_dots_for(sheet, items, ids);
+    dots.extend(
+        (corners.into_iter().chain(stems)).filter(|dot| taken.insert(pt_key(&dot.position))),
+    );
+}
 
 /// How many wire ends of `sheet` sit on each point.
 fn wire_end_counts(sheet: &SchematicSheet) -> HashMap<Key, usize> {
@@ -25,7 +42,7 @@ fn wire_end_counts(sheet: &SchematicSheet) -> HashMap<Key, usize> {
 /// The dots an edit needs where two wire ends now meet on a pin end: at the
 /// ends of the `items` wires and the pin ends of the `items` symbols, where
 /// no dot stands yet. Called with the edit applied; the ids come from `ids`.
-pub(crate) fn corner_dots_for(
+fn corner_dots_for(
     sheet: &SchematicSheet,
     items: &[SelectedItem],
     ids: &mut dyn IdSource,

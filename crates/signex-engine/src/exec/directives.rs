@@ -4,7 +4,7 @@
 //! directive's rule list the same way.
 
 use crate::*;
-use signex_types::schematic::SchDirective;
+use signex_types::schematic::{SchDirective, SelectedItem, SelectedKind};
 
 /// The typing-run key of a directive edit. The run is also keyed by the
 /// directive's uuid, which no symbol shares, so it never continues a symbol
@@ -49,13 +49,14 @@ impl Engine {
         }
         // An update is recorded as a typing run: consecutive edits of one
         // directive share one undo step (`Engine::end_field_edit_run`).
-        let (semantic, run) = match cmd {
+        let (semantic, run, id) = match cmd {
             Command::PlaceDirective { directive } => {
                 if !is_valid(&directive) {
                     return Err(EngineError::InvalidDirectiveRegion);
                 }
+                let id = directive.uuid();
                 self.document.directives.push(directive);
-                (SemanticPatch::ObjectPlaced, None)
+                (SemanticPatch::ObjectPlaced, None, id)
             }
             Command::UpdateDirective { directive } => {
                 if !is_valid(&directive) {
@@ -77,14 +78,17 @@ impl Engine {
                     return Ok(CommandResult::unchanged());
                 }
                 *slot = directive;
-                (SemanticPatch::StyleUpdated, Some(id))
+                (SemanticPatch::StyleUpdated, Some(id), id)
             }
             _ => unreachable!("exec_directives routes only the directive commands"),
         };
-        let patch_pair = PatchPair {
-            semantic,
-            document: DocumentPatch::DIRECTIVES,
-        };
+        // A stem that now stands on a wire gets its dot, one that left loses
+        // it, in this step (`transform::stem_dots`).
+        let mut document = DocumentPatch::DIRECTIVES;
+        if self.reconcile_wire_junctions(&[SelectedItem::new(id, SelectedKind::Directive)]) {
+            document |= DocumentPatch::JUNCTIONS;
+        }
+        let patch_pair = PatchPair { semantic, document };
         match run {
             Some(id) => self.record_field_edit(before, patch_pair, id, DIRECTIVE_RUN_KEY),
             None => self.record_history(before, patch_pair),

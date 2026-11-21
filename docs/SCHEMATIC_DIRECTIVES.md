@@ -216,7 +216,9 @@ with no class) and, with Show parameters on the flag, the width, clearance,
 via and diff-pair class; it is sized to its text. A Net Blanket with a class
 carries a "Net Class = <class>" flag below its outline's right end, clear of
 its edge; a Differential Pair with a class a "Diff Pair · <class>" flag
-below the wire. The flag text is fixed English, like every sheet output. A
+below the wire. Where such a stem stands on a wire, the engine adds an
+automatic junction dot at its foot, as at a wire T (`transform::stem_dots`,
+decision of 2026-11-21); a net label gets none. The flag text is fixed English, like every sheet output. A
 region is picked by a click near its edge, so a click inside it still
 reaches what it covers; a point directive by its mark or its flag
 (`schematic_runtime/directives.rs`).

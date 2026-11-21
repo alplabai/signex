@@ -256,6 +256,19 @@ wires stay (or the other way round) shows its own rule until the drop.
 
 ---
 
+## sch-junction-places — Where a junction dot stands
+
+Every dot is a stored junction; the canvas draws what the sheet holds and
+derives none at draw time. The engine mints an automatic dot (`minted`) where
+a wire ends inside another wire (a T), where three or more wire ends meet,
+where a pin end lies inside a wire, where two wire ends meet on a pin end (a
+part's or a power port's), and at the foot of a directive's stem on a wire (a
+Net Parameters flag, a Differential Pair with a class). It drops the dot once
+that meeting is gone. A net label on a wire gets no dot. Decisions: the
+2026-11-18, 2026-11-19 and 2026-11-21 junction rows of `docs/DECISIONS.md`.
+
+---
+
 ## sch-pan-reuse — Panning moves retained content (#2078)
 
 The CPU schematic canvas tessellates the content layer once and moves it

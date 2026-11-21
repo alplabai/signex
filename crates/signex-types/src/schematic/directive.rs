@@ -219,6 +219,18 @@ impl SchDirective {
         }
     }
 
+    /// Where the directive's stem stands on its wire: a Net Parameters flag
+    /// always, a Differential Pair while it names a class (its flag); `None`
+    /// for a region or a pair drawn without a flag. The junction dot of a
+    /// stem on a wire is placed here (`signex_engine`, `stem_dots`).
+    pub fn stem_foot(&self) -> Option<Point> {
+        match self {
+            Self::NetParameters { position, .. } => Some(*position),
+            Self::DiffPair { position, .. } => self.diff_pair_class().map(|_| *position),
+            Self::Blanket { .. } | Self::CompileMask { .. } => None,
+        }
+    }
+
     /// Every stored point mapped through `f`: a move, a turn or a mirror.
     pub fn map_points(&mut self, f: impl Fn(Point) -> Point) {
         match self {

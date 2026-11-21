@@ -246,16 +246,9 @@ impl Engine {
                 decided.dots
             }
         };
-        // Two wire ends meeting on a pin end get a dot too (`corner_dots`).
-        let pin_dot_at: std::collections::HashSet<_> = (pin_dots.iter())
-            .map(|dot| signex_net::pt_key(&dot.position))
-            .collect();
-        let corners = corner_dots::corner_dots_for(&self.document, items, ids);
-        pin_dots.extend(
-            corners
-                .into_iter()
-                .filter(|dot| !pin_dot_at.contains(&signex_net::pt_key(&dot.position))),
-        );
+        // Two wire ends on a pin end, and a directive's stem on a wire, get a
+        // dot too (`corner_dots`, `stem_dots`).
+        corner_dots::add_meeting_dots(&self.document, items, ids, &mut pin_dots);
         let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
             .filter(|(j, v)| j.minted && v.is_none())
@@ -294,9 +287,10 @@ impl Engine {
         // deleted wire is no longer in `touched` yet is exactly what strands
         // its neighbours' dots (issue #422). The index makes each check O(1).
         // A dot no wire meeting holds stays while a pin end still sits strictly
-        // inside a wire there, or two wire ends meet on it: it goes when the
-        // pin or the wire leaves. The
-        // no-short rule is the minting's, never a reason to drop a dot.
+        // inside a wire there, or two wire ends meet on it, and while a stem
+        // stands on a wire there: it goes when the pin, stem or wire leaves.
+        // The no-short rule is the minting's, never a reason to drop a dot.
+        let stems = stem_dots::stem_keys(&self.document);
         let moved: std::collections::HashSet<uuid::Uuid> = (items.iter())
             .filter(|item| item.kind == SelectedKind::Symbol)
             .map(|item| item.uuid)
@@ -313,8 +307,14 @@ impl Engine {
                 );
                 k != a && k != b && signex_net::point_on_segment(k, a, b)
             });
-            // Or two wire ends meet on the pin end (`corner_dots`).
-            if !through && autoplace::wire_endpoint_count(*at, &index) < 2 {
+            // Or two wire ends meet on the pin end (`corner_dots`), or a
+            // stem stands on the wire there (`stem_dots`).
+            let ends = autoplace::wire_endpoint_count(*at, &index);
+            let stem = stems.contains(&k);
+            if stem && (through || ends >= 2) {
+                return true;
+            }
+            if !through && ends < 2 && !(stem && ends == 1) {
                 return false;
             }
             // The pin ends of the sheet before the edit (a drag preview's,
@@ -796,6 +796,7 @@ mod merge;
 mod pin_junctions;
 mod region_wires;
 pub(crate) mod rubber_band;
+mod stem_dots;
 mod wire_index;
 use autoplace::autoplace_fields;
 pub use autoplace::place_fields_for_new_symbol;
