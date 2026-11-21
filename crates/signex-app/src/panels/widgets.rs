@@ -130,15 +130,6 @@ pub fn section_title<'a, 'b>(
         .style(crate::styles::section_label(tokens))
 }
 
-pub fn separator<'a>(tokens: &ThemeTokens) -> iced::widget::Text<'a> {
-    // Use a cached static string instead of allocating on every render
-    const SEP: &str = "──────────────────────────────";
-    // raw: a rule of box-drawing glyphs, not language.
-    text(raw(SEP))
-        .size(TS.micro)
-        .color(theme_ext::border_color(tokens))
-}
-
 /// A planned panel (#1283): the shared planned card with the panel's icon,
 /// its name (`title`), the planned pill and what it will do (`desc`). The
 /// dock title is the panel's only title row.

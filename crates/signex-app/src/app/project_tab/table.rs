@@ -123,42 +123,6 @@ pub(super) fn problem<'a>(words: Localized, tokens: &ThemeTokens) -> Element<'a,
         .boxed()
 }
 
-/// The heading row of a table: one caption per column with its width, then
-/// an uncaptioned column of `actions` width (the row buttons), if any.
-pub(super) fn heading_row<'a>(
-    columns: &[(MessageId, Length)],
-    actions: Option<Length>,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let mut head: Row<Element<'a, Message>> = Row::new().spacing(SP.s).padding([SP.xs, SP.m]);
-    for (caption, width) in columns {
-        head = head.push(
-            text(t!(i18n, *caption))
-                .size(TS.caption)
-                .color(ink::muted_text(tokens))
-                .width(*width)
-                .boxed(),
-        );
-    }
-    if let Some(width) = actions {
-        head = head.push(Space::new().width(width).boxed());
-    }
-    head.boxed()
-}
-
-/// One table row: each cell in its column's width.
-pub(super) fn table_row<'a>(cells: Vec<(Element<'a, Message>, Length)>) -> Element<'a, Message> {
-    let mut line: Row<Element<'a, Message>> = Row::new()
-        .spacing(SP.s)
-        .padding([SP.xs, SP.m])
-        .align_y(Alignment::Center);
-    for (cell, width) in cells {
-        line = line.push(container(cell).width(width).boxed());
-    }
-    line.boxed()
-}
-
 /// A cell of user text in the mono face (`td.m`): a file, a path.
 pub(in crate::app::project_tab) fn mono_cell<'a>(
     value: impl Into<String>,
@@ -178,19 +142,6 @@ pub(super) fn word_cell<'a>(words: Localized, tokens: &ThemeTokens) -> Element<'
     text(words)
         .size(TS.body)
         .color(crate::styles::ti(tokens.text))
-        .boxed()
-}
-
-/// A small outlined action button; `None` greys it.
-pub(super) fn action<'a>(
-    words: Localized,
-    on_press: Option<Message>,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    button(text(words).size(TS.body))
-        .padding([SP.xs, SP.m])
-        .style(crate::styles::outline_button(tokens))
-        .on_press_maybe(on_press)
         .boxed()
 }
 
