@@ -187,7 +187,9 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   General**, so a change in one place shows in the other. The small drawing at
   the top shows what the settings do and redraws as you change them. It
   closes when you press Esc, click outside it, switch to another document or
-  open a dialog.
+  open any dialog, an error card, a print or BOM preview, the netlist prompt,
+  the net colour picker and the command palette included, and does not come
+  back after it.
 - **Status bar:** at the left, the cursor's X and Y followed by the unit
   (click the unit to step through mm, mil, in and um), then the grid and snap,
   then the active tool and what it is doing. At the right, the selection

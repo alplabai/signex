@@ -2,7 +2,8 @@
 //! Replace, Paste Array, the Parameter Manager or any other dialog opens over
 //! it.
 
-use signex_app::app::{EditMsg, Message, OverlayMsg, ParameterManagerMsg, Signex};
+use signex_app::app::contracts::ExportWriteOutcome;
+use signex_app::app::{EditMsg, ExportMsg, Message, OverlayMsg, ParameterManagerMsg, Signex};
 
 use crate::paste_stamp_array::open_array;
 use crate::paste_support::sheet::{app_with_sheet, populated_sheet, select};
@@ -69,4 +70,26 @@ fn a_popover_opened_beside_an_open_dialog_stays_open() {
         ),
     )));
     assert!(app.ui_state.grid_snap_popover.is_some());
+}
+
+/// An error card that opens over the popover closes it, and the popover
+/// does not come back once the card is dismissed.
+#[test]
+fn an_error_card_closes_the_grid_and_snap_popover_for_good() {
+    let mut app = app_with_sheet(populated_sheet());
+    open_popover(&mut app);
+    let failed = ExportWriteOutcome {
+        path: std::path::PathBuf::from("/w/out.pdf"),
+        result: Err("disk full".to_string()),
+        success_log: String::new(),
+        advisory: None,
+        warnings: Vec::new(),
+        preview_source: None,
+    };
+    let _ = app.update(Message::Export(ExportMsg::FileWritten(Box::new(failed))));
+    assert!(app.document_state.error_notice.is_some(), "the card is up");
+    assert!(app.ui_state.grid_snap_popover.is_none());
+    let _ = app.update(Message::Overlay(OverlayMsg::DismissErrorNotice));
+    assert!(app.document_state.error_notice.is_none());
+    assert!(app.ui_state.grid_snap_popover.is_none());
 }

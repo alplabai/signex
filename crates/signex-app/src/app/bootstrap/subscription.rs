@@ -631,19 +631,27 @@ impl Signex {
         })
     }
 
-    /// How many dialogs that paint above the Grid & Snap popover are open,
-    /// in the main window or a window of their own (the Parameter Manager,
-    /// which only opens in its own, included). The popover closes when this
-    /// grows, so every dialog closes it, trunk's new ones too, with no
-    /// per-dialog line (`handlers/grid_snap_popover.rs`).
+    /// How many dialogs that cover the Grid & Snap popover are open, in the
+    /// main window or a window of their own (the Parameter Manager, which
+    /// only opens in its own, included): the ones painted above it, the
+    /// blocking cards that hide it (error card, print and BOM preview,
+    /// netlist prompt, net colour picker) and the command palette. The
+    /// popover closes when this grows, so every dialog closes it, trunk's
+    /// new ones too, with no per-dialog line (`handlers/grid_snap_popover.rs`).
     pub(crate) fn dialogs_open_above_grid_snap_popover(&self) -> usize {
+        use crate::app::view::overlay_id::{PAINT_ORDER, visible};
         let open = self.open_overlays_where(|_| false);
-        let above = crate::app::view::overlay_id::PAINT_ORDER
+        let above = PAINT_ORDER
             .iter()
             .skip_while(|id| **id != OverlayId::GridSnapPopover)
             .skip(1);
-        above.filter(|id| open.rung(**id).is_some()).count()
+        let blocking = visible(true).iter();
+        blocking
+            .chain(above)
+            .filter(|id| open.rung(**id).is_some())
+            .count()
             + usize::from(self.ui_state.parameter_manager_open)
+            + usize::from(self.ui_state.command_palette.open)
     }
 
     /// The snapshot, with `modal_detached` saying which modals show in a
