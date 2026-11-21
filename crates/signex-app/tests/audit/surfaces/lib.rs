@@ -558,8 +558,7 @@ fn library_panel_docked(app: &mut Signex) -> Result<(), String> {
         app.document_state
             .dock
             .panel_kinds(pos)
-            .iter()
-            .any(|k| *k == PanelKind::Library)
+            .contains(&PanelKind::Library)
     });
     ensure(docked, "no Library tab in any dock")
 }
