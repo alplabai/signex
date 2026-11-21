@@ -167,6 +167,7 @@ impl Signex {
             return self.handle_placement_click(wx, wy);
         }
 
+        self.end_wire_of_another_canvas();
         match self.interaction_state.current_tool {
             Tool::Wire => {
                 let pt = signex_types::schematic::Point::new(wx, wy);
@@ -280,6 +281,25 @@ impl Signex {
             }
         }
         Task::none()
+    }
+
+    /// A wire belongs to the canvas it started on: a click on another one
+    /// must not commit a segment from that sheet's point into this sheet.
+    /// The old wire ends, so the click starts a new one here.
+    fn end_wire_of_another_canvas(&mut self) {
+        let state = &mut self.interaction_state;
+        if !state.wire_drawing || state.wire_window == state.acting_window {
+            return;
+        }
+        // While a window acts, its slot and main's are swapped, so main's
+        // slot is filed under the acting window.
+        let owner_slot = state.wire_window.or(state.acting_window);
+        if let Some(slot) = owner_slot.and_then(|id| state.canvases.get_mut(&id)) {
+            slot.wire_preview.clear();
+            slot.drawing_mode = false;
+        }
+        state.wire_drawing = false;
+        state.wire_points.clear();
     }
 
     /// The first click of a wire or bus: anchor it at `pt`.

@@ -268,6 +268,43 @@ fn undocking_main_tab_keeps_a_wire_of_another_window() {
     assert_eq!(state.canvases[&other].wire_preview.len(), 1);
 }
 
+/// A wire started in a window does not go on from a click on main's sheet.
+#[test]
+fn a_click_in_main_does_not_continue_a_wire_of_another_window() {
+    use crate::canvas::CanvasEvent::Clicked;
+    let (mut app, paths) = three_sheets();
+    let window = undock(&mut app, &paths[1]);
+    app.interaction_state.current_tool = crate::app::Tool::Wire;
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id: window,
+        event: Clicked {
+            world_x: 10.16,
+            world_y: 10.16,
+        },
+    });
+    assert_eq!(app.interaction_state.wire_window, Some(window));
+    let third = app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == paths[2])
+        .expect("the tab");
+    app.document_state.active_tab = third;
+    app.sync_active_tab();
+    assert!(app.interaction_state.wire_drawing, "the window keeps its wire");
+    let _ = app.update(Message::CanvasEvent(Clicked {
+        world_x: 50.8,
+        world_y: 50.8,
+    }));
+    let state = &app.interaction_state;
+    assert_eq!(state.wire_window, None, "the click started main's own wire");
+    assert_eq!(state.wire_points.len(), 1);
+    assert!(state.canvases[&window].wire_preview.is_empty());
+    assert!(!state.canvases[&window].drawing_mode);
+    let sheet = app.document_state.engines[&paths[2]].document();
+    assert!(sheet.wires.is_empty(), "nothing committed into main's sheet");
+}
+
 /// Two footprints, A in main and B in a window.
 fn two_footprints() -> (Signex, PathBuf, PathBuf, iced::window::Id) {
     let mut app = app_with_main();
