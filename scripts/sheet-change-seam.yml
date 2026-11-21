@@ -1,0 +1,12 @@
+# ast-grep rule for scripts/check_sheet_change_seam.sh (#2326 M6): the core
+# half of the edit tails names none of the GUI's state and not the
+# diagnostics log. Identifiers only, so a comment never matches. Kept out of
+# ast-grep/rules on purpose, like scripts/app-catch-unwind.yml.
+id: sheet-change-gui-name
+language: rust
+rule:
+  any:
+    - kind: identifier
+      regex: '^(diagnostics|ui_state|interaction_state|panel_ctx|window_panel_ctx)$'
+    - kind: field_identifier
+      regex: '^(ui_state|interaction_state|panel_ctx|window_panel_ctx)$'

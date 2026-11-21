@@ -587,6 +587,17 @@ jobs:
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_legacy_english.sh
 
+      # The edit-tail seam (#2326 M5, M6): only the tail wrappers call the core
+      # half in app/state/sheet_change/, and it names no GUI state and not the
+      # diagnostics log. Rules and blind spots live in the script. Hard gate.
+      - name: Sheet-change seam guard
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/check_sheet_change_seam.sh
+
+      - name: Sheet-change seam guard controls
+        if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
+        run: bash scripts/test_check_sheet_change_seam.sh
+
       # A panic in the app must not leave a value taken out (#2651, ADR-0006):
       # production catch_unwind calls under crates/signex-app/src/app may only
       # get fewer. Rules and blind spots live in the script. Hard gate.
