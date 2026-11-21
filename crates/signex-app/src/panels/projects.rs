@@ -1,12 +1,6 @@
 //! Projects and Navigator panel views plus the project-tree model.
 
 use super::*;
-use crate::styles::{Spacing, TypeScale};
-use iced::Widget;
-
-/// Default type / spacing scales; equal to the old literals at the default size.
-const TS: TypeScale = TypeScale::DEFAULT;
-const SP: Spacing = Spacing::DEFAULT;
 
 /// Per-sheet info for the project tree.
 #[derive(Debug, Clone, PartialEq)]
