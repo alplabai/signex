@@ -335,7 +335,12 @@ fn a_click_in_a_window_ends_the_wire_main_was_drawing() {
     assert!(state.canvas.wire_preview.is_empty());
     assert!(!state.canvas.drawing_mode);
     assert!(state.canvases[&window].drawing_mode);
-    assert!(app.document_state.engines[&paths[0]].document().wires.is_empty());
+    assert!(
+        app.document_state.engines[&paths[0]]
+            .document()
+            .wires
+            .is_empty()
+    );
 }
 
 /// Two footprints, A in main and B in a window.
