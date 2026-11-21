@@ -9,8 +9,9 @@ use crate::app::Signex;
 use crate::app::core::event::{ChangeCause, DocumentChanged};
 
 impl Signex {
-    /// Whether the document was repainted (an empty patch on the active
-    /// canvas is not).
+    /// Whether the panel context must follow: the document was repainted (an
+    /// empty patch on the active canvas is not), and not as a member, whose
+    /// wrapper refreshes it once.
     pub(super) fn project_document_changed(
         &mut self,
         changed: &DocumentChanged,
@@ -31,6 +32,11 @@ impl Signex {
                 self.repaint_active_canvas(changed.patch, clear_overlay, update_selection_info);
             }
             RefreshScope::Sheet => self.repaint_sheet(&changed.path, changed.patch),
+            RefreshScope::Member => {
+                let patch = changed.patch.into();
+                self.refresh_slots_from_engine(&changed.path, false, patch, false);
+                return false;
+            }
         }
         true
     }

@@ -179,7 +179,14 @@ impl Signex {
             .active_engine()
             .and_then(|engine| direction.top(engine))
         {
-            let stepped = self.apply_grouped_step(group, direction, update_selection_info);
+            let undo = direction == StepDirection::Undo;
+            let stepped = if self.undo_group_has_boards(group) {
+                self.step_board_undo_group(group, undo)
+            } else {
+                let undocked = self.undocked_sheet_paths();
+                let step = self.document_state.step_undo_group(group, undo, &undocked);
+                self.project_group_step(step, update_selection_info)
+            };
             // An agent's step says what it was (docs/AGENT_EDITS.md, "Undo").
             if stepped && let Some(label) = self.document_state.agent_edits.step_text(group) {
                 let verb = if direction == StepDirection::Undo {

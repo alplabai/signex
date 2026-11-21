@@ -8,6 +8,9 @@
 //! this module off the GUI's state and the diagnostics log.
 
 mod execute;
+mod group;
+#[cfg(test)]
+mod group_tests;
 mod notices;
 #[cfg(test)]
 mod tests;
@@ -21,6 +24,8 @@ use crate::app::core::event::{
     ChangeCause, CoreEvent, DocumentChanged, Notice, NoticeLevel, read_only_refusal_message,
 };
 use crate::app::core::mutation_outcome::MutationOutcome;
+
+pub(crate) use group::GroupStep;
 
 /// An edit run by the core half: its outcome, the refusal text of a failed
 /// one, and the events to project.
