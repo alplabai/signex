@@ -114,6 +114,14 @@ impl Default for SnapOptions {
     }
 }
 
+impl SnapOptions {
+    /// Whether the cursor rounds to the grid: the Grids switch of the Snap
+    /// menu and Properties is on, and the step is usable.
+    pub fn snaps_to_grid(&self) -> bool {
+        self.grid && self.snap_to_grids && self.grid_step_mm > 1e-9
+    }
+}
+
 /// v0.18.19 — Altium grid display style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GridDisplay {

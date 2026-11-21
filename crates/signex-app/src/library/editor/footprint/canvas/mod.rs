@@ -34,6 +34,8 @@ mod layout_keys_tests;
 #[cfg(test)]
 mod resize_tests;
 #[cfg(test)]
+mod snap_path_tests;
+#[cfg(test)]
 mod tests;
 
 // `draw_pads_tool_preview` is the one sub-draw still invoked inline by

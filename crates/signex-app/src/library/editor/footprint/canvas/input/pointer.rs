@@ -12,10 +12,14 @@ use iced::widget::canvas;
 use iced::{Point, Rectangle};
 
 use crate::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+use signex_sketch::entity::EntityKind;
+use signex_sketch::id::SketchEntityId;
+
 use crate::library::editor::footprint::snap;
+use crate::library::editor::footprint::snap_objects::ObjectTargets;
 use crate::library::messages::{EditorMsg, FootprintEditorMsg, LibraryMessage};
 
-use super::super::hit_test::{sketch_glyph_at, sketch_snap};
+use super::super::hit_test::{sketch_glyph_at, sketch_snap, sketch_snap_except};
 use super::super::{
     DRAG_THRESHOLD_PX, DragState, FootprintCanvas, FootprintCanvasState, silk_f_hit_at,
 };
@@ -202,11 +206,43 @@ impl FootprintCanvas<'_> {
         } else {
             let point_hit = sketch_snap(self.sketch, cstate, raw_world);
             let infer = self.snap_infers(cstate);
-            let result =
-                snap::snap_cursor_with(raw_world, self.sketch, self.state, point_hit, infer);
+            let result = snap::snap_cursor_among(
+                raw_world,
+                self.sketch,
+                self.state,
+                point_hit,
+                infer,
+                Some(self.object_targets(None)),
+            );
             cstate.last_snap = Some(result);
             result.pos
         }
+    }
+
+    /// The footprint objects this canvas snaps to; `moving_pad` is left out.
+    fn object_targets(&self, moving_pad: Option<usize>) -> ObjectTargets<'_> {
+        ObjectTargets {
+            silk_f: self.silk_f,
+            silk_b: self.silk_b,
+            moving_pad,
+        }
+    }
+
+    /// The Points a drag carries with it, which it must not snap to.
+    fn dragged_points(&self, drag: Option<DragState>) -> [Option<SketchEntityId>; 2] {
+        let Some(drag) = drag else {
+            return [None, None];
+        };
+        if drag.sketch_point.is_some() {
+            return [drag.sketch_point, None];
+        }
+        drag.sketch_line
+            .and_then(|line| self.sketch?.entities.iter().find(|e| e.id == line))
+            .and_then(|e| match e.kind {
+                EntityKind::Line { start, end } => Some([Some(start), Some(end)]),
+                _ => None,
+            })
+            .unwrap_or([None, None])
     }
 
     /// Whether the cursor snap may infer: not while Ctrl is held with a
@@ -447,8 +483,9 @@ impl FootprintCanvas<'_> {
 
     /// v0.18.8 / v0.27 — resolve the move-tick world position. Select
     /// tools read the raw cursor EXCEPT while a drag is in flight
-    /// (edge-resize should respect Snap Options).
-    fn pointer_move_world(
+    /// (edge-resize should respect Snap Options). A drag snaps the grabbed
+    /// object's anchor, the cursor less the grab offset, and returns it.
+    pub(in crate::library::editor::footprint::canvas) fn pointer_move_world(
         &self,
         cstate: &mut FootprintCanvasState,
         cursor_pos: Point,
@@ -459,15 +496,19 @@ impl FootprintCanvas<'_> {
             && self.state.active_tool == SketchTool::Select)
             || (matches!(self.state.mode, EditorMode::Normal)
                 && self.state.pads_tool == PadsTool::Select);
-        let drag_active_for_snap = cstate
-            .drag
-            .as_ref()
-            .map(|d| d.sketch_line.is_some() || d.sketch_point.is_some() || d.pad_idx != usize::MAX)
-            .unwrap_or(false);
-        if select_mode_tick && !drag_active_for_snap {
+        let object_drag = cstate.drag.filter(|d| {
+            d.sketch_line.is_some() || d.sketch_point.is_some() || d.pad_idx != usize::MAX
+        });
+        if select_mode_tick && object_drag.is_none() {
             cstate.last_snap = None;
             raw_world
         } else {
+            let target = object_drag.map_or(raw_world, |d| {
+                (
+                    raw_world.0 - d.grab_offset_mm.0,
+                    raw_world.1 - d.grab_offset_mm.1,
+                )
+            });
             // A whole-pad drag must NOT snap the cursor to sketch
             // Points. A sketch-profile pad carries its outline as
             // sketch geometry that moves WITH the pad, so those Points
@@ -477,21 +518,25 @@ impl FootprintCanvas<'_> {
             // via `snap_cursor` still applies. Sketch-point and
             // sketch-line drags keep vertex snapping (that's the whole
             // point of dragging a vertex).
-            let pad_drag = cstate
-                .drag
-                .as_ref()
-                .map(|d| {
-                    d.pad_idx != usize::MAX && d.sketch_point.is_none() && d.sketch_line.is_none()
-                })
-                .unwrap_or(false);
+            let pad_drag = object_drag.is_some_and(|d| {
+                d.pad_idx != usize::MAX && d.sketch_point.is_none() && d.sketch_line.is_none()
+            });
             let point_hit = if pad_drag {
                 None
             } else {
-                sketch_snap(self.sketch, cstate, raw_world)
+                let carried = self.dragged_points(object_drag);
+                sketch_snap_except(self.sketch, cstate, target, &carried)
             };
             let infer = self.snap_infers(cstate);
-            let result =
-                snap::snap_cursor_with(raw_world, self.sketch, self.state, point_hit, infer);
+            let moving_pad = object_drag.filter(|_| pad_drag).map(|d| d.pad_idx);
+            let result = snap::snap_cursor_among(
+                target,
+                self.sketch,
+                self.state,
+                point_hit,
+                infer,
+                Some(self.object_targets(moving_pad)),
+            );
             cstate.last_snap = Some(result);
             result.pos
         }
@@ -563,16 +608,15 @@ impl FootprintCanvas<'_> {
                 return self.drag_tick_line(drag, line_id, sketch_ref, world);
             }
             if drag.moved && drag.pad_idx != usize::MAX {
-                let new_x = world.0 - drag.grab_offset_mm.0;
-                let new_y = world.1 - drag.grab_offset_mm.1;
+                // `world` is already the pad's snapped centre.
                 return Some(canvas::Action::publish(LibraryMessage::EditorEvent {
                     library_path: self.address.library_path.clone(),
                     table: self.address.table.clone(),
                     row_id: self.address.row_id,
                     msg: EditorMsg::Footprint(FootprintEditorMsg::MovePad {
                         idx: drag.pad_idx,
-                        x_mm: new_x,
-                        y_mm: new_y,
+                        x_mm: world.0,
+                        y_mm: world.1,
                     }),
                 }));
             }

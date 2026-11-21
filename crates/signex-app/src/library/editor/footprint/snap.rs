@@ -88,6 +88,9 @@ pub enum SnapKind {
     Midpoint(SketchEntityId),
     /// The centre of the sketch Circle or Arc with this id (mockup row 188).
     Centre(SketchEntityId),
+    /// A pad centre, track vertex, arc centre or the origin, in Pads mode.
+    /// See [`super::snap_objects`].
+    Object,
 }
 
 /// The constraint a drawing-tool click lands from the snap it took
@@ -214,6 +217,19 @@ pub fn snap_cursor_with(
     point_hit: Option<SketchEntityId>,
     infer: bool,
 ) -> SnapResult {
+    snap_cursor_among(raw, sketch, state, point_hit, infer, None)
+}
+
+/// [`snap_cursor_with`] that also reaches the footprint's own objects in
+/// Pads mode, the canvas's snap.
+pub fn snap_cursor_among(
+    raw: (f64, f64),
+    sketch: Option<&SketchData>,
+    state: &FootprintEditorState,
+    point_hit: Option<SketchEntityId>,
+    infer: bool,
+    objects: Option<super::snap_objects::ObjectTargets<'_>>,
+) -> SnapResult {
     // Snapping Off, or the status bar's global Snap toggle
     // (`global_snap_disabled`), turns every priority off.
     // `CurrentLayer` behaves as `AllLayers` until a layer-aware filter.
@@ -251,6 +267,11 @@ pub fn snap_cursor_with(
     // Priority 1.2 — the board under a board sketch (#2518). `None` on
     // a footprint sketch, which has no board.
     if let Some(hit) = super::snap_board::board_feature_snap(raw, state) {
+        return hit;
+    }
+
+    // Priority 1.25 — the footprint's own objects, in Pads mode only.
+    if let Some(hit) = objects.and_then(|o| super::snap_objects::object_snap(raw, state, o)) {
         return hit;
     }
 
@@ -332,7 +353,7 @@ pub fn snap_cursor_with(
             // the grid too, so a snapped point is on the axis and on the
             // grid at once. No-op when grid snap is disabled.
             let grid_snap = |v: f64| -> f64 {
-                if opts.grid && opts.grid_step_mm > 1e-9 {
+                if opts.snaps_to_grid() {
                     (v / opts.grid_step_mm).round() * opts.grid_step_mm
                 } else {
                     v
@@ -390,7 +411,7 @@ pub fn snap_cursor_with(
     // a hardcoded constant. Defends against zero/negative steps by
     // falling through to raw — a misconfigured step shouldn't crash
     // the canvas or move pads to the origin.
-    if opts.grid && opts.grid_step_mm > 1e-9 {
+    if opts.snaps_to_grid() {
         let step = opts.grid_step_mm;
         let snapped = ((raw.0 / step).round() * step, (raw.1 / step).round() * step);
         SnapResult {

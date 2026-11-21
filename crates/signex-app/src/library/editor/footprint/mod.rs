@@ -49,6 +49,7 @@ pub mod snap_board;
 #[cfg(test)]
 mod snap_board_tests;
 pub mod snap_menu;
+pub mod snap_objects;
 pub mod state;
 pub(crate) mod status;
 pub mod step_attach;
