@@ -533,7 +533,7 @@ instance rings of a selected grid or polar pattern come from the same walk
 (`signex_bake::pattern_slots`): each ring sits where the bake puts the pad,
 with the per-instance spacing and the sweep's written unit; a slot the
 suppression list holds back draws as suppressed, and a slot the mask drops
-has no ring. One walk for the plain bake as well is a follow-up.
+has no ring. One walk for the plain bake as well is a follow-up (#2689).
 
 ## Per-pad overrides {#per-pad-overrides}
 

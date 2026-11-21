@@ -144,7 +144,7 @@ message. The chrome catalog draws a sample of it.
   warning colour with the typed number when it was clamped. The drawing is
   not editable; values are edited in the fields. Not built yet: editing a
   value on the drawing and the junction and bus drag handles (follow-up
-  issue "Project tab previews: edit values on the drawing", to be filed).
+  issue "Project tab previews: edit values on the drawing", #2685).
 
 Each section but Variants shows its title and help line over its content in
 a column that scrolls inside the tab. Variants (mockup row 32) shows its
@@ -188,8 +188,7 @@ not an edit. An entry with no id takes its verdict from the run under its
 place in the list (`req::#1` for the first), the name the check gives it.
 
 Not built yet (follow-up issue "Requirements: variant and fitted parts for
-Part lifecycle, measured-from and a limit preview for Board size", to be
-filed): Part lifecycle's Variant and Fitted parts only fields, Board size's
+Part lifecycle, measured-from and a limit preview for Board size", #2686): Part lifecycle's Variant and Fitted parts only fields, Board size's
 Measured from, its preview with limit handles and the measured size on a
 passed card, and the net class note that edits are not checked yet.
 

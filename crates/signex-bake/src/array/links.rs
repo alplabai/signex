@@ -5,7 +5,7 @@
 //! A plain array without links or overrides still bakes through
 //! `bake_one_array`; this walk serves the arrays that have them, the
 //! mirrors and the canvas's instance slots (`slots.rs`). Folding the plain
-//! bake into one walk is a follow-up; see docs/FOOTPRINT_SKETCH.md,
+//! bake into one walk is a follow-up (#2689); see docs/FOOTPRINT_SKETCH.md,
 //! "Pattern links".
 
 use std::collections::BTreeMap;

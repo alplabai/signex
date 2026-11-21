@@ -47,7 +47,7 @@ undo is exact.
   room. A polygon room is packed into the box round it.
 - **Shape**: Rectangle ↔ Polygon. A rectangle becomes the polygon of its four
   corners; a polygon becomes the rectangle round it. Moving or adding polygon
-  corners on the canvas is not built yet.
+  corners on the canvas is not built yet (#2693).
 
 ## Place ▸ Room
 
@@ -170,9 +170,10 @@ byte for byte, and removing the last room writes the lower token again
 
 ## Not built yet
 
-- Dragging, adding or removing a polygon room's corners on the canvas.
+- Dragging, adding or removing a polygon room's corners on the canvas
+  (#2693).
 - Delete on a selected room (Properties edits it; Undo removes a room just
-  placed).
+  placed) (#2693).
 - From sheet names placements by the room made for them or a short id, not by
   their sheet file.
 - The Layers panel cannot hide rooms yet; the selection filter's Rooms chip
