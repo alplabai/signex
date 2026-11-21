@@ -338,6 +338,172 @@ fn a_flyout_reopened_with_its_tool_armed_closes_on_a_canvas_click() {
     probe(&|_, row| Point::new(row.x - 200.0, row.y + 120.0));
 }
 
+/// Wire armed with a segment in progress, the state a stray canvas
+/// right-release would cancel.
+fn drawing_a_wire(app: &mut Signex) {
+    let _ = app.update(Message::Tool(crate::app::ToolMessage::SelectTool(
+        Tool::Wire,
+    )));
+    app.interaction_state.active_canvas_mut().drawing_mode = true;
+}
+
+fn assert_still_drawing_a_wire(app: &Signex, messages: &[Message]) {
+    assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    assert!(
+        app.interaction_state.active_canvas().drawing_mode,
+        "the drawing was cancelled: {messages:?}"
+    );
+    assert!(
+        app.interaction_state.context_menu.is_none(),
+        "the canvas menu opened: {messages:?}"
+    );
+}
+
+#[test]
+fn a_right_click_outside_the_flyout_closes_it_and_opens_no_canvas_menu() {
+    let (mut app, main) = app();
+    let mut ev = EventLoop::new();
+    let trigger = trigger_centre(&app, ActiveBarMenu::TextTools);
+    ev.click(&mut app, main, trigger, Button::Right);
+    assert_eq!(
+        app.interaction_state.active_bar_menu,
+        Some(ActiveBarMenu::TextTools)
+    );
+    ev.messages.clear();
+    let target = outside(&app);
+    ev.click(&mut app, main, target, Button::Right);
+    assert!(
+        app.interaction_state.active_bar_menu.is_none(),
+        "the flyout stayed open: {:?}",
+        ev.messages
+    );
+    assert!(
+        app.interaction_state.context_menu.is_none(),
+        "the closing right-click opened the canvas menu: {:?}",
+        ev.messages
+    );
+}
+
+#[test]
+fn a_right_click_outside_the_flyout_leaves_the_armed_tool() {
+    let (mut app, main) = app();
+    drawing_a_wire(&mut app);
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::ToggleMenu(
+        ActiveBarMenu::TextTools,
+    )));
+    let mut ev = EventLoop::new();
+    let target = outside(&app);
+    ev.click(&mut app, main, target, Button::Right);
+    assert!(
+        app.interaction_state.active_bar_menu.is_none(),
+        "the flyout stayed open: {:?}",
+        ev.messages
+    );
+    assert_still_drawing_a_wire(&app, &ev.messages);
+}
+
+/// #2715: the bar takes the press, and its release must not reach the canvas.
+#[test]
+fn a_right_click_on_a_bar_button_leaves_the_armed_wire_tool() {
+    let (mut app, main) = app();
+    drawing_a_wire(&mut app);
+    let mut ev = EventLoop::new();
+    let trigger = trigger_centre(&app, ActiveBarMenu::TextTools);
+    ev.click(&mut app, main, trigger, Button::Right);
+    assert_eq!(
+        app.interaction_state.active_bar_menu,
+        Some(ActiveBarMenu::TextTools),
+        "the flyout did not open: {:?}",
+        ev.messages
+    );
+    assert_still_drawing_a_wire(&app, &ev.messages);
+}
+
+/// A board in the main window with its Via tool armed.
+fn board_app_with_tool_armed() -> (Signex, iced::window::Id) {
+    let (mut app, main) = app();
+    let board: signex_types::pcb::PcbBoard =
+        serde_json::from_value(serde_json::json!({ "uuid": uuid::Uuid::nil() })).expect("a board");
+    let path = std::env::temp_dir().join("active_bar_dismiss.snxpcb");
+    app.open_pcb_tab(path, "board".into(), board);
+    let via = crate::keymap::AppCommandId::new("place_board_via").expect("a command");
+    let _ = app.update(Message::Menu(crate::menu_bar::MenuMessage::Command(via)));
+    assert!(app.interaction_state.pcb_tool.is_some(), "the tool armed");
+    (app, main)
+}
+
+/// A point on a board bar button that opens a dropdown, and that dropdown,
+/// found by pressing along the bar's row through the real view.
+fn board_bar_trigger(app: &Signex, main: iced::window::Id) -> (Point, crate::app::PcbBarMenu) {
+    let canvas = app.canvas_bounds();
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    let y = canvas.y
+        + crate::active_bar::bar_top_margin()
+        + crate::active_bar::bar_height_for(&metrics) / 2.0;
+    let centre = canvas.x + canvas.width / 2.0;
+    (0..60)
+        .flat_map(|step| {
+            let reach = step as f32 * 10.0;
+            [centre + reach, centre - reach]
+        })
+        .find_map(|x| {
+            let at = Point::new(x, y);
+            messages_for_events(app.view(main), WINDOW, at, &[press(Button::Right)])
+                .into_iter()
+                .find_map(|message| match message {
+                    Message::Pcb(crate::app::PcbMsg::Bar(crate::app::PcbBarMsg::MenuToggled(
+                        menu,
+                    ))) => Some((at, menu)),
+                    _ => None,
+                })
+        })
+        .expect("a board bar button with a dropdown")
+}
+
+/// #2715 on the board: the button's flyout opens and the tool stays armed.
+#[test]
+fn a_right_click_on_a_board_bar_button_leaves_the_armed_tool() {
+    let (mut app, main) = board_app_with_tool_armed();
+    let (trigger, menu) = board_bar_trigger(&app, main);
+    let mut ev = EventLoop::new();
+    ev.click(&mut app, main, trigger, Button::Right);
+    assert_eq!(
+        app.interaction_state.pcb_bar_menu,
+        Some(menu),
+        "the flyout did not open: {:?}",
+        ev.messages
+    );
+    assert!(
+        app.interaction_state.pcb_tool.is_some(),
+        "the release ended the tool: {:?}",
+        ev.messages
+    );
+    assert!(app.interaction_state.context_menu.is_none());
+}
+
+#[test]
+fn a_right_click_outside_the_board_flyout_closes_it_and_leaves_the_tool() {
+    let (mut app, main) = board_app_with_tool_armed();
+    let (trigger, menu) = board_bar_trigger(&app, main);
+    let mut ev = EventLoop::new();
+    ev.click(&mut app, main, trigger, Button::Right);
+    assert_eq!(app.interaction_state.pcb_bar_menu, Some(menu));
+    ev.messages.clear();
+    let target = outside(&app);
+    ev.click(&mut app, main, target, Button::Right);
+    assert_eq!(
+        app.interaction_state.pcb_bar_menu, None,
+        "the flyout stayed open: {:?}",
+        ev.messages
+    );
+    assert!(
+        app.interaction_state.pcb_tool.is_some(),
+        "the closing right-click ended the tool: {:?}",
+        ev.messages
+    );
+    assert!(app.interaction_state.context_menu.is_none());
+}
+
 /// Esc closes the board's Active Bar dropdown too.
 #[test]
 fn esc_closes_the_board_active_bar_dropdown() {
