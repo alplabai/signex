@@ -292,6 +292,15 @@ release PR then still adds by hand the headline, the install block and the
 closing `[Full changelog](…compare/v<prev>...v<this>)` line that the Format
 section of `CHANGELOG.md` requires.
 
+### Translations
+
+`README.zh-CN.md` is the Simplified Chinese translation of `README.md`. A change
+that edits `README.md` — the version, the status note, the download section or
+the licence — also updates `README.zh-CN.md` in the same PR. If you cannot
+translate the change, add a line at the top of `README.zh-CN.md` saying
+`> 本译文落后于英文 README，自 <version> 起。` so readers know how current it is;
+nobody is blocked on Chinese.
+
 ### Commit Messages
 
 We use conventional-ish commits:
