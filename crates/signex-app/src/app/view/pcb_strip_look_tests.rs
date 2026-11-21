@@ -149,6 +149,23 @@ fn the_strip_keeps_a_lane_for_the_scrollbar_under_the_tabs() {
     }
 }
 
+/// Selecting a layer does not change the width of its tab or move the next.
+#[test]
+fn the_selected_tab_keeps_the_width_of_its_name() {
+    let board = board(&["TopCopper", "BottomCopper", "TopSilkscreen"]);
+    let tokens = theme_tokens(ThemeId::GraphiteDark);
+    let window = Size::new(1200.0, STRIP_HEIGHT);
+    let at = |active: PcbLayer, name: &str| {
+        let mut view = PcbLayerView::default();
+        view.set_active(active);
+        let texts = lay_out_texts(strip(&board, &view, false, &tokens), window);
+        texts.iter().find(|t| t.text == name).expect(name).bounds
+    };
+    let top = PcbLayer::Copper(CopperLayer::Top);
+    assert_eq!(at(top, "Bottom Layer"), at(BOTTOM, "Bottom Layer"));
+    assert_eq!(at(top, "Top Layer"), at(BOTTOM, "Top Layer"));
+}
+
 /// A line divides two neighbouring tabs, in both Graphite themes.
 #[test]
 fn a_visible_line_divides_neighbouring_tabs() {

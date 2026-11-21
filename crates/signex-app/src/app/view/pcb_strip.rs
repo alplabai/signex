@@ -14,7 +14,7 @@ use iced::border::Side;
 use iced::widget::button::{Status, Style as ButtonStyle};
 use iced::widget::scrollable::Direction;
 use iced::widget::{Row, Space, container, mouse_area, row, scrollable};
-use iced::{Background, Border, Color, Element, Font, Length, Theme, Widget as _};
+use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_renderer::pcb::{
     LayerSetId, PcbLayerView, board_copper_layers, panel_order_layers, used_layers,
@@ -322,9 +322,8 @@ fn tab_divider<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         .boxed()
 }
 
-/// One tab: swatch and name; the active layer's
-/// tab is filled accent-soft, in medium weight, with the accent bar along
-/// its top.
+/// One tab: swatch and name; the active layer's tab is filled accent-soft
+/// with the accent bar along its top.
 fn layer_tab<'a>(
     label: Label<'static>,
     swatch: iced::Color,
@@ -339,16 +338,12 @@ fn layer_tab<'a>(
     } else {
         ti(tokens.text_secondary)
     };
-    let mut name = text(label)
+    // One font for every tab: a heavier selected name would widen its tab
+    // and shift the ones after it.
+    let name = text(label)
         .size(TS.body)
         .color(ink)
         .wrapping(text::Wrapping::None);
-    if selected {
-        name = name.font(Font {
-            weight: iced::font::Weight::Medium,
-            ..Font::DEFAULT
-        });
-    }
     let content = row![
         container(Space::new())
             .width(SWATCH)
