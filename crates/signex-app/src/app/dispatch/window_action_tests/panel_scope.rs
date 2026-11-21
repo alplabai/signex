@@ -311,6 +311,33 @@ fn a_click_in_main_does_not_continue_a_wire_of_another_window() {
     );
 }
 
+/// A window's click takes over from a wire in main: main stops drawing it.
+#[test]
+fn a_click_in_a_window_ends_the_wire_main_was_drawing() {
+    use crate::canvas::CanvasEvent::Clicked;
+    let (mut app, paths) = three_sheets();
+    let window = undock(&mut app, &paths[1]);
+    app.interaction_state.current_tool = crate::app::Tool::Wire;
+    let _ = app.update(Message::CanvasEvent(Clicked {
+        world_x: 10.16,
+        world_y: 10.16,
+    }));
+    assert!(app.interaction_state.canvas.drawing_mode);
+    let _ = app.update(Message::CanvasEventInWindow {
+        window_id: window,
+        event: Clicked {
+            world_x: 50.8,
+            world_y: 50.8,
+        },
+    });
+    let state = &app.interaction_state;
+    assert_eq!(state.wire_window, Some(window));
+    assert!(state.canvas.wire_preview.is_empty());
+    assert!(!state.canvas.drawing_mode);
+    assert!(state.canvases[&window].drawing_mode);
+    assert!(app.document_state.engines[&paths[0]].document().wires.is_empty());
+}
+
 /// Two footprints, A in main and B in a window.
 fn two_footprints() -> (Signex, PathBuf, PathBuf, iced::window::Id) {
     let mut app = app_with_main();

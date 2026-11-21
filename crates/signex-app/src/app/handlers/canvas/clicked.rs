@@ -291,10 +291,9 @@ impl Signex {
         if !state.wire_drawing || state.wire_window == state.acting_window {
             return;
         }
-        // While a window acts, its slot and main's are swapped, so main's
-        // slot is filed under the acting window.
-        let owner_slot = state.wire_window.or(state.acting_window);
-        if let Some(slot) = owner_slot.and_then(|id| state.canvases.get_mut(&id)) {
+        // Main's own slot is out of reach while a window acts: `run_in_window`
+        // clears it when it swaps back.
+        if let Some(slot) = state.wire_window.and_then(|id| state.canvases.get_mut(&id)) {
             slot.wire_preview.clear();
             slot.drawing_mode = false;
         }
