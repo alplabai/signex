@@ -151,7 +151,8 @@ fn a_turned_port_draws_its_text_past_the_turned_head() {
     let app = app_with_port(port);
     // Turned a quarter counter-clockwise, the head points left.
     let [tx, ty] = drawn_text_at(doc(&app));
-    assert!(f64::from(tx) < AT.0 - 2.54, "text at x {tx}");
+    // Past the head: every power-port stem is one 1.27 mm step (Caner, 2026-11-21).
+    assert!(f64::from(tx) < AT.0 - 1.27, "text at x {tx}");
     assert!((f64::from(ty) - AT.1).abs() < 1e-3, "text at y {ty}");
 }
 
