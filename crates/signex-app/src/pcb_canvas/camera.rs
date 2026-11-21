@@ -95,7 +95,8 @@ impl BoardCamera {
     }
 
     pub fn zoom_by_factor(&mut self, at: Point, factor: f32) -> bool {
-        self.camera.zoom_by_factor_up_to(at, factor, MAX_BOARD_SCALE)
+        self.camera
+            .zoom_by_factor_up_to(at, factor, MAX_BOARD_SCALE)
     }
 
     pub fn apply_scroll(

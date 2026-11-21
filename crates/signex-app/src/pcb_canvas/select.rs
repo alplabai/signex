@@ -347,9 +347,8 @@ impl PcbSelectionState {
                 (None, Some((footprint, field))) => {
                     self.shapes_of(|item| item == ItemRef::FootprintText { footprint, field })
                 }
-                (None, None) if !carry.vias.is_empty() => self.shapes_of(
-                    |item| matches!(item, ItemRef::Via(id) if carry.vias.contains(&id)),
-                ),
+                (None, None) if !carry.vias.is_empty() => self
+                    .shapes_of(|item| matches!(item, ItemRef::Via(id) if carry.vias.contains(&id))),
                 (None, None) => self.footprint_shapes(board, &carry.footprints),
             };
             highlight.ghost = shapes

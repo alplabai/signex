@@ -165,4 +165,3 @@ pub fn leader_label(end: Point, anchor: Anchor, metrics: &Metrics) -> LabelPlace
         baseline: Baseline::Centre,
     }
 }
-

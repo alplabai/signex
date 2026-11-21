@@ -523,7 +523,12 @@ fn the_layer_dropdown_lists_the_sets_and_a_pick_shows_the_set() {
     open_dropdown(&mut app, main);
     let card = app.board_popover_card(main).expect("the dropdown");
     let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1600.0, 900.0));
-    for label in ["All Layers", "Signal Layers", "Save current as set...", "Manage sets..."] {
+    for label in [
+        "All Layers",
+        "Signal Layers",
+        "Save current as set...",
+        "Manage sets...",
+    ] {
         assert!(texts.iter().any(|t| t.text == label), "{label}");
     }
     for message in dropdown_row_click(&app, main, "Signal Layers") {

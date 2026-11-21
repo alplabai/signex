@@ -282,9 +282,7 @@ fn size_row<'a>(
     } else {
         mm_field(common, field, value, look)
     };
-    let mut value_row = row![input]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center);
+    let mut value_row = row![input].spacing(SP.s).align_y(iced::Alignment::Center);
     if own {
         let icon = iced::widget::svg(crate::icons::icon_undo(look.ctx.theme_id))
             .width(Length::Fixed(TS.label))

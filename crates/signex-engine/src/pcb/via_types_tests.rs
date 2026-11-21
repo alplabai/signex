@@ -207,7 +207,11 @@ fn a_micro_type_makes_a_through_via_micro() {
 fn a_finished_hole_gives_the_drill_that_leaves_it_after_plating() {
     assert_eq!(ViaTypeDef::drill_for_finished(0.25), 0.3);
     assert_eq!(ViaTypeDef::drill_for_finished(0.3), 0.35);
-    assert_eq!(ViaTypeDef::drill_for_finished(0.0), 0.0, "left to be refused");
+    assert_eq!(
+        ViaTypeDef::drill_for_finished(0.0),
+        0.0,
+        "left to be refused"
+    );
     assert_eq!(ViaTypeDef::drill_for_finished(-0.01), -0.01);
 }
 
