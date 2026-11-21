@@ -382,17 +382,7 @@ pub(crate) fn view<'a>(
     }
 
     col = col.push(title(ids::PANELS_COMPONENTS_DETAILS_PARAMETERS));
-    if d.parameters.is_empty() {
-        col = col.push(
-            text(t!(i18n, ids::PANELS_COMPONENTS_DETAILS_NO_PARAMETERS))
-                .size(HINT_TEXT_SIZE)
-                .color(muted)
-                .boxed(),
-        );
-    }
-    for (name, value) in &d.parameters {
-        col = col.push(graphite::parameter_row(name, value, tokens));
-    }
+    col = col.push(graphite::parameter_table(&d.parameters, tokens, i18n));
     col = col.push(Space::new().height(SP.m).boxed());
 
     scrollable(container(col).padding([SP.s, 10.0]).width(Length::Fill))
