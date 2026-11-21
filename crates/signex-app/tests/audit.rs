@@ -17,11 +17,15 @@ mod settle_support;
 
 // Shared with `graphite_screens`, which does not use every helper.
 #[allow(dead_code)]
+#[path = "audit/fixture.rs"]
 mod fixture;
 #[allow(dead_code)]
+#[path = "audit/render.rs"]
 mod render;
 #[allow(dead_code)]
+#[path = "audit/surface.rs"]
 mod surface;
+#[path = "audit/surfaces/mod.rs"]
 mod surfaces;
 
 use signex_types::theme::ThemeId;

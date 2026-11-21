@@ -13,8 +13,8 @@
 //! editor).
 
 use crate::fixture::{self, Fixture};
-use crate::{render, settle_support};
 use crate::surface::{Surface, WindowSel};
+use crate::{render, settle_support};
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_app::dock::{DockMessage, PanelPosition};
 use signex_app::library::LibraryMessage;
@@ -56,7 +56,10 @@ pub fn rows() -> Vec<Surface> {
             title: "Symbol editor Properties (symbol / pin / graphic)",
             open: |app, r, fx| {
                 fixture::mount_stock(app, fx)?;
-                settle_support::settle(app, Message::File(FileMsg::Opened(Some(fx.symbol.clone()))));
+                settle_support::settle(
+                    app,
+                    Message::File(FileMsg::Opened(Some(fx.symbol.clone()))),
+                );
                 let _ = render::draw_main(r, app);
                 Ok(())
             },
