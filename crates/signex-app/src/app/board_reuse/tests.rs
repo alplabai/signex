@@ -762,3 +762,29 @@ fn a_menu_place_after_a_failed_read_is_refused_without_reading_again() {
     let blocks = &app.document_state.reuse_blocks;
     assert!(blocks.read_failure(dir.path()).is_some(), "not read again");
 }
+
+/// A block kept in the Model while its folder is marked to be read again (a
+/// second read failed, then a board menu opened) is placed from the Model by
+/// a menu Place, as before the translator: the menu waits for no read and
+/// leaves no answer parked for an agent.
+#[test]
+fn a_menu_place_of_a_kept_block_while_a_read_is_owed_places_it_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_with_board(dir.path());
+    save_channel_a(&mut app);
+    let failed = super::BlocksOnDisk {
+        error: Some("the read did not finish".into()),
+        ..Default::default()
+    };
+    let blocks = &mut app.document_state.reuse_blocks;
+    blocks.land(dir.path(), &failed);
+    blocks.retry_failed_read(dir.path());
+    let folder = dir.path().join("reuse-blocks");
+    std::fs::remove_dir_all(&folder).unwrap();
+    std::fs::write(&folder, b"x").unwrap();
+
+    let said = place_on_u2(&mut app, "R1-U1");
+
+    assert_eq!(at(&app, &board, R2), (54.0, 50.0), "placed, {said:?}");
+    assert!(app.document_state.agent_edits.finished.is_empty());
+}

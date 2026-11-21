@@ -519,9 +519,7 @@ fn an_agent_swaps_pins_of_the_component_its_uuid_names() {
     );
 }
 
-/// A refusal of the operands reaches Messages in the menu's words; one from
-/// the board or the schematic, which `swap_part` said already, is not said
-/// twice.
+/// A refusal of the operands reaches Messages in the menu's words.
 #[test]
 fn a_menu_swap_refused_by_its_operands_says_why_in_messages() {
     use signex_engine::pcb::pad_swap::SwapKind;
@@ -538,11 +536,35 @@ fn a_menu_swap_refused_by_its_operands_says_why_in_messages() {
         crate::diagnostics::logged_count(&unknown.to_string()),
         said + 1
     );
+}
 
-    let marker = "swap-said-already-2326";
-    let already = CommandOutcome::Disabled {
-        reason: Translatable::new(ids::PCB_PART_SWAP_WHY).arg("why", marker),
-    };
-    app.say_part_swap_refusal(SwapKind::Pins, &already);
-    assert_eq!(crate::diagnostics::logged_count(marker), 0);
+/// Pad and pin 1 numbered "1 ": the menu sends the pad numbers as they are,
+/// so it swaps them as before the translator, where an agent's `pins` is
+/// trimmed.
+#[test]
+fn swap_pins_from_the_menu_on_a_pad_number_with_a_space_swaps_them() {
+    let mut spaced = board();
+    spaced.footprints[0].pads[0].number = "1 ".into();
+    let mut part = sheet();
+    if let Some(lib) = part.lib_symbols.get_mut("DUAL") {
+        lib.pins[0].pin.number = "1 ".into();
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[SHEET]);
+    app.ui_state.first_run_tour_open = false;
+    let sheet_path = dir.path().join(SHEET);
+    open_with(&mut app.document_state, &sheet_path, part);
+    app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), spaced);
+
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 9.0, 10.0, ClickMode::Add);
+    run(&mut app, "swap_pins");
+
+    assert!(translator::ran("swap_pins"));
+    assert_eq!(
+        pad_nets(&app, &path),
+        nets(&[("1 ", "B"), ("2", "A"), ("3", "C"), ("4", "D")])
+    );
 }

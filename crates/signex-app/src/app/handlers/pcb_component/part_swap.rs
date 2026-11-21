@@ -153,19 +153,18 @@ impl Signex {
     }
 
     /// Say in Messages why the menu's swap did nothing, when `outcome` is a
-    /// refusal of its operands: one from the board or the schematic
-    /// (`pcb-part-swap-why`) was said by `swap_part` already.
+    /// refusal: of its operands, or of the board or the schematic, which
+    /// `swap_part` leaves to the menu.
     pub(super) fn say_part_swap_refusal(&self, kind: SwapKind, outcome: &CommandOutcome) {
-        if let CommandOutcome::Disabled { reason } = outcome
-            && reason.id() != Some(ids::PCB_PART_SWAP_WHY)
-        {
+        if let CommandOutcome::Disabled { reason } = outcome {
             let why = reason.render(&self.ui_state.i18n);
             self.refuse_part_swap(kind, &why);
         }
     }
 
     /// Swap `request` on `footprint` of `board` and its schematic part, as
-    /// one undo step. A refusal is said in Messages and returned.
+    /// one undo step. A refusal is returned, and said in Messages unless the
+    /// board menu runs it (`agent.from_view`), which says it itself.
     pub(crate) fn swap_part(
         &mut self,
         board: &Path,
@@ -174,7 +173,9 @@ impl Signex {
     ) -> Result<PartSwapReport, String> {
         let kind = request.kind();
         let result = self.run_part_swap(board, footprint, request);
-        if let Err(why) = &result {
+        if let Err(why) = &result
+            && !self.agent.from_view
+        {
             self.refuse_part_swap(kind, why);
         }
         result

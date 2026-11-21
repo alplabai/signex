@@ -240,12 +240,11 @@ impl Signex {
             CommandOutcome::Answered(answer) => {
                 match serde_json::from_value::<ToolReport>(answer) {
                     Ok(report) => Ok(report),
-                    // The edit has landed: say so, never a refusal.
+                    // The edit has landed, so it is never said as a refusal.
+                    // The handler builds the report from `ToolReport`, so
+                    // this cannot fail outside a bug.
                     Err(error) => {
                         debug_assert!(false, "{command}: unreadable report: {error}");
-                        crate::diagnostics::log_warning(format!(
-                            "{command} ran, but what it did could not be read: {error}"
-                        ));
                         return task;
                     }
                 }

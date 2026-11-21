@@ -7,7 +7,6 @@
 use iced::Task;
 use serde_json::json;
 use signex_engine::pcb::placement;
-use signex_i18n::{Translatable, ids};
 
 use super::part_swap::SwapRequest;
 use crate::app::command::{CommandArgs, CommandOutcome, OperandValue, component_by_uuid};
@@ -20,16 +19,17 @@ fn refused(reason: impl Into<String>) -> Ran {
     (CommandOutcome::disabled(reason), Task::none())
 }
 
-/// The two members of operand `name`, written `a,b`.
-fn pair(args: &CommandArgs, name: &str) -> Result<(String, String), String> {
+/// The two members of operand `name`, written `a,b`, trimmed; the board
+/// menu (`from_view`) sends the pad numbers as they are, spaces included.
+fn pair(args: &CommandArgs, name: &str, from_view: bool) -> Result<(String, String), String> {
     let text = match args.operand(name) {
         Some(OperandValue::Text(text)) => text.as_str(),
         _ => return Err(format!("needs the operand `{name}`, written `a,b`")),
     };
     let members: Vec<&str> = text
         .split(',')
-        .map(str::trim)
-        .filter(|m| !m.is_empty())
+        .filter(|m| !m.trim().is_empty())
+        .map(|m| if from_view { m } else { m.trim() })
         .collect();
     match members.as_slice() {
         [a, b] => Ok(((*a).to_string(), (*b).to_string())),
@@ -73,23 +73,19 @@ fn swap(app: &mut Signex, args: &CommandArgs, request: Result<SwapRequest, Strin
             answer["document"] = json!(board.display().to_string());
             (CommandOutcome::Answered(answer), Task::none())
         }
-        // `swap_part` said it in Messages; the id tells the menu so.
-        Err(why) => {
-            let reason = Translatable::new(ids::PCB_PART_SWAP_WHY).arg("why", why);
-            (CommandOutcome::Disabled { reason }, Task::none())
-        }
+        Err(reason) => refused(reason),
     }
 }
 
 /// `swap_pins document=<board> (ids=<uuid> | designator=<ref>) pins=<a>,<b>`.
 pub(crate) fn swap_pins(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let request = pair(args, "pins").map(|(a, b)| SwapRequest::Pins(a, b));
+    let request = pair(args, "pins", app.agent.from_view).map(|(a, b)| SwapRequest::Pins(a, b));
     swap(app, args, request)
 }
 
 /// `swap_gates document=<board> (ids=<uuid> | designator=<ref>) units=<a>,<b>`.
 pub(crate) fn swap_gates(app: &mut Signex, args: &CommandArgs) -> Ran {
-    let request = pair(args, "units").and_then(|(a, b)| {
+    let request = pair(args, "units", false).and_then(|(a, b)| {
         let unit = |text: &str| {
             text.parse::<u32>()
                 .ok()

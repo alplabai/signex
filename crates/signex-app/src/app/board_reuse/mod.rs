@@ -350,8 +350,8 @@ impl Signex {
             ("ids", OperandValue::Text(ids.join(","))),
         ];
         let (outcome, task) = translator::run(self, "save_board_reuse_block", &board, operands);
-        // Answered: the write landing says it. Deferred cannot come, the
-        // blocks are read above; were it to, the read runs it again.
+        // Answered: the write landing says it. Deferred cannot come: the
+        // blocks are read above and the handler reads nothing for the menu.
         if let CommandOutcome::Disabled { reason } = outcome {
             let why = reason.render(&self.ui_state.i18n);
             self.refuse_reuse(command_ids::CMD_MENU_SAVE_BOARD_REUSE_BLOCK, &why);
@@ -434,8 +434,8 @@ impl Signex {
             ("ids", OperandValue::Targets(vec![anchor])),
         ];
         let (outcome, task) = translator::run(self, "place_board_reuse_block", &board, operands);
-        // Answered: `place_reuse_block` says it. Deferred cannot come while
-        // the block is in the Model, unless a failed read left it there.
+        // Answered: `place_reuse_block` says it. Deferred cannot come: the
+        // handler reads nothing for the menu (`agent.from_view`).
         if let CommandOutcome::Disabled { reason } = outcome {
             let why = reason.render(&self.ui_state.i18n);
             self.refuse_reuse(command_ids::CMD_MENU_PLACE_BOARD_REUSE_BLOCK, &why);

@@ -80,6 +80,7 @@ pub(crate) fn run(
     // The person's command, not an agent's: every open document is in
     // reach (`document_entries`) and no agent undo step wraps it.
     let serving = std::mem::replace(&mut app.agent.serving, false);
+    let from_view = std::mem::replace(&mut app.agent.from_view, true);
     let ran = match document_target(app, document) {
         Some(target) => {
             let mut values =
@@ -97,6 +98,7 @@ pub(crate) fn run(
         None => (not_available(), Task::none()),
     };
     app.agent.serving = serving;
+    app.agent.from_view = from_view;
     let (outcome, task) = ran;
     let outcome = match outcome {
         CommandOutcome::Answered(_)

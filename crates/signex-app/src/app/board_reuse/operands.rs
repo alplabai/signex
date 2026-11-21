@@ -59,13 +59,15 @@ fn board_items(board: &PcbBoard, ids: &str) -> Result<Vec<BoardItemId>, String> 
 
 /// The project's blocks of `board`, read first when they are not read yet:
 /// then the command `id` runs again, as the caller that sent it, when they
-/// land (`Deferred`). `None` when they are read.
+/// land (`Deferred`). `None` when they are read, or when the board menu
+/// runs it (`from_view`): the menu reads the blocks itself, or acts on those
+/// it lists, as before the translator.
 fn read_first(app: &mut Signex, board: &Path, id: &str, args: &CommandArgs) -> Option<Ran> {
     let folder = match app.reuse_block_folder(board) {
         Ok(folder) => folder,
         Err(reason) => return Some(refused(reason)),
     };
-    if !app.retry_and_need_read(&folder) {
+    if app.agent.from_view || !app.retry_and_need_read(&folder) {
         return None;
     }
     let Ok(command) = AppCommandId::new(id) else {

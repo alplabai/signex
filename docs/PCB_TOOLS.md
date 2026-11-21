@@ -1061,8 +1061,9 @@ again on another channel of the same circuit, with its tracks and vias.
   block of the project, live with one unlocked component selected: the
   anchor. The project's blocks are read once, when a board menu first opens.
   The row closes the menu and acts on the board of the window it was in,
-  around the clicked anchor by its uuid; a block the menu cannot find in
-  the blocks read is refused at once, without reading them again.
+  around the clicked anchor by its uuid. It reads no blocks: the block kept
+  in memory is placed at once, and a missing one, or a failed read, is
+  refused at once.
   `place_board_reuse_block document=<board> name=<name> ids=<uuid>
   [degrees=<turn>]` does the same; the anchor is named by `ids` or by
   `designator=<ref>`, exactly one, as for a pin swap. While the project's
