@@ -19,7 +19,7 @@ use signex_types::part_swap::SwapGroups;
 use signex_types::schematic::{LibSymbol, SchematicSheet, Symbol};
 use uuid::Uuid;
 
-use crate::app::command::{OperandValue, translator};
+use crate::app::command::{CommandOutcome, OperandValue, translator};
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, PartSwapMsg, Signex, UndoGroupKind};
 
@@ -119,9 +119,10 @@ impl Signex {
     }
 
     /// Run the swap `request` of the menu through the command's operand
-    /// handler (`command::translator`), named by designator and by pad or
-    /// unit numbers. It is planned here first, so a refusal reads as the
-    /// menu's always did and the gates of two pads are known as units.
+    /// handler (`command::translator`), on the clicked component by its uuid
+    /// (`ids`) and by pad or unit numbers. It is planned here first, so a
+    /// refusal reads as the menu's always did and the gates of two pads are
+    /// known as units.
     /// shortcut: the plan is built twice, here and in the handler; drop
     /// this one if the handler ever takes pads.
     fn translate_part_swap(
@@ -131,34 +132,36 @@ impl Signex {
         request: &SwapRequest,
     ) -> Task<Message> {
         let kind = request.kind();
-        let operands = self
-            .plan_part_swap(board, footprint, request)
-            .and_then(|plan| {
-                let designator = translator::designator_of(self, board, footprint)?;
-                let pair = match kind {
-                    SwapKind::Pins => "pins",
-                    SwapKind::Gates => "units",
-                };
-                Ok(vec![
-                    ("designator", OperandValue::Text(designator)),
-                    (pair, OperandValue::Text(plan.swapped.join(","))),
-                ])
-            });
-        let operands = match operands {
-            Ok(operands) => operands,
+        let plan = match self.plan_part_swap(board, footprint, request) {
+            Ok(plan) => plan,
             Err(why) => {
                 self.refuse_part_swap(kind, &why);
                 return Task::none();
             }
         };
-        let command = match kind {
-            SwapKind::Pins => "swap_pins",
-            SwapKind::Gates => "swap_gates",
+        let (command, pair) = match kind {
+            SwapKind::Pins => ("swap_pins", "pins"),
+            SwapKind::Gates => ("swap_gates", "units"),
         };
-        // Past the checks above a refusal comes from `swap_part`, which says
-        // it in Messages itself; the board and the sheet stay as they were.
-        let (_outcome, task) = translator::run(self, command, board, operands);
+        let operands = vec![
+            ("ids", OperandValue::Targets(vec![footprint])),
+            (pair, OperandValue::Text(plan.swapped.join(","))),
+        ];
+        let (outcome, task) = translator::run(self, command, board, operands);
+        self.say_part_swap_refusal(kind, &outcome);
         task
+    }
+
+    /// Say in Messages why the menu's swap did nothing, when `outcome` is a
+    /// refusal of its operands: one from the board or the schematic
+    /// (`pcb-part-swap-why`) was said by `swap_part` already.
+    pub(super) fn say_part_swap_refusal(&self, kind: SwapKind, outcome: &CommandOutcome) {
+        if let CommandOutcome::Disabled { reason } = outcome
+            && reason.id() != Some(ids::PCB_PART_SWAP_WHY)
+        {
+            let why = reason.render(&self.ui_state.i18n);
+            self.refuse_part_swap(kind, &why);
+        }
     }
 
     /// Swap `request` on `footprint` of `board` and its schematic part, as

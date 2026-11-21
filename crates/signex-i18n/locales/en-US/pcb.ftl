@@ -552,6 +552,9 @@ pcb-dxf-layer-refused = No DXF file was asked for: { $why }
 ## Pin and gate swap (#2410). Messages lines; $why is the reason from the
 ## board or the schematic, in English.
 pcb-part-swap-refused = { $what } did nothing: { $why }
+# A swap command's refusal from the board or the schematic, as its answer
+# gives it; the line above already said it in Messages.
+pcb-part-swap-why = { $why }
 pcb-pins-swapped = { $designator }: pins { $a } and { $b } traded nets on the board and on its schematic
 pcb-gates-swapped = { $designator }: gates { $a } and { $b } traded places on the board and on its schematic
 pcb-part-swap-nothing = { $designator }: pins { $a } and { $b } already share their nets; nothing changed

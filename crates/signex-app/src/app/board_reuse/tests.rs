@@ -653,26 +653,112 @@ fn a_menu_place_lays_the_block_as_the_operand_handler_does() {
     assert_eq!(layout(&menu, &menu_board), layout(&app, &board));
 }
 
-/// Behaviour change (#2326 slice 6): the handler finds the anchor by its
-/// designator, so on a board where two components share it the menu Place
-/// is refused, where it placed around the clicked component before.
+/// The menu names the clicked anchor by uuid (#2326 slice 6), so the block
+/// is placed around it where its designator is shared, or stored as "U2 ",
+/// as before the translator.
 #[test]
-fn a_menu_place_on_a_component_whose_designator_is_shared_is_refused() {
-    let _ = crate::diagnostics::init_logging();
+fn a_menu_place_on_a_component_whose_designator_is_shared_places_around_it() {
     let mut pcb = board();
     pcb.footprints[3].reference = "U2".into();
     let dir = tempfile::tempdir().unwrap();
     let (mut app, board) = app_on(dir.path(), pcb);
     save_channel_a(&mut app);
-    let before = layout(&app, &board);
-    let mark = crate::diagnostics::newest_entry_id();
     place_from_menu(&mut app, "R1-U1", 49.0, 50.0);
-    let said = crate::diagnostics::entries_since(mark).entries;
+    assert!(translator::ran("place_board_reuse_block"));
+    assert_eq!(at(&app, &board, R2), (54.0, 50.0), "placed around U2");
+}
+
+#[test]
+fn a_menu_place_on_a_reference_with_spaces_places_around_it() {
+    let mut pcb = board();
+    pcb.footprints[2].reference = "U2 ".into();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    save_channel_a(&mut app);
+    place_from_menu(&mut app, "R1-U1", 49.0, 50.0);
+    assert_eq!(at(&app, &board, R2), (54.0, 50.0), "placed around U2");
+}
+
+/// An agent names the anchor by uuid where its designator is shared.
+#[test]
+fn an_agent_places_a_block_around_the_component_its_uuid_names() {
+    let mut pcb = board();
+    pcb.footprints[3].reference = "U2".into();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    save_channel_a(&mut app);
+    let document = format!("document={}", board.display());
+    let ids = format!("ids={U2}");
+    let outcome = headless(
+        &mut app,
+        "place_board_reuse_block",
+        &[&document, "name=R1-U1", &ids],
+    );
     assert!(
-        said.iter().any(|e| e
-            .message
-            .contains("several components on the board are named U2")),
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(at(&app, &board, R2), (54.0, 50.0));
+}
+
+/// The menu's Place row sent with U2 selected, its task settled.
+fn place_on_u2(app: &mut Signex, name: &str) -> Vec<String> {
+    click(app, 49.0, 50.0, ClickMode::Replace);
+    let mark = crate::diagnostics::newest_entry_id();
+    let place = ReuseBlockMsg::PlaceRequested {
+        name: name.to_string(),
+    };
+    let task = app.update(Message::Pcb(crate::app::PcbMsg::ReuseBlock(place)));
+    settle(app, task);
+    crate::diagnostics::entries_since(mark)
+        .entries
+        .into_iter()
+        .map(|e| e.message)
+        .collect()
+}
+
+/// A menu Place is refused at once, as it always was, while the project's
+/// blocks are not read: the menu reads nothing first, even with the block
+/// on disk.
+#[test]
+fn a_menu_place_before_the_blocks_are_read_is_refused_without_reading_them() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut earlier, _) = app_with_board(dir.path());
+    save_channel_a(&mut earlier);
+    let (mut app, board) = app_with_board(dir.path());
+
+    let said = place_on_u2(&mut app, "R1-U1");
+
+    assert!(
+        said.iter()
+            .any(|m| m.contains("the project has no reuse block named R1-U1")),
         "{said:?}"
     );
-    assert_eq!(layout(&app, &board), before, "nothing is placed");
+    assert!(app.document_state.reuse_blocks.needs_read(dir.path()));
+    assert_eq!(at(&app, &board, R2), (70.0, 70.0), "nothing is placed");
+}
+
+/// After a failed read a menu Place is refused with why, again on the next
+/// Place: the menu does not read the folder again (a save or a menu open
+/// does).
+#[test]
+fn a_menu_place_after_a_failed_read_is_refused_without_reading_again() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, _) = app_with_board(dir.path());
+    let not_a_folder = dir.path().join("reuse-blocks");
+    std::fs::write(&not_a_folder, b"x").unwrap();
+    right_click(&mut app);
+    let _ = app.update(Message::ContextMenu(ContextMenuMsg::Close));
+    let unread = "the project's reuse blocks could not be read";
+
+    let first = place_on_u2(&mut app, "amp");
+    std::fs::remove_file(&not_a_folder).unwrap();
+    let second = place_on_u2(&mut app, "amp");
+
+    assert!(first.iter().any(|m| m.contains(unread)), "{first:?}");
+    assert!(second.iter().any(|m| m.contains(unread)), "{second:?}");
+    let blocks = &app.document_state.reuse_blocks;
+    assert!(blocks.read_failure(dir.path()).is_some(), "not read again");
 }

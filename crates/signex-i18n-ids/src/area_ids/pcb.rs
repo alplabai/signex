@@ -212,6 +212,7 @@ define_ids! {
     PCB_DXF_REFUSED = "pcb-dxf-refused";
     PCB_DXF_LAYER_REFUSED = "pcb-dxf-layer-refused";
     PCB_PART_SWAP_REFUSED = "pcb-part-swap-refused";
+    PCB_PART_SWAP_WHY = "pcb-part-swap-why";
     PCB_PINS_SWAPPED = "pcb-pins-swapped";
     PCB_GATES_SWAPPED = "pcb-gates-swapped";
     PCB_PART_SWAP_NOTHING = "pcb-part-swap-nothing";

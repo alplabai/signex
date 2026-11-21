@@ -1,7 +1,8 @@
 //! The design reuse commands from their operands (#2410): an agent or the
 //! CLI names the board (`document`), the block (`name`) and what to save
-//! (`ids`) or where to place it (`designator`, `degrees`), and gets what was
-//! saved or placed as JSON. The same `Signex` calls as the board menu.
+//! (`ids`) or where to place it (the anchor by `ids`, its uuid, or by
+//! `designator`; `degrees`), and gets what was saved or placed as JSON. The
+//! same `Signex` calls as the board menu.
 
 use std::path::Path;
 
@@ -12,7 +13,7 @@ use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
 use super::{ReuseRerun, read_blocks_task};
-use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::command::{CommandArgs, CommandOutcome, OperandValue, component_by_uuid};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 
@@ -114,8 +115,8 @@ pub(crate) fn save_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> Ra
     }
 }
 
-/// `place_board_reuse_block document=<board> name=<name> designator=<ref>
-/// [degrees=<turn>]`. While the project's blocks are not read yet, they are
+/// `place_board_reuse_block document=<board> name=<name> (ids=<uuid> |
+/// designator=<ref>) [degrees=<turn>]`. While the project's blocks are not read yet, they are
 /// read first and the command runs when they land (`Deferred`).
 pub(crate) fn place_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> Ran {
     let board = match app.named_output_board(args) {
@@ -125,16 +126,20 @@ pub(crate) fn place_board_reuse_block(app: &mut Signex, args: &CommandArgs) -> R
     if let Some(waiting) = read_first(app, &board, "place_board_reuse_block", args) {
         return waiting;
     }
-    let anchor = match app
-        .document_state
-        .pcb_board(&board)
-        .ok_or_else(|| "the board is not open".to_string())
-        .and_then(|pcb| {
+    let Some(pcb) = app.document_state.pcb_board(&board) else {
+        return refused("the board is not open");
+    };
+    let anchor = match component_by_uuid(pcb, args) {
+        Ok(Some(anchor)) => anchor,
+        Ok(None) => {
             let typed = text(args, "designator");
-            placement::by_designator(pcb, app.document_state.stored_reference_for(&board, typed))
-        }) {
-        Ok(anchor) => anchor,
-        Err(reason) => return refused(reason),
+            let stored = app.document_state.stored_reference_for(&board, typed);
+            match placement::by_designator(pcb, stored) {
+                Ok(anchor) => anchor,
+                Err(reason) => return refused(reason),
+            }
+        }
+        Err(reason) => return (CommandOutcome::Disabled { reason }, Task::none()),
     };
     let degrees = match args.operand("degrees") {
         Some(OperandValue::Angle(degrees)) => *degrees,

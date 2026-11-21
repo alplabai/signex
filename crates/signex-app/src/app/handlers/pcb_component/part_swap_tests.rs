@@ -438,12 +438,8 @@ fn swap_gates_from_the_menu_on_one_gate_is_refused_as_before() {
     );
 }
 
-/// Behaviour change (#2326 slice 6): the handler finds the part by its
-/// designator, so on a board where two components share it the menu swap
-/// is refused, where it swapped the clicked component's pads before.
-#[test]
-fn swap_pins_from_the_menu_on_a_shared_designator_is_refused() {
-    let _ = crate::diagnostics::init_logging();
+/// U1 and a second, unlinked component also named U1 at y = 40.
+fn board_with_a_twin() -> PcbBoard {
     let mut twin = board();
     let mut other = twin.footprints[0].clone();
     other.uuid = Uuid::from_u128(0xf1);
@@ -453,21 +449,100 @@ fn swap_pins_from_the_menu_on_a_shared_designator_is_refused() {
         pad.uuid = Uuid::from_u128(0x21 + n as u128);
     }
     twin.footprints.push(other);
+    twin
+}
+
+/// The menu names the clicked component by uuid (#2326 slice 6), so a
+/// designator another component shares, or one stored as "U1 ", does not
+/// stop the swap: it acts on the clicked component, as before the translator.
+fn menu_swap_acts_on_the_clicked_component(board: PcbBoard) {
     let dir = tempfile::tempdir().unwrap();
-    let (mut app, board, _) = app_with(dir.path(), twin);
+    let (mut app, path, sheet) = app_with(dir.path(), board);
+    let one = tip(&live_sheet(&app, &sheet), UNIT_A, "1");
     click(&mut app, 7.0, 10.0, ClickMode::Replace);
     click(&mut app, 9.0, 10.0, ClickMode::Add);
-    let mark = crate::diagnostics::newest_entry_id();
     run(&mut app, "swap_pins");
-    let said = crate::diagnostics::entries_since(mark).entries;
+    assert!(translator::ran("swap_pins"));
+    assert_eq!(
+        pad_nets(&app, &path),
+        nets(&[("1", "B"), ("2", "A"), ("3", "C"), ("4", "D")]),
+        "the clicked component's pads traded nets"
+    );
+    assert_eq!(
+        wire_start(&app, &sheet, 0x102),
+        one,
+        "and its sheet followed"
+    );
+}
+
+#[test]
+fn swap_pins_from_the_menu_on_a_shared_designator_swaps_the_clicked_component() {
+    let twin = board_with_a_twin();
+    menu_swap_acts_on_the_clicked_component(twin.clone());
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path, _) = app_with(dir.path(), twin);
+    let other = app.document_state.pcb_board(&path).unwrap().footprints[1].clone();
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 9.0, 10.0, ClickMode::Add);
+    run(&mut app, "swap_pins");
+    assert_eq!(
+        app.document_state.pcb_board(&path).unwrap().footprints[1],
+        other,
+        "the other U1 is left as it was"
+    );
+}
+
+#[test]
+fn swap_pins_from_the_menu_on_a_reference_with_spaces_swaps_the_clicked_component() {
+    let mut spaced = board();
+    spaced.footprints[0].reference = "U1 ".into();
+    menu_swap_acts_on_the_clicked_component(spaced);
+}
+
+/// An agent names the component by uuid where its designator is shared.
+#[test]
+fn an_agent_swaps_pins_of_the_component_its_uuid_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board, _) = app_with(dir.path(), board_with_a_twin());
+    let document = format!("document={}", board.display());
+    let ids = format!("ids={FP}");
+
+    let outcome = headless(&mut app, "swap_pins", &[&document, &ids, "pins=1,2"]);
+
     assert!(
-        said.iter().any(|e| e
-            .message
-            .contains("several components on the board are named U1")),
-        "{said:?}"
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
     );
     assert_eq!(
         pad_nets(&app, &board),
-        nets(&[("1", "A"), ("2", "B"), ("3", "C"), ("4", "D")])
+        nets(&[("1", "B"), ("2", "A"), ("3", "C"), ("4", "D")])
     );
+}
+
+/// A refusal of the operands reaches Messages in the menu's words; one from
+/// the board or the schematic, which `swap_part` said already, is not said
+/// twice.
+#[test]
+fn a_menu_swap_refused_by_its_operands_says_why_in_messages() {
+    use signex_engine::pcb::pad_swap::SwapKind;
+    use signex_i18n::{Translatable, ids};
+    let dir = tempfile::tempdir().unwrap();
+    let (app, _, _) = app_with_part(dir.path());
+    let unknown = Uuid::from_u128(0xdead_2326);
+    let refused = CommandOutcome::Disabled {
+        reason: Translatable::new(ids::BOARD_TARGET_UNKNOWN).arg("id", unknown.to_string()),
+    };
+    let said = crate::diagnostics::logged_count(&unknown.to_string());
+    app.say_part_swap_refusal(SwapKind::Pins, &refused);
+    assert_eq!(
+        crate::diagnostics::logged_count(&unknown.to_string()),
+        said + 1
+    );
+
+    let marker = "swap-said-already-2326";
+    let already = CommandOutcome::Disabled {
+        reason: Translatable::new(ids::PCB_PART_SWAP_WHY).arg("why", marker),
+    };
+    app.say_part_swap_refusal(SwapKind::Pins, &already);
+    assert_eq!(crate::diagnostics::logged_count(marker), 0);
 }

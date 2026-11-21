@@ -20,6 +20,7 @@ use signex_engine::pcb::BoardItemId;
 use signex_engine::pcb::reuse_block;
 use signex_i18n::{command_ids, ids, t};
 use signex_types::format::SnxPcb;
+use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
 pub(crate) use operands::{place_board_reuse_block, save_board_reuse_block};
@@ -222,6 +223,22 @@ impl Signex {
         Ok((saved, task))
     }
 
+    /// The project's block `name` of `board`, as kept in the Model; refused
+    /// when the project's blocks could not be read or it has none so named.
+    fn block_to_place(&mut self, board: &Path, name: &str) -> Result<PcbBoard, String> {
+        let folder = self.reuse_block_folder(board)?;
+        let blocks = &mut self.document_state.reuse_blocks;
+        if let Some(why) = blocks.answer_read_failure(&folder) {
+            return Err(format!(
+                "the project's reuse blocks could not be read: {why}"
+            ));
+        }
+        blocks
+            .block(&folder, name.trim())
+            .cloned()
+            .ok_or_else(|| format!("the project has no reuse block named {}", name.trim()))
+    }
+
     /// Place the project's block `name` on `board` around `anchor`, turned
     /// by `degrees`, as one undo step. The block must be in the Model.
     pub(crate) fn place_reuse_block(
@@ -231,22 +248,7 @@ impl Signex {
         anchor: Uuid,
         degrees: f64,
     ) -> Result<PlacedBlock, String> {
-        let folder = self.reuse_block_folder(board)?;
-        if let Some(why) = self
-            .document_state
-            .reuse_blocks
-            .answer_read_failure(&folder)
-        {
-            return Err(format!(
-                "the project's reuse blocks could not be read: {why}"
-            ));
-        }
-        let block = self
-            .document_state
-            .reuse_blocks
-            .block(&folder, name.trim())
-            .ok_or_else(|| format!("the project has no reuse block named {}", name.trim()))?
-            .clone();
+        let block = self.block_to_place(board, name)?;
         let engine = self
             .document_state
             .board_engine(board)
@@ -408,40 +410,32 @@ impl Signex {
 
     /// A board menu row: the block around the one footprint selected, placed
     /// by the command's operand handler with the board, the name and the
-    /// footprint's designator filled in (`command::translator`). Before the
-    /// project's blocks are read, they are read first and the row is asked
-    /// again once they land, as a save is, so the handler never defers it to
-    /// an agent's rerun.
+    /// footprint's uuid filled in (`command::translator`). The block must be
+    /// in the Model, as the menu lists it: a missing or unread one is refused
+    /// here at once, so the handler never reads the blocks first.
     fn place_block_on_selection(&mut self, name: &str) -> Task<Message> {
         let Some(board) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return Task::none();
         };
         let footprints = self.pcb_selected_footprints();
-        let designator = match (footprints.len(), footprints.first()) {
-            (1, Some(anchor)) => translator::designator_of(self, &board, *anchor),
+        let anchor = match (footprints.len(), footprints.first()) {
+            (1, Some(anchor)) => self.block_to_place(&board, name).map(|_| *anchor),
             _ => Err("select one component of the channel to place the block on".to_string()),
         };
-        let designator = match designator {
-            Ok(designator) => designator,
+        let anchor = match anchor {
+            Ok(anchor) => anchor,
             Err(why) => {
                 self.refuse_reuse(command_ids::CMD_MENU_PLACE_BOARD_REUSE_BLOCK, &why);
                 return Task::none();
             }
         };
-        if let Ok(folder) = self.reuse_block_folder(&board)
-            && self.retry_and_need_read(&folder)
-        {
-            let name = name.to_string();
-            let again = Message::Pcb(PcbMsg::ReuseBlock(ReuseBlockMsg::PlaceRequested { name }));
-            return read_blocks_task(folder, None).chain(Task::done(again));
-        }
         let operands = vec![
             ("name", OperandValue::Text(name.to_string())),
-            ("designator", OperandValue::Text(designator)),
+            ("ids", OperandValue::Targets(vec![anchor])),
         ];
         let (outcome, task) = translator::run(self, "place_board_reuse_block", &board, operands);
-        // Answered: `place_reuse_block` says it. Deferred cannot come, the
-        // blocks are read above.
+        // Answered: `place_reuse_block` says it. Deferred cannot come while
+        // the block is in the Model, unless a failed read left it there.
         if let CommandOutcome::Disabled { reason } = outcome {
             let why = reason.render(&self.ui_state.i18n);
             self.refuse_reuse(command_ids::CMD_MENU_PLACE_BOARD_REUSE_BLOCK, &why);

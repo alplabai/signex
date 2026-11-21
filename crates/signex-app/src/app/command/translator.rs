@@ -1,9 +1,9 @@
 //! The GUI translator (ADR-0006, slice 6): a person's command leaves its
 //! document and targets implicit, the board in view and its selection. The
 //! GUI handler reads them, and this fills them in as the `document` and
-//! `ids` (or `designator`) operands and runs the same operand handler an
-//! agent or the CLI runs, so one command id has one behaviour on every
-//! surface.
+//! `ids` operands (uuids, never a designator, which a board may share) and
+//! runs the same operand handler an agent or the CLI runs, so one command id
+//! has one behaviour on every surface.
 //!
 //! Operands stay private to the `command` module (`args.rs`): a GUI module
 //! hands plain values to [`run`] and never builds a `CommandArgs` itself.
@@ -12,9 +12,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use iced::Task;
-use signex_engine::pcb::placement;
 use signex_i18n::{Translatable, ids};
-use uuid::Uuid;
 
 use super::args::Operands;
 use super::{CommandArgs, CommandOutcome, OperandValue};
@@ -121,28 +119,6 @@ fn document_target(app: &Signex, document: &Path) -> Option<DocumentTarget> {
         .find(|entry| entry.path.as_deref() == Some(document))
         .and_then(|entry| entry.id)
         .map(DocumentTarget::Id)
-}
-
-/// The `designator` operand that names `footprint` of the board at `board`:
-/// its reference, when an operand handler finds exactly that component by
-/// it. Else why not, in the words the handler would refuse it with, so a
-/// GUI route never sends a designator that lands on another component.
-pub(crate) fn designator_of(app: &Signex, board: &Path, footprint: Uuid) -> Result<String, String> {
-    let pcb = app
-        .document_state
-        .pcb_board(board)
-        .ok_or_else(|| "the board is not open".to_string())?;
-    let typed = pcb
-        .footprints
-        .iter()
-        .find(|fp| fp.uuid == footprint)
-        .map(|fp| fp.reference.trim().to_string())
-        .ok_or_else(|| "the component is no longer on the board".to_string())?;
-    let stored = app.document_state.stored_reference_for(board, &typed);
-    match placement::by_designator(pcb, stored)? {
-        found if found == footprint => Ok(typed),
-        _ => Err(format!("{typed} names another component on the board")),
-    }
 }
 
 fn not_available() -> CommandOutcome {

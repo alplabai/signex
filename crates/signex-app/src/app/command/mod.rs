@@ -24,6 +24,7 @@ mod board_operands;
 mod board_view_operand_tests;
 mod board_view_operands;
 pub(crate) mod bridge;
+mod component_operand;
 #[cfg(test)]
 mod directive_operand_tests;
 mod directive_operands;
@@ -116,6 +117,7 @@ pub use agent_edits::{
 pub use args::CommandArgs;
 pub(crate) use args::InvocationContext;
 use bridge::core_to_message;
+pub(crate) use component_operand::component_by_uuid;
 pub use edit_reads::{EditReads, ReadsLoaded};
 pub(crate) use enablement::CommandContext;
 pub(crate) use enablement::is_enabled;

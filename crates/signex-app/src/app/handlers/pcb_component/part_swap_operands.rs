@@ -1,14 +1,16 @@
 //! `swap_pins` and `swap_gates` from their operands (#2410): an agent or the
-//! CLI names the board (`document`), the component (`designator`) and the two
-//! pins (`pins=a,b`, pad numbers) or gates (`units=a,b`), and gets what the
-//! swap did as JSON. The same `Signex::swap_part` as the board menu.
+//! CLI names the board (`document`), the component (`ids`, its uuid, or
+//! `designator`) and the two pins (`pins=a,b`, pad numbers) or gates
+//! (`units=a,b`), and gets what the swap did as JSON. The same
+//! `Signex::swap_part` as the board menu, which names the component by uuid.
 
 use iced::Task;
 use serde_json::json;
 use signex_engine::pcb::placement;
+use signex_i18n::{Translatable, ids};
 
 use super::part_swap::SwapRequest;
-use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::command::{CommandArgs, CommandOutcome, OperandValue, component_by_uuid};
 use crate::app::{Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
@@ -47,20 +49,23 @@ fn swap(app: &mut Signex, args: &CommandArgs, request: Result<SwapRequest, Strin
         Ok(request) => request,
         Err(reason) => return refused(reason),
     };
-    let designator = match args.operand("designator") {
-        Some(OperandValue::Text(text)) => text.clone(),
-        _ => return refused("needs the operand `designator`"),
+    let Some(pcb) = app.document_state.pcb_board(&board) else {
+        return refused("the board is not open");
     };
-    let footprint = match app
-        .document_state
-        .pcb_board(&board)
-        .ok_or_else(|| "the board is not open".to_string())
-        .and_then(|pcb| {
-            let stored = app.document_state.stored_reference_for(&board, &designator);
-            placement::by_designator(pcb, stored)
-        }) {
-        Ok(footprint) => footprint,
-        Err(reason) => return refused(reason),
+    let footprint = match component_by_uuid(pcb, args) {
+        Ok(Some(footprint)) => footprint,
+        Ok(None) => {
+            let designator = match args.operand("designator") {
+                Some(OperandValue::Text(text)) => text.as_str(),
+                _ => "",
+            };
+            let stored = app.document_state.stored_reference_for(&board, designator);
+            match placement::by_designator(pcb, stored) {
+                Ok(footprint) => footprint,
+                Err(reason) => return refused(reason),
+            }
+        }
+        Err(reason) => return (CommandOutcome::Disabled { reason }, Task::none()),
     };
     match app.swap_part(&board, footprint, &request) {
         Ok(report) => {
@@ -68,17 +73,21 @@ fn swap(app: &mut Signex, args: &CommandArgs, request: Result<SwapRequest, Strin
             answer["document"] = json!(board.display().to_string());
             (CommandOutcome::Answered(answer), Task::none())
         }
-        Err(reason) => refused(reason),
+        // `swap_part` said it in Messages; the id tells the menu so.
+        Err(why) => {
+            let reason = Translatable::new(ids::PCB_PART_SWAP_WHY).arg("why", why);
+            (CommandOutcome::Disabled { reason }, Task::none())
+        }
     }
 }
 
-/// `swap_pins document=<board> designator=<ref> pins=<a>,<b>`.
+/// `swap_pins document=<board> (ids=<uuid> | designator=<ref>) pins=<a>,<b>`.
 pub(crate) fn swap_pins(app: &mut Signex, args: &CommandArgs) -> Ran {
     let request = pair(args, "pins").map(|(a, b)| SwapRequest::Pins(a, b));
     swap(app, args, request)
 }
 
-/// `swap_gates document=<board> designator=<ref> units=<a>,<b>`.
+/// `swap_gates document=<board> (ids=<uuid> | designator=<ref>) units=<a>,<b>`.
 pub(crate) fn swap_gates(app: &mut Signex, args: &CommandArgs) -> Ran {
     let request = pair(args, "units").and_then(|(a, b)| {
         let unit = |text: &str| {
