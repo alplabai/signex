@@ -11,133 +11,40 @@ use iced::Task;
 use crate::app::state::WindowKind;
 use crate::app::{Message, Signex};
 
-/// Whether a dock message edits the sheet an undocked window shows, so it
-/// runs in the window's swap. This is an allow-list: everything else (the
-/// dock layout, Projects, Navigator, ERC focus and quick fixes, library rows,
-/// anything that opens or activates a document, and any variant added later)
-/// runs on the main window, where the swap cannot load one sheet into
-/// another's canvas or write one sheet's history over another sheet. The
-/// Components row press is scoped to stamp its window; History restore is
-/// scoped so it restores the file the window's own History panel shows.
-fn dock_message_edits_shown_sheet(message: &crate::dock::DockMessage) -> bool {
-    use crate::dock::DockMessage;
+/// Whether a dock message runs in the document of the undocked window it
+/// came from. Every panel message does unless [`PanelMsg::runs_in_window`]
+/// names it app-wide; the dock's own layout never does. No wildcard: a new
+/// variant must be classified to compile.
+///
+/// [`PanelMsg::runs_in_window`]: crate::panels::PanelMsg::runs_in_window
+fn dock_message_runs_in_window(message: &crate::dock::DockMessage) -> bool {
+    use crate::dock::DockMessage as D;
     use crate::library::LibraryMessage;
-    use crate::panels::PanelMsg as P;
-    use signex_widgets::tree_view::TreeMsg;
     match message {
-        DockMessage::Library(
+        D::Panel(panel) => panel.runs_in_window(),
+        D::Library(library) => matches!(
+            library,
             LibraryMessage::ComponentsPanelRowPressed(_)
-            | LibraryMessage::ComponentsPanelRowRightClicked(_)
-            | LibraryMessage::ComponentsPanelRowMenuPicked(_),
-        ) => true,
-        // Expanding a row only changes the window's own tree. A Navigator
-        // row click opens a sheet, so it stays on the main window.
-        DockMessage::Panel(P::Tree(TreeMsg::Toggle(_)) | P::Navigator(TreeMsg::Toggle(_))) => true,
-        // The Projects menu opens owned by the window it was right-clicked
-        // in; its picks are split by `ContextMenuMsg::ProjectTreeAction`.
-        DockMessage::Panel(P::Tree(TreeMsg::ContextMenu(_) | TreeMsg::BackgroundContextMenu)) => {
-            true
-        }
-        // The board Properties' edits and commands act on the window's board.
-        DockMessage::Panel(P::PcbBoard(board)) => board.acts_on_board(),
-        DockMessage::Panel(panel) => matches!(
-            panel,
-            P::PropertiesTab(_)
-                | P::ToggleSection(_)
-                | P::EditSymbolDesignator(..)
-                // A board window's footprint fields edit that window's board (#1312).
-                | P::PcbFootprintText(..)
-                // And its Component view's edits (#2354).
-                | P::PcbComponent(..)
-                | P::PcbPrimitive(..)
-                | P::EditSymbolValue(..)
-                | P::EditSymbolFootprint(..)
-                | P::SwitchSymbolChoice(..)
-                | P::SwitchFootprintChoice(..)
-                | P::ToggleSymbolMirrorX(_)
-                | P::ToggleSymbolMirrorY(_)
-                | P::ToggleSymbolLocked(_)
-                | P::ToggleItemLocked(..)
-                | P::ToggleSymbolDnp(_)
-                | P::SymbolBodyStylePicked(..)
-                | P::EditSymbolValueFontSizePt(..)
-                | P::EditPowerPortStyle { .. }
-                | P::EditLabelText(..)
-                | P::EditLabelJustifyH(..)
-                | P::EditLabelDirection(..)
-                | P::EditLabelFontSizePt(..)
-                | P::EditBlanket(..)
-                | P::Directive(..)
-                | P::EditNoErcRules(..)
-                | P::EditTextFontFamily(..)
-                | P::SetDocumentFontFamily(_)
-                | P::SetPageFormatMode(_)
-                | P::SetPaperSize(_)
-                | P::SetSheetOrientation(_)
-                | P::SetPageOrigin(_)
-                | P::SetSheetColor(_)
-                | P::EditSheetFrame(..)
-                | P::CustomPaperEdgeTyping(..)
-                | P::CommitCustomPaperEdge(..)
-                | P::TitleBlockTyping(..)
-                | P::CommitTitleBlockField(..)
-                | P::SheetVariables(_)
-                | P::DocumentOptions(_)
-                | P::NumericFieldTyped(..)
-                | P::NumericFieldSubmitted(..)
-                | P::UpdateDrawingEdit(..)
-                | P::DrawingFieldTyping(..)
-                | P::Annotation(..)
-                | P::MultiEdit(..)
-                | P::PlacedEdit(..)
-                | P::UpdateSymbolFromLibrary(_)
-                | P::UpdateSymbolFromLibraryOnly(_)
-                | P::PlacedPartAction(_)
-                // The part's ⋯ menu, its picks and hover, the illustration
-                // hover and a sheet symbol's Browse… act on the window's own
-                // sheet and panel state; the browsed file comes back scoped.
-                | P::Part(_)
-                | P::Illustration(_)
-                | P::SelectionForm(
-                    crate::panels::SelectionFormMsg::SheetFileBrowseClicked(_)
-                        | crate::panels::SelectionFormMsg::SheetFileBrowsed(..)
-                )
-                | P::HistoryRestoreClicked { .. }
-                | P::HistoryRestoreCancelled
-                | P::ToggleChildSheetBorderPicker(_)
-                | P::ToggleChildSheetFillPicker(_)
-                | P::OpenChildSheetAdvancedPicker(..)
-                | P::CancelChildSheetColorPicker
-                | P::EditChildSheetBorderColor(..)
-                | P::EditChildSheetFillColor(..)
-                | P::ChildSheetStrokeWidthTyping(..)
-                | P::CommitChildSheetStrokeWidth(_)
-                | P::ChildSheetNameTyping(..)
-                | P::ChildSheetFileTyping(..)
-                | P::CommitChildSheetName(_)
-                | P::CommitChildSheetFile(_)
-                | P::ResetChildSheetStyle(_)
-                | P::SetPrePlacementText(_)
-                | P::SetPrePlacementDesignator(_)
-                | P::SetPrePlacementRotation(_)
-                | P::SetPrePlacementFont(_)
-                | P::SetPrePlacementFontSize(_)
-                | P::TogglePrePlacementBold
-                | P::TogglePrePlacementItalic
-                | P::TogglePrePlacementUnderline
-                | P::SetPrePlacementShapeWidth(_)
-                | P::SetPrePlacementWireWidth(_)
-                | P::SetPrePlacementWireColor(_)
-                | P::EditWireWidth(..)
-                | P::EditWireColor(..)
-                | P::ToggleWireColorPicker
-                | P::OpenWireColorAdvancedPicker
-                | P::CancelWireColorPicker
-                | P::SetPrePlacementShapeFill(_)
-                | P::ConfirmPrePlacement
-                | P::PrePlacementPosition(_)
+                | LibraryMessage::ComponentsPanelRowRightClicked(_)
+                | LibraryMessage::ComponentsPanelRowMenuPicked(_)
         ),
-        _ => false,
+        D::SelectTab(..)
+        | D::ToggleCollapse(..)
+        | D::ClosePanel(..)
+        | D::UndockPanel(..)
+        | D::TabDragStart(..)
+        | D::TabClick(..)
+        | D::TabHoverEnter(..)
+        | D::TabHoverExit(..)
+        | D::MoveFloating(..)
+        | D::StartDragFloating(..)
+        | D::FloatingDragEnd(..)
+        | D::DockFloating(..)
+        | D::DockFloatingTo(..)
+        | D::TabContextMenuRequested(..)
+        | D::TabMenuDismissed
+        | D::TabMenuActionPicked(..)
+        | D::ScopedToWindow(..) => false,
     }
 }
 
@@ -353,13 +260,13 @@ impl Signex {
             && self.interaction_state.canvases.contains_key(&window)
     }
 
-    /// `message` as the dock of `window` sends it: wrapped when it edits the
-    /// sheet that undocked window shows, unchanged otherwise (and for the
-    /// main window).
+    /// `message` as the dock of `window` sends it: wrapped when it runs in
+    /// the document that undocked window shows, unchanged otherwise (and for
+    /// the main window).
     pub fn scope_dock_message(&self, window: iced::window::Id, message: Message) -> Message {
         match message {
             Message::Dock(dock)
-                if self.is_document_window(window) && dock_message_edits_shown_sheet(&dock) =>
+                if self.is_document_window(window) && dock_message_runs_in_window(&dock) =>
             {
                 Message::Dock(crate::dock::DockMessage::ScopedToWindow(
                     window,

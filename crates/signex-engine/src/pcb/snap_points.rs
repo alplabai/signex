@@ -47,7 +47,10 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
                 Side::Top => CopperLayer::Top,
                 Side::Bottom => CopperLayer::Bottom,
             };
-            if on(1 << layer_bit(side)) && origin_on_net(query, footprint) {
+            if on(1 << layer_bit(side))
+                && origin_on_net(query, footprint)
+                && !foreign_pad_covers(board, query, footprint.position, 1 << layer_bit(side))
+            {
                 out.push(footprint.position);
             }
         }
@@ -203,6 +206,30 @@ fn origin_on_net(query: &SnapQuery, footprint: &Footprint) -> bool {
         .filter(|net| *net != 0)
         .peekable();
     nets.peek().is_none() || nets.any(|net| net == own)
+}
+
+/// Whether a pad of a net other than the running route's covers `point` on
+/// a copper layer of `layers`, so a route landing there would short to it.
+fn foreign_pad_covers(board: &PcbBoard, query: &SnapQuery, point: Point, layers: u32) -> bool {
+    let Some(own) = query.net else {
+        return false;
+    };
+    let Ok(at) = PointNm::from_mm(point, "footprint origin") else {
+        return false;
+    };
+    let covers = |footprint: &Footprint, pad: &Pad| {
+        let net = pad.net.as_ref().map_or(0, |net| net.number);
+        net != 0
+            && net != own
+            && pad_layers(footprint, pad) & layers != 0
+            && pad_shape(footprint, pad).is_ok_and(|shape| shape.contains(at, 0))
+    };
+    let frame = free_pad_frame();
+    board
+        .footprints
+        .iter()
+        .any(|footprint| footprint.pads.iter().any(|pad| covers(footprint, pad)))
+        || board.free.pads.iter().any(|pad| covers(&frame, pad))
 }
 
 /// The asked-for points of `pad` of `footprint`, if it is in the scope, on

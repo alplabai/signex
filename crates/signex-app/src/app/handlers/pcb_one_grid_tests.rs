@@ -404,6 +404,44 @@ fn the_status_bar_shows_and_edits_the_extra_grid_in_effect() {
     assert_eq!(status.size_mm, 0.5);
 }
 
+/// A Fast Grids chip edits the grid in effect; the Grid Manager's
+/// board-step row stays the board's step.
+#[test]
+fn a_fast_grid_chip_edits_the_extra_grid_in_effect() {
+    let mut rig = rig();
+    let mut options = rig
+        .app
+        .document_state
+        .pcb_board(&rig.a)
+        .expect("board")
+        .options
+        .clone();
+    options.grids.push(
+        serde_json::from_value(json!({
+            "uuid": Uuid::from_u128(0xC1), "name": "Parts", "step_mm": 10.0,
+            "origin": {"x": 0.0, "y": 0.0}, "color": {"r": 0, "g": 0, "b": 0, "a": 255},
+            "components": true, "non_components": false
+        }))
+        .unwrap(),
+    );
+    let a = rig.a.clone();
+    let command = signex_engine::pcb::BoardCommand::SetBoardOptions {
+        options: Box::new(options),
+    };
+    rig.app
+        .execute_board_commands(&a, vec![command], None)
+        .expect("the grid");
+    rig.panel(PcbBoardMsg::FastGridApplied(0));
+    let fast = f64::from(rig.app.ui_state.fast_grids_mm[0]);
+    let board = rig.app.document_state.pcb_board(&a).expect("board");
+    assert!((board.options.grids[0].step_mm - fast).abs() < 1e-6);
+    assert_eq!(rig.board_grid(), 0.5, "the board's own step stays");
+
+    rig.panel(PcbBoardMsg::GridStepTyped("0.25".into()));
+    rig.panel(PcbBoardMsg::GridStepSubmitted);
+    assert_eq!(rig.board_grid(), 0.25, "the Grid Manager row is the board's");
+}
+
 /// A pick or a grid command in an undocked board's window changes that
 /// board only: the main window's board, its undo and a sheet's grid stay.
 #[test]

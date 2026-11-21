@@ -211,10 +211,10 @@ impl Signex {
         }
     }
 
-    /// A Fast Grids button: the board's snap step becomes that fast grid.
+    /// A Fast Grids button: the grid in effect becomes that fast grid.
     fn apply_pcb_fast_grid(&mut self, index: usize) {
         if let Some(mm) = self.ui_state.fast_grids_mm.get(index).copied() {
-            self.set_pcb_grid_preset(mm);
+            self.set_pcb_grid_in_effect(mm);
         }
     }
 

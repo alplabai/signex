@@ -111,6 +111,7 @@ pub(crate) mod rotation_steps;
 mod symbol_context;
 pub(crate) mod unions;
 mod widgets;
+mod window_scope;
 mod wire_style_rows;
 
 #[cfg(test)]

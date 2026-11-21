@@ -376,11 +376,12 @@ impl Signex {
                         // document_state.tabs. Drop the per-window
                         // canvas so we don't leak caches for a window
                         // that's gone.
-                        WindowKind::UndockedTab { .. } => {
+                        WindowKind::UndockedTab { path, .. } => {
                             self.interaction_state.canvases.remove(&id);
                             self.interaction_state.pcb_canvases.remove(&id);
                             self.interaction_state.pcb_selections.remove(&id);
                             self.forget_pcb_carry_of_window(id);
+                            self.show_redocked_tab(&path);
                             self.settle_document_tiling();
                         }
                         // Closing a detached panel reattaches it to the
@@ -479,10 +480,18 @@ impl Signex {
                 // renders the correct schematic from its first frame.
                 // Pan/zoom/selection start at CanvasSlot::new
                 // defaults — independent of the main canvas.
-                // The tab was the active one, so the main canvas holds its
-                // paper size.
+                // The tab need not be main's active one: its sheet names its
+                // paper. A tab with no sheet keeps the main canvas's.
                 let main = &self.interaction_state.canvas;
-                let paper = (main.paper_width_mm, main.paper_height_mm);
+                let paper = self.document_state.engines.get(&path).map_or(
+                    (main.paper_width_mm, main.paper_height_mm),
+                    |engine| {
+                        let size = super::projector::effective_paper_size(
+                            &engine.document().paper_size,
+                        );
+                        crate::panels::paper_dimensions(&size)
+                    },
+                );
                 let per_window = self.seeded_canvas_slot(&path, paper);
                 self.interaction_state.canvases.insert(id, per_window);
                 // A PCB tab gets its own PCB canvas too, so panning one
@@ -512,11 +521,14 @@ impl Signex {
                 // canvas cache + selection leak.
                 self.close_overlays_owned_by(id);
                 self.ui_state.forget_undocked_window_size(id);
-                self.ui_state.windows.remove(&id);
+                let reattached = self.ui_state.windows.remove(&id);
                 self.interaction_state.canvases.remove(&id);
                 self.interaction_state.pcb_canvases.remove(&id);
                 self.interaction_state.pcb_selections.remove(&id);
                 self.forget_pcb_carry_of_window(id);
+                if let Some(super::state::WindowKind::UndockedTab { path, .. }) = reattached {
+                    self.show_redocked_tab(&path);
+                }
                 // The tab is back in the main window, as a pane when tiled.
                 self.settle_document_tiling();
                 iced::window::close(id)

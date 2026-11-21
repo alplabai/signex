@@ -124,14 +124,8 @@ impl Signex {
             return Task::none();
         }
 
-        // Make the tab active so the new window is seeded from its content.
-        // `UndockedTabOpened` then moves main to a docked tab.
-        if idx != self.document_state.active_tab {
-            self.park_active_schematic_session();
-            self.document_state.active_tab = idx;
-            self.sync_active_tab();
-        }
-
+        // Main stays on the tab it shows. If that is this one,
+        // `UndockedTabOpened` moves it to a docked tab.
         let size = iced::Size::new(1400.0, 900.0);
         let position = self.new_window_position(
             size,

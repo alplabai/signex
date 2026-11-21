@@ -695,6 +695,32 @@ fn a_running_route_ignores_a_foreign_parts_origin() {
     assert!(close(tool_cursor(&rig), bare), "a part with no net");
 }
 
+/// A part with a pad on the route's net, but a pad of another net over its
+/// origin: landing there would short to that pad.
+#[test]
+fn a_running_route_refuses_an_origin_under_a_foreign_pad() {
+    let mut covered = board_with_foreign_pad();
+    let mut own_pad = covered.footprints[3].pads[0].clone();
+    own_pad.uuid = Uuid::from_u128(0xE1);
+    own_pad.position = Point::new(3.0, 0.0);
+    own_pad.net = Some(PadNet {
+        number: 1,
+        name: "A".into(),
+    });
+    covered.footprints[3].pads.push(own_pad);
+    let mut rig = rig_on(covered);
+    rig.toggle(SnapObject::FootprintOrigins);
+    rig.toggle(SnapObject::PadCenters);
+    rig.run("place_board_track");
+    rig.click(Point::new(30.03, 30.03));
+    rig.toggle(SnapObject::PadCenters);
+    let origin = Point::new(25.03, 15.03);
+    rig.app
+        .board_tool_followed(Point::new(origin.x, origin.y + rig.mm(4.0)));
+    let at = tool_cursor(&rig);
+    assert!(!close(at, origin), "{at:?}");
+}
+
 #[test]
 fn a_hidden_object_kind_gives_no_targets() {
     for (object, shown, (x, y)) in [
