@@ -424,7 +424,7 @@ pub(super) fn sheet_actions_entries(
 /// Add New to Project submenu — the "Add New" picker for the right-clicked
 /// project (resolved as `target`), grouped as in the tree menu (mockup row 20): the
 /// design documents (Schematic, PCB), the libraries, then the project files
-/// whose tabs are not built yet (Design Notebook, Output Job) as planned rows.
+/// whose tabs are not built yet (Design Notebook, Export Job) as planned rows.
 pub(super) fn add_new_entries(
     i18n: &I18n,
     tid: ThemeId,

@@ -325,7 +325,7 @@ fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
     expected.extend([
         SEP,
         "Design Notebook",
-        "Output Job",
+        "Export Job",
         SEP,
         "Constraint File",
         "VHDL File",
@@ -333,7 +333,7 @@ fn the_add_new_to_project_flyout_is_grouped_documents_libraries_planned() {
     assert_eq!(layout(&rows), expected);
     for planned in [
         "Design Notebook",
-        "Output Job",
+        "Export Job",
         "Constraint File",
         "VHDL File",
     ] {
