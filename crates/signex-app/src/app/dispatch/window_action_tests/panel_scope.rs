@@ -291,7 +291,10 @@ fn a_click_in_main_does_not_continue_a_wire_of_another_window() {
         .expect("the tab");
     app.document_state.active_tab = third;
     app.sync_active_tab();
-    assert!(app.interaction_state.wire_drawing, "the window keeps its wire");
+    assert!(
+        app.interaction_state.wire_drawing,
+        "the window keeps its wire"
+    );
     let _ = app.update(Message::CanvasEvent(Clicked {
         world_x: 50.8,
         world_y: 50.8,
@@ -302,7 +305,10 @@ fn a_click_in_main_does_not_continue_a_wire_of_another_window() {
     assert!(state.canvases[&window].wire_preview.is_empty());
     assert!(!state.canvases[&window].drawing_mode);
     let sheet = app.document_state.engines[&paths[2]].document();
-    assert!(sheet.wires.is_empty(), "nothing committed into main's sheet");
+    assert!(
+        sheet.wires.is_empty(),
+        "nothing committed into main's sheet"
+    );
 }
 
 /// Two footprints, A in main and B in a window.
