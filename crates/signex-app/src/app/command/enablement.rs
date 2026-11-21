@@ -1250,6 +1250,37 @@ mod tests {
         );
     }
 
+    /// Decision 8 pending: the board sketch session sits in the interaction
+    /// state and still feeds `document_is_dirty_board`. When the session
+    /// moves to document state this goes red: drop the exception from
+    /// `need_context.rs` and this test.
+    #[test]
+    fn a_board_sketch_session_is_the_known_interaction_read_of_the_core_facts() {
+        let mut app = Box::new(with_board());
+        let board: signex_types::pcb::PcbBoard =
+            serde_json::from_str(r#"{"uuid":"00000000-0000-0000-0000-000000000000","setup":null}"#)
+                .expect("a minimal board parses");
+        let mut session = crate::app::state::BoardSketchSession::open(
+            std::path::Path::new("enablement.snxpcb"),
+            &board,
+        );
+        session.editor.primitive_mut().sketch = None;
+        app.interaction_state.board_sketch = Some(session);
+        let before = app.command_context(None).core();
+        app.interaction_state = Box::new(Signex::new().0).interaction_state;
+        let after = app.command_context(None).core();
+
+        assert!(before.document_is_dirty_board && !after.document_is_dirty_board);
+        assert_eq!(
+            super::super::need_context::CoreContext {
+                document_is_dirty_board: true,
+                ..after
+            },
+            before,
+            "the dirty-board fact is the only core fact the session moves"
+        );
+    }
+
     #[test]
     fn up_hierarchy_is_off_without_a_hierarchy() {
         let app = with_schematic();

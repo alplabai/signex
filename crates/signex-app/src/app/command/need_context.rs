@@ -10,6 +10,13 @@
 //! target (ADR-0006, "Driving ports"); a fact read from a panel, the canvas
 //! or the interaction state belongs in `UiContext`
 //! (`core_facts_ignore_panel_and_interaction_state` checks it).
+//!
+//! Known exception, pending kill-check decision 8 (`BoardSketchSession` lives
+//! in `InteractionState`): `document_is_dirty_board` and a board's
+//! `can_undo` / `can_redo` read its sketch session. A board sketch is board
+//! work, so the facts stay core;
+//! `a_board_sketch_session_is_the_known_interaction_read_of_the_core_facts`
+//! pins the dirty-board read, so moving the session turns it red.
 
 use super::CommandContext;
 use signex_commands::PcbTargets;
