@@ -200,6 +200,42 @@ fn through_items_take_the_size_of_the_active_layer() {
     }
 }
 
+/// A blind via or a surface pad takes a per-layer size only on a layer it
+/// reaches, as its colour does.
+#[test]
+fn a_via_or_pad_off_the_active_layer_keeps_its_own_size() {
+    use signex_types::pcb::{LayerSizes, Point};
+    let mut board = board();
+    board.vias[0].layers = vec!["TopCopper".into(), "Inner1Copper".into()];
+    board.vias[0].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: 0.7,
+        middle: 0.5,
+        bottom: 0.3,
+    });
+    board.footprints[0].pads[1].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: Point::new(2.0, 2.0),
+        middle: Point::new(1.5, 1.5),
+        bottom: Point::new(0.8, 0.4),
+    });
+    // The bottom SMD pad, at (13, 10).
+    let bottom_pad = |snapshot: &PcbSnapshot| {
+        let pad = snapshot.pads.iter().find(|p| p.center == [13.0, 10.0]);
+        pad.expect("the bottom pad").size_mm
+    };
+    let mut view = PcbLayerView::default();
+
+    view.set_active(CopperLayer::Bottom);
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(snapshot.vias[0].diameter_mm, 0.8, "off the via's span");
+    assert_eq!(snapshot.vias[0].shown_on, None);
+    assert_eq!(bottom_pad(&snapshot), [0.8, 0.4], "on the pad's layer");
+
+    view.set_active(CopperLayer::Top);
+    let snapshot = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(snapshot.vias[0].diameter_mm, 0.7, "in the via's span");
+    assert_eq!(bottom_pad(&snapshot), [1.0, 0.6], "off the pad's layer");
+}
+
 /// An SMD pad keeps its own layer's colour with another layer active.
 #[test]
 fn an_smd_pad_keeps_its_own_colour() {

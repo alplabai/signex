@@ -23,7 +23,7 @@ use signex_types::part::FootprintSourceRef;
 use signex_types::pcb::{PCB_DEFAULT_THICKNESS_MM, PcbBoard};
 use uuid::Uuid;
 
-use crate::pcb::{PcbLayerView, PcbSnapshot};
+use crate::pcb::{BOARD_OUTLINE, PcbLayerView, PcbSnapshot};
 
 mod copper;
 mod explode;
@@ -239,12 +239,15 @@ pub(crate) fn board_thickness_mm(board: &PcbBoard) -> f64 {
     }
 }
 
-/// `view` with single-layer mode off: the hidden layers stay hidden.
+/// `view` with single-layer mode off and no active copper layer: the hidden
+/// layers stay hidden, and a via or pad keeps its own size, not the size it
+/// has on the layer being worked on.
 fn all_layers_of(view: &PcbLayerView) -> PcbLayerView {
     let mut view = view.clone();
     if view.single_layer() {
         view.toggle_single_layer();
     }
+    view.set_active(BOARD_OUTLINE);
     view
 }
 

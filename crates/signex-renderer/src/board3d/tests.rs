@@ -165,6 +165,48 @@ fn the_board_is_its_outline_extruded_to_its_thickness() {
     assert!(into_board.is_some_and(|t| close(t, 10.0 - 1.6)));
 }
 
+/// The active layer's size is a flat-view aid: 3D keeps the stored size.
+#[test]
+fn the_3d_copper_keeps_its_own_size_whatever_layer_is_active() {
+    use signex_types::pcb::{DrillDef, LayerSizes};
+    use signex_types::pcb_layer::CopperLayer;
+    let mut board = board();
+    board.vias[0].layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: 1.2,
+        middle: 0.5,
+        bottom: 0.9,
+    });
+    let mut through = pad("TopCopper");
+    through.pad_type = PadType::Thru;
+    through.shape = PadShape::Circle;
+    through.size = Point::new(1.5, 1.5);
+    through.drill = Some(DrillDef {
+        diameter: 0.8,
+        shape: String::new(),
+    });
+    through.layers = vec!["TopCopper".into(), "BottomCopper".into()];
+    through.layer_sizes = Some(LayerSizes::TopMiddleBottom {
+        top: Point::new(2.4, 2.4),
+        middle: Point::new(1.2, 1.2),
+        bottom: Point::new(1.8, 1.8),
+    });
+    board.footprints[0].pads.push(through);
+    let mut view = PcbLayerView::default();
+    view.set_active(CopperLayer::Top);
+    let through_size = |snapshot: &PcbSnapshot| {
+        let pad = snapshot.pads.iter().find(|p| p.pad_type == PadType::Thru);
+        pad.expect("the through-hole pad").size_mm
+    };
+
+    let flat = PcbSnapshot::from_board_with_view(&board, &view);
+    assert_eq!(flat.vias[0].diameter_mm, 1.2, "the flat view's active size");
+    assert_eq!(through_size(&flat), [2.4, 2.4]);
+
+    let in_3d = PcbSnapshot::from_board_with_view(&board, &all_layers_of(&view));
+    assert_eq!(in_3d.vias[0].diameter_mm, 0.6);
+    assert_eq!(through_size(&in_3d), [1.5, 1.5]);
+}
+
 #[test]
 fn the_via_drill_goes_through_the_board() {
     let scene = scene_of(&board());

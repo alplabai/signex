@@ -552,10 +552,11 @@ impl PcbSnapshot {
         for via in &board.vias {
             if view.is_none_or(|v| v.shows_object(BoardObject::Vias) && v.shows_via(&via.layers)) {
                 let (how, ink) = classify(view, &via.layers, true);
-                let mut input = via_from_board_via(via, view.and_then(PcbLayerView::active_copper));
+                let reached = active_in_span(view, &via.layers);
+                let mut input = via_from_board_via(via, reached);
                 input.dimmed = how == Emphasis::Dimmed;
                 input.ink = ink;
-                input.shown_on = active_in_span(view, &via.layers);
+                input.shown_on = reached;
                 vias.push((how, input));
             }
         }
@@ -676,13 +677,15 @@ fn footprint_pads(footprint: &Footprint, view: Option<&PcbLayerView>) -> Vec<(Em
         if view.is_some_and(|v| !v.shows_pad(footprint, pad)) {
             continue;
         }
-        let (how, ink) = classify(view, pad_layer_names(footprint, pad), is_through_pad(pad));
-        if let Some(mut input) =
-            pad_from_footprint(footprint, pad, view.and_then(PcbLayerView::active_copper))
-        {
+        let names = pad_layer_names(footprint, pad);
+        let (how, ink) = classify(view, names, is_through_pad(pad));
+        let shown_on = active_on_through_pad(view, pad);
+        // Another pad shows a per-layer size only on a layer it reaches.
+        let size_layer = shown_on.or_else(|| active_in_span(view, names));
+        if let Some(mut input) = pad_from_footprint(footprint, pad, size_layer) {
             input.dimmed = how == Emphasis::Dimmed;
             input.ink = ink;
-            input.shown_on = active_on_through_pad(view, pad);
+            input.shown_on = shown_on;
             pads.push((how, input));
         }
     }

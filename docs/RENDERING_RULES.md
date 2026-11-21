@@ -535,7 +535,9 @@ mesh, `signex_gfx::scene3d::Scene3d`):
   view's (`signex_gfx::ring_fill::triangulate_with_holes`).
 - **Single-layer mode does not reach 3D.** It is an editing aid of the flat
   view; in 3D the copper of every shown layer and the parts of both faces
-  stay. Only a layer's eye hides it (`PcbLayerView::is_hidden`).
+  stay. Only a layer's eye hides it (`PcbLayerView::is_hidden`). The active
+  layer's per-layer size does not reach 3D either: a via or pad keeps its
+  stored `diameter` or `size`.
 - **Copper** comes from the same `PcbSnapshot` the flat view draws, so a
   hidden layer is hidden in 3D too: top copper on the top face, bottom
   copper on the bottom face, vias and through-hole pads on both, inner
