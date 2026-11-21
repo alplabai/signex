@@ -108,6 +108,7 @@ impl Signex {
                 if let Some(dismiss) = self
                     .components_row_menu_escape()
                     .or_else(|| self.layer_tab_menu_escape())
+                    .or_else(|| self.active_bar_menu_escape())
                 {
                     return self.update(dismiss);
                 }
@@ -139,6 +140,7 @@ impl Signex {
                 if let Some(dismiss) = self
                     .components_row_menu_escape()
                     .or_else(|| self.layer_tab_menu_escape())
+                    .or_else(|| self.active_bar_menu_escape())
                     .or_else(|| self.board_3d_popover_escape())
                 {
                     return self.update(dismiss);
@@ -213,6 +215,21 @@ impl Signex {
             .then_some(Message::Pcb(PcbMsg::LayerTabMenu(
                 LayerTabMenuMsg::Dismissed,
             )))
+    }
+
+    /// Esc closes an open Active Bar flyout, schematic or board, and nothing
+    /// behind it (#2377): an armed tool stays armed.
+    fn active_bar_menu_escape(&self) -> Option<Message> {
+        let interaction = &self.interaction_state;
+        if interaction.active_bar_menu.is_some() {
+            return Some(Message::ActiveBar(
+                crate::active_bar::ActiveBarMsg::CloseMenus,
+            ));
+        }
+        interaction
+            .pcb_bar_menu
+            .is_some()
+            .then_some(Message::Pcb(PcbMsg::Bar(crate::app::PcbBarMsg::MenuDismissed)))
     }
 
     /// Esc closes an open dock tab right-click menu.
