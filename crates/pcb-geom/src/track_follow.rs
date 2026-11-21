@@ -81,7 +81,10 @@ impl ArcEnds {
             return moved;
         }
         // The turn and scale taking the old chord onto the new one.
-        let (c, s) = ((nx * ox + ny * oy) / chord_sq, (ny * ox - nx * oy) / chord_sq);
+        let (c, s) = (
+            (nx * ox + ny * oy) / chord_sq,
+            (ny * ox - nx * oy) / chord_sq,
+        );
         let (mx, my) = (arc.mid.x - fixed.x, arc.mid.y - fixed.y);
         moved.mid = Point::new(fixed.x + c * mx - s * my, fixed.y + c * my + s * mx);
         if self.start {

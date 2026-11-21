@@ -219,7 +219,10 @@ fn an_arc_following_one_end_keeps_its_other_end_and_its_sweep() {
     let after = ends.follow(&before, Point::new(-1.0, 3.0));
     assert_eq!(after.start, Point::new(1.0, 3.0));
     assert_eq!(after.end, before.end);
-    let (old, new) = (before.sweep().unwrap(), after.sweep().expect("still an arc"));
+    let (old, new) = (
+        before.sweep().unwrap(),
+        after.sweep().expect("still an arc"),
+    );
     assert!((old.sweep - new.sweep).abs() < 1e-9, "{old:?} {new:?}");
 
     let both = ArcEnds { end: true, ..ends };
