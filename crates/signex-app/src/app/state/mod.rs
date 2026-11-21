@@ -57,6 +57,7 @@ mod reference_policy;
 pub(crate) mod rule_profile_ui;
 pub(crate) mod rules_history;
 pub(crate) mod scope;
+pub(crate) mod sheet_change;
 mod sheet_read;
 pub(crate) mod sheet_refs;
 mod tab_placements;

@@ -82,6 +82,9 @@ pub struct CanvasState {
     pan_moved: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
+    /// The right press landed on this canvas, so its release is a canvas
+    /// right-click. A press the Active Bar or an overlay took leaves it unset.
+    right_press_on_canvas: bool,
     /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
     /// Ctrl or Cmd held: a scroll zooms even with "Two-finger scroll pans" on.

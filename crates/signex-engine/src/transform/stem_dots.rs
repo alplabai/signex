@@ -22,7 +22,7 @@ pub(crate) fn stem_keys(sheet: &SchematicSheet) -> HashSet<Key> {
 }
 
 /// The wires passing strictly through `k` and the wire ends on it.
-fn wires_at(sheet: &SchematicSheet, k: Key) -> (usize, usize) {
+pub(super) fn wires_at(sheet: &SchematicSheet, k: Key) -> (usize, usize) {
     let (mut through, mut ends) = (0, 0);
     for wire in &sheet.wires {
         let (a, b) = (pt_key(&wire.start), pt_key(&wire.end));

@@ -147,7 +147,7 @@ impl Signex {
                 .contains_key(&path);
             if missing_sheet && let Some(engine) = self.document_state.engines.get(&path) {
                 let size =
-                    crate::app::load_gateway::effective_paper_size(&engine.document().paper_size);
+                    crate::app::projector::effective_paper_size(&engine.document().paper_size);
                 let paper = crate::panels::paper_dimensions(&size);
                 let slot = self.seeded_canvas_slot(&path, paper);
                 self.interaction_state

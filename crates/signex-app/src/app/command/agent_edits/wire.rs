@@ -19,8 +19,8 @@ pub struct EditSpec {
 }
 
 /// The text of an operand given as JSON: a string, a number, a boolean,
-/// `[x, y]` for a point, or a list of objects (the `edits` of `apply_edits`)
-/// as compact JSON.
+/// `[x, y]` for a point, a list of uuid strings for `ids`, or a list of
+/// objects (the `edits` of `apply_edits`) as compact JSON.
 pub fn operand_text(name: &str, value: &Value) -> Result<String, String> {
     if name.contains('=') {
         return Err(format!("operand name `{name}` must not contain `=`"));
@@ -35,6 +35,12 @@ pub fn operand_text(name: &str, value: &Value) -> Result<String, String> {
         Value::Array(items) if name == "documents" && items.iter().all(Value::is_string) => {
             Ok(value.to_string())
         }
+        // The targets `ids` (#2326) as a JSON list reads as its comma form.
+        Value::Array(items) if name == "ids" && items.iter().all(Value::is_string) => Ok(items
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join(",")),
         Value::Array(point) => match point.as_slice() {
             [Value::Number(x), Value::Number(y)] => Ok(format!("{x},{y}")),
             _ => Err(format!("operand `{name}` must be [x, y] when it is a list")),
@@ -427,6 +433,17 @@ mod tests {
         );
         assert!(parse_documents(r#"["a",1]"#).is_err());
         assert!(parse_documents("{}").is_err());
+    }
+
+    /// `ids` as a JSON list of uuids is the comma text the targets parser
+    /// reads; a list holding anything else keeps the point rule's reason.
+    #[test]
+    fn ids_as_a_list_of_strings_reads_as_comma_text() {
+        let list = json!(["a", "b"]);
+        assert_eq!(operand_text("ids", &list).unwrap(), "a,b");
+        assert_eq!(operand_text("ids", &json!([])).unwrap(), "");
+        assert!(operand_text("ids", &json!(["a", 1])).is_err());
+        assert!(operand_text("summary", &list).is_err());
     }
 
     #[test]

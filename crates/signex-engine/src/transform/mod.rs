@@ -247,8 +247,10 @@ impl Engine {
             }
         };
         // Two wire ends on a pin end, and a directive's stem on a wire, get a
-        // dot too (`corner_dots`, `stem_dots`).
-        corner_dots::add_meeting_dots(&self.document, items, ids, &mut pin_dots);
+        // dot too (`corner_dots`, `stem_dots`), never on a bare T a guarded
+        // move keeps (`frozen.bare`).
+        let bare = frozen.map(|frozen| frozen.bare);
+        corner_dots::add_meeting_dots(&self.document, items, bare, ids, &mut pin_dots);
         let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
             .filter(|(j, v)| j.minted && v.is_none())
@@ -299,7 +301,7 @@ impl Engine {
         let moved_tips = std::cell::OnceCell::new();
         let pin_holds = |at: &signex_types::schematic::Point| {
             let k = signex_net::pt_key(at);
-            let through = (index.segment_candidates(*at).into_iter()).any(|i| {
+            let crossing = (index.segment_candidates(*at).into_iter()).filter(|&i| {
                 let wire = index.wire(i);
                 let (a, b) = (
                     signex_net::pt_key(&wire.start),
@@ -307,11 +309,14 @@ impl Engine {
                 );
                 k != a && k != b && signex_net::point_on_segment(k, a, b)
             });
+            let through_n = crossing.count();
+            let through = through_n > 0;
             // Or two wire ends meet on the pin end (`corner_dots`), or a
-            // stem stands on the wire there (`stem_dots`).
+            // stem stands on one wire there, never where a second passes
+            // (`stem_dots`).
             let ends = autoplace::wire_endpoint_count(*at, &index);
             let stem = stems.contains(&k);
-            if stem && (through || ends >= 2) {
+            if stem && ((through_n == 1 && ends == 0) || (!through && ends >= 2)) {
                 return true;
             }
             if !through && ends < 2 && !(stem && ends == 1) {

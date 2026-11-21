@@ -179,6 +179,8 @@ pub enum PrefMsg {
     DraftTrackpadPan(bool),
     /// Choose "Mouse wheel": zoom or scroll the view. Persisted on Save.
     DraftWheelMode(crate::canvas::WheelMode),
+    /// Choose "Layer switcher": the strip or a dropdown. Persisted on Save.
+    DraftLayerSwitcher(crate::layer_strip_prefs::LayerSwitcher),
     /// Toggle "Remember window size and position". Persisted on Save.
     DraftRememberWindowGeometry(bool),
     /// Move the "Increment step" (-100..=100, never 0). Persisted on Save.
@@ -346,6 +348,7 @@ pub struct PrefsView<'a> {
     pub body_fill_picker_open: bool,
     pub draft_trackpad_pan: bool,
     pub draft_wheel_mode: crate::canvas::WheelMode,
+    pub draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
     pub draft_remember_window_geometry: bool,
     pub draft_drag_direction_select: bool,
     pub draft_increment_step: i32,

@@ -10,7 +10,7 @@ impl Signex {
     /// The status bar for `window_id`. A symbol tab shows its own grid, unit,
     /// tool and segment and no schematic selection; its Grid and unit buttons
     /// drive the symbol's library.
-    pub(in crate::app::view) fn view_status_bar(
+    pub(in crate::app) fn view_status_bar(
         &self,
         window_id: iced::window::Id,
     ) -> Element<'_, Message> {
@@ -66,6 +66,7 @@ impl Signex {
             caption,
             name,
             colour: crate::pcb_canvas::layer_style::painted_layer_colour(view.paint(), layer),
+            opens_list: !self.shows_pcb_layer_strip(),
         })
     }
 

@@ -34,6 +34,9 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 signex-widgets = { workspace = true }
 signex-i18n = { workspace = true }
+# The core's notices are catalog keys (`app/core/event`), named without the
+# Fluent stack (scripts/check_core_guard.sh).
+signex-i18n-ids = { workspace = true }
 signex-erc = { workspace = true }
 signex-erc-dsl = { workspace = true }
 pcb-geom = { path = "../pcb-geom" }

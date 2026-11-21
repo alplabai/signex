@@ -478,9 +478,8 @@ row always works.
 
 File ▸ Fabrication Outputs… runs `fabrication_outputs` (#2388), after the
 Export submenu: it opens the Fabrication Outputs dialog on the board in view,
-greyed while no PCB is in view. The same command is the PCB Active Bar's
-Fabrication Outputs button (after Board Sketch) and a palette row; no keymap
-preset binds it. Nothing is written until the dialog's Generate. Files,
+greyed while no PCB is in view. The same command is a palette row; it is not
+on the PCB Active Bar, and no keymap preset binds it. Nothing is written until the dialog's Generate. Files,
 formats and frame: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).
 
 ## File: close, save all {#file-close-save-all}

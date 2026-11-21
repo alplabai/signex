@@ -17,9 +17,9 @@ mod graphite;
 mod grid_popover;
 pub(crate) use board::{
     AnchorBar, BoardPopoverModel, BoardReadout, ConnectionTally, DrcAge, DrcList, DrcTally,
-    GridChoice, LayerChoice, LayerList, NetRow, SelectedRow, SelectedWhat, SelectionList,
-    UnroutedList, board_grid_value, custom_pitch, popover_left as board_popover_left,
-    popover_view as board_popover_view,
+    GridChoice, LayerChoice, LayerDropdownGroup, LayerList, NetRow, SelectedRow, SelectedWhat,
+    SelectionList, UnroutedList, board_grid_value, custom_pitch, group_layers,
+    popover_left as board_popover_left, popover_view as board_popover_view,
 };
 pub use board::{
     BoardCounter, BoardPopoverEvent, BoardPopoverKind, BoardStatusPopover, BoardStatusUi,
@@ -80,6 +80,8 @@ pub(crate) struct LayerReadout {
     pub caption: Localized,
     pub name: Localized,
     pub colour: Color,
+    /// A click opens the layer dropdown; otherwise the pill is a label.
+    pub opens_list: bool,
 }
 
 /// The board view's angle readout (#2316): a click opens a value field.

@@ -26,3 +26,8 @@
 # raising the baseline needs a maintainer's approval.
 /scripts/uifree-state.txt                        @hkngln @alpCaner
 /scripts/uifree-state-baseline.txt               @hkngln @alpCaner
+
+# The edit-tail wrapper exception (#2704): the list may only shrink, and its
+# cap and name checksum live in the guard, so both need a maintainer.
+/scripts/check_sheet_change_seam.sh              @hkngln @alpCaner
+/scripts/sheet-change-wrappers.txt               @hkngln @alpCaner

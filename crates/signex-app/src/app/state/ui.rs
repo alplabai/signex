@@ -225,6 +225,10 @@ pub struct UiState {
     pub wheel_mode: crate::canvas::WheelMode,
     /// Draft mirror of [`Self::wheel_mode`] for the Preferences dialog.
     pub preferences_draft_wheel_mode: crate::canvas::WheelMode,
+    /// How a board picks its active layer: the tabs or a dropdown.
+    pub layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
+    /// Draft mirror of [`Self::layer_switcher`] for the Preferences dialog.
+    pub preferences_draft_layer_switcher: crate::layer_strip_prefs::LayerSwitcher,
     /// The locale in force: its catalog bundle and the Language list. Shared
     /// with the menus; replaced by `Signex::set_language` (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,

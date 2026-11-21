@@ -1,7 +1,7 @@
 # Fabrication outputs
 
-File ▸ Fabrication Outputs (#2388), the PCB Active Bar's Fabrication Outputs
-button and the palette row all run `fabrication_outputs`. It opens one
+File ▸ Fabrication Outputs (#2388) and the palette row both run
+`fabrication_outputs`. It opens one
 dialog on the board in view: which files to write, the file-name stem, and
 the output folder (default: a `fabrication` folder beside the board). Nothing
 is written until Generate. Generate copies the board as it is in memory

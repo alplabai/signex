@@ -702,10 +702,13 @@ impl canvas::Program<Message> for PcbCanvas {
             Event::Mouse(mouse::Event::ButtonReleased(button)) => {
                 if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
                     let moved = std::mem::take(&mut state.pan_moved);
-                    state.panning = false;
+                    // Only a press on this canvas starts a pan: the release
+                    // of one the Active Bar took is not a board right-click.
+                    let pressed_here = std::mem::take(&mut state.panning);
                     state.last_pan_pos = None;
                     // A right click that did not pan opens the board's menu (#2240).
                     if *button == mouse::Button::Right
+                        && pressed_here
                         && !moved
                         && self.selectable
                         && let Some(pos) = cursor.position_in(bounds)

@@ -61,14 +61,11 @@ fn text<'a>(args: &'a CommandArgs, name: &str) -> Option<&'a str> {
     }
 }
 
-/// `ids`: uuids, comma separated.
-fn uuids(args: &CommandArgs) -> Result<Vec<Uuid>, String> {
-    let list = text(args, "ids").ok_or("the operand `ids` is needed")?;
-    list.split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| Uuid::parse_str(s).map_err(|_| format!("`{s}` is not a uuid")))
-        .collect()
+/// `ids`: the items, as the operand parser read them.
+fn uuids(args: &CommandArgs) -> Result<Vec<Uuid>, &'static str> {
+    args.targets("ids")
+        .map(<[Uuid]>::to_vec)
+        .ok_or("the operand `ids` is needed")
 }
 
 fn board<'a>(app: &'a Signex, path: &std::path::Path) -> Option<&'a PcbBoard> {

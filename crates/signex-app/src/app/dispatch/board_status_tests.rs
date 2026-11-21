@@ -357,3 +357,96 @@ fn route_next_frames_the_connection_and_arms_routing() {
     assert_eq!(armed, Some(BoardPlaceTool::InteractiveRouting));
     assert_eq!(open_kind(&app), None);
 }
+
+// ─── The layer switcher preference (Caner, 2026-11-21) ───────────────────
+
+/// What a left click on the Layer pill of `window`'s bar sends.
+fn pill_click(app: &Signex, window: iced::window::Id) -> Vec<Message> {
+    let caption = signex_i18n::t!(app.ui_state.i18n, signex_i18n::ids::PCB_STATUS_LAYER);
+    crate::layout_probe::messages_on_click(
+        app.view_status_bar(window),
+        iced::Size::new(1600.0, 40.0),
+        &caption.to_string(),
+    )
+}
+
+fn prefs(msg: crate::preferences::PrefMsg) -> Message {
+    Message::Preferences(crate::app::PreferencesMsg::Inner(msg))
+}
+
+#[test]
+fn the_layer_switcher_defaults_to_strip_and_round_trips() {
+    use crate::fonts::{read_layer_switcher_pref_from, write_layer_switcher_pref_at};
+    use crate::layer_strip_prefs::LayerSwitcher;
+    assert_eq!(read_layer_switcher_pref_from(None), LayerSwitcher::Strip);
+    let junk = serde_json::json!({ "pcb_layer_switcher": "sideways" });
+    assert_eq!(
+        read_layer_switcher_pref_from(Some(&junk)),
+        LayerSwitcher::Strip
+    );
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("prefs.json");
+    write_layer_switcher_pref_at(&path, LayerSwitcher::Dropdown);
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(
+        read_layer_switcher_pref_from(Some(&saved)),
+        LayerSwitcher::Dropdown
+    );
+}
+
+#[test]
+fn under_strip_the_layer_pill_is_a_label_that_does_not_step() {
+    use crate::layer_strip_prefs::LayerSwitcher;
+    let (mut app, path, main) = app_with_board();
+    app.ui_state.layer_switcher = LayerSwitcher::Strip;
+    let before = app.pcb_layer_view(&path).active();
+    assert!(app.shows_pcb_layer_strip());
+    assert!(pill_click(&app, main).is_empty(), "a click sends nothing");
+    assert_eq!(app.pcb_layer_view(&path).active(), before);
+    assert_eq!(open_kind(&app), None);
+}
+
+/// Saved in Preferences it applies at once: the strip goes, the pill opens
+/// the grouped list, a pick sets the layer and closes it, and Esc closes it.
+#[test]
+fn under_dropdown_the_pill_opens_the_list_and_a_pick_sets_the_layer() {
+    use crate::app::PreferencesMsg;
+    use crate::layer_strip_prefs::LayerSwitcher;
+    use crate::preferences::PrefMsg;
+    let (mut app, path, main) = app_with_board();
+    app.ui_state.layer_switcher = LayerSwitcher::Strip;
+    let _ = app.update(Message::Preferences(PreferencesMsg::Open));
+    let _ = app.update(prefs(PrefMsg::DraftLayerSwitcher(LayerSwitcher::Dropdown)));
+    assert!(app.ui_state.preferences_draft_differs());
+    assert!(app.shows_pcb_layer_strip(), "a draft changes nothing");
+    let _ = app.update(prefs(PrefMsg::Save));
+    let _ = app.update(prefs(PrefMsg::DiscardAndClose));
+    assert_eq!(app.ui_state.layer_switcher, LayerSwitcher::Dropdown);
+    assert!(!app.shows_pcb_layer_strip(), "the strip is gone");
+
+    let clicked = pill_click(&app, main);
+    assert_eq!(clicked.len(), 1, "the pill is a button");
+    let _ = app.update(clicked[0].clone());
+    assert_eq!(open_kind(&app), Some((main, BoardPopoverKind::Layer)));
+    let Some(BoardPopoverModel::LayerDropdown(groups)) = app.board_popover_model(main) else {
+        panic!("the layer dropdown");
+    };
+    let bottom = PcbLayer::Copper(CopperLayer::Bottom);
+    assert!(
+        groups
+            .iter()
+            .flat_map(|group| &group.rows)
+            .any(|row| row.layer == bottom)
+    );
+    event(&mut app, BoardPopoverEvent::LayerPicked(bottom));
+    assert_eq!(app.pcb_layer_view(&path).active(), bottom);
+    assert_eq!(open_kind(&app), None, "a pick closes it");
+
+    click(&mut app, main, BoardCounter::Layer);
+    let _ = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
+    assert_eq!(open_kind(&app), None, "Esc closes it");
+    click(&mut app, main, BoardCounter::Layer);
+    event(&mut app, BoardPopoverEvent::Dismissed);
+    assert_eq!(open_kind(&app), None, "a press outside closes it");
+}

@@ -12,8 +12,8 @@ use signex_widgets::{button, text};
 use super::Readout;
 use super::graphite::{
     BAR_GAP, BAR_PADDING, CLUSTER_GAP, PANELS_ICON, SP, TS, UNIT_COLUMN, X_COLUMN, Y_COLUMN,
-    cursor_texts, grid_text, layer_pill, mono_button, mono_message, mono_text, panels_button, rule,
-    selection_pill, snap_label, snap_pill, view_angle, zoom_text,
+    cursor_texts, grid_text, layer_label, layer_pill, mono_button, mono_message, mono_text,
+    panels_button, rule, selection_pill, snap_label, snap_pill, view_angle, zoom_text,
 };
 use crate::app::StatusBarRequest;
 use crate::styles::tokens::resolve;
@@ -224,35 +224,43 @@ fn grid_snap_cluster<'a>(
         .boxed()
 }
 
-/// The active copper layer of an open board: its swatch, the caption, the
-/// name and the chevron; a click steps to the next layer (#2223), a
-/// right-click opens the Active layer popover (#2460).
+/// The active layer of an open board: its swatch, the caption and the name.
+/// Under the Dropdown layer switcher it is a button with a chevron that
+/// opens the list; under Strip it is a plain label. A right-click opens the
+/// Active layer popover (#2460).
 fn layer_pill_view<'a>(
     r: &Readout<'_>,
     tokens: &ThemeTokens,
 ) -> Option<Element<'a, StatusBarRequest>> {
     let layer = r.surface.active_layer.clone()?;
     let r_tokens = resolve(tokens);
-    let pill = button(
-        row![
-            super::board::layer_swatch(layer.colour, tokens),
-            text(layer.caption).size(TS.body).color(r_tokens.ink3),
-            text(layer.name)
-                .size(TS.body)
-                .color(r_tokens.accent_soft_ink),
-            super::board::layer_chevron(tokens),
-        ]
-        .spacing(SP.s)
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([1.5, 6.0])
-    .style(layer_pill(tokens))
-    .on_press(StatusBarRequest::ActiveLayerStepRequested);
-    let pill = mouse_area(pill).on_right_press(StatusBarRequest::BoardCounterClicked {
+    let mut face = row![
+        super::board::layer_swatch(layer.colour, tokens),
+        text(layer.caption).size(TS.body).color(r_tokens.ink3),
+        text(layer.name)
+            .size(TS.body)
+            .color(r_tokens.accent_soft_ink),
+    ]
+    .spacing(SP.s)
+    .align_y(iced::Alignment::Center);
+    let opened = StatusBarRequest::BoardCounterClicked {
         window: None,
         counter: super::BoardCounter::Layer,
-    });
-    Some(pill.boxed())
+    };
+    let pill: Element<'a, StatusBarRequest> = if layer.opens_list {
+        face = face.push(super::board::layer_chevron(tokens));
+        button(face)
+            .padding([1.5, 6.0])
+            .style(layer_pill(tokens))
+            .on_press(opened.clone())
+            .boxed()
+    } else {
+        container(face)
+            .padding([1.5, 6.0])
+            .style(layer_label(tokens))
+            .boxed()
+    };
+    Some(mouse_area(pill).on_right_press(opened).boxed())
 }
 
 /// The tool alone, in ink and the UI face, then the live hint in muted mono
@@ -373,6 +381,7 @@ mod tests {
                 caption: t!(i18n, ids::PCB_STATUS_LAYER),
                 name: t!(i18n, ids::PCB_STATUS_LAYER),
                 colour: iced::Color::WHITE,
+                opens_list: false,
             }),
             view_angle: Some(ViewAngleReadout {
                 caption: t!(i18n, ids::PCB_STATUS_LAYER),

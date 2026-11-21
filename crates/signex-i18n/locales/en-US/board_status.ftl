@@ -28,6 +28,15 @@ board-status-cycles-both = { $next } / { $prev } cycles
 board-status-layer-title = Active layer
 board-status-layers-panel = Layers panel
 
+## The layer dropdown's group headings
+board-status-layer-group-copper = Copper
+board-status-layer-group-silkscreen = Silkscreen
+board-status-layer-group-mask = Mask
+board-status-layer-group-paste = Paste
+board-status-layer-group-assembly = Assembly
+board-status-layer-group-mechanical = Mechanical
+board-status-layer-group-documentation = Documentation
+
 ## Grid popover
 board-status-grid-title = Grid
 # { $value } is a grid pitch in mm, without the unit.

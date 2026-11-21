@@ -44,6 +44,7 @@ pub mod find_similar;
 pub mod first_run_tour;
 pub mod fonts;
 pub mod frame_probe;
+pub mod gpu_backend;
 pub mod headless;
 pub mod icons;
 pub mod io_ports;

@@ -103,6 +103,14 @@ impl Size {
         }
     }
 
+    /// Edge of the leading glyph (the mock's 12 px and 14 px).
+    fn glyph(self) -> f32 {
+        match self {
+            Size::Small => TS.body,
+            Size::Regular => ICON,
+        }
+    }
+
     fn radius(self) -> f32 {
         match self {
             Size::Small => Radii::GRAPHITE.small,
@@ -195,7 +203,6 @@ fn sized_button<'a>(
     visible: bool,
 ) -> Element<'a, Message> {
     let ink = match look {
-        _ if !visible => Color::TRANSPARENT,
         Look::Outline => ti(tokens.text),
         Look::Primary => resolve(tokens).primary_ink,
         Look::Ghost => resolve(tokens).accent_text,
@@ -204,7 +211,13 @@ fn sized_button<'a>(
         .spacing(SP.s + SP.xs / 2.0)
         .align_y(Alignment::Center);
     if let Some(glyph) = glyph {
-        content = content.push(icon(glyph, size.text() * 7.0 / 6.0, ink));
+        let side = size.glyph();
+        // An SVG tint drops its alpha, so a transparent one paints black.
+        content = content.push(if visible {
+            icon(glyph, side, ink)
+        } else {
+            Space::new().width(side).height(side).boxed()
+        });
     }
     content = content.push(
         text(label)

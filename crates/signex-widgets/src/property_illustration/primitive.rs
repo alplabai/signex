@@ -147,6 +147,11 @@ pub enum Primitive {
     Callout(Callout),
     Leader(Leader),
     Label(TextLabel),
+    /// An undrawn hover region: one steady target for a group of small
+    /// parts (a field of dots), so the gaps between them do not unlight it.
+    HoverArea {
+        rect: Rectangle,
+    },
 }
 
 impl Primitive {

@@ -54,10 +54,17 @@ impl Signex {
                 self.close_board_popover();
                 Task::none()
             }
-            E::LayerPicked(layer) => self.dispatch_pcb_message(PcbMsg::ViewInWindow {
-                window,
-                event: PcbViewMsg::ActiveLayerPicked(layer),
-            }),
+            E::LayerPicked(layer) => {
+                let task = self.dispatch_pcb_message(PcbMsg::ViewInWindow {
+                    window,
+                    event: PcbViewMsg::ActiveLayerPicked(layer),
+                });
+                // The dropdown closes on a pick; the Active layer popover stays.
+                if !self.shows_pcb_layer_strip() {
+                    self.close_board_popover();
+                }
+                task
+            }
             E::LayersPanelOpened => {
                 self.close_board_popover();
                 self.update(Message::Overlay(OverlayMsg::OpenPanel(

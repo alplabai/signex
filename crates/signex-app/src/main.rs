@@ -7,7 +7,7 @@
 use signex_app::app::Signex;
 use signex_app::fonts::bundled;
 use signex_app::startup_args::StartupAction;
-use signex_app::{diagnostics, fonts, pan_zoom_bench, startup_args};
+use signex_app::{diagnostics, fonts, gpu_backend, pan_zoom_bench, startup_args};
 
 fn main() -> iced::Result {
     // `--version` / `--help` must answer before logging, fonts, iced or
@@ -30,6 +30,8 @@ fn main() -> iced::Result {
             std::process::exit(2);
         }
     };
+
+    gpu_backend::prefer_dx12_on_windows();
 
     // The pan/zoom frame bench, a dev/QA mode (#2472, docs/PERFORMANCE.md):
     // it opens its own board instead of the command-line documents.

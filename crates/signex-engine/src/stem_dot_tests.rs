@@ -120,3 +120,25 @@ fn a_net_label_on_a_wire_still_gets_no_dot() {
     engine.execute(Command::PlaceLabel { label }).unwrap();
     assert!(dots(&engine).is_empty());
 }
+
+/// A wire drawn later straight through a stem's dot: the dot would join the
+/// two wires, which never met, so it goes and they stay apart.
+#[test]
+fn a_wire_drawn_through_a_stem_dot_drops_it_and_stays_apart() {
+    let mut engine = one_wire();
+    place(&mut engine, net_parameters((50.0, 40.0)));
+    assert_eq!(dots(&engine), vec![Point::new(50.0, 40.0)]);
+    let wire = signex_types::schematic::Wire {
+        uuid: Uuid::now_v7(),
+        start: Point::new(50.0, 0.0),
+        end: Point::new(50.0, 80.0),
+        ..Default::default()
+    };
+    engine
+        .execute(Command::PlaceWireSegmentAsIs { wire })
+        .unwrap();
+    assert!(dots(&engine).is_empty(), "{:?}", dots(&engine));
+    let mut nets = signex_net::logical_connectivity(engine.document());
+    let (a, b) = (Point::new(0.0, 40.0), Point::new(50.0, 0.0));
+    assert_ne!(nets.root_of(&a), nets.root_of(&b));
+}

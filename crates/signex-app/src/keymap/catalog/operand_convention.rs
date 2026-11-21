@@ -31,7 +31,8 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     // Delete what the command names instead of setting it.
     ("remove", OperandKind::Bool),
     ("net", OperandKind::Text),
-    ("ids", OperandKind::Text),
+    // #2326: the items a command acts on, by uuid; see `IDS_STILL_TEXT`.
+    ("ids", OperandKind::Targets),
     ("kinds", OperandKind::Text),
     ("region", OperandKind::Text),
     ("fields", OperandKind::Text),
@@ -115,6 +116,11 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
     ("via_hole", OperandKind::Text),
     ("current", OperandKind::Text),
 ];
+
+/// The commands whose `ids` is still text, not targets (#2326): a design
+/// reuse block takes designators too, and `read_document` filters by ids
+/// rather than acting on them. The list only shrinks; #2709 empties it.
+pub const IDS_STILL_TEXT: &[&str] = &["read_document", "save_board_reuse_block"];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma
 /// separated; `-` when the command takes none.

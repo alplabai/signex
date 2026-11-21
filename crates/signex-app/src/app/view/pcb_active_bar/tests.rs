@@ -141,9 +141,9 @@ fn the_pcb_bar_button_is_named_and_drawn_as_board_sketch() {
 
 /// #2352, #2373, #2388, #2389, #2392, #2424, mockup row 108: Selection Filter, Move,
 /// Align | Components | Route, Tune, Via/Pad, Copper Areas, Copper Drawing |
-/// Dimensions, Text, Graphics | Board Sketch, Fabrication Outputs | View. A
-/// group with a live row runs it; a group with none is greyed with a tooltip
-/// that says it is not on boards yet.
+/// Dimensions, Text, Graphics | Board Sketch | View. Fabrication Outputs is
+/// not on the bar (Caner, 2026-11-21). A group with a live row runs it; a
+/// group with none is greyed with a tooltip that says it is not on boards yet.
 #[test]
 fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     let items = pcb_bar_items(
@@ -154,7 +154,11 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         None,
     );
     let all = buttons(&items);
-    assert_eq!(all.len(), 15);
+    assert_eq!(all.len(), 14);
+    assert!(
+        !all.iter().any(|b| runs(b, "fabrication_outputs")),
+        "Fabrication Outputs stays in its menu"
+    );
     let separators = items
         .iter()
         .filter(|item| matches!(item, ActiveBarItem::Separator))
@@ -176,12 +180,12 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
     let after: Vec<usize> = (0..all.len()).filter(|&i| separator_after(i)).collect();
     assert_eq!(
         after,
-        [2, 3, 8, 11, 13],
-        "Align | Components | Copper Drawing | Graphics | Fabrication Outputs |"
+        [2, 3, 8, 11, 12],
+        "Align | Components | Copper Drawing | Graphics | Board Sketch |"
     );
     let live = all.iter().filter(|button| button.enabled).count();
     assert_eq!(
-        live, 15,
+        live, 14,
         "#2373, #2389, #2424: every button, Tune, Dimensions, Text and Graphics included, is live"
     );
     assert!(runs(all[1], "move_object"), "Move follows the filter");
@@ -204,8 +208,7 @@ fn the_pcb_bar_has_the_group_layout_and_greys_what_boards_cannot_do() {
         "#2424: Line heads Graphics"
     );
     assert!(runs(all[12], "board_sketch"));
-    assert!(runs(all[13], "fabrication_outputs"));
-    assert!(runs(all[14], "view_rotate"), "View closes the bar");
+    assert!(runs(all[13], "view_rotate"), "View closes the bar");
     for button in all.iter().filter(|button| !button.enabled) {
         assert!(button.on_press.is_none() && button.on_right_press.is_none());
         assert!(
@@ -277,12 +280,12 @@ fn the_board_sketch_button_enters_sketch_mode() {
     assert!(app.board_sketch_in_view().is_some());
 }
 
-/// #2388: Fabrication Outputs opens its dialog on the board in view and
-/// writes nothing.
+/// #2388: the Fabrication Outputs command, which its menu row runs, opens
+/// the dialog on the board in view and writes nothing.
 #[test]
-fn the_fabrication_outputs_button_opens_its_dialog() {
+fn the_fabrication_outputs_command_opens_its_dialog() {
     let mut app = board_app();
-    click(&mut app, "fabrication_outputs");
+    let _ = app.update(run("fabrication_outputs").expect("a catalog command"));
     let state = app
         .ui_state
         .fab_outputs

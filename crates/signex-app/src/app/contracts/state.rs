@@ -730,11 +730,9 @@ pub enum StatusBarRequest {
     /// Click on the "Importing …" segment cancels the running board
     /// import (#1123).
     CancelBoardImport,
-    /// A click on the active-layer pill steps to the next copper layer
-    /// (#2223).
-    ActiveLayerStepRequested,
-    /// A click on a board counter (Routed, Unrouted, DRC, Selected), or a
-    /// right-click on the layer pill or the Grid read-out, opens its popover
+    /// A click on a board counter (Routed, Unrouted, DRC, Selected) or the
+    /// Dropdown switcher's layer pill, or a right-click on the layer pill or
+    /// the Grid read-out, opens its popover
     /// above it, or closes it when open (#2460). The bar sends
     /// `window: None`; `Signex::status_bar_message` names the window it was
     /// clicked in.

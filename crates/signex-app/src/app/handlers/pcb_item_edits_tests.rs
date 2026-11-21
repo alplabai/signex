@@ -446,3 +446,15 @@ fn an_agent_makes_a_pad_a_trapezoid_then_a_custom_pad_in_one_step_each() {
     );
     assert_eq!(pad(&app).shape, PadShape::Trapezoid);
 }
+
+/// #2326: an item named twice is locked once and answered once, in the
+/// order first given.
+#[test]
+fn a_lock_naming_an_item_twice_acts_on_it_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let ids = format!("ids={VIA},{TRACK},{VIA}");
+    let answer = agent(&mut app, &path, "lock_board_items", &[ids.as_str()]);
+    assert_eq!(answer["ids"], serde_json::json!([VIA, TRACK]));
+    assert!(board_of(&app, &path).vias[0].locked);
+}

@@ -39,7 +39,7 @@ const STRIP_HEIGHT: f32 = chrome_px(28.0 * 11.0 / 12.0);
 /// Side padding of the layer set button.
 const SET_PAD_X: f32 = chrome_px(8.0 * 11.0 / 12.0);
 /// Side padding of a tab.
-const TAB_PAD_X: f32 = chrome_px(10.0 * 11.0 / 12.0);
+const TAB_PAD_X: f32 = SP.s;
 /// Gap between a tab's swatch and its name.
 const TAB_GAP: f32 = chrome_px(6.0 * 11.0 / 12.0);
 /// Edge of a tab's colour swatch.
@@ -108,6 +108,13 @@ fn describe(
     match user_name {
         Some(def) => signex_i18n::UserText::new(def.display_name.clone()).into(),
         None => tab_name(i18n, layer, names.0, names.1).into(),
+    }
+}
+
+impl Signex {
+    /// Whether boards show the layer strip: the Strip layer switcher.
+    pub(crate) fn shows_pcb_layer_strip(&self) -> bool {
+        self.ui_state.layer_switcher == crate::layer_strip_prefs::LayerSwitcher::Strip
     }
 }
 
@@ -299,7 +306,7 @@ fn layer_set_button<'a>(
     signex_widgets::tooltip(set_button, tip, signex_widgets::tooltip::Position::Top).boxed()
 }
 
-/// One tab: swatch and name with a line on its right; the active layer's
+/// One tab: swatch and name with a divider on its right; the active layer's
 /// tab is filled accent-soft, in medium weight, with the accent bar along
 /// its top.
 fn layer_tab<'a>(
@@ -349,7 +356,7 @@ fn layer_tab<'a>(
         r.accent_soft,
         crate::styles::tokens::hover_overlay(tokens),
         ti(tokens.accent),
-        r.line_soft,
+        r.line_strong,
     );
     let TabMessages { press, menu } = messages;
     let tab = button(container(content).center_y(Length::Fill))

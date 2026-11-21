@@ -52,7 +52,8 @@ fn app_with_a_compile(path: &std::path::Path) -> Signex {
 fn an_electrical_edit_marks_a_compiled_sheet_out_of_date() {
     let path = PathBuf::from("/p/child.snxsch");
     let mut app = app_with_a_compile(&path);
-    app.mark_compiled_stale(&path, signex_engine::DocumentPatch::SYMBOLS);
+    app.document_state
+        .mark_compiled_stale(&path, signex_engine::DocumentPatch::SYMBOLS);
     let result = app.document_state.compiled_design.results.values().next();
     assert!(result.is_some_and(|r| r.stale.contains(&path)));
 }
@@ -61,8 +62,9 @@ fn an_electrical_edit_marks_a_compiled_sheet_out_of_date() {
 fn a_colour_only_edit_or_another_sheet_leaves_the_compile_fresh() {
     let path = PathBuf::from("/p/child.snxsch");
     let mut app = app_with_a_compile(&path);
-    app.mark_compiled_stale(&path, signex_engine::DocumentPatch::NET_COLORS);
-    app.mark_compiled_stale(
+    app.document_state
+        .mark_compiled_stale(&path, signex_engine::DocumentPatch::NET_COLORS);
+    app.document_state.mark_compiled_stale(
         &PathBuf::from("/p/other.snxsch"),
         signex_engine::DocumentPatch::WIRES,
     );
