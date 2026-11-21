@@ -6,6 +6,7 @@
 pub(crate) mod footprint_canvas;
 mod graphite;
 pub mod load;
+pub mod preview_view;
 pub(crate) mod symbol_canvas;
 
 #[cfg(test)]
@@ -23,6 +24,7 @@ use signex_types::schematic::LibSymbol;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
+use self::preview_view::PreviewPane;
 use super::{HINT_TEXT_SIZE, ROW_TEXT_SIZE, SP};
 use crate::library::messages::LibraryMessage;
 use crate::library::state::{ComponentsPanelRowKey, ComponentsPanelState};
@@ -283,15 +285,18 @@ pub(crate) fn view<'a>(
     // Symbol and Footprint side by side, each under its label.
     let symbol_preview = match &d.symbol {
         Some(symbol) => preview_box(
-            symbol_canvas::symbol_preview(
-                symbol.clone(),
-                *canvas_colors,
+            symbol_canvas::viewed_symbol(symbol_canvas::ViewedSymbolSpec {
+                lib: symbol.clone(),
+                colors: *canvas_colors,
                 grid,
-                PREVIEW_HEIGHT,
+                height: PREVIEW_HEIGHT,
                 device_px_per_logical_px,
-            )
-            // The preview canvas publishes nothing.
-            .map(|()| LibraryMessage::ComponentsPanelRowMenuDismissed)
+                view: panel.preview_views.of(PreviewPane::Symbol),
+                wheel_mode: panel.wheel_mode,
+            })
+            .map(|gesture| {
+                LibraryMessage::ComponentsPanelPreviewMoved(PreviewPane::Symbol, gesture)
+            })
             .boxed(),
             tokens,
         ),
@@ -308,13 +313,19 @@ pub(crate) fn view<'a>(
     let choices = d.footprint_choices(i18n);
     let preview = d.footprint_preview(shown.as_ref().map(|c| &c.reference));
     let footprint_preview = match preview {
-        Some(fp) => {
-            let program = footprint_canvas::FootprintPreview::new(fp).with_theme_tokens(tokens);
-            let canvas = iced::widget::canvas(program)
-                .width(Length::Fill)
-                .height(PREVIEW_HEIGHT);
-            preview_box(canvas.boxed(), tokens)
-        }
+        Some(fp) => preview_box(
+            footprint_canvas::viewed_footprint(
+                fp,
+                tokens,
+                panel.preview_views.of(PreviewPane::Footprint),
+                panel.wheel_mode,
+                PREVIEW_HEIGHT,
+            )
+            .map(|gesture| {
+                LibraryMessage::ComponentsPanelPreviewMoved(PreviewPane::Footprint, gesture)
+            }),
+            tokens,
+        ),
         None if d.has_footprint_ref => empty(
             note(ids::PANELS_COMPONENTS_DETAILS_FOOTPRINT_UNREADABLE),
             muted,

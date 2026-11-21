@@ -323,13 +323,15 @@ fn drive_with(
                 &mut renderer,
                 &mut published,
             );
-            // An outdated interface is rebuilt and so redrawn.
-            live.redraws.push(match event_state {
+            // An outdated interface is rebuilt and so redrawn; so is one
+            // that published a message.
+            let asked = match event_state {
                 State::Updated { redraw_request, .. } => {
                     !matches!(redraw_request, iced::window::RedrawRequest::Wait)
                 }
                 State::Outdated => true,
-            });
+            };
+            live.redraws.push(asked || !published.is_empty());
             cache = ui.into_cache();
         }
         for message in published {

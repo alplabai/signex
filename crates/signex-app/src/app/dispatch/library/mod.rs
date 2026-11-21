@@ -590,6 +590,14 @@ impl Signex {
                 self.library.components_panel.split_hovered = is_hovered;
                 Task::none()
             }
+            LibraryMessage::ComponentsPanelPreviewMoved(pane, gesture) => {
+                let zoom_step = self.ui_state.effective_zoom_step();
+                self.library
+                    .components_panel
+                    .preview_views
+                    .apply(pane, gesture, zoom_step);
+                Task::none()
+            }
             LibraryMessage::ComponentsPanelDetailsLoaded {
                 key,
                 generation,

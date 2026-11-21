@@ -877,6 +877,10 @@ pub struct ComponentsPanelState {
     pub split_hovered: bool,
     /// The divider is being dragged.
     pub split_dragging: bool,
+    /// Zoom and pan of the card's Symbol and Footprint previews.
+    pub preview_views: crate::panels::components_panel::details::preview_view::PreviewViews,
+    /// The Mouse wheel preference, mirrored by `sync_zoom_step`.
+    pub wheel_mode: crate::canvas::WheelMode,
     /// The selected row's details, or the load that is filling them.
     pub details: crate::panels::components_panel::details::DetailsState,
     /// The footprint picked in the details view, with the row it was picked
@@ -915,6 +919,8 @@ impl Default for ComponentsPanelState {
             list_height: crate::panels::components_panel::split::DEFAULT_LIST_HEIGHT,
             split_hovered: false,
             split_dragging: false,
+            preview_views: Default::default(),
+            wheel_mode: Default::default(),
             details: Default::default(),
             footprint_pick: None,
             drag: None,

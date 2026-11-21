@@ -33,6 +33,10 @@ impl Signex {
         {
             panel.footprint_pick = None;
         }
+        // Another part opens fitted.
+        if panel.selected.as_ref() != Some(&key) {
+            panel.preview_views = Default::default();
+        }
         panel.selected = Some(key.clone());
         // The row already shown is read again only when it was saved since
         // or its last read failed, and not while a read is running.
@@ -67,7 +71,10 @@ impl Signex {
             return Task::none();
         }
         let is_default = row.footprint_ref == Some(reference);
-        self.library.components_panel.footprint_pick = (!is_default).then_some((key, reference));
+        let panel = &mut self.library.components_panel;
+        panel.footprint_pick = (!is_default).then_some((key, reference));
+        // The newly shown footprint opens fitted.
+        panel.preview_views.footprint = Default::default();
         Task::none()
     }
 
