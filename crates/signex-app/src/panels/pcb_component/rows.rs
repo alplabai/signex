@@ -537,7 +537,7 @@ pub(super) fn callout<'a>(
     action: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
     let (ground, ink) = pill_colors(&form.ctx.tokens, PillTone::Warn);
-    let icon = svg(svg::Handle::from_memory(WARN_ICON))
+    let icon = svg(crate::icons::static_glyph(WARN_ICON))
         .width(TS.body)
         .height(TS.body)
         .style(move |_: &Theme, _| svg::Style {

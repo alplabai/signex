@@ -45,7 +45,7 @@ const FOLDER: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" hei
 
 /// A monochrome glyph tinted `ink`.
 pub(super) fn glyph(bytes: &'static [u8], side: f32, ink: Color) -> iced::widget::Svg<'static> {
-    svg(svg::Handle::from_memory(bytes))
+    svg(crate::icons::static_glyph(bytes))
         .width(side)
         .height(side)
         .style(move |_: &Theme, _| svg::Style {

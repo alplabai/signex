@@ -357,7 +357,7 @@ fn binding_card<'a>(b: Binding, tokens: &ThemeTokens, i18n: &I18n) -> Element<'a
     };
     let card = container(
         row![
-            svg(svg::Handle::from_memory(glyph_bytes))
+            svg(crate::icons::static_glyph(glyph_bytes))
                 .width(GLYPH)
                 .height(GLYPH)
                 .style(move |_: &Theme, _| svg::Style {

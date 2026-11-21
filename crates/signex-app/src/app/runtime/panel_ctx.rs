@@ -745,7 +745,7 @@ impl Signex {
                 .map(crate::panels::PcbNetsSummary::of),
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
-            // Kept: `sync_unions_panel` and `harness_panel_facts` own these.
+            // Kept: `sync_unions_panel` and `refresh_harness_panel` own these.
             unions: self.document_state.panel_ctx.unions.clone(),
             harness: self.document_state.panel_ctx.harness.clone(),
             compiled_design: self.compiled_design_view(),

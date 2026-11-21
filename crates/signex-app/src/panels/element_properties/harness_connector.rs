@@ -74,6 +74,9 @@ pub struct HarnessPanel {
     pub selected_definition: usize,
     /// A placement field being typed and its text.
     pub draft: Option<(HarnessField, String)>,
+    /// The stamp of the app state these facts were built from; see
+    /// `Signex::refresh_harness_panel`.
+    pub built_from: Option<u64>,
 }
 
 /// An edit or a click in the harness Properties or definitions view.

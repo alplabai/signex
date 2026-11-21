@@ -25,6 +25,8 @@ mod symbol_ctx;
 mod value_evaluation;
 mod window_panel_ctx;
 pub(crate) use window_panel_ctx::WindowCtxKey;
+#[cfg(test)]
+mod mirror_cache_tests;
 mod sketch_canvas_text;
 mod window_hierarchies;
 #[cfg(test)]
@@ -507,7 +509,7 @@ impl Signex {
             }
         }
         self.document_state.panel_ctx.footprint_card = self.resolve_footprint_card();
-        self.document_state.panel_ctx.harness = self.harness_panel_facts();
+        self.refresh_harness_panel();
     }
 
     /// Canvas colours for a given theme id — the one derivation shared by

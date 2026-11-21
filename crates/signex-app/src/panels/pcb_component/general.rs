@@ -100,7 +100,7 @@ fn lock_control<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Element<'a
             locked: facts.locked != Shared::Same(true),
         })
     });
-    let icon = svg(svg::Handle::from_memory(LOCK_ICON))
+    let icon = svg(crate::icons::static_glyph(LOCK_ICON))
         .width(TS.caption)
         .height(TS.caption)
         .style(move |_: &Theme, _| svg::Style {

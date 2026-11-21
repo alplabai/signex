@@ -15,6 +15,21 @@ use super::state::{
 };
 use crate::app::{Message, Signex};
 
+#[cfg(test)]
+thread_local! {
+    /// Test probe: how many times this thread built the Unions panel's view.
+    pub(crate) static UNIONS_VIEW_BUILDS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
+/// The hash of one item, for an order-independent sum over a map.
+fn stamp(item: impl std::hash::Hash) -> u64 {
+    use std::hash::Hasher;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    item.hash(&mut hasher);
+    hasher.finish()
+}
+
 impl Signex {
     pub(crate) fn handle_unions_message(&mut self, msg: UnionsMsg) -> Task<Message> {
         match msg {
@@ -377,12 +392,54 @@ impl Signex {
         true
     }
 
-    /// Rebuild the panel's view from the open sheets. Cheap when the panel
-    /// is closed: nothing is read.
+    /// A stamp of everything the panel's view is built from: the slice's
+    /// state, the sheet in view and its project, the revision of every sheet
+    /// in scope and the selection.
+    fn unions_panel_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let state = &self.ui_state.unions;
+        let docs = &self.document_state;
+        let active = docs.active_path.as_deref();
+        let owner = active
+            .and_then(|p| docs.document_project(p))
+            .map(|p| p.path.as_path());
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (active, owner, state.scope, &state.filter).hash(&mut hasher);
+        (&state.tags_on, &state.picked).hash(&mut hasher);
+        // Order-independent: the hidden unions, and the sheets in scope.
+        let hidden = state.hidden.iter().map(stamp).fold(0u64, u64::wrapping_add);
+        let project_wide = state.scope == UnionScope::Project && owner.is_some();
+        let sheets = docs
+            .engines
+            .iter()
+            .filter(|(path, _)| {
+                Some(path.as_path()) == active
+                    || (project_wide
+                        && docs.document_project(path).map(|p| p.path.as_path()) == owner)
+            })
+            .map(|(path, engine)| stamp((path, engine.revision())))
+            .fold(0u64, u64::wrapping_add);
+        (hidden, state.hidden.len(), sheets).hash(&mut hasher);
+        self.interaction_state
+            .active_canvas()
+            .selected
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Rebuild the panel's view from the open sheets, when what it is built
+    /// from changed. Cheap when the panel is closed: nothing is read.
     pub(crate) fn sync_unions_panel(&mut self) {
         if !self.is_panel_open(crate::panels::PanelKind::Unions) {
+            self.document_state.panel_ctx.unions.built_from = None;
             return;
         }
+        let key = self.unions_panel_key();
+        if self.document_state.panel_ctx.unions.built_from == Some(key) {
+            return;
+        }
+        #[cfg(test)]
+        UNIONS_VIEW_BUILDS.with(|n| n.set(n.get() + 1));
         let state = &self.ui_state.unions;
         let docs = &self.document_state;
         let active = docs.active_path.clone();
@@ -420,7 +477,8 @@ impl Signex {
             sheets.extend(others);
         }
         let selected = &self.interaction_state.active_canvas().selected;
-        let view = panel_view(state, &sheets, active.as_deref(), selected);
+        let mut view = panel_view(state, &sheets, active.as_deref(), selected);
+        view.built_from = Some(key);
         self.document_state.panel_ctx.unions = view;
     }
 }

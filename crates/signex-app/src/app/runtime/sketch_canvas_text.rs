@@ -2,14 +2,16 @@
 //! board sketch session, in the app's language. A canvas cannot read the
 //! `I18n`, so the words travel as plain strings in the editor state
 //! (`state/canvas_text.rs`). Each editor is re-rendered only when its words
-//! are missing or in another language, and its conflict badge only when the
-//! conflict count changes, so the per-update refresh is a comparison.
+//! are missing or in another language, and its conflicts are counted only
+//! when the constraint lists they come from change, so the per-update
+//! refresh is a comparison.
 
 use signex_i18n::{I18n, MessageId, ids};
 
 use super::super::*;
 use crate::library::editor::footprint::SketchCanvasText;
 use crate::library::editor::footprint::sketch_mode::value_edit::conflicting_constraints;
+use crate::library::editor::footprint::state::canvas_text::ConflictSources;
 
 /// `id` as plain canvas text: no bidi isolation marks.
 fn word(i18n: &I18n, id: MessageId) -> String {
@@ -42,6 +44,7 @@ pub(crate) fn render_sketch_canvas_text(i18n: &I18n) -> SketchCanvasText {
         snap_arc: w(ids::SKETCH_CANVAS_SNAP_ARC),
         conflict_badge: String::new(),
         conflict_count: 0,
+        conflict_sources: Default::default(),
         unit_mm: w(ids::SKETCH_CANVAS_UNIT_MM),
         unit_deg: w(ids::SKETCH_CANVAS_UNIT_DEG),
         value_unresolved: w(ids::SKETCH_CANVAS_VALUE_UNRESOLVED),
@@ -59,16 +62,47 @@ pub(crate) fn render_sketch_canvas_text(i18n: &I18n) -> SketchCanvasText {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Test probe: how many times this thread counted a sketch's conflicts.
+    pub(crate) static CONFLICT_COUNTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many constraints of `state` are in conflict.
+fn count_conflicts(state: &crate::library::editor::footprint::FootprintEditorState) -> usize {
+    #[cfg(test)]
+    CONFLICT_COUNTS.with(|n| n.set(n.get() + 1));
+    conflicting_constraints(state).len()
+}
+
 /// Put the words in `i18n`'s language into `editor`, unless they already
-/// are, and the conflict badge for its current conflict count. Returns
-/// whether they changed.
+/// are, and the conflict badge for its current conflict count. The count is
+/// taken again only when the constraint lists it comes from changed, so an
+/// update that touched no sketch (a resize, a hover) only compares them.
+/// Returns whether the words changed.
 pub(crate) fn refresh_canvas_text(editor: &mut FootprintDocument, i18n: &I18n) -> bool {
     let relanguaged = !editor.state.canvas_text.is_rendered_for(i18n.locale());
     if relanguaged {
         editor.state.canvas_text = render_sketch_canvas_text(i18n);
     }
-    let count = conflicting_constraints(&editor.state).len();
-    let recounted = editor.state.canvas_text.set_conflict_count(i18n, count);
+    let state = &editor.state;
+    let solved = state
+        .last_solve
+        .as_ref()
+        .map_or(&[][..], |s| s.over_constraints.as_slice());
+    let rejected = state.conflict.constraints();
+    let recounted = if state.canvas_text.conflict_sources.are(solved, rejected) {
+        false
+    } else {
+        let sources = ConflictSources {
+            solved: solved.to_vec(),
+            rejected: rejected.to_vec(),
+        };
+        let count = count_conflicts(&editor.state);
+        let text = &mut editor.state.canvas_text;
+        text.conflict_sources = sources;
+        text.set_conflict_count(i18n, count)
+    };
     let changed = relanguaged || recounted;
     if changed {
         editor.canvas_cache.clear();

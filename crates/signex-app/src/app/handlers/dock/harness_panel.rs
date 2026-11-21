@@ -18,10 +18,77 @@ use signex_types::schematic::{
 /// The ERC rule whose findings drive the mismatch banner.
 const MISMATCH_RULE: &str = "builtin::harness_entry_mismatch";
 
+#[cfg(test)]
+thread_local! {
+    /// Test probe: how many times this thread built the harness facts.
+    pub(crate) static HARNESS_FACT_BUILDS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
 impl Signex {
+    /// Bring the harness panels up to date. They are rebuilt only when what
+    /// they read changed (see [`Self::harness_facts_key`]); otherwise only
+    /// the typed draft is dropped, as a rebuild drops it.
+    pub(crate) fn refresh_harness_panel(&mut self) {
+        let key = self.harness_facts_key();
+        let held = &mut self.document_state.panel_ctx.harness;
+        if held.built_from == Some(key) {
+            held.draft = None;
+            return;
+        }
+        let mut facts = self.harness_panel_facts();
+        facts.built_from = Some(key);
+        self.document_state.panel_ctx.harness = facts;
+    }
+
+    /// A stamp of everything [`Self::harness_panel_facts`] reads: the
+    /// project in view (its name and harness definitions), every open
+    /// sheet's revision, the sheet in view, the selection and the harness
+    /// mismatch findings.
+    fn harness_facts_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let docs = &self.document_state;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let project = self.project_in_view().and_then(|id| docs.project_by_id(id));
+        if let Some(project) = project {
+            (project.id, &project.data.name).hash(&mut hasher);
+            for d in &project.data.schematic_design.harness_definitions {
+                (&d.name, &d.description).hash(&mut hasher);
+                for e in &d.entries {
+                    (&e.name, &e.harness).hash(&mut hasher);
+                }
+                d.entries.len().hash(&mut hasher);
+            }
+        }
+        // Order-independent: the open sheets and their revisions.
+        let sheets = docs
+            .engines
+            .iter()
+            .map(|(path, engine)| {
+                let mut one = std::collections::hash_map::DefaultHasher::new();
+                (path, engine.revision()).hash(&mut one);
+                one.finish()
+            })
+            .fold(0u64, u64::wrapping_add);
+        (sheets, docs.engines.len()).hash(&mut hasher);
+        docs.active_engine()
+            .map(signex_engine::Engine::revision)
+            .hash(&mut hasher);
+        docs.active_path.hash(&mut hasher);
+        (docs.panel_ctx.selected_uuid, docs.panel_ctx.selected_kind).hash(&mut hasher);
+        for v in &self.ui_state.erc_violations {
+            if v.rule_id.as_str() == MISMATCH_RULE {
+                (v.primary, &v.tag).hash(&mut hasher);
+            }
+        }
+        hasher.finish()
+    }
+
     /// What the harness panels show for the current selection. Keeps the
     /// definitions view open and its pick across refreshes.
-    pub(crate) fn harness_panel_facts(&self) -> HarnessPanel {
+    fn harness_panel_facts(&self) -> HarnessPanel {
+        #[cfg(test)]
+        HARNESS_FACT_BUILDS.with(|n| n.set(n.get() + 1));
         let old = &self.document_state.panel_ctx.harness;
         let mut facts = HarnessPanel {
             definitions_open: old.definitions_open,
@@ -199,7 +266,7 @@ impl Signex {
                 self.set_harness_entry_type(pin, harness_type);
             }
         }
-        self.document_state.panel_ctx.harness = self.harness_panel_facts();
+        self.refresh_harness_panel();
         Some(task)
     }
 

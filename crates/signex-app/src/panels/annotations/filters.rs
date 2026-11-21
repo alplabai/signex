@@ -48,7 +48,7 @@ pub(super) fn tools<'a>(ctx: &'a PanelContext, view: &'a AnnotationsView) -> Ele
 }
 
 pub(super) fn glyph<'a>(bytes: &'static [u8], size: f32, ink: Color) -> Element<'a, PanelMsg> {
-    svg(svg::Handle::from_memory(bytes))
+    svg(crate::icons::static_glyph(bytes))
         .width(size)
         .height(size)
         .style(move |_: &Theme, _| svg::Style {

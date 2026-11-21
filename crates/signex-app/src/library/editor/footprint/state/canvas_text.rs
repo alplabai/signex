@@ -7,6 +7,23 @@
 //! character, never shaped as mixed-script text.
 
 use signex_i18n::{Arg, I18n, ids};
+use signex_sketch::id::ConstraintId;
+
+/// The constraint lists a conflict count was taken from: the last solve's
+/// over-constrained set and the rejected edit's conflict. Equal lists give
+/// the same count, so an update that changed neither does not count again.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ConflictSources {
+    pub solved: Vec<ConstraintId>,
+    pub rejected: Vec<ConstraintId>,
+}
+
+impl ConflictSources {
+    /// Whether these are `solved` and `rejected`.
+    pub fn are(&self, solved: &[ConstraintId], rejected: &[ConstraintId]) -> bool {
+        self.solved == solved && self.rejected == rejected
+    }
+}
 
 /// The rendered canvas words. Empty until the app first renders them.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -43,6 +60,8 @@ pub struct SketchCanvasText {
     pub conflict_badge: String,
     /// The conflict count `conflict_badge` was rendered for.
     pub conflict_count: usize,
+    /// What `conflict_count` was counted from.
+    pub conflict_sources: ConflictSources,
 
     /// Unit after a length on the drawing ("mm").
     pub unit_mm: String,

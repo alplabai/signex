@@ -96,6 +96,27 @@ fn build_tinted_handle(canonical: &'static [u8], theme: ThemeId) -> svg::Handle 
     svg::Handle::from_memory(tinted.into_bytes())
 }
 
+thread_local! {
+    /// Handles of untinted glyph assets, keyed by the address and length of
+    /// their `'static` bytes. Bounded by the number of glyph assets.
+    static GLYPH_CACHE: std::cell::RefCell<
+        std::collections::HashMap<(usize, usize), svg::Handle>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The handle of a monochrome glyph asset that its caller tints with an
+/// ink (`svg::Style::color`), built once. `Handle::from_memory` hashes the
+/// bytes on every call, which a view would otherwise pay on every frame.
+pub fn static_glyph(bytes: &'static [u8]) -> svg::Handle {
+    let key = (bytes.as_ptr() as usize, bytes.len());
+    if let Some(handle) = GLYPH_CACHE.with(|cache| cache.borrow().get(&key).cloned()) {
+        return handle;
+    }
+    let handle = svg::Handle::from_memory(bytes);
+    GLYPH_CACHE.with(|cache| cache.borrow_mut().insert(key, handle.clone()));
+    handle
+}
+
 #[cfg(test)]
 fn handle_cache_len() -> usize {
     HANDLE_CACHE.with(|cache| cache.borrow().len())

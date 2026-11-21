@@ -131,7 +131,7 @@ pub fn planned_card<'a, M: 'a>(
     let r = resolve(tokens);
     let disc_fill = r.sunken;
     let disc = container(
-        svg(svg::Handle::from_memory(icon))
+        svg(crate::icons::static_glyph(icon))
             .width(TS.body * ICON_EMS)
             .height(TS.body * ICON_EMS)
             .style(move |_: &Theme, _| svg::Style {

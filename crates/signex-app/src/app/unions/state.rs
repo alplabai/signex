@@ -202,6 +202,9 @@ pub struct UnionsPanelView {
     pub foot: Option<UnionFoot>,
     /// The selection can become a union (Create from selection).
     pub can_create: bool,
+    /// The stamp of the app state this view was built from; see
+    /// `Signex::sync_unions_panel`. `None` from [`panel_view`].
+    pub built_from: Option<u64>,
 }
 
 /// One sheet the panel reads: its path, file name and document.
@@ -368,5 +371,6 @@ pub fn panel_view(
         groups,
         foot,
         can_create: active_sheet.is_some() && !selected.is_empty(),
+        built_from: None,
     }
 }

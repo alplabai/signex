@@ -7,6 +7,8 @@
 mod popover;
 mod state;
 mod update;
+#[cfg(test)]
+pub(crate) use update::UNIONS_VIEW_BUILDS;
 
 #[cfg(test)]
 mod state_tests;

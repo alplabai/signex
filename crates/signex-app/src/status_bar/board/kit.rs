@@ -71,7 +71,7 @@ impl Glyph {
             Self::Check => return crate::icons::icon_chrome_check(GLYPH_THEME),
             Self::Chevron => return crate::icons::icon_chrome_chevron_down(GLYPH_THEME),
         };
-        svg::Handle::from_memory(bytes)
+        crate::icons::static_glyph(bytes)
     }
 }
 

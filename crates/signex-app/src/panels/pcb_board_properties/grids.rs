@@ -178,7 +178,7 @@ fn global_card<'a>(form: &Form<'a>, board: &PcbBoardSummary) -> Shown<'a> {
         cards::more(form, menu_msg),
     ]);
     let faint = form.faint();
-    let lock = svg(svg::Handle::from_memory(GLYPH_LOCK))
+    let lock = svg(crate::icons::static_glyph(GLYPH_LOCK))
         .width(TS.caption)
         .height(TS.caption)
         .style(move |_: &Theme, _| svg::Style {

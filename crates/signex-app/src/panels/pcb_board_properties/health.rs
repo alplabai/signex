@@ -123,7 +123,7 @@ fn title_line<'a>(
         Status::Findings => (GLYPH_WARN, ti(tokens.error)),
         Status::NotRun => (GLYPH_IDLE, form.faint()),
     };
-    let icon = svg(svg::Handle::from_memory(glyph))
+    let icon = svg(crate::icons::static_glyph(glyph))
         .width(TS.body)
         .height(TS.body)
         .style(move |_: &Theme, _| svg::Style {

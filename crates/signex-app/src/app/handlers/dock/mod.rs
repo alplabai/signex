@@ -7,6 +7,8 @@ use super::super::*;
 mod child_sheet_identity;
 mod floating_layout;
 mod harness_panel;
+#[cfg(test)]
+pub(crate) use harness_panel::HARNESS_FACT_BUILDS;
 mod layout_persist;
 mod library_browser;
 mod multi_edit;

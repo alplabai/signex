@@ -250,7 +250,7 @@ fn pill<'a>(words: Localized, tone: PillTone, tokens: &ThemeTokens) -> Element<'
 
 /// A 16 × 16 stroke glyph (`currentColor`) drawn `size` square in `color`.
 fn glyph<'a>(bytes: &'static [u8], size: f32, color: Color) -> Element<'a, Message> {
-    svg(svg::Handle::from_memory(bytes))
+    svg(crate::icons::static_glyph(bytes))
         .width(size)
         .height(size)
         .style(move |_: &Theme, _| svg::Style {
