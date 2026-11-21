@@ -279,6 +279,12 @@ impl Signex {
         )
     }
 
+    /// The rows of the empty Projects panel's Recent projects list: the
+    /// Start screen's cap over `UiState::recent_projects`, newest first.
+    pub(crate) fn recent_projects_panel_rows(&self) -> Vec<PathBuf> {
+        crate::start_screen::visible_recent(self.ui_state.recent_projects.entries()).to_vec()
+    }
+
     /// Rebuild the panel contexts: the main window's, then those of the
     /// undocked windows, each from the sheet its window shows.
     pub(crate) fn refresh_panel_ctx(&mut self) {
@@ -340,8 +346,8 @@ impl Signex {
         let active_id = self.document_state.active_project;
         // Open-state lookup is "is there a tab pointing at this path?"
         // Dirty-state lookup is per document, not per tab, so it persists
-        // across tab close (Altium parity: closing a tab keeps the file
-        // dirty until the project is saved or the edits are discarded).
+        // across tab close: closing a tab keeps the file dirty until the
+        // project is saved or the edits are discarded.
         let open_paths: std::collections::HashSet<std::path::PathBuf> = self
             .document_state
             .tabs
@@ -349,8 +355,8 @@ impl Signex {
             .map(|tab| tab.path.clone())
             .collect();
         let dirty_paths = self.document_state.dirty_document_paths();
-        // Active-tab path drives the per-row highlight in the tree —
-        // matches Altium's "you are here" cue. None when no tabs open.
+        // Active-tab path drives the per-row highlight and accent edge in
+        // the tree, the "you are here" cue. None when no tabs open.
         let active_path = self
             .document_state
             .tabs
@@ -694,6 +700,7 @@ impl Signex {
             properties_tab,
             document_options,
             projects_view,
+            recent_projects: self.recent_projects_panel_rows(),
             net_classes,
             pcb_layers,
             pcb_layers_ui,

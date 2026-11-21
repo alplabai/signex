@@ -31,6 +31,9 @@ pub enum DialogButtonKind {
     Secondary,
     /// Destructive actions: a subtle `error` tint, border and label.
     Danger,
+    /// The one destructive action a dialog exists for (Delete): the solid
+    /// `error` fill with a label that reads on it.
+    DangerSolid,
     /// The accent fill, for a call to action beside a `Primary`.
     Accent,
     /// A quiet action with no fill or visible border at rest ("Decide
@@ -239,6 +242,7 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::DangerSolid,
                 DialogButtonKind::Accent,
                 DialogButtonKind::Ghost,
                 DialogButtonKind::Cancel,
@@ -275,6 +279,7 @@ mod tests {
             DialogButtonKind::Primary,
             DialogButtonKind::Secondary,
             DialogButtonKind::Danger,
+            DialogButtonKind::DangerSolid,
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
         ] {
@@ -349,6 +354,7 @@ mod tests {
             DialogButtonKind::Primary,
             DialogButtonKind::Secondary,
             DialogButtonKind::Danger,
+            DialogButtonKind::DangerSolid,
             DialogButtonKind::Accent,
             DialogButtonKind::Ghost,
             DialogButtonKind::Cancel,
@@ -396,6 +402,7 @@ mod tests {
                 DialogButtonKind::Primary,
                 DialogButtonKind::Secondary,
                 DialogButtonKind::Danger,
+                DialogButtonKind::DangerSolid,
                 DialogButtonKind::Accent,
                 DialogButtonKind::Ghost,
             ] {

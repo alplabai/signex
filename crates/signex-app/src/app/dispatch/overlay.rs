@@ -733,24 +733,12 @@ impl Signex {
         msg: EnableVersionControlMsg,
     ) -> Task<Message> {
         match msg {
-            // A run in flight has already read the choices; edits are ignored.
-            EnableVersionControlMsg::ToggleLfs => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut()
-                    && !s.working
-                    && !s.scanning
-                {
-                    s.use_lfs = !s.use_lfs;
-                }
-                Task::none()
-            }
-            EnableVersionControlMsg::ToggleItem(idx) => {
-                if let Some(s) = self.ui_state.enable_version_control.as_mut()
-                    && !s.working
-                    && !s.scanning
-                    && let Some(item) = s.items.get_mut(idx)
-                {
-                    item.tracked = !item.tracked;
-                }
+            edit @ (EnableVersionControlMsg::ToggleLfs
+            | EnableVersionControlMsg::ToggleItem(_)
+            | EnableVersionControlMsg::AllTicked
+            | EnableVersionControlMsg::CommitMessageChanged(_)
+            | EnableVersionControlMsg::CommitEverySaveToggled) => {
+                self.edit_enable_version_control(edit);
                 Task::none()
             }
             EnableVersionControlMsg::Confirm => self.handle_enable_version_control_confirm(),
@@ -780,10 +768,7 @@ impl Signex {
     pub(crate) fn dispatch_rename_message(&mut self, msg: RenameMsg) -> Task<Message> {
         match msg {
             RenameMsg::BufferChanged(s) => {
-                if let Some(d) = self.ui_state.rename_dialog.as_mut() {
-                    d.buffer = s;
-                    d.error = None;
-                }
+                self.handle_rename_buffer_changed(s);
                 Task::none()
             }
             RenameMsg::Submit => self.handle_rename_submit(),
@@ -814,6 +799,45 @@ impl Signex {
                 Task::none()
             }
             RemoveMsg::Deleted(done) => self.handle_path_deleted(*done),
+            // Selecting a card removes nothing; the footer action does.
+            RemoveMsg::ChoicePicked(choice) => {
+                if let Some(dialog) = self.ui_state.remove_dialog.as_mut() {
+                    dialog.choice = Some(choice);
+                }
+                Task::none()
+            }
+        }
+    }
+
+    /// The Remove or Close Project confirm when its card is in front of the
+    /// main window: the overlay Esc would answer (#2262).
+    pub(crate) fn confirm_in_front(&self) -> Option<crate::app::state::ModalId> {
+        use crate::app::state::ModalId;
+        match self.escape_overlay_message()? {
+            Message::Remove(RemoveMsg::Close) => Some(ModalId::RemoveDialog),
+            Message::Project(ProjectMsg::CloseConfirm(crate::app::ProjectCloseChoice::Cancel)) => {
+                Some(ModalId::ProjectCloseConfirm)
+            }
+            _ => None,
+        }
+    }
+
+    /// What Enter does in `modal`'s card: Close Project saves all. `None`:
+    /// Enter does nothing there, as in Remove, where only a click confirms.
+    pub(crate) fn confirm_enter_message(
+        &self,
+        modal: crate::app::state::ModalId,
+    ) -> Option<Message> {
+        use crate::app::state::ModalId;
+        match modal {
+            ModalId::ProjectCloseConfirm => {
+                self.ui_state.project_close_confirm.is_some().then(|| {
+                    Message::Project(ProjectMsg::CloseConfirm(
+                        crate::app::ProjectCloseChoice::SaveAll,
+                    ))
+                })
+            }
+            _ => None,
         }
     }
 

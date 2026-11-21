@@ -307,7 +307,8 @@ pub enum ProjectMsg {
     /// The Create Sheet dialog was answered: Create, or Later (`create:
     /// false`, which also closes the window).
     CreateChildSheetAnswered { create: bool },
-    /// "Open it" in the Create Sheet dialog, for a path that already exists.
+    /// "Use existing file" in the Create Sheet dialog, for a path that
+    /// already exists.
     CreateChildSheetOpenExisting,
     /// The off-thread write of a child sheet created from a symbol finished.
     /// `project_id` is the project owning the parent sheet, if any.

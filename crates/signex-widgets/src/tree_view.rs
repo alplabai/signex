@@ -1,7 +1,7 @@
-//! Tree view widget — Altium-style project/component browser tree.
+//! Tree view widget — the project / component browser tree.
 //!
 //! COSMIC composition pattern: `TreeView` struct with builder methods.
-//! Compact Altium-style spacing (see the layout constants below):
+//! Compact spacing (see the layout constants below):
 //!   - 12px indent per depth + 4px base left padding
 //!   - 2px gap between elements
 //!   - 2px vertical row padding, 6px right padding
@@ -19,8 +19,10 @@ use signex_types::theme::ThemeTokens;
 use crate::theme_ext;
 
 mod kind_tag;
+mod marks;
+mod pill;
 mod style;
-pub use style::{BadgeTone, BadgeTones, TreeStyle};
+pub use style::{BadgeTone, BadgeTones, GroupRows, TreeStyle};
 
 // ─── Data Model ───────────────────────────────────────────────
 
@@ -217,18 +219,19 @@ pub struct TreeNode {
     /// workspaces; inner nodes ignore it.
     pub accent: bool,
     /// File represented by this leaf is currently open in a tab.
-    /// Drives a small right-side "open" marker — Altium parity.
+    /// Drives a small right-side "open" marker.
     pub is_open: bool,
-    /// File has unsaved changes. Drives a red dot on the right —
-    /// Altium parity. Implies `is_open` (only open files can be
-    /// dirty), but the renderer doesn't enforce that.
+    /// File has unsaved changes. Drives a red dot on the right. Implies
+    /// `is_open` (only open files can be dirty), but the renderer doesn't
+    /// enforce that.
     pub is_dirty: bool,
     /// Leaf is the currently-active document (the tab the user is
-    /// viewing). Renders with a highlighted row background so the
-    /// user can find their place in a multi-sheet project at a
-    /// glance — Altium parity.
+    /// viewing). Renders with a highlighted row background (and the edge
+    /// of a style that sets [`TreeStyle::active_edge`]) so the user can
+    /// find their place in a multi-sheet project at a glance.
     pub is_active: bool,
-    /// Tint of the badge pill (themed rows only).
+    /// Tint of the badge pill (themed rows only); [`BadgeTone::Err`] marks
+    /// a problem row on a kind-tag tree.
     pub badge_tone: BadgeTone,
     /// Small monospace note on the right of the row (themed rows only).
     pub meta: Option<String>,
@@ -341,30 +344,24 @@ pub enum TreeMsg {
     BackgroundContextMenu,
 }
 
-// ─── Layout Constants (matched to Altium Designer) ────────────
+// ─── Layout Constants (compact density) ───────────────────────
 
-const INDENT_PER_DEPTH: f32 = 12.0; // Altium: ~12px per depth at compact density
+const INDENT_PER_DEPTH: f32 = 12.0; // ~12px per depth at compact density
 const BASE_PAD_LEFT: f32 = 4.0; // minimal base indent
-const ELEM_GAP: f32 = 2.0; // Altium: very tight gaps
-const ICON_LABEL_GAP: f32 = 4.0; // Tight gap right of the icon (Altium parity)
-const ICON_SZ: f32 = 12.0; // Chamfered SVG silhouettes — Altium parity at compact density
+const ELEM_GAP: f32 = 2.0; // very tight gaps
+const ICON_LABEL_GAP: f32 = 4.0; // Tight gap right of the icon
+const ICON_SZ: f32 = 12.0; // Chamfered SVG silhouettes at compact density
 /// Default row label size; the metrics below are tuned for it and scale
 /// with `TreeView::text_size` relative to it.
 const FONT_SZ: f32 = 10.5;
 const BADGE_SZ: f32 = 9.0; // muted counts — track FONT_SZ down a half-step
 const EMPTY_SZ: f32 = 11.0; // "(empty)" placeholder
-const PAD_V: u16 = 2; // Altium-ish: 16-18px row height — 1-2 px breathing room above + below the icon
+const PAD_V: u16 = 2; // 16-18px row height — 1-2 px breathing room above + below the icon
 /// Foreground for the selected row's label, chevron and open-dot. Kept
 /// literal: it must contrast with `tokens.selection` on every theme and
 /// no token guarantees that (`tokens.text` is dark on Solarized Light).
 const FG_ON_SELECTION: Color = Color::WHITE;
 const PAD_R: u16 = 6; // right margin — leaves room for open / dirty indicators
-/// Right-side "file is currently open" indicator — small filled square,
-/// matches Altium's per-row open-document marker. Pulled out as a const
-/// so the rest of the tree row layout can plan around its width.
-const OPEN_DOT_SZ: f32 = 6.0;
-/// Right-side "file has unsaved changes" indicator — bright red dot.
-const DIRTY_DOT_SZ: f32 = 6.0;
 /// Spacer between the label / badge and the right-side indicators.
 const RIGHT_INDICATOR_GAP: f32 = 6.0;
 
@@ -468,12 +465,9 @@ impl<'a> TreeView<'a> {
         // the background context menu (Expand all / Collapse all / Refresh).
         // Row right-clicks are captured earlier by per-row mouse_areas and
         // take priority — they never propagate to this outer handler.
-        let inset = self.style.map_or(0.0, |s| s.inset);
-        let body: Element<'static, TreeMsg> = if inset > 0.0 {
-            container(col)
-                .padding([0.0, inset])
-                .width(Length::Fill)
-                .boxed()
+        let padding = style::tree_padding(self.style.as_ref());
+        let body: Element<'static, TreeMsg> = if padding != iced::Padding::ZERO {
+            container(col).padding(padding).width(Length::Fill).boxed()
         } else {
             col.boxed()
         };
@@ -499,26 +493,35 @@ fn render_node(
     let is_expandable = has_kids || node.is_folder;
 
     // --- Colors ---
-    // Tree labels render in primary text (white on dark themes) so
-    // they read cleanly next to the full-colour SVG icons. Older
-    // builds used `text_secondary` back when icons were muted
-    // Unicode glyphs.
+    // Labels render in primary text so they read next to the full-colour
+    // icons. A group header (styled trees) and a problem row (a kind-tag
+    // tree's `BadgeTone::Err` leaf) take their own inks.
+    let hov_bg = theme_ext::hover_color(tokens);
+    let kind_tags = m.style.is_some_and(|s| s.kind_tags);
+    let problem = kind_tags && !is_expandable && node.badge_tone == BadgeTone::Err;
+    let group = m
+        .style
+        .and_then(|s| s.groups)
+        .filter(|_| depth == 1 && is_expandable);
+    let edge = m.style.and_then(|s| s.active_edge).is_some();
+    let (tone_fill, tone_ink) = m
+        .style
+        .and_then(|s| s.tone_colors(node.badge_tone))
+        .unwrap_or((hov_bg, theme_ext::text_secondary(tokens)));
     let sel_ink = m.style.map_or(FG_ON_SELECTION, |s| s.selected_ink);
     // Themed rows sit on a light or dark panel, so unselected chrome uses
     // the secondary text colour instead of the legacy literal white.
     let chrome_c = match (is_sel, m.style) {
         (true, _) => sel_ink,
-        (false, Some(_)) => theme_ext::text_secondary(tokens),
+        (false, Some(_)) => group.map_or(theme_ext::text_secondary(tokens), |g| g.muted),
         (false, None) => FG_ON_SELECTION,
     };
-    let txt_c = if is_sel {
-        sel_ink
-    } else {
-        theme_ext::text_primary(tokens)
+    let txt_c = match (is_sel, group) {
+        (true, _) => sel_ink,
+        (false, Some(g)) => g.ink,
+        (false, None) if problem => tone_ink,
+        (false, None) => theme_ext::text_primary(tokens),
     };
-    // Icons are now rendered as full-colour bitmap / SVG assets — no
-    // per-variant theme tinting. The theme still drives text + hover
-    // + selection bg below.
     let badge_c = {
         let base = theme_ext::text_secondary(tokens);
         Color::from_rgba(base.r, base.g, base.b, 0.5)
@@ -526,7 +529,6 @@ fn render_node(
     let sel_bg = m
         .style
         .map_or_else(|| theme_ext::selection_color(tokens), |s| s.selected_fill);
-    let hov_bg = theme_ext::hover_color(tokens);
 
     // --- Assemble row ---
     let pad_left = (depth as f32) * m.indent + BASE_PAD_LEFT;
@@ -551,30 +553,20 @@ fn render_node(
         r = r.push(Space::new().width(m.chevron).boxed());
     }
 
-    // Icon — full-colour bundled SVG. Cached per variant; render via
-    // `iced::widget::svg`. Standard handoff formats share glyphs with
-    // their Signex-native counterparts (see `TreeIcon::svg`).
-    //
-    // Active-project marker: when this row is the accented root in a
-    // multi-project workspace (`node.accent && depth == 0`), tint the
-    // icon with the theme accent so the active project pops without
-    // relying solely on the bold-label cue. svg::Style.color flat-tints
-    // the SVG, which is what we want at this size — the silhouette
-    // stays readable, the colour signals "this is active".
-    // Kind tags (a styled tree's option): a leaf's badge leads the row in
-    // place of its icon, and branches draw no icon.
-    let kind_tags = m.style.is_some_and(|s| s.kind_tags);
-    // The badge is data (a count or a file kind), not catalog text.
+    // Icon — full-colour bundled SVG, the active project root's tinted with
+    // the accent. Kind tags (a styled tree's option): a leaf's badge leads
+    // the row in place of its icon, a problem leaf leads with a warn glyph
+    // and trails its badge as a pill, and branches draw no icon.
+    // The badge is data (a count, a file kind) or text the caller localized.
     let badge_label = node.badge.as_ref().map(|badge| raw(badge.clone()));
-    let leading_tag = (kind_tags && !is_expandable)
+    let leading_tag = (kind_tags && !is_expandable && !problem)
         .then(|| badge_label.clone())
         .flatten();
     if let Some(tag) = leading_tag.clone() {
-        let (fill, ink) = m
-            .style
-            .and_then(|s| s.tone_colors(node.badge_tone))
-            .unwrap_or((hov_bg, theme_ext::text_secondary(tokens)));
-        r = r.push(kind_tag::kind_tag(tag, m.badge, fill, ink));
+        r = r.push(kind_tag::kind_tag(tag, m.badge, tone_fill, tone_ink));
+        r = r.push(Space::new().width(ICON_LABEL_GAP).boxed());
+    } else if problem {
+        r = r.push(pill::warn_glyph(m.icon, tone_ink));
         r = r.push(Space::new().width(ICON_LABEL_GAP).boxed());
     } else if !(kind_tags && is_expandable) {
         let icon_w = svg(node.icon.svg()).width(m.icon).height(m.icon);
@@ -596,17 +588,21 @@ fn render_node(
     }
 
     // Label (flex, no wrap — truncation handled by scrollable parent).
-    // Accented root nodes (active project in a multi-project workspace)
-    // render bold so the user can scan the workspace at a glance; inner
-    // depths ignore the flag.
+    // The accented root (active project) is bold; a group header and, on a
+    // tree that marks it, the active row are weight 500.
     let mut label = text(raw(node.label.clone()))
-        .size(m.font)
+        .size(group.map_or(m.font, |_| pill::section(m.font)))
         .color(txt_c)
         .line_height(iced::widget::text::LineHeight::Relative(1.0))
         .wrapping(iced::widget::text::Wrapping::None);
-    if node.accent && depth == 0 {
+    let weight = if node.accent && depth == 0 {
+        Some(iced::font::Weight::Bold)
+    } else {
+        (group.is_some() || (edge && node.is_active)).then_some(iced::font::Weight::Medium)
+    };
+    if let Some(weight) = weight {
         label = label.font(iced::Font {
-            weight: iced::font::Weight::Bold,
+            weight,
             ..iced::Font::DEFAULT
         });
     }
@@ -633,76 +629,28 @@ fn render_node(
         if meta.is_none() {
             r = r.push(iced::widget::space::horizontal().boxed());
         }
-        let badge_text = text(badge)
-            .size(m.badge)
-            .wrapping(iced::widget::text::Wrapping::None);
-        if m.style.is_some() {
-            // Themed rows draw the badge as a count / kind pill.
-            let (fill, ink) = m
-                .style
-                .and_then(|s| s.tone_colors(node.badge_tone))
-                .unwrap_or((hov_bg, theme_ext::text_secondary(tokens)));
-            r = r.push(
-                container(badge_text.color(ink))
-                    .padding([0.0, 5.0])
-                    .style(move |_: &Theme| container::Style {
-                        background: Some(Background::Color(fill)),
-                        border: iced::Border {
-                            radius: 999.0.into(),
-                            ..iced::Border::default()
-                        },
-                        ..container::Style::default()
-                    })
-                    .boxed(),
-            );
-        } else {
-            r = r.push(badge_text.color(badge_c).boxed());
-        }
+        // Themed rows draw a group's count as a mono note and any other
+        // badge as a toned pill; legacy rows as muted text.
+        r = r.push(match (group, m.style) {
+            (Some(g), _) => pill::count(badge, m.font, g.muted),
+            (None, Some(_)) => pill::pill(badge, m.font, tone_fill, tone_ink),
+            (None, None) => text(badge)
+                .size(m.badge)
+                .color(badge_c)
+                .wrapping(iced::widget::text::Wrapping::None)
+                .boxed(),
+        });
     }
 
-    // Right-side indicators (Altium parity):
-    //   • dim grey dot  → file is currently open in a tab
-    //   • bright red dot → file has unsaved changes
-    // Both ride to the far right of the row, after the badge. The
-    // `is_dirty` dot replaces the open dot when both apply since the
-    // dirty state already implies open and only one indicator's worth
-    // of width fits comfortably in narrow Projects panels.
+    // Right-side dot, after the badge: open, or unsaved (which implies
+    // open). The open dot is neutral; the accent marks the active project.
     if node.is_open || node.is_dirty {
         if (node.badge.is_none() || leading_tag.is_some()) && meta.is_none() {
             r = r.push(iced::widget::space::horizontal().boxed());
         } else {
             r = r.push(Space::new().width(RIGHT_INDICATOR_GAP).boxed());
         }
-        let dot_color = if node.is_dirty {
-            // Theme error colour: the unsaved-changes dot follows the
-            // active theme instead of a fixed red.
-            theme_ext::error_color(tokens)
-        } else {
-            // Open-but-clean reads as a neutral white dot — the theme
-            // accent is reserved for the active-project marker so
-            // mixing accent colour into the open indicator made the
-            // tree feel noisy at a glance.
-            chrome_c
-        };
-        let sz = if node.is_dirty {
-            DIRTY_DOT_SZ
-        } else {
-            OPEN_DOT_SZ
-        };
-        r = r.push(
-            container(Space::new().width(sz).height(sz))
-                .width(sz)
-                .height(sz)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(dot_color)),
-                    border: iced::Border {
-                        radius: (sz / 2.0).into(),
-                        ..iced::Border::default()
-                    },
-                    ..container::Style::default()
-                })
-                .boxed(),
-        );
+        r = r.push(marks::state_dot(node.is_dirty, chrome_c, tokens));
     }
 
     // Click action
@@ -712,14 +660,13 @@ fn render_node(
         TreeMsg::Select(key.to_vec())
     };
 
-    // Button with hover/selection styling. Active-row gets a
-    // dimmer-than-selection bg so the active document reads at a
-    // glance without competing with the explicit click-to-select
-    // colour.
+    // Button with hover/selection styling. The active row gets a
+    // dimmer-than-selection fill, or the full one on a tree that marks it
+    // with an edge.
     let is_active = node.is_active;
-    let active_bg = {
-        let s = sel_bg;
-        Color::from_rgba(s.r, s.g, s.b, 0.45)
+    let active_bg = Color {
+        a: if edge { sel_bg.a } else { 0.45 },
+        ..sel_bg
     };
     let row_radius = m.style.map_or(2.0, |s| s.radius);
     let row_btn = button(r)
@@ -758,7 +705,11 @@ fn render_node(
     // button so left-press still reaches the button's `on_press`; only
     // `on_right_press` is intercepted here.
     let row_element = mouse_area(row_btn).on_right_press(TreeMsg::ContextMenu(key.to_vec()));
-    col = col.push(row_element.boxed());
+    col = col.push(marks::with_edge(
+        row_element.boxed(),
+        is_active,
+        m.style.as_ref(),
+    ));
 
     // Expanded children
     if is_expandable && node.expanded {

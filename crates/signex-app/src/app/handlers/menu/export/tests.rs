@@ -985,6 +985,7 @@ fn a_child_that_exists_but_will_not_parse_is_not_called_missing() {
 }
 
 mod diagnosis;
+mod omitted_pages;
 
 #[test]
 fn uncovered_pdf_characters_are_named_in_the_export_warning() {

@@ -79,6 +79,9 @@ pub struct PanelContext {
     pub document_options: super::DocumentOptionsUi,
     /// Projects panel filter text and collapsed groups; view-only.
     pub projects_view: super::ProjectsView,
+    /// The recent projects the empty Projects panel lists, newest first,
+    /// capped as on the Start screen; mirrored from `UiState::recent_projects`.
+    pub recent_projects: Vec<std::path::PathBuf>,
     /// Net Classes section of the General tab (#1042).
     pub net_classes: NetClassPanel,
     /// Layers panel of the active board (#2223).

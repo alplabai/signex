@@ -166,6 +166,15 @@ define_ids! {
     PANELS_OBJECT_LIST_READING = "panels-object-list-reading";
     PANELS_OBJECT_LIST_NO_SCHEMATIC = "panels-object-list-no-schematic";
     PANELS_OBJECT_LIST_FOOTER = "panels-object-list-footer";
+    PANELS_PROJECTS_OPTIONS = "panels-projects-options";
+    PANELS_PROJECTS_PILL_MISSING = "panels-projects-pill-missing";
+    PANELS_PROJECTS_PILL_UNREADABLE = "panels-projects-pill-unreadable";
+    PANELS_PROJECTS_CLEAR_FILTER = "panels-projects-clear-filter";
+    PANELS_PROJECTS_NO_MATCH_TITLE = "panels-projects-no-match-title";
+    PANELS_PROJECTS_NO_MATCH_BODY = "panels-projects-no-match-body";
+    PANELS_PROJECTS_NEW_PROJECT = "panels-projects-new-project";
+    PANELS_PROJECTS_OPEN = "panels-projects-open";
+    PANELS_PROJECTS_RECENT = "panels-projects-recent";
     PANELS_ERC_RUN_BUTTON = "panels-erc-run-button";
     PANELS_ERC_CLEAR_TOOLTIP = "panels-erc-clear-tooltip";
     PANELS_ERC_STALE_BANNER = "panels-erc-stale-banner";

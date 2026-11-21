@@ -434,8 +434,9 @@ pub struct UiState {
     pub preferences_keymap_recorder: Option<KeymapRecorderState>,
     pub preferences_dirty: bool,
     /// Rename-sheet modal state. Opened from the Projects-panel tree
-    /// context menu; `None` when the modal is closed.
-    pub rename_dialog: Option<crate::app::RenameDialogState>,
+    /// context menu; `None` when the modal is closed. Boxed: a closed dialog
+    /// costs one pointer (#2412).
+    pub rename_dialog: Option<Box<crate::app::RenameDialogState>>,
     /// Remove-from-project modal state (Delete / Exclude / Cancel).
     pub remove_dialog: Option<crate::app::RemoveDialogState>,
     /// "Close Project — Unsaved Edits" confirmation modal. `Some`

@@ -351,6 +351,12 @@ pub enum EnableVersionControlMsg {
         project_dir: std::path::PathBuf,
         outcome: EnableVersionControlOutcome,
     },
+    /// "Select all" was clicked: every row is ticked.
+    AllTicked,
+    /// The first commit message field was edited.
+    CommitMessageChanged(String),
+    /// The "Commit every save" switch was flipped.
+    CommitEverySaveToggled,
 }
 
 /// What an Enable Version Control run did on disk.
@@ -404,6 +410,9 @@ pub enum RemoveMsg {
     /// The delete worker finished: forget the documents of what it removed
     /// (#859).
     Deleted(Box<crate::app::path_ops::DeleteDone>),
+    /// A card of the Remove modal was clicked: it is selected, and nothing
+    /// is removed until the footer action sends `Confirm` (#2262).
+    ChoicePicked(RemoveChoice),
 }
 
 /// Context-menu subsystem message family (ADR-0001 D3). Namespaced

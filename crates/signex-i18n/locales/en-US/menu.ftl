@@ -95,6 +95,8 @@ menu-help-report-issue = Report an Issue
 menu-app-title = { -brand-name }
 # Tooltip of a menu row for a feature that is planned but not built yet.
 menu-planned-tooltip = Planned — not available yet
+# Pill on a menu row for a feature that is planned but not built yet.
+menu-planned-badge = planned
 
 ## Context menus (#2057)
 # Rows of the right-click menus. A row that runs a command shows the command's
@@ -174,18 +176,22 @@ ctx-tree-packager = Project Packager...
 ctx-tree-releaser = Project Releaser...
 ctx-tree-share = Share...
 ctx-tree-enable-version-control = Enable Version Control...
-ctx-tree-add-new-component = Add New ▸ Component
-ctx-tree-add-new-symbol-library = Add New ▸ Symbol Library
-ctx-tree-add-new-footprint-library = Add New ▸ Footprint Library
 ctx-tree-collapse = Collapse
 ctx-tree-expand = Expand
 ctx-tree-refresh = Refresh
 ctx-tree-remove-library = Remove from Project...
 ctx-tree-open = Open
-ctx-tree-remove = Remove from Project
+ctx-tree-remove = Remove from Project...
 ctx-tree-show-differences = Show Differences...
 ctx-tree-expand-all = Expand All
 ctx-tree-collapse-all = Collapse All
+# The project root's launcher of the planned-feature rows.
+ctx-tree-planned = Planned
+# The library node's Add New submenu: the kind of item to create.
+ctx-tree-library-add-new = Add New
+ctx-tree-library-add-component = Component
+ctx-tree-library-add-symbol-library = Symbol Library
+ctx-tree-library-add-footprint-library = Footprint Library
 # Shapes, in the symbol and footprint editor menus.
 ctx-shape-rectangle = Rectangle
 ctx-shape-circle = Circle

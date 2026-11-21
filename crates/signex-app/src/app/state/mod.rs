@@ -34,6 +34,7 @@ mod link_policy;
 pub(crate) mod navigator_job;
 pub(crate) mod net_class_styles;
 pub(crate) mod net_nav;
+mod omitted_page;
 pub(crate) mod ownership_index;
 mod parameter_table;
 mod path_key;
@@ -76,6 +77,7 @@ pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResize
 pub use error_notice::{ErrorNotice, NoticeAction, untranslated, verbatim};
 pub use interaction::{ClickedPin, InteractionState};
 pub use keymap_recorder::KeymapRecorderState;
+pub use omitted_page::{OmittedPage, OmittedReason};
 pub use parameter_table::{ParameterCell, ParameterTableState};
 pub(crate) use pcb_drc::DrcInput;
 pub(crate) use pcb_ratsnest::{PcbRatsnest, RatsnestKey};
@@ -348,8 +350,8 @@ pub struct NetlistIncompletePrompt {
     /// Where the file dialog said to write the `.net`.
     pub save_path: PathBuf,
     /// One user-facing line per omitted / uncovered page — the same
-    /// `ExportIssues::messages()` shown in the prompt and logged as a
-    /// warning when the user exports anyway.
+    /// `ExportIssues::messages()` logged as a warning when the user exports
+    /// anyway.
     pub messages: Vec<String>,
     /// The export scope snapshotted when the prompt was raised. "Export anyway"
     /// writes from THIS, never a fresh re-derivation — so the bytes on disk and
@@ -357,6 +359,9 @@ pub struct NetlistIncompletePrompt {
     /// describe the same project state, even if the document changes while the
     /// modal is up (#431 review).
     pub ctx: signex_output::ExportContext,
+    /// The prompt's list: one row per page left out of the netlist, from the
+    /// same derivation as `messages` (`ExportIssues::omitted_pages`).
+    pub omitted: Vec<OmittedPage>,
 }
 
 /// One printed page copy in the export file picker: the sheet file plus the

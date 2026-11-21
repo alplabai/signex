@@ -638,14 +638,16 @@ fn a_rename_is_refused_while_a_recovery_check_still_runs() {
         rename_error(&fx)
     );
 
-    fx.app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    fx.app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         project_id: None,
         target_path: fx.sheet.clone(),
         tree_path: vec![0, 0],
         buffer: "other.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let task = fx
         .app
         .update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
@@ -792,14 +794,16 @@ fn renaming_a_closed_sheet_carries_its_earlier_run_copy() {
     std::fs::write(&closed, b"sheet").expect("closed sheet");
     crate::autosave::sidecar::write(&recovery, &closed, b"crash edits").expect("copy");
 
-    fx.app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    fx.app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         project_id: None,
         target_path: closed.clone(),
         tree_path: vec![0, 0],
         buffer: "renamed.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let task = fx
         .app
         .update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));

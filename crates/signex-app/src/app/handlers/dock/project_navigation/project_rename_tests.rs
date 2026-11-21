@@ -41,14 +41,16 @@ pub(super) fn submit_rename(
     project_file: &Path,
     new_stem: &str,
 ) -> iced::Task<Message> {
-    app.ui_state.rename_dialog = Some(RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: project_file.to_path_buf(),
         tree_path: vec![0],
         buffer: new_stem.to_string(),
         error: None,
         is_project_rename: true,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     app.update(Message::Rename(RenameMsg::Submit))
 }
 

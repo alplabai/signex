@@ -30,7 +30,7 @@
 //! ## Helpers
 //!
 //! - `chip_btn(label, on_press, enabled, accent) -> Element<M>` —
-//!   Altium-style toggle chip used inside `DropdownEntry::Custom` for
+//!   toggle chip used inside `DropdownEntry::Custom` for
 //!   chip-grid layouts. Identical chrome across all editors.
 //!
 //! ## NOT included here
@@ -41,7 +41,7 @@
 //! - The toggle state (each editor's state owns it).
 //! - The click-outside backstop layer (each editor mounts its own).
 
-use crate::{button, raw, text};
+use crate::{Label, button, raw, text};
 use iced::widget::svg;
 use iced::widget::{Column, Row, Space, container, mouse_area};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
@@ -139,8 +139,15 @@ where
     /// The row is the current choice: accent-soft fill and ink, plus the
     /// check when `checked`.
     pub selected: bool,
-    /// The row is the menu's default action: its label is semibold.
+    /// The row is the menu's default action (the row a double-click runs):
+    /// its label is semibold.
     pub strong: bool,
+    /// Label and icon draw in the theme's danger ink (a destructive row);
+    /// the hover wash stays the same as every other row.
+    pub danger: bool,
+    /// A small outlined pill right of the label (the "planned" marker), a
+    /// catalog message like any other new text.
+    pub badge: Option<Label<'static>>,
 }
 
 impl<M: 'static + Clone> DropdownItem<M> {
@@ -168,6 +175,8 @@ impl<M: 'static + Clone> DropdownItem<M> {
             caption: None,
             selected: false,
             strong: false,
+            danger: false,
+            badge: None,
         }
     }
 
@@ -263,6 +272,18 @@ impl<M: 'static + Clone> DropdownItem<M> {
         self.active = on;
         self
     }
+
+    /// Builder: draw the label and icon in the danger ink.
+    pub fn danger(mut self) -> Self {
+        self.danger = true;
+        self
+    }
+
+    /// Builder: show `text` in an outlined pill right of the label.
+    pub fn badge(mut self, text: impl Into<Label<'static>>) -> Self {
+        self.badge = Some(text.into());
+        self
+    }
 }
 
 /// Chrome of the small hover hint shown on a planned row, shared by the
@@ -301,6 +322,10 @@ struct Look {
     active: Color,
     /// Tint of a row icon.
     icon_ink: Color,
+    /// Label and icon of a destructive row.
+    danger: Color,
+    /// Outline of a badge pill (the soft line token).
+    line: Color,
     panel_bg: Color,
     border: Color,
     /// Fill and ink of the current-choice row.
@@ -327,6 +352,8 @@ impl Look {
             hover: skin.hover,
             active: skin.hover,
             icon_ink: skin.icon_ink,
+            danger: theme_ext::error_color(tokens),
+            line: skin.line_soft,
             panel_bg: theme_ext::to_color(&tokens.panel_bg),
             border,
             selected_fill: e.accent_soft.as_ref().map_or(
@@ -343,6 +370,31 @@ impl Look {
             swatch_edge: e.line_strong.as_ref().map_or(border, theme_ext::to_color),
         }
     }
+
+    /// Ink of a row label: muted when disabled (a greyed danger row reads
+    /// greyed, not red), the danger ink on a destructive row, else primary.
+    fn label_ink(&self, disabled: bool, danger: bool) -> Color {
+        if disabled {
+            self.muted
+        } else if danger {
+            self.danger
+        } else {
+            self.primary
+        }
+    }
+
+    /// Ink of a live row icon: the danger ink on a destructive row.
+    fn row_icon_ink(&self, danger: bool) -> Color {
+        if danger { self.danger } else { self.icon_ink }
+    }
+}
+
+/// Face of a row label: the semibold weight for the strong (default) row.
+fn label_font(strong: bool) -> Option<iced::Font> {
+    strong.then_some(iced::Font {
+        weight: iced::font::Weight::Semibold,
+        ..iced::Font::DEFAULT
+    })
 }
 
 /// Render the dropdown panel as an `Element<M>`. `width_hint`
@@ -470,20 +522,24 @@ where
         caption,
         selected,
         strong,
+        danger,
+        badge,
     } = item;
-    let text_c = if disabled {
-        look.muted
-    } else if selected {
+    // The current choice reads in the accent-soft ink unless it is greyed
+    // or destructive.
+    let text_c = if selected && !disabled && !danger {
         look.selected_ink
     } else {
-        look.primary
+        look.label_ink(disabled, danger)
     };
     let mut cells: Row<Element<'a, M>> = Row::new()
         .spacing(m.row_spacing)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
     if shape.has_icons {
-        cells = cells.push(lead_cell(icon, swatch, icon_tint, disabled, m, look));
+        cells = cells.push(lead_cell(
+            icon, swatch, icon_tint, disabled, danger, m, look,
+        ));
     }
     // Menu rows never wrap: a too-narrow card clips rather than reflowing a
     // label onto two lines.
@@ -491,11 +547,8 @@ where
         .size(m.label_size)
         .color(text_c)
         .wrapping(text::Wrapping::None);
-    if strong {
-        label_text = label_text.font(iced::Font {
-            weight: iced::font::Weight::Semibold,
-            ..iced::Font::DEFAULT
-        });
+    if let Some(font) = label_font(strong) {
+        label_text = label_text.font(font);
     }
     cells = cells.push(label_text.boxed());
     // A fixed card pushes the shortcut column to its right edge; an unsized
@@ -506,6 +559,9 @@ where
         Length::Fixed(m.cluster_gap)
     };
     cells = cells.push(Space::new().width(gap).boxed());
+    if let Some(pill) = badge {
+        cells = cells.push(badge_pill(pill, m, look));
+    }
     for s in [caption, shortcut].into_iter().flatten() {
         let mut hint = text(raw(s))
             .size(m.shortcut_size)
@@ -593,14 +649,41 @@ where
     }
 }
 
-/// The icon column of one row: an icon (in `tint` when set), a colour
-/// swatch or nothing, always in one `icon_size` square with its content
-/// centred, so every label of a card starts at the same x.
+/// The outlined pill of a row badge: caption text in the muted ink inside a
+/// soft-line outline with round ends.
+fn badge_pill<'a, M: 'a>(label: Label<'static>, m: &MenuMetrics, look: Look) -> Element<'a, M> {
+    let line = look.line;
+    container(
+        text(label)
+            .size(m.badge_size)
+            .color(look.muted)
+            .wrapping(text::Wrapping::None),
+    )
+    .padding([0.0, m.badge_pad_x])
+    .height(m.badge_height)
+    .align_y(iced::alignment::Vertical::Center)
+    .style(move |_: &Theme| container::Style {
+        border: Border {
+            width: 1.0,
+            radius: theme_ext::Radii::GRAPHITE.pill.into(),
+            color: line,
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .boxed()
+}
+
+/// The icon column of one row: an icon (in `tint` when set, in the danger
+/// ink on a destructive row), a colour swatch or nothing, always in one
+/// `icon_size` square with its content centred, so every label of a card
+/// starts at the same x.
 fn lead_cell<'a, M>(
     icon: Option<svg::Handle>,
     swatch: Option<Color>,
     tint: Option<Color>,
     disabled: bool,
+    danger: bool,
     m: &MenuMetrics,
     look: Look,
 ) -> Element<'a, M>
@@ -609,7 +692,11 @@ where
 {
     let content: Element<'a, M> = match (icon, swatch) {
         (Some(handle), _) => {
-            let (muted, ink) = (look.muted, tint.unwrap_or(look.icon_ink));
+            let ink = match tint {
+                Some(tint) if !danger => tint,
+                _ => look.row_icon_ink(danger),
+            };
+            let muted = look.muted;
             svg(handle)
                 .width(m.icon_size)
                 .height(m.icon_size)
@@ -643,7 +730,7 @@ where
         .boxed()
 }
 
-/// Altium-style toggle chip — used inside `DropdownEntry::Custom`
+/// Toggle chip — used inside `DropdownEntry::Custom`
 /// to build chip-wrap layouts (Selection Filter pill grids in the
 /// schematic / footprint / future PCB editors).
 ///

@@ -153,7 +153,8 @@ pub use adapters::local_git::{
 /// `git2::Repository::init` at `project_dir`, merges Signex's managed
 /// block into `.gitignore` (and, when `use_lfs`, into `.gitattributes`),
 /// then stages every tracked file and creates the initial commit
-/// "chore: enable version control".
+/// [`DEFAULT_FIRST_COMMIT_MESSAGE`] (the app passes the user's subject
+/// through [`enable_project_version_control_with_message`]).
 ///
 /// Existing `.gitignore` / `.gitattributes` files are merged, never
 /// replaced: only the block between the `# >>> signex (managed) >>>` /
@@ -193,7 +194,37 @@ pub fn enable_project_version_control_with(
     gitignore: Option<&str>,
     keep_agent_journals_in_git: bool,
 ) -> Result<(), adapter::LibraryError> {
+    enable_project_version_control_with_message(
+        project_dir,
+        use_lfs,
+        project_scope,
+        gitignore,
+        keep_agent_journals_in_git,
+        DEFAULT_FIRST_COMMIT_MESSAGE,
+    )
+}
+
+/// The first commit's subject when the caller names none.
+pub const DEFAULT_FIRST_COMMIT_MESSAGE: &str = "chore: enable version control";
+
+/// [`enable_project_version_control_with`] with the first commit's message
+/// (the Enable Version Control dialog's "First commit message"). A blank
+/// `message` falls back to [`DEFAULT_FIRST_COMMIT_MESSAGE`].
+#[cfg(feature = "local-git")]
+pub fn enable_project_version_control_with_message(
+    project_dir: &std::path::Path,
+    use_lfs: bool,
+    project_scope: bool,
+    gitignore: Option<&str>,
+    keep_agent_journals_in_git: bool,
+    message: &str,
+) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
+    let message = if message.trim().is_empty() {
+        DEFAULT_FIRST_COMMIT_MESSAGE
+    } else {
+        message
+    };
 
     // Before anything touches disk: never `git init` a home / shared user
     // folder, a filesystem root or a folder holding other projects (#1205).
@@ -231,7 +262,7 @@ pub fn enable_project_version_control_with(
 
     // From here on any failure restores the user's files, and removes the
     // `.git` this call created (the check above guarantees there was none).
-    if let Err(e) = init_and_commit(project_dir, use_lfs, &sig_name, &sig_email) {
+    if let Err(e) = init_and_commit(project_dir, use_lfs, &sig_name, &sig_email, message) {
         let mut notes = files.roll_back();
         notes.extend(vcs_init_files::remove_new_git_dir(project_dir));
         return Err(with_rollback_notes(e, notes));
@@ -255,13 +286,14 @@ fn with_rollback_notes(error: adapter::LibraryError, notes: Vec<String>) -> adap
     }
 }
 
-/// `git init`, stage the tree and make the initial commit.
+/// `git init`, stage the tree and make the initial commit with `message`.
 #[cfg(feature = "local-git")]
 fn init_and_commit(
     project_dir: &std::path::Path,
     use_lfs: bool,
     sig_name: &str,
     sig_email: &str,
+    message: &str,
 ) -> Result<(), adapter::LibraryError> {
     use adapter::LibraryError;
 
@@ -317,15 +349,8 @@ fn init_and_commit(
     let tree = repo
         .find_tree(tree_oid)
         .map_err(|e| LibraryError::Backend(format!("git find tree: {e}")))?;
-    repo.commit(
-        Some("HEAD"),
-        &sig,
-        &sig,
-        "chore: enable version control",
-        &tree,
-        &[],
-    )
-    .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
+    repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[])
+        .map_err(|e| LibraryError::Backend(format!("git initial commit: {e}")))?;
     Ok(())
 }
 

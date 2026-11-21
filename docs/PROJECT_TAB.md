@@ -106,7 +106,9 @@ message. The chrome catalog draws a sample of it.
   label: turning it on needs a repository, turning it off keeps the
   repository, and a note says so when it cannot be turned on. "Commits in
   progress" shows only while commits run. The branch, the last commit, the
-  commit author and remotes are not shown yet.
+  commit author and remotes are not shown yet. The Enable Version Control
+  dialog's own "Commit every save" switch (on by default) decides whether a
+  successful Enable turns `enable_git` on, as the same General step.
 - **Schematic defaults** (#2026, mockup row 36) — two cards side by
   side. **Lines**: Wire width, Bus width, Symbol line and pin width, Shape
   stroke (mm), then Wire line style. **Text and markers**: Text size (pt),

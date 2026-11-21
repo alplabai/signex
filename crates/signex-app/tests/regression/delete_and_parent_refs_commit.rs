@@ -135,6 +135,7 @@ fn delete(f: &mut Fixture, name: &str) {
         is_outside_project: false,
         unsaved_prompt: false,
         is_directory_package: false,
+        choice: None,
     });
     crate::settle_support::settle(
         &mut f.app,
@@ -143,14 +144,16 @@ fn delete(f: &mut Fixture, name: &str) {
 }
 
 fn rename(f: &mut Fixture, name: &str, buffer: &str) {
-    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+    f.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: f.dir.join(name),
         tree_path: vec![0],
         buffer: buffer.to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     crate::settle_support::settle(&mut f.app, Message::Rename(RenameMsg::Submit));
 }
 
@@ -458,14 +461,16 @@ fn a_project_closed_during_the_rename_leaves_open_parents_matching_disk() {
     let mut f = fixture();
     open_root(&mut f, sheet("A4", &["Child.snxsch"]));
     let root = f.dir.join("Root.snxsch");
-    f.app.ui_state.rename_dialog = Some(RenameDialogState {
+    f.app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
         project_id: None,
         target_path: f.dir.join("Child.snxsch"),
         tree_path: vec![0],
         buffer: "Kid.snxsch".to_string(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let task = f.app.update(Message::Rename(RenameMsg::Submit));
     f.app.document_state.projects.clear();
     settle_task(&mut f.app, task);

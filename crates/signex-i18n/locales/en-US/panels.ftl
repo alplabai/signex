@@ -298,8 +298,26 @@ panels-projects-libraries =
 panels-projects-git = git
 # Placeholder of the project file filter.
 panels-projects-filter = Filter files
-# Shown when the filter matches no file.
-panels-projects-no-match = No files match
+# Tooltip of the gear button on a project card; it opens that project's
+# options in a tab.
+panels-projects-options = Project Options…
+# Pill behind a file the project lists but the disk does not have.
+panels-projects-pill-missing = missing
+# Pill behind a file that exists but could not be read.
+panels-projects-pill-unreadable = unreadable
+# Tooltip of the clear (x) button inside the file filter.
+panels-projects-clear-filter = Clear filter
+# Card shown when the file filter matches no file. $filter is the text the
+# user typed.
+panels-projects-no-match-title = No files match "{ $filter }"
+panels-projects-no-match-body = Clear the filter to see every file.
+# Buttons of the Projects panel when no project is open; the ellipsis says a
+# dialog follows.
+panels-projects-new-project = New Project…
+panels-projects-open = Open…
+# Section heading above the recently opened projects when no project is
+# open, shown in capitals.
+panels-projects-recent = Recent projects
 
 ## Net Classes section of the Properties panel
 

@@ -935,14 +935,16 @@ fn renaming_a_closed_sheet_mid_flight_refuses_the_replace() {
     let (mut app, _root, child) = placed_twice_on_disk(&dir);
     let (generation, prep) = prepared_child_replace(&mut app);
 
-    app.ui_state.rename_dialog = Some(crate::app::RenameDialogState {
+    app.ui_state.rename_dialog = Some(Box::new(crate::app::RenameDialogState {
         project_id: None,
         target_path: child.clone(),
         tree_path: vec![0, 0],
         buffer: "power.snxsch".into(),
         error: None,
         is_project_rename: false,
-    });
+        placing_symbols: Vec::new(),
+        name_clash: None,
+    }));
     let before = app.document_state.documents_epoch;
     let rename = app.update(crate::app::Message::Rename(crate::app::RenameMsg::Submit));
     assert_ne!(

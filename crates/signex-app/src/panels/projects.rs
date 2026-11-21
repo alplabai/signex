@@ -3,7 +3,6 @@
 use super::*;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
-use iced::widget::column;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -18,14 +17,14 @@ pub struct SheetInfo {
     pub wire_count: usize,
     pub label_count: usize,
     /// True when this sheet is currently in `document_state.tabs`.
-    /// Drives the small accent-coloured dot on the tree row (Altium parity).
+    /// Drives the small open dot on the tree row.
     pub is_open: bool,
     /// True when the open tab for this sheet has unsaved edits.
     /// Drives the bright red dot on the tree row.
     pub is_dirty: bool,
     /// True when this sheet is the document the user is currently
     /// viewing (`document_state.tabs[active_tab].path == sheet path`).
-    /// Drives the highlighted row background — Altium parity.
+    /// Drives the highlighted row background and the accent edge.
     pub is_active: bool,
     /// F24 (2026-05-03) — `true` when the file backing this entry
     /// is registered on the project but no longer exists on disk
@@ -257,8 +256,7 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
     // Libraries branch: every entry renders as a single leaf with the
     // file's full filename (incl. extension). `.snxlib` (Component
     // Libraries), `.snxsym` (Symbol Libraries), and `.snxfpt` (PCB
-    // Libraries) all live as siblings under this branch — Altium
-    // parity. No nested Symbols / Footprints subbranches: a `.snxlib`
+    // Libraries) all live as siblings under this branch. No nested Symbols / Footprints subbranches: a `.snxlib`
     // can hold thousands of primitives and surfacing them in the tree
     // would explode the panel; opening the `.snxlib` shows the
     // browser instead.
@@ -321,29 +319,11 @@ fn project_root_node(project: &ProjectPanelInfo) -> TreeNode {
         .with_dirty(project.is_dirty)
 }
 
+/// The Projects panel: the tree of every open project, or, with none open,
+/// the empty card and the recent projects.
 pub fn view_projects<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     if ctx.project_tree.is_empty() {
-        let muted = theme_ext::text_secondary(&ctx.tokens);
-        column![
-            text(signex_i18n::t!(
-                ctx.i18n,
-                signex_i18n::ids::PANELS_PROJECTS_NONE_OPEN
-            ))
-            .size(TS.body)
-            .color(muted),
-            // raw: blank spacer between the two lines, no text.
-            text(raw("")).size(TS.micro),
-            text(signex_i18n::t!(
-                ctx.i18n,
-                signex_i18n::ids::PANELS_PROJECTS_OPEN_HINT
-            ))
-            .size(TS.caption)
-            .color(muted),
-        ]
-        .spacing(SP.xs)
-        .padding(6)
-        .width(Length::Fill)
-        .boxed()
+        super::projects_graphite::empty_view(ctx)
     } else {
         super::projects_graphite::view(ctx)
     }

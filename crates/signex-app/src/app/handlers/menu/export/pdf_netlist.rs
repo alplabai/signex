@@ -200,6 +200,7 @@ impl Signex {
                     save_path,
                     messages: issues.messages(),
                     ctx,
+                    omitted: issues.omitted_pages(),
                 });
             return Task::none();
         }

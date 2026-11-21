@@ -140,6 +140,20 @@ that cannot be fully read is refused too. Such a repository would commit
 every file in the folder. Move the project into its own folder first. A
 project that already lives in a shared folder still opens normally.
 
+The dialog lists the project's files and library folders, all ticked; untick
+one to keep it out of the repository (it goes into `.gitignore`), or click
+**Select all** to tick every row again. **First commit message** is the
+subject of the repository's first commit, "Initial version of" and the
+project's name until you change it; **Enable** waits while it is blank.
+**Commit every save** (on by default) commits each later save of a project
+file. Turn it off to create the repository without that: saves are then not
+committed until you turn it on in the Project tab's Version control section.
+
+**Rename** shows the file's name without its extension, which stays as it is.
+Renaming a sheet that sheet symbols of the same project place says so, and
+those symbols are pointed at the new name. A name another file of the folder
+already has is shown at once, and **Rename** waits for a different one.
+
 To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
 > **Sample project.** **Help ▸ Open Sample Project** (or the button on the
@@ -546,7 +560,8 @@ annotate (section 5).
 
 By default a placed part takes its reference letters from the library symbol
 (`U?`, `R?`). A project can instead follow a designator standard: right-click
-the project in the Projects panel, choose **Project Options...** and pick a
+the project in the Projects panel and choose **Project Options...** (or press
+the gear on the project's card at the top of the panel), then pick a
 **Designator standard** (IEEE 315, DIN 40719-2, EN IEC 81346-2 or EN IEC
 81346-2 (full codes)). New parts then get the standard's letters for their
 component class, for example a diode is `D` under IEEE 315 and `V` under DIN
@@ -765,6 +780,23 @@ greyed out when no schematic is open.
 Edits are held in memory until you save. Undo is `Ctrl+Z` and redo is
 `Ctrl+Y` or `Ctrl+Shift+Z`.
 
+**Closing a project with unsaved edits.** **Close Project** lists every
+unsaved document of the project with what it is (Schematic, PCB, Project
+settings, Library, Component). **Save All** (or `Enter`) saves them and closes
+the project; **Discard All**, alone at the left, drops the edits; **Cancel**
+(or `Esc`) keeps everything open. A document another open project may use
+stays open, and the dialog says so. While a sheet cannot be read, Discard All
+is not offered and the dialog says why.
+
+**Removing a file from the project.** Right-click a file in the Projects panel
+and choose **Remove from Project**. Pick a card, then press the button:
+**Exclude** keeps the file on disk (and in Git, when the project folder is a
+repository) and only takes it off the project's list; **Delete file** also
+deletes it from disk for good. Exclude is selected when the dialog opens;
+`Enter` does nothing here, only the button acts. A choice that does not apply (the file
+is placed by another sheet, it is a shared library, or it is not a page of the
+project) is not shown, and a note says why.
+
 **Library saves are different.** A component library (`.snxlib`) is a git
 repository, and each library save writes the file and then commits it. If the
 write succeeds but git refuses the commit, the change is still saved. The
@@ -852,6 +884,10 @@ the bundled Sample Project (which lives in the app's config folder), the export
 and New Project dialogs leave the folder to the operating system.
 
 The Reports menu also offers **Netlist (Protel .NET)…** and **ERC Report…**.
+When some pages cannot go into the netlist (a missing or unreadable sheet file,
+a sheet cycle), the netlist export stops and lists them with the reason.
+**Cancel**, the default, writes nothing; **Export anyway (incomplete)** writes
+the partial netlist and reports the omitted pages in the Messages panel.
 The ERC report writes the results of the newest ERC run and does not run ERC
 itself: run it first (section 9), or the menu says so and writes nothing. It
 lists the rows the ERC panel shows, and when you have edited the sheet since the

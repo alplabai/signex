@@ -594,14 +594,16 @@ mod tests {
         sheet.unknown.newer_minor_source = Some("snxsch/1.7".into());
         fx::open_with(&mut app.document_state, &parent, sheet);
 
-        app.ui_state.rename_dialog = Some(RenameDialogState {
+        app.ui_state.rename_dialog = Some(Box::new(RenameDialogState {
             project_id: None,
             target_path: child.clone(),
             tree_path: vec![0],
             buffer: "renamed.snxsch".to_string(),
             error: None,
             is_project_rename: false,
-        });
+            placing_symbols: Vec::new(),
+            name_clash: None,
+        }));
         let _task = app.update(Message::Rename(RenameMsg::Submit));
 
         assert!(child.exists(), "the file must not move");

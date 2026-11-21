@@ -164,6 +164,8 @@ enum InputConsumer {
     DocumentSetup,
     /// Enter picks Place while a Components row menu is open (#2535).
     ComponentsRowMenu,
+    /// Enter saves all in Close Project and is swallowed in Remove (#2262).
+    ConfirmDefault,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
     /// Ctrl/Alt+1-8 — the digit is data the keymap profile cannot
@@ -179,7 +181,7 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 11] = [
+const CLAIM_ORDER: [InputConsumer; 12] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::RulePreview,
@@ -188,6 +190,7 @@ const CLAIM_ORDER: [InputConsumer; 11] = [
     InputConsumer::UpdatePcb,
     InputConsumer::DocumentSetup,
     InputConsumer::ComponentsRowMenu,
+    InputConsumer::ConfirmDefault,
     InputConsumer::ShortcutsSheet,
     InputConsumer::SelectionSlots,
     InputConsumer::Keymap,
@@ -374,6 +377,7 @@ impl Signex {
             InputConsumer::ComponentsRowMenu => {
                 self.claim_components_row_menu(target, window, event)
             }
+            InputConsumer::ConfirmDefault => self.claim_confirm_default(target, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
             InputConsumer::Keymap => self.claim_keymap(target, window, event),
@@ -637,6 +641,35 @@ impl Signex {
             Claim::consume(Message::from(D::Setup(N::SaveProfileConfirmed)))
         } else {
             Claim::consume(Message::from(D::SubmitRequested))
+        }
+    }
+
+    /// Enter in the Remove or Close Project confirm, in the window that shows
+    /// its card: Close Project saves all; Remove swallows it, so Enter never
+    /// removes or deletes (`confirm_enter_message`).
+    fn claim_confirm_default(&self, target: InputTarget, event: &keyboard::Event) -> Claim {
+        use crate::app::state::ModalId;
+        let keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(keyboard::key::Named::Enter),
+            modifiers,
+            ..
+        } = event
+        else {
+            return Claim::Pass;
+        };
+        if !modifiers.is_empty() {
+            return Claim::Pass;
+        }
+        let front = match target {
+            InputTarget::DetachedModal(modal) => Some(modal),
+            _ if target.paints_overlay_stack() => self.confirm_in_front(),
+            _ => None,
+        };
+        match front {
+            Some(modal @ (ModalId::RemoveDialog | ModalId::ProjectCloseConfirm)) => self
+                .confirm_enter_message(modal)
+                .map_or(Claim::Swallow, Claim::consume),
+            _ => Claim::Pass,
         }
     }
 
@@ -946,6 +979,7 @@ mod tests {
             InputConsumer::UpdatePcb,
             InputConsumer::DocumentSetup,
             InputConsumer::ComponentsRowMenu,
+            InputConsumer::ConfirmDefault,
             InputConsumer::ShortcutsSheet,
             InputConsumer::SelectionSlots,
             InputConsumer::Keymap,

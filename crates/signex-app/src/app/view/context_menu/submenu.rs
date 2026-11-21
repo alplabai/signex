@@ -13,7 +13,7 @@ use super::*;
 
 use super::items::{
     command_text, dd_cmd_disabled, dd_command, dd_disabled, dd_kb, dd_msg, dd_planned,
-    dd_planned_because, dd_ruled, tag_command, text,
+    dd_planned_because, dd_planned_pill, dd_ruled, tag_command, text,
 };
 use super::menus::CanvasSelection;
 use crate::active_bar::ActiveBarAction as A;
@@ -428,90 +428,78 @@ pub(super) fn sheet_actions_entries(
     ]
 }
 
-/// Add New to Project submenu — the master "Add New" picker for the
-/// right-clicked project (resolved as `target`). Schematic / Component
-/// Library / Symbol Library are wired; the rest stay version-badged stubs
-/// until their editors land.
+/// Add New to Project submenu — the "Add New" picker for the right-clicked
+/// project (resolved as `target`), grouped as in the tree menu (mockup row 20): the
+/// design documents (Schematic, PCB), the libraries, then the project files
+/// whose tabs are not built yet (Design Notebook, Output Job) as planned rows.
 pub(super) fn add_new_entries(
     i18n: &I18n,
     tid: ThemeId,
     target: signex_widgets::tree_view::TreeKey,
 ) -> Vec<DropdownEntry<Message>> {
     use crate::app::ProjectTreeAction as P;
-    let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(12);
+    let tree = |action: P| Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(action));
+    let mut v: Vec<DropdownEntry<Message>> = Vec::with_capacity(13);
 
     v.push(dd_msg(
-        Some(ic::icon_dd_wire(tid)),
+        Some(ic::icon_menu_sheet(tid)),
         &text(i18n, menu_ids::CTX_ADD_SCHEMATIC),
         "",
-        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(P::AddNewSchematic(
-            target.clone(),
-        ))),
+        tree(P::AddNewSchematic(target.clone())),
     ));
-    // Component Library is the Altium-style replacement for the legacy
-    // "Schematic Library" row, wired through the menu bridge.
+    // The project's one board, opened unsaved (#1312).
     v.push(dd_msg(
-        Some(ic::icon_component(tid)),
+        Some(ic::icon_menu_board(tid)),
+        &text(i18n, menu_ids::CTX_ADD_PCB),
+        "",
+        tree(P::AddNewPcb(target.clone())),
+    ));
+    v.push(DropdownEntry::Separator);
+    // A component library (the part table), wired through the menu bridge.
+    v.push(dd_msg(
+        Some(ic::icon_menu_library(tid)),
         &text(i18n, menu_ids::CTX_ADD_COMPONENT_LIBRARY),
         "",
         Message::Menu(crate::menu_bar::MenuMessage::AddComponentLibrary),
     ));
-    // Altium parity: Symbol Library (= our `.snxsym`) is a top-level
-    // project document. Opens a Save-As dialog scoped to the project dir.
+    // A `.snxsym` is a project document of its own: Save-As in the project
+    // folder.
     v.push(dd_msg(
-        Some(ic::icon_component(tid)),
+        Some(ic::icon_menu_library(tid)),
         &text(i18n, menu_ids::CTX_ADD_SYMBOL_LIBRARY),
         "",
-        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-            P::AddProjectSymbolLibrary(target.clone()),
-        )),
+        tree(P::AddProjectSymbolLibrary(target.clone())),
     ));
-    // The project's one board, opened unsaved (#1312).
-    v.push(dd_msg(
-        Some(ic::icon_dd_part_actions(tid)),
-        &text(i18n, menu_ids::CTX_ADD_PCB),
-        "",
-        Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(P::AddNewPcb(
-            target.clone(),
-        ))),
-    ));
-    // Footprint editor gated off for release; hide the "PCB Library" create
-    // entry on the project-root menu.
+    // Hidden while the footprint editor is gated off for release.
     if crate::feature_flags::FOOTPRINT_EDITOR_ENABLED {
         v.push(dd_msg(
-            Some(ic::icon_component(tid)),
+            Some(ic::icon_menu_library(tid)),
             &text(i18n, menu_ids::CTX_ADD_PCB_LIBRARY),
             "",
-            Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(
-                P::AddProjectFootprintLibrary(target.clone()),
-            )),
+            tree(P::AddProjectFootprintLibrary(target)),
         ));
     }
     v.push(DropdownEntry::Separator);
-    v.push(dd_planned(
+    v.push(dd_planned_pill(
         i18n,
-        Some(ic::icon_dd_text_string(tid)),
-        &text(i18n, menu_ids::CTX_ADD_OUTPUT_JOB),
-        None,
-    ));
-    v.push(dd_planned(
-        i18n,
-        Some(ic::icon_dd_text_frame(tid)),
+        Some(ic::icon_menu_notebook(tid)),
         &text(i18n, menu_ids::CTX_ADD_DESIGN_NOTEBOOK),
-        None,
+    ));
+    v.push(dd_planned_pill(
+        i18n,
+        Some(ic::icon_menu_export(tid)),
+        &text(i18n, menu_ids::CTX_ADD_OUTPUT_JOB),
     ));
     v.push(DropdownEntry::Separator);
-    v.push(dd_planned(
+    v.push(dd_planned_pill(
         i18n,
-        Some(ic::icon_dd_text_string(tid)),
+        Some(ic::icon_menu_file(tid)),
         &text(i18n, menu_ids::CTX_ADD_CONSTRAINT_FILE),
-        None,
     ));
-    v.push(dd_planned(
+    v.push(dd_planned_pill(
         i18n,
-        Some(ic::icon_dd_text_string(tid)),
+        Some(ic::icon_menu_file(tid)),
         &text(i18n, menu_ids::CTX_ADD_VHDL_FILE),
-        None,
     ));
 
     v
@@ -519,7 +507,8 @@ pub(super) fn add_new_entries(
 
 impl Signex {
     /// Build the secondary submenu (Place / Align / Arrange / Part Actions /
-    /// Sheet Actions / Add New to Project) shown to the right of the parent
+    /// Sheet Actions / Add New to Project / Planned / a library's Add New)
+    /// shown to the right of the parent
     /// context menu. The selection is the one of the sheet `window_id` shows
     /// (#1910); the target project is resolved from `self`. The pure entry
     /// builders do the rest and the shared widget renders it.
@@ -562,6 +551,12 @@ impl Signex {
                 add_new_entries(i18n, tid, target)
             }
             ContextSubmenu::Planned => planned_entries(i18n, tid),
+            ContextSubmenu::ProjectPlanned => {
+                super::project_tree::planned::planned_entries(i18n, tid)
+            }
+            ContextSubmenu::AddNewToLibrary => {
+                super::project_tree::library::library_add_new_entries(i18n, tid)
+            }
         };
         super::placement::menu_card(entries, tokens, &self.document_state.panel_ctx.ui_font_name)
             .element

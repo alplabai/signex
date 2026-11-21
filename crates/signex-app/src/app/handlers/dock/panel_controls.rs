@@ -313,7 +313,41 @@ impl Signex {
                 self.handle_net_class_message(msg);
             }
             crate::panels::PanelMsg::Projects(msg) => {
-                self.document_state.panel_ctx.projects_view.apply(msg);
+                use crate::menu_bar::MenuMessage;
+                use crate::panels::ProjectsMsg;
+                follow = match msg {
+                    // The card's gear runs the tree menu's Project Options
+                    // row for that project: the same command, same context.
+                    ProjectsMsg::OptionsPressed(id) => {
+                        match crate::keymap::AppCommandId::new("open_project_options") {
+                            Ok(command) => {
+                                let context = crate::app::command::InvocationContext {
+                                    origin: None,
+                                    project: Some(id.to_string()),
+                                };
+                                let args = crate::app::command::CommandArgs::in_context(context);
+                                self.dispatch_command(&command, args, None)
+                            }
+                            Err(_) => Task::none(),
+                        }
+                    }
+                    ProjectsMsg::NewProjectPressed => {
+                        self.update(Message::Menu(MenuMessage::NewProject))
+                    }
+                    ProjectsMsg::OpenPressed => {
+                        self.update(Message::Menu(MenuMessage::OpenProject))
+                    }
+                    ProjectsMsg::RecentProjectPressed(path) => {
+                        self.update(crate::start_screen::recent_message(path))
+                    }
+                    ProjectsMsg::FilterChanged(_)
+                    | ProjectsMsg::FilterCleared
+                    | ProjectsMsg::GroupToggled(_)
+                    | ProjectsMsg::RecentToggled => {
+                        self.document_state.panel_ctx.projects_view.apply(msg);
+                        Task::none()
+                    }
+                };
             }
             crate::panels::PanelMsg::PropertiesTab(index) => {
                 self.document_state.panel_ctx.properties_tab = *index;

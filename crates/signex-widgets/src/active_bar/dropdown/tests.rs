@@ -182,6 +182,103 @@ fn the_new_builders_set_their_fields() {
     assert!(item.selected && item.strong);
 }
 
+/// A new row is plain: not strong, not danger, no badge, so every menu that
+/// does not ask for them draws as before.
+#[test]
+fn a_new_row_is_neither_strong_nor_danger_and_has_no_badge() {
+    let item = DropdownItem::new("Open", ());
+    assert!(!item.strong && !item.danger && item.badge.is_none());
+    let item = DropdownItem::<()>::passive("Share...");
+    assert!(!item.strong && !item.danger && item.badge.is_none());
+}
+
+#[test]
+fn the_builders_set_strong_danger_and_badge() {
+    let item = DropdownItem::new("Remove from Project...", ())
+        .danger()
+        .strong()
+        .badge(pill());
+    assert!(item.strong);
+    assert!(item.danger);
+    assert_eq!(item.badge.as_ref().map(Label::as_str), Some("planned"));
+}
+
+/// Badge text as a caller passes it: never a `raw` literal.
+fn pill() -> signex_i18n::UserText {
+    signex_i18n::UserText::new("planned")
+}
+
+/// A danger row draws its label and icon in the theme's error ink in both
+/// Graphite themes; greyed, it reads muted like any disabled row.
+#[test]
+fn a_danger_row_uses_the_error_ink_unless_it_is_disabled() {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(id);
+        let look = Look::of(&tokens);
+        let error = theme_ext::error_color(&tokens);
+        assert_eq!(look.label_ink(false, true), error);
+        assert_eq!(look.row_icon_ink(true), error);
+        assert_eq!(look.label_ink(true, true), look.muted);
+        assert_eq!(look.label_ink(false, false), look.primary);
+        assert_eq!(look.row_icon_ink(false), look.icon_ink);
+        assert_ne!(error, look.primary, "{id:?}: danger must read apart");
+    }
+}
+
+/// The danger ink changes the text, not the hover wash.
+#[test]
+fn a_danger_row_hovers_like_any_other_row() {
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    assert_eq!(Look::of(&tokens).hover, RowPaint::of(&tokens).hover);
+}
+
+/// The strong row is set in the semibold weight; a plain row keeps the
+/// card's default face.
+#[test]
+fn a_strong_row_uses_the_semibold_weight() {
+    assert_eq!(
+        label_font(true).map(|f| f.weight),
+        Some(iced::font::Weight::Semibold)
+    );
+    assert_eq!(label_font(false), None);
+}
+
+/// A badge pill widens the fitted card by at least its text and padding.
+#[test]
+fn a_badge_is_part_of_the_fitted_width() {
+    let m = MenuMetrics::GRAPHITE;
+    let label = "Project Releaser...";
+    let plain = m.fitted_width(&labelled(label), f32::MAX, "");
+    let badged = m.fitted_width(
+        &[DropdownEntry::Item(
+            DropdownItem::new(label, ()).badge(pill()),
+        )],
+        f32::MAX,
+        "",
+    );
+    assert!(badged >= plain + 2.0 * m.badge_pad_x, "{badged} {plain}");
+}
+
+/// The view builds with every new flag set, in both Graphite themes.
+#[test]
+fn a_card_with_strong_danger_and_badge_rows_builds() {
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = theme_tokens(id);
+        let entries = vec![
+            DropdownEntry::Item(DropdownItem::new("Open", ()).strong()),
+            DropdownEntry::Item(DropdownItem::new("Remove", ()).danger()),
+            DropdownEntry::Item(
+                DropdownItem::passive("Share...")
+                    .disabled(true)
+                    .badge(pill()),
+            ),
+        ];
+        let panel = view(entries, &tokens, Some(240.0));
+        use iced::advanced::Widget as _;
+        assert_eq!(panel.size().width, Length::Fixed(240.0));
+    }
+}
+
 /// A swatch row reserves the icon column like an icon row, so a card mixing
 /// the two starts every label at one x, and the swatch fits inside it.
 #[test]

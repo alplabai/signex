@@ -31,14 +31,16 @@ fn open(app: &mut Signex, modal: ModalId) {
         }
         ModalId::FindReplace => ui.find_replace.open = true,
         ModalId::RenameDialog => {
-            ui.rename_dialog = Some(RenameDialogState {
+            ui.rename_dialog = Some(Box::new(RenameDialogState {
                 target_path: "p.snxsch".into(),
                 tree_path: vec![0],
                 project_id: None,
                 buffer: "p".into(),
                 error: None,
                 is_project_rename: false,
-            })
+                placing_symbols: Vec::new(),
+                name_clash: None,
+            }))
         }
         ModalId::RemoveDialog => {
             ui.remove_dialog = Some(RemoveDialogState {
@@ -49,6 +51,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 is_outside_project: false,
                 unsaved_prompt: false,
                 is_directory_package: false,
+                choice: None,
             })
         }
         ModalId::EnableVersionControl => {
@@ -59,7 +62,8 @@ fn open(app: &mut Signex, modal: ModalId) {
                 project_name: "p".into(),
                 items: Vec::new(),
                 use_lfs: false,
-                intro_text: String::new(),
+                commit_message: "Initial version".to_string(),
+                commit_every_save: true,
                 error: None,
                 working: false,
                 scanning: false,
@@ -207,6 +211,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                     path_text: "s.snxsch".into(),
                     error: None,
                     exists: false,
+                    reuse_warning: None,
                 })
         }
         other => panic!("{other:?} is not followed"),
