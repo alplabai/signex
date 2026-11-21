@@ -155,10 +155,10 @@ pub(in crate::app::command) fn revert(app: &mut Signex, args: &CommandArgs) -> R
     }
     app.document_state.agent_edits.forget_step(group);
     app.document_state.undo_groups.remove(&group);
-    // Undo can bring back an older embedded library symbol.
-    app.library.drift.check_pending = true;
+    // A step: the library drift check follows (an undo can bring back an
+    // older embedded library symbol).
     for (member, _, patch) in &taken {
-        app.after_sheet_change(member, *patch);
+        app.after_sheet_step(member, *patch);
     }
     if let Some(reason) = failure {
         return refused(format!(

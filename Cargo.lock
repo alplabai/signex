@@ -5727,6 +5727,7 @@ dependencies = [
  "signex-gfx",
  "signex-history",
  "signex-i18n",
+ "signex-i18n-ids",
  "signex-library",
  "signex-net",
  "signex-output",

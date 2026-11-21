@@ -29,19 +29,14 @@ impl Signex {
 
     /// [`Self::refuse_if_active_read_only`] for the open sheet at `path`, for
     /// an edit that targets a sheet that is not the active one.
+    /// A tail wrapper (#2326 M5): the decision in `state::sheet_change`, the
+    /// Messages line through the projector.
     pub(crate) fn refuse_if_read_only_at(&mut self, path: &std::path::Path) -> Option<String> {
-        let engine = self.document_state.engines.get(path)?;
-        let document = engine.document();
-        if !document.is_read_only() {
-            return None;
+        let refusal = self.document_state.refuse_read_only_at(path)?;
+        if let Some(notice) = &refusal.notice {
+            super::projector::log_notice(notice);
         }
-        let token = document.unknown.newer_minor_source.as_deref().unwrap_or("");
-        let message = refusal_message(Some(path), token);
-        let instance = engine.instance_id();
-        if self.document_state.read_only_refusal_noted.insert(instance) {
-            crate::diagnostics::log_warning(&message);
-        }
-        Some(message)
+        Some(refusal.reason)
     }
 }
 
