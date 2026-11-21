@@ -250,8 +250,9 @@ impl PcbSelectionState {
         self.highlight_except(board, &BTreeSet::new())
     }
 
-    /// [`Self::highlight`] without the footprints in `moving`: a drag or
-    /// Move draws them, and their outline, where they are going (#2358).
+    /// [`Self::highlight`] without the footprints or vias in `moving`: a
+    /// drag or Move draws them, and their outline, where they are going
+    /// (#2358).
     fn highlight_except(&mut self, board: &PcbBoard, moving: &BTreeSet<Uuid>) -> Highlight {
         if self.selection.is_empty() && self.hover.is_none() {
             return Highlight::default();
@@ -270,7 +271,9 @@ impl PcbSelectionState {
             .collect();
         let mut highlight = Highlight::default();
         let is_moving = |item: ItemRef| match item {
-            ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } => moving.contains(&id),
+            ItemRef::Footprint(id) | ItemRef::Pad { footprint: id, .. } | ItemRef::Via(id) => {
+                moving.contains(&id)
+            }
             _ => false,
         };
         for indexed in index.items().filter(|i| !is_moving(i.item)) {
@@ -310,7 +313,13 @@ impl PcbSelectionState {
     ) -> (Highlight, Vec<pcb_geom::Shape>) {
         let anchored = carry.filter(|c| c.anchor.is_some());
         let none = BTreeSet::new();
-        let carried = anchored.map_or(&none, |c| &c.footprints);
+        let carried = anchored.map_or(&none, |c| {
+            if c.vias.is_empty() {
+                &c.footprints
+            } else {
+                &c.vias
+            }
+        });
         let mut highlight = self.highlight_except(board, carried);
         // A Move, a paste or a Place waits for clicks: nothing is grabbed.
         let waiting = carry.is_some_and(super::PcbCarry::waits_for_clicks);
@@ -324,6 +333,10 @@ impl PcbSelectionState {
             if self.filter.is_on(pcb_geom::PickKind::Texts) {
                 grab.extend(self.shapes_of(|item| matches!(item, ItemRef::FootprintText { .. })));
             }
+            // A via is grabbed unless the filter turns vias off.
+            if self.filter.is_on(pcb_geom::PickKind::Vias) {
+                grab.extend(self.shapes_of(|item| matches!(item, ItemRef::Via(_))));
+            }
             grab
         };
         if let Some(carry) = carry.filter(|c| c.anchor.is_some())
@@ -334,6 +347,9 @@ impl PcbSelectionState {
                 (None, Some((footprint, field))) => {
                     self.shapes_of(|item| item == ItemRef::FootprintText { footprint, field })
                 }
+                (None, None) if !carry.vias.is_empty() => self.shapes_of(
+                    |item| matches!(item, ItemRef::Via(id) if carry.vias.contains(&id)),
+                ),
                 (None, None) => self.footprint_shapes(board, &carry.footprints),
             };
             highlight.ghost = shapes
@@ -415,6 +431,47 @@ impl PcbSelectionState {
             self.selection.apply_click(Some(item), ClickMode::Replace);
         }
         Some((footprint, field))
+    }
+
+    /// The vias a press at `at` grabs to drag: the via a click there picks,
+    /// with the other selected vias when the selection is only vias and holds
+    /// it; otherwise it becomes the selection. `None` off a via, and on a via
+    /// over a selected footprint, which the press carries instead.
+    pub fn grab_vias_for_drag(
+        &mut self,
+        board: &PcbBoard,
+        at: Point,
+        tolerance_mm: f64,
+    ) -> Option<BTreeSet<Uuid>> {
+        let (item, _) = self.pick_at(board, at, tolerance_mm)?;
+        let ItemRef::Via(id) = item else {
+            return None;
+        };
+        let p = PointNm::from_mm(at, "press").ok()?;
+        let tol = pcb_geom::mm_to_nm(tolerance_mm, "reach").ok()?;
+        let selected = self.selection.footprints();
+        let on_selected_footprint = self.index.as_ref()?.items_at(p, tol).iter().any(|i| {
+            matches!(i.item, ItemRef::Footprint(fp) | ItemRef::Pad { footprint: fp, .. }
+                if selected.contains(&fp))
+        });
+        if on_selected_footprint {
+            return None;
+        }
+        let vias: Option<BTreeSet<Uuid>> = self
+            .selection
+            .items()
+            .map(|item| match item {
+                ItemRef::Via(via) => Some(via),
+                _ => None,
+            })
+            .collect();
+        match vias.filter(|vias| vias.contains(&id)) {
+            Some(vias) => Some(vias),
+            None => {
+                self.selection.apply_click(Some(item), ClickMode::Replace);
+                Some(BTreeSet::from([id]))
+            }
+        }
     }
 
     /// The shapes of the indexed items `keep` accepts; the index must be

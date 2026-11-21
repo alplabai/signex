@@ -32,7 +32,7 @@ pub use board_text::BoardTextLayer;
 pub use camera::BoardCamera;
 pub use carry::{
     CarryKind, PasteLoad, PcbCarry, board_after_move, board_without, carried_board, carry_delta,
-    snap_point,
+    snap_point, via_carry_delta,
 };
 pub use content::BoardContentLayer;
 pub use highlight::{Highlight, HighlightLayer};
@@ -282,7 +282,7 @@ impl PcbCanvas {
         HighlightLayer(self)
     }
 
-    fn camera_ref(&self) -> std::cell::Ref<'_, BoardCamera> {
+    pub(crate) fn camera_ref(&self) -> std::cell::Ref<'_, BoardCamera> {
         self.camera.borrow()
     }
 

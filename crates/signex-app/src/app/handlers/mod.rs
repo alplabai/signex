@@ -106,6 +106,9 @@ pub(crate) mod pcb_tool;
 pub(crate) mod pcb_tune;
 #[cfg(test)]
 mod pcb_tune_tests;
+mod pcb_via_move;
+#[cfg(test)]
+mod pcb_via_move_tests;
 pub mod pcb_view;
 pub mod pcb_view_rotation;
 pub mod placed_part;

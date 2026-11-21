@@ -189,6 +189,12 @@ impl Signex {
                 self.carry_to(from, to);
                 return;
             }
+            if let Some(reach) = pick
+                && self.start_via_drag(&path, from, reach)
+            {
+                self.carry_to(from, to);
+                return;
+            }
             let mut footprints = match pick {
                 Some(reach) => self
                     .with_pcb_selection(|state, board| state.grab_for_drag(board, from, reach))
@@ -343,6 +349,11 @@ impl Signex {
         let delta = if carry.text.is_some() {
             // A text follows the pointer exactly (#2368).
             Point::new(to.x - from.x, to.y - from.y)
+        } else if !carry.vias.is_empty() {
+            let Some(delta) = self.via_drag_delta(&carry.vias, from, to) else {
+                return;
+            };
+            delta
         } else {
             carry_delta(
                 board,
@@ -373,6 +384,10 @@ impl Signex {
         if carry.text.is_some() {
             self.end_pcb_carry();
             self.drop_text_carry(&carry);
+            return;
+        }
+        if !carry.vias.is_empty() {
+            self.drop_via_carry(&carry, from, to);
             return;
         }
         if carry.footprints.is_empty() {
@@ -572,6 +587,6 @@ pub(crate) fn deletable_items(selection: &pcb_geom::Selection) -> Vec<BoardItemI
     items
 }
 
-fn refuse(what: &str, refusal: &PlacementRefusal) {
+pub(super) fn refuse(what: &str, refusal: &PlacementRefusal) {
     crate::diagnostics::log_warning(format!("{what}: {refusal}; nothing changed"));
 }

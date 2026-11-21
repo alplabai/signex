@@ -66,6 +66,8 @@ pub struct PcbCarry {
     /// A footprint's designator or comment a drag moves on its own (#2368);
     /// `footprints` is then empty.
     pub text: Option<(Uuid, BoardTextField)>,
+    /// The vias a drag moves; `footprints` is then empty.
+    pub vias: BTreeSet<Uuid>,
     /// A drag with Ctrl held moves the footprints alone: the tracks on
     /// their pads stay where they are (Caner, 2026-11-21).
     pub leaves_tracks: bool,
@@ -96,6 +98,7 @@ impl PcbCarry {
             paste: None,
             part: None,
             text: None,
+            vias: BTreeSet::new(),
             leaves_tracks: false,
         }
     }
@@ -142,11 +145,58 @@ pub fn carry_delta(
     snap: &PcbSnapOptions,
     active: CopperLayer,
 ) -> Point {
+    let on_grid = grid_delta(board, footprints, from, to, snap);
+    snapped_delta(board, footprints, from, to, on_grid, snap, active)
+}
+
+/// The offset that takes the carried `vias` from `from` towards `to`, snapped
+/// as [`carry_delta`] snaps but for the centre of the via nearest `from`, so
+/// it lands exactly on the snap point wherever the via was pressed. A via is
+/// not a component: it takes the Non-Components grid.
+pub fn via_carry_delta(
+    board: &PcbBoard,
+    vias: &BTreeSet<Uuid>,
+    from: Point,
+    to: Point,
+    snap: &PcbSnapOptions,
+    active: CopperLayer,
+) -> Point {
+    let raw = Point::new(to.x - from.x, to.y - from.y);
+    let distance = |p: Point| (p.x - from.x).powi(2) + (p.y - from.y).powi(2);
+    let Some(centre) = board
+        .vias
+        .iter()
+        .filter(|via| vias.contains(&via.uuid))
+        .map(|via| via.position)
+        .min_by(|a, b| distance(*a).total_cmp(&distance(*b)))
+    else {
+        return raw;
+    };
+    let on_grid = if snap.to_grids {
+        grid_for(board, GridUse::NonComponents).snap_delta(centre, raw)
+    } else {
+        raw
+    };
+    let target = Point::new(centre.x + raw.x, centre.y + raw.y);
+    snapped_delta(board, vias, centre, target, on_grid, snap, active)
+}
+
+/// `on_grid` refined by the object, guide and axis snaps at `to`, leaving
+/// the carried `skip` items out of them.
+fn snapped_delta(
+    board: &PcbBoard,
+    skip: &BTreeSet<Uuid>,
+    from: Point,
+    to: Point,
+    on_grid: Point,
+    snap: &PcbSnapOptions,
+    active: CopperLayer,
+) -> Point {
     let radius_mm = snap.distance.factor() * grid_step_mm(board);
     let query = snap.layer_mask(active).map(|layers| SnapQuery {
         objects: &snap.objects,
         layers,
-        skip: footprints,
+        skip,
         radius_mm,
     });
     if let Some(query) = &query
@@ -154,7 +204,7 @@ pub fn carry_delta(
     {
         return Point::new(target.x - from.x, target.y - from.y);
     }
-    let mut delta = grid_delta(board, footprints, from, to, snap);
+    let mut delta = on_grid;
     let (mut free_x, mut free_y) = (true, true);
     if snap.to_guides
         && let Some(hit) = guide_snap(&board.options.guides, to, radius_mm)

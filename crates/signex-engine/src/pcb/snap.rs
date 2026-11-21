@@ -64,7 +64,8 @@ pub struct SnapQuery<'a> {
     /// bits; `u32::MAX` for every layer. Texts and graphics count only on
     /// every layer, the board shape on any.
     pub layers: u32,
-    /// Footprints whose pads and origins are left out: the carried ones.
+    /// Footprints whose pads and origins are left out, and vias whose
+    /// centres are: the carried ones.
     pub skip: &'a BTreeSet<Uuid>,
     /// How far from the pointer a point may be, mm.
     pub radius_mm: f64,
