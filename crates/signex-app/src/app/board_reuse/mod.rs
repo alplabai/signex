@@ -18,7 +18,7 @@ use iced::Task;
 use serde::Serialize;
 use signex_engine::pcb::BoardItemId;
 use signex_engine::pcb::reuse_block;
-use signex_i18n::{command_ids, ids, t};
+use signex_i18n::{RenderTranslatable, command_ids, ids, t};
 use signex_types::format::SnxPcb;
 use uuid::Uuid;
 
@@ -26,7 +26,7 @@ pub(crate) use operands::{place_board_reuse_block, save_board_reuse_block};
 pub use store::{BlocksOnDisk, ReuseBlockStore};
 
 use crate::app::agent::Origin;
-use crate::app::command::CommandArgs;
+use crate::app::command::{CommandArgs, CommandOutcome, OperandValue, translator};
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Message, PcbMsg, Signex};
 use crate::keymap::AppCommandId;
@@ -300,8 +300,11 @@ impl Signex {
     }
 
     /// `save_board_reuse_block` from the board menu: the selection, named
-    /// after its designators. Before the project's blocks are read, they
-    /// are read first and the save is asked again once they land.
+    /// after its designators, saved by the command's operand handler with
+    /// the board, the name and the selected footprints, tracks and vias
+    /// filled in (`command::translator`); a block is made of those alone.
+    /// Before the project's blocks are read, they are read first and the
+    /// save is asked again once they land, so the handler never defers it.
     fn save_selection_as_block(&mut self) -> Task<Message> {
         let Some(board) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
             return Task::none();
@@ -318,13 +321,25 @@ impl Signex {
             })
             .unwrap_or_default();
         let name = self.block_name_for(&board, &items);
-        match self.save_reuse_block(&board, &name, &items) {
-            Ok((_, task)) => task,
-            Err(why) => {
-                self.refuse_reuse(command_ids::CMD_MENU_SAVE_BOARD_REUSE_BLOCK, &why);
-                Task::none()
-            }
+        let ids: Vec<String> = items
+            .iter()
+            .filter_map(|item| match item {
+                BoardItemId::Footprint(id) | BoardItemId::Segment(id) | BoardItemId::Via(id) => {
+                    Some(id.to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        let operands = vec![
+            ("name", OperandValue::Text(name)),
+            ("ids", OperandValue::Text(ids.join(","))),
+        ];
+        let (outcome, task) = translator::run(self, "save_board_reuse_block", &board, operands);
+        if let CommandOutcome::Disabled { reason } = outcome {
+            let why = reason.render_en_us();
+            self.refuse_reuse(command_ids::CMD_MENU_SAVE_BOARD_REUSE_BLOCK, &why);
         }
+        task
     }
 
     /// A save or place request starts: whether the project's blocks in

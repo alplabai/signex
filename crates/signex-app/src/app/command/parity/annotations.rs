@@ -10,6 +10,7 @@
 //! shapes what a command writes or answers) is settings. A translated
 //! refusal, log line or undo label is not a read of the locale.
 
+use super::forms::Form::Translator;
 use super::forms::Form::{self, ActiveBar, Bridge, BridgeContextMenu, HeadlessWithoutOperands};
 use super::forms::Form::{AgentWindowLayout, Check, CloseInWindow, HeadlessNewDocument};
 use super::forms::Form::{Operand, Query, SplitCore, StillRunsRefusal, StillRunsUnavailable};
@@ -724,7 +725,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "lock_board_items",
             "unlock_board_items",
             "repour_selected",
-            "save_board_reuse_block",
             "swap_gates",
             "swap_pins",
             "remove_teardrops",
@@ -738,15 +738,25 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
     (
         &[
             "add_teardrops",
-            "board_shape_from_selection",
-            "gloss_selected_routes",
-            "keepout_from_selection",
             "stitch_vias",
             "tune_diff_pair",
             "tune_net_length",
         ],
         Bridge,
         &[Selection, Settings],
+    ),
+    // The translators read the board in view and its selection
+    // (`translated_targets`, `save_selection_as_block`); the clearances are
+    // the operand handler's.
+    (
+        &[
+            "board_shape_from_selection",
+            "gloss_selected_routes",
+            "keepout_from_selection",
+            "save_board_reuse_block",
+        ],
+        Translator,
+        &[Selection],
     ),
     // The origin moves to the outline corner nearest the pointer.
     (&["snap_board_origin_to_corner"], Bridge, &[Cursor]),

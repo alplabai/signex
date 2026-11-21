@@ -14,7 +14,7 @@ mod outline;
 mod stitch;
 mod teardrop;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub use arrange::arrange_in_box;
 pub use gloss::gloss_tracks;
@@ -74,8 +74,10 @@ pub struct ToolEdit {
     pub report: ToolReport,
 }
 
-/// What a tool edit does, as an agent reads it back.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+/// What a tool edit does, as an agent reads it back and as the GUI reads
+/// it back from the operand handler's answer.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ToolReport {
     /// Items the edit adds (vias, teardrops, a keepout), by uuid.
     #[serde(skip_serializing_if = "Vec::is_empty")]

@@ -92,10 +92,10 @@ board_report_netlist	operand_handler	run_operands: named document	core	origin	ha
 board_report_netlist	in_window_rewrite	document_window	gui	window	routing
 board_report_netlist	refusal_needs	Pcb	gui	active document	routing
 board_report_netlist	headless_missing_operand	needs `document`	core	none	routing
-board_shape_from_selection	bridge	Pcb(Tools(BoardShapeRequested))	core	active document,selection,settings	handler
+board_shape_from_selection	translator	Pcb(Tools(BoardShapeRequested))	gui	active document,selection	handler
 board_shape_from_selection	operand_handler	run_operands: named document	core	origin,settings	handler
 board_shape_from_selection	in_window_rewrite	document_window	gui	window	routing
-board_shape_from_selection	refusal_needs	PcbSelection	core	active document,selection	routing
+board_shape_from_selection	refusal_needs	PcbSelection	gui	active document,selection	routing
 board_shape_from_selection	headless_missing_operand	needs `document`	core	none	routing
 board_sketch	bridge	Pcb(Sketch(ModeToggled))	undecided	active document	gate
 board_sketch	in_window_rewrite	document_window	gui	window	routing
@@ -437,10 +437,10 @@ force_annotate_all_schematics	bridge	Annotate(Run(ResetAndRenumber))	core	active
 force_annotate_all_schematics	in_window_rewrite	document_window	gui	window	routing
 force_annotate_all_schematics	refusal_needs	ActiveSheet	core	active document	routing
 force_annotate_all_schematics	disabled_still_runs	explains_when_unavailable	core	active document,dialog answer	handler
-gloss_selected_routes	bridge	Pcb(Tools(GlossRequested))	core	active document,selection,settings	handler
+gloss_selected_routes	translator	Pcb(Tools(GlossRequested))	gui	active document,selection	handler
 gloss_selected_routes	operand_handler	run_operands: named document	core	origin,settings	handler
 gloss_selected_routes	in_window_rewrite	document_window	gui	window	routing
-gloss_selected_routes	refusal_needs	PcbSelection	core	active document,selection	routing
+gloss_selected_routes	refusal_needs	PcbSelection	gui	active document,selection	routing
 gloss_selected_routes	headless_missing_operand	needs `document`	core	none	routing
 go_to_net_partner	bridge	Ui(NetNav(PartnerJumpRequested))	gui	selection	handler
 go_to_net_partner	in_window_rewrite	document_window	gui	window	routing
@@ -481,10 +481,10 @@ import_graphics	operand_handler	run_operands: active-tab gate unless a document 
 import_graphics	in_window_rewrite	document_window	gui	window	routing
 import_graphics	refusal_needs	Schematic	gui	active document	routing
 import_graphics	headless_missing_operand	needs `at`	core	none	routing
-keepout_from_selection	bridge	Pcb(Tools(KeepoutRequested))	core	active document,selection,settings	handler
+keepout_from_selection	translator	Pcb(Tools(KeepoutRequested))	gui	active document,selection	handler
 keepout_from_selection	operand_handler	run_operands: named document	core	origin,settings	handler
 keepout_from_selection	in_window_rewrite	document_window	gui	window	routing
-keepout_from_selection	refusal_needs	PcbSelection	core	active document,selection	routing
+keepout_from_selection	refusal_needs	PcbSelection	gui	active document,selection	routing
 keepout_from_selection	headless_missing_operand	needs `document`	core	none	routing
 lasso_select	active_bar	LassoSelect	gui	none	handler
 lasso_select	in_window_rewrite	document_window	gui	window	routing
@@ -1136,10 +1136,10 @@ run_drc	refusal_needs	Pcb	core	active document	routing
 run_erc	bridge	Erc(Run)	core	active document,render cache,settings	handler
 run_erc	in_window_rewrite	document_window	gui	window	routing
 run_erc	refusal_needs	Sheets	core	active document	routing
-save_board_reuse_block	bridge	Pcb(ReuseBlock(SaveRequested))	core	active document,selection	handler
+save_board_reuse_block	translator	Pcb(ReuseBlock(SaveRequested))	gui	active document,selection	handler
 save_board_reuse_block	operand_handler	run_operands: named document	core	origin	handler
 save_board_reuse_block	in_window_rewrite	document_window	gui	window	routing
-save_board_reuse_block	refusal_needs	ReuseSource	core	active document,selection	routing
+save_board_reuse_block	refusal_needs	ReuseSource	gui	active document,selection	routing
 save_board_reuse_block	headless_missing_operand	needs `document`	core	none	routing
 save_document	bridge	File(Save)	core	active document,window	handler
 save_document	operand_handler	run_operands: named document	core	origin	handler

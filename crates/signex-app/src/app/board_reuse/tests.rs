@@ -512,3 +512,43 @@ fn a_failed_block_folder_read_is_retried_on_the_next_menu_open() {
     let blocks = &app.document_state.reuse_blocks;
     assert_eq!(blocks.read_failure(dir.path()), None);
 }
+
+/// #2326 slice 6: the menu save runs the operand handler, and a selection
+/// with no footprint, track or via in it is refused in the handler's words.
+/// Before the translator the menu said "a block needs at least one
+/// footprint"; either way nothing is saved.
+#[test]
+fn a_menu_save_of_a_selection_with_nothing_a_block_holds_is_refused() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    app.ui_state.first_run_tour_open = false;
+    app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
+    let path = dir.path().join("board.snxpcb");
+    let mut pcb = board();
+    pcb.zones = serde_json::from_value(serde_json::json!([{
+        "uuid": Uuid::from_u128(0x41), "net": 1, "net_name": "GND", "layer": "TopCopper",
+        "outline": [{"x": 0.0, "y": 0.0}, {"x": 5.0, "y": 0.0}, {"x": 5.0, "y": 5.0}],
+        "fill_type": "solid"
+    }]))
+    .unwrap();
+    let kind = pcb_geom::PickKind::of_zone(&pcb.zones[0]).expect("a pickable area");
+    app.open_pcb_tab(path, "board".into(), pcb);
+    let zone = Uuid::from_u128(0x41);
+    app.select_pcb_items(&[pcb_geom::ItemRef::Zone { zone, kind }]);
+    let mark = crate::diagnostics::newest_entry_id();
+    let task = app.update(Message::Menu(MenuMessage::command(
+        "save_board_reuse_block",
+    )));
+    settle(&mut app, task);
+    let said = crate::diagnostics::entries_since(mark).entries;
+    assert!(
+        said.iter()
+            .any(|e| e.message.contains("names nothing to save")),
+        "{said:?}"
+    );
+    assert!(
+        !dir.path().join("reuse-blocks").exists(),
+        "nothing is saved"
+    );
+}
