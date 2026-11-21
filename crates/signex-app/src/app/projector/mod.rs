@@ -6,12 +6,17 @@
 //! active canvas is the window `run_in_window_document` swapped in, and the
 //! drag invalidation counts depend on it (`canvas/drag_invalidation_tests.rs`).
 
+mod board_view;
 mod document_changed;
 mod notice;
 #[cfg(test)]
 mod notice_tests;
+mod panel;
+mod replaced_engine;
+mod slots;
 
 pub(crate) use notice::log_notice;
+pub(crate) use panel::effective_paper_size;
 
 use crate::app::Signex;
 use crate::app::core::event::CoreEvent;
