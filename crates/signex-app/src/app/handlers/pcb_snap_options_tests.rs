@@ -698,7 +698,11 @@ fn a_running_route_ignores_a_foreign_parts_origin() {
 #[test]
 fn a_hidden_object_kind_gives_no_targets() {
     for (object, shown, (x, y)) in [
-        (SnapObject::TrackVertices, BoardObject::Tracks, (40.03, 5.03)),
+        (
+            SnapObject::TrackVertices,
+            BoardObject::Tracks,
+            (40.03, 5.03),
+        ),
         (SnapObject::ArcCenters, BoardObject::Arcs, (52.03, 30.03)),
         (SnapObject::ViaCenters, BoardObject::Vias, (20.03, 20.03)),
         (SnapObject::PadCenters, BoardObject::Pads, (30.03, 30.03)),
