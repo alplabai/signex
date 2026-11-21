@@ -14,7 +14,7 @@ fn rendered(notice: &Notice) -> String {
 #[test]
 fn each_notice_renders_byte_identical_to_trunk() {
     let skips = locked_skips_line(&["R1".to_string(), "R2".to_string()]).unwrap();
-    let refusal = crate::app::read_only_refusal::refusal_message(
+    let refusal = crate::app::core::event::read_only_refusal_message(
         Some(std::path::Path::new("/w/power.snxsch")),
         "snxsch/1.7",
     );

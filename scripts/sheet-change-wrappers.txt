@@ -1,17 +1,15 @@
-# The edit-tail wrappers (#2326 M5, tracked in #2704): the only functions
-# outside crates/signex-app/src/app/state/sheet_change/ that may call its core
-# half. `<file under crates/signex-app/src/app/> <fn>`. This list may only
-# shrink: scripts/check_sheet_change_seam.sh fails on a line that is not part
-# of the exception, and on a line whose wrapper no longer calls the core half.
-# Each wrapper is removed by the slice #2704 names for it.
-mutation_gateway.rs report_engine_warnings
-mutation_gateway.rs without_locked_items
+# The edit-tail wrappers, issue #2704 (#2326 M5): the only functions outside
+# crates/signex-app/src/app/state/sheet_change/ that may call its core half.
+# `<file under crates/signex-app/src/app/> <fn>`. This list may only shrink:
+# scripts/check_sheet_change_seam.sh caps it at MAX_WRAPPERS lines and fails
+# on a line whose wrapper no longer calls the core half. Each wrapper is
+# removed by the slice #2704 names for it.
 mutation_gateway.rs apply_engine_commands_reporting
 mutation_gateway.rs apply_engine_command_recording
-mutation_gateway.rs mark_active_document_dirty
-mutation_gateway.rs apply_engine_step
 mutation_gateway.rs finish_schematic_mutation
+mutation_gateway.rs apply_engine_step
+mutation_gateway.rs mark_active_document_dirty
 handlers/editing_commands/sheet_on.rs execute_on_sheet
 handlers/editing_commands/sheet_on.rs step_sheet_on
-handlers/editing_commands/sheet_on.rs settle_and_project
+handlers/editing_commands/sheet_on.rs after_sheet_change
 read_only_refusal.rs refuse_if_read_only_at

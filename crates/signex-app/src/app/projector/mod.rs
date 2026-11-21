@@ -35,7 +35,7 @@ pub(crate) enum RefreshScope {
 impl Signex {
     /// Project `events` in order; the panel context is re-derived once at the
     /// end when a document was repainted.
-    pub(crate) fn project(&mut self, events: Vec<CoreEvent>, scope: RefreshScope) {
+    pub(crate) fn project_events(&mut self, events: Vec<CoreEvent>, scope: RefreshScope) {
         let mut repainted = false;
         for event in events {
             match event {

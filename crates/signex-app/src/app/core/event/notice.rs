@@ -1,6 +1,8 @@
 //! A line for the Messages panel, raised by the core and written by the GUI.
 
-use signex_engine::EngineNotice;
+use std::path::Path;
+
+use signex_engine::{Engine, EngineNotice};
 use signex_i18n_ids::Translatable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +42,28 @@ impl Notice {
             body: NoticeBody::Engine(notice),
         }
     }
+}
+
+/// The notices `engine` holds from its last command, taken: its older
+/// English warnings first, then its typed notices, all at warning level.
+pub(crate) fn engine_notices(engine: &mut Engine) -> Vec<Notice> {
+    let warnings = engine
+        .take_warnings()
+        .into_iter()
+        .map(|warning| Notice::legacy_english(NoticeLevel::Warning, warning));
+    let typed = engine.take_notices().into_iter().map(Notice::engine);
+    warnings.chain(typed).collect()
+}
+
+/// The Messages line for an edit refused on a read-only sheet (#1402): file
+/// name only, the reason and the way out.
+pub(crate) fn read_only_refusal_message(path: Option<&Path>, format_token: &str) -> String {
+    let name = path
+        .and_then(|p| p.file_name())
+        .map_or_else(|| "This sheet".into(), |n| n.to_string_lossy());
+    format!(
+        "Not changed: {name} is read-only, written by a newer Signex ({format_token}). Edit it in that version."
+    )
 }
 
 /// The line naming the locked objects an edit passed over; `None` when it

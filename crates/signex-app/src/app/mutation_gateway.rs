@@ -1,4 +1,4 @@
-//! The schematic edit gateway. Each edit tail here is a wrapper (#2326 M5,
+//! The schematic edit gateway. Each edit tail here is a wrapper (#2704,
 //! until slice 6): its core half in `state::sheet_change`, then the
 //! projection in `app::projector`, inside the same call.
 
@@ -16,7 +16,7 @@ impl Signex {
     /// English lines as they are, its typed notices worded through the
     /// catalog (`app::engine_notices`).
     pub(crate) fn report_engine_warnings(engine: &mut signex_engine::Engine) {
-        for notice in sheet_change::engine_notices(engine) {
+        for notice in core::event::engine_notices(engine) {
             super::projector::log_notice(&notice);
         }
     }
@@ -27,7 +27,7 @@ impl Signex {
         engine: &signex_engine::Engine,
         commands: Vec<signex_engine::Command>,
     ) -> (Vec<signex_engine::Command>, Vec<String>) {
-        sheet_change::locked_items_pruned(engine, commands)
+        core::locked_items::locked_items_pruned(engine, commands)
     }
 
     pub(crate) fn apply_engine_commands(
@@ -77,7 +77,7 @@ impl Signex {
             clear_overlay,
             update_selection_info,
         };
-        self.project(edit.events, scope);
+        self.project_events(edit.events, scope);
         (edit.outcome, edit.refusal)
     }
 
@@ -213,7 +213,7 @@ impl Signex {
             clear_overlay: true,
             update_selection_info,
         };
-        self.project(step.events, scope);
+        self.project_events(step.events, scope);
         step.stepped
     }
 

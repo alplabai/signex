@@ -8,7 +8,7 @@
 //! derived state (dirty mark, render caches of windows that show it, the
 //! panel context).
 //!
-//! These are tail wrappers (#2326 M5, until slice 6): the core half in
+//! These are tail wrappers (#2704, until slice 6): the core half in
 //! `state::sheet_change`, then the projection in `app::projector`.
 
 use std::path::Path;
@@ -30,7 +30,7 @@ impl Signex {
         command: signex_engine::Command,
     ) -> Result<bool, String> {
         let edit = self.document_state.execute_at(path, command);
-        self.project(edit.events, RefreshScope::Sheet);
+        self.project_events(edit.events, RefreshScope::Sheet);
         match edit.refusal {
             Some(reason) => Err(reason),
             None => Ok(edit.outcome == MutationOutcome::Changed),
@@ -48,7 +48,7 @@ impl Signex {
             return Ok(true);
         }
         let step = self.document_state.step_history_at(path, undo);
-        self.project(step.events, RefreshScope::Sheet);
+        self.project_events(step.events, RefreshScope::Sheet);
         match step.refusal {
             Some(reason) => Err(reason),
             None => Ok(step.stepped),
@@ -60,18 +60,10 @@ impl Signex {
     /// the sheet is also the main window's active one the same refresh keeps
     /// that canvas current.
     pub(crate) fn after_sheet_change(&mut self, path: &Path, patch: DocumentPatch) {
-        self.settle_and_project(path, patch, ChangeCause::Edit);
-    }
-
-    /// [`Self::after_sheet_change`] for a history step (an agent's revert),
-    /// which also asks for the library drift check.
-    pub(crate) fn after_sheet_step(&mut self, path: &Path, patch: DocumentPatch) {
-        self.settle_and_project(path, patch, ChangeCause::Step);
-    }
-
-    fn settle_and_project(&mut self, path: &Path, patch: DocumentPatch, cause: ChangeCause) {
-        let events = self.document_state.settle_sheet_at(path, patch, cause);
-        self.project(events, RefreshScope::Sheet);
+        let events = self
+            .document_state
+            .settle_sheet_at(path, patch, ChangeCause::Edit);
+        self.project_events(events, RefreshScope::Sheet);
     }
 
     /// Repaint the undocked windows and tile pane showing `path`, a member of

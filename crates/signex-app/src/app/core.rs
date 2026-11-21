@@ -8,6 +8,7 @@ pub(crate) mod document_key;
 pub(crate) mod document_times;
 pub(crate) mod editor_address;
 pub(crate) mod event;
+pub(crate) mod locked_items;
 pub(crate) mod mutation_outcome;
 pub(crate) mod new_library_defaults;
 pub(crate) mod origin;

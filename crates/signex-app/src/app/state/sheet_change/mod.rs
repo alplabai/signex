@@ -3,9 +3,8 @@
 //! (dirty mark, ERC epoch, the agent's owed refresh) and return what happened
 //! as events. The GUI half is `app::projector`.
 //!
-//! Only the tail wrappers call in here (`mutation_gateway.rs`,
-//! `handlers/editing_commands/sheet_on.rs`, `read_only_refusal.rs`), until
-//! slice 6; `scripts/check_sheet_change_seam.sh` keeps it that way and keeps
+//! Only the tail wrappers in `scripts/sheet-change-wrappers.txt` call in here
+//! (#2704); `scripts/check_sheet_change_seam.sh` keeps it that way and keeps
 //! this module off the GUI's state and the diagnostics log.
 
 mod execute;
@@ -18,11 +17,10 @@ use std::path::{Path, PathBuf};
 use signex_engine::DocumentPatch;
 
 use super::DocumentState;
-use crate::app::core::event::{ChangeCause, CoreEvent, DocumentChanged, Notice, NoticeLevel};
+use crate::app::core::event::{
+    ChangeCause, CoreEvent, DocumentChanged, Notice, NoticeLevel, read_only_refusal_message,
+};
 use crate::app::core::mutation_outcome::MutationOutcome;
-
-pub(crate) use execute::locked_items_pruned;
-pub(crate) use notices::engine_notices;
 
 /// An edit run by the core half: its outcome, the refusal text of a failed
 /// one, and the events to project.
@@ -73,7 +71,7 @@ pub(crate) struct ReadOnlyRefusal {
 
 /// What the active tail did with a patch.
 #[derive(Debug, PartialEq, Eq)]
-enum Settled {
+enum ActiveSettlement {
     /// Nothing to show: an empty patch, or no engine behind the active path.
     Unchanged,
     /// An agent's edit list is running: the refresh is owed to its end.
@@ -92,8 +90,8 @@ impl DocumentState {
     ) -> SheetEdit {
         let mut events = Vec::new();
         let outcome = match self.settle_active_into(patch, cause, &mut events) {
-            Settled::Unchanged => MutationOutcome::Unchanged,
-            Settled::Owed | Settled::Shown => MutationOutcome::Changed,
+            ActiveSettlement::Unchanged => MutationOutcome::Unchanged,
+            ActiveSettlement::Owed | ActiveSettlement::Shown => MutationOutcome::Changed,
         };
         SheetEdit {
             outcome,
@@ -134,7 +132,7 @@ impl DocumentState {
             return None;
         }
         let token = document.unknown.newer_minor_source.as_deref().unwrap_or("");
-        let reason = crate::app::read_only_refusal::refusal_message(Some(path), token);
+        let reason = read_only_refusal_message(Some(path), token);
         let instance = engine.instance_id();
         let notice = self
             .read_only_refusal_noted
@@ -148,24 +146,24 @@ impl DocumentState {
         patch: DocumentPatch,
         cause: ChangeCause,
         events: &mut Vec<CoreEvent>,
-    ) -> Settled {
+    ) -> ActiveSettlement {
         if patch == DocumentPatch::NONE {
-            return Settled::Unchanged;
+            return ActiveSettlement::Unchanged;
         }
         // An agent's edit list refreshes the sheet once, when it ends, and
         // never through the person's canvas (docs/AGENT_EDITS.md).
         if self.agent_edit_running() {
             self.agent_edits.owed |= patch;
-            return Settled::Owed;
+            return ActiveSettlement::Owed;
         }
         if !patch.is_display_only() {
             self.note_sheet_edit();
         }
         let Some(path) = self.sync_active_history_dirty() else {
-            return Settled::Unchanged;
+            return ActiveSettlement::Unchanged;
         };
         events.push(DocumentChanged { path, patch, cause }.into());
-        Settled::Shown
+        ActiveSettlement::Shown
     }
 
     fn settle_at_into(

@@ -175,3 +175,57 @@ fn an_undo_with_no_active_engine_still_sets_the_library_drift_check() {
     assert!(!app.apply_engine_undo(true));
     assert!(app.library.drift.check_pending);
 }
+
+/// A step whose refresh the core half does not show (here owed to an agent's
+/// run) still asks for the drift check: the history moved all the same.
+#[test]
+fn an_undo_the_active_tail_does_not_show_still_sets_the_library_drift_check() {
+    let (mut app, path) = colours::app_with_sheet("core-half-owed-step.snxsch");
+    assert!(app.apply_engine_command(paper("A3"), true, true));
+    app.document_state.agent_edits.target = Some(path);
+    app.library.drift.check_pending = false;
+    assert!(app.apply_engine_undo(true));
+    assert!(app.library.drift.check_pending);
+}
+
+/// `path`'s engine with one paper edit on top, recorded under a new group.
+fn grouped_top_step(app: &mut Signex, path: &Path) -> signex_engine::UndoGroupId {
+    let group = app.mint_undo_group();
+    let engine = app.document_state.engines.get_mut(path).unwrap();
+    engine.begin_transaction().unwrap();
+    engine.execute(paper("A3")).unwrap();
+    engine.commit_transaction(Some(group)).unwrap();
+    group
+}
+
+#[test]
+fn a_step_by_path_onto_a_project_wide_run_is_refused_with_its_reason() {
+    let (mut app, path) = colours::app_with_sheet("core-half-run-step.snxsch");
+    grouped_top_step(&mut app, &path);
+    let before = app.document_state.engines[&path].undo_position();
+    assert_eq!(
+        app.step_sheet_on(&path, true),
+        Err(
+            "the next step belongs to a project-wide run (annotate, replace or re-prefix) \
+             and moves other sheets too; undo it from the sheet it was run on"
+                .to_string()
+        )
+    );
+    assert_eq!(app.document_state.engines[&path].undo_position(), before);
+}
+
+#[test]
+fn a_step_by_path_onto_an_agents_step_is_refused_with_its_reason() {
+    let (mut app, path) = colours::app_with_sheet("core-half-agent-step.snxsch");
+    let group = grouped_top_step(&mut app, &path);
+    let origin = app.agent.origin.clone();
+    app.document_state
+        .agent_edits
+        .record_step(group, "Agent: test".to_string(), &origin);
+    let before = app.document_state.engines[&path].undo_position();
+    assert_eq!(
+        app.step_sheet_on(&path, true),
+        Err("the next step is an agent's edit step; take it back with `revert`".to_string())
+    );
+    assert_eq!(app.document_state.engines[&path].undo_position(), before);
+}

@@ -6,28 +6,11 @@ use std::path::Path;
 
 use signex_engine::{Command, DocumentPatch, Engine, EngineError};
 
-use super::notices::{engine_events, error_line, locked_skips, warning};
-use super::{DocumentState, Settled, SheetEdit, SheetStep};
+use super::notices::{engine_error_notice, engine_notice_events, skip_notice, warning_notice};
+use super::{ActiveSettlement, DocumentState, SheetEdit, SheetStep};
 use crate::app::core::event::{ChangeCause, CoreEvent, DocumentChanged};
+use crate::app::core::locked_items::locked_items_pruned;
 use crate::app::core::mutation_outcome::MutationOutcome;
-
-/// `commands` without what the lock would refuse (see
-/// `Engine::without_locked`), and the references skipped.
-pub(crate) fn locked_items_pruned(
-    engine: &Engine,
-    commands: Vec<Command>,
-) -> (Vec<Command>, Vec<String>) {
-    let mut kept = Vec::with_capacity(commands.len());
-    let mut skipped = Vec::new();
-    for command in commands {
-        let (command, references) = engine.without_locked(command);
-        kept.extend(command);
-        skipped.extend(references);
-    }
-    skipped.sort();
-    skipped.dedup();
-    (kept, skipped)
-}
 
 fn document_patch(pair: Option<signex_engine::PatchPair>) -> DocumentPatch {
     pair.map_or(DocumentPatch::NONE, |pair| pair.document)
@@ -60,17 +43,20 @@ impl DocumentState {
             Err(reason) => return SheetEdit::failed(reason, events),
         };
         let (commands, skipped) = locked_items_pruned(engine, commands);
-        events.extend(locked_skips(&skipped));
+        events.extend(skip_notice(&skipped));
         if commands.is_empty() {
             return SheetEdit::unchanged(events);
         }
         let batch = engine.execute_batch(commands);
-        events.extend(engine_events(engine));
+        events.extend(engine_notice_events(engine));
         let patch = match batch {
             Ok(result) => document_patch(result.patch_pair),
             Err(error) => {
                 let reason = error.to_string();
-                events.push(error_line("Engine command execution failed", error));
+                events.push(engine_error_notice(
+                    "Engine command execution failed",
+                    error,
+                ));
                 return SheetEdit::failed(reason, events);
             }
         };
@@ -96,12 +82,12 @@ impl DocumentState {
             let (mut kept, skipped) = locked_items_pruned(engine, vec![command.clone()]);
             match kept.pop() {
                 Some(pruned) => {
-                    events.extend(locked_skips(&skipped));
+                    events.extend(skip_notice(&skipped));
                     pruned
                 }
                 None if names_locked => command,
                 None => {
-                    events.extend(locked_skips(&skipped));
+                    events.extend(skip_notice(&skipped));
                     return SheetEdit::unchanged(events);
                 }
             }
@@ -113,7 +99,7 @@ impl DocumentState {
         } else {
             engine.execute_unrecorded(command)
         };
-        events.extend(engine_events(engine));
+        events.extend(engine_notice_events(engine));
         match executed {
             Ok(result) if result.changed => {
                 self.settle_edit(document_patch(result.patch_pair), events)
@@ -123,9 +109,9 @@ impl DocumentState {
                 let reason = error.to_string();
                 if matches!(error, EngineError::ItemLocked { .. }) {
                     // Same level as the skip notice a batch raises.
-                    events.push(warning(reason.clone()));
+                    events.push(warning_notice(reason.clone()));
                 } else {
-                    events.push(error_line("Engine command failed", error));
+                    events.push(engine_error_notice("Engine command failed", error));
                 }
                 SheetEdit::failed(reason, events)
             }
@@ -146,13 +132,14 @@ impl DocumentState {
         let patch = match stepped {
             Ok(Some(pair)) => pair.document,
             Ok(None) => return Some(Self::not_stepped(events)),
+            // Unreachable today: `Engine::undo` / `redo` never return `Err`.
             Err(error) => {
-                events.push(error_line(failure, error));
+                events.push(engine_error_notice(failure, error));
                 return Some(Self::not_stepped(events));
             }
         };
         let settled = self.settle_active_into(patch, ChangeCause::Step, &mut events);
-        if settled != Settled::Shown {
+        if settled != ActiveSettlement::Shown {
             // The history moved all the same: an empty patch on the active
             // canvas only asks for the library drift check.
             let patch = DocumentPatch::NONE;
@@ -160,7 +147,7 @@ impl DocumentState {
             events.push(DocumentChanged { path, patch, cause }.into());
         }
         Some(SheetStep {
-            stepped: settled != Settled::Unchanged,
+            stepped: settled != ActiveSettlement::Unchanged,
             refusal: None,
             events,
         })
@@ -175,13 +162,13 @@ impl DocumentState {
             return SheetEdit::failed(format!("{} is not loaded", path.display()), events);
         };
         let executed = engine.execute(command);
-        events.extend(engine_events(engine));
+        events.extend(engine_notice_events(engine));
         let patch = match executed {
             Ok(result) if result.changed => document_patch(result.patch_pair),
             Ok(_) => return SheetEdit::unchanged(events),
             Err(error) => {
                 let reason = error.to_string();
-                events.push(error_line("Engine command failed", error));
+                events.push(engine_error_notice("Engine command failed", error));
                 return SheetEdit::failed(reason, events);
             }
         };
@@ -228,6 +215,7 @@ impl DocumentState {
         let patch = match stepped {
             Ok(Some(pair)) => pair.document,
             Ok(None) => return Self::not_stepped(events),
+            // Unreachable today: `Engine::undo` / `redo` never return `Err`.
             Err(error) => {
                 let reason = error.to_string();
                 let failure = if undo {
@@ -235,7 +223,7 @@ impl DocumentState {
                 } else {
                     "Engine redo failed"
                 };
-                events.push(error_line(failure, error));
+                events.push(engine_error_notice(failure, error));
                 return Self::step_refused(reason, events);
             }
         };
@@ -249,8 +237,8 @@ impl DocumentState {
 
     fn settle_edit(&mut self, patch: DocumentPatch, mut events: Vec<CoreEvent>) -> SheetEdit {
         let outcome = match self.settle_active_into(patch, ChangeCause::Edit, &mut events) {
-            Settled::Unchanged => MutationOutcome::Unchanged,
-            Settled::Owed | Settled::Shown => MutationOutcome::Changed,
+            ActiveSettlement::Unchanged => MutationOutcome::Unchanged,
+            ActiveSettlement::Owed | ActiveSettlement::Shown => MutationOutcome::Changed,
         };
         SheetEdit {
             outcome,
