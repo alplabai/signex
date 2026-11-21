@@ -687,6 +687,24 @@ canvas's bottom-left names the tool and the next click.
 Checks: `schematic::drawing_kinds_tests`, `signex_output::svg::annotation_drawing_tests`,
 `annotation_drawing_tests` (engine), `app::sch_tables::tests`.
 
+## Canvas cursor
+
+Decided by Caner, 2026-11-21. One rule for the schematic, board, footprint
+editor and symbol editor canvases (`canvas::cursor::tool_cursor`):
+
+- **Idle selection tool:** the OS arrow (`mouse::Interaction::Idle`).
+- **A tool armed:** the crosshair, while a placement, drawing or routing
+  tool or Measure is active, or a part, power port, paste or Edit ▸ Move
+  waits for clicks. On the board that is the canvas's clicks-only state.
+- **Gestures keep their own cursors:** grabbing while panning, move while
+  dragging the selection or a board footprint, the resize cursor over a
+  handle.
+- **Footprint Sketch mode:** the Select tool shows the arrow and draws no
+  mark of its own except the line-hover resize arrow; a drawing tool hides
+  the OS cursor and its reticle is the crosshair.
+
+Checks: `canvas::cursor::tests`.
+
 ## What this document is *not*
 
 - **Not** a reverse-engineering of any third-party EDA tool's

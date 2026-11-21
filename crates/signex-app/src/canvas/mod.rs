@@ -12,6 +12,7 @@
 //!   every frame.
 
 mod camera;
+pub(crate) mod cursor;
 mod drag_layers;
 pub(crate) mod drag_preview;
 mod draw;
@@ -704,6 +705,14 @@ pub struct SchematicCanvas<'a> {
 }
 
 impl<'a> SchematicCanvas<'a> {
+    /// A placement, drawing or Measure tool is armed, or a part or power
+    /// port waits on the cursor: the canvas shows the crosshair.
+    pub(crate) fn has_armed_tool(&self) -> bool {
+        self.prefs.current_tool != crate::app::Tool::Select
+            || self.prefs.power_port_pending
+            || self.prefs.placement.is_some()
+    }
+
     /// What the content scene draws instead of the stored values.
     fn scene_overrides(&self) -> crate::schematic_runtime::SceneOverrides<'_> {
         crate::schematic_runtime::SceneOverrides {
@@ -905,19 +914,17 @@ impl canvas::Program<Message> for SchematicCanvas<'_> {
     fn mouse_interaction(
         &self,
         state: &CanvasState,
-        _bounds: Rectangle,
-        _cursor: mouse::Cursor,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
     ) -> mouse::Interaction {
-        // Single cursor shape across every canvas mode: default arrow
-        // for idle, native pan / move cursors while dragging. No
-        // mode-specific shape swaps (the OS Crosshair is white + tiny
-        // on Windows so invisible on yellow paper anyway). Visual
-        // feedback for armed modes comes from overlay glyphs — the
-        // net-colour pencil and the lasso polygon preview.
+        // Pan and move cursors while dragging; otherwise the arrow, or the
+        // crosshair while a tool is armed (`cursor::tool_cursor`).
         if state.panning {
             mouse::Interaction::Grabbing
         } else if state.move_dragging {
             mouse::Interaction::Move
+        } else if cursor.is_over(bounds) {
+            cursor::tool_cursor(self.has_armed_tool())
         } else {
             mouse::Interaction::default()
         }

@@ -824,8 +824,12 @@ impl canvas::Program<Message> for PcbCanvas {
         if state.panning {
             return mouse::Interaction::Grabbing;
         }
+        if self.carry.get() {
+            return mouse::Interaction::Move;
+        }
+        // A tool, Measure, or a Move, paste or part waiting for clicks.
         if cursor.is_over(bounds) {
-            mouse::Interaction::Crosshair
+            crate::canvas::cursor::tool_cursor(self.clicks_only)
         } else {
             mouse::Interaction::default()
         }

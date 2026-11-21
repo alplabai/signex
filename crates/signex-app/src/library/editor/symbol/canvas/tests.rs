@@ -374,8 +374,8 @@ fn the_hover_cursor_agrees_with_the_press_over_a_pin_on_a_handle() {
 
     assert_eq!(
         shown,
-        mouse::Interaction::Crosshair,
-        "a press here grabs the pin, so no resize cursor"
+        mouse::Interaction::Idle,
+        "a press here grabs the pin, so no resize cursor: the idle arrow"
     );
 }
 

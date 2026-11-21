@@ -228,6 +228,10 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   PCB; an open panel has a check and says where it is (left, right, bottom,
   floating or window). Click a panel to open it, or to bring an open one
   forward.
+- **Cursor:** on every canvas the pointer is the normal arrow while nothing
+  is being placed or drawn. It turns into a crosshair while a placement,
+  drawing or routing tool or Measure is active, and back to the arrow when
+  `Esc` ends the tool. Dragging and resize handles show their own cursors.
 - **Board counters:** on a board the status bar also shows how far the
   board is: **Routed** (routed connections of all, with a bar and the
   percent), **Unrouted**, **DRC** (the violations of the last **Run DRC** and
