@@ -256,3 +256,47 @@ fn an_edit_in_the_form_drops_a_refused_label() {
     assert_eq!(step_mm(&mut app), 0.5);
     assert_eq!(multiplier(&mut app), 2);
 }
+
+/// A press on the other label that arrives before the open field's blur
+/// still commits the length typed on the open label.
+#[test]
+fn a_length_typed_on_one_label_is_kept_when_the_other_label_is_pressed() {
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    let mut app = app_with_footprint_editor();
+    send(&mut app, GridPropertiesMsg::Open);
+    label(&mut app, M::LabelPressed(0));
+    label(&mut app, M::DraftEdited("2.5".into()));
+    label(&mut app, M::LabelPressed(1));
+    let state = app.ui_state.grid_properties.as_ref().expect("open");
+    assert_eq!(state.preview_labels.editing_index(), Some(1));
+    send(&mut app, GridPropertiesMsg::Close);
+    send(&mut app, GridPropertiesMsg::Apply);
+    assert_eq!(step_mm(&mut app), 2.5);
+}
+
+/// The OS close of a detached Grid Properties window closes the dialog in
+/// one click, as Cancel does, even with a preview label open.
+#[test]
+fn the_os_close_of_the_detached_window_closes_the_dialog_with_a_label_open() {
+    use crate::app::state::{ModalId, WindowKind};
+    use crate::app::{Message, WindowMsg};
+    use signex_widgets::dimension_label::DimensionLabelMessage as M;
+    let mut app = app_with_footprint_editor();
+    app.ui_state.main_window_id = Some(iced::window::Id::unique());
+    app.ui_state.main_window_opened = true;
+    app.ui_state.first_run_tour_open = false;
+    send(&mut app, GridPropertiesMsg::Open);
+    let _ = app.sync_detached_modals();
+    let window = app
+        .ui_state
+        .windows
+        .iter()
+        .find_map(|(id, kind)| {
+            matches!(kind, WindowKind::DetachedModal(ModalId::GridProperties)).then_some(*id)
+        })
+        .expect("the dialog has its own window");
+    label(&mut app, M::LabelPressed(0));
+    label(&mut app, M::DraftEdited("2.5".into()));
+    let _ = app.update(Message::Window(WindowMsg::WindowCloseRequested(window)));
+    assert!(app.ui_state.grid_properties.is_none());
+}

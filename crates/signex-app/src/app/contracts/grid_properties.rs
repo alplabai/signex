@@ -131,6 +131,17 @@ impl GridPropertiesState {
         if self.label_event_refused(&event, &labels) {
             return false;
         }
+        // A press on the other label can arrive before the open field's
+        // blur, so the open label's length is committed here first.
+        let (kinds, labels) = match event {
+            DimensionLabelMessage::LabelPressed(i) | DimensionLabelMessage::HandlePressed(i)
+                if self.preview_labels.editing_index().is_some_and(|o| o != i) =>
+            {
+                self.commit_label_event(DimensionLabelMessage::DraftSubmitted, &kinds, &labels);
+                self.update_labels(i18n)
+            }
+            _ => (kinds, labels),
+        };
         let event = match event {
             DimensionLabelMessage::DraftBlurred(i)
                 if self.preview_labels.editing_index() == Some(i) =>
@@ -139,7 +150,18 @@ impl GridPropertiesState {
             }
             other => other,
         };
-        let outcome = self.preview_labels.update(event, &labels);
+        self.commit_label_event(event, &kinds, &labels)
+    }
+
+    /// Hands `event` to the labels and writes a committed value into the
+    /// draft. Returns whether a label field opened.
+    fn commit_label_event(
+        &mut self,
+        event: DimensionLabelMessage,
+        kinds: &[PreviewLabel],
+        labels: &[DimensionLabel<'_>],
+    ) -> bool {
+        let outcome = self.preview_labels.update(event, labels);
         if let Some(done) = outcome.committed
             && let Some(&kind) = kinds.get(done.index)
         {

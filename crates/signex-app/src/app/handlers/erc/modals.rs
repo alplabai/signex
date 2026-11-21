@@ -253,7 +253,11 @@ impl Signex {
             ModalId::EnableVersionControl => Some(Message::EnableVersionControl(
                 EnableVersionControlMsg::Close,
             )),
-            ModalId::GridProperties => Some(Message::GridProperties(GridPropertiesMsg::Close)),
+            // The OS close is the Cancel button: one click closes the
+            // dialog, even with a preview label open.
+            ModalId::GridProperties => {
+                Some(Message::GridProperties(GridPropertiesMsg::CancelPressed))
+            }
             ModalId::SelectionFilterCustom => {
                 Some(Message::SelectionFilter(SelectionFilterMsg::CloseCustom))
             }
