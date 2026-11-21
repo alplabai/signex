@@ -526,7 +526,7 @@ fn resolve_effective_click(
                 let cursor_ang = if cursor_len > 1e-9 { dy.atan2(dx) } else { 0.0 };
                 // Typed angle wins; else follow the cursor.
                 let ang_rad = match line_ang_typed {
-                    Some(a) => a.to_radians(),
+                    Some(a) => editor.state.angle_deg_mirrored(a).to_radians(),
                     None => cursor_ang,
                 };
                 // Typed (positive) length wins; else use the
@@ -615,7 +615,7 @@ fn resolve_effective_click(
                 let r = ((sx - cx).powi(2) + (sy - cy).powi(2)).sqrt();
                 if r > 1e-9 {
                     let start_ang = (sy - cy).atan2(sx - cx);
-                    let end_ang = start_ang + deg.to_radians();
+                    let end_ang = start_ang + editor.state.angle_deg_mirrored(deg).to_radians();
                     (cx + r * end_ang.cos(), cy + r * end_ang.sin(), true)
                 } else {
                     (x_mm, y_mm, false)

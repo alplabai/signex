@@ -1,5 +1,6 @@
 //! #2356: board sketch mode through `Signex::update`. The canvas cursor
 //! follows the pointer, and Properties shows the board, not footprint fields.
+//! The origin, grid, guides and angles read as on the board view.
 
 use iced::{Point, Size, Widget as _};
 use signex_types::format::SnxPcb;
@@ -295,6 +296,293 @@ fn properties_read_a_sketch_point_from_the_board_origin() {
     let stored = session.working_sketch();
     let kept = stored.entities.iter().find(|e| e.id == id).expect("kept");
     assert!(matches!(kept.kind, EntityKind::Point { x: a, y: b } if a == x && b == y));
+}
+
+/// Caner, 2026-11-21: on a board with an off-grid origin at (5.3, 30.7) the
+/// sketch's grid, guides and angles follow the board origin.
+fn sketching_off_grid() -> (Signex, tempfile::TempDir) {
+    sketching_with(|board| {
+        board.options.origin =
+            signex_types::pcb_origin::BoardOrigin::new(BoardPoint::new(5.3, 30.7));
+    })
+}
+
+fn near(a: f64, b: f64) -> bool {
+    (a - b).abs() < 1e-6
+}
+
+fn sketch_edit(
+    app: &mut Signex,
+    path: &std::path::Path,
+    msg: crate::library::messages::FootprintEditorMsg,
+) {
+    use crate::library::messages::{LibraryMessage, PrimitiveEdit};
+    send(
+        app,
+        Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path: path.to_path_buf(),
+            msg: PrimitiveEdit::Footprint(msg),
+        }),
+    );
+}
+
+fn click(app: &mut Signex, path: &std::path::Path, x_mm: f64, y_mm: f64) {
+    use crate::library::messages::FootprintEditorMsg;
+    sketch_edit(
+        app,
+        path,
+        FootprintEditorMsg::SketchToolClick {
+            x_mm,
+            y_mm,
+            snap_id: None,
+        },
+    );
+}
+
+fn typed(app: &mut Signex, path: &std::path::Path, digits: &str) {
+    use crate::library::messages::FootprintEditorMsg;
+    for ch in digits.chars() {
+        sketch_edit(app, path, FootprintEditorMsg::SketchPlacementInputChar(ch));
+    }
+}
+
+/// A Line from (15, 10), 5 mm long at a typed 30 degrees.
+fn draw_typed_line(app: &mut Signex, path: &std::path::Path) {
+    use crate::library::editor::footprint::SketchTool;
+    use crate::library::messages::FootprintEditorMsg;
+    sketch_edit(
+        app,
+        path,
+        FootprintEditorMsg::SketchSetTool(SketchTool::Line),
+    );
+    click(app, path, 15.0, 10.0);
+    typed(app, path, "5");
+    sketch_edit(app, path, FootprintEditorMsg::SketchPlacementInputTab);
+    typed(app, path, "30");
+    click(app, path, 1.0, 1.0);
+}
+
+/// An Arc about (10, 10) from (15, 10), with a typed sweep of 90 degrees.
+fn draw_typed_arc(app: &mut Signex, path: &std::path::Path) {
+    use crate::library::editor::footprint::SketchTool;
+    use crate::library::messages::FootprintEditorMsg;
+    sketch_edit(
+        app,
+        path,
+        FootprintEditorMsg::SketchSetTool(SketchTool::Arc),
+    );
+    click(app, path, 10.0, 10.0);
+    click(app, path, 15.0, 10.0);
+    typed(app, path, "90");
+    click(app, path, 1.0, 1.0);
+}
+
+fn last_point(sketch: &signex_sketch::SketchData) -> (f64, f64) {
+    use signex_sketch::entity::EntityKind;
+    sketch
+        .entities
+        .iter()
+        .rev()
+        .find_map(|e| match e.kind {
+            EntityKind::Point { x, y } => Some((x, y)),
+            _ => None,
+        })
+        .expect("a point")
+}
+
+fn arc_turn(sketch: &signex_sketch::SketchData) -> bool {
+    use signex_sketch::entity::EntityKind;
+    sketch
+        .entities
+        .iter()
+        .find_map(|e| match e.kind {
+            EntityKind::Arc { sweep_ccw, .. } => Some(sweep_ccw),
+            _ => None,
+        })
+        .expect("an arc")
+}
+
+fn board_sketch_data(app: &Signex) -> signex_sketch::SketchData {
+    let session = app.interaction_state.board_sketch.as_ref().expect("on");
+    session.working_sketch()
+}
+
+/// A footprint tab in sketch mode, the same inputs' other host.
+fn footprint_sketching() -> (Signex, std::path::PathBuf) {
+    use crate::app::{FootprintDocument, TabInfo, TabKind};
+    use crate::library::editor::footprint::EditorMode;
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.first_run_tour_open = false;
+    let path = std::path::PathBuf::from("angles.snxfpt");
+    let file = signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
+    let mut editor = FootprintDocument::new(path.clone(), file);
+    editor.state.mode = EditorMode::Sketch;
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), editor);
+    app.document_state.tabs.push(TabInfo {
+        title: "f".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    (app, path)
+}
+
+fn footprint_sketch_data(app: &Signex, path: &std::path::Path) -> signex_sketch::SketchData {
+    let editor = app.document_state.footprint_editors.get(path);
+    let editor = editor.expect("the editor");
+    editor.primitive().sketch.clone().expect("a sketch")
+}
+
+#[test]
+fn grid_snap_lands_on_the_board_origin_plus_whole_steps() {
+    use crate::library::editor::footprint::snap::{SnapKind, snap_cursor};
+    let (app, _tmp) = sketching_off_grid();
+    let session = app.interaction_state.board_sketch.as_ref().expect("on");
+    let state = &session.editor.state;
+    let sketch = session.working_sketch();
+    let step = state.snap_options.grid_step_mm;
+    let hit = snap_cursor((12.2, 13.1), Some(&sketch), state, None);
+    assert!(matches!(hit.kind, SnapKind::Grid), "{:?}", hit.kind);
+    for (at, from) in [(hit.pos.0, 5.3), (hit.pos.1, 30.7)] {
+        let steps = (at - from) / step;
+        assert!(near(steps, steps.round()), "{at} from {from}");
+    }
+    let [x, y] = state.shown_mm([hit.pos.0, hit.pos.1]);
+    assert!(near(x / step, (x / step).round()), "reads round: {x}");
+    assert!(near(y / step, (y / step).round()), "reads round: {y}");
+}
+
+#[test]
+fn a_footprint_sketch_grid_still_steps_from_zero() {
+    use crate::library::editor::footprint::FootprintEditorState;
+    use crate::library::editor::footprint::snap::snap_cursor;
+    let footprint = signex_library::Footprint::empty("f");
+    let state = FootprintEditorState::from_footprint(&footprint);
+    assert_eq!(state.grid_origin_mm(), None);
+    let step = state.snap_options.grid_step_mm;
+    let hit = snap_cursor((12.2, 13.1), None, &state, None);
+    let expected = ((12.2 / step).round() * step, (13.1 / step).round() * step);
+    assert_eq!(hit.pos, expected);
+}
+
+#[test]
+fn a_guide_shows_and_takes_its_position_from_the_board_origin() {
+    use crate::panels::PanelMsg;
+    let (mut app, _tmp) = sketching_off_grid();
+    let panel = |msg| Message::Dock(crate::dock::DockMessage::Panel(msg));
+    let stored = |app: &Signex, i: usize| {
+        let session = app.interaction_state.board_sketch.as_ref().expect("on");
+        session.editor.state.guides[i].position_mm
+    };
+    let shown = |app: &Signex, i: usize| {
+        let ctx = app.document_state.panel_ctx.footprint_editor.as_ref();
+        ctx.expect("the panel").guides[i].position_mm
+    };
+    send(&mut app, panel(PanelMsg::FpEditorGuideAddVertical));
+    assert!(near(stored(&app, 0), 5.3), "a new guide reads 0");
+    assert!(near(shown(&app, 0), 0.0));
+    send(
+        &mut app,
+        panel(PanelMsg::FpEditorGuideSetPosition(0, "12.5".into())),
+    );
+    assert!(near(stored(&app, 0), 17.8), "{}", stored(&app, 0));
+    assert!(near(shown(&app, 0), 12.5));
+
+    send(&mut app, panel(PanelMsg::FpEditorGuideAddHorizontal));
+    assert!(near(stored(&app, 1), 30.7));
+    send(
+        &mut app,
+        panel(PanelMsg::FpEditorGuideSetPosition(1, "4".into())),
+    );
+    assert!(near(stored(&app, 1), 26.7), "Y runs up from the origin");
+    assert!(near(shown(&app, 1), 4.0));
+}
+
+#[test]
+fn a_footprint_guide_stores_what_is_typed() {
+    use crate::panels::PanelMsg;
+    let (mut app, path) = footprint_sketching();
+    let panel = |msg| Message::Dock(crate::dock::DockMessage::Panel(msg));
+    send(&mut app, panel(PanelMsg::FpEditorGuideAddHorizontal));
+    send(
+        &mut app,
+        panel(PanelMsg::FpEditorGuideSetPosition(0, "4".into())),
+    );
+    let editor = app.document_state.footprint_editors.get(&path);
+    assert_eq!(editor.expect("the editor").state.guides[0].position_mm, 4.0);
+}
+
+#[test]
+fn a_typed_line_angle_runs_counter_clockwise_on_screen() {
+    let (mut app, _tmp) = sketching_off_grid();
+    let path = app.active_tab_path().expect("the board tab");
+    draw_typed_line(&mut app, &path);
+    let end = last_point(&board_sketch_data(&app));
+    let run = 5.0 * 30.0_f64.to_radians().cos();
+    assert!(near(end.0, 15.0 + run), "{end:?}");
+    assert!(near(end.1, 10.0 - 2.5), "up the screen is less y: {end:?}");
+}
+
+#[test]
+fn a_footprint_typed_line_angle_is_unchanged() {
+    let (mut app, path) = footprint_sketching();
+    draw_typed_line(&mut app, &path);
+    let end = last_point(&footprint_sketch_data(&app, &path));
+    let run = 5.0 * 30.0_f64.to_radians().cos();
+    assert!(near(end.0, 15.0 + run), "{end:?}");
+    assert!(near(end.1, 10.0 + 2.5), "{end:?}");
+}
+
+#[test]
+fn a_typed_arc_sweep_turns_counter_clockwise_on_screen() {
+    let (mut app, _tmp) = sketching_off_grid();
+    let path = app.active_tab_path().expect("the board tab");
+    draw_typed_arc(&mut app, &path);
+    let sketch = board_sketch_data(&app);
+    let end = last_point(&sketch);
+    assert!(near(end.0, 10.0) && near(end.1, 5.0), "{end:?}");
+    assert!(!arc_turn(&sketch), "clockwise in the model's y-down axes");
+}
+
+#[test]
+fn a_footprint_typed_arc_sweep_is_unchanged() {
+    let (mut app, path) = footprint_sketching();
+    draw_typed_arc(&mut app, &path);
+    let sketch = footprint_sketch_data(&app, &path);
+    let end = last_point(&sketch);
+    assert!(near(end.0, 10.0) && near(end.1, 15.0), "{end:?}");
+    assert!(arc_turn(&sketch));
+}
+
+/// A literal angle reads and is entered in the board's sense and is stored
+/// as it was; an angle bound to an expression keeps its text.
+#[test]
+fn a_literal_angle_dimension_converts_only_at_the_boundary() {
+    use crate::library::editor::footprint::FootprintEditorState;
+    use crate::library::editor::footprint::sketch_mode::value_edit::constraint_buffer;
+    use signex_sketch::constraint::{ConstraintKind, DimTarget};
+    use signex_sketch::id::SketchEntityId;
+    let (app, _tmp) = sketching_off_grid();
+    let session = app.interaction_state.board_sketch.as_ref().expect("on");
+    let state = &session.editor.state;
+    let (l1, l2) = (SketchEntityId::new(), SketchEntityId::new());
+    let angle = |target| ConstraintKind::Angle { l1, l2, target };
+    let stored = angle(DimTarget::Literal((-30.0_f64).to_radians()));
+    let shown = state.shown_constraint(&stored);
+    assert_eq!(constraint_buffer(&shown).as_deref(), Some("30"));
+    let back = state.stored_target(&stored, DimTarget::Literal(30.0_f64.to_radians()));
+    assert_eq!(back, DimTarget::Literal(0.0 - 30.0_f64.to_radians()));
+    let bound = angle(DimTarget::Expr("slope".into()));
+    assert_eq!(*state.shown_constraint(&bound), bound);
+
+    let footprint = signex_library::Footprint::empty("f");
+    let plain = FootprintEditorState::from_footprint(&footprint);
+    assert_eq!(*plain.shown_constraint(&stored), stored);
+    assert_eq!(plain.angle_deg_mirrored(30.0), 30.0);
 }
 
 /// The main window's texts, isolation marks stripped.

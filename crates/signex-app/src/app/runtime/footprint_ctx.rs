@@ -698,7 +698,16 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selection_filter: editor.state.selection_filter,
         snap_subtab: editor.state.snap_subtab,
         snapping_mode: editor.state.snapping_mode,
-        guides: editor.state.guides.clone(),
+        // As the user reads them; the state keeps model coordinates.
+        guides: editor
+            .state
+            .guides
+            .iter()
+            .map(|guide| crate::library::editor::footprint::state::Guide {
+                position_mm: editor.state.guide_shown_mm(guide.axis, guide.position_mm),
+                ..*guide
+            })
+            .collect(),
         grids: editor.state.grids.clone(),
         active_grid_idx: editor.state.active_grid_idx,
         selected_silk_summary,

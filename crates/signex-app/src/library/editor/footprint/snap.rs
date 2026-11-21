@@ -243,6 +243,8 @@ pub fn snap_cursor_among(
     // workflow).
     let opts = state.snap_options;
     let drawing = infer && draws_with_inference(state);
+    // A board sketch's grid steps from the board origin.
+    let grid_from = state.grid_origin_mm().unwrap_or((0.0, 0.0));
 
     // Priority 1 — Point snap.
     if opts.point_hit
@@ -352,9 +354,9 @@ pub fn snap_cursor_among(
             // The free axis (H / V) and the ray distance (angle) snap to
             // the grid too, so a snapped point is on the axis and on the
             // grid at once. No-op when grid snap is disabled.
-            let grid_snap = |v: f64| -> f64 {
+            let grid_snap = |v: f64, from: f64| -> f64 {
                 if opts.snaps_to_grid() {
-                    (v / opts.grid_step_mm).round() * opts.grid_step_mm
+                    on_grid(v, from, opts.grid_step_mm)
                 } else {
                     v
                 }
@@ -364,7 +366,7 @@ pub fn snap_cursor_among(
                 // axis to grid. Using the cursor's own X (not
                 // anchor + hypotenuse) avoids the perpendicular
                 // component leaking into the length.
-                let pos = (grid_snap(raw.0), anchor.1);
+                let pos = (grid_snap(raw.0, grid_from.0), anchor.1);
                 return SnapResult {
                     pos,
                     kind: SnapKind::Horizontal,
@@ -372,7 +374,7 @@ pub fn snap_cursor_among(
             }
             if opts.horizontal_vertical && angle.cos().abs() < axis_thresh {
                 // Vertical: lock X to the anchor, snap the free Y.
-                let pos = (anchor.0, grid_snap(raw.1));
+                let pos = (anchor.0, grid_snap(raw.1, grid_from.1));
                 return SnapResult {
                     pos,
                     kind: SnapKind::Vertical,
@@ -391,7 +393,7 @@ pub fn snap_cursor_among(
                     // the endpoint lands on a grid-multiple radius
                     // (a true diagonal can't sit on both the ray
                     // and an XY grid node, so grid the distance).
-                    let snapped_dist = grid_snap(dist);
+                    let snapped_dist = grid_snap(dist, 0.0);
                     let pos = (
                         anchor.0 + snapped_dist * snapped_angle.cos(),
                         anchor.1 + snapped_dist * snapped_angle.sin(),
@@ -413,13 +415,25 @@ pub fn snap_cursor_among(
     // the canvas or move pads to the origin.
     if opts.snaps_to_grid() {
         let step = opts.grid_step_mm;
-        let snapped = ((raw.0 / step).round() * step, (raw.1 / step).round() * step);
+        let snapped = (
+            on_grid(raw.0, grid_from.0, step),
+            on_grid(raw.1, grid_from.1, step),
+        );
         SnapResult {
             pos: snapped,
             kind: SnapKind::Grid,
         }
     } else {
         SnapResult::raw(raw)
+    }
+}
+
+/// The point of the grid through `from`, of pitch `step`, nearest `v`.
+fn on_grid(v: f64, from: f64, step: f64) -> f64 {
+    if from == 0.0 {
+        (v / step).round() * step
+    } else {
+        from + ((v - from) / step).round() * step
     }
 }
 
