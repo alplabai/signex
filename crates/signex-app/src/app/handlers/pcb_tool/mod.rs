@@ -293,7 +293,7 @@ impl Signex {
 
     /// Where a tool click at `at` lands on the board in view.
     fn board_tool_point(&self, board: &PcbBoard, at: Point) -> Point {
-        snap_point(board, at, &self.ui_state.pcb_snap, self.pcb_active_layer())
+        snap_point(board, at, self.pcb_snap_view())
     }
 
     /// The pointer moved over the board: what the next click adds follows,

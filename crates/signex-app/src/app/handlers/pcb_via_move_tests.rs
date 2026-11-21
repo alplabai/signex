@@ -262,7 +262,7 @@ fn a_track_of_another_net_or_a_locked_track_does_not_follow_the_via() {
 }
 
 #[test]
-fn a_ctrl_drag_moves_the_via_alone_and_ctrl_switches_live() {
+fn a_ctrl_drag_moves_the_via_alone_until_the_drop() {
     let mut rig = rig();
     let before = rig.live();
     let to = Point::new(24.0, 13.0);
@@ -280,14 +280,14 @@ fn a_ctrl_drag_moves_the_via_alone_and_ctrl_switches_live() {
     );
     rig.hold(Modifiers::empty(), to);
     assert!(
-        !rig.app
+        rig.app
             .interaction_state
             .pcb_canvas
             .drag_preview_following()
             .is_empty(),
-        "letting Ctrl go carries the track at once"
+        "letting Ctrl go does not reattach the track"
     );
-    rig.hold(Modifiers::CTRL, to);
+    rig.move_to(to);
     rig.release(to);
     assert!(close(rig.via(FREE).position, 24.0, 13.0));
     assert!(close(rig.track(TRACK).end, 20.0, 10.0), "the track stays");
@@ -486,6 +486,78 @@ fn a_ctrl_drag_leaves_a_copper_arc() {
     let arc = rig.board().free.arcs[0].clone();
     rig.hold(Modifiers::CTRL, Point::new(20.0, 10.0));
     rig.drag(Point::new(20.0, 10.0), Point::new(20.0, 12.0));
+    assert!(close(rig.via(FREE).position, 20.0, 12.0));
+    assert_eq!(rig.board().free.arcs[0], arc);
+}
+
+/// Caner, 2026-11-21: Ctrl down at the press or mid-drag leaves the track
+/// until the drop, even once released; after an undo, a plain drag carries
+/// it again. `at` reads the object, `track` ends on it at `from`.
+fn assert_ctrl_latches(board: PcbBoard, track: Uuid, from: Point, at: fn(&Rig) -> Point) {
+    let to = Point::new(from.x + 4.0, from.y + 3.0);
+    let beyond = Point::new(from.x + 5.0, from.y + 3.0);
+    for ctrl_at_press in [true, false] {
+        let mut rig = rig_on(board.clone());
+        if ctrl_at_press {
+            rig.hold(Modifiers::CTRL, from);
+        }
+        rig.press(from);
+        rig.move_to(to);
+        if !ctrl_at_press {
+            rig.hold(Modifiers::CTRL, to);
+        }
+        rig.hold(Modifiers::empty(), to);
+        rig.move_to(beyond);
+        assert!(
+            rig.app
+                .interaction_state
+                .pcb_canvas
+                .drag_preview_following()
+                .is_empty(),
+            "the preview keeps the track behind"
+        );
+        rig.release(beyond);
+        assert!(!close(at(&rig), from.x, from.y), "the object moved");
+        assert!(close(rig.track(track).end, from.x, from.y), "track stays");
+
+        let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+        rig.drag(from, to);
+        let moved = at(&rig);
+        assert!(!close(moved, from.x, from.y), "the plain drag moved it");
+        assert!(close(rig.track(track).end, moved.x, moved.y), "it follows");
+    }
+}
+
+#[test]
+fn ctrl_latches_for_a_via_drag() {
+    assert_ctrl_latches(board(), TRACK, Point::new(20.0, 10.0), |rig| {
+        rig.via(FREE).position
+    });
+}
+
+#[test]
+fn ctrl_latches_for_a_footprint_drag() {
+    const PAD_TRACK: Uuid = Uuid::from_u128(0x54);
+    let mut with_track = board();
+    let mut on_pad = with_track.segments[0].clone();
+    on_pad.uuid = PAD_TRACK;
+    on_pad.start = Point::new(5.0, 10.0);
+    on_pad.end = Point::new(10.0, 10.0);
+    on_pad.net = 0;
+    with_track.segments.push(on_pad);
+    assert_ctrl_latches(with_track, PAD_TRACK, Point::new(10.0, 10.0), Rig::u1_at);
+}
+
+#[test]
+fn ctrl_released_mid_drag_leaves_a_copper_arc() {
+    let mut rig = rig_on(board_with_arc());
+    let arc = rig.board().free.arcs[0].clone();
+    let (from, to) = (Point::new(20.0, 10.0), Point::new(20.0, 12.0));
+    rig.hold(Modifiers::CTRL, from);
+    rig.press(from);
+    rig.move_to(to);
+    rig.hold(Modifiers::empty(), to);
+    rig.release(to);
     assert!(close(rig.via(FREE).position, 20.0, 12.0));
     assert_eq!(rig.board().free.arcs[0], arc);
 }

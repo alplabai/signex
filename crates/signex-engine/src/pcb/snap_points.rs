@@ -3,11 +3,14 @@
 //! on the pointer (the nearest point of a track or pad edge, a crossing of
 //! two tracks near it).
 
+use std::f64::consts::TAU;
+
 use pcb_geom::{
     Placement, PointNm, Shape, Side, layer_bit, layer_mask, pad_layers, pad_shape,
     pad_world_center, via_layers,
 };
 use signex_types::pcb::{PcbBoard, Point};
+use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_layer::CopperLayer;
 
 use super::snap::{SnapObject, SnapQuery};
@@ -50,7 +53,9 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
             let Ok(shape) = pad_shape(footprint, pad) else {
                 continue;
             };
-            if wants(SnapObject::PadVertices) && matches!(shape, Shape::Rect { .. }) {
+            if wants(SnapObject::PadVertices)
+                && matches!(shape, Shape::Rect { .. } | Shape::Polygon { .. })
+            {
                 out.extend(shape.outline(0).into_iter().map(PointNm::to_mm));
             }
             if wants(SnapObject::PadEdges) {
@@ -111,17 +116,22 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
             }
         }
     }
-    // Free arcs (#2373): their ends are vertices, their centres arc centres.
+    // Free arcs (#2373): their ends are vertices, their centres arc centres,
+    // and their curve a line. One on a copper layer counts on that layer.
     let arcs: Vec<_> = board
         .free
         .arcs
         .iter()
         .filter(|a| !query.skip.contains(&a.uuid))
+        .filter(|a| every_layer || on(layer_mask(std::iter::once(a.layer.as_str()))))
         .collect();
-    if wants(SnapObject::TrackVertices) && every_layer {
+    if wants(SnapObject::TrackVertices) {
         out.extend(arcs.iter().flat_map(|a| [a.start, a.end]));
     }
-    if wants(SnapObject::ArcCenters) && every_layer {
+    if wants(SnapObject::TrackLines) {
+        out.extend(arcs.iter().map(|a| nearest_on_arc(a, at)));
+    }
+    if wants(SnapObject::ArcCenters) {
         out.extend(arcs.iter().filter_map(|a| a.sweep().map(|s| s.center)));
     }
     if wants(SnapObject::ArcCenters) && every_layer {
@@ -132,7 +142,8 @@ pub(super) fn candidates(board: &PcbBoard, query: &SnapQuery, at: Point) -> Vec<
     }
     if wants(SnapObject::Regions) {
         for zone in &board.zones {
-            if on(layer_mask(std::iter::once(zone.layer.as_str()))) {
+            // A region off copper (a keepout, a silk fill) counts on All Layers.
+            if every_layer || on(layer_mask(std::iter::once(zone.layer.as_str()))) {
                 out.extend(zone.outline.iter().copied());
             }
         }
@@ -155,6 +166,30 @@ pub(super) fn nearest_on_segment(a: Point, b: Point, p: Point) -> Point {
     }
     let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / len_sq).clamp(0.0, 1.0);
     Point::new(a.x + t * dx, a.y + t * dy)
+}
+
+/// The point of `arc` nearest `p`: on the curve when `p` faces it, else the
+/// nearer end. An arc with no circle is its chord.
+fn nearest_on_arc(arc: &TrackArc, p: Point) -> Point {
+    let Some(sweep) = arc.sweep() else {
+        return nearest_on_segment(arc.start, arc.end, p);
+    };
+    let angle = (p.y - sweep.center.y).atan2(p.x - sweep.center.x);
+    let turn = (angle - sweep.start_angle).rem_euclid(TAU);
+    let inside = if sweep.sweep >= 0.0 {
+        turn <= sweep.sweep
+    } else {
+        turn == 0.0 || turn - TAU >= sweep.sweep
+    };
+    if inside {
+        return sweep.at(angle);
+    }
+    let distance = |q: Point| (q.x - p.x).powi(2) + (q.y - p.y).powi(2);
+    if distance(arc.start) <= distance(arc.end) {
+        arc.start
+    } else {
+        arc.end
+    }
 }
 
 fn nearest_on_circle(center: Point, radius: f64, p: Point) -> Option<Point> {

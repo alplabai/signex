@@ -241,14 +241,14 @@ fn a_grid_preset_or_custom_pitch_sets_the_grid_and_a_bad_one_is_refused() {
     let (mut app, _path, main) = app_with_board();
     click(&mut app, main, BoardCounter::Grid);
     event(&mut app, BoardPopoverEvent::GridPresetPicked(0.5));
-    assert_eq!(app.ui_state.grid_size_mm, 0.5);
+    assert_eq!(app.status_grid(main).size_mm, 0.5);
     event(&mut app, BoardPopoverEvent::CustomGridEdited("0.15".into()));
     event(&mut app, BoardPopoverEvent::CustomGridSubmitted);
-    assert_eq!(app.ui_state.grid_size_mm, 0.15);
+    assert_eq!(app.status_grid(main).size_mm, 0.15);
     for bad in ["0", "-1", "abc"] {
         event(&mut app, BoardPopoverEvent::CustomGridEdited(bad.into()));
         event(&mut app, BoardPopoverEvent::CustomGridSubmitted);
-        assert_eq!(app.ui_state.grid_size_mm, 0.15, "{bad} changes nothing");
+        assert_eq!(app.status_grid(main).size_mm, 0.15, "{bad} changes nothing");
         let popover = app.ui_state.board_status.popover.as_ref().unwrap();
         assert!(popover.custom_refused, "{bad} is refused");
     }

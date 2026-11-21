@@ -14,7 +14,7 @@ impl Signex {
     /// set the two apart.
     pub(crate) fn cycle_grid_size(&mut self, forward: bool) -> Task<Message> {
         let sizes = crate::canvas::grid::GRID_SIZES_MM;
-        let current = self.ui_state.grid_size_mm;
+        let current = self.snap_grid_in_view();
         let i = sizes
             .iter()
             .position(|s| (s - current).abs() < f32::EPSILON)
@@ -40,7 +40,7 @@ impl Signex {
     /// that is not a fast grid, land on fast grid 1.
     pub(crate) fn cycle_fast_grid(&mut self) -> Task<Message> {
         let fast = self.ui_state.fast_grids_mm;
-        let current = self.ui_state.grid_size_mm;
+        let current = self.snap_grid_in_view();
         let next = fast
             .iter()
             .position(|s| (s - current).abs() < f32::EPSILON)
@@ -48,9 +48,22 @@ impl Signex {
         self.set_snap_grid(fast[next])
     }
 
-    /// Set the snap grid; the visible grid follows unless the user set the
-    /// two apart. The board's Grid popover picks through it too (#2460).
+    /// The snap grid of the document in view: a board's own, else the
+    /// app-wide one.
+    fn snap_grid_in_view(&self) -> f32 {
+        self.active_pcb().map_or(self.ui_state.grid_size_mm, |board| {
+            signex_engine::pcb::placement::grid_step_mm(board) as f32
+        })
+    }
+
+    /// Set the snap grid. On a board it is the board's own, one undo step.
+    /// Elsewhere the visible grid follows unless the user set the two apart.
+    /// The board's Grid popover picks through it too (#2460).
     pub(crate) fn set_snap_grid(&mut self, next: f32) -> Task<Message> {
+        if self.has_active_pcb() {
+            self.set_pcb_grid_preset(next);
+            return Task::none();
+        }
         let current = self.ui_state.grid_size_mm;
         let linked = (self.ui_state.visible_grid_mm - current).abs() < f32::EPSILON;
         let mut tasks =

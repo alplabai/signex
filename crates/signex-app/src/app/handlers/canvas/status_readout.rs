@@ -119,7 +119,7 @@ impl Signex {
     }
 
     /// The grid and unit the status bar of `window_id` shows: a symbol
-    /// tab's library settings, or the app-wide ones.
+    /// tab's library settings, a board's own snap grid, or the app-wide ones.
     pub fn status_grid(&self, window_id: iced::window::Id) -> StatusGrid {
         if let Surface::SymbolEditor(editor) = self.status_surface(window_id) {
             let display = self.symbol_display(&editor.path);
@@ -130,9 +130,14 @@ impl Signex {
             };
         }
         let ui = &self.ui_state;
+        let size_mm = self
+            .status_board_target(window_id)
+            .map_or(ui.grid_size_mm, |(_, board)| {
+                signex_engine::pcb::placement::grid_step_mm(board) as f32
+            });
         StatusGrid {
             visible: ui.grid_visible,
-            size_mm: ui.grid_size_mm,
+            size_mm,
             unit: ui.unit,
         }
     }

@@ -15,7 +15,7 @@ use signex_types::pcb::Point;
 use uuid::Uuid;
 
 use crate::app::{Message, Signex};
-use crate::pcb_canvas::{CarryKind, PcbCarry, carry_delta};
+use crate::pcb_canvas::{CarryKind, PcbCarry, SnapView, carry_delta};
 
 impl Signex {
     /// Rotate or mirror the board selection when the active tab is a PCB.
@@ -143,9 +143,8 @@ impl Signex {
 
     /// A drag pressed at `from` reached `to`: preview it. A press on the
     /// selection carries it; a press on an unselected footprint selects and
-    /// carries that one (#2358). With `leaves_tracks` (Ctrl held) the tracks
-    /// on their pads stay where they are; it is read on every step, so Ctrl
-    /// switches it mid-drag.
+    /// carries that one (#2358). Once `leaves_tracks` (Ctrl down) arrives,
+    /// the tracks on them stay where they are until the carry ends.
     pub(crate) fn pcb_footprints_dragged(
         &mut self,
         from: Point,
@@ -154,16 +153,17 @@ impl Signex {
         leaves_tracks: bool,
     ) {
         self.follow_pcb_drag(from, to, Some(tolerance_mm));
-        let switched = self
-            .live_carry(CarryKind::Drag)
-            .is_some_and(|carry| carry.leaves_tracks != leaves_tracks);
+        let latched = leaves_tracks
+            && self
+                .live_carry(CarryKind::Drag)
+                .is_some_and(|carry| !carry.leaves_tracks);
         if let Some(carry) = self
             .interaction_state
             .pcb_carry
             .as_mut()
-            .filter(|_| switched)
+            .filter(|_| latched)
         {
-            carry.leaves_tracks = leaves_tracks;
+            carry.leaves_tracks = true;
             // A via's snap counts its tracks only while they stay.
             self.carry_to(from, to);
             self.refresh_pcb_highlight();
@@ -224,7 +224,7 @@ impl Signex {
 
     /// What the status bar says while this window drags footprints, or vias
     /// with tracks on them: whether the tracks follow, and the key that
-    /// switches it.
+    /// leaves them.
     pub(crate) fn board_drag_status(&self) -> Option<String> {
         let carry = self.live_carry(CarryKind::Drag)?;
         if (carry.footprints.is_empty() && !carry.via_tracks) || carry.anchor.is_none() {
@@ -337,6 +337,23 @@ impl Signex {
         (carry.kind == kind && self.has_own_pcb_carry()).then(|| carry.clone())
     }
 
+    pub(crate) fn pcb_snap_view(&self) -> SnapView<'_> {
+        let state = &self.interaction_state;
+        let tile = || {
+            let path = self.active_tab_path()?;
+            state.tile_panes.board.get(&path)
+        };
+        let canvas = match state.acting_window {
+            Some(window) => state.pcb_canvas_for_window(window),
+            None => tile().unwrap_or(&state.pcb_canvas),
+        };
+        SnapView {
+            options: &self.ui_state.pcb_snap,
+            active: self.pcb_active_layer(),
+            px_per_mm: f64::from(canvas.camera_ref().scale()),
+        }
+    }
+
     fn carry_to(&mut self, from: Point, to: Point) {
         let Some(board) = self.active_pcb() else {
             return;
@@ -363,8 +380,7 @@ impl Signex {
                 &carry.footprints,
                 from,
                 to,
-                &self.ui_state.pcb_snap,
-                self.pcb_active_layer(),
+                self.pcb_snap_view(),
             )
         };
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
@@ -398,16 +414,8 @@ impl Signex {
             self.end_pcb_carry();
             return;
         }
-        let active = self.pcb_active_layer();
         let built = self.active_pcb().map(|board| {
-            let delta = carry_delta(
-                board,
-                &carry.footprints,
-                from,
-                to,
-                &self.ui_state.pcb_snap,
-                active,
-            );
+            let delta = carry_delta(board, &carry.footprints, from, to, self.pcb_snap_view());
             if carry.leaves_tracks {
                 placement::move_footprints_only(board, &carry.footprints, delta)
             } else {
