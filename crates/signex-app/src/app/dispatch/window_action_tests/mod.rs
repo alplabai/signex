@@ -366,7 +366,10 @@ fn erc_focus_and_opening_a_sibling_run_on_main_and_a_symbol_row_in_the_window() 
     }
     // A symbol row picks within the file the window shows.
     let row = dock(crate::panels::PanelMsg::SchLibrarySelectSymbol(0));
-    assert!(is_scoped(&f.app.scope_dock_message(f.window, row), f.window));
+    assert!(is_scoped(
+        &f.app.scope_dock_message(f.window, row),
+        f.window
+    ));
 }
 
 #[test]

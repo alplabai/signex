@@ -295,7 +295,11 @@ fn a_custom_filter_opened_in_a_window_applies_to_its_footprint() {
     use crate::app::SelectionFilterMsg as S;
     use crate::library::editor::footprint::state::SelectionFilterKind;
     let (mut app, a, b, window) = two_footprints();
-    send_from(&mut app, window, PanelMsg::FpEditorOpenSelectionFilterCustom);
+    send_from(
+        &mut app,
+        window,
+        PanelMsg::FpEditorOpenSelectionFilterCustom,
+    );
     let toggle = S::ToggleCustomKind(SelectionFilterKind::Pads);
     let _ = app.update(Message::SelectionFilter(toggle));
     let _ = app.update(Message::SelectionFilter(S::ApplyCustom));
