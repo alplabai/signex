@@ -149,7 +149,10 @@ fn a_middle_gesture_leaves_an_armed_board_tool_armed() {
     rig.press(mouse::Button::Left, end);
     let click = rig.release(mouse::Button::Left, end);
     assert!(
-        matches!(click, Some(Message::PcbCanvas(PcbCanvasMsg::Clicked { .. }))),
+        matches!(
+            click,
+            Some(Message::PcbCanvas(PcbCanvasMsg::Clicked { .. }))
+        ),
         "the tool's next click: {click:?}"
     );
 }

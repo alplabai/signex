@@ -79,11 +79,7 @@ impl FootprintCanvas<'_> {
 
     /// Zoom about the press point for this pointer move. Returns whether
     /// the camera was asked to change.
-    fn step_middle_zoom(
-        &self,
-        cstate: &mut FootprintCanvasState,
-        cursor: mouse::Cursor,
-    ) -> bool {
+    fn step_middle_zoom(&self, cstate: &mut FootprintCanvasState, cursor: mouse::Cursor) -> bool {
         let Some(drag) = cstate.middle_zoom.as_mut() else {
             return false;
         };

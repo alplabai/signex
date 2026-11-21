@@ -771,7 +771,9 @@ impl canvas::Program<Message> for PcbCanvas {
                         );
                     }
 
-                    return Some(canvas::Action::publish(self.pointer_report(cursor_pos, bounds)));
+                    return Some(canvas::Action::publish(
+                        self.pointer_report(cursor_pos, bounds),
+                    ));
                 }
             }
             _ => {}

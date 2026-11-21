@@ -63,8 +63,10 @@ impl SymbolCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<CanvasAction>> {
-        if !matches!(event, Event::Window(iced::window::Event::RedrawRequested(_)))
-            || !std::mem::take(&mut state.middle_zoom_follow)
+        if !matches!(
+            event,
+            Event::Window(iced::window::Event::RedrawRequested(_))
+        ) || !std::mem::take(&mut state.middle_zoom_follow)
         {
             return None;
         }

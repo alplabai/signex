@@ -124,7 +124,12 @@ fn the_strip_lays_out_every_visible_tab_inside_its_scrollable() {
 /// so the scrollbar has its own space under them.
 #[test]
 fn an_overflowing_strip_keeps_the_scrollbar_clear_of_the_tabs() {
-    let board = board(&["TopCopper", "BottomCopper", "TopSilkscreen", "BottomSilkscreen"]);
+    let board = board(&[
+        "TopCopper",
+        "BottomCopper",
+        "TopSilkscreen",
+        "BottomSilkscreen",
+    ]);
     let view = PcbLayerView::default();
     let tokens = theme_tokens(ThemeId::GraphiteDark);
     let centre = |width: f32| {
