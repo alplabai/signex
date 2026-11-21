@@ -2,6 +2,7 @@
 //! status bar, its popover, the Grid Manager, snap and the grid commands
 //! read and write it; other documents keep theirs.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use serde_json::json;
@@ -10,7 +11,7 @@ use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
 use crate::app::command::CommandArgs;
-use crate::app::{EditMsg, Message, Signex, StatusBarRequest, UiMsg};
+use crate::app::{EditMsg, Message, Signex, StatusBarRequest, UiMsg, WindowMsg};
 use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
 use crate::panels::{PanelMsg, PcbBoardMsg};
@@ -224,6 +225,81 @@ fn a_board_without_a_setup_takes_a_pick_and_undo_gives_none() {
     let _ = rig.app.update(Message::Edit(EditMsg::Undo));
     let board = rig.app.document_state.pcb_board(&path).expect("board");
     assert!(board.setup.is_none(), "undo gives back no setup");
+}
+
+/// A pick or a grid command in an undocked board's window changes that
+/// board only: the main window's board, its undo and a sheet's grid stay.
+#[test]
+fn an_undocked_window_edits_its_own_boards_grid() {
+    let mut rig = rig();
+    let b = PathBuf::from("/w/b.snxpcb");
+    let index = rig
+        .app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == b)
+        .expect("tab B");
+    let before: HashSet<iced::window::Id> = rig.app.ui_state.windows.keys().copied().collect();
+    let _ = rig.app.update(Message::Window(WindowMsg::UndockTab(index)));
+    let window = *rig
+        .app
+        .ui_state
+        .windows
+        .keys()
+        .find(|id| !before.contains(id))
+        .expect("an undocked window");
+    let _ = rig.app.update(Message::Window(WindowMsg::UndockedTabOpened {
+        path: b.clone(),
+        id: window,
+    }));
+    let a_tab = rig
+        .app
+        .document_state
+        .tabs
+        .iter()
+        .position(|t| t.path == rig.a)
+        .expect("tab A");
+    rig.select(a_tab);
+    let of = |app: &Signex, path: &PathBuf| {
+        grid_step_mm(app.document_state.pcb_board(path).expect("board"))
+    };
+
+    let request = StatusBarRequest::BoardCounterClicked {
+        window: None,
+        counter: BoardCounter::Grid,
+    };
+    let open = Signex::status_bar_message(window, None, request);
+    let _ = rig.app.update(open);
+    rig.popover(BoardPopoverEvent::GridPresetPicked(0.25));
+    assert_eq!(of(&rig.app, &b), 0.25, "the window's board");
+    assert_eq!(of(&rig.app, &rig.a), 0.5, "the main board");
+    assert_eq!(rig.app.status_grid(window).size_mm, 0.25);
+    assert_eq!(rig.status(), 0.5);
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(of(&rig.app, &b), 0.25, "no undo step on the main board");
+
+    let command = AppCommandId::new("fast_grid_2").expect("a catalog id");
+    let _ = rig
+        .app
+        .dispatch_command(&command, CommandArgs::none(), Some(window));
+    let fast = rig.app.ui_state.fast_grids_mm[1];
+    assert_eq!(rig.app.status_grid(window).size_mm, fast);
+    assert_eq!(of(&rig.app, &rig.a), 0.5);
+    assert_eq!(rig.app.ui_state.grid_size_mm, APP_GRID, "the sheet's grid");
+}
+
+/// A pitch below the nanometre a board stores is refused, not read as the
+/// default step.
+#[test]
+fn a_custom_pitch_too_small_to_store_is_refused() {
+    let mut rig = rig();
+    rig.open_popover();
+    rig.popover(BoardPopoverEvent::CustomGridEdited("0.0000001".into()));
+    rig.popover(BoardPopoverEvent::CustomGridSubmitted);
+    assert_eq!(rig.board_grid(), 0.5);
+    let popover = rig.app.ui_state.board_status.popover.as_ref().unwrap();
+    assert!(popover.custom_refused);
 }
 
 /// On a sheet the grid commands stay app-wide.

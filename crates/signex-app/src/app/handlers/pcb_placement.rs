@@ -11,7 +11,9 @@ use iced::Task;
 use pcb_geom::ItemRef;
 use signex_engine::pcb::placement::{self, PlacementRefusal, PlacementTransform};
 use signex_engine::pcb::{BoardCommand, BoardItemId};
+use signex_renderer::pcb::{BOARD_OUTLINE, board_layers};
 use signex_types::pcb::Point;
+use signex_types::pcb_layer::PcbLayer;
 use uuid::Uuid;
 
 use crate::app::{Message, Signex};
@@ -337,6 +339,23 @@ impl Signex {
         (carry.kind == kind && self.has_own_pcb_carry()).then(|| carry.clone())
     }
 
+    /// `at` on the grid for `what`, or as it is with the status bar's Snap
+    /// off: for a point that takes the grid alone (an origin, a guide).
+    pub(crate) fn board_grid_point(
+        &self,
+        board: &signex_types::pcb::PcbBoard,
+        what: signex_types::pcb_options::GridUse,
+        at: Point,
+    ) -> Point {
+        if self.ui_state.snap_enabled {
+            placement::grid_for(board, what).snap(at)
+        } else {
+            at
+        }
+    }
+
+    /// What a snap reads for the canvas in view: the panel's options, the
+    /// status bar's Snap, the zoom and the layers shown.
     pub(crate) fn pcb_snap_view(&self) -> SnapView<'_> {
         let state = &self.interaction_state;
         let tile = || {
@@ -347,11 +366,31 @@ impl Signex {
             Some(window) => state.pcb_canvas_for_window(window),
             None => tile().unwrap_or(&state.pcb_canvas),
         };
-        SnapView {
-            options: &self.ui_state.pcb_snap,
-            active: self.pcb_active_layer(),
-            px_per_mm: f64::from(canvas.camera_ref().scale()),
+        let mut view = SnapView::new(
+            &self.ui_state.pcb_snap,
+            self.pcb_active_layer(),
+            f64::from(canvas.camera_ref().scale()),
+        );
+        view.snap_on = self.ui_state.snap_enabled;
+        if let Some((path, board)) = self.active_tab_path().zip(self.active_pcb()) {
+            let shown = self.pcb_layer_view(&path);
+            view.through_hidden = !shown.multi_layer_visible();
+            view.shown_copper = 0;
+            for layer in board_layers(&board.layers) {
+                match layer {
+                    PcbLayer::Copper(copper) if shown.is_visible(layer) => {
+                        view.shown_copper |= 1 << pcb_geom::layer_bit(copper);
+                    }
+                    PcbLayer::Copper(_) => {}
+                    _ if !shown.is_visible(layer) => view.hidden.push(layer),
+                    _ => {}
+                }
+            }
+            if !shown.is_visible(BOARD_OUTLINE) && !view.hidden.contains(&BOARD_OUTLINE) {
+                view.hidden.push(BOARD_OUTLINE);
+            }
         }
+        view
     }
 
     fn carry_to(&mut self, from: Point, to: Point) {
@@ -375,7 +414,15 @@ impl Signex {
             };
             delta
         } else {
-            carry_delta(board, &carry.footprints, from, to, self.pcb_snap_view())
+            let skip = carry.snap_skip(board);
+            carry_delta(
+                board,
+                &carry.footprints,
+                &skip,
+                from,
+                to,
+                self.pcb_snap_view(),
+            )
         };
         if let Some(carry) = self.interaction_state.pcb_carry.as_mut()
             && carry.delta != delta
@@ -409,7 +456,9 @@ impl Signex {
             return;
         }
         let built = self.active_pcb().map(|board| {
-            let delta = carry_delta(board, &carry.footprints, from, to, self.pcb_snap_view());
+            let skip = carry.snap_skip(board);
+            let view = self.pcb_snap_view();
+            let delta = carry_delta(board, &carry.footprints, &skip, from, to, view);
             if carry.leaves_tracks {
                 placement::move_footprints_only(board, &carry.footprints, delta)
             } else {

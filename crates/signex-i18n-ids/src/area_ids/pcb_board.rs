@@ -138,7 +138,6 @@ define_ids! {
     PCB_BOARD_MATERIALS = "pcb-board-materials";
     PCB_BOARD_MATERIALS_LINK = "pcb-board-materials-link";
     PCB_BOARD_MATERIALS_TIP = "pcb-board-materials-tip";
-    PCB_BOARD_PANEL_NONE = "pcb-board-panel-none";
     PCB_BOARD_HEALTH_DRC = "pcb-board-health-drc";
     PCB_BOARD_HEALTH_ERC = "pcb-board-health-erc";
     PCB_BOARD_HEALTH_ERC_SOURCE = "pcb-board-health-erc-source";

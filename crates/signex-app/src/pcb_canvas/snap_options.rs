@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 
 use signex_engine::pcb::snap::SnapObject;
-use signex_types::pcb_layer::CopperLayer;
+use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
 /// Which layers' objects the pointer snaps to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -133,11 +133,47 @@ impl PcbSnapOptions {
     }
 }
 
-/// The options a snap reads, the active copper layer, and the zoom of the
-/// canvas the pointer is on.
-#[derive(Debug, Clone, Copy)]
+/// The options a snap reads, the active copper layer, the zoom of the canvas
+/// the pointer is on and what that view shows.
+#[derive(Debug, Clone)]
 pub struct SnapView<'a> {
     pub options: &'a PcbSnapOptions,
     pub active: CopperLayer,
     pub px_per_mm: f64,
+    /// The status bar's Snap: off, nothing pulls the pointer.
+    pub snap_on: bool,
+    /// Object points pull the pointer. Off for what is not on the board
+    /// yet and for a bus's centre line: grid and guides only.
+    pub objects_on: bool,
+    /// The copper layers shown, as `pcb_geom::layer_bit` bits.
+    pub shown_copper: u32,
+    /// The other layers the view hides.
+    pub hidden: Vec<PcbLayer>,
+    /// The Multi-Layer row is off.
+    pub through_hidden: bool,
+    /// A running route's net: other nets give no object points.
+    pub net: Option<u32>,
+}
+
+impl<'a> SnapView<'a> {
+    /// A view showing every layer, with Snap on.
+    pub fn new(options: &'a PcbSnapOptions, active: CopperLayer, px_per_mm: f64) -> Self {
+        Self {
+            options,
+            active,
+            px_per_mm,
+            snap_on: true,
+            objects_on: true,
+            shown_copper: u32::MAX,
+            hidden: Vec::new(),
+            through_hidden: false,
+            net: None,
+        }
+    }
+
+    /// This view with grid, guides and axes only.
+    pub fn without_objects(mut self) -> Self {
+        self.objects_on = false;
+        self
+    }
 }

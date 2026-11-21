@@ -197,7 +197,9 @@ impl Signex {
             return;
         };
         let unit = pcb_board_properties::shown_unit(self.ui_state.unit);
-        match parse_length_field_mm(&text, unit).filter(|mm| *mm > 0.0) {
+        let typed = parse_length_field_mm(&text, unit)
+            .filter(|mm| *mm > 0.0 && Self::board_grid_step(*mm).is_some());
+        match typed {
             Some(grid_mm) => self.set_pcb_grid_step(grid_mm),
             None => self.say_pcb_grid_refused(t!(self.ui_state.i18n, ids::PCB_BOARD_GRID_INVALID)),
         }
@@ -211,9 +213,19 @@ impl Signex {
     }
 
     /// The board's snap step becomes a preset held as `f32`, without its
-    /// float noise (0.1 stays 0.1, not 0.10000000149).
+    /// float noise (0.1 stays 0.1, not 0.10000000149). One below the
+    /// nanometre a board stores is refused, not read as the default step.
     pub(crate) fn set_pcb_grid_preset(&mut self, mm: f32) {
-        self.set_pcb_grid_step((f64::from(mm) * 1e6).round() / 1e6);
+        match Self::board_grid_step(f64::from(mm)) {
+            Some(step) => self.set_pcb_grid_step(step),
+            None => self.say_pcb_grid_refused(t!(self.ui_state.i18n, ids::PCB_BOARD_GRID_INVALID)),
+        }
+    }
+
+    /// `mm` to the nanometre, or `None` when that leaves no step.
+    pub(crate) fn board_grid_step(mm: f64) -> Option<f64> {
+        let nm = (mm * 1e6).round();
+        (nm.is_finite() && nm >= 1.0).then(|| nm / 1e6)
     }
 
     fn say_pcb_grid_refused(&self, why: impl std::fmt::Display) {

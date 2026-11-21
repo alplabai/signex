@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::app::Signex;
 use crate::app::pcb_tools::BoardPlaceTool;
-use crate::pcb_canvas::{SnapView, carried_board, snap_point};
+use crate::pcb_canvas::{carried_board, snap_point};
 
 mod area;
 mod form;
@@ -294,24 +294,27 @@ impl Signex {
     /// Where a tool click at `at` lands on the board in view. A running
     /// pair or multi-track route places its centre line, which runs between
     /// its tracks: an object point would put one member on that object, so
-    /// only the grid, guides and axes hold it.
+    /// only the grid, guides and axes hold it. A running single route snaps
+    /// to its own net only (Caner, 2026-11-21); its first click still finds
+    /// its net from whatever is there.
     fn board_tool_point(&self, board: &PcbBoard, at: Point) -> Point {
-        let view = self.pcb_snap_view();
-        let on_centre_line = self.own_board_tool().is_some_and(|session| {
-            matches!(
-                session.tool,
-                BoardPlaceTool::DiffPairRouting | BoardPlaceTool::MultiRoute
-            ) && !session.points.is_empty()
-        });
-        if !on_centre_line {
-            return snap_point(board, at, view);
+        let mut view = self.pcb_snap_view();
+        if let Some(session) = self
+            .own_board_tool()
+            .filter(|session| !session.points.is_empty())
+        {
+            match session.tool {
+                BoardPlaceTool::DiffPairRouting | BoardPlaceTool::MultiRoute => {
+                    view = view.without_objects();
+                }
+                BoardPlaceTool::Track
+                | BoardPlaceTool::InteractiveRouting
+                | BoardPlaceTool::QuickRoute => {
+                    view.net = session.route.as_ref().map(|style| style.net);
+                }
+                _ => {}
+            }
         }
-        let mut no_objects = view.options.clone();
-        no_objects.objects.clear();
-        let view = SnapView {
-            options: &no_objects,
-            ..view
-        };
         snap_point(board, at, view)
     }
 
