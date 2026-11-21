@@ -20,7 +20,7 @@ use crate::library::editor::footprint::sketch_mode::value_edit::{
 };
 use crate::library::editor::footprint::sketch_mode::{SketchCanvasMsg, SketchEdit};
 use crate::library::editor::footprint::snap::point_pos;
-use crate::library::editor::footprint::state::sketch_overlay::ValueTarget;
+use crate::library::editor::footprint::ValueTarget;
 use crate::library::messages::FootprintEditorMsg;
 
 /// A fixed base line from (10, 10) to (20, 10) and a 10 mm arm from (10, 10)
