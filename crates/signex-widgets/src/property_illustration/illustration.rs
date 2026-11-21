@@ -1,7 +1,7 @@
 //! The illustration as data: parts linked to field ids, and the features
 //! switched off.
 
-use iced::Size;
+use iced::{Rectangle, Size};
 
 use super::field::FieldId;
 use super::primitive::{Callout, Leader, Primitive, TextLabel};
@@ -23,6 +23,8 @@ pub struct Part {
     /// The feature switch this part needs; the part is dropped while the
     /// feature is off.
     pub requires: Option<FieldId>,
+    /// Lights with its fields but never reports a hover itself.
+    pub is_highlight_only: bool,
 }
 
 impl Part {
@@ -32,7 +34,25 @@ impl Part {
             style,
             fields: Vec::new(),
             requires: None,
+            is_highlight_only: false,
         }
+    }
+
+    /// An undrawn hover region over `rect`, in view units.
+    pub fn hover_area(rect: Rectangle) -> Self {
+        Self::new(Primitive::HoverArea { rect }, Style::edge())
+    }
+
+    /// Keeps the part from reporting a hover: a small mark inside another
+    /// field's region would otherwise be an island the pointer flips onto.
+    pub fn highlight_only(mut self) -> Self {
+        self.is_highlight_only = true;
+        self
+    }
+
+    /// Whether the pointer on this part reports its field.
+    pub fn reports_hover(&self) -> bool {
+        !self.is_highlight_only && self.primary_field().is_some()
     }
 
     /// A dimension callout in the callout ink.

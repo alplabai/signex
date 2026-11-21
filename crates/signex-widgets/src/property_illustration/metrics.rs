@@ -14,6 +14,7 @@ const SHORT_SPAN_EM: f32 = 1.4;
 const SHORT_OVERHANG_EM: f32 = 1.07;
 const LABEL_GAP_EM: f32 = 0.5;
 const HIT_TOLERANCE_EM: f32 = 0.5;
+const HIT_HOLD_EM: f32 = 0.5;
 const DASH_EM: f32 = 0.36;
 const DASH_GAP_EM: f32 = 0.24;
 const LEADER_DOT_EM: f32 = 0.15;
@@ -67,6 +68,11 @@ impl Metrics {
 
     pub fn hit_tolerance(&self) -> f32 {
         self.em(HIT_TOLERANCE_EM)
+    }
+
+    /// How far past its hit region a lit field stays lit.
+    pub fn hit_hold(&self) -> f32 {
+        self.em(HIT_HOLD_EM)
     }
 
     /// Dash and gap lengths of a dashed stroke.

@@ -23,15 +23,34 @@ const VIEW: Size = Size::new(264.0, 140.0);
 /// Spacing of the visible-grid dots, in view units.
 const DOT_STEP: f32 = 24.0;
 const GRID_LEFT: f32 = 16.0;
-const GRID_TOP: f32 = 30.0;
+const GRID_TOP: f32 = 32.0;
 const DOT_COLUMNS: usize = 6;
-const DOT_ROWS: usize = 4;
+const DOT_ROWS: usize = 3;
 const DOT_RADIUS: f32 = 1.4;
 /// Snap ticks are kept between these spacings so they stay readable.
 const MIN_TICK_STEP: f32 = 6.0;
 const MAX_TICK_STEP: f32 = 48.0;
-const TICK_BASE: f32 = 122.0;
+const TICK_BASE: f32 = 108.0;
 const TICK_LENGTH: f32 = 6.0;
+/// The two pitch dimension lines, and the bottoms of their labels, which
+/// sit clear of the line on the side away from the grid.
+const VISIBLE_LINE_Y: f32 = 20.0;
+const VISIBLE_LABEL_BOTTOM: f32 = 15.0;
+const SNAP_LINE_Y: f32 = 116.0;
+const SNAP_LABEL_BOTTOM: f32 = 134.0;
+/// The hover regions of the two grids; the band between them lights nothing.
+const VISIBLE_AREA: Rectangle = Rectangle {
+    x: 8.0,
+    y: 24.0,
+    width: 136.0,
+    height: 64.0,
+};
+const SNAP_AREA: Rectangle = Rectangle {
+    x: 8.0,
+    y: 96.0,
+    width: 136.0,
+    height: 40.0,
+};
 const CURSOR_ARM: f32 = 7.0;
 const PIN_END: Point = Point::new(176.0, 78.0);
 const PIN_LENGTH: f32 = 24.0;
@@ -127,6 +146,7 @@ fn cursor(step: f32) -> Vec<Part> {
             Style::outline(Ink::Secondary, Weight::Regular),
         )
         .linked(SNAP_GRID)
+        .highlight_only()
     };
     vec![arm(CURSOR_ARM, 0.0), arm(0.0, CURSOR_ARM)]
 }
@@ -182,32 +202,37 @@ pub fn grid_illustration(facts: &GridFacts, i18n: &I18n) -> Illustration {
         ids::PROPERTIES_ILLUSTRATION_SNAP_GRID,
         "pitch" => pitch_text(facts.snap_grid_mm, facts.unit)
     );
-    let pitch_y = GRID_TOP - 14.0;
     let visible_callout = Callout::new(
-        Point::new(GRID_LEFT, pitch_y),
-        Point::new(GRID_LEFT + DOT_STEP, pitch_y),
+        Point::new(GRID_LEFT, VISIBLE_LINE_Y),
+        Point::new(GRID_LEFT + DOT_STEP, VISIBLE_LINE_Y),
     )
     .label(visible)
-    .label_at(
-        Point::new(GRID_LEFT + DOT_STEP + 6.0, pitch_y),
-        Anchor::Start,
-    )
+    .label_at(Point::new(GRID_LEFT, VISIBLE_LABEL_BOTTOM), Anchor::Start)
     .extension(
         Point::new(GRID_LEFT, GRID_TOP - 3.0),
-        Point::new(GRID_LEFT, pitch_y - 3.0),
+        Point::new(GRID_LEFT, VISIBLE_LINE_Y - 3.0),
     )
     .extension(
         Point::new(GRID_LEFT + DOT_STEP, GRID_TOP - 3.0),
-        Point::new(GRID_LEFT + DOT_STEP, pitch_y - 3.0),
+        Point::new(GRID_LEFT + DOT_STEP, VISIBLE_LINE_Y - 3.0),
     );
-    let snap_y = TICK_BASE + 10.0;
     let snap_callout = Callout::new(
-        Point::new(GRID_LEFT, snap_y),
-        Point::new(GRID_LEFT + step, snap_y),
+        Point::new(GRID_LEFT, SNAP_LINE_Y),
+        Point::new(GRID_LEFT + step, SNAP_LINE_Y),
     )
     .label(snap)
-    .label_at(Point::new(GRID_LEFT + step + 6.0, snap_y), Anchor::Start);
+    .label_at(Point::new(GRID_LEFT, SNAP_LABEL_BOTTOM), Anchor::Start);
     Illustration::new(VIEW.width, VIEW.height)
+        .part(
+            Part::hover_area(VISIBLE_AREA)
+                .linked(VISIBLE_GRID)
+                .requires(VISIBLE_GRID),
+        )
+        .part(
+            Part::hover_area(SNAP_AREA)
+                .linked(SNAP_GRID)
+                .requires(SNAP_GRID),
+        )
         .parts(dots())
         .parts(ticks(step))
         .parts(cursor(step))
