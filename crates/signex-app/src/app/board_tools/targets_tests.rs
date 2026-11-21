@@ -42,6 +42,46 @@ fn a_board_shape_with_an_id_that_is_no_line_is_refused_whole() {
 }
 
 #[test]
+fn a_keepout_naming_zones_and_lines_is_refused_whole() {
+    // Before, the zone became a keepout and the four lines were skipped.
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let before = live(&app, &path);
+    let list: Vec<String> = [id(10), id(80), id(81), id(82), id(83)]
+        .iter()
+        .map(Uuid::to_string)
+        .collect();
+    let ids = format!("ids={}", list.join(","));
+    let outcome = run_operands(&mut app, &path, "keepout_from_selection", &[&ids]);
+    let CommandOutcome::Disabled { reason } = &outcome else {
+        panic!("{outcome:?}");
+    };
+    let reason = reason.render_en_us();
+    assert!(reason.contains("not both"), "{reason}");
+    assert_eq!(live(&app, &path), before);
+}
+
+/// `stitch_vias id=` keeps its pre-#2326 reading: empty comma parts are
+/// skipped, and two zones are refused as more than one.
+#[test]
+fn stitching_a_zone_named_with_a_trailing_comma_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    let zone = format!("id={},", id(10));
+    let outcome = run_operands(&mut app, &path, "stitch_vias", &[&zone, "pitch=2"]);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    let two = format!("id={},{}", id(10), id(11));
+    let outcome = run_operands(&mut app, &path, "stitch_vias", &[&two]);
+    assert!(
+        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.render_en_us().contains("names one zone")),
+        "{outcome:?}"
+    );
+}
+
+#[test]
 fn a_keepout_with_an_unknown_id_is_refused_whole() {
     let unknown = id(9999);
     let lines = [id(80), id(81), id(82), id(83), unknown];

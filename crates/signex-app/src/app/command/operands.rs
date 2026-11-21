@@ -236,14 +236,14 @@ fn parse_value(operand: &Operand, text: &str) -> Result<OperandValue, OperandErr
             .filter(|mm| *mm > 0.0 && mm_as_stored_nm(*mm).is_some())
             .map(OperandValue::Length)
             .ok_or_else(|| invalid("a length in mm above zero")),
-        OperandKind::Targets => parse_targets(operand.name, text),
+        OperandKind::Targets => parse_targets(operand.name, text).map(OperandValue::Targets),
     }
 }
 
 /// The one parser of a uuid list (#2326): `uuid,uuid,..`, empty parts
 /// skipped, a repeated uuid kept at its first place; refused when empty,
 /// longer than [`MAX_TARGETS`] or holding anything but a uuid.
-fn parse_targets(operand: &str, text: &str) -> Result<OperandValue, OperandError> {
+pub(crate) fn parse_targets(operand: &str, text: &str) -> Result<Vec<Uuid>, OperandError> {
     let invalid = |got: &str| OperandError::Invalid {
         operand: operand.to_string(),
         expected: "uuids, comma separated",
@@ -271,7 +271,7 @@ fn parse_targets(operand: &str, text: &str) -> Result<OperandValue, OperandError
             ids.push(id);
         }
     }
-    Ok(OperandValue::Targets(ids))
+    Ok(ids)
 }
 
 /// Whether both sides of the first `.` are numbers (`1.5`, `10.16`).

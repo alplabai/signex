@@ -17,7 +17,7 @@ use signex_types::pcb::{PcbBoard, Point};
 use uuid::Uuid;
 
 use super::{clearance_rules, pair_gap};
-use crate::app::command::{CommandArgs, CommandOutcome, OperandValue};
+use crate::app::command::{CommandArgs, CommandOutcome, OperandError, OperandValue, parse_targets};
 use crate::app::{DocumentKey, Message, Signex};
 
 type Ran = (CommandOutcome, Task<Message>);
@@ -52,15 +52,23 @@ fn targets(args: &CommandArgs) -> BTreeSet<Uuid> {
         .map_or_else(BTreeSet::new, |ids| ids.iter().copied().collect())
 }
 
-/// The zone the text operand `id` names, if any.
+/// The zone the text operand `id` names, if any: empty comma parts are
+/// skipped and a zone named twice is one, as before #2326.
 fn zone_id(args: &CommandArgs) -> Result<Option<Uuid>, String> {
-    match args.operand("id") {
-        Some(OperandValue::Text(text)) if !text.trim().is_empty() => text
-            .trim()
-            .parse::<Uuid>()
-            .map(Some)
-            .map_err(|_| format!("`{}` in `id` is not a uuid", text.trim())),
-        _ => Ok(None),
+    let Some(OperandValue::Text(text)) = args.operand("id") else {
+        return Ok(None);
+    };
+    if text.split(',').all(|part| part.trim().is_empty()) {
+        return Ok(None);
+    }
+    let one_zone = || "`id` names one zone".to_string();
+    match parse_targets("id", text) {
+        Ok(ids) => match ids[..] {
+            [zone] => Ok(Some(zone)),
+            _ => Err(one_zone()),
+        },
+        Err(OperandError::Invalid { got, .. }) => Err(format!("`{got}` in `id` is not a uuid")),
+        Err(_) => Err(one_zone()),
     }
 }
 
@@ -79,6 +87,18 @@ fn unknown_target(
         .find(|id| !acts_on(board, **id))?;
     let reason = Translatable::new(ids::BOARD_TARGET_UNKNOWN).arg("id", id.to_string());
     Some((CommandOutcome::Disabled { reason }, Task::none()))
+}
+
+/// Refused when `ids` names both zones and lines: the keepout is made from
+/// the zones alone, so the lines would be skipped without a word.
+fn zones_and_lines(app: &Signex, args: &CommandArgs) -> Option<Ran> {
+    let path = named_board(app, args).ok()?;
+    let board = app.document_state.pcb_board(&path)?;
+    let named = args.targets("ids")?;
+    let is_zone = |id: &Uuid| board.zones.iter().any(|z| z.uuid == *id);
+    let mixed = named.iter().any(is_zone) && named.iter().any(|id| is_track(board, *id));
+    let reason = Translatable::new(ids::BOARD_KEEPOUT_MIXED);
+    mixed.then_some((CommandOutcome::Disabled { reason }, Task::none()))
 }
 
 fn is_track(board: &PcbBoard, id: Uuid) -> bool {
@@ -209,6 +229,9 @@ pub(crate) fn keepout_by_operands(app: &mut Signex, args: &CommandArgs) -> Ran {
     let zone_or_line =
         |board: &PcbBoard, id| is_track(board, id) || board.zones.iter().any(|z| z.uuid == id);
     if let Some(refused) = unknown_target(app, args, zone_or_line) {
+        return refused;
+    }
+    if let Some(refused) = zones_and_lines(app, args) {
         return refused;
     }
     run(app, args, false, |board, _| {

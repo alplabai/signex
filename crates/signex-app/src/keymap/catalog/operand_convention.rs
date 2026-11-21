@@ -114,7 +114,7 @@ pub const CONVENTION: &[(&str, OperandKind)] = &[
 
 /// The commands whose `ids` is still text, not targets (#2326): a design
 /// reuse block takes designators too, and `read_document` filters by ids
-/// rather than acting on them. The list only shrinks.
+/// rather than acting on them. The list only shrinks; #2709 empties it.
 pub const IDS_STILL_TEXT: &[&str] = &["read_document", "save_board_reuse_block"];
 
 /// The golden column:`name:kind` with `/unit`, `?` when optional, comma
