@@ -8,6 +8,7 @@ use crate::surface::Surface;
 mod annot_valid;
 pub mod checks;
 mod global;
+mod helpers_c;
 mod lib;
 mod new_features;
 mod output_prefs;
