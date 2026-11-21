@@ -236,7 +236,7 @@ mod tests {
             camera.zoom_at(at, 1.0, 1.1, VIEW);
         }
         assert_eq!(camera.scale(), MAX_BOARD_SCALE);
-        assert!(MAX_BOARD_SCALE > Camera::MAX_SCALE);
+        const { assert!(MAX_BOARD_SCALE > Camera::MAX_SCALE) };
         let after = camera.screen_to_world(at);
         assert!((after.x - before.x).abs() < 1e-2 && (after.y - before.y).abs() < 1e-2);
 
