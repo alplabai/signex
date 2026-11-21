@@ -5,6 +5,7 @@
 //! same.
 
 use serde_json::{Value, json};
+use signex_i18n::RenderTranslatable;
 use signex_types::project::{RequirementField, RequirementProblem, parse_project, write_project};
 
 use super::{EntryKey, RequirementsMsg};
@@ -102,7 +103,7 @@ fn answer(app: &mut Signex, id: &str, operands: &[&str]) -> Value {
 
 fn refusal(app: &mut Signex, id: &str, operands: &[&str]) -> String {
     match run(app, id, operands) {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("{id} was not refused: {other:?}"),
     }
 }

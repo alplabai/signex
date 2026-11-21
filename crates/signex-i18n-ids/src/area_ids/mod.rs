@@ -10,6 +10,7 @@ mod board_query;
 mod board_view;
 mod bom;
 mod chrome;
+mod command_needs;
 mod dialog;
 mod dialog_text;
 mod drc_rules;
@@ -17,6 +18,7 @@ mod editors;
 mod fab_outputs;
 mod file_dialog;
 mod find;
+mod gerber_viewer;
 mod library;
 mod notice;
 mod overlay;
@@ -46,6 +48,7 @@ pub use board_query::*;
 pub use board_view::*;
 pub use bom::*;
 pub use chrome::*;
+pub use command_needs::*;
 pub use dialog::*;
 pub use dialog_text::*;
 pub use drc_rules::*;
@@ -53,6 +56,7 @@ pub use editors::*;
 pub use fab_outputs::*;
 pub use file_dialog::*;
 pub use find::*;
+pub use gerber_viewer::*;
 pub use library::*;
 pub use notice::*;
 pub use overlay::*;
@@ -86,6 +90,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         board_view::BOARD_VIEW,
         bom::BOM,
         chrome::CHROME,
+        command_needs::COMMAND_NEEDS,
         dialog::DIALOG,
         dialog_text::DIALOG_TEXT,
         drc_rules::DRC_RULES,
@@ -93,6 +98,7 @@ pub(crate) fn area_lists() -> Vec<crate::MessageId> {
         fab_outputs::FAB_OUTPUTS,
         file_dialog::FILE_DIALOG,
         find::FIND,
+        gerber_viewer::GERBER_VIEWER,
         library::LIBRARY,
         notice::NOTICE,
         overlay::OVERLAY,

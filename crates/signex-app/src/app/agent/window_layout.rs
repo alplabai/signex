@@ -26,7 +26,7 @@ impl Signex {
         let context = self.command_context(None);
         if let Some(reason) = disabled_reason(command, &context) {
             let outcome = CommandOutcome::Disabled {
-                reason: reason.to_string(),
+                reason: reason.into(),
             };
             return (
                 outcome_verdict(command.as_str(), outcome, None),

@@ -559,7 +559,10 @@ impl Signex {
         } else if let Some(reason) =
             enablement::disabled_reason(command, &self.command_context(None))
         {
-            return refused(reason);
+            let outcome = CommandOutcome::Disabled {
+                reason: reason.into(),
+            };
+            return (outcome, Task::none());
         }
         // What its checks read from disk is read off the UI thread first, and
         // the command runs when that lands (#2199).

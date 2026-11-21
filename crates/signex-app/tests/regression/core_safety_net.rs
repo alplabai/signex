@@ -13,7 +13,7 @@ use signex_library::adapters::local_git_project::LocalGitProjectAdapter;
 use signex_types::project::ProjectData;
 use signex_types::schematic::SchematicSheet;
 
-fn sheet_text(paper: &str) -> String {
+pub(crate) fn sheet_text(paper: &str) -> String {
     let sheet = SchematicSheet {
         uuid: uuid::Uuid::now_v7(),
         paper_size: paper.to_string(),
@@ -52,7 +52,7 @@ fn project_data(dir: &Path) -> ProjectData {
 
 /// A project under the adapter's root holding the sheets `names`, open,
 /// with every sheet opened from the tree. The sheets' paths, in order.
-fn open_project(adapter: &mut TestAdapter, names: &[&str]) -> Vec<PathBuf> {
+pub(crate) fn open_project(adapter: &mut TestAdapter, names: &[&str]) -> Vec<PathBuf> {
     let dir = adapter.root().join("P");
     std::fs::create_dir_all(&dir).unwrap();
     let paths: Vec<PathBuf> = names.iter().map(|name| dir.join(name)).collect();
@@ -73,12 +73,12 @@ fn open_project(adapter: &mut TestAdapter, names: &[&str]) -> Vec<PathBuf> {
     paths
 }
 
-fn document(path: &Path) -> String {
+pub(crate) fn document(path: &Path) -> String {
     format!("document={}", path.display())
 }
 
 /// A text note `text` on the sheet at `path`, placed by an agent.
-fn place_text(adapter: &mut TestAdapter, path: &Path, text: &str) {
+pub(crate) fn place_text(adapter: &mut TestAdapter, path: &Path, text: &str) {
     let text = format!("text={text}");
     let args = ["at=20.32,20.32", text.as_str(), &document(path)];
     let (outcome, pending) = adapter.execute("place_text", &args, Origin::Agent);
@@ -98,11 +98,11 @@ fn info(adapter: &mut TestAdapter, path: &Path) -> serde_json::Value {
         .expect("document_info answers")
 }
 
-fn is_dirty(adapter: &mut TestAdapter, path: &Path) -> bool {
+pub(crate) fn is_dirty(adapter: &mut TestAdapter, path: &Path) -> bool {
     info(adapter, path)["dirty"] == true
 }
 
-fn is_open(adapter: &mut TestAdapter, path: &Path) -> bool {
+pub(crate) fn is_open(adapter: &mut TestAdapter, path: &Path) -> bool {
     let listed = adapter
         .query("list_documents", &[])
         .expect("list_documents");
@@ -322,14 +322,14 @@ fn restore_then_close_all() -> (TestAdapter, PathBuf, signex_app::test_adapter::
     (adapter, a, restore)
 }
 
-fn read_document(adapter: &mut TestAdapter, path: &Path) -> String {
+pub(crate) fn read_document(adapter: &mut TestAdapter, path: &Path) -> String {
     adapter
         .query("read_document", &[&document(path)])
         .expect("read_document answers")
         .to_string()
 }
 
-fn paper(adapter: &mut TestAdapter, path: &Path) -> String {
+pub(crate) fn paper(adapter: &mut TestAdapter, path: &Path) -> String {
     let answer = adapter
         .query("read_document", &[&document(path)])
         .expect("read_document answers");

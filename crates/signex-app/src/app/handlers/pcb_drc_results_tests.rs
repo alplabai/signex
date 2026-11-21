@@ -226,7 +226,7 @@ fn show_drc_violation_selects_through_the_command_and_answers() {
         &[&document(&path), "id=nope"],
     );
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("nope")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("nope")),
         "{outcome:?}"
     );
 }

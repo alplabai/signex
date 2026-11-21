@@ -252,7 +252,7 @@ fn net_colors() {
         .clone();
     let (outcome, _task) = app.dispatch_command_headless(&id("color_net"), CommandArgs::none());
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("needs the operand")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("needs the operand")),
         "{outcome:?}"
     );
     assert_eq!(
@@ -282,7 +282,7 @@ fn net_colors() {
     let path_operand = format!("path={}", missing.display());
     let refused = run(&mut app, "open_document", &[&path_operand]);
     assert!(
-        matches!(&refused, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
+        matches!(&refused, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("made no document")),
         "{refused:?}"
     );
 }
@@ -371,9 +371,7 @@ fn run() {
         app.dispatch_command_headless(&id("toggle_visible_grid"), CommandArgs::none());
     assert_eq!(
         outcome,
-        CommandOutcome::Disabled {
-            reason: "`toggle_visible_grid` only works in a window".into()
-        }
+        CommandOutcome::disabled("`toggle_visible_grid` only works in a window")
     );
     assert_eq!(app.ui_state.grid_visible, grid_before, "nothing ran");
     let (outcome, task) = app.dispatch_command_headless(&id("unselect_all"), CommandArgs::none());
@@ -388,7 +386,7 @@ fn run() {
         .replace_all([("path".to_string(), missing.display().to_string())]);
     let (outcome, task) = app.dispatch_command_headless(&id("open_document"), CommandArgs::none());
     assert!(
-        matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains("made no document")),
+        matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains("made no document")),
         "{outcome:?}"
     );
     driver.settle(&mut app, task).expect("open settled");
@@ -771,6 +769,7 @@ fn net_class_assign() {
     // never falls back to the active sheet; nothing changes.
     match run(&mut app, "assign_net_class", &[]) {
         CommandOutcome::Disabled { reason } => {
+            let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
             assert!(reason.contains("needs the operand `document`"), "{reason}")
         }
         other => panic!("expected a refusal, got {other:?}"),

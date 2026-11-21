@@ -30,6 +30,7 @@ Contents:
 12. [File types](#12-file-types)
 13. [Keyboard shortcuts](#13-keyboard-shortcuts)
 14. [Where to get help](#14-where-to-get-help)
+15. [Preferences](#15-preferences)
 
 For the whole flow in one pass, see the
 [walkthrough](#walkthrough-a-saved-schematic-with-a-wired-symbol).
@@ -168,6 +169,23 @@ cycle it on a schematic. The menu item runs `next_grid`, so it works on a
 schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
 zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
 `F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
+
+**Fast grids.** The Fast grid 1 and Fast grid 2 commands snap to two grids
+you choose in **Tools ▸ Preferences… ▸ Editing ▸ Grid** (1.27 mm and 2.54 mm
+out of the box). Each field shows the grid in mil as you type, and a value
+that cannot be a grid (not a number above zero, or finer than 1 nm) is marked
+on its row with the reason; Save refuses it until you fix it. The snap preview
+under the fields draws Fast grid 1 as dots and Fast grid 2 as rings. Click a
+pitch on the drawing to type it (Enter commits, Tab moves to the other pitch,
+Esc cancels), or drag its handle; the field follows, and the other way round.
+
+**How the canvas looks.** **Tools ▸ Preferences… ▸ Appearance** holds the
+theme (Graphite Light or Graphite Dark), the UI font, the interface scale,
+the grid style of the schematic and of the symbol editor (dots, lines or
+small crosses, shown side by side in the grid preview), the symbol editor's
+default grid, pin selection, the GPU render and anti-aliasing, the mouse
+wheel (Zoom or Scroll), two-finger scroll panning and zoom speed. A setting
+marked **Restart** applies the next time Signex starts.
 
 ## 5. Place a symbol
 
@@ -399,7 +417,7 @@ or sheet entry and run **Go to net partner on another sheet** from the command
 palette; run it again to cycle through the other ends. The highlight commands
 keep a net bright on every sheet while the rest fades, and step through its pins
 and labels. Resting the pointer on a wire, pin or label shows its net, class and
-pins (Preferences ▸ Schematic ▸ Editing turns it off). See
+pins (Preferences ▸ Editing ▸ Show net info on hover turns it off). See
 [NET_NAVIGATION.md](NET_NAVIGATION.md).
 
 1. Choose **Place ▸ Net Label**, or press `P` then `N` in the default profile
@@ -785,21 +803,46 @@ Both exports are under **File ▸ Export** and need a schematic open.
 **PDF**
 
 1. Choose **File ▸ Export ▸ PDF…** (or press `Ctrl+P`).
-2. A preview window opens with **Preview** and **Settings** tabs. Choose colour
-   or gray, which pages, and the other options.
-3. Press **Export PDF**. A save dialog titled **Export PDF** opens in the
+2. The **Export PDF** window opens on one screen: the sheets as thumbnails on
+   the left, the page in the middle, the settings on the right. Tick the sheets
+   to print under **Sheets** (an unticked sheet's thumbnail is dimmed), choose
+   the pages, the page setup and the colour under **Output**, and the variant.
+   **Watermark** prints DRAFT, CONFIDENTIAL or your own text over the pages
+   (off by default; the preview shows it), **PDF Layers** lets a PDF reader
+   switch groups such as wires or parts on and off, and **Bookmarks** adds one
+   bookmark per sheet, per part or per net. The rarely changed sections start
+   folded and show a summary.
+3. Press **Export PDF…**. A save dialog titled **Export PDF** opens in the
    project's folder with the name `<project or document>.pdf` (`schematic.pdf`
    only when neither is known). Choose where to save. When the file is written,
    the footer of the export window names the written file (a long path is
-   shortened in the middle; the Messages panel has the full path). Changing a setting
-   brings the page count back.
+   shortened in the middle; the Messages panel has the full path) and
+   **Cancel** becomes **Close**. Changing a setting brings the page count back.
 
 **BOM (bill of materials)**
 
-1. Choose **Reports ▸ Bill of Materials…**.
-2. A preview of the table opens. Adjust the options and press **Export…**.
-3. In the save dialog, name the file. The format can be CSV (`.csv`), Excel
-   (`.xlsx`) or HTML (`.html`).
+1. Choose **Reports ▸ Bill of Materials…** or **File ▸ Export ▸ Export
+   BOM…**.
+2. The Bill of Materials dialog opens on the table. The toolbar holds the
+   **Filter lines** field, the **Variant** picker, the **Grouped** /
+   **Ungrouped** / **Flat** switch and, when validation finds something, a
+   chip such as **2 warnings** that opens the **Rules** tab. The filter only
+   hides lines on screen; the file always lists every line. Click a column
+   head to sort, drag it to move the column, or drag the line between two
+   heads to resize. Lines a validation rule flags are tinted, with a mark in
+   the line-number column.
+3. The Properties side bar has three tabs. **General**: **Include not-fitted
+   (DNP), excluded-from-BOM and off-board parts** lists the parts a BOM
+   leaves out (DNP parts and parts the variant marks not fitted, parts
+   excluded from the BOM and parts not on the board) instead of leaving them
+   out, and **Format** picks CSV, XLSX or
+   HTML. **Columns**: the ticked columns are exported, in the order shown;
+   drag a ticked column by its grip to move it. **Rules**: the validation
+   rules and the issues they found; click an issue to select its line.
+4. The footer shows how many lines are shown, how many parts the BOM lists
+   and, with a price column, the total. Press **Export CSV…** (or **Export
+   XLSX…** / **Export HTML…**) and name the file in the save dialog, or
+   **Cancel**. Issues never stop the export.
 
 A schematic without placed parts produces an empty BOM.
 
@@ -952,7 +995,7 @@ the default Altium profile; the menu path always works.
    writes the sheet to its `.snxsch` file. Close the tab and reopen it with
    **File ▸ Open Recent** to check that the wires and labels came back.
 9. **Export a PDF.** Press `Ctrl+P` or choose **File ▸ Export ▸ PDF…**, check
-   the preview, press **Export PDF** and pick where to save (section 11).
+   the preview, press **Export PDF…** and pick where to save (section 11).
 
 **Place ▸ Sheet Entry** selects the same **Sheet Entry** tool as the Active
 Bar's sheet-symbol menu. **Place ▸ Power Port**, **Text** and **No Connect**
@@ -1112,6 +1155,17 @@ Other view rows: **View ▸ Toggle Ratsnest** (`N`), **View ▸ Single Layer
 Mode** (`Shift+S`), **View ▸ Flip Board View** to look from below, and
 **View ▸ 3D View** (`3`) to see the board in 3D.
 
+In 3D, drag to turn the board, right-drag to slide it, use the wheel to
+zoom and click a part to select it. The toolbar at the top of the view
+switches back with **2D**, looks from **Top**, **Iso**, **Front**,
+**Left**, **Right** or **Back**, resets the camera
+and fits the board. **Flip** turns the board over to show its bottom side;
+**Explode** opens a slider that moves the copper, mask and parts apart. The
+lighting button steps through four lighting presets (Studio, Workshop,
+Outdoor, Dark), which also set the backdrop. The camera button copies a
+screenshot of the view to the clipboard; its arrow opens **Save PNG…**.
+None of this changes the board file.
+
 More detail: [PCB_SKETCH.md](PCB_SKETCH.md) and
 [PCB_LAYER_STACK.md](PCB_LAYER_STACK.md).
 
@@ -1269,30 +1323,40 @@ Run DRC until it is clean, save the board, then make the files.
 
 1. Choose **File ▸ Fabrication Outputs…** (or the Active Bar's
    **Fabrication Outputs** button).
-2. Under **Files**, tick what to write. All are ticked at first:
-   - **Gerber RS-274X with X2 attributes: copper, legend, solder mask, paste
-     and board profile**
-   - **Excellon drill: plated and non-plated holes, slots and a drill table**
-   - **Pick and place (CSV)**
-   - **IPC-D-356 test netlist**
-3. Check **File name** (the board's name) and **Output folder** (a
-   `fabrication` folder beside the board; **Browse…** picks another).
-4. Press **Generate**. The dialog lists what was written.
+2. Tick what to write. The kinds come in four groups, each counting its
+   ticks:
+   - **Fabrication**: **Gerber RS-274X**, **Excellon drill** and the
+     **IPC-D-356 test netlist**
+   - **Single-file job**: **IPC-2581 revision C** and the **ODB++ job**
+     (tick **As a folder instead of one archive** under it for the folder
+     form; it is greyed until ODB++ is ticked)
+   - **Assembly**: **Pick and place (CSV)**, **Assembly drawing (PDF)** and
+     **Assembly drawings (SVG)**
+   - **3D**: the **STEP model of the board and its parts**
+
+   The footer counts the kinds ticked. Your ticks are saved with the
+   project.
+3. Under **Destination**, check **File name** (the board's name) and
+   **Output folder** (a `fabrication` folder beside the board; **Browse…**
+   picks another). The line under them shows how the files are named.
+4. Press **Generate**. A green banner says how many files were written and
+   where; **Open folder** shows them. Notes follow: what the files leave
+   out, and in red any older files in the folder that are not part of this
+   set. **Generate again** runs it once more; **Close** closes the dialog.
 
 <!-- screenshot: the Fabrication Outputs dialog after Generate -->
 
-Every run also writes the IPC-2581 file `<name>-ipc2581.xml`, the ODB++
-archive `<name>-odb.tar` and the Gerber job file `<name>-job.gbrjob`. Send
-the board house either the Gerber and drill files or one of the IPC-2581 and
-ODB++ files, whichever it asks for. The pick-and-place file is
-`<name>-centroid.csv`; it goes to the assembler.
+With a fabrication file ticked, Generate also writes the Gerber job file
+`<name>-job.gbrjob`. Send the board house either the Gerber and drill files
+or one of the IPC-2581 and ODB++ files, whichever it asks for. The
+pick-and-place file is `<name>-centroid.csv`; it goes to the assembler.
 
 Generate writes the board as it is in memory, unsaved edits included, and
 replaces files of the same name. It never deletes: older files of the same
 name that this run did not write are listed, so you can remove them before
 you send the folder. Without a board outline nothing is written (Board 2).
-With a panel (**Tools ▸ Panelize Board**) a **Whole panel** box writes the
-whole panel.
+With a panel (**Tools ▸ Panelize Board**) a blue banner at the top holds the
+**Whole panel** box, which writes the whole panel.
 
 **Assembly drawings**
 
@@ -1301,7 +1365,10 @@ whole panel.
 - For a PDF, choose **File ▸ Export ▸ PDF…** on the board. In **Board Print
   / PDF**, tick **Assembly Drawing, Top** and **Assembly Drawing, Bottom**
   under **Layer Sets** and press **Export PDF…**. The same dialog prints the
-  copper and mechanical layers.
+  copper and mechanical layers. The **Page plan** on the right shows a card
+  for each page as you change the options; with no set ticked, Export PDF…
+  is greyed. **Mirror the Bottom Side** is greyed until a bottom set is
+  ticked.
 
 **STEP model**
 
@@ -1313,7 +1380,10 @@ its holes and cutouts; each part is the body the 3D view shows.
 
 **Reports ▸ Board Bill of Materials…**, **Board Netlist…**, **Net Lengths…**
 and **Component Report…** show the board's tables; **Export Report as CSV…**
-saves the one in view.
+saves the one in view. In **Board Reports**, switch tables at the top, type
+in **Filter rows** to narrow the rows, and click a column heading to sort by
+it (click again to turn the order round). The filter and the sort only
+change what you see: **Export CSV…** always saves every row.
 
 More detail: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md) and
 [BOARD_OUTPUT.md](BOARD_OUTPUT.md).
@@ -1383,3 +1453,109 @@ label. The complete lists are in the
 - Report a bug or request a feature in the
   [issue tracker](https://github.com/alplabai/signex/issues). **Help ▸ Report
   an Issue** opens it from inside the application.
+
+## 15. Preferences
+
+<!-- Preferences: the dialog (shell), Language and Annotation pages. -->
+
+**Tools ▸ Preferences…** (`Ctrl+,`) opens the Preferences dialog in its own
+window. The pages are listed on the left in four groups: **System**
+(Appearance, Language, Keyboard shortcuts), **Schematic** (Annotation,
+Editing), **Validation** (Rule Profiles) and **Library** (Distributor APIs,
+Component Classes). The search field above the list filters it by page or group
+name; the former names Theme and Graphical editing still find their pages.
+
+A change is not kept until you press **Apply** (the dialog stays open) or
+**OK** (it closes). **Cancel** drops every change. While a change is not
+applied, the footer shows **Unsaved changes** and the page it is on gets a dot
+in the list. Rule Profiles is the exception: its edits are saved to the profile
+file at once.
+
+If your preferences file cannot be read, a red banner under the title names the
+file and the reason. Until it is fixed, appearance, ERC severities, component
+classes and panel layout show their defaults and are not saved; the file itself
+is not changed. **Start a fresh preferences file** moves the unreadable file
+aside and starts a new one; **Open folder** shows the folder that holds it, so
+you can repair it by hand.
+
+**Language** sets the language of menus, panels, dialogs and messages. **Follow
+the system** uses your operating system's language and names the one it
+picks. The preview under the list shows the menu titles, three buttons and a
+message in the language you chose. The language changes in every window when
+you press Apply or OK; there is no restart. Text on the canvas (designators,
+values, net names) is your own and is never translated, and numbers always use a
+point. Developer builds also list the pseudo-locale (en-XA), which brackets and
+lengthens every string to show text that cannot be translated yet or that is cut
+off.
+
+**Annotation** sets how many undo steps one annotate run is: **One step for the
+whole project** (one Undo reverts every sheet the run changed) or **Per sheet**
+(each sheet is undone on its own). It applies to the next annotate run. What a
+pasted part is called is set on Editing (Designators on paste); the Annotation
+page links to it.
+
+<!-- Preferences: Keyboard shortcuts page (mockup row 145); belongs with section 13. -->
+### Editing keyboard shortcuts
+
+**Tools ▸ Preferences… ▸ Keyboard shortcuts** shows the active profile's
+bindings in one table sorted by command. Pick a profile in the Profile list
+(each entry says how many bindings it has); **Create** makes an editable copy
+of it, **Delete** removes a custom profile, and **Import…** / **Export…** read
+and write a profile file.
+
+When two commands share the same keys, a warning banner names them; **Show**
+lists only the clashing rows. The chips next to the search field narrow the
+table to one context (Global, Schematic, PCB, Footprint, Library) or to the
+conflicts.
+
+In a custom profile, point at a row and press **Edit**. Press the keys you want
+(Esc counts as a key), then **OK**; **Clear** starts over, **Stop** ends the
+recording and **Cancel** closes without a change. The new keys are saved when
+you press **Apply** or **OK** in Preferences.
+
+<!-- Preferences: Distributor APIs and Component Classes pages -->
+## Preferences: Distributor APIs
+
+**Preferences ▸ Library ▸ Distributor APIs** holds the accounts Signex uses to
+fetch prices, stock and part data. Keys and tokens are kept in the OS keyring,
+never in a project file. Each distributor has a card with its state:
+
+- **DigiKey** shows *Connected as …* once connected. **Connect via OAuth**
+  opens your browser to sign in and stores the refresh token in the keyring;
+  **Cancel** stops a sign-in that is still waiting. **Disconnect** removes the
+  stored token and forgets the account; if the keyring refuses, the card says
+  why and the message is also in the Messages panel. When Signex was started
+  without `SIGNEX_DIGIKEY_CLIENT_ID` the card shows *Not configured* and
+  Connect stays off until Signex is started with that variable (and
+  `SIGNEX_DIGIKEY_CLIENT_SECRET`) set.
+- **Mouser** takes an API key. **Test** checks it with one lookup and, if it
+  works, saves it in the keyring; the card then shows *Key verified*. Editing
+  the key makes it *Not tested* again.
+- **LCSC, JLCPCB** need no key.
+
+**Order of Preference**, beside the cards, decides which distributor's adapter
+is tried first when you paste a distributor URL into the Supply tab. Drag a
+row by its handle to move it; the order is saved at once to the
+`distributors.toml` file named under the list.
+
+## Preferences: Component Classes
+
+**Preferences ▸ Library ▸ Component Classes** lists the classes a new library
+starts with. They appear in the class picker of New Component and Edit
+Component; a library's own list is edited in that library.
+
+- The **Key** is what a part stores; the **Label** is what pickers show. Click
+  a cell to edit it.
+- **+ Add Class** adds a row at the bottom, marked *new*, with its key ready
+  to type.
+- Drag a row by its handle to change the order the picker shows. The filter
+  field only hides rows; it does not change the order.
+- Point at a row and press **×** to remove it.
+- A key that is empty or used by another row is marked in red with the
+  reason. Save keeps one class per key: when two rows share a key, the lower
+  row's label is kept.
+- **Reset to Defaults…** asks before it replaces the list with the default
+  classes.
+
+Nothing on this page is kept until you save Preferences; discarding drops the
+changes.

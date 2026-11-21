@@ -1,6 +1,10 @@
-//! Bill-of-materials modal catalog slice.
+//! Bill-of-materials export dialog catalog slice, laid out as the app's
+//! dialog (mockup row 112): header with the project file, a toolbar with the
+//! line filter, the one variant picker, the grouping switch and an issue
+//! chip, the lines beside a 300 px Properties sidebar, and a footer with the
+//! line and part counts, Cancel and a format-named Export button.
 
-use iced::widget::{Column, Space, column, container, row, svg};
+use iced::widget::{Column, Row, Space, column, container, row, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{raw, text};
@@ -9,11 +13,14 @@ use crate::catalog::Message;
 use crate::icon::x_handle;
 use crate::theme;
 
+/// Width of the row-number gutter, as the app's dialog draws it.
+const GUTTER_W: f32 = 34.0;
+
 pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    const MODAL_WIDTH: f32 = 1100.0;
-    const MODAL_HEIGHT: f32 = 660.0;
+    const MODAL_WIDTH: f32 = 1000.0;
+    const MODAL_HEIGHT: f32 = 700.0;
     const HEADER_HEIGHT: f32 = 28.0;
-    const SIDEBAR_WIDTH: f32 = 320.0;
+    const SIDEBAR_WIDTH: f32 = 300.0;
 
     let panel_bg = theme::color(tokens.panel_bg);
     let toolbar_bg = theme::color(tokens.toolbar_bg);
@@ -31,25 +38,15 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         });
     let header = container(
         row![
-            text(raw(
-                "Bill of Materials for Variant [Production] of Project [Loratis-SN]"
-            ))
-            .size(13)
-            .color(text_color),
+            text(raw("Bill of Materials")).size(13).color(text_color),
+            Space::new().width(8),
+            text(raw("Loratis-SN.snxprj")).size(11).color(muted),
             Space::new().width(Length::Fill),
             container(close_icon)
                 .width(46)
                 .height(HEADER_HEIGHT)
                 .align_x(iced::alignment::Horizontal::Center)
-                .align_y(iced::alignment::Vertical::Center)
-                .style(move |_: &Theme| container::Style {
-                    background: Some(Background::Color(Color::from_rgba(0.78, 0.22, 0.22, 1.0))),
-                    border: Border {
-                        radius: iced::border::Radius::default().top_right(8.0),
-                        ..Border::default()
-                    },
-                    ..container::Style::default()
-                }),
+                .align_y(iced::alignment::Vertical::Center),
         ]
         .align_y(iced::Alignment::Center),
     )
@@ -73,12 +70,17 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 
     let toolbar = container(
         row![
-            dropdown("Production", tokens),
+            field_box("Filter lines", 180.0, tokens),
+            Space::new().width(12),
+            text(raw("Variant")).size(11).color(muted),
+            Space::new().width(6),
+            field_box("Production  ▾", 140.0, tokens),
+            Space::new().width(12),
+            segmented(&["Grouped", "Ungrouped", "Flat"], 0, tokens),
             Space::new().width(Length::Fill),
-            info_icon(tokens),
+            chip("2 warnings", tokens),
         ]
-        .align_y(iced::Alignment::Center)
-        .spacing(4),
+        .align_y(iced::Alignment::Center),
     )
     .padding([8, 12])
     .width(Length::Fill)
@@ -91,7 +93,6 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         container(table(tokens))
             .width(Length::Fill)
             .height(Length::Fill)
-            .padding([6, 6])
             .style(move |_: &Theme| container::Style {
                 background: Some(Background::Color(panel_bg)),
                 ..container::Style::default()
@@ -113,41 +114,27 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     ]
     .height(Length::Fill);
 
-    let status = container(
+    let footer = container(
         row![
-            text(raw("84 of 84 lines visible")).size(11).color(muted),
-            Space::new().width(16),
-            text(raw("|")).size(11).color(muted),
-            Space::new().width(16),
-            text(raw("Current variant: Production"))
+            text(raw("10 of 10 lines · 73 parts · no cached prices"))
                 .size(11)
                 .color(muted),
+            Space::new().width(Length::Fill),
+            secondary_button("Cancel", tokens),
+            Space::new().width(8),
+            primary_button("Export CSV…", accent, Color::WHITE),
         ]
         .align_y(iced::Alignment::Center),
     )
-    .padding([6, 14])
+    .padding([10, 14])
     .width(Length::Fill)
     .style(move |_: &Theme| container::Style {
         background: Some(Background::Color(toolbar_bg)),
         ..container::Style::default()
     });
 
-    let buttons = container(
-        row![
-            Space::new().width(Length::Fill),
-            secondary_button("Export…", tokens),
-            Space::new().width(8),
-            primary_button("OK", accent, text_color),
-            Space::new().width(8),
-            secondary_button("Cancel", tokens),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .padding([10, 14])
-    .width(Length::Fill);
-
     container(
-        column![header, toolbar, content, status, buttons]
+        column![header, toolbar, content, footer]
             .spacing(0)
             .width(Length::Fixed(MODAL_WIDTH))
             .height(Length::Fixed(MODAL_HEIGHT)),
@@ -171,32 +158,77 @@ pub(crate) fn view<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     .boxed()
 }
 
-fn dropdown<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
-    let text_color = theme::color(tokens.text);
+/// A text field or a closed picker: a bordered box with its text.
+fn field_box<'a>(label: &str, width: f32, tokens: &ThemeTokens) -> Element<'a, Message> {
+    let muted = theme::color(tokens.text_secondary);
     let border = theme::color(tokens.border);
-    container(
-        row![
-            Space::new().width(Length::Fill),
-            text(raw(label.to_string())).size(11).color(text_color),
-            Space::new().width(Length::Fill),
-            text(raw("▾")).size(10).color(text_color),
-        ]
-        .align_y(iced::Alignment::Center),
-    )
-    .width(140)
-    .height(24)
-    .padding([0, 10])
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
-        border: Border {
-            width: 1.0,
-            radius: 3.0.into(),
-            color: border,
-            ..Border::default()
-        },
-        ..container::Style::default()
-    })
-    .boxed()
+    container(text(raw(label.to_string())).size(11).color(muted))
+        .width(width)
+        .height(24)
+        .padding([4, 8])
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// A segmented switch with `active` picked.
+fn segmented<'a>(labels: &[&str], active: usize, tokens: &ThemeTokens) -> Element<'a, Message> {
+    let text_color = theme::color(tokens.text);
+    let accent = theme::color(tokens.accent);
+    let border = theme::color(tokens.border);
+    let mut cells = Row::new().spacing(0);
+    for (index, label) in labels.iter().enumerate() {
+        let fill = if index == active {
+            Color { a: 0.18, ..accent }
+        } else {
+            Color::TRANSPARENT
+        };
+        cells = cells.push(
+            container(text(raw(label.to_string())).size(11).color(text_color))
+                .padding([4, 10])
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(fill)),
+                    ..container::Style::default()
+                }),
+        );
+    }
+    container(cells)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                width: 1.0,
+                radius: 3.0.into(),
+                color: border,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The issue chip that opens the Rules tab.
+fn chip<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
+    let warning = theme::color(tokens.warning);
+    container(text(raw(label.to_string())).size(11).color(warning))
+        .padding([2, 8])
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(Color { a: 0.14, ..warning })),
+            border: Border {
+                width: 0.0,
+                radius: 10.0.into(),
+                color: Color::TRANSPARENT,
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }
 
 fn secondary_button<'a>(label: &str, tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -233,45 +265,33 @@ fn primary_button<'a>(label: &str, accent: Color, text_color: Color) -> Element<
         .boxed()
 }
 
-fn info_icon<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    let accent = theme::color(tokens.accent);
-    container(text(raw("i")).size(11).color(Color::WHITE))
-        .width(20)
-        .height(20)
-        .align_x(iced::alignment::Horizontal::Center)
-        .align_y(iced::alignment::Vertical::Center)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(Color { a: 0.7, ..accent })),
-            border: Border {
-                width: 0.0,
-                radius: 10.0.into(),
-                color: Color::TRANSPARENT,
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
+/// The lines: a row-number gutter, text columns, and Qty right-aligned. The
+/// second line is flagged by a rule: a soft warning tint and a 2 px edge.
 fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let text_color = theme::color(tokens.text);
     let muted = theme::color(tokens.text_secondary);
     let toolbar_bg = theme::color(tokens.toolbar_bg);
-    let header_cell = |label: &'static str, width: f32| -> Element<'a, Message> {
+    let warning = theme::color(tokens.warning);
+    let header_cell = |label: &'static str, width: f32, right: bool| -> Element<'a, Message> {
+        let align = if right {
+            iced::alignment::Horizontal::Right
+        } else {
+            iced::alignment::Horizontal::Left
+        };
         container(text(raw(label)).size(11).color(text_color))
             .width(Length::Fixed(width))
             .padding([4, 8])
+            .align_x(align)
             .boxed()
     };
     let header = container(
         row![
-            header_cell("#", 32.0),
-            header_cell("Name", 140.0),
-            header_cell("Description", 200.0),
-            header_cell("Designator", 160.0),
-            header_cell("Footprint", 140.0),
-            header_cell("LibRef", 120.0),
-            header_cell("Quantity", 70.0),
+            header_cell("#", GUTTER_W, true),
+            header_cell("Designator ▲", 170.0, false),
+            header_cell("Value", 90.0, false),
+            header_cell("Description", 220.0, false),
+            header_cell("Footprint", 130.0, false),
+            header_cell("Qty", 50.0, true),
         ]
         .spacing(0),
     )
@@ -283,122 +303,90 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
 
     let rows = [
         (
-            "1",
-            "SBR1M100BLP-7",
-            "BRIDGE RECT 1P 100V",
             "BR1, BR2",
-            "DIODES U-DFN303…",
-            "SBR1M100BLP-7",
+            "SBR1M100",
+            "BRIDGE RECT 1P 100V",
+            "U-DFN3030",
             "2",
         ),
         (
-            "2",
+            "C1, C28, C29, C34…",
             "10µF",
             "CAP CER 10UF 10V",
-            "C1, C28, C29, C34…",
-            "CAP 0603/1608",
-            "GRM188Z71A106K…",
+            "C0603",
             "5",
         ),
         (
-            "3",
-            "0.1µF",
-            "CAP CER 0.1UF 10V…",
             "C2, C3, C7, C8, C17…",
-            "CAP 0603/1608",
-            "C0603X7S1A104K03…",
+            "0.1µF",
+            "CAP CER 0.1UF 10V",
+            "C0603",
             "35",
         ),
+        ("C4, C61, C65", "4.7µF", "CAP CER 4.7UF 6.3V", "C0603", "3"),
+        ("C5, C6", "30pF", "CAP CER 30PF 50V", "C0402", "2"),
         (
-            "4",
-            "4.7µF",
-            "CAP CER 4.7UF 6.3…",
-            "C4, C61, C65",
-            "CAP 0603/1608",
-            "CL10B475K6JNQNC",
-            "3",
-        ),
-        (
-            "5",
-            "30pF",
-            "CAP CER 30PF 50V…",
-            "C5, C6",
-            "CAP 0402/1005",
-            "GRM1555C1H300J…",
-            "2",
-        ),
-        (
-            "6",
-            "12nF",
-            "CAP CER 0.012UF 1…",
             "C9, C10, C11, C12",
-            "CAP 0402/1005",
-            "06031C123KAT2A",
+            "12nF",
+            "CAP CER 0.012UF 16V",
+            "C0402",
             "4",
         ),
+        ("C13, C14", "1nF", "CAP CER 1000PF 2KV", "C1206", "2"),
+        ("C15, C25", "100µF", "CAP ALUM POLY 10V", "WCAP-PHGP", "2"),
+        ("C16, C52", "10µF", "CAP CER 10UF 10V", "C0805", "2"),
         (
-            "7",
-            "1nF",
-            "CAP CER 1000PF 2K…",
-            "C13, C14",
-            "CAP 1206/3216",
-            "CL31B102KJHNNNE",
-            "2",
-        ),
-        (
-            "8",
-            "100µF",
-            "CAP ALUM POLY 10…",
-            "C15, C25",
-            "WURTH WCAP-PH…",
-            "875015119003",
-            "2",
-        ),
-        (
-            "9",
-            "10µF",
-            "CAP CER 10UF 10V…",
-            "C16, C52",
-            "CAP 0805/2012",
-            "C2012X7R1A106K1…",
-            "2",
-        ),
-        (
-            "10",
-            "10µF",
-            "CAP CER 10UF 6.3V…",
             "C19, C20, C21, C22…",
-            "CAP 0402/1005",
-            "C0402X5R1A106K…",
+            "10µF",
+            "CAP CER 10UF 6.3V",
+            "C0402",
             "16",
         ),
     ];
     let mut body: Column<Element<'a, Message>> = Column::new();
     for (index, values) in rows.iter().enumerate() {
-        let background = if index % 2 == 0 {
-            Color::TRANSPARENT
+        let flagged = index == 1;
+        let background = if flagged {
+            Color { a: 0.10, ..warning }
         } else {
-            Color::from_rgba(1.0, 1.0, 1.0, 0.025)
+            Color::TRANSPARENT
         };
-        let cell = |value: &str, width: f32| -> Element<'a, Message> {
+        let edge = if flagged { warning } else { Color::TRANSPARENT };
+        let cell = |value: &str, width: f32, right: bool| -> Element<'a, Message> {
+            let align = if right {
+                iced::alignment::Horizontal::Right
+            } else {
+                iced::alignment::Horizontal::Left
+            };
             container(text(raw(value.to_string())).size(10).color(text_color))
                 .width(Length::Fixed(width))
                 .padding([3, 8])
+                .align_x(align)
                 .boxed()
         };
+        let gutter = row![
+            container(Space::new())
+                .width(2)
+                .height(Length::Fill)
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(edge)),
+                    ..container::Style::default()
+                }),
+            container(text(raw((index + 1).to_string())).size(10).color(muted))
+                .width(Length::Fixed(GUTTER_W - 2.0))
+                .padding([3, 8])
+                .align_x(iced::alignment::Horizontal::Right),
+        ]
+        .height(Length::Shrink);
         body = body.push(
             container(
                 row![
-                    container(text(raw(values.0)).size(10).color(muted))
-                        .width(Length::Fixed(32.0))
-                        .padding([3, 8])
-                        .align_x(iced::alignment::Horizontal::Right),
-                    cell(values.1, 140.0),
-                    cell(values.2, 200.0),
-                    cell(values.3, 160.0),
-                    cell(values.4, 140.0),
-                    cell(values.5, 120.0),
-                    cell(values.6, 70.0),
+                    gutter,
+                    cell(values.0, 170.0, false),
+                    cell(values.1, 90.0, false),
+                    cell(values.2, 220.0, false),
+                    cell(values.3, 130.0, false),
+                    cell(values.4, 50.0, true),
                 ]
                 .spacing(0),
             )
@@ -413,41 +401,17 @@ fn table<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     column![header, body].boxed()
 }
 
+/// General / Columns / Rules tabs; General holds the one not-fitted option
+/// and the format.
 fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
     let text_color = theme::color(tokens.text);
     let muted = theme::color(tokens.text_secondary);
     let border = theme::color(tokens.border);
-    let accent = theme::color(tokens.accent);
     let sidebar_title = container(text(raw("Properties")).size(13).color(text_color))
         .padding([8, 12])
         .width(Length::Fill);
 
-    let tab = |label: &'static str, active: bool| -> Element<'a, Message> {
-        let background = if active {
-            Color { a: 0.18, ..accent }
-        } else {
-            Color::TRANSPARENT
-        };
-        container(text(raw(label)).size(11).color(text_color))
-            .padding([4, 12])
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(background)),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            })
-            .boxed()
-    };
-    let tabs = row![
-        tab("General", true),
-        Space::new().width(4),
-        tab("Columns", false)
-    ]
-    .padding([0, 12]);
+    let tabs = container(segmented(&["General", "Columns", "Rules"], 0, tokens)).padding([0, 12]);
 
     let checkbox = |label: &'static str, checked: bool| -> Element<'a, Message> {
         let background = if checked {
@@ -479,67 +443,24 @@ fn properties_sidebar<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
         .boxed()
     };
 
-    let field = |label: &'static str, value: &'static str| -> Element<'a, Message> {
-        row![
-            container(text(raw(label)).size(11).color(muted)).width(Length::Fixed(80.0)),
-            container(
-                row![
-                    text(raw(value)).size(11).color(text_color),
-                    Space::new().width(Length::Fill),
-                    text(raw("▾")).size(10).color(text_color),
-                ]
-                .align_y(iced::Alignment::Center),
-            )
-            .padding([4, 8])
-            .width(Length::Fill)
-            .style(move |_: &Theme| container::Style {
-                background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.04))),
-                border: Border {
-                    width: 1.0,
-                    radius: 3.0.into(),
-                    color: border,
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            }),
+    let section = |title: &'static str, body: Element<'a, Message>| -> Element<'a, Message> {
+        column![
+            container(text(raw(title)).size(11).color(muted)).padding([6, 12]),
+            container(body).padding([4, 12]),
         ]
-        .align_y(iced::Alignment::Center)
-        .spacing(8)
         .boxed()
     };
 
-    let section = |title: &'static str, body: Element<'a, Message>| -> Element<'a, Message> {
-        let header = container(
-            row![
-                text(raw("▾")).size(10).color(muted),
-                Space::new().width(6),
-                text(raw(title)).size(11).color(text_color),
-            ]
-            .align_y(iced::Alignment::Center),
-        )
-        .padding([6, 12])
-        .width(Length::Fill)
-        .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.025))),
-            ..container::Style::default()
-        });
-        column![header, container(body).padding([8, 12])].boxed()
-    };
-
-    let bom_items = column![
-        checkbox("Show Not Fitted", false),
-        Space::new().height(6),
-        checkbox("Include DB Parameters in Variations", false),
-    ];
-    let export_options = column![
-        field("File Format", "MS-Excel (*.xls, *.xlsx, *.xlsm)"),
-        Space::new().height(8),
-        field("Template", "No Template"),
-        Space::new().height(8),
-        checkbox("Add to Project", false),
-        Space::new().height(6),
-        checkbox("Open Exported", false),
-    ];
+    let bom_items = column![checkbox(
+        "Include not-fitted (DNP), excluded-from-BOM and off-board parts",
+        false
+    )];
+    let export_options = row![
+        text(raw("Format")).size(11).color(muted),
+        Space::new().width(12),
+        segmented(&["CSV", "XLSX", "HTML"], 0, tokens),
+    ]
+    .align_y(iced::Alignment::Center);
 
     column![
         sidebar_title,

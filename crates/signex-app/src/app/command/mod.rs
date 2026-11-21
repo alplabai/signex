@@ -50,7 +50,10 @@ mod hierarchy_operands;
 #[cfg(test)]
 pub(in crate::app) mod interaction_snapshot_tests;
 mod layer_strip_operands;
+mod need_context;
 mod needs;
+#[cfg(test)]
+mod needs_reason_tests;
 /// The enablement gate, for the hostile-operand test's not-reached set.
 #[cfg(test)]
 pub(crate) use needs::needs as enablement_gate;
@@ -61,7 +64,6 @@ mod opened;
 mod operand_handler_tests;
 mod operand_handlers;
 mod operands;
-mod outcome;
 #[cfg(test)]
 mod parity;
 #[cfg(test)]
@@ -120,10 +122,11 @@ pub(crate) use opened::answers_with_the_new_document;
 pub(crate) use operand_handlers::runs_headless_without_operands;
 pub(crate) use operands::missing_headless_operand;
 pub use operands::{OperandError, OperandValue};
-pub use outcome::CommandOutcome;
 pub(crate) use placed_operands::PlacedRefusal;
+pub use signex_commands::CommandOutcome;
 
 use iced::Task;
+use signex_i18n::RenderTranslatable;
 
 use super::*;
 
@@ -149,6 +152,7 @@ impl Signex {
         // Only the missing-operand refusal is said here; every other command
         // reports (or stays silent) exactly as before.
         if let CommandOutcome::Disabled { reason } = outcome
+            && let reason = reason.render_en_us()
             && operand_handlers::needs_operands_reason(command) == Some(reason.as_str())
         {
             crate::diagnostics::log_info(format!(
@@ -171,8 +175,9 @@ impl Signex {
         let (outcome, task) = self.dispatch_command_reporting(command, CommandArgs::none(), window);
         if let CommandOutcome::Disabled { reason } = outcome {
             crate::diagnostics::log_info(format!(
-                "Menu: {} did nothing: {reason}",
-                command.as_str()
+                "Menu: {} did nothing: {}",
+                command.as_str(),
+                reason.render_en_us()
             ));
         }
         task
@@ -277,12 +282,14 @@ impl Signex {
         }
         let context = self.command_context(window);
         let unmet = enablement::disabled_reason(command, &context);
-        if unmet.is_some()
+        if let Some(reason) = unmet
             && !enablement::explains_when_unavailable(command)
             && !enablement::explains_refusal_in(command, &context)
         {
             return (
-                CommandOutcome::disabled(unmet.unwrap_or_default()),
+                CommandOutcome::Disabled {
+                    reason: reason.into(),
+                },
                 Task::none(),
             );
         }
@@ -295,7 +302,9 @@ impl Signex {
             core_to_message(command, &args)
         };
         let outcome = match (unmet, &resolved) {
-            (Some(reason), _) => CommandOutcome::disabled(reason),
+            (Some(reason), _) => CommandOutcome::Disabled {
+                reason: reason.into(),
+            },
             (None, Some(_)) => CommandOutcome::Ran,
             (None, None) if crate::keymap::metadata_for(command).is_some() => {
                 CommandOutcome::NoBridgeArm
@@ -440,11 +449,10 @@ mod tests {
         let command = AppCommandId::new("place_wire").unwrap();
         let (outcome, task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: "No schematic is open".to_string()
-            }
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason }
+                if reason.render_en_us() == "No schematic is open"),
+            "{outcome:?}"
         );
         assert_eq!(task.units(), 0);
         assert_eq!(app.interaction_state.current_tool, Tool::Select);
@@ -460,11 +468,10 @@ mod tests {
         let command = AppCommandId::new("place_signal_harness").unwrap();
         let (outcome, _task) = app.dispatch_command_reporting(&command, CommandArgs::none(), None);
 
-        assert_eq!(
-            outcome,
-            CommandOutcome::Disabled {
-                reason: "Planned, not available yet".to_string()
-            }
+        assert!(
+            matches!(&outcome, CommandOutcome::Disabled { reason }
+                if reason.render_en_us() == "Planned, not available yet"),
+            "{outcome:?}"
         );
         assert!(
             crate::diagnostics::recent_entries().iter().any(|e| e

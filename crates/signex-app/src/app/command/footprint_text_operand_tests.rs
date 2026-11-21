@@ -170,6 +170,7 @@ fn a_bad_field_or_text_is_refused_with_the_reason() {
         all.extend(operands);
         match headless(&mut app, "set_footprint_text", &all) {
             CommandOutcome::Disabled { reason } => {
+                let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
                 assert!(reason.contains(says), "{reason} lacks {says}");
             }
             other => panic!("not refused: {other:?}"),

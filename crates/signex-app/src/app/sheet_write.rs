@@ -164,6 +164,8 @@ impl Signex {
                 active_patch = done.patch;
             } else {
                 self.document_state.mark_history_edit_dirty(&done.path);
+                let patch = done.patch.unwrap_or(signex_engine::DocumentPatch::FULL);
+                self.repaint_member_sheet(&done.path, patch);
             }
         }
         self.set_undo_group_sheets(group, recorded);

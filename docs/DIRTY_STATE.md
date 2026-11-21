@@ -58,7 +58,9 @@ copy, an in-memory rewrite) can never look clean. It is set only where the
 content is known to equal the file: `Engine::open`, `open_schematic_tab`
 (a sheet read from disk), a History restore, and a landed save whose
 revision still matches (`Engine::mark_saved`, called from
-`mark_document_clean` and `finish_save_as`). After every history step
+`mark_document_clean` and from the Save As revision check in
+`apply_saved_as_to_active`, run through `rekey_active_schematic`). After
+every history step
 (edit, undo, redo; `sync_history_dirty`) the sheet is dirty unless
 `Engine::is_at_save_point()` holds, so undoing the only edit since the save
 is clean again and Redo is dirty again.
@@ -88,8 +90,9 @@ when no history step can reproduce the file any more:
   group step;
 - a save whose snapshot the document had already moved past (an edit, or
   an Undo back to an older state, while the write ran): `mark_saved` and
-  `finish_save_as` see a different revision, forget the point and leave the
-  sheet dirty, even if the Undo had cleared it meanwhile.
+  the Save As revision check in `apply_saved_as_to_active` see a different
+  revision, forget the point and leave the sheet dirty, even if the Undo had
+  cleared it meanwhile.
 
 Who sets the save point (#1854):
 

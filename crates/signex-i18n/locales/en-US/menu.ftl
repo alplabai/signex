@@ -36,6 +36,8 @@ menu-file-clear-recent = Clear Recent
 menu-file-open-library = Open Library...
 menu-file-place-component = Place Component...
 menu-file-export-pdf = PDF…
+# File ▸ Export row of the Bill of Materials export dialog (mockup row 112).
+menu-file-export-bom = Export BOM…
 
 ## Edit menu (#2057)
 # Submenu titles of the Edit menu.
@@ -152,7 +154,7 @@ ctx-add-component-library = Component Library
 ctx-add-symbol-library = Symbol Library
 ctx-add-pcb = PCB
 ctx-add-pcb-library = PCB Library
-ctx-add-output-job = Output Job
+ctx-add-output-job = Export Job
 ctx-add-design-notebook = Design Notebook
 ctx-add-constraint-file = Constraint File
 ctx-add-vhdl-file = VHDL File

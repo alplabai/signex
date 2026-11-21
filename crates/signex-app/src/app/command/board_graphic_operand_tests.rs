@@ -112,7 +112,7 @@ fn an_agent_is_told_why_a_drawing_is_refused() {
         all.extend(operands);
         let outcome = headless(&mut app, "add_board_graphic", &all);
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains(why)),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains(why)),
             "{why}: {outcome:?}"
         );
     }
@@ -157,7 +157,7 @@ fn an_agent_sets_one_field_of_a_drawing_in_one_step() {
     ] {
         let outcome = set(&mut app, field, value);
         assert!(
-            matches!(&outcome, CommandOutcome::Disabled { reason } if reason.contains(why)),
+            matches!(&outcome, CommandOutcome::Disabled { reason } if signex_i18n::RenderTranslatable::render_en_us(reason).contains(why)),
             "{field}: {outcome:?}"
         );
     }

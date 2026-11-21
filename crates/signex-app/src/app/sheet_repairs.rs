@@ -51,14 +51,14 @@ pub(crate) fn log_sheet_repairs(path: &Path, repairs: &[SheetLoadRepair]) -> boo
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use signex_types::format::{RepairedObject, SheetLoadRepair};
     use signex_types::schematic::SchematicSheet;
 
     use crate::app::handlers::menu::export::tests::app_workspace;
     use crate::app::restore_job::RestoreJobDocument;
 
-    fn repaired_sheet(read_only: bool) -> SchematicSheet {
+    pub(crate) fn repaired_sheet(read_only: bool) -> SchematicSheet {
         let mut sheet = SchematicSheet {
             uuid: uuid::Uuid::now_v7(),
             paper_size: "A4".into(),

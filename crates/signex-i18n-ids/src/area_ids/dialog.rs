@@ -9,7 +9,6 @@ define_ids! {
     DIALOG_ANNOTATE_REPREFIX_PARTS = "dialog-annotate-reprefix-parts";
     DIALOG_AUTOSAVE_RECOVERY_RESTORE = "dialog-autosave-recovery-restore";
     DIALOG_AUTOSAVE_RECOVERY_LATER = "dialog-autosave-recovery-later";
-    DIALOG_BOM_EXPORT = "dialog-bom-export";
     DIALOG_UNSAVED_DISCARD_ALL = "dialog-unsaved-discard-all";
     DIALOG_CREATE_CHILD_SHEET_OPEN_EXISTING = "dialog-create-child-sheet-open-existing";
     DIALOG_CREATE_CHILD_SHEET_BROWSE = "dialog-create-child-sheet-browse";
@@ -36,7 +35,6 @@ define_ids! {
     DIALOG_NETLIST_EXPORT_ANYWAY = "dialog-netlist-export-anyway";
     DIALOG_PRINT_PREVIEW_EXPORT_PDF = "dialog-print-preview-export-pdf";
     DIALOG_PRINT_PREVIEW_NO_FILES = "dialog-print-preview-no-files";
-    DIALOG_PRINT_PREVIEW_PAGE_COUNT = "dialog-print-preview-page-count";
     DIALOG_NETLIST_INCOMPLETE_TITLE = "dialog-netlist-incomplete-title";
     DIALOG_NETLIST_INCOMPLETE_BODY = "dialog-netlist-incomplete-body";
     DIALOG_BUTTON_CANCEL = "dialog-button-cancel";

@@ -4,6 +4,7 @@
 //! refused; an edit list reads once; an edit that needs no disk runs at once.
 
 use serde_json::json;
+use signex_i18n::RenderTranslatable;
 use signex_types::schematic::{Point, SchematicSheet};
 
 use super::part_operand_tests::library;
@@ -29,7 +30,7 @@ fn wires(app: &Signex) -> usize {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }

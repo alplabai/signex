@@ -2,6 +2,7 @@
 //! and the geometry rules, the escapes, the dry run, and the click it equals.
 
 use serde_json::{Value, json};
+use signex_i18n::RenderTranslatable;
 use signex_types::corner::CornerMode;
 use signex_types::schematic::{
     Bus, BusEntry, LabelType, LibGraphic, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
@@ -104,7 +105,7 @@ fn answered(outcome: CommandOutcome) -> Value {
 
 fn refusal(outcome: CommandOutcome) -> String {
     match outcome {
-        CommandOutcome::Disabled { reason } => reason,
+        CommandOutcome::Disabled { reason } => reason.render_en_us(),
         other => panic!("not refused: {other:?}"),
     }
 }
