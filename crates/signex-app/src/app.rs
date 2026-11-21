@@ -48,6 +48,7 @@ pub mod path_ops;
 pub(crate) mod pin_junction_repair;
 pub mod project_entry_disk;
 mod project_tab;
+pub(crate) mod projector;
 mod rules_tab;
 pub(crate) mod sheet_numbering;
 pub(crate) mod sheet_repairs;
