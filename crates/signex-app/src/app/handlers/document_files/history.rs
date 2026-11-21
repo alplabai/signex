@@ -702,7 +702,28 @@ impl Signex {
             );
             installed
         } else {
-            self.install_schematic_at(path, sheet)
+            // Inline text typed into a window on this sheet targets an object
+            // of the engine being replaced: read it before the install.
+            if self.text_edit_targets_sheet_at(path) {
+                self.interaction_state.editing_text = None;
+            }
+            let result = signex_engine::Engine::new_with_path(sheet, Some(path.to_path_buf()));
+            let install = self.document_state.replace_engine_at(path, result);
+            install
+                .notices
+                .iter()
+                .for_each(crate::app::projector::log_notice);
+            if install.installed {
+                // An undocked window on this sheet must not keep drawing the
+                // replaced engine, nor select its objects.
+                self.refresh_slots_from_engine(
+                    path,
+                    false,
+                    crate::schematic_runtime::RenderInvalidation::FULL,
+                    true,
+                );
+            }
+            install.installed
         };
         self.settle_restored_schematic(path, installed, commit, restored_bytes);
         // The file still holds what was repaired: not what the engine holds.

@@ -3,7 +3,9 @@
 
 use signex_engine::Engine;
 
-use crate::app::core::event::{CoreEvent, Notice, NoticeLevel, engine_notices, locked_skips_line};
+use crate::app::core::event::{
+    CoreEvent, Notice, NoticeLevel, engine_notices, legacy_warning, locked_skips_line,
+};
 
 /// [`engine_notices`] as events.
 pub(super) fn engine_notice_events(engine: &mut Engine) -> impl Iterator<Item = CoreEvent> + use<> {
@@ -23,5 +25,5 @@ pub(super) fn engine_error_notice(context: &str, error: signex_engine::EngineErr
 
 /// A plain warning line.
 pub(super) fn warning_notice(text: impl Into<String>) -> CoreEvent {
-    Notice::legacy_english(NoticeLevel::Warning, text).into()
+    legacy_warning(text).into()
 }

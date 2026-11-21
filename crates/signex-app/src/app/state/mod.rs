@@ -21,6 +21,7 @@ mod dirty;
 #[cfg(test)]
 mod dirty_tests;
 mod document;
+mod document_load;
 #[cfg(test)]
 mod draft_ownership_tests;
 mod error_notice;

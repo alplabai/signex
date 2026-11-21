@@ -105,8 +105,9 @@ Who sets the save point (#1854):
   `discard_undo_group_top` fails or finds the run is not on top leaves that
   sheet dirty and says so in Messages.
 - A sheet read from disk or restored is marked saved only when the engine
-  was just installed (`install_active_engine` / `install_schematic_at`
-  return whether it was); a failed install cannot mark the older engine.
+  was just installed (`DocumentState::install_active` /
+  `replace_engine_at` in `app/state/document_load/` say whether it was); a
+  failed install cannot mark the older engine.
 - History-recorded edits outside the mark paths go through
   `mark_history_edit_dirty`: the non-active sheets of a project-wide Replace
   and a recorded library update on a parked sheet, so undo back to the save
