@@ -79,6 +79,8 @@ fn reattaching_an_undocked_tab_applies_its_typed_note() {
 }
 
 /// Close Document run inside the window, then the OS close it asks for.
+/// Already true before #2649 (the close-tab path commits the note itself);
+/// this pins it rather than testing the fix.
 #[test]
 fn closing_the_document_from_its_undocked_window_applies_its_typed_note() {
     let (_dir, mut app, a, window) = typed_in_undocked_window();
