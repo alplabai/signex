@@ -1,8 +1,9 @@
 //! The GUI translator (ADR-0006, slice 6): a person's command leaves its
 //! document and targets implicit, the board in view and its selection. The
 //! GUI handler reads them, and this fills them in as the `document` and
-//! `ids` operands and runs the same operand handler an agent or the CLI
-//! runs, so one command id has one behaviour on every surface.
+//! `ids` (or `designator`) operands and runs the same operand handler an
+//! agent or the CLI runs, so one command id has one behaviour on every
+//! surface.
 //!
 //! Operands stay private to the `command` module (`args.rs`): a GUI module
 //! hands plain values to [`run`] and never builds a `CommandArgs` itself.
@@ -11,7 +12,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use iced::Task;
+use signex_engine::pcb::placement;
 use signex_i18n::{Translatable, ids};
+use uuid::Uuid;
 
 use super::args::Operands;
 use super::{CommandArgs, CommandOutcome, OperandValue};
@@ -21,25 +24,42 @@ use crate::keymap::AppCommandId;
 
 type Ran = (CommandOutcome, Task<Message>);
 
-/// The ids whose bridge arm translates: the handler of the message it sends
-/// reads the selection and calls [`run`]. The parity table names that row
-/// `translator`. `arrange_in_box` translates too, but on its second board
-/// click (`pcb_arrange_box_clicked`); its bridge arm only arms the box, so
-/// that row stays `bridge`. `swap_pins`, `swap_gates` and
-/// `place_board_reuse_block` do not translate yet: their handlers name the
-/// part by designator (and a gate by unit), the GUI by uuid (and pin).
+/// The ids whose GUI route translates: the handler of the message it sends
+/// reads the selection and calls [`run`]. The parity table names a bridge
+/// row of one `translator`. `arrange_in_box` translates too, but on its
+/// second board click (`pcb_arrange_box_clicked`); its bridge arm only arms
+/// the box, so that row stays `bridge`. `place_board_reuse_block` has no
+/// bridge row: a context-menu row carries the block name. Each id's GUI
+/// route test checks [`ran`], so a route that calls the engine itself
+/// fails it.
 #[cfg(test)]
-const TRANSLATED: &[&str] = &[
+pub(crate) const TRANSLATED: &[&str] = &[
     "board_shape_from_selection",
     "gloss_selected_routes",
     "keepout_from_selection",
+    "place_board_reuse_block",
     "save_board_reuse_block",
+    "swap_gates",
+    "swap_pins",
 ];
 
 /// Whether the bridge arm of the command `id` is a translator.
 #[cfg(test)]
 pub(crate) fn is_translated(id: &str) -> bool {
     TRANSLATED.contains(&id)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The ids [`run`] ran on this thread, so a test can tell a GUI route
+    /// that translates from one that calls the engine itself.
+    static RAN: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Whether [`run`] ran `id` on this thread.
+#[cfg(test)]
+pub(crate) fn ran(id: &str) -> bool {
+    RAN.with(|ran| ran.borrow().iter().any(|r| r == id))
 }
 
 /// Run `id`'s operand handler on the document at `document` with
@@ -54,26 +74,32 @@ pub(crate) fn run(
     document: &Path,
     operands: Vec<(&'static str, OperandValue)>,
 ) -> Ran {
+    #[cfg(test)]
+    RAN.with(|ran| ran.borrow_mut().push(id.to_string()));
     let Ok(command) = AppCommandId::new(id) else {
         return (not_available(), Task::none());
-    };
-    // A path that is not Unicode resolves to no document, and the handler
-    // refuses it as it refuses an agent naming it.
-    let target = DocumentTarget::Path(document.to_string_lossy().into_owned());
-    let mut values = BTreeMap::from([("document".to_string(), OperandValue::Document(target))]);
-    values.extend(operands.into_iter().map(|(n, v)| (n.to_string(), v)));
-    let args = CommandArgs {
-        context: Default::default(),
-        operands: Operands {
-            values,
-            texts: BTreeMap::new(),
-        },
     };
     // The person's command, not an agent's: every open document is in
     // reach (`document_entries`) and no agent undo step wraps it.
     let serving = std::mem::replace(&mut app.agent.serving, false);
-    let (outcome, task) = app.run_operands(&command, &args);
+    let ran = match document_target(app, document) {
+        Some(target) => {
+            let mut values =
+                BTreeMap::from([("document".to_string(), OperandValue::Document(target))]);
+            values.extend(operands.into_iter().map(|(n, v)| (n.to_string(), v)));
+            let args = CommandArgs {
+                context: Default::default(),
+                operands: Operands {
+                    values,
+                    texts: BTreeMap::new(),
+                },
+            };
+            app.run_operands(&command, &args)
+        }
+        None => (not_available(), Task::none()),
+    };
     app.agent.serving = serving;
+    let (outcome, task) = ran;
     let outcome = match outcome {
         CommandOutcome::Answered(_)
         | CommandOutcome::Disabled { .. }
@@ -81,6 +107,42 @@ pub(crate) fn run(
         _ => not_available(),
     };
     (outcome, task)
+}
+
+/// `document` as a target: its path, or its document id when the path is
+/// not Unicode, which no text path can name. `None` for a non-Unicode path
+/// of a document without an id.
+fn document_target(app: &Signex, document: &Path) -> Option<DocumentTarget> {
+    if let Some(text) = document.to_str() {
+        return Some(DocumentTarget::Path(text.to_string()));
+    }
+    app.document_entries()
+        .into_iter()
+        .find(|entry| entry.path.as_deref() == Some(document))
+        .and_then(|entry| entry.id)
+        .map(DocumentTarget::Id)
+}
+
+/// The `designator` operand that names `footprint` of the board at `board`:
+/// its reference, when an operand handler finds exactly that component by
+/// it. Else why not, in the words the handler would refuse it with, so a
+/// GUI route never sends a designator that lands on another component.
+pub(crate) fn designator_of(app: &Signex, board: &Path, footprint: Uuid) -> Result<String, String> {
+    let pcb = app
+        .document_state
+        .pcb_board(board)
+        .ok_or_else(|| "the board is not open".to_string())?;
+    let typed = pcb
+        .footprints
+        .iter()
+        .find(|fp| fp.uuid == footprint)
+        .map(|fp| fp.reference.trim().to_string())
+        .ok_or_else(|| "the component is no longer on the board".to_string())?;
+    let stored = app.document_state.stored_reference_for(board, &typed);
+    match placement::by_designator(pcb, stored)? {
+        found if found == footprint => Ok(typed),
+        _ => Err(format!("{typed} names another component on the board")),
+    }
 }
 
 fn not_available() -> CommandOutcome {

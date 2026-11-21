@@ -1311,15 +1311,15 @@ stitch_vias	operand_handler	run_operands: named document	core	origin,settings	ha
 stitch_vias	in_window_rewrite	document_window	gui	window	routing
 stitch_vias	refusal_needs	Pcb	core	active document	routing
 stitch_vias	headless_missing_operand	needs `document`	core	none	routing
-swap_gates	bridge	Pcb(PartSwap(Requested(Gates)))	core	active document,selection	handler
+swap_gates	translator	Pcb(PartSwap(Requested(Gates)))	gui	active document,selection	handler
 swap_gates	operand_handler	run_operands: named document	core	origin	handler
 swap_gates	in_window_rewrite	document_window	gui	window	routing
-swap_gates	refusal_needs	PadPair	core	active document,selection	routing
+swap_gates	refusal_needs	PadPair	gui	active document,selection	routing
 swap_gates	headless_missing_operand	needs `document`	core	none	routing
-swap_pins	bridge	Pcb(PartSwap(Requested(Pins)))	core	active document,selection	handler
+swap_pins	translator	Pcb(PartSwap(Requested(Pins)))	gui	active document,selection	handler
 swap_pins	operand_handler	run_operands: named document	core	origin	handler
 swap_pins	in_window_rewrite	document_window	gui	window	routing
-swap_pins	refusal_needs	PadPair	core	active document,selection	routing
+swap_pins	refusal_needs	PadPair	gui	active document,selection	routing
 swap_pins	headless_missing_operand	needs `document`	core	none	routing
 switch_segment_posture	bridge	Tool(CornerFlipRequested)	gui	tool state,in-progress edit	handler
 switch_segment_posture	in_window_rewrite	document_window	gui	window	routing

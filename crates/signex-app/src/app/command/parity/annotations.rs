@@ -725,8 +725,6 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
             "lock_board_items",
             "unlock_board_items",
             "repour_selected",
-            "swap_gates",
-            "swap_pins",
             "remove_teardrops",
         ],
         Bridge,
@@ -746,14 +744,16 @@ pub(super) const ANNOTATIONS: &[(&[&str], Form, &[Input])] = &[
         &[Selection, Settings],
     ),
     // The translators read the board in view and its selection
-    // (`translated_targets`, `save_selection_as_block`); the clearances are
-    // the operand handler's.
+    // (`translated_targets`, `save_selection_as_block`,
+    // `swap_selected_pads`); the clearances are the operand handler's.
     (
         &[
             "board_shape_from_selection",
             "gloss_selected_routes",
             "keepout_from_selection",
             "save_board_reuse_block",
+            "swap_gates",
+            "swap_pins",
         ],
         Translator,
         &[Selection],

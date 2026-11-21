@@ -238,12 +238,25 @@ impl Signex {
         let (outcome, task) = translator::run(self, command, path, operands);
         let ran = match outcome {
             CommandOutcome::Answered(answer) => {
-                serde_json::from_value::<ToolReport>(answer).map_err(|error| error.to_string())
+                match serde_json::from_value::<ToolReport>(answer) {
+                    Ok(report) => Ok(report),
+                    // The edit has landed: say so, never a refusal.
+                    Err(error) => {
+                        debug_assert!(false, "{command}: unreadable report: {error}");
+                        crate::diagnostics::log_warning(format!(
+                            "{command} ran, but what it did could not be read: {error}"
+                        ));
+                        return task;
+                    }
+                }
             }
             CommandOutcome::Disabled { reason } => Err(reason.render(&self.ui_state.i18n)),
             // A board tool reads nothing first, so it never waits; were it
             // to, the read runs it again (`translator::run` leaves no other).
-            _ => return task,
+            other => {
+                debug_assert!(false, "{command}: a board tool waited: {other:?}");
+                return task;
+            }
         };
         self.say_board_tool(command, &ran);
         task

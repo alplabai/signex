@@ -14,7 +14,7 @@ use uuid::Uuid;
 use signex_i18n::RenderTranslatable;
 
 use super::ReuseBlockMsg;
-use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::app::command::{CommandArgs, CommandOutcome, translator};
 use crate::app::handlers::menu::export::settle;
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{ContextAction, ContextMenuMsg, Message, Signex};
@@ -527,6 +527,7 @@ fn a_menu_save_writes_the_block_the_operand_handler_writes() {
     let menu_dir = tempfile::tempdir().unwrap();
     let (mut menu, _) = app_on(menu_dir.path(), pcb.clone());
     save_channel_a(&mut menu);
+    assert!(translator::ran("save_board_reuse_block"));
     let dir = tempfile::tempdir().unwrap();
     let (mut app, board) = app_on(dir.path(), pcb);
     let document = format!("document={}", board.display());
@@ -589,4 +590,89 @@ fn a_menu_save_of_a_selection_with_nothing_a_block_holds_is_refused() {
         !dir.path().join("reuse-blocks").exists(),
         "nothing is saved"
     );
+}
+
+/// The board menu's Place row for `name` on the component at (x, y).
+fn place_from_menu(app: &mut Signex, name: &str, x: f64, y: f64) {
+    click(app, x, y, ClickMode::Replace);
+    right_click(app);
+    let place = ReuseBlockMsg::PlaceRequested {
+        name: name.to_string(),
+    };
+    let task = app.update(Message::ContextMenu(ContextMenuMsg::Action(
+        ContextAction::ReuseBlock(place),
+    )));
+    settle(app, task);
+}
+
+/// Where each footprint sits and how many tracks and vias: a placed block
+/// takes fresh uuids, so two placements compare by these.
+fn layout(app: &Signex, board: &Path) -> Vec<String> {
+    let pcb = app.document_state.pcb_board(board).expect("board");
+    let mut lines: Vec<String> = pcb
+        .footprints
+        .iter()
+        .map(|fp| {
+            let (x, y) = (fp.position.x, fp.position.y);
+            format!("{} {x} {y} {}", fp.reference, fp.rotation)
+        })
+        .collect();
+    lines.push(format!(
+        "{} tracks {} vias",
+        pcb.segments.len(),
+        pcb.vias.len()
+    ));
+    lines
+}
+
+/// The menu Place on U2 lays the block as the operand handler does with
+/// `designator=U2`, through the handler (#2326 slice 6 translator).
+#[test]
+fn a_menu_place_lays_the_block_as_the_operand_handler_does() {
+    let pcb = board();
+    let menu_dir = tempfile::tempdir().unwrap();
+    let (mut menu, menu_board) = app_on(menu_dir.path(), pcb.clone());
+    save_channel_a(&mut menu);
+    place_from_menu(&mut menu, "R1-U1", 49.0, 50.0);
+    assert!(translator::ran("place_board_reuse_block"));
+    assert_eq!(at(&menu, &menu_board, R2), (54.0, 50.0), "it placed");
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    save_channel_a(&mut app);
+    let document = format!("document={}", board.display());
+    let outcome = headless(
+        &mut app,
+        "place_board_reuse_block",
+        &[&document, "name=R1-U1", "designator=U2"],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(layout(&menu, &menu_board), layout(&app, &board));
+}
+
+/// Behaviour change (#2326 slice 6): the handler finds the anchor by its
+/// designator, so on a board where two components share it the menu Place
+/// is refused, where it placed around the clicked component before.
+#[test]
+fn a_menu_place_on_a_component_whose_designator_is_shared_is_refused() {
+    let _ = crate::diagnostics::init_logging();
+    let mut pcb = board();
+    pcb.footprints[3].reference = "U2".into();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    save_channel_a(&mut app);
+    let before = layout(&app, &board);
+    let mark = crate::diagnostics::newest_entry_id();
+    place_from_menu(&mut app, "R1-U1", 49.0, 50.0);
+    let said = crate::diagnostics::entries_since(mark).entries;
+    assert!(
+        said.iter().any(|e| e
+            .message
+            .contains("several components on the board are named U2")),
+        "{said:?}"
+    );
+    assert_eq!(layout(&app, &board), before, "nothing is placed");
 }

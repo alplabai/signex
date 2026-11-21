@@ -272,8 +272,6 @@ const MENU_DOCUMENT: &[&str] = &[
     "send_to_back",
     "snap_board_origin_to_corner",
     "stitch_vias",
-    "swap_gates",
-    "swap_pins",
     "sync_sheet_pins",
     "tune_diff_pair",
     "tune_net_length",

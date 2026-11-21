@@ -8,7 +8,7 @@ use pcb_geom::{ItemRef, PickKind};
 use signex_types::pcb::Point;
 
 use super::copper_tests::{app_with_board, board_of, id, live, run, run_operands};
-use crate::app::command::CommandOutcome;
+use crate::app::command::{CommandOutcome, translator};
 
 /// The board after `command` from operands with `operands` on a fresh app.
 fn by_operands(command: &str, operands: &[&str]) -> String {
@@ -35,6 +35,10 @@ fn menu_matches_operands(command: &str, selection: &[ItemRef], acted_on: &[u128]
     let before = live(&app, &path);
     app.select_pcb_items(selection);
     run(&mut app, command);
+    assert!(
+        translator::ran(command),
+        "{command} ran its operand handler"
+    );
     let after = live(&app, &path);
     assert_ne!(after, before, "{command} changed nothing");
     assert_eq!(after, by_operands(command, &[&ids(acted_on)]), "{command}");
@@ -80,10 +84,12 @@ fn arrange_in_box_from_two_clicks_is_its_operand_handler_on_the_corners() {
     app.select_pcb_items(&[ItemRef::Footprint(id(50)), ItemRef::Footprint(id(60))]);
     run(&mut app, "arrange_in_box");
     assert!(app.pcb_arrange_box_clicked(Point::new(0.0, 20.0)).is_some());
+    assert!(!translator::ran("arrange_in_box"), "the first click arms");
     assert!(
         app.pcb_arrange_box_clicked(Point::new(10.0, 30.0))
             .is_some()
     );
+    assert!(translator::ran("arrange_in_box"));
     let want = by_operands(
         "arrange_in_box",
         &[&ids(&[50, 60]), "start=0,20", "end=10,30"],

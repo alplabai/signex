@@ -103,10 +103,7 @@ impl Signex {
     pub(crate) fn handle_reuse_block(&mut self, msg: ReuseBlockMsg) -> Task<Message> {
         match msg {
             ReuseBlockMsg::SaveRequested => self.save_selection_as_block(),
-            ReuseBlockMsg::PlaceRequested { name } => {
-                self.place_block_on_selection(&name);
-                Task::none()
-            }
+            ReuseBlockMsg::PlaceRequested { name } => self.place_block_on_selection(&name),
             ReuseBlockMsg::Written { saved, result } => {
                 self.end_project_write(&saved.file);
                 self.report_block_written(&saved, result);
@@ -323,6 +320,9 @@ impl Signex {
         // What the selection cannot make a block of is refused in the menu's
         // own words, after the project check, as before the translator:
         // `ids` would refuse an empty or stale list in an agent's words.
+        // shortcut: the handler captures the block again, a second board
+        // clone per save; drop this check if `ids` ever keeps capture's
+        // wording.
         let refusal = self
             .reuse_block_folder(&board)
             .ok()
@@ -406,19 +406,47 @@ impl Signex {
         names.join("-").chars().take(64).collect()
     }
 
-    /// A board menu row: the block around the one footprint selected.
-    fn place_block_on_selection(&mut self, name: &str) {
+    /// A board menu row: the block around the one footprint selected, placed
+    /// by the command's operand handler with the board, the name and the
+    /// footprint's designator filled in (`command::translator`). Before the
+    /// project's blocks are read, they are read first and the row is asked
+    /// again once they land, as a save is, so the handler never defers it to
+    /// an agent's rerun.
+    fn place_block_on_selection(&mut self, name: &str) -> Task<Message> {
         let Some(board) = self.active_tab_path().filter(|_| self.has_active_pcb()) else {
-            return;
+            return Task::none();
         };
         let footprints = self.pcb_selected_footprints();
-        let result = match (footprints.len(), footprints.first()) {
-            (1, Some(anchor)) => self.place_reuse_block(&board, name, *anchor, 0.0),
+        let designator = match (footprints.len(), footprints.first()) {
+            (1, Some(anchor)) => translator::designator_of(self, &board, *anchor),
             _ => Err("select one component of the channel to place the block on".to_string()),
         };
-        if let Err(why) = result {
+        let designator = match designator {
+            Ok(designator) => designator,
+            Err(why) => {
+                self.refuse_reuse(command_ids::CMD_MENU_PLACE_BOARD_REUSE_BLOCK, &why);
+                return Task::none();
+            }
+        };
+        if let Ok(folder) = self.reuse_block_folder(&board)
+            && self.retry_and_need_read(&folder)
+        {
+            let name = name.to_string();
+            let again = Message::Pcb(PcbMsg::ReuseBlock(ReuseBlockMsg::PlaceRequested { name }));
+            return read_blocks_task(folder, None).chain(Task::done(again));
+        }
+        let operands = vec![
+            ("name", OperandValue::Text(name.to_string())),
+            ("designator", OperandValue::Text(designator)),
+        ];
+        let (outcome, task) = translator::run(self, "place_board_reuse_block", &board, operands);
+        // Answered: `place_reuse_block` says it. Deferred cannot come, the
+        // blocks are read above.
+        if let CommandOutcome::Disabled { reason } = outcome {
+            let why = reason.render(&self.ui_state.i18n);
             self.refuse_reuse(command_ids::CMD_MENU_PLACE_BOARD_REUSE_BLOCK, &why);
         }
+        task
     }
 
     /// Say in Messages that the command `what` names did nothing, and why.

@@ -15,7 +15,7 @@ use signex_types::schematic::{
 use uuid::Uuid;
 
 use super::part_swap::SwapRequest;
-use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::app::command::{CommandArgs, CommandOutcome, translator};
 use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -359,4 +359,115 @@ fn swap_gates_on_pads_of_two_gates_trades_the_gates_and_one_gate_is_refused() {
         .map(|s| (s.uuid, s.unit))
         .collect();
     assert_eq!(units, [(UNIT_A, 2), (UNIT_B, 1)]);
+}
+
+fn units_on(app: &Signex, sheet: &Path) -> Vec<(Uuid, u32)> {
+    live_sheet(app, sheet)
+        .symbols
+        .iter()
+        .map(|s| (s.uuid, s.unit))
+        .collect()
+}
+
+/// `command` from the board menu on the pads at x = `a` and `b` leaves the
+/// board and the sheet as its operand handler does with `operands`, and
+/// goes through that handler (#2326 slice 6 translator).
+fn menu_swap_matches_operands(command: &str, a: f64, b: f64, operands: &[&str]) {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut menu, board, sheet) = app_with_part(dir.path());
+    click(&mut menu, a, 10.0, ClickMode::Replace);
+    click(&mut menu, b, 10.0, ClickMode::Add);
+    run(&mut menu, command);
+    assert!(
+        translator::ran(command),
+        "{command} ran its operand handler"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board_b, sheet_b) = app_with_part(dir.path());
+    let document = format!("document={}", board_b.display());
+    let mut texts = vec![document.as_str(), "designator=U1"];
+    texts.extend_from_slice(operands);
+    let outcome = headless(&mut app, command, &texts);
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    assert_eq!(pad_nets(&menu, &board), pad_nets(&app, &board_b));
+    assert_ne!(
+        pad_nets(&menu, &board),
+        nets(&[("1", "A"), ("2", "B"), ("3", "C"), ("4", "D")]),
+        "{command} changed the board"
+    );
+    assert_eq!(
+        live_sheet(&menu, &sheet).wires,
+        live_sheet(&app, &sheet_b).wires
+    );
+    assert_eq!(units_on(&menu, &sheet), units_on(&app, &sheet_b));
+}
+
+#[test]
+fn swap_pins_from_the_menu_is_its_operand_handler_on_the_two_pads() {
+    menu_swap_matches_operands("swap_pins", 7.0, 9.0, &["pins=1,2"]);
+}
+
+#[test]
+fn swap_gates_from_the_menu_is_its_operand_handler_on_the_gates_of_the_two_pads() {
+    menu_swap_matches_operands("swap_gates", 7.0, 11.0, &["units=1,2"]);
+}
+
+/// Pads of one gate are refused from the menu in the words they always
+/// were, before the handler is asked.
+#[test]
+fn swap_gates_from_the_menu_on_one_gate_is_refused_as_before() {
+    let _ = crate::diagnostics::init_logging();
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board, _) = app_with_part(dir.path());
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 9.0, 10.0, ClickMode::Add);
+    let mark = crate::diagnostics::newest_entry_id();
+    run(&mut app, "swap_gates");
+    let said = crate::diagnostics::entries_since(mark).entries;
+    assert!(
+        said.iter().any(|e| e.message.contains("are on one gate")),
+        "{said:?}"
+    );
+    assert_eq!(
+        pad_nets(&app, &board),
+        nets(&[("1", "A"), ("2", "B"), ("3", "C"), ("4", "D")])
+    );
+}
+
+/// Behaviour change (#2326 slice 6): the handler finds the part by its
+/// designator, so on a board where two components share it the menu swap
+/// is refused, where it swapped the clicked component's pads before.
+#[test]
+fn swap_pins_from_the_menu_on_a_shared_designator_is_refused() {
+    let _ = crate::diagnostics::init_logging();
+    let mut twin = board();
+    let mut other = twin.footprints[0].clone();
+    other.uuid = Uuid::from_u128(0xf1);
+    other.position.y = 40.0;
+    other.schematic_link = None;
+    for (n, pad) in other.pads.iter_mut().enumerate() {
+        pad.uuid = Uuid::from_u128(0x21 + n as u128);
+    }
+    twin.footprints.push(other);
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board, _) = app_with(dir.path(), twin);
+    click(&mut app, 7.0, 10.0, ClickMode::Replace);
+    click(&mut app, 9.0, 10.0, ClickMode::Add);
+    let mark = crate::diagnostics::newest_entry_id();
+    run(&mut app, "swap_pins");
+    let said = crate::diagnostics::entries_since(mark).entries;
+    assert!(
+        said.iter().any(|e| e
+            .message
+            .contains("several components on the board are named U1")),
+        "{said:?}"
+    );
+    assert_eq!(
+        pad_nets(&app, &board),
+        nets(&[("1", "A"), ("2", "B"), ("3", "C"), ("4", "D")])
+    );
 }
