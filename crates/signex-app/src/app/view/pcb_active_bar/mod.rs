@@ -74,6 +74,16 @@ impl Signex {
             &self.ui_state.i18n,
             &self.document_state.panel_ctx.ui_font_name,
         );
+        // Buttons take their own right press first. The rest of the bar
+        // holds the release; with a dropdown open it counts as outside it.
+        let bar_right_press = if open.is_some() {
+            PcbBarMsg::FlyoutRightPressed
+        } else {
+            PcbBarMsg::RightPressTaken
+        };
+        let bar = iced::widget::mouse_area(bar)
+            .on_right_press(bar_message(bar_right_press))
+            .boxed();
         let top = Space::new().height(crate::active_bar::bar_top_margin());
         let Some((menu, trigger_x)) = anchor else {
             return column![
@@ -100,7 +110,12 @@ impl Signex {
                 &self.document_state.panel_ctx.ui_font_name,
             )
         });
-        let panel = signex_widgets::active_bar_dropdown::view(entries, tokens, panel_width);
+        let panel = iced::widget::mouse_area(signex_widgets::active_bar_dropdown::view(
+            entries,
+            tokens,
+            panel_width,
+        ))
+        .on_right_press(bar_message(PcbBarMsg::RightPressTaken));
         // The panel stays inside the bar's width, so the centred bar does not
         // move while its dropdown is open.
         let panel_x = trigger_x

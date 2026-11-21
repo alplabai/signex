@@ -557,3 +557,130 @@ fn esc_closes_the_board_active_bar_dropdown() {
     let _ = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
     assert_eq!(app.interaction_state.pcb_bar_menu, None);
 }
+
+/// The y of the middle of the bar's row, in window space.
+fn bar_row_y(app: &Signex) -> f32 {
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    app.canvas_bounds().y
+        + crate::active_bar::bar_top_margin()
+        + crate::active_bar::bar_height_for(&metrics) / 2.0
+}
+
+/// A point just under the bar, on the first row of a flyout hung from a
+/// button centred at `trigger_x`.
+fn flyout_card_point(app: &Signex, trigger_x: f32) -> Point {
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    Point::new(
+        trigger_x,
+        bar_row_y(app)
+            + crate::active_bar::bar_height_for(&metrics) / 2.0
+            + crate::active_bar::BAR_DROPDOWN_GAP_PX
+            + 12.0,
+    )
+}
+
+/// #2715: the corner-mode pill opens no menu, and a right-click on it must
+/// not end the wire or open the canvas menu.
+#[test]
+fn a_right_click_on_the_corner_pill_leaves_the_wire() {
+    let (mut app, main) = app();
+    drawing_a_wire(&mut app);
+    let metrics = signex_widgets::active_bar::Metrics::GRAPHITE;
+    let tool = app.interaction_state.current_tool;
+    let bar_right = crate::active_bar::bar_left_in_window(tool, WINDOW.width, &metrics)
+        + crate::active_bar::bar_width_for(tool, &metrics);
+    let pill = Point::new(bar_right - metrics.padding - 48.0, bar_row_y(&app));
+    let mut ev = EventLoop::new();
+    ev.click(&mut app, main, pill, Button::Right);
+    assert!(
+        ev.messages
+            .iter()
+            .any(|m| matches!(m, Message::ActiveBar(ActiveBarMsg::RightPressTaken))),
+        "the bar did not take the press: {:?}",
+        ev.messages
+    );
+    assert_still_drawing_a_wire(&app, &ev.messages);
+    assert!(
+        !app.interaction_state.swallow_right_release,
+        "the release ended the hold"
+    );
+}
+
+/// A right-click on the open flyout's card changes nothing: the flyout
+/// stays open and the wire goes on.
+#[test]
+fn a_right_click_on_the_flyout_card_leaves_the_flyout_and_the_wire() {
+    let (mut app, main) = app();
+    drawing_a_wire(&mut app);
+    let trigger = trigger_centre(&app, ActiveBarMenu::TextTools);
+    let _ = app.update(Message::ActiveBar(ActiveBarMsg::ToggleMenu(
+        ActiveBarMenu::TextTools,
+    )));
+    let card = flyout_card_point(&app, trigger.x);
+    let mut ev = EventLoop::new();
+    ev.click(&mut app, main, card, Button::Right);
+    assert_eq!(
+        app.interaction_state.active_bar_menu,
+        Some(ActiveBarMenu::TextTools),
+        "the flyout closed: {:?}",
+        ev.messages
+    );
+    assert_still_drawing_a_wire(&app, &ev.messages);
+    assert!(!app.interaction_state.swallow_right_release);
+}
+
+/// The same on the board bar: a part with no menu takes the press and the
+/// armed tool stays.
+#[test]
+fn a_right_click_on_a_board_bar_part_with_no_menu_leaves_the_tool() {
+    let (mut app, main) = board_app_with_tool_armed();
+    let canvas = app.canvas_bounds();
+    let y = bar_row_y(&app);
+    let centre = canvas.x + canvas.width / 2.0;
+    let taken = (0..400)
+        .flat_map(|step| [centre + step as f32, centre - step as f32])
+        .map(|x| Point::new(x, y))
+        .find(|at| {
+            messages_for_events(app.view(main), WINDOW, *at, &[press(Button::Right)])
+                .iter()
+                .any(|m| {
+                    matches!(
+                        m,
+                        Message::Pcb(crate::app::PcbMsg::Bar(
+                            crate::app::PcbBarMsg::RightPressTaken
+                        ))
+                    )
+                })
+        })
+        .expect("a part of the bar with no menu");
+    let mut ev = EventLoop::new();
+    ev.click(&mut app, main, taken, Button::Right);
+    assert!(
+        app.interaction_state.pcb_tool.is_some(),
+        "the release ended the tool: {:?}",
+        ev.messages
+    );
+    assert!(app.interaction_state.context_menu.is_none());
+    assert!(!app.interaction_state.swallow_right_release);
+}
+
+/// A right-click on the board flyout's card leaves it and the tool.
+#[test]
+fn a_right_click_on_the_board_flyout_card_leaves_it_and_the_tool() {
+    let (mut app, main) = board_app_with_tool_armed();
+    let (trigger, menu) = board_bar_trigger(&app, main);
+    let mut ev = EventLoop::new();
+    ev.click(&mut app, main, trigger, Button::Right);
+    assert_eq!(app.interaction_state.pcb_bar_menu, Some(menu));
+    ev.messages.clear();
+    let card = flyout_card_point(&app, trigger.x);
+    ev.click(&mut app, main, card, Button::Right);
+    assert_eq!(
+        app.interaction_state.pcb_bar_menu,
+        Some(menu),
+        "the dropdown closed: {:?}",
+        ev.messages
+    );
+    assert!(app.interaction_state.pcb_tool.is_some());
+    assert!(app.interaction_state.context_menu.is_none());
+}

@@ -53,6 +53,10 @@ impl Signex {
                 self.set_swallow_right_release(true);
                 self.handle_active_bar_message(ActiveBarMsg::CloseMenus)
             }
+            ActiveBarMsg::RightPressTaken => {
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
             ActiveBarMsg::RightReleaseSwallowed => {
                 self.set_swallow_right_release(false);
                 Task::none()
