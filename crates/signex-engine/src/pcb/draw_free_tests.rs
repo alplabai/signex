@@ -7,7 +7,7 @@ use uuid::Uuid;
 use super::BoardEngine;
 use super::draw::{
     ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
-    place_item,
+    new_free_pad_on, place_item,
 };
 use super::items::BoardItem;
 
@@ -115,6 +115,25 @@ fn a_free_pad_is_a_through_pad_on_the_net_it_lands_on() {
     assert_eq!(engine.board().free.pads, [pad]);
     assert!(engine.undo().is_ok());
     assert!(engine.board().free.pads.is_empty());
+}
+
+/// Caner 2026-11-21: a pad placed with an outer copper layer active is a
+/// surface pad of that side; any other layer keeps the through-hole pad.
+#[test]
+fn a_free_pad_on_outer_copper_is_a_surface_pad_of_that_side() {
+    let board = board();
+    let id = Uuid::from_u128(0x31);
+    let top = new_free_pad_on(&board, id, p(5.0, 0.0), "1".into(), CopperLayer::Top.into());
+    assert_eq!(top.pad_type, signex_types::pcb::PadType::Smd);
+    assert!(top.drill.is_none());
+    assert_eq!(top.layers, ["TopCopper", "TopSolderMask", "TopPaste"]);
+    assert_eq!(top.net.as_ref().map(|n| n.number), Some(3));
+    let bottom = new_free_pad_on(&board, id, p(5.0, 0.0), "1".into(), CopperLayer::Bottom.into());
+    assert_eq!(bottom.layers, ["BottomCopper", "BottomSolderMask", "BottomPaste"]);
+    assert!(bottom.net.is_none(), "the track is on the top copper only");
+    let silk = PcbLayer::Technical(TechnicalLayer::SilkscreenTop);
+    let through = new_free_pad_on(&board, id, p(5.0, 0.0), "1".into(), silk);
+    assert_eq!(through, new_free_pad(&board, id, p(5.0, 0.0), "1".into()));
 }
 
 #[test]

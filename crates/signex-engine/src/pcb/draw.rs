@@ -293,6 +293,7 @@ pub fn place_item(item: BoardItem) -> BoardCommand {
 
 pub use super::draw_free::{
     ArcMode, FREE_PAD_HOLE_MM, FREE_PAD_SIZE_MM, arc_points, new_arc, new_dimension, new_free_pad,
+    new_free_pad_on,
 };
 
 /// Whether the polygon encloses any area, in integer nm (exact): false for

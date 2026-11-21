@@ -1617,6 +1617,9 @@ locked track, a pad or a via is never pushed; the route walks around it.
 - **Multi-Route** routes the selected nets side by side as a bus.
 - **Quick Route** routes straight from the first click to the second.
 - **Via** (`P V`) places a through via per click.
+- **Pad** places a free pad per click on the active layer: with Top Layer or
+  Bottom Layer active it is a surface pad on that side, with its solder mask
+  and paste; with any other layer active it is a through-hole pad.
 
 **Copper pours**
 

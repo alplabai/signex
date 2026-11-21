@@ -652,9 +652,17 @@ draws a board drawing (`PcbBoard::graphics`, kinds in
 ## Pad
 
 `place_board_pad` (no default key) places a free pad, one per click: a pad
-with no footprint, kept in `PcbBoard::free.pads` at its board position. By
-default it is a round through-hole pad 1.5 mm across with a 0.8 mm hole on
-the top and bottom copper, numbered `1`, on the net of the copper under it.
+with no footprint, kept in `PcbBoard::free.pads` at its board position. It
+goes on the active layer (Caner, 2026-11-21): with Top Layer or Bottom Layer
+active it is a round surface pad 1.5 mm across on that copper, with that
+side's solder mask and paste and no hole, on the net of that layer's copper
+under it (`signex_engine::pcb::draw::new_free_pad_on`). With any other layer
+active (a mid-layer, or a layer that is not copper, the Multi-Layer case) it
+is the round through-hole pad 1.5 mm across with a 0.8 mm hole on the top and
+bottom copper, on the net of the copper under it. It is numbered `1`. The
+pad form has no pad type or layer row: the active layer is its starting
+value, and making another layer active while Tab pauses the tool changes it
+(Esc puts the layer back).
 Code that reads footprint pads reads a free pad in the board's own frame
 (`signex_types::pcb_free::free_pad_frame`: a footprint at the origin, not
 turned), so the copper list, ratsnest, design rule check, pick index,
