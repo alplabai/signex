@@ -228,6 +228,7 @@ fn board() -> PcbBoard {
             })
             .to_vec(),
         footprints,
+        rooms: Vec::new(),
         segments: vec![Segment {
             uuid: Uuid::from_u128(50),
             start: p(5.0, 5.0),
