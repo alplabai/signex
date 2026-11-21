@@ -470,22 +470,34 @@ const PIN_TABLE: &[Check] = &[
 
 const PICKER: &[Check] = &[
     ("the picker lists rows", picker_open),
-    ("a filter with no match empties the list", picker_filter_narrows),
+    (
+        "a filter with no match empties the list",
+        picker_filter_narrows,
+    ),
 ];
 
 const PRIMITIVE_PICKER: &[Check] = &[
-    ("the filter text reaches the picker", primitive_picker_filters),
+    (
+        "the filter text reaches the picker",
+        primitive_picker_filters,
+    ),
     ("Cancel closes the picker", primitive_picker_cancels),
 ];
 
 const DOCUMENT_OPTIONS: &[Check] = &[
-    ("Grid Visible toggles the draft", document_options_grid_toggles),
+    (
+        "Grid Visible toggles the draft",
+        document_options_grid_toggles,
+    ),
     ("Cancel closes the dialog", document_options_cancels),
 ];
 
 const CREATE_OPTIONS: &[Check] = &[
     ("version control toggles", create_options_git_toggles),
-    ("LFS turns off with version control", create_options_lfs_follows_git),
+    (
+        "LFS turns off with version control",
+        create_options_lfs_follows_git,
+    ),
     ("Cancel closes the dialog", create_options_cancels),
 ];
 
@@ -510,7 +522,10 @@ const RECOVERY: &[Check] = &[("Cancel closes the dialog", recovery_cancels)];
 
 const FOOTPRINT_BAR: &[Check] = &[
     ("the context menu is open", footprint_context_menu_open),
-    ("Move Selection By opens and cancels", footprint_move_by_opens),
+    (
+        "Move Selection By opens and cancels",
+        footprint_move_by_opens,
+    ),
     ("Align… opens and cancels", footprint_align_opens),
 ];
 
@@ -560,7 +575,10 @@ fn symbol_props_ui(app: &Signex) -> Result<&SymbolPropsUi, String> {
 
 fn pins_tab_shown(app: &mut Signex) -> Result<(), String> {
     let tab = symbol_props_ui(app)?.tab;
-    ensure(tab == SymbolPropsTab::Pins, format!("Properties shows {tab:?}"))
+    ensure(
+        tab == SymbolPropsTab::Pins,
+        format!("Properties shows {tab:?}"),
+    )
 }
 
 fn pin_table_shown(app: &mut Signex) -> Result<(), String> {
@@ -598,7 +616,10 @@ fn primitive_picker_filters(app: &mut Signex) -> Result<(), String> {
         .primitive_picker
         .as_ref()
         .ok_or("the primitive picker is closed")?;
-    ensure(picker.filter == "res", format!("filter is {:?}", picker.filter))
+    ensure(
+        picker.filter == "res",
+        format!("filter is {:?}", picker.filter),
+    )
 }
 
 fn primitive_picker_cancels(app: &mut Signex) -> Result<(), String> {
@@ -672,9 +693,7 @@ fn create_options_lfs_follows_git(app: &mut Signex) -> Result<(), String> {
 }
 
 fn create_options_cancels(app: &mut Signex) -> Result<(), String> {
-    let _ = app.update(Message::Library(
-        LibraryMessage::LibraryCreateOptionsCancel,
-    ));
+    let _ = app.update(Message::Library(LibraryMessage::LibraryCreateOptionsCancel));
     ensure(
         app.library.create_options.is_none(),
         "the New Library dialog stayed open",
@@ -705,7 +724,10 @@ fn library_updates_toggles(app: &mut Signex) -> Result<(), String> {
     let _ = app.update(Message::Library(
         LibraryMessage::LibraryUpdatesToggleSelection(uuid),
     ));
-    ensure(first_update(app)?.1 != before, "the checkbox did not change")
+    ensure(
+        first_update(app)?.1 != before,
+        "the checkbox did not change",
+    )
 }
 
 fn library_updates_cancels(app: &mut Signex) -> Result<(), String> {
@@ -759,10 +781,7 @@ fn delete_confirm_cancels(app: &mut Signex) -> Result<(), String> {
         .get(&stock)
         .is_some_and(|b| b.delete_confirm.is_some());
     ensure(!open, "the confirm stayed open")?;
-    ensure(
-        stock_row_count(app, &stock) == before,
-        "a row was deleted",
-    )
+    ensure(stock_row_count(app, &stock) == before, "a row was deleted")
 }
 
 fn recovery_cancels(app: &mut Signex) -> Result<(), String> {
@@ -935,10 +954,7 @@ fn open_footprint(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Res
 /// Open the first stock symbol in its editor.
 fn open_symbol(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
     fixture::mount_stock(app, fx)?;
-    settle_support::settle(
-        app,
-        Message::File(FileMsg::Opened(Some(fx.symbol.clone()))),
-    );
+    settle_support::settle(app, Message::File(FileMsg::Opened(Some(fx.symbol.clone()))));
     let _ = render::draw_main(r, app);
     Ok(())
 }

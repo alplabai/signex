@@ -428,7 +428,10 @@ fn about_closes(app: &mut Signex) -> Result<(), String> {
 }
 
 fn shortcuts_open(app: &mut Signex) -> Result<(), String> {
-    flag(app.ui_state.keyboard_shortcuts_open, "keyboard_shortcuts_open")
+    flag(
+        app.ui_state.keyboard_shortcuts_open,
+        "keyboard_shortcuts_open",
+    )
 }
 
 fn shortcuts_close(app: &mut Signex) -> Result<(), String> {
@@ -459,7 +462,10 @@ fn quit_prompt_open(app: &mut Signex) -> Result<(), String> {
 }
 
 fn calculator_open(app: &mut Signex) -> Result<(), String> {
-    flag(app.ui_state.passive_calculator_open, "passive_calculator_open")
+    flag(
+        app.ui_state.passive_calculator_open,
+        "passive_calculator_open",
+    )
 }
 
 fn calculator_closes(app: &mut Signex) -> Result<(), String> {

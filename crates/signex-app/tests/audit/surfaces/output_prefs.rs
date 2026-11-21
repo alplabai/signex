@@ -184,7 +184,10 @@ const PRINT_PREVIEW: &[Check] = &[("the print preview is open", print_preview_op
 
 const BOM_EXPORT: &[Check] = &[
     ("the BOM export dialog is open", bom_preview_open),
-    ("turning a rule off drops its issues", bom_rule_off_drops_issues),
+    (
+        "turning a rule off drops its issues",
+        bom_rule_off_drops_issues,
+    ),
 ];
 
 const FAB_OUTPUTS: &[Check] = &[("Fabrication Outputs is open", fab_outputs_open)];
@@ -193,7 +196,10 @@ const BOARD_PRINT: &[Check] = &[("Board Print / PDF is open", board_print_open)]
 
 const BOARD_REPORTS: &[Check] = &[
     ("Board Reports is open on the BOM", board_reports_on_bom),
-    ("picking Net Lengths switches the table", board_reports_switch),
+    (
+        "picking Net Lengths switches the table",
+        board_reports_switch,
+    ),
 ];
 
 const PREFERENCES: &[Check] = &[("Preferences is open", preferences_open)];
@@ -210,12 +216,18 @@ const KEYBOARD: &[Check] = &[
 
 const ANNOTATION: &[Check] = &[
     ("the Annotation page is shown", on_annotation),
-    ("a scope change marks the page dirty", annotation_draft_dirties),
+    (
+        "a scope change marks the page dirty",
+        annotation_draft_dirties,
+    ),
 ];
 
 const EDITING: &[Check] = &[
     ("the Editing page is shown", on_editing),
-    ("a wire-drag change marks the page dirty", editing_draft_dirties),
+    (
+        "a wire-drag change marks the page dirty",
+        editing_draft_dirties,
+    ),
 ];
 
 const RULE_PROFILES: &[Check] = &[
