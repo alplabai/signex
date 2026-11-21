@@ -8,7 +8,10 @@
 #            get, contains_key, keys, values, iter, len, is_empty; a method on
 #            `.active_path` other than clone, as_deref, as_ref, is_some,
 #            is_none; a `&mut` of, or an assignment to, `.engines`,
-#            `.active_path` or `.document_state`.
+#            `.active_path` or `.document_state`; and for any other field
+#            reached through `document_state` but `panel_ctx` (the GUI's own
+#            projection), a `&mut`, an assignment or a method other than the
+#            reads above and copied, cloned, first, last.
 #   names    any use of a dirty or saved mark, an engine-map method, a load
 #            wrapper, a delegating edit form, or an edit-tail wrapper listed in
 #            scripts/sheet-change-wrappers.txt: a call, a path call, a method

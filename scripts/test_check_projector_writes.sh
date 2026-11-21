@@ -75,6 +75,24 @@ run_case active_path_assign fail slots.rs "$(in_fn 'self.document_state.active_p
 run_case engines_assign fail slots.rs "$(in_fn 'self.document_state.engines = HashMap::new();')"
 run_case document_state_assign fail slots.rs "$(in_fn 'self.document_state = DocumentState::default();')"
 run_case after_cfg_test_attr fail slots.rs "$(in_fn '#[cfg(test)] let _x = 1; self.document_state.active_path = None;')"
+# Any other field reached through document_state, panel_ctx excepted.
+run_case pcb_revisions_insert fail slots.rs "$(in_fn 'self.document_state.pcb_revisions.insert(p, 1);')"
+run_case arbitrary_field_push fail slots.rs "$(in_fn 'self.document_state.foo.push(1);')"
+run_case nested_field_method fail slots.rs "$(in_fn 'self.document_state.autosave.pending.clear();')"
+run_case arbitrary_field_assign fail slots.rs "$(in_fn 'self.document_state.active_tab = 0;')"
+run_case arbitrary_field_compound fail slots.rs "$(in_fn 'self.document_state.active_tab += 1;')"
+run_case arbitrary_field_index_assign fail slots.rs "$(in_fn 'self.document_state.tabs[0].title = t;')"
+run_case arbitrary_field_mut_ref fail slots.rs "$(in_fn 'let t = &mut self.document_state.tabs;')"
+run_case arbitrary_field_reads pass slots.rs "$(in_fn 'let _ = self.document_state.tabs.get(i).map(|t| t.path.clone());
+        let _ = (self.document_state.tabs.len(), self.document_state.tabs.iter(), self.document_state.tabs.first());
+        let _ = (self.document_state.tabs.last(), self.document_state.pcb_revisions.get(&p).copied());
+        let _ = (self.document_state.recovery_check_due.is_empty(), self.document_state.tabs.cloned());
+        let tab = self.document_state.active_tab;')"
+run_case panel_ctx_writes pass slots.rs "$(in_fn 'self.document_state.panel_ctx.paper_size = token;
+        self.document_state.panel_ctx.sym_count += 1;
+        self.document_state.panel_ctx.projects.push(row);
+        self.document_state.panel_ctx.symbol_lists_key = None;
+        let ctx = &mut self.document_state.panel_ctx;')"
 # Marks and engine-map methods, as a call, a path call and a value.
 for mark in insert_engine remove_engine clear_active_engine mark_document_dirty \
   mark_document_dirty_display_only mark_history_edit_dirty mark_document_clean \
