@@ -486,9 +486,8 @@ impl Signex {
                 let paper = self.document_state.engines.get(&path).map_or(
                     (main.paper_width_mm, main.paper_height_mm),
                     |engine| {
-                        let size = super::projector::effective_paper_size(
-                            &engine.document().paper_size,
-                        );
+                        let size =
+                            super::projector::effective_paper_size(&engine.document().paper_size);
                         crate::panels::paper_dimensions(&size)
                     },
                 );

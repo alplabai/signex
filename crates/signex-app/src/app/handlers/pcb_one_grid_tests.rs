@@ -439,7 +439,11 @@ fn a_fast_grid_chip_edits_the_extra_grid_in_effect() {
 
     rig.panel(PcbBoardMsg::GridStepTyped("0.25".into()));
     rig.panel(PcbBoardMsg::GridStepSubmitted);
-    assert_eq!(rig.board_grid(), 0.25, "the Grid Manager row is the board's");
+    assert_eq!(
+        rig.board_grid(),
+        0.25,
+        "the Grid Manager row is the board's"
+    );
 }
 
 /// A pick or a grid command in an undocked board's window changes that
