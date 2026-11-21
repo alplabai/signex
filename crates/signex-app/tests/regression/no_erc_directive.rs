@@ -145,7 +145,8 @@ fn unticking_all_rules_then_ticking_one_silences_only_that_rule() {
     arm_no_erc(&mut app);
     click(&mut app, 10.0, 20.0);
     let id = doc(&app).no_erc_directives[0].uuid;
-    let builtin = |kind: signex_erc::RuleKind| signex_erc::RuleId::builtin(kind).as_str().to_string();
+    let builtin =
+        |kind: signex_erc::RuleKind| signex_erc::RuleId::builtin(kind).as_str().to_string();
     for kind in signex_erc::RuleKind::ALL {
         assert!(doc(&app).no_erc_directives[0].suppresses(&builtin(kind)));
     }

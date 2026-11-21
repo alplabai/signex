@@ -436,7 +436,7 @@ pub(crate) fn junctions_under_new_wire(
 }
 
 /// Number of the sheet's wires that terminate (start or end) at `point`.
-fn wire_endpoint_count(point: signex_types::schematic::Point, index: &WireIndex) -> usize {
+pub(crate) fn wire_endpoint_count(point: signex_types::schematic::Point, index: &WireIndex) -> usize {
     let tolerance = index.tolerance();
     index
         .endpoint_candidates(point)

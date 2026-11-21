@@ -102,6 +102,8 @@ mod id_source_tests;
 #[cfg(test)]
 mod pin_junction_tests;
 #[cfg(test)]
+mod corner_dot_tests;
+#[cfg(test)]
 mod sheet_identity_tests;
 #[cfg(test)]
 mod undo_depth_tests;

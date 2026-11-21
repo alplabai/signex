@@ -431,9 +431,7 @@ fn rule_row<'a>(
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
     let tip = container(text(raw(name)).size(TS.body)).padding([SP.xs, SP.s]);
-    let row = container(cells)
-        .padding([SP.xs, PAD_X])
-        .width(Length::Fill);
+    let row = container(cells).padding([SP.xs, PAD_X]).width(Length::Fill);
     let row = iced::widget::mouse_area(row).on_press(toggled);
     signex_widgets::tooltip(row, tip, iced::widget::tooltip::Position::Bottom)
         .style(crate::panels::form_look::value_tip)

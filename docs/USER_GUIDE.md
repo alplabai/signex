@@ -681,6 +681,10 @@ Messages says how many there are. Choose **Tools ▸ Repair Pin Junctions** for
 the sheet in view, or the link on that Messages row for the sheet it names, to
 add their dots in one undo step.
 
+Where two wires end on the same pin end, a part's or a power port's, Signex
+adds a junction dot too, as it does where wires meet in a T. One wire on a pin
+gets no dot.
+
 ![A resistor R1 with a wire from its lower pin to the net label SENSE](../assets/screenshots/guide-wired-symbol.png)
 
 ## 7. Label a net

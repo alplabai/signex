@@ -246,6 +246,16 @@ impl Engine {
                 decided.dots
             }
         };
+        // Two wire ends meeting on a pin end get a dot too (`corner_dots`).
+        let pin_dot_at: std::collections::HashSet<_> = (pin_dots.iter())
+            .map(|dot| signex_net::pt_key(&dot.position))
+            .collect();
+        let corners = corner_dots::corner_dots_for(&self.document, items, ids);
+        pin_dots.extend(
+            corners
+                .into_iter()
+                .filter(|dot| !pin_dot_at.contains(&signex_net::pt_key(&dot.position))),
+        );
         let mut judged: Vec<signex_types::schematic::Point> = (self.document.junctions.iter())
             .zip(&verdict)
             .filter(|(j, v)| j.minted && v.is_none())
@@ -284,7 +294,8 @@ impl Engine {
         // deleted wire is no longer in `touched` yet is exactly what strands
         // its neighbours' dots (issue #422). The index makes each check O(1).
         // A dot no wire meeting holds stays while a pin end still sits strictly
-        // inside a wire there: it goes when the pin or the wire leaves. The
+        // inside a wire there, or two wire ends meet on it: it goes when the
+        // pin or the wire leaves. The
         // no-short rule is the minting's, never a reason to drop a dot.
         let moved: std::collections::HashSet<uuid::Uuid> = (items.iter())
             .filter(|item| item.kind == SelectedKind::Symbol)
@@ -302,7 +313,8 @@ impl Engine {
                 );
                 k != a && k != b && signex_net::point_on_segment(k, a, b)
             });
-            if !through {
+            // Or two wire ends meet on the pin end (`corner_dots`).
+            if !through && autoplace::wire_endpoint_count(*at, &index) < 2 {
                 return false;
             }
             // The pin ends of the sheet before the edit (a drag preview's,
@@ -778,6 +790,7 @@ mod about_centre;
 mod autoplace;
 mod autoplace_request;
 mod bus_entry;
+mod corner_dots;
 mod dot_verdicts;
 mod merge;
 mod pin_junctions;
