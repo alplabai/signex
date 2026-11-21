@@ -572,10 +572,12 @@ mod tests {
     use super::unavailable_text;
 
     #[test]
-    fn a_footprint_mismatch_names_its_open_follow_up() {
+    fn a_footprint_mismatch_has_compare_boards_own_reason() {
         let why = Unavailable::Schematic(BackBlock::FootprintFromBoard);
         let text = unavailable_text(I18n::en_us_ref(), &why).into_string();
-        assert!(text.contains("#2653"), "{text}");
-        assert!(!text.contains("#2248"), "{text}");
+        assert!(text.contains("not available yet"), "{text}");
+        // Compare Board's own reason, not Back Annotate's, and no issue
+        // number in the text the user reads.
+        assert!(!text.contains('#'), "{text}");
     }
 }

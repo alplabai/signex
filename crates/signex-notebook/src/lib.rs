@@ -1,4 +1,4 @@
-//! Design Notebook annotations (#1306, Annotations panel: mockup row 165).
+//! Design Notebook annotations (#2679, Annotations panel: mockup row 165).
 //!
 //! A notebook is a `.snxnbk` file in the project's `notebook/` folder:
 //! Typst source with an optional TOML front matter between two `+++` lines.
