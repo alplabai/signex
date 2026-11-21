@@ -68,8 +68,10 @@ pub struct PcbCarry {
     pub text: Option<(Uuid, BoardTextField)>,
     /// The vias a drag moves; `footprints` is then empty.
     pub vias: BTreeSet<Uuid>,
-    /// A drag with Ctrl held moves the footprints alone: the tracks on
-    /// their pads stay where they are (Caner, 2026-11-21).
+    /// Tracks end on the carried `vias`, read when the drag starts.
+    pub via_tracks: bool,
+    /// A drag with Ctrl held moves the footprints or vias alone: the tracks
+    /// on them stay where they are (Caner, 2026-11-21).
     pub leaves_tracks: bool,
 }
 
@@ -99,7 +101,31 @@ impl PcbCarry {
             part: None,
             text: None,
             vias: BTreeSet::new(),
+            via_tracks: false,
             leaves_tracks: false,
+        }
+    }
+
+    /// The footprints and vias the carry takes.
+    pub fn carried(&self) -> BTreeSet<Uuid> {
+        self.footprints.union(&self.vias).copied().collect()
+    }
+
+    /// Whether the board is drawn without what is carried: for footprints,
+    /// and for vias with tracks following them. A lone via keeps its ghost.
+    pub fn previews_on_board(&self) -> bool {
+        !self.footprints.is_empty() || (self.via_tracks && !self.leaves_tracks)
+    }
+
+    /// The track ends on what is carried, which move with it; none with
+    /// Ctrl held.
+    pub fn following(&self, board: &PcbBoard) -> Vec<TrackEnds> {
+        if self.leaves_tracks {
+            Vec::new()
+        } else if self.vias.is_empty() {
+            pcb_geom::tracks_on_pads(board, &self.footprints)
+        } else {
+            pcb_geom::tracks_on_vias(board, &self.vias)
         }
     }
 
@@ -297,23 +323,30 @@ pub fn snap_point(
     grid_for(board, GridUse::NonComponents).snap_delta(Point::new(0.0, 0.0), to)
 }
 
-/// `board` without `footprints` and the `following` tracks, the ones with
-/// an end on their pads: what a drag preview leaves in place.
+/// `board` without the `carried` footprints and vias and the `following`
+/// tracks, the ones with an end on them: what a drag preview leaves in place.
 pub fn board_without(
     board: &PcbBoard,
-    footprints: &BTreeSet<Uuid>,
+    carried: &BTreeSet<Uuid>,
     following: &[TrackEnds],
 ) -> PcbBoard {
     let following: BTreeSet<Uuid> = following.iter().map(|ends| ends.track).collect();
     let mut rest = PcbBoard {
         footprints: Vec::new(),
         segments: Vec::new(),
+        vias: Vec::new(),
         ..board.clone()
     };
     rest.footprints = board
         .footprints
         .iter()
-        .filter(|fp| !footprints.contains(&fp.uuid))
+        .filter(|fp| !carried.contains(&fp.uuid))
+        .cloned()
+        .collect();
+    rest.vias = board
+        .vias
+        .iter()
+        .filter(|via| !carried.contains(&via.uuid))
         .cloned()
         .collect();
     rest.segments = board
@@ -336,13 +369,13 @@ fn followed(board: &PcbBoard, ends: &TrackEnds, delta: Point) -> Option<Segment>
     Some(ends.follow(segment, delta))
 }
 
-/// `board` as a move of `footprints` by `delta` leaves it: they and the
-/// `following` track ends on their pads moved (#2379), as the drop's
-/// commands (`placement::move_commands`) move them. The drag preview's
-/// ratsnest is read off it.
+/// `board` as a move of the `carried` footprints and vias by `delta` leaves
+/// it: they and the `following` track ends on them moved (#2379), as the
+/// drop's commands (`placement::move_commands`, `move_vias`) move them. The
+/// drag preview's ratsnest is read off it.
 pub fn board_after_move(
     board: &PcbBoard,
-    footprints: &BTreeSet<Uuid>,
+    carried: &BTreeSet<Uuid>,
     following: &[TrackEnds],
     delta: Point,
 ) -> PcbBoard {
@@ -350,9 +383,16 @@ pub fn board_after_move(
     for fp in moved
         .footprints
         .iter_mut()
-        .filter(|fp| footprints.contains(&fp.uuid))
+        .filter(|fp| carried.contains(&fp.uuid))
     {
         fp.position = Point::new(fp.position.x + delta.x, fp.position.y + delta.y);
+    }
+    for via in moved
+        .vias
+        .iter_mut()
+        .filter(|via| carried.contains(&via.uuid))
+    {
+        via.position = Point::new(via.position.x + delta.x, via.position.y + delta.y);
     }
     for ends in following {
         if let Some(segment) = followed(board, ends, delta) {
@@ -362,23 +402,33 @@ pub fn board_after_move(
     moved
 }
 
-/// Only `footprints` of `board`, moved by `delta`, on its layers, with the
-/// `following` tracks on their pads (#2379): what a drag preview draws
-/// where they are going. No other copper of the board's own.
+/// Only the `carried` footprints and vias of `board`, moved by `delta`, on
+/// its layers, with the `following` tracks on them (#2379): what a drag
+/// preview draws where they are going. No other copper of the board's own.
 pub fn carried_board(
     board: &PcbBoard,
-    footprints: &BTreeSet<Uuid>,
+    carried: &BTreeSet<Uuid>,
     following: &[TrackEnds],
     delta: Point,
 ) -> PcbBoard {
     let moved = board
         .footprints
         .iter()
-        .filter(|fp| footprints.contains(&fp.uuid))
+        .filter(|fp| carried.contains(&fp.uuid))
         .map(|fp| {
             let mut fp = fp.clone();
             fp.position = Point::new(fp.position.x + delta.x, fp.position.y + delta.y);
             fp
+        })
+        .collect();
+    let vias = board
+        .vias
+        .iter()
+        .filter(|via| carried.contains(&via.uuid))
+        .map(|via| {
+            let mut via = via.clone();
+            via.position = Point::new(via.position.x + delta.x, via.position.y + delta.y);
+            via
         })
         .collect();
     let segments = following
@@ -396,7 +446,7 @@ pub fn carried_board(
         nets: board.nets.clone(),
         footprints: moved,
         segments,
-        vias: Vec::new(),
+        vias,
         zones: Vec::new(),
         graphics: Vec::new(),
         texts: Vec::new(),

@@ -1,6 +1,7 @@
 //! Vias moved by a drag: a press on a via carries it, the release moves it
 //! as one board undo step through `signex_engine::pcb::placement`, which
-//! refuses a locked via. The tracks ending on it stay where they are.
+//! refuses a locked via. The track ends on it follow as they do for a
+//! footprint's pads (#2379); with Ctrl held they stay.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -31,7 +32,12 @@ impl Signex {
         carry.anchor = Some(from);
         match refused {
             Some(refusal) => refuse("Move", &refusal),
-            None => carry.vias = vias,
+            None => {
+                carry.via_tracks = self
+                    .active_pcb()
+                    .is_some_and(|board| !pcb_geom::tracks_on_vias(board, &vias).is_empty());
+                carry.vias = vias;
+            }
         }
         self.interaction_state.pcb_carry = Some(carry);
         self.refresh_pcb_highlight();
@@ -64,7 +70,11 @@ impl Signex {
             .via_drag_delta(&carry.vias, from, to)
             .and_then(|delta| {
                 let board = self.active_pcb()?;
-                Some(placement::move_vias(board, &carry.vias, delta))
+                Some(if carry.leaves_tracks {
+                    placement::move_vias_only(board, &carry.vias, delta)
+                } else {
+                    placement::move_vias(board, &carry.vias, delta)
+                })
             });
         self.end_pcb_carry();
         if let Some(built) = built {

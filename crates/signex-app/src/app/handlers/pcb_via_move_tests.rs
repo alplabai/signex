@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use iced::keyboard::Modifiers;
 use iced::widget::canvas;
 use iced::{Event, Rectangle, mouse};
 use signex_types::pcb::{PcbBoard, Point};
@@ -10,12 +11,15 @@ use uuid::Uuid;
 
 use crate::app::handlers::menu::export::tests::app_workspace;
 use crate::app::{EditMsg, Message, Signex};
-use crate::pcb_canvas::PcbCanvasState;
+use crate::pcb_canvas::{PcbCanvasState, board_without, carried_board};
 
 const U1: Uuid = Uuid::from_u128(0x10);
 const FREE: Uuid = Uuid::from_u128(0x40);
 const LOCKED: Uuid = Uuid::from_u128(0x41);
+const LONE: Uuid = Uuid::from_u128(0x42);
 const TRACK: Uuid = Uuid::from_u128(0x50);
+const OTHER_NET: Uuid = Uuid::from_u128(0x51);
+const LOCKED_TRACK: Uuid = Uuid::from_u128(0x52);
 const BOUNDS: Rectangle = Rectangle {
     x: 0.0,
     y: 0.0,
@@ -59,10 +63,14 @@ struct Rig {
 }
 
 fn rig() -> Rig {
+    rig_on(board())
+}
+
+fn rig_on(board: PcbBoard) -> Rig {
     let dir = tempfile::tempdir().unwrap();
     let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
     let path = dir.path().join("board.snxpcb");
-    app.open_pcb_tab(path.clone(), "board".into(), board());
+    app.open_pcb_tab(path.clone(), "board".into(), board);
     app.ui_state.pcb_snap.objects.clear();
     app.ui_state.pcb_snap.to_guides = false;
     app.ui_state.pcb_snap.to_axes = false;
@@ -178,10 +186,122 @@ fn a_dragged_via_lands_on_the_grid_keeps_its_net_and_undoes_in_one_step() {
     assert!(close(via.position, 24.0, 13.0), "{:?}", via.position);
     assert_eq!(via.net, 1, "the net is unchanged");
     let track = &rig.board().segments[0];
-    assert!(close(track.end, 20.0, 10.0), "the track stays: {track:?}");
+    assert!(close(track.end, 24.0, 13.0), "its end follows: {track:?}");
+    assert!(
+        close(track.start, 15.0, 10.0),
+        "its far end stays: {track:?}"
+    );
 
     let _ = rig.app.update(Message::Edit(EditMsg::Undo));
+    assert_eq!(rig.live(), before, "one undo restores via and track");
+}
+
+/// `board()` with tracks ending on the free via that must not follow it (one
+/// of another net, one locked), and a via at (30, 10) with no track.
+fn board_with_other_tracks() -> PcbBoard {
+    let mut board = board();
+    let mut other_net = board.segments[0].clone();
+    other_net.uuid = OTHER_NET;
+    other_net.start = Point::new(20.0, 5.0);
+    other_net.net = 2;
+    let mut locked = board.segments[0].clone();
+    locked.uuid = LOCKED_TRACK;
+    locked.start = Point::new(20.0, 15.0);
+    locked.locked = true;
+    board.segments.extend([other_net, locked]);
+    let mut lone = board.vias[0].clone();
+    lone.uuid = LONE;
+    lone.position = Point::new(30.0, 10.0);
+    board.vias.push(lone);
+    board
+}
+
+impl Rig {
+    fn track(&self, id: Uuid) -> &signex_types::pcb::Segment {
+        let segments = &self.board().segments;
+        segments.iter().find(|s| s.uuid == id).unwrap()
+    }
+
+    /// `modifiers` pressed or released with the pointer at `at`.
+    fn hold(&mut self, modifiers: Modifiers, at: Point) {
+        let pixel = self.pixel(at);
+        let event = Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers));
+        self.send(event, pixel);
+    }
+}
+
+#[test]
+fn a_track_of_another_net_or_a_locked_track_does_not_follow_the_via() {
+    let mut rig = rig_on(board_with_other_tracks());
+    rig.drag(Point::new(20.0, 10.0), Point::new(24.0, 13.0));
+    assert!(close(rig.track(TRACK).end, 24.0, 13.0), "its own track");
+    assert!(close(rig.track(OTHER_NET).end, 20.0, 10.0), "another net");
+    assert!(close(rig.track(LOCKED_TRACK).end, 20.0, 10.0), "locked");
+}
+
+#[test]
+fn a_ctrl_drag_moves_the_via_alone_and_ctrl_switches_live() {
+    let mut rig = rig();
+    let before = rig.live();
+    let to = Point::new(24.0, 13.0);
+    rig.hold(Modifiers::CTRL, Point::new(20.0, 10.0));
+    rig.press(Point::new(20.0, 10.0));
+    rig.move_to(to);
+    assert!(
+        !rig.app.interaction_state.pcb_canvas.previews_drag(),
+        "with Ctrl no track is carried"
+    );
+    rig.hold(Modifiers::empty(), to);
+    assert!(
+        !rig.app
+            .interaction_state
+            .pcb_canvas
+            .drag_preview_following()
+            .is_empty(),
+        "letting Ctrl go carries the track at once"
+    );
+    rig.hold(Modifiers::CTRL, to);
+    rig.release(to);
+    assert!(close(rig.via(FREE).position, 24.0, 13.0));
+    assert!(close(rig.track(TRACK).end, 20.0, 10.0), "the track stays");
+    let _ = rig.app.update(Message::Edit(EditMsg::Undo));
     assert_eq!(rig.live(), before, "one undo restores the via");
+}
+
+#[test]
+fn the_preview_draws_the_via_and_its_track_where_they_are_going() {
+    let mut rig = rig();
+    let before = rig.board().clone();
+    let saved = rig.live();
+    rig.press(Point::new(20.0, 10.0));
+    rig.move_to(Point::new(24.0, 13.0));
+    let canvas = &rig.app.interaction_state.pcb_canvas;
+    assert!(canvas.drag_preview_scene().is_some(), "a moving scene");
+    let following = canvas.drag_preview_following().to_vec();
+    assert_eq!(following.len(), 1);
+    assert_eq!(following[0].track, TRACK);
+    let carry = rig.app.interaction_state.pcb_carry.as_ref().expect("carry");
+    let drawn = carried_board(&before, &carry.carried(), &following, carry.delta);
+    assert!(close(drawn.segments[0].end, 24.0, 13.0), "the moved track");
+    assert!(close(drawn.vias[0].position, 24.0, 13.0), "the moved via");
+    let left = board_without(&before, &carry.carried(), &following);
+    assert!(left.segments.is_empty(), "the track left its old place");
+    assert!(left.vias.iter().all(|via| via.uuid != FREE));
+    assert_eq!(rig.live(), saved, "nothing moves before the release");
+}
+
+#[test]
+fn a_via_with_no_track_keeps_its_ghost_and_moves() {
+    let mut rig = rig_on(board_with_other_tracks());
+    let tracks = rig.board().segments.clone();
+    rig.press(Point::new(30.0, 10.0));
+    rig.move_to(Point::new(33.0, 12.0));
+    let canvas = &rig.app.interaction_state.pcb_canvas;
+    assert!(!canvas.previews_drag(), "the board is drawn as it is");
+    assert!(!canvas.highlight().ghost.is_empty(), "the ghost follows");
+    rig.release(Point::new(33.0, 12.0));
+    assert!(close(rig.via(LONE).position, 33.0, 12.0));
+    assert_eq!(rig.board().segments, tracks);
 }
 
 #[test]

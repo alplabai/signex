@@ -191,9 +191,28 @@ pub fn editable_vias<'a>(
     }
 }
 
-/// Move every via in `ids` by `delta`, keeping its net. The tracks ending on
-/// it stay where they are, as when its position is typed in Properties.
+/// Move every via in `ids` by `delta`, keeping its net. The track ends on it
+/// move with it (`pcb_geom::tracks_on_vias`), in the same command, so the
+/// move stays one undo step.
 pub fn move_vias(
+    board: &PcbBoard,
+    ids: &BTreeSet<Uuid>,
+    delta: Point,
+) -> Result<Vec<BoardCommand>, PlacementRefusal> {
+    let mut commands = move_vias_only(board, ids, delta)?;
+    if let Some(BoardCommand::ReplaceItems { items }) = commands.first_mut() {
+        items.extend(
+            pcb_geom::tracks_on_vias(board, ids)
+                .iter()
+                .map(|ends| BoardItem::Segment(ends.follow(&board.segments[ends.index], delta))),
+        );
+    }
+    Ok(commands)
+}
+
+/// Move every via in `ids` by `delta` and leave the tracks on them where they
+/// are (a Ctrl drag): their ends no longer touch the vias.
+pub fn move_vias_only(
     board: &PcbBoard,
     ids: &BTreeSet<Uuid>,
     delta: Point,

@@ -1,6 +1,6 @@
-//! The track ends that sit on the pads of footprints being moved, so the
-//! move takes them along (#2379): the drop and the drag preview read the
-//! same answer.
+//! The track ends that sit on the pads of footprints, or on vias, being
+//! moved, so the move takes them along (#2379): the drop and the drag preview
+//! read the same answer.
 //!
 //! An end follows when it lies on the pad's copper, on a copper layer the
 //! pad reaches, and the track is on the pad's net (no net counts as 0): the
@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use uuid::Uuid;
 
-use crate::copper::{layer_mask, pad_layers};
+use crate::copper::{layer_mask, pad_layers, via_layers};
 use crate::shape::Shape;
 use crate::transform::pad_shape;
 use crate::units::PointNm;
@@ -58,6 +58,38 @@ pub fn tracks_on_pads(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> Vec<Trac
     if pads.is_empty() {
         return Vec::new();
     }
+    ends_where(board, |net, layers, p| {
+        pads.iter()
+            .any(|pad| pad.net == net && pad.layers & layers != 0 && pad.shape.contains(p, 0))
+    })
+}
+
+/// The tracks of `board` with an end at the position of one of `vias`, to
+/// the nanometre, on a copper layer the via reaches and on its net, in board
+/// order. A locked track is left out, as for [`tracks_on_pads`].
+pub fn tracks_on_vias(board: &PcbBoard, vias: &BTreeSet<Uuid>) -> Vec<TrackEnds> {
+    let moved: Vec<(PointNm, u32, u32)> = board
+        .vias
+        .iter()
+        .filter(|via| vias.contains(&via.uuid))
+        .filter_map(|via| {
+            let at = PointNm::from_mm(via.position, "via").ok()?;
+            Some((at, via_layers(via), via.net))
+        })
+        .collect();
+    if moved.is_empty() {
+        return Vec::new();
+    }
+    ends_where(board, |net, layers, p| {
+        moved
+            .iter()
+            .any(|(at, reach, via_net)| *via_net == net && reach & layers != 0 && *at == p)
+    })
+}
+
+/// The unlocked tracks with an end `touches` accepts, given the track's net,
+/// its layer mask and the end.
+fn ends_where(board: &PcbBoard, touches: impl Fn(u32, u32, PointNm) -> bool) -> Vec<TrackEnds> {
     board
         .segments
         .iter()
@@ -67,16 +99,10 @@ pub fn tracks_on_pads(board: &PcbBoard, footprints: &BTreeSet<Uuid>) -> Vec<Trac
             if layers == 0 || segment.locked {
                 return None;
             }
-            let on_pad = |p: Point| {
-                PointNm::from_mm(p, "track end").is_ok_and(|p| {
-                    pads.iter().any(|pad| {
-                        pad.net == segment.net
-                            && pad.layers & layers != 0
-                            && pad.shape.contains(p, 0)
-                    })
-                })
+            let on = |p: Point| {
+                PointNm::from_mm(p, "track end").is_ok_and(|p| touches(segment.net, layers, p))
             };
-            let (start, end) = (on_pad(segment.start), on_pad(segment.end));
+            let (start, end) = (on(segment.start), on(segment.end));
             (start || end).then_some(TrackEnds {
                 track: segment.uuid,
                 index,

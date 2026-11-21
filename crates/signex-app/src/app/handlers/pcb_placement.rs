@@ -220,11 +220,12 @@ impl Signex {
         self.carry_to(from, to);
     }
 
-    /// What the status bar says while this window drags footprints: whether
-    /// their tracks follow, and the key that switches it.
+    /// What the status bar says while this window drags footprints, or vias
+    /// with tracks on them: whether the tracks follow, and the key that
+    /// switches it.
     pub(crate) fn board_drag_status(&self) -> Option<String> {
         let carry = self.live_carry(CarryKind::Drag)?;
-        if carry.footprints.is_empty() || carry.anchor.is_none() {
+        if (carry.footprints.is_empty() && !carry.via_tracks) || carry.anchor.is_none() {
             return None;
         }
         let id = if carry.leaves_tracks {

@@ -347,36 +347,32 @@ fn sync_drag_preview(
     ratsnest: Option<(&PcbRatsnest, &std::path::Path)>,
     carry: Option<&PcbCarry>,
 ) {
-    let live = carry.filter(|c| c.anchor.is_some() && !c.footprints.is_empty());
+    let live = carry.filter(|c| c.anchor.is_some() && c.previews_on_board());
     let Some(carry) = live else {
         canvas.end_drag_preview();
         return;
     };
-    if !canvas.previews_drag_of(&carry.footprints, carry.leaves_tracks) {
-        // Once per carry and per Ctrl switch: the tracks that follow the
-        // carried pads (none with Ctrl), and the board without what it
+    let carried = carry.carried();
+    if !canvas.previews_drag_of(&carried, carry.leaves_tracks) {
+        // Once per carry and per Ctrl switch: the tracks that follow what
+        // is carried (none with Ctrl), and the board without what it
         // carries, with its pour fills.
-        let following = if carry.leaves_tracks {
-            Vec::new()
-        } else {
-            pcb_geom::tracks_on_pads(board, &carry.footprints)
-        };
-        let rest = board_without(board, &carry.footprints, &following);
+        let following = carry.following(board);
+        let rest = board_without(board, &carried, &following);
         let fills = pcb_geom::zone_fills(&rest);
         let base = PcbSnapshot::from_board_with_view(&rest, view)
             .with_designator_standard(standard)
             .with_zone_fills(&fills);
-        let carried = carry.footprints.clone();
-        canvas.begin_drag_preview(carried, carry.leaves_tracks, following, base);
+        canvas.begin_drag_preview(carried.clone(), carry.leaves_tracks, following, base);
     }
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
-        let moved = carried_board(board, &carry.footprints, &following, carry.delta);
+        let moved = carried_board(board, &carried, &following, carry.delta);
         let snapshot =
             PcbSnapshot::from_board_with_view(&moved, view).with_designator_standard(standard);
         match ratsnest {
             Some((cache, path)) => {
-                let after = board_after_move(board, &carry.footprints, &following, carry.delta);
+                let after = board_after_move(board, &carried, &following, carry.delta);
                 let fills = pcb_geom::zone_fills(&after);
                 cache.apply_uncached(path, &after, &fills, snapshot)
             }
