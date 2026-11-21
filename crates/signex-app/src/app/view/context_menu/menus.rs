@@ -688,7 +688,7 @@ impl SheetRows<'_> {
         &self,
         project_key: Option<signex_widgets::tree_view::TreeKey>,
     ) -> DropdownEntry<Message> {
-        let icon = Some(ic::icon_dd_project_options(self.tid));
+        let icon = Some(ic::icon_menu_sliders(self.tid));
         let hint = self.sc.of("open_project_options");
         match project_key {
             Some(key) => dd_command(

@@ -1,6 +1,6 @@
 //! The project card of the Projects panel: icon tile, name, real counts, a
-//! "git" pill when the project has version control on, and a gear that
-//! opens the project's options.
+//! "git" pill when the project has version control on, and a sliders button
+//! that opens the project's options.
 
 use iced::widget::{container, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
@@ -15,11 +15,14 @@ use super::{ProjectsMsg, SP, TS};
 use crate::styles::tokens::{Overlay, overlay, resolve};
 use crate::styles::{self, PillTone, Radii, ti};
 
-/// Side of the project icon tile.
-const CARD_ICON_TILE: f32 = 26.0;
-/// Side of the card's icon button (the gear).
-pub(super) const ICON_BUTTON: f32 = 24.0;
-/// Side of a glyph inside an icon button.
+/// Side of the project icon tile: a field's height, so it scales with the UI
+/// font.
+pub(super) const CARD_ICON_TILE: f32 = crate::styles::ChromeMetrics::DEFAULT.field;
+/// Side of the Project Options button: the tile it shares the row with.
+pub(super) const OPTIONS_BUTTON: f32 = CARD_ICON_TILE;
+/// Side of the Project Options glyph: a third larger than the body text.
+const OPTIONS_GLYPH: f32 = TS.body * 4.0 / 3.0;
+/// Side of the glyph in the project icon tile.
 const ICON_GLYPH: f32 = 14.0;
 /// Height of the "git" pill.
 const PILL_HEIGHT: f32 = 16.0;
@@ -98,7 +101,8 @@ pub(super) fn icon_button<'a>(
     .boxed()
 }
 
-/// The project card; the gear opens Project Options… for this project.
+/// The project card; the sliders button opens Project Options… for this
+/// project.
 pub(super) fn project_card<'a>(
     project: &'a ProjectPanelInfo,
     ctx: &'a PanelContext,
@@ -161,19 +165,19 @@ pub(super) fn project_card<'a>(
         .style(styles::pill(tokens, PillTone::Neutral));
         head = head.push(pill.boxed());
     }
-    let gear = icon_button(
-        crate::icons::icon_chrome_gear(ctx.theme_id),
-        ICON_BUTTON,
-        ICON_GLYPH,
+    let options = icon_button(
+        crate::icons::icon_chrome_sliders(ctx.theme_id),
+        OPTIONS_BUTTON,
+        OPTIONS_GLYPH,
         ti(tokens.text_secondary),
         PanelMsg::Projects(ProjectsMsg::OptionsPressed(project.id)),
         tokens,
     );
-    let gear = hint_tooltip(
-        gear,
+    let options = hint_tooltip(
+        options,
         t!(i18n, ids::PANELS_PROJECTS_OPTIONS),
         tokens,
         iced::widget::tooltip::Position::Bottom,
     );
-    head.push(gear).boxed()
+    head.push(options).boxed()
 }

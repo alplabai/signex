@@ -324,8 +324,9 @@ fn each_card_gear_asks_for_its_projects_options() {
     let second = add_project(&mut app, "B");
     app.refresh_panel_ctx();
     let ctx = app.document_state.panel_ctx.clone();
-    // 24 px square at the card's right end, inside the header's 10 px padding.
-    let x = WINDOW.width - 10.0 - 12.0;
+    // The button's centre at the card's right end, inside the header's 10 px
+    // padding.
+    let x = WINDOW.width - 10.0 - card::OPTIONS_BUTTON / 2.0;
     let asked: Vec<crate::app::ProjectId> = messages_down(&ctx, x, 200.0)
         .into_iter()
         .filter_map(|m| match m {
@@ -336,6 +337,27 @@ fn each_card_gear_asks_for_its_projects_options() {
     for id in [first, second] {
         assert!(asked.contains(&id), "{asked:?} has no gear for {id:?}");
     }
+}
+
+/// The Project Options button is as large as the project tile it shares the
+/// card row with: a press just inside its left edge reaches it, one just
+/// outside does not.
+#[test]
+fn the_project_options_button_is_as_large_as_the_cards_tile() {
+    assert_eq!(card::OPTIONS_BUTTON, card::CARD_ICON_TILE);
+    let (mut app, _boot) = crate::app::Signex::new();
+    let id = add_project(&mut app, "A");
+    app.refresh_panel_ctx();
+    let ctx = app.document_state.panel_ctx.clone();
+    // The card's right end, inside the header's 10 px padding.
+    let right = WINDOW.width - 10.0;
+    let asks = |x: f32| {
+        messages_down(&ctx, x, 200.0)
+            .into_iter()
+            .any(|m| matches!(m, PanelMsg::Projects(ProjectsMsg::OptionsPressed(p)) if p == id))
+    };
+    assert!(asks(right - card::OPTIONS_BUTTON + 1.0), "just inside");
+    assert!(!asks(right - card::OPTIONS_BUTTON - 2.0), "just outside");
 }
 
 /// The gear runs the tree menu's Project Options for the project whose card

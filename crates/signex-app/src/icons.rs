@@ -220,7 +220,7 @@ bar_icon!(icon_wire, "wire.svg", "active_bar/graphite/wire.svg");
 
 // ─── Chrome (window controls, search, the Help cards) ──────────────
 
-canonical_icon!(icon_chrome_gear, "chrome/gear.svg");
+canonical_icon!(icon_chrome_sliders, "chrome/sliders.svg");
 canonical_icon!(icon_chrome_info, "chrome/info.svg");
 canonical_icon!(icon_chrome_lock, "chrome/lock.svg");
 canonical_icon!(icon_chrome_lock_mixed, "chrome/lock_mixed.svg");
@@ -309,7 +309,6 @@ canonical_icon!(icon_dd_place_menu, "dropdown/place.svg");
 canonical_icon!(icon_dd_polygon, "dropdown/polygon.svg");
 canonical_icon!(icon_dd_port, "dropdown/port.svg");
 canonical_icon!(icon_dd_preferences, "dropdown/preferences.svg");
-canonical_icon!(icon_dd_project_options, "dropdown/project_options.svg");
 canonical_icon!(icon_dd_properties, "dropdown/properties.svg");
 canonical_icon!(icon_dd_pwr_arrow, "dropdown/pwr_arrow.svg");
 canonical_icon!(icon_dd_pwr_bar, "dropdown/pwr_bar.svg");
@@ -467,7 +466,6 @@ canonical_icon!(icon_menu_diff, "menu/diff.svg");
 canonical_icon!(icon_menu_export, "menu/export.svg");
 canonical_icon!(icon_menu_file, "menu/file.svg");
 canonical_icon!(icon_menu_folder, "menu/folder.svg");
-canonical_icon!(icon_menu_gear, "menu/gear.svg");
 canonical_icon!(icon_menu_git, "menu/git.svg");
 canonical_icon!(icon_menu_layers, "menu/layers.svg");
 canonical_icon!(icon_menu_library, "menu/library.svg");
@@ -483,6 +481,7 @@ canonical_icon!(icon_menu_save, "menu/save.svg");
 canonical_icon!(icon_menu_share, "menu/share.svg");
 canonical_icon!(icon_menu_sheet, "menu/sheet.svg");
 canonical_icon!(icon_menu_shield, "menu/shield.svg");
+canonical_icon!(icon_menu_sliders, "menu/sliders.svg");
 canonical_icon!(icon_menu_sync, "menu/sync.svg");
 canonical_icon!(icon_menu_trash, "menu/trash.svg");
 
@@ -601,6 +600,23 @@ mod tests {
         assert_ne!(icon_chrome_external_link(theme), icon_chrome_search(theme));
     }
 
+    /// Project Options shows one glyph, a sliders mark, wherever it appears:
+    /// a 16 px monochrome stroke in the chrome, its 24 px twin in the menus.
+    #[test]
+    fn project_options_is_a_sliders_glyph_in_chrome_and_menus() {
+        let chrome = include_str!("../assets/icons/chrome/sliders.svg");
+        assert!(chrome.contains(r#"viewBox="0 0 16 16""#), "{chrome}");
+        assert!(chrome.contains(r#"stroke="currentColor""#), "{chrome}");
+        assert!(chrome.contains(r#"fill="none""#), "{chrome}");
+        let menu = include_str!("../assets/icons/menu/sliders.svg");
+        for svg in [chrome, menu] {
+            assert!(!svg.contains(ACCENT_SENTINEL), "{svg}");
+            assert_eq!(svg.matches("<circle").count(), 3, "three knobs: {svg}");
+        }
+        let theme = ThemeId::GraphiteLight;
+        assert_ne!(icon_chrome_sliders(theme), icon_menu_sliders(theme));
+    }
+
     /// Two paths with identical bytes (merged by the compiler) still get
     /// separate, correct entries because the key is the path.
     #[test]
@@ -626,7 +642,6 @@ mod tests {
             include_str!("../assets/icons/menu/export.svg"),
             include_str!("../assets/icons/menu/file.svg"),
             include_str!("../assets/icons/menu/folder.svg"),
-            include_str!("../assets/icons/menu/gear.svg"),
             include_str!("../assets/icons/menu/git.svg"),
             include_str!("../assets/icons/menu/layers.svg"),
             include_str!("../assets/icons/menu/library.svg"),
@@ -642,6 +657,7 @@ mod tests {
             include_str!("../assets/icons/menu/share.svg"),
             include_str!("../assets/icons/menu/sheet.svg"),
             include_str!("../assets/icons/menu/shield.svg"),
+            include_str!("../assets/icons/menu/sliders.svg"),
             include_str!("../assets/icons/menu/sync.svg"),
             include_str!("../assets/icons/menu/trash.svg"),
         ];

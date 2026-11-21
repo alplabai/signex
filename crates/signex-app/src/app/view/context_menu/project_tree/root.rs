@@ -88,7 +88,7 @@ impl Signex {
         // Settings.
         v.push(dd_command(
             i18n,
-            Some(ic::icon_menu_gear(tid)),
+            Some(ic::icon_menu_sliders(tid)),
             "open_project_options",
             &self.keymap_shortcut_label("open_project_options"),
             key.first().cloned(),
