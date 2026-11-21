@@ -255,6 +255,12 @@ impl PcbCanvas {
         self.swallow_right_release = swallow;
     }
 
+    /// Whether the next right release is held back.
+    #[cfg(test)]
+    pub fn swallows_right_release(&self) -> bool {
+        self.swallow_right_release
+    }
+
     /// Whether a press at `at` (board mm) lands on a grabbed footprint.
     pub fn grabs(&self, at: signex_types::pcb::Point, reach_mm: f64) -> bool {
         let (Ok(p), Ok(reach)) = (

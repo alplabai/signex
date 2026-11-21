@@ -809,6 +809,12 @@ impl Signex {
             if window_alive {
                 self.interaction_state.pcb_canvases.insert(window_id, pcb);
             }
+            // The main canvas sat in a local while the handler ran, out of
+            // reach of a change to the right-release hold.
+            let swallow = self.interaction_state.swallow_right_release;
+            self.interaction_state
+                .pcb_canvas
+                .set_swallow_right_release(swallow);
         }
         if let Some(mut selection) = swapped_pcb_selection {
             std::mem::swap(&mut self.interaction_state.pcb_selection, &mut selection);
