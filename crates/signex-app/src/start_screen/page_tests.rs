@@ -467,3 +467,67 @@ fn the_picked_page_row_is_highlighted() {
         }
     }
 }
+
+/// Whether every pixel of `area` in a `window` drawn as RGBA is the same.
+fn is_flat(pixels: &[u8], window: iced::Size, area: iced::Rectangle) -> bool {
+    let stride = window.width as usize * 4;
+    let (left, right) = (area.x as usize * 4, (area.x + area.width) as usize * 4);
+    let (top, bottom) = (area.y as usize, (area.y + area.height) as usize);
+    let first = &pixels[top * stride + left..top * stride + left + 4];
+    (top..bottom).all(|y| {
+        pixels[y * stride + left..y * stride + right]
+            .chunks_exact(4)
+            .all(|pixel| pixel == first)
+    })
+}
+
+/// Mockup row 1: a recent row draws nothing where its Pin button goes until
+/// the pointer is on the row, and then the button pins the project.
+#[test]
+fn a_recent_row_shows_pin_only_on_hover() {
+    let recent = paths(1);
+    let fx = Fixture::new(&recent);
+    let texts = fx.texts(MOCK_WINDOW);
+    let label = find(&texts, "Pin").bounds;
+    // The label and the glyph before it, inside the button's padding.
+    let button = iced::Rectangle {
+        x: label.x - 2.0 * BASE,
+        width: label.width + 2.0 * BASE,
+        ..label
+    };
+    let unhovered = crate::layout_probe::draw_pixels(fx.view(), MOCK_WINDOW);
+    assert!(
+        is_flat(&unhovered, MOCK_WINDOW, button),
+        "the unhovered row draws something in {button:?}"
+    );
+
+    let clicked = fx.click(MOCK_WINDOW, "Pin");
+    assert!(sent(
+        &clicked,
+        &StartScreenMsg::ProjectPinned(recent[0].clone())
+    ));
+}
+
+/// Mockup row 1: a pinned project carries a pin mark right after its name;
+/// the same place on an unpinned row is empty.
+#[test]
+fn a_pinned_row_shows_the_pin_mark_after_its_name() {
+    let recent = paths(1);
+    let after_name = |fx: &Fixture| {
+        let texts = fx.texts(MOCK_WINDOW);
+        let name = find(&texts, &recent_label(&recent[0])).bounds;
+        iced::Rectangle {
+            x: name.x + name.width + 1.0,
+            width: 2.0 * BASE,
+            ..name
+        }
+    };
+    let unpinned = Fixture::new(&recent);
+    let pixels = crate::layout_probe::draw_pixels(unpinned.view(), MOCK_WINDOW);
+    assert!(is_flat(&pixels, MOCK_WINDOW, after_name(&unpinned)));
+
+    let mut pinned = Fixture::new(&recent);
+    pinned.pinned.pin(&recent[0]);
+    let pixels = crate::layout_probe::draw_pixels(pinned.view(), MOCK_WINDOW);
+    assert!(!is_flat(&pixels, MOCK_WINDOW, after_name(&pinned)));
+}
