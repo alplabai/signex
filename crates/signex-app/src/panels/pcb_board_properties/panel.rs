@@ -1,5 +1,5 @@
-//! Panel (#2410): the board's manufacturing panel. Without one, a line that
-//! says what a panel is and Panelize Board; with one, its settings (copies,
+//! Panel (#2410): the board's manufacturing panel. Without one the section
+//! is not shown; with one, its settings (copies,
 //! gaps, rails, marks, the separation and the tabs), what it comes to, and
 //! Remove Panel. Each edit is one undo step through `set_board_panel`'s
 //! path. Rules: `docs/PANELISATION.md`.
@@ -101,15 +101,8 @@ pub(super) fn section<'a>(
     let why = board.read_only.then(|| form.t(ids::BOARD_PANEL_READ_ONLY));
     let live = |m: PcbBoardMsg| (!board.read_only).then_some(m).and_then(msg);
     let mut rows: Vec<Shown<'a>> = Vec::new();
-    let Some(panel) = board.options.panel.as_ref() else {
-        let none = form.t(ids::BOARD_PANEL_NONE);
-        rows.push(form.row(&[&title, &none], form.note(none.clone())));
-        let add = form.t(ids::BOARD_PANEL_ADD);
-        let button = form.action(add.clone(), live(PcbBoardMsg::PanelizeClicked), why);
-        rows.push(form.row(&[&title, &add], button));
-        let head = Head::closed().summary(form.header_caption(form.t(ids::PCB_BOARD_PANEL_NONE)));
-        return form.section_with("pcb_board_panel", ids::BOARD_PANEL_SECTION, head, rows);
-    };
+    // A board without a panel has no section: Tools > Panelize Board makes one.
+    let panel = board.options.panel.as_ref()?;
     for field in ARRAY {
         rows.push(setting(form, board, panel, field));
     }

@@ -632,6 +632,18 @@ fn the_snapping_choices_do_not_overlap_in_a_narrow_dock() {
     }
 }
 
+/// A board without a panel shows no Panel section or Panelize button; the
+/// section comes with a panel (Caner, 2026-11-21).
+#[test]
+fn the_panel_section_shows_only_on_a_panelized_board() {
+    let mut ctx = context(0);
+    open_all(&mut ctx);
+    let shown = texts(&ctx);
+    for gone in ["Panel", "Panelize Board"] {
+        assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
+    }
+}
+
 /// #2523 (mockup row 93): Selection Filter, Snap Options, Guide Manager and Panel
 /// start closed with a summary in their header, and the fold of layer and
 /// primitive counts too; a click on a header opens it.
@@ -656,7 +668,7 @@ fn closed_sections_show_their_summary_and_open_on_a_click() {
         2,
         "{shown:?}"
     );
-    for summary in ["All Layers", "none"] {
+    for summary in ["All Layers"] {
         assert_eq!(
             shown.iter().filter(|t| *t == summary).count(),
             1,

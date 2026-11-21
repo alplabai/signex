@@ -117,10 +117,7 @@ impl Signex {
                 });
             }
             PcbBoardMsg::SheetFromBoardToggled => self.toggle_pcb_sheet_from_board(),
-            // #2410: the Panel section's buttons run the menu rows' commands.
-            PcbBoardMsg::PanelizeClicked => {
-                task = run_menu_command("panelize_board");
-            }
+            // #2410: the Panel section's button runs the menu row's command.
             PcbBoardMsg::PanelRemoveClicked => {
                 task = run_menu_command("remove_board_panel");
             }

@@ -208,9 +208,7 @@ pub enum PcbBoardMsg {
     FastGridApplied(usize),
     /// Get Size From Sheet Layer.
     SheetFromBoardToggled,
-    /// The Panel section's Panelize Board (#2410): runs `panelize_board`.
-    PanelizeClicked,
-    /// Its Remove Panel: runs `remove_board_panel`.
+    /// The Panel section's Remove Panel (#2410): runs `remove_board_panel`.
     PanelRemoveClicked,
     /// Its Mouse Bites | V-Score control.
     PanelSeparationPicked(PanelSeparation),
