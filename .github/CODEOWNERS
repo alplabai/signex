@@ -31,3 +31,7 @@
 # cap and name checksum live in the guard, so both need a maintainer.
 /scripts/check_sheet_change_seam.sh              @hkngln @alpCaner
 /scripts/sheet-change-wrappers.txt               @hkngln @alpCaner
+
+# The load wrapper exception (#2704, #2326 slice 3): same rule as above.
+/scripts/check_document_load_seam.sh             @hkngln @alpCaner
+/scripts/document-load-wrappers.txt              @hkngln @alpCaner

@@ -1,0 +1,99 @@
+# ast-grep rules for scripts/check_document_load_seam.sh, run on the core half
+# of the schematic load path only. Code nodes only, so a comment never matches.
+# Kept out of ast-grep/rules on purpose, like scripts/sheet-change-seam.yml.
+#
+# #2326 M6 and the slice 3 decisions: no GUI state, not the diagnostics log,
+# no catch_unwind, and none of the helpers that log directly.
+id: document-load-gui-name
+language: rust
+rule:
+  any:
+    - kind: identifier
+      regex: '^(diagnostics|ui_state|interaction_state|panel_ctx|window_panel_ctx|catch_unwind|log_sheet_repairs|report_bare_pin_taps|report_unrecognized_sheet_size|warn_if_read_only)$'
+    - kind: field_identifier
+      regex: '^(ui_state|interaction_state|panel_ctx|window_panel_ctx)$'
+---
+# #2704: no trait and no trait impl, whose methods would reach the core half
+# under a name the wrapper list does not see.
+id: document-load-trait
+language: rust
+rule:
+  any:
+    - kind: trait_item
+    - kind: impl_item
+      has:
+        field: trait
+        kind: type_identifier
+    - kind: impl_item
+      has:
+        field: trait
+        kind: scoped_type_identifier
+    - kind: impl_item
+      has:
+        field: trait
+        kind: generic_type
+---
+# No closure parameter: a callback would run wrapper code inside the core half
+# (`impl FnOnce(..)`, `F: FnMut(..)`, a `fn(..)` pointer).
+id: document-load-closure
+language: rust
+rule:
+  any:
+    - kind: function_type
+    - kind: type_identifier
+      regex: '^Fn(Once|Mut)?$'
+---
+# Every direct removal from the engine map outside `#[cfg(test)]` items.
+id: document-load-engines-remove
+language: rust
+utils:
+  in-test:
+    inside:
+      stopBy: end
+      any:
+        - kind: mod_item
+        - kind: function_item
+        - kind: impl_item
+      follows:
+        stopBy:
+          not:
+            any:
+              - kind: attribute_item
+              - kind: line_comment
+              - kind: block_comment
+        pattern: "#[cfg(test)]"
+rule:
+  pattern: $MAP.engines.remove($$$ARGS)
+  not:
+    matches: in-test
+---
+# The one allowed removal: inside an `Err(..)` match arm (a failed install
+# behind a tab drops the stale engine).
+id: document-load-engines-remove-err
+language: rust
+utils:
+  in-test:
+    inside:
+      stopBy: end
+      any:
+        - kind: mod_item
+        - kind: function_item
+        - kind: impl_item
+      follows:
+        stopBy:
+          not:
+            any:
+              - kind: attribute_item
+              - kind: line_comment
+              - kind: block_comment
+        pattern: "#[cfg(test)]"
+rule:
+  pattern: $MAP.engines.remove($$$ARGS)
+  not:
+    matches: in-test
+  inside:
+    stopBy: end
+    kind: match_arm
+    has:
+      field: pattern
+      regex: '^Err\b'

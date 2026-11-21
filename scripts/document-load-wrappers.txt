@@ -1,0 +1,14 @@
+# The load wrappers, issue #2704 (#2326 slice 3, ADR-0006): the only functions
+# outside crates/signex-app/src/app/state/document_load/ that may call its
+# core half. `<file under crates/signex-app/src/app/> <fn>`. This list may only
+# shrink: scripts/check_document_load_seam.sh caps it at MAX_WRAPPERS lines,
+# pins its names by checksum and fails on a line whose wrapper no longer calls
+# the core half. Each wrapper is removed by the slice ADR-0006 names for it
+# (5b, 5c or 6).
+load_gateway.rs open_schematic_tab
+handlers/autosave_recovery.rs restore_loaded
+handlers/document_files/history.rs install_reloaded_schematic
+load_gateway.rs apply_loaded_schematic
+load_gateway.rs attach_parked_schematic_tab
+load_gateway.rs sync_visible_document_from_active_tab
+load_gateway.rs clear_schematic_ui_state
