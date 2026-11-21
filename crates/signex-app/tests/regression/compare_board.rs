@@ -99,6 +99,7 @@ fn project_data(dir: &Path) -> signex_types::project::ProjectData {
         schematic_defaults: Default::default(),
         project_defaults: Default::default(),
         agent_journal: Default::default(),
+        schematic_design: Default::default(),
         fab_outputs: None,
         requirements: Default::default(),
         parameters: Default::default(),
