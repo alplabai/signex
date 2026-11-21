@@ -7,8 +7,6 @@
 //! switch (Sketch / Pads / 3D) is the floating overlay
 //! [`mode_switcher_overlay`].
 
-use std::path::PathBuf;
-
 use iced::widget::{container, row};
 use iced::{Border, Length, Theme, Widget};
 use signex_types::theme::ThemeTokens;
