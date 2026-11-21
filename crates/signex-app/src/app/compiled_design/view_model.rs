@@ -18,7 +18,7 @@ use crate::panels::compiled_design::{
 impl Signex {
     /// Put a fresh view of the multi-channel surfaces in the panel context.
     pub(crate) fn sync_compiled_design_view(&mut self) {
-        self.document_state.panel_ctx.compiled_design = Box::new(self.compiled_design_view());
+        *self.document_state.panel_ctx.compiled_design = self.compiled_design_view();
     }
 
     /// The view of the multi-channel surfaces for the active document.

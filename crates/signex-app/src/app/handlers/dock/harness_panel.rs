@@ -38,7 +38,7 @@ impl Signex {
         }
         let mut facts = self.harness_panel_facts();
         facts.built_from = Some(key);
-        self.document_state.panel_ctx.harness = Box::new(facts);
+        *self.document_state.panel_ctx.harness = facts;
     }
 
     /// A stamp of everything [`Self::harness_panel_facts`] reads: the
