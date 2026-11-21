@@ -8,7 +8,7 @@ use super::super::args::InvocationContext;
 use super::super::routing::{self, InWindowRoute, WindowFacts};
 use super::super::{
     CommandArgs, active_bar, bridge, enablement, needs, opened, operand_handlers, operands,
-    queries, window_document,
+    queries, translator, window_document,
 };
 use super::inputs::Input;
 use crate::app::document::{DocumentKey, UndoTarget};
@@ -23,6 +23,10 @@ use crate::toolbar::ToolMessage;
 pub(super) enum Form {
     /// A `bridge::resolve` arm, as a key, menu row or the palette sends it.
     Bridge,
+    /// A bridge arm whose handler is a GUI translator (`translator.rs`): it
+    /// fills `document` and `ids` from the selection and runs the id's
+    /// operand handler, the `operand_handler` row.
+    Translator,
     /// The same arm from a context menu, which carries the click point or
     /// the project, where that changes the message.
     BridgeContextMenu,
@@ -70,6 +74,7 @@ impl Form {
     pub(super) fn name(self) -> &'static str {
         match self {
             Self::Bridge => "bridge",
+            Self::Translator => "translator",
             Self::BridgeContextMenu => "bridge_context_menu",
             Self::ActiveBar => "active_bar",
             Self::Operand => "operand_handler",
@@ -113,6 +118,7 @@ impl Form {
         matches!(
             self,
             Self::Bridge
+                | Self::Translator
                 | Self::BridgeContextMenu
                 | Self::ActiveBar
                 | Self::Needs
@@ -231,6 +237,7 @@ fn bridge_route(id: &str, message: &Message) -> (Form, String) {
         {
             (Form::ActiveBar, format!("{action:?}"))
         }
+        _ if translator::is_translated(id) => (Form::Translator, debug),
         _ => (Form::Bridge, debug),
     }
 }

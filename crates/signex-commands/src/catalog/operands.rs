@@ -521,18 +521,21 @@ pub const FOOTPRINT_TEXT_SET: &[Operand] = &[
     required("field", OperandKind::Text),
     required("value", OperandKind::Text),
 ];
-/// `swap_pins` (#2410): two pins of the component `designator` on the board
-/// `document`, as `pins` = `a,b` (pad numbers).
+/// `swap_pins` (#2410): two pins of one component on the board `document`,
+/// as `pins` = `a,b` (pad numbers). The component is named by `ids` (its
+/// uuid) or by `designator`, exactly one of them (#2326).
 pub const SWAP_PINS: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     required("pins", OperandKind::Text),
 ];
-/// `swap_gates` (#2410): two gates of the component `designator`, as
-/// `units` = `a,b` (unit numbers).
+/// `swap_gates` (#2410): two gates of one component, named as for
+/// `swap_pins`, as `units` = `a,b` (unit numbers).
 pub const SWAP_GATES: &[Operand] = &[
     required("document", OperandKind::Document),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     required("units", OperandKind::Text),
 ];
 /// `save_board_reuse_block` (#2410): the block `name` made of `ids`
@@ -542,12 +545,14 @@ pub const SAVE_REUSE_BLOCK: &[Operand] = &[
     required("name", OperandKind::Text),
     required("ids", OperandKind::Text),
 ];
-/// `place_board_reuse_block` (#2410): the block `name` around the component
-/// `designator`, turned by `degrees`.
+/// `place_board_reuse_block` (#2410): the block `name` around one component,
+/// named by `ids` (its uuid) or by `designator` (exactly one, #2326), turned
+/// by `degrees`.
 pub const PLACE_REUSE_BLOCK: &[Operand] = &[
     required("document", OperandKind::Document),
     required("name", OperandKind::Text),
-    required("designator", OperandKind::Text),
+    optional("ids", OperandKind::Targets),
+    optional("designator", OperandKind::Text),
     optional("degrees", OperandKind::Turn),
 ];
 /// A save dialog's answer for the named document.

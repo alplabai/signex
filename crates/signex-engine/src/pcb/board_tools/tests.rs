@@ -339,3 +339,26 @@ fn locked_lines_are_not_turned_into_a_keepout() {
     assert_eq!(refused, Err(locked_refusal(&[82])));
     assert_eq!(json(&board), before);
 }
+
+/// The GUI reads a report back from the operand handler's JSON answer
+/// (#2326 slice 6): every field survives the trip, so Messages loses none.
+#[test]
+fn a_tool_report_reads_back_as_it_was_written() {
+    let report = ToolReport {
+        added: vec![id(1)],
+        removed: vec![id(2)],
+        changed: vec![id(3)],
+        skipped: 4,
+        outline_points: 5,
+    };
+    let answer = serde_json::to_value(&report).unwrap();
+    assert_eq!(
+        serde_json::from_value::<ToolReport>(answer).unwrap(),
+        report
+    );
+    let empty = serde_json::to_value(ToolReport::default()).unwrap();
+    assert_eq!(
+        serde_json::from_value::<ToolReport>(empty).unwrap(),
+        ToolReport::default()
+    );
+}
