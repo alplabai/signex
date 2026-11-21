@@ -568,6 +568,11 @@ impl Signex {
                         view: &view,
                         window: undocked.map(|_| window_id),
                         prefs: &self.ui_state.layer_strip,
+                        set_menu_open: self
+                            .interaction_state
+                            .pcb_layer_set_menu
+                            .as_ref()
+                            .is_some_and(|m| self.overlay_belongs_to(m.window, window_id)),
                     },
                     &self.ui_state.i18n,
                     &self.document_state.panel_ctx.tokens,

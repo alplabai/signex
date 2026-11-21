@@ -538,7 +538,7 @@ impl Signex {
         let properties_tab = self.document_state.panel_ctx.properties_tab;
         let document_options = self.document_state.panel_ctx.document_options.clone();
         let projects_view = self.document_state.panel_ctx.projects_view.clone();
-        let pcb_layers_ui = self.document_state.panel_ctx.pcb_layers_ui.clone();
+        let mut pcb_layers_ui = self.document_state.panel_ctx.pcb_layers_ui.clone();
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
@@ -637,6 +637,8 @@ impl Signex {
 
         let net_classes = self.with_board_net_classes(self.net_class_panel_state());
         let pcb_layers = self.pcb_layers_panel_state();
+        let shown_board = self.document_state.panel_ctx.pcb_layers.board.as_deref();
+        pcb_layers_ui.follow_board(shown_board, &pcb_layers);
 
         let (panel_tokens, panel_theme_id) = self.panel_theme();
         self.document_state.panel_ctx = crate::panels::PanelContext {

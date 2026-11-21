@@ -1,23 +1,27 @@
-//! The Layers panel of a board (#2223, #2359, #2363): two tabs and a search
-//! field. Layers & Colors lists the board's layers (copper, the component
+//! The Layers panel of a board (#2223, #2359, #2363, mockup row 103): two tabs.
+//! Layers & Colors has a search row (with Used On and the more menu), the
+//! Active | Set row and the board's layers by section (copper, the component
 //! layer pairs, the other technical layers, the other layers and the system
-//! colours), each with an eye and a colour chip; a click on a name makes
-//! that layer the active one, as a tab under the canvas does. View Options
-//! shows, hides and fades kinds of objects. The rows are data
-//! (`PcbLayersPanel`, rebuilt from the view; `LayersPanelUi`, the panel's
-//! own state); `view` only draws them. Layout: `docs/PCB_TOOLS.md`,
-//! "Board view configuration".
+//! colours), each with an eye and a colour dot; a click on a name makes that
+//! layer the active one, as a tab under the canvas does. View Options shows,
+//! hides and fades kinds of objects. The rows are data (`PcbLayersPanel`,
+//! rebuilt from the view; `LayersPanelUi`, the panel's own state); `view`
+//! only draws them. Layout: `docs/PCB_TOOLS.md`, "Board view configuration".
 
+mod colour_card;
 mod layers_tab;
+mod metrics;
+mod more_menu;
 mod rows;
 mod view_options;
 
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use iced::widget::button::{Status, Style as ButtonStyle};
-use iced::widget::{Column, Row, container, svg};
-use iced::{Background, Border, Color, Element, Length, Theme, Widget};
+use iced::widget::{Column, container, svg};
+use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget};
 use signex_i18n::{I18n, ids, t};
 use signex_renderer::pcb::{
     BoardObject, BoardPaint, LayerSetId, PcbLayerView, board_copper_layers, board_layers,
@@ -26,12 +30,13 @@ use signex_renderer::pcb::{
 use signex_types::pcb::PcbBoard;
 use signex_types::pcb_layer::PcbLayer;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, text, text_input};
+use signex_widgets::Label;
+use signex_widgets::segmented::{SegmentedMetrics, SegmentedStyle, segmented};
 
-use super::form_look::{self, ghost_button};
-use super::graphite::{active_fill, wash_fn};
+use super::graphite::wash_fn;
 use super::{PanelContext, PanelMsg, empty_state_card};
 use crate::pcb_canvas::layer_style;
+use crate::styles::tokens::resolve;
 use crate::styles::{Radii, Spacing, TypeScale, ti};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -62,6 +67,16 @@ pub struct CopperRow {
     pub plane: bool,
 }
 
+/// A section of Layers & Colors whose eye shows or hides all its layers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayerSection {
+    Copper,
+    Pairs,
+    Technical,
+    /// Drill Drawing (the Multi-Layer row in it keeps its own eye).
+    Other,
+}
+
 /// What the panel shows of the active board and its view.
 #[derive(Clone)]
 pub struct PcbLayersPanel {
@@ -84,7 +99,7 @@ pub struct PcbLayersPanel {
     pub origin_marker_visible: bool,
     /// The layers the board has objects on, while Used On is on.
     pub used: Option<HashSet<PcbLayer>>,
-    /// The view's own colours and transparencies.
+    /// The board's layer colours and the view's transparencies.
     pub paint: BoardPaint,
     /// The kinds of object the view hides.
     pub hidden_objects: Vec<BoardObject>,
@@ -95,8 +110,14 @@ pub struct PcbLayersPanel {
     pub grid_visible: bool,
     /// The board is shown in 3D.
     pub board_3d: bool,
+    /// The Layer Stack command can run: the more menu's Layer Stack... row
+    /// is live.
+    pub layer_stack_live: bool,
     /// A board is open; without one the panel shows its empty state.
     pub board_open: bool,
+    /// The tab path of the board shown, so an open colour card can tell a
+    /// switch of board from an edit of the same one.
+    pub board: Option<PathBuf>,
     pub i18n: Arc<I18n>,
 }
 
@@ -120,7 +141,9 @@ impl Default for PcbLayersPanel {
             saved_sets: Vec::new(),
             grid_visible: true,
             board_3d: false,
+            layer_stack_live: false,
             board_open: false,
+            board: None,
             i18n: I18n::en_us(),
         }
     }
@@ -179,14 +202,40 @@ impl PcbLayersPanel {
         self.used.as_ref().is_none_or(|used| used.contains(&layer))
     }
 
-    /// The colour `layer` is drawn in, in this view.
+    /// The colour `layer` is drawn in: the board's, else the palette's.
     pub fn colour(&self, layer: PcbLayer) -> Color {
         layer_style::painted_layer_colour(&self.paint, layer)
+    }
+
+    /// The colour of `layer` as the colour card's hex field writes it.
+    pub fn hex_of(&self, layer: PcbLayer) -> String {
+        let [r, g, b, _] = self.colour(layer).into_rgba8();
+        format!("#{r:02X}{g:02X}{b:02X}")
     }
 
     /// Whether the view draws objects of `kind`.
     pub fn shows_object(&self, kind: BoardObject) -> bool {
         !self.hidden_objects.contains(&kind)
+    }
+
+    /// The layers the eye of `section` shows and hides: those of the rows
+    /// the panel lists (the search and Used On leave the others alone). The
+    /// Multi-Layer row is no layer and keeps its own eye.
+    pub fn section_layers(&self, section: LayerSection, ui: &LayersPanelUi) -> Vec<PcbLayer> {
+        layers_tab::section_layers(self, ui, section)
+    }
+
+    /// Every listed layer of `section` is hidden: its eye is shut.
+    pub fn section_hidden(&self, section: LayerSection, ui: &LayersPanelUi) -> bool {
+        let layers = self.section_layers(section, ui);
+        !layers.is_empty() && layers.iter().all(|layer| self.is_hidden(*layer))
+    }
+
+    /// Some listed layer of `section` is hidden: its eye shows them all.
+    pub fn section_any_hidden(&self, section: LayerSection, ui: &LayersPanelUi) -> bool {
+        self.section_layers(section, ui)
+            .iter()
+            .any(|layer| self.is_hidden(*layer))
     }
 }
 
@@ -198,16 +247,21 @@ pub enum LayersTab {
     ViewOptions,
 }
 
-/// The Layers panel's own state (#2363), kept across rebuilds: view-only,
-/// never part of a board view.
+/// The Layers panel's own state (#2363, mockup row 103), kept across rebuilds:
+/// view-only, never part of a board view.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LayersPanelUi {
     pub tab: LayersTab,
     /// The row filter: rows whose name holds it, ignoring case.
     pub search: String,
-    /// The layer whose colour chip is open, and whether its custom picker
-    /// is.
-    pub picker: Option<(PcbLayer, bool)>,
+    /// The layer whose colour card is open.
+    pub picker: Option<PcbLayer>,
+    /// The text of the colour card's hex field.
+    pub hex: String,
+    /// The more menu beside the search field is open.
+    pub more_menu_open: bool,
+    /// A new layer set is being named: the name row shows under the search.
+    pub naming: bool,
     /// The name typed for a new layer set.
     pub set_name: String,
 }
@@ -217,42 +271,77 @@ pub struct LayersPanelUi {
 pub enum LayersPanelMsg {
     TabPicked(LayersTab),
     SearchChanged(String),
-    /// A colour chip was clicked: its colours open, or close again.
+    /// A colour dot was clicked: its colour card opens, or closes again.
     ColourChipToggled(PcbLayer),
-    CustomColourOpened,
-    CustomColourClosed,
+    /// The colour card's hex field was edited.
+    HexEdited(String),
+    /// The more button was clicked.
+    MoreMenuToggled,
+    /// A click outside the more menu closed it.
+    MoreMenuDismissed,
+    /// Save current as set... in the more menu: the name row opens.
+    SetNamingStarted,
+    /// The name row was closed without saving.
+    SetNamingCancelled,
     SetNameChanged(String),
-    /// A saved layer set was picked in the Layer Sets dropdown.
+    /// A saved layer set was picked in the Set dropdown.
     SavedSetShown(String),
-    /// Save in the Layer Sets row: the shown layers under the typed name.
+    /// Save in the name row: the shown layers under the typed name.
     SetSaved,
-    /// Delete in the Layer Sets row: the saved set the view shows.
+    /// Delete current set... in the more menu: the saved set the view shows.
     SetDeleted(String),
+    /// A section's eye: show or hide every layer of the section.
+    SectionVisibilitySet {
+        section: LayerSection,
+        visible: bool,
+    },
+    /// Layer Stack... in the more menu.
+    LayerStackPicked,
+    /// View From Bottom Side in the more menu: the view flips and the menu
+    /// closes, as every other live row of it does.
+    BoardFlipPicked,
     /// The 3D switch of View Options.
     Board3dToggled,
 }
 
 impl LayersPanelUi {
+    /// The set name field, focused when the name row opens.
+    pub const SET_NAME_INPUT: iced::widget::Id =
+        iced::widget::Id::new("signex.layers_panel.set_name");
+
     /// Apply what changes only the panel; `false` for a message that acts on
-    /// the app (a layer set, 3D).
+    /// the app (a layer set, a section's eye, a typed colour, 3D).
     pub fn apply(&mut self, msg: &LayersPanelMsg) -> bool {
         match msg {
             LayersPanelMsg::TabPicked(tab) => self.tab = *tab,
             LayersPanelMsg::SearchChanged(query) => self.search.clone_from(query),
             LayersPanelMsg::ColourChipToggled(layer) => {
-                self.picker = match self.picker {
-                    Some((open, _)) if open == *layer => None,
-                    _ => Some((*layer, false)),
-                };
+                self.picker = (self.picker != Some(*layer)).then_some(*layer);
             }
-            LayersPanelMsg::CustomColourOpened => {
-                self.picker = self.picker.map(|(layer, _)| (layer, true));
+            LayersPanelMsg::MoreMenuToggled => self.more_menu_open = !self.more_menu_open,
+            LayersPanelMsg::MoreMenuDismissed => self.more_menu_open = false,
+            LayersPanelMsg::SetNamingStarted => {
+                self.more_menu_open = false;
+                self.naming = true;
             }
-            LayersPanelMsg::CustomColourClosed => self.picker = None,
+            LayersPanelMsg::SetNamingCancelled => {
+                self.naming = false;
+                self.set_name.clear();
+            }
             LayersPanelMsg::SetNameChanged(name) => self.set_name.clone_from(name),
+            LayersPanelMsg::HexEdited(hex) => {
+                self.hex.clone_from(hex);
+                return false;
+            }
+            LayersPanelMsg::SetDeleted(_)
+            | LayersPanelMsg::LayerStackPicked
+            | LayersPanelMsg::BoardFlipPicked => {
+                self.more_menu_open = false;
+                return false;
+            }
             LayersPanelMsg::SavedSetShown(_)
             | LayersPanelMsg::SetSaved
-            | LayersPanelMsg::SetDeleted(_)
+            | LayersPanelMsg::SectionVisibilitySet { .. }
             | LayersPanelMsg::Board3dToggled => return false,
         }
         true
@@ -267,6 +356,59 @@ impl LayersPanelUi {
                 .fold_for_search(&label.to_string())
                 .contains(&i18n.fold_for_search(query))
     }
+
+    /// The colour the hex field holds, once it reads as `#RRGGBB` (the `#`
+    /// may be left out).
+    pub fn hex_colour(&self) -> Option<[u8; 3]> {
+        let text = self.hex.trim();
+        let digits = text.strip_prefix('#').unwrap_or(text);
+        if digits.len() != 6 || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let byte = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).ok();
+        Some([byte(0)?, byte(2)?, byte(4)?])
+    }
+
+    /// Keep the open colour card true to the board after a rebuild: it
+    /// closes when the panel now shows another board (`before` is the board
+    /// it showed), and its hex field takes the layer's colour again when it
+    /// reads as another colour (an undo, a redo or a reset while it was
+    /// open), so the next keystroke never applies a stale colour. A
+    /// half-typed colour is left as typed.
+    pub fn follow_board(&mut self, before: Option<&Path>, now: &PcbLayersPanel) {
+        let Some(layer) = self.picker else {
+            return;
+        };
+        if before != now.board.as_deref() {
+            self.picker = None;
+            return;
+        }
+        let [r, g, b, _] = now.colour(layer).into_rgba8();
+        if self.hex_colour().is_some_and(|typed| typed != [r, g, b]) {
+            self.hex = now.hex_of(layer);
+        }
+    }
+}
+
+/// Padding around the tabs; the search row follows them.
+const TABS_PAD: Padding = Padding {
+    top: SP.m,
+    right: SP.m,
+    bottom: SP.s,
+    left: SP.m,
+};
+/// Padding around the search row.
+const SEARCH_PAD: Padding = Padding {
+    top: SP.xs,
+    right: SP.m,
+    bottom: SP.s,
+    left: SP.m,
+};
+
+/// Where the more menu card starts: just under the search row.
+fn more_menu_top() -> f32 {
+    let tabs = SegmentedMetrics::from_text_size(TS.body).track_height;
+    TABS_PAD.top + tabs + TABS_PAD.bottom + SEARCH_PAD.top + metrics::FIELD + SP.xs
 }
 
 pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
@@ -281,59 +423,54 @@ pub(super) fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
         );
     }
     let ui = &ctx.pcb_layers_ui;
-    let title = text(t!(i18n, ids::PCB_LAYERS_TITLE))
-        .size(TS.label)
-        .color(ti(ctx.tokens.text));
-    let search = text_input(t!(i18n, ids::PCB_LAYERS_SEARCH), ui.search.clone())
-        .on_input(|query| PanelMsg::LayersPanel(LayersPanelMsg::SearchChanged(query)))
-        .size(TS.body)
-        .padding(SP.s)
-        .style(form_look::text_input_style)
-        .width(Length::Fill);
-    let body = match ui.tab {
+    // The dock's title bar names the panel: no title in the body.
+    let content = match ui.tab {
         LayersTab::LayersAndColors => layers_tab::view(panel, ui, ctx),
         LayersTab::ViewOptions => view_options::view(panel, ctx),
     };
-    Column::<Element<'_, PanelMsg>>::new()
-        .spacing(SP.xs)
+    let body = Column::<Element<'_, PanelMsg>>::new()
         .width(Length::Fill)
-        .push(container(title).padding([SP.s, SP.m]).boxed())
-        .push(container(tabs(panel, ui)).padding([0.0, SP.m]).boxed())
-        .push(container(search).padding([0.0, SP.m]).boxed())
-        .push(body)
-        .boxed()
+        .push(container(tabs(panel, ui, ctx)).padding(TABS_PAD).boxed())
+        .push(content)
+        .boxed();
+    if ui.tab == LayersTab::LayersAndColors && ui.more_menu_open {
+        return more_menu::overlay(body, panel, ctx);
+    }
+    body
 }
 
 /// The two tabs, as a segmented control.
-fn tabs<'a>(panel: &PcbLayersPanel, ui: &LayersPanelUi) -> Element<'a, PanelMsg> {
+fn tabs<'a>(
+    panel: &PcbLayersPanel,
+    ui: &LayersPanelUi,
+    ctx: &PanelContext,
+) -> Element<'a, PanelMsg> {
     let i18n = &panel.i18n;
-    let tab = |label, which: LayersTab| {
-        let on = ui.tab == which;
-        button(text(label).size(TS.body))
-            .padding([SP.xs, SP.m])
-            .width(Length::Fill)
-            .on_press(PanelMsg::LayersPanel(LayersPanelMsg::TabPicked(which)))
-            .style(move |theme: &Theme, status: Status| {
-                form_look::segment_cell(theme, on, matches!(status, Status::Hovered))
-            })
-            .boxed()
-    };
-    container(
-        Row::new()
-            .push(tab(
-                t!(i18n, ids::PCB_LAYERS_TAB_LAYERS),
-                LayersTab::LayersAndColors,
-            ))
-            .push(tab(
-                t!(i18n, ids::PCB_LAYERS_TAB_VIEW_OPTIONS),
-                LayersTab::ViewOptions,
-            ))
-            .spacing(SP.xs),
+    let r = resolve(&ctx.tokens);
+    let style = SegmentedStyle::new(
+        r.sunken,
+        r.raised,
+        r.shadow,
+        r.ink3,
+        ti(ctx.tokens.text),
+        TS.body,
     )
-    .padding(SP.xs)
-    .width(Length::Fill)
-    .style(form_look::segmented_frame)
-    .boxed()
+    .fill_width(true);
+    segmented(
+        [
+            (
+                LayersTab::LayersAndColors,
+                Label::from(t!(i18n, ids::PCB_LAYERS_TAB_LAYERS)),
+            ),
+            (
+                LayersTab::ViewOptions,
+                Label::from(t!(i18n, ids::PCB_LAYERS_TAB_VIEW_OPTIONS)),
+            ),
+        ],
+        ui.tab,
+        style,
+        |tab| PanelMsg::LayersPanel(LayersPanelMsg::TabPicked(tab)),
+    )
 }
 
 /// A transparent row button with the Graphite hover wash.
@@ -346,25 +483,6 @@ fn row_button(tokens: &ThemeTokens) -> impl Fn(&Theme, Status) -> ButtonStyle + 
             ..Border::default()
         },
         ..ButtonStyle::default()
-    }
-}
-
-/// A two-state button (Used On, a View Options switch): the active fill
-/// while on.
-fn toggle_button(
-    tokens: &ThemeTokens,
-    on: bool,
-) -> impl Fn(&Theme, Status) -> ButtonStyle + 'static {
-    let on_fill = active_fill(tokens);
-    move |theme: &Theme, status| {
-        let mut style = ghost_button(theme, status);
-        if on {
-            style.background = Some(Background::Color(on_fill));
-        }
-        if matches!(status, Status::Disabled) {
-            style.text_color = form_look::FormLook::of(theme).ink4;
-        }
-        style
     }
 }
 

@@ -11,6 +11,7 @@
 
 use iced::Color;
 use signex_types::theme::ThemeTokens;
+use signex_widgets::theme_ext::{self, SOFT_TINT_ALPHA};
 
 use super::ti;
 
@@ -285,9 +286,6 @@ pub struct ResolvedTokens {
     pub scrim: Color,
 }
 
-/// Alpha of a soft status / accent tint derived from its base colour.
-const SOFT_TINT_ALPHA: f32 = 0.15;
-
 /// Alpha of the shadow under a floating surface when the theme sets none.
 const FALLBACK_SHADOW_ALPHA: f32 = 0.35;
 
@@ -316,8 +314,8 @@ pub fn resolve(tokens: &ThemeTokens) -> ResolvedTokens {
         ink3: pick(e.ink3, muted_text(tokens)),
         ink4: pick(e.ink4, half_secondary(tokens)),
         accent_text: pick(e.accent_text, accent),
-        accent_soft: pick(e.accent_soft, tint(accent, SOFT_TINT_ALPHA)),
-        accent_soft_ink: pick(e.accent_soft_ink, ti(tokens.text)),
+        accent_soft: theme_ext::accent_soft(tokens),
+        accent_soft_ink: theme_ext::accent_soft_ink(tokens),
         primary: pick(e.primary, accent_fill(tokens)),
         primary_ink: pick(e.primary_ink, on_accent(tokens)),
         info: pick(e.info, accent),

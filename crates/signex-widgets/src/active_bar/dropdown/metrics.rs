@@ -208,7 +208,7 @@ impl MenuMetrics {
                             + advance(badge.as_str(), self.badge_size, family)
                             + 2.0 * (self.badge_pad_x + 1.0);
                     }
-                    if item.checked {
+                    if item.checked && item.lead_check.is_none() {
                         w += self.row_spacing + self.check_size;
                     }
                     if has_chevrons {
@@ -235,13 +235,14 @@ fn line_height(size: f32) -> f32 {
         .0
 }
 
-/// Whether any item row of `entries` carries an icon or a swatch: the menu
-/// then has an icon column.
+/// Whether any item row of `entries` carries an icon, a swatch or a leading
+/// check: the menu then has an icon column.
 pub(super) fn has_icons<M: Clone>(entries: &[DropdownEntry<M>]) -> bool {
     entries.iter().any(|entry| {
         matches!(
             entry,
-            DropdownEntry::Item(item) if item.icon.is_some() || item.swatch.is_some()
+            DropdownEntry::Item(item)
+                if item.icon.is_some() || item.swatch.is_some() || item.lead_check.is_some()
         )
     })
 }

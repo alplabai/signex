@@ -6,6 +6,22 @@ pcb-layers-tab-layers = Layers & Colors
 pcb-layers-tab-view-options = View Options
 # Placeholder of the field that filters the layer rows by name.
 pcb-layers-search = Search layers
+# A search that lists no row, and the button that empties it. $query is the
+# text typed.
+pcb-layers-no-match = No layers match “{ $query }”
+pcb-layers-clear-search = Clear
+# Tooltip of the more button beside the search field.
+pcb-layers-more-tip = Manage layer sets, import, export, view from bottom, layer stack
+# Rows of the more menu besides Save current as set..., Import..., Export...
+# and View From Bottom Side.
+pcb-layers-set-delete-current = Delete current set...
+pcb-layers-layer-stack = Layer Stack...
+# The Active | Set row: its caption (also the pill of the active layer's
+# row), what it reads while the active layer is hidden, and the set the view
+# shows. $set is the set's short name or a saved set's name.
+pcb-layers-active = Active
+pcb-layers-no-active = No active layer
+pcb-layers-set-current = Set: { $set }
 # The row whose eye shows or hides every layer.
 pcb-layers-all-layers = All Layers
 # Toggle that lists only the layers the board has objects on.
@@ -17,6 +33,11 @@ pcb-layers-pairs = Component Layer Pairs
 pcb-layers-technical = Other Technical Layers
 pcb-layers-other = Other Layers
 pcb-layers-system-colors = System Colors
+# The count of rows a section lists, in its header.
+pcb-layers-section-count = { $count }
+# Tooltips of a section header's eye.
+pcb-layers-section-show = Show this section
+pcb-layers-section-hide = Hide this section
 # The type column of a copper row.
 pcb-layers-type-signal = Signal
 pcb-layers-type-plane = Plane
@@ -44,19 +65,19 @@ pcb-layers-pair = { $pair ->
     [fiducial] Fiducial
    *[keepout] Keep-Out
 }
-# Tooltip of a greyed-out row: the board has no layer for it.
-pcb-layers-no-layer = No board layer for this row yet
-# The Drill Guide row of Other Layers; there is no layer for it yet.
-pcb-layers-drill-guide = Drill Guide
-# Tooltip of a layer's colour chip.
-pcb-layers-colour-tip = Pick this layer's colour in this view
-# Label of the colour row that opens under a chip.
+# Tooltip of a layer's colour dot.
+pcb-layers-colour-tip = Pick this layer's colour, saved with the board
+# The colour card under a dot: the caption of the palette swatches, the
+# caption of the hex field and the field's placeholder.
+pcb-layers-palette = Palette
 pcb-layers-colour = Colour
-# Caption of a chip that shows the board palette's colour.
-pcb-layers-colour-palette = Palette
-# The layer set dropdown and its name field.
+pcb-layers-hex = #RRGGBB
+# The colour card's button that gives the layer the board palette's colour
+# again.
+pcb-layers-colour-palette = Palette colour
+# The more menu's layer set header, and the tooltip of the Set dropdown.
 pcb-layers-sets = Layer Sets
-# The active layer dropdown.
+# Tooltip of the active layer dropdown.
 pcb-layers-active-layer = Active Layer
 # Mirrors the board view, as if seen from below.
 pcb-layers-view-from-bottom = View From Bottom Side
@@ -93,6 +114,8 @@ pcb-view-preset-default = Default
 # The 3D switch and the Single Layer Mode switch, and their states.
 pcb-view-3d = 3D
 pcb-view-single-layer = Single Layer Mode
+# The Single Layer Mode caption in View Options; the full name is its tooltip.
+pcb-view-single-layer-short = Single Layer
 pcb-view-off = Off
 pcb-view-on = On
 pcb-view-mono = Mono
@@ -115,6 +138,8 @@ pcb-view-object = { $kind ->
     [coordinates] Coordinates
    *[body_3d] 3D Body
 }
+# The Object column of Object Visibility, over the names of the kinds.
+pcb-view-object-column = Object
 # The Draft column (outline only) and the Transparency column.
 pcb-view-draft = Draft
 pcb-view-transparency = Transparency
@@ -126,7 +151,9 @@ pcb-view-percent = { $percent } %
 pcb-view-dimmed = Dimmed Objects
 pcb-view-highlighted = Highlighted Objects
 pcb-view-masked = Masked Objects
-# A toggle chip of Additional Options. $option is the chip's token.
+# The Additional Options header count: $on of the $total options are on.
+pcb-view-options-on = { $on }/{ $total }
+# A checkbox of Additional Options. $option is the option's token.
 pcb-view-option = { $option ->
     [test_points] Test Points
     [status_info] Status Info

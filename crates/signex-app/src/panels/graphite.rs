@@ -101,11 +101,6 @@ pub fn decorate_tree(roots: &[TreeNode]) -> Vec<TreeNode> {
     roots.iter().map(|n| walk(n, 0)).collect()
 }
 
-/// Fill of the active row of the PCB Layers list: the soft accent.
-pub fn active_fill(tokens: &ThemeTokens) -> Color {
-    resolve(tokens).accent_soft
-}
-
 /// Fill of the selected row in a tree or library list (Projects, SCH
 /// Library, Footprint Library): the theme's neutral selection, as in the
 /// Library Browser, not an accent tint.

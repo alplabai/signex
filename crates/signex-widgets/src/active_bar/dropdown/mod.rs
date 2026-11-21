@@ -148,6 +148,10 @@ where
     /// A small outlined pill right of the label (the "planned" marker), a
     /// catalog message like any other new text.
     pub badge: Option<Label<'static>>,
+    /// `Some` draws an accent check in the icon column (`Some(true)`) or
+    /// leaves the column empty (`Some(false)`), in place of the icon and
+    /// the trailing check; `None` is an ordinary row.
+    pub lead_check: Option<bool>,
 }
 
 impl<M: 'static + Clone> DropdownItem<M> {
@@ -177,6 +181,7 @@ impl<M: 'static + Clone> DropdownItem<M> {
             strong: false,
             danger: false,
             badge: None,
+            lead_check: None,
         }
     }
 
@@ -282,6 +287,14 @@ impl<M: 'static + Clone> DropdownItem<M> {
     /// Builder: show `text` in an outlined pill right of the label.
     pub fn badge(mut self, text: impl Into<Label<'static>>) -> Self {
         self.badge = Some(text.into());
+        self
+    }
+
+    /// Builder: an accent check in the icon column when `on`, an empty
+    /// column when not. The row reserves the column like an icon row and
+    /// draws neither its icon nor the trailing check.
+    pub fn lead_check(mut self, on: bool) -> Self {
+        self.lead_check = Some(on);
         self
     }
 }
@@ -524,6 +537,7 @@ where
         strong,
         danger,
         badge,
+        lead_check,
     } = item;
     // The current choice reads in the accent-soft ink unless it is greyed
     // or destructive.
@@ -536,10 +550,25 @@ where
         .spacing(m.row_spacing)
         .align_y(iced::Alignment::Center)
         .width(Length::Fill);
-    if shape.has_icons {
-        cells = cells.push(lead_cell(
-            icon, swatch, icon_tint, disabled, danger, m, look,
-        ));
+    // A leading check takes the icon column in place of the icon or swatch.
+    match lead_check {
+        Some(true) => {
+            cells = cells.push(
+                container(check_mark(m, look.accent))
+                    .width(Length::Fixed(m.icon_size))
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .boxed(),
+            )
+        }
+        Some(false) => {
+            cells = cells.push(Space::new().width(Length::Fixed(m.icon_size)).boxed());
+        }
+        None if shape.has_icons => {
+            cells = cells.push(lead_cell(
+                icon, swatch, icon_tint, disabled, danger, m, look,
+            ));
+        }
+        None => {}
     }
     // Menu rows never wrap: a too-narrow card clips rather than reflowing a
     // label onto two lines.
@@ -574,13 +603,8 @@ where
         }
         cells = cells.push(hint.boxed());
     }
-    if checked {
-        cells = cells.push(
-            text(raw("\u{2713}"))
-                .size(m.check_size)
-                .color(look.accent)
-                .boxed(),
-        );
+    if checked && lead_check.is_none() {
+        cells = cells.push(check_mark(m, look.accent));
     }
     if shape.has_chevrons {
         cells = cells.push(
@@ -647,6 +671,14 @@ where
         Some((enter, leave)) => mouse_area(row).on_enter(enter).on_exit(leave).boxed(),
         None => row,
     }
+}
+
+/// The accent check of a checked row, trailing or in the icon column.
+fn check_mark<'a, M: 'a>(m: &MenuMetrics, color: Color) -> Element<'a, M> {
+    text(raw("\u{2713}"))
+        .size(m.check_size)
+        .color(color)
+        .boxed()
 }
 
 /// The outlined pill of a row badge: caption text in the muted ink inside a

@@ -27,6 +27,11 @@ pcb-layer-tab-highlight = Highlight { $layer }
 # Flyouts of the layer tab menu: one row per kind of layer.
 pcb-layer-tab-hide-layers = Hide layers
 pcb-layer-tab-show-layers = Show layers
+# Header of the open flyout, shown in capitals. $mode is hide or show.
+pcb-layer-tab-flyout = { $mode ->
+    [show] Show
+   *[hide] Hide
+}
 # A row of those flyouts. $kind is the kind's token.
 pcb-layer-kind = { $kind ->
     [signal] Signal layers
@@ -45,10 +50,14 @@ pcb-layer-tab-drill-symbols = Drill symbols...
 pcb-layer-tab-drill-symbols-unavailable = Drill symbols cannot be set yet.
 pcb-layer-tab-drawing-order = Layer drawing order...
 pcb-layer-tab-drawing-order-unavailable = The layer drawing order cannot be changed yet.
-# How the layer tabs name their layers, and their numbers.
-pcb-layer-tab-names-short = Short tab names
-pcb-layer-tab-names-medium = Medium tab names
-pcb-layer-tab-names-long = Long tab names
+# How the layer tabs name their layers, and their numbers: a header shown in
+# capitals over a Short | Medium | Long switch. $style is the style's token.
+pcb-layer-tab-names = Tab names
+pcb-layer-tab-name-style = { $style ->
+    [short] Short
+    [medium] Medium
+   *[long] Long
+}
 pcb-layer-tab-show-numbers = Show layer numbers
 # View the board from below: mirrored, bottom layers on top.
 pcb-layer-tab-flip = Flip board view
@@ -119,6 +128,8 @@ pcb-layer-set = { $set ->
 pcb-layer-set-save = Save current as set...
 pcb-layer-set-manage = Manage sets...
 pcb-layer-set-none-saved = No saved sets yet.
+# Hint at the right of a set the user saved, in the set menu.
+pcb-layer-set-saved-hint = saved
 pcb-layer-set-name-placeholder = Set name
 pcb-layer-set-save-button = Save
 pcb-layer-set-delete = Delete
@@ -142,6 +153,23 @@ pcb-bar-align-tooltip = Align (click for the align and distribute menu)
 # Tooltips of the PCB Active Bar's greyed buttons: tools the board editor
 # cannot run yet (#2352).
 pcb-bar-component-unavailable = Place Component: not available on boards yet
+# The badge on the Selection Filter button: how many object kinds are off
+# (mockup row 108). There is no badge while every kind is on.
+pcb-bar-filter-off-count = { $count }
+# Heading of a tool group's dropdown on the PCB Active Bar (mockup row 108), shown in
+# capitals. $group is the group's key.
+pcb-bar-group =
+    { $group ->
+        [components] Components
+        [route] Route
+        [tune] Tune
+        [via_pad] Via / Pad
+        [copper_areas] Copper Areas
+        [copper_drawing] Copper Drawing
+        [dimensions] Dimensions
+        [text] Text
+       *[graphics] Graphics
+    }
 # Rows of the Place menu on a board (#2360). The ones the board editor cannot
 # run yet are greyed, with the tooltip above as the reason.
 pcb-tool-component = Component

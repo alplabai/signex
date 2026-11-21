@@ -698,6 +698,13 @@ state. Kinds the board editor cannot pick yet are greyed with why, as their
 chips are. Since #2373 Arcs picks free arcs, Texts strings, Pads free pads
 as well as footprint pads, and Other dimensions (`PickKind::of`).
 
+While any kind is off, the button carries a small accent badge at its
+top-right corner with the number of kinds that are off (mockup row 108); there is no
+badge while every kind is on. Only kinds the board editor can pick count, so
+turning off a greyed kind (Rooms, 3D Bodies) does not change it. The badge is
+a layer over the bar that takes no clicks
+(`app/view/pcb_active_bar/badge.rs`).
+
 ## Align
 
 The PCB Active Bar's Align button opens a dropdown of the Align rows (Align
@@ -737,10 +744,24 @@ the Tune rows are the length tuning commands of #2389 (palette, no menu row).
   selected while one of its group's tools is armed on the board in the main
   window, as a schematic bar button is, and while its dropdown is open.
 - **Dropdown.** A right-click on a group with more than one row opens its
-  rows. A live row runs its command and is greyed by the same gate as its
-  menu row; a tool the board editor cannot run yet is greyed and its tooltip
-  is the reason Place gives ("Place Component: not available on boards
-  yet").
+  rows under a heading with the group's name in capitals (mockup row 108). The tools
+  come first; a group's commands (Repour Selected and Repour All, Change
+  Footprint) sit below a separator after them. The row the button shows is
+  drawn current, with the accent-soft fill. A live row runs its command and
+  is greyed by the same gate as its menu row; a tool the board editor cannot
+  run yet is greyed and its tooltip is the reason Place gives ("Place
+  Component: not available on boards yet"). A button with a dropdown has the
+  corner triangle; a group of one row (Dimensions, Text) has neither.
+- **Glyphs.** Every button is an SVG glyph drawn in the bar's ink: Via, Pad,
+  Dimension and Keepout use the board tool glyphs of their dropdown rows
+  (`assets/icons/pcb/`), the via a ring around its drill hole and the pad a
+  rounded SMD pad with its centre (mockup row 108). The View button and the
+  View dropdown draw each turn with an arrow that turns the same way; the
+  half turn uses the clockwise arrow and Reset View Rotation has no icon.
+  The clockwise arrow's direction comes from the #2503 icon fix.
+- **Separators.** Components stands alone; Route, Tune, Via / Pad, Copper
+  Areas and Copper Drawing form one run; Dimensions, Text and Graphics the
+  next (mockup row 108).
 - **No live row.** A group whose rows are all greyed is one greyed button
   with that reason as its tooltip and no dropdown.
 - **Last used.** A tool armed from the group's dropdown, Place, a key or the
@@ -797,35 +818,45 @@ swatch is the layer's colour on this board.
 
 ## Layer tab menu
 
-A right-click on a layer tab under the board opens its menu (#2379, #2394):
+A right-click on a layer tab under the board opens its menu (#2379, #2394,
+mockup row 104). Every row has one 16 px icon column, so the labels line up
+whether or not a row has an icon:
 
-- Hide <layer>, Highlight <layer> (every other layer is drawn dimmed;
-  picking it again ends the highlight).
+- Hide <layer> (eye crossed out) and Highlight <layer> (every other layer is
+  drawn dimmed; picking it again ends the highlight).
 - Layer colour..., Reset layer colour and Reset all layer colours
-  (2026-11-18). Layer colour... opens the Layers panel on Layers & Colors with
-  that layer's colours open under its row; it is greyed for the keep-out and
-  mechanical layers, which have no colour row yet. A colour is saved with the
-  board (`[board_options.layer_colors]`, `docs/PCB_BOARD_OPTIONS.md`), one
-  undo step; the resets are greyed while there is nothing to reset.
-- Show only this layer and Show all layers. Show only this layer makes the
-  layer active and hides every other layer the Layers panel lists; the board
-  outline and the Multi-Layer row keep their state, as in single-layer mode.
-- Hide layers ▸ and Show layers ▸: per kind (signal, plane, silkscreen, mask
-  (solder mask and adhesive), paste, mechanical (board outline,
-  documentation and mechanical layers)) a row for the whole kind, then the
-  layers of that kind the row would change, one by one: the shown ones under
-  Hide, the hidden ones under Show. All layers ends the list.
-- Layer stack... runs `board_layer_stack` (#2401) from the window the menu
-  was opened in and is greyed exactly when that command is. Drill symbols...
-  and Layer drawing order... are greyed with the reason as their hover text:
-  neither editor exists yet.
-- Short, Medium and Long tab names and Show layer numbers. Short names are
-  `TL`, `BL`, `M1` (Mid-Layer 1), `TO` (Top Silkscreen), `TS` (Top Solder)
-  and so on; Medium names are `Top`, `Bottom`, `Mid 1`, and a technical layer
-  keeps its long name. A number goes in front: a copper layer's place in the
-  stack (1 is the top), a mechanical layer's index; technical layers have
-  none.
-- Flip board view: the board seen from below. The view is mirrored left to
+  (2026-11-18), with the net colour menu's glyphs. Layer colour... opens the
+  Layers panel on Layers & Colors with that layer's colour card open under
+  its row; it is greyed for the keep-out and mechanical layers, which have no
+  colour row yet. A colour is saved with the board
+  (`[board_options.layer_colors]`, `docs/PCB_BOARD_OPTIONS.md`), one undo
+  step; the resets are greyed while there is nothing to reset.
+- Show only this layer (eye) and Show all layers (no icon). Show only this
+  layer makes the layer active and hides every other layer the Layers panel
+  lists; the board outline and the Multi-Layer row keep their state, as in
+  single-layer mode.
+- Hide layers ▸ and Show layers ▸, no icon; the launcher of the open flyout
+  keeps the current-row look, and pointing at the other one switches the
+  flyout. A flyout has a HIDE or SHOW header, then All layers; then per kind
+  (signal, plane, silkscreen, mask (solder mask and adhesive), paste,
+  mechanical (board outline, documentation and mechanical layers)), after a
+  line, a row for the whole kind and the layers of that kind the row would
+  change, one by one: the shown ones under Hide, the hidden ones under Show.
+- Layer stack... (layers icon) runs `board_layer_stack` (#2401) from the
+  window the menu was opened in and is greyed exactly when that command is.
+  Drill symbols... and Layer drawing order... are greyed with the reason as
+  their hover text: neither editor exists yet.
+- A TAB NAMES header over one switch, Short | Medium | Long, lined up with
+  the labels; a click on a cell sets the style and closes the menu. Short
+  names are `TL`, `BL`, `M1` (Mid-Layer 1), `TO` (Top Silkscreen), `TS` (Top
+  Solder) and so on; Medium names are `Top`, `Bottom`, `Mid 1`, and a
+  technical layer keeps its long name.
+- Show layer numbers, a checkbox in the icon column; a click anywhere on the
+  row turns the numbers on or off and closes the menu. A number goes in
+  front: a copper layer's place in the stack (1 is the top), a mechanical
+  layer's index; technical layers have none.
+- Flip board view (mirror icon), straight after Show layer numbers with no
+  line between them: the board seen from below. The view is mirrored left to
   right (the turn of the view, #2316, still applies on top), board text
   reads mirrored, a box selection keeps its left-to-right and right-to-left
   meaning on screen, and within one emphasis the copper nearer the bottom is
@@ -854,14 +885,23 @@ catalog command and is live by that command's own rule.
 
 ## Layer sets
 
+The strip under the board is 28 px tall and lists the tabs of "Layer tabs"
+above. The active layer's tab is filled with the soft accent and has the
+accent bar along its top. When the tabs are wider than the window the strip
+scrolls sideways with the thin scrollbar instead of widening the window
+(mockup row 104). A layer token this build does not know has no tab, as it
+has no row in the Layers panel (Caner, 2026-11-20).
+
 The button at the left end of the layer tabs names the set the tabs list and
-opens the set menu (#2394): All Layers, Signal Layers, Plane Layers,
+opens the set menu (#2394); it is drawn pressed while its menu is open. The
+menu has a LAYER SETS header, then All Layers, Signal Layers, Plane Layers,
 Non-signal Layers (every layer but copper), Mechanical Layers, then the sets
-the user saved, then Save current as set... and Manage sets.... Picking a set
-shows its layers and hides every other listed layer (the board outline keeps
-its state), and the tabs list only the set's layers. An active layer the set
-hides moves into the set. All Layers and Show all layers list and show every
-layer again.
+the user saved, each with a muted "saved" at the right, then Save current as
+set... (plus icon) and Manage sets.... The set the view shows has its check
+in the icon column. Picking a set shows its layers and hides every other
+listed layer (the board outline keeps its state), and the tabs list only the
+set's layers. An active layer the set hides moves into the set. All Layers
+and Show all layers list and show every layer again.
 
 Save current as set... turns the card into a name field; Enter or Save saves
 the layers the view shows under that name (a set of the same name is
@@ -881,53 +921,91 @@ layer and `reset_layer_colors` gives every layer the palette colour again
 
 ## Board view configuration
 
-The Layers panel configures the board view (#2363). It has a search field,
-which keeps the rows whose name holds the text, and two tabs.
+The Layers panel configures the board view (#2363, #2480, mockup row 103). The dock's title
+bar names it; its body starts with two tabs.
 
 **Layers & Colors**, top to bottom:
 
-- Layer Sets: the set dropdown (the built-in sets, then the saved ones), a
-  name field with Save, and Delete for the saved set in view. They do what
-  the layer set button does.
-- Active Layer: the same choice as the layer tabs.
-- View From Bottom Side: the flip of the layer tab menu.
-- Import... and Export...: greyed until a view can be saved to a file.
+- The search row: the search field, which keeps the rows whose name holds
+  the text; Used On, a toggle chip that lists only the layers the board has
+  objects on; and the more button. When the search lists no row, the panel
+  says "No layers match" with the text, and Clear empties the field.
+- The more menu, opened in place under the more button; a click outside it
+  closes it. Layer Sets: Save current as set... (a name row with Save and a
+  close button opens under the search row; Enter saves too) and Delete
+  current set... (live while the view shows a saved set). Import... and
+  Export... are greyed until a view can be saved to a file. View From
+  Bottom Side, ticked while the board is seen from below, is the flip of
+  the layer tab menu; a click flips the view and closes the menu, as the
+  menu's other live rows do. Layer Stack... runs the Layer Stack command and opens
+  the Layer Stack panel; it is greyed when that command cannot run.
+- The Active | Set row: the active layer's dot and name, a dropdown with
+  the same choice as the layer tabs; and the set the view shows ("Set:
+  All"), a dropdown of the built-in sets, then the saved ones. This is the
+  one place a set is picked in the panel.
 - All Layers: its eye hides every layer, or shows them all while one is
-  hidden. Used On lists only the layers the board has objects on.
+  hidden.
+- The sections. Each header has a chevron that opens or closes it and a
+  count of the rows it lists. The four layer sections also have an eye
+  over the layers of the rows they list (a row the search or Used On
+  leaves out is left alone): it is shut while every one is hidden, and a
+  click shows them all while one is hidden, else hides them all.
 - Signal and Plane Layers: the copper layers, each with its number in the
-  stack and its type.
-- Component Layer Pairs: Top | Layer | Bottom, an eye and a colour chip per
-  side. The rows map onto the named technical layers: 3D Body, Assembly,
-  Component Outline (the fabrication layers), Courtyard, Designator,
-  Silkscreen, Paste, Solder (solder mask), Adhesive, Fiducial and
-  Keep-Out. Coating, Component Center, Tenting and Value have no layer and
-  are greyed.
+  stack and its type. The active layer's row has an accent bar, a soft
+  accent fill and an Active pill.
+- Component Layer Pairs: Top | Layer | Bottom, an eye and a colour dot per
+  side, the bottom side mirrored. The rows map onto the named technical
+  layers: 3D Body, Assembly, Component Outline (the fabrication layers),
+  Courtyard, Designator, Silkscreen, Paste, Solder (solder mask), Adhesive,
+  Fiducial and Keep-Out. Coating, Component Center, Tenting and Value have
+  no layer yet and are not listed; they show once the board has a layer for
+  them.
 - Other Technical Layers: Board Outline, Margin, Dimensions, Notes, ECO 1
-  and ECO 2. Other Layers: Drill Drawing, Drill Guide (no layer yet,
-  greyed) and Multi-Layer (vias and through-hole pads).
-- System Colors: the eyes of Connection Lines (the ratsnest) and the Origin
-  Marker work; the other rows and the system colours are greyed.
+  and ECO 2. Other Layers: Drill Drawing and Multi-Layer (vias and
+  through-hole pads); the section eye covers Drill Drawing, and the
+  Multi-Layer row keeps its own eye.
+  Drill Guide has no layer yet and is not listed.
+- System Colors, closed until opened: the eyes of Connection Lines (the
+  ratsnest) and the Origin Marker work; the other rows and the system
+  colours are greyed.
 
-A click on a layer's name makes it the active layer. A click on a chip opens
-the colours under the row: twelve presets, Custom... and the palette colour
-again. The colour is an override on top of the one board palette for this
-board view only; the canvas (the Board Outline colour draws the board edge
-too), the chip and the board texts draw it. The Keep-Out chips are greyed:
-the board's keepout regions keep the palette colour.
+A click on a layer's name makes it the active layer. A click on a colour
+dot opens the colour card under the row, and the open dot gets an accent
+ring: the 24 colours of the board palette (the open layer's colour is
+ringed), a hex field (`#RRGGBB`) that recolours the layer as soon as it reads
+as a colour, and, while the layer has its own colour, Palette colour, which
+gives it the palette's again. A swatch or Palette colour closes the card, as
+does the card's close button, a second click on the dot or a switch to
+another board. An undo, a redo or a reset while the card is open puts the
+layer's colour back in the hex field; a half-typed colour stays. The colour is an
+override on top of the one board palette, saved with the board
+(`[board_options.layer_colors]`), one undo step; the canvas (the Board
+Outline colour draws the board edge too), the dot, the layer tab and the
+board texts draw it. The Keep-Out dots are greyed: the board's keepout
+regions keep the palette colour.
 
-**View Options**: the configuration preset (greyed), 3D Off/On, Single Layer
-Mode Off/On (Mono is greyed) and Show Grid. Object Visibility lists All
-Objects (Mixed while the rows differ) and one row per kind of object, each
-with an eye, Draft (greyed) and a Transparency slider. Pads, Vias, Arcs,
-Tracks, Polygons, Regions, Fills, Texts, Dimensions and Keepouts can be
-hidden; a hidden kind is neither drawn nor picked. Texts covers footprint
-texts, board strings and text frames, box and all. Pads, Vias, Arcs (copper
-arcs; Tracks never fades them), Tracks, Polygons, Regions and Fills can be
-drawn transparent. Mask and Dim Settings and the Additional Options chips
-are greyed until the view can draw them.
+**View Options**: above the sections, Configuration is one labelled field
+reading Default, greyed until presets exist. General Settings holds 3D
+Off/On, Single Layer Off/On (Mono is greyed; the tooltip gives the full
+name, Single Layer Mode) and the Show Grid switch (a click on its caption
+toggles the grid too). Object Visibility is a
+grid of four columns under a header: eye, Object, Draft and Transparency (a
+slider and its percent). All Objects comes first, in medium weight; while
+the rows differ its eye is faded and Transparency reads Mixed. Then one row
+per kind of object, each with an eye, Draft (greyed) and a Transparency
+slider. Pads, Vias, Arcs, Tracks, Polygons, Regions, Fills, Texts,
+Dimensions and Keepouts can be hidden; a hidden kind is neither drawn nor
+picked. Texts covers footprint texts, board strings and text frames, box and
+all. Pads, Vias, Arcs (copper arcs; Tracks never fades them), Tracks,
+Polygons, Regions and Fills can be drawn transparent; the other kinds show a
+greyed slider. Mask and Dim Settings uses the same columns, so its percents
+line up with the object rows; its sliders show what the view draws today
+and are greyed. Additional Options is closed by default and its header
+counts the options that are on; its eleven checkboxes are greyed until the
+view can draw them.
 
-All of this is the board view's state, for the session; nothing touches the
-board file. Saving the view, presets and every greyed control are tracked in
+Apart from the layer colours, all of this is the board view's state, for the
+session; nothing else touches the board file. Saving the view, presets and every greyed control are tracked in
 #2480. Every control has a catalog command that names its board with
 `document`: `set_layer_visible`, `set_active_layer`, `set_layer_color`
 (without `color`, the palette colour again), `show_used_layers_only`,

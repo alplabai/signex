@@ -183,12 +183,6 @@ bar_icon!(
     "active_bar/graphite/fab_outputs.svg",
     "active_bar/graphite/fab_outputs.svg"
 );
-// The board view's quarter turn (#2316); Graphite has the only glyph.
-bar_icon!(
-    icon_view_rotate,
-    "active_bar/graphite/view_rotate.svg",
-    "active_bar/graphite/view_rotate.svg"
-);
 canonical_icon!(icon_shape_arc, "shape_arc.svg");
 canonical_icon!(icon_shape_circle, "shape_circle.svg");
 canonical_icon!(icon_shape_line, "shape_line.svg");
@@ -209,6 +203,7 @@ canonical_icon!(icon_chrome_gear, "chrome/gear.svg");
 canonical_icon!(icon_chrome_info, "chrome/info.svg");
 canonical_icon!(icon_chrome_lock, "chrome/lock.svg");
 canonical_icon!(icon_chrome_lock_mixed, "chrome/lock_mixed.svg");
+canonical_icon!(icon_chrome_more, "chrome/more.svg");
 canonical_icon!(icon_chrome_search, "chrome/search.svg");
 canonical_icon!(icon_chrome_window_close, "chrome/window_close.svg");
 canonical_icon!(icon_chrome_window_max, "chrome/window_max.svg");
@@ -324,6 +319,13 @@ canonical_icon!(icon_dd_text_string, "dropdown/text_string.svg");
 canonical_icon!(icon_dd_unions, "dropdown/unions.svg");
 canonical_icon!(icon_dd_vcc, "dropdown/vcc.svg");
 canonical_icon!(icon_dd_wire, "dropdown/wire.svg");
+// The layer tab menu under the board canvas (mockup row 104).
+canonical_icon!(icon_dd_draw_order, "dropdown/draw_order.svg");
+canonical_icon!(icon_dd_drill, "dropdown/drill.svg");
+canonical_icon!(icon_dd_eye, "dropdown/eye.svg");
+canonical_icon!(icon_dd_eye_off, "dropdown/eye_off.svg");
+canonical_icon!(icon_dd_highlight, "dropdown/highlight.svg");
+canonical_icon!(icon_dd_layers, "dropdown/layers.svg");
 
 // ─── Board tools (PCB Active Bar dropdown rows, #2392) ─────────────
 //

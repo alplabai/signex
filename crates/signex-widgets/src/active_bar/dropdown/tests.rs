@@ -279,6 +279,46 @@ fn a_card_with_strong_danger_and_badge_rows_builds() {
     }
 }
 
+/// A row built without the new builders is an ordinary row: not selected,
+/// no leading check, no caption, and no icon column.
+#[test]
+fn a_default_row_is_not_selected_and_has_no_lead_check_or_caption() {
+    let item = DropdownItem::new("Place", ());
+    assert!(!item.selected && item.lead_check.is_none() && item.caption.is_none());
+    assert!(!metrics::has_icons(&labelled("Place")));
+}
+
+/// A leading check reserves the icon column (on or off) and replaces the
+/// trailing check, so it does not widen the card.
+#[test]
+fn a_lead_check_row_takes_the_icon_column_not_the_trailing_check() {
+    let m = MenuMetrics::GRAPHITE;
+    let off = vec![DropdownEntry::Item(
+        DropdownItem::new("Signal Layers", ()).lead_check(false),
+    )];
+    assert!(
+        metrics::has_icons(&off),
+        "an empty column is still a column"
+    );
+    // Wide enough to clear the 200 px floor, narrow enough for 320 px, so
+    // the widths compare unclamped.
+    const WIDE: &str = "Assembly Drawings as SVG Files";
+    let on = DropdownItem::new(WIDE, ()).lead_check(true);
+    assert_eq!(on.lead_check, Some(true));
+    let plain = m.fitted_width(&[DropdownEntry::Item(on)], f32::MAX, "");
+    let checked = m.fitted_width(
+        &[DropdownEntry::Item(
+            DropdownItem::new(WIDE, ()).lead_check(true).checked(true),
+        )],
+        f32::MAX,
+        "",
+    );
+    assert_eq!(plain, checked, "no trailing check beside a leading one");
+    let iconless = m.fitted_width(&labelled(WIDE), f32::MAX, "");
+    assert!(iconless > m.min_width, "{iconless} clears the floor");
+    assert!(plain > iconless, "{plain} {iconless}");
+}
+
 /// A swatch row reserves the icon column like an icon row, so a card mixing
 /// the two starts every label at one x, and the swatch fits inside it.
 #[test]

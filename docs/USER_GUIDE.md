@@ -1198,23 +1198,31 @@ above them.
 
 **Layer tabs and the Layers panel**
 
-The tabs under the board list every layer the Layers panel shows, and
-scroll sideways when they do not fit; a hidden layer has no tab. Click a tab
-to make that layer active; new tracks, pours and text go on the active
-layer. `+` and `-` step
-to the next and previous layer, `*` to the next signal layer. A right-click
-on a tab hides, highlights or shows layers, sets the layer's colour
-(**Layer colour...**, saved with the board) and its **Layer stack...** row
-opens the Layer Stack panel.
+The tabs under the board list every layer the Layers panel shows; a hidden
+layer has no tab and gets it back when you show it again. When the tabs do
+not fit, scroll the strip sideways. Click a tab to make that layer active;
+new tracks, pours and text go on the active layer, and its tab has the
+accent bar along the top. `+` and `-` step to the next and previous layer,
+`*` to the next signal layer. A right-click on a tab hides, highlights or
+shows layers, sets the layer's colour (**Layer colour...**, saved with the
+board), sets the tab names (Short, Medium or Long) and the layer numbers,
+and its **Layer stack...** row opens the Layer Stack panel. The button at
+the left end of the tabs picks a layer set.
 
 **View ▸ Layers** opens the **Layers** panel. Its **Layers & Colors** tab
-has an eye per layer to show or hide it and a colour chip to change its
-colour (saved with the board, one undo step). **Used On** lists only the
-layers the board uses, and **Layer Sets** switches between sets of layers.
-The **View Options** tab
-shows or hides each kind of object and switches 3D and **Single Layer Mode**.
-Apart from the colours, these are view settings; they never change the board
-file.
+has an eye per layer to show or hide it, and an eye per section for all the
+layers it lists (a search or Used On leaves the others alone). Click a
+layer's colour dot to pick a colour from the board palette or type a hex
+value such as `#C8A02C`; the colour is saved with the board, one undo step.
+**Used On**, beside the search field, lists only the layers the board uses.
+The **Active** row shows the active layer, and its **Set** dropdown switches
+between sets of layers. The **⋯** button beside the search field saves and
+deletes sets, flips the view to the bottom side and opens the layer stack.
+The **View Options** tab shows or hides each kind of object and switches 3D
+and **Single Layer Mode**. The layer colours are part of the board: a
+colour picked in the colour card or typed in its hex field is one undo
+step, marks the board changed and is saved in the board file. The other
+settings on both tabs are view settings; they never change the board file.
 
 <!-- screenshot: the Layers panel, Layers & Colors tab, on a four-layer board -->
 
