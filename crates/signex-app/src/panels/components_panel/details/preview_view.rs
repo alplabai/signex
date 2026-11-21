@@ -288,10 +288,7 @@ mod tests {
     #[test]
     fn a_zoom_keeps_the_point_under_the_cursor() {
         let (scale, offset) = (10.0, Point::new(25.0, 15.0));
-        let world = Point::new(
-            (ANCHOR.x - offset.x) / scale,
-            (ANCHOR.y - offset.y) / scale,
-        );
+        let world = Point::new((ANCHOR.x - offset.x) / scale, (ANCHOR.y - offset.y) / scale);
         let view = PreviewView::default().zoomed_about(ANCHOR, 1.5);
         let (zoomed, moved) = view.place(scale, offset);
         assert!((world.x * zoomed + moved.x - ANCHOR.x).abs() < 1e-3);

@@ -390,7 +390,10 @@ fn the_size_label_sits_at_the_bottom_clear_of_the_drawing_and_the_bar() {
         let camera = super::fitted_camera(&model, area);
         let bounds = size_label_bounds(area, &label);
         assert!(bounds.y >= size.height / 2.0, "{size:?} {bounds:?}");
-        assert!(bounds.y + bounds.height <= size.height, "{size:?} {bounds:?}");
+        assert!(
+            bounds.y + bounds.height <= size.height,
+            "{size:?} {bounds:?}"
+        );
         let drawing_bottom = bbox.3 as f32 * camera.scale + camera.offset.y;
         assert!(
             drawing_bottom <= bounds.y + 1e-2,
