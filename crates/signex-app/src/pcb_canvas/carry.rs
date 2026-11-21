@@ -8,10 +8,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use pcb_geom::{ArcEnds, BoardTextField, TrackEnds};
-use signex_engine::pcb::BoardClipboard;
+use signex_engine::pcb::footprint_text_edit::{FootprintTextEdit, footprint_text_command};
 use signex_engine::pcb::part_place::PartToPlace;
 use signex_engine::pcb::placement::{grid_for, grid_step_mm};
 use signex_engine::pcb::snap::{GuideHit, SnapQuery, axis_snap, guide_snap, object_snap_point};
+use signex_engine::pcb::{BoardClipboard, BoardCommand};
 use signex_types::pcb::{PcbBoard, Point, Segment};
 use signex_types::pcb_arc::TrackArc;
 use signex_types::pcb_layer::CopperLayer;
@@ -113,10 +114,21 @@ impl PcbCarry {
         self.footprints.union(&self.vias).copied().collect()
     }
 
-    /// Whether the board is drawn without what is carried: for footprints,
-    /// and for vias with tracks following them. A lone via keeps its ghost.
+    /// Whether this carry moves objects already on the board, which then
+    /// move themselves in their real look. A paste or a part on the cursor
+    /// does not exist yet and keeps its ghost.
     pub fn previews_on_board(&self) -> bool {
-        !self.footprints.is_empty() || (self.via_tracks && !self.leaves_tracks)
+        !self.footprints.is_empty() || !self.vias.is_empty() || self.text.is_some()
+    }
+
+    /// The ids of what moves with this carry on `board`: the footprints or
+    /// vias and the tracks and arcs following them. Their selection marks do
+    /// not stay behind.
+    pub fn moving_ids(&self, board: &PcbBoard) -> BTreeSet<Uuid> {
+        let mut ids = self.carried();
+        ids.extend(self.following(board).iter().map(|ends| ends.track));
+        ids.extend(self.following_arcs(board).iter().map(|ends| ends.arc));
+        ids
     }
 
     /// The track ends on what is carried, which move with it; none with
@@ -378,6 +390,48 @@ pub fn board_without(
         .cloned()
         .collect();
     rest
+}
+
+/// `board` without the footprint text `text`: what a drag of it leaves in
+/// place.
+pub fn board_without_text(board: &PcbBoard, text: (Uuid, BoardTextField)) -> PcbBoard {
+    let mut rest = board.clone();
+    let (id, field) = text;
+    if let Some(footprint) = rest.footprints.iter_mut().find(|fp| fp.uuid == id)
+        && let Some(index) = pcb_geom::property_index(footprint, field)
+    {
+        footprint.properties[index].hidden = true;
+    }
+    rest
+}
+
+/// Only the footprint text `text` of `board`, moved by `delta`, as the drop's
+/// command (`footprint_text_command`) moves it: what its drag preview draws.
+pub fn carried_text_board(
+    board: &PcbBoard,
+    text: (Uuid, BoardTextField),
+    delta: Point,
+) -> PcbBoard {
+    let (id, field) = text;
+    let zero = Point::new(0.0, 0.0);
+    let mut only = carried_board(board, &BTreeSet::from([id]), &[], zero);
+    let moved = footprint_text_command(board, id, field, FootprintTextEdit::MoveBy(delta));
+    let Some(footprint) = only.footprints.first_mut() else {
+        return only;
+    };
+    footprint.pads.clear();
+    footprint.graphics.clear();
+    if let Ok(Some(BoardCommand::SetFootprintProperty {
+        index, property, ..
+    })) = moved
+    {
+        footprint.properties[index] = property;
+    }
+    let shown = pcb_geom::property_index(footprint, field);
+    for (index, property) in footprint.properties.iter_mut().enumerate() {
+        property.hidden |= Some(index) != shown;
+    }
+    only
 }
 
 /// The arcs of `ends` on `board` as the move by `delta` leaves them; an arc

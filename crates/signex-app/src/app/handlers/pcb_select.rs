@@ -12,7 +12,7 @@ use crate::app::{ContextMenuMsg, Message, Signex, TabDocument};
 use crate::canvas::CanvasEvent;
 use crate::pcb_canvas::{
     PcbCanvas, PcbCanvasMsg, PcbCarry, PcbSelectionState, board_after_move, board_without,
-    carried_board, followed_arcs, with_arcs_replaced,
+    board_without_text, carried_board, carried_text_board, followed_arcs, with_arcs_replaced,
 };
 
 impl Signex {
@@ -337,10 +337,10 @@ impl Signex {
 }
 
 /// Bring `canvas`'s drag preview in line with `carry` on `board` (#2358):
-/// while the carry is anchored, the board is drawn without the carried
-/// footprints and the tracks that follow their pads, and those are drawn at
-/// its offset; otherwise the whole board. `ratsnest` is the cache and the
-/// board path when the view shows it: during the carry the ratsnest is
+/// while a carry of objects on the board is anchored, the board is drawn
+/// without them (footprints, vias or one text) and the tracks that follow
+/// them, and those are drawn at its offset; otherwise the whole board.
+/// `ratsnest` is the cache and the board path when the view shows it: during the carry the ratsnest is
 /// drawn with the carried footprints, read off the board as the drop would
 /// leave it, so its lines stay on the carried pads (#2379).
 fn sync_drag_preview(
@@ -357,12 +357,19 @@ fn sync_drag_preview(
         return;
     };
     let carried = carry.carried();
-    if !canvas.previews_drag_of(&carried, carry.leaves_tracks) {
+    let begun = match carry.text {
+        Some(text) => canvas.previews_text_drag_of(text),
+        None => canvas.previews_drag_of(&carried, carry.leaves_tracks),
+    };
+    if !begun {
         // Once per carry and per Ctrl switch: the tracks that follow what
         // is carried (none with Ctrl), and the board without what it
         // carries, with its pour fills.
         let following = carry.following(board);
-        let mut rest = board_without(board, &carried, &following);
+        let mut rest = match carry.text {
+            Some(text) => board_without_text(board, text),
+            None => board_without(board, &carried, &following),
+        };
         let arcs = carry.following_arcs(board);
         rest.free
             .arcs
@@ -371,12 +378,20 @@ fn sync_drag_preview(
         let base = PcbSnapshot::from_board_with_view(&rest, view)
             .with_designator_standard(standard)
             .with_zone_fills(&fills);
-        canvas.begin_drag_preview(carried.clone(), carry.leaves_tracks, following, base);
+        match carry.text {
+            Some(text) => canvas.begin_text_drag_preview(text, base),
+            None => {
+                canvas.begin_drag_preview(carried.clone(), carry.leaves_tracks, following, base);
+            }
+        }
     }
     let following = canvas.drag_preview_following().to_vec();
     canvas.move_drag_preview(carry.delta, || {
         let arcs = followed_arcs(board, &carry.following_arcs(board), carry.delta);
-        let mut moved = carried_board(board, &carried, &following, carry.delta);
+        let mut moved = match carry.text {
+            Some(text) => carried_text_board(board, text, carry.delta),
+            None => carried_board(board, &carried, &following, carry.delta),
+        };
         moved.free.arcs = arcs.clone();
         let snapshot =
             PcbSnapshot::from_board_with_view(&moved, view).with_designator_standard(standard);
