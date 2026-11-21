@@ -125,6 +125,24 @@ impl Signex {
         )
     }
 
+    /// An Active Bar flyout `card` at the absolute `at`, as one overlay layer
+    /// over [`Self::flyout_dismiss_layer`].
+    pub(in crate::app::view) fn flyout_and_place<'a>(
+        on_dismiss: Message,
+        card: Element<'a, Message>,
+        at: (f32, f32),
+    ) -> Vec<Element<'a, Message>> {
+        let scrim = crate::styles::tokens::scrim(crate::styles::tokens::BACKDROP_ALPHA);
+        vec![
+            iced::widget::Stack::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Self::flyout_dismiss_layer(on_dismiss, scrim))
+                .push(signex_widgets::Translate::new(claim_pointer(card), at).boxed())
+                .boxed(),
+        ]
+    }
+
     /// [`Self::dismiss_over`] with `card` centred in the window.
     pub(in crate::app::view) fn dismiss_and_centre<'a>(
         on_dismiss: Message,

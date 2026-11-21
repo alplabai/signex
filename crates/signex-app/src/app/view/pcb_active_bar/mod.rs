@@ -13,7 +13,7 @@
 //! (`badge.rs`).
 
 use iced::alignment::Horizontal;
-use iced::widget::{Space, column, container, mouse_area, row, stack, svg};
+use iced::widget::{Space, column, container, row, stack, svg};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
@@ -112,12 +112,10 @@ impl Signex {
             row![Space::new().width(panel_x), panel],
         ]
         .width(bar_width);
-        let dismiss = mouse_area(
-            container(Space::new())
-                .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .on_press(bar_message(PcbBarMsg::MenuDismissed));
+        let dismiss = Self::flyout_dismiss_layer(
+            bar_message(PcbBarMsg::MenuDismissed),
+            iced::Color::TRANSPARENT,
+        );
         stack![
             dismiss,
             column![
