@@ -1,7 +1,7 @@
 //! #2059: the Projects tree names its branches and file marks from the
 //! catalog in the view, while the cached tree, and so navigation, keeps its
 //! keys whatever the language. Mockup row 19: missing files read as their plain name
-//! with a pill, the filter says when it matches nothing, the card's gear
+//! with a pill, the filter says when it matches nothing, the card's options button
 //! opens Project Options… and the empty panel offers New Project…, Open…
 //! and the recent projects.
 
@@ -315,10 +315,10 @@ fn add_project(app: &mut crate::app::Signex, name: &str) -> crate::app::ProjectI
     id
 }
 
-/// Mockup row 19: the gear at the right end of each project card asks for that
+/// Mockup row 19: the options button at the right end of each project card asks for that
 /// card's project's options.
 #[test]
-fn each_card_gear_asks_for_its_projects_options() {
+fn each_card_options_button_asks_for_its_projects_options() {
     let (mut app, _boot) = crate::app::Signex::new();
     let first = add_project(&mut app, "A");
     let second = add_project(&mut app, "B");
@@ -335,7 +335,7 @@ fn each_card_gear_asks_for_its_projects_options() {
         })
         .collect();
     for id in [first, second] {
-        assert!(asked.contains(&id), "{asked:?} has no gear for {id:?}");
+        assert!(asked.contains(&id), "{asked:?} has no options button for {id:?}");
     }
 }
 
@@ -360,10 +360,10 @@ fn the_project_options_button_is_as_large_as_the_cards_tile() {
     assert!(!asks(right - card::OPTIONS_BUTTON - 2.0), "just outside");
 }
 
-/// The gear runs the tree menu's Project Options for the project whose card
+/// The options button runs the tree menu's Project Options for the project whose card
 /// it is on, not the active one.
 #[test]
-fn the_card_gear_opens_the_clicked_projects_options_tab() {
+fn the_card_options_button_opens_the_clicked_projects_options_tab() {
     use crate::app::Message;
     use crate::dock::DockMessage;
     let (mut app, _boot) = crate::app::Signex::new();
