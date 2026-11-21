@@ -15,12 +15,22 @@ LIST='# the edit-tail wrappers
 handlers/editing_commands/sheet_on.rs after_sheet_change
 read_only_refusal.rs refuse_if_read_only_at'
 
-# run_case <name> <expected: fail|pass> <file under projector> <body>
+STATE='impl DocumentState {
+    pub(crate) fn bump(&mut self) {}
+    pub(crate) fn peek(&self) -> bool { true }
+}'
+
+# run_case <name> <expected: fail|pass> <file under projector> <body> [<file under crates/signex-app/src> <body>]
 run_case() {
   local name="$1" expect="$2" tree="$TMP/$1" status=0
-  mkdir -p "$tree/$SRC/$(dirname "$3")" "$tree/scripts"
+  mkdir -p "$tree/$SRC/$(dirname "$3")" "$tree/scripts" "$tree/crates/signex-app/src/app/state"
   printf '%s\n' "$LIST" > "$tree/scripts/sheet-change-wrappers.txt"
+  printf '%s\n' "$STATE" > "$tree/crates/signex-app/src/app/state/document.rs"
   printf '%s\n' "$4" > "$tree/$SRC/$3"
+  if [[ $# -ge 6 ]]; then
+    mkdir -p "$tree/crates/signex-app/src/$(dirname "$5")"
+    printf '%s\n' "$6" > "$tree/crates/signex-app/src/$5"
+  fi
   PROJECTOR_WRITES_ROOT="$tree" bash "$GATE" >/dev/null 2>&1 || status=$?
   if [[ "$expect" == fail && $status -ne 1 ]] || [[ "$expect" == pass && $status -ne 0 ]]; then
     echo "FAIL  $name — expected $expect, gate exit $status"
@@ -117,6 +127,40 @@ run_case wrapper_as_value fail board_view.rs "$(in_fn 'let f = Signex::apply_eng
 run_case wrapper_suffix pass board_view.rs "$(in_fn 'self.reapply_engine_undo_marker();')"
 
 # A tree without the projector or the wrapper list is an error, never a pass.
+# `&mut self` methods of DocumentState, collected from the crate.
+run_case state_mut_method fail slots.rs "$(in_fn 'self.document_state.bump();')"
+run_case state_ref_method pass slots.rs "$(in_fn 'let _ = self.document_state.peek();')"
+run_case state_mut_split fail slots.rs "$(in_fn 'self
+            .document_state
+            .bump();')"
+run_case state_mut_by_path fail slots.rs "$(in_fn 'DocumentState::bump(&mut ds);')"
+run_case state_mut_as_value fail slots.rs "$(in_fn 'let f = crate::app::state::DocumentState::bump;')"
+run_case state_mut_other_file fail slots.rs "$(in_fn 'self.document_state.open_sheet(p);')" \
+  app/state/document_load/open.rs 'impl DocumentState {
+    pub(crate) fn open_sheet(&mut self, path: PathBuf) {}
+}'
+run_case state_mut_scoped_impl fail slots.rs "$(in_fn 'self.document_state.settle(p);')" \
+  app/state/sheet_change/mod.rs "impl crate::app::state::DocumentState {
+    pub(crate) fn settle<'a>(&'a mut self, path: PathBuf) {}
+}"
+run_case state_mut_name_elsewhere pass slots.rs "$(in_fn 'slot.bump(); self.bump();')"
+run_case state_mut_in_test_mod pass slots.rs "fn g() {}
+#[cfg(test)]
+mod tests { $(in_fn 'self.document_state.bump();') }"
+
+# No `&mut self` method of DocumentState found means a broken scan, not a pass.
+tree="$TMP/no_state" status=0
+mkdir -p "$tree/scripts" "$tree/$SRC"
+printf '%s\n' "$LIST" > "$tree/scripts/sheet-change-wrappers.txt"
+printf '%s\n' "$(in_fn 'self.refresh_panel_ctx();')" > "$tree/$SRC/mod.rs"
+PROJECTOR_WRITES_ROOT="$tree" bash "$GATE" >/dev/null 2>&1 || status=$?
+if [[ $status -ne 2 ]]; then
+  echo "FAIL  no_state — expected exit 2, gate exit $status"
+  failures=$((failures + 1))
+else
+  echo "ok    no_state"
+fi
+
 for missing in projector list; do
   tree="$TMP/no_$missing" status=0
   mkdir -p "$tree/scripts" "$tree/crates"

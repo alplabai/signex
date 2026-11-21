@@ -16,8 +16,13 @@
 #            wrapper, a delegating edit form, or an edit-tail wrapper listed in
 #            scripts/sheet-change-wrappers.txt: a call, a path call, a method
 #            or function named as a value, an import.
+#   state    a `&mut self` method of DocumentState, called on
+#            `<..>.document_state` or named as `DocumentState::<m>`. The names
+#            are collected from every `impl DocumentState` block under
+#            crates/signex-app/src, so a new one is caught without an edit
+#            here; `&self` methods are reads and stay allowed.
 #
-# Both read the code through ast-grep, so comments do not count. Test code is
+# All read the code through ast-grep, so comments do not count. Test code is
 # left out: files named `tests.rs` or `*_tests.rs`, anything under a `tests/`
 # or `*_tests/` folder, and items under `#[cfg(test)]`. Blind spots: code
 # inside a macro's token tree (`dbg!(..)`, `vec![..]`) is not parsed for the
@@ -63,14 +68,7 @@ fi
 listed="$(grep -vE '^[[:space:]]*(#|$)' "$LIST" | awk '{ print $2 }')"
 names="$(printf '%s\n' $MARKS $LOAD_WRAPPERS $DELEGATING $listed | sed '/^$/d' | sort -u | paste -sd '|' -)"
 
-if ! writes="$(ast-grep scan --rule "$RULE" --json=compact "$SRC")" \
-  || ! uses="$(ast-grep scan --json=compact --inline-rules "
-id: projector-name
-language: rust
-rule:
-  any:
-    - {kind: identifier, regex: '^($names)\$'}
-    - {kind: field_identifier, regex: '^($names)\$'}
+NOT_IN_TEST="
   not:
     inside:
       stopBy: end
@@ -85,13 +83,69 @@ rule:
               - kind: attribute_item
               - kind: line_comment
               - kind: block_comment
-        pattern: '#[cfg(test)]'" "$SRC")"; then
+        pattern: '#[cfg(test)]'"
+
+# Every `&mut self` method of an `impl DocumentState` block in the crate,
+# whichever file declares it; the `&self` ones are reads and stay allowed.
+if ! decls="$(ast-grep scan --json=compact --inline-rules "
+id: document-state-mut-fn
+language: rust
+rule:
+  kind: function_item
+  has:
+    field: parameters
+    has:
+      kind: self_parameter
+      regex: '^&.*\\bmut\\s+self\$'
+  inside:
+    kind: impl_item
+    stopBy: end
+    has:
+      field: type
+      regex: '(^|::)DocumentState\$'" crates/signex-app/src)"; then
+  echo "Projector write guard: FAIL — ast-grep could not list DocumentState's methods."
+  exit 2
+fi
+state_names="$(jq -r '.[] | .text | capture("fn\\s+(?<n>[A-Za-z_][A-Za-z0-9_]*)").n' <<<"$decls" | sort -u | paste -sd '|' -)"
+if [[ -z "$state_names" ]]; then
+  echo "Projector write guard: FAIL — no \`&mut self\` method of DocumentState under crates/signex-app/src."
+  exit 2
+fi
+
+if ! writes="$(ast-grep scan --rule "$RULE" --json=compact "$SRC")" \
+  || ! uses="$(ast-grep scan --json=compact --inline-rules "
+id: projector-name
+language: rust
+rule:
+  any:
+    - {kind: identifier, regex: '^($names)\$'}
+    - {kind: field_identifier, regex: '^($names)\$'}
+$NOT_IN_TEST" "$SRC")" \
+  || ! state_uses="$(ast-grep scan --json=compact --inline-rules "
+id: projector-document-state-mut
+language: rust
+rule:
+  any:
+    # \`<..>.document_state.<m>(..)\`
+    - kind: field_expression
+      all:
+        - has: {field: field, regex: '^($state_names)\$'}
+        - has:
+            field: value
+            kind: field_expression
+            has: {field: field, regex: '^document_state\$'}
+    # \`DocumentState::<m>\`, called or named as a value
+    - kind: scoped_identifier
+      all:
+        - has: {field: path, regex: '(^|::)DocumentState\$'}
+        - has: {field: name, regex: '^($state_names)\$'}
+$NOT_IN_TEST" "$SRC")"; then
   echo "Projector write guard: FAIL — ast-grep could not scan $SRC."
   exit 2
 fi
 hits="$(jq -rs 'add | .[]
   | select(.file | test("(^|/|_)tests/|(^|/|_)tests\\.rs$") | not)
-  | "\(.file):\(.range.start.line + 1): \(.text | split("\n")[0])"' <<<"$writes$uses" | sort -u)"
+  | "\(.file):\(.range.start.line + 1): \(.text | split("\n")[0])"' <<<"$writes$uses$state_uses" | sort -u)"
 
 if [[ -n "$hits" ]]; then
   echo "Projector write guard: FAIL — $SRC writes core state or calls a wrapper:"
