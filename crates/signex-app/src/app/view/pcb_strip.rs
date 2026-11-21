@@ -207,8 +207,8 @@ pub(super) fn layer_strip<'a>(
             .push(layer_tab(label, swatch, tokens, false, messages))
             .push(tab_divider(tokens));
     }
-    // A long strip scrolls inside the window instead of widening it; its bar
-    // sits in its own space under the tabs, clear of them.
+    // A long strip scrolls inside the window instead of widening it; the bar
+    // has a lane of its own under the tabs, kept whether or not they overflow.
     let tabs = scrollable(tabs)
         .direction(Direction::Horizontal(
             crate::styles::thin_scrollbar().spacing(SCROLLBAR_GAP),
