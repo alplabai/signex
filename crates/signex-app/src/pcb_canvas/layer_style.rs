@@ -165,36 +165,32 @@ pub fn multi_layer_colour() -> Color {
     Color { r, g, b, a }
 }
 
-/// How much darker the board's edge is than its mask in 3D.
-const BOARD_3D_EDGE_SHADE: f32 = 0.55;
 /// How strongly a selected part is washed in the selection colour in 3D.
 const BOARD_3D_HIGHLIGHT_ALPHA: f32 = 0.45;
 
-/// The colours of the board 3D view (#2390), from this palette: the solder
-/// mask over the faces (opaque), its darker shade on the edge, the copper
-/// and Multi-Layer colours, and the 3D Body layer for a part with no colour
-/// of its own.
+/// Green solder mask, slightly translucent. The board stores no mask colour.
+const BOARD_3D_MASK: [f32; 4] = [0.05, 0.32, 0.16, 0.88];
+/// FR-4 laminate.
+const BOARD_3D_SUBSTRATE: [f32; 4] = [0.63, 0.58, 0.40, 1.0];
+/// Bare copper.
+const BOARD_3D_COPPER: [f32; 4] = [0.80, 0.50, 0.27, 1.0];
+/// Gold surface finish. The board stores no finish.
+const BOARD_3D_FINISH: [f32; 4] = [0.90, 0.73, 0.33, 1.0];
+/// White silkscreen ink.
+const BOARD_3D_SILK: [f32; 4] = [0.95, 0.95, 0.92, 1.0];
+/// A moulded part body with no colour of its own.
+const BOARD_3D_BODY: [f32; 4] = [0.16, 0.16, 0.18, 1.0];
+
+/// The physical materials of the board 3D view (#2390). They do not follow
+/// the flat view's layer palette: see `docs/RENDERING_RULES.md`, "board-3d".
 pub fn board_3d_colors() -> signex_renderer::board3d::Board3dColors {
-    let rgba = |c: Color| [c.r, c.g, c.b, c.a];
-    let mask = Color {
-        a: 1.0,
-        ..board_layer_colour(PcbLayer::Technical(TechnicalLayer::SolderMaskTop))
-    };
-    let edge = Color {
-        r: mask.r * BOARD_3D_EDGE_SHADE,
-        g: mask.g * BOARD_3D_EDGE_SHADE,
-        b: mask.b * BOARD_3D_EDGE_SHADE,
-        a: 1.0,
-    };
     signex_renderer::board3d::Board3dColors {
-        mask: rgba(mask),
-        edge: rgba(edge),
-        top_copper: rgba(board_layer_colour(PcbLayer::Copper(CopperLayer::Top))),
-        bottom_copper: rgba(board_layer_colour(PcbLayer::Copper(CopperLayer::Bottom))),
-        multi_layer: rgba(multi_layer_colour()),
-        body: rgba(board_layer_colour(PcbLayer::Technical(
-            TechnicalLayer::Body3dTop,
-        ))),
+        mask: BOARD_3D_MASK,
+        substrate: BOARD_3D_SUBSTRATE,
+        copper: BOARD_3D_COPPER,
+        finish: BOARD_3D_FINISH,
+        silk: BOARD_3D_SILK,
+        body: BOARD_3D_BODY,
     }
 }
 
@@ -210,6 +206,23 @@ mod tests {
     use super::*;
     use signex_renderer::pcb::{BOARD_OUTLINE, copper_slot};
     use signex_types::theme::{Color as ThemeColor, pair_bottom};
+
+    /// The 3D board is drawn in materials: no flat-view layer colour.
+    #[test]
+    fn no_3d_material_is_a_flat_view_layer_colour() {
+        let c = board_3d_colors();
+        let materials = [c.mask, c.substrate, c.copper, c.finish, c.silk, c.body];
+        for layer in PcbLayer::all() {
+            let flat = board_layer_colour(layer);
+            for material in materials {
+                assert_ne!(
+                    [material[0], material[1], material[2]],
+                    [flat.r, flat.g, flat.b],
+                    "{layer:?}"
+                );
+            }
+        }
+    }
 
     /// Every layer has a catalog name: none falls back to its message id.
     #[test]

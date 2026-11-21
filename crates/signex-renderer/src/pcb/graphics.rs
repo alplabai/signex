@@ -373,7 +373,7 @@ pub(super) fn emit(graphics: &[GraphicInput], theme: &ResolvedTheme, scene: &mut
 
 /// The points along an arc, at most `ARC_CHORD_DEG` apart, both ends
 /// included.
-pub(super) fn arc_points(
+pub(crate) fn arc_points(
     center: [f32; 2],
     radius: f32,
     start_deg: f32,
