@@ -25,6 +25,7 @@ impl Signex {
         self.ui_state.symbol_body_fill = self.ui_state.preferences_draft_symbol_body_fill;
         self.ui_state.trackpad_pan = self.ui_state.preferences_draft_trackpad_pan;
         self.ui_state.wheel_mode = self.ui_state.preferences_draft_wheel_mode;
+        self.ui_state.layer_switcher = self.ui_state.preferences_draft_layer_switcher;
         self.ui_state.remember_window_geometry =
             self.ui_state.preferences_draft_remember_window_geometry;
         self.ui_state.drag_direction_select = self.ui_state.preferences_draft_drag_direction_select;

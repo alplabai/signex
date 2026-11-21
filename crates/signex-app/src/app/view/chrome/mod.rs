@@ -89,6 +89,7 @@ impl Signex {
             body_fill_picker_open: ui.preferences_body_fill_picker_open,
             draft_trackpad_pan: ui.preferences_draft_trackpad_pan,
             draft_wheel_mode: ui.preferences_draft_wheel_mode,
+            draft_layer_switcher: ui.preferences_draft_layer_switcher,
             draft_remember_window_geometry: ui.preferences_draft_remember_window_geometry,
             draft_drag_direction_select: ui.preferences_draft_drag_direction_select,
             draft_increment_step: ui.preferences_draft_increment_step,

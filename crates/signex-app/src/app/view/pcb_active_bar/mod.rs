@@ -1,6 +1,6 @@
 //! The PCB Active Bar (#2352, mockup row 108): selection filter, move, align |
 //! components | route, tune, via and pad, copper areas, copper drawing |
-//! dimensions, text, graphics | board sketch, fabrication outputs | view.
+//! dimensions, text, graphics | board sketch | view.
 //!
 //! Every live button runs its command through the menu bar's own message, so
 //! a click is the menu row. The tool groups (#2392, `groups.rs`) show the row
@@ -262,11 +262,6 @@ pub(in crate::app::view) fn pcb_bar_items(
             "board_sketch",
             svg(ic::icon_board_sketch(tid)),
             t!(i18n, ids::BOARD_SKETCH_TOOLTIP).into_string(),
-        ),
-        command_button(
-            "fabrication_outputs",
-            svg(ic::icon_fab_outputs(tid)),
-            t!(i18n, ids::FAB_OUTPUTS_TOOLTIP).into_string(),
         ),
         ActiveBarItem::Separator,
         menu_button(

@@ -116,6 +116,10 @@ define_ids! {
     PREFERENCES_WHEEL_MODE_ZOOM = "preferences-wheel-mode-zoom";
     PREFERENCES_WHEEL_MODE_SCROLL = "preferences-wheel-mode-scroll";
     PREFERENCES_WHEEL_MODE_SHORT_HELP = "preferences-wheel-mode-short-help";
+    PREFERENCES_LAYER_SWITCHER_LABEL = "preferences-layer-switcher-label";
+    PREFERENCES_LAYER_SWITCHER_STRIP = "preferences-layer-switcher-strip";
+    PREFERENCES_LAYER_SWITCHER_DROPDOWN = "preferences-layer-switcher-dropdown";
+    PREFERENCES_LAYER_SWITCHER_HELP = "preferences-layer-switcher-help";
     PREFERENCES_APPEARANCE_TRACKPAD_PAN_SHORT_HELP = "preferences-appearance-trackpad-pan-short-help";
     PREFERENCES_APPEARANCE_REMEMBER_GEOMETRY_SHORT_HELP = "preferences-appearance-remember-geometry-short-help";
     PREFERENCES_EDITING_HEADING = "preferences-editing-heading";

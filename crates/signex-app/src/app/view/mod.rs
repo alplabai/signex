@@ -22,7 +22,7 @@ mod net_color;
 mod overlays;
 pub(crate) mod parameter_manager;
 mod pcb_active_bar;
-mod pcb_strip;
+pub(in crate::app) mod pcb_strip;
 mod pdf_preview;
 mod print_preview;
 mod status;
@@ -533,8 +533,12 @@ impl Signex {
                     .boxed()
             };
             // The board's layers as tabs under the canvas; a tab click acts
-            // on this window's board (#2357).
-            let strip = self.pcb_for_window(window_id).and_then(|board| {
+            // on this window's board (#2357). The Dropdown layer switcher
+            // has none.
+            let shown = self
+                .pcb_for_window(window_id)
+                .filter(|_| self.shows_pcb_layer_strip());
+            let strip = shown.and_then(|board| {
                 let undocked = self.undocked_pcb_path(window_id);
                 let path = undocked.clone().or_else(|| self.active_tab_path())?;
                 let view = self.pcb_layer_view(&path);

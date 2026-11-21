@@ -37,6 +37,35 @@ impl LayerNameStyle {
     }
 }
 
+/// How a board picks its active layer: Preferences ▸ Appearance ▸ Layer
+/// switcher, saved in `prefs.json` as `pcb_layer_switcher`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayerSwitcher {
+    /// The layer tabs under the board; the status-bar pill is a label.
+    #[default]
+    Strip,
+    /// No tabs; the status-bar pill opens a list of the visible layers.
+    Dropdown,
+}
+
+impl LayerSwitcher {
+    /// The value stored in `prefs.json`.
+    pub fn as_pref(self) -> &'static str {
+        match self {
+            Self::Strip => "strip",
+            Self::Dropdown => "dropdown",
+        }
+    }
+
+    /// Parse a stored value; anything unknown is [`Self::Strip`].
+    pub fn from_pref(value: &str) -> Self {
+        match value {
+            "dropdown" => Self::Dropdown,
+            _ => Self::Strip,
+        }
+    }
+}
+
 /// A layer set the user saved: a name and its layers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SavedLayerSet {

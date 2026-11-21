@@ -237,10 +237,12 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   percent), **Unrouted**, **DRC** (the violations of the last **Run DRC** and
   how long ago it ran, or *not run yet*) and **Selected**, which takes the
   place of the selection summary. A count of zero shows as a grey 0. Each of
-  them is a button that opens a popover above it. A click on the active
-  layer pill still steps to the next layer and a click on the grid value
-  still shows or hides the grid; right-click either to open its popover.
-  Esc or a click elsewhere closes a popover:
+  them is a button that opens a popover above it. The active layer pill is
+  a plain label under the **Strip** layer switcher; under **Dropdown**
+  (**Preferences ▸ Appearance ▸ Layer switcher**) the layer tabs are hidden
+  and a click on the pill lists the visible layers by group. A click on the
+  grid value still shows or hides the grid; right-click it or the pill to
+  open its popover. Esc or a click elsewhere closes a popover:
   - **Active layer:** the board's shown layers; click one to make it the
     active layer. **Layers panel** opens the panel. The `+` and `-` keys
     (**View ▸ Next Layer** and **Previous Layer**) step the layer too.
@@ -1720,8 +1722,7 @@ Run DRC until it is clean, save the board, then make the files.
 
 **Gerber, drill, pick-and-place and the whole-job files**
 
-1. Choose **File ▸ Fabrication Outputs…** (or the Active Bar's
-   **Fabrication Outputs** button).
+1. Choose **File ▸ Fabrication Outputs…**.
 2. Tick what to write. The kinds come in four groups, each counting its
    ticks:
    - **Fabrication**: **Gerber RS-274X**, **Excellon drill** and the

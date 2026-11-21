@@ -446,6 +446,9 @@ pub(crate) fn popover_view<'a>(
 ) -> Element<'a, BoardPopoverEvent> {
     match model {
         BoardPopoverModel::Layer(list) => super::layer_popover::view(list, tokens, i18n),
+        BoardPopoverModel::LayerDropdown(groups) => {
+            super::layer_dropdown::view(groups, tokens, i18n)
+        }
         BoardPopoverModel::Grid(grid) => super::grid_popover::view(grid, tokens, i18n),
         BoardPopoverModel::Unrouted(list) => super::unrouted_popover::view(list, tokens, i18n),
         BoardPopoverModel::Drc(list) => super::drc_popover::view(list, tokens, i18n),

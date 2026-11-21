@@ -20,6 +20,13 @@ define_ids! {
     BOARD_STATUS_CYCLES_BOTH = "board-status-cycles-both";
     BOARD_STATUS_LAYER_TITLE = "board-status-layer-title";
     BOARD_STATUS_LAYERS_PANEL = "board-status-layers-panel";
+    BOARD_STATUS_LAYER_GROUP_COPPER = "board-status-layer-group-copper";
+    BOARD_STATUS_LAYER_GROUP_SILKSCREEN = "board-status-layer-group-silkscreen";
+    BOARD_STATUS_LAYER_GROUP_MASK = "board-status-layer-group-mask";
+    BOARD_STATUS_LAYER_GROUP_PASTE = "board-status-layer-group-paste";
+    BOARD_STATUS_LAYER_GROUP_ASSEMBLY = "board-status-layer-group-assembly";
+    BOARD_STATUS_LAYER_GROUP_MECHANICAL = "board-status-layer-group-mechanical";
+    BOARD_STATUS_LAYER_GROUP_DOCUMENTATION = "board-status-layer-group-documentation";
     BOARD_STATUS_GRID_TITLE = "board-status-grid-title";
     BOARD_STATUS_GRID_PRESET = "board-status-grid-preset";
     BOARD_STATUS_GRID_MIL = "board-status-grid-mil";

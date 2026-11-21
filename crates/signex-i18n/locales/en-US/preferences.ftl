@@ -386,6 +386,11 @@ preferences-appearance-antialiasing-short-help = Smooth the edges of canvas shap
 preferences-wheel-mode-zoom = Zoom
 preferences-wheel-mode-scroll = Scroll
 preferences-wheel-mode-short-help = Zoom: the wheel zooms the canvas. Scroll: the wheel and two-finger scroll pan, Shift + wheel pans sideways, Ctrl/Cmd + wheel or a pinch zooms.
+# How a board picks its active layer.
+preferences-layer-switcher-label = Layer switcher
+preferences-layer-switcher-strip = Strip
+preferences-layer-switcher-dropdown = Dropdown
+preferences-layer-switcher-help = Strip: layer tabs under the board. Dropdown: the status bar's Layer pill opens a list of the visible layers.
 preferences-appearance-trackpad-pan-short-help = A two-finger trackpad scroll pans instead of zooming. Pinch and Ctrl/Cmd + scroll still zoom. Only used when Mouse wheel is Zoom.
 preferences-appearance-remember-geometry-short-help = Reopen the main window at the size and position it had when you last closed it.
 
