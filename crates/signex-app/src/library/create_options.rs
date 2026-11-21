@@ -80,11 +80,13 @@ pub fn view<'a>(
     let create = if refused {
         tooltip(
             create,
-            container(text(t!(i18n, ids::LIBRARY_CREATE_OPTIONS_REFUSED_TIP)).size(TS.body))
-                .padding([SP.xs, SP.s]),
+            iced::widget::container(
+                container(text(t!(i18n, ids::LIBRARY_CREATE_OPTIONS_REFUSED_TIP)).size(TS.body))
+                    .padding([SP.xs, SP.s]),
+            )
+            .style(crate::styles::context_menu(tokens)),
             tooltip::Position::Top,
         )
-        .style(crate::styles::context_menu(tokens))
         .boxed()
     } else {
         create

@@ -165,9 +165,12 @@ fn cell_view<'a>(
         .center_y(Length::Fill);
     let tip =
         container(text(signex_i18n::UserText::new(full)).size(TS.body)).padding([SP.xs, SP.s]);
-    tooltip(boxed, tip, tooltip::Position::Bottom)
-        .style(crate::styles::context_menu(tokens))
-        .boxed()
+    tooltip(
+        boxed,
+        iced::widget::container(tip).style(crate::styles::context_menu(tokens)),
+        tooltip::Position::Bottom,
+    )
+    .boxed()
 }
 
 /// The headings: each a button that sorts by its column, the sorted one in

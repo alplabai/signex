@@ -209,15 +209,17 @@ fn group_header<'a>(
     };
     tooltip(
         press,
-        text(t!(
-            i18n,
-            tip,
-            "type" => t!(i18n, type_label(group.id)).into_string()
-        ))
-        .size(TS.caption),
+        iced::widget::container(
+            text(t!(
+                i18n,
+                tip,
+                "type" => t!(i18n, type_label(group.id)).into_string()
+            ))
+            .size(TS.caption),
+        )
+        .style(crate::styles::card(tokens)),
         tooltip::Position::Bottom,
     )
-    .style(crate::styles::card(tokens))
     .boxed()
 }
 
