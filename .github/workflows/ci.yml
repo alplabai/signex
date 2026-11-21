@@ -609,8 +609,8 @@ jobs:
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
         run: bash scripts/test_check_app_catch_unwind.sh
 
-      # The projector draws documents and writes none (#2326 slice 3): no
-      # engine-map, active_path or dirty/saved write under app/projector.
+      # The projector draws documents and writes none (#2326 slice 3, #2705):
+      # no core-state write and no wrapper call under app/projector.
       # Rules and blind spots live in the script. Hard gate.
       - name: Projector write guard
         if: ${{ !cancelled() && steps.install-ast-grep.outcome == 'success' }}
