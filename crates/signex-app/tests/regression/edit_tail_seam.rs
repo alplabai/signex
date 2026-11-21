@@ -245,10 +245,12 @@ fn an_agents_edit_list_across_two_sheets_round_trips_both_dirty_marks() {
     let [a, b] = open_project(&mut adapter, &["a.snxsch", "b.snxsch"])
         .try_into()
         .unwrap();
-    let edits = format!(
-        r#"[{{"id":"place_junction","args":{{"at":[5.08,0]}}}},{{"id":"place_junction","args":{{"at":[5.08,0],"document":"{}"}}}}]"#,
-        a.display()
-    );
+    // Built as JSON, not spliced: a Windows path's backslashes are escapes.
+    let edits = serde_json::json!([
+        {"id": "place_junction", "args": {"at": [5.08, 0]}},
+        {"id": "place_junction", "args": {"at": [5.08, 0], "document": a.display().to_string()}},
+    ])
+    .to_string();
     apply_edits(&mut adapter, &b, &[&a], &edits);
     assert_round_trip(
         &mut adapter,
