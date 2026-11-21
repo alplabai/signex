@@ -7,7 +7,7 @@ use iced::{Color, Element, Size};
 use signex_types::theme::{
     Color as ThemeColor, ExtendedTokens, SelectedSegmentLook, ThemeId, ThemeTokens, theme_tokens,
 };
-use signex_widgets::{SegmentedStyle, raw, segmented};
+use signex_widgets::{SegmentedStyle, segmented};
 
 const BODY: f32 = 12.0;
 const WINDOW: Size = Size::new(240.0, 40.0);
@@ -21,9 +21,13 @@ fn tokens(id: ThemeId, look: SelectedSegmentLook) -> ThemeTokens {
     look.apply(id, theme_tokens(id))
 }
 
+fn user_text(text: &str) -> signex_widgets::Label<'static> {
+    signex_i18n::UserText::new(text.to_owned()).into()
+}
+
 fn control(style: SegmentedStyle) -> Element<'static, bool> {
     segmented(
-        [(true, raw("On".to_owned())), (false, raw("Off".to_owned()))],
+        [(true, user_text("On")), (false, user_text("Off"))],
         true,
         style,
         |picked| picked,
