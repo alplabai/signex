@@ -157,6 +157,9 @@ pub struct PcbCanvas {
     /// A tool, Move, paste or part on the cursor waits for clicks: every
     /// press is a click, never a drag or a box (#2396).
     clicks_only: bool,
+    /// The Active Bar took the last right press, so its release is not a
+    /// board right-click. Set by `Signex::set_swallow_right_release`.
+    swallow_right_release: bool,
     /// The board without the carried footprints, and them at their offset.
     drag_preview: Option<drag_preview::DragPreview>,
     /// What the next click adds, set by the app (#2364), and the share of
@@ -168,6 +171,14 @@ pub struct PcbCanvas {
     text_key: std::cell::Cell<Option<board_text::TextKey>>,
     /// Whether this canvas reports clicks and hovers.
     pub selectable: bool,
+}
+
+/// Ends the hold on a right release the Active Bar's press owned.
+fn right_release_swallowed() -> canvas::Action<Message> {
+    canvas::Action::publish(Message::ActiveBar(
+        crate::active_bar::ActiveBarMsg::RightReleaseSwallowed,
+    ))
+    .and_capture()
 }
 
 impl Default for PcbCanvas {
@@ -206,6 +217,7 @@ impl PcbCanvas {
             grab: Vec::new(),
             carry: std::cell::Cell::new(false),
             clicks_only: false,
+            swallow_right_release: false,
             drag_preview: None,
             part_ghost: None,
             text_cache: canvas::Cache::default(),
@@ -236,6 +248,11 @@ impl PcbCanvas {
     /// Whether every press is a click.
     pub fn is_clicks_only(&self) -> bool {
         self.clicks_only
+    }
+
+    /// Hold back the next right release, or stop holding it back.
+    pub fn set_swallow_right_release(&mut self, swallow: bool) {
+        self.swallow_right_release = swallow;
     }
 
     /// Whether a press at `at` (board mm) lands on a grabbed footprint.
@@ -696,19 +713,23 @@ impl canvas::Program<Message> for PcbCanvas {
                     state.panning = true;
                     state.pan_moved = false;
                     state.last_pan_pos = Some(pos);
+                    // A held-back release was lost: this press ends the hold.
+                    if *button == mouse::Button::Right && self.swallow_right_release {
+                        return Some(right_release_swallowed());
+                    }
                     return Some(canvas::Action::capture());
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(button)) => {
                 if matches!(button, mouse::Button::Right | mouse::Button::Middle) {
                     let moved = std::mem::take(&mut state.pan_moved);
-                    // Only a press on this canvas starts a pan: the release
-                    // of one the Active Bar took is not a board right-click.
-                    let pressed_here = std::mem::take(&mut state.panning);
+                    state.panning = false;
                     state.last_pan_pos = None;
+                    if *button == mouse::Button::Right && self.swallow_right_release {
+                        return Some(right_release_swallowed());
+                    }
                     // A right click that did not pan opens the board's menu (#2240).
                     if *button == mouse::Button::Right
-                        && pressed_here
                         && !moved
                         && self.selectable
                         && let Some(pos) = cursor.position_in(bounds)

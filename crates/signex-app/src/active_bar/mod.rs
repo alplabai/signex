@@ -61,6 +61,15 @@ pub enum ActiveBarMenu {
 pub enum ActiveBarMsg {
     ToggleMenu(ActiveBarMenu),
     CloseMenus,
+    /// A bar button took a right press and opens `menu`; the release of that
+    /// press stays off the canvas.
+    MenuRightPressed(ActiveBarMenu),
+    /// A right press outside the open flyout closed it; its release stays
+    /// off the canvas.
+    FlyoutRightPressed,
+    /// A canvas saw the held-back right release, or a new right press after
+    /// that release was lost.
+    RightReleaseSwallowed,
     Action(ActiveBarAction),
     ToggleFilter(SelectionFilter),
     ToggleAllFilters,
@@ -122,7 +131,15 @@ pub fn view_bar<'a>(
         has_selection,
         has_net_colors,
     };
-    signex_widgets::active_bar::view(bar_items(&state, tokens, i18n), tokens)
+    let mut items = bar_items(&state, tokens, i18n);
+    for item in &mut items {
+        if let signex_widgets::active_bar::ActiveBarItem::Button(button) = item
+            && let Some(ActiveBarMsg::ToggleMenu(menu)) = button.on_right_press
+        {
+            button.on_right_press = Some(ActiveBarMsg::MenuRightPressed(menu));
+        }
+    }
+    signex_widgets::active_bar::view(items, tokens)
 }
 
 #[cfg(test)]

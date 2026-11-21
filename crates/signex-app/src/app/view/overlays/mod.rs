@@ -138,15 +138,16 @@ impl Signex {
     }
 
     /// The click-outside layer of an Active Bar flyout, on either bar. Unlike
-    /// [`Self::dismiss_layer`] it takes a right press too: that press closes
-    /// the flyout and stops here, so the canvas neither pans nor opens its
-    /// menu and an armed tool stays armed.
+    /// [`Self::dismiss_layer`] it takes a right press too and sends
+    /// `on_right_press`, which also holds that press's release off the
+    /// canvas, so an armed tool stays armed.
     pub(super) fn flyout_dismiss_layer(
         on_dismiss: Message,
+        on_right_press: Message,
         scrim: iced::Color,
     ) -> Element<'static, Message> {
-        iced::widget::mouse_area(Self::dismiss_layer_tinted(on_dismiss.clone(), scrim))
-            .on_right_press(on_dismiss)
+        iced::widget::mouse_area(Self::dismiss_layer_tinted(on_dismiss, scrim))
+            .on_right_press(on_right_press)
             .boxed()
     }
 
@@ -195,6 +196,7 @@ impl Signex {
             x_off + crate::active_bar::bar_left_in_window(interaction.current_tool, ww, &metrics);
         Self::flyout_and_place(
             Message::ActiveBar(crate::active_bar::ActiveBarMsg::CloseMenus),
+            Message::ActiveBar(crate::active_bar::ActiveBarMsg::FlyoutRightPressed),
             dropdown,
             (adjusted_x, ab_y),
         )

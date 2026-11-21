@@ -82,9 +82,6 @@ pub struct CanvasState {
     pan_moved: bool,
     /// Last cursor position during a pan (in screen pixels).
     last_pan_pos: Option<iced::Point>,
-    /// The right press landed on this canvas, so its release is a canvas
-    /// right-click. A press the Active Bar or an overlay took leaves it unset.
-    right_press_on_canvas: bool,
     /// Whether Ctrl is currently held (for multi-select toggle).
     pub ctrl_held: bool,
     /// Ctrl or Cmd held: a scroll zooms even with "Two-finger scroll pans" on.
@@ -629,6 +626,9 @@ pub struct CanvasViewPrefs<'a> {
     /// Full window width. The Active Bar is centred on the window, not on
     /// this canvas, so docked side panels do not move it.
     pub window_width: f32,
+    /// The Active Bar took the last right press, so its release is not a
+    /// canvas right-click.
+    pub swallow_right_release: bool,
     pub wire_color_overrides: &'a std::collections::HashMap<uuid::Uuid, signex_types::theme::Color>,
     /// Resolved net-class style per wire and junction, read from app state
     /// so the canvas never reaches into the project. See
@@ -1106,6 +1106,7 @@ mod tests {
             drag_wiring: Default::default(),
             current_tool: crate::app::Tool::Select,
             window_width: 1400.0,
+            swallow_right_release: false,
             wire_color_overrides: overrides,
             wire_class_styles: class_styles,
             wire_class_revision: 0,
