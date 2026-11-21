@@ -239,6 +239,14 @@ pub fn corners(rect: Rectangle) -> [Point; 4] {
     ]
 }
 
+/// `rect` grown by `by` on every side.
+pub fn grown(rect: Rectangle, by: f32) -> Rectangle {
+    Rectangle::new(
+        Point::new(rect.x - by, rect.y - by),
+        Size::new(rect.width + 2.0 * by, rect.height + 2.0 * by),
+    )
+}
+
 /// Whether `angle` lies on the clockwise sweep from `start` to `end`.
 pub fn angle_in_sweep(angle: f32, start: f32, end: f32) -> bool {
     use std::f32::consts::TAU;

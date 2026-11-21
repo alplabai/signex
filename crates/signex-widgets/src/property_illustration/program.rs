@@ -6,7 +6,7 @@ use signex_types::theme::ThemeTokens;
 
 use super::draw::Painter;
 use super::geometry::Fit;
-use super::hit::hit_test;
+use super::hit::held_hit_test;
 use super::hover::{IllustrationHover, IllustrationMsg, hover_transition};
 use super::illustration::Illustration;
 use super::metrics::Metrics;
@@ -45,12 +45,13 @@ impl canvas::Program<IllustrationMsg> for IllustrationProgram {
         ) {
             return None;
         }
+        let held = self.hover.hovered_callout();
+        let fit = self.fit(bounds);
         let under_pointer = cursor
             .position_in(bounds)
-            .and_then(|p| hit_test(&self.illustration, &self.fit(bounds), &self.metrics, p));
+            .and_then(|p| held_hit_test(&self.illustration, &fit, &self.metrics, p, held));
         let was_owner = std::mem::replace(is_owner, under_pointer.is_some());
-        hover_transition(self.hover.hovered_callout(), under_pointer, was_owner)
-            .map(canvas::Action::publish)
+        hover_transition(held, under_pointer, was_owner).map(canvas::Action::publish)
     }
 
     fn draw(

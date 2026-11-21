@@ -114,7 +114,8 @@ impl Painter<'_> {
             Primitive::Band { .. }
             | Primitive::Callout(_)
             | Primitive::Leader(_)
-            | Primitive::Label(_) => return None,
+            | Primitive::Label(_)
+            | Primitive::HoverArea { .. } => return None,
         })
     }
 

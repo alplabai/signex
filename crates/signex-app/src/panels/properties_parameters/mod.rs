@@ -21,6 +21,8 @@
 
 mod doc_rows;
 mod document_options;
+#[cfg(test)]
+mod drawing_hover_tests;
 mod form_rows;
 mod general;
 mod graphite_table;
