@@ -36,3 +36,9 @@ board-nets-select = Select
 board-nets-highlight = Highlight
 board-nets-summary = { $shown } of { $total } nets
 board-nets-empty = No net of the board matches the filter
+
+## Board items an agent or the CLI names by uuid (#2326)
+# { $id } is the uuid; the whole command is refused, nothing changes.
+board-target-unknown = { $id } names nothing on the board this command acts on; nothing was changed
+# A keepout is made from the named zones or from the named lines, never both.
+board-keepout-mixed = A keepout is made from zones or from lines, not both; nothing was changed

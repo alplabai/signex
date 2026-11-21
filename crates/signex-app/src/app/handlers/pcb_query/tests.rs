@@ -624,3 +624,18 @@ fn find_results_of_a_board_out_of_view_are_searched_again() {
     assert_eq!(footprint(&app, &second, R1).value, "4k7");
     assert_eq!(footprint(&app, &first, R1).value, "10k");
 }
+
+/// #2326: `ids` is a targets list, so an item named twice is one item, and
+/// edge to edge needs two.
+#[test]
+fn measuring_one_item_named_twice_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), board());
+    let ids = format!("ids={V1},{V1}");
+    let reason = crate::app::command::queries::tests::refusal(
+        &mut app,
+        "measure_board",
+        &[document(&path).as_str(), ids.as_str()],
+    );
+    assert_eq!(reason, "`ids` names two items, comma separated");
+}
