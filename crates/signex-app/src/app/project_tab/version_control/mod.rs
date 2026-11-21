@@ -3,20 +3,20 @@
 //! Version Control… (the project tree's dialog: `git init`, the first
 //! commit), and the "Commit every save" switch, which is the `.snxprj`
 //! `enable_git` flag and a General step. Turning it off keeps the repository.
+//! The look (mockup row 35) is in `view`.
+
+mod view;
+
+#[cfg(test)]
+mod tests;
 
 use std::path::Path;
 
-use iced::{Element, Widget as _};
-use signex_i18n::{I18n, ids, t};
-use signex_types::theme::ThemeTokens;
-use signex_widgets::{CheckboxLabel as _, checkbox};
-
-use super::ProjectTabMsg;
-use super::general::tab_message;
-use super::table::{TS, action, heading, note, problem, section};
+use crate::app::Signex;
 use crate::app::state::project_fs::git_marker;
 use crate::app::state::{LoadedProject, ProjectId};
-use crate::app::{Message, Signex};
+
+pub(super) use view::view;
 
 /// Whether the project folder holds a Git repository, as last probed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,63 +45,10 @@ pub(crate) struct VersionControlFacts {
     pub pending: usize,
 }
 
-pub(super) fn view<'a>(
-    project: &LoadedProject,
-    facts: &VersionControlFacts,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let project_id = project.id;
-    let state = match facts.repository {
-        Repository::Present => ids::PROJECT_VCS_REPOSITORY_PRESENT,
-        Repository::Absent => ids::PROJECT_VCS_REPOSITORY_ABSENT,
-        Repository::Unknown => ids::PROJECT_VCS_REPOSITORY_CHECKING,
-    };
-    let mut body: Vec<Element<'a, Message>> = vec![
-        heading(t!(i18n, ids::PROJECT_VCS_REPOSITORY), tokens),
-        note(t!(i18n, state), tokens),
-    ];
-    if facts.repository == Repository::Absent {
-        let enable = tab_message(ProjectTabMsg::EnableVersionControlRequested { project_id });
-        body.push(action(
-            t!(i18n, ids::PROJECT_VCS_ENABLE),
-            Some(enable),
-            tokens,
-        ));
-    }
-    let on = project.data.enable_git;
-    // Turning it on needs a repository; turning it off never does.
-    let may_toggle = on || facts.repository != Repository::Absent;
-    let switch = checkbox(on)
-        .style(crate::panels::form_look::checkbox_style)
-        .size(TS.title)
-        .labelled(t!(i18n, ids::PROJECT_VCS_AUTO_COMMIT))
-        .text_size(TS.label)
-        .on_toggle_maybe(may_toggle.then_some(move |on| {
-            tab_message(ProjectTabMsg::VersionControlToggled { project_id, on })
-        }));
-    body.push(switch.boxed());
-    if may_toggle {
-        body.push(note(t!(i18n, ids::PROJECT_VCS_AUTO_COMMIT_HELP), tokens));
-    } else {
-        body.push(problem(
-            t!(i18n, ids::PROJECT_VCS_AUTO_COMMIT_NEEDS_REPO),
-            tokens,
-        ));
-    }
-    if facts.pending > 0 {
-        body.push(note(
-            t!(i18n, ids::PROJECT_VCS_PENDING, "count" => facts.pending),
-            tokens,
-        ));
-    }
-    section(
-        ids::PROJECT_SECTION_VERSION_CONTROL,
-        ids::PROJECT_VCS_HELP,
-        body,
-        i18n,
-        tokens,
-    )
+/// Whether the Commit every save switch may be flipped from `on`: turning it
+/// on needs a repository; turning it off never does.
+pub(crate) fn may_toggle_commit_on_save(on: bool, repository: Repository) -> bool {
+    on || repository != Repository::Absent
 }
 
 impl Signex {

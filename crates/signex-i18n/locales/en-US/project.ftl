@@ -25,8 +25,50 @@ project-section-setup = Project setup
 project-move-up = Move up
 project-move-down = Move down
 
+# Parameters section (mockup row 30): the filter, the Title block and Variables groups,
+# and renaming a variable in place.
+project-parameters-hint = Every sheet inherits these; a sheet's own Title Block value or sheet variable overrides one. A value starting with = is an expression, such as = VCC / 2. Press Enter in a value to check it.
+project-parameters-filter = Filter parameters
+project-parameters-totals = { $title_block } title block · { $variables ->
+    [one] 1 variable
+   *[other] { $variables } variables
+}
+project-parameters-group-title-block = TITLE BLOCK
+project-parameters-group-variables = VARIABLES
+project-parameters-count = { $count }
+project-parameters-sheets-override = sheets override
+project-parameters-not-set = Not set
+project-parameters-remove = Remove
+project-parameters-add = Add
+project-parameters-field-title = Title
+project-parameters-field-document-number = Document No.
+project-parameters-field-rev = Revision
+project-parameters-field-date = Date
+project-parameters-field-company = Company
+project-parameters-field-drawn-by = Drawn By
+project-parameters-field-checked-by = Checked By
+project-parameters-field-approved-by = Approved By
+project-parameters-field-author = Author
+project-parameters-field-engineer = Engineer
+project-parameters-field-organization = Organization
+project-parameters-field-address-1 = Address 1
+project-parameters-field-address-2 = Address 2
+project-parameters-field-address-3 = Address 3
+project-parameters-field-address-4 = Address 4
+project-parameter-name-empty = Enter a parameter name.
+project-parameter-name-invalid = A parameter name is letters, digits and _, and does not start with a digit.
+project-parameter-name-title-block = { $name } is a title block field; choose another name.
+project-parameter-name-taken = The project already has a parameter named { $name }.
+project-parameter-rename-references = Sheet text that uses { $name } as a special string, and sheet values named { $name }, keep the old name: they stop showing this value. Press Enter to rename anyway.
+# What a project variable's `=` expression evaluates to. $value is the
+# result, such as 1.65V.
+project-parameter-shows = Shows { $value }
+# Why a project variable's `=` expression does not evaluate. $error is the
+# reason.
+project-parameter-error = Error: { $error }
+
 # Sheets section (#1689).
-project-sheets-help = The project lists its sheets in this order: the Sheet N of M a sheet shows in its title block and the order of the project tree follow it. PDF export numbers its pages by the sheet hierarchy instead; number child sheets with Tools ▸ Annotation ▸ Number Schematic Sheets.
+project-sheets-help = The project lists its sheets in this order. The Sheet N of M in a title block and the order of the project tree follow it. PDF export numbers pages by the sheet hierarchy instead; number child sheets with Tools ▸ Annotation ▸ Number Schematic Sheets.
 project-sheets-col-number = Page
 project-sheets-page = { $page }
 project-sheets-col-name = Name
@@ -73,13 +115,10 @@ project-erc-machine = This project uses this machine's ERC rules (User Default).
 project-erc-unreadable = This project holds ERC rules from a newer version of Signex; they are kept and not applied.
 project-erc-store = Store ERC rules in this project
 project-erc-edit-hint = Change a rule's severity in Project ▸ Electrical Rules Check.
-project-erc-col-rules = Rules
-project-erc-col-severity = Severity
 project-erc-rule-count = { $count }
 project-erc-severity-error = Error
 project-erc-severity-warning = Warning
 project-erc-severity-info = Info
-project-erc-severity-off = Off
 project-annotate-title = Annotation
 project-annotate-undo = Annotate undo
 project-annotate-undo-help = How many undo steps one annotate run of this project is. The Preferences default follows this machine's Preferences.
@@ -95,16 +134,69 @@ project-vcs-repository-absent = The project folder has no Git repository.
 project-vcs-repository-checking = Checking the project folder…
 project-vcs-enable = Enable Version Control…
 project-vcs-auto-commit = Commit every save
-project-vcs-auto-commit-help = Each save of a project file is committed to the project's repository. Turned off, saves are not committed and the repository stays.
+project-vcs-auto-commit-help = Each save of a project file is committed to the project's repository. Turned off, saves are not committed; the repository and its history stay as they are.
 project-vcs-auto-commit-needs-repo = Enable version control first: the project folder has no Git repository.
 project-vcs-pending = Commits in progress: { $count }
-project-parameters-hint = Every sheet inherits these; a sheet's own Title Block value or sheet variable overrides one. A value starting with = is an expression, such as = VCC / 2. Press Enter in a value to check it.
-project-parameters-variables = Variables
-project-parameters-add = Add
-project-parameters-remove = Remove
-# What a project variable's `=` expression evaluates to. $value is the
-# result, such as 1.65V.
-project-parameter-shows = Shows { $value }
-# Why a project variable's `=` expression does not evaluate. $error is the
-# reason.
-project-parameter-error = Error: { $error }
+
+# Graphite look (mockup rows 31 and 33).
+project-sheets-root = root
+project-sheets-missing = missing
+project-sheets-add-schematic = Add New ▸ Schematic
+project-sheets-preview = Preview
+# $size is the sheet size name, such as A4 or ANSI B.
+project-sheets-preview-landscape = { $size } landscape
+project-sheets-preview-portrait = { $size } portrait
+project-sheets-preview-mm = { $width } × { $height } mm
+project-libraries-where = Add, remove and rename libraries in the project tree: right-click the project, then Add New to Project ▸ Component Library.
+
+# ERC, version control look (mockup rows 34 and 35).
+project-erc-source-machine = User Default
+project-erc-source-project = Stored in project
+project-erc-source-unreadable = Newer version
+project-erc-by-severity = Rules by severity
+project-erc-by-severity-caption = (how the { $total } rules are set, not ERC results)
+project-erc-tile-error = rules set to Error
+project-erc-tile-warning = rules set to Warning
+project-erc-tile-info = rules set to Info
+project-erc-tile-off = rules turned off
+project-erc-open-dialog = Open Electrical Rules Check…
+project-vcs-state-present = Present
+project-vcs-state-absent = None
+project-vcs-state-checking = Checking…
+project-vcs-status = Status
+project-vcs-open-history = Open History panel
+
+# Schematic defaults (mockup row 36).
+project-defaults-help = Unset widths and sizes on every sheet of this project follow these. Leave a field empty for the built-in value.
+project-defaults-lines = Lines
+project-defaults-text-markers = Text and markers
+project-defaults-wire-width = Wire width
+project-defaults-bus-width = Bus width
+project-defaults-symbol-line-width = Symbol line and pin width
+project-defaults-shape-stroke = Shape stroke
+project-defaults-text-size = Text size
+project-defaults-junction-diameter = Junction diameter
+project-defaults-unit-mm = mm
+project-defaults-unit-pt = pt
+project-defaults-font = Font
+project-defaults-wire-line-style = Wire line style
+project-defaults-shape-fill = New shape fill
+project-defaults-built-in = Built-in ({ $value })
+project-defaults-line-solid = Solid
+project-defaults-line-dashed = Dashed
+project-defaults-line-dotted = Dotted
+project-defaults-fill-none = No fill
+project-defaults-fill-outline = Outline colour
+project-defaults-fill-background = Background colour
+project-defaults-reset = Reset to built-in ({ $value })
+project-defaults-clamped = Out of range ({ $min } to { $max }): { $used } is used.
+project-defaults-caption = Grey values are the built-in defaults. An edited field has an accent border and a reset button; an invalid value has a red border, a tinted fill and a warning icon.
+project-defaults-preview = Preview
+project-defaults-preview-caption = schematic canvas · empty = built-in
+project-defaults-preview-wire = wire { $value }
+project-defaults-preview-bus = bus { $value }
+project-defaults-preview-line = line { $value }
+project-defaults-preview-stroke = stroke { $value }
+project-defaults-preview-text = text { $value } pt
+project-defaults-preview-junction = ⌀ { $value }
+project-defaults-preview-clamped = { $label } ({ $typed } clamped)

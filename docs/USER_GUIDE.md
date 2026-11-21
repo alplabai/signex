@@ -865,11 +865,22 @@ known), and the extension you choose sets the format: `.html`, `.pdf`, `.json`, 
 
 The title block of every sheet is filled from **project parameters**. Open the
 project's **Project** tab (project tree, **Project Options**) and choose
-**Parameters**: title, document number, revision, date, company, drawn by,
-checked by and approved by apply to every sheet, and **Variables** adds your
-own name/value pairs (the project variables). A name is letters, digits and
-`_`, not starting with a digit. Edits there are undoable with `Ctrl+Z` and are
-saved to the `.snxprj` with `Ctrl+S`.
+**Parameters**: the **Title block** group (title, document number, revision,
+date, company, drawn by, checked by, approved by, author, engineer,
+organization and address 1 to 4) applies to every sheet, and
+the **Variables** group holds your own name/value pairs (the project
+variables). A name is letters, digits and `_`, not starting with a digit. Add
+one with the Name field and **Add** at the end of the list, remove one with ×
+on its row, and rename one by typing over its name and pressing Enter. A value
+that is an `=` expression shows what it evaluates to, or why it does not, under
+its row. A rename changes only
+the project's name for the value: sheet text that uses the old name as a special
+string, and a sheet value with the old name, keep it and stop showing the
+project value until you change them, which the row warns about before you press
+Enter. The filter above the
+list finds a row by its name or value, and a group's header folds it shut.
+Edits there are undoable with `Ctrl+Z` and are saved to the `.snxprj` with
+`Ctrl+S`.
 
 A sheet's own parameters are in one list: click an empty spot of the sheet so
 the **Properties** panel shows **Document Options**, and open its

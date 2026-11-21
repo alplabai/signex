@@ -1,22 +1,24 @@
 //! Libraries section of the Project tab (#1691): the libraries the project
 //! mounts, in list order, with where each lives, its kind and whether it is
-//! mounted (and read-only) now, and Move up / Move down. A move is one step of
-//! the General history. Adding, removing and renaming stay in the project
-//! tree, which owns the mount and the file work.
+//! mounted (and read-only) now, and Move up / Move down on row hover
+//! (mockup row 33). A move is one step of the General history. Adding,
+//! removing and renaming stay in the project tree, which owns the mount and
+//! the file work; a line under the table says so.
+
+mod view;
+
+#[cfg(test)]
+mod tests;
+
+pub(super) use view::view;
 
 use std::path::{Path, PathBuf};
 
-use iced::{Element, Length};
-use signex_i18n::{I18n, MessageId, ids, t};
+use signex_i18n::{MessageId, ids};
 use signex_types::project::{LibraryEntryKind, ListMove};
-use signex_types::theme::ThemeTokens;
 
-use super::ProjectTabMsg;
-use super::general::tab_message;
-use super::sheets::ACTIONS_EMS;
-use super::table::{TS, cell, heading_row, move_buttons, note, section, table_row, word_cell};
+use crate::app::Signex;
 use crate::app::state::{LoadedProject, ProjectId};
-use crate::app::{Message, Signex};
 
 /// Whether a project's library is mounted now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +47,17 @@ impl LibraryMount {
             Self::ReadOnly => ids::PROJECT_LIBRARIES_STATE_READ_ONLY,
             Self::Missing => ids::PROJECT_LIBRARIES_STATE_MISSING,
             Self::NotMounted => ids::PROJECT_LIBRARIES_STATE_NOT_MOUNTED,
+        }
+    }
+
+    /// The tone of the state pill: ok when mounted, error when missing,
+    /// neutral otherwise (read-only adds a lock).
+    fn tone(self) -> crate::styles::PillTone {
+        use crate::styles::PillTone;
+        match self {
+            Self::Mounted => PillTone::Ok,
+            Self::Missing => PillTone::Err,
+            Self::ReadOnly | Self::NotMounted => PillTone::Neutral,
         }
     }
 }
@@ -78,54 +91,17 @@ fn kind_words(kind: LibraryEntryKind) -> MessageId {
     }
 }
 
-pub(super) fn view<'a>(
-    project_id: ProjectId,
-    rows: &[LibraryRow],
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let columns = [
-        (ids::PROJECT_LIBRARIES_COL_NAME, Length::FillPortion(2)),
-        (ids::PROJECT_LIBRARIES_COL_LOCATION, Length::FillPortion(3)),
-        (ids::PROJECT_LIBRARIES_COL_KIND, Length::FillPortion(1)),
-        (ids::PROJECT_LIBRARIES_COL_STATE, Length::FillPortion(1)),
-    ];
-    let actions = Length::Fixed(TS.body * ACTIONS_EMS);
-    let mut body: Vec<Element<'a, Message>> =
-        vec![heading_row(&columns, Some(actions), i18n, tokens)];
-    if rows.is_empty() {
-        body.push(note(t!(i18n, ids::PROJECT_LIBRARIES_EMPTY), tokens));
+/// `path` cut from the start to at most `max_chars` characters, so the file
+/// name at its end stays visible: `…` and the tail. A path that fits is
+/// returned whole.
+pub(super) fn path_tail(path: &str, max_chars: usize) -> String {
+    let count = path.chars().count();
+    if count <= max_chars {
+        return path.to_string();
     }
-    for (index, row) in rows.iter().enumerate() {
-        let path = row.stored.clone();
-        let moved = move |step: ListMove| {
-            tab_message(ProjectTabMsg::LibraryMoved {
-                project_id,
-                path: path.clone(),
-                step,
-            })
-        };
-        body.push(table_row(vec![
-            (cell(row.name(), tokens), columns[0].1),
-            (cell(row.stored.display().to_string(), tokens), columns[1].1),
-            (
-                word_cell(t!(i18n, kind_words(row.kind)), tokens),
-                columns[2].1,
-            ),
-            (word_cell(t!(i18n, row.mount.words()), tokens), columns[3].1),
-            (
-                move_buttons(index, rows.len(), moved, i18n, tokens),
-                actions,
-            ),
-        ]));
-    }
-    section(
-        ids::PROJECT_SECTION_LIBRARIES,
-        ids::PROJECT_LIBRARIES_HELP,
-        body,
-        i18n,
-        tokens,
-    )
+    let keep = max_chars.saturating_sub(1);
+    let tail: String = path.chars().skip(count - keep).collect();
+    format!("…{tail}")
 }
 
 impl Signex {

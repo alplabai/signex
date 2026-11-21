@@ -37,13 +37,41 @@ message. The chrome catalog draws a sample of it.
 
 ## Sections (#1689-#1693)
 
+- **Parameters** (#1080) — the values every sheet inherits, in one list
+  with two groups, each folded shut by its header: Title block (the fifteen
+  title-block fields: title, document number, revision, date, company,
+  drawn by, checked by, approved by, author, engineer, organization and
+  address 1 to 4; a sheet's own Title Block value overrides one) and
+  Variables (every other parameter). The filter above keeps the rows whose
+  shown name or value holds the typed text, ignoring case; the caption
+  beside it counts all of them. A value box shows its outline on hover or
+  focus; an empty value reads "Not set". A variable's name is edited in
+  place: Enter renames it as one undo step, keeping its value. A name that
+  is blank, is not a variable name (letters, digits and `_`, not starting
+  with a digit, as Add requires, #1987), is a title-block key (`title`,
+  `rev`, ...) or is already used (names are case-sensitive) is refused: the
+  name stays in its box with the reason under the row and nothing changes.
+  A rename moves only the project key: sheet text that uses `${OLD}` and a
+  sheet value named OLD keep the old name and stop resolving to the project
+  value, as after Remove; while a typed name would be accepted, a warning
+  under the row says so before Enter. × on a hovered row removes the variable; Name and Add at the end of
+  Variables add one with an empty value. The filter and the folded groups
+  are tab state, not project data.
 - **Sheets** — the project's sheets in list order (the Sheet N of M a
-  sheet's title block shows on the canvas, and the project tree order) with
-  Move up / Move down, then what a new sheet starts from (size,
-  orientation, title block), edited with the Project setup fields. An undo
-  puts the order back for the sheets it names; a sheet added or renamed
-  since keeps its page. The PDF export does not follow this list: it
-  numbers pages by the sheet hierarchy (the root sheet, then the other
+  sheet's title block shows on the canvas, and the project tree order):
+  page, name, file. The root sheet carries a `root` pill and a page whose
+  file the last probe found absent (and no open or unsaved document holds)
+  a `missing` pill. Move up / Move down are two icon buttons shown while the
+  pointer is over the row, dimmed at the ends of the list. A project that
+  lists no sheets shows that in a line with **Add New ▸ Schematic**, which
+  opens the project tree's New Schematic setup for the project. Under the
+  list, the New sheets card holds what a new sheet starts from (size,
+  orientation, title block), edited with the Project setup fields, beside a
+  preview of that sheet in the schematic canvas colours: the outline, the
+  zone border and title block of the canvas's own frame, and the size in
+  mm. An undo puts the order back for the sheets it names; a sheet added or
+  renamed since keeps its page. The PDF export does not follow this list:
+  it numbers pages by the sheet hierarchy (the root sheet, then the other
   pages by file key), and changing that would renumber the nets of an
   exported netlist.
 - **Variants** — Base and the variant definitions, the active one picked
@@ -53,42 +81,97 @@ message. The chrome catalog draws a sample of it.
   characters, unique ignoring ASCII case, and never `Base`; a refused edit
   shows its reason and changes nothing.
 - **Libraries** — the project's libraries in list order, with the path as
-  stored, the kind (in the project, shared, global) and the mount state read
-  from the app (mounted, mounted read-only, missing at the last probe, not
-  mounted), and Move up / Move down. Adding, removing and renaming stay in
-  the project tree.
-- **ERC and annotation** — where the ERC rules come from (stored in the
-  project, this machine's Preferences, or an unreadable set from a newer
-  Signex), how many rules run at each severity, and "Store ERC rules in this
-  project". Severities are edited in the ERC dialog. The Annotate undo
-  choice is stored in the project (`annotation.annotate_undo`) or follows
-  Preferences.
-- **Version control** — whether the project folder has a Git repository
-  (from the last probe), Enable Version Control… (the project tree's dialog)
-  when it has none, and "Commit every save" (`enable_git`). Turning it on
-  needs a repository; turning it off keeps the repository.
+  stored (cut from the start so the file name stays visible), the kind (in
+  the project, shared, global) and the mount state read from the app as a
+  pill (mounted, mounted read-only with a lock, missing at the last probe,
+  not mounted); a missing library shows a warning glyph before its name.
+  Move up / Move down are icon buttons on row hover, as in Sheets. Adding,
+  removing and renaming stay in the project tree; a line under the table
+  says where.
+- **ERC and annotation** — two cards. The ERC rules card names where the
+  rules come from in a header pill (User Default for this machine's
+  Preferences, Stored in project, or Newer version for an unreadable set
+  from a newer Signex). With machine rules, "Store ERC rules in this
+  project" sits on the same line as the message. For a readable rule set,
+  four tiles count how many rules are set to Error, Warning, Info and off
+  (how the rules are set, not ERC results), and "Open Electrical Rules
+  Check…" opens the ERC dialog for this project, where severities are
+  edited. The Annotation card holds the Annotate undo choice, stored in the
+  project (`annotation.annotate_undo`) or following Preferences.
+- **Version control** — the Repository card shows the last probe of the
+  project folder as a pill (Present, None, Checking…). With a repository it
+  gives the status and "Open History panel"; without one, Enable Version
+  Control… (the project tree's dialog) is the primary button. Below it,
+  "Commit every save" (`enable_git`) is a switch with its help under the
+  label: turning it on needs a repository, turning it off keeps the
+  repository, and a note says so when it cannot be turned on. "Commits in
+  progress" shows only while commits run. The branch, the last commit, the
+  commit author and remotes are not shown yet.
+- **Schematic defaults** (#2026, mockup row 36) — two cards side by
+  side. **Lines**: Wire width, Bus width, Symbol line and pin width, Shape
+  stroke (mm), then Wire line style. **Text and markers**: Text size (pt),
+  Font, Junction diameter (mm), then New shape fill. A number box carries
+  its unit as a suffix and shows the built-in value in grey while empty.
+  An edited field has an accent border and a reset button, which clears the
+  override exactly as emptying the field does; a value that is not a usable
+  number, or one that was clamped into the field's range, gives the box an
+  error border, a tinted fill and a warning icon, and a clamped value says
+  under the field what is used instead. The two pickers show "Built-in (…)"
+  while unset. Under the cards a live preview draws a small schematic in
+  the canvas colours with the values in effect (power port, wires with a
+  junction, a resistor, a net label, a bus with entries, a shape) and writes
+  each value beside its item: grey italic while the field is empty, in the
+  warning colour with the typed number when it was clamped. The drawing is
+  not editable; values are edited in the fields. Not built yet: editing a
+  value on the drawing and the junction and bus drag handles (follow-up
+  issue "Project tab previews: edit values on the drawing", to be filed).
+
+Each section but Variants shows its title and help line over its content in
+a column that scrolls inside the tab. Variants keeps its earlier frame
+until its own restyle (mockup row 32).
 
 ## Requirements (#2339)
 
 The project's requirements list (the `.snxprj` `requirements` key; kinds and
-fields in [CLI.md](CLI.md), "Requirement checks"), one card per entry: the
-Enabled check, the kind, the outcome of the last run, Remove, then the id,
-the severity and the kind's fields. Add requirement… picks a kind and adds
-an entry with starting values (`board_size` 100 × 100 mm, `net_class` all
-nets with 0.15 mm minimums, `bom_cost` 100 boards at 10 USD each) and the
-kind's name as its id, made unique. A field box commits on Enter; a value
-that is not valid (an id that is empty or taken, a length or cost that is no
-number above 0, a count below 1, an unknown lifecycle state, a `net_class`
-with neither a class nor a minimum) stays in its box with the reason and
-changes nothing. An empty box clears an optional field. An entry this build
-cannot read is shown with the reason and can only be removed; a
-`requirements` value that is not a list is not edited at all.
+fields in [CLI.md](CLI.md), "Requirement checks"), one card per entry. Run
+checks is the section header's primary button. Under the header, a summary
+row shows the last run's counts (Passed, Failed, and Not checked when there
+are any), when it finished, and Add requirement…, which picks a kind and
+adds an entry with starting values (`board_size` 100 × 100 mm, `net_class`
+all nets with 0.15 mm minimums, `bom_cost` 100 boards at 10 USD each) and
+the kind's name as its id, made unique.
+
+A card's header row holds the Enabled switch, the kind, its kind id, the
+requirement's id (read-only; `project_set_requirement` with `field=id`
+changes it), a one-line summary of its values, the outcome pill, Remove and
+an expand button. A passed card is closed to that row and every other
+card is open; a card holding a typed value or a refusal stays open. The
+expand button flips a card; the flip follows its entry through an add or a
+remove of another, like a typed value, and goes with a removed entry. An open card shows the severity, Allow warnings and the
+kind's fields three to a row with the caption above each, then each finding
+of the last run with its measured values. A field box commits on Enter; a
+value that is not valid (a length or cost that is no number above 0, a count
+below 1, an unknown lifecycle state, a `net_class` with neither a class nor a
+minimum) stays in its box, which turns to the error colours, with the reason
+under it, and changes nothing. An empty box clears an optional field. A
+requirement switched off is dimmed, its fields take no input, its pill reads
+Off and the counts leave it out. An entry this build cannot read is shown
+with the reason and can only be removed; a `requirements` value that is not
+a list is not edited at all.
 
 Run checks runs the same job as `check_requirements` over the project as it
 is in memory, off the UI thread, and shows each requirement as passed,
 failed (with each finding's message and measured values) or not checked,
-the run's notes, and when it finished. It writes nothing and says nothing in
-Messages. Edits are General undo steps; a run is not an edit.
+the run's notes under the summary row, and when it finished. It writes
+nothing and says nothing in Messages. Edits are General undo steps; a run is
+not an edit. An entry with no id takes its verdict from the run under its
+place in the list (`req::#1` for the first), the name the check gives it.
+
+Not built yet (follow-up issue "Requirements: variant and fitted parts for
+Part lifecycle, measured-from and a limit preview for Board size", to be
+filed): Part lifecycle's Variant and Fitted parts only fields, Board size's
+Measured from, its preview with limit handles and the measured size on a
+passed card, and the net class note that edits are not checked yet.
 
 ## Preferences and the project
 

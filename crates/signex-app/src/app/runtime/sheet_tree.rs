@@ -30,11 +30,10 @@ pub(super) struct RowMarks<'a> {
 }
 
 impl RowMarks<'_> {
-    /// A listed file is `(missing)` only when the probe found it absent and
-    /// no open or unsaved document holds it: a document created this session
-    /// is not on disk until the user saves it (#2350).
+    /// A listed file is `(missing)`: see
+    /// [`ProjectFsFacts::is_listed_file_missing`].
     pub(super) fn is_missing(&self, facts: &ProjectFsFacts, path: &Path) -> bool {
-        facts.is_missing(path) && !self.open.contains(path) && !self.dirty.contains(path)
+        facts.is_listed_file_missing(path, self.open.contains(path), self.dirty.contains(path))
     }
 }
 

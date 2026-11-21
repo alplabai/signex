@@ -17,6 +17,7 @@ mod commands;
 mod erc_annotation;
 mod general;
 mod libraries;
+mod look;
 mod open;
 mod parameters;
 mod requirements;
@@ -52,6 +53,7 @@ pub(crate) use commands::{
     project_set_version_control,
 };
 pub use general::ProjectGeneralFacts;
+pub use parameters::ParameterGroup;
 pub use requirements::{RequirementsMsg, RequirementsTabState};
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,
@@ -160,6 +162,18 @@ pub struct ProjectTabState {
     pub variant_problem: Option<signex_types::project::VariantProblem>,
     /// The Requirements section's drafts, refusal and last run (#2339).
     pub requirements: RequirementsTabState,
+    /// The Parameters filter as typed (mockup row 30).
+    pub parameter_filter: String,
+    /// The Parameters Title block group is folded shut.
+    pub parameter_title_block_closed: bool,
+    /// The Parameters Variables group is folded shut.
+    pub parameter_variables_closed: bool,
+    /// A variable name being typed over, `(from, text)`, until Enter
+    /// renames it.
+    pub parameter_rename: Option<(String, String)>,
+    /// Enter refused the typed variable name; the reason is read again
+    /// from the draft. Cleared by the next keystroke.
+    pub parameter_rename_refused: bool,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -202,6 +216,26 @@ pub enum ProjectTabMsg {
     },
     /// Add the typed custom parameter, with an empty value.
     ParameterAdded {
+        project_id: ProjectId,
+    },
+    /// The Parameters filter as typed (mockup row 30).
+    ParameterFilterEdited {
+        project_id: ProjectId,
+        text: String,
+    },
+    /// A Parameters group header clicked: fold the group or open it.
+    ParameterGroupToggled {
+        project_id: ProjectId,
+        group: ParameterGroup,
+    },
+    /// A variable's name as typed over in its row.
+    ParameterRenameEdited {
+        project_id: ProjectId,
+        from: String,
+        text: String,
+    },
+    /// Enter in a variable's name box: rename it to what was typed.
+    ParameterRenameSubmitted {
         project_id: ProjectId,
     },
     /// A schematic default as typed (#2026); empty clears it.
@@ -252,6 +286,11 @@ pub enum ProjectTabMsg {
         filename: String,
         step: signex_types::project::ListMove,
     },
+    /// Add New ▸ Schematic in an empty Sheets section (mockup row 31): the
+    /// project tree's New Schematic flow for the project.
+    AddSchematicRequested {
+        project_id: ProjectId,
+    },
     /// The new variant name as typed (#1690).
     NewVariantNameEdited {
         project_id: ProjectId,
@@ -294,6 +333,11 @@ pub enum ProjectTabMsg {
     },
     /// "Store ERC rules in this project": a copy of this machine's rules.
     ErcRulesStoreRequested {
+        project_id: ProjectId,
+    },
+    /// Open Electrical Rules Check…: the ERC dialog for this project, its
+    /// Project tab brought to the front first.
+    ErcDialogRequested {
         project_id: ProjectId,
     },
     /// The Commit every save check (#1693).

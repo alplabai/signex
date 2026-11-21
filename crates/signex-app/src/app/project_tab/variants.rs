@@ -4,19 +4,21 @@
 //! edit is one step of the General history; a refused one shows its reason
 //! and changes nothing.
 
-use iced::widget::row;
+use iced::widget::{Column, column, container, row};
 use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::project::{MAX_VARIANT_NAME_CHARS, VariantProblem};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{radio, text_input};
+use signex_widgets::{radio, text, text_input};
 
 use super::general::tab_message;
-use super::table::{SP, TS, action, heading_row, problem, section, table_row, word_cell};
+use super::table::{SP, TS, action, heading_row, note, problem, table_row, word_cell};
 use super::{ProjectTabMsg, ProjectTabState, VariantRenameDraft};
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::{Message, Signex};
 
+/// Widest the section grows, in `body`-size characters.
+const SECTION_MAX_EMS: f32 = 64.0;
 /// Width of the Active column, in `body`-size characters.
 const ACTIVE_EMS: f32 = 6.0;
 /// Width of the Remove column, in `body`-size characters.
@@ -141,13 +143,28 @@ pub(super) fn view<'a>(
     if let Some(refused) = tab.and_then(|tab| tab.variant_problem.as_ref()) {
         body.push(problem(problem_words(refused, i18n), tokens));
     }
-    section(
-        ids::PROJECT_SECTION_VARIANTS,
-        ids::PROJECT_VARIANTS_HELP,
-        body,
-        i18n,
-        tokens,
-    )
+    frame(body, i18n, tokens)
+}
+
+/// The section's own frame: title, help, then `body`. Variants keeps this
+/// look; its restyle is mockup row 32, not the shared section frame.
+fn frame<'a>(
+    body: Vec<Element<'a, Message>>,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let mut col: Column<Element<'a, Message>> = column![
+        text(t!(i18n, ids::PROJECT_SECTION_VARIANTS))
+            .size(TS.heading)
+            .color(crate::styles::ti(tokens.text)),
+        note(t!(i18n, ids::PROJECT_VARIANTS_HELP), tokens),
+    ]
+    .spacing(SP.l)
+    .width(Length::Fill.max(TS.body * SECTION_MAX_EMS));
+    for part in body {
+        col = col.push(part);
+    }
+    container(col).padding([SP.xl, SP.xl]).boxed()
 }
 
 /// The new variant's name box and Add.

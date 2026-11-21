@@ -53,6 +53,11 @@ pub enum ProjectGeneralCommand {
     SetParameter { name: String, value: String },
     /// Delete a parameter.
     RemoveParameter(String),
+    /// Rename a parameter, keeping its value. Always a step of its own.
+    /// Changes nothing when `from` is missing, `to` is empty or already
+    /// used, or the two are equal; the Project tab refuses those names
+    /// before they get here.
+    RenameParameter { from: String, to: String },
     /// Pick the designator standard (#1421); `None` is "Library designator".
     /// Always its own undo step, and it closes the description typing run.
     /// An unreadable section from a newer Signex is replaced only by a real
@@ -246,6 +251,7 @@ impl ProjectGeneralHistory {
         let is_pick = matches!(
             command,
             ProjectGeneralCommand::SetDesignatorStandard(_)
+                | ProjectGeneralCommand::RenameParameter { .. }
                 | ProjectGeneralCommand::SetSchematicDefaultLineStyle(_)
                 | ProjectGeneralCommand::SetSchematicDefaultShapeFill(_)
                 | ProjectGeneralCommand::SetProjectDefaults { typing: None, .. }
@@ -273,6 +279,15 @@ impl ProjectGeneralHistory {
             }
             ProjectGeneralCommand::RemoveParameter(name) => {
                 data.parameters.remove(&name);
+            }
+            ProjectGeneralCommand::RenameParameter { from, to } => {
+                if !to.is_empty()
+                    && from != to
+                    && !data.parameters.contains_key(&to)
+                    && let Some(value) = data.parameters.remove(&from)
+                {
+                    data.parameters.insert(to, value);
+                }
             }
             ProjectGeneralCommand::SetDesignatorStandard(standard) => {
                 if !(standard.is_none() && data.has_unreadable_annotation()) {

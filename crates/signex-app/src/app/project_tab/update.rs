@@ -19,6 +19,12 @@ impl Signex {
             ProjectTabMsg::Requirements { project_id, msg } => {
                 return self.dispatch_requirements(project_id, msg);
             }
+            ProjectTabMsg::AddSchematicRequested { project_id } => {
+                return self.add_schematic_from_tab(project_id);
+            }
+            ProjectTabMsg::ErcDialogRequested { project_id } => {
+                return self.open_erc_from_tab(project_id);
+            }
             _ => {}
         }
         self.apply_project_tab_message(msg);
@@ -106,6 +112,20 @@ impl Signex {
                     self.close_general_run(project_id);
                 }
             }
+            ProjectTabMsg::ParameterFilterEdited { project_id, text } => {
+                self.edit_parameter_filter(project_id, text);
+            }
+            ProjectTabMsg::ParameterGroupToggled { project_id, group } => {
+                self.toggle_parameter_group(project_id, group);
+            }
+            ProjectTabMsg::ParameterRenameEdited {
+                project_id,
+                from,
+                text,
+            } => self.edit_parameter_rename(project_id, from, text),
+            ProjectTabMsg::ParameterRenameSubmitted { project_id } => {
+                self.submit_parameter_rename(project_id);
+            }
             ProjectTabMsg::SchematicDefaultEdited {
                 project_id,
                 field,
@@ -167,6 +187,9 @@ impl Signex {
             }
             // Routed by `dispatch_project_tab_message`, which returns their task.
             ProjectTabMsg::SetupEdited { .. } | ProjectTabMsg::Requirements { .. } => {}
+            // Routed by `dispatch_project_tab_message`: they open a dialog.
+            ProjectTabMsg::AddSchematicRequested { .. }
+            | ProjectTabMsg::ErcDialogRequested { .. } => {}
             ProjectTabMsg::SheetMoved {
                 project_id,
                 filename,
@@ -279,6 +302,8 @@ impl Signex {
             tab.journal_lines_draft = None;
             tab.variant_rename = None;
             tab.variant_problem = None;
+            tab.parameter_rename = None;
+            tab.parameter_rename_refused = false;
             tab.requirements.clear_drafts();
         }
     }
@@ -360,6 +385,8 @@ impl Signex {
         tab.journal_lines_draft = None;
         tab.variant_rename = None;
         tab.variant_problem = None;
+        tab.parameter_rename = None;
+        tab.parameter_rename_refused = false;
         // Requirement drafts are by id: only a stepped entry's go (#2547).
         tab.requirements
             .follow_step(&requirements_before, &project.data.requirements);
