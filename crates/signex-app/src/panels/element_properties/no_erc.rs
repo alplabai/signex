@@ -136,7 +136,7 @@ mod tests {
         let name = longest_rule_name();
         let at = crate::layout_probe::find(&texts, name).bounds;
         let one_line =
-            crate::layout_probe::natural::<PanelMsg>(text(raw(name)).size(TS.body).into(), name);
+            crate::layout_probe::natural::<PanelMsg>(text(raw(name)).size(TS.body).boxed(), name);
         assert!(
             at.height <= one_line.height + 1.0,
             "{name:?} wraps: {at:?} vs one line {one_line:?}"
