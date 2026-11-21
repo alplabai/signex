@@ -702,6 +702,8 @@ impl Signex {
 }
 
 #[cfg(test)]
+mod active_bar_dismiss_tests;
+#[cfg(test)]
 mod canvas_wheel_tests;
 #[cfg(test)]
 mod dock_layout_tests;
