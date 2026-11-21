@@ -91,6 +91,23 @@ fn arrange_in_box_from_two_clicks_is_its_operand_handler_on_the_corners() {
     assert_eq!(live(&app, &path), want);
 }
 
+/// The menu row is the person's, not an agent's: a board outside any
+/// project stays in reach while the agent socket serves (#2326 review).
+#[test]
+fn a_menu_tool_on_a_board_in_no_project_runs_while_the_agent_socket_serves() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with_board(dir.path());
+    app.document_state.projects.clear();
+    assert!(app.document_state.document_project(&path).is_none());
+    let before = live(&app, &path);
+    app.select_pcb_items(&[ItemRef::Track(id(30)), ItemRef::Track(id(31))]);
+    app.agent.serving = true;
+    run(&mut app, "gloss_selected_routes");
+    assert!(app.agent.serving, "the flag is the caller's again");
+    app.agent.serving = false;
+    assert_ne!(live(&app, &path), before, "the tracks are glossed");
+}
+
 #[test]
 fn a_translated_refusal_is_said_in_messages_as_before() {
     let _ = crate::diagnostics::init_logging();

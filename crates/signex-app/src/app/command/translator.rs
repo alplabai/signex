@@ -11,9 +11,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use iced::Task;
+use signex_i18n::{Translatable, ids};
 
 use super::args::Operands;
-use super::{CommandArgs, CommandOutcome, OperandValue, operand_handlers};
+use super::{CommandArgs, CommandOutcome, OperandValue};
 use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -22,7 +23,11 @@ type Ran = (CommandOutcome, Task<Message>);
 
 /// The ids whose bridge arm translates: the handler of the message it sends
 /// reads the selection and calls [`run`]. The parity table names that row
-/// `translator`.
+/// `translator`. `arrange_in_box` translates too, but on its second board
+/// click (`pcb_arrange_box_clicked`); its bridge arm only arms the box, so
+/// that row stays `bridge`. `swap_pins`, `swap_gates` and
+/// `place_board_reuse_block` do not translate yet: their handlers name the
+/// part by designator (and a gate by unit), the GUI by uuid (and pin).
 #[cfg(test)]
 const TRANSLATED: &[&str] = &[
     "board_shape_from_selection",
@@ -38,20 +43,19 @@ pub(crate) fn is_translated(id: &str) -> bool {
 }
 
 /// Run `id`'s operand handler on the document at `document` with
-/// `operands`, filled in by a GUI handler from what the person has in view.
-/// An id without a handler runs nothing (`NoBridgeArm`);
-/// `every_translated_id_has_an_operand_handler` keeps that from happening.
+/// `operands`, filled in by a GUI handler from what the person has in view,
+/// through `run_operands`, the entry an agent or the CLI takes. The outcome
+/// is `Answered`, `Disabled` or `Deferred`; anything else is turned into a
+/// refusal. `every_translated_id_has_an_operand_handler` keeps an id
+/// without a handler out.
 pub(crate) fn run(
     app: &mut Signex,
     id: &str,
     document: &Path,
     operands: Vec<(&'static str, OperandValue)>,
 ) -> Ran {
-    let handler = AppCommandId::new(id)
-        .ok()
-        .and_then(|command| operand_handlers::operand_handler(&command));
-    let Some(handler) = handler else {
-        return (CommandOutcome::NoBridgeArm, Task::none());
+    let Ok(command) = AppCommandId::new(id) else {
+        return (not_available(), Task::none());
     };
     // A path that is not Unicode resolves to no document, and the handler
     // refuses it as it refuses an agent naming it.
@@ -65,11 +69,29 @@ pub(crate) fn run(
             texts: BTreeMap::new(),
         },
     };
-    handler(app, &args)
+    // The person's command, not an agent's: every open document is in
+    // reach (`document_entries`) and no agent undo step wraps it.
+    let serving = std::mem::replace(&mut app.agent.serving, false);
+    let (outcome, task) = app.run_operands(&command, &args);
+    app.agent.serving = serving;
+    let outcome = match outcome {
+        CommandOutcome::Answered(_)
+        | CommandOutcome::Disabled { .. }
+        | CommandOutcome::Deferred { .. } => outcome,
+        _ => not_available(),
+    };
+    (outcome, task)
+}
+
+fn not_available() -> CommandOutcome {
+    CommandOutcome::Disabled {
+        reason: Translatable::new(ids::NOTICE_NOT_AVAILABLE),
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::operand_handlers;
     use super::*;
 
     #[test]

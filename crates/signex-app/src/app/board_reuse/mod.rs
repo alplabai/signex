@@ -18,7 +18,7 @@ use iced::Task;
 use serde::Serialize;
 use signex_engine::pcb::BoardItemId;
 use signex_engine::pcb::reuse_block;
-use signex_i18n::{RenderTranslatable, command_ids, ids, t};
+use signex_i18n::{command_ids, ids, t};
 use signex_types::format::SnxPcb;
 use uuid::Uuid;
 
@@ -320,6 +320,19 @@ impl Signex {
                 crate::app::handlers::pcb_placement::deletable_items(state.selection())
             })
             .unwrap_or_default();
+        // What the selection cannot make a block of is refused in the menu's
+        // own words, after the project check, as before the translator:
+        // `ids` would refuse an empty or stale list in an agent's words.
+        let refusal = self
+            .reuse_block_folder(&board)
+            .ok()
+            .and(self.document_state.pcb_board(&board))
+            .and_then(|pcb| reuse_block::capture(pcb, &items).err());
+        if let Some(refusal) = refusal {
+            let why = refusal.to_string();
+            self.refuse_reuse(command_ids::CMD_MENU_SAVE_BOARD_REUSE_BLOCK, &why);
+            return Task::none();
+        }
         let name = self.block_name_for(&board, &items);
         let ids: Vec<String> = items
             .iter()
@@ -335,8 +348,10 @@ impl Signex {
             ("ids", OperandValue::Text(ids.join(","))),
         ];
         let (outcome, task) = translator::run(self, "save_board_reuse_block", &board, operands);
+        // Answered: the write landing says it. Deferred cannot come, the
+        // blocks are read above; were it to, the read runs it again.
         if let CommandOutcome::Disabled { reason } = outcome {
-            let why = reason.render_en_us();
+            let why = reason.render(&self.ui_state.i18n);
             self.refuse_reuse(command_ids::CMD_MENU_SAVE_BOARD_REUSE_BLOCK, &why);
         }
         task

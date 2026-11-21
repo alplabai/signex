@@ -87,11 +87,16 @@ fn board() -> PcbBoard {
 }
 
 fn app_with_board(dir: &Path) -> (Signex, PathBuf) {
+    app_on(dir, board())
+}
+
+/// An app with `pcb` open as the project's board.
+fn app_on(dir: &Path, pcb: PcbBoard) -> (Signex, PathBuf) {
     let mut app = app_workspace(&dir.to_string_lossy(), &[]);
     app.ui_state.first_run_tour_open = false;
     app.document_state.projects[0].data.pcb_file = Some("board.snxpcb".into());
     let path = dir.join("board.snxpcb");
-    app.open_pcb_tab(path.clone(), "board".into(), board());
+    app.open_pcb_tab(path.clone(), "board".into(), pcb);
     (app, path)
 }
 
@@ -513,10 +518,39 @@ fn a_failed_block_folder_read_is_retried_on_the_next_menu_open() {
     assert_eq!(blocks.read_failure(dir.path()), None);
 }
 
-/// #2326 slice 6: the menu save runs the operand handler, and a selection
-/// with no footprint, track or via in it is refused in the handler's words.
-/// Before the translator the menu said "a block needs at least one
-/// footprint"; either way nothing is saved.
+/// The menu save of channel A writes the block file the operand handler
+/// writes for the same board, name and items (#2326 slice 6 translator).
+#[test]
+fn a_menu_save_writes_the_block_the_operand_handler_writes() {
+    // One board for both: its pads take fresh uuids.
+    let pcb = board();
+    let menu_dir = tempfile::tempdir().unwrap();
+    let (mut menu, _) = app_on(menu_dir.path(), pcb.clone());
+    save_channel_a(&mut menu);
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board) = app_on(dir.path(), pcb);
+    let document = format!("document={}", board.display());
+    let ids: Vec<String> = [0x11u128, 0x12, 0x31, 0x32]
+        .map(|n| Uuid::from_u128(n).to_string())
+        .to_vec();
+    let ids = format!("ids={}", ids.join(","));
+    let outcome = headless(
+        &mut app,
+        "save_board_reuse_block",
+        &[&document, "name=R1-U1", &ids],
+    );
+    assert!(
+        matches!(outcome, CommandOutcome::Answered(_)),
+        "{outcome:?}"
+    );
+    let file = |dir: &Path| {
+        std::fs::read_to_string(dir.join("reuse-blocks").join("R1-U1.snxpcb")).expect("block")
+    };
+    assert_eq!(file(menu_dir.path()), file(dir.path()));
+}
+
+/// A menu save of a selection with no footprint, track or via in it says
+/// what it always said, not the `ids` refusal an agent gets.
 #[test]
 fn a_menu_save_of_a_selection_with_nothing_a_block_holds_is_refused() {
     let _ = crate::diagnostics::init_logging();
@@ -544,7 +578,11 @@ fn a_menu_save_of_a_selection_with_nothing_a_block_holds_is_refused() {
     let said = crate::diagnostics::entries_since(mark).entries;
     assert!(
         said.iter()
-            .any(|e| e.message.contains("names nothing to save")),
+            .any(|e| e.message.contains("a block needs at least one footprint")),
+        "{said:?}"
+    );
+    assert!(
+        !said.iter().any(|e| e.message.contains("`ids`")),
         "{said:?}"
     );
     assert!(

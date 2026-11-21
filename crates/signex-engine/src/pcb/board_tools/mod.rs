@@ -75,7 +75,8 @@ pub struct ToolEdit {
 }
 
 /// What a tool edit does, as an agent reads it back and as the GUI reads
-/// it back from the operand handler's answer.
+/// it back from the operand handler's answer: a field must round-trip
+/// (`a_tool_report_reads_back_as_it_was_written`).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ToolReport {

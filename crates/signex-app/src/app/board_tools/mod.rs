@@ -27,7 +27,7 @@ use signex_engine::pcb::board_tools::{
     StitchArea, ToolEdit, ToolRefusal, ToolReport, add_teardrops, default_stitch_pitch_mm,
     remove_teardrops,
 };
-use signex_i18n::{RenderTranslatable, ids, t};
+use signex_i18n::{ids, t};
 use signex_types::pcb::PcbBoard;
 use uuid::Uuid;
 
@@ -240,8 +240,10 @@ impl Signex {
             CommandOutcome::Answered(answer) => {
                 serde_json::from_value::<ToolReport>(answer).map_err(|error| error.to_string())
             }
-            CommandOutcome::Disabled { reason } => Err(reason.render_en_us()),
-            other => Err(format!("{other:?}")),
+            CommandOutcome::Disabled { reason } => Err(reason.render(&self.ui_state.i18n)),
+            // A board tool reads nothing first, so it never waits; were it
+            // to, the read runs it again (`translator::run` leaves no other).
+            _ => return task,
         };
         self.say_board_tool(command, &ran);
         task
