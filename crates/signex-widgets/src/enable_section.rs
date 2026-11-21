@@ -57,7 +57,11 @@ pub struct EnableSection<'a, M> {
     is_enabled: bool,
     on_toggle: Option<Box<dyn Fn(bool) -> M + 'a>>,
     tip: Option<Label<'a>>,
+    wrap_header: Option<HeaderWrap<'a, M>>,
 }
+
+/// A wrapper put around the header row.
+type HeaderWrap<'a, M> = Box<dyn FnOnce(Element<'a, M>) -> Element<'a, M> + 'a>;
 
 impl<'a, M: 'a> EnableSection<'a, M> {
     /// A subsection headed by `label`, switched on when `is_enabled`.
@@ -68,6 +72,7 @@ impl<'a, M: 'a> EnableSection<'a, M> {
             is_enabled,
             on_toggle: None,
             tip: None,
+            wrap_header: None,
         }
     }
 
@@ -80,6 +85,13 @@ impl<'a, M: 'a> EnableSection<'a, M> {
     /// A hover note on the header: what turning it off does.
     pub fn tip(mut self, tip: impl Into<Label<'a>>) -> Self {
         self.tip = Some(tip.into());
+        self
+    }
+
+    /// Wraps the header row only, not the dependent fields: a row hover
+    /// region for the header, so it does not nest the dependents' own.
+    pub fn wrap_header(mut self, wrap: impl FnOnce(Element<'a, M>) -> Element<'a, M> + 'a) -> Self {
+        self.wrap_header = Some(Box::new(wrap));
         self
     }
 
@@ -119,6 +131,10 @@ impl<'a, M: 'a> EnableSection<'a, M> {
             )
             .style(move |theme: &Theme| tip_look(theme))
             .boxed(),
+            None => header,
+        };
+        let header = match self.wrap_header {
+            Some(wrap) => wrap(header),
             None => header,
         };
         Column::new()

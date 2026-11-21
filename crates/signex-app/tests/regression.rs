@@ -718,6 +718,9 @@ mod rotate_mirror_selection;
 mod document_options_persist;
 #[path = "regression/page_origin_readout.rs"]
 mod page_origin_readout;
+// Document Options rows (General, Page Options) hold one steady hover.
+#[path = "regression/properties_row_hover.rs"]
+mod properties_row_hover;
 #[path = "regression/sample_title_block.rs"]
 mod sample_title_block;
 #[path = "regression/title_block_fields.rs"]

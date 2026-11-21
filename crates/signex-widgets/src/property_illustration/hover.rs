@@ -87,16 +87,22 @@ impl IllustrationHover {
 }
 
 /// The message a pointer move over the drawing should publish, given the
-/// callout hover the model holds and the field now under the pointer.
-/// `None` when nothing changed, so a still pointer publishes nothing.
+/// callout hover the model holds, the field now under the pointer, and
+/// whether this drawing set that callout (`is_owner`). `None` when nothing
+/// changed, so a still pointer publishes nothing.
+///
+/// Only the owner clears a callout: with two drawings on one hover, the
+/// drawing away from the pointer would otherwise clear the other's callout
+/// on every move, and the row it lights would flash.
 pub fn hover_transition(
     current_callout: Option<&FieldId>,
     under_pointer: Option<FieldId>,
+    is_owner: bool,
 ) -> Option<IllustrationMsg> {
     match (current_callout, under_pointer) {
         (Some(current), Some(hit)) if *current == hit => None,
         (_, Some(hit)) => Some(IllustrationMsg::CalloutHovered(hit)),
-        (Some(_), None) => Some(IllustrationMsg::CalloutLeft),
-        (None, None) => None,
+        (Some(_), None) if is_owner => Some(IllustrationMsg::CalloutLeft),
+        (_, None) => None,
     }
 }

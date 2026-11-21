@@ -65,20 +65,28 @@ fn callout_hover_highlights_its_field_row_until_left() {
 
 #[test]
 fn transition_publishes_only_changes() {
-    assert_eq!(hover_transition(None, None), None);
-    assert_eq!(hover_transition(Some(&W), Some(W)), None);
+    assert_eq!(hover_transition(None, None, false), None);
+    assert_eq!(hover_transition(None, None, true), None);
+    assert_eq!(hover_transition(Some(&W), Some(W), true), None);
     assert_eq!(
-        hover_transition(None, Some(W)),
+        hover_transition(None, Some(W), false),
         Some(IllustrationMsg::CalloutHovered(W))
     );
     assert_eq!(
-        hover_transition(Some(&W), Some(GAP)),
+        hover_transition(Some(&W), Some(GAP), true),
         Some(IllustrationMsg::CalloutHovered(GAP))
     );
     assert_eq!(
-        hover_transition(Some(&W), None),
+        hover_transition(Some(&W), None, true),
         Some(IllustrationMsg::CalloutLeft)
     );
+}
+
+/// A drawing the pointer is not on never clears a callout that another
+/// drawing on the same hover set.
+#[test]
+fn only_the_drawing_that_set_a_callout_clears_it() {
+    assert_eq!(hover_transition(Some(&W), None, false), None);
 }
 
 #[test]
