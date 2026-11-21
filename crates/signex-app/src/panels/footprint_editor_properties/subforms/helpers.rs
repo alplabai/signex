@@ -16,9 +16,10 @@ use signex_widgets::{CheckboxLabel as _, Label, button, checkbox, text, text_inp
 
 use super::super::super::{
     CollapsedSections, FootprintEditorPanelContext, PROPERTY_LABEL_COLUMN, PROPERTY_ROW_GAP,
-    PanelMsg, form_look, section_title,
+    PanelMsg, form_look,
 };
 use crate::panels::enable_section::enable_section_style;
+use crate::panels::widgets::section_title;
 use crate::styles::tokens::resolve;
 use crate::styles::{Radii, Spacing, TypeScale, ti};
 

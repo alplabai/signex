@@ -10,13 +10,9 @@ use crate::library::editor::footprint::SelectionFilterKind;
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length};
 use signex_i18n::{MessageId, ids, t};
-use signex_widgets::{Label, raw, text};
+use signex_widgets::{Label, text};
 
-use super::widgets::modal_title_header;
-use crate::styles::{
-    DialogButtonKind, DialogIcon, dialog_body, dialog_button, dialog_footer, dialog_footer_split,
-    dialog_intro,
-};
+use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer_split};
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
