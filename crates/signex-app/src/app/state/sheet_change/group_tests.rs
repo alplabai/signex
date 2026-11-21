@@ -84,23 +84,47 @@ fn an_undo_drops_a_parked_member_nothing_holds_open() {
     );
 }
 
-/// `a` (active) and `b` under one colour group, then a later colour on `b`.
-fn blocked_group() -> (Signex, UndoGroupId, PathBuf, PathBuf) {
-    let mut app = app_with(&[("b.snxsch", 101), ("a.snxsch", 100)]);
-    let (a, b) = (path("a.snxsch"), path("b.snxsch"));
+/// One colour on each of `sheets` under one group.
+fn colour_group(app: &mut Signex, sheets: &[&PathBuf]) -> UndoGroupId {
     let group = app.mint_undo_group();
-    for sheet in [&a, &b] {
-        let engine = app.document_state.engines.get_mut(sheet).unwrap();
+    for sheet in sheets {
+        let engine = app.document_state.engines.get_mut(*sheet).unwrap();
         engine.begin_transaction().unwrap();
         engine.execute(colour_wire_a(8)).unwrap();
         engine.commit_transaction(Some(group)).unwrap();
     }
     let record = UndoGroupSheets {
         kind: UndoGroupKind::Replace,
-        live: vec![a.clone(), b.clone()],
+        live: sheets.iter().map(|sheet| (*sheet).clone()).collect(),
         ..Default::default()
     };
     app.document_state.undo_groups.insert(group, record);
+    group
+}
+
+/// The active sheet's change is owed to a running agent edit list: the
+/// history moved all the same, so the library drift check is still asked
+/// for, as the grouped step always did.
+#[test]
+fn a_group_step_whose_active_change_is_owed_still_asks_for_the_drift_check() {
+    let mut app = app_with(&[("a.snxsch", 100)]);
+    let a = path("a.snxsch");
+    let group = colour_group(&mut app, &[&a]);
+    app.document_state.agent_edits.target = Some(path("other.snxsch"));
+    app.library.drift.check_pending = false;
+    let step = app
+        .document_state
+        .step_undo_group(group, true, &HashSet::new());
+    assert!(step.stepped, "owed counts as a change");
+    app.project_group_step(step, true);
+    assert!(app.library.drift.check_pending);
+}
+
+/// `a` (active) and `b` under one colour group, then a later colour on `b`.
+fn blocked_group() -> (Signex, UndoGroupId, PathBuf, PathBuf) {
+    let mut app = app_with(&[("b.snxsch", 101), ("a.snxsch", 100)]);
+    let (a, b) = (path("a.snxsch"), path("b.snxsch"));
+    let group = colour_group(&mut app, &[&a, &b]);
     let later = app.document_state.engines.get_mut(&b).unwrap();
     later.execute(colour_wire_a(9)).unwrap();
     (app, group, a, b)
