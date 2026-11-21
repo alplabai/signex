@@ -99,7 +99,15 @@ impl Signex {
         // A pad off the run's layer at its end is reached with a via there.
         let end = end_via(board, defaults, at, &mut style);
         // A pad of another net refuses the leg, as Interactive Routing's.
-        if let Some(line) = track_end_refusal(&self.ui_state.i18n, board, at, style.net) {
+        let refused = track_end_refusal(
+            &self.ui_state.i18n,
+            board,
+            at,
+            &style,
+            via.as_ref(),
+            end.as_ref(),
+        );
+        if let Some(line) = refused {
             self.note_board_tool(line);
             return;
         }
@@ -154,7 +162,15 @@ impl Signex {
             next_leg_style(board, session, defaults, anchor, cursor, layer, classes);
         let end = end_via(board, defaults, cursor, &mut style);
         // The leg a click would refuse is not previewed, nor its via.
-        if track_end_refusal(&self.ui_state.i18n, board, cursor, style.net).is_some() {
+        let refused = track_end_refusal(
+            &self.ui_state.i18n,
+            board,
+            cursor,
+            &style,
+            via.as_ref(),
+            end.as_ref(),
+        );
+        if refused.is_some() {
             return;
         }
         let rule = self.interaction_state.corner_rule;

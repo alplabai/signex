@@ -145,7 +145,7 @@ impl Signex {
         let classes = self.board_net_classes(&session.path);
         let (style, via) = next_leg_style(board, session, defaults, anchor, at, layer, classes);
         let i18n = &self.ui_state.i18n;
-        let end = match leg_end(i18n, board, defaults, &router.rules, at, style) {
+        let end = match leg_end(i18n, board, defaults, &router.rules, at, via.as_ref(), style) {
             Ok(end) => end,
             Err(line) => {
                 self.note_board_tool(line);
@@ -462,7 +462,15 @@ impl Signex {
             board, session, defaults, key.anchor, key.cursor, key.layer, classes,
         );
         let i18n = &self.ui_state.i18n;
-        let why = match leg_end(i18n, board, defaults, &router.rules, key.cursor, style) {
+        let why = match leg_end(
+            i18n,
+            board,
+            defaults,
+            &router.rules,
+            key.cursor,
+            via.as_ref(),
+            style,
+        ) {
             Err(line) => line,
             Ok(end) => {
                 let leg = LegRequest {

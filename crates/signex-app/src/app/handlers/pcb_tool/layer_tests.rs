@@ -361,6 +361,26 @@ fn a_track_run_is_refused_on_a_pad_of_another_net_off_its_layer() {
     assert!(why.starts_with("Track:"), "{why}");
 }
 
+/// Mid-run, a layer change at an anchor over another net's Bottom pad would
+/// put a through via on it: the leg is refused.
+#[test]
+fn a_mid_run_layer_change_via_is_refused_on_a_pad_of_another_net() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut foreign = pad(5, 0.0, 0.0, Some((2, "B")));
+    foreign["layer"] = json!("BottomCopper");
+    foreign["pads"][0]["layers"] = json!(["BottomCopper"]);
+    let pads = vec![pad(1, 0.0, 0.0, Some((1, "A"))), foreign];
+    let (mut app, path) = app_with(dir.path(), pads);
+    let before = live(&app, &path);
+    run(&mut app, "place_board_track");
+    click(&mut app, 0.0, 0.0);
+    make_active(&mut app, inner());
+    click(&mut app, 5.0, 3.0);
+    assert_eq!(live(&app, &path), before, "no via, no track");
+    let why = status(&app);
+    assert!(why.contains(OTHER_NET), "{why}");
+}
+
 /// Arming a board tool brings Properties to the front on what the next
 /// click places, Via included.
 #[test]

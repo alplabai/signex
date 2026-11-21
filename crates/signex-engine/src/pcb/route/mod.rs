@@ -28,7 +28,8 @@ use super::items::BoardItem;
 
 pub use bus::{BusMember, BusStyle, bus_start, bus_tracks, nearest_net_point, route_bus_leg};
 pub use ends::{
-    PadAt, PadEnd, copper_under, end_via, join_pads, pad_at, pad_end, start_on_copper, via_fits,
+    PadAt, PadEnd, copper_under, end_via, join_pads, pad_end, start_on_copper, via_fits,
+    via_pad_end,
 };
 pub use pair::{PairNets, PairTuned, diff_pair_of, pair_width_gap, tune_pair};
 pub use tune::{Meander, NetsTuned, TuneRefusal, tune_length, tune_net, tune_nets};
@@ -388,6 +389,8 @@ fn lattice_step(grid_mm: f64, a: PointNm, b: PointNm) -> i64 {
 
 #[cfg(test)]
 mod bus_tests;
+#[cfg(test)]
+mod ends_tests;
 #[cfg(test)]
 mod fit_tests;
 #[cfg(test)]
