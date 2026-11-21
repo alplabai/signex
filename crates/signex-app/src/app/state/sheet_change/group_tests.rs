@@ -217,14 +217,23 @@ fn a_blocked_group_step_returns_only_a_notice_and_moves_nothing() {
     assert_eq!(app.document_state.sheet_edit_epoch, epoch, "no edit noted");
 }
 
-/// The multi-sheet finishers mark a non-active member with
-/// `mark_history_edit_dirty`; a member whose engine is gone still reads
-/// unsaved, so close and quit still ask.
+/// A multi-sheet run's member whose engine is gone still reads unsaved once
+/// the run settles, so close and quit still ask.
 #[test]
 fn a_run_member_with_no_engine_is_still_marked_dirty() {
     let mut app = app_with(&[("a.snxsch", 100)]);
     let gone = path("gone.snxsch");
     assert!(!app.document_state.engines.contains_key(&gone));
-    app.document_state.mark_history_edit_dirty(&gone);
+    let run = super::SheetRun {
+        group: app.mint_undo_group(),
+        recorded: UndoGroupSheets {
+            kind: UndoGroupKind::Replace,
+            live: vec![gone.clone()],
+            ..Default::default()
+        },
+        members: vec![(gone.clone(), signex_engine::DocumentPatch::NET_COLORS)],
+        notes_edit: false,
+    };
+    let _events = app.document_state.settle_run(run, false);
     assert!(app.document_state.is_document_dirty(&gone));
 }

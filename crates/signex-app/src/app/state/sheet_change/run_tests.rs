@@ -106,3 +106,29 @@ fn a_run_notes_the_sheet_edit_only_when_the_active_sheet_took_none() {
         );
     }
 }
+
+/// A board gate swap edits its linked sheet, which is not the active one: the
+/// finisher's run takes `active_changed` false, so the run's own `notes_edit`
+/// moves the ERC epoch on top of the member's dirty mark.
+#[test]
+fn a_board_swap_on_a_non_active_sheet_moves_the_erc_epoch() {
+    use crate::app::command::{CommandArgs, CommandOutcome};
+    use crate::app::handlers::pcb_component::part_swap_tests::app_with_part;
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, board, sheet) = app_with_part(dir.path());
+    assert_ne!(app.document_state.active_path.as_ref(), Some(&sheet));
+    let epoch = app.document_state.sheet_edit_epoch;
+    let command = crate::keymap::AppCommandId::new("swap_gates").unwrap();
+    let document = format!("document={}", board.display());
+    let args =
+        CommandArgs::parse_operands(&command, &[document.as_str(), "designator=U1", "units=1,2"])
+            .unwrap();
+    let ran = app.run_headless_command_in_test(&command, args).0;
+    assert!(matches!(ran, CommandOutcome::Answered(_)), "{ran:?}");
+    assert!(
+        app.document_state.is_document_dirty(&sheet),
+        "the sheet took it"
+    );
+    // One for the member's `mark_history_edit_dirty`, one for `notes_edit`.
+    assert_eq!(app.document_state.sheet_edit_epoch, epoch + 2);
+}
