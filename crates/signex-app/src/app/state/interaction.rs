@@ -179,6 +179,9 @@ pub struct InteractionState {
     pub active_bar_menu_window: Option<iced::window::Id>,
     /// The open dropdown of the main window's PCB Active Bar (#2352).
     pub pcb_bar_menu: Option<crate::app::PcbBarMenu>,
+    /// An Active Bar took the last right press, so the canvas ignores its
+    /// release. Cleared by that release or the next right press on a canvas.
+    pub swallow_right_release: bool,
     /// The open right-click menu of a layer tab under a board canvas (#2379).
     pub pcb_layer_tab_menu: Option<crate::app::LayerTabMenu>,
     /// The open menu of the layer set button under a board canvas (#2394).

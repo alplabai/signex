@@ -102,7 +102,11 @@ impl SchematicCanvas<'_> {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
                 let action = self.update_right_pressed(state, bounds, cursor);
                 self.refresh_drag_ghost(state);
-                action
+                if self.prefs.swallow_right_release && cursor.position_in(bounds).is_some() {
+                    Self::ending_release_hold(action)
+                } else {
+                    action
+                }
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) => {
                 self.update_middle_pressed(state, bounds, cursor)

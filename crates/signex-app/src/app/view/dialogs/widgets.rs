@@ -129,6 +129,7 @@ impl Signex {
     /// over [`Self::flyout_dismiss_layer`].
     pub(in crate::app::view) fn flyout_and_place<'a>(
         on_dismiss: Message,
+        on_right_press: Message,
         card: Element<'a, Message>,
         at: (f32, f32),
     ) -> Vec<Element<'a, Message>> {
@@ -137,7 +138,11 @@ impl Signex {
             iced::widget::Stack::new()
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .push(Self::flyout_dismiss_layer(on_dismiss, scrim))
+                .push(Self::flyout_dismiss_layer(
+                    on_dismiss,
+                    on_right_press,
+                    scrim,
+                ))
                 .push(signex_widgets::Translate::new(claim_pointer(card), at).boxed())
                 .boxed(),
         ]

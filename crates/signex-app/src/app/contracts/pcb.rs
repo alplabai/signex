@@ -239,6 +239,12 @@ pub enum PcbBarMsg {
     MenuToggled(PcbBarMenu),
     /// The user clicked outside the open dropdown.
     MenuDismissed,
+    /// A bar button took a right press and toggles `menu`; the release of
+    /// that press stays off the canvas.
+    MenuRightPressed(PcbBarMenu),
+    /// A right press outside the open dropdown closed it; its release stays
+    /// off the canvas.
+    FlyoutRightPressed,
     /// A dropdown row was picked: the dropdown closes and the command runs
     /// as its menu row runs it.
     CommandPicked(crate::keymap::AppCommandId),

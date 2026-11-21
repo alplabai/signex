@@ -123,6 +123,16 @@ impl Signex {
                 *open = None;
                 Task::none()
             }
+            PcbBarMsg::MenuRightPressed(menu) => {
+                *open = (*open != Some(menu)).then_some(menu);
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
+            PcbBarMsg::FlyoutRightPressed => {
+                *open = None;
+                self.set_swallow_right_release(true);
+                Task::none()
+            }
             PcbBarMsg::CommandPicked(command) => {
                 let picked_from = open.take();
                 let remembered = match picked_from {

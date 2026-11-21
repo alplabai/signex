@@ -451,9 +451,9 @@ fn board_bar_trigger(app: &Signex, main: iced::window::Id) -> (Point, crate::app
             messages_for_events(app.view(main), WINDOW, at, &[press(Button::Right)])
                 .into_iter()
                 .find_map(|message| match message {
-                    Message::Pcb(crate::app::PcbMsg::Bar(crate::app::PcbBarMsg::MenuToggled(
-                        menu,
-                    ))) => Some((at, menu)),
+                    Message::Pcb(crate::app::PcbMsg::Bar(
+                        crate::app::PcbBarMsg::MenuRightPressed(menu),
+                    )) => Some((at, menu)),
                     _ => None,
                 })
         })
@@ -502,6 +502,51 @@ fn a_right_click_outside_the_board_flyout_closes_it_and_leaves_the_tool() {
         ev.messages
     );
     assert!(app.interaction_state.context_menu.is_none());
+}
+
+/// The release of a press the bar took never arrives (it landed outside the
+/// window): the next right-click on the canvas still opens the menu.
+#[test]
+fn a_lost_release_does_not_swallow_the_next_canvas_right_click() {
+    let (mut app, main) = app();
+    let mut ev = EventLoop::new();
+    let trigger = trigger_centre(&app, ActiveBarMenu::TextTools);
+    ev.move_to(&mut app, main, trigger);
+    ev.frame(&mut app, main, trigger, press(Button::Right));
+    assert!(app.interaction_state.swallow_right_release);
+    let _ = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
+    assert!(app.interaction_state.active_bar_menu.is_none());
+
+    let target = outside(&app);
+    ev.click(&mut app, main, target, Button::Right);
+    assert!(!app.interaction_state.swallow_right_release);
+    assert!(
+        app.interaction_state.context_menu.is_some(),
+        "the canvas right-click was swallowed: {:?}",
+        ev.messages
+    );
+}
+
+/// The same on a board: the next right-click reaches the armed tool.
+#[test]
+fn a_lost_release_does_not_swallow_the_next_board_right_click() {
+    let (mut app, main) = board_app_with_tool_armed();
+    let (trigger, _) = board_bar_trigger(&app, main);
+    let mut ev = EventLoop::new();
+    ev.move_to(&mut app, main, trigger);
+    ev.frame(&mut app, main, trigger, press(Button::Right));
+    assert!(app.interaction_state.swallow_right_release);
+    let _ = app.update(Message::Input(InputMsg::EscapePressed { window: None }));
+    assert_eq!(app.interaction_state.pcb_bar_menu, None);
+
+    let target = outside(&app);
+    ev.click(&mut app, main, target, Button::Right);
+    assert!(!app.interaction_state.swallow_right_release);
+    assert!(
+        app.interaction_state.pcb_tool.is_none(),
+        "the board right-click was swallowed: {:?}",
+        ev.messages
+    );
 }
 
 /// Esc closes the board's Active Bar dropdown too.

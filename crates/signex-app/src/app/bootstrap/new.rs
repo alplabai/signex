@@ -844,6 +844,7 @@ impl Signex {
                 last_tree_click: Default::default(),
                 active_bar_menu: None,
                 active_bar_menu_window: None,
+                swallow_right_release: false,
                 pcb_bar_menu: None,
                 pcb_layer_tab_menu: None,
                 pcb_layer_set_menu: None,

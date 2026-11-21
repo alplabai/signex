@@ -67,7 +67,7 @@ impl Signex {
             .position(|item| opens(item, PcbBarMenu::Filter))
             .map(|slot| offsets[slot]);
         let bar = badge::with_filter_badge(
-            signex_widgets::active_bar::view(items, tokens),
+            signex_widgets::active_bar::view(holding_right_release(items), tokens),
             filter_x,
             badge::off_count(&self.ui_state.pcb_pick_filter),
             tokens,
@@ -114,6 +114,7 @@ impl Signex {
         .width(bar_width);
         let dismiss = Self::flyout_dismiss_layer(
             bar_message(PcbBarMsg::MenuDismissed),
+            bar_message(PcbBarMsg::FlyoutRightPressed),
             iced::Color::TRANSPARENT,
         );
         stack![
@@ -160,6 +161,20 @@ fn opens(item: &ActiveBarItem<Message>, menu: PcbBarMenu) -> bool {
         &button.on_right_press,
         Some(Message::Pcb(PcbMsg::Bar(PcbBarMsg::MenuToggled(m)))) if *m == menu
     )
+}
+
+/// `items` as drawn: a right press on a dropdown button also holds its
+/// release off the canvas.
+fn holding_right_release(mut items: Vec<ActiveBarItem<Message>>) -> Vec<ActiveBarItem<Message>> {
+    for item in &mut items {
+        if let ActiveBarItem::Button(button) = item
+            && let Some(Message::Pcb(PcbMsg::Bar(PcbBarMsg::MenuToggled(menu)))) =
+                button.on_right_press
+        {
+            button.on_right_press = Some(bar_message(PcbBarMsg::MenuRightPressed(menu)));
+        }
+    }
+    items
 }
 
 /// A button that runs `command`.
