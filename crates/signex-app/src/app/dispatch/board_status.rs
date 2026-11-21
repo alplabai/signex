@@ -71,6 +71,21 @@ impl Signex {
                 }
                 task
             }
+            E::LayerSetMenu(picked) => {
+                // The layer set menu takes over from the dropdown, so a row
+                // runs exactly as it does from the strip's set button.
+                let (x, y) = self.layer_set_card_anchor(window);
+                let owner = self.overlay_owner(window);
+                self.close_board_popover();
+                self.close_all_context_menus();
+                self.interaction_state.pcb_layer_set_menu = Some(crate::app::LayerSetMenu {
+                    x,
+                    y,
+                    window: owner,
+                    card: crate::app::LayerSetCard::Sets,
+                });
+                self.handle_layer_set_menu(picked)
+            }
             E::LayersPanelOpened => {
                 self.close_board_popover();
                 self.update(Message::Overlay(OverlayMsg::OpenPanel(

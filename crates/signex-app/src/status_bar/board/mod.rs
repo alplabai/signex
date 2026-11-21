@@ -115,6 +115,8 @@ pub enum BoardPopoverEvent {
     Dismissed,
     /// A row of the Active layer popover was picked.
     LayerPicked(PcbLayer),
+    /// A layer set row of the layer dropdown was picked.
+    LayerSetMenu(crate::app::LayerSetMenuMsg),
     LayersPanelOpened,
     /// A grid preset row was picked, in mm.
     GridPresetPicked(f32),

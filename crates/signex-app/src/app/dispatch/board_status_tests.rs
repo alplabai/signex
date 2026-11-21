@@ -503,6 +503,62 @@ fn under_dropdown_the_pill_click_lists_and_its_right_click_opens_the_popover() {
     );
 }
 
+/// What a click on the row `label` of the open layer dropdown sends.
+fn dropdown_row_click(app: &Signex, main: iced::window::Id, label: &str) -> Vec<Message> {
+    let card = app.board_popover_card(main).expect("the dropdown");
+    crate::layout_probe::messages_on_click(card, iced::Size::new(1600.0, 900.0), label)
+}
+
+fn open_dropdown(app: &mut Signex, main: iced::window::Id) {
+    app.ui_state.layer_switcher = crate::layer_strip_prefs::LayerSwitcher::Dropdown;
+    click(app, main, BoardCounter::Layer);
+}
+
+/// Caner (2026-11-21): under Dropdown the sets are in the layer list, and a
+/// picked set is shown as from the strip's set button.
+#[test]
+fn the_layer_dropdown_lists_the_sets_and_a_pick_shows_the_set() {
+    use signex_renderer::pcb::{BuiltinLayerSet, LayerSetId};
+    let (mut app, path, main) = app_with_board();
+    open_dropdown(&mut app, main);
+    let card = app.board_popover_card(main).expect("the dropdown");
+    let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1600.0, 900.0));
+    for label in ["All Layers", "Signal Layers", "Save current as set...", "Manage sets..."] {
+        assert!(texts.iter().any(|t| t.text == label), "{label}");
+    }
+    for message in dropdown_row_click(&app, main, "Signal Layers") {
+        let _ = app.update(message);
+    }
+    assert_eq!(
+        app.pcb_layer_view(&path)
+            .layer_set()
+            .map(|set| set.id.clone()),
+        Some(LayerSetId::Builtin(BuiltinLayerSet::Signal))
+    );
+    assert_eq!(open_kind(&app), None, "the pick closes the dropdown");
+    assert!(app.interaction_state.pcb_layer_set_menu.is_none());
+}
+
+/// Save current as set... reaches the naming card, above the status bar.
+#[test]
+fn save_from_the_layer_dropdown_opens_the_naming_card() {
+    let (mut app, _path, main) = app_with_board();
+    open_dropdown(&mut app, main);
+    for message in dropdown_row_click(&app, main, "Save current as set...") {
+        let _ = app.update(message);
+    }
+    let menu = app
+        .interaction_state
+        .pcb_layer_set_menu
+        .as_ref()
+        .expect("the layer set menu");
+    assert!(matches!(&menu.card, crate::app::LayerSetCard::Naming(name) if name.is_empty()));
+    let tokens = &app.document_state.panel_ctx.tokens;
+    let (_, height) = app.ui_state.size_of_window(main);
+    assert!(menu.y < height - crate::status_bar::status_bar_height(tokens));
+    assert_eq!(open_kind(&app), None);
+}
+
 /// #2460 under Strip: the pill takes no click, and its right-click opens
 /// the Active layer popover.
 #[test]

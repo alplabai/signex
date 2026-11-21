@@ -278,6 +278,57 @@ impl Signex {
         let board = self.status_board(window)?;
         let ui = &self.ui_state;
         let tokens = &self.document_state.panel_ctx.tokens;
+        let left = self.status_popover_left(window, model.kind(), &board);
+        let card = crate::status_bar::board_popover_view(&model, tokens, &ui.i18n)
+            .map(|event| Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))));
+        // The strip and its set button are hidden under Dropdown, so the
+        // layer list carries the layer sets.
+        let card: Element<'_, Message> = if matches!(model, BoardPopoverModel::LayerDropdown(_)) {
+            iced::widget::column![self.layer_dropdown_sets(window), card]
+                .spacing(crate::status_bar::POPUP_GAP)
+                .into()
+        } else {
+            card
+        };
+        // The card claims the pointer over itself, so a press on its padding
+        // does not reach the click-outside layer.
+        let card = iced::widget::mouse_area(card).interaction(iced::mouse::Interaction::Idle);
+        let status_h = crate::status_bar::status_bar_height(tokens);
+        Some(
+            iced::widget::container(card)
+                .width(iced::Length::Fill)
+                .height(iced::Length::Fill)
+                .padding(iced::Padding {
+                    top: 0.0,
+                    right: 0.0,
+                    bottom: status_h + crate::status_bar::POPUP_GAP,
+                    left,
+                })
+                .align_x(iced::alignment::Horizontal::Left)
+                .align_y(iced::alignment::Vertical::Bottom)
+                .boxed(),
+        )
+    }
+
+    /// Where a layer set card opened from the layer dropdown goes: its left
+    /// edge at the dropdown's, its bottom just above the status bar.
+    pub(crate) fn layer_set_card_anchor(&self, window: iced::window::Id) -> (f32, f32) {
+        let left = self.status_board(window).map_or(0.0, |board| {
+            self.status_popover_left(window, BoardPopoverKind::Layer, &board)
+        });
+        let status_h = crate::status_bar::status_bar_height(&self.document_state.panel_ctx.tokens);
+        let (_, height) = self.ui_state.size_of_window(window);
+        (left, height - status_h - crate::status_bar::POPUP_GAP)
+    }
+
+    /// The left edge of the `kind` card in `window`'s bar.
+    fn status_popover_left(
+        &self,
+        window: iced::window::Id,
+        kind: BoardPopoverKind,
+        board: &BoardReadout,
+    ) -> f32 {
+        let ui = &self.ui_state;
         let grid = self.status_grid(window);
         let angle = self.status_view_angle(window);
         let window_width = if ui.main_window_id == Some(window) {
@@ -297,30 +348,10 @@ impl Signex {
             snap_enabled: ui.snap_enabled,
             zoom: self.status_zoom(window),
             view_angle: angle.as_ref(),
-            board: &board,
+            board,
             window_width,
         };
-        let left = crate::status_bar::board_popover_left(model.kind(), &bar, &ui.i18n);
-        let card = crate::status_bar::board_popover_view(&model, tokens, &ui.i18n)
-            .map(|event| Message::Ui(UiMsg::StatusBar(StatusBarRequest::BoardPopover(event))));
-        // The card claims the pointer over itself, so a press on its padding
-        // does not reach the click-outside layer.
-        let card = iced::widget::mouse_area(card).interaction(iced::mouse::Interaction::Idle);
-        let status_h = crate::status_bar::status_bar_height(tokens);
-        Some(
-            iced::widget::container(card)
-                .width(iced::Length::Fill)
-                .height(iced::Length::Fill)
-                .padding(iced::Padding {
-                    top: 0.0,
-                    right: 0.0,
-                    bottom: status_h + crate::status_bar::POPUP_GAP,
-                    left,
-                })
-                .align_x(iced::alignment::Horizontal::Left)
-                .align_y(iced::alignment::Vertical::Bottom)
-                .boxed(),
-        )
+        crate::status_bar::board_popover_left(kind, &bar, &ui.i18n)
     }
 }
 
