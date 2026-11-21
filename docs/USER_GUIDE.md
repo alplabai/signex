@@ -240,9 +240,10 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
   them is a button that opens a popover above it. The active layer pill is
   a plain label under the **Strip** layer switcher; under **Dropdown**
   (**Preferences ▸ Appearance ▸ Layer switcher**) the layer tabs are hidden
-  and a click on the pill lists the visible layers by group. A click on the
-  grid value still shows or hides the grid; right-click it or the pill to
-  open its popover. Esc or a click elsewhere closes a popover:
+  and a click on the pill lists the visible layers by group, with the layer
+  sets above them. A click on the grid value still shows or hides the grid;
+  right-click it or the pill to open its popover. Esc or a click elsewhere
+  closes a popover:
   - **Active layer:** the board's shown layers; click one to make it the
     active layer. **Layers panel** opens the panel. The `+` and `-` keys
     (**View ▸ Next Layer** and **Previous Layer**) step the layer too.
