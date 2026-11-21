@@ -664,6 +664,10 @@ Wires connect pins and each other.
 Wires snap to the grid while snapping is on. The status bar shows the active
 tool.
 
+A wire you start on the end or the middle of another wire takes that wire's
+colour and width, so a red wire carries on red. A wire that only ends on it
+keeps its own look, and a wire started on a plain wire stays plain.
+
 Once you have placed parts (section 5), connect the wires to their pins.
 
 A pin end placed or moved onto the middle of a wire joins it: Signex adds a

@@ -85,6 +85,9 @@ pub struct InteractionState {
     pub tab_drag_origin: Option<(f32, f32)>,
     pub wire_points: Vec<signex_types::schematic::Point>,
     pub wire_drawing: bool,
+    /// Width and colour of the wire the route being drawn started on, which
+    /// its wires take; `None` when it started on no wire.
+    pub(crate) wire_start_style: Option<(f64, Option<signex_types::theme::Color>)>,
     /// 3-click arc placement buffer. Holds the first two clicks
     /// (start, mid); the third click commits as SchDrawing::Arc.
     pub arc_points: Vec<signex_types::schematic::Point>,

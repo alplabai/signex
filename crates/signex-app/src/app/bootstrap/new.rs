@@ -814,6 +814,7 @@ impl Signex {
                 tab_drag_origin: None,
                 wire_points: Vec::new(),
                 wire_drawing: false,
+                wire_start_style: None,
                 arc_points: Vec::new(),
                 polyline_points: Vec::new(),
                 annotation_tool: Default::default(),

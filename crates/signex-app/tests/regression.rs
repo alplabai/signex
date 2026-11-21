@@ -787,6 +787,8 @@ mod stroke_zoom_law;
 mod unions;
 #[path = "regression/validation_panels_graphite.rs"]
 mod validation_panels_graphite;
+#[path = "regression/wire_inherit_style.rs"]
+mod wire_inherit_style;
 #[path = "regression/wire_tab_options.rs"]
 mod wire_tab_options;
 

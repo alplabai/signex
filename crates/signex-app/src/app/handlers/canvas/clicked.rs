@@ -287,6 +287,7 @@ impl Signex {
         self.interaction_state.wire_drawing = true;
         self.interaction_state.wire_points.clear();
         self.interaction_state.wire_points.push(pt);
+        self.interaction_state.wire_start_style = self.wire_style_at(pt);
         let canvas = self.interaction_state.active_canvas_mut();
         canvas.wire_preview = vec![pt];
         canvas.drawing_mode = true;
