@@ -5,7 +5,7 @@
 
 use signex_types::format_version::{FormatVersion, MissingToken, NewerMinor};
 
-use super::FootprintFile;
+use super::{Footprint, FootprintFile};
 
 /// 1.1 (#2242): a pad may carry the `trapezoid:<dx>,<dy>` shape token.
 pub(super) const SNXFPT_FORMAT_V1_1: &str = "snxfpt/1.1";
@@ -16,19 +16,20 @@ pub(super) const SNXFPT_FORMAT_V1_1: &str = "snxfpt/1.1";
 /// by name instead.
 pub(super) const SNXFPT_FORMAT_SKETCH_LINKS: &str = "snxfpt/1.2";
 
-/// Written when a footprint has generated features (mockup row 124, #2834):
-/// a 1.2 build would drop them on save, so it refuses the file by name.
-pub(super) const SNXFPT_FORMAT_GENERATED: &str = "snxfpt/1.3";
+/// Written when a footprint has generated features (mockup row 124, #2834)
+/// or a pattern with a non-default numbering sweep (mockup row 126): a 1.2
+/// build would drop them on save, so it refuses the file by name.
+pub(super) const SNXFPT_FORMAT_V1_3: &str = "snxfpt/1.3";
 
 /// `.snxfpt` version policy. A newer token, minor included, is refused by
 /// name: an older build cannot tell which of its shapes it would misread.
 pub(super) const FOOTPRINT_FILE_VERSION: FormatVersion = FormatVersion {
-    current: SNXFPT_FORMAT_GENERATED,
+    current: SNXFPT_FORMAT_V1_3,
     readable: &[
         "snxfpt/1",
         SNXFPT_FORMAT_V1_1,
         SNXFPT_FORMAT_SKETCH_LINKS,
-        SNXFPT_FORMAT_GENERATED,
+        SNXFPT_FORMAT_V1_3,
     ],
     newer_minor: NewerMinor::Refused,
     missing: MissingToken::Refused,
@@ -36,10 +37,14 @@ pub(super) const FOOTPRINT_FILE_VERSION: FormatVersion = FormatVersion {
 
 impl FootprintFile {
     /// The lowest token that holds this file's content. From content, so a
-    /// file whose last link or generated feature goes drops back down.
+    /// file whose last link, sweep or generated feature goes drops back down.
     pub fn format_token(&self) -> &'static str {
-        if self.footprints.iter().any(|fp| !fp.generated.is_default()) {
-            return SNXFPT_FORMAT_GENERATED;
+        let needs_1_3 = |fp: &Footprint| {
+            !fp.generated.is_default()
+                || fp.sketch.as_ref().is_some_and(|s| s.has_numbering_sweep())
+        };
+        if self.footprints.iter().any(needs_1_3) {
+            return SNXFPT_FORMAT_V1_3;
         }
         let links = self
             .footprints

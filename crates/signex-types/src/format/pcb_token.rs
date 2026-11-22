@@ -34,23 +34,25 @@ pub const SNXPCB_FORMAT_ROOMS: &str = "snxpcb/1.6";
 pub const SNXPCB_FORMAT_BOARD_SKETCH_TARGETS: &str = "snxpcb/1.7";
 
 /// Written when the stackup has a name (`stack_name` in `[stackup]`, mockup
-/// row 105, 2026-11-22): a build that knows only 1.7 cannot edit the name, so
-/// it opens 1.8 read-only. A board without a name keeps its token, byte for
-/// byte.
-pub const SNXPCB_FORMAT_STACKUP_NAME: &str = "snxpcb/1.8";
+/// row 105, 2026-11-22), when a board sketch pattern repeats a baked target
+/// (#2517), or when an array has a non-default numbering sweep (mockup row
+/// 126): a build that knows only 1.7 would lose each on save or re-bake, so
+/// it opens 1.8 read-only. A board with none keeps its token, byte for byte.
+pub const SNXPCB_FORMAT_V1_8: &str = "snxpcb/1.8";
 
 /// The token a save of `board` writes, from its content, highest need
-/// first: a stackup name needs [`SNXPCB_FORMAT_STACKUP_NAME`], the board
-/// sketch targets [`SNXPCB_FORMAT_BOARD_SKETCH_TARGETS`], rooms
-/// [`SNXPCB_FORMAT_ROOMS`], layer colours [`SNXPCB_FORMAT_LAYER_COLORS`],
-/// anything else [`SNXPCB_FORMAT_V1`]. A board whose last such item is gone
-/// goes back to the lower token.
+/// first: a stackup name, a patterned baked target or a numbering sweep
+/// needs [`SNXPCB_FORMAT_V1_8`], the board sketch targets
+/// [`SNXPCB_FORMAT_BOARD_SKETCH_TARGETS`], rooms [`SNXPCB_FORMAT_ROOMS`],
+/// layer colours [`SNXPCB_FORMAT_LAYER_COLORS`], anything else
+/// [`SNXPCB_FORMAT_V1`]. A board whose last such item is gone goes back to
+/// the lower token.
 pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
-    let targets = board.sketch.as_ref().is_some_and(|stored| {
-        stored.sketch.carries_board_targets() || stored.sketch.needs_format_1_2()
-    });
-    if board.stackup.as_ref().is_some_and(|s| s.name.is_some()) {
-        SNXPCB_FORMAT_STACKUP_NAME
+    let sketch = board.sketch.as_ref().map(|stored| &stored.sketch);
+    let patterned = sketch.is_some_and(|s| s.repeats_baked_target() || s.has_numbering_sweep());
+    let targets = sketch.is_some_and(|s| s.carries_board_targets() || s.needs_format_1_2());
+    if patterned || board.stackup.as_ref().is_some_and(|s| s.name.is_some()) {
+        SNXPCB_FORMAT_V1_8
     } else if targets {
         SNXPCB_FORMAT_BOARD_SKETCH_TARGETS
     } else if !board.rooms.is_empty() {
@@ -65,7 +67,7 @@ pub fn snxpcb_token(board: &PcbBoard) -> &'static str {
 /// `.snxpcb` version policy: a newer minor opens read-only. A save writes
 /// the lowest token its content needs ([`snxpcb_token`]).
 pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
-    current: SNXPCB_FORMAT_STACKUP_NAME,
+    current: SNXPCB_FORMAT_V1_8,
     readable: &[
         "snxpcb/1",
         "snxpcb/1.1",
@@ -75,7 +77,7 @@ pub const SNXPCB_VERSION: FormatVersion = FormatVersion {
         SNXPCB_FORMAT_LAYER_COLORS,
         SNXPCB_FORMAT_ROOMS,
         SNXPCB_FORMAT_BOARD_SKETCH_TARGETS,
-        SNXPCB_FORMAT_STACKUP_NAME,
+        SNXPCB_FORMAT_V1_8,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,

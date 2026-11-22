@@ -137,7 +137,7 @@ fn a_named_stackup_round_trips_under_its_token() {
     named.stackup.as_mut().unwrap().name = Some("sensor-node 4L".into());
     let (text, back) = round_trip(&named);
     assert!(
-        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_STACKUP_NAME}\"")),
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1_8}\"")),
         "{text}"
     );
     assert!(text.contains("stack_name = \"sensor-node 4L\""), "{text}");

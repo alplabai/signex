@@ -387,6 +387,9 @@ overrides in `[board_sketch.sketch]` as a footprint sketch does
 expands them ([Patterned board items](#patterned-board-items)). A board
 sketch holding any of them, or a reference dimension, is saved as
 `snxpcb/1.7`, so an older build opens it read-only instead of dropping them.
+A pattern that repeats a baked target, or a numbering sweep other than row by
+row, writes `snxpcb/1.8`: a build before the expansion would lose the
+instances on its next bake (`docs/FORMAT_VERSIONS.md`).
 
 ## Patterned board items {#patterned-board-items}
 
@@ -475,6 +478,7 @@ sketch without them commits through `SetBoardSketch` as before.
 
 The `.snxpcb` token is `snxpcb/1.7` while the board sketch carries any of
 `board_slot`, `pour`, `mechanical` or `component_anchor`
-(`SketchData::carries_board_targets`), else what it was (1.4, or 1.5 with
-layer colours), byte for byte. Still to do: the drill and route output emits a
+(`SketchData::carries_board_targets`), `snxpcb/1.8` when a pattern repeats a
+target (`SketchData::repeats_baked_target`), else what it was (1.4, or 1.5
+with layer colours), byte for byte. Still to do: the drill and route output emits a
 Slot cutout as a stadium cutout, not a routed slot.
