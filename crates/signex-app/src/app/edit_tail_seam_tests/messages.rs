@@ -215,23 +215,17 @@ const KINDS: [Words; 10] = [
 enum Skip {
     HistoryGone,
     Closed,
-    DiskOnly,
     DroppedRedo,
 }
 
-/// History gone, closed and disk-only on one undo, then the dropped redo;
-/// `check` is the line asserted.
+/// History gone and closed on one undo, then the dropped redo; `check` is the
+/// line asserted.
 fn skipped_members_and_the_dropped_redo(w: &Words, check: Skip) {
-    let [a, b, c, d, e] = ["a", "b", "c", "d", "e"].map(short_unique);
+    let [a, b, c, e] = ["a", "b", "c", "e"].map(short_unique);
     let (mut app, paths) = app_with_sheets(&[&b, &a]);
     let (b_path, a_path) = (paths[0].clone(), paths[1].clone());
     let live = [a_path.clone(), b_path, sheet_path(&c)];
     let group = group_over(&mut app, w.kind, &live, &[a_path]);
-    app.document_state
-        .undo_groups
-        .get_mut(&group)
-        .unwrap()
-        .disk_only = vec![sheet_path(&d)];
     let (title, noun) = (w.title, w.noun);
     let gone = format!(
         "{title} undone on the other sheets but not on {b}: its undo history no longer holds \
@@ -243,14 +237,9 @@ fn skipped_members_and_the_dropped_redo(w: &Words, check: Skip) {
          whatever was last saved.",
         w.holds
     );
-    let disk = format!(
-        "{title} undone on open sheets; not open, so still {} on disk: {d}",
-        w.done
-    );
     let undo_line = match check {
         Skip::HistoryGone => Some(gone),
         Skip::Closed => Some(closed),
-        Skip::DiskOnly => Some(disk),
         Skip::DroppedRedo => None,
     };
     match &undo_line {
@@ -286,11 +275,6 @@ fn a_member_whose_history_lost_the_group_is_named_for_every_kind() {
 #[test]
 fn a_member_closed_since_the_group_is_named_for_every_kind() {
     for_every_kind(Skip::Closed);
-}
-
-#[test]
-fn a_member_only_on_disk_is_named_for_every_kind() {
-    for_every_kind(Skip::DiskOnly);
 }
 
 #[test]

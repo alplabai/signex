@@ -383,8 +383,8 @@ impl Signex {
     }
 
     /// The file at `path` was rewritten without going through a document
-    /// save (Annotate and Reset Duplicate Designators on a sheet with no
-    /// open tab). Only a copy this run wrote is removed. A copy an earlier
+    /// save (a History restore, or a change from outside Signex). Only a
+    /// copy this run wrote is removed. A copy an earlier
     /// run left may hold unsaved edits to a sheet nobody has opened yet, so
     /// it stays for the reconcile at the next open to compare bytes and
     /// offer it.

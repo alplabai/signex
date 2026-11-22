@@ -601,10 +601,9 @@ fn undone_reprefix_does_not_shadow_a_sheet_rewritten_on_disk() {
         Message::Annotate(AnnotateMsg::Run(signex_engine::AnnotateMode::Incremental)),
     );
 
-    // An unopened sheet is annotated and written straight to disk.
-    let on_disk = signex_engine::Engine::open(&child_path).expect("reopen the child");
+    // An unopened sheet is annotated into a parked engine, unsaved.
     assert_eq!(
-        on_disk.document().symbols[0].reference,
+        w.app.document_state.engines[&child_path].document().symbols[0].reference,
         "R1",
         "Annotate must read the rewritten file, not the pre-undo copy"
     );

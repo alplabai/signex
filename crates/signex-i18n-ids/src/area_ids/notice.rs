@@ -93,7 +93,6 @@ define_ids! {
     NOTICE_NEW_PROJECT_FAILED = "notice-new-project-failed";
     NOTICE_RECENT_GONE = "notice-recent-gone";
     NOTICE_RUN_REFUSED = "notice-run-refused";
-    NOTICE_RUN_WRITE_FAILED = "notice-run-write-failed";
     NOTICE_RUN_WOULD_SKIP = "notice-run-would-skip";
     NOTICE_RUN_SKIPPED_READ_ONLY = "notice-run-skipped-read-only";
     NOTICE_RUN_PROJECT_MOVING = "notice-run-project-moving";

@@ -192,8 +192,7 @@ impl DocumentState {
     }
 
     /// A `.snxsch` was written or deleted on disk with no engine behind it
-    /// (the unopened-sheet Annotate and Reset Duplicate Designators writes,
-    /// a deleted project file). The writers reach it through
+    /// (a History restore, a deleted project file). The writers reach it through
     /// `autosave_after_disk_write` or `drop_deleted_documents`; a new
     /// engine-less writer must call one of those or this, so a background read
     /// of that file can tell it is out of date.
