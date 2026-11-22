@@ -124,6 +124,8 @@ fn m43_a_bus_end_is_edited_like_a_wire_end() {
         uuid: id,
         start: Point::new(10.0, 40.0),
         end: Point::new(30.0, 40.0),
+        stroke_width: 0.0,
+        color: None,
     });
     let mut b = bench(sheet);
     let item = SelectedItem::new(id, SelectedKind::Bus);

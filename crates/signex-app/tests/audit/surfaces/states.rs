@@ -106,6 +106,8 @@ fn schematic_rows() -> Vec<Surface> {
                     uuid: Uuid::from_u128(0x4301),
                     start: Point::new(160.02, 40.64),
                     end: Point::new(190.5, 40.64),
+                    stroke_width: 0.0,
+                    color: None,
                 });
             })?;
             click_pick(app, (175.26, 40.64), SelectedKind::Bus)
