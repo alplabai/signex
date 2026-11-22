@@ -91,6 +91,15 @@ so the row marked is the newest logged undoable command of that document.
 With nothing logged yet every count reads 0, the filters are greyed and the
 panel says what it will list.
 
+## Panel width
+
+All six table columns stay at any width. Command, Arguments and Result shrink
+together to their least widths, then the table scrolls sideways, header and
+rows together. The detail pane takes at most half the panel. In the filter
+bar the search field shrinks first, then the filters wrap; in a narrow side
+dock Follow newest and the actions take their own line, so they are never
+clipped.
+
 ## Actions
 
 - **Pause logging** stops recording until Resume logging; **Clear** empties

@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::font::Weight;
-use iced::widget::{Row, container};
+use iced::widget::{Row, container, svg};
 use iced::{Alignment, Background, Border, Color, Element, Font, Length, Padding, Theme, Widget};
 use signex_i18n::{I18n, UserText};
 
@@ -263,7 +263,39 @@ pub fn chip<'a, M: Clone + 'a>(
     on_press: Option<M>,
 ) -> Element<'a, M> {
     let count = count.map(|n| count_text(i18n, n));
-    pill(None, label.into(), count, is_on, style, metrics, on_press)
+    pill(
+        Lead::None,
+        label.into(),
+        count,
+        is_on,
+        style,
+        metrics,
+        on_press,
+    )
+}
+
+/// A [`chip`] led by a monochrome glyph, tinted with the chip's ink.
+#[allow(clippy::too_many_arguments)]
+pub fn icon_chip<'a, M: Clone + 'a>(
+    glyph: svg::Handle,
+    label: impl Into<Label<'a>>,
+    count: Option<u32>,
+    is_on: bool,
+    style: ChipStyle,
+    metrics: ChipMetrics,
+    i18n: &I18n,
+    on_press: Option<M>,
+) -> Element<'a, M> {
+    let count = count.map(|n| count_text(i18n, n));
+    pill(
+        Lead::Glyph(glyph),
+        label.into(),
+        count,
+        is_on,
+        style,
+        metrics,
+        on_press,
+    )
 }
 
 /// A [`chip`] led by a round colour dot (a kind's colour). `count` is
@@ -278,7 +310,7 @@ pub fn dot_chip<'a, M: Clone + 'a>(
     on_press: Option<M>,
 ) -> Element<'a, M> {
     pill(
-        Some(dot),
+        Lead::Dot(dot),
         label.into(),
         count,
         is_on,
@@ -305,9 +337,28 @@ fn dot_mark<'a, M: 'a>(colour: Color, metrics: ChipMetrics) -> Element<'a, M> {
         .boxed()
 }
 
+/// The glyph of an [`icon_chip`], one text size square.
+fn glyph_mark<'a, M: 'a>(handle: svg::Handle, ink: Color, metrics: ChipMetrics) -> Element<'a, M> {
+    svg(handle)
+        .width(metrics.text_size)
+        .height(metrics.text_size)
+        .style(move |_: &Theme, _| svg::Style {
+            color: Some(ink),
+            ..svg::Style::default()
+        })
+        .boxed()
+}
+
+/// What sits before a chip's label.
+enum Lead {
+    None,
+    Dot(Color),
+    Glyph(svg::Handle),
+}
+
 /// A chip whose count, if any, is already written out.
 fn pill<'a, M: Clone + 'a>(
-    dot: Option<Color>,
+    lead: Lead,
     label: Label<'a>,
     count: Option<String>,
     is_on: bool,
@@ -325,8 +376,10 @@ fn pill<'a, M: Clone + 'a>(
         .spacing(metrics.gap)
         .height(Length::Fill)
         .align_y(Alignment::Center);
-    if let Some(colour) = dot {
-        content = content.push(dot_mark(faded(colour, alpha), metrics));
+    match lead {
+        Lead::None => {}
+        Lead::Dot(colour) => content = content.push(dot_mark(faded(colour, alpha), metrics)),
+        Lead::Glyph(handle) => content = content.push(glyph_mark(handle, ink, metrics)),
     }
     content = content.push(label_text(label, metrics.text_size, ink, is_on));
     if let Some(count) = count {
@@ -383,7 +436,7 @@ where
     for (value, label) in options {
         let on_press = Some(on_select(value));
         row = row.push(pill(
-            None,
+            Lead::None,
             label,
             None,
             value == selected,
@@ -718,6 +771,17 @@ mod tests {
         let _: Element<'_, Kind> = kind_chip(sample("panel"), tone, m);
         let i18n = I18n::en_us_ref();
         let _: Element<'_, Kind> = chip(sample("Off"), Some(2), false, style(), m, i18n, None);
+        let glyph = svg::Handle::from_memory(&b"<svg xmlns='http://www.w3.org/2000/svg'/>"[..]);
+        let _: Element<'_, Kind> = icon_chip(
+            glyph,
+            sample("GUI"),
+            Some(1),
+            true,
+            style(),
+            m,
+            i18n,
+            Some(Kind::Errors),
+        );
         let _: Element<'_, Kind> = tab_chips(
             [
                 TabChip::new(Kind::Errors, sample("Clearance")).count(4),
