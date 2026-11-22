@@ -85,7 +85,9 @@ fn a_switch_restores_lfs_content_from_the_object_store() {
 fn the_index_records_the_pointer_and_a_second_switch_comes_back() {
     let (dir, repo) = lfs_repo();
     switch(dir.path(), &side(), &[]).unwrap();
-    let index = repo.index().unwrap();
+    // The switch wrote the index through its own handle.
+    let mut index = repo.index().unwrap();
+    index.read(true).unwrap();
     let entry = index.get_path(Path::new("m.step"), 0).unwrap();
     let tree = repo.head().unwrap().peel_to_tree().unwrap();
     assert_eq!(entry.id, tree.get_path(Path::new("m.step")).unwrap().id());

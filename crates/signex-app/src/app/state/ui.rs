@@ -239,7 +239,7 @@ pub struct UiState {
     /// The Project tab previews' open label, held handle and larger window.
     pub project_preview: crate::app::project_tab::ProjectPreviewUi,
     /// Each project's repository as last read, and the one branch switcher.
-    pub project_git: crate::app::project_git::ProjectGitState,
+    pub project_git: Box<crate::app::project_git::ProjectGitState>,
     /// The Preferences language draft, dirty pages and page view state.
     /// Boxed: a pointer of the size budget (#2412).
     pub preferences_pages: Box<crate::preferences::PreferencesPagesState>,

@@ -509,12 +509,14 @@ fn is_exact_label(i18n: &I18n, query: &str, label: &str) -> bool {
     query.trim().chars().map(fold).eq(label.chars().map(fold))
 }
 
-/// Whether `text` holds `query` as one run, under the search fold: every
+/// Whether `text` holds every word of `query`, under the search fold: every
 /// result the palette draws contains what was typed (mockup row 9).
 fn contains_query(i18n: &I18n, query: &str, text: &str) -> bool {
     let fold = |c: char| i18n.fold_char_for_search(c);
-    let query: String = query.chars().map(fold).collect();
-    text.chars().map(fold).collect::<String>().contains(&query)
+    let text: String = text.chars().map(fold).collect();
+    query
+        .split_whitespace()
+        .all(|word| text.contains(&word.chars().map(fold).collect::<String>()))
 }
 
 /// Filter the catalog by query and rank the survivors. Returns indices
