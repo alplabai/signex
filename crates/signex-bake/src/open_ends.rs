@@ -118,6 +118,49 @@ pub fn open_ends(
     out
 }
 
+/// The place a bake warning and the preview card name for an open end.
+pub fn open_end_place(at: Point) -> String {
+    format!("at ({:.2}, {:.2})", at.x, at.y)
+}
+
+/// Report the open profiles of the edges `is_profile` picks: one warning per
+/// gap, naming the object (`name`) and its place, never an entity id. A
+/// profile whose ends cannot be placed still gets one line.
+pub fn warn_open_profiles(
+    sketch: &SketchData,
+    solve: &FullSolveOutput,
+    name: &str,
+    is_profile: impl Fn(&Entity) -> bool,
+    warnings: &mut Vec<String>,
+) {
+    let mut lines: Vec<String> = open_ends(sketch, solve, is_profile)
+        .iter()
+        .filter_map(|end| {
+            let place = open_end_place(end.at?);
+            Some(match end.gap_mm {
+                Some(gap) => format!("{name} profile is not closed: {gap:.3} mm gap {place}"),
+                None => format!("{name} profile is not closed {place}"),
+            })
+        })
+        .collect();
+    if lines.is_empty() {
+        lines.push(format!("{name} profile is not closed"));
+    }
+    for line in lines {
+        if !warnings.contains(&line) {
+            warnings.push(line);
+        }
+    }
+}
+
+/// Whether `warning` is the open-profile warning of `end`, so a list that
+/// names `end` does not say it twice.
+pub fn warning_names_end(warning: &str, end: &OpenEnd) -> bool {
+    end.at.is_some_and(|at| {
+        warning.contains("profile is not closed") && warning.ends_with(&open_end_place(at))
+    })
+}
+
 /// The two endpoints the profile walk joins an edge by; `None` for points
 /// and circles.
 fn edge_ends(entity: &Entity) -> Option<(SketchEntityId, SketchEntityId)> {
@@ -174,6 +217,28 @@ mod tests {
     fn solved(sketch: &SketchData) -> FullSolveOutput {
         let params = resolve(&sketch.parameters).unwrap();
         Solver::default().solve(sketch, &params).unwrap()
+    }
+
+    /// Mockup row 190: one gap of a four-edge profile is one warning, naming
+    /// the object and the place, with no entity id.
+    #[test]
+    fn a_refused_courtyard_reports_its_one_gap_once_without_ids() {
+        let (mut sketch, _, l) = sketch_with(
+            &[(0.0, 0.0), (5.0, 0.0), (5.0, 5.0), (0.0, 5.0), (0.0, 0.02)],
+            &[(0, 1), (1, 2), (2, 3), (3, 4)],
+        );
+        for entity in &mut sketch.entities {
+            if l.contains(&entity.id) {
+                entity.courtyard = Some(CourtyardAttr {});
+            }
+        }
+        let mut outline = signex_library::primitive::footprint::Polygon::default();
+        let mut warnings = Vec::new();
+        crate::bake_courtyard(&sketch, &solved(&sketch), &mut outline, &mut warnings).unwrap();
+        assert_eq!(
+            warnings,
+            ["Courtyard profile is not closed: 0.020 mm gap at (0.00, 0.01)"]
+        );
     }
 
     #[test]

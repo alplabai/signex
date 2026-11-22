@@ -1,0 +1,340 @@
+//! Add fillets on failing inside corners (mockup row 179d): a sharp corner
+//! between two lines takes a tangent arc of the radius the router needs. A
+//! corner that is an arc, or whose lines are too short, is left as it was
+//! and counted. Rules: `docs/PCB_SKETCH.md`, "Outline checks".
+
+use std::collections::HashMap;
+use std::f64::consts::PI;
+
+use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::id::SketchEntityId;
+use signex_sketch::sketch::SketchData;
+use signex_sketch::solver::FullSolveOutput;
+use signex_sketch::solver::state::point_xy;
+
+use super::checks::{Finding, OutlineChecks};
+
+/// Over the required radius, in mm: two file units (1 nm each), so a fillet
+/// read back from disk still passes the check it fixes.
+const RADIUS_MARGIN_MM: f64 = 2e-6;
+/// Shortest line a fillet may leave, in mm.
+const MIN_LINE_LEFT_MM: f64 = 1e-6;
+/// An angle this close to flat or folded, in radians, has no corner to round.
+const MIN_ANGLE_RAD: f64 = 1e-3;
+
+type Xy = (f64, f64);
+
+/// What [`add_fillets`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FilletReport {
+    pub applied: usize,
+    pub refused: usize,
+}
+
+/// The sharp corners of `checks` a fillet can fix, each with the radius it
+/// needs.
+pub fn fillet_targets(sketch: &SketchData, checks: &OutlineChecks) -> Vec<(SketchEntityId, f64)> {
+    let mut out: Vec<(SketchEntityId, f64)> = Vec::new();
+    for (_, finding) in checks.failures() {
+        if let Finding::TightCorner {
+            entity,
+            tool_radius_mm,
+            ..
+        } = finding
+            && corner_arms(sketch, *entity).is_some()
+            && !out.iter().any(|(id, _)| id == entity)
+        {
+            out.push((*entity, *tool_radius_mm));
+        }
+    }
+    out
+}
+
+/// Round each of `targets` at the positions of `solve`. Corners sharing a
+/// line are cut in turn, each from what the last one left.
+pub fn add_fillets(
+    sketch: &mut SketchData,
+    solve: &FullSolveOutput,
+    targets: &[(SketchEntityId, f64)],
+) -> FilletReport {
+    let mut at = solved_points(sketch, solve);
+    let mut report = FilletReport::default();
+    for &(corner, radius) in targets {
+        let fillet = corner_arms(sketch, corner).and_then(|arms| {
+            let geometry = fillet_geometry(
+                *at.get(&corner)?,
+                *at.get(&arms[0].far)?,
+                *at.get(&arms[1].far)?,
+                radius + RADIUS_MARGIN_MM,
+            )?;
+            Some((arms, geometry))
+        });
+        match fillet {
+            Some((arms, geometry)) => {
+                splice(sketch, &mut at, corner, arms, geometry);
+                report.applied += 1;
+            }
+            None => report.refused += 1,
+        }
+    }
+    report
+}
+
+/// One line at a corner and its other end.
+#[derive(Clone, Copy)]
+struct Arm {
+    line: SketchEntityId,
+    far: SketchEntityId,
+}
+
+/// The two lines meeting at `corner`; `None` unless it is exactly two lines.
+fn corner_arms(sketch: &SketchData, corner: SketchEntityId) -> Option<[Arm; 2]> {
+    let mut arms = Vec::new();
+    for entity in sketch.entities.iter().filter(|e| !e.bake_skipped()) {
+        match entity.kind {
+            EntityKind::Line { start, end } if start == corner => arms.push(Arm {
+                line: entity.id,
+                far: end,
+            }),
+            EntityKind::Line { start, end } if end == corner => arms.push(Arm {
+                line: entity.id,
+                far: start,
+            }),
+            EntityKind::Arc { start, end, .. } if start == corner || end == corner => return None,
+            _ => {}
+        }
+    }
+    <[Arm; 2]>::try_from(arms).ok()
+}
+
+fn solved_points(sketch: &SketchData, solve: &FullSolveOutput) -> HashMap<SketchEntityId, Xy> {
+    sketch
+        .entities
+        .iter()
+        .filter(|e| matches!(e.kind, EntityKind::Point { .. }))
+        .filter_map(|e| {
+            let xy = point_xy(e.id, &solve.result.state, &solve.result.index, sketch)?;
+            Some((e.id, xy))
+        })
+        .collect()
+}
+
+/// A fillet's tangent points on the two lines, its centre and its sweep.
+#[derive(Debug, Clone, Copy)]
+struct Geometry {
+    on_first: Xy,
+    on_second: Xy,
+    centre: Xy,
+    sweep_ccw: bool,
+}
+
+/// The arc of `radius` tangent to the lines from `corner` to `a` and `b`;
+/// `None` when they are in line or too short to hold it.
+fn fillet_geometry(corner: Xy, a: Xy, b: Xy, radius: f64) -> Option<Geometry> {
+    let (ax, ay) = (a.0 - corner.0, a.1 - corner.1);
+    let (bx, by) = (b.0 - corner.0, b.1 - corner.1);
+    let (a_len, b_len) = (ax.hypot(ay), bx.hypot(by));
+    if a_len <= MIN_LINE_LEFT_MM || b_len <= MIN_LINE_LEFT_MM {
+        return None;
+    }
+    let (ua, ub) = ((ax / a_len, ay / a_len), (bx / b_len, by / b_len));
+    let theta = (ua.0 * ub.0 + ua.1 * ub.1).clamp(-1.0, 1.0).acos();
+    if theta < MIN_ANGLE_RAD || PI - theta < MIN_ANGLE_RAD {
+        return None;
+    }
+    let half = theta / 2.0;
+    let trim = radius / half.tan();
+    if trim >= a_len - MIN_LINE_LEFT_MM || trim >= b_len - MIN_LINE_LEFT_MM {
+        return None;
+    }
+    let on_first = (corner.0 + ua.0 * trim, corner.1 + ua.1 * trim);
+    let on_second = (corner.0 + ub.0 * trim, corner.1 + ub.1 * trim);
+    let (mx, my) = (ua.0 + ub.0, ua.1 + ub.1);
+    let m_len = mx.hypot(my);
+    let reach = radius / half.sin();
+    let centre = (corner.0 + mx / m_len * reach, corner.1 + my / m_len * reach);
+    // The short way round from the first tangent point to the second.
+    let (sx, sy) = (on_first.0 - centre.0, on_first.1 - centre.1);
+    let (ex, ey) = (on_second.0 - centre.0, on_second.1 - centre.1);
+    Some(Geometry {
+        on_first,
+        on_second,
+        centre,
+        sweep_ccw: sx * ey - sy * ex > 0.0,
+    })
+}
+
+/// Add the arc and its points, and end the two lines on the arc. The arc
+/// takes the outline or cutout tag of the line it continues.
+fn splice(
+    sketch: &mut SketchData,
+    at: &mut HashMap<SketchEntityId, Xy>,
+    corner: SketchEntityId,
+    arms: [Arm; 2],
+    geometry: Geometry,
+) {
+    let Some(line) = sketch.entities.iter().find(|e| e.id == arms[0].line) else {
+        return;
+    };
+    let (plane, outline, cutout) = (line.plane, line.board_outline, line.board_cutout.clone());
+    let mut point = |xy: Xy| {
+        let id = SketchEntityId::new();
+        at.insert(id, xy);
+        sketch.entities.push(Entity::new(
+            id,
+            plane,
+            EntityKind::Point { x: xy.0, y: xy.1 },
+        ));
+        id
+    };
+    let start = point(geometry.on_first);
+    let end = point(geometry.on_second);
+    let center = point(geometry.centre);
+    let mut arc = Entity::new(
+        SketchEntityId::new(),
+        plane,
+        EntityKind::Arc {
+            center,
+            start,
+            end,
+            sweep_ccw: geometry.sweep_ccw,
+        },
+    );
+    arc.board_outline = outline;
+    arc.board_cutout = cutout;
+    sketch.entities.push(arc);
+    move_line_end(sketch, arms[0].line, corner, start);
+    move_line_end(sketch, arms[1].line, corner, end);
+}
+
+fn move_line_end(
+    sketch: &mut SketchData,
+    line: SketchEntityId,
+    from: SketchEntityId,
+    to: SketchEntityId,
+) {
+    let Some(entity) = sketch.entities.iter_mut().find(|e| e.id == line) else {
+        return;
+    };
+    if let EntityKind::Line { start, end } = &mut entity.kind {
+        if *start == from {
+            *start = to;
+        } else if *end == from {
+            *end = to;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use signex_sketch::Solver;
+    use signex_sketch::parameter::resolve;
+    use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+
+    use super::super::checks::{CheckState, outline_checks_with};
+    use super::*;
+
+    /// An L-shaped outline: one concave corner, at (5, 5).
+    fn l_outline(notch: f64) -> SketchData {
+        let plane = PlaneId::new();
+        let mut sketch = SketchData::default();
+        sketch.planes.push(Plane {
+            id: plane,
+            kind: PlaneKind::BoardTop,
+        });
+        let corners = [
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, notch),
+            (notch, notch),
+            (notch, 10.0),
+            (0.0, 10.0),
+        ];
+        let points: Vec<SketchEntityId> = corners
+            .iter()
+            .map(|&(x, y)| {
+                let id = SketchEntityId::new();
+                sketch
+                    .entities
+                    .push(Entity::new(id, plane, EntityKind::Point { x, y }));
+                id
+            })
+            .collect();
+        for i in 0..points.len() {
+            let kind = EntityKind::Line {
+                start: points[i],
+                end: points[(i + 1) % points.len()],
+            };
+            let mut line = Entity::new(SketchEntityId::new(), plane, kind);
+            line.board_outline = true;
+            sketch.entities.push(line);
+        }
+        sketch
+    }
+
+    fn solved(sketch: &SketchData) -> FullSolveOutput {
+        let params = resolve(&sketch.parameters).unwrap();
+        Solver::default().solve(sketch, &params).unwrap()
+    }
+
+    fn checks(sketch: &SketchData, solve: &FullSolveOutput) -> OutlineChecks {
+        outline_checks_with(sketch, solve, &solve.params, Some(2.0))
+    }
+
+    #[test]
+    fn a_sharp_inside_corner_takes_the_required_radius_and_passes() {
+        let mut sketch = l_outline(5.0);
+        let solve = solved(&sketch);
+        let targets = fillet_targets(&sketch, &checks(&sketch, &solve));
+        assert_eq!(targets.len(), 1, "{targets:?}");
+        assert_eq!(targets[0].1, 1.0);
+
+        let report = add_fillets(&mut sketch, &solve, &targets);
+
+        assert_eq!(
+            report,
+            FilletReport {
+                applied: 1,
+                refused: 0
+            }
+        );
+        let solve = solved(&sketch);
+        let after = checks(&sketch, &solve);
+        assert_eq!(after.closed, CheckState::Passed, "{after:?}");
+        assert_eq!(after.inside_corners, CheckState::Passed, "{after:?}");
+        let arc = sketch
+            .entities
+            .iter()
+            .find(|e| matches!(e.kind, EntityKind::Arc { .. }))
+            .expect("the fillet arc");
+        assert!(arc.board_outline, "the arc is part of the outline");
+    }
+
+    #[test]
+    fn a_corner_whose_lines_are_too_short_is_refused_and_left_alone() {
+        // The notch leaves 0.5 mm lines: no room for a 1 mm radius.
+        let mut sketch = l_outline(9.5);
+        let solve = solved(&sketch);
+        let before = sketch.clone();
+        let targets = fillet_targets(&sketch, &checks(&sketch, &solve));
+        assert_eq!(targets.len(), 1);
+
+        let report = add_fillets(&mut sketch, &solve, &targets);
+
+        assert_eq!(
+            report,
+            FilletReport {
+                applied: 0,
+                refused: 1
+            }
+        );
+        assert_eq!(sketch, before);
+    }
+
+    #[test]
+    fn the_fillet_arc_takes_the_short_way_round() {
+        let g = fillet_geometry((0.0, 0.0), (5.0, 0.0), (0.0, 5.0), 1.0).unwrap();
+        assert!(!g.sweep_ccw, "{g:?}");
+        assert!((g.centre.0 - 1.0).abs() < 1e-9 && (g.centre.1 - 1.0).abs() < 1e-9);
+    }
+}

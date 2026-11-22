@@ -53,6 +53,9 @@ pub(super) fn view_outline_checks<'a>(
                 col = col.push(close_gap_row(offer, palette, i18n));
             }
         }
+        if let Some(radius) = board.fillet_radius {
+            col = col.push(add_fillets_row(radius, i18n));
+        }
         col = col.push(
             container(
                 text(t!(i18n, ids::BOARD_SKETCH_CHECKS_CAPTION))
@@ -65,6 +68,20 @@ pub(super) fn view_outline_checks<'a>(
         );
     }
     view_fab_profile(col, board, palette, collapsed_sections, i18n)
+}
+
+/// Add fillets on the failing inside corners (mockup row 179d).
+fn add_fillets_row<'a>(radius: f64, i18n: &I18n) -> Element<'a, PanelMsg> {
+    let label = t!(i18n, ids::SKETCH_BAKE_ADD_FILLETS, "radius" => format_check_mm(radius, 2));
+    container(
+        button(text(label).size(TS.caption))
+            .padding([SP.xs, SP.s])
+            .on_press(PanelMsg::SketchFix(SketchFixMsg::AddFilletsClicked))
+            .style(crate::panels::form_look::ghost_button),
+    )
+    .padding([SP.xs, SP.m])
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// Whether the gap heals, and Close gap when it does.

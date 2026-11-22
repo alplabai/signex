@@ -92,9 +92,15 @@ pub struct FootprintEditorPanelContext {
     /// Role picker offers (#2518).
     pub sketch_host: signex_types::sketch::SketchHost,
     /// v0.16.2 — `true` when the primary selected sketch entity is a
-    /// Point. Drives the "Pad role applies to Points only" hint on
-    /// the Role pick_list.
+    /// Point. A non-point gets the closed-profile Pad hint on the Role
+    /// pick_list.
     pub selected_sketch_is_point: bool,
+    /// What the last Bake wrote, until the selection changes (mockup row 190).
+    pub bake_outcome: Option<crate::library::editor::footprint::sketch_mode::BakeOutcome>,
+    /// The Roles section's rows, in a footprint sketch (mockup row 190).
+    pub profile_roles: Vec<crate::library::editor::footprint::sketch_mode::roles::ProfileRoleRow>,
+    /// How many centerlines the sketch has; they never bake.
+    pub centerline_count: usize,
     /// v0.16.3 — `true` when the Pads-mode tool is `PlacePad`. Drives
     /// visibility of the "Pad placement defaults" form on the
     /// Properties panel (designator override + size_x / size_y / side).
@@ -757,6 +763,9 @@ pub struct BoardSketchProps {
     /// The project's router tool diameter in mm (mockup row 179d), for the Fab
     /// profile group; `None` when its fab profile names none.
     pub router_tool_diameter: Option<f64>,
+    /// The radius Add fillets applies; `None` when no failing corner can
+    /// take a fillet (mockup row 179d).
+    pub fillet_radius: Option<f64>,
 }
 
 /// A mounting hole's fields as the Properties panel edits them.

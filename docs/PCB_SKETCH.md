@@ -261,6 +261,13 @@ the board's project on entry and after every edit; Properties shows it in a
 **Every outline check warns only; Bake still applies the sketch**
 (`DECISIONS.md`, Caner 2026-11-20, decision 3).
 
+A failing inside corner is ringed on the canvas with a callout such as
+`R 0.00 < R 1.00`, and stays visible over the bake preview. **Add fillets**
+under the checks rounds each sharp corner between two lines to the router's
+radius, as one undo step (mockup row 179d). A corner that is already an arc,
+or whose lines are too short for the radius, is left alone and said in
+Messages.
+
 ## Close gap {#close-gap}
 
 An open profile whose two nearest open ends are at most **0.05 mm** apart

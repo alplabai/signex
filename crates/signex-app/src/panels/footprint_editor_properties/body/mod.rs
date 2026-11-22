@@ -116,6 +116,10 @@ pub(super) fn view_body<'a>(
         i18n,
     };
     let col = Column::new().spacing(0).width(Length::Fill);
+    let col = match fp.bake_outcome.as_ref() {
+        Some(outcome) => super::bake_outcome::view_bake_outcome(col, outcome, tokens, i18n),
+        None => col,
+    };
     match body_state(fp) {
         BodyState::SketchEntity(entity) => {
             let col = super::selection::view_sketch_entity(col, cx, entity);
@@ -183,6 +187,7 @@ fn view_nothing_selected<'a>(
         Some(footprint_status(cx.fp, i18n)),
         cx.tokens,
     ));
+    col = super::roles::view_roles(col, cx);
     col = super::pad_stack_check::view_pad_stack_check(col, cx.fp, i18n);
     col = footprint_sections::view(col, cx);
     col = snap_sections::view(col, cx);

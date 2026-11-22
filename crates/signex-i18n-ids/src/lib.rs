@@ -1127,7 +1127,7 @@ define_ids! {
     EDITORS_FOOTPRINT_DOF = "editors-footprint-dof";
     EDITORS_FOOTPRINT_DOF_FULLY_CONSTRAINED = "editors-footprint-dof-fully-constrained";
     EDITORS_FOOTPRINT_UNLINK_CORNER_RADIUS = "editors-footprint-unlink-corner-radius";
-    EDITORS_FOOTPRINT_ROLE_POINTS_ONLY = "editors-footprint-role-points-only";
+    EDITORS_FOOTPRINT_ROLE_PAD_HINT = "editors-footprint-role-pad-hint";
     EDITORS_FOOTPRINT_SILK_FROM_SKETCH = "editors-footprint-silk-from-sketch";
     EDITORS_PAD_PLACEMENT_PAUSED = "editors-pad-placement-paused";
     EDITORS_PAD_PLACEMENT_PAUSE_HINT = "editors-pad-placement-pause-hint";

@@ -14,12 +14,14 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{text, theme_ext};
 
 use crate::app::FootprintDocument;
+use crate::library::editor::footprint::sketch_dispatch::current_role_of;
+use crate::library::editor::footprint::sketch_mode::roles::role_label;
 use crate::library::editor::footprint::sketch_mode::{BakePreview, SketchExit};
 use crate::library::editor::footprint::state::CheckStatus;
-use crate::library::editor::footprint::state::board_checks::{GapOffer, open_end_text};
+use crate::library::editor::footprint::state::board_checks::{GapOffer, mm, open_end_text};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::{DialogButtonKind, dialog_button};
-use signex_bake::open_ends::OpenEnd;
+use signex_bake::open_ends::{OpenEnd, warning_names_end};
 use signex_sketch::id::SketchEntityId;
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -431,37 +433,7 @@ pub fn footprint_overlay<'a>(
     let mut stack = column![].spacing(SP.m);
     if exit_state.preview {
         let preview = BakePreview::of_footprint_editor(editor);
-        // A footprint bakes on every solve: what the last bake left out is
-        // in the sketch warnings, with refused tool clicks and solver notes;
-        // they name no entity.
-        let issues = PreviewIssues {
-            refusal_select: None,
-            heading: ids::SKETCH_BAKE_WARNINGS,
-            lines: editor
-                .state
-                .solve_warnings
-                .iter()
-                .map(|warning| {
-                    let line = t!(i18n, ids::SKETCH_BAKE_WARNING, "warning" => warning.as_str());
-                    (CheckStatus::Failed, line, None)
-                })
-                .collect(),
-            caption: None,
-            // An open profile: why its shape is missing, and Close gap.
-            gap: editor
-                .state
-                .first_open_end(editor.primitive().sketch.as_ref())
-                .and_then(|end| {
-                    GapLine::of_open_end(
-                        &end,
-                        editor.state.last_solve.is_some(),
-                        i18n,
-                        |keep, merge| {
-                            fp(FootprintEditorMsg::SketchCloseGapRequested { keep, merge })
-                        },
-                    )
-                }),
-        };
+        let issues = footprint_issues(editor, &fp, i18n);
         stack = stack.push(preview_card(&preview, issues, tokens, i18n));
     }
     stack = stack.push(mode_bar(look, exit_state, msgs, tokens, i18n));
@@ -472,6 +444,82 @@ pub fn footprint_overlay<'a>(
         .align_x(Horizontal::Left)
         .align_y(Vertical::Bottom)
         .boxed()
+}
+
+/// What a footprint's preview card lists. It bakes on every solve, so what
+/// the last bake left out is in the sketch warnings, with refused tool
+/// clicks and solver notes. The open profile the gap line names is said
+/// there once, not again as a warning (mockup row 190).
+fn footprint_issues(
+    editor: &FootprintDocument,
+    fp: &impl Fn(FootprintEditorMsg) -> LibraryMessage,
+    i18n: &I18n,
+) -> PreviewIssues<LibraryMessage> {
+    let open_end = editor
+        .state
+        .first_open_end(editor.primitive().sketch.as_ref());
+    let lines = editor
+        .state
+        .solve_warnings
+        .iter()
+        .filter(|warning| {
+            !open_end
+                .as_ref()
+                .is_some_and(|end| warning_names_end(warning, end))
+        })
+        .map(|warning| {
+            let line = t!(i18n, ids::SKETCH_BAKE_WARNING, "warning" => warning.as_str());
+            (CheckStatus::Failed, line, None)
+        })
+        .collect();
+    PreviewIssues {
+        refusal_select: None,
+        heading: ids::SKETCH_BAKE_WARNINGS,
+        lines,
+        caption: None,
+        gap: open_end
+            .as_ref()
+            .and_then(|end| named_gap_line(editor, end, fp, i18n)),
+    }
+}
+
+/// The open-profile line: the object and its place, then whether the gap
+/// heals, with Close gap's message when it does.
+fn named_gap_line(
+    editor: &FootprintDocument,
+    end: &OpenEnd,
+    fp: &impl Fn(FootprintEditorMsg) -> LibraryMessage,
+    i18n: &I18n,
+) -> Option<GapLine<LibraryMessage>> {
+    let solved = editor.state.last_solve.is_some();
+    let line = GapLine::of_open_end(end, solved, i18n, |keep, merge| {
+        fp(FootprintEditorMsg::SketchCloseGapRequested { keep, merge })
+    })?;
+    let host = editor.state.sketch_host();
+    let object = end.edges.first().and_then(|id| {
+        let sketch = editor.primitive().sketch.as_ref()?;
+        let entity = sketch.entities.iter().find(|e| e.id == *id)?;
+        Some(role_label(
+            current_role_of(entity).on_host(host),
+            host,
+            i18n,
+        ))
+    });
+    let (Some(object), Some(at), Some(_)) = (object, end.at, end.gap_mm) else {
+        return Some(line);
+    };
+    let text = t!(
+        i18n,
+        ids::SKETCH_BAKE_OPEN_PROFILE,
+        "object" => object.as_str(),
+        "x" => mm(at.x, 2).as_str(),
+        "y" => mm(at.y, 2).as_str(),
+        "heal" => line.text.into_string()
+    );
+    Some(GapLine {
+        text,
+        close: line.close,
+    })
 }
 
 #[cfg(test)]

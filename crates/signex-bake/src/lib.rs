@@ -14,6 +14,7 @@
 pub mod array;
 pub mod board;
 pub mod body3d;
+pub mod closed_profiles;
 pub mod courtyard;
 pub mod cutout;
 mod eval_util;

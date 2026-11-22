@@ -305,17 +305,17 @@ pub(super) fn build_footprint_editor_panel_ctx(
     let selected_sketch_entity_id = editor.state.selected_sketch;
     let (selected_sketch_role, selected_sketch_is_point) = match selected_sketch_entity_id {
         Some(id) => {
-            use crate::library::editor::footprint::sketch_dispatch::current_role_of;
+            use crate::library::editor::footprint::sketch_mode::roles::shown_role;
             use crate::library::messages::RoleTag;
             use signex_sketch::entity::EntityKind;
             editor
                 .primitive()
                 .sketch
                 .as_ref()
-                .and_then(|s| s.entities.iter().find(|e| e.id == id))
-                .map(|e| {
+                .and_then(|s| Some((s, s.entities.iter().find(|e| e.id == id)?)))
+                .map(|(s, e)| {
                     (
-                        current_role_of(e).on_host(editor.state.sketch_host()),
+                        shown_role(s, e, editor.state.sketch_host()),
                         matches!(e.kind, EntityKind::Point { .. }),
                     )
                 })
@@ -323,6 +323,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         }
         None => (crate::library::messages::RoleTag::Unassigned, false),
     };
+    let (profile_roles, centerline_count) = super::board_sketch_ctx::sketch_role_rows(editor);
 
     // v0.16.3 — pad-placement defaults exposed for the Properties
     // panel form. Form is visible whenever Pads mode + PlacePad tool
@@ -662,6 +663,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_sketch_role,
         sketch_host: editor.state.sketch_host(),
         selected_sketch_is_point,
+        bake_outcome: crate::library::editor::footprint::sketch_mode::exit::shown_outcome(editor)
+            .cloned(),
+        profile_roles,
+        centerline_count,
         placement_active,
         placement_paused,
         next_pad_designator_override,

@@ -18,6 +18,7 @@ mod arrows;
 mod bake_overlay;
 mod constraints;
 mod entities;
+mod failure_marks;
 mod fills;
 mod pad_link;
 mod pattern_instances;
@@ -47,6 +48,7 @@ const SELECTION: iced::Color = iced::Color {
 pub(super) use arrows::draw_dof_direction_arrows;
 pub(super) use dimension_labels::draw_sketch_values;
 pub(super) use entities::draw_sketch_overlay;
+pub(super) use failure_marks::draw_failure_marks;
 pub(super) use pad_link::draw_pad_link_profile;
 pub(super) use pattern_instances::draw_pattern_instances;
 pub(super) use preview::draw_sketch_tool_preview;
