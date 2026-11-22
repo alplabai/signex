@@ -226,7 +226,7 @@ fn faded(c: Color, alpha: f32) -> Color {
 fn medium() -> Font {
     Font {
         weight: Weight::Medium,
-        ..Font::DEFAULT
+        ..crate::ui_font::regular()
     }
 }
 

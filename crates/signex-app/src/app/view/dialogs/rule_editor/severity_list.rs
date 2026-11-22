@@ -250,7 +250,7 @@ fn severity_control<M: Clone + 'static>(
         let font = if is_word {
             Font {
                 weight: iced::font::Weight::Medium,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             }
         } else {
             Font {

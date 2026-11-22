@@ -52,7 +52,7 @@ const DECISION: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 pub(super) fn medium() -> Font {
     Font {
         weight: Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 

@@ -156,7 +156,7 @@ impl<'a> Rows<'a> {
             .color(self.ink())
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             });
         let caption = text(caption).size(TS.caption).color(self.faint());
         container(

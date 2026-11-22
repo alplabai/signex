@@ -63,7 +63,7 @@ pub fn mode_switcher_overlay<'a>(
         if on {
             label = label.font(iced::Font {
                 weight: iced::font::Weight::Medium,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             });
         }
         button(container(label).center_y(Length::Fixed(SEGMENT_H)))

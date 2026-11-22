@@ -77,7 +77,7 @@ fn card<'a>(
             row![
                 text(t!(i18n, name)).size(TS.label).color(ink).font(Font {
                     weight: Weight::Semibold,
-                    ..Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 }),
                 tone_pill(t!(i18n, pill), PillTone::Neutral, active),
             ]

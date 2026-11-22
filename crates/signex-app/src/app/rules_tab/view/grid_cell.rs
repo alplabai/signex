@@ -24,7 +24,7 @@ const RING_EM: f32 = 1.5 / 12.0;
 fn strong() -> Font {
     Font {
         weight: iced::font::Weight::Semibold,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 
@@ -143,19 +143,27 @@ fn face<'a>(
         CellShow::NotChecked => (
             t!(frame.i18n, ids::RULES_CELL_EMPTY).into_string(),
             style.muted_ink,
-            Font::DEFAULT,
+            signex_widgets::ui_font::regular(),
         ),
-        CellShow::Empty => (String::new(), style.muted_ink, Font::DEFAULT),
+        CellShow::Empty => (
+            String::new(),
+            style.muted_ink,
+            signex_widgets::ui_font::regular(),
+        ),
         CellShow::Value {
             written, source, ..
         } => {
             let shown = written.clone();
             match source {
                 CellSource::Own { .. } if !is_all => (shown, style.ink, strong()),
-                CellSource::Set { .. } => (shown, style.ink, Font::DEFAULT),
-                CellSource::Own { .. } => (shown, style.ink, Font::DEFAULT),
-                _ if hide_inherited => (String::new(), style.muted_ink, Font::DEFAULT),
-                _ => (shown, style.muted_ink, Font::DEFAULT),
+                CellSource::Set { .. } => (shown, style.ink, signex_widgets::ui_font::regular()),
+                CellSource::Own { .. } => (shown, style.ink, signex_widgets::ui_font::regular()),
+                _ if hide_inherited => (
+                    String::new(),
+                    style.muted_ink,
+                    signex_widgets::ui_font::regular(),
+                ),
+                _ => (shown, style.muted_ink, signex_widgets::ui_font::regular()),
             }
         }
     };

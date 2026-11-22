@@ -51,7 +51,7 @@ pub(super) fn caps(i18n: &I18n, id: MessageId) -> Label<'static> {
 pub(super) fn medium() -> Font {
     Font {
         weight: Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 
@@ -319,7 +319,7 @@ pub(super) fn layer_row<'a>(
     if active {
         name = name.font(Font {
             weight: Weight::Semibold,
-            ..Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         });
     }
     let mut named = Row::<Element<'a, PanelMsg>>::new()

@@ -8,7 +8,7 @@ type Para = <iced::Renderer as text::Renderer>::Paragraph;
 
 /// Width in px of `label` on one line at `size`, shaped by the font system.
 pub(super) fn text_width(label: &str, size: f32) -> f32 {
-    text_width_in(label, size, iced::Font::DEFAULT)
+    text_width_in(label, size, signex_widgets::ui_font::regular())
 }
 
 /// [`text_width`] in `font`.

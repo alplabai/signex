@@ -115,7 +115,7 @@ fn union_row<'a>(ctx: &'a PanelContext, u: &'a UnionRow) -> Element<'a, PanelMsg
             .color(name_ink)
             .font(iced::Font {
                 weight: iced::font::Weight::Medium,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             }),
         text(UserText::new(ctx.i18n.count(u.members as i64)))
             .size(TS.caption)

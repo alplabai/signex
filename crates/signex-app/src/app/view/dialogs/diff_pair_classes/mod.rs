@@ -348,7 +348,7 @@ fn group<'a>(label: signex_i18n::Localized, tokens: &ThemeTokens) -> Element<'a,
             .color(ti(tokens.text_secondary))
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             }),
     )
     .padding([SP.m, 0.0])

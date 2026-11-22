@@ -52,7 +52,7 @@ impl CalculatorControl {
             .push(
                 text(t!(i18n, ids::PASSIVE_CALCULATOR_RESULT))
                     .size(TS.label)
-                    .font(medium(iced::Font::DEFAULT))
+                    .font(medium(crate::ui_font::regular()))
                     .color(palette.ink)
                     .boxed(),
             )

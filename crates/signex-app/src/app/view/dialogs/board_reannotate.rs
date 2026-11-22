@@ -176,7 +176,7 @@ fn order_card<'a>(
     let words = column![
         text(name).size(TS.body).font(iced::Font {
             weight: iced::font::Weight::Semibold,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         }),
         text(hint)
             .size(TS.caption)

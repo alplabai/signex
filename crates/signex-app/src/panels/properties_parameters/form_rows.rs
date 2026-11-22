@@ -494,7 +494,7 @@ pub fn font_style_row<'a>(
                 .color(primary)
                 .font(iced::Font {
                     weight: style,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .align_x(iced::alignment::Horizontal::Center),
         )

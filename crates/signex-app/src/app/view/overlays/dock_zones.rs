@@ -144,7 +144,7 @@ impl Signex {
             let label = if zone.is_target {
                 name.color(r.accent_text).font(iced::Font {
                     weight: iced::font::Weight::Semibold,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
             } else {
                 name.color(r.ink4)

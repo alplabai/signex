@@ -349,7 +349,7 @@ pub(super) fn library_banner<'a>(
             .color(ink)
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .boxed(),
     );

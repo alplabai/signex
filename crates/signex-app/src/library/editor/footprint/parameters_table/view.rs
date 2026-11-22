@@ -160,7 +160,7 @@ fn header<'a>(
             .size(TS.title)
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .color(look.ink),
         Space::new().width(Length::Fill),

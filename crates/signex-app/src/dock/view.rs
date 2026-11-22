@@ -618,6 +618,7 @@ impl canvas::Program<DockMessage> for RotatedLabel {
             position: iced::Point::ORIGIN,
             color: self.color,
             size: iced::Pixels(RAIL_FONT_SIZE),
+            font: signex_widgets::ui_font::regular(),
             align_x: iced::alignment::Horizontal::Center.into(),
             align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()

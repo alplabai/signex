@@ -102,7 +102,7 @@ impl canvas::Program<Message> for ViewCube {
                 align_y: iced::alignment::Vertical::Center,
                 font: iced::Font {
                     weight: iced::font::Weight::Semibold,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 },
                 ..Text::default()
             });

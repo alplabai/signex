@@ -147,7 +147,7 @@ fn rule<'a>(color: Color) -> Element<'a, PrefMsg> {
 fn medium() -> Font {
     Font {
         weight: iced::font::Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 
@@ -349,7 +349,7 @@ fn state_cell<'a>(i18n: &I18n, state: RowState, tokens: &ThemeTokens) -> Element
             .color(r.ink4)
             .font(Font {
                 style: iced::font::Style::Italic,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .boxed(),
         RowState::Editable | RowState::CreateCustom => {

@@ -248,7 +248,7 @@ pub(super) fn titled_filter_menu_view<M: Clone + 'static>(
             .color(ink)
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             }),
         Space::new().width(Length::Fill),
         graphite::all_none(tokens, scope, menu.all, menu.none),

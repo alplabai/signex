@@ -75,7 +75,7 @@ pub fn mode_bar<'a, M: Clone + 'a>(
             .size(TS.body)
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .color(theme_ext::text_primary(tokens)),
     ]

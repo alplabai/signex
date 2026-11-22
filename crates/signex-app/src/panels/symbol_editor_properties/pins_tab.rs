@@ -355,7 +355,7 @@ fn pin_row<'a>(pin: &SymbolPinSummary, issue: PinIssue, form: &Form<'_>) -> Elem
             .size(TS.body)
             .font(iced::Font {
                 style: iced::font::Style::Italic,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .color(look.warn)
     } else {

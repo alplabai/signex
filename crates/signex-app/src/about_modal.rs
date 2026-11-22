@@ -134,7 +134,7 @@ fn identity<'a>(i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
                 .size(TS.display)
                 .font(Font {
                     weight: Weight::Semibold,
-                    ..Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .color(ti(tokens.text)),
             text(t!(i18n, ids::DIALOG_ABOUT_TAGLINE))

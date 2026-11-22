@@ -230,7 +230,7 @@ impl Painter<'_> {
 
 fn font_of(role: TextRole) -> Font {
     match role {
-        TextRole::Caption | TextRole::Note => Font::DEFAULT,
+        TextRole::Caption | TextRole::Note => crate::ui_font::regular(),
         TextRole::Mono => Font {
             weight: font::Weight::Bold,
             ..Font::MONOSPACE

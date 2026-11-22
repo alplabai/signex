@@ -82,7 +82,7 @@ fn distributor_label(src: DistributorSource) -> Option<&'static str> {
 fn semibold() -> Font {
     Font {
         weight: iced::font::Weight::Semibold,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 

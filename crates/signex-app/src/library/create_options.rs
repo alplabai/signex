@@ -123,7 +123,7 @@ pub fn view<'a>(
 fn title_font() -> Font {
     Font {
         weight: Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 

@@ -304,7 +304,7 @@ impl Signex {
         };
         let medium = iced::Font {
             weight: iced::font::Weight::Medium,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         };
         let n = preview.options.columns.len();
         let mut heads: Row<Element<'a, Message>> =

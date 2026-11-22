@@ -403,7 +403,7 @@ fn no_match<'a>(i18n: &I18n, tokens: &ThemeTokens, sheet: &ShortcutSheet) -> Ele
     .size(TS.body)
     .font(Font {
         weight: Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     })
     .color(ti(tokens.text));
     let next: Element<'a, Message> = if sheet.scope == ShortcutScope::All {

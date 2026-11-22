@@ -21,11 +21,14 @@ const TRACK_RADIUS_EM: f32 = 7.0 / 12.0;
 const SHADOW_OFFSET_EM: f32 = 1.0 / 12.0;
 const SHADOW_BLUR_EM: f32 = 2.0 / 12.0;
 
-/// The face of the selected segment's label.
-const ACTIVE_FONT: Font = Font {
-    weight: Weight::Medium,
-    ..Font::DEFAULT
-};
+/// The face of a segment's label: the UI font, medium when selected.
+fn segment_font(is_selected: bool) -> Font {
+    crate::ui_font::at(if is_selected {
+        Weight::Medium
+    } else {
+        Weight::Normal
+    })
+}
 
 /// Colours for [`segmented`]; they come from the caller's tokens.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -119,25 +122,18 @@ pub fn segment_radius(track_radius: f32, track_pad: f32) -> f32 {
     (track_radius - track_pad).max(0.0)
 }
 
-/// A segment's label in `font`, or the renderer's default font for `None`.
-fn label_face<'a, M: 'a>(
-    label: Label<'a>,
-    size: f32,
-    ink: Color,
-    font: Option<Font>,
-) -> Element<'a, M> {
+/// A segment's label in `font`.
+fn label_face<'a, M: 'a>(label: Label<'a>, size: f32, ink: Color, font: Font) -> Element<'a, M> {
     let face = text(label)
         .size(size)
         .color(ink)
+        .font(font)
         .height(Length::Fill)
         .align_y(Vertical::Center)
         .align_x(Horizontal::Center)
         .wrapping(iced::widget::text::Wrapping::None)
         .ellipsis(iced::widget::text::Ellipsis::End);
-    match font {
-        Some(font) => iced::Widget::boxed(face.font(font)),
-        None => iced::Widget::boxed(face),
-    }
+    iced::Widget::boxed(face)
 }
 
 /// Segmented control over `options` (value, label). `on_select` maps the
@@ -168,8 +164,8 @@ where
             style.ink
         };
         // Both faces are measured, so picking a segment cannot refold the row.
-        let plain = label_face(label.clone(), style.text_size, ink, None);
-        let medium = label_face(label, style.text_size, ink, Some(ACTIVE_FONT));
+        let plain = label_face(label.clone(), style.text_size, ink, segment_font(false));
+        let medium = label_face(label, style.text_size, ink, segment_font(true));
         let label: Element<'a, M> = WidestFace::new(plain, medium, is_active).into();
         let seg = button(label)
             .padding(Padding::from([0.0, m.segment_pad_h]))
@@ -242,6 +238,15 @@ mod tests {
     fn segment_radius_is_concentric_and_never_negative() {
         assert_eq!(segment_radius(7.0, 2.0), 5.0);
         assert_eq!(segment_radius(1.0, 2.0), 0.0);
+    }
+
+    #[test]
+    fn a_selected_segment_uses_the_family_of_an_unselected_one() {
+        let (selected, unselected) = (segment_font(true), segment_font(false));
+        assert_eq!(selected.family, unselected.family);
+        assert_eq!(selected.family, crate::ui_font::regular().family);
+        assert_eq!(selected.weight, Weight::Medium);
+        assert_eq!(unselected.weight, Weight::Normal);
     }
 
     #[derive(Clone, Copy, PartialEq, Debug)]

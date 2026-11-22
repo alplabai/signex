@@ -135,11 +135,11 @@ fn text_style_buttons<'a>(i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
         };
     let bold = iced::Font {
         weight: iced::font::Weight::Bold,
-        ..iced::Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     };
     let italic = iced::Font {
         style: iced::font::Style::Italic,
-        ..iced::Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     };
     container(
         iced::widget::row![
@@ -156,12 +156,12 @@ fn text_style_buttons<'a>(i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
             style_button(
                 ids::PROPERTIES_STYLE_UNDERLINE_GLYPH,
                 ids::PROPERTIES_STYLE_UNDERLINE,
-                iced::Font::DEFAULT
+                signex_widgets::ui_font::regular()
             ),
             style_button(
                 ids::PROPERTIES_STYLE_STRIKE_GLYPH,
                 ids::PROPERTIES_STYLE_STRIKE,
-                iced::Font::DEFAULT
+                signex_widgets::ui_font::regular()
             ),
         ]
         .spacing(sp.xs)

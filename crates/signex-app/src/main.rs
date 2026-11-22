@@ -57,7 +57,7 @@ fn main() -> iced::Result {
     }
 
     // Read the persisted UI font preference (defaults to "Inter").
-    let ui_font_name = fonts::read_ui_font_pref();
+    let ui_font = signex_widgets::ui_font::set_launch_family(&fonts::read_ui_font_pref());
 
     iced::daemon(
         move || match &bench {
@@ -106,6 +106,6 @@ fn main() -> iced::Result {
     // Default UI font resolves through the Preferences-panel pick. When
     // it matches a bundled family ("Inter" / "Roboto" / "Iosevka") iced uses the
     // embedded TTF directly; otherwise it falls back to a system font.
-    .default_font(iced::Font::with_family(ui_font_name.as_str()))
+    .default_font(ui_font)
     .run()
 }

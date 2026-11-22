@@ -130,7 +130,7 @@ pub(in crate::app::view::dialogs) fn group_header<'a>(
                 .size(TS.label)
                 .font(iced::Font {
                     weight: iced::font::Weight::Semibold,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .color(ti(tokens.text))
                 .boxed(),

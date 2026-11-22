@@ -83,7 +83,7 @@ fn empty_card<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .color(ti(tokens.text))
         .font(iced::Font {
             weight: iced::font::Weight::Medium,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         });
     let hint = text(t!(i18n, ids::PANELS_PROJECTS_OPEN_HINT))
         .size(TS.body)
@@ -190,7 +190,7 @@ fn recent_header<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
             .color(r.ink3)
             .font(iced::Font {
                 weight: iced::font::Weight::Medium,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .wrapping(iced::widget::text::Wrapping::None)
             .boxed(),

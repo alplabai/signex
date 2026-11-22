@@ -138,7 +138,10 @@ pub fn commit_detail<'a, M: 'a>(
             .wrapping(Wrapping::None),
         text(UserText::new(commit.subject.clone()))
             .size(s.text_size)
-            .font(weighted(iced::font::Weight::Medium, Font::DEFAULT))
+            .font(weighted(
+                iced::font::Weight::Medium,
+                crate::ui_font::regular()
+            ))
             .color(s.ink)
             .wrapping(Wrapping::None)
             .ellipsis(Ellipsis::End)

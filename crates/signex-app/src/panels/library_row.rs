@@ -370,7 +370,7 @@ fn binding_card<'a>(b: Binding, tokens: &ThemeTokens, i18n: &I18n) -> Element<'a
                     .size(TS.body)
                     .font(Font {
                         weight: iced::font::Weight::Medium,
-                        ..Font::DEFAULT
+                        ..signex_widgets::ui_font::regular()
                     })
                     .color(ink)
                     .boxed(),
