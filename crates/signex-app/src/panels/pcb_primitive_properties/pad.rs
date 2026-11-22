@@ -11,6 +11,7 @@
 use iced::widget::{Row, column, container, row};
 use iced::{Element, Length, Theme, Widget as _};
 use signex_i18n::{MessageId, UserText, ids};
+use signex_types::pcb_layer::PcbLayer;
 use signex_types::pcb_stack::StackMode;
 use signex_widgets::enable_section::EnableSection;
 use signex_widgets::{CheckboxLabel as _, Label, checkbox, text};
@@ -19,8 +20,8 @@ use super::drawing::pad as drawing;
 use super::linked::{Segment, segments};
 use super::mask::{greyed_unless, subhead};
 use super::rows::{
-    Look, Section, chip, dropdown, field, labelled, mm_field, net_row, pair, stack, value_box,
-    with_tip,
+    Look, Section, dropdown, field, labelled, mm_field, net_row, pair, stack, sunken_box,
+    sunken_ink, sunken_value, value_box, with_tip,
 };
 use super::stack_rows::{illustration, linked, mode_tiles, rows_column, unstored, unstored_row};
 use super::{PadFacts, PcbPrimitiveMsg, PrimitiveField as F, SP, TS, format_number, net_info};
@@ -64,23 +65,6 @@ fn properties<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMs
         ),
     );
     s.push(common, ids::PCB_PRIM_NET, net_row(look, common));
-    let layer: Element<'a, PanelMsg> = match f.layer.as_ref() {
-        Some((name, colour_of)) => {
-            let shown = value_box(look, UserText::new(name.clone()));
-            let content = match colour_of {
-                Some(layer) => row![
-                    chip(layer_style::layer_colour(*layer, look.tokens())),
-                    shown
-                ]
-                .spacing(SP.s)
-                .align_y(iced::Alignment::Center)
-                .boxed(),
-                None => shown,
-            };
-            with_tip(look, content, ids::PCB_PRIM_PAD_LAYER_UNSUPPORTED)
-        }
-        None => value_box(look, UserText::new(String::new())),
-    };
     s.push(
         common,
         ids::PCB_PRIM_LAYER,
@@ -88,7 +72,11 @@ fn properties<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMs
             look,
             common,
             drawing::LAYER,
-            labelled(look, ids::PCB_PRIM_LAYER, layer),
+            labelled(
+                look,
+                ids::PCB_PRIM_LAYER,
+                layer_value(look, f.layer.as_ref()),
+            ),
         ),
     );
     s.push(
@@ -114,6 +102,35 @@ fn properties<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMs
         ),
     );
     s.finish()
+}
+
+/// The read-only Layer (mockup row 97): sunken, with the layer's round dot.
+fn layer_value<'a>(
+    look: Look<'a>,
+    layer: Option<&(String, Option<PcbLayer>)>,
+) -> Element<'a, PanelMsg> {
+    let Some((name, colour_of)) = layer else {
+        return sunken_value(look, UserText::new(String::new()));
+    };
+    let name = text(UserText::new(name.clone()))
+        .size(TS.body)
+        .color(sunken_ink(look))
+        .wrapping(iced::widget::text::Wrapping::Word);
+    let content = match colour_of {
+        Some(layer) => row![
+            super::linked::dot(layer_style::layer_colour(*layer, look.tokens())),
+            name
+        ]
+        .spacing(SP.s)
+        .align_y(iced::Alignment::Center)
+        .boxed(),
+        None => name.boxed(),
+    };
+    with_tip(
+        look,
+        sunken_box(content),
+        ids::PCB_PRIM_PAD_LAYER_UNSUPPORTED,
+    )
 }
 
 fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg>> {
@@ -380,3 +397,7 @@ fn not_stored<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMs
             .collect(),
     )
 }
+
+#[cfg(test)]
+#[path = "pad_tests.rs"]
+mod tests;

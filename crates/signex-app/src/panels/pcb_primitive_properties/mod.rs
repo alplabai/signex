@@ -568,6 +568,9 @@ pub fn parse_number(text: &str) -> Option<f64> {
 }
 
 #[cfg(test)]
+mod two_field_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

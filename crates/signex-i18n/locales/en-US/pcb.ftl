@@ -553,6 +553,14 @@ pcb-3d-model-unread-more = { $count ->
        *[other] { $count } more parts could not be read; Messages lists them.
     }
 pcb-3d-dismiss = Dismiss
+# The stack legend under the view cube (mockup row 109).
+pcb-3d-legend-title = Stack, laminate out
+pcb-3d-legend-silk = Silkscreen
+pcb-3d-legend-mask = Solder mask
+pcb-3d-legend-copper = Copper
+pcb-3d-legend-laminate = FR-4
+pcb-3d-legend-finish = Finish on exposed copper
+pcb-3d-legend-mask-over-copper = Mask over copper, tented via
 
 ## The board Tools edits (#2408, #2409).
 

@@ -9,7 +9,7 @@ use signex_types::pcb::ViaType;
 use signex_types::pcb_layer::CopperLayer;
 use uuid::Uuid;
 
-use super::{not_stored, via_stack};
+use super::{definition, not_stored, via_stack};
 use crate::app::Signex;
 use crate::layout_probe::{LaidOutText, lay_out_texts, messages_on_click_at};
 use crate::panels::PanelContext;
@@ -135,6 +135,33 @@ fn stack_texts(ctx: &PanelContext, f: &ViaFacts) -> Vec<String> {
         .into_iter()
         .map(|t| t.text.replace(['\u{2068}', '\u{2069}'], ""))
         .collect()
+}
+
+/// Mockup row 96: the type's Name is a sunken read-only value, not a field.
+#[test]
+fn the_type_name_is_a_sunken_value() {
+    let ctx = context();
+    let mut f = via(ViaType::Through, false);
+    f.span = Some("Thru 1:2".to_string());
+    let section = || definition(Look::of(&ctx), &f).expect("the definition");
+    let texts: Vec<LaidOutText> = lay_out_texts(section(), WINDOW)
+        .into_iter()
+        .map(|t| LaidOutText {
+            text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+            ..t
+        })
+        .collect();
+    let name = crate::layout_probe::find(&texts, "Thru 1:2").bounds;
+    let pixels = crate::layout_probe::draw_pixels(section(), WINDOW);
+    let at = ((name.center_y() as usize) * WINDOW.width as usize + (name.x - 2.0) as usize) * 4;
+    let sunken = crate::panels::form_look::FormLook::of(&iced::Theme::Dark).sunken;
+    for (got, want) in pixels[at..at + 3]
+        .iter()
+        .zip([sunken.r, sunken.g, sunken.b])
+    {
+        let want = (want * 255.0).round() as i32;
+        assert!((i32::from(*got) - want).abs() <= 3, "{got} is not {want}");
+    }
 }
 
 /// Caner, 2026-11-21: no Override switch; the row's note follows the value.
