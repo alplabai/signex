@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use iced::Task;
 use iced::futures::StreamExt as _;
 use iced_runtime::Action;
-use iced_runtime::core::clipboard::{Content, Error as ClipboardError, Kind};
+use iced_runtime::core::clipboard::{ClipboardKind, Content, Error as ClipboardError, Kind};
 
 use crate::app::{Message, Signex, WindowMsg};
 use crate::ignore::IgnoreResult as _;
@@ -244,6 +244,8 @@ impl Effects {
 
     fn clipboard(&mut self, action: iced_runtime::clipboard::Action) {
         use iced_runtime::clipboard::Action as Clip;
+        // The primary selection is unavailable, as the runtime answers it
+        // outside X11 and Wayland.
         match action {
             Clip::Read { kind, channel, .. } => {
                 channel.send(self.read(kind)).ignore(UNANSWERED);

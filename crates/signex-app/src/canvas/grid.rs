@@ -139,8 +139,8 @@ pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
     radius: f32,
     color: Color,
 ) {
-    // At least 1 px, so the square always holds a pixel centre: tiny-skia
-    // fills rectangles without anti-aliasing and would drop a smaller one.
+    // At least 1 px, so the square always holds a pixel centre: a software
+    // fill without anti-aliasing would drop a smaller one.
     let side = (radius * std::f32::consts::PI.sqrt()).max(1.0);
     frame.fill_rectangle(
         Point::new(centre.x - side / 2.0, centre.y - side / 2.0),
@@ -154,8 +154,8 @@ pub(crate) fn fill_grid_dot<R: GeometryRenderer>(
 /// per-glyph stroke tessellation). Every bar edge is a whole device pixel
 /// (`device_scale` device px per logical px) and each bar is at least one
 /// device pixel thick: a bar that covers part of a pixel draws at part
-/// intensity under multisampling, and tiny-skia fills rectangles without
-/// anti-aliasing, so it would drop a sub-pixel bar.
+/// intensity under multisampling, and a software fill without
+/// anti-aliasing would drop a sub-pixel bar.
 pub(crate) fn fill_grid_cross<R: GeometryRenderer>(
     frame: &mut canvas::Frame<R>,
     centre: Point,
