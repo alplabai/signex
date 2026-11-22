@@ -274,6 +274,75 @@ fn a_duplicate_replay_onto_its_own_copy_is_refused() {
     assert_eq!(places(&app), before, "nothing was placed");
 }
 
+/// The answer of the numbering read a Duplicate started: its copy lands.
+fn answer_paste_numbers(app: &mut Signex) {
+    let request = crate::app::PasteRequest {
+        intent: crate::app::PasteIntent::Duplicate,
+        epoch: app.interaction_state.placement_epoch,
+        path: app.document_state.active_path.clone(),
+        dialog: 0,
+        from_agent: false,
+    };
+    let seed = crate::app::handlers::paste::PasteSeed::default();
+    let _ = app.update(Message::Edit(crate::app::EditMsg::PasteCountersSeeded {
+        request,
+        seed: std::sync::Arc::new(seed),
+    }));
+}
+
+fn symbol_count(app: &Signex, path: &std::path::Path) -> usize {
+    app.document_state.engines[path].document().symbols.len()
+}
+
+/// Default numbering: the first copy waits for the project's numbers.
+#[test]
+fn a_duplicate_replay_is_refused_while_its_paste_waits_for_numbers() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    assert_eq!(symbol_count(&app, &path), 2, "the paste is still waiting");
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("still waiting"));
+    assert_eq!(symbol_count(&app, &path), 2, "the replay placed nothing");
+    answer_paste_numbers(&mut app);
+    assert_eq!(symbol_count(&app, &path), 3, "only the paste's own copy");
+}
+
+#[test]
+fn a_duplicate_replay_after_its_numbers_answer_is_refused_on_the_copy() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    answer_paste_numbers(&mut app);
+    assert_eq!(symbol_count(&app, &path), 3, "the copy landed");
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
+    assert_eq!(symbol_count(&app, &path), 3);
+}
+
+#[test]
+fn two_duplicate_replays_in_a_row_place_one_copy() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    answer_paste_numbers(&mut app);
+    undo(&mut app, &path);
+    assert_eq!(symbol_count(&app, &path), 2);
+
+    replay(&mut app, seq);
+    replay(&mut app, seq);
+
+    assert_eq!(symbol_count(&app, &path), 3, "at most one copy");
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
+}
+
 #[test]
 fn a_properties_edit_is_one_row_per_field_run_and_a_symbol_flag_replay_is_refused() {
     let (mut app, path) = app_with_parts();

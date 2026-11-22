@@ -429,11 +429,30 @@ pub(crate) struct ReplayBook {
     pub(super) panel_edit_running: bool,
     /// Change Footprint is between its picker and its read.
     pub(super) swap_in_transit: bool,
+    /// The sheet of each paste still waiting for its designator numbers.
+    waiting_pastes: Vec<PathBuf>,
     /// How deep `Signex::update` is nested.
     update_depth: u32,
 }
 
 impl ReplayBook {
+    /// A paste on `sheet` started reading its numbers: it places later.
+    pub(crate) fn note_paste_waiting(&mut self, sheet: PathBuf) {
+        self.waiting_pastes.push(sheet);
+    }
+
+    /// The numbers of one paste on `sheet` came back, used or dropped.
+    pub(crate) fn note_paste_answered(&mut self, sheet: Option<&std::path::Path>) {
+        let at = (self.waiting_pastes.iter()).position(|path| Some(path.as_path()) == sheet);
+        if let Some(at) = at {
+            self.waiting_pastes.remove(at);
+        }
+    }
+
+    pub(super) fn has_waiting_paste(&self, sheet: &std::path::Path) -> bool {
+        self.waiting_pastes.iter().any(|path| path == sheet)
+    }
+
     pub(super) fn input_of(&self, seq: u64) -> Option<Arc<ReplayInput>> {
         self.inputs.get(&seq).cloned()
     }

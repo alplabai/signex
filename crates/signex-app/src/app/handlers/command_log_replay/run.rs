@@ -156,6 +156,15 @@ impl Signex {
             self.refuse_replay(row, numbers_unread(document));
             return Task::none();
         }
+        // A paste still waiting for its numbers has yet to place its copy.
+        if command.as_str() == "duplicate"
+            && self.ui_state.command_replay.has_waiting_paste(document)
+        {
+            let reason = Translatable::new(ids::COMMAND_LOG_REPLAY_PASTE_WAITING)
+                .arg("document", document_name(document));
+            self.refuse_replay(row, reason);
+            return Task::none();
+        }
         // The offset is fixed: a second copy would stack on the first.
         if command.as_str() == "duplicate" && self.duplicate_lands_on_a_copy(targets, document) {
             let reason = Translatable::new(ids::COMMAND_LOG_REPLAY_COPY_IN_PLACE)

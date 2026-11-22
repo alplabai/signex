@@ -42,7 +42,12 @@ impl Signex {
         self.interaction_state.paste_designators_override = None;
         let request = self.new_paste_request(intent);
         match self.paste_seed_task(&request) {
-            Some(seeding) => seeding,
+            Some(seeding) => {
+                if let Some(path) = request.path.clone() {
+                    self.ui_state.command_replay.note_paste_waiting(path);
+                }
+                seeding
+            }
             None => self.continue_paste(request),
         }
     }

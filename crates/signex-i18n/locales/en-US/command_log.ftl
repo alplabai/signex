@@ -64,6 +64,7 @@ command-log-replay-not-replayable = Not replayed: { $command } can't be replayed
 # $command is the command's label.
 command-log-replay-nothing-to-check = Not replayed: { $command } recorded no state to check its target against, so running it again can't be proven safe.
 command-log-replay-copy-in-place = Not replayed: { $document } already holds a copy where { $command } would place one.
+command-log-replay-paste-waiting = Not replayed: a paste on { $document } is still waiting for its designator numbers. Replay again once it has landed.
 # $command is the command's label.
 command-log-replay-drops-layer-sizes = Not replayed: { $command } would remove a copper layer that items in { $document } still have sizes on.
 command-log-replay-tool-active =Not replayed: a tool is in progress, and running this on { $document } would disturb it. Finish or cancel the tool first.
