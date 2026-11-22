@@ -442,11 +442,14 @@ impl PanelKind {
 pub struct TitleAction {
     pub icon: svg::Handle,
     pub tip: signex_i18n::Localized,
-    pub on_press: PanelMsg,
+    /// `None` draws the action disabled.
+    pub on_press: Option<PanelMsg>,
 }
 
 /// The title-bar actions of `kind`: Clear of the ERC panel (#85) while it
-/// holds results, Copy and Clear of the Messages panel (#86).
+/// holds results, Copy and Clear of the Messages panel (#86), Recompile of
+/// Compiled Design (mockup row 154), Refresh of Annotations (row 165) and
+/// Create Union of Unions (row 158).
 pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
     use signex_i18n::{ids, t};
     let tid = ctx.theme_id;
@@ -454,20 +457,41 @@ pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
         PanelKind::Erc if ctx.erc_ran || !ctx.erc_diagnostics.is_empty() => vec![TitleAction {
             icon: crate::icons::icon_dd_delete(tid),
             tip: t!(ctx.i18n, ids::PANELS_ERC_CLEAR_TOOLTIP),
-            on_press: PanelMsg::ClearErc,
+            on_press: Some(PanelMsg::ClearErc),
         }],
         PanelKind::Messages => vec![
             TitleAction {
                 icon: crate::icons::icon_dd_copy(tid),
                 tip: t!(ctx.i18n, ids::PANELS_MESSAGES_COPY_TOOLTIP),
-                on_press: PanelMsg::MessagesView(MessagesPanelMsg::Copied),
+                on_press: Some(PanelMsg::MessagesView(MessagesPanelMsg::Copied)),
             },
             TitleAction {
                 icon: crate::icons::icon_dd_delete(tid),
                 tip: t!(ctx.i18n, ids::PANELS_MESSAGES_CLEAR_TOOLTIP),
-                on_press: PanelMsg::MessagesView(MessagesPanelMsg::Cleared),
+                on_press: Some(PanelMsg::MessagesView(MessagesPanelMsg::Cleared)),
             },
         ],
+        PanelKind::CompiledDesign => vec![TitleAction {
+            icon: crate::icons::icon_chrome_refresh(tid),
+            tip: t!(ctx.i18n, ids::PANELS_COMPILED_DESIGN_RECOMPILE),
+            on_press: (ctx.compiled_design.panel.status
+                != compiled_design::CompiledStatus::NoProject)
+                .then(|| compiled_design::msg(crate::app::CompiledDesignMsg::CompileRequested)),
+        }],
+        PanelKind::Annotations if ctx.annotations.status == annotations::ListStatus::Ready => {
+            vec![TitleAction {
+                icon: crate::icons::icon_chrome_refresh(tid),
+                tip: t!(ctx.i18n, ids::ANNOTATIONS_REFRESH),
+                on_press: Some(PanelMsg::Annotations(AnnotationsMsg::RefreshRequested)),
+            }]
+        }
+        PanelKind::Unions if ctx.unions.has_sheet => vec![TitleAction {
+            icon: crate::icons::icon_plus(tid),
+            tip: t!(ctx.i18n, ids::UNIONS_PANEL_CREATE),
+            on_press: ctx.unions.can_create.then_some(PanelMsg::Unions(
+                crate::app::unions::UnionsMsg::CreateRequested,
+            )),
+        }],
         _ => Vec::new(),
     }
 }

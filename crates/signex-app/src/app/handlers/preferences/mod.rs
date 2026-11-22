@@ -10,6 +10,7 @@ mod keymap_tests;
 pub(crate) mod language;
 mod pages_view;
 mod prefs_file;
+mod profile_page;
 mod profiles;
 #[cfg(test)]
 mod profiles_tests;

@@ -122,6 +122,7 @@ impl Signex {
             draft_ui_scale_percent: ui.preferences_draft_ui_scale_percent,
             dirty: ui.preferences_dirty,
             profiles: &ui.profile_manager,
+            profiles_saving: !ui.profile_writes.is_idle(),
             default_profile: ui.default_rule_profile.as_deref(),
             distributor_settings: &self.library.settings,
             panel_tokens: &self.document_state.panel_ctx.tokens,

@@ -84,6 +84,7 @@ impl Signex {
             on_pin_cell: |row, col| Message::Erc(ErcMsg::PinMatrixCellCycled { row, col }),
             on_changed_only: |on| Message::Erc(ErcMsg::RulesChangedOnlyToggled(on)),
             on_filter: |query| Message::Erc(ErcMsg::RuleFilterChanged(query)),
+            on_open_rule: None,
         });
 
         // In-window: sized to the window-capped modal. Detached: the OS

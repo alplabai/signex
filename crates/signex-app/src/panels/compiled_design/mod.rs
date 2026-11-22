@@ -10,8 +10,8 @@ mod tree;
 
 use std::path::PathBuf;
 
-use iced::widget::{Space, column, container, row};
-use iced::{Alignment, Background, Element, Length, Theme, Widget as _};
+use iced::widget::{Space, column, container};
+use iced::{Background, Element, Length, Theme, Widget as _};
 use signex_i18n::{ids, t};
 use signex_types::project::ChannelNaming;
 use signex_types::schematic::{ChannelFormatError, ChannelOccurrence, ChannelRepeat};
@@ -213,7 +213,8 @@ pub(crate) fn msg(m: CompiledDesignMsg) -> PanelMsg {
 pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let view = &ctx.compiled_design.panel;
     let is_live = view.status == CompiledStatus::Ready;
-    let mut panel = column![title_row(ctx), controls(ctx, view, is_live), rule(ctx)]
+    // The title and Recompile are the dock title bar's (`title_actions`).
+    let mut panel = column![controls(ctx, view, is_live), rule(ctx)]
         .width(Length::Fill)
         .height(Length::Fill);
     if is_live && view.stale_count > 0 {
@@ -229,34 +230,6 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
         .push(rule(ctx))
         .push(footer(ctx, view))
         .boxed()
-}
-
-/// "Compiled Design" and the Recompile button.
-fn title_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
-    let i18n = &*ctx.i18n;
-    let ink = ti(ctx.tokens.text);
-    let recompile = signex_widgets::button(
-        text(t!(i18n, ids::PANELS_COMPILED_DESIGN_RECOMPILE)).size(TS.caption),
-    )
-    .padding([SP.xs, SP.s])
-    .on_press_maybe(
-        (ctx.compiled_design.panel.status != CompiledStatus::NoProject)
-            .then(|| msg(CompiledDesignMsg::CompileRequested)),
-    )
-    .style(crate::styles::ghost_button(&ctx.tokens));
-    container(
-        row![
-            text(t!(i18n, ids::PANELS_KIND_COMPILED_DESIGN))
-                .size(TS.body)
-                .color(ink)
-                .width(Length::Fill),
-            recompile,
-        ]
-        .align_y(Alignment::Center),
-    )
-    .padding([SP.s, SP.l])
-    .width(Length::Fill)
-    .boxed()
 }
 
 /// The Sheets / Nets switch and the search field; both disabled until the

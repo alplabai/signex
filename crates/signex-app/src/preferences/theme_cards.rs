@@ -114,7 +114,7 @@ fn card<'a>(
 }
 
 /// The radio mark: a ring, with an accent dot when chosen.
-fn radio<'a>(selected: bool, t: &ThemeTokens) -> Element<'a, PrefMsg> {
+pub(super) fn radio<'a>(selected: bool, t: &ThemeTokens) -> Element<'a, PrefMsg> {
     let r = tokens::resolve(t);
     let (accent, ring, fill) = (ti(t.accent), r.line_strong, r.field);
     let dot = container(Space::new())

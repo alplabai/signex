@@ -64,7 +64,7 @@ pub enum AnnotationsMsg {
     RowToggled(RowKey),
     /// A reference chip or a Jump button was pressed.
     ReferenceClicked(Reference),
-    /// More ▸ Refresh: read the notebook files again.
+    /// The title bar's Refresh: read the notebook files again.
     RefreshRequested,
 }
 
