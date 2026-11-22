@@ -3,7 +3,7 @@
 //! a read are read again; anything else that stops it changes nothing.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::Task;
@@ -23,6 +23,29 @@ use crate::library::closed_sheets::FileStamp;
 const LABEL: &str = "Rename power rail";
 
 impl Signex {
+    /// The rename typing `new` on symbol `port` of `sheet` asks for, when that
+    /// symbol names a rail: a named power port, not a flag or a part.
+    pub(crate) fn rail_rename_on(
+        &self,
+        sheet: &Path,
+        port: uuid::Uuid,
+        new: &str,
+    ) -> Option<RailRename> {
+        let engine = self.document_state.engines.get(sheet)?;
+        let symbol = engine.document().symbols.iter().find(|s| s.uuid == port)?;
+        let names_rail = symbol.is_power
+            && !signex_net::is_power_flag(&symbol.lib_id)
+            && !symbol.value.is_empty();
+        names_rail.then(|| {
+            RailRename::new(
+                sheet.to_path_buf(),
+                port,
+                symbol.value.clone(),
+                new.to_string(),
+            )
+        })
+    }
+
     /// Rename the rail `rename` names: at once on a loose sheet, else queued
     /// for [`Self::start_rail_rename`].
     pub(crate) fn rename_rail(&mut self, rename: RailRename) {

@@ -183,6 +183,35 @@ fn a_blank_name_would_unname_the_rail_and_is_refused() {
 }
 
 #[test]
+fn only_a_named_power_port_starts_a_rail_rename() {
+    let flag = Symbol {
+        lib_id: "power:PWR_FLAG".into(),
+        ..power_port(Uuid::from_u128(1), "+3V3")
+    };
+    let part = Symbol {
+        is_power: false,
+        ..power_port(Uuid::from_u128(2), "+3V3")
+    };
+    let unnamed = power_port(Uuid::from_u128(3), "");
+    let sheet = SchematicSheet {
+        symbols: vec![flag, part, unnamed, power_port(PORT, "+3V3")],
+        ..Default::default()
+    };
+    let path = PathBuf::from("rail.snxsch");
+    let (mut app, _task) = Signex::new();
+    let engine = signex_engine::Engine::new(sheet).expect("engine");
+    app.document_state.engines.insert(path.clone(), engine);
+    for id in 1..=3 {
+        assert!(
+            app.rail_rename_on(&path, Uuid::from_u128(id), "X")
+                .is_none()
+        );
+    }
+    let rename = app.rail_rename_on(&path, PORT, "X").expect("a rail");
+    assert_eq!((rename.old.as_str(), rename.new.as_str()), ("+3V3", "X"));
+}
+
+#[test]
 fn the_rail_is_its_power_ports_and_power_labels_only() {
     let flag = Symbol {
         lib_id: "power:PWR_FLAG".into(),

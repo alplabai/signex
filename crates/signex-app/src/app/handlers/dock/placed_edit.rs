@@ -173,24 +173,22 @@ impl Signex {
     }
 
     /// Rename a power port through the engine. A named port takes its whole
-    /// rail as one undo step (`app/rail_rename`); a port with no name yet is
-    /// on no rail and changes alone. A port that is gone keeps nothing, so the
-    /// typed name is quoted in Messages instead of being dropped silently.
+    /// rail as one undo step (`app/rail_rename`); a power flag or a port with
+    /// no name yet is on no rail and changes alone. A port that is gone keeps
+    /// nothing, so the typed name is quoted in Messages instead of being
+    /// dropped silently.
     fn apply_port_name_draft(&mut self, draft: PortNameDraft) {
         let PortNameDraft { sheet, item, text } = draft;
-        let stored = (self.document_state.engines.get(&sheet)).and_then(|engine| {
-            let mut symbols = engine.document().symbols.iter();
-            symbols
-                .find(|s| s.uuid == item.uuid)
-                .map(|s| s.value.clone())
-        });
-        if let Some(old) = stored.clone().filter(|old| !old.is_empty()) {
-            self.rename_rail(crate::app::rail_rename::RailRename::new(
-                sheet, item.uuid, old, text,
-            ));
+        if let Some(rename) = self.rail_rename_on(&sheet, item.uuid, &text) {
+            self.rename_rail(rename);
             return;
         }
-        if stored.is_none() {
+        let on_sheet = self
+            .document_state
+            .engines
+            .get(&sheet)
+            .is_some_and(|e| e.document().symbols.iter().any(|s| s.uuid == item.uuid));
+        if !on_sheet {
             let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
             let shown = sheet.display().to_string();
             crate::diagnostics::log_warning(
