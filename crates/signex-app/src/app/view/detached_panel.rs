@@ -121,10 +121,11 @@ pub(super) fn title_strip(
     line = line.push(
         tooltip(
             dock_back,
-            container(text(facts.dock_back_tip).size(TS.body)).padding([SP.xs, SP.m]),
+            container(text(facts.dock_back_tip).size(TS.body))
+                .padding([SP.xs, SP.m])
+                .style(crate::styles::context_menu(theme_tokens)),
             tooltip::Position::Bottom,
         )
-        .style(crate::styles::context_menu(theme_tokens))
         .boxed(),
     );
     let close = button(centred(glyph(

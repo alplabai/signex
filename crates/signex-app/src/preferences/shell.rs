@@ -217,10 +217,10 @@ fn dirty_dot<'a>(t: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
     tooltip(
         dot,
         container(text(t!(i18n, ids::PREFERENCES_UNSAVED)).size(TS.caption))
-            .padding([SP.xs, SP.s + SP.xs]),
+            .padding([SP.xs, SP.s + SP.xs])
+            .style(styles::context_menu(t)),
         tooltip::Position::Bottom,
     )
-    .style(styles::context_menu(t))
     .boxed()
 }
 

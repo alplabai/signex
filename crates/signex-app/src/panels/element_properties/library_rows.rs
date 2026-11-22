@@ -176,10 +176,10 @@ pub(super) fn library_and_id_row<'a>(
                 .size(TS.body)
                 .font(mono),
         )
-        .padding([SP.xs, 6.0]),
+        .padding([SP.xs, 6.0])
+        .style(crate::styles::context_menu(tokens)),
         iced::widget::tooltip::Position::Bottom,
-    )
-    .style(crate::styles::context_menu(tokens));
+    );
     container(
         iced::widget::row![
             property_label(t!(i18n, ids::PROPERTIES_LIBRARY), label),
@@ -395,10 +395,10 @@ fn banner_actions<'a>(
         };
         signex_widgets::tooltip(
             pressable,
-            signex_widgets::text(t!(i18n, tip)).size(TS.body),
+            container(signex_widgets::text(t!(i18n, tip)).size(TS.body))
+                .style(crate::styles::context_menu(tokens)),
             iced::widget::tooltip::Position::Bottom,
         )
-        .style(crate::styles::context_menu(tokens))
         .boxed()
     };
     let mut actions = iced::widget::Row::<Element<'a, PanelMsg>>::new().push(action(

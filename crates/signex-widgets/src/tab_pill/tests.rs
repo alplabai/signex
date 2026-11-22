@@ -7,9 +7,8 @@
 
 use super::*;
 use iced::advanced::Renderer as _;
-use iced::advanced::renderer;
+use iced::advanced::renderer::{self, Headless as _};
 use iced::{Font, Pixels};
-use iced_vello_cpu::graphics::Viewport;
 
 const W: u32 = 120;
 const H: u32 = 32;
@@ -134,7 +133,7 @@ fn reference_quads(bounds: Rectangle, style: &TabPillStyle) -> Vec<(Quad, Backgr
     quads
 }
 
-/// Rasterise `quads` on a mid-grey surface; returns RGBA bytes.
+/// Rasterise `quads` on a mid-grey surface; returns BGRA bytes.
 fn rasterise(quads: Vec<(Quad, Background)>) -> Vec<u8> {
     let mut renderer = iced_vello_cpu::Renderer::new(renderer::Settings {
         font: Font::DEFAULT,
@@ -144,17 +143,7 @@ fn rasterise(quads: Vec<(Quad, Background)>) -> Vec<u8> {
     for (quad, background) in quads {
         renderer.fill_quad(quad, background);
     }
-    let mut pixmap = tiny_skia::Pixmap::new(W, H).expect("pixmap");
-    let mut mask = tiny_skia::Mask::new(W, H).expect("mask");
-    let viewport = Viewport::with_physical_size(Size::new(W, H), Default::default());
-    renderer.draw(
-        &mut pixmap.as_mut(),
-        &mut mask,
-        &viewport,
-        &[Rectangle::with_size(Size::new(W as f32, H as f32))],
-        Color::from_rgb(0.5, 0.5, 0.5),
-    );
-    pixmap.data().to_vec()
+    renderer.screenshot(Size::new(W, H), 1.0, Color::from_rgb(0.5, 0.5, 0.5))
 }
 
 /// Two adjacent pills (first non-last, second last) as a tab row paints
@@ -246,7 +235,7 @@ fn shared_divider_is_a_single_border_column() {
     let px = row(pill_quads, &first, &second);
     let at = |x: u32, y: u32| {
         let i = ((y * W + x) * 4) as usize;
-        // The tiny-skia backend writes BGRA; read it back as RGB.
+        // The headless screenshot is BGRA; read it back as RGB.
         [px[i + 2], px[i + 1], px[i]]
     };
     let border = [0.30f32, 0.32, 0.38].map(|c| (c * 255.0).round() as u8);

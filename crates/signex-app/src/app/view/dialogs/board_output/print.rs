@@ -265,13 +265,13 @@ fn show_group<'a>(
         } else {
             let note =
                 container(text(t!(i18n, ids::BOARD_PRINT_MIRROR_NEEDS_BOTTOM)).size(TS.body))
-                    .padding([SP.xs, SP.s]);
+                    .padding([SP.xs, SP.s])
+                    .style(crate::styles::context_menu(tokens));
             tooltip(
                 kit::dependent(false, tick, tokens),
                 note,
                 tooltip::Position::Bottom,
             )
-            .style(crate::styles::context_menu(tokens))
             .boxed()
         };
         col = col.push(control);

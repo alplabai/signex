@@ -85,24 +85,26 @@ fn main() -> iced::Result {
     // polygon fills). Only iced's mesh pass is multisampled, and it resolves
     // into the single-sample frame, so signex-gfx's own pipelines are unaffected.
     .antialiasing(fonts::read_antialiasing_pref())
-    // Iosevka — schematic / PCB canvas text (monospace, tuned for EDA).
-    .font(bundled::IOSEVKA_REGULAR)
-    .font(bundled::IOSEVKA_BOLD)
-    .font(bundled::IOSEVKA_ITALIC)
-    .font(bundled::IOSEVKA_BOLD_ITALIC)
-    // Roboto — UI chrome (panels, toolbars, menus, dialogs).
-    .font(bundled::ROBOTO_REGULAR)
-    .font(bundled::ROBOTO_BOLD)
-    // Inter — default UI chrome; JetBrains Mono — chrome-only mono text.
-    .font(bundled::INTER_REGULAR)
-    .font(bundled::INTER_MEDIUM)
-    .font(bundled::INTER_SEMIBOLD)
-    .font(bundled::JETBRAINS_MONO_REGULAR)
-    .font(bundled::JETBRAINS_MONO_MEDIUM)
-    // iced_aw bundled icon font — used by ColorPicker (Cancel / OK
-    // glyphs) and other iced_aw widgets. Without this their action
-    // buttons render as empty rectangles.
-    .font(iced_aw::ICED_AW_FONT_BYTES)
+    .fonts([
+        // Iosevka — schematic / PCB canvas text (monospace, tuned for EDA).
+        bundled::IOSEVKA_REGULAR,
+        bundled::IOSEVKA_BOLD,
+        bundled::IOSEVKA_ITALIC,
+        bundled::IOSEVKA_BOLD_ITALIC,
+        // Roboto — UI chrome (panels, toolbars, menus, dialogs).
+        bundled::ROBOTO_REGULAR,
+        bundled::ROBOTO_BOLD,
+        // Inter — default UI chrome; JetBrains Mono — chrome-only mono text.
+        bundled::INTER_REGULAR,
+        bundled::INTER_MEDIUM,
+        bundled::INTER_SEMIBOLD,
+        bundled::JETBRAINS_MONO_REGULAR,
+        bundled::JETBRAINS_MONO_MEDIUM,
+        // iced_aw bundled icon font — used by ColorPicker (Cancel / OK
+        // glyphs) and other iced_aw widgets. Without this their action
+        // buttons render as empty rectangles.
+        iced_aw::ICED_AW_FONT_BYTES,
+    ])
     // Default UI font resolves through the Preferences-panel pick. When
     // it matches a bundled family ("Inter" / "Roboto" / "Iosevka") iced uses the
     // embedded TTF directly; otherwise it falls back to a system font.

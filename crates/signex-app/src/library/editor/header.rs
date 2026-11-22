@@ -181,9 +181,9 @@ fn close_button<'a>(
     tooltip(
         close,
         container(text(t!(i18n, ids::EDITORS_COMPONENT_CLOSE)).size(TS.caption))
-            .padding([SP.xs, SP.s]),
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(tokens)),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(crate::styles::context_menu(tokens))
     .boxed()
 }

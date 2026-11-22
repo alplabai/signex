@@ -188,10 +188,11 @@ fn value_cell<'a>(value: &'a str, tokens: &ThemeTokens) -> Element<'a, LibraryMe
     }
     signex_widgets::tooltip(
         cell,
-        container(text(signex_i18n::UserText::new(value)).size(TS.caption)).padding([SP.xs, SP.s]),
+        container(text(signex_i18n::UserText::new(value)).size(TS.caption))
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(tokens)),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(crate::styles::context_menu(tokens))
     .boxed()
 }
 

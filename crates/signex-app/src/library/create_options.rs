@@ -87,10 +87,11 @@ pub fn view<'a>(
         };
         tooltip(
             create,
-            container(text(t!(i18n, tip)).size(TS.body)).padding([SP.xs, SP.s]),
+            container(text(t!(i18n, tip)).size(TS.body))
+                .padding([SP.xs, SP.s])
+                .style(crate::styles::context_menu(tokens)),
             tooltip::Position::Top,
         )
-        .style(crate::styles::context_menu(tokens))
         .boxed()
     } else {
         create

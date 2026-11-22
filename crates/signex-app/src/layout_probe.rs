@@ -5,7 +5,7 @@
 //! builds a laid-out widget tree, so no test could see a size or a position:
 //! a button squeezed to a sliver with its label wrapped onto five lines
 //! (#604) passed every gate. This lays an [`Element`] out against a window
-//! size with a headless tiny-skia renderer, so text is measured with real
+//! size with a headless vello_cpu renderer, so text is measured with real
 //! fonts, and reports the bounds of every text widget in it.
 //!
 //! The fonts are whatever the system and iced's defaults provide, not the

@@ -126,10 +126,11 @@ impl<'a, M: 'a> EnableSection<'a, M> {
         let header = match self.tip {
             Some(tip) => tooltip(
                 header,
-                container(text(tip).size(TS.body)).padding([SP.xs, SP.s]),
+                container(text(tip).size(TS.body))
+                    .padding([SP.xs, SP.s])
+                    .style(move |theme: &Theme| tip_look(theme)),
                 tooltip::Position::Bottom,
             )
-            .style(move |theme: &Theme| tip_look(theme))
             .boxed(),
             None => header,
         };
