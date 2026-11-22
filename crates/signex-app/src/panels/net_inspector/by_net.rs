@@ -84,11 +84,18 @@ fn net_block<'a>(ctx: &'a PanelContext, net: &'a NetRow) -> Element<'a, PanelMsg
     if net.more > 0 {
         block = block.push(more_row(
             ctx,
-            t!(ctx.i18n, ids::PANELS_NET_INSPECTOR_MORE_PINS, "count" => net.more),
+            more_members_label(&ctx.i18n, net.more),
             net.name.clone(),
         ));
     }
     expanded_fill(ctx, block.boxed(), net.expanded)
+}
+
+/// The overflow row of a net. It counts members (pins, labels, ports and
+/// sheet entries), so it does not call them pins: the Pins column counts
+/// pins alone (mockup row 58).
+fn more_members_label(i18n: &signex_i18n::I18n, count: usize) -> Localized {
+    t!(i18n, ids::PANELS_NET_INSPECTOR_MORE_MEMBERS, "count" => count)
 }
 
 /// `content` on the selection fill when `expanded`, then a soft rule.
@@ -305,5 +312,29 @@ mod tests {
         assert_eq!(ink(NetMemberRowKind::SheetEntry), None);
         assert_eq!(ink(NetMemberRowKind::Label), Some(muted));
         assert_eq!(ink(NetMemberRowKind::PowerPort), Some(power));
+    }
+
+    fn plain(text: Localized) -> String {
+        text.into_string().replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// Mockup row 58: a net's overflow row counts members and does not call
+    /// them pins, so it cannot contradict the Pins column.
+    #[test]
+    fn a_nets_overflow_row_counts_members_not_pins() {
+        let i18n = signex_i18n::I18n::en_us();
+        assert_eq!(plain(more_members_label(&i18n, 1)), "+ 1 more");
+        assert_eq!(plain(more_members_label(&i18n, 3)), "+ 3 more");
+    }
+
+    /// A part's overflow row does count pins, in the singular for one.
+    #[test]
+    fn a_parts_overflow_row_handles_the_singular() {
+        let i18n = signex_i18n::I18n::en_us();
+        let more = |count: usize| {
+            plain(t!(i18n, ids::PANELS_NET_INSPECTOR_MORE_PINS, "count" => count))
+        };
+        assert_eq!(more(1), "+ 1 more pin");
+        assert_eq!(more(8), "+ 8 more pins");
     }
 }

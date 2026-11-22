@@ -86,6 +86,20 @@ impl ProjectsView {
             | ProjectsMsg::RecentProjectPressed(_) => {}
         }
     }
+
+    /// Fold or unfold every view-only group of `roots`: Expand All and
+    /// Collapse All reach the groups, which the cached tree does not hold.
+    pub fn set_groups_collapsed(&mut self, roots: &[TreeNode], collapsed: bool) {
+        if !collapsed {
+            self.collapsed.clear();
+            return;
+        }
+        for root in roots {
+            for name in GROUPS {
+                self.collapsed.insert(group_path(&root.key, name));
+            }
+        }
+    }
 }
 
 /// The group a document row belongs to.
@@ -238,6 +252,39 @@ fn route(msg: TreeMsg) -> PanelMsg {
     }
 }
 
+/// The rows the tree draws, and the project they sit under when its card
+/// stands in for its row (mockup row 19). With several projects each keeps
+/// its row, which is what says whose groups follow.
+fn under_card(decorated: Vec<TreeNode>) -> (Vec<TreeNode>, Option<String>) {
+    match <[TreeNode; 1]>::try_from(decorated) {
+        Ok([root]) => (root.children, Some(root.key)),
+        Err(roots) => (roots, None),
+    }
+}
+
+/// `key` as the drawn rows know it: without the project when its row is not
+/// drawn. The project's own key then names no drawn row.
+fn key_under_card<'k>(key: &'k [String], root: Option<&str>) -> Option<&'k [String]> {
+    match root {
+        None => Some(key),
+        Some(_) => key.get(1..).filter(|rest| !rest.is_empty()),
+    }
+}
+
+/// [`route`] for a tree drawn [`under_card`]: its keys get the project back.
+fn route_under(root: Option<&str>, msg: TreeMsg) -> PanelMsg {
+    let Some(root) = root else {
+        return route(msg);
+    };
+    let full = |key: TreeKey| -> TreeKey { std::iter::once(root.to_string()).chain(key).collect() };
+    route(match msg {
+        TreeMsg::Toggle(key) => TreeMsg::Toggle(full(key)),
+        TreeMsg::Select(key) => TreeMsg::Select(full(key)),
+        TreeMsg::ContextMenu(key) => TreeMsg::ContextMenu(full(key)),
+        TreeMsg::BackgroundContextMenu => TreeMsg::BackgroundContextMenu,
+    })
+}
+
 /// The Graphite Projects panel for a non-empty `ctx.project_tree`.
 pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
@@ -278,18 +325,24 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let body: Element<'a, PanelMsg> = if roots.is_empty() {
         filter::no_match_hint(ctx)
     } else {
-        let decorated = super::graphite::decorate_tree(&roots);
-        let mut tree = TreeView::new(&decorated, tokens)
+        // Decorated first: the count badges go by depth under the project.
+        let (rows, root) = under_card(super::graphite::decorate_tree(&roots));
+        let mut tree = TreeView::new(&rows, tokens)
             .text_size(TS.body)
             .style(super::graphite::tree_style(tokens));
         let selected = ctx
             .project_tree_selected
             .as_deref()
             .map(|key| to_view_key(key, &roots));
-        if let Some(sel) = selected.as_deref() {
+        let drawn = selected
+            .as_deref()
+            .and_then(|key| key_under_card(key, root.as_deref()));
+        if let Some(sel) = drawn {
             tree = tree.selected(sel);
         }
-        tree.view().map(route).boxed()
+        tree.view()
+            .map(move |msg| route_under(root.as_deref(), msg))
+            .boxed()
     };
     let body = container(body).padding(iced::Padding {
         top: 6.0,

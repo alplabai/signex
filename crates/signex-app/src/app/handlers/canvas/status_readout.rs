@@ -121,19 +121,31 @@ impl Signex {
     }
 
     /// The grid and unit the status bar of `window_id` shows: a symbol
-    /// tab's library settings, the grid in effect on a board, or the
+    /// tab's library settings, a footprint tab's step (the one its grid
+    /// picker marks, mockup row 63), the grid in effect on a board, or the
     /// app-wide ones.
     pub fn status_grid(&self, window_id: iced::window::Id) -> StatusGrid {
-        if let Surface::SymbolEditor(editor) = self.status_surface(window_id) {
-            let display = self.symbol_display(&editor.path);
-            return StatusGrid {
-                visible: display.grid_visible,
-                size_mm: display.grid_size_mm,
-                unit: display.unit,
-                extra: false,
-            };
-        }
         let ui = &self.ui_state;
+        match self.status_surface(window_id) {
+            Surface::SymbolEditor(editor) => {
+                let display = self.symbol_display(&editor.path);
+                return StatusGrid {
+                    visible: display.grid_visible,
+                    size_mm: display.grid_size_mm,
+                    unit: display.unit,
+                    extra: false,
+                };
+            }
+            Surface::FootprintEditor(editor) => {
+                return StatusGrid {
+                    visible: ui.grid_visible,
+                    size_mm: editor.state.snap_options.grid_step_mm as f32,
+                    unit: ui.unit,
+                    extra: false,
+                };
+            }
+            Surface::NoCamera | Surface::Pcb | Surface::Schematic => {}
+        }
         let owner = (ui.main_window_id != Some(window_id)).then_some(window_id);
         let (size_mm, extra) = self.status_board_target(window_id).map_or(
             (ui.grid_size_mm, false),
