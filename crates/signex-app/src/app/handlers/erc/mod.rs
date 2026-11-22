@@ -10,11 +10,11 @@ mod annotate_job;
 mod annotate_job_tests;
 #[cfg(test)]
 mod annotate_mixed_versions_tests;
+#[cfg(test)]
+mod annotate_parked_tests;
 mod annotate_pass;
 mod annotate_placements;
 mod annotate_preview;
-#[cfg(test)]
-mod annotate_parked_tests;
 #[cfg(test)]
 mod annotate_reset_tests;
 #[cfg(test)]
