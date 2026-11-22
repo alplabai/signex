@@ -4,11 +4,12 @@
 //! Create reads the picked sheet off the UI thread and places a sheet symbol
 //! with an entry for every port as one undo step. The sync dialog previews
 //! the entries or ports either direction would add, remove and rename, and
-//! Apply makes exactly those changes as one undo step: on the sheet symbol
+//! Apply makes those changes as one undo step: on the sheet symbol
 //! (`Command::ReconcileChildSheetPins`), or on the child sheet, which is
-//! loaded into a tabless engine and left unsaved when it is not open. The
-//! rules live in `signex_engine::sheet_sync`; docs/DECISIONS.md, "Bottom-up
-//! hierarchy".
+//! loaded into a tabless engine and left unsaved when it is not open. A port
+//! Symbol to Sheet would remove is named in a warning and has its own tick
+//! (#2831). The rules live in `signex_engine::sheet_sync`; docs/DECISIONS.md,
+//! "Bottom-up hierarchy".
 
 mod apply;
 mod create;
@@ -66,6 +67,11 @@ pub enum SheetSyncMsg {
     PreviewModePicked(SheetSyncPreviewMode),
     /// The drawing's expand button was pressed.
     PreviewExpandToggled,
+    /// The tick of a port Symbol to Sheet would remove was set or cleared.
+    RemovalTicked {
+        port: String,
+        ticked: bool,
+    },
     ApplyRequested,
     /// Apply's re-stat of the closed child sheet finished: the files that
     /// changed on disk since read `generation`, or why they could not be
@@ -94,13 +100,12 @@ impl Signex {
                 Task::none()
             }
             SheetSyncMsg::DirectionPicked(direction) => {
-                // A refused Apply's reason belongs to the other direction; a
-                // failed read stays, since there is still no preview.
+                self.pick_sheet_sync_direction(direction);
+                Task::none()
+            }
+            SheetSyncMsg::RemovalTicked { port, ticked } => {
                 if let Some(state) = self.ui_state.sheet_sync.as_mut() {
-                    state.direction = direction;
-                    if state.previews.is_some() {
-                        state.problem = None;
-                    }
+                    state.set_removal_ticked(&port, ticked);
                 }
                 Task::none()
             }
@@ -126,5 +131,16 @@ impl Signex {
             }
         };
         Task::batch([task, self.finish_update()])
+    }
+
+    /// A refused Apply's reason belongs to the other direction; a failed
+    /// read stays, since there is still no preview.
+    fn pick_sheet_sync_direction(&mut self, direction: SheetSyncDirection) {
+        if let Some(state) = self.ui_state.sheet_sync.as_mut() {
+            state.direction = direction;
+            if state.previews.is_some() {
+                state.problem = None;
+            }
+        }
     }
 }

@@ -46,6 +46,17 @@ sheet-sync-change-count = { $count ->
 sheet-sync-column-change = Change
 sheet-sync-column-entry = Entry
 sheet-sync-column-io = I/O type
+# Over the ticks of the ports Apply would remove.
+sheet-sync-column-remove = Remove
+# The Change pill of a removal whose tick is off.
+sheet-sync-left-out = Kept
+
+# Over the change table when Apply removes ports. $file is the sheet file,
+# $ports the port names.
+sheet-sync-removal-warning = { $count ->
+    [one] Apply removes this port from { $file }: { $ports }. Untick it to keep it.
+   *[other] Apply removes these { $count } ports from { $file }: { $ports }. Untick a port to keep it.
+}
 
 # The I/O type of an entry or port.
 sheet-sync-io-input = Input

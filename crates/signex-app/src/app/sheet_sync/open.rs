@@ -96,6 +96,7 @@ impl Signex {
             read: None,
             previews: None,
             entries: None,
+            kept_ports: std::collections::BTreeSet::new(),
             preview_mode: SheetSyncPreviewMode::default(),
             preview_expanded: false,
             checking: false,

@@ -2,10 +2,11 @@
 //! messages: the sheet symbol it syncs, the child sheet read for it, the
 //! preview of each direction and why Apply refused, if it did.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use signex_engine::{SheetSyncDirection, SheetSyncEntry, SheetSyncPreview};
+use signex_engine::{SheetEntryChange, SheetSyncDirection, SheetSyncEntry, SheetSyncPreview};
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
@@ -91,6 +92,9 @@ pub struct SheetSyncState {
     pub previews: Option<SheetSyncPreviews>,
     /// `None` until the child sheet is known, like `previews`.
     pub entries: Option<SheetSyncEntries>,
+    /// Ports Symbol to Sheet would remove whose tick is off: Apply keeps
+    /// them. Every removal starts ticked.
+    pub kept_ports: BTreeSet<String>,
     pub preview_mode: SheetSyncPreviewMode,
     pub preview_expanded: bool,
     /// Apply is re-checking the closed child sheet's file.
@@ -115,8 +119,84 @@ impl SheetSyncState {
         })
     }
 
+    /// What Apply makes in the chosen direction: the preview without the
+    /// removals left out.
+    pub fn applied_preview(&self) -> Option<SheetSyncPreview> {
+        let previews = self.previews.as_ref()?;
+        Some(match self.direction {
+            SheetSyncDirection::SheetToSymbol => previews.to_symbol.clone(),
+            SheetSyncDirection::SymbolToSheet => previews.to_sheet.leaving_out(&self.kept_ports),
+        })
+    }
+
     /// Apply has something to do and is not already waiting.
     pub fn can_apply(&self) -> bool {
-        !self.checking && self.preview().is_some_and(|preview| !preview.is_empty())
+        !self.checking
+            && self
+                .applied_preview()
+                .is_some_and(|preview| !preview.is_empty())
+    }
+
+    /// The change table carries a tick per removal: Symbol to Sheet with
+    /// ports to remove.
+    pub fn shows_removal_ticks(&self) -> bool {
+        self.direction == SheetSyncDirection::SymbolToSheet
+            && self
+                .previews
+                .as_ref()
+                .is_some_and(|previews| !previews.to_sheet.removed.is_empty())
+    }
+
+    /// `entry` is a removal the user left out.
+    pub fn is_left_out(&self, entry: &SheetSyncEntry) -> bool {
+        self.direction == SheetSyncDirection::SymbolToSheet
+            && entry.change == SheetEntryChange::Removed
+            && self.kept_ports.contains(&entry.name)
+    }
+
+    /// The ports Apply removes from the sheet, for the warning.
+    pub fn ports_to_remove(&self) -> Vec<String> {
+        match self.direction {
+            SheetSyncDirection::SheetToSymbol => Vec::new(),
+            SheetSyncDirection::SymbolToSheet => self
+                .applied_preview()
+                .map_or_else(Vec::new, |preview| preview.removed),
+        }
+    }
+
+    /// The written side as the drawing shows it: a removal left out stays.
+    pub fn drawn_entries(&self) -> Option<Vec<SheetSyncEntry>> {
+        let entries = self.entries()?;
+        Some(
+            entries
+                .iter()
+                .map(|entry| SheetSyncEntry {
+                    change: if self.is_left_out(entry) {
+                        SheetEntryChange::Kept
+                    } else {
+                        entry.change.clone()
+                    },
+                    ..entry.clone()
+                })
+                .collect(),
+        )
+    }
+
+    /// The tick of the removal `port` was set. Ignored for a name that is no
+    /// removal, and while Apply is waiting on the file check, so what was
+    /// confirmed is what is written.
+    pub fn set_removal_ticked(&mut self, port: &str, ticked: bool) {
+        let listed = self
+            .previews
+            .as_ref()
+            .is_some_and(|previews| previews.to_sheet.removed.iter().any(|name| name == port));
+        if self.checking || !listed {
+            return;
+        }
+        if ticked {
+            self.kept_ports.remove(port);
+        } else {
+            self.kept_ports.insert(port.to_string());
+        }
     }
 }

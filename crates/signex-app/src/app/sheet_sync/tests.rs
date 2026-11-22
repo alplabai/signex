@@ -371,6 +371,145 @@ fn symbol_to_sheet_changes_the_closed_child_in_memory_only() {
     );
 }
 
+/// A dialog on Symbol to Sheet that would remove the ports GONE1 and GONE2.
+fn removal_rig() -> Rig {
+    let mut rig = rig(
+        vec![pin("KEEP", "input", 2.54, false)],
+        vec![
+            hierarchical("KEEP", "input", 10.0),
+            hierarchical("GONE1", "output", 20.0),
+            hierarchical("GONE2", "output", 30.0),
+        ],
+    );
+    send(&mut rig.app, SheetSyncMsg::Requested);
+    send(
+        &mut rig.app,
+        SheetSyncMsg::DirectionPicked(SheetSyncDirection::SymbolToSheet),
+    );
+    rig
+}
+
+fn tick(app: &mut Signex, port: &str, ticked: bool) {
+    send(
+        app,
+        SheetSyncMsg::RemovalTicked {
+            port: port.to_string(),
+            ticked,
+        },
+    );
+}
+
+fn child_ports(rig: &Rig) -> Vec<String> {
+    let child = rig
+        .app
+        .document_state
+        .engines
+        .get(&rig.child)
+        .expect("the child is held in memory");
+    let mut ports: Vec<String> = signex_engine::exposed_sheet_ports(child.document())
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    ports.sort_unstable();
+    ports
+}
+
+/// #2831, mockup row 79: a removal left out keeps its port, the others go,
+/// and Apply is one undo step, written to no file.
+#[test]
+fn a_removal_left_out_keeps_its_port_and_apply_is_one_undo_step() {
+    let mut rig = removal_rig();
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert_eq!(
+        state.ports_to_remove(),
+        ["GONE1", "GONE2"],
+        "ticked at first"
+    );
+    tick(&mut rig.app, "GONE1", false);
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert_eq!(state.ports_to_remove(), ["GONE2"]);
+
+    send(&mut rig.app, SheetSyncMsg::ApplyRequested);
+    assert!(rig.app.ui_state.sheet_sync.is_none(), "Apply closes it");
+    assert_eq!(child_ports(&rig), ["GONE1", "KEEP"]);
+    let on_disk = std::fs::read_to_string(&rig.child).expect("child file");
+    assert_eq!(on_disk, rig.child_text, "nothing is written until Save");
+
+    rig.app
+        .document_state
+        .engines
+        .get_mut(&rig.child)
+        .expect("child")
+        .undo()
+        .expect("undo");
+    assert_eq!(
+        child_ports(&rig),
+        ["GONE1", "GONE2", "KEEP"],
+        "one undo step"
+    );
+}
+
+/// #2831: a tick changes no sheet, and a tick set back restores the removal.
+#[test]
+fn removal_ticks_change_nothing_until_apply() {
+    let mut rig = removal_rig();
+    tick(&mut rig.app, "GONE1", false);
+    tick(&mut rig.app, "GONE2", false);
+    assert!(!rig.app.document_state.engines.contains_key(&rig.child));
+    assert!(!rig.app.document_state.has_dirty_documents());
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert!(!state.can_apply(), "every change is left out");
+    assert!(state.ports_to_remove().is_empty());
+
+    send(&mut rig.app, SheetSyncMsg::ApplyRequested);
+    assert!(rig.app.ui_state.sheet_sync.is_some(), "nothing to apply");
+    assert!(!rig.app.document_state.engines.contains_key(&rig.child));
+
+    tick(&mut rig.app, "GONE2", true);
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert!(state.can_apply());
+    assert_eq!(state.ports_to_remove(), ["GONE2"]);
+}
+
+/// #2831: what was confirmed is what is written; a tick cannot land while
+/// Apply waits on the file check, and a name that is no removal is ignored.
+#[test]
+fn a_tick_is_ignored_during_the_file_check_or_for_another_name() {
+    let mut rig = removal_rig();
+    tick(&mut rig.app, "KEEP", false);
+    let state = rig.app.ui_state.sheet_sync.as_mut().expect("dialog open");
+    assert!(state.kept_ports.is_empty(), "KEEP is no removal");
+    state.checking = true;
+    tick(&mut rig.app, "GONE1", false);
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert!(state.kept_ports.is_empty(), "Apply is waiting");
+}
+
+/// #2831: when the sheets changed, a port left out stays left out while it
+/// is still a removal, and a name that no longer is one is dropped.
+#[test]
+fn a_refreshed_preview_keeps_only_the_removals_still_left_out() {
+    let mut rig = removal_rig();
+    let state = rig.app.ui_state.sheet_sync.as_mut().expect("dialog open");
+    state.kept_ports.insert("GONE1".to_string());
+    state.kept_ports.insert("NO_LONGER".to_string());
+    state.previews = Some(super::SheetSyncPreviews::default());
+    state.checking = true;
+    let generation = state.generation;
+    send(
+        &mut rig.app,
+        SheetSyncMsg::DiskChecked {
+            generation,
+            result: Ok(Vec::new()),
+        },
+    );
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog stays");
+    assert_eq!(state.problem, Some(super::SheetSyncProblem::Changed));
+    let kept: Vec<&str> = state.kept_ports.iter().map(String::as_str).collect();
+    assert_eq!(kept, ["GONE1"]);
+    assert_eq!(state.ports_to_remove(), ["GONE2"]);
+}
+
 #[test]
 fn a_symbol_from_a_sheet_lands_with_every_port_as_one_step() {
     let mut rig = rig(Vec::new(), Vec::new());
