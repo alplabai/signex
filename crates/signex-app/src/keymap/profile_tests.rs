@@ -204,11 +204,11 @@ file_kind = "keyboard_shortcuts"
 version = 1
 
 [keyboard_shortcuts]
-active_profile = "signex_standard"
+active_profile = "classic"
 
 [[keyboard_shortcuts.profiles]]
 schema_version = 1
-profile_id = "signex_standard"
+profile_id = "classic"
 profile_name = "Shadow"
 profile_kind = "custom"
 "#,
@@ -216,7 +216,7 @@ profile_kind = "custom"
     .unwrap();
 
     let err = load_profile_set_at(&path).unwrap_err().to_string();
-    assert!(err.contains("built-in profile `signex_standard` cannot be modified"));
+    assert!(err.contains("built-in profile `classic` cannot be modified"));
 }
 
 // ─── #595 — a refused load must stay visible, and must never be
