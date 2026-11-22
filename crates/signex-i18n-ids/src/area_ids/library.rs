@@ -196,6 +196,9 @@ define_ids! {
     LIBRARY_CREATE_OPTIONS_REFUSED_TIP = "library-create-options-refused-tip";
     LIBRARY_CREATE_OPTIONS_EXISTS = "library-create-options-exists";
     LIBRARY_CREATE_OPTIONS_EXISTS_TIP = "library-create-options-exists-tip";
+    LIBRARY_CREATE_OPTIONS_BAD_NAME = "library-create-options-bad-name";
+    LIBRARY_CREATE_OPTIONS_PENDING = "library-create-options-pending";
+    LIBRARY_CREATE_OPTIONS_PATH_TIP = "library-create-options-path-tip";
     LIBRARY_CREATE_OPTIONS_OPEN_EXISTING = "library-create-options-open-existing";
     // Library Updates (mockup row 135)
     LIBRARY_UPDATES_SUMMARY = "library-updates-summary";

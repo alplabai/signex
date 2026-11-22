@@ -80,6 +80,8 @@ pub fn view<'a>(
     let create = if refused {
         let tip = if state.existing_library {
             ids::LIBRARY_CREATE_OPTIONS_EXISTS_TIP
+        } else if state.path_refused {
+            ids::LIBRARY_CREATE_OPTIONS_PATH_TIP
         } else {
             ids::LIBRARY_CREATE_OPTIONS_REFUSED_TIP
         };
@@ -234,6 +236,7 @@ mod tests {
             use_lfs: false,
             refusal: refusal.map(str::to_owned),
             existing_library: false,
+            path_refused: false,
         }
     }
 

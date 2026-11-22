@@ -386,9 +386,12 @@ sketch holding any of them, or a reference dimension, is saved as
 A pattern repeats a board item when its innermost source is the item's entity
 or a point that defines it. For a closed profile (keepout, cutout, slot, pour)
 that is any edge or point of the loop, and the whole loop repeats. For a
-mounting hole it is the circle or its centre. A V-score or a mechanical drawing
-is one edge, so a pattern of a corner shared by two mechanical edges repeats
-those two edges. Mockup rows 179 and 179e, #2517, #2772.
+mounting hole it is the circle or its centre. A V-score is one edge. Mechanical
+edges repeat as a connected shape: patterning any edge or point of it repeats
+all of it, whether it is a closed loop, an open chain or a branching figure.
+Edges connect where they share an end Point on the same mechanical layer; an
+arc's centre connects nothing, and a circle is a shape of its own (Caner,
+2026-11-22). Mockup rows 179 and 179e, #2517, #2772.
 
 - **Every instance is written** as its own item with the source's attributes:
   linear, grid and polar patterns, a pattern of a pattern, and live mirrors.

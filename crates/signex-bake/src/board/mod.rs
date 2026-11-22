@@ -9,6 +9,7 @@
 //! (`Entity::bake_skipped`). Rules and formats: `docs/PCB_SKETCH.md`.
 
 mod checks;
+mod edge_chains;
 mod error;
 mod features;
 mod geometry;

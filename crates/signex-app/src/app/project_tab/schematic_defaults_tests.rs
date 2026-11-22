@@ -421,6 +421,39 @@ fn a_junction_default_outside_the_range_is_refused_with_the_text_kept() {
     }
 }
 
+/// #2783: a refused junction value names the range it needs and does not
+/// claim a value was used.
+#[test]
+fn a_refused_junction_value_names_the_allowed_range() {
+    use super::schematic_defaults::refused_range;
+    use signex_i18n::{Arg, ids};
+    let junction = SchematicDefaultField::JunctionDiameter;
+    let typed = |text: &str| text.to_string();
+    for bad in ["0.19", "2.01", "5", "0", "-1"] {
+        assert_eq!(
+            refused_range(junction, Some(&typed(bad))),
+            Some((0.2, 2.0)),
+            "{bad}"
+        );
+    }
+    for fine in ["0.2", "1", "2", "x", ""] {
+        assert_eq!(refused_range(junction, Some(&typed(fine))), None, "{fine}");
+    }
+    assert_eq!(
+        refused_range(SchematicDefaultField::WireWidth, Some(&typed("12"))),
+        None,
+        "a clamping field keeps its clamp note"
+    );
+    let words = signex_i18n::I18n::en_us().message_plain(
+        ids::PROJECT_DEFAULTS_REFUSED,
+        &[
+            ("min", Arg::from("0.2".to_string())),
+            ("max", Arg::from("2".to_string())),
+        ],
+    );
+    assert_eq!(words, "Not applied: enter 0.2 to 2 mm.");
+}
+
 /// Review of #2026: a late edit for a project that is no longer loaded
 /// creates no tab state for it.
 #[test]

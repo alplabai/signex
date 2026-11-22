@@ -186,7 +186,8 @@ reads **Bake preview · Discard changes · Bake**:
 - **Bake** keeps the edits and goes back to the pads view. The footprint
   bakes on every solve, so nothing more is written. An open profile stops
   it: the editor stays in sketch mode, selects the open ends and opens the
-  bake preview.
+  bake preview. The check reads the sketch's topology, so it needs no solve.
+  A sketch that cannot be solved stops Bake too, and the preview says why.
 - **Discard changes** goes back to the pads view without the edits. Sketch
   mode keeps the footprint as it found it (`sketch_mode::exit`); when the
   footprint differs from that, Discard changes asks first, then restores

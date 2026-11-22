@@ -13,8 +13,12 @@ use signex_bake::open_ends::{OpenEnd, bakes_a_profile, open_ends};
 use signex_i18n::{MessageId, Translatable, ids};
 use signex_sketch::SketchData;
 use signex_sketch::baked_kinds::BakedKind;
+use signex_sketch::entity::EntityKind;
 use signex_sketch::heal::{HEAL_TOLERANCE_MM, heals};
 use signex_sketch::id::SketchEntityId;
+use signex_sketch::solver::FullSolveOutput;
+use signex_sketch::solver::lm::SolveResult;
+use signex_sketch::solver::state::pack;
 use signex_types::sketch::SketchHost;
 
 use super::FootprintEditorState;
@@ -44,14 +48,73 @@ impl FootprintEditorState {
             .find_map(GapOffer::of)
     }
 
-    /// The first open profile end of `sketch` at the last solve, paired or
-    /// lone. `None` when every profile is closed or nothing is solved.
+    /// The first open profile end of `sketch`, paired or lone; `None` when
+    /// every profile is closed. Whether a profile is open is topology, so
+    /// this needs no solve: without one that knows every point, the ends are
+    /// placed at the sketch's stored coordinates.
     pub fn first_open_end(&self, sketch: Option<&SketchData>) -> Option<OpenEnd> {
-        let solve = self.last_solve.as_ref()?;
-        open_ends(sketch?, solve, bakes_a_profile)
+        let sketch = sketch?;
+        let stored;
+        let positions = match self
+            .last_solve
+            .as_ref()
+            .filter(|solve| knows_every_point(solve, sketch))
+        {
+            Some(solve) => solve,
+            None => {
+                stored = stored_positions(sketch);
+                &stored
+            }
+        };
+        open_ends(sketch, positions, bakes_a_profile)
             .into_iter()
             .next()
     }
+}
+
+/// Whether `solve` can place every point of `sketch`. `open_ends` leaves out
+/// an end it cannot place, so a solve older than the sketch would hide it.
+fn knows_every_point(solve: &FullSolveOutput, sketch: &SketchData) -> bool {
+    let index = &solve.result.index;
+    sketch.entities.iter().all(|entity| {
+        !matches!(entity.kind, EntityKind::Point { .. })
+            || index.points.contains_key(&entity.id)
+            || index.fixed.contains(&entity.id)
+            || index.frozen.contains(&entity.id)
+    })
+}
+
+/// The sketch's stored coordinates in the shape `open_ends` reads. Nothing
+/// was solved: only the positions are meaningful.
+fn stored_positions(sketch: &SketchData) -> FullSolveOutput {
+    let packed = pack(sketch);
+    FullSolveOutput {
+        result: SolveResult {
+            state: packed.vector,
+            index: packed.index,
+            iterations: 0,
+            final_residual_norm: 0.0,
+            elapsed_ms: 0,
+        },
+        colours: Default::default(),
+        over_constraints: Vec::new(),
+        redundant_constraints: Vec::new(),
+        warnings: Vec::new(),
+        redundancy_pending: false,
+        jacobian: Vec::new(),
+        params: Default::default(),
+    }
+}
+
+/// The line for an open profile that Close gap cannot be offered on: a lone
+/// end, or any end of a sketch with no solve. Names where it is.
+pub fn open_end_text(end: &OpenEnd) -> Option<Translatable> {
+    let at = end.at?;
+    Some(
+        Translatable::new(ids::SKETCH_BAKE_OPEN_END)
+            .arg("x", mm(at.x, 2))
+            .arg("y", mm(at.y, 2)),
+    )
 }
 
 /// How a line of the Outline checks list reads.

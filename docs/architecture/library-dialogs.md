@@ -21,7 +21,8 @@ A refused Create shows as an error banner with "Choose another location…", and
 Create stays disabled until the refusal clears. Version control off clears a
 refusal for a folder that is the root of a repository with history. A library
 already at the path stays refused either way, and its banner adds "Open
-existing library".
+existing library". A file name that is not portable and a path the project
+already waits to create are refused the same way and also survive the toggle.
 
 It is mounted as a full-screen overlay backdrop via
 `app/view/mod.rs::collect_overlays` when `LibraryState::create_options` is

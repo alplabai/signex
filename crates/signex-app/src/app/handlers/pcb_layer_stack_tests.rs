@@ -378,6 +378,78 @@ fn the_net_table_and_the_stack_follow_an_edit_and_its_undo() {
     assert!(!facts(&app).stored, "undo shows the derived stack again");
 }
 
+/// #2776: an undocked window keeps its own panel context, so an edit and an
+/// undo made while the main window shows another tab reach its net table
+/// and Layer Stack too.
+#[test]
+fn an_undocked_windows_net_table_and_stack_follow_an_edit_and_its_undo() {
+    use crate::app::state::WindowKind;
+    use crate::dock::PanelPosition;
+    use signex_engine::pcb::{BoardCommand, BoardItemId};
+    let dir = tempfile::tempdir().unwrap();
+    let mut with_net = board(true);
+    with_net.nets = serde_json::from_value(serde_json::json!([{"number": 1, "name": "GND"}]))
+        .expect("a net list");
+    with_net.segments[0].net = 1;
+    let segment = with_net.segments[0].uuid;
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), with_net);
+    app.document_state
+        .dock
+        .add_panel(PanelPosition::Right, PanelKind::PcbNets);
+
+    let window = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        window,
+        WindowKind::UndockedTab {
+            path: path.clone(),
+            title: "board".into(),
+        },
+    );
+    app.interaction_state
+        .canvases
+        .insert(window, crate::canvas::CanvasSlot::new());
+    let canvas = app.new_pcb_canvas_for(&path).expect("board canvas");
+    app.interaction_state.pcb_canvases.insert(window, canvas);
+    app.document_state.tabs.push(crate::app::TabInfo {
+        title: "sheet".into(),
+        path: dir.path().join("sheet.snxsch"),
+        cached_document: None,
+        project_id: None,
+        kind: crate::app::TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.refresh_window_panel_ctxs(None);
+
+    let length = |app: &Signex| {
+        let nets = app.panel_ctx_for(window).pcb_nets.as_ref();
+        nets.expect("the window's net table").nets[0].length_mm
+    };
+    assert_eq!(length(&app), 5.0);
+    let delete = BoardCommand::DeleteItems {
+        items: vec![BoardItemId::Segment(segment)],
+    };
+    app.execute_board_commands(&path, vec![delete], None)
+        .expect("the command runs");
+    assert_eq!(length(&app), 0.0, "the edit");
+    assert!(app.step_board_history(&path, true));
+    assert_eq!(length(&app), 5.0, "its undo");
+
+    let stack = |app: &Signex| {
+        let facts = app.panel_ctx_for(window).layer_stack.clone();
+        facts.expect("the window's stack")
+    };
+    let row = row_of(&stack(&app), StackLayerKind::Dielectric, 0);
+    let was = stack(&app).stack.layers[row].thickness_mm;
+    let mut thicker = stack(&app).stack;
+    thicker.layers[row].thickness_mm = was + 0.1;
+    app.apply_layer_stack(&path, thicker).expect("stored");
+    assert_eq!(stack(&app).stack.layers[row].thickness_mm, was + 0.1);
+    assert!(app.step_board_history(&path, true));
+    assert_eq!(stack(&app).stack.layers[row].thickness_mm, was);
+}
+
 #[test]
 fn a_thickness_edit_keeps_the_layer_tab_order() {
     let dir = tempfile::tempdir().unwrap();

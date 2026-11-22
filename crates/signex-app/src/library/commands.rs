@@ -94,10 +94,23 @@ const RESERVED_STEMS: &[&str] = &[
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
-/// Shared pre-flight for a new `.snxlib` path: extension, portable
-/// non-empty stem, and the target must not already exist. Rejecting
-/// here beats a confusing adapter-init error later.
+/// Shared pre-flight for a new `.snxlib` path: a usable name, and the target
+/// must not already exist. Rejecting here beats a confusing adapter-init
+/// error later.
 pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryError> {
+    validate_new_library_name(lib_path)?;
+    if lib_path.exists() {
+        return Err(LibraryError::Conflict(format!(
+            "{} already exists",
+            lib_path.display()
+        )));
+    }
+    Ok(())
+}
+
+/// The name half of [`validate_new_library_path`], which reads no disk:
+/// the `.snxlib` extension and a portable, non-empty stem.
+pub(crate) fn validate_new_library_name(lib_path: &Path) -> Result<(), LibraryError> {
     let ext_ok = lib_path
         .extension()
         .and_then(|e| e.to_str())
@@ -126,12 +139,6 @@ pub(crate) fn validate_new_library_path(lib_path: &Path) -> Result<(), LibraryEr
     {
         return Err(LibraryError::Conflict(format!(
             "library name {stem:?} is not a portable file name"
-        )));
-    }
-    if lib_path.exists() {
-        return Err(LibraryError::Conflict(format!(
-            "{} already exists",
-            lib_path.display()
         )));
     }
     Ok(())

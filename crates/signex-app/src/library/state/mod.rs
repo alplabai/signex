@@ -1016,13 +1016,17 @@ pub struct LibraryCreateOptionsState {
     /// greys it out otherwise.
     pub use_lfs: bool,
     /// Why the last Create press was refused: a library is already at the
-    /// path, or its folder is the root of a repository with history. The
+    /// path, the file name is not usable, the path is already waiting to be
+    /// created, or its folder is the root of a repository with history. The
     /// modal stays open and shows it; toggling version control clears only
     /// the repository refusal.
     pub refusal: Option<String>,
     /// The refusal is a library already at the path: it survives the
     /// version-control toggle and the banner offers to open that library.
     pub existing_library: bool,
+    /// The refusal is the path itself (an unusable name, or already waiting
+    /// to be created): it survives the version-control toggle too.
+    pub path_refused: bool,
 }
 
 mod browser_preview;

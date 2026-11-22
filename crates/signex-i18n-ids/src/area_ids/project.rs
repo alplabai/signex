@@ -197,6 +197,7 @@ define_ids! {
     PROJECT_DEFAULTS_FILL_BACKGROUND = "project-defaults-fill-background";
     PROJECT_DEFAULTS_RESET = "project-defaults-reset";
     PROJECT_DEFAULTS_CLAMPED = "project-defaults-clamped";
+    PROJECT_DEFAULTS_REFUSED = "project-defaults-refused";
     PROJECT_DEFAULTS_CAPTION = "project-defaults-caption";
     PROJECT_DEFAULTS_PREVIEW = "project-defaults-preview";
     PROJECT_DEFAULTS_PREVIEW_CAPTION = "project-defaults-preview-caption";
