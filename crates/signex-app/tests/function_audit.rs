@@ -38,3 +38,12 @@ mod b_library;
 mod b_project;
 #[path = "function_audit/b_sketch.rs"]
 mod b_sketch;
+
+#[path = "function_audit/c_board.rs"]
+mod c_board;
+#[path = "function_audit/c_design.rs"]
+mod c_design;
+#[path = "function_audit/c_nets.rs"]
+mod c_nets;
+#[path = "function_audit/c_output.rs"]
+mod c_output;
