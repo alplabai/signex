@@ -80,8 +80,8 @@ pub struct UiState {
     /// edit now could be overwritten by that migration on a later launch.
     pub machine_rules_locked: Option<String>,
     /// Why the machine's rules are not being saved (the `User Default` file
-    /// could not be read or written), shown in the ERC dialog. `None` when
-    /// they are.
+    /// could not be read or written), shown in the ERC dialog and on the Rule
+    /// Profiles page. `None` when they are.
     pub machine_rules_problem: Option<String>,
     /// The profile new projects start from; `None` means "User Default if
     /// the machine has one, else Signex Default" (#1608). Persisted in

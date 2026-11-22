@@ -3,7 +3,7 @@
 //! those actions open.
 
 use iced::widget::{Column, Row, column, container, hover, row, svg};
-use iced::{Alignment, Background, Border, Element, Font, Length, Theme, Widget};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::theme::{ThemeId, ThemeTokens};
 use signex_widgets::{button, text, text_input};
@@ -130,10 +130,7 @@ fn list_row<'a>(item: ListRow, tokens: &'a ThemeTokens, i18n: &I18n) -> Element<
     let mut label: Column<Element<'a, PrefMsg>> = Column::new().push(
         text(item.title)
             .size(TS.label)
-            .font(Font {
-                weight,
-                ..Font::DEFAULT
-            })
+            .font(signex_widgets::ui_font::at(weight))
             .color(ti(tokens.text))
             .boxed(),
     );

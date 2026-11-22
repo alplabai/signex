@@ -262,6 +262,10 @@ preferences-profiles-name = Name
 # Pill beside the profile's name once its edits reached its file.
 preferences-profiles-saved = Saved
 preferences-profiles-saved-line = Changes are saved to the profile's file immediately.
+# Why edits of the User Default profile are not saved; $why is the file error.
+preferences-profiles-machine-read-only = The machine's rules are read-only this session, because your old ERC preferences could not be merged into User Default yet: { $why }
+preferences-profiles-machine-loading = Loading the User Default profile; changes wait until it has loaded.
+preferences-profiles-machine-not-saving = User Default is not saving: { $why } Your changes last until you quit.
 # Title of the rule editor opened for one rule; $name is the profile's name.
 preferences-profiles-rule-title = Rule Profile: { $name }
 # $rules counts every rule; $changed and $cells count what differs.

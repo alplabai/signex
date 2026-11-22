@@ -29,3 +29,4 @@ pub use types::{
     DockArea, DockMessage, DockTabAction, DockTabMenu, EditorContext, FloatingPanel, PanelPosition,
     PanelSite,
 };
+pub(crate) use view::title_actions;

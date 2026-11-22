@@ -8,7 +8,7 @@ use signex_erc::Severity;
 use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::stat_tiles::{Density, StatTile, Tone, stat_tiles};
-use signex_widgets::{raw, text};
+use signex_widgets::text;
 
 use crate::app::{Message, Signex};
 use crate::styles::{HAIRLINE, PillTone, pill, pill_colors, tokens};
@@ -98,11 +98,9 @@ impl Signex {
         // Editing the machine's rules while they are loading, or while the
         // User Default file cannot be read or written: say so here, not only
         // in the log.
-        if !stores_rules && let Some(notice) = self.machine_rules_notice() {
-            // raw: the machine-rules notice is built in English by the rule
-            // profile loader, which also logs it (#2061).
+        if !stores_rules && let Some(issue) = self.machine_rules_issue() {
             note = note.push(
-                text(raw(notice))
+                text(issue.localized(i18n))
                     .size(TS.caption)
                     .color(tokens::danger(theme_tokens))
                     .boxed(),

@@ -6,9 +6,36 @@ use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::project::{ErcRules, RuleProfile};
 
 use crate::rule_profiles::{ListedProfile, ProfileKind, ProfileListing, RuleEdit};
+
+/// Why edits of the machine's rules (`User Default`) are not reaching its
+/// file. The ERC dialog and the Rule Profiles page both show it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MachineRulesIssue<'a> {
+    /// The old preferences could not be merged, so edits are refused.
+    ReadOnly(&'a str),
+    /// The boot task is still reading the file.
+    Loading,
+    /// The file could not be read or written; edits last until quit.
+    NotSaving(&'a str),
+}
+
+impl MachineRulesIssue<'_> {
+    pub fn localized(self, i18n: &I18n) -> Localized {
+        match self {
+            Self::ReadOnly(why) => {
+                t!(i18n, ids::PREFERENCES_PROFILES_MACHINE_READ_ONLY, "why" => why)
+            }
+            Self::Loading => t!(i18n, ids::PREFERENCES_PROFILES_MACHINE_LOADING),
+            Self::NotSaving(why) => {
+                t!(i18n, ids::PREFERENCES_PROFILES_MACHINE_NOT_SAVING, "why" => why)
+            }
+        }
+    }
+}
 
 /// The open "Save as profile" dialog of the ERC dialog. Nothing is written
 /// until Save; a name that exists asks before replacing it.
@@ -75,9 +102,17 @@ pub struct ProfileManager {
     /// library again once they finish, so the screen never shows a state
     /// older than what was written.
     pub relist_pending: bool,
+    /// Write-queue key of the library profile whose shown edit did not reach
+    /// its file. Cleared by a good write or by the next read of the library.
+    pub failed_write: Option<String>,
 }
 
 impl ProfileManager {
+    /// Whether the page is showing an edit of `name` that its file lacks.
+    pub fn write_failed(&self, name: &str) -> bool {
+        self.failed_write.as_deref() == Some(name.to_lowercase().as_str())
+    }
+
     pub fn selected_profile(&self) -> Option<&ListedProfile> {
         let name = self.selected.as_deref()?;
         self.listing
@@ -99,6 +134,7 @@ impl ProfileManager {
     pub fn apply_listing(&mut self, listing: ProfileListing) {
         self.listing = listing;
         self.loaded = true;
+        self.failed_write = None;
         let keep = self
             .selected
             .as_deref()

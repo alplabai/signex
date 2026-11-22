@@ -123,6 +123,7 @@ impl Signex {
             dirty: ui.preferences_dirty,
             profiles: &ui.profile_manager,
             profiles_saving: !ui.profile_writes.is_idle(),
+            machine_rules_issue: self.machine_rules_issue(),
             default_profile: ui.default_rule_profile.as_deref(),
             distributor_settings: &self.library.settings,
             panel_tokens: &self.document_state.panel_ctx.tokens,

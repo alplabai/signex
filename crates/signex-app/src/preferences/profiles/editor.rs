@@ -3,9 +3,9 @@
 //! one rule opened alone (the maintainer's 2026-11-22 decision, #2765).
 
 use iced::widget::{column, container, row};
-use iced::{Alignment, Element, Font, Length, Widget};
+use iced::{Alignment, Element, Length, Widget};
 use signex_erc::RuleKind;
-use signex_i18n::{I18n, UserText, ids, t};
+use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, segmented, text};
 
@@ -27,6 +27,7 @@ pub(super) fn view<'a>(
     manager: &'a ProfileManager,
     listed: &'a ListedProfile,
     is_saved: bool,
+    notice: Option<Localized>,
     tokens: &'a ThemeTokens,
     i18n: &'a I18n,
 ) -> Element<'a, PrefMsg> {
@@ -53,9 +54,11 @@ pub(super) fn view<'a>(
         (None, ProfileEditorTab::Severity) => severity_pane(&editor),
         (None, ProfileEditorTab::PinMatrix) => matrix_pane(&editor),
     };
-    let mut out = column![head(manager, name, editable, is_saved, tokens, i18n)]
-        .spacing(SP.m)
-        .width(Length::Fill);
+    let mut out = column![head(
+        manager, name, editable, is_saved, notice, tokens, i18n
+    )]
+    .spacing(SP.m)
+    .width(Length::Fill);
     if editable && manager.confirm_reset.as_deref() == Some(name) {
         out = out.push(reset_confirm(name, tokens, i18n));
     }
@@ -64,22 +67,21 @@ pub(super) fn view<'a>(
         .boxed()
 }
 
-/// The profile's name and Saved pill, what editing it does, and the reset.
+/// The profile's name and Saved pill, what editing it does (or why edits are
+/// not being saved), and the reset.
 fn head<'a>(
     manager: &ProfileManager,
     name: &'a str,
     editable: bool,
     is_saved: bool,
+    notice: Option<Localized>,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, PrefMsg> {
     let mut title = row![
         text(UserText::new(name.to_string()))
             .size(TS.label)
-            .font(Font {
-                weight: iced::font::Weight::Semibold,
-                ..Font::DEFAULT
-            })
+            .font(signex_widgets::ui_font::at(iced::font::Weight::Semibold))
             .style(text_primary)
     ]
     .spacing(SP.s)
@@ -92,18 +94,20 @@ fn head<'a>(
                 .boxed(),
         );
     }
-    let line = if editable {
-        t!(i18n, ids::PREFERENCES_PROFILES_SAVED_LINE)
-    } else {
-        t!(i18n, ids::PREFERENCES_PROFILES_READ_ONLY, "name" => name)
+    let line: Element<'a, PrefMsg> = match notice {
+        Some(notice) => text(notice).size(TS.caption).style(text_warning).boxed(),
+        None if editable => text(t!(i18n, ids::PREFERENCES_PROFILES_SAVED_LINE))
+            .size(TS.caption)
+            .style(text_muted)
+            .boxed(),
+        None => text(t!(i18n, ids::PREFERENCES_PROFILES_READ_ONLY, "name" => name))
+            .size(TS.caption)
+            .style(text_muted)
+            .boxed(),
     };
-    let mut top = row![
-        column![title, text(line).size(TS.caption).style(text_muted)]
-            .spacing(SP.xs)
-            .width(Length::Fill)
-    ]
-    .spacing(SP.s)
-    .align_y(Alignment::Start);
+    let mut top = row![column![title, line].spacing(SP.xs).width(Length::Fill)]
+        .spacing(SP.s)
+        .align_y(Alignment::Start);
     if editable {
         top = top.push(
             button(text(t!(i18n, ids::PREFERENCES_PROFILES_RESET_TO_DEFAULT)).size(TS.body))
