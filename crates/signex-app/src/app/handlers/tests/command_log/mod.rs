@@ -13,6 +13,7 @@ use crate::library::messages::{FootprintEditorMsg, SymbolEditorMsg};
 use crate::panels::PanelMsg;
 use crate::panels::command_log::{CommandLogMsg, LogOutcome, LogSource};
 
+mod board_replay;
 mod fixtures;
 use fixtures::*;
 

@@ -22,7 +22,7 @@ impl Signex {
         commands: Vec<BoardCommand>,
         checked: Option<CheckedStep<'_>>,
     ) -> Result<Vec<BoardPatch>, BoardEditError> {
-        let recorded = self.board_edit_to_record(&commands);
+        let recorded = self.board_edit_to_record(path, &commands);
         let patches = match self.document_state.execute_board(path, commands, checked) {
             Ok(patches) => patches,
             Err(error) => {
@@ -34,8 +34,8 @@ impl Signex {
             self.ui_state.command_replay.forget_board_marks();
         } else {
             self.after_board_change(path);
-            if let Some(commands) = recorded {
-                self.note_board_edit(path, commands);
+            if let Some(record) = recorded {
+                self.note_board_edit(path, record);
             }
         }
         Ok(patches)

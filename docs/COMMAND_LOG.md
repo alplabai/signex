@@ -133,7 +133,11 @@ clipped.
     later move or edit of another field stays. A list it changed (table rows,
     say) is merged element by element when the elements changed since are
     other ones; a list that changed length or was edited at the same element
-    is refused, as the sheet has moved on.
+    is refused, as the sheet has moved on. A board edit keeps each target it
+    wrote as it stood before and after, and runs only while every target is
+    still one of the two; fields are not merged, and one changed target
+    refuses the whole row before anything runs. A row holding an inverse or a
+    command that adds objects cannot be checked and is refused.
   - **Footprint and symbol editors:** the recorded messages or Properties
     panel edit run on the recorded pads, pins, silk or sketch entities of that
     editor document, with the person's selection and tool put back. A pad or

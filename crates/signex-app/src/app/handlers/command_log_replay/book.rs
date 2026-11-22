@@ -9,7 +9,7 @@ use std::time::Instant;
 use pcb_geom::ItemRef;
 use serde_json::Value;
 use signex_engine::Command;
-use signex_engine::pcb::BoardCommand;
+use signex_engine::pcb::{BoardCommand, BoardReplayGuard};
 use signex_types::pcb::{Footprint, Point};
 use signex_types::schematic::SelectedItem;
 use uuid::Uuid;
@@ -37,6 +37,9 @@ pub(super) enum ReplayInput {
     Board {
         commands: Vec<BoardCommand>,
         targets: Vec<ItemRef>,
+        /// The touched targets before and after: Replay refuses once one
+        /// holds anything else.
+        guard: BoardReplayGuard,
     },
     /// Footprints carried by an offset.
     BoardMove {
@@ -159,17 +162,23 @@ impl ReplayInput {
                 Self::Board {
                     mut commands,
                     mut targets,
+                    guard,
                 },
                 Self::Board {
                     commands: more,
                     targets: more_targets,
+                    guard: more_guard,
                 },
             ) => {
                 commands.extend(more);
                 targets.extend(more_targets);
                 targets.sort();
                 targets.dedup();
-                Self::Board { commands, targets }
+                Self::Board {
+                    commands,
+                    targets,
+                    guard: guard.merged(more_guard),
+                }
             }
             _ => Self::MadeNewObjects,
         }
