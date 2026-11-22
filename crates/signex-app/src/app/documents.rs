@@ -57,6 +57,10 @@ pub enum TabKind {
     /// in the project's [`crate::app::ProjectTabState::rules`];
     /// `TabInfo.path` is the `.snxprj` path, which Save writes.
     Rules(super::state::ProjectId),
+    /// A board's Layer Stack as a page tab (mockup row 105). `TabInfo.path`
+    /// is the board's path, which Save writes; the board stays in its own
+    /// PCB tab, and this tab always sits after it (`app/layer_stack_tab`).
+    LayerStack,
 }
 
 impl TabKind {
@@ -112,10 +116,18 @@ impl TabKind {
         }
     }
 
-    /// A tab that shows a project's own settings, not a drawing: the
-    /// Project and Rules tabs. Neither is undocked or restored from History.
+    /// A board's Layer Stack tab.
+    pub fn is_layer_stack(&self) -> bool {
+        matches!(self, TabKind::LayerStack)
+    }
+
+    /// A page tab, not a drawing: the Project, Rules and Layer Stack tabs.
+    /// None is undocked or restored from History.
     pub fn is_project_page(&self) -> bool {
-        matches!(self, TabKind::Project(_) | TabKind::Rules(_))
+        matches!(
+            self,
+            TabKind::Project(_) | TabKind::Rules(_) | TabKind::LayerStack
+        )
     }
 }
 

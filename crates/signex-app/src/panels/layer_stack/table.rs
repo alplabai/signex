@@ -27,11 +27,12 @@ const COLUMNS: [(MessageId, u16); 6] = [
 ];
 
 /// The table width in body-text ems: wide enough for every column, scrolled
-/// sideways in a narrow dock.
+/// sideways in a narrow tab.
 const TABLE_EMS: f32 = 44.0;
 
 pub(super) fn view<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
-    let mut rows: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs).push(header(ctx));
+    let mut rows: Column<Element<'a, PanelMsg>> =
+        Column::new().spacing(SP.xs).push(header(ctx, facts));
     for (index, layer) in facts.stack.layers.iter().enumerate() {
         rows = rows.push(layer_row(ctx, facts, index, layer));
     }
@@ -58,13 +59,19 @@ fn number_width() -> Length {
     Length::Fixed(TS.body * 2.0)
 }
 
-fn header<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+fn header<'a>(ctx: &'a PanelContext, facts: &LayerStackFacts) -> Element<'a, PanelMsg> {
     let muted = resolve(&ctx.tokens).ink3;
     let mut line: Row<Element<'a, PanelMsg>> =
         row![container(iced::widget::Space::new()).width(number_width())].spacing(SP.xs);
+    let unit = facts.unit.label(&ctx.i18n).into_string();
     for (id, portion) in COLUMNS {
+        let title = if id == ids::PCB_STACK_COL_THICKNESS {
+            t!(ctx.i18n, id, "unit" => unit.clone())
+        } else {
+            t!(ctx.i18n, id)
+        };
         line = line.push(cell(
-            text(t!(ctx.i18n, id)).size(TS.dense).color(muted).boxed(),
+            text(title).size(TS.dense).color(muted).boxed(),
             portion,
         ));
     }
@@ -114,7 +121,7 @@ fn layer_row<'a>(
                 facts,
                 index,
                 StackField::Thickness,
-                Some(format_number(layer.thickness_mm))
+                Some(facts.unit.show(layer.thickness_mm))
             ),
             3
         ),

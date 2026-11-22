@@ -1,27 +1,33 @@
-//! The Layer Stack manager of the board in view (#2401): one table row per
-//! layer of the physical stack, top to bottom, with its name, type,
-//! material, thickness, Er and copper weight, and the total under it. A pure
-//! view over facts the app copies from the board
-//! (`app/handlers/pcb_layer_stack`); every edit is a [`LayerStackMsg`] the
-//! app turns into one `SetLayerStack` board step.
+//! The Layer Stack manager of a board (#2401, mockup row 105), drawn as a
+//! document tab (`app/layer_stack_tab`). A pure view over facts the app copies
+//! from the board (`app/handlers/pcb_layer_stack`); every edit is a
+//! [`LayerStackMsg`] the app turns into one `SetLayerStack` board step.
 
+mod drills;
+mod page;
+mod section;
 mod table;
+mod toolbar;
+
+pub use page::view;
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 
-use iced::widget::{column, container, row};
-use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, ids, t};
 use signex_types::pcb_stack::{LayerStack, StackLayerKind};
-use signex_widgets::{button, text};
 
-use super::{PanelContext, PanelMsg, empty_state_card, form_look};
-use crate::styles::{Spacing, TypeScale, ti, tokens::resolve};
+use super::{PanelMsg, form_look};
+use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
+
+/// Micrometres in a millimetre.
+const UM_PER_MM: f64 = 1000.0;
+/// Millimetres in a mil.
+const MM_PER_MIL: f64 = 0.0254;
 
 /// A typed cell of the table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -37,6 +43,76 @@ impl StackField {
     /// A cell typed as text, not as a number.
     pub fn is_text(self) -> bool {
         matches!(self, Self::Name | Self::Material)
+    }
+}
+
+/// The unit the tab shows and reads lengths in. The board stays in mm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StackUnit {
+    #[default]
+    Mm,
+    Um,
+    Mil,
+}
+
+impl StackUnit {
+    pub const ALL: [Self; 3] = [Self::Mm, Self::Um, Self::Mil];
+
+    /// `mm` in this unit.
+    pub fn from_mm(self, mm: f64) -> f64 {
+        match self {
+            Self::Mm => mm,
+            Self::Um => mm * UM_PER_MM,
+            Self::Mil => mm / MM_PER_MIL,
+        }
+    }
+
+    /// `value` in this unit, in mm.
+    pub fn to_mm(self, value: f64) -> f64 {
+        match self {
+            Self::Mm => value,
+            Self::Um => value / UM_PER_MM,
+            Self::Mil => value * MM_PER_MIL,
+        }
+    }
+
+    fn message(self) -> MessageId {
+        match self {
+            Self::Mm => ids::PCB_STACK_UNIT_MM,
+            Self::Um => ids::PCB_STACK_UNIT_UM,
+            Self::Mil => ids::PCB_STACK_UNIT_MIL,
+        }
+    }
+
+    /// The unit's catalog name.
+    pub fn label(self, i18n: &I18n) -> Localized {
+        t!(i18n, self.message())
+    }
+
+    /// `mm` as a cell shows it in this unit.
+    pub fn show(self, mm: f64) -> String {
+        super::pcb_primitive_properties::format_number(self.from_mm(mm))
+    }
+}
+
+/// The sub-tab in view. The other sub-tabs of mockup row 105 are not drawn:
+/// Finish, Materials and Templates are #2798; Impedance and Back Drill wait
+/// until after the release (DECISIONS, 2026-11-22).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StackSubTab {
+    #[default]
+    Stack,
+    Drills,
+}
+
+impl StackSubTab {
+    pub const ALL: [Self; 2] = [Self::Stack, Self::Drills];
+
+    fn message(self) -> MessageId {
+        match self {
+            Self::Stack => ids::PCB_STACK_SUB_STACK,
+            Self::Drills => ids::PCB_STACK_SUB_DRILLS,
+        }
     }
 }
 
@@ -79,6 +155,43 @@ pub enum LayerStackMsg {
         board: PathBuf,
         up: bool,
     },
+    /// The unit lengths are shown and typed in.
+    UnitPicked {
+        board: PathBuf,
+        unit: StackUnit,
+    },
+    SubTabPicked {
+        board: PathBuf,
+        tab: StackSubTab,
+    },
+}
+
+/// One row of the Drill pairs table.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DrillPairRow {
+    /// "Through 1–4".
+    pub name: String,
+    pub from: String,
+    pub to: String,
+    pub kind: String,
+    /// The 1-based copper places the pair runs between.
+    pub span: (usize, usize),
+    pub depth_mm: Option<f64>,
+    pub min_drill_mm: Option<f64>,
+    pub aspect_ratio: Option<f64>,
+    pub vias: usize,
+}
+
+/// One row of the Via types table.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ViaTypeRow {
+    pub name: String,
+    pub pair: String,
+    pub drill_mm: f64,
+    pub finished_mm: f64,
+    pub pad_mm: f64,
+    pub protection: String,
+    pub used: usize,
 }
 
 /// What the manager shows of the board in view.
@@ -95,6 +208,12 @@ pub struct LayerStackFacts {
     pub selected: Option<usize>,
     /// Text typed into a cell and not applied yet.
     pub drafts: BTreeMap<(usize, StackField), String>,
+    pub unit: StackUnit,
+    pub sub_tab: StackSubTab,
+    pub drill_pairs: Vec<DrillPairRow>,
+    pub via_types: Vec<ViaTypeRow>,
+    /// The board belongs to a project, whose Rules hold the fab profile.
+    pub has_project: bool,
 }
 
 /// A copper kind in a row's Type dropdown.
@@ -123,172 +242,25 @@ pub fn kind_label(i18n: &I18n, kind: StackLayerKind) -> Localized {
     t!(i18n, id)
 }
 
-/// The manager, or its empty state with no board in view.
-pub fn view(ctx: &PanelContext) -> Element<'_, PanelMsg> {
-    let Some(facts) = ctx.layer_stack.as_ref() else {
-        return empty_state_card(
-            &ctx.tokens,
-            t!(ctx.i18n, ids::PCB_STACK_NO_BOARD_TITLE),
-            t!(ctx.i18n, ids::PCB_STACK_NO_BOARD),
-            None,
-        );
-    };
-    column![
-        header(ctx, facts),
-        toolbar(ctx, facts),
-        table::view(ctx, facts),
-        notes(ctx, facts),
-    ]
-    .spacing(SP.s)
-    .width(Length::Fill)
-    .boxed()
-}
-
 fn msg(m: LayerStackMsg) -> PanelMsg {
     PanelMsg::LayerStack(m)
 }
 
-/// The total thickness and the copper count.
-fn header<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
-    let i18n = &*ctx.i18n;
-    let total = super::pcb_primitive_properties::format_number(facts.stack.total_thickness_mm());
-    let semibold = iced::Font {
-        weight: iced::font::Weight::Semibold,
-        ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
-    };
-    container(
-        column![
-            text(t!(i18n, ids::PCB_STACK_TITLE))
-                .size(TS.body)
-                .font(semibold)
-                .color(ti(ctx.tokens.text)),
-            text(t!(i18n, ids::PCB_STACK_TOTAL, "value" => total))
-                .size(TS.dense)
-                .color(ti(ctx.tokens.text)),
-            text(t!(
-                i18n,
-                ids::PCB_STACK_COPPER_COUNT,
-                "count" => facts.stack.copper_count()
-            ))
-            .size(TS.dense)
-            .color(resolve(&ctx.tokens).ink3),
-        ]
-        .spacing(SP.xs),
-    )
-    .padding([SP.m, SP.l])
-    .width(Length::Fill)
-    .boxed()
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// Add, Remove and Move buttons. Remove and Move need a selected row; none
-/// is live on a read-only board.
-fn toolbar<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
-    let board = facts.board.clone();
-    let live = !facts.read_only;
-    let selected = live && facts.selected.is_some();
-    let add = |id: MessageId, kind: StackLayerKind| {
-        let board = board.clone();
-        action(
-            ctx,
-            id,
-            live.then(|| {
-                msg(LayerStackMsg::LayerAdded {
-                    board: board.clone(),
-                    kind,
-                })
-            }),
-            ids::PCB_STACK_ADD_TIP,
-        )
-    };
-    let on_selected = |id: MessageId, m: LayerStackMsg, tip: MessageId| {
-        let tip = if selected {
-            tip
-        } else {
-            ids::PCB_STACK_SELECT_TIP
-        };
-        action(ctx, id, selected.then(|| msg(m)), tip)
-    };
-    let adds = row![
-        add(ids::PCB_STACK_ADD_SIGNAL, StackLayerKind::Signal),
-        add(ids::PCB_STACK_ADD_PLANE, StackLayerKind::Plane),
-        add(ids::PCB_STACK_ADD_DIELECTRIC, StackLayerKind::Dielectric),
-    ]
-    .spacing(SP.xs);
-    let edits = row![
-        on_selected(
-            ids::PCB_STACK_REMOVE,
-            LayerStackMsg::RowRemoved {
-                board: board.clone()
-            },
-            ids::PCB_STACK_REMOVE_TIP,
-        ),
-        on_selected(
-            ids::PCB_STACK_MOVE_UP,
-            LayerStackMsg::RowMoved {
-                board: board.clone(),
-                up: true,
-            },
-            ids::PCB_STACK_MOVE_UP,
-        ),
-        on_selected(
-            ids::PCB_STACK_MOVE_DOWN,
-            LayerStackMsg::RowMoved {
-                board: board.clone(),
-                up: false,
-            },
-            ids::PCB_STACK_MOVE_DOWN,
-        ),
-    ]
-    .spacing(SP.xs);
-    container(
-        iced_aw::Wrap::new()
-            .spacing(SP.xs)
-            .line_spacing(SP.xs)
-            .push(adds)
-            .push(edits),
-    )
-    .padding([0.0, SP.l])
-    .width(Length::Fill)
-    .boxed()
-}
+    #[test]
+    fn a_length_reads_back_in_every_unit() {
+        for unit in StackUnit::ALL {
+            let back = unit.to_mm(unit.from_mm(0.035));
+            assert!((back - 0.035).abs() < 1e-12, "{unit:?}");
+        }
+    }
 
-/// A ghost button with a hint; inert without a message.
-fn action<'a>(
-    ctx: &'a PanelContext,
-    label: MessageId,
-    on_press: Option<PanelMsg>,
-    tip: MessageId,
-) -> Element<'a, PanelMsg> {
-    let mut b = button(text(t!(ctx.i18n, label)).size(TS.dense))
-        .padding([SP.xs, SP.s])
-        .style(form_look::ghost_button);
-    if let Some(m) = on_press {
-        b = b.on_press(m);
+    #[test]
+    fn one_mil_is_exactly_25_4_micrometres() {
+        assert!((StackUnit::Mil.to_mm(1.0) - 0.0254).abs() < 1e-12);
+        assert_eq!(StackUnit::Um.show(0.035), "35");
     }
-    super::graphite::hint_tooltip(
-        b.boxed(),
-        t!(ctx.i18n, tip),
-        &ctx.tokens,
-        iced::widget::tooltip::Position::Bottom,
-    )
-}
-
-/// Why nothing can be edited, that the stack is not stored yet, and the
-/// Enter hint while a cell holds a draft.
-fn notes<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
-    let muted = resolve(&ctx.tokens).ink3;
-    let note = |id| text(t!(ctx.i18n, id)).size(TS.dense).color(muted);
-    let mut col = column![].spacing(SP.xs);
-    if facts.read_only {
-        col = col.push(note(ids::PCB_STACK_READ_ONLY));
-    } else if !facts.stored {
-        col = col.push(note(ids::PCB_STACK_DERIVED));
-    }
-    if !facts.drafts.is_empty() {
-        col = col.push(note(ids::PCB_STACK_ENTER_HINT));
-    }
-    container(col)
-        .padding([SP.s, SP.l])
-        .width(Length::Fill)
-        .boxed()
 }

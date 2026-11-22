@@ -8,15 +8,16 @@ history, which the ERC dialog and the Rules tab share.
 
 ## Page tabs (#2523)
 
-The Project tab and the Rules tab are page tabs: document tabs that show one
-of a project's pages rather than a drawing. The later page kinds (Layer Stack
-Manager, Length Matching, Polygon Manager, BOM Studio, Export Job, Variant
-Manager, Design Notebook) join them. Two rules hold for every page tab, in
+The Project, Rules and Layer Stack tabs are page tabs: document tabs that show
+one of a project's pages rather than a drawing. The later page kinds (Length
+Matching, Polygon Manager, BOM Studio, Export Job, Variant Manager, Design
+Notebook) join them. Two rules hold for every page tab, in
 `app/page_tab.rs`:
 
 - **Title.** `<project> — <page>`, for example `dcdc-buck — Rules` or
   `sensor-node — Layer Stack`. The project part is the project's name (the
-  `.snxprj` file stem when the name is blank) and follows a project rename;
+  `.snxprj` file stem when the name is blank; for a Layer Stack tab of a board
+  with no project, the board's file stem) and follows a project rename;
   the page part is a catalog message, read in the current language. The tab
   strip also shows the kind glyph and the close button.
 - **Dirty.** A page tab has no unsaved state of its own. It shows the accent
@@ -25,8 +26,11 @@ Manager, Design Notebook) join them. Two rules hold for every page tab, in
   owner's path is the tab's path, so a page kind never adds a second dirty
   source (#661).
 
-A shared page shell, `signex_widgets::doc_tab_shell`, is ready for page
-bodies; the Project and Rules tabs do not use it yet. It draws, from the top,
+A Layer Stack tab shares its board's path, and path lookups take the first
+tab, so it always sits after the board's tab (`app/layer_stack_tab.rs`).
+
+A shared page shell, `signex_widgets::doc_tab_shell`, holds the Layer Stack
+tab; the Project and Rules tabs do not use it yet. It draws, from the top,
 a toolbar row (items from the left, wrapping when the tab is
 narrow, and an end group of totals or pills at the right), a strip of
 sub-tabs (the active one in the ink colour with an accent underline; a

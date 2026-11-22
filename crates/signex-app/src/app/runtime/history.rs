@@ -297,7 +297,9 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         // A restored `.snxprj` would replace the whole loaded project
         // (libraries, sheets, variants) under every open document; not
         // offered until the Project tab can reload it safely (#1084).
-        crate::app::TabKind::Project(_) | crate::app::TabKind::Rules(_) => None,
+        crate::app::TabKind::Project(_)
+        | crate::app::TabKind::Rules(_)
+        | crate::app::TabKind::LayerStack => None,
         _ => Some(active.path.clone()),
     }
 }

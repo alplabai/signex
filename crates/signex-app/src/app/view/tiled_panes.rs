@@ -130,6 +130,7 @@ impl Signex {
             Some(tab) if tab.kind.as_rules().is_some() => {
                 tab.kind.as_rules().map(|id| self.view_rules_tab(id))
             }
+            Some(tab) if tab.kind.is_layer_stack() => Some(self.view_layer_stack_tab()),
             Some(tab) => self
                 .view_library_tab(tab, window_id, true)
                 .or_else(|| {

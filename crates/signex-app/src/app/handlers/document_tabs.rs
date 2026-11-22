@@ -40,6 +40,13 @@ impl Signex {
                     } else {
                         active
                     };
+                    // A Layer Stack tab stays after its board's.
+                    let active = self.document_state.active_tab;
+                    self.document_state.active_tab =
+                        crate::app::layer_stack_tab::keep_pages_after_boards(
+                            &mut self.document_state.tabs,
+                            active,
+                        );
                     self.ui_state.tab_dragging = None;
                     return Task::none();
                 }
@@ -202,6 +209,17 @@ impl Signex {
     }
 
     fn close_tab(&mut self, idx: usize, park_dirty: bool, keep_session: bool) -> Task<Message> {
+        // A Layer Stack tab shares its board's path but holds no document:
+        // nothing below, which acts on that path, may run for it.
+        if self
+            .document_state
+            .tabs
+            .get(idx)
+            .is_some_and(|tab| tab.kind.is_layer_stack())
+        {
+            self.close_layer_stack_tab(idx, keep_session);
+            return Task::none();
+        }
         if let Some(tab) = self.document_state.tabs.get(idx) {
             let path = tab.path.clone();
             if park_dirty && !keep_session {
@@ -345,6 +363,7 @@ impl Signex {
             self.document_state.mark_document_clean(p);
         }
         if matches!(closing_kind, crate::app::TabKind::Pcb) {
+            self.drop_layer_stack_tab_of(&closing_path);
             self.park_or_drop_closing_pcb(idx, park_dirty);
         }
         // Library Browser tabs — drop the per-browser state on close.
@@ -499,7 +518,11 @@ impl Signex {
         let Some(tab) = self.document_state.tabs.get(idx) else {
             return Vec::new();
         };
-        if self.tab_is_undocked(&tab.path) {
+        // A Layer Stack tab stays on the main strip while its board is
+        // undocked.
+        let left_main =
+            |tab: &TabInfo| !tab.kind.is_layer_stack() && self.tab_is_undocked(&tab.path);
+        if left_main(tab) {
             return Vec::new();
         }
         self.document_state
@@ -507,7 +530,7 @@ impl Signex {
             .iter()
             .enumerate()
             .skip(idx.saturating_add(1))
-            .filter(|(_, tab)| !self.tab_is_undocked(&tab.path))
+            .filter(|(_, tab)| !left_main(*tab))
             .map(|(i, _)| i)
             .collect()
     }

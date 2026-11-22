@@ -203,7 +203,11 @@ fn layer_stack_in_the_more_menu_opens_the_layer_stack() {
     assert!(app.document_state.panel_ctx.pcb_layers.layer_stack_live);
     layers(&mut app, LayersPanelMsg::MoreMenuToggled);
     layers(&mut app, LayersPanelMsg::LayerStackPicked);
-    assert!(app.is_panel_open(PanelKind::LayerStack));
+    assert!(
+        app.document_state.tabs[app.document_state.active_tab]
+            .kind
+            .is_layer_stack()
+    );
     assert!(!app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
 }
 
