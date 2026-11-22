@@ -98,6 +98,37 @@ panels-pcb-nets-column-net = NET
 panels-pcb-nets-column-nodes = NODES
 # The routed length of the net, in millimetres.
 panels-pcb-nets-column-length = LENGTH
+# The net class a net belongs to.
+panels-pcb-nets-column-class = CLASS
+# Class cell of a net in no class.
+panels-pcb-nets-no-class = —
+# The PCB panel's mode dropdown.
+panels-pcb-mode-nets = Nets
+panels-pcb-mode-net-classes = Net Classes
+# Placeholder of the field that filters the net list by name.
+panels-pcb-nets-filter = Filter nets
+# Chips over the net list; the others are net class names.
+panels-pcb-nets-chip-all = All
+panels-pcb-nets-chip-unrouted = Unrouted
+# The chip and the filter leave no net in the list.
+panels-pcb-nets-no-match = No nets match this filter.
+# Detail of the selected net. $count is a whole number.
+panels-pcb-nets-detail-pads = Pads { $count }
+# One pad: its part's designator and its number.
+panels-pcb-nets-detail-pad = { $part }-{ $pad }
+# Where a drilled or multi-layer pad is.
+panels-pcb-nets-detail-multi = Multi
+panels-pcb-nets-detail-tracks = Tracks and vias
+panels-pcb-nets-detail-track-count =
+    { $count ->
+        [one] { $count } track
+       *[other] { $count } tracks
+    }
+# One layer's row: the layer's name and its track count.
+panels-pcb-nets-detail-layer-tracks = { $layer } · { $tracks }
+panels-pcb-nets-detail-vias = Vias
+# A length in millimetres; $length is already formatted.
+panels-pcb-nets-detail-mm = { $length } mm
 # Shown when the board has no nets.
 panels-pcb-nets-empty = This board has no nets.
 # Length cell of a net with nothing routed.
@@ -585,6 +616,8 @@ panels-list-region-bottom = bottom
 panels-list-region-floating = floating
 # A panel detached into a window of its own.
 panels-list-region-window = window
+# The PCB panel's row in the panel list, named for its first mode.
+panels-list-row-nets = Nets
 # Foot of the panel list: where the tool documents went.
 panels-list-foot = Rules and the other tool documents open as tabs, from their menus or the command palette.
 panels-erc-running = Running…

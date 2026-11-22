@@ -115,6 +115,9 @@ pub struct PanelContext {
     pub component_sheet: Option<super::ComponentSheet>,
     /// Nets of the active PCB tab, for the PCB panel.
     pub pcb_nets: Option<super::PcbNetsSummary>,
+    /// The PCB panel's mode, filter, chip and selected net; kept across
+    /// context rebuilds (mockup row 106).
+    pub pcb_panel: super::PcbPanelUi,
     /// The active project's nets, for the Net Inspector panel; filled only
     /// while that panel is open.
     pub net_inspector: super::NetInspectorView,

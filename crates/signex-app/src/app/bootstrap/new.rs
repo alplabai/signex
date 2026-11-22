@@ -684,6 +684,7 @@ impl Signex {
                     library_row_detail: None,
                     component_sheet: None,
                     pcb_nets: None,
+                    pcb_panel: Default::default(),
                     net_inspector: Default::default(),
                     compiled_design: Default::default(),
                     unions: Default::default(),
