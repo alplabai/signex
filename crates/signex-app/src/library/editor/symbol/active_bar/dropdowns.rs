@@ -407,11 +407,13 @@ fn shapes_entries(
             SymbolTool::PlaceArc,
             ic::icon_dd_arc(tid),
         ),
+        DropdownEntry::Item(stub("Elliptical Arc", path.clone())),
+        DropdownEntry::Item(stub("Bezier", path.clone())),
         shape(
-            "Ellipse / Circle",
-            SymbolToolMsg::PlaceCircle,
-            SymbolTool::PlaceCircle,
-            ic::icon_dd_circle(tid),
+            "Polygon",
+            SymbolToolMsg::PlacePolygon,
+            SymbolTool::PlacePolygon,
+            ic::icon_dd_polygon(tid),
         ),
         shape(
             "Rectangle",
@@ -419,17 +421,14 @@ fn shapes_entries(
             SymbolTool::PlaceRectangle,
             ic::icon_dd_rect(tid),
         ),
-        shape(
-            "Polygon",
-            SymbolToolMsg::PlacePolygon,
-            SymbolTool::PlacePolygon,
-            ic::icon_dd_polygon(tid),
-        ),
-        DropdownEntry::Separator,
         DropdownEntry::Item(stub("Round Rectangle", path.clone())),
-        DropdownEntry::Item(stub("Bezier", path.clone())),
-        DropdownEntry::Item(stub("Pie Chart", path.clone())),
-        DropdownEntry::Item(stub("Elliptical Arc", path)),
+        shape(
+            "Ellipse / Circle",
+            SymbolToolMsg::PlaceCircle,
+            SymbolTool::PlaceCircle,
+            ic::icon_dd_circle(tid),
+        ),
+        DropdownEntry::Item(stub("Pie Chart", path)),
     ]
 }
 
@@ -525,6 +524,45 @@ mod tests {
                 other => panic!("row {label:?}: expected routed ActiveBarStub, got {other:?}"),
             }
         }
+    }
+
+    /// Mockup row 141: the Shapes menu is one list in the drawn order, with
+    /// no divider.
+    #[test]
+    fn shapes_menu_is_one_list_in_the_drawn_order() {
+        let i18n = I18n::en_us();
+        let entries = shapes_entries(
+            SymbolTool::Select,
+            PathBuf::from("t.snxsym"),
+            ThemeId::GraphiteDark,
+            &i18n,
+        );
+        assert!(
+            !entries
+                .iter()
+                .any(|e| matches!(e, DropdownEntry::Separator))
+        );
+        let labels: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| match e {
+                DropdownEntry::Item(item) => Some(item.label.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "Line",
+                "Arc",
+                "Elliptical Arc",
+                "Bezier",
+                "Polygon",
+                "Rectangle",
+                "Round Rectangle",
+                "Ellipse / Circle",
+                "Pie Chart",
+            ]
+        );
     }
 
     /// Mockup row 141: the Shapes menu opens under a "Shapes" header and highlights

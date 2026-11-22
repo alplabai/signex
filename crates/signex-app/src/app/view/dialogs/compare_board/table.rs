@@ -16,19 +16,20 @@ use signex_engine::pcb::eco::{
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::segmented::SegmentedMetrics;
-use signex_widgets::{Label, button, text, tooltip};
+use signex_widgets::{FitRow, Label, button, text, tooltip};
 
 use super::{Glyph, SP, TS, cb, direction_id, glyph};
 use crate::app::compare_board::{CompareBoardState, JumpSide};
 use crate::app::{CompareBoardMsg, Message};
 use crate::styles::{ti, tokens};
 
-/// Column widths (mockup row 162: 30 / 150 / 190 / 190 / 150 px at the 12 px body);
-/// Action takes the rest.
+/// Column widths (mockup row 162: 30 / 150 / 190 / 190 px at the 12 px body);
+/// Jump hugs its two links (134 px), leaving Action, which takes the rest,
+/// room for the three-way choice and its caption.
 const KIND_W: f32 = TS.body * 30.0 / 12.0;
 const OBJECT_W: f32 = TS.body * 150.0 / 12.0;
 const SIDE_W: f32 = TS.body * 190.0 / 12.0;
-const JUMP_W: f32 = TS.body * 150.0 / 12.0;
+const JUMP_W: f32 = TS.body * 134.0 / 12.0;
 /// Row and heading height (26 px at the 12 px body).
 const ROW_H: f32 = TS.body * 26.0 / 12.0;
 /// Cell padding (8 px at the 12 px body).
@@ -95,16 +96,17 @@ fn unavailable_text(i18n: &I18n, why: &Unavailable) -> Localized {
     }
 }
 
-/// A row line: fixed height, a hairline under it, an optional fill.
+/// A row line: at least [`ROW_H`] tall (a folded Action cell makes it
+/// taller), a hairline under it, an optional fill.
 fn line_box<'a>(
     content: Row<Element<'a, Message>>,
     fill: Option<Color>,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let rule = tokens::resolve(tokens).line_soft;
-    container(content.height(Length::Fill).align_y(Alignment::Center))
+    let strut = Space::new().height(Length::Fixed(ROW_H));
+    container(row![strut, content.align_y(Alignment::Center)].align_y(Alignment::Center))
         .width(Length::Fill)
-        .height(Length::Fixed(ROW_H))
         .style(move |_: &Theme| {
             let mut border = Border {
                 color: rule,
@@ -445,17 +447,30 @@ fn action_cell<'a>(
             None => t!(i18n, ids::COMPARE_BOARD_ACTION_SKIP),
         }
     };
-    Row::new()
-        .push(direction_control(row, i18n, tokens))
-        .push(
-            text(caption)
-                .size(TS.caption)
-                .color(r.ink4)
-                .wrapping(Wrapping::None)
-                .boxed(),
-        )
-        .spacing(SP.m)
-        .align_y(Alignment::Center)
+    action_line(
+        direction_control(row, i18n, tokens),
+        text(caption)
+            .size(TS.caption)
+            .color(r.ink4)
+            .wrapping(Wrapping::None)
+            .boxed(),
+        SegmentedMetrics::from_text_size(TS.caption).track_height,
+    )
+}
+
+/// The control, then its caption centred on the `track` height; a caption
+/// the cell cannot hold beside the control takes its own line.
+fn action_line<'a>(
+    control: Element<'a, Message>,
+    caption: Element<'a, Message>,
+    track: f32,
+) -> Element<'a, Message> {
+    let caption = container(caption)
+        .height(Length::Fixed(track))
+        .align_y(iced::alignment::Vertical::Center)
+        .boxed();
+    container(FitRow::new(vec![control, caption]).spacing(SP.m))
+        .padding([(ROW_H - track).max(0.0) / 2.0, 0.0])
         .boxed()
 }
 
@@ -566,10 +581,36 @@ fn hint<'a>(label: Localized, tokens: &ThemeTokens) -> Element<'a, Message> {
 
 #[cfg(test)]
 mod tests {
+    use iced::widget::Space;
+    use iced::{Element, Length, Size, Widget as _};
     use signex_engine::pcb::eco::{BackBlock, Unavailable};
-    use signex_i18n::I18n;
+    use signex_i18n::{I18n, UserText};
+    use signex_widgets::text;
 
-    use super::unavailable_text;
+    use super::{TS, action_line, unavailable_text};
+    use crate::app::Message;
+    use crate::layout_probe::{find, lay_out_texts};
+
+    /// Mockup row 162: the Action caption stays beside the control while
+    /// it fits, and takes its own line, inside the cell, when it does not.
+    #[test]
+    fn an_action_caption_too_long_for_the_cell_takes_its_own_line() {
+        const LABEL: &str = "Take board designator";
+        const TRACK: f32 = 20.0;
+        let caption_at = |room: f32| {
+            let control: Element<'_, Message> = Space::new()
+                .width(Length::Fixed(260.0))
+                .height(Length::Fixed(TRACK))
+                .boxed();
+            let caption = text(UserText::new(LABEL)).size(TS.caption).boxed();
+            let line = action_line(control, caption, TRACK);
+            find(&lay_out_texts(line, Size::new(room, 200.0)), LABEL).bounds
+        };
+        assert!(caption_at(600.0).y < TRACK, "fits beside the control");
+        let folded = caption_at(300.0);
+        assert!(folded.y >= TRACK, "own line: {folded:?}");
+        assert!(folded.x + folded.width <= 300.0, "inside: {folded:?}");
+    }
 
     #[test]
     fn a_footprint_mismatch_has_compare_boards_own_reason() {

@@ -371,7 +371,7 @@ fn shortcut_row<'a>(
         Row::new().spacing(px(8.0)).align_y(Alignment::Center).push(
             rich_text::<(), Message, Theme>(spans)
                 .size(TS.body)
-                .wrapping(iced::widget::text::Wrapping::None)
+                .wrapping(iced::widget::text::Wrapping::Word)
                 .width(Length::Fill)
                 .boxed(),
         );
@@ -383,9 +383,8 @@ fn shortcut_row<'a>(
             tokens,
         ));
     }
-    container(line)
-        .height(ROW_H)
-        .center_y(ROW_H)
+    // At least a row tall; a long action wraps clear of its key caps.
+    container(row![Space::new().height(ROW_H), line].align_y(Alignment::Center))
         .width(Length::Fill)
         .style(bottom_rule(tokens))
         .boxed()
@@ -557,6 +556,27 @@ mod tests {
                 "the Action | Shortcut header is gone"
             );
         }
+    }
+
+    /// Mockup row 13: a label too long for its column wraps, growing the
+    /// row, instead of running under the key cap.
+    #[test]
+    fn a_long_action_label_wraps_clear_of_its_key_cap() {
+        let i18n = I18n::en_us_ref();
+        let tokens = theme_tokens(ThemeId::GraphiteDark);
+        let sections = sections();
+        let mut sample = sections[0].rows[0].clone();
+        let height = |row: &KeymapEditorRow| {
+            let line = shortcut_row(i18n, &tokens, row, "");
+            crate::layout_probe::root_size(line, iced::Size::new(260.0, 400.0)).height
+        };
+        sample.label = "Move".into();
+        assert!(
+            (height(&sample) - ROW_H).abs() < 0.5,
+            "one line keeps the row"
+        );
+        sample.label = "Show valid shortcuts for the current interactive command".into();
+        assert!(height(&sample) > ROW_H, "a long label takes a second line");
     }
 
     #[test]
