@@ -293,6 +293,8 @@ pub struct FootprintCanvas<'a> {
     pub silk_f: &'a [signex_library::primitive::footprint::FpGraphic],
     /// v0.18.16 — silk-back graphics (mirror layer for B.SilkS).
     pub silk_b: &'a [signex_library::primitive::footprint::FpGraphic],
+    /// The generated front silkscreen: drawn, never hit-tested or edited.
+    pub generated_silk: &'a [signex_library::primitive::footprint::FpGraphic],
     /// Per-wheel-notch zoom factor — the Preferences "Zoom speed", shared
     /// with the schematic, PCB and symbol canvases.
     pub zoom_step: f32,

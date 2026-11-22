@@ -1,10 +1,8 @@
 //! The Footprint part of the nothing-selected body: the pads-and-courtyard
 //! illustration, the Footprint
 //! section (name, description, designator, type, height, version, units)
-//! and the Courtyard & Silkscreen section.
-//!
-//! Silkscreen outline, pad clearance, pin 1 marker and assembly outline
-//! have no model yet, so the section holds the generated courtyard only.
+//! and the Courtyard & Silkscreen section, whose generated silkscreen and
+//! assembly rows are in `generated_sections`.
 
 use iced::widget::{Column, container, stack};
 use iced::{Element, Length, Padding, Widget as _};
@@ -39,7 +37,11 @@ pub(super) fn view<'a>(
         ));
     }
     col = footprint_section(col, cx);
-    courtyard_section(col, cx)
+    col = courtyard_section(col, cx);
+    if is_open(COURTYARD_KEY, cx.collapsed) {
+        col = super::generated_sections::view(col, cx);
+    }
+    col
 }
 
 fn footprint_section<'a>(

@@ -274,6 +274,7 @@ define_ids! {
     EDITORS_FP_PAD_NO_THROUGH_HOLE_PASTE = "editors-fp-pad-no-through-hole-paste";
     EDITORS_FP_PAD_INVALID_NUMBER = "editors-fp-pad-invalid-number";
     EDITORS_FP_PAD_INVALID_POSITIVE = "editors-fp-pad-invalid-positive";
+    EDITORS_FP_PAD_INVALID_NEGATIVE = "editors-fp-pad-invalid-negative";
     EDITORS_FP_PAD_INVALID_NO_COPPER = "editors-fp-pad-invalid-no-copper";
     EDITORS_FP_PAD_INVALID_CORNER_RADIUS = "editors-fp-pad-invalid-corner-radius";
     EDITORS_FP_PAD_CALLOUT_TITLE = "editors-fp-pad-callout-title";

@@ -398,6 +398,20 @@ editors-fp-props-courtyard-size = { $width } × { $height } mm
 editors-fp-props-expansion = Expansion
 # A length in millimetres. $value is a number.
 editors-fp-props-length-mm = { $value } mm
+# Enable header: a silkscreen outline generated on the part's body.
+editors-fp-props-silk-outline = Silkscreen outline
+# Note at the right of the Silkscreen outline header.
+editors-fp-props-silk-clipped = clipped at pads
+# Stroke width of the generated silkscreen outline.
+editors-fp-props-line-width = Line width
+# How far the silkscreen outline stays from the pads.
+editors-fp-props-pad-clearance = Pad clearance
+# Checkbox text of the Pin 1 marker row.
+editors-fp-props-pin-one-dot = Dot beside pad 1
+# Size of the part's body. $width and $height are millimetre numbers.
+editors-fp-props-assembly-body = body { $width } × { $height }
+# Note when a generated outline has no body to follow.
+editors-fp-props-no-body = needs a 3D body or fab outline
 # Leader label of the courtyard in the illustration.
 editors-fp-props-illustration-courtyard = Courtyard
 editors-fp-props-illustration-silkscreen = Silkscreen
@@ -855,6 +869,7 @@ editors-fp-pad-no-through-hole-paste = No paste on through-hole pads and holes.
 # Why a typed value was not taken. The field keeps the last good value.
 editors-fp-pad-invalid-number = Enter a number
 editors-fp-pad-invalid-positive = Must be greater than 0
+editors-fp-pad-invalid-negative = Must be 0 or more
 editors-fp-pad-invalid-no-copper = Leaves no copper with this trapezoid
 editors-fp-pad-invalid-corner-radius = Must be 0 to 50
 # Illustration labels. $value is a length in mm, already formatted.

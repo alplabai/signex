@@ -28,6 +28,10 @@ pub mod pad_field {
 
 /// The `numeric_buffers` key of the footprint's refused Height text.
 pub const FOOTPRINT_HEIGHT_BUFFER: &str = "footprint.height";
+/// The `numeric_buffers` key of the generated silkscreen's line width text.
+pub const SILK_LINE_WIDTH_BUFFER: &str = "footprint.silk_line_width";
+/// The `numeric_buffers` key of the generated silkscreen's clearance text.
+pub const PAD_CLEARANCE_BUFFER: &str = "footprint.pad_clearance";
 
 /// The `numeric_buffers` key of `field` on the selected pad `idx`, or on
 /// the next pad placed when `idx` is `None`.

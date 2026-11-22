@@ -58,6 +58,7 @@ fn canvas_of<'a>(editor: &'a FootprintDocument, cache: &'a canvas::Cache) -> Foo
         sketch: primitive.sketch.as_ref(),
         silk_f: &primitive.silk_f,
         silk_b: &primitive.silk_b,
+        generated_silk: &primitive.generated.silk,
         zoom_step: 1.1,
         trackpad_pan: false,
         wheel_mode: Default::default(),

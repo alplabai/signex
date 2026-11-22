@@ -110,6 +110,7 @@ pub(super) fn bake_solution_with(
             &mut footprint.body_3d,
             &mut state.solve_warnings,
         )?;
+        signex_bake::bake_generated(footprint);
 
         // Bake warnings (a skipped over-cap array, a dropped
         // feature) are failures the user must be able to see:
@@ -169,6 +170,7 @@ pub(super) fn bake_solution_with(
         // goes with them. (A sketch that never baked owns nothing.)
         let remaps = BakedFields::clear_owned(footprint, &mut state.solve_warnings);
         state.remap_silk_selection(&remaps);
+        signex_bake::bake_generated(footprint);
         for warning in
             take_unlogged_bake_warnings(&state.solve_warnings, &mut state.logged_solve_warnings)
         {

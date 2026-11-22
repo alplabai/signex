@@ -87,6 +87,33 @@ build reads a file with markers (it ignores the key) and drops them when it
 saves. The format token stays `snxfpt/1` and `FOOTPRINT_SCHEMA_VERSION`
 is unchanged.
 
+### Generated features {#generated-features}
+
+Silkscreen outline, Pad clearance, Pin 1 marker and Assembly outline (mockup
+row 124, #2834) are switches and values on the footprint, edited in the
+Courtyard & Silkscreen section as one undo step each. All off at the
+defaults (line width 0.12 mm, clearance 0.20 mm, marker on), which is not
+written, so such a file keeps its lower token; anything else writes
+`snxfpt/1.3`.
+
+`signex_bake::bake_generated` rebuilds the strokes after a setting edit, a
+pad write-back (saves included) and a sketch bake. They are stored in
+`generated.silk` and `generated.assembly`, apart from `silk_f` and `fab_f`:
+a re-bake never touches hand-drawn entries or their selection, and a stroke
+cannot be selected or edited by hand. Placing the footprint copies them to
+the board's top silkscreen and fab layers.
+
+- **Body:** the 3D body outline's extent, else the extent of the hand-drawn
+  front fab graphics. With neither, no outline is generated and the section
+  says what is missing.
+- **Silkscreen outline:** the body rectangle, with the part of each edge
+  within the clearance plus half the line width of a pad's turned extent
+  removed.
+- **Pin 1 marker:** a solid dot on the outer side of the pad numbered 1, the
+  clearance away from its copper. No such pad, no dot.
+- **Assembly outline:** the body rectangle on the front fab layer, at the
+  stock parts' 0.1 mm line.
+
 ## Redundant constraints
 
 `FullSolveOutput.redundant_constraints` names consistent constraints whose

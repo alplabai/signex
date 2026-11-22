@@ -181,6 +181,56 @@ fn the_footprint_illustration_draws_the_numbers_outlines_and_callouts() {
     assert_eq!(count(|p| matches!(p, Primitive::Line { .. })), 2, "strokes");
 }
 
+/// Mockup row 124: the generated silkscreen and assembly rows.
+#[test]
+fn the_generated_features_show_their_fields_and_body_size() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.generated.silk_outline = true;
+    fp.generated.assembly_outline = true;
+    fp.body_extent_mm = Some([-1.95, -2.45, 1.95, 2.45]);
+    let texts = texts(&app, &fp);
+    for label in [
+        "Silkscreen outline",
+        "clipped at pads",
+        "Line width",
+        "Pad clearance",
+        "Pin 1 marker",
+        "Dot beside pad 1",
+        "Assembly outline",
+        "body 3.90 × 4.90",
+    ] {
+        assert!(has(&texts, label), "{label:?} missing: {texts:#?}");
+    }
+    assert!(top_of(&texts, "Silkscreen outline") < top_of(&texts, "Assembly outline"));
+}
+
+#[test]
+fn a_generated_outline_without_a_body_says_what_it_needs() {
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.generated.assembly_outline = true;
+    fp.body_extent_mm = None;
+    let texts = texts(&app, &fp);
+    assert!(has(&texts, "needs a 3D body or fab outline"), "{texts:#?}");
+}
+
+#[test]
+fn switching_the_pin_one_marker_off_drops_its_dot() {
+    use signex_widgets::property_illustration::Primitive;
+    let app = app_with_eight_pads();
+    let mut fp = panel_ctx(&app);
+    fp.generated.silk_outline = true;
+    fp.generated.pin_one_marker = false;
+    let drawing = super::footprint_illustration::illustration(&fp, &signex_i18n::I18n::en_us())
+        .expect("eight pads draw");
+    assert!(
+        !drawing
+            .visible_parts()
+            .any(|part| matches!(part.primitive, Primitive::Circle { .. }))
+    );
+}
+
 #[test]
 fn the_pad_stack_check_sits_above_every_section() {
     let app = app_with_eight_pads();

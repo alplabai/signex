@@ -110,7 +110,10 @@ pub(super) fn illustration(fp: &FootprintEditorPanelContext, i18n: &I18n) -> Opt
     ill = ill.parts(pad_numbers(&fp.pad_outlines, &map));
     ill = ill.parts(assembly_parts(&fp.assembly_segments, &map, i18n));
     ill = ill.parts(silk_parts(&fp.silk_segments, &map, i18n));
-    ill = ill.parts(pin_one_parts(&fp.pad_outlines, &map, i18n));
+    // A generated outline with its marker switched off draws no dot.
+    if !fp.generated.silk_outline || fp.generated.pin_one_marker {
+        ill = ill.parts(pin_one_parts(&fp.pad_outlines, &map, i18n));
+    }
     if let Some(courtyard) = fp.courtyard_extent_mm {
         ill = ill.parts(courtyard_parts(courtyard, pads, &map, i18n));
     }

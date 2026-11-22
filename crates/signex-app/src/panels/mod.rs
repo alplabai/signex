@@ -186,7 +186,7 @@ mod doc_grid;
 pub(crate) use doc_grid::typed_pitch_mm;
 pub use doc_grid::{DocGridField, DocGridMsg};
 mod typed_pick;
-pub use messages::{PanelMsg, SheetFrameEdit};
+pub use messages::{FootprintFeatureEdit, PanelMsg, SheetFrameEdit};
 pub use multi_selection::{
     MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
     edit_from_text_in as multi_edit_from_text,

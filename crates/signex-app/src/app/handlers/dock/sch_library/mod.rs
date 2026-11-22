@@ -313,6 +313,9 @@ impl Signex {
             PanelMsg::FpEditorSetFootprintHeight(v) => {
                 self.handle_fp_editor_set_footprint_height(v)
             }
+            PanelMsg::FpEditorGeneratedFeature(edit) => {
+                self.handle_fp_editor_generated_feature(edit)
+            }
             PanelMsg::FpEditorSetSilkLineFromX(v) => {
                 self.fp_editor_set_silk_line_endpoint(SilkLineEndpoint::FromX, v.clone())
             }

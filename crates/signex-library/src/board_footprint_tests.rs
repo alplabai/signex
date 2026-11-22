@@ -594,3 +594,26 @@ fn a_negative_library_height_is_left_unset() {
     fp.height_mm = Some(-2.0);
     assert_eq!(board_footprint(&fp).unwrap().component.height_mm, 0.0);
 }
+
+/// Mockup row 124: the generated strokes reach the board's top layers.
+#[test]
+fn generated_strokes_are_placed_on_the_top_silk_and_fab() {
+    let stroke = |width| {
+        let kind = FpGraphicKind::Line {
+            from: [0.0, 0.0],
+            to: [1.0, 0.0],
+        };
+        FpGraphic::drawn(kind, width, false)
+    };
+    let mut fp = library(vec![pad("1", PadKind::Smd, PadShape::Rect, &["F.Cu"])]);
+    fp.generated.silk = vec![stroke(0.12)];
+    fp.generated.assembly = vec![stroke(0.1)];
+    let board = board_footprint(&fp).unwrap();
+    let layer_of = |width: f64| {
+        let graphic = board.graphics.iter().find(|g| g.width == width).unwrap();
+        graphic.layer.clone()
+    };
+    let token = |layer| pcb_layer_token(PcbLayer::Technical(layer));
+    assert_eq!(layer_of(0.12), token(TechnicalLayer::SilkscreenTop));
+    assert_eq!(layer_of(0.1), token(TechnicalLayer::FabTop));
+}

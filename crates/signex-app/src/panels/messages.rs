@@ -238,6 +238,8 @@ pub enum PanelMsg {
     FpEditorSetFootprintDefaultDesignator(String),
     FpEditorSetFootprintComponentType(signex_library::primitive::footprint::ComponentType),
     FpEditorSetFootprintHeight(String),
+    /// A generated feature's switch or value was edited (mockup row 124).
+    FpEditorGeneratedFeature(FootprintFeatureEdit),
     /// v0.21 — Selected silk graphic edits (Line + Text only;
     /// Arc/Region/Fill/etc are sketch-mode-authored).
     FpEditorSetSilkLineFromX(String),
@@ -1168,6 +1170,17 @@ pub enum PanelMsg {
     FpSubform(super::FpSubformMsg),
     /// A sketch fix picked in Properties for the sketch in view.
     SketchFix(super::SketchFixMsg),
+}
+
+/// One edit of a footprint's generated features (mockup row 124). Typed
+/// values carry the field's text; a refused one stays in the field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FootprintFeatureEdit {
+    SilkOutlineToggled,
+    SilkLineWidthTyped(String),
+    PadClearanceTyped(String),
+    PinOneMarkerToggled,
+    AssemblyOutlineToggled,
 }
 
 /// One change to the active sheet's frame settings (#1134).

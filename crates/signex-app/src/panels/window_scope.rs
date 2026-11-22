@@ -148,6 +148,7 @@ impl PanelMsg {
             | Self::FpEditorSetFootprintDefaultDesignator { .. }
             | Self::FpEditorSetFootprintComponentType { .. }
             | Self::FpEditorSetFootprintHeight { .. }
+            | Self::FpEditorGeneratedFeature { .. }
             | Self::FpEditorSetSilkLineFromX { .. }
             | Self::FpEditorSetSilkLineFromY { .. }
             | Self::FpEditorSetSilkLineToX { .. }
