@@ -2,7 +2,8 @@
 //! run's findings, the Table and Text switch and Run DRC. The second: the
 //! find-a-constraint box, the Show inherited values and Overridden rows
 //! only chips, Constraint sets, Add and Presets (and the Clearance
-//! domain's Matrix switch). Also the info banner of the notes.
+//! domain's Matrix switch). Also the info banner of the notes, and the
+//! controls the text view's bar (`text_bar`) shares.
 
 use iced::alignment::Vertical;
 use iced::widget::{Row, Space, container, row};
@@ -41,7 +42,7 @@ fn chip_style(frame: &Frame) -> ChipStyle {
     }
 }
 
-fn metrics() -> ChipMetrics {
+pub(super) fn metrics() -> ChipMetrics {
     ChipMetrics::from_text_size(TS.body)
 }
 
@@ -85,41 +86,54 @@ pub(super) fn domains<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             })
         },
     );
-    let in_text = frame.state.text.is_some();
+    row![
+        bar,
+        Space::new().width(Length::Fill),
+        view_switch(frame),
+        run_drc(frame),
+    ]
+    .spacing(SP.s)
+    .align_y(Vertical::Center)
+    .boxed()
+}
+
+/// The Table and Text switch.
+pub(super) fn view_switch<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
+    let (i18n, id) = (frame.i18n, frame.id);
+    let r = resolve(frame.tokens);
     let switch = segmented(
         [
             (false, t!(i18n, ids::RULES_VIEW_TABLE).into()),
             (true, t!(i18n, ids::RULES_VIEW_TEXT).into()),
         ],
-        in_text,
+        frame.state.text.is_some(),
         r.segmented(TS.body).fill_width(true),
         move |on| up(RulesTabMsg::TextViewToggled { project_id: id, on }),
     );
-    let drc_label = if frame.running {
+    container(switch).width(TS.body * SWITCH_WIDTH_EM).boxed()
+}
+
+/// Run DRC: off while a check runs or the project's board is not open.
+pub(super) fn run_drc<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
+    let (i18n, tokens, id) = (frame.i18n, frame.tokens, frame.id);
+    let r = resolve(tokens);
+    let label = if frame.running {
         ids::RULES_DRC_RUNNING
     } else {
         ids::RULES_RUN_DRC
     };
     let can_run = !frame.running && !matches!(*frame.checked, Checked::NoBoard);
-    let run = button(
+    button(
         row![
             icon(Icon::Play, TS.body, r.primary_ink),
-            text(t!(i18n, drc_label)).size(TS.label),
+            text(t!(i18n, label)).size(TS.label),
         ]
         .spacing(SP.xs)
         .align_y(Vertical::Center),
     )
     .padding([SP.xs, SP.m])
     .style(crate::styles::primary_button(tokens))
-    .on_press_maybe(can_run.then(|| up(RulesTabMsg::DrcRequested { project_id: id })));
-    row![
-        bar,
-        Space::new().width(Length::Fill),
-        container(switch).width(TS.body * SWITCH_WIDTH_EM),
-        run,
-    ]
-    .spacing(SP.s)
-    .align_y(Vertical::Center)
+    .on_press_maybe(can_run.then(|| up(RulesTabMsg::DrcRequested { project_id: id })))
     .boxed()
 }
 
@@ -287,31 +301,43 @@ fn bar_button<'a>(
     }
 }
 
-/// Constraint sets, with how many the project has.
-fn sets_button<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
-    let (i18n, id) = (frame.i18n, frame.id);
+/// A small neutral pill: the sets count, the text view's tag.
+pub(super) fn quiet_pill<'a>(
+    frame: &Frame<'a>,
+    label: Element<'a, Message>,
+) -> Element<'a, Message> {
     let r = resolve(frame.tokens);
     let m = metrics();
+    container(label)
+        .height(m.badge_height)
+        .padding(Padding::from([0.0, m.badge_pad_h]))
+        .align_y(Vertical::Center)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(r.sunken)),
+            text_color: Some(r.ink3),
+            border: Border {
+                radius: Radii::GRAPHITE.pill.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// Constraint sets, with how many the project has.
+pub(super) fn sets_button<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
+    let (i18n, id) = (frame.i18n, frame.id);
+    let m = metrics();
     let count = frame.sets.len();
-    let pill = container(
+    let pill = quiet_pill(
+        frame,
         text(user(signex_widgets::chips::count_text(
             i18n,
             u32::try_from(count).unwrap_or(u32::MAX),
         )))
-        .size(m.badge_text),
-    )
-    .height(m.badge_height)
-    .padding(Padding::from([0.0, m.badge_pad_h]))
-    .align_y(Vertical::Center)
-    .style(move |_: &Theme| container::Style {
-        background: Some(Background::Color(r.sunken)),
-        text_color: Some(r.ink3),
-        border: Border {
-            radius: Radii::GRAPHITE.pill.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
+        .size(m.badge_text)
+        .boxed(),
+    );
     let content = row![text(t!(i18n, ids::RULES_PANEL_SETS)).size(TS.label), pill]
         .spacing(SP.xs)
         .align_y(Vertical::Center)
@@ -366,7 +392,7 @@ fn add_button<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     bar_button(frame, content, false, msg)
 }
 
-fn presets_button<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
+pub(super) fn presets_button<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
     let (i18n, id) = (frame.i18n, frame.id);
     let open = frame.state.panel == Some(RulesPanel::Presets);
     let content = text(t!(i18n, ids::RULES_PANEL_PRESETS))
