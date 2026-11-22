@@ -237,23 +237,28 @@ pub fn property_label<'a, M: 'a>(
 
 /// Numeric edit row used by the shape pre-placement form. The typed text
 /// stays as a draft while the box is edited, so `-` and `1.` survive; each
-/// parsable keystroke is applied, and Enter shows the stored value again.
+/// value the field takes is applied, and Enter shows the stored value again.
+/// Text it refuses stays, outlined in `error`.
 pub fn form_edit_row_f64<'a>(
     label: signex_i18n::Localized,
     value: f64,
     key: crate::panels::NumericFieldKey,
     draft: Option<&crate::panels::NumericDraft>,
     muted: Color,
+    error: Color,
 ) -> Element<'a, PanelMsg> {
     use iced::widget::row;
-    row![
-        property_label(label, muted),
-        crate::panels::numeric_input("", key, value, draft).size(TS.body),
-    ]
-    .padding([4, PROPERTY_ROW_PAD_X])
-    .spacing(PROPERTY_ROW_GAP)
-    .align_y(iced::Alignment::Center)
-    .boxed()
+    let input = crate::panels::numeric_input("", key, value, draft).size(TS.body);
+    let input = if key.refused_in(draft) {
+        input.style(super::form_look::refusable_input_style(Some(error)))
+    } else {
+        input
+    };
+    row![property_label(label, muted), input]
+        .padding([4, PROPERTY_ROW_PAD_X])
+        .spacing(PROPERTY_ROW_GAP)
+        .align_y(iced::Alignment::Center)
+        .boxed()
 }
 
 pub fn shape_fill_row<'a>(

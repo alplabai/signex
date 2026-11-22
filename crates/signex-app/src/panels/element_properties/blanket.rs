@@ -89,6 +89,7 @@ pub(super) fn push_sections<'a>(
             panel.shown(DraftField::Outline(f), Some(value)),
             typed(f),
             HALF_W,
+            panel.refused_ink(DraftField::Outline(f), ctx),
         )
     };
     let (x, y) = (start.x, origin.map_y(start.y, paper_height));
@@ -139,6 +140,7 @@ pub(super) fn push_sections<'a>(
                         panel.shown(DraftField::TrackWidth, track),
                         move |text| edit(BlanketEdit::TrackWidth(text)),
                         VALUE_W,
+                        panel.refused_ink(DraftField::TrackWidth, ctx),
                     ),
                     unit(t!(i18n, ids::PANELS_NP_UNIT_MM), muted),
                 ]

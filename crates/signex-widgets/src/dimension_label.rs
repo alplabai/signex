@@ -341,6 +341,45 @@ impl DimensionLabels {
         })
     }
 
+    /// Whether `event` must not reach [`Self::update`] because it would
+    /// close the open field on refused text. Enter, Tab, a blur and a press
+    /// on another label wait; Esc still closes the field.
+    pub fn event_refused(
+        &self,
+        event: &DimensionLabelMessage,
+        labels: &[DimensionLabel<'_>],
+    ) -> bool {
+        self.event_held(event, self.draft_refused(labels))
+    }
+
+    /// [`Self::event_refused`] for a caller with a stricter rule: `refused`
+    /// says whether the open field's text is refused.
+    pub fn event_held(&self, event: &DimensionLabelMessage, refused: bool) -> bool {
+        use DimensionLabelMessage as M;
+        let open = self.editing_index();
+        refused
+            && match *event {
+                M::DraftSubmitted | M::TabPressed { .. } => true,
+                M::LabelPressed(i) | M::HandlePressed(i) => open.is_some_and(|o| o != i),
+                M::DraftBlurred(i) => open == Some(i),
+                _ => false,
+            }
+    }
+
+    /// What the open field would commit: `None` while it holds the text it
+    /// opened with, or text that is not a length.
+    pub fn pending_value(&self, labels: &[DimensionLabel<'_>]) -> Option<DimensionCommitted> {
+        let editing = self.editing.as_ref()?;
+        if editing.draft.trim() == editing.opened.trim() {
+            return None;
+        }
+        let value = labels.get(editing.index)?.format.parse(&editing.draft)?;
+        Some(DimensionCommitted {
+            index: editing.index,
+            value,
+        })
+    }
+
     /// Index of the label whose handle is held.
     pub fn dragging_index(&self) -> Option<usize> {
         self.drag.map(|d| d.index)
@@ -800,6 +839,36 @@ mod tests {
         }
         s.update(DimensionLabelMessage::DraftEdited("0.25".into()), &items);
         assert!(!s.draft_refused(&items));
+    }
+
+    /// Everything that would close the field waits on refused text, except
+    /// Esc; a number lets them all through.
+    #[test]
+    fn refused_text_holds_every_event_that_would_close_the_field() {
+        use DimensionLabelMessage as M;
+        let items = labels();
+        let mut s = DimensionLabels::default();
+        s.update(M::LabelPressed(1), &items);
+        s.update(M::DraftEdited("abc".into()), &items);
+        let closing = [
+            M::DraftSubmitted,
+            M::TabPressed { backward: false },
+            M::DraftBlurred(1),
+            M::LabelPressed(0),
+            M::HandlePressed(0),
+        ];
+        for event in &closing {
+            assert!(s.event_refused(event, &items), "{event:?}");
+        }
+        assert!(!s.event_refused(&M::EscapePressed, &items));
+        assert!(
+            !s.event_refused(&M::DraftBlurred(0), &items),
+            "another label"
+        );
+        s.update(M::DraftEdited("0.25".into()), &items);
+        for event in &closing {
+            assert!(!s.event_refused(event, &items), "{event:?}");
+        }
     }
 
     #[test]

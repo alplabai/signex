@@ -95,7 +95,10 @@ dependency, which this does not.
   while Repeat is off) and the Entries list. Typing `Repeat(CH, 1, 6)` as the
   designator and editing the Repeat fields write the same designator through
   the same Name edit, one undo step each. Turning Repeat off restores the
-  designator the symbol had before; that memory lasts the session only.
+  newest plain designator in the sheet's undo history, however the repeat
+  was written; with none there it takes the file's stem. A From / To that
+  is invalid or that another sheet symbol holds is refused: the document
+  does not change and the box keeps the typed text, outlined as invalid.
 
 ## Channel tabs
 

@@ -3,19 +3,51 @@
 //! socket, newest last. Plain data; the shell records a row after the command
 //! ran and the panel reads it. Rules: `docs/COMMAND_LOG.md`.
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
+use pcb_geom::ItemRef;
 use serde_json::{Map, Value};
+use signex_types::schematic::SelectedItem;
 
 /// The most rows the log keeps; the oldest goes first.
 pub const MAX_ROWS: usize = 5000;
 
 /// The client name the CLI gives on the agent socket (`docs/CLI.md`).
 pub const CLI_CLIENT: &str = "signex-cli";
+
+/// The argument a GUI row shows its targets under. It is a record, not an
+/// operand: the CLI line and an operand run leave it out.
+pub const RECORDED_TARGETS: &str = "recorded_targets";
+
+/// What a command that acts on the selection acted on, by stable item id.
+/// The row's `document` says where.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecordedTargets {
+    Sheet(Vec<SelectedItem>),
+    Board(Vec<ItemRef>),
+}
+
+impl RecordedTargets {
+    /// Each target as text: its kind and id.
+    pub fn names(&self) -> Vec<String> {
+        match self {
+            Self::Sheet(items) => items
+                .iter()
+                .map(|item| format!("{:?} {}", item.kind, item.uuid))
+                .collect(),
+            Self::Board(items) => items.iter().map(|item| format!("{item:?}")).collect(),
+        }
+    }
+
+    /// The targets as the row's recorded argument.
+    pub fn to_operand(&self) -> Value {
+        Value::Array(self.names().into_iter().map(Value::String).collect())
+    }
+}
 
 /// Who ran a command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,12 +193,20 @@ impl LogRow {
             && !matches!(self.command.as_str(), "undo" | "redo")
     }
 
-    /// Each operand as `name` and the text the CLI takes for it.
+    /// Each operand as `name` and the text the CLI takes for it. A GUI row's
+    /// recorded targets are not an operand.
     pub fn argument_pairs(&self) -> Vec<(&str, String)> {
+        let is_gui = matches!(self.source, LogSource::Gui { .. });
         self.operands
             .iter()
+            .filter(|(name, _)| !(is_gui && name.as_str() == RECORDED_TARGETS))
             .map(|(name, value)| (name.as_str(), operand_text(value)))
             .collect()
+    }
+
+    /// Whether it ran with operands of its own, to run through their handler.
+    pub fn has_given_operands(&self) -> bool {
+        !self.argument_pairs().is_empty()
     }
 
     /// The Arguments cell: `name=value` pairs two spaces apart; empty when
@@ -407,6 +447,8 @@ pub struct CommandLog {
     pub show_view_commands: bool,
     /// Agent requests whose reply waits for reads: `(pid, id, seq)`.
     awaiting: VecDeque<(Option<u32>, String, u64)>,
+    /// What each row that acted on a selection acted on, by its number.
+    targets: BTreeMap<u64, Arc<RecordedTargets>>,
 }
 
 impl CommandLog {
@@ -442,9 +484,23 @@ impl CommandLog {
         }
         self.rows.push_back(Arc::new(row));
         while self.rows.len() > MAX_ROWS {
-            self.rows.pop_front();
+            if let Some(gone) = self.rows.pop_front() {
+                self.targets.remove(&gone.seq);
+            }
         }
         Some(self.next_seq)
+    }
+
+    /// Keep what row `seq` acted on, for Replay.
+    pub fn keep_targets(&mut self, seq: u64, targets: RecordedTargets) {
+        if self.row(seq).is_some() {
+            self.targets.insert(seq, Arc::new(targets));
+        }
+    }
+
+    /// What row `seq` acted on, when it recorded targets.
+    pub fn targets_of(&self, seq: u64) -> Option<&RecordedTargets> {
+        self.targets.get(&seq).map(Arc::as_ref)
     }
 
     /// The newest row of `document` an undo can take back, not undone yet.
@@ -505,6 +561,7 @@ impl CommandLog {
     pub fn clear(&mut self) {
         self.rows.clear();
         self.awaiting.clear();
+        self.targets.clear();
     }
 
     /// Whether the view-command switch leaves `row` in.
@@ -831,6 +888,47 @@ mod tests {
             loose.cli_line("<project.snxprj>"),
             "signex-cli run '<project.snxprj>' undo"
         );
+    }
+
+    /// Caner (2026-11-22): the targets show in the row's arguments and its
+    /// saved line, and never reach the CLI line or an operand run.
+    #[test]
+    fn recorded_targets_show_as_arguments_but_are_not_operands() {
+        use signex_types::schematic::SelectedKind;
+        let id = uuid::Uuid::from_u128(7);
+        let targets = RecordedTargets::Sheet(vec![SelectedItem::new(id, SelectedKind::Symbol)]);
+        let mut r = gui("delete_selection");
+        r.operands
+            .insert(RECORDED_TARGETS.to_string(), targets.to_operand());
+        assert!(r.arguments_json().unwrap().contains(&id.to_string()));
+        assert!(!r.has_given_operands());
+        assert!(r.operand_texts().is_empty());
+        assert!(!r.cli_line("<p>").contains(RECORDED_TARGETS));
+
+        let agent = with_args(
+            row("x", LogSource::of_agent(None, None)),
+            json!({ RECORDED_TARGETS: "given" }),
+        );
+        assert!(agent.has_given_operands(), "an agent's operand is its own");
+    }
+
+    #[test]
+    fn targets_go_with_their_row() {
+        let mut log = CommandLog::default();
+        let seq = log.record(gui("delete_selection")).unwrap();
+        log.keep_targets(seq, RecordedTargets::Sheet(Vec::new()));
+        assert!(log.targets_of(seq).is_some());
+        log.keep_targets(seq + 1, RecordedTargets::Sheet(Vec::new()));
+        assert!(log.targets_of(seq + 1).is_none(), "no such row");
+        log.clear();
+        assert!(log.targets_of(seq).is_none());
+
+        let oldest = log.record(gui("delete_selection")).unwrap();
+        log.keep_targets(oldest, RecordedTargets::Sheet(Vec::new()));
+        for _ in 0..MAX_ROWS {
+            log.record(gui("a"));
+        }
+        assert!(log.targets_of(oldest).is_none(), "its row was dropped");
     }
 
     #[test]

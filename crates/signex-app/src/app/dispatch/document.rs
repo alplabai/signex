@@ -329,11 +329,18 @@ impl Signex {
                 let task = self.handle_export_written(*outcome);
                 iced::Task::batch([task, self.finish_update()])
             }
+            ExportMsg::BomWritten { source, outcome } => {
+                let task = self.handle_bom_written(source, *outcome);
+                iced::Task::batch([task, self.finish_update()])
+            }
         }
     }
 
     /// BOM-preview modal message handler (namespaced family, ADR-0001 D3).
     pub(crate) fn dispatch_bom_preview_message(&mut self, msg: BomPreviewMsg) -> Task<Message> {
+        if self.bom_edit_waits_for_save(&msg) {
+            return Task::none();
+        }
         // Pure pointer/UI-state messages cannot change the rows on screen;
         // every other message (and any future one) re-sorts, re-filters and
         // re-flags after it ran.

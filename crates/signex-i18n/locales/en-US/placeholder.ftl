@@ -28,7 +28,7 @@ placeholder-move-offset = 0.00
 # Custom net colour: one red, green or blue channel, 0 to 255.
 placeholder-color-channel = 0
 # Print preview: the one page to print.
-placeholder-pdf-page = 1
+placeholder-pdf-page = e.g. 1-2, 4
 # Rename: an example project name, written without spaces.
 placeholder-rename-project = new-project-name
 # Grid Properties: the grid step in millimetres.

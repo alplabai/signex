@@ -8,7 +8,7 @@ use std::sync::Arc;
 use signex_types::schematic::{SchDirective, SelectedKind};
 
 use super::super::super::*;
-use super::place_directive::parse_value;
+use super::place_directive::{outline_value, parse_value};
 use crate::panels::{
     BlanketEdit, DirectivePanel, DirectivePanelMsg, DraftField, NetParametersEdit, NetRule,
     OutlineField,
@@ -23,8 +23,17 @@ fn blanket_draft(edit: &BlanketEdit) -> Option<(DraftField, String)> {
     }
 }
 
-/// Whether the draft still stands for what is stored: a value changed by
-/// anything else (an undo, a command) drops it.
+/// Whether `field` refuses typed `text`: nothing was applied, and the box
+/// keeps the text and shows it is invalid (#2767).
+fn draft_refused(field: DraftField, text: &str) -> bool {
+    match field {
+        DraftField::Rule(_) | DraftField::TrackWidth => parse_value(text).is_err(),
+        DraftField::Outline(side) => outline_value(side, text).is_none(),
+    }
+}
+
+/// Whether the draft still stands: it is refused text, or it reads as what is
+/// stored. A value changed by anything else (an undo, a command) drops it.
 fn draft_still_true(
     directive: &SchDirective,
     page: (signex_types::schematic::PageOrigin, f64),
@@ -48,15 +57,14 @@ fn draft_still_true(
         }),
         _ => return false,
     };
-    match parse_value(text) {
-        Ok(typed) => typed == stored,
-        Err(()) => match text.trim().parse::<f64>() {
-            // A negative X or Y.
-            Ok(typed) => Some(typed) == stored,
-            // Half typed (`-`, `.`): nothing was applied, keep typing.
-            Err(_) => true,
-        },
+    if draft_refused(*field, text) {
+        return true;
     }
+    let typed = match field {
+        DraftField::Outline(_) => text.trim().parse::<f64>().ok(),
+        DraftField::Rule(_) | DraftField::TrackWidth => parse_value(text).ok().flatten(),
+    };
+    typed == stored
 }
 
 impl Signex {
@@ -119,6 +127,10 @@ impl Signex {
             panel.draft = old
                 .draft
                 .filter(|draft| draft_still_true(&panel.directive, panel.page, draft));
+            panel.draft_refused = panel
+                .draft
+                .as_ref()
+                .is_some_and(|(field, text)| draft_refused(*field, text));
         }
         self.document_state.panel_ctx.directive_panel = Some(Box::new(panel));
     }
@@ -213,5 +225,35 @@ mod tests {
         assert!(draft_still_true(&blanket(None), page, &width));
         let half = (DraftField::Outline(OutlineField::X), "-".to_string());
         assert!(draft_still_true(&blanket(None), page, &half));
+    }
+
+    #[test]
+    fn refused_text_stands_as_typed_and_a_stored_value_does_not_hold_it() {
+        let page = (PageOrigin::UpperLeft, 297.0);
+        for (field, text) in [
+            (DraftField::TrackWidth, "-1"),
+            (DraftField::TrackWidth, "wide"),
+            (DraftField::Outline(OutlineField::Width), "0"),
+            (DraftField::Outline(OutlineField::Height), "-4"),
+            (DraftField::Outline(OutlineField::X), "inf"),
+            (DraftField::Outline(OutlineField::Y), ""),
+        ] {
+            assert!(draft_refused(field, text), "{field:?} {text:?}");
+            let draft = (field, text.to_string());
+            assert!(draft_still_true(&blanket(Some(1.0)), page, &draft));
+        }
+    }
+
+    #[test]
+    fn a_value_the_field_can_store_is_not_refused() {
+        for (field, text) in [
+            (DraftField::TrackWidth, ""),
+            (DraftField::TrackWidth, "0"),
+            (DraftField::Rule(NetRule::Current), "3"),
+            (DraftField::Outline(OutlineField::X), "-5"),
+            (DraftField::Outline(OutlineField::Width), "0.1"),
+        ] {
+            assert!(!draft_refused(field, text), "{field:?} {text:?}");
+        }
     }
 }

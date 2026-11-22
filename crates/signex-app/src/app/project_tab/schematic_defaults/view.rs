@@ -49,7 +49,7 @@ pub(in crate::app::project_tab) fn view<'a>(
         let (control, note) = numeric_field(project_id, which, overrides, draft, i18n, tokens);
         let line = grid_row(t!(i18n, label_words(which)), control, tokens);
         match note {
-            // The clamp note spans the row, under the label and the box.
+            // The refusal note spans the row, under the label and the box.
             Some(note) => column![line, note].spacing(SP.xs).boxed(),
             None => line,
         }
@@ -89,7 +89,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     let body = vec![
         cards.boxed(),
         caption.boxed(),
-        preview(overrides, drafts, canvas_colors, i18n, tokens),
+        preview(overrides, canvas_colors, i18n, tokens),
     ];
     section(
         ids::PROJECT_SECTION_SCHEMATIC_DEFAULTS,
@@ -259,7 +259,6 @@ fn fill_picker<'a>(
 /// full width in a hairline frame with the button radius.
 fn preview<'a>(
     overrides: &SchematicDefaultOverrides,
-    drafts: Option<&HashMap<SchematicDefaultField, String>>,
     canvas_colors: &CanvasColors,
     i18n: &I18n,
     tokens: &ThemeTokens,
@@ -286,7 +285,7 @@ fn preview<'a>(
         text_font: crate::fonts::canvas_iced_font(overrides.font_family()),
         label_font: mono_font(),
         ink: PreviewInk::new(canvas_colors, tokens),
-        labels: value_labels(overrides, drafts, i18n),
+        labels: value_labels(overrides, i18n),
     };
     let line = ti(tokens.border);
     let drawing = container(

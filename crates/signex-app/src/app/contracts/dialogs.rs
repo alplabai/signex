@@ -509,6 +509,12 @@ pub enum ExportMsg {
     NetlistCancelIncomplete,
     /// An export deliverable's off-thread write finished (#859).
     FileWritten(Box<ExportWriteOutcome>),
+    /// A BOM's off-thread write finished; `source` is the document its dialog
+    /// was opened for, which closes when the file was written.
+    BomWritten {
+        source: std::path::PathBuf,
+        outcome: Box<ExportWriteOutcome>,
+    },
 }
 
 /// What an export's background file write produced, carried back to `update`

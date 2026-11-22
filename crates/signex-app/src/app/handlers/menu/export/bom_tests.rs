@@ -201,6 +201,67 @@ fn the_not_fitted_option_sets_both_flags_together() {
     assert!(!preview.includes_not_fitted());
 }
 
+fn written(result: Result<(), String>) -> crate::app::contracts::ExportWriteOutcome {
+    crate::app::contracts::ExportWriteOutcome {
+        path: PathBuf::from("bom-112.csv"),
+        result,
+        success_log: String::new(),
+        advisory: None,
+        warnings: Vec::new(),
+        preview_source: None,
+    }
+}
+
+/// Mockup rows 111 and 112: Export and a cancelled save leave the dialog and
+/// its settings; a failed write leaves them too; a completed one closes it.
+#[test]
+fn the_dialog_closes_only_after_a_completed_export() {
+    let mut app = app_with_sheet();
+    let source = app.document_state.active_path.clone().expect("active");
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::SetGrouping(
+        signex_output::BomGrouping::Flat,
+    )));
+    let _ = app.handle_bom_preview_export();
+    assert!(app.document_state.bom_preview.is_some(), "Export keeps it");
+
+    let opts = options(&app);
+    let _ = app.handle_export_bom_finished(source.clone(), opts, Err("cancelled".to_string()));
+    assert_eq!(options(&app).grouping, signex_output::BomGrouping::Flat);
+
+    let _ = app.handle_bom_written(source.clone(), written(Err("disk full".to_string())));
+    assert!(app.document_state.bom_preview.is_some(), "a failed write");
+
+    let other = PathBuf::from("another-sheet.snxsch");
+    let _ = app.handle_bom_written(other, written(Ok(())));
+    assert!(app.document_state.bom_preview.is_some(), "another document");
+
+    let _ = app.handle_bom_written(source, written(Ok(())));
+    assert!(app.document_state.bom_preview.is_none(), "written, closed");
+}
+
+/// #2792: while Export waits on its save dialog the dialog takes no setting,
+/// so none can be lost; a cancelled save gives the dialog back.
+#[test]
+fn settings_are_not_taken_while_the_save_dialog_is_open() {
+    use signex_output::BomGrouping;
+    let mut app = app_with_sheet();
+    let source = app.document_state.active_path.clone().expect("active");
+    let before = options(&app).grouping;
+    let changed = if before == BomGrouping::Flat {
+        BomGrouping::Grouped
+    } else {
+        BomGrouping::Flat
+    };
+    let _ = app.handle_bom_preview_export();
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::SetGrouping(changed)));
+    assert_eq!(options(&app).grouping, before, "the edit is not taken");
+
+    let opts = options(&app);
+    let _ = app.handle_export_bom_finished(source, opts, Err("cancelled".to_string()));
+    let _ = app.update(Message::BomPreview(BomPreviewMsg::SetGrouping(changed)));
+    assert_eq!(options(&app).grouping, changed, "editable again");
+}
+
 /// The filter hides lines on screen only: the options Export writes from
 /// are unchanged, and a filter that matches nothing leaves the table whole.
 #[test]

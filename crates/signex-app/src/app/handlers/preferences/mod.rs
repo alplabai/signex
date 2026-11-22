@@ -312,8 +312,13 @@ impl Signex {
             }
             PrefMsg::SaveAndClose => {
                 // Save as the Save button does; a refused save leaves the
-                // dialog dirty, so the close guard keeps it open.
+                // dialog dirty, so the close guard keeps it open. A refused
+                // pitch label is not a dirty draft: it keeps it open itself.
+                let held = self.snap_label_holds_refused_text();
                 let saved = self.handle_preferences_save();
+                if held {
+                    return saved;
+                }
                 return Task::batch([saved, self.handle_preferences_close_requested()]);
             }
             PrefMsg::Save => return self.handle_preferences_save(),

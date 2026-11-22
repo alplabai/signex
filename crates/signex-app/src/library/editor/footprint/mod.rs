@@ -89,7 +89,8 @@ pub use state::sketch_overlay::{CanvasMenu, MenuTarget, PatternField, ValueEdit,
 pub use state::{
     CheckLine, CheckStatus, EditorPad, FOOTPRINT_HEIGHT_BUFFER, FootprintEditorState, GridDef,
     GridDisplay, PadLinkMsg, PadLinkOffer, PadSide, PadStackTab, SketchCanvasText, SketchOverlay,
-    SnappingMode, check_lines, pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,
+    SnapOptions, SnappingMode, check_lines, pad_field, pad_field_buffer_key,
+    sketch_pad_field_buffer_key,
 };
 pub(crate) use updates::hold_patterned_pad_edit;
 

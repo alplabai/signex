@@ -1,6 +1,6 @@
 //! One default field of the section (mockup row 36): a fixed box holding the
 //! text input and its unit suffix, drawn in its [`FieldState`], the reset
-//! button beside an edited box, and the clamp note under it. Pure.
+//! button beside an edited box, and the refusal note under it. Pure.
 
 use iced::widget::{Row, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
@@ -12,9 +12,7 @@ use signex_widgets::{text, text_input};
 
 use super::super::look::{Glyph, glyph, icon_button, mono_font};
 use super::super::table::{SP, TS};
-use super::{
-    FieldState, built_in_value, clamp_note, field_state, refused_range, shown_number, shown_text,
-};
+use super::{FieldState, built_in_value, field_state, refused_range, shown_number, shown_text};
 use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
 use crate::app::project_tab::general::tab_message;
@@ -47,8 +45,8 @@ fn unit_words(field: SchematicDefaultField) -> MessageId {
 }
 
 /// A numeric field: the box and the reset button when it is not built-in,
-/// then the clamp note, in warning ink, when the typed number was clamped.
-/// The view puts the note under the whole form row.
+/// then the note naming the allowed range, in error ink, when the typed
+/// number was refused. The view puts the note under the whole form row.
 pub(super) fn numeric_field<'a>(
     project_id: ProjectId,
     field: SchematicDefaultField,
@@ -99,31 +97,24 @@ pub(super) fn numeric_field<'a>(
         let tip = t!(i18n, ids::PROJECT_DEFAULTS_RESET, "value" => built_in);
         line = line.push(icon_button(Glyph::Restore, tip, Some(reset), tokens));
     }
-    let note = clamp_note(field, draft).map(|note| {
+    let note = refused_range(field, draft).map(|(min, max)| {
         let words = t!(
             i18n,
-            ids::PROJECT_DEFAULTS_CLAMPED,
-            "min" => shown_number(note.min),
-            "max" => shown_number(note.max),
-            "used" => shown_number(note.used),
+            refused_words(field),
+            "min" => shown_number(min),
+            "max" => shown_number(max),
         );
-        text(words)
-            .size(TS.caption)
-            .color(ti(tokens.warning))
-            .boxed()
-    });
-    let note = note.or_else(|| {
-        refused_range(field, draft).map(|(min, max)| {
-            let words = t!(
-                i18n,
-                ids::PROJECT_DEFAULTS_REFUSED,
-                "min" => shown_number(min),
-                "max" => shown_number(max),
-            );
-            text(words).size(TS.caption).color(ti(tokens.error)).boxed()
-        })
+        text(words).size(TS.caption).color(ti(tokens.error)).boxed()
     });
     (line.boxed(), note)
+}
+
+/// The note under a refused field, in the field's unit.
+pub(super) fn refused_words(field: SchematicDefaultField) -> MessageId {
+    match field {
+        SchematicDefaultField::TextSize => ids::PROJECT_DEFAULTS_REFUSED_PT,
+        _ => ids::PROJECT_DEFAULTS_REFUSED,
+    }
 }
 
 /// The font field: a wide box with the font in effect as its placeholder

@@ -17,6 +17,8 @@ use crate::panels::compiled_design::{CompiledMode, NamingTarget, RepeatField};
 pub struct RepeatDraft {
     pub sheet_symbol: Uuid,
     pub fields: HashMap<RepeatField, String>,
+    /// Enter refused these fields; typing again clears it.
+    pub refused: bool,
 }
 
 /// The open naming format menu.
@@ -38,10 +40,6 @@ pub struct CompiledDesignUi {
     pub selected: Option<usize>,
     /// The channel each sheet file shows (1-based index); absent is Editor.
     pub channel_tabs: HashMap<PathBuf, u32>,
-    /// The plain designator a sheet symbol had when Repeat was switched on,
-    /// so switching it off restores it. Session state only: the file keeps
-    /// just the designator.
-    pub plain_names: HashMap<Uuid, String>,
     pub repeat_draft: Option<RepeatDraft>,
     pub naming_menu: Option<NamingMenu>,
     pub illustration_hover: IllustrationHover,

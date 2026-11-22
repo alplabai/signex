@@ -8,7 +8,7 @@ use signex_app::app::{Message, Signex, TabInfo, TabKind};
 use signex_app::canvas::CanvasEvent;
 use signex_app::dock::DockMessage;
 use signex_app::panels::{HarnessField, HarnessPanelMsg, PanelMsg};
-use signex_types::schematic::{ChildSheet, FillType, Point, SchematicSheet, SheetPin};
+use signex_types::schematic::{ChildSheet, FillType, PageOrigin, Point, SchematicSheet, SheetPin};
 use std::path::PathBuf;
 
 fn app_with(sheet: SchematicSheet) -> Signex {
@@ -166,6 +166,31 @@ fn a_size_that_is_not_a_positive_number_is_refused_with_the_text_kept() {
                 "the box keeps {bad}"
             );
         }
+    }
+}
+
+/// #2789: the Y box counts from the sheet's page origin.
+#[test]
+fn a_typed_y_counts_from_the_page_origin() {
+    for origin in [PageOrigin::LowerLeft, PageOrigin::UpperLeft] {
+        let mut sheet = empty();
+        sheet.page.origin = origin;
+        let mut app = app_with(sheet);
+        arm(&mut app, ActiveBarAction::PlaceHarnessConnector);
+        click(&mut app, 10.0, 10.0);
+        click(&mut app, 20.16, 10.0);
+        let id = doc(&app).harness.connectors[0].uuid;
+        harness(
+            &mut app,
+            HarnessPanelMsg::FieldTyped {
+                connector: id,
+                field: HarnessField::Y,
+                text: "20".to_string(),
+            },
+        );
+        let expected = doc(&app).page_y(20.0);
+        let stored = doc(&app).harness.connectors[0].position.y;
+        assert!((stored - expected).abs() < 1e-9, "{origin}: {stored}");
     }
 }
 

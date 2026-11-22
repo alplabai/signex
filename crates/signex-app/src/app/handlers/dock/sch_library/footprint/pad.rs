@@ -262,10 +262,10 @@ impl Signex {
             d.drill_slot_length_mm = v
         })
     }
-    /// #599 — the three outcomes stay apart: empty clears, out of range
-    /// clamps to the nearest bound, unreadable text leaves the stored
-    /// default alone. Collapsing them into one `None` used to erase the
-    /// value and drop the key from the saved `.snxfpt`.
+    /// #599, #2792 — empty clears; out of range or unreadable text leaves
+    /// the stored default alone and stays in the box. Collapsing them into
+    /// one `None` used to erase the value and drop the key from the saved
+    /// `.snxfpt`.
     pub(crate) fn fp_editor_set_next_pad_corner_radius_pct(&mut self, value: String) -> bool {
         let edit = fp_parse_optional_number_in(
             &value,

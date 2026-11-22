@@ -42,8 +42,8 @@ pub(crate) use form_rows::check_state_color;
 pub(crate) use form_rows::form_choice_row;
 pub use form_rows::{
     PaperEdge, PaperEdgeDraft, canvas_font_popup, font_style_row, form_check_row,
-    form_check_row_shortcut, form_edit_row, form_font_link_row, form_input_row,
-    form_input_row_untipped, form_label, form_pick_row, thin_sep, typed_mm,
+    form_check_row_shortcut, form_edit_row, form_edit_row_refusable, form_font_link_row,
+    form_input_row, form_input_row_untipped, form_label, form_pick_row, thin_sep, typed_mm,
 };
 #[cfg(test)]
 pub(crate) use general::seg_text;

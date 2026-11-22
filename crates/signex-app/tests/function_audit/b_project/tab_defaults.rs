@@ -81,20 +81,17 @@ fn m36_zero_and_a_negative_width_are_refused() {
 }
 
 #[test]
-fn m36_a_value_past_the_range_is_stored_at_the_end_of_the_range() {
+fn m36_a_value_past_the_range_is_refused_and_the_text_stays() {
     let mut b = on(ProjectSection::SchematicDefaults);
     type_default(&mut b, Field::WireWidth, "99");
-    assert_eq!(
-        stored(&b, Field::WireWidth),
-        Some(*Field::WireWidth.range().end())
-    );
+    assert_eq!(stored(&b, Field::WireWidth), None, "nothing is stored");
     assert_eq!(
         b.tab_state()
             .default_drafts
             .get(&Field::WireWidth)
             .map(String::as_str),
         Some("99"),
-        "the box keeps what was typed for its clamp note"
+        "the box keeps what was typed"
     );
 }
 
