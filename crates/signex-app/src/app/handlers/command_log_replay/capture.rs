@@ -15,6 +15,7 @@ use signex_types::schematic::SelectedItem;
 use super::book::{PendingTool, ReplayInput};
 use super::rebase;
 use super::scope::{EditFamily, ReplayScope, replay_scope};
+use super::sheet_guard::SheetTargetGuard;
 use crate::app::Signex;
 use crate::app::core::command_log::{RECORDED_INPUT, RecordedTargets};
 use crate::keymap::AppCommandId;
@@ -224,6 +225,8 @@ impl Signex {
             pre_images: engine.map_or_else(Vec::new, |engine| {
                 rebase::pre_images(engine.document(), commands)
             }),
+            guard: engine
+                .and_then(|engine| SheetTargetGuard::for_move(engine.document(), commands)),
         })
     }
 
@@ -232,10 +235,16 @@ impl Signex {
         let SheetEditRecord {
             commands,
             pre_images,
+            mut guard,
         } = record;
         let Some(document) = self.document_state.edit_path().map(Path::to_path_buf) else {
             return;
         };
+        if let (Some(guard), Some(engine)) =
+            (guard.as_mut(), self.document_state.engines.get(&document))
+        {
+            guard.record_after(engine.document());
+        }
         let family = sheet_family(&commands);
         let row = sheet_row_command(family, &commands);
         let input = if commands.iter().any(makes_object) {
@@ -252,6 +261,7 @@ impl Signex {
                 commands,
                 targets,
                 pre_images,
+                guard,
             }
         };
         self.note_finished_edit(document, family, row, input);
@@ -291,6 +301,23 @@ impl Signex {
             .and_then(ReplayInput::row_command)
             .or(by_family);
         let input = match dropped {
+            Some(ReplayInput::BoardMove {
+                footprints,
+                delta,
+                leaves_tracks,
+                ..
+            }) => {
+                let mut guard = guard;
+                if let Some(board) = self.document_state.pcb_board(path) {
+                    guard.record_after(board);
+                }
+                ReplayInput::BoardMove {
+                    footprints,
+                    delta,
+                    leaves_tracks,
+                    guard: Some(guard),
+                }
+            }
             Some(input) => input,
             None if board_makes_objects(&commands) => ReplayInput::MadeNewObjects,
             None => self.board_input(path, commands, guard),
@@ -551,4 +578,5 @@ pub(crate) struct BoardEditRecord {
 pub(crate) struct SheetEditRecord {
     commands: Vec<Command>,
     pre_images: Vec<Command>,
+    guard: Option<SheetTargetGuard>,
 }

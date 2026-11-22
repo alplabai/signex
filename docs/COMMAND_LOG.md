@@ -120,7 +120,10 @@ clipped.
 
   | Command | Proof |
   |---|---|
-  | `edit_object_properties` | Only a recorded edit of whole objects by id. On a sheet, a drawing, directive or harness connector against its pre-image: a field the edit changed must still hold its old or new value. On a board, each written item or value against its guard. |
+  | `edit_object_properties` | Only a recorded edit of whole objects by id. On a sheet, a drawing, directive or harness connector writes only the fields it changed: it runs when another field changed since and keeps that change, inside a list's elements too, and refuses only if the same field holds a third value. On a board, each written item or value against its guard. |
+  | `move_selection` | A recorded offset on recorded ids, on a sheet or board. Each target must be where the move found it or left it, so a replay cannot pull it from a later position. A sheet move also guards a fingerprint of the wires, buses, bus entries and junctions it reads; a board move refuses if the offset would now carry a track it did not write. |
+  | `delete_selection` | Recorded ids on a sheet or board, each exactly as the command found it, so an item edited since is not removed. A target already gone is named in the refusal. |
+  | `duplicate` | Recorded source ids on a sheet or board, each exactly as found. Copies take new ids; the clipboard is kept. |
   | `lock_board_items`, `unlock_board_items` | Tracks and vias by uuid, an absolute flag. Every id must be one the row wrote, since an item already at the value records nothing. |
   | `set_pad_shape` | Pads by uuid, absolute pad-local shape. The whole pad is guarded, and every id must be one the row wrote. |
   | `panelize_board` | Writes the constant default panel; the board's panel is guarded. The outline only validates. |
@@ -129,9 +132,11 @@ clipped.
   | `set_layer_color`, `reset_layer_colors` | A colour keyed by its layer token; all board options are guarded. |
   | `set_layer_stack` | The whole stack. Its rows name the layer each was, so a rerun on its own result would rename copper: it runs only on the stack, layers and thickness it found. |
 
-  Off the list until a guard proves them: Delete, Move and every relative or
-  selection command; view commands and tools; `undo` and `redo`; footprint
-  and symbol editor rows; `board_shape_from_selection` and `arrange_in_box`
+  Off the list until a guard proves them: every other relative or selection
+  command (rotate, mirror, flip, cut, `move_object`, `move_selection_xy`,
+  `drag_keep_connections`); view commands and tools; `undo` and `redo`; every
+  footprint and symbol editor row, Move and Delete included, since they name
+  pads and pins by index; `board_shape_from_selection` and `arrange_in_box`
   (absolute writes over later edits); `set_board_graphic`, `add_board_graphic`
   and `set_footprint_text` (operands resolve through the live origin or
   designator); `set_via_span` and `set_layer_sizes` (layer names resolve by
@@ -147,13 +152,21 @@ clipped.
     (`CommandArgs::parse_operands`, then `run_operands`), as the CLI does.
     A row that edited a board keeps the targets it wrote, and is refused with
     nothing run once one has changed.
-  - **Recorded edit** (`edit_object_properties`): the same engine or board
-    commands run again on the same items. An edit that stores a whole drawing,
-    directive or harness connector changes only the fields it changed when
-    recorded, so a later edit of another field stays; a field it changed that
-    now holds a third value refuses the row. A list it changed (table rows,
-    say) is merged element by element when the elements changed since are
-    other ones; a list that changed length or was edited at the same element
+  - **Recorded targets** (Delete, Duplicate): the command's own handler runs
+    on exactly those items, in their document, in the window or tab that shows
+    it, then the person's selection comes back. Duplicate's copies get new ids
+    and the clipboard stays. In project-wide numbering it counts the
+    designators of every project sheet, and is refused if one of those sheets
+    is not open. A target that is gone is named; Replay never runs on the
+    survivors. A tool in progress refuses the row.
+  - **Recorded edit** (Move, `edit_object_properties`): the same engine or
+    board commands run again on the same items. A move repeats its offset. A
+    move started and cancelled says it never finished. An edit that stores a
+    whole drawing, directive or harness connector changes only the fields it
+    changed when recorded, so a later edit of another field stays; a field it
+    changed that now holds a third value refuses the row. A list it changed
+    (table rows, say) is merged field by field when what changed since is
+    another field; a list that changed length or was edited at the same field
     is refused. A board edit keeps each target it wrote as it stood before and
     after, and runs only while every target is still one of the two; fields
     are not merged, and one changed target refuses the whole row before

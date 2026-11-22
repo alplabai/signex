@@ -115,6 +115,25 @@ impl BoardReplayGuard {
         guard
     }
 
+    /// `items` as they stand on `board`, for a command that names them.
+    pub fn of_items(board: &PcbBoard, items: &[BoardItemId]) -> Self {
+        let mut targets: Vec<GuardedTarget> = Vec::with_capacity(items.len());
+        for item in items {
+            let target = Target::Item(*item);
+            if !targets.iter().any(|t| t.target == target) {
+                targets.push(GuardedTarget {
+                    target,
+                    before: read(board, target),
+                    after: None,
+                });
+            }
+        }
+        Self {
+            targets,
+            is_uncheckable: false,
+        }
+    }
+
     /// A guard for an edit whose targets were never read: it never holds.
     pub fn uncheckable() -> Self {
         Self {
@@ -165,6 +184,16 @@ impl BoardReplayGuard {
     /// Whether every command of the edit has a target that can be checked.
     pub fn is_checkable(&self) -> bool {
         !self.is_uncheckable && !self.targets.is_empty()
+    }
+
+    /// Whether `commands`, built from the board as it is now, write nothing
+    /// this guard does not hold.
+    pub fn writes_only_its_targets(&self, board: &PcbBoard, commands: &[BoardCommand]) -> bool {
+        commands.iter().all(|command| {
+            targets_of(board, command).is_some_and(|targets| {
+                (targets.iter()).all(|target| self.targets.iter().any(|t| t.target == *target))
+            })
+        })
     }
 
     /// Whether the edit wrote the board item or footprint pad `id`.

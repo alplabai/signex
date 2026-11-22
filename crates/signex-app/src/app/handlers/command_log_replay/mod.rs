@@ -4,6 +4,7 @@
 //!
 //! - [`safe_list`]: the only commands Replay may run, with their proofs.
 //! - [`gate`]: the check every Replay passes first.
+//! - [`sheet_guard`]: the target check of Move, Delete and Duplicate.
 //! - [`scope`]: how each catalog command replays.
 //! - [`book`]: the recorded input of each row.
 //! - [`capture`]: recording a finished edit.
@@ -24,6 +25,7 @@ mod run;
 mod safe_list;
 mod scope;
 mod selection;
+mod sheet_guard;
 
 pub(crate) use book::ReplayBook;
 #[cfg(test)]

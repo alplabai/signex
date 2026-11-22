@@ -265,7 +265,7 @@ fn a_command_that_cannot_be_checked_is_refused() {
 /// DECISIONS 2026-11-22 "refuses unless proven safe": with no recorded value
 /// to compare, a Flip cannot be proven safe, so it is refused.
 #[test]
-fn a_command_with_no_recorded_state_is_not_refused() {
+fn a_command_with_no_recorded_state_is_refused() {
     let mut b = board();
     let guard = recorded(
         &mut b,
@@ -276,6 +276,28 @@ fn a_command_with_no_recorded_state_is_not_refused() {
 
     assert!(!guard.holds(&b));
     assert!(!guard.is_checkable());
+}
+
+#[test]
+fn an_item_guard_holds_only_as_it_found_the_item() {
+    let mut b = board();
+    let guard = BoardReplayGuard::of_items(&b, &[BoardItemId::Segment(id(SEG_1))]);
+    assert!(guard.is_checkable());
+    assert!(guard.holds_as_found(&b));
+
+    moved(&b, SEG_1).apply(&mut b).unwrap();
+
+    assert!(!guard.holds_as_found(&b));
+}
+
+/// A track that joined a moved pad since would be carried by a replay.
+#[test]
+fn a_rebuilt_command_on_an_item_the_guard_never_held_does_not_fit() {
+    let mut b = board();
+    let guard = widened(&mut b, SEG_1);
+
+    assert!(guard.writes_only_its_targets(&b, &[moved(&b, SEG_1)]));
+    assert!(!guard.writes_only_its_targets(&b, &[moved(&b, SEG_2)]));
 }
 
 #[test]

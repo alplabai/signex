@@ -150,7 +150,7 @@ fn a_command_from_an_undocked_window_adds_exactly_one_row() {
 }
 
 #[test]
-fn replay_runs_the_command_again_as_a_new_gui_row() {
+fn replay_of_an_unlisted_command_is_a_new_refused_gui_row() {
     let mut app = fresh_app();
     let _ = app.update(menu_row("place_wire"));
     let first = last(&app);

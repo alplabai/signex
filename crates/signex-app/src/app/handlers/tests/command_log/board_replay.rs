@@ -256,9 +256,172 @@ fn run_then_change_its_target(app: &mut Signex, path: &Path, id: &str) -> u64 {
     }
 }
 
+/// Move, Delete or Duplicate of part 1 on a sheet, then a later move of it.
+fn sheet_row_then_change_its_target(app: &mut Signex, path: &Path, id: &str) -> u64 {
+    select(app, &[1]);
+    let seq = match id {
+        "move_selection" => {
+            move_part(app, 1, 2.54, 0.0);
+            newest(app).seq
+        }
+        "delete_selection" => {
+            run(app, id);
+            let seq = newest(app).seq;
+            undo(app, path);
+            seq
+        }
+        "duplicate" => {
+            run(app, id);
+            newest(app).seq
+        }
+        other => panic!("{other} has no sheet form here"),
+    };
+    move_part(app, 1, 2.54, 0.0);
+    seq
+}
+
+fn refused_on_a_sheet_once_changed(id: &str) {
+    let (mut app, path) = app_with_parts();
+    let seq = sheet_row_then_change_its_target(&mut app, &path, id);
+    let at = position(&app, &path, 1);
+    let parts = app.document_state.engines[&path].document().symbols.len();
+    let revision = app.document_state.engines[&path].revision();
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("changed after"), "{id}");
+    assert_eq!(position(&app, &path, 1), at, "{id} moved the part");
+    let engine = &app.document_state.engines[&path];
+    assert_eq!(engine.document().symbols.len(), parts, "{id}");
+    assert_eq!(engine.revision(), revision, "{id}");
+}
+
+const PART: u128 = 1;
+
+/// The offset drop of a board move, as the canvas runs it.
+fn drop_part(app: &mut Signex, path: &Path, dx: f64) {
+    let moved = std::collections::BTreeSet::from([uuid::Uuid::from_u128(PART)]);
+    let delta = Point::new(dx, 0.0);
+    let built = signex_engine::pcb::placement::move_commands(
+        app.document_state.pcb_board(path).expect("the board"),
+        &moved,
+        delta,
+    );
+    app.ui_state
+        .command_replay
+        .note_board_drop(moved, delta, false);
+    assert!(app.run_placement("Move", built));
+}
+
+fn select_part(app: &mut Signex) {
+    let part = pcb_geom::ItemRef::Footprint(uuid::Uuid::from_u128(PART));
+    app.select_pcb_items(&[part]);
+}
+
+fn footprints_on(app: &Signex, path: &Path) -> usize {
+    let board = app.document_state.pcb_board(path).expect("the board");
+    board.footprints.len()
+}
+
+/// Move, Delete or Duplicate of a part on a board, then a later move of it.
+fn board_row_then_change_its_target(app: &mut Signex, path: &Path, id: &str) -> u64 {
+    let seq = match id {
+        "move_selection" => {
+            drop_part(app, path, 2.0);
+            newest(app).seq
+        }
+        "delete_selection" => {
+            select_part(app);
+            run(app, id);
+            let seq = newest(app).seq;
+            assert!(app.step_board_history(path, true));
+            seq
+        }
+        "duplicate" => {
+            select_part(app);
+            run(app, id);
+            newest(app).seq
+        }
+        other => panic!("{other} has no board form here"),
+    };
+    drop_part(app, path, 3.0);
+    seq
+}
+
+fn refused_on_a_board_once_changed(id: &str) {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_tracks(dir.path());
+    let seq = board_row_then_change_its_target(&mut app, &path, id);
+    let x = footprint_x(&app, &path, PART);
+    let count = footprints_on(&app, &path);
+    let revision = |app: &Signex| {
+        let engine = app.document_state.board_engine(&path);
+        engine.expect("the board").revision()
+    };
+    let before = revision(&app);
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("changed after"), "{id}");
+    assert_eq!(footprint_x(&app, &path, PART), x, "{id} moved the part");
+    assert_eq!(footprints_on(&app, &path), count, "{id}");
+    assert_eq!(revision(&app), before, "{id}");
+}
+
+#[test]
+fn a_board_delete_replays_on_its_part_after_an_undo() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_tracks(dir.path());
+    select_part(&mut app);
+    run(&mut app, "delete_selection");
+    let seq = newest(&app).seq;
+    let after = footprints_on(&app, &path);
+    assert!(app.step_board_history(&path, true));
+
+    replay(&mut app, seq);
+
+    assert_eq!(footprints_on(&app, &path), after);
+    assert!(!newest(&app).outcome.is_failed());
+}
+
+#[test]
+fn a_board_delete_whose_target_is_gone_says_so() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_tracks(dir.path());
+    select_part(&mut app);
+    run(&mut app, "delete_selection");
+    let seq = newest(&app).seq;
+    let after = footprints_on(&app, &path);
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("no longer in"));
+    assert_eq!(footprints_on(&app, &path), after);
+}
+
+#[test]
+fn a_board_duplicate_replays_as_one_more_copy() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_tracks(dir.path());
+    select_part(&mut app);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    let copies = footprints_on(&app, &path);
+
+    replay(&mut app, seq);
+
+    assert_eq!(footprints_on(&app, &path), copies + 1);
+    assert!(!newest(&app).outcome.is_failed());
+}
+
 #[test]
 fn every_listed_command_is_refused_once_its_target_changed() {
     for (id, _) in SAFE_COMMANDS {
+        if matches!(*id, "move_selection" | "delete_selection" | "duplicate") {
+            refused_on_a_sheet_once_changed(id);
+            refused_on_a_board_once_changed(id);
+            continue;
+        }
         let dir = tempfile::tempdir().expect("a folder");
         let (mut app, path) = if *id == "set_layer_stack" {
             app_with_four_layers(dir.path())
