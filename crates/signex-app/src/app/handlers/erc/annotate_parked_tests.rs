@@ -1,20 +1,19 @@
 //! A sheet a project-wide run parked is an open document (#2760): an outside
 //! change is never overwritten, an earlier recovery copy survives autosave,
-//! one undo still restores it after a save, and it follows a rename.
+//! undo reaches every sheet until you save and is refused whole after, and it
+//! follows a rename.
 
 use std::path::{Path, PathBuf};
 
 use signex_engine::AnnotateMode::ResetAndRenumber;
 
-use signex_types::format::SnxSchematic;
-
 use super::annotate_tests::{
-    child_path, child_refs, logged_since, notice_detail, project, root_refs, sheet_of, unit,
+    child_path, child_refs, logged_since, notice_detail, project, root_refs, unit,
 };
 use crate::annotate_undo::AnnotateUndo;
 use crate::app::path_ops::settle_task;
 use crate::app::state::NoticeAction;
-use crate::app::{AnnotateMsg, EditMsg, Message, Signex, TabInfo, TabKind};
+use crate::app::{AnnotateMsg, EditMsg, FileMsg, Message, Signex, TabInfo, TabKind};
 use crate::autosave::AutosaveMsg;
 use crate::menu_bar::MenuMessage;
 use crate::persist::ContentHash;
@@ -160,12 +159,122 @@ fn an_autosave_tick_does_not_replace_an_earlier_runs_recovery_copy() {
 // ---- Undo after a save.
 
 #[test]
-fn annotate_save_all_then_one_undo_restores_every_sheet() {
+fn annotate_undo_before_saving_restores_every_sheet() {
     let (mut app, dir, child) = fixture();
+    let on_disk = std::fs::read(&child).expect("child");
+    annotate(&mut app);
+
+    undo(&mut app);
+
+    let root = root_refs(&app, &dir);
+    let released = !app.document_state.engines.contains_key(&child);
+    let unchanged = std::fs::read(&child).expect("child") == on_disk;
+    let refs = child_refs(&dir);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(root, ["R5"]);
+    assert_eq!(refs, ["R7"]);
+    assert!(released && unchanged, "the child is back at its file");
+}
+
+#[test]
+fn annotate_save_all_then_undo_is_refused_whole_and_names_the_sheet() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir, child) = fixture();
+    let root_path = dir.join("a_root.snxsch");
     annotate(&mut app);
     save_all(&mut app);
-    let saved = child_refs(&dir);
-    let clean = !app.document_state.is_document_dirty(&child);
+    let released = !app.document_state.engines.contains_key(&child);
+    let saved = (
+        std::fs::read(&root_path).expect("root"),
+        std::fs::read(&child).expect("child"),
+    );
+    let since = crate::diagnostics::newest_entry_id();
+
+    undo(&mut app);
+
+    let root = root_refs(&app, &dir);
+    let root_dirty = app.document_state.is_document_dirty(&root_path);
+    let child_dirty = app.document_state.is_document_dirty(&child);
+    let after = (
+        std::fs::read(&root_path).expect("root"),
+        std::fs::read(&child).expect("child"),
+    );
+    let refs = child_refs(&dir);
+    let named = logged_since(
+        since,
+        "Cannot undo the project-wide annotate: z_child.snxsch was saved and closed",
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(released, "a clean save releases the tabless engine");
+    assert_eq!(root, ["R1"], "the open sheet did not move");
+    assert_eq!(refs, ["R2"]);
+    assert!(!root_dirty && !child_dirty, "nothing became unsaved");
+    assert!(after == saved, "no file changed");
+    assert!(named, "one Messages line names the sheet");
+}
+
+/// The unsaved child is still in memory, so the undo reaches both: the saved
+/// root is then unsaved, and the child is back at its untouched file.
+#[test]
+fn annotate_save_only_the_open_sheet_then_undo_restores_both() {
+    let (mut app, dir, child) = fixture();
+    let root_path = dir.join("a_root.snxsch");
+    let child_bytes = std::fs::read(&child).expect("child");
+    annotate(&mut app);
+    send(&mut app, Message::File(FileMsg::Save));
+    let root_saved = std::fs::read(&root_path).expect("root");
+
+    undo(&mut app);
+
+    let root = root_refs(&app, &dir);
+    let root_dirty = app.document_state.is_document_dirty(&root_path);
+    let child_released = !app.document_state.engines.contains_key(&child);
+    let child_dirty = app.document_state.is_document_dirty(&child);
+    let files = (
+        std::fs::read(&root_path).expect("root") == root_saved,
+        std::fs::read(&child).expect("child") == child_bytes,
+    );
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(root, ["R5"]);
+    assert!(root_dirty, "the undone root differs from its saved file");
+    assert!(
+        child_released && !child_dirty,
+        "the child is back at its file"
+    );
+    assert_eq!(files, (true, true), "the undo writes nothing");
+}
+
+/// Reopening gives a fresh history, so the run cannot reach that sheet.
+#[test]
+fn a_sheet_reopened_after_the_save_refuses_the_undo_whole() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir, child) = fixture();
+    let root_path = dir.join("a_root.snxsch");
+    annotate(&mut app);
+    save_all(&mut app);
+    assert!(app.open_or_focus_sheet_path(child.clone()));
+    assert!(app.activate_tab_for_path(&root_path));
+    let since = crate::diagnostics::newest_entry_id();
+
+    undo(&mut app);
+
+    let (root, reopened) = (root_refs(&app, &dir), held_refs(&app, &child));
+    let named = logged_since(since, "z_child.snxsch was saved and closed");
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(root, ["R1"]);
+    assert_eq!(reopened, ["R2"]);
+    assert!(named);
+}
+
+/// A sheet with an open tab keeps its engine through the save, so its undo.
+#[test]
+fn sheets_with_open_tabs_undo_together_after_a_save() {
+    let (mut app, dir, child) = fixture();
+    let root_path = dir.join("a_root.snxsch");
+    assert!(app.open_or_focus_sheet_path(child.clone()));
+    assert!(app.activate_tab_for_path(&root_path));
+    annotate(&mut app);
+    save_all(&mut app);
 
     undo(&mut app);
 
@@ -173,115 +282,12 @@ fn annotate_save_all_then_one_undo_restores_every_sheet() {
     let dirty = app.document_state.is_document_dirty(&child);
     let on_disk = child_refs(&dir);
     std::fs::remove_dir_all(&dir).ok();
-    assert_eq!(saved, ["R2"], "Save All wrote the numbering");
-    assert!(clean);
     assert_eq!(
         (root, held),
         (vec!["R5".to_string()], vec!["R7".to_string()])
     );
     assert!(dirty, "the undone sheet differs from its saved file");
     assert_eq!(on_disk, ["R2"], "the undo writes nothing");
-}
-
-#[test]
-fn a_saved_engine_is_released_once_its_undo_group_is_gone() {
-    let (mut app, dir, child) = fixture();
-    annotate(&mut app);
-    save_all(&mut app);
-    let kept = app.document_state.held_for_undo.contains_key(&child);
-
-    app.document_state.undo_groups.clear();
-    app.sync_undo_depth();
-
-    let released = !app.document_state.held_for_undo.contains_key(&child);
-    std::fs::remove_dir_all(&dir).ok();
-    assert!(kept, "the group still needs the engine");
-    assert!(released, "nothing can undo into it any more");
-}
-
-/// What another program puts in the child: one part, R9.
-fn change_child_outside(child: &Path) {
-    let text = SnxSchematic::new(sheet_of(&[], vec![unit("R9", 1, 0.0)]))
-        .write_string()
-        .expect("encode");
-    std::fs::write(child, text).expect("outside change");
-}
-
-#[test]
-fn a_held_engine_is_never_read_as_the_document() {
-    let (mut app, dir, child) = fixture();
-    annotate(&mut app);
-    save_all(&mut app);
-    change_child_outside(&child);
-
-    let root = dir.join("a_root.snxsch");
-    let (_, set) =
-        crate::app::project_sheets::assemble_project_sheets_for(&app.document_state, &root);
-    let seen = set.sheets[&child].symbols[0].reference.clone();
-    let in_engines = app.document_state.engines.contains_key(&child);
-    std::fs::remove_dir_all(&dir).ok();
-    assert_eq!(seen, "R9", "netlist, ERC and export read the newer file");
-    assert!(!in_engines, "the holder is not an open document");
-}
-
-#[test]
-fn a_newer_file_releases_the_held_engine_and_the_undo_names_the_sheet() {
-    let _ = crate::diagnostics::init_logging();
-    let (mut app, dir, child) = fixture();
-    annotate(&mut app);
-    save_all(&mut app);
-    change_child_outside(&child);
-    let poll = app.start_document_disk_poll();
-    settle_task(&mut app, poll);
-    let released = !app.document_state.held_for_undo.contains_key(&child);
-    let since = crate::diagnostics::newest_entry_id();
-
-    undo(&mut app);
-
-    let named = logged_since(since, "closed since");
-    let (root, on_disk) = (root_refs(&app, &dir), child_refs(&dir));
-    let dirty = app.document_state.is_document_dirty(&child);
-    std::fs::remove_dir_all(&dir).ok();
-    assert!(released);
-    assert!(named, "the undo says it did not reach the sheet");
-    assert_eq!(root, ["R5"]);
-    assert_eq!(on_disk, ["R9"], "the newer file stands");
-    assert!(!dirty);
-}
-
-#[test]
-fn opening_a_saved_sheet_keeps_its_undo() {
-    let (mut app, dir, child) = fixture();
-    annotate(&mut app);
-    save_all(&mut app);
-
-    assert!(app.open_or_focus_sheet_path(child.clone()));
-    undo(&mut app);
-
-    let (root, held) = (root_refs(&app, &dir), held_refs(&app, &child));
-    let dirty = app.document_state.is_document_dirty(&child);
-    std::fs::remove_dir_all(&dir).ok();
-    assert_eq!(
-        (root, held),
-        (vec!["R5".to_string()], vec!["R7".to_string()])
-    );
-    assert!(dirty, "the undone sheet differs from its saved file");
-}
-
-#[test]
-fn opening_a_sheet_changed_on_disk_reads_the_file_and_releases_the_engine() {
-    let (mut app, dir, child) = fixture();
-    annotate(&mut app);
-    save_all(&mut app);
-    change_child_outside(&child);
-
-    assert!(app.open_or_focus_sheet_path(child.clone()));
-
-    let held = held_refs(&app, &child);
-    let released = !app.document_state.held_for_undo.contains_key(&child);
-    std::fs::remove_dir_all(&dir).ok();
-    assert_eq!(held, ["R9"]);
-    assert!(released);
 }
 
 #[test]

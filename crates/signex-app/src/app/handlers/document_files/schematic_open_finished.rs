@@ -32,11 +32,6 @@ impl Signex {
                 {
                     return self.finish_update();
                 }
-                if let Some(disk) = &disk
-                    && self.attach_held_engine(&path, &title, disk.hash)
-                {
-                    return self.finish_update();
-                }
                 // `update` starts the recovery check of every tab opened.
                 self.open_schematic_tab(path.clone(), title, *sheet);
                 if let Some(disk) = disk {

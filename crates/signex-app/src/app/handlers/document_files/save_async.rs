@@ -484,9 +484,9 @@ impl Signex {
     fn finish_clean_save(&mut self, path: &std::path::Path, saved: crate::app::state::CommitBytes) {
         self.document_state.mark_document_clean(path);
         // The tab closed mid-save and parked the engine because it was
-        // dirty; now it is clean nothing needs it, unless a project-wide undo
-        // step still has to restore this sheet (#2760).
-        if !self.document_is_held_open(path) && !self.document_state.keep_engine_for_undo(path) {
+        // dirty; now it is clean nothing needs it. A group undo that needed
+        // it is then refused whole (#2760).
+        if !self.document_is_held_open(path) {
             self.document_state.remove_engine(path);
             self.document_state.document_saves.forget_disk_records(path);
         }

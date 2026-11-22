@@ -180,8 +180,6 @@ impl DocumentState {
         engine: signex_engine::Engine,
     ) -> Option<signex_engine::Engine> {
         self.note_documents_changed();
-        // A new document at the path ends what a held engine could undo.
-        self.held_for_undo.remove(&path);
         self.engines.insert(path, engine)
     }
 

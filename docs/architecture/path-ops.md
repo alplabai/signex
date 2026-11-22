@@ -163,15 +163,18 @@ because a queued run would number the project as it was when the first started.
 **Parked sheets** (`app/parked_sheets.rs`). Every run that loads a sheet into a
 tabless engine records the hash of the bytes its read parsed as the save
 baseline, so a save and the idle poll show the changed-on-disk card, and runs the
-open-time recovery check before autosave may write for it. After a save, while
-an undo group has a step in it, the engine moves from `engines` to
-`held_for_undo`: only an undo holder, never a source of content, so netlist, ERC,
-Update PCB, export and Annotate all read the file. One undo wakes it, so every
-sheet is restored (that sheet is then unsaved again). Opening the sheet attaches
-it when the read matches its baseline. When the file has changed, the idle poll
-or the open releases it and a later undo names the sheet. If an undo lands before
-the poll, the woken sheet is unsaved and its save shows the changed-on-disk card.
-A rename carries the sheet's undo groups with it.
+open-time recovery check before autosave may write for it. A rename carries an
+unsaved parked sheet's undo groups with it.
+
+**Undo until you save** (Caner, 2026-11-22). One undo restores every sheet of a
+run while each is still in memory. A clean save of a tabless sheet releases its
+engine. A later undo or redo of the group is then refused whole, before any sheet
+moves, with one Messages line naming the sheets; the same holds for a sheet
+reopened since (a fresh history) or trimmed past the undo depth. A sheet with an
+open tab keeps its engine through the save, so it keeps its undo. If only the
+open sheet was saved, the undo still reaches both: the saved sheet becomes unsaved
+and the parked one goes back to its untouched file. A refused group stays on top
+of the open sheets' undo stacks, so older steps there wait behind it.
 
 **Failures.** A reset or re-prefix whose sheet fails while numbering rolls every
 sheet back, and the parked engines it loaded are dropped. Incremental logs the

@@ -59,7 +59,9 @@ The project-wide numbering commands (`annotate_schematic_quietly`,
 or not, stays unsaved in memory. To keep the result, run with `--save` and send
 one `save_document` naming each changed sheet (`list_documents` lists them). A
 run that ends with changes unsaved names those sheets, and they are lost with
-the run. A save never overwrites a file that changed since it was read.
+the run. A save never overwrites a file that changed since it was read. Once a
+sheet with no tab is saved, `undo` of the run is refused for every sheet, naming
+it.
 
 An argument is a string, a number, a boolean, or `[x, y]` for a point (mm).
 The names, kinds and units of a command's arguments are in

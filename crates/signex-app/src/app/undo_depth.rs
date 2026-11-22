@@ -51,7 +51,6 @@ impl Signex {
         for preview in self.library.editors.values_mut() {
             preview.history.set_undo_depth(depth);
         }
-        self.release_engines_past_their_undo();
     }
 }
 

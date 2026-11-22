@@ -880,7 +880,8 @@ as one undo step: **Ctrl+Z** on any sheet the run changed undoes it on all of
 them (the Messages panel names those sheets; on a sheet the run did not change,
 Ctrl+Z undoes your previous edit instead). Sheets that are not open are loaded
 in memory and stay unsaved like any edited sheet: nothing is written to disk
-until you save, and undo reverts them too. If a sheet cannot be read, the run stops
+until you save, and undo reverts them too. Once such a sheet is saved, undo of the
+run is refused for every sheet and the Messages panel names it. If a sheet cannot be read, the run stops
 before anything changes and the Messages panel names that sheet; fix it and
 press the button again. If one sheet cannot be converted while numbering, the
 whole run is undone and cannot be redone.

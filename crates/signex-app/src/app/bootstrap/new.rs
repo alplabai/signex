@@ -611,7 +611,6 @@ impl Signex {
                 instance_note_scopes: std::collections::HashSet::new(),
                 instance_note_due: false,
                 recovery_check_due: Vec::new(),
-                held_for_undo: std::collections::HashMap::new(),
                 sheet_edit_epoch: 0,
                 symbol_editors_opened: 0,
                 undo_depth,

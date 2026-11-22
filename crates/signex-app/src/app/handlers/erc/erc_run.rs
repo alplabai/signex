@@ -518,10 +518,6 @@ impl Signex {
             self.sync_active_tab();
             return true;
         }
-        if self.attach_held_engine(path, &title, disk.hash) {
-            self.sync_active_tab();
-            return true;
-        }
         self.open_schematic_tab(path.clone(), title, sheet);
         self.record_disk_read(path, disk);
         self.sync_active_tab();

@@ -616,7 +616,6 @@ impl Signex {
             .iter()
             .map(|t| t.path.clone())
             .chain(ds.engines.keys().cloned())
-            .chain(ds.held_for_undo.keys().cloned())
             .chain(ds.symbol_editors.keys().cloned())
             .chain(ds.footprint_editors.keys().cloned())
             .chain(ds.dirty_document_paths())

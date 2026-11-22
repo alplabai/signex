@@ -273,36 +273,25 @@ fn warned(text: &str) -> bool {
     })
 }
 
+/// Undo until you save (Caner, 2026-11-22, #2760): never half undone.
+const REFUSED: &str = "Cannot undo the project-wide annotate: child.snxsch was saved and closed";
+
 #[test]
-fn redo_works_after_the_other_sheet_was_closed_and_reopened() {
+fn undo_is_refused_whole_after_the_other_sheet_was_closed_and_reopened() {
     let _ = signex_app::diagnostics::init_logging();
     let mut p = project(AnnotateUndo::Project);
     annotate(&mut p.app);
-    let (root_after, child_after) = annotated_pair(&p);
+    let after = annotated_pair(&p);
     reopen_child(&mut p);
 
     undo(&mut p.app);
-    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
-    assert_eq!(
-        refs(&p.app, &p.child),
-        child_after,
-        "the reopened sheet has nothing to undo"
-    );
-    assert!(
-        warned("Annotate undone on the other sheets but not on child.snxsch"),
-        "the split must be named, not silent"
-    );
 
-    redo(&mut p.app);
-    assert_eq!(
-        refs(&p.app, &p.root),
-        root_after,
-        "redo must not be refused forever"
-    );
+    assert_eq!(annotated_pair(&p), after, "no sheet moved");
+    assert!(warned(REFUSED), "the sheet is named");
 }
 
 #[test]
-fn undo_and_redo_work_after_the_other_sheet_history_was_trimmed() {
+fn undo_is_refused_whole_after_the_other_sheet_history_was_trimmed() {
     let _ = signex_app::diagnostics::init_logging();
     let mut p = project(AnnotateUndo::Project);
     annotate(&mut p.app);
@@ -321,15 +310,9 @@ fn undo_and_redo_work_after_the_other_sheet_history_was_trimmed() {
     );
 
     undo(&mut p.app);
-    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
+    assert_eq!(refs(&p.app, &p.root), root_after, "no sheet moved");
     assert_eq!(refs(&p.app, &p.child), child_after);
-    assert!(
-        warned("Annotate undone on the other sheets but not on child.snxsch"),
-        "the split must be named, not silent"
-    );
-
-    redo(&mut p.app);
-    assert_eq!(refs(&p.app, &p.root), root_after);
+    assert!(warned(REFUSED), "the sheet is named");
 }
 
 #[test]
@@ -354,27 +337,21 @@ fn redo_is_refused_with_its_own_wording_after_an_edit_following_the_undo() {
 }
 
 #[test]
-fn undo_says_which_sheets_stay_annotated_because_they_are_not_open() {
+fn undo_is_refused_whole_naming_a_sheet_that_is_not_loaded() {
     let _ = signex_app::diagnostics::init_logging();
     let mut p = project(AnnotateUndo::Project);
     annotate(&mut p.app);
+    let root_after = refs(&p.app, &p.root);
     p.app.document_state.engines.remove(&p.child);
 
     undo(&mut p.app);
 
-    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"]);
-    assert!(
-        signex_app::diagnostics::recent_entries()
-            .iter()
-            .any(|e| e.level == signex_app::diagnostics::DiagnosticLevel::Warning
-                && e.message.contains(
-                    "Annotate undone on open sheets but not on child.snxsch: closed since the annotate"
-                )),
-    );
+    assert_eq!(refs(&p.app, &p.root), root_after, "the open sheet stays");
+    assert!(warned(REFUSED), "the sheet is named");
 }
 
 #[test]
-fn redo_names_a_sheet_closed_after_the_undo() {
+fn redo_is_refused_whole_naming_a_sheet_closed_after_the_undo() {
     let _ = signex_app::diagnostics::init_logging();
     let mut p = project(AnnotateUndo::Project);
     annotate(&mut p.app);
@@ -383,8 +360,9 @@ fn redo_names_a_sheet_closed_after_the_undo() {
 
     redo(&mut p.app);
 
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"], "nothing is redone");
     assert!(warned(
-        "Annotate redone on open sheets but not on child.snxsch: closed since the annotate"
+        "Cannot redo the project-wide annotate: child.snxsch was saved and closed"
     ));
 }
 

@@ -110,15 +110,13 @@ impl Signex {
         if d.disk_poll.in_flight {
             return Task::none();
         }
-        // A parked sheet has no tab but is an open document all the same; a
-        // held engine is watched so a newer file ends its undo.
+        // A parked sheet has no tab but is an open document all the same.
         let mut paths: Vec<PathBuf> = d
             .tabs
             .iter()
             .filter(|tab| matches!(tab.kind, TabKind::Schematic | TabKind::Pcb))
             .map(|tab| &tab.path)
             .chain(d.engines.keys())
-            .chain(d.held_for_undo.keys())
             .filter(|path| d.document_saves.baseline(path).is_some())
             .filter(|path| !d.document_saves.is_saving(path))
             .filter(|path| !d.disk_poll.reloading.contains(*path))
@@ -159,9 +157,7 @@ impl Signex {
                 (Some(stamp), Ok(hash)) => d.disk_poll.stamps.insert(path.clone(), (stamp, hash)),
                 _ => d.disk_poll.stamps.remove(&path),
             };
-            let held = d.held_for_undo.contains_key(&path);
-            let open =
-                held || d.engines.contains_key(&path) || d.tabs.iter().any(|tab| tab.path == path);
+            let open = d.engines.contains_key(&path) || d.tabs.iter().any(|tab| tab.path == path);
             // A write begun since the read owns the file's state now.
             if !open
                 || d.document_saves.is_saving(&path)
@@ -175,18 +171,6 @@ impl Signex {
                 Ok(hash) => d.document_saves.knows(&path, hash),
                 Err(_) => false,
             };
-            // No unsaved edits to protect, so no card: the older engine goes,
-            // and a later undo names this sheet instead of restoring it.
-            if held {
-                if !known {
-                    d.release_held(&path);
-                    crate::diagnostics::log_info(format!(
-                        "[disk] {} changed on disk; undo no longer reaches it",
-                        file_label(&path)
-                    ));
-                }
-                continue;
-            }
             // A card already up keeps the slot; leave the change unreported so
             // a later tick raises it once the slot is free.
             if !known && d.error_notice.is_some() {
@@ -207,7 +191,6 @@ impl Signex {
         let d = &mut self.document_state;
         let open: HashSet<&PathBuf> = (d.tabs.iter().map(|tab| &tab.path))
             .chain(d.engines.keys())
-            .chain(d.held_for_undo.keys())
             .collect();
         d.disk_poll.stamps.retain(|p, _| open.contains(p));
         d.disk_poll.reported.retain(|p, _| open.contains(p));

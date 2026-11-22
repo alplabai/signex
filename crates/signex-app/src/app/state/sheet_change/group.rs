@@ -33,8 +33,8 @@ pub(crate) struct GroupStep {
 struct GroupSheets {
     members: Vec<PathBuf>,
     blocked: Vec<PathBuf>,
-    history_gone: Vec<PathBuf>,
-    closed: Vec<PathBuf>,
+    /// Not loaded, or loaded without this step: the step is refused whole.
+    out_of_reach: Vec<PathBuf>,
 }
 
 impl DocumentState {
@@ -42,19 +42,6 @@ impl DocumentState {
     /// `undocked` is the sheets an undocked window shows: with the tabs, what
     /// holds a parked sheet open, so an undo never drops its engine.
     pub(crate) fn step_undo_group(
-        &mut self,
-        group: UndoGroupId,
-        undo: bool,
-        undocked: &HashSet<PathBuf>,
-    ) -> GroupStep {
-        let woken = self.wake_held_members(group);
-        let step = self.step_awake_undo_group(group, undo, undocked);
-        self.rest_woken(&woken, undocked);
-        step
-    }
-
-    /// [`Self::step_undo_group`] once its held members are back in `engines`.
-    fn step_awake_undo_group(
         &mut self,
         group: UndoGroupId,
         undo: bool,
@@ -82,8 +69,13 @@ impl DocumentState {
                 .push(blocked_notice(&recorded, undo, &sheets.blocked));
             return step;
         }
-        step.members
-            .extend(skipped_notices(&recorded, undo, &sheets));
+        // Undo until you save (#2760): a project is never left half undone.
+        if !sheets.out_of_reach.is_empty() {
+            step.members.push(warning_notice(
+                recorded.out_of_reach(undo, &sheets.out_of_reach),
+            ));
+            return step;
+        }
         step.ran = true;
         let moved = self.step_group_members(group, undo, &recorded, sheets.members, undocked);
         let (moved_any, active_patch, events) = moved;
@@ -106,7 +98,7 @@ impl DocumentState {
     }
 
     /// The group's live sheets and the active one, sorted into the members
-    /// that move and the ones that block or are skipped.
+    /// that move and the ones that refuse the step.
     fn sort_group_sheets(
         &mut self,
         group: UndoGroupId,
@@ -128,7 +120,7 @@ impl DocumentState {
             let Some(engine) = self.engines.get(&path) else {
                 // A redo owes nothing to a sheet the undo did not revert.
                 if undo || recorded.undone.contains(&path) {
-                    sheets.closed.push(path);
+                    sheets.out_of_reach.push(path);
                 }
                 continue;
             };
@@ -142,9 +134,9 @@ impl DocumentState {
                 continue;
             }
             // Undo: gone from this sheet's undo stack (reopened, or history
-            // trimmed) means nothing to revert, and it must not block the
-            // others; a newer edit above a present entry blocks. Redo: only
-            // the sheets the undo reverted can owe one.
+            // trimmed) means it cannot go back with the others; a newer edit
+            // above a present entry blocks. Redo: only the sheets the undo
+            // reverted can owe one.
             let expected = if undo {
                 engine.has_undo_group(group)
             } else {
@@ -153,7 +145,7 @@ impl DocumentState {
             if expected {
                 sheets.blocked.push(path);
             } else if undo {
-                sheets.history_gone.push(path);
+                sheets.out_of_reach.push(path);
             }
         }
         sheets
@@ -296,29 +288,4 @@ fn blocked_notice(recorded: &UndoGroupSheets, undo: bool, blocked: &[PathBuf]) -
              undo, so the {noun} can't be redone across sheets."
         )
     })
-}
-
-/// The warnings naming the sheets a step that runs passes over.
-fn skipped_notices(recorded: &UndoGroupSheets, undo: bool, sheets: &GroupSheets) -> Vec<CoreEvent> {
-    let (title, noun) = (recorded.title(), recorded.noun());
-    let verb = if undo { "undone" } else { "redone" };
-    let mut notices = Vec::new();
-    if !sheets.history_gone.is_empty() {
-        notices.push(warning_notice(format!(
-            "{title} {verb} on the other sheets but not on {}: its undo history no \
-             longer holds the {noun} (reopened, or trimmed past the history limit), \
-             so it keeps its {}.",
-            file_names(&sheets.history_gone),
-            recorded.kept(),
-        )));
-    }
-    if !sheets.closed.is_empty() {
-        notices.push(warning_notice(format!(
-            "{title} {verb} on open sheets but not on {}: closed since the {noun}, \
-             so its {} are whatever was last saved.",
-            file_names(&sheets.closed),
-            recorded.holds(),
-        )));
-    }
-    notices
 }

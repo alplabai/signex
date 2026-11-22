@@ -108,7 +108,7 @@ mod copy_tests {
         );
         assert_eq!(
             en.message_plain(ids::DIALOG_ANNOTATE_RESET_ONE_STEP, &[("undo", undo())]),
-            "One undo step: Ctrl+Z restores every sheet."
+            "One undo step: Ctrl+Z restores every sheet until you save."
         );
         // The recovery hint is split into the callout (Restore) and the
         // caption (Discard, Decide later); together they keep every word.

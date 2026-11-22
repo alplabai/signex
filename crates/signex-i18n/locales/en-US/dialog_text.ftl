@@ -461,7 +461,7 @@ dialog-annotate-banner-scope =
        *[other] on { $sheets } sheets.
     } The list updates live; Accept Changes applies it as { $undo ->
         [sheet] one undo step per sheet.
-       *[project] one undo step.
+       *[project] one undo step until you save.
     }
 # Change-list switch. $count is a whole number.
 dialog-annotate-view-changes = Changes { $count }
@@ -474,7 +474,7 @@ dialog-annotate-no-changes = No designator changes. Pick All to see every row.
 dialog-annotate-reset-all-ellipsis = Reset All…
 dialog-annotate-reset-renumber-ellipsis = Reset & Renumber…
 # Footer caption. $undo is the Undo shortcut, such as "Ctrl+Z".
-dialog-annotate-undo-caption = { $undo } undoes it on every sheet
+dialog-annotate-undo-caption = { $undo } undoes it on every sheet until you save
 dialog-annotate-undo-caption-per-sheet = { $undo } undoes it one sheet at a time
 
 ## Reset confirm (#76)
@@ -485,7 +485,7 @@ dialog-annotate-reset-detail-loading =
        *[no] .
     }
 # $undo is the Undo shortcut, such as "Ctrl+Z".
-dialog-annotate-reset-one-step = One undo step: { $undo } restores every sheet.
+dialog-annotate-reset-one-step = One undo step: { $undo } restores every sheet until you save.
 dialog-annotate-reset-per-sheet = { $undo } undoes it one sheet at a time, as the Annotate undo setting asks.
 
 ## Re-prefix confirm (#77)
@@ -502,7 +502,7 @@ dialog-reprefix-tile-sheets =
     }
 dialog-reprefix-tile-standard = standard
 # $undo is the Undo shortcut, such as "Ctrl+Z".
-dialog-reprefix-bullet-undo = One undo step: { $undo } on any changed sheet undoes it on all of them.
+dialog-reprefix-bullet-undo = One undo step: { $undo } on any changed sheet undoes it on all of them until you save.
 dialog-reprefix-bullet-unsaved = Sheets stay unsaved until you save. PCB references are not updated.
 # $count is a whole number.
 dialog-reprefix-bullet-by-symbol =
