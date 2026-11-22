@@ -449,6 +449,19 @@ mod tests {
         );
     }
 
+    /// #2751: raising the default leaves a layout saved at the old 220 px
+    /// at 220 px.
+    #[test]
+    fn a_layout_saved_at_the_old_default_keeps_its_width() {
+        let json = serde_json::json!({
+            "dock": {
+                "right": { "panels": ["properties"], "collapsed": false, "width": 220 },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("a saved layout loads");
+        assert_eq!(dock.preferred_width(PanelPosition::Right), 220.0);
+    }
+
     /// #2458: the Command Log is saved as `command_log` and loads back.
     #[test]
     fn the_command_log_round_trips_under_its_key() {

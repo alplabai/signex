@@ -5,13 +5,13 @@
 //! rows share: a collapsible section header, a segmented row, the Ends row
 //! and a field with an X / Y / Start / End prefix.
 
-use iced::widget::{Row, Space, container, mouse_area, row};
+use iced::widget::{Space, container, mouse_area, row};
 use iced::{Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
 use signex_i18n::{Localized, MessageId, ids};
 use signex_widgets::property_illustration::{
     Cap, FieldId, Illustration, IllustrationMsg, property_illustration,
 };
-use signex_widgets::{Label, button, text};
+use signex_widgets::{FitRow, Label, button, text};
 
 use super::rows::{Look, PAD_X, input, labelled, with_tip};
 use super::{PcbPrimitiveMsg, PrimitiveCommon, PrimitiveField, SP, TS, format_number};
@@ -151,20 +151,20 @@ pub(super) struct Segment {
     pub msg: Option<PcbPrimitiveMsg>,
 }
 
-/// A segmented row on the sunken frame, the cells sharing the width.
+/// A segmented row on the sunken frame: [`FitRow`] shares the width and
+/// folds the cells rather than overlap their labels.
 pub(super) fn segments<'a>(cells: Vec<Segment>) -> Element<'a, PanelMsg> {
-    let mut line: Row<Element<'a, PanelMsg>> = Row::new().spacing(SP.xs).width(Length::Fill);
+    let mut line: Vec<Element<'a, PanelMsg>> = Vec::with_capacity(cells.len());
     for Segment { label, is_on, msg } in cells {
         let is_live = msg.is_some();
         let cell = button(
             text(label)
                 .size(TS.caption)
-                .width(Length::Fill)
                 .align_x(iced::alignment::Horizontal::Center)
-                .wrapping(iced::widget::text::Wrapping::None),
+                .wrapping(iced::widget::text::Wrapping::None)
+                .ellipsis(iced::widget::text::Ellipsis::End),
         )
         .padding([SP.xs, SP.xs])
-        .width(Length::Fill)
         .on_press_maybe(msg.map(PanelMsg::PcbPrimitive))
         .style(move |theme: &Theme, status| {
             let hovered = is_live && matches!(status, iced::widget::button::Status::Hovered);
@@ -174,9 +174,9 @@ pub(super) fn segments<'a>(cells: Vec<Segment>) -> Element<'a, PanelMsg> {
             }
             style
         });
-        line = line.push(cell.boxed());
+        line.push(cell.boxed());
     }
-    container(line)
+    container(FitRow::new(line).spacing(SP.xs).fill(true))
         .padding(SP.xs)
         .width(Length::Fill)
         .style(form_look::segmented_frame)
@@ -258,13 +258,19 @@ pub(super) fn prefixed<'a>(
     .boxed()
 }
 
-/// Two prefixed fields and the unit after them, on one row.
+/// Narrowest a prefixed field gets beside its partner: its padding, the
+/// prefix and a six-character value.
+const PREFIXED_FIELD_MIN: f32 = 2.0 * SP.s + SP.xs + TS.caption + TS.body * 3.75;
+
+/// Two prefixed fields and the unit after them, on one row while each keeps
+/// room for its value, else stacked with the unit beside them.
 pub(super) fn two_fields<'a>(
     a: Element<'a, PanelMsg>,
     b: Element<'a, PanelMsg>,
     unit: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
-    row![a, b, unit]
+    let fields = crate::panels::element_properties::rows::pair_line(a, b, PREFIXED_FIELD_MIN);
+    row![container(fields).width(Length::Fill), unit]
         .spacing(SP.s)
         .align_y(iced::Alignment::Center)
         .boxed()

@@ -82,6 +82,19 @@ pub(in crate::panels) fn value_box(theme: &Theme) -> (Color, Color, f32) {
     (l.field, l.line, PROPERTY_FIELD_RADIUS)
 }
 
+/// A value the panel only reports: the sunken fill with no border, so it
+/// cannot be taken for a field (mockup rows 42, 43, 45 and 50).
+pub(in crate::panels) fn read_only_value(theme: &Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(FormLook::of(theme).sunken)),
+        border: Border {
+            radius: PROPERTY_FIELD_RADIUS.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    }
+}
+
 /// The tooltip that shows a field's whole value: a raised card with the
 /// field's ink and hairline.
 pub(in crate::panels) fn value_tip(theme: &Theme) -> container::Style {

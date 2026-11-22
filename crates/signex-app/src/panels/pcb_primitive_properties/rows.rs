@@ -322,8 +322,12 @@ pub(super) fn pair<'a>(
     a: Element<'a, PanelMsg>,
     b: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
-    row![a, b].spacing(SP.s).boxed()
+    crate::panels::element_properties::rows::pair_line(a, b, MM_FIELD_MIN)
 }
+
+/// Narrowest an mm field gets beside its partner: its padding, the unit
+/// after it and a six-character value. Below it the pair stacks.
+const MM_FIELD_MIN: f32 = 3.0 * SP.s + TS.dense * 1.6 + TS.body * 3.75;
 
 /// A dropdown over `options`; blank when the selection does not share a
 /// value, inert when it cannot be edited.

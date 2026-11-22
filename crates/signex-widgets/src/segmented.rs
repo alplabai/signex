@@ -3,10 +3,10 @@
 //! modes, a two-page toggle). Stateless — the caller owns the selection and
 //! maps each pick to a message. Sizes derive from the text size.
 
-use crate::{Label, button, text};
+use crate::{FitRow, Label, button, text};
 use iced::alignment::{Horizontal, Vertical};
 use iced::font::Weight;
-use iced::widget::{Row, container};
+use iced::widget::container;
 use iced::{
     Background, Border, Color, Element, Font, Length, Padding, Shadow, Theme, Vector, Widget,
 };
@@ -35,7 +35,9 @@ pub struct SegmentedStyle {
     pub active_ink: Color,
     /// Body text size; every metric derives from it.
     pub text_size: f32,
-    /// Stretch segments to share the full width instead of hugging labels.
+    /// Take the full width, segments sharing what their labels leave spare,
+    /// instead of hugging the labels. Either way the segments fold onto more
+    /// lines rather than overlap.
     pub fill_width: bool,
 }
 
@@ -123,13 +125,13 @@ where
     M: Clone + 'a,
 {
     let m = SegmentedMetrics::from_text_size(style.text_size);
-    let seg_w = if style.fill_width {
+    let track_width = if style.fill_width {
         Length::Fill
     } else {
         Length::Shrink
     };
 
-    let mut row: Row<Element<'a, M>> = Row::new().spacing(m.gap);
+    let mut cells: Vec<Element<'a, M>> = Vec::new();
     for (value, label) in options {
         let is_active = value == selected;
         let ink = if is_active {
@@ -144,7 +146,7 @@ where
             .align_y(Vertical::Center)
             .align_x(Horizontal::Center)
             .wrapping(iced::widget::text::Wrapping::None)
-            .width(seg_w);
+            .ellipsis(iced::widget::text::Ellipsis::End);
         if is_active {
             label = label.font(Font {
                 weight: Weight::Medium,
@@ -153,7 +155,6 @@ where
         }
         let seg = button(label)
             .padding(Padding::from([0.0, m.segment_pad_h]))
-            .width(seg_w)
             .height(m.segment_height)
             .on_press(on_select(value))
             .style(move |_: &Theme, _| button::Style {
@@ -174,12 +175,13 @@ where
                 },
                 ..button::Style::default()
             });
-        row = row.push(seg.boxed());
+        cells.push(seg.boxed());
     }
 
-    container(row)
+    let cells = FitRow::new(cells).spacing(m.gap).fill(style.fill_width);
+    container(cells)
         .padding(m.track_pad)
-        .width(seg_w)
+        .width(track_width)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(style.track)),
             border: Border {

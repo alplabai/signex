@@ -82,7 +82,11 @@ fn properties<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Option<Element<'a, P
             ),
         )
     };
-    let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES);
+    let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES).collapsible(
+        "pcb_prim.dimension.properties",
+        false,
+        None,
+    );
     // What a dimension not placed yet measures is its clicks'.
     if !common.target.is_placement() {
         s.push(

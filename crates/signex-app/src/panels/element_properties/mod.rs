@@ -26,6 +26,8 @@ pub(in crate::panels) mod header;
 mod illustrations;
 mod label;
 mod library_rows;
+#[cfg(test)]
+mod narrow_dock_tests;
 mod no_erc;
 mod part_panel;
 mod pins;

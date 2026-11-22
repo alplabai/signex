@@ -158,6 +158,84 @@ fn the_via_stack_has_no_override_switch_and_a_changed_size_loses_from_type() {
     assert_eq!(count(&shown), 1, "only Drill is the type's: {shown:?}");
 }
 
+/// #2751, mockup row 96: the stack tiles, the widest labels of any segmented
+/// row, keep every label whole and apart at 220 and 300 px.
+#[test]
+fn the_stack_tile_labels_never_overlap() {
+    use super::super::linked::{Segment, segments};
+    let ctx = context();
+    let tiles = [
+        ids::PCB_PRIM_STACK_SIMPLE,
+        ids::PCB_PRIM_STACK_TOP_MIDDLE_BOTTOM,
+        ids::PCB_PRIM_STACK_FULL,
+    ];
+    let names = tiles.map(|id| said(&ctx, id));
+    for dock in [220.0, 300.0] {
+        let cells = tiles
+            .iter()
+            .map(|&id| Segment {
+                label: t!(ctx.i18n, id),
+                is_on: false,
+                msg: None,
+            })
+            .collect();
+        let laid: Vec<LaidOutText> = lay_out_texts(segments(cells), iced::Size::new(dock, 400.0))
+            .into_iter()
+            .map(|t| LaidOutText {
+                text: t.text.replace(['\u{2068}', '\u{2069}'], ""),
+                ..t
+            })
+            .collect();
+        let at: Vec<iced::Rectangle> = names
+            .iter()
+            .map(|name| crate::layout_probe::find(&laid, name).bounds)
+            .collect();
+        for (i, a) in at.iter().enumerate() {
+            let whole = crate::layout_probe::natural::<crate::panels::PanelMsg>(
+                iced::Widget::boxed(
+                    signex_widgets::text(signex_widgets::raw(names[i].clone()))
+                        .size(crate::styles::TypeScale::DEFAULT.caption),
+                ),
+                &names[i],
+            );
+            assert!(a.width + 1.0 >= whole.width, "{} cut: {a:?}", names[i]);
+            for b in &at[i + 1..] {
+                assert!(!a.intersects(b), "overlap at {dock} px: {a:?} {b:?}");
+            }
+        }
+    }
+}
+
+/// #2754, mockup row 96: Via Stack folds under its chevron; a press on the
+/// header reports its key, and folded it shows the header alone.
+#[test]
+fn the_via_stack_folds_under_its_header() {
+    let mut ctx = context();
+    let f = via(ViaType::Through, false);
+    let title = ctx
+        .i18n
+        .upper_for_display(&said(&ctx, ids::PCB_PRIM_VIA_STACK));
+    let open = stack_texts(&ctx, &f);
+    assert!(open.len() > 1, "{open:?}");
+    let at = lay_out_texts(via_stack(Look::of(&ctx), &f).expect("the stack"), WINDOW)
+        .into_iter()
+        .find(|t| t.text.replace(['\u{2068}', '\u{2069}'], "") == title)
+        .unwrap_or_else(|| panic!("{title} in {open:?}"))
+        .bounds
+        .center();
+    let section = via_stack(Look::of(&ctx), &f).expect("the stack");
+    let sent = messages_on_click_at(section, WINDOW, None, at);
+    assert!(
+        sent.iter().any(|m| matches!(
+            m,
+            crate::panels::PanelMsg::ToggleSection(key) if key == "pcb_prim.via.stack"
+        )),
+        "{sent:?}"
+    );
+    ctx.collapsed_sections.insert("pcb_prim.via.stack".into());
+    assert_eq!(stack_texts(&ctx, &f), [title]);
+}
+
 #[test]
 fn a_through_type_has_no_microvia_row() {
     let ctx = context();
