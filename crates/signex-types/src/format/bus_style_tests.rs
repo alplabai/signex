@@ -32,6 +32,14 @@ fn load(text: &str) -> Result<SchematicSheet, FormatError> {
     SnxSchematic::parse(text).map(|file| file.sheet)
 }
 
+/// The bus table alone: the wire table has its own `stroke_width` column.
+fn bus_block(text: &str) -> &str {
+    let start = text.find("[sheets.buses]").expect("a bus table");
+    let rest = &text[start + 1..];
+    let end = rest.find("\n[").unwrap_or(rest.len());
+    &rest[..end]
+}
+
 fn starts_with_token(text: &str, token: &str) -> bool {
     text.starts_with(&format!("format = \"{token}\""))
 }
@@ -40,8 +48,10 @@ fn starts_with_token(text: &str, token: &str) -> bool {
 fn an_unstyled_bus_writes_no_style_key_and_stays_at_the_low_token() {
     let text = save(&sheet_of(vec![bus(1, 0.0, None)]));
     assert!(starts_with_token(&text, SNXSCH_FORMAT_V1), "{text}");
-    assert!(!text.contains("stroke_width"), "{text}");
-    assert!(!text.contains("color"), "{text}");
+    let buses = bus_block(&text);
+    assert!(buses.contains("uuid"), "{text}");
+    assert!(!buses.contains("stroke_width"), "{buses}");
+    assert!(!buses.contains("color"), "{buses}");
     assert_eq!(save(&load(&text).unwrap()), text);
 }
 
