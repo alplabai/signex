@@ -7,6 +7,7 @@
 
 use signex_sketch::baked_kinds::BakedKind;
 use signex_sketch::entity::{Entity, EntityKind};
+use signex_sketch::id::SketchEntityId;
 use signex_sketch::sketch::SketchData;
 use signex_types::format::{UnknownFields, pcb_layer_token};
 use signex_types::pcb::{
@@ -18,6 +19,7 @@ use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::board_attr::{BakedAnchor, SketchBoardItems};
 use signex_types::zone_pour::POUR_FILL;
 
+use super::edge_chains::EdgeChains;
 use super::features::{expression, finite, named_net};
 use super::geometry::{boundary, circle, point};
 use super::patterned::{boundary_places, own_sources, places, refuse_pattern};
@@ -201,17 +203,37 @@ fn drawn(ctx: &Context<'_>, entity: &Entity) -> Result<Drawn, BoardBakeError> {
     })
 }
 
-/// A board drawing on its mechanical layer at each place of each line, arc
-/// or circle tagged `mechanical`.
+/// What a pattern of a connected mechanical shape names, and the points that
+/// say where the whole shape is.
+fn chain_reach(
+    ctx: &Context<'_>,
+    chain: &[&Entity],
+) -> Result<(Vec<SketchEntityId>, Vec<Point>), BoardBakeError> {
+    let (mut sources, mut shape) = (Vec::new(), Vec::new());
+    for edge in chain {
+        sources.extend(own_sources(edge));
+        shape.extend(drawn(ctx, edge)?.shape());
+    }
+    Ok((sources, shape))
+}
+
+/// A board drawing on its mechanical layer for each line, arc or circle
+/// tagged `mechanical`, at each place of the connected shape it belongs to.
 fn mechanical(ctx: &Context<'_>) -> Result<Vec<BoardGraphic>, BoardBakeError> {
+    let chains = EdgeChains::new(ctx.tagged(|e| e.mechanical.is_some()));
+    let reaches = chains
+        .chains()
+        .iter()
+        .map(|chain| chain_reach(ctx, chain))
+        .collect::<Result<Vec<_>, _>>()?;
     let mut out = Vec::new();
     for entity in ctx.tagged(|e| e.mechanical.is_some()) {
         let Some(attr) = entity.mechanical else {
             continue;
         };
         let edge = drawn(ctx, entity)?;
-        let sources = own_sources(entity);
-        for place in places(ctx, entity, &sources, &edge.shape(), "mechanical pattern")? {
+        let (sources, shape) = &reaches[chains.index_of(entity.id)];
+        for place in places(ctx, entity, sources, shape, "mechanical pattern")? {
             // A reflection turns an arc clockwise: swap its ends to keep it
             // counter-clockwise.
             let flip = place.mirrors() && edge.kind == BoardGraphicKind::Arc;
@@ -275,7 +297,6 @@ fn anchors(
 #[cfg(test)]
 mod tests {
     use signex_sketch::attr::{BoardCutoutAttr, PourAttr, ThermalRelief};
-    use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, TechnicalLayer};
     use signex_types::sketch::board_attr::{BoardSlotAttr, ComponentAnchorAttr, MechanicalAttr};
