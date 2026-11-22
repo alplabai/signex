@@ -167,7 +167,9 @@ fn drawing_stores(drawing: &SchDrawing, live: &SchDrawing, key: &str) -> bool {
             ) || (key == "override_text" && d.override_text.is_some())
         }
         SchDrawing::Table(t) => {
-            let same_source = matches!(live, SchDrawing::Table(l) if l.source == t.source);
+            // A source switched away and back keeps the other source's columns.
+            let same_source = matches!(live, SchDrawing::Table(l) if l.source == t.source
+                && l.columns.iter().map(|c| &c.key).eq(t.columns.iter().map(|c| &c.key)));
             matches!(key, "refresh" | "style" | "locked")
                 || (same_source && (key == "columns" || (key == "rows" && !t.source.is_bound())))
         }
@@ -534,6 +536,37 @@ mod tests {
             table_column("a", true),
             table_column("x", true),
             bound_since(table_column("a", true)),
+        );
+        assert!(now.is_none());
+    }
+
+    /// `drawing`, a table, left with another source's first column key.
+    fn rekeyed_since(drawing: SchDrawing) -> SchDrawing {
+        let SchDrawing::Table(mut table) = drawing else {
+            panic!("a table");
+        };
+        table.columns[0].key = "rev".into();
+        SchDrawing::Table(table)
+    }
+
+    /// Typed, bound, then typed again: the source matches, the columns don't.
+    #[test]
+    fn a_column_edit_is_refused_after_a_source_round_trip() {
+        let now = replayed(
+            table_column("a", true),
+            table_column("a", false),
+            rekeyed_since(table_column("b", true)),
+        );
+        assert!(now.is_none());
+    }
+
+    /// The same round trip must not write a cell under the other column.
+    #[test]
+    fn a_cell_edit_is_refused_after_a_source_round_trip() {
+        let now = replayed(
+            table(&[&["a", "b"]]),
+            table(&[&["x", "b"]]),
+            rekeyed_since(table(&[&["a", "y"]])),
         );
         assert!(now.is_none());
     }
