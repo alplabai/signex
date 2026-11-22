@@ -189,9 +189,17 @@ pub(super) fn push_text_note_sections<'a>(
     )
 }
 
-/// The Text box: grows with its lines up to `NoteDraft::MAX_VISIBLE_LINES`,
-/// then scrolls. Ctrl+Enter, Escape or a press outside it applies a typed
-/// draft.
+/// The tallest the Text box gets: `NoteDraft::MAX_VISIBLE_LINES` lines and
+/// its padding. Only a maximum: a minimum would leave the height unbounded
+/// inside the panel's scrollable.
+fn box_height_cap() -> f32 {
+    let line = TS.body * signex_widgets::theme_ext::LINE_HEIGHT;
+    line * crate::panels::NoteDraft::MAX_VISIBLE_LINES as f32 + 2.0 * SP.s
+}
+
+/// The Text box: grows with its wrapped lines up to
+/// `NoteDraft::MAX_VISIBLE_LINES`, then scrolls. Ctrl+Enter, Escape or a
+/// press outside it applies a typed draft.
 fn text_box<'a>(
     i18n: &signex_i18n::I18n,
     draft: &'a crate::panels::NoteDraft,
@@ -199,12 +207,10 @@ fn text_box<'a>(
     muted: Color,
     read_only: bool,
 ) -> Element<'a, PanelMsg> {
-    let line = TS.body * signex_widgets::theme_ext::LINE_HEIGHT;
-    let height = line * draft.visible_lines() as f32 + 2.0 * SP.s;
     let mut editor = iced::widget::text_editor(&draft.content)
         .size(TS.body)
         .padding(SP.s)
-        .height(Length::Fixed(height))
+        .height(Length::Fit.max(box_height_cap()))
         .key_binding(move |key| note_binding(key, item));
     if !read_only {
         editor = editor.on_action(move |action| {
@@ -320,6 +326,24 @@ mod tests {
             justification(&rows("Center", "Center")),
             (HAlign::Center, VAlign::Center)
         );
+    }
+
+    /// Mockup row 47: one long line wraps and the box grows to show it, up
+    /// to its six-line cap.
+    #[test]
+    fn the_text_box_grows_with_wrapped_lines_up_to_its_cap() {
+        let i18n = signex_i18n::I18n::en_us();
+        let item = SelectedItem::new(uuid::Uuid::from_u128(1), SelectedKind::TextNote);
+        let sheet = std::path::Path::new("a.snxsch");
+        let height = |typed: &str| {
+            let draft = crate::panels::NoteDraft::new(sheet, item, typed);
+            let view = text_box(&i18n, &draft, item, Color::BLACK, false);
+            crate::layout_probe::root_size(view, iced::Size::new(300.0, 2000.0)).height
+        };
+        let one_line = height("short");
+        assert!(height(&"long words ".repeat(8)) > one_line);
+        let cap = box_height_cap() + 4.0;
+        assert!(height(&"long words ".repeat(200)) <= cap);
     }
 
     #[test]

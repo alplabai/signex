@@ -29,6 +29,24 @@ pub(super) fn is_net_kind(kind: SelectedKind) -> bool {
     )
 }
 
+/// The label or power port that names `net_name`: the one whose text is the
+/// name (a local net's name carries its sheet path), else the first that
+/// sits on the net.
+pub(super) fn naming_member<'m>(
+    members: &'m [signex_net::NetMember],
+    net_name: &str,
+) -> Option<&'m signex_net::NetMember> {
+    let names = |m: &&signex_net::NetMember| {
+        matches!(m.kind, NetMemberKind::Label(_) | NetMemberKind::PowerPort)
+    };
+    let short = net_name.rsplit('/').next().unwrap_or(net_name);
+    members
+        .iter()
+        .filter(names)
+        .find(|m| m.text == net_name || m.text == short)
+        .or_else(|| members.iter().find(names))
+}
+
 /// The net of the pin `key` of the placed symbol `symbol` in the placement
 /// `occurrence` (every placement when `None`).
 pub(crate) fn pin_net(
@@ -130,6 +148,32 @@ impl Signex {
         signex_types::schematic::symbol_pin_at(doc, item.uuid, at, tolerance).map(|p| p.key)
     }
 
+    /// The net of the wire or bus `id` on the sheet at `sheet`, in the
+    /// placement the sheet shows, and what names it. `None` while the index
+    /// is not built: this never starts a build.
+    pub(crate) fn run_net_of(
+        &self,
+        sheet: &std::path::Path,
+        id: uuid::Uuid,
+    ) -> Option<crate::panels::RunNet> {
+        let project = self.project_of_sheet(sheet)?;
+        let data = self.ready_net_data(project)?;
+        let key = data.key_of(sheet)?;
+        let occurrence = self.net_occurrence(&data, sheet);
+        let net = *data.index.nets_in(&key, id, occurrence.as_ref()).first()?;
+        let net = data.index.net(net)?;
+        if net.name.is_empty() {
+            return None;
+        }
+        let named_by = naming_member(&net.members, &net.name).map(|member| {
+            signex_net::NetAnchor::new(member.sheet.clone(), member.id, member.occurrence.clone())
+        });
+        Some(crate::panels::RunNet {
+            name: net.name.clone(),
+            named_by,
+        })
+    }
+
     /// The net name of each of `pins` (keys) of the placed symbol `symbol` on
     /// the sheet at `sheet`, from the project net index in the placement the
     /// sheet shows (the hover card reads the same). Empty while the index is
@@ -228,5 +272,42 @@ impl Signex {
         path: &std::path::Path,
     ) -> Option<crate::app::state::ProjectId> {
         self.document_state.document_project(path).map(|p| p.id)
+    }
+}
+
+#[cfg(test)]
+mod run_net_tests {
+    use super::*;
+    use signex_net::NetMember;
+    use signex_types::schematic::LabelType;
+
+    fn member(n: u128, kind: NetMemberKind, text: &str) -> NetMember {
+        NetMember {
+            sheet: SheetKey::new("root"),
+            occurrence: InstancePath::root(),
+            kind,
+            id: uuid::Uuid::from_u128(n),
+            at: Point::new(0.0, 0.0),
+            text: text.into(),
+        }
+    }
+
+    /// 2026-11-22 (mockup row 45): the jump goes to the label whose text is
+    /// the net's name, also when a local net's name carries its sheet path.
+    #[test]
+    fn the_jump_finds_the_label_that_names_the_net() {
+        let members = [
+            member(1, NetMemberKind::Wire, ""),
+            member(2, NetMemberKind::Label(LabelType::Net), "OTHER"),
+            member(3, NetMemberKind::Label(LabelType::Net), "SPI_CLK"),
+        ];
+        let named = naming_member(&members, "/SPI_CLK").map(|m| m.id);
+        assert_eq!(named, Some(uuid::Uuid::from_u128(3)));
+    }
+
+    #[test]
+    fn a_net_with_no_label_has_nothing_to_jump_to() {
+        let members = [member(1, NetMemberKind::Wire, "")];
+        assert!(naming_member(&members, "Net-1").is_none());
     }
 }

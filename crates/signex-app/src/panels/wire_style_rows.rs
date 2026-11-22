@@ -32,6 +32,9 @@ const FIELD_SWATCH_EM: f32 = 16.0 / 12.0;
 const MENU_ROW_EM: f32 = 24.0 / 12.0;
 /// Swatches per popover row.
 const SWATCHES_PER_ROW: usize = 6;
+/// Under the field. `BottomStart` of the dropdown widget opens to the
+/// field's left, away from it.
+const POPOVER_ALIGNMENT: iced_aw::drop_down::Alignment = iced_aw::drop_down::Alignment::Bottom;
 
 /// Whether the wire colour picker is closed, shows the preset palette or the
 /// full HSV / RGB picker.
@@ -151,6 +154,7 @@ fn field_swatch<'a>(current: Option<[u8; 4]>) -> Element<'a, PanelMsg> {
 fn color_field_face<'a>(
     current: Option<[u8; 4]>,
     is_open: bool,
+    on_toggle: PanelMsg,
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
     let name: signex_widgets::Label<'a> = match current {
@@ -180,7 +184,7 @@ fn color_field_face<'a>(
     button(face)
         .width(Length::Fill)
         .padding([SP.s, SP.s + SP.xs])
-        .on_press(PanelMsg::ToggleWireColorPicker)
+        .on_press(on_toggle)
         .style(move |theme: &Theme, status| {
             let mut style = form_look::value_field_button(theme, status);
             if is_open {
@@ -226,11 +230,12 @@ fn menu_row<'a>(
     row.boxed()
 }
 
-/// The popover under the Color field: Preset Colours, Custom…, Reset to
-/// Default. Reset is live only while the wire has a colour of its own.
+/// The popover under a colour field: Preset Colours, Custom…, Reset to
+/// Default. Reset is live only while the object has a colour of its own.
 fn color_popover<'a>(
     current: Option<[u8; 4]>,
     on_pick: &Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static>,
+    on_advanced: PanelMsg,
     on_clear: Option<PanelMsg>,
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
@@ -287,7 +292,7 @@ fn color_popover<'a>(
         .push(rule.boxed())
         .push(menu_row(
             t!(i18n, ids::PROPERTIES_COLOR_CUSTOM),
-            Some(PanelMsg::OpenWireColorAdvancedPicker),
+            Some(on_advanced),
         ))
         .push(menu_row(t!(i18n, ids::PROPERTIES_COLOR_RESET), on_clear));
     container(body)
@@ -320,41 +325,78 @@ pub fn wire_color_row<'a>(
     _border_c: Color,
     i18n: &I18n,
 ) -> Element<'a, PanelMsg> {
-    let rgba = current.map(color_to_rgba);
     let on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static> = {
         let on_set = Rc::clone(&on_set);
         Rc::new(move |rgba| on_set(Some(rgba_to_color(rgba))))
     };
-    let face = color_field_face(rgba, picker != WireColorPicker::Closed, i18n);
+    popover_color_row(
+        PopoverColorRow {
+            label: t!(i18n, ids::PROPERTIES_WIRE_COLOR),
+            current: current.map(color_to_rgba),
+            picker,
+            on_toggle: PanelMsg::ToggleWireColorPicker,
+            on_advanced: PanelMsg::OpenWireColorAdvancedPicker,
+            on_cancel: PanelMsg::CancelWireColorPicker,
+            on_pick,
+            on_clear: current.is_some().then(|| on_set(None)),
+        },
+        i18n,
+    )
+}
+
+/// What a colour field with the preset popover shows and sends.
+pub struct PopoverColorRow {
+    pub label: signex_i18n::Localized,
+    pub current: Option<[u8; 4]>,
+    pub picker: WireColorPicker,
+    /// A press on the field: open or close the popover.
+    pub on_toggle: PanelMsg,
+    /// Custom…: open the HSV / RGB picker.
+    pub on_advanced: PanelMsg,
+    /// A press outside: close whatever is open.
+    pub on_cancel: PanelMsg,
+    pub on_pick: Rc<dyn Fn([u8; 4]) -> PanelMsg + 'static>,
+    /// Reset to Default; `None` greys it.
+    pub on_clear: Option<PanelMsg>,
+}
+
+/// A labelled colour field whose popover opens right under it (mockup rows
+/// 43 and 46).
+pub fn popover_color_row<'a>(row: PopoverColorRow, i18n: &I18n) -> Element<'a, PanelMsg> {
+    let PopoverColorRow {
+        label,
+        current,
+        picker,
+        on_toggle,
+        on_advanced,
+        on_cancel,
+        on_pick,
+        on_clear,
+    } = row;
+    let face = color_field_face(current, picker != WireColorPicker::Closed, on_toggle, i18n);
     let control: Element<'a, PanelMsg> = match picker {
-        WireColorPicker::Advanced => {
-            let on_pick_hsv = Rc::clone(&on_pick);
-            iced_aw::ColorPicker::new(
-                true,
-                rgba.map_or(Color::WHITE, iced_color),
-                face,
-                PanelMsg::CancelWireColorPicker,
-                move |c: Color| {
-                    let [r, g, b, a] = c.into_rgba8();
-                    on_pick_hsv([r, g, b, a])
-                },
-            )
-            .boxed()
-        }
-        WireColorPicker::Closed | WireColorPicker::Palette => {
-            let on_clear = current.is_some().then(|| on_set(None));
-            iced_aw::DropDown::new(
-                face,
-                color_popover(rgba, &on_pick, on_clear, i18n),
-                picker == WireColorPicker::Palette,
-            )
-            .alignment(iced_aw::drop_down::Alignment::BottomStart)
-            .offset(SP.xs)
-            .on_dismiss(PanelMsg::CancelWireColorPicker)
-            .boxed()
-        }
+        WireColorPicker::Advanced => iced_aw::ColorPicker::new(
+            true,
+            current.map_or(Color::WHITE, iced_color),
+            face,
+            on_cancel,
+            move |c: Color| {
+                let [r, g, b, a] = c.into_rgba8();
+                on_pick([r, g, b, a])
+            },
+        )
+        .boxed(),
+        WireColorPicker::Closed | WireColorPicker::Palette => iced_aw::DropDown::new(
+            face,
+            color_popover(current, &on_pick, on_advanced, on_clear, i18n),
+            picker == WireColorPicker::Palette,
+        )
+        .alignment(POPOVER_ALIGNMENT)
+        .offset(SP.xs)
+        .on_dismiss(on_cancel)
+        .boxed(),
     };
-    labelled_row(t!(i18n, ids::PROPERTIES_WIRE_COLOR), control)
+    labelled_row(label, control)
 }
 
 #[cfg(test)]
@@ -434,6 +476,40 @@ mod tests {
         assert!(shown.iter().any(|t| t == "Color"), "{shown:?}");
         assert!(shown.iter().any(|t| t == "Default"), "{shown:?}");
         assert!(!shown.iter().any(|t| t == "Preset Colours"), "{shown:?}");
+    }
+
+    /// Mockup row 43: the popover opens under its field, not beside it.
+    #[test]
+    fn the_colour_popover_opens_under_its_field() {
+        assert!(matches!(
+            POPOVER_ALIGNMENT,
+            iced_aw::drop_down::Alignment::Bottom
+        ));
+    }
+
+    /// A press on a shared colour field sends the message of its owner.
+    #[test]
+    fn a_colour_field_sends_its_owners_toggle() {
+        let en = I18n::en_us();
+        let row = popover_color_row(
+            PopoverColorRow {
+                label: t!(en, ids::PROPERTIES_SHEET_BORDER),
+                current: None,
+                picker: WireColorPicker::Closed,
+                on_toggle: PanelMsg::CancelChildSheetColorPicker,
+                on_advanced: PanelMsg::Noop,
+                on_cancel: PanelMsg::Noop,
+                on_pick: Rc::new(|_| PanelMsg::Noop),
+                on_clear: None,
+            },
+            &en,
+        );
+        let pressed =
+            crate::layout_probe::messages_on_click(row, iced::Size::new(320.0, 80.0), "Default");
+        assert!(
+            matches!(pressed.as_slice(), [PanelMsg::CancelChildSheetColorPicker]),
+            "{pressed:?}"
+        );
     }
 
     /// A wire with its own colour shows the hex code.
