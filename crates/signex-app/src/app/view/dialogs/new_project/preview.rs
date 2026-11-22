@@ -232,17 +232,17 @@ pub(crate) fn pane<'a>(
     );
     // The pane scrolls on a short window, so nothing in it is `Fill`.
     container(scrollable(parts))
-    .padding([SP.xl + SP.s, SP.xl])
-    .width(Length::Fixed(PREVIEW_W))
-    .height(Length::Fill)
-    .style(move |_: &Theme| container::Style {
-        background: Some(fill.into()),
-        border: iced::Border {
-            width: 1.0,
-            color: line,
-            ..iced::Border::default()
-        },
-        ..container::Style::default()
-    })
-    .boxed()
+        .padding([SP.xl + SP.s, SP.xl])
+        .width(Length::Fixed(PREVIEW_W))
+        .height(Length::Fill)
+        .style(move |_: &Theme| container::Style {
+            background: Some(fill.into()),
+            border: iced::Border {
+                width: 1.0,
+                color: line,
+                ..iced::Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
 }

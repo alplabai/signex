@@ -154,7 +154,8 @@ pub(super) fn waive_editor<'a>(
         },
         ReasonFormEvents {
             reason: |action| PanelMsg::ErcWaiver(ErcWaiverMsg::ReasonActed(action)),
-            confirm: (!draft.awaits_identity).then_some(PanelMsg::ErcWaiver(ErcWaiverMsg::Confirmed)),
+            confirm: (!draft.awaits_identity)
+                .then_some(PanelMsg::ErcWaiver(ErcWaiverMsg::Confirmed)),
             cancel: PanelMsg::ErcWaiver(ErcWaiverMsg::Cancelled),
         },
         &ctx.i18n,
@@ -311,10 +312,7 @@ mod tests {
             "LAPSED: an involved object changed"
         );
         assert_eq!(words(ErcWaiverStatus::Unmatched), "matches no finding");
-        assert_eq!(
-            words(ErcWaiverStatus::Incomplete),
-            "ignored: no reason"
-        );
+        assert_eq!(words(ErcWaiverStatus::Incomplete), "ignored: no reason");
         assert_eq!(ErcWaiverStatus::of_net(0), ErcWaiverStatus::Unmatched);
         assert_eq!(ErcWaiverStatus::of_net(3), ErcWaiverStatus::Waiving(3));
     }

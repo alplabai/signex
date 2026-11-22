@@ -60,10 +60,12 @@ pub(in crate::library::editor::footprint::canvas::draw) fn draw_pattern_instance
             segments: &DASH,
             offset: 0,
         },
-        ..Stroke::default().with_width(STROKE_PX).with_color(iced::Color {
-            a: INK_ALPHA,
-            ..SELECTION
-        })
+        ..Stroke::default()
+            .with_width(STROKE_PX)
+            .with_color(iced::Color {
+                a: INK_ALPHA,
+                ..SELECTION
+            })
     };
     for array in &sketch.arrays {
         for (at, radius) in instance_circles(array, sketch, solve) {

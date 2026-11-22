@@ -428,7 +428,11 @@ fn importing_parameters_copies_the_ticked_ones_as_one_undo_step() {
     rig.send(SketchParametersMsg::ImportRowToggled { name: "w".into() });
     rig.send(SketchParametersMsg::ImportConfirmed);
 
-    assert_eq!(rig.parameter("w").as_deref(), Some("2mm"), "never overwritten");
+    assert_eq!(
+        rig.parameter("w").as_deref(),
+        Some("2mm"),
+        "never overwritten"
+    );
     assert_eq!(rig.parameter("pitch").as_deref(), Some("0.65mm"));
     assert_eq!(rig.parameter("span"), None, "unticked");
     assert_eq!(rig.undo_steps(), steps + 1);

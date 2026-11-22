@@ -612,7 +612,10 @@ fn a_power_port_has_one_name_field() {
     );
     let shown = texts(&ctx);
     assert!(shown.iter().any(|t| t.text == "Name"), "{shown:#?}");
-    assert!(shown.iter().any(|t| t.text == "Physical Name"), "{shown:#?}");
+    assert!(
+        shown.iter().any(|t| t.text == "Physical Name"),
+        "{shown:#?}"
+    );
     assert!(!shown.iter().any(|t| t.text == "Net Name"), "{shown:#?}");
 }
 

@@ -155,8 +155,8 @@ pub use properties_parameters::{
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
     form_choice_row, form_edit_row, form_edit_row_refusable, form_font_link_row, form_input_row,
-    form_label, form_pick_row, justification_grid, label_anchor,
-    net_params_add_bar, net_params_tabs, seg_btn, thin_sep,
+    form_label, form_pick_row, justification_grid, label_anchor, net_params_add_bar,
+    net_params_tabs, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;

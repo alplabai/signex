@@ -580,7 +580,10 @@ impl Signex {
             }
             crate::panels::PanelMsg::UpdateDrawingEdit(edit) => {
                 // A colour pick closes the popover it came from.
-                if matches!(edit, crate::app::contracts::DrawingFieldEdit::StrokeColor(_)) {
+                if matches!(
+                    edit,
+                    crate::app::contracts::DrawingFieldEdit::StrokeColor(_)
+                ) {
                     self.document_state.panel_ctx.wire_color_picker =
                         crate::panels::WireColorPicker::Closed;
                 }

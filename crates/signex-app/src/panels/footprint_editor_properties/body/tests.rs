@@ -168,7 +168,11 @@ fn the_footprint_illustration_draws_the_numbers_outlines_and_callouts() {
             .filter(|part| want(&part.primitive))
             .count()
     };
-    assert_eq!(count(|p| matches!(p, Primitive::Label(_))), 8, "pad numbers");
+    assert_eq!(
+        count(|p| matches!(p, Primitive::Label(_))),
+        8,
+        "pad numbers"
+    );
     assert_eq!(
         count(|p| matches!(p, Primitive::Leader(_))),
         3,

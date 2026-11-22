@@ -125,7 +125,10 @@ fn the_waive_form_needs_one_reason_and_takes_the_git_author() {
     assert_eq!(draft.reason.text(), "by design", "the second press");
     assert!(draft.awaits_identity);
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
-    assert!(board_waivers(&app, &path).is_empty(), "waits for the author");
+    assert!(
+        board_waivers(&app, &path).is_empty(),
+        "waits for the author"
+    );
 
     app.handle_waiver_identity_resolved(Some("C. Alp".into()));
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
@@ -147,7 +150,11 @@ fn an_empty_reason_is_refused() {
     panel(&mut app, DrcPanelMsg::WaiveStarted(clearance));
     panel(&mut app, DrcPanelMsg::WaiveConfirmed);
     assert!(board_waivers(&app, &path).is_empty());
-    let draft = app.pcb_drc_panel().unwrap().waive_draft.expect("still open");
+    let draft = app
+        .pcb_drc_panel()
+        .unwrap()
+        .waive_draft
+        .expect("still open");
     assert!(draft.blank);
 }
 

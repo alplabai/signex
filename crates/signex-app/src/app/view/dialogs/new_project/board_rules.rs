@@ -262,9 +262,7 @@ pub(super) fn section<'a>(
             tokens
         ),
         framed,
-        text(line)
-            .size(TS.body)
-            .color(tokens::muted_text(tokens)),
+        text(line).size(TS.body).color(tokens::muted_text(tokens)),
     ]
     .spacing(SP.s)
     .boxed()
@@ -325,12 +323,13 @@ fn expanded_body<'a>(
     match view {
         DialogPreview::BoardRules => {
             let ground = BoardPalette::new().canvas;
-            let board = container(drawing(state, EXPANDED_ZOOM, true, i18n)).style(
-                move |_: &Theme| container::Style {
-                    background: Some(Background::Color(ground)),
-                    ..container::Style::default()
-                },
-            );
+            let board =
+                container(drawing(state, EXPANDED_ZOOM, true, i18n)).style(move |_: &Theme| {
+                    container::Style {
+                        background: Some(Background::Color(ground)),
+                        ..container::Style::default()
+                    }
+                });
             let side = column![
                 preview::stack_card(state, i18n),
                 customize::board_size_fields(state, i18n, tokens),

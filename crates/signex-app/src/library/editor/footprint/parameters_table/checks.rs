@@ -33,8 +33,7 @@ type PadBox<'a> = (&'a EditorPad, (f64, f64, f64, f64));
 /// The designators of the pad pairs whose outlines overlap, at most
 /// [`MAX_OVERLAPS`]. Sorted along X, so a large footprint stays cheap.
 pub(super) fn overlapping_pads(pads: &[EditorPad]) -> Vec<(String, String)> {
-    let mut boxes: Vec<PadBox<'_>> =
-        pads.iter().map(|pad| (pad, pad.bbox_mm())).collect();
+    let mut boxes: Vec<PadBox<'_>> = pads.iter().map(|pad| (pad, pad.bbox_mm())).collect();
     boxes.sort_by(|a, b| a.1.0.total_cmp(&b.1.0));
     let mut out = Vec::new();
     for (k, (pad, (_, y0, x1, y1))) in boxes.iter().enumerate() {

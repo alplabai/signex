@@ -159,9 +159,10 @@ impl Signex {
         use NewProjectMsg as M;
         match edit {
             M::Preview(preview) => match self.ui_state.document_setup.as_mut() {
-                Some(state) => state.draft.act_on_preview(preview).map(|msg| {
-                    Message::from(DocumentSetupMsg::Setup(NewProjectMsg::Preview(msg)))
-                }),
+                Some(state) => state
+                    .draft
+                    .act_on_preview(preview)
+                    .map(|msg| Message::from(DocumentSetupMsg::Setup(NewProjectMsg::Preview(msg)))),
                 None => Task::none(),
             },
             M::ProfilePicked(_)

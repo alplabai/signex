@@ -9,8 +9,8 @@
 use signex_sketch::SketchData;
 use signex_sketch::mirrored_angle::parameter_from_mirrored_angle;
 use signex_sketch::parameter_refs::{
-    DeleteParameterError, DeletePolicy, check_new_name, delete_parameter,
-    parameter_from_dimension, rename_parameter, resolve_rows, unique_name, used_by,
+    DeleteParameterError, DeletePolicy, check_new_name, delete_parameter, parameter_from_dimension,
+    rename_parameter, resolve_rows, unique_name, used_by,
 };
 
 use crate::app::FootprintDocument;
@@ -109,9 +109,7 @@ fn confirm_import(editor: &mut FootprintDocument) {
     let mut added = false;
     for row in import.picked() {
         if check_new_name(&sketch.parameters, &row.name).is_ok() {
-            sketch
-                .parameters
-                .insert(row.name.clone(), row.expr.clone());
+            sketch.parameters.insert(row.name.clone(), row.expr.clone());
             added = true;
         }
     }

@@ -580,7 +580,10 @@ fn the_erc_form_waits_for_git_and_takes_its_author() {
         app.erc_violation_waiver_entries().is_empty(),
         "waits for the author"
     );
-    assert!(app.ui_state.erc_waive_draft.is_some(), "the form stays open");
+    assert!(
+        app.ui_state.erc_waive_draft.is_some(),
+        "the form stays open"
+    );
 
     app.handle_waiver_identity_resolved(Some("C. Alp".into()));
     send(&mut app, ErcWaiverMsg::Confirmed);

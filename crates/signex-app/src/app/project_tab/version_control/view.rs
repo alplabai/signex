@@ -181,10 +181,7 @@ fn present_body<'a>(
                 .boxed(),
         );
     }
-    rows.push(last)
-        .push(history)
-        .spacing(SP.m + SP.xs)
-        .boxed()
+    rows.push(last).push(history).spacing(SP.m + SP.xs).boxed()
 }
 
 /// The Repository card: the state pill in the header; the rows of
@@ -248,9 +245,7 @@ fn author_row<'a>(
         .width(Length::Fixed(AUTHOR_W));
     if repository == Repository::Present {
         input = input
-            .on_input(move |text| {
-                Message::from(ProjectGitMsg::AuthorEdited { project_id, text })
-            })
+            .on_input(move |text| Message::from(ProjectGitMsg::AuthorEdited { project_id, text }))
             .on_submit(Message::from(ProjectGitMsg::AuthorSubmitted { project_id }));
     }
     let line = option_row(

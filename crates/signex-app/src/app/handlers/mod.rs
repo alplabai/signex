@@ -79,6 +79,7 @@ mod pcb_edit;
 #[cfg(test)]
 mod pcb_edit_tests;
 mod pcb_filter_presets;
+mod pcb_footprint_place;
 pub(crate) mod pcb_footprint_text;
 pub(crate) mod pcb_item_edits;
 pub(crate) mod pcb_layer_stack;
@@ -92,7 +93,6 @@ mod pcb_one_grid_tests;
 mod pcb_origin;
 #[cfg(test)]
 mod pcb_origin_tests;
-mod pcb_footprint_place;
 mod pcb_parking;
 mod pcb_part_place;
 pub(crate) mod pcb_placement;

@@ -184,7 +184,11 @@ mod tests {
     /// Mockup row 125: "(custom)" first, each template once, in name order.
     #[test]
     fn the_dropdown_lists_custom_then_the_footprints_templates() {
-        let pads = [pad("rr155x60", "Lib"), pad("c180", ""), pad("rr155x60", "Lib")];
+        let pads = [
+            pad("rr155x60", "Lib"),
+            pad("c180", ""),
+            pad("rr155x60", "Lib"),
+        ];
         let offered = choices(&pads, Some(1), "c180", "");
         let names: Vec<&str> = offered.rows.iter().map(|c| c.template.as_str()).collect();
         assert_eq!(names, ["", "c180", "rr155x60"]);

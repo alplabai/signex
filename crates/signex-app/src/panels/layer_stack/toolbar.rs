@@ -6,8 +6,8 @@ use iced::widget::{pick_list, row};
 use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{MessageId, UserText, ids, t};
 use signex_types::pcb_stack::StackLayerKind;
-use signex_widgets::doc_tab_shell::Toolbar;
 use signex_widgets::PickListPlaceholder as _;
+use signex_widgets::doc_tab_shell::Toolbar;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{ToggleSwitchStyle, button, segmented, text, text_input, toggle_switch};
 
