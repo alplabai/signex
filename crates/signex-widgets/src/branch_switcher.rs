@@ -298,7 +298,7 @@ pub fn branch_popover<'a, M: Clone + 'a>(
         ..
     } = messages;
     let find = text_input(t!(i18n, ids::PANELS_HISTORY_BRANCH_FIND), state.query)
-        .on_input(move |value| on_query(value))
+        .on_input(on_query)
         .size(s.text_size)
         .padding(s.em(POPOVER_PAD_EM));
     let create = menu_row(

@@ -276,6 +276,7 @@ mod tests {
         NumberingScheme::LinearIncrement {
             start_expr: "1 +".to_string(),
             step_expr: "1".to_string(),
+            sweep: Default::default(),
         }
     }
 
@@ -376,6 +377,7 @@ mod tests {
         let scheme = NumberingScheme::LinearIncrement {
             start_expr: "= 10".to_string(),
             step_expr: "2".to_string(),
+            sweep: Default::default(),
         };
 
         let number = derive_pad_number(&scheme, 3, &mut ctx, &mut warnings, source);
