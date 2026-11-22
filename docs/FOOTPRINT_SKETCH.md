@@ -488,9 +488,14 @@ A pad made in the sketch keeps the id of the entity that drives it
   no undo step and does not mark the document changed. A board sketch has no pads
   and shows no link.
 
+- A pad with sketch geometry behind it shows a read-only **Driven by sketch**
+  section in Properties (mockup row 192, item D5): its source (a pad point or
+  a profile of N edges), its pattern instance, found from its position by
+  `signex_bake::instance_at`, and its size.
+
 Not done yet: the outline of the pattern instance a pad came from (pads do
-not record their instance yet), and a "Driven by sketch" section in the pad
-Properties.
+not record their instance yet), and locking the pad's Size fields to "from
+sketch".
 
 ## Pattern links {#pattern-links}
 

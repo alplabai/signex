@@ -675,7 +675,7 @@ fn mono() -> iced::Font {
 }
 
 /// A form field, its border and text in the error colour when `bad`.
-fn field_style(
+pub(crate) fn field_style(
     tokens: &ThemeTokens,
     bad: bool,
 ) -> impl Fn(&Theme, text_input::Status) -> text_input::Style + 'static {

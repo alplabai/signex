@@ -609,6 +609,8 @@ pub struct FootprintPadSummary {
     pub hole_rotation_deg: Option<f64>,
     pub copper_offset_x_mm: Option<f64>,
     pub copper_offset_y_mm: Option<f64>,
+    /// The sketch geometry that drives the pad (mockup row 192, item D5).
+    pub sketch_source: Option<crate::library::editor::footprint::PadSketchSource>,
 }
 
 /// v0.18.24 — Read-only summary of the currently-selected silk-front

@@ -39,6 +39,9 @@ pub struct BoardSketchSession {
     /// Why the open preview's bake refuses, with the entity it names: the
     /// preview card selects it on a click (mockup row 190).
     pub preview_error: Option<BoardBakeError>,
+    /// The open Import DXF dialog (mockup row 179c); the sketch is unchanged
+    /// until its Import.
+    pub dxf_dialog: Option<Box<super::SketchDxfDialog>>,
     /// The sketch as the board last took it (or had it at entry).
     start: SketchData,
 }
@@ -77,6 +80,7 @@ impl BoardSketchSession {
             refusal: None,
             preview: None,
             preview_error: None,
+            dxf_dialog: None,
             start,
         }
     }

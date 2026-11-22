@@ -88,3 +88,26 @@ board-sketch-check-corner-tight = Inside corner R { $radius } < R { $tool } at (
 board-sketch-fab-section = Fab profile
 board-sketch-fab-router = Router tool Ø { $diameter } · from profile
 board-sketch-fab-router-none = Router tool: the project's fab profile names none
+# The Import DXF dialog of the board sketch (mockup row 179c).
+board-sketch-dxf-open = Import DXF…
+board-sketch-dxf-title = Import DXF into sketch
+board-sketch-dxf-file = File
+board-sketch-dxf-units = Units
+board-sketch-dxf-units-file = From file
+board-sketch-dxf-units-mm = mm
+board-sketch-dxf-units-mil = mil
+board-sketch-dxf-units-inch = in
+board-sketch-dxf-scale = Scale
+board-sketch-dxf-scale-hint = 1
+board-sketch-dxf-skip = Skip
+board-sketch-dxf-sketch-only = Sketch only
+board-sketch-dxf-join = Add H / V and Coincident where found
+# What Import would make; $healed gaps are closed under the heal tolerance.
+board-sketch-dxf-check = { $edges } edges · { $healed } gaps healed · { $open } open ends
+board-sketch-dxf-bad-scale = The scale must be a number above 0.
+board-sketch-dxf-out-of-range = At this scale the drawing leaves the range a board file holds.
+board-sketch-dxf-nothing = Every layer is on Skip: nothing to import.
+board-sketch-dxf-import = Import
+board-sketch-dxf-cancel = Cancel
+board-sketch-dxf-imported = Imported { $edges } edges from { $file } into the sketch: { $healed } gaps healed, { $open } open ends.
+board-sketch-dxf-rejected = { $file } was not imported: the sketch could not solve with it.

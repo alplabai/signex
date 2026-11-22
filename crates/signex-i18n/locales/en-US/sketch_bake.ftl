@@ -24,3 +24,9 @@ sketch-bake-gap-too-wide = Gap { $gap } mm is wider than the { $tolerance } mm h
 # An open profile Close gap cannot be offered on: an end nothing pairs, or a
 # sketch with no solve. $x and $y are millimetres.
 sketch-bake-open-end = Open profile at ({ $x }, { $y }) mm
+# The layer colour legend over a footprint's bake preview (mockup row 190).
+sketch-bake-legend-top = Top
+sketch-bake-legend-paste = Paste
+sketch-bake-legend-mask = Mask
+sketch-bake-legend-silk = Silk
+sketch-bake-legend-courtyard = Courtyard

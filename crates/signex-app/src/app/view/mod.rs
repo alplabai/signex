@@ -11,6 +11,7 @@ pub(crate) mod overlay_id;
 
 mod board_3d;
 mod board_sketch;
+mod board_sketch_dxf;
 pub(in crate::app) mod canvas_region;
 mod chrome;
 mod context_menu;

@@ -223,6 +223,15 @@ define_ids! {
     EDITORS_FP_PAD_PLACE = "editors-fp-pad-place";
     EDITORS_FP_PAD_NEXT_TITLE = "editors-fp-pad-next-title";
     EDITORS_FP_PAD_EDIT_IN_SKETCH = "editors-fp-pad-edit-in-sketch";
+    EDITORS_FP_PAD_DRIVEN_BY = "editors-fp-pad-driven-by";
+    EDITORS_FP_PAD_DRIVEN_SOURCE = "editors-fp-pad-driven-source";
+    EDITORS_FP_PAD_DRIVEN_POINT = "editors-fp-pad-driven-point";
+    EDITORS_FP_PAD_DRIVEN_PROFILE = "editors-fp-pad-driven-profile";
+    EDITORS_FP_PAD_DRIVEN_INSTANCE = "editors-fp-pad-driven-instance";
+    EDITORS_FP_PAD_DRIVEN_SINGLE = "editors-fp-pad-driven-single";
+    EDITORS_FP_PAD_DRIVEN_PATTERN = "editors-fp-pad-driven-pattern";
+    EDITORS_FP_PAD_DRIVEN_SIZE = "editors-fp-pad-driven-size";
+    EDITORS_FP_PAD_DRIVEN_SIZE_VALUE = "editors-fp-pad-driven-size-value";
     EDITORS_FP_PAD_PILL_NPTH = "editors-fp-pad-pill-npth";
     EDITORS_FP_PAD_SECTION_PROPERTIES = "editors-fp-pad-section-properties";
     EDITORS_FP_PAD_SECTION_PAD_TOP = "editors-fp-pad-section-pad-top";
