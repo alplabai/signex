@@ -239,8 +239,7 @@ fn tier_card<'a>(
         head,
         text(t!(i18n, blurb))
             .size(TS.body)
-            .color(tokens::resolve(tokens).ink3)
-            .wrapping(iced::widget::text::Wrapping::None),
+            .color(tokens::resolve(tokens).ink3),
         container(specs(profile, users, i18n, tokens)).padding([SP.xs, 0.0]),
         container(layer_row).padding(iced::Padding {
             top: SP.xs,

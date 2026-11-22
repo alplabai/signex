@@ -25,7 +25,7 @@ pub(crate) const LIST_GROUP_H: f32 = chrome_px(24.0 * 11.0 / 12.0);
 /// Height of a key cap (18 px).
 const CAP_H: f32 = chrome_px(18.0 * 11.0 / 12.0);
 /// The file tile: 30 x 36 px, its code set at 8.5 px on the bottom edge.
-const TILE_W: f32 = chrome_px(30.0 * 11.0 / 12.0);
+pub(super) const TILE_W: f32 = chrome_px(30.0 * 11.0 / 12.0);
 const TILE_H: f32 = chrome_px(36.0 * 11.0 / 12.0);
 const TILE_CODE: f32 = chrome_px(8.5 * 11.0 / 12.0);
 /// Height of a pill (16 px).

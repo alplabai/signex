@@ -158,6 +158,28 @@ fn the_dialog_builds_closed_open_and_with_many_layers() {
     let _ = app.view_new_project_dialog();
 }
 
+/// Mockup row 22: a card's blurb wraps inside a narrow card instead of
+/// running past its edge.
+#[test]
+fn a_profile_card_blurb_wraps_inside_a_narrow_card() {
+    let (mut app, _t) = crate::app::Signex::new();
+    let _ = app.update(crate::app::Message::Menu(
+        crate::menu_bar::MenuMessage::NewProject,
+    ));
+    let state = app.ui_state.new_project.as_ref().expect("dialog open");
+    let i18n = signex_i18n::I18n::en_us_ref();
+    let body = crate::styles::TypeScale::DEFAULT.body;
+    const ROOM: f32 = 460.0;
+    for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let t = theme_tokens(id);
+        let grid = super::cards::tier_grid(state, &[], i18n, &t);
+        let texts = crate::layout_probe::lay_out_texts(grid, iced::Size::new(ROOM, 800.0));
+        let blurb = crate::layout_probe::find(&texts, "Fine-pitch BGAs, laser microvias.").bounds;
+        assert!(blurb.height >= 2.0 * body, "{id:?}: {blurb:?}");
+        assert!(blurb.x + blurb.width <= ROOM / 2.0, "{id:?}: {blurb:?}");
+    }
+}
+
 /// A rendered message without Fluent's bidi isolation marks.
 fn plain(text: signex_i18n::Localized) -> String {
     text.into_string()
