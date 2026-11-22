@@ -123,6 +123,9 @@ pub enum RuleKind {
     PartWithoutValue,
     /// A part carries no manufacturer part number field.
     PartWithoutMpn,
+    /// A non-power part whose library body is not on the sheet: its pins are
+    /// not known, so they get no pin checks and join no net.
+    PartWithoutLibraryBody,
     /// A part's designator is empty or still unannotated (`R?`).
     UnannotatedDesignator,
     /// A net connects exactly one pin and goes nowhere else.
@@ -185,6 +188,7 @@ impl RuleKind {
             RuleKind::PartWithoutFootprint => "Part without footprint",
             RuleKind::PartWithoutValue => "Part without value",
             RuleKind::PartWithoutMpn => "Part without MPN",
+            RuleKind::PartWithoutLibraryBody => "Part without library body",
             RuleKind::UnannotatedDesignator => "Unannotated designator",
             RuleKind::SinglePinNet => "Single-pin net",
             RuleKind::NetWithNoDriver => "Net with no driver",
@@ -220,7 +224,7 @@ impl RuleKind {
     }
 
     /// Every built-in rule, in the order the ERC dialog lists them.
-    pub const ALL: [RuleKind; 36] = [
+    pub const ALL: [RuleKind; 37] = [
         RuleKind::UnusedPin,
         RuleKind::DuplicateRefDesignator,
         RuleKind::HierPortDisconnected,
@@ -245,6 +249,7 @@ impl RuleKind {
         RuleKind::PartWithoutFootprint,
         RuleKind::PartWithoutValue,
         RuleKind::PartWithoutMpn,
+        RuleKind::PartWithoutLibraryBody,
         RuleKind::UnannotatedDesignator,
         RuleKind::SinglePinNet,
         RuleKind::NetWithNoDriver,
@@ -269,6 +274,7 @@ impl RuleKind {
     pub fn default_severity(self) -> Severity {
         match self {
             RuleKind::DuplicateRefDesignator
+            | RuleKind::PartWithoutLibraryBody
             | RuleKind::RepeatEntryNeedsBus
             | RuleKind::BusBitWidthMismatch
             | RuleKind::BadHierSheetPin

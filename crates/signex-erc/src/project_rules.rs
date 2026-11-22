@@ -42,6 +42,7 @@ impl RuleKind {
             RuleKind::PartWithoutFootprint => "part_without_footprint",
             RuleKind::PartWithoutValue => "part_without_value",
             RuleKind::PartWithoutMpn => "part_without_mpn",
+            RuleKind::PartWithoutLibraryBody => "part_without_library_body",
             RuleKind::UnannotatedDesignator => "unannotated_designator",
             RuleKind::SinglePinNet => "single_pin_net",
             RuleKind::NetWithNoDriver => "net_with_no_driver",

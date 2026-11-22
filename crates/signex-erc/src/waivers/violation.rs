@@ -163,6 +163,7 @@ impl Scope {
                 K::PartWithoutFootprint
                 | K::PartWithoutValue
                 | K::PartWithoutMpn
+                | K::PartWithoutLibraryBody
                 | K::UnannotatedDesignator
                 | K::DuplicateRefDesignator
                 | K::UnitsNotPlaced,
