@@ -111,6 +111,20 @@ properties-body-no-alternate-tip = This library symbol has no alternate (De Morg
 properties-body-alternate-short = Alternate
 # A power port's typed name could not be applied because the port is gone.
 properties-port-name-not-applied = Properties: the name typed for a power port on { $sheet } was not applied, the port is no longer there. The name was: { $name }
+# Renaming a power port renames every port of that name in the project.
+properties-rail-renamed = Properties: renamed the power rail { $old } to { $new } on { $sheets } sheets; save to keep it.
+properties-rail-rename-waits = Properties: the power rail name { $name } is applied once the project's sheets are read, so this save does not include it. Save again to keep it.
+properties-rail-rename-refused = Properties: the power rail { $old } was not renamed to { $new } on any sheet: { $why }
+properties-rail-why-empty = a rail needs a name.
+properties-rail-why-port-gone = the port changed or is no longer there.
+properties-rail-why-stale = the project's sheets kept changing while they were read. Try again.
+properties-rail-why-read-failed = the sheets could not be read ({ $path }).
+properties-rail-why-unreadable = { $path } could not be read, so it may hold a port of this rail.
+properties-rail-why-shared = { $path } is also part of another open project, whose rail would split.
+properties-rail-why-busy = { $path } is being saved or moved.
+properties-rail-why-read-only = { $path } opens read-only.
+properties-rail-why-not-loaded = { $path } could not be loaded.
+properties-rail-why-not-changed = { $path } refused the change; a locked port holds the rail, or the sheet could not be edited.
 
 ## Footprint card
 

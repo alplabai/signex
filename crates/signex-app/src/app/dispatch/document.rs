@@ -108,6 +108,7 @@ impl Signex {
             }
             EditMsg::Extras(msg) => self.dispatch_placement_extras(msg),
             EditMsg::SheetSync(msg) => self.dispatch_sheet_sync(msg),
+            EditMsg::RailRename(msg) => self.dispatch_rail_rename(msg),
             EditMsg::Tables(msg) => self.dispatch_tables(msg),
             EditMsg::Unions(msg) => {
                 let task = self.handle_unions_message(msg);

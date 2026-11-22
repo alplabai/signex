@@ -630,6 +630,7 @@ impl Signex {
                 pcb_revisions: std::collections::HashMap::new(),
                 parked_pcb_boards: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
+                rail_rename: Default::default(),
                 agent_edits: Default::default(),
                 check_runs: Default::default(),
                 reuse_blocks: Default::default(),
