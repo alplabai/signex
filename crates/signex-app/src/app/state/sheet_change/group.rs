@@ -138,7 +138,9 @@ impl DocumentState {
             // reverted can owe one; with no history at all it was reopened,
             // not edited.
             let (expected, edited) = if undo {
-                (true, engine.has_undo_group(group))
+                // The active sheet is only looked at: it owes the step only
+                // if the run recorded it.
+                (recorded.live.contains(&path), engine.has_undo_group(group))
             } else {
                 let owed = recorded.undone.contains(&path);
                 (owed, owed && (engine.can_undo() || engine.can_redo()))
