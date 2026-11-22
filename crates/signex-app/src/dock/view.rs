@@ -52,15 +52,16 @@ fn icon_button(
     icon_button_of(svg_icon(handle), tokens)
 }
 
-/// The icon actions the active panel puts in its title bar (ERC Clear,
-/// Messages Copy and Clear), each with its tooltip.
+/// The icon actions the active panel puts in its title bar, each with its
+/// tooltip; one with no message is drawn disabled.
 fn title_actions<'a>(kind: PanelKind, ctx: &panels::PanelContext) -> Vec<Element<'a, DockMessage>> {
     panels::title_actions(kind, ctx)
         .into_iter()
         .map(|action| {
             let tip = container(text(action.tip).size(TS.caption)).padding([SP.xs, SP.s]);
             signex_widgets::tooltip(
-                icon_button(action.icon, &ctx.tokens).on_press(DockMessage::Panel(action.on_press)),
+                icon_button(action.icon, &ctx.tokens)
+                    .on_press_maybe(action.on_press.map(DockMessage::Panel)),
                 tip,
                 iced::widget::tooltip::Position::Bottom,
             )
@@ -618,6 +619,7 @@ impl canvas::Program<DockMessage> for RotatedLabel {
             position: iced::Point::ORIGIN,
             color: self.color,
             size: iced::Pixels(RAIL_FONT_SIZE),
+            font: signex_widgets::ui_font::regular(),
             align_x: iced::alignment::Horizontal::Center.into(),
             align_y: iced::alignment::Vertical::Center,
             ..canvas::Text::default()

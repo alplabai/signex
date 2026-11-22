@@ -574,12 +574,19 @@ mod tests {
         let task = app.handle_reset_duplicate_designators();
         crate::app::path_ops::settle_task(&mut app, task);
 
-        let written = std::fs::read_to_string(&child_path).expect("read child back");
+        // The run parks the child unsaved: the file waits for the user's save.
+        let on_disk = std::fs::read_to_string(&child_path).expect("read child back");
+        let parked = signex_types::format::SnxSchematic::new(
+            app.document_state.engines[&child_path].document().clone(),
+        )
+        .write_string()
+        .expect("serialize parked child");
         std::fs::remove_dir_all(&dir).ok();
         assert!(
-            written.contains("R?"),
-            "the on-disk child's duplicate R1 must have been reset: {written}"
+            parked.contains("R?"),
+            "the unopened child's duplicate R1 must have been reset: {parked}"
         );
+        assert!(!on_disk.contains("R?"), "no file is written before a save");
     }
 
     /// Project `top` -> `child`, both open, `child` focused.

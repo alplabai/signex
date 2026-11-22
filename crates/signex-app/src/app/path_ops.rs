@@ -21,9 +21,6 @@ pub enum PathOpKind {
     Rename,
     RenameLibrary,
     Delete,
-    /// Annotate, Reset Duplicate Designators or Re-prefix reading or
-    /// rewriting the project's sheets.
-    ProjectRewrite,
     /// Annotate, Reset Duplicate Designators or Re-prefix reading the
     /// project's sheets.
     /// Saving an open sheet is allowed meanwhile: the save moves
@@ -41,7 +38,6 @@ impl PathOpKind {
         match self {
             Self::Rename | Self::RenameLibrary => "rename",
             Self::Delete => "delete",
-            Self::ProjectRewrite => "project-wide rewrite",
             Self::ProjectRead => "project-wide read",
             Self::AddSheet => "new-sheet add",
             Self::SaveAsSheet => "Save As",
@@ -183,12 +179,7 @@ impl PendingPathOps {
 
     /// Is an Annotate or Reset Duplicate Designators run holding sheets?
     pub fn rewrite_running(&self) -> bool {
-        self.ops.iter().any(|op| {
-            matches!(
-                op.kind,
-                PathOpKind::ProjectRewrite | PathOpKind::ProjectRead
-            )
-        })
+        self.ops.iter().any(|op| op.kind == PathOpKind::ProjectRead)
     }
 
     /// Is a library rename or delete running? Library edits write through

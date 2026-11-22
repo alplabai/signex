@@ -329,9 +329,8 @@ fn layer_picker<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Element<'a
                 side,
             })
         });
-        button(container(content).center_x(Length::Fill))
+        button(container(content).align_x(iced::alignment::Horizontal::Center))
             .padding([SP.xs, SP.s])
-            .width(Length::Fill)
             .on_press_maybe(picked)
             .style(move |theme: &Theme, status| {
                 let hovered = matches!(status, iced::widget::button::Status::Hovered);
@@ -340,19 +339,20 @@ fn layer_picker<'a>(form: &Form<'a>, facts: &'a PcbComponentFacts) -> Element<'a
             .boxed()
     };
     container(
-        Row::new()
-            .push(cell(
+        signex_widgets::FitRow::new(vec![
+            cell(
                 BoardSide::Top,
                 CopperLayer::Top,
                 ids::PCB_COMPONENT_LAYER_TOP,
-            ))
-            .push(cell(
+            ),
+            cell(
                 BoardSide::Bottom,
                 CopperLayer::Bottom,
                 ids::PCB_COMPONENT_LAYER_BOTTOM,
-            ))
-            .spacing(SP.xs)
-            .width(Length::Fill),
+            ),
+        ])
+        .spacing(SP.xs)
+        .fill(true),
     )
     .padding(SP.xs)
     .width(Length::Fill)

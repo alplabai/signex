@@ -110,16 +110,21 @@ impl Signex {
         if d.disk_poll.in_flight {
             return Task::none();
         }
-        let paths: Vec<PathBuf> = d
+        // A parked sheet has no tab but is an open document all the same.
+        let mut paths: Vec<PathBuf> = d
             .tabs
             .iter()
             .filter(|tab| matches!(tab.kind, TabKind::Schematic | TabKind::Pcb))
-            .filter(|tab| d.document_saves.baseline(&tab.path).is_some())
-            .filter(|tab| !d.document_saves.is_saving(&tab.path))
-            .filter(|tab| !d.disk_poll.reloading.contains(&tab.path))
-            .filter(|tab| !d.pending_restores.contains(&tab.path))
-            .map(|tab| tab.path.clone())
+            .map(|tab| &tab.path)
+            .chain(d.engines.keys())
+            .filter(|path| d.document_saves.baseline(path).is_some())
+            .filter(|path| !d.document_saves.is_saving(path))
+            .filter(|path| !d.disk_poll.reloading.contains(*path))
+            .filter(|path| !d.pending_restores.contains(path))
+            .cloned()
             .collect();
+        paths.sort();
+        paths.dedup();
         if paths.is_empty() {
             return Task::none();
         }
@@ -152,7 +157,7 @@ impl Signex {
                 (Some(stamp), Ok(hash)) => d.disk_poll.stamps.insert(path.clone(), (stamp, hash)),
                 _ => d.disk_poll.stamps.remove(&path),
             };
-            let open = d.tabs.iter().any(|tab| tab.path == path);
+            let open = d.engines.contains_key(&path) || d.tabs.iter().any(|tab| tab.path == path);
             // A write begun since the read owns the file's state now.
             if !open
                 || d.document_saves.is_saving(&path)
@@ -182,9 +187,11 @@ impl Signex {
             ));
             self.document_state.error_notice = Some(ErrorNotice::disk_changed(path, drift));
         }
-        // A closed tab's bookkeeping goes with it.
+        // A closed document's bookkeeping goes with it.
         let d = &mut self.document_state;
-        let open: HashSet<&PathBuf> = d.tabs.iter().map(|tab| &tab.path).collect();
+        let open: HashSet<&PathBuf> = (d.tabs.iter().map(|tab| &tab.path))
+            .chain(d.engines.keys())
+            .collect();
         d.disk_poll.stamps.retain(|p, _| open.contains(p));
         d.disk_poll.reported.retain(|p, _| open.contains(p));
         Task::none()

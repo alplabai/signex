@@ -267,7 +267,7 @@ fn preview<'a>(
     let r = ink::resolve(tokens);
     let bold = Font {
         weight: iced::font::Weight::Semibold,
-        ..Font::default()
+        ..signex_widgets::ui_font::regular()
     };
     let header = row![
         text(t!(i18n, ids::PROJECT_DEFAULTS_PREVIEW))

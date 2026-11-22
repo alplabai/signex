@@ -136,7 +136,7 @@ pub(super) fn project_card<'a>(
         .color(ink)
         .font(iced::Font {
             weight: iced::font::Weight::Semibold,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         })
         .wrapping(iced::widget::text::Wrapping::None);
     let summary = text(UserText::new(card_summary(i18n, project)))

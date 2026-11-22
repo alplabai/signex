@@ -33,16 +33,16 @@ pub fn net_params_tabs<'a>(
     };
     container(
         container(
-            row![
+            signex_widgets::FitRow::new(vec![
                 tab(ids::PROPERTIES_TAB_ALL, true),
                 tab(ids::PROPERTIES_TAB_PARAMETERS, false),
                 tab(ids::PROPERTIES_TAB_RULES, false),
                 tab(ids::PROPERTIES_TAB_CLASSES, false),
-            ]
-            .spacing(0)
-            .width(Length::Fill),
+            ])
+            .fill(true),
         )
         .padding(SP.xs)
+        .width(Length::Fill)
         .style(crate::panels::form_look::segmented_frame),
     )
     .padding([4, PROPERTY_ROW_PAD_X])

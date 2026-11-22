@@ -264,35 +264,35 @@ pub(super) fn read_only_length<'a>(
     .boxed()
 }
 
-/// Cells of a segmented control in `rows` rows of equal width, each
+/// Cells of a segmented control, at most `per_row` on a line, each
 /// `(label, active, msg)`.
 fn segmented_grid<'a>(
     cells: Vec<(Localized, bool, PanelMsg)>,
     per_row: usize,
 ) -> Element<'a, PanelMsg> {
-    let mut grid: Column<Element<'a, PanelMsg>> = Column::new().spacing(SP.xs);
-    let mut cells = cells.into_iter().peekable();
-    while cells.peek().is_some() {
-        let mut line: Row<Element<'a, PanelMsg>> = Row::new().spacing(SP.xs).width(Length::Fill);
-        for (label, active, msg) in cells.by_ref().take(per_row) {
-            let cell = button(
+    let cells: Vec<Element<'a, PanelMsg>> = cells
+        .into_iter()
+        .map(|(label, active, msg)| {
+            button(
                 text(label)
                     .size(TS.body)
                     .wrapping(Wrapping::None)
-                    .align_x(iced::alignment::Horizontal::Center)
-                    .width(Length::Fill),
+                    .ellipsis(iced::widget::text::Ellipsis::End)
+                    .align_x(iced::alignment::Horizontal::Center),
             )
             .padding([SP.xs, SP.xs])
-            .width(Length::Fill)
             .on_press(msg)
             .style(move |theme: &Theme, status: button::Status| {
                 let hovered = matches!(status, button::Status::Hovered);
                 form_look::segment_cell(theme, active, hovered && !active)
-            });
-            line = line.push(cell.boxed());
-        }
-        grid = grid.push(line.boxed());
-    }
+            })
+            .boxed()
+        })
+        .collect();
+    let grid = signex_widgets::FitRow::new(cells)
+        .spacing(SP.xs)
+        .fill(true)
+        .max_columns(per_row.max(1));
     container(grid)
         .padding(SP.xs)
         .width(Length::Fill)

@@ -22,6 +22,7 @@ mod open;
 mod parameters;
 mod requirements;
 mod schematic_defaults;
+mod section_list;
 mod setup;
 mod sheets;
 mod table;
@@ -40,6 +41,8 @@ mod open_command_tests;
 mod save_point_tests;
 #[cfg(test)]
 mod schematic_defaults_tests;
+#[cfg(test)]
+mod section_list_tests;
 #[cfg(test)]
 mod sections_tests;
 #[cfg(test)]
@@ -77,12 +80,12 @@ pub enum ProjectSection {
     Libraries,
     /// The project's ERC rules and annotate undo choice (#1692).
     ErcAnnotation,
-    /// The project's repository and commit on save (#1693).
-    VersionControl,
     /// Widths and sizes of unset schematic items (#2026).
     SchematicDefaults,
     /// What new PCBs and sheets start from (#2232).
     Setup,
+    /// The project's repository and commit on save (#1693).
+    VersionControl,
     /// The project's requirements and their checks (#2339).
     Requirements,
 }
@@ -96,9 +99,9 @@ impl ProjectSection {
         ProjectSection::Variants,
         ProjectSection::Libraries,
         ProjectSection::ErcAnnotation,
-        ProjectSection::VersionControl,
         ProjectSection::SchematicDefaults,
         ProjectSection::Setup,
+        ProjectSection::VersionControl,
         ProjectSection::Requirements,
     ];
 
@@ -302,6 +305,11 @@ pub enum ProjectTabMsg {
     },
     /// Rename… in the General section: the project-tree Rename flow.
     RenameRequested {
+        project_id: ProjectId,
+    },
+    /// Explore in the General section's files card: the project folder in
+    /// the system file manager.
+    ExploreRequested {
         project_id: ProjectId,
     },
     /// A Move up / Move down button of the Sheets table (#1689).

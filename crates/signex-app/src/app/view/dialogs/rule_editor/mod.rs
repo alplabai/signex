@@ -61,14 +61,40 @@ pub(crate) struct RuleEditor<'a, M> {
     /// The "Changed only" chip was pressed; carries the new state.
     pub on_changed_only: fn(bool) -> M,
     pub on_filter: fn(String) -> M,
+    /// The Rule Profiles page (mockup row 148): a rule's name opens it alone,
+    /// and a Rule / Severity table head replaces the section heading.
+    pub on_open_rule: Option<fn(RuleKind) -> M>,
 }
 
 /// The two-column editor body: the rule list, then the matrix pane.
 pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Element<'static, M> {
+    row![
+        container(severity_pane(&editor)).width(Length::Fill),
+        matrix_pane(&editor)
+    ]
+    .align_y(iced::Alignment::Start)
+    .boxed()
+}
+
+/// The rule list on its own, for a surface that shows one half at a time.
+pub(crate) fn severity_pane<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'static, M> {
+    severity_list::view(editor)
+}
+
+/// One rule's name and severity control.
+pub(crate) fn one_rule_line<M: Clone + 'static>(
+    editor: &RuleEditor<'_, M>,
+    rule: RuleKind,
+) -> Element<'static, M> {
+    severity_list::one_rule(editor, rule)
+}
+
+/// The framed pin-connection matrix.
+pub(crate) fn matrix_pane<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'static, M> {
     let tokens = editor.tokens;
     let chrome = crate::styles::ti(tokens.toolbar_bg);
     let line = crate::styles::ti(tokens.border);
-    let matrix = container(pin_matrix::view(&editor))
+    container(pin_matrix::view(editor))
         .width(MATRIX_PANE_W)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(chrome)),
@@ -79,18 +105,14 @@ pub(crate) fn rule_editor<M: Clone + 'static>(editor: RuleEditor<'_, M>) -> Elem
                 ..Border::default()
             },
             ..container::Style::default()
-        });
-    row![
-        container(severity_list::view(&editor)).width(Length::Fill),
-        matrix
-    ]
-    .align_y(iced::Alignment::Start)
-    .boxed()
+        })
+        .boxed()
 }
 
 /// An uppercase section label (SEVERITY PER RULE, PINS): the section size
-/// and the muted section ink, in capitals for the message language.
-fn section_heading<M: 'static>(
+/// and the muted section ink, in capitals for the message language. It keeps
+/// one line; a narrow parent clips it rather than wrapping it into a neighbour.
+pub(crate) fn section_heading<M: 'static>(
     i18n: &I18n,
     label: MessageId,
     tokens: &signex_types::theme::ThemeTokens,
@@ -99,6 +121,7 @@ fn section_heading<M: 'static>(
     // raw: catalog text already rendered, then upper-cased for the locale.
     text(raw(i18n.upper_for_display(&words)))
         .size(TS.section)
+        .wrapping(iced::widget::text::Wrapping::None)
         .style(crate::styles::section_label(tokens))
         .boxed()
 }
@@ -258,6 +281,18 @@ pub(crate) fn lower_triangle(
                 .collect()
         })
         .collect()
+}
+
+/// How many drawn matrix cells differ from the shipped profile.
+pub(crate) fn changed_cell_count(
+    pin_matrix: &HashMap<(u8, u8), Severity>,
+    shipped: &ResolvedRules,
+) -> usize {
+    lower_triangle(pin_matrix, shipped)
+        .iter()
+        .flatten()
+        .filter(|cell| cell.changed)
+        .count()
 }
 
 /// The catalog id of a group's subhead.

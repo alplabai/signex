@@ -296,7 +296,7 @@ fn check_live_row(
 #[test]
 fn command_rows_read_label_and_shortcut_from_the_catalog() {
     let mut walk = Walk::default();
-    for profile in ["altium", "classic"] {
+    for profile in ["signex_standard", "classic"] {
         let app = app_with_keymap(profile);
         let hint = |id: &str| app.keymap_shortcut_label(id);
         let sc = CanvasShortcuts::resolve(hint);

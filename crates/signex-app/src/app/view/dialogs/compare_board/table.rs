@@ -143,7 +143,7 @@ pub(super) fn view<'a>(
             .color(r.ink3)
             .font(Font {
                 weight: Weight::Medium,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .wrapping(Wrapping::None)
             .boxed()
@@ -228,7 +228,7 @@ fn group_row<'a>(
                 .color(r.ink3)
                 .font(Font {
                     weight: Weight::Medium,
-                    ..Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .wrapping(Wrapping::None)
                 .boxed(),
@@ -315,7 +315,7 @@ fn side_cell<'a>(
             .color(r.ink4)
             .font(Font {
                 style: FontStyle::Italic,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             }),
         Some(value) if differs => text(value_text(i18n, value))
             .size(TS.dense)
@@ -495,7 +495,7 @@ fn direction_control<'a>(
         if is_on {
             label = label.font(Font {
                 weight: Weight::Semibold,
-                ..Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             });
         }
         face = face.push(label.boxed());

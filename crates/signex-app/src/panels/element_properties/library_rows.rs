@@ -168,19 +168,7 @@ pub(super) fn library_and_id_row<'a>(
         .padding([3, 6])
         .width(Length::Fill)
         .clip(true)
-        .style(move |theme: &Theme| {
-            let (bg, bdr, radius) = super::super::form_look::value_box(theme);
-            container::Style {
-                background: Some(Background::Color(bg)),
-                border: Border {
-                    width: 1.0,
-                    radius: radius.into(),
-                    color: bdr,
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            }
-        });
+        .style(super::super::form_look::read_only_value);
     let tip = signex_widgets::tooltip(
         value,
         container(
@@ -361,7 +349,7 @@ pub(super) fn library_banner<'a>(
             .color(ink)
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .boxed(),
     );

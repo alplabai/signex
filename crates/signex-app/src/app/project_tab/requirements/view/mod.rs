@@ -23,8 +23,9 @@ use crate::app::state::{LoadedProject, ProjectId};
 
 #[cfg(test)]
 pub(super) use card::is_open;
+pub(super) use summary::outcome_counts;
 #[cfg(test)]
-pub(super) use summary::{OutcomeCounts, outcome_counts, summary_words};
+pub(super) use summary::{OutcomeCounts, summary_words};
 
 /// A choice of a picker: a value and its words.
 #[derive(Debug, Clone, PartialEq)]

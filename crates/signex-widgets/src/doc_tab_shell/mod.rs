@@ -240,7 +240,7 @@ fn rule<'a, M: 'a>(color: Color) -> Element<'a, M> {
 fn medium() -> Font {
     Font {
         weight: iced::font::Weight::Medium,
-        ..Font::DEFAULT
+        ..crate::ui_font::regular()
     }
 }
 

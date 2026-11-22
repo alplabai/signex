@@ -49,7 +49,11 @@ fn is_surface(f: &PadFacts) -> bool {
 
 fn properties<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
-    let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES);
+    let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES).collapsible(
+        "pcb_prim.pad.properties",
+        false,
+        None,
+    );
     s.push(
         common,
         ids::PCB_PRIM_DESIGNATOR,
@@ -115,7 +119,8 @@ fn properties<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMs
 fn pad_stack<'a>(look: Look<'a>, f: &'a PadFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
     let surface = is_surface(f);
-    let mut s = Section::new(look, ids::PCB_PRIM_PAD_STACK);
+    let mut s =
+        Section::new(look, ids::PCB_PRIM_PAD_STACK).collapsible("pcb_prim.pad.stack", false, None);
     if !surface {
         s.push(
             common,

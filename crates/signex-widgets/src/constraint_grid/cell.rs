@@ -36,7 +36,7 @@ fn reset_handle() -> svg::Handle {
 pub(super) fn strong_font() -> Font {
     Font {
         weight: iced::font::Weight::Semibold,
-        ..Font::DEFAULT
+        ..crate::ui_font::regular()
     }
 }
 

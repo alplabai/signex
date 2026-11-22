@@ -272,6 +272,8 @@ impl Signex {
         self.document_state.note_documents_changed();
         if !self.document_state.is_document_dirty(&closing_path) {
             self.document_state.remove_engine(&closing_path);
+        } else {
+            self.document_state.mark_closed_sheet_parked(&closing_path);
         }
         if self.document_state.active_path.as_ref() == Some(&closing_path) {
             self.document_state.active_path = None;

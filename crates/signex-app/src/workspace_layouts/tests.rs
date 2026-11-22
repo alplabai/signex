@@ -61,6 +61,14 @@ fn three() -> Layouts {
     layouts
 }
 
+/// #2751: every built-in opens its right dock at the 300 px default.
+#[test]
+fn every_built_in_opens_the_right_dock_at_the_default_width() {
+    for builtin in BuiltinLayout::ALL {
+        assert_eq!(shipped_dock(builtin).right.width, Some(300), "{builtin:?}");
+    }
+}
+
 #[test]
 fn the_built_ins_hold_the_panels_the_design_names() {
     use PanelKind::*;

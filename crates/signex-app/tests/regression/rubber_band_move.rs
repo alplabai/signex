@@ -165,7 +165,7 @@ fn click_click_move_selection_drags_the_attached_wires() {
 fn move_by_dialog_drags_the_attached_wires() {
     let (mut app, path, _) = app_with_resistor();
     app.ui_state.move_selection.dx = "0".to_string();
-    app.ui_state.move_selection.dy = "10".to_string();
+    app.ui_state.move_selection.dy = "-10".to_string();
     let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
     assert_eq!(symbol_y(&app, &path), 60.0);
     assert_connected_after_dy(&segments(&app, &path), 10.0);
@@ -192,7 +192,7 @@ fn with_the_preference_off_wires_stay_behind_as_before() {
     assert_eq!(segments(&app, &path), before, "plain translate");
 
     app.ui_state.move_selection.dx = "0".to_string();
-    app.ui_state.move_selection.dy = "5".to_string();
+    app.ui_state.move_selection.dy = "-5".to_string();
     let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
     assert_eq!(symbol_y(&app, &path), 65.0);
     assert_eq!(segments(&app, &path), before, "Move By is plain too");
@@ -443,7 +443,7 @@ fn move_by_ignores_the_drag_wiring_mode() {
     let (mut app, path, _) = app_with_resistor();
     app.interaction_state.drag_wiring = signex_types::corner::DragWiringMode::Straight;
     app.ui_state.move_selection.dx = "0".to_string();
-    app.ui_state.move_selection.dy = "10".to_string();
+    app.ui_state.move_selection.dy = "-10".to_string();
     let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
     assert_connected_after_dy(&segments(&app, &path), 10.0);
 }

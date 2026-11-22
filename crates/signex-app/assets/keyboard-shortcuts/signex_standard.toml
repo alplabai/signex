@@ -1,4 +1,4 @@
-# Built-in keyboard shortcut defaults based on Altium references.
+# Built-in "Signex Standard" keyboard shortcut profile defaults for Signex.
 #
 # `Mod` is Cmd on macOS and Ctrl elsewhere; a plain `Ctrl` stays the physical
 # Control key (it is kept where Cmd would collide with a macOS system chord).
@@ -14,10 +14,10 @@ version = 1
 
 [keyboard_shortcuts]
 schema_version = 1
-profile_id = "altium"
-profile_name = "Altium"
+profile_id = "signex_standard"
+profile_name = "Signex Standard"
 profile_kind = "built_in"
-description = "Altium-style keyboard shortcut defaults for Signex."
+description = "Signex Standard keyboard shortcut defaults."
 
 # On a board `Q` toggles the unit (#2406). It loads first so the global
 # `Ctrl+Q` below stays the command's menu hint.

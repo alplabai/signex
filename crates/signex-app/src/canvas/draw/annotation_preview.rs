@@ -216,7 +216,7 @@ fn draw_hint_bar(frame: &mut canvas::Frame, bounds: Rectangle, draft: &Annotatio
         size: iced::Pixels(HINT_FONT_PX),
         font: iced::Font {
             weight: iced::font::Weight::Bold,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         },
         align_y: iced::alignment::Vertical::Center,
         ..canvas::Text::default()
@@ -226,6 +226,7 @@ fn draw_hint_bar(frame: &mut canvas::Frame, bounds: Rectangle, draft: &Annotatio
         position: iced::Point::new(top_left.x + 2.0 * HINT_PAD_PX + title_w, y),
         color: draft.ink.caption,
         size: iced::Pixels(HINT_FONT_PX),
+        font: signex_widgets::ui_font::regular(),
         align_y: iced::alignment::Vertical::Center,
         ..canvas::Text::default()
     });

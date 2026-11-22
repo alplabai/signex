@@ -56,7 +56,7 @@ pub(super) fn recorder_actions(recording: bool) -> [RecorderAction; 4] {
 fn semibold() -> Font {
     Font {
         weight: iced::font::Weight::Semibold,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 

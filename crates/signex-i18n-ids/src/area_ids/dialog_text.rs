@@ -121,6 +121,8 @@ define_ids! {
     DIALOG_RULES_CHANGED_ONLY = "dialog-rules-changed-only";
     DIALOG_RULES_FILTER_PLACEHOLDER = "dialog-rules-filter-placeholder";
     DIALOG_RULES_NO_MATCH = "dialog-rules-no-match";
+    DIALOG_RULES_COLUMN_RULE = "dialog-rules-column-rule";
+    DIALOG_RULES_COLUMN_SEVERITY = "dialog-rules-column-severity";
     DIALOG_RULES_GROUP_PINS = "dialog-rules-group-pins";
     DIALOG_RULES_GROUP_NETS = "dialog-rules-group-nets";
     DIALOG_RULES_GROUP_LABELS = "dialog-rules-group-labels";

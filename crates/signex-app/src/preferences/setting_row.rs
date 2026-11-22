@@ -49,7 +49,7 @@ const HELP_MAX_W: f32 = 66.0 * CH_EM * TS.caption;
 pub(in crate::preferences) fn semibold() -> Font {
     Font {
         weight: font::Weight::Semibold,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 
@@ -57,7 +57,7 @@ pub(in crate::preferences) fn semibold() -> Font {
 pub(in crate::preferences) fn medium() -> Font {
     Font {
         weight: font::Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     }
 }
 

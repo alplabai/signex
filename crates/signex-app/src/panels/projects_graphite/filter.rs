@@ -117,7 +117,7 @@ pub(super) fn no_match_hint<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> 
         .color(ti(tokens.text))
         .font(iced::Font {
             weight: iced::font::Weight::Medium,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         })
         .align_x(iced::alignment::Horizontal::Center)
         .width(Length::Fill);

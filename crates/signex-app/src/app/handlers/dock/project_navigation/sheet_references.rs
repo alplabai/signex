@@ -456,10 +456,12 @@ impl Signex {
                 .remove(parent)
                 .ok_or_else(|| "was not read before the rename".to_string())??;
             let mut sheet = *sheet;
+            let read_hash = sheet.take_source_hash();
             crate::app::sheet_repairs::take_and_log(parent, &mut sheet);
             let engine = signex_engine::Engine::new_with_path(sheet, Some(parent.clone()))
                 .map_err(|e| format!("could not be loaded: {e}"))?;
             self.document_state.insert_engine(parent.clone(), engine);
+            self.settle_parked_sheet(parent, read_hash);
         }
         let Some(engine) = self.document_state.engines.get_mut(parent) else {
             return Err("no engine".to_string());
@@ -473,7 +475,7 @@ impl Signex {
         // An engine loaded only to be edited, left clean and tabless, would
         // own the path for the rest of the session and shadow a later open.
         if loaded_here && !matches!(&result, Ok(done) if done.changed) {
-            self.document_state.remove_engine(parent);
+            self.abandon_parked_sheet(parent);
         }
         let result = result?;
         if result.changed {

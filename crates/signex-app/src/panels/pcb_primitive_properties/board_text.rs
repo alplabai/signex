@@ -27,7 +27,11 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a TextFacts) -> Element<'a, P
 
 fn properties<'a>(look: Look<'a>, f: &'a TextFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
-    let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES);
+    let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES).collapsible(
+        "pcb_prim.text.properties",
+        false,
+        None,
+    );
     // The text first, across the full width and a step taller.
     let text = input(common, F::Text, f.text.clone(), look)
         .size(TS.label)

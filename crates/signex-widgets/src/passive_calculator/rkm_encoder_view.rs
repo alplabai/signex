@@ -192,7 +192,7 @@ impl RkmEncoder {
             .push(
                 text(upper(i18n, ids::PASSIVE_CALCULATOR_OPTIONAL))
                     .size(TS.section)
-                    .font(medium(Font::DEFAULT))
+                    .font(medium(crate::ui_font::regular()))
                     .color(palette.ink3)
                     .boxed(),
             )

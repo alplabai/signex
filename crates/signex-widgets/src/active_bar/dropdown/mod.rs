@@ -406,7 +406,7 @@ impl Look {
 fn label_font(strong: bool) -> Option<iced::Font> {
     strong.then_some(iced::Font {
         weight: iced::font::Weight::Semibold,
-        ..iced::Font::DEFAULT
+        ..crate::ui_font::regular()
     })
 }
 

@@ -459,7 +459,9 @@ impl Signex {
         self.save_held_path(&target)?;
         if !decided {
             // The spellings may be two files: the others were not written.
-            return match self.unsaved_spellings(&held, &target) {
+            let kept = self.unsaved_spellings(&held, &target);
+            self.release_saved_sheet(&target);
+            return match kept {
                 Some((_, message)) => Err(anyhow::Error::new(SpellingsKept(message))),
                 None => Ok(()),
             };
@@ -467,6 +469,9 @@ impl Signex {
         let key = path_key_with(path, fold);
         self.document_state
             .mark_documents_clean_where(|p| path_key_with(p, fold) == key);
+        for spelling in &held {
+            self.release_saved_sheet(spelling);
+        }
         Ok(())
     }
 

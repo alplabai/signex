@@ -52,7 +52,7 @@ pub(super) fn header<'a>(
                 .color(ti(tokens.text))
                 .font(iced::Font {
                     weight: iced::font::Weight::Semibold,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .boxed(),
         );
@@ -257,19 +257,19 @@ pub(super) struct Segment {
     pub msg: Option<PanelMsg>,
 }
 
-/// A segmented control on the sunken frame, one equal cell per option.
+/// A segmented control on the sunken frame, one cell per option.
 pub(super) fn segmented<'a>(options: Vec<Segment>) -> Element<'a, PanelMsg> {
-    let mut cells: Row<Element<'a, PanelMsg>> = Row::new().width(Length::Fill);
+    let mut cells: Vec<Element<'a, PanelMsg>> = Vec::with_capacity(options.len());
     for Segment { label, active, msg } in options {
         let enabled = msg.is_some();
         let cell = button(
             text(label)
                 .size(TS.caption)
                 .align_x(Horizontal::Center)
-                .width(Length::Fill),
+                .wrapping(iced::widget::text::Wrapping::None)
+                .ellipsis(iced::widget::text::Ellipsis::End),
         )
         .padding([SP.xs, SP.xs])
-        .width(Length::Fill)
         .on_press_maybe(msg)
         .style(move |theme: &Theme, status: button::Status| {
             let hovered = matches!(status, button::Status::Hovered);
@@ -279,9 +279,9 @@ pub(super) fn segmented<'a>(options: Vec<Segment>) -> Element<'a, PanelMsg> {
             }
             style
         });
-        cells = cells.push(cell.boxed());
+        cells.push(cell.boxed());
     }
-    container(cells)
+    container(signex_widgets::FitRow::new(cells).fill(true))
         .padding(SP.xs)
         .width(Length::Fill)
         .style(form_look::segmented_frame)

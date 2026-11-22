@@ -67,7 +67,6 @@ pub(super) fn h_align_from_row(row: &str) -> signex_types::schematic::HAlign {
 // body, kept as ratios of the type scale; colours come from the form look.
 
 use crate::panels::form_look::{self, FormLook};
-use crate::panels::graphite::PROPERTY_FIELD_RADIUS;
 use crate::styles::{Spacing, TypeScale};
 use iced::widget::{Row, stack};
 use iced::{Alignment, Padding};
@@ -80,7 +79,13 @@ const SP: Spacing = Spacing::DEFAULT;
 /// Room an axis tag (X, Y, W, H) takes inside a field, in captions.
 const AXIS_EM: f32 = 1.0;
 /// Room a unit (mm, mil, pt) takes inside a field, in captions.
-const UNIT_EM: f32 = 2.2;
+const UNIT_EM: f32 = 1.8;
+/// Room a six-character value (`88.900`) takes in the mono face, in bodies.
+const PAIR_VALUE_EM: f32 = 3.75;
+/// Narrowest a field of a pair gets beside its partner: the tags, their
+/// insets and a six-character value. Below it the pair stacks.
+pub(in crate::panels) const PAIR_FIELD_MIN: f32 =
+    TS.caption * (AXIS_EM + UNIT_EM) + 2.0 * SP.s + 2.0 * SP.xs + TS.body * PAIR_VALUE_EM;
 /// Height of a count pill, as a ratio of the body size (16 px at 12 px).
 const PILL_HEIGHT_EM: f32 = 16.0 / 12.0;
 /// Side padding of a count pill (6 px at 12 px).
@@ -104,7 +109,7 @@ pub(in crate::panels) fn unit_suffix(i18n: &I18n, unit: signex_types::coord::Uni
     t!(i18n, ids::PROPERTIES_UNIT_SUFFIX, "unit" => unit.to_string())
 }
 
-fn mono() -> iced::Font {
+pub(super) fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
 }
 
@@ -161,13 +166,33 @@ pub(in crate::panels) fn pair_row<'a>(
     first: Element<'a, PanelMsg>,
     second: Element<'a, PanelMsg>,
 ) -> Element<'a, PanelMsg> {
-    labelled_row(
-        label,
-        iced::widget::row![first, second]
-            .spacing(SP.s + SP.xs)
-            .width(Length::Fill)
-            .boxed(),
-    )
+    labelled_row(label, pair_line(first, second, PAIR_FIELD_MIN))
+}
+
+/// Two fields sharing a line while each gets `min_field`, else one above
+/// the other at the full width, so a value is never squeezed out of sight.
+pub(in crate::panels) fn pair_line<'a>(
+    first: Element<'a, PanelMsg>,
+    second: Element<'a, PanelMsg>,
+    min_field: f32,
+) -> Element<'a, PanelMsg> {
+    signex_widgets::FitRow::new(vec![first, second])
+        .spacing(SP.s)
+        .fill(true)
+        .cell_floor(min_field)
+        .into()
+}
+
+/// The left and right text insets of a field with these tags.
+pub(super) fn field_insets(has_axis: bool, has_unit: bool) -> (f32, f32) {
+    let tag = |is_shown: bool, em: f32| {
+        if is_shown {
+            TS.caption * em + SP.xs
+        } else {
+            0.0
+        }
+    };
+    (SP.s + tag(has_axis, AXIS_EM), SP.s + tag(has_unit, UNIT_EM))
 }
 
 /// The axis tag and the unit drawn over a field, left and right.
@@ -175,7 +200,7 @@ fn field_tags<'a>(axis: Option<Label<'a>>, unit: Option<Label<'a>>) -> Element<'
     let mut tags = Row::<Element<'a, PanelMsg>>::new()
         .align_y(Alignment::Center)
         .height(Length::Fill)
-        .padding([0.0, SP.s + SP.xs]);
+        .padding([0.0, SP.s]);
     if let Some(axis) = axis {
         tags = tags.push(text(axis).size(TS.caption).style(ink4).boxed());
     }
@@ -196,9 +221,7 @@ pub(in crate::panels) fn unit_input<'a>(
     on_input: impl Fn(String) -> PanelMsg + 'a,
     on_submit: PanelMsg,
 ) -> Element<'a, PanelMsg> {
-    let inset = SP.s + SP.xs;
-    let left = inset + axis.as_ref().map_or(0.0, |_| TS.caption * AXIS_EM + SP.s);
-    let right = inset + unit.as_ref().map_or(0.0, |_| TS.caption * UNIT_EM + SP.s);
+    let (left, right) = field_insets(axis.is_some(), unit.is_some());
     let input = signex_widgets::text_input(UserText::new(String::new()), value)
         .on_input(on_input)
         .on_submit(on_submit)
@@ -226,7 +249,7 @@ pub(in crate::panels) fn sunken_value<'a>(
     unit: Option<Label<'a>>,
 ) -> Element<'a, PanelMsg> {
     let mut content = Row::<Element<'a, PanelMsg>>::new()
-        .spacing(SP.s)
+        .spacing(SP.xs)
         .align_y(Alignment::Center);
     if let Some(axis) = axis {
         content = content.push(text(axis).size(TS.caption).style(ink4).boxed());
@@ -246,30 +269,10 @@ pub(in crate::panels) fn sunken_value<'a>(
         content = content.push(text(unit).size(TS.caption).style(ink4).boxed());
     }
     container(content)
-        .padding([SP.s, SP.s + SP.xs])
+        .padding(SP.s)
         .width(Length::Fill)
-        .style(|theme: &Theme| container::Style {
-            background: Some(Background::Color(FormLook::of(theme).sunken)),
-            border: Border {
-                radius: PROPERTY_FIELD_RADIUS.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
+        .style(form_look::read_only_value)
         .boxed()
-}
-
-/// A labelled read-only row: [`sunken_value`] with no axis tag (Length).
-#[allow(
-    dead_code,
-    reason = "row kit of epic #2523; the g1 Properties units adopt it"
-)]
-pub(in crate::panels) fn sunken_value_row<'a>(
-    label: impl Into<Label<'a>>,
-    value: String,
-    unit: Option<Label<'a>>,
-) -> Element<'a, PanelMsg> {
-    labelled_row(label, sunken_value(None, value, unit))
 }
 
 /// The segmented-control look of the form: sunken track, raised chip, the

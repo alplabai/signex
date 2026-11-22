@@ -91,9 +91,6 @@ struct Words {
     wide: &'static str,
     title: &'static str,
     noun: &'static str,
-    kept: &'static str,
-    holds: &'static str,
-    done: &'static str,
 }
 
 const fn words(
@@ -101,18 +98,12 @@ const fn words(
     wide: &'static str,
     title: &'static str,
     noun: &'static str,
-    kept: &'static str,
-    holds: &'static str,
-    done: &'static str,
 ) -> Words {
     Words {
         kind,
         wide,
         title,
         noun,
-        kept,
-        holds,
-        done,
     }
 }
 
@@ -122,159 +113,114 @@ const KINDS: [Words; 10] = [
         "project-wide annotate",
         "Annotate",
         "annotate",
-        "annotated designators",
-        "designators",
-        "annotated",
     ),
     words(
         UndoGroupKind::Reprefix,
         "project-wide re-prefix",
         "Re-prefix",
         "re-prefix",
-        "re-prefixed designators",
-        "designators",
-        "re-prefixed",
     ),
     words(
         UndoGroupKind::Replace,
         "project-wide replace",
         "Replace",
         "replace",
-        "replaced text",
-        "text",
-        "replaced",
     ),
     words(
         UndoGroupKind::Footprints,
         "project-wide footprint assignment",
         "Assign Footprints",
         "footprint assignment",
-        "assigned footprints",
-        "footprints",
-        "assigned",
     ),
     words(
         UndoGroupKind::SheetNumbers,
         "project-wide sheet numbering",
         "Sheet numbering",
         "sheet numbering",
-        "new sheet numbers",
-        "sheet numbers",
-        "renumbered",
     ),
     words(
         UndoGroupKind::BackAnnotate,
         "project-wide back annotate",
         "Back annotate",
         "back annotate",
-        "back-annotated designators and values",
-        "designators and values",
-        "back-annotated",
     ),
     words(
         UndoGroupKind::AgentEdit,
         "cross-sheet agent edit",
         "Agent edit",
         "agent edit",
-        "agent edits",
-        "contents",
-        "edited",
     ),
     words(
         UndoGroupKind::FootprintSwap,
         "project-wide footprint change",
         "Change Footprint",
         "footprint change",
-        "changed footprints",
-        "footprints",
-        "changed",
     ),
     words(
         UndoGroupKind::PartSwap,
         "project-wide pin or gate swap",
         "Pin or gate swap",
         "pin or gate swap",
-        "swapped pin connections",
-        "pin connections",
-        "swapped",
     ),
     words(
         UndoGroupKind::SheetEntrySync,
         "project-wide sheet entry sync",
         "Sheet entry sync",
         "sheet entry sync",
-        "synced ports",
-        "ports",
-        "synced",
     ),
 ];
 
-/// The lines of [`skipped_members_and_the_dropped_redo`], one test each so a
+/// The lines of [`refused_members_and_the_dropped_redo`], one test each so a
 /// mutation of one log call shows in its own test.
 #[derive(Clone, Copy, PartialEq)]
 enum Skip {
     HistoryGone,
     Closed,
-    DiskOnly,
     DroppedRedo,
 }
 
-/// History gone, closed and disk-only on one undo, then the dropped redo;
-/// `check` is the line asserted.
-fn skipped_members_and_the_dropped_redo(w: &Words, check: Skip) {
-    let [a, b, c, d, e] = ["a", "b", "c", "d", "e"].map(short_unique);
+/// A member out of reach refuses the undo whole (#2760), or, with every member
+/// in reach, the undo runs and the dropped redo is refused; `check` picks.
+fn refused_members_and_the_dropped_redo(w: &Words, check: Skip) {
+    let [a, b, c, e] = ["a", "b", "c", "e"].map(short_unique);
     let (mut app, paths) = app_with_sheets(&[&b, &a]);
     let (b_path, a_path) = (paths[0].clone(), paths[1].clone());
-    let live = [a_path.clone(), b_path, sheet_path(&c)];
-    let group = group_over(&mut app, w.kind, &live, &[a_path]);
-    app.document_state
-        .undo_groups
-        .get_mut(&group)
-        .unwrap()
-        .disk_only = vec![sheet_path(&d)];
-    let (title, noun) = (w.title, w.noun);
-    let gone = format!(
-        "{title} undone on the other sheets but not on {b}: its undo history no longer holds \
-         the {noun} (reopened, or trimmed past the history limit), so it keeps its {}.",
-        w.kept
-    );
-    let closed = format!(
-        "{title} undone on open sheets but not on {c}: closed since the {noun}, so its {} are \
-         whatever was last saved.",
-        w.holds
-    );
-    let disk = format!(
-        "{title} undone on open sheets; not open, so still {} on disk: {d}",
-        w.done
-    );
-    let undo_line = match check {
-        Skip::HistoryGone => Some(gone),
-        Skip::Closed => Some(closed),
-        Skip::DiskOnly => Some(disk),
-        Skip::DroppedRedo => None,
+    let (live, missing) = match check {
+        Skip::HistoryGone => (vec![a_path.clone(), b_path], Some(&b)),
+        Skip::Closed => (vec![a_path.clone(), sheet_path(&c)], Some(&c)),
+        Skip::DroppedRedo => (vec![a_path.clone()], None),
     };
-    match &undo_line {
-        Some(line) => says_once(line, || app.handle_undo_requested()),
-        None => app.handle_undo_requested(),
+    let group = group_over(&mut app, w.kind, &live, std::slice::from_ref(&a_path));
+    if let Some(name) = missing {
+        let line = format!(
+            "Cannot undo the {}: {name} was saved and closed, or no longer holds this step, so \
+             no sheet was changed.",
+            w.wide
+        );
+        says_once(&line, || app.handle_undo_requested());
+        assert_eq!(
+            app.document_state.engines[&a_path].next_undo_group(),
+            Some(group),
+            "the sheet in reach did not move"
+        );
+        return;
     }
-
+    app.handle_undo_requested();
     app.document_state
         .undo_groups
         .get_mut(&group)
         .unwrap()
         .dropped = vec![sheet_path(&e)];
     let dropped = format!(
-        "Cannot redo the {}: {e} went back to its saved state. Run {title} again.",
-        w.wide
+        "Cannot redo the {}: {e} went back to its saved state. Run {} again.",
+        w.wide, w.title
     );
-    if check == Skip::DroppedRedo {
-        says_once(&dropped, || app.handle_redo_requested());
-    }
+    says_once(&dropped, || app.handle_redo_requested());
 }
 
 fn for_every_kind(check: Skip) {
     for w in &KINDS {
-        skipped_members_and_the_dropped_redo(w, check);
+        refused_members_and_the_dropped_redo(w, check);
     }
 }
 
@@ -286,11 +232,6 @@ fn a_member_whose_history_lost_the_group_is_named_for_every_kind() {
 #[test]
 fn a_member_closed_since_the_group_is_named_for_every_kind() {
     for_every_kind(Skip::Closed);
-}
-
-#[test]
-fn a_member_only_on_disk_is_named_for_every_kind() {
-    for_every_kind(Skip::DiskOnly);
 }
 
 #[test]

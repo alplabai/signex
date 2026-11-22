@@ -603,7 +603,7 @@ fn render_node(
     if let Some(weight) = weight {
         label = label.font(iced::Font {
             weight,
-            ..iced::Font::DEFAULT
+            ..crate::ui_font::regular()
         });
     }
     r = r.push(label.boxed());

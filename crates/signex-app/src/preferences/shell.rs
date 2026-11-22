@@ -13,7 +13,7 @@ use crate::styles::{
     self, DialogButtonKind, PillTone, Radii, chrome_px, dialog_button, ti, tokens,
 };
 use iced::widget::{Column, Space, column, container, row, scrollable};
-use iced::{Alignment, Background, Border, Element, Font, Length, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text, tooltip};
@@ -153,7 +153,11 @@ fn nav_row<'a>(
         ti(t.selection),
         tokens::overlay(t, tokens::Overlay::Hover),
     );
-    let font = if active { medium() } else { Font::DEFAULT };
+    let font = if active {
+        medium()
+    } else {
+        signex_widgets::ui_font::regular()
+    };
     let mut line = row![
         text(t!(i18n, graphite_label(item)))
             .size(TS.label)

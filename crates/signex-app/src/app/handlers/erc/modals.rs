@@ -433,7 +433,7 @@ impl Signex {
             signex_engine::Command::MoveSelection {
                 items,
                 dx,
-                dy,
+                dy: crate::app::handlers::editing_commands::move_selection_dialog::stored_dy(dy),
                 keep_wires: self.ui_state.move_keeps_wires,
                 wiring: signex_types::corner::DragWiringMode::Auto,
             },

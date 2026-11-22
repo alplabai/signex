@@ -54,6 +54,18 @@ Blank lines are skipped.
 {"id": "save_document", "args": {"document": "main.snxsch"}}
 ```
 
+The project-wide numbering commands (`annotate_schematic_quietly`,
+`force_annotate_all_schematics`) write no file: each sheet they change, opened
+or not, stays unsaved in memory. To keep the result, run with `--save` and send
+one `save_document` naming each changed sheet (`list_documents` lists them). A
+run that ends with changes unsaved names those sheets, and they are lost with
+the run. A save never overwrites a file that changed since it was read.
+`undo document=<sheet>` never steps such a run, saved or not: it moves other
+sheets too, so the command is refused with `the next step belongs to a
+project-wide run (annotate, replace or re-prefix) and moves other sheets too;
+undo it from the sheet it was run on`. Undo the run in the app window, where
+Ctrl+Z restores every sheet until you save.
+
 An argument is a string, a number, a boolean, or `[x, y]` for a point (mm).
 The names, kinds and units of a command's arguments are in
 `signex-cli commands --json`; the same checks as `CommandArgs::parse_operands`

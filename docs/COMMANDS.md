@@ -70,7 +70,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## General
 
-| command id | label | category | Altium | Classic |
+| command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
 | `apply_edits` | Apply edits (agent) | edit | — | — |
 | `apply_layout_board` | Workspace layout: Layout | window | — | — |
@@ -217,7 +217,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## Schematic
 
-| command id | label | category | Altium | Classic |
+| command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
 | `add_table_of_contents` | Add table of contents sheet | design | — | — |
 | `add_to_union` | Add the selection to the selected union | edit | — | — |
@@ -353,7 +353,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## PCB
 
-| command id | label | category | Altium | Classic |
+| command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
 | `add_board_graphic` | Add a line, arc, circle, rectangle or text frame to a board | place | — | — |
 | `add_net_class` | Add a net class | design | — | — |
@@ -497,7 +497,7 @@ Ids and where each file kind stores one: [DOCUMENT_IDS.md](DOCUMENT_IDS.md).
 
 ## 3D
 
-| command id | label | category | Altium | Classic |
+| command id | label | category | Signex Standard | Classic |
 | --- | --- | --- | --- | --- |
 | `footprint_mode_pads` | Switch footprint editor to Pads mode | library | `2` | `2` |
 | `footprint_mode_sketch` | Switch footprint editor to Sketch mode | library | `1` | `1` |

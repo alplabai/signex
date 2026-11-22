@@ -69,7 +69,11 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a ViaFacts) -> Element<'a, Pa
 
 fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
-    let mut s = Section::new(look, ids::PCB_PRIM_DEFINITION);
+    let mut s = Section::new(look, ids::PCB_PRIM_DEFINITION).collapsible(
+        "pcb_prim.via.definition",
+        false,
+        None,
+    );
     s.push(common, ids::PCB_PRIM_NET, net_row(look, common));
     let live = common.is_editable() && !common.target.is_placement();
     let target = common.target.clone();
@@ -204,7 +208,8 @@ fn labelled_blank<'a>(look: Look<'a>, value: Element<'a, PanelMsg>) -> Element<'
 
 fn via_stack<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
-    let mut s = Section::new(look, ids::PCB_PRIM_VIA_STACK);
+    let mut s =
+        Section::new(look, ids::PCB_PRIM_VIA_STACK).collapsible("pcb_prim.via.stack", false, None);
     s.push(
         common,
         ids::PCB_PRIM_STACK_SIMPLE,
@@ -395,7 +400,11 @@ pub(super) fn class_label(class: Ipc4761) -> MessageId {
 
 fn protection<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
-    let mut s = Section::new(look, ids::PCB_PRIM_PROTECTION);
+    let mut s = Section::new(look, ids::PCB_PRIM_PROTECTION).collapsible(
+        "pcb_prim.via.protection",
+        false,
+        None,
+    );
     let class = f.protection.map(|p| p.class());
     if let Some(class) = class {
         s.push_row(labelled_blank(

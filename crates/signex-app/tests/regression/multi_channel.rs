@@ -292,6 +292,27 @@ fn compile_project_fills_the_panel_with_the_channels() {
     assert_eq!(panel.totals.channels, 2);
 }
 
+/// Mockup row 154: Recompile is the panel's title-bar icon.
+#[test]
+fn the_title_bar_recompile_compiles_the_project() {
+    let mut f = fixture("Repeat(CH, 1, 2)", false);
+    send(&mut f.app, CompiledDesignMsg::FindChanged(String::new()));
+    let press = signex_app::panels::title_actions(
+        signex_app::panels::PanelKind::CompiledDesign,
+        &f.app.document_state.panel_ctx,
+    )
+    .into_iter()
+    .next()
+    .expect("the panel has Recompile in its title bar")
+    .on_press
+    .expect("a project is open");
+    crate::settle_support::settle(&mut f.app, Message::Dock(DockMessage::Panel(press)));
+    assert_eq!(
+        f.app.document_state.panel_ctx.compiled_design.panel.status,
+        CompiledStatus::Ready
+    );
+}
+
 /// The compile of one project refreshes that project's contents tables and
 /// never another open project's (#1300 review).
 #[test]

@@ -152,7 +152,7 @@ pub(super) fn grid_preview_card<'a>(
         .color(ink)
         .font(iced::Font {
             weight: iced::font::Weight::Semibold,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         });
     let caption = signex_widgets::text(i18n.message(
         menu_ids::CTX_GRID_PREVIEW_ACTIVE,

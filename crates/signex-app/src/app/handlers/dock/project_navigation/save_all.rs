@@ -518,6 +518,7 @@ impl Signex {
                 .collect();
             for pinned in unchanged {
                 self.document_state.mark_document_clean(&pinned.path);
+                self.release_saved_sheet(&pinned.path);
             }
         }
     }

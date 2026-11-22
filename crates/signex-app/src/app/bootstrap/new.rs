@@ -217,7 +217,7 @@ impl Signex {
         let grid_size_mm = crate::fonts::read_grid_size_mm_pref_from(prefs)
             .unwrap_or(crate::canvas::grid::GRID_SIZES_MM[1]);
         // Keyboard shortcut profiles: prefer the user's saved set from
-        // the OS config dir, else fall back to the bundled Altium /
+        // the OS config dir, else fall back to the bundled Signex Standard /
         // Classic built-ins (which must always parse). The active
         // profile is compiled once here into a fast lookup table.
         //

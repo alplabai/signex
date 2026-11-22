@@ -3,54 +3,16 @@
 
 use iced::widget::{Space, column, container, row};
 use iced::{Element, Length, Widget};
-use signex_i18n::{I18n, t};
-use signex_types::theme::ThemeTokens;
-use signex_widgets::{button, raw, text};
+use signex_widgets::{raw, text};
 
+use super::section_list::section_list;
 use super::{
-    ProjectSection, ProjectTabMsg, erc_annotation, general, libraries, parameters, requirements,
+    ProjectSection, erc_annotation, general, libraries, parameters, requirements,
     schematic_defaults, setup, sheets, variants, version_control,
 };
 use crate::app::state::ProjectId;
-use crate::app::{Message, ProjectMsg, Signex};
-use crate::styles::{Spacing, TypeScale};
-
-/// Width of the section list, in `body`-size characters.
-const SECTION_LIST_EMS: f32 = 16.0;
-
-fn section_list<'a>(
-    project_id: ProjectId,
-    selected: ProjectSection,
-    i18n: &I18n,
-    tokens: &ThemeTokens,
-) -> Element<'a, Message> {
-    let (ts, sp) = (TypeScale::default(), Spacing::default());
-    let mut list: iced::widget::Column<Element<'a, Message>> =
-        column![].spacing(sp.xs).padding([sp.l, sp.m]);
-    for section in ProjectSection::ALL {
-        let label = text(t!(i18n, section.title())).size(ts.label);
-        let entry = button(label)
-            .width(Length::Fill)
-            .padding([sp.s, sp.m])
-            .on_press(Message::Project(ProjectMsg::Tab(
-                ProjectTabMsg::SectionSelected {
-                    project_id,
-                    section,
-                },
-            )));
-        let entry = if section == selected {
-            entry.style(crate::styles::accent_button(tokens))
-        } else {
-            entry.style(crate::styles::subtle_button(tokens))
-        };
-        list = list.push(entry.boxed());
-    }
-    container(list)
-        .width(Length::Fixed(ts.body * SECTION_LIST_EMS))
-        .height(Length::Fill)
-        .style(crate::styles::panel_region(tokens))
-        .boxed()
-}
+use crate::app::{Message, Signex};
+use crate::styles::TypeScale;
 
 impl Signex {
     /// The project whose Project tab `window` shows. Only the main window
@@ -144,7 +106,13 @@ impl Signex {
             column![content, Space::new().height(Length::Fill)].boxed()
         };
         row![
-            section_list(project_id, selected, i18n, tokens),
+            section_list(
+                project,
+                &self.section_facts(project),
+                selected,
+                i18n,
+                tokens
+            ),
             container(body)
                 .width(Length::Fill)
                 .height(Length::Fill)

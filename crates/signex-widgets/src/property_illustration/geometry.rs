@@ -61,6 +61,16 @@ pub struct LabelPlacement {
     pub baseline: Baseline,
 }
 
+impl LabelPlacement {
+    /// This placement moved by `shift`.
+    pub fn shifted(self, shift: Vector) -> Self {
+        Self {
+            at: self.at + shift,
+            ..self
+        }
+    }
+}
+
 /// A filled arrow head: tip and the two base corners.
 pub type Head = [Point; 3];
 

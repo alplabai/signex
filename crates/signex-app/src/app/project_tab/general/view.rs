@@ -2,15 +2,17 @@
 //! the read-only file facts. Pure: reads the project, emits `ProjectTabMsg`s.
 //! Sizes come from the shared type and spacing scales.
 
-use iced::widget::{Widget, column, container, row};
+use iced::widget::{Space, Widget, column, container, row};
 use iced::{Element, Length};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, raw, text, text_input};
 
 use super::ProjectGeneralFacts;
 use crate::app::project_tab::ProjectTabMsg;
-use crate::app::state::LoadedProject;
+use crate::app::project_tab::look::{ButtonKind, Glyph, card, text_button, ui_font};
+use crate::app::state::{LoadedProject, ProjectId};
 use crate::app::{Message, ProjectMsg};
+use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale};
 
 /// Width of the label column, in `body`-size characters.
@@ -75,6 +77,34 @@ fn name_row<'a>(project: &'a LoadedProject, tokens: &ThemeTokens) -> Element<'a,
     labelled("Name", name, tokens)
 }
 
+/// The top line of the files card: `read-only`, then Explore.
+fn files_actions<'a>(
+    project_id: ProjectId,
+    i18n: &signex_i18n::I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let sp = Spacing::default();
+    row![
+        Space::new().width(Length::Fill),
+        text(signex_i18n::t!(
+            i18n,
+            signex_i18n::ids::PANELS_TAB_READ_ONLY
+        ))
+        .size(TypeScale::default().caption)
+        .color(resolve(tokens).ink3),
+        text_button(
+            Some(Glyph::Folder),
+            signex_i18n::t!(i18n, signex_i18n::menu_ids::CTX_TREE_EXPLORE),
+            Some(tab_message(ProjectTabMsg::ExploreRequested { project_id })),
+            ButtonKind::Small,
+            tokens,
+        ),
+    ]
+    .spacing(sp.m)
+    .align_y(iced::Alignment::Center)
+    .boxed()
+}
+
 pub(in crate::app::project_tab) fn view<'a>(
     i18n: &signex_i18n::I18n,
     project: &'a LoadedProject,
@@ -92,19 +122,33 @@ pub(in crate::app::project_tab) fn view<'a>(
     .width(Length::Fill);
 
     let facts = ProjectGeneralFacts::of(project);
-    let body = column![
-        text(raw("General"))
-            .size(ts.heading)
-            .color(crate::styles::ti(tokens.text)),
+    let fields = column![
         name_row(project, tokens),
         labelled("Description", description, tokens),
         super::designator_standard::row(project, tokens),
+    ]
+    .spacing(sp.m);
+    let files = column![
+        files_actions(project_id, i18n, tokens),
         read_only("Directory", facts.directory, tokens),
         read_only("Root schematic", or_dash(facts.schematic_root), tokens),
         read_only("PCB file", or_dash(facts.pcb_file), tokens),
         read_only("Libraries", i18n.count(facts.library_count as i64), tokens),
     ]
+    .spacing(sp.m);
+    let body = column![
+        text(raw("General"))
+            .size(ts.heading)
+            .font(ui_font(iced::font::Weight::Semibold))
+            .color(crate::styles::ti(tokens.text)),
+        card(None, fields.boxed(), tokens),
+        card(None, files.boxed(), tokens),
+    ]
     .spacing(sp.l)
     .width(Length::Fill.max(ts.body * SECTION_MAX_EMS));
-    container(body).padding([sp.xl, sp.xl]).boxed()
+    let page = container(body)
+        .width(Length::Fill)
+        .padding([sp.xl, sp.xl])
+        .boxed();
+    crate::app::project_tab::table::page_scroller(page, tokens)
 }

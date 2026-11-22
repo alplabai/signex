@@ -21,7 +21,7 @@ pub(super) fn cell_font(kind: &ColumnKind) -> Font {
     if mono {
         crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
     } else {
-        Font::default()
+        signex_widgets::ui_font::regular()
     }
 }
 

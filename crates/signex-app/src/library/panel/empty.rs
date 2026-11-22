@@ -26,7 +26,7 @@ pub(super) fn card<'a>(tokens: &ThemeTokens, i18n: &I18n) -> Element<'a, DockMes
             .size(TS.body)
             .font(iced::Font {
                 weight: iced::font::Weight::Medium,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .color(ti(tokens.text))
             .boxed(),

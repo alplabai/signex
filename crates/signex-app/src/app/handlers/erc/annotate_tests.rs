@@ -72,6 +72,16 @@ pub(super) fn child_refs(dir: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
+/// The child as a run left it: parked unsaved, else as it is on disk.
+pub(super) fn held_child_refs(app: &Signex, dir: &std::path::Path) -> Vec<String> {
+    match app.document_state.engines.get(&dir.join("z_child.snxsch")) {
+        Some(engine) => (engine.document().symbols.iter())
+            .map(|s| s.reference.clone())
+            .collect(),
+        None => child_refs(dir),
+    }
+}
+
 #[test]
 fn reset_duplicates_leaves_units_of_one_part_alone() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0), unit("U1", 2, 10.0)], vec![]);
@@ -110,7 +120,7 @@ fn reset_and_renumber_keeps_a_part_split_across_sheets_together() {
     let (mut app, dir) = project(vec![unit("U1", 1, 0.0)], vec![unit("U1", 2, 0.0)]);
     let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
     crate::app::path_ops::settle_task(&mut app, task);
-    let (root, child) = (root_refs(&app, &dir), child_refs(&dir));
+    let (root, child) = (root_refs(&app, &dir), held_child_refs(&app, &dir));
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(root, child, "one part, one designator across sheets");
     assert!(!root[0].ends_with('?'));
@@ -354,10 +364,9 @@ fn an_annotate_that_numbers_nothing_redraws_a_stale_slot_whole() {
     assert!(shown, "the undocked slot must show the wire");
 }
 
-/// #1164: both bulk passes write unopened sheets straight to disk. A recovery
-/// copy an earlier run left may hold unsaved edits to a sheet nobody has
-/// opened yet, so it must survive the rewrite and be offered at open; only a
-/// copy this run wrote is removed.
+/// #1164: a recovery copy an earlier run left may hold unsaved edits to a
+/// sheet nobody has opened yet, so it must survive a bulk pass and be offered
+/// at open. The passes no longer touch the file (#2760).
 fn child_with_recovery_copy(
     root: Vec<Symbol>,
     child: Vec<Symbol>,
@@ -431,7 +440,7 @@ fn annotate_keeps_an_earlier_runs_recovery_copy_and_offers_it() {
 }
 
 #[test]
-fn annotate_drops_a_recovery_copy_this_run_wrote() {
+fn annotate_keeps_a_recovery_copy_this_run_wrote() {
     let (mut app, dir, recovery, child_path) =
         child_with_recovery_copy(vec![unit("U?", 1, 0.0)], vec![unit("U?", 1, 0.0)]);
     // This run's autosave tick wrote the copy: the write began and landed.
@@ -440,12 +449,9 @@ fn annotate_drops_a_recovery_copy_this_run_wrote() {
     app.document_state.autosave.finish(&child_path, stamp, true);
     let task = app.handle_annotate(signex_engine::AnnotateMode::ResetAndRenumber);
     crate::app::path_ops::settle_task(&mut app, task);
-    let gone = !crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
+    let kept = crate::autosave::sidecar::sidecar_path(&recovery, &child_path).exists();
     std::fs::remove_dir_all(&dir).ok();
-    assert!(
-        gone,
-        "a copy this run wrote is stale once Annotate rewrote the sheet"
-    );
+    assert!(kept, "Annotate no longer rewrites the sheet under its copy");
 }
 
 // ---- #859: an in-flight read or restore owns the sheet's file.
@@ -524,12 +530,12 @@ fn assert_unopened_sheet_untouched_while(
     let refs = child_refs(&dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, [expected], "the sheet file was not rewritten");
-    // Annotate here is Reset & Renumber, which refuses the run rather than
-    // number around the sheet (#1753); Reset Duplicates still skips it.
+    // Both refuse the run whole rather than go around the sheet (#1753,
+    // #2760); Annotate here is Reset & Renumber.
     let said = if pass == "Annotate" {
         format!("{pass} was not run: it would skip z_child.snxsch ({reason})")
     } else {
-        format!("{pass}: z_child.snxsch was left unchanged, {reason}")
+        format!("{pass} was not run: it could not reach z_child.snxsch ({reason})")
     };
     assert!(logged_since(since, &said), "the skip is reported");
 }
@@ -708,13 +714,10 @@ fn reset_duplicates_of_a_closed_sheet_leaves_the_erc_results_stale() {
     assert!(!app.erc_results_stale());
     let task = app.handle_reset_duplicate_designators();
     crate::app::path_ops::settle_task(&mut app, task);
-    let child = child_refs(&dir);
+    let (held, on_disk) = (held_child_refs(&app, &dir), child_refs(&dir));
     std::fs::remove_dir_all(&dir).ok();
-    assert_eq!(
-        child,
-        ["U?", "U?"],
-        "the closed child was rewritten on disk"
-    );
+    assert_eq!(held, ["U?", "U?"], "the closed child was reset, parked");
+    assert_eq!(on_disk, ["U1", "U1"], "and its file waits for a save");
     assert!(app.erc_results_stale());
 }
 
@@ -743,7 +746,7 @@ fn a_rollback_that_found_no_run_leaves_an_unrelated_edit_dirty() {
     assert!(app.document_state.is_document_dirty(&root));
     let wrong_group = signex_engine::UndoGroupId::new(u64::MAX);
     let touched = [root.clone()];
-    let _ = app.roll_back_reprefix(
+    let _ = app.roll_back_run(
         Some(wrong_group),
         &touched,
         &std::collections::HashSet::new(),
@@ -773,7 +776,7 @@ fn a_rollback_that_found_no_run_on_the_active_sheet_leaves_it_unsaved() {
     // The pass marked the sheet dirty before the rollback ran.
     app.document_state.mark_document_dirty(&root);
     let touched = [root.clone()];
-    let _ = app.roll_back_reprefix(
+    let _ = app.roll_back_run(
         Some(signex_engine::UndoGroupId::new(u64::MAX)),
         &touched,
         &std::collections::HashSet::new(),

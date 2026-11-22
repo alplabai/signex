@@ -678,6 +678,7 @@ impl SnxSchematic {
                     .is_newer_minor(&format)
                     .then(|| format.clone()),
                 load_repairs: Vec::new(),
+                source_hash: None,
             },
         };
         sheet.upgrade_unversioned_bodies();

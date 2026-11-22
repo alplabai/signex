@@ -34,6 +34,7 @@ mod shell;
 mod theme_cards;
 mod widgets;
 
+pub use crate::app::core::rule_profile_page::{ProfileEditorTab, ProfileNameAction};
 use annotation::content_annotation;
 use appearance::content_appearance;
 use component_classes::content_component_classes;
@@ -47,7 +48,7 @@ use language::content_language;
 pub use pages_state::PreferencesPagesState;
 pub use pages_view::{PagesViewMsg, PagesViewState};
 use profiles::content_profiles;
-pub use profiles::{ProfileAction, ProfilesMsg};
+pub use profiles::{ProfileAction, ProfilePageMsg, ProfilesMsg};
 pub use schematic_display::BodyFillMsg;
 use schematic_display::{DisplayPage, content_schematic_display};
 
@@ -55,7 +56,7 @@ use schematic_display::{DisplayPage, content_schematic_display};
 // at their original module-local visibility so the shell here and every
 // section submodule keep resolving them through `use super::*`.
 pub(in crate::preferences) use widgets::{
-    danger_button_style, h_sep, secondary_button_style, text_muted, text_primary, text_warning,
+    danger_button_style, text_muted, text_primary, text_warning,
 };
 
 // ─── Navigation Items ─────────────────────────────────────────
@@ -390,6 +391,8 @@ pub struct PrefsView<'a> {
     pub draft_ui_scale_percent: u16,
     pub dirty: bool,
     pub profiles: &'a crate::app::rule_profile_ui::ProfileManager,
+    /// A profile edit is still on its way to its file.
+    pub profiles_saving: bool,
     /// The profile new projects start from; `None` is automatic.
     pub default_profile: Option<&'a str>,
     pub distributor_settings: &'a crate::library::state::DistributorSettings,
@@ -480,6 +483,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         nav,
         i18n,
         profiles,
+        profiles_saving,
         default_profile,
         panel_tokens,
         ..
@@ -500,7 +504,13 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
             tokens: panel_tokens,
             i18n,
         }),
-        PrefNav::RuleProfiles => content_profiles(profiles, default_profile, panel_tokens, i18n),
+        PrefNav::RuleProfiles => content_profiles(
+            profiles,
+            profiles_saving,
+            default_profile,
+            panel_tokens,
+            i18n,
+        ),
         // The library subsystem owns the Distributor APIs form; the page
         // re-emits its `LibraryMessage::Settings(_)` as
         // `PrefMsg::LibrarySettings(_)`, and the handler re-dispatches it

@@ -373,7 +373,7 @@ impl Signex {
                 .color(look.ink3)
                 .font(iced::Font {
                     weight: iced::font::Weight::Medium,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .width(Length::Fill)
                 .wrapping(iced::widget::text::Wrapping::None)

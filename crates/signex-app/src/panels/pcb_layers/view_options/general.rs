@@ -2,7 +2,7 @@
 //! Single Layer and Show Grid.
 
 use iced::widget::tooltip::Position;
-use iced::widget::{Row, container, mouse_area, row};
+use iced::widget::{container, mouse_area, row};
 use iced::{Alignment, Background, Border, Element, Length, Padding, Theme, Widget, mouse};
 use signex_i18n::{Localized, MessageId, ids, t};
 use signex_widgets::chevron::chevron;
@@ -187,11 +187,14 @@ fn cell<'a>(
     let greyed = msg.is_none() && !on;
     let label = text(t!(panel.i18n, label))
         .size(TS.caption)
-        .width(Length::Fill)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End)
         .align_x(iced::alignment::Horizontal::Center);
-    let cell = button(container(label).center_y(Length::Fill))
+    let centred = container(label)
+        .align_x(iced::alignment::Horizontal::Center)
+        .center_y(Length::Fill);
+    let cell = button(centred)
         .padding([0.0, SP.s])
-        .width(Length::Fill)
         .height(CELL_H)
         .on_press_maybe(msg)
         .style(
@@ -214,7 +217,7 @@ fn cell<'a>(
 
 /// The frame around the cells of a segmented switch, as wide as its column.
 fn segmented<'a>(cells: Vec<Element<'a, PanelMsg>>) -> Element<'a, PanelMsg> {
-    container(Row::with_children(cells).spacing(SP.xs).width(Length::Fill))
+    container(signex_widgets::FitRow::new(cells).spacing(SP.xs).fill(true))
         .padding(SP.xs)
         .width(Length::Fill)
         .style(form_look::segmented_frame)

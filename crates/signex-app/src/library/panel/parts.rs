@@ -151,7 +151,7 @@ fn library_row<'a>(
                 .size(TS.body)
                 .font(iced::Font {
                     weight: iced::font::Weight::Medium,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .color(ink)
                 .wrapping(iced::widget::text::Wrapping::None)

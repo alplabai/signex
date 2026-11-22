@@ -289,6 +289,9 @@ dialog-net-color-quick-pick = Quick Pick
 dialog-rules-changed-only = Changed only
 dialog-rules-filter-placeholder = Filter rules
 dialog-rules-no-match = No rule matches the filter.
+# Column heads of the rule table on the Rule Profiles page.
+dialog-rules-column-rule = Rule
+dialog-rules-column-severity = Severity
 # Subheads of the rule list.
 dialog-rules-group-pins = Pins
 dialog-rules-group-nets = Nets
@@ -302,7 +305,7 @@ dialog-rules-legend-warning = Warning
 dialog-rules-legend-info = Info
 dialog-rules-legend-off = No report
 dialog-rules-legend-changed = Changed
-dialog-rules-legend-changed-rule = Changed rule
+dialog-rules-legend-changed-rule = Rule differs
 dialog-rules-matrix-caption = Pin type conflict is on/off only: its findings take their severity from this matrix.
 
 ## Help ▸ About Signex (#2262)
@@ -411,10 +414,10 @@ dialog-parameter-manager-revert-tip = { $count ->
 # The primary button: moves the selection by the offsets.
 dialog-move-selection-move = Move
 # Under the preview. $grid is the grid step and $unit its unit; $x and $y
-# are how many whole grid steps the offsets span. Stored Y counts down.
-dialog-move-selection-help = Positive X moves right, positive Y moves down. Grid { $grid } { $unit }: { $x } × { $y } steps.
+# are how many whole grid steps the offsets span.
+dialog-move-selection-help = Positive X moves right, positive Y moves up. Grid { $grid } { $unit }: { $x } × { $y } steps.
 # The same line when an offset is not a whole number of grid steps.
-dialog-move-selection-help-off-grid = Positive X moves right, positive Y moves down. Grid { $grid } { $unit }: off grid.
+dialog-move-selection-help-off-grid = Positive X moves right, positive Y moves up. Grid { $grid } { $unit }: off grid.
 
 ## Net colour palette (#2528)
 # Header subtitle. $count is how many nets the active sheet labels.
@@ -461,7 +464,7 @@ dialog-annotate-banner-scope =
        *[other] on { $sheets } sheets.
     } The list updates live; Accept Changes applies it as { $undo ->
         [sheet] one undo step per sheet.
-       *[project] one undo step.
+       *[project] one undo step until you save.
     }
 # Change-list switch. $count is a whole number.
 dialog-annotate-view-changes = Changes { $count }
@@ -474,7 +477,7 @@ dialog-annotate-no-changes = No designator changes. Pick All to see every row.
 dialog-annotate-reset-all-ellipsis = Reset All…
 dialog-annotate-reset-renumber-ellipsis = Reset & Renumber…
 # Footer caption. $undo is the Undo shortcut, such as "Ctrl+Z".
-dialog-annotate-undo-caption = { $undo } undoes it on every sheet
+dialog-annotate-undo-caption = { $undo } undoes it on every sheet until you save
 dialog-annotate-undo-caption-per-sheet = { $undo } undoes it one sheet at a time
 
 ## Reset confirm (#76)
@@ -485,7 +488,7 @@ dialog-annotate-reset-detail-loading =
        *[no] .
     }
 # $undo is the Undo shortcut, such as "Ctrl+Z".
-dialog-annotate-reset-one-step = One undo step: { $undo } restores every sheet.
+dialog-annotate-reset-one-step = One undo step: { $undo } restores every sheet until you save.
 dialog-annotate-reset-per-sheet = { $undo } undoes it one sheet at a time, as the Annotate undo setting asks.
 
 ## Re-prefix confirm (#77)
@@ -502,7 +505,7 @@ dialog-reprefix-tile-sheets =
     }
 dialog-reprefix-tile-standard = standard
 # $undo is the Undo shortcut, such as "Ctrl+Z".
-dialog-reprefix-bullet-undo = One undo step: { $undo } on any changed sheet undoes it on all of them.
+dialog-reprefix-bullet-undo = One undo step: { $undo } on any changed sheet undoes it on all of them until you save.
 dialog-reprefix-bullet-unsaved = Sheets stay unsaved until you save. PCB references are not updated.
 # $count is a whole number.
 dialog-reprefix-bullet-by-symbol =

@@ -45,7 +45,8 @@ impl SheetFacts {
     }
 }
 
-/// The sheet painted as a card in the main window.
+/// The sheet as a card in the main window, sized to itself: the overlay
+/// centres it over the click-outside layer.
 pub fn view<'a>(
     i18n: &I18n,
     tokens: &'a ThemeTokens,
@@ -108,16 +109,11 @@ fn build<'a>(
         crate::app::view::dialogs::DIALOG_HEADER_H,
         tokens,
     );
-    let card = container(column![header, toolbar, body, footer])
+    container(column![header, toolbar, body, footer])
         .width(Length::Fixed(CARD_W))
         .height(Length::Fixed(CARD_H))
         .clip(true)
-        .style(styles::modal_card(tokens));
-    container(card)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x(Length::Fill)
-        .center_y(Length::Fill)
+        .style(styles::modal_card(tokens))
         .boxed()
 }
 
@@ -407,7 +403,7 @@ fn no_match<'a>(i18n: &I18n, tokens: &ThemeTokens, sheet: &ShortcutSheet) -> Ele
     .size(TS.body)
     .font(Font {
         weight: Weight::Medium,
-        ..Font::DEFAULT
+        ..signex_widgets::ui_font::regular()
     })
     .color(ti(tokens.text));
     let next: Element<'a, Message> = if sheet.scope == ShortcutScope::All {

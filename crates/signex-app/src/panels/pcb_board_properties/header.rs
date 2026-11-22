@@ -91,15 +91,11 @@ fn tabs<'a>(form: &Form<'a>, active: BoardTab) -> Element<'a, PanelMsg> {
         active == BoardTab::HealthCheck,
         Some(msg(PcbBoardMsg::TabPicked(BoardTab::HealthCheck))),
     );
-    container(
-        row![general, parameters, health]
-            .width(Length::Fill)
-            .align_y(Alignment::Center),
-    )
-    .padding(SP.xs)
-    .width(Length::Fill)
-    .style(form_look::segmented_frame)
-    .boxed()
+    container(signex_widgets::FitRow::new(vec![general, parameters, health]).fill(true))
+        .padding(SP.xs)
+        .width(Length::Fill)
+        .style(form_look::segmented_frame)
+        .boxed()
 }
 
 /// The Selection Filter button (#2383): the Active Bar's filter icon and how

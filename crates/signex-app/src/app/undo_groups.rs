@@ -10,17 +10,14 @@
 //! after the run has a newer entry on top, so undoing the group would revert
 //! the run underneath that edit; the step is refused instead, with a Messages
 //! panel line naming the sheets, and nothing changes. Undo that newer edit
-//! first. For redo, a sheet that still has the group in neither stack is
-//! skipped (reopened or history trimmed); one that has the group deeper in its
-//! undo stack but not on its redo stack (edited after the undo) refuses.
+//! first. For redo, a sheet the undo did not revert owes nothing; one that has
+//! the group deeper in its undo stack but not on its redo stack (edited after
+//! the undo) refuses.
 //!
-//! A skipped sheet keeps the other half of a split multi-unit part, so every
-//! one is named in a Messages panel warning, in both directions:
-//! - open, but its history no longer holds the run (reopened, or trimmed past
-//!   the history cap);
-//! - closed since the run, so no engine holds its history;
-//! - rewritten on disk by the run with no engine (undo only; it was never
-//!   reverted, so a redo owes it nothing).
+//! Undo until you save (#2760): a member no engine holds (saved and closed) or
+//! whose history no longer holds the run (reopened, or trimmed past the history
+//! cap) refuses the whole step, in both directions, before any sheet moves.
+//! One Messages line names those sheets; a project is never left half undone.
 
 use super::*;
 
@@ -29,18 +26,18 @@ use super::*;
 pub struct UndoGroupSheets {
     /// Sheets whose open engine recorded the group's entry.
     pub live: Vec<std::path::PathBuf>,
-    /// Sheets rewritten on disk with no engine, so with no history to undo.
-    pub disk_only: Vec<std::path::PathBuf>,
     /// Sheets the last undo of the group actually reverted. A redo requires
-    /// exactly these, so a sheet the undo skipped (reopened, history trimmed)
-    /// cannot block it, while one edited after the undo still does.
+    /// exactly these, so one edited after the undo blocks it.
     pub undone: Vec<std::path::PathBuf>,
     /// What the group is, named in its undo and redo messages.
     pub kind: UndoGroupKind,
-    /// Sheets the run loaded into tabless parked engines (re-prefix of a
-    /// sheet that was not open). Back at their loaded state after an undo,
+    /// Sheets the run loaded into tabless parked engines (re-prefix or reset
+    /// of a sheet that was not open). Back at their loaded state after an undo,
     /// they are clean, not unsaved.
     pub parked: Vec<std::path::PathBuf>,
+    /// Sheets with no unsaved edits when the run began. One whose tab closes
+    /// before the undo joins `parked`: it holds nothing the file lacks.
+    pub clean_before: Vec<std::path::PathBuf>,
     /// Parked sheets an undo took back to disk state and dropped. Their
     /// history is gone, so the group can no longer be redone as a whole.
     pub dropped: Vec<std::path::PathBuf>,
@@ -111,51 +108,16 @@ impl UndoGroupSheets {
         }
     }
 
-    /// What a sheet the step skipped keeps: "keeps its ...".
-    pub(crate) fn kept(&self) -> String {
-        match self.kind {
-            UndoGroupKind::Replace => "replaced text".to_string(),
-            UndoGroupKind::Footprints => "assigned footprints".to_string(),
-            UndoGroupKind::SheetNumbers => "new sheet numbers".to_string(),
-            UndoGroupKind::BackAnnotate => "back-annotated designators and values".to_string(),
-            UndoGroupKind::AgentEdit => "agent edits".to_string(),
-            UndoGroupKind::FootprintSwap => "changed footprints".to_string(),
-            UndoGroupKind::PartSwap => "swapped pin connections".to_string(),
-            UndoGroupKind::SheetEntrySync => "synced ports".to_string(),
-            _ => format!("{} designators", self.participle()),
-        }
-    }
-
-    /// What a sheet closed since the step holds: "its ... are whatever was
-    /// last saved".
-    pub(crate) fn holds(&self) -> &'static str {
-        match self.kind {
-            UndoGroupKind::Replace => "text",
-            UndoGroupKind::Footprints => "footprints",
-            UndoGroupKind::SheetNumbers => "sheet numbers",
-            UndoGroupKind::BackAnnotate => "designators and values",
-            UndoGroupKind::AgentEdit => "contents",
-            UndoGroupKind::FootprintSwap => "footprints",
-            UndoGroupKind::PartSwap => "pin connections",
-            UndoGroupKind::SheetEntrySync => "ports",
-            _ => "designators",
-        }
-    }
-
-    /// What the run did to the designators, for "keeps its ... designators".
-    pub(crate) fn participle(&self) -> &'static str {
-        match self.kind {
-            UndoGroupKind::Annotate => "annotated",
-            UndoGroupKind::Reprefix => "re-prefixed",
-            UndoGroupKind::Replace => "replaced",
-            UndoGroupKind::Footprints => "assigned",
-            UndoGroupKind::SheetNumbers => "renumbered",
-            UndoGroupKind::BackAnnotate => "back-annotated",
-            UndoGroupKind::AgentEdit => "edited",
-            UndoGroupKind::FootprintSwap => "changed",
-            UndoGroupKind::PartSwap => "swapped",
-            UndoGroupKind::SheetEntrySync => "synced",
-        }
+    /// The one line of a step refused because `sheets` cannot move with the
+    /// others (#2760).
+    pub(crate) fn out_of_reach(&self, undo: bool, sheets: &[std::path::PathBuf]) -> String {
+        format!(
+            "Cannot {} the {}: {} was saved and closed, or no longer holds this step, so no \
+             sheet was changed.",
+            if undo { "undo" } else { "redo" },
+            self.wide(),
+            file_names(sheets),
+        )
     }
 }
 
@@ -193,7 +155,7 @@ impl crate::app::state::DocumentState {
         group: signex_engine::UndoGroupId,
         sheets: UndoGroupSheets,
     ) {
-        if sheets.live.is_empty() && sheets.disk_only.is_empty() {
+        if sheets.live.is_empty() {
             self.undo_groups.remove(&group);
         } else {
             self.undo_groups.insert(group, sheets);
@@ -251,7 +213,7 @@ impl Signex {
     /// Undo (`undo`) or redo a group that holds board steps as well as sheet
     /// steps (#2366), from the board or from a sheet: every live member moves
     /// in one step. Refused, with nothing moved, when a member has a later
-    /// step above the group's; a closed member is skipped and named.
+    /// step above the group's, or a member is out of reach (#2760).
     pub(crate) fn step_board_undo_group(
         &mut self,
         group: signex_engine::UndoGroupId,
@@ -271,7 +233,11 @@ impl Signex {
         for path in &recorded.live {
             match self.document_state.engines.get(path) {
                 Some(engine) if direction.top(engine) == Some(group) => sheets.push(path.clone()),
-                Some(engine) if (undo && engine.has_undo_group(group)) || (!undo && owed(path)) => {
+                // A redo with no history at all: reopened, not edited.
+                Some(engine)
+                    if (undo && engine.has_undo_group(group))
+                        || (!undo && owed(path) && (engine.can_undo() || engine.can_redo())) =>
+                {
                     blocked.push(path.clone());
                 }
                 _ if owed(path) => skipped.push(path.clone()),
@@ -298,7 +264,7 @@ impl Signex {
                 skipped.push(path.clone());
             }
         }
-        let (title, verb) = (recorded.title(), if undo { "undo" } else { "redo" });
+        let verb = if undo { "undo" } else { "redo" };
         if !blocked.is_empty() {
             crate::diagnostics::log_warning(format!(
                 "Cannot {verb} the {}: {} has a later step. Undo the newer edit there first.",
@@ -307,14 +273,12 @@ impl Signex {
             ));
             return false;
         }
-        if sheets.is_empty() && boards.is_empty() {
+        if !skipped.is_empty() {
+            crate::diagnostics::log_warning(recorded.out_of_reach(undo, &skipped));
             return false;
         }
-        if !skipped.is_empty() {
-            crate::diagnostics::log_warning(format!(
-                "{title}: the {verb} did not reach {}, which is closed or no longer holds the step.",
-                file_names(&skipped),
-            ));
+        if sheets.is_empty() && boards.is_empty() {
+            return false;
         }
         let active = self.document_state.active_path.clone();
         let mut active_patch = None;

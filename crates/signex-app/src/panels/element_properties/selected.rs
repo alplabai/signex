@@ -239,7 +239,7 @@ fn titled_header<'a>(
                 .color(primary)
                 .font(iced::Font {
                     weight: iced::font::Weight::Semibold,
-                    ..iced::Font::DEFAULT
+                    ..signex_widgets::ui_font::regular()
                 })
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
@@ -328,21 +328,24 @@ fn wire_width_grid<'a>(
     st: PanelStyle,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
-    let mut grid = Column::new().spacing(SP.xs).width(Length::Fill);
-    for pair in wire_width_cells(current) {
-        let mut line = iced::widget::Row::new().spacing(SP.xs).width(Length::Fill);
-        for (preset, active) in pair {
-            line = line.push(seg_btn(
+    let cells: Vec<Element<'a, PanelMsg>> = wire_width_cells(current)
+        .into_iter()
+        .flatten()
+        .map(|(preset, active)| {
+            seg_btn(
                 t!(i18n, super::super::wire_style_rows::preset_label(preset)),
                 active,
                 PanelMsg::EditWireWidth(id, preset),
                 st.palette.input_bg,
                 st.primary,
                 st.muted,
-            ));
-        }
-        grid = grid.push(line);
-    }
+            )
+        })
+        .collect();
+    let grid = signex_widgets::FitRow::new(cells)
+        .spacing(SP.xs)
+        .fill(true)
+        .max_columns(2);
     container(
         row![
             property_label(t!(i18n, ids::PROPERTIES_WIRE_WIDTH), st.muted),

@@ -274,7 +274,7 @@ fn the_header_counts_the_kinds_that_are_on() {
     let texts = texts(&ctx);
     let fewer = format!("{}/{total}", total - 1);
     assert!(texts.contains(&fewer), "{texts:?}");
-    let width = DEFAULT_DOCK;
+    let width = NARROW_DOCK;
     let button = laid_out(&ctx, width)
         .into_iter()
         .find(|t| t.text == fewer)
@@ -329,8 +329,8 @@ fn the_managers_list_the_boards_guides_and_grids() {
     );
 }
 
-/// The default width of the right dock (`UiState::right_width` at startup).
-const DEFAULT_DOCK: f32 = 220.0;
+/// The narrow dock every board panel row must still fit (#2386).
+const NARROW_DOCK: f32 = 220.0;
 
 fn laid_out(ctx: &PanelContext, width: f32) -> Vec<crate::layout_probe::LaidOutText> {
     let window = iced::Size::new(width, WINDOW.height);
@@ -364,7 +364,7 @@ fn board_information(
 
 /// #2386, #2523: the Components, Top and Bottom tiles share one row, in
 /// that order, at the mockup's dock width (three tiles a row); in the
-/// default dock two tiles a row keep every value whole.
+/// narrow dock two tiles a row keep every value whole.
 #[test]
 fn the_component_tiles_share_a_row_and_values_fit_their_tiles() {
     let wide = laid_out(&context(0), MOCKUP_DOCK);
@@ -376,13 +376,13 @@ fn the_component_tiles_share_a_row_and_values_fit_their_tiles() {
     assert!(x("Components") < x("Top") && x("Top") < x("Bottom"));
     assert_eq!(y("Width"), y("Thickness"), "three a row: {info:?}");
 
-    let narrow = laid_out(&context(0), DEFAULT_DOCK);
+    let narrow = laid_out(&context(0), NARROW_DOCK);
     let info = board_information(&narrow);
     let width = crate::layout_probe::find(info, "Width").bounds;
     let height = crate::layout_probe::find(info, "Height").bounds;
     assert_eq!(width.y, height.y, "two a row: {info:?}");
     let area = crate::layout_probe::find(info, "2000.00 mm²").bounds;
-    assert!(area.x + area.width <= DEFAULT_DOCK, "{area:?}");
+    assert!(area.x + area.width <= NARROW_DOCK, "{area:?}");
     let value = crate::layout_probe::find(info, "50.000 mm").bounds;
     assert!(
         value.x + value.width <= height.x,
@@ -390,12 +390,12 @@ fn the_component_tiles_share_a_row_and_values_fit_their_tiles() {
     );
 }
 
-/// #2386: no label of the board panel wraps at the default dock width.
+/// #2386: no label of the board panel wraps at the narrow dock width.
 #[test]
-fn no_board_panel_label_wraps_at_the_default_dock_width() {
+fn no_board_panel_label_wraps_at_the_narrow_dock_width() {
     let mut ctx = context(0);
     open_all(&mut ctx);
-    let texts = laid_out(&ctx, DEFAULT_DOCK);
+    let texts = laid_out(&ctx, NARROW_DOCK);
     let one_line = crate::layout_probe::find(&texts, "Width").bounds.height;
     for label in [
         "Width",
@@ -435,7 +435,7 @@ fn an_outline_less_board_says_so_on_one_line() {
     let mut no_outline = board();
     no_outline.outline.clear();
     ctx.pcb_board = Some(Box::new(PcbBoardSummary::of(&no_outline, "b".into(), 0)));
-    let texts = laid_out(&ctx, DEFAULT_DOCK);
+    let texts = laid_out(&ctx, NARROW_DOCK);
     let line = crate::layout_probe::find(&texts, "No board outline");
     let thickness = crate::layout_probe::find(&texts, "Thickness");
     assert!(
@@ -480,7 +480,7 @@ fn the_primitives_card_counts_what_the_board_holds() {
 fn add_preset_and_run_drc_are_wired() {
     let mut ctx = context(0);
     open_all(&mut ctx);
-    let window = iced::Size::new(DEFAULT_DOCK, WINDOW.height);
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
     let added = crate::layout_probe::messages_on_click(
         super::super::properties::view_properties(&ctx),
         window,
@@ -556,16 +556,16 @@ fn the_global_grid_card_cannot_be_moved_or_deleted() {
 }
 
 /// #2386: the grid and guide cards, the Other rows and the Sheet card keep
-/// every text on one line at the default dock width.
+/// every text on one line at the narrow dock width.
 #[test]
-fn the_manager_cards_do_not_wrap_at_the_default_dock_width() {
+fn the_manager_cards_do_not_wrap_at_the_narrow_dock_width() {
     let mut ctx = context(0);
     open_all(&mut ctx);
     managed(&mut ctx);
     if let Some(board) = ctx.pcb_board.as_mut() {
         board.view.guide_add_open = true;
     }
-    let texts = laid_out(&ctx, DEFAULT_DOCK);
+    let texts = laid_out(&ctx, NARROW_DOCK);
     let one_line = crate::layout_probe::find(&texts, "Parts").bounds.height;
     for label in [
         "Global Snap Grid",
@@ -686,7 +686,7 @@ fn closed_sections_show_their_summary_and_open_on_a_click() {
             "{summary} in {shown:?}"
         );
     }
-    let window = iced::Size::new(DEFAULT_DOCK, WINDOW.height);
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
     let sent = crate::layout_probe::messages_on_click(
         super::super::properties::view_properties(&ctx),
         window,
@@ -717,7 +717,7 @@ fn the_size_row_reads_the_board_shape_and_offers_to_edit_it() {
     ] {
         assert!(shown.iter().any(|t| t == wanted), "{wanted} in {shown:?}");
     }
-    let window = iced::Size::new(DEFAULT_DOCK, WINDOW.height);
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
     let sent = crate::layout_probe::messages_on_click(
         super::super::properties::view_properties(&ctx),
         window,
@@ -840,7 +840,7 @@ fn the_health_check_tab_has_a_card_per_check() {
     for gone in ["Search", "SNAP OPTIONS", "Edit board shape…"] {
         assert!(!shown.iter().any(|t| t == gone), "{gone} in {shown:?}");
     }
-    let window = iced::Size::new(DEFAULT_DOCK, WINDOW.height);
+    let window = iced::Size::new(NARROW_DOCK, WINDOW.height);
     let sent = crate::layout_probe::messages_on_click(
         super::super::properties::view_properties(&ctx),
         window,

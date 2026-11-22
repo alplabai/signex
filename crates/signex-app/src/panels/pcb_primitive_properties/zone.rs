@@ -87,7 +87,11 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, f: &'a ZoneFacts) -> Element<'a, P
 
 fn properties<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
     let common = &f.common;
-    let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES);
+    let mut s = Section::new(look, ids::PCB_PRIM_PROPERTIES).collapsible(
+        "pcb_prim.zone.properties",
+        false,
+        None,
+    );
     if f.is_copper {
         s.push(
             common,
@@ -148,7 +152,11 @@ fn pour<'a>(look: Look<'a>, f: &'a ZoneFacts) -> Option<Element<'a, PanelMsg>> {
     }
     let common = &f.common;
     let mm = || unit(look, ids::PCB_PRIM_UNIT_MM);
-    let mut s = Section::new(look, ids::PCB_PRIM_POUR_SETTINGS);
+    let mut s = Section::new(look, ids::PCB_PRIM_POUR_SETTINGS).collapsible(
+        "pcb_prim.zone.pour_settings",
+        false,
+        None,
+    );
     s.push(
         common,
         ids::PCB_PRIM_POUR_FILL_MODE,

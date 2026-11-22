@@ -43,7 +43,7 @@ pub fn relative_time(i18n: &I18n, time: DateTime<Utc>, now: DateTime<Utc>) -> Lo
 fn semibold() -> Font {
     Font {
         weight: iced::font::Weight::Semibold,
-        ..Font::DEFAULT
+        ..crate::ui_font::regular()
     }
 }
 

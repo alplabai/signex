@@ -34,8 +34,9 @@ updates, the file tasks) and
 | Review | (empty) | History | Messages, Command Log |
 | Notebook | Projects | Annotations, Properties | (empty) |
 
-Every built-in opens the side docks at the default widths, with no dock
-collapsed and no split. The mock's "Layers strip" under the board is the
+Every built-in opens the side docks at the default widths (left 240 px,
+right 300 px), with no dock collapsed and no split. A built-in with an
+override, and any saved layout, keeps the widths it stored. The mock's "Layers strip" under the board is the
 Layers panel in the bottom dock: a layout arranges dock panels, and the board
 canvas's own layer tabs are not a panel.
 

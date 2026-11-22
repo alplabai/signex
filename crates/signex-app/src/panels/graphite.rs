@@ -141,7 +141,7 @@ fn summary_cell<'a>(
             .color(color)
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .boxed(),
     ]

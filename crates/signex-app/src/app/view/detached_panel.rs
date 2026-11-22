@@ -84,7 +84,7 @@ pub(super) fn title_strip(
             .color(ink)
             .font(iced::Font {
                 weight: iced::font::Weight::Medium,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             })
             .wrapping(Wrapping::None)
             .boxed(),

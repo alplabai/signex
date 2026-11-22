@@ -100,8 +100,8 @@ Who sets the save point (#1854):
   `Engine::mark_saved`. Where the engine at the path is gone or is not known
   to equal the file, `clear_document_dirty` clears the marks and leaves the
   save point alone: Discard All, an undo that drops a parked engine, a
-  rolled back re-prefix, and the Save As old key and the unopened-sheet
-  Annotate write (no engine at that key). A re-prefix rollback whose
+  rolled back re-prefix or reset, and the Save As old key (no engine at
+  that key). A rollback whose
   `discard_undo_group_top` fails or finds the run is not on top leaves that
   sheet dirty and says so in Messages.
 - A sheet read from disk or restored is marked saved only when the engine

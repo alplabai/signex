@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::app::handlers::editing_commands::move_selection_dialog::{
-    MOVE_DX_INPUT_ID, PREVIEW_EM, grid_steps, offset_mm,
+    MOVE_DX_INPUT_ID, PREVIEW_EM, grid_steps, offset_mm, stored_dy,
 };
 use crate::styles::{DialogButtonKind, dialog_body, dialog_button, dialog_footer};
 use iced::{Point, Rectangle, Size};
@@ -181,8 +181,8 @@ fn offset_field<'a>(
 }
 
 /// The preview: the selection's box as a dashed ghost at its place and drawn
-/// at its new place, with a ΔX and a ΔY callout. Read-only line art. Y is
-/// drawn down, as stored Y counts.
+/// at its new place, with a ΔX and a ΔY callout. Read-only line art. A
+/// positive ΔY draws upward; the callout shows the value as typed.
 fn move_preview(dx_mm: f64, dy_mm: f64, fmt: &LengthFormat<'_>) -> Illustration {
     let largest = dx_mm.abs().max(dy_mm.abs());
     let k = if largest > 0.0 {
@@ -190,7 +190,7 @@ fn move_preview(dx_mm: f64, dy_mm: f64, fmt: &LengthFormat<'_>) -> Illustration 
     } else {
         0.0
     };
-    let (dx, dy) = (dx_mm as f32 * k, dy_mm as f32 * k);
+    let (dx, dy) = (dx_mm as f32 * k, stored_dy(dy_mm) as f32 * k);
     let (min_x, max_x) = (dx.min(0.0), (dx + BOX_W).max(BOX_W));
     let (min_y, max_y) = (dy.min(0.0), (dy + BOX_H).max(BOX_H));
     let (ox, oy) = (MARGIN - min_x, MARGIN - min_y);
@@ -289,11 +289,11 @@ mod tests {
         app.ui_state.grid_size_mm = 1.27;
         assert_eq!(
             app.move_selection_help(5.08, -2.54),
-            "Positive X moves right, positive Y moves down. Grid 1.27 mm: 4 × 2 steps."
+            "Positive X moves right, positive Y moves up. Grid 1.27 mm: 4 × 2 steps."
         );
         assert_eq!(
             app.move_selection_help(1.0, 0.0),
-            "Positive X moves right, positive Y moves down. Grid 1.27 mm: off grid."
+            "Positive X moves right, positive Y moves up. Grid 1.27 mm: off grid."
         );
     }
 }

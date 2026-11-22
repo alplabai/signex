@@ -120,7 +120,7 @@ fn editor_header<'a>(ctx: &'a PanelContext, editor: MessageId) -> Element<'a, Pa
         .color(ti(ctx.tokens.text))
         .font(iced::Font {
             weight: iced::font::Weight::Semibold,
-            ..iced::Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         });
     let follows = text(t!(ctx.i18n, ids::PANELS_FILTER_FOLLOWS))
         .size(TS.caption)

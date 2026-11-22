@@ -84,6 +84,8 @@ impl Signex {
             // The old key no longer has an engine, so a lingering dirty
             // marker would make every later Save All fail on it.
             self.document_state.clear_document_dirty(&old_path);
+            self.document_state.rekey_undo_sheets(&old_path, &to);
+            self.document_state.forget_parked_mark(&to);
             self.rekey_page_setup(&old_path, &to);
             // The new file is not what any sheet symbol places.
             self.document_state.tab_placements.forget(&old_path);

@@ -276,7 +276,7 @@ fn label<'a>(text_: Localized, on: bool, look: &Look) -> Element<'a, Message> {
     if on {
         label = label.font(Font {
             weight: Weight::Medium,
-            ..Font::DEFAULT
+            ..signex_widgets::ui_font::regular()
         });
     }
     label.boxed()

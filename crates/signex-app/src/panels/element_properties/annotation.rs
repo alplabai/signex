@@ -4,7 +4,7 @@
 //! choice, dropdown, check, collapsible section).
 
 use iced::widget::text::Wrapping;
-use iced::widget::{Column, Row, container, pick_list, row};
+use iced::widget::{Column, container, pick_list, row};
 use iced::{Alignment, Element, Length, Theme, Widget as _};
 use signex_i18n::{Localized, MessageId, t};
 use signex_types::schematic::SchDrawing;
@@ -156,7 +156,7 @@ impl<'a> Rows<'a> {
             .color(self.ink())
             .font(iced::Font {
                 weight: iced::font::Weight::Semibold,
-                ..iced::Font::DEFAULT
+                ..signex_widgets::ui_font::regular()
             });
         let caption = text(caption).size(TS.caption).color(self.faint());
         container(
@@ -277,23 +277,24 @@ impl<'a> Rows<'a> {
         &self,
         options: Vec<(MessageId, bool, AnnotationEdit)>,
     ) -> Element<'a, PanelMsg> {
-        let mut cells: Row<Element<'a, PanelMsg>> = Row::new().width(Length::Fill);
+        let mut cells: Vec<Element<'a, PanelMsg>> = Vec::with_capacity(options.len());
         for (label, active, edit) in options {
             let cell = button(
                 text(self.t(label))
                     .size(TS.body)
-                    .align_x(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .wrapping(Wrapping::None)
+                    .ellipsis(iced::widget::text::Ellipsis::End),
             )
             .padding([SP.s, SP.xs])
-            .width(Length::Fill)
             .on_press(picked(edit))
             .style(move |theme: &Theme, status: button::Status| {
                 let hovered = matches!(status, button::Status::Hovered);
                 form_look::segment_cell(theme, active, hovered && !active)
             });
-            cells = cells.push(cell.boxed());
+            cells.push(cell.boxed());
         }
-        container(cells)
+        container(signex_widgets::FitRow::new(cells).fill(true))
             .padding(SP.xs)
             .width(Length::Fill)
             .style(form_look::segmented_frame)

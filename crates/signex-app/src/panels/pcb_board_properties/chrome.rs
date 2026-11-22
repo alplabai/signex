@@ -437,11 +437,17 @@ impl<'a> Form<'a> {
 
     /// A segmented control on the sunken frame, one cell per option.
     pub fn segmented(&self, options: Vec<Segment>) -> Element<'a, PanelMsg> {
-        let mut cells: Row<Element<'a, PanelMsg>> = Row::new().width(Length::Fill);
-        for Segment { label, active, msg } in options {
-            cells = cells.push(segment_cell(text(label).size(TS.body).boxed(), active, msg));
-        }
-        container(cells)
+        let cells = options
+            .into_iter()
+            .map(|Segment { label, active, msg }| {
+                let label = text(label)
+                    .size(TS.body)
+                    .wrapping(Wrapping::None)
+                    .ellipsis(iced::widget::text::Ellipsis::End);
+                segment_cell(label.boxed(), active, msg)
+            })
+            .collect();
+        container(signex_widgets::FitRow::new(cells).fill(true))
             .padding(SP.xs)
             .width(Length::Fill)
             .style(form_look::segmented_frame)
@@ -566,12 +572,10 @@ pub(super) fn segment_cell<'a>(
     msg: Option<PanelMsg>,
 ) -> Element<'a, PanelMsg> {
     let enabled = msg.is_some();
-    let cell = container(content)
-        .width(Length::Fill)
-        .align_x(iced::alignment::Horizontal::Center);
+    // Sized by the `FitRow` around it: the content centres in what it gets.
+    let cell = container(content).align_x(iced::alignment::Horizontal::Center);
     button(cell)
         .padding([SP.s, SP.xs])
-        .width(Length::Fill)
         .on_press_maybe(msg)
         .style(move |theme: &Theme, status: button::Status| {
             let hovered = matches!(status, button::Status::Hovered);

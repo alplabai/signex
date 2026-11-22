@@ -155,13 +155,6 @@ pub enum AnnotateMsg {
         generation: u64,
         result: std::sync::Arc<Result<crate::app::handlers::erc::SheetsRead, String>>,
     },
-    /// The worker wrote the unopened sheets the run renumbered. `hold` keeps
-    /// quit waiting until the completion has registered what it owes.
-    PassSheetsWritten {
-        generation: u64,
-        result: std::sync::Arc<Result<Vec<crate::app::handlers::erc::SheetWrite>, String>>,
-        hold: crate::autosave::SaveHold,
-    },
     /// The change list's Changes / All switch was picked (#75).
     ListViewPicked(crate::app::handlers::erc::AnnotateListView),
     /// The change list's filter text was edited (#75).

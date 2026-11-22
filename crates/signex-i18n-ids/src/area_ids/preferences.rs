@@ -30,11 +30,13 @@ define_ids! {
     PREFERENCES_PROFILES_TITLE = "preferences-profiles-title";
     PREFERENCES_PROFILES_HELP = "preferences-profiles-help";
     PREFERENCES_PROFILES_READING = "preferences-profiles-reading";
-    PREFERENCES_PROFILES_AUTOMATIC = "preferences-profiles-automatic";
+    PREFERENCES_PROFILES_LIST_HEADING = "preferences-profiles-list-heading";
+    PREFERENCES_PROFILES_AUTOMATIC_NAME = "preferences-profiles-automatic-name";
+    PREFERENCES_PROFILES_AUTOMATIC_NOTE = "preferences-profiles-automatic-note";
+    PREFERENCES_PROFILES_HINT = "preferences-profiles-hint";
     PREFERENCES_PROFILES_NOTE_BUILTIN = "preferences-profiles-note-builtin";
     PREFERENCES_PROFILES_NOTE_USER_DEFAULT = "preferences-profiles-note-user-default";
     PREFERENCES_PROFILES_ROW = "preferences-profiles-row";
-    PREFERENCES_PROFILES_ROW_NOTE = "preferences-profiles-row-note";
     PREFERENCES_PROFILES_IS_DEFAULT = "preferences-profiles-is-default";
     PREFERENCES_PROFILES_USE_AS_DEFAULT = "preferences-profiles-use-as-default";
     PREFERENCES_PROFILES_NEW = "preferences-profiles-new";
@@ -43,7 +45,10 @@ define_ids! {
     PREFERENCES_PROFILES_DELETE_CONFIRM = "preferences-profiles-delete-confirm";
     PREFERENCES_PROFILES_KEEP = "preferences-profiles-keep";
     PREFERENCES_PROFILES_NAME = "preferences-profiles-name";
-    PREFERENCES_PROFILES_EDITING = "preferences-profiles-editing";
+    PREFERENCES_PROFILES_SAVED = "preferences-profiles-saved";
+    PREFERENCES_PROFILES_SAVED_LINE = "preferences-profiles-saved-line";
+    PREFERENCES_PROFILES_RULE_TITLE = "preferences-profiles-rule-title";
+    PREFERENCES_PROFILES_RULE_SUMMARY = "preferences-profiles-rule-summary";
     PREFERENCES_PROFILES_READ_ONLY = "preferences-profiles-read-only";
     PREFERENCES_PROFILES_NONE_SELECTED = "preferences-profiles-none-selected";
     PREFERENCES_PROFILES_RESET_CONFIRM = "preferences-profiles-reset-confirm";
