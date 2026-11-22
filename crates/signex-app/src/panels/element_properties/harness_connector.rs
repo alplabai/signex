@@ -437,7 +437,7 @@ mod definition_link_tests {
         let window = iced::Size::new(320.0, 60.0);
         let en = signex_i18n::I18n::en_us();
         let (app, _boot) = crate::app::Signex::new();
-        let tokens = app.document_state.panel_ctx.tokens.clone();
+        let tokens = app.document_state.panel_ctx.tokens;
         let row = || {
             super::super::part_panel::link_row(
                 t!(en, ids::PANELS_HARNESS_DEFINITION),
