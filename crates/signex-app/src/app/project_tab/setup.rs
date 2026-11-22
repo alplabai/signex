@@ -56,7 +56,7 @@ pub(super) fn view<'a>(
             .boxed();
         body.push(warn_line(Glyph::Warn, note, None, tokens));
     }
-    body.push(cards::tab_choices(state, users, i18n, tokens).map(edited(project.id)));
+    body.push(cards::tab_choices(state, users, i18n, tokens).map(edited(project.id)).boxed());
     body.push(rule_cards(project.id, state, i18n, tokens));
     body.push(super::agent_journals::view(
         project,
@@ -83,7 +83,7 @@ fn save_action<'a>(
 ) -> Element<'a, Message> {
     let wrap = edited(project_id);
     if state.save_profile_name.is_some() {
-        return user_cards::save_as(state, i18n, tokens).map(wrap);
+        return user_cards::save_as(state, i18n, tokens).map(wrap).boxed();
     }
     text_button(
         Some(Glyph::Save),
@@ -106,7 +106,7 @@ fn rule_cards<'a>(
             title,
             trailing: Vec::new(),
         };
-        container(card(Some(header), fields.map(edited(project_id)), tokens))
+        container(card(Some(header), fields.map(edited(project_id)).boxed(), tokens))
             .width(Length::FillPortion(1))
     };
     row![

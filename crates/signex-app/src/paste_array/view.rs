@@ -229,7 +229,8 @@ fn preview_block<'a>(
     crate::app::view::dialogs::preview_frame(
         caption,
         property_illustration(drawing, &state.hover, tokens, TS.caption)
-            .map(PasteArrayMsg::PreviewHovered),
+            .map(PasteArrayMsg::PreviewHovered)
+            .boxed(),
         Some(expand_button(state.preview_expanded, tokens, i18n)),
         tokens,
     )
