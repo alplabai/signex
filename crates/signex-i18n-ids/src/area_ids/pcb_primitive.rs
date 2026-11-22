@@ -321,4 +321,5 @@ define_ids! {
     PCB_PRIM_DIM_STYLE = "pcb-prim-dim-style";
     PCB_PRIM_DIM_PRECISION_STEP = "pcb-prim-dim-precision-step";
     PCB_PRIM_DIM_DRAWING_NOTE = "pcb-prim-dim-drawing-note";
+    PCB_PRIM_DIM_LAYER_NOTE = "pcb-prim-dim-layer-note";
 }

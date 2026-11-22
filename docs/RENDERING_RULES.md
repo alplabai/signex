@@ -583,7 +583,10 @@ centre of the view, always shown: the "3D View" title; 2D | 3D; Top, Iso,
 Front, Left, Right, Back, Reset and Fit; Flip and Explode; the lighting
 preset; the screenshot button and its menu chevron. The interaction hint is
 a quiet caption at the bottom right, the status pill sits at the bottom
-left, the view cube at the top right. As decided (DECISIONS, the 2026-11-19
+left, the view cube at the top right, under the toolbar's band so the two
+never overlap at any view width. Under the cube, while the view is tall
+enough, a legend card lists the stack from the laminate out in the scene's
+own materials (mockup row 109). As decided (DECISIONS, the 2026-11-19
 board 3D view toolbar row), the "3D View" title stays and Left and Right
 are separate buttons (no single Side button with Shift+click).
 

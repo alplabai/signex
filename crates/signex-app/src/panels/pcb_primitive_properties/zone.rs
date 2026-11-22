@@ -21,8 +21,8 @@ use super::linked::{
     with_unit,
 };
 use super::rows::{
-    Look, PAD_X, Section, chip, dropdown, field, fixed_value, labelled, live_checkbox, mm_field,
-    net_row, stack, with_tip,
+    Look, PAD_X, Section, chip, dropdown, field, labelled, live_checkbox, mm_field, net_row, stack,
+    sunken_value, with_tip,
 };
 use super::stack_rows::caption;
 use super::{
@@ -341,9 +341,9 @@ fn corners<'a>(
         greyed(look),
         ids::PCB_PRIM_POUR_CORNER_SIZE,
         with_unit(
-            fixed_value(
+            with_tip(
                 look,
-                UserText::new(String::new()),
+                corner_size_value(look),
                 ids::PCB_PRIM_POUR_CORNERS_TIP,
             ),
             unit(look, ids::PCB_PRIM_UNIT_MM),
@@ -353,6 +353,15 @@ fn corners<'a>(
         (ids::PCB_PRIM_POUR_CORNERS, shapes),
         (ids::PCB_PRIM_POUR_CORNER_SIZE, size),
     ]
+}
+
+/// Corner Size, greyed while Corners is Sharp, the only corner the fill
+/// makes (mockup row 99). The board stores no size, so it is blank.
+fn corner_size_value<'a>(look: Look<'a>) -> Element<'a, PanelMsg> {
+    veiled(
+        look.tokens(),
+        sunken_value(look, UserText::new(String::new())),
+    )
 }
 
 /// `look` with the label ink of a greyed row.
@@ -696,5 +705,20 @@ mod tests {
         let mut read_only = pour(Some(false));
         read_only.common.editability = Editability::ReadOnly;
         assert_eq!(shelve_message(&read_only), None);
+    }
+
+    /// Mockup row 99: Corner Size is greyed and takes no typing while the
+    /// only corner is Sharp.
+    #[test]
+    fn corner_size_is_greyed_and_cannot_be_typed() {
+        use crate::layout_probe::{draw_pixels, lay_out_inputs};
+        let (app, _boot) = crate::app::Signex::new();
+        let ctx = app.document_state.panel_ctx.clone();
+        let look = Look::of(&ctx);
+        let window = iced::Size::new(120.0, 30.0);
+        assert!(lay_out_inputs(corner_size_value(look), window).is_empty());
+        let greyed = draw_pixels(corner_size_value(look), window);
+        let plain = draw_pixels(sunken_value(look, UserText::new(String::new())), window);
+        assert_ne!(greyed, plain, "the veil dims the sunken value");
     }
 }
