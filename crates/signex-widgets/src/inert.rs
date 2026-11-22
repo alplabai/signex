@@ -138,14 +138,32 @@ where
             Cursor::Unavailable,
             viewport,
         );
+        draw_veil(renderer, layout.bounds(), viewport, self.veil);
+    }
+}
+
+/// Fill the visible part of `bounds` with `veil`, in a layer of its own: a
+/// layer draws its text above its quads, so a quad in the content's layer
+/// would leave the text undimmed. A new layer replaces the clip instead of
+/// narrowing it, so the clip is cut to `viewport` here.
+fn draw_veil<Renderer: iced::advanced::Renderer>(
+    renderer: &mut Renderer,
+    bounds: Rectangle,
+    viewport: &Rectangle,
+    veil: Color,
+) {
+    let Some(visible) = bounds.intersection(viewport) else {
+        return;
+    };
+    renderer.with_layer(visible, |renderer| {
         renderer.fill_quad(
             renderer::Quad {
-                bounds: layout.bounds(),
+                bounds,
                 ..renderer::Quad::default()
             },
-            Background::Color(self.veil),
+            Background::Color(veil),
         );
-    }
+    });
 }
 
 impl<'a, Message, Theme, Renderer> From<Inert<'a, Message, Theme, Renderer>>
@@ -217,5 +235,75 @@ mod tests {
     fn a_veiled_wrapper_stays_inert() {
         let veil = Color::from_rgba(0.5, 0.5, 0.5, 0.5);
         assert!(click(|e| Inert::new(e, veil).into()).is_empty());
+    }
+
+    /// Records the layers opened and the layer depth of each quad.
+    #[derive(Default)]
+    struct Recorder {
+        layers: Vec<Rectangle>,
+        depth: usize,
+        quad_depths: Vec<usize>,
+    }
+
+    impl renderer::Renderer for Recorder {
+        fn start_layer(&mut self, bounds: Rectangle) {
+            self.layers.push(bounds);
+            self.depth += 1;
+        }
+
+        fn end_layer(&mut self) {
+            self.depth -= 1;
+        }
+
+        fn start_transformation(&mut self, _: iced::Transformation) {}
+
+        fn end_transformation(&mut self) {}
+
+        fn fill_quad(&mut self, _: renderer::Quad, _: impl Into<Background>) {
+            self.quad_depths.push(self.depth);
+        }
+
+        fn allocate_image(
+            &self,
+            _: &iced::advanced::image::Handle,
+            _: impl FnOnce(Result<iced::advanced::image::Allocation, iced::advanced::image::Error>)
+            + Send
+            + 'static,
+        ) {
+        }
+
+        fn hint(&mut self, _: renderer::Scale) {}
+
+        fn scale(&self) -> Option<renderer::Scale> {
+            None
+        }
+
+        fn reset(&mut self, _: Rectangle) {}
+
+        fn settings(&self) -> renderer::Settings {
+            renderer::Settings::default()
+        }
+    }
+
+    /// Mockup row 133: the veil is in a layer above the content, so it
+    /// dims text, and that layer stays inside the visible part.
+    #[test]
+    fn the_veil_draws_in_its_own_layer_cut_to_the_viewport() {
+        let bounds = Rectangle::new(Point::new(0.0, 0.0), Size::new(100.0, 40.0));
+        let viewport = Rectangle::new(Point::new(0.0, 10.0), Size::new(100.0, 10.0));
+        let mut recorder = Recorder::default();
+        draw_veil(&mut recorder, bounds, &viewport, Color::BLACK);
+        assert_eq!(recorder.layers, vec![viewport]);
+        assert_eq!(recorder.quad_depths, vec![1]);
+    }
+
+    /// Scrolled out of sight, the veil draws nothing, not even a layer.
+    #[test]
+    fn a_veil_out_of_the_viewport_draws_nothing() {
+        let bounds = Rectangle::new(Point::new(0.0, 0.0), Size::new(100.0, 40.0));
+        let viewport = Rectangle::new(Point::new(0.0, 50.0), Size::new(100.0, 10.0));
+        let mut recorder = Recorder::default();
+        draw_veil(&mut recorder, bounds, &viewport, Color::BLACK);
+        assert!(recorder.layers.is_empty() && recorder.quad_depths.is_empty());
     }
 }

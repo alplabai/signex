@@ -4,8 +4,8 @@
 
 use std::collections::HashMap;
 
-use iced::widget::{Column, Space, canvas, column, container, pick_list, row};
-use iced::{Alignment, Border, Element, Font, Length, Widget as _};
+use iced::widget::{Column, Space, canvas, column, container, pick_list, row, stack};
+use iced::{Alignment, Background, Border, Element, Font, Length, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, Translatable, ids, t};
 use signex_types::net_class::NetLineStyle;
 use signex_types::project::{SchematicDefaultField, SchematicDefaultOverrides};
@@ -17,10 +17,14 @@ use signex_widgets::text;
 use super::super::look::{CardHeader, card, mono_font};
 use super::super::table::{SP, TS, section};
 use super::field::{WIDE_BOX_EMS, font_field, label_words, numeric_field};
-use super::preview::{Preview, PreviewInk, VIEW_HEIGHT, value_labels};
+use super::labels::{label_style, preview_labels};
+use super::preview::{Preview, PreviewInk, VIEW_HEIGHT, VIEW_WIDTH, value_labels};
 use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
 use crate::app::project_tab::general::tab_message;
+use crate::app::project_tab::preview_ui::{
+    PreviewPopup, ProjectPreviewMsg, ProjectPreviewUi, expand_layer, preview_message,
+};
 use crate::app::state::{LoadedProject, ProjectId};
 use crate::styles::{HAIRLINE, Radii, ti, tokens as ink};
 
@@ -38,8 +42,9 @@ const LINE_FIELDS: [SchematicDefaultField; 4] = [
 pub(in crate::app::project_tab) fn view<'a>(
     project: &'a LoadedProject,
     drafts: Option<&'a HashMap<SchematicDefaultField, String>>,
+    ui: &'a ProjectPreviewUi,
     canvas_colors: &CanvasColors,
-    i18n: &I18n,
+    i18n: &'a I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let project_id = project.id;
@@ -89,7 +94,7 @@ pub(in crate::app::project_tab) fn view<'a>(
     let body = vec![
         cards.boxed(),
         caption.boxed(),
-        preview(overrides, canvas_colors, i18n, tokens),
+        preview(project_id, overrides, ui, canvas_colors, i18n, tokens),
     ];
     section(
         ids::PROJECT_SECTION_SCHEMATIC_DEFAULTS,
@@ -255,12 +260,15 @@ fn fill_picker<'a>(
     )
 }
 
-/// The live preview: a bold header with its caption, then the drawing at
-/// full width in a hairline frame with the button radius.
+/// The live preview: a bold header with its caption, then the drawing on
+/// the paper in a hairline frame with the button radius. While the larger
+/// window shows the drawing, this one is static: a label has one open field.
 fn preview<'a>(
+    project_id: ProjectId,
     overrides: &SchematicDefaultOverrides,
+    ui: &'a ProjectPreviewUi,
     canvas_colors: &CanvasColors,
-    i18n: &I18n,
+    i18n: &'a I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let r = ink::resolve(tokens);
@@ -280,6 +288,72 @@ fn preview<'a>(
     ]
     .spacing(SP.s)
     .align_y(Alignment::Center);
+    let is_in_window = ui.popup_of(project_id) == Some(PreviewPopup::SchematicDefaults);
+    let art = if is_in_window {
+        drawn(overrides, 1.0, canvas_colors, i18n, tokens)
+    } else {
+        editable(project_id, overrides, ui, 1.0, canvas_colors, i18n, tokens)
+    };
+    let expand = expand_layer(project_id, PreviewPopup::SchematicDefaults, i18n, tokens);
+    let line = ti(tokens.border);
+    let framed = container(stack![on_paper(art, canvas_colors), expand])
+        .width(Length::Fill)
+        .clip(true)
+        .style(move |_| container::Style {
+            border: Border {
+                width: HAIRLINE,
+                color: line,
+                radius: Radii::GRAPHITE.button.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    column![header, framed]
+        .spacing(SP.xs)
+        .width(Length::Fill)
+        .boxed()
+}
+
+/// The drawing for the larger preview window.
+pub(in crate::app::project_tab) fn popup_drawing<'a>(
+    project: &LoadedProject,
+    ui: &'a ProjectPreviewUi,
+    canvas_colors: &CanvasColors,
+    i18n: &'a I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let art = editable(
+        project.id,
+        &project.data.schematic_defaults,
+        ui,
+        ui.zoom(),
+        canvas_colors,
+        i18n,
+        tokens,
+    );
+    on_paper(art, canvas_colors)
+}
+
+/// `art` centred across on the canvas paper.
+fn on_paper<'a>(art: Element<'a, Message>, canvas_colors: &CanvasColors) -> Element<'a, Message> {
+    let paper = ti(canvas_colors.paper);
+    container(art)
+        .center_x(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(Background::Color(paper)),
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
+/// The canvas alone, `zoom` pixels per layout unit.
+fn drawn<'a>(
+    overrides: &SchematicDefaultOverrides,
+    zoom: f32,
+    canvas_colors: &CanvasColors,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
     let program = Preview {
         values: overrides.resolve(),
         text_font: crate::fonts::canvas_iced_font(overrides.font_family()),
@@ -287,25 +361,37 @@ fn preview<'a>(
         ink: PreviewInk::new(canvas_colors, tokens),
         labels: value_labels(overrides, i18n),
     };
-    let line = ti(tokens.border);
-    let drawing = container(
-        canvas(program)
-            .width(Length::Fill)
-            .height(Length::Fixed(VIEW_HEIGHT)),
-    )
-    .width(Length::Fill)
-    .clip(true)
-    .style(move |_| container::Style {
-        border: Border {
-            width: HAIRLINE,
-            color: line,
-            radius: Radii::GRAPHITE.button.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
-    column![header, drawing]
-        .spacing(SP.xs)
-        .width(Length::Fill)
+    canvas(program)
+        .width(Length::Fixed(VIEW_WIDTH * zoom))
+        .height(Length::Fixed(VIEW_HEIGHT * zoom))
         .boxed()
+}
+
+/// The canvas with its value labels and handles stacked over it.
+fn editable<'a>(
+    project_id: ProjectId,
+    overrides: &SchematicDefaultOverrides,
+    ui: &'a ProjectPreviewUi,
+    zoom: f32,
+    canvas_colors: &CanvasColors,
+    i18n: &'a I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let refused = ti(tokens.error);
+    let shown: Vec<_> = preview_labels(overrides, zoom, i18n)
+        .into_iter()
+        .map(|label| label.refused_ink(refused))
+        .collect();
+    let overlay = ui
+        .labels_of(project_id)
+        .view(&shown, label_style(canvas_colors, tokens, zoom))
+        .map(move |msg| preview_message(project_id, ProjectPreviewMsg::Labels(msg)))
+        .boxed();
+    container(stack![
+        drawn(overrides, zoom, canvas_colors, i18n, tokens),
+        overlay
+    ])
+    .width(Length::Fixed(VIEW_WIDTH * zoom))
+    .height(Length::Fixed(VIEW_HEIGHT * zoom))
+    .boxed()
 }

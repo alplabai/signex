@@ -700,6 +700,8 @@ mod pending_open_rename_delete;
 // (Space / Shift+Space / X / Y), at placement and on a selected entry.
 #[path = "regression/bus_entry.rs"]
 mod bus_entry;
+#[path = "regression/bus_style.rs"]
+mod bus_style;
 
 // #1404 — the X / Y keys, context-menu Mirror X / Y and the active bar's
 // Flip Along X / Y all flip a symbol the same way.

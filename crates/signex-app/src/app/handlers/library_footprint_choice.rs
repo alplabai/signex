@@ -166,6 +166,71 @@ impl Signex {
             .collect())
     }
 
+    /// The footprints every selected part's library row offers, in the
+    /// first part's order (mockup row 51). Empty when a part has no open
+    /// row or the rows share none.
+    pub(crate) fn common_footprint_choices(
+        &self,
+        items: &[signex_types::schematic::SelectedItem],
+    ) -> Vec<FootprintChoiceItem> {
+        let Some(doc) = self.document_state.active_engine().map(|e| e.document()) else {
+            return Vec::new();
+        };
+        let parts = signex_engine::selected_symbols(doc, items);
+        if items.len() < 2 || parts.is_empty() {
+            return Vec::new();
+        }
+        let mut rows = parts.iter().map(|part| {
+            self.row_of_placed_symbol(part)
+                .map(|(_, _, row)| row.footprint_bindings())
+        });
+        let Some(Some(first)) = rows.next() else {
+            return Vec::new();
+        };
+        let mut common: Vec<PrimitiveRef> = first.iter().map(|b| b.footprint).collect();
+        for row in rows {
+            let Some(bindings) = row else {
+                return Vec::new();
+            };
+            common.retain(|f| bindings.iter().any(|b| b.footprint == *f));
+        }
+        common
+            .iter()
+            .map(|footprint| FootprintChoiceItem {
+                binding: lib_id_of(footprint),
+                label: self.footprint_label(footprint),
+                selected: false,
+            })
+            .collect()
+    }
+
+    /// Build every selected part with the footprint `binding` names, as one
+    /// undo step. If any part refuses, none changes and the reason is logged.
+    pub(crate) fn apply_common_footprint(&mut self, binding: &str) {
+        let items = self.interaction_state.active_canvas().selected.clone();
+        let Some(doc) = self.document_state.active_engine().map(|e| e.document()) else {
+            return;
+        };
+        let mut covered = std::collections::HashSet::new();
+        let mut commands = Vec::new();
+        for part in signex_engine::selected_symbols(doc, &items) {
+            if !covered.insert(part.uuid) {
+                continue;
+            }
+            covered.extend(signex_engine::placed_unit_ids(doc, part.uuid));
+            match self.footprint_binding_commands(doc, part.uuid, binding) {
+                Ok(part_commands) => commands.extend(part_commands),
+                Err(FootprintChoiceRefusal { reference, why }) => {
+                    self.report_footprint_choice_failure(&reference, why);
+                    return;
+                }
+            }
+        }
+        if !commands.is_empty() {
+            self.apply_engine_commands(commands, true, true);
+        }
+    }
+
     /// The footprint's listed name, else a short id.
     fn footprint_label(&self, reference: &PrimitiveRef) -> String {
         self.library.footprint_name(reference).unwrap_or_else(|| {

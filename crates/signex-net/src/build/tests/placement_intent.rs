@@ -256,6 +256,7 @@ fn a_label_that_names_a_bus_run_another_name_is_a_change() {
         uuid: Uuid::now_v7(),
         start: pt(a, 0.0),
         end: pt(b, 0.0),
+        ..Default::default()
     };
     let mut before = empty_sheet();
     before.buses.push(bus(0.0, 10.0));

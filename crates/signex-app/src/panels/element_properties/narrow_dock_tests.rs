@@ -104,6 +104,35 @@ fn a_paired_value_fits_side_by_side_at_300_px_and_stacks_at_220_px() {
     }
 }
 
+/// Mockup row 43: a seven-character value keeps its last digit beside the
+/// unit, with X and Y still side by side at the 300 px dock.
+#[test]
+fn a_seven_character_value_fits_side_by_side_at_300_px() {
+    const LONG: &str = "110.940";
+    let field = |axis: &'static str| {
+        unit_input(
+            Some(fixture_label(axis)),
+            LONG.to_string(),
+            Some(fixture_label("mm")),
+            |_| PanelMsg::Noop,
+            PanelMsg::Noop,
+        )
+    };
+    let view = pair_row(fixture_label("Start"), field("X"), field("Y"));
+    let inputs = lay_out_inputs(view, Size::new(300.0, 400.0));
+    assert_eq!(inputs.len(), 2, "{inputs:?}");
+    assert_eq!(inputs[0].bounds.y, inputs[1].bounds.y, "side by side");
+    let value = natural::<PanelMsg>(
+        text(fixture_label(LONG)).size(TS.body).font(mono()).boxed(),
+        LONG,
+    );
+    let (left, right) = field_insets(true, true);
+    for input in &inputs {
+        let room = input.bounds.width - left - right;
+        assert!(room >= value.width, "{room} px for {} px", value.width);
+    }
+}
+
 #[test]
 fn a_read_only_value_is_sunken_with_no_field_border() {
     let theme = Theme::Dark;

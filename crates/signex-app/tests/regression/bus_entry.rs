@@ -28,6 +28,7 @@ fn app_with_buses(buses: &[BusEnds]) -> (Signex, TempDir) {
             uuid: Uuid::now_v7(),
             start: Point::new(start.0, start.1),
             end: Point::new(end.0, end.1),
+            ..Default::default()
         });
     }
     app.document_state.engines.insert(

@@ -154,6 +154,9 @@ pub struct DimensionLabel<'a> {
     /// `format` (see [`DimensionLabels::draft_refused`]); `None` keeps the
     /// ink outline.
     pub refused_ink: Option<Color>,
+    /// The drawing writes this label itself: the closed label is only a
+    /// press target the size of its caption.
+    pub is_bare: bool,
 }
 
 impl<'a> DimensionLabel<'a> {
@@ -170,11 +173,19 @@ impl<'a> DimensionLabel<'a> {
             handle: None,
             limits: ValueLimits::default(),
             refused_ink: None,
+            is_bare: false,
         }
     }
 
     pub fn refused_ink(mut self, color: Color) -> Self {
         self.refused_ink = Some(color);
+        self
+    }
+
+    /// The closed label draws nothing: the caller's drawing shows its words
+    /// (the caption) and this is the press target over them.
+    pub fn bare(mut self) -> Self {
+        self.is_bare = true;
         self
     }
 
@@ -216,7 +227,11 @@ impl<'a> DimensionLabel<'a> {
             .caption
             .as_ref()
             .map_or(0, |c| c.as_str().chars().count());
-        let value_chars = self.value_text().chars().count();
+        let value_chars = if self.is_bare {
+            0
+        } else {
+            self.value_text().chars().count()
+        };
         label_box(caption_chars, value_chars, text_size, self.at, self.anchor)
     }
 }
@@ -635,6 +650,13 @@ fn tag_view<'a>(
 ) -> Element<'a, DimensionLabelMessage> {
     let size = style.text_size;
     let bounds = label.bounds(size);
+    if label.is_bare {
+        let target = button(Space::new().width(bounds.width).height(bounds.height))
+            .padding(0.0)
+            .style(|_: &Theme, _| button::Style::default())
+            .on_press(DimensionLabelMessage::LabelPressed(index));
+        return Translate::new(target.boxed(), (bounds.x, bounds.y)).into();
+    }
     let mut content: Row<Element<'a, DimensionLabelMessage>> = Row::new().spacing(GAP_EM * size);
     if let Some(caption) = &label.caption {
         content = content.push(
@@ -1090,5 +1112,16 @@ mod tests {
         let _ = s.view(&items, style);
         s.update(DimensionLabelMessage::HandlePressed(0), &items);
         let _ = s.view(&items, style);
+    }
+
+    /// A bare label is a press target the size of its caption: the drawing
+    /// under it writes the value.
+    #[test]
+    fn a_bare_label_measures_its_caption_alone() {
+        let plain = DimensionLabel::new(1.5, mm(), Point::ORIGIN)
+            .caption(UserText::new("wire 1.5".to_string()));
+        let bare = plain.clone().bare();
+        assert!(bare.bounds(11.0).width < plain.bounds(11.0).width);
+        assert_eq!(bare.bounds(11.0).height, plain.bounds(11.0).height);
     }
 }

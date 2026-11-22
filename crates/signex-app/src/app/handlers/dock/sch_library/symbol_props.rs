@@ -42,6 +42,12 @@ impl Signex {
                 PartStep::Removed => SymbolEditorMsg::RemovePart,
             },
             SymbolPropsMsg::BodyPicked(body) => SymbolEditorMsg::BodyStyleSelected(*body),
+            SymbolPropsMsg::BodyScopePicked(scope) => {
+                let Some(editor) = self.document_state.symbol_editors.get(&path) else {
+                    return Task::none();
+                };
+                SymbolEditorMsg::SelectionBodyAssigned(scope.tag(editor.view()))
+            }
             SymbolPropsMsg::TabPicked(_)
             | SymbolPropsMsg::PinFilterChanged(_)
             | SymbolPropsMsg::PartChipPicked(_)

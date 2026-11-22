@@ -16,6 +16,7 @@ pub(in crate::app) mod net_class_styles;
 mod panel_ctx;
 mod pin_focus;
 mod placed_ctx;
+mod run_style;
 mod selection_filter_ctx;
 mod sheet_frame;
 mod sheet_tree;
@@ -304,6 +305,10 @@ impl Signex {
             }
             _ => Default::default(),
         };
+        let selected_items = selected.clone();
+        self.document_state.panel_ctx.multi_footprint_choices =
+            self.common_footprint_choices(&selected_items);
+        let selected = &self.interaction_state.active_canvas_mut().selected;
 
         if selected.len() != 1 {
             if !selected.is_empty() {
@@ -340,21 +345,11 @@ impl Signex {
                 self.document_state.designator_standard_for(&path),
             );
             self.document_state.panel_ctx.selection_info.extend(rows);
-            if details.selected_kind == signex_types::schematic::SelectedKind::Wire {
-                self.document_state.panel_ctx.selected_wire_style = engine
-                    .document()
-                    .wires
-                    .iter()
-                    .find(|w| w.uuid == details.selected_uuid)
-                    .map(|w| {
-                        (
-                            signex_types::schematic::WireWidthPreset::from_stroke_mm(
-                                w.stroke_width,
-                            ),
-                            w.color,
-                        )
-                    });
-            }
+            self.document_state.panel_ctx.selected_wire_style = run_style::of_selected(
+                engine.document(),
+                details.selected_kind,
+                details.selected_uuid,
+            );
             let pins = pin_focus::pin_keys(&self.document_state.panel_ctx.selection_info);
             let nets = self.pin_net_names(&path, details.selected_uuid, &pins);
             pin_focus::add_pin_rows(

@@ -178,6 +178,10 @@ pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library_row::{ComponentSheet, LibraryRowDetail};
 pub(super) use library_row::{view_component_sheet, view_library_row_properties};
+mod doc_grid;
+pub(crate) use doc_grid::typed_pitch_mm;
+pub use doc_grid::{DocGridField, DocGridMsg};
+mod typed_pick;
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use multi_selection::{
     MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
@@ -207,7 +211,7 @@ pub use pcb_component::{
     Shared,
 };
 pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
-pub use pcb_nets::PcbNetsSummary;
+pub use pcb_nets::{PcbNetsSummary, PcbPanelMode, PcbPanelMsg, PcbPanelUi};
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{
     NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel, RunNet,
@@ -405,6 +409,15 @@ impl PanelKind {
         }
     }
 
+    /// The row's name in the panel list: the PCB panel is listed as Nets
+    /// (mockup row 7), its dock title stays PCB.
+    pub fn list_message(self) -> signex_i18n::MessageId {
+        match self {
+            PanelKind::PcbNets => signex_i18n::ids::PANELS_LIST_ROW_NETS,
+            other => other.message(),
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             PanelKind::Projects => "Projects",
@@ -557,7 +570,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         PanelKind::SchLibrary | PanelKind::FootprintLibrary | PanelKind::Library => {
             view_stub(ids::PANELS_KIND_LIBRARY, ids::PANELS_STUB_LIBRARY, ctx)
         }
-        PanelKind::PcbNets => pcb_nets::view(ctx),
+        // Its list and detail scroll on their own.
+        PanelKind::PcbNets => return pcb_nets::view(ctx),
         PanelKind::History => return history::view_history(ctx),
         PanelKind::NetInspector => return net_inspector::view(ctx),
         PanelKind::CompiledDesign => return compiled_design::view(ctx),

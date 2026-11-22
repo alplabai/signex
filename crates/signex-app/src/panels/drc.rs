@@ -54,6 +54,9 @@ pub struct DrcPanel {
     /// The minimum clearance in mm, when the board set none and the default
     /// was used (or, before a run, will be).
     pub default_clearance_mm: Option<String>,
+    /// The clearance in mm the board is checked with where no rule is
+    /// written, its own or the default (mockup row 87).
+    pub checked_clearance_mm: Option<String>,
     /// The run applied a written clearance rule (the default note then says
     /// it holds only where no written rule does).
     pub written_clearance: bool,

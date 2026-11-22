@@ -122,7 +122,7 @@ pub struct NetRow {
     pub name: String,
     /// The first net class that contains the net.
     pub class: Option<String>,
-    /// Component pins on the net.
+    /// Component pins on the net; a power port is not one (mockup row 58).
     pub pins: usize,
     pub expanded: bool,
     /// Filled only while expanded: the first [`MEMBER_PREVIEW`] unless the

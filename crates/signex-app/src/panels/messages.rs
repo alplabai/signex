@@ -735,6 +735,8 @@ pub enum PanelMsg {
     CompiledDesign(crate::app::CompiledDesignMsg),
     /// The Unions panel (mockup row 158).
     Unions(crate::app::unions::UnionsMsg),
+    /// The PCB panel (mockup row 106).
+    PcbPanel(super::PcbPanelMsg),
     /// The Object List panel (#1259).
     ObjectList(super::ObjectListMsg),
     /// The Command Log panel (#2458).
@@ -806,6 +808,10 @@ pub enum PanelMsg {
     EditWireWidth(uuid::Uuid, signex_types::schematic::WireWidthPreset),
     /// Properties of a selected wire: its colour, as an undoable edit.
     EditWireColor(uuid::Uuid, Option<signex_types::theme::Color>),
+    /// Properties of a selected bus: its width, as an undoable edit.
+    EditBusWidth(uuid::Uuid, signex_types::schematic::WireWidthPreset),
+    /// Properties of a selected bus: its colour, as an undoable edit.
+    EditBusColor(uuid::Uuid, Option<signex_types::theme::Color>),
     /// Open or close the wire colour palette.
     ToggleWireColorPicker,
     /// Switch the wire colour picker to the full HSV / RGB picker.
@@ -1060,6 +1066,8 @@ pub enum PanelMsg {
     SetGridSize(f32),
     /// Set visible grid size (mm) — independent of snap grid.
     SetVisibleGridSize(f32),
+    /// The typed text of Document Options' grid rows (mockup row 40).
+    DocGrid(super::DocGridMsg),
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
     /// Change the UI font (saved to prefs; applies on next restart).

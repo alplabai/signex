@@ -67,6 +67,7 @@
 //! this module rather than inventing a parallel one.
 
 mod key_repeat;
+mod text_edit_tab;
 
 use super::*;
 use crate::keymap::{KeyStroke, ModifiersExt as _};
@@ -150,8 +151,9 @@ enum InputConsumer {
     /// Preferences ▸ Keyboard Shortcuts, while recording a chord.
     KeymapRecorder,
     CommandPalette,
-    /// Tab, Shift+Tab and Esc on a Rules tab drawing's open value label or
-    /// held handle (#2530); passes when none is open.
+    /// Tab, Shift+Tab and Esc on a Rules tab or Project tab drawing's open
+    /// value label or held handle (#2530, #2685), and Esc on the Project
+    /// tab's larger preview window; passes when none is open.
     RulePreview,
     /// The Esc ladder (#535 / #547 / #554), resolved in `escape.rs`.
     Escape,
@@ -168,6 +170,8 @@ enum InputConsumer {
     ConfirmDefault,
     /// F1 toggles the keyboard-shortcuts sheet.
     ShortcutsSheet,
+    /// Tab moves the in-place editor along a part's fields (mockup row 65).
+    TextEditTab,
     /// Ctrl/Alt+1-8 — the digit is data the keymap profile cannot
     /// express, which is why these stay hardcoded.
     SelectionSlots,
@@ -181,7 +185,7 @@ enum InputConsumer {
 /// Order is behaviour. It is ported verbatim from the `if` chain this
 /// module replaced, and it is NOT derived from `PAINT_ORDER` — see the
 /// module docs for the counterexample that rules that out.
-const CLAIM_ORDER: [InputConsumer; 12] = [
+const CLAIM_ORDER: [InputConsumer; 13] = [
     InputConsumer::KeymapRecorder,
     InputConsumer::CommandPalette,
     InputConsumer::RulePreview,
@@ -192,6 +196,7 @@ const CLAIM_ORDER: [InputConsumer; 12] = [
     InputConsumer::ComponentsRowMenu,
     InputConsumer::ConfirmDefault,
     InputConsumer::ShortcutsSheet,
+    InputConsumer::TextEditTab,
     InputConsumer::SelectionSlots,
     InputConsumer::Keymap,
 ];
@@ -364,12 +369,17 @@ impl Signex {
         match consumer {
             InputConsumer::KeymapRecorder => self.claim_keymap_recorder(target, event),
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
-            InputConsumer::RulePreview => match (target, self.rules_drawing_key(window, event)) {
-                (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
-                    Claim::consume(message)
+            InputConsumer::RulePreview => {
+                let key = self
+                    .rules_drawing_key(window, event)
+                    .or_else(|| self.project_preview_key(window, event));
+                match (target, key) {
+                    (InputTarget::Main | InputTarget::UndockedTab, Some(message)) => {
+                        Claim::consume(message)
+                    }
+                    _ => Claim::Pass,
                 }
-                _ => Claim::Pass,
-            },
+            }
             InputConsumer::Escape => Self::claim_escape(window, event),
             InputConsumer::NewProject => self.claim_new_project(target, event),
             InputConsumer::UpdatePcb => self.claim_update_pcb(target, event),
@@ -379,6 +389,7 @@ impl Signex {
             }
             InputConsumer::ConfirmDefault => self.claim_confirm_default(target, event),
             InputConsumer::ShortcutsSheet => self.claim_shortcuts_sheet(target, event),
+            InputConsumer::TextEditTab => self.claim_text_edit_tab(target, window, event),
             InputConsumer::SelectionSlots => Self::claim_selection_slots(event),
             InputConsumer::Keymap => self.claim_keymap(target, window, event),
         }
@@ -981,6 +992,7 @@ mod tests {
             InputConsumer::ComponentsRowMenu,
             InputConsumer::ConfirmDefault,
             InputConsumer::ShortcutsSheet,
+            InputConsumer::TextEditTab,
             InputConsumer::SelectionSlots,
             InputConsumer::Keymap,
         ] {

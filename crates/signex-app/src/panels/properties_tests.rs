@@ -902,7 +902,8 @@ fn a_selected_label_titles_its_properties_section() {
 
 /// The words `ctx` draws the same in en-US and en-XA: text a call site
 /// rendered in `I18n::en_us()` instead of the panel's language. Only
-/// all-letter text is compared; digits and punctuation are skipped.
+/// all-letter text is compared; digits and punctuation are skipped, and so
+/// are the unit symbols, which are the same in every language.
 fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
     let english: Vec<String> = texts(&ctx).into_iter().map(|t| t.text).collect();
     ctx.i18n = std::sync::Arc::new(I18n::new(&signex_i18n::LanguagePref::Locale(
@@ -910,7 +911,8 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
     )));
     let xa: Vec<String> = texts(&ctx).into_iter().map(|t| t.text).collect();
     let is_words = |t: &str| {
-        t.chars().any(char::is_alphabetic)
+        !matches!(t, "mm" | "mil")
+            && t.chars().any(char::is_alphabetic)
             && t.chars().all(|c| c.is_alphabetic() || c == ' ' || c == '…')
     };
     english

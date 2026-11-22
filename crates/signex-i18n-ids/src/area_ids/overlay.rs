@@ -13,4 +13,5 @@ define_ids! {
     OVERLAY_LOCKED_WINDOW_HINT = "overlay-locked-window-hint";
     OVERLAY_READ_ONLY_BADGE_TOOLTIP = "overlay-read-only-badge-tooltip";
     OVERLAY_TEXT_EDIT_HINT = "overlay-text-edit-hint";
+    OVERLAY_TEXT_EDIT_HINT_NEXT_FIELD = "overlay-text-edit-hint-next-field";
 }

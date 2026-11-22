@@ -1,10 +1,13 @@
 //! The Project tab shell: a vertical section list beside the selected
 //! section. Pure: `&Signex -> Element`, no mutation.
 
-use iced::widget::{Space, column, container, row};
+use iced::widget::{Space, Stack, column, container, mouse_area, row};
 use iced::{Element, Length, Widget};
+use signex_i18n::ids;
+use signex_widgets::dimension_label::DimensionLabelMessage;
 use signex_widgets::{raw, text};
 
+use super::preview_ui::{self, PreviewPopup, ProjectPreviewMsg, preview_message};
 use super::section_list::section_list;
 use super::{
     ProjectSection, erc_annotation, general, libraries, parameters, requirements,
@@ -83,6 +86,7 @@ impl Signex {
             ProjectSection::SchematicDefaults => schematic_defaults::view(
                 project,
                 tab.map(|tab| &tab.default_drafts),
+                &self.ui_state.project_preview,
                 &self.document_state.panel_ctx.canvas_colors,
                 i18n,
                 tokens,
@@ -105,7 +109,7 @@ impl Signex {
         } else {
             column![content, Space::new().height(Length::Fill)].boxed()
         };
-        row![
+        let page = row![
             section_list(
                 project,
                 &self.section_facts(project),
@@ -117,7 +121,56 @@ impl Signex {
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .style(crate::styles::panel_region(tokens)),
-        ]
-        .boxed()
+        ];
+        // A handle let go past the drawing still ends its drag.
+        let ui = &self.ui_state.project_preview;
+        let is_held = ui.labels_of(project_id).dragging_index().is_some();
+        let released = is_held.then(|| {
+            let msg = ProjectPreviewMsg::Labels(DimensionLabelMessage::PointerReleased);
+            preview_message(project_id, msg)
+        });
+        let mut area = mouse_area(page);
+        if let Some(released) = released {
+            area = area.on_release(released);
+        }
+        let mut layers = Stack::new()
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .push(area.boxed());
+        if let Some(popup) = self.preview_window(project_id, setup_draft) {
+            layers = layers.push(popup);
+        }
+        layers.boxed()
+    }
+
+    /// The larger preview window open over `project_id`'s tab.
+    fn preview_window<'a>(
+        &'a self,
+        project_id: ProjectId,
+        setup_draft: Option<&crate::app::NewProjectState>,
+    ) -> Option<Element<'a, Message>> {
+        let project = self.document_state.project_by_id(project_id)?;
+        let ui = &self.ui_state.project_preview;
+        let tokens = &self.document_state.panel_ctx.tokens;
+        let canvas = &self.document_state.panel_ctx.canvas_colors;
+        let i18n = self.ui_state.i18n.as_ref();
+        let (hint, drawing) = match ui.popup_of(project_id)? {
+            PreviewPopup::Sheet => (
+                ids::PROJECT_PREVIEW_HINT_SHEET,
+                sheets::popup_drawing(
+                    project,
+                    setup_draft,
+                    &self.ui_state.setup_profiles,
+                    canvas,
+                    i18n,
+                    tokens,
+                ),
+            ),
+            PreviewPopup::SchematicDefaults => (
+                ids::PROJECT_PREVIEW_HINT_VALUES,
+                schematic_defaults::popup_drawing(project, ui, canvas, i18n, tokens),
+            ),
+        };
+        Some(preview_ui::window(project_id, hint, drawing, i18n, tokens))
     }
 }

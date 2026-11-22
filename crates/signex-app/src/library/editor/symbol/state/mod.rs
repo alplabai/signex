@@ -591,7 +591,7 @@ mod rotation;
 #[cfg(test)]
 mod tests;
 
-pub use body::{assign_body, body_assign_targets};
+pub use body::{BodyScope, BodyScopeRow, assign_body, body_assign_targets, body_scope_row};
 pub use context_menu::*;
 pub use fields::*;
 pub use hit_test::*;

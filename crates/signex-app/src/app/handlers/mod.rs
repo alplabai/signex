@@ -60,6 +60,7 @@ mod pcb_drc_results;
 #[cfg(test)]
 mod pcb_drc_results_tests;
 pub(crate) mod pcb_dxf_import;
+pub(crate) mod pcb_dxf_sketch;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 pub(crate) use pcb_drc_results::DrcWaiverText;
@@ -83,6 +84,9 @@ pub(crate) mod pcb_item_edits;
 pub(crate) mod pcb_layer_stack;
 pub(crate) mod pcb_layer_strip;
 mod pcb_layers_panel;
+mod pcb_nets_panel;
+#[cfg(test)]
+mod pcb_nets_panel_tests;
 #[cfg(test)]
 mod pcb_one_grid_tests;
 mod pcb_origin;

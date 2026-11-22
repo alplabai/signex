@@ -574,6 +574,8 @@ editors-symprops-uuid = UUID
 editors-symprops-graphics = Graphics
 editors-symprops-section-parts = Parts
 editors-symprops-part = Part
+# Whether the selected items belong to both bodies or only the body shown.
+editors-symprops-applies-to = Applies to
 # Part stepper buttons.
 editors-symprops-previous-part = ‹
 editors-symprops-next-part = ›
@@ -779,6 +781,21 @@ editors-fp-pad-place = { $index } of { $pads ->
 editors-fp-pad-next-title = Next pad
 # Link in the header that opens the pad's profile in Sketch mode.
 editors-fp-pad-edit-in-sketch = Edit in Sketch ▸
+# The Driven by sketch section of a baked pad (mockup row 192, item D5).
+editors-fp-pad-driven-by = Driven by sketch
+editors-fp-pad-driven-source = Source
+editors-fp-pad-driven-point = Pad point
+editors-fp-pad-driven-profile = Profile of { $edges } edges
+editors-fp-pad-driven-instance = Instance
+editors-fp-pad-driven-single = Single pad
+editors-fp-pad-driven-pattern = { $kind ->
+        [linear] Linear
+        [grid] Grid
+        [circular] Circular
+       *[mirror] Mirror
+    } pattern, instance { $place }
+editors-fp-pad-driven-size = Size
+editors-fp-pad-driven-size-value = { $x } × { $y } mm · from sketch
 # Kind pill of a non-plated hole.
 editors-fp-pad-pill-npth = NPTH
 editors-fp-pad-section-properties = Properties

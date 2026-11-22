@@ -23,6 +23,8 @@ impl PanelMsg {
             // The filter and snap settings are the session's, the edits the
             // window's board's.
             Self::PcbBoard(board) => board.acts_on_board(),
+            // The list and its highlight belong to the board the window shows.
+            Self::PcbPanel(_) => true,
 
             // Project-wide views, and what opens or steps to a document.
             Self::NavigatorPanel { .. }
@@ -50,6 +52,7 @@ impl PanelMsg {
             | Self::ToggleSnap { .. }
             | Self::SetGridSize { .. }
             | Self::SetVisibleGridSize { .. }
+            | Self::DocGrid { .. }
             | Self::ToggleSnapHotspots { .. }
             | Self::SetUiFont { .. }
             | Self::SetCanvasFont { .. }
@@ -295,6 +298,8 @@ impl PanelMsg {
             | Self::SetPrePlacementWireColor { .. }
             | Self::EditWireWidth { .. }
             | Self::EditWireColor { .. }
+            | Self::EditBusWidth { .. }
+            | Self::EditBusColor { .. }
             | Self::ToggleWireColorPicker { .. }
             | Self::OpenWireColorAdvancedPicker { .. }
             | Self::CancelWireColorPicker { .. }

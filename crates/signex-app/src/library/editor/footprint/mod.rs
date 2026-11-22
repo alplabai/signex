@@ -37,6 +37,7 @@ mod sketch_conflict_tests;
 pub mod sketch_dispatch;
 #[cfg(test)]
 mod sketch_dispatch_tests;
+mod sketch_import;
 pub mod sketch_mode;
 pub mod sketch_redundancy_task;
 #[cfg(test)]
@@ -78,6 +79,7 @@ pub(crate) use updates::apply_footprint_primitive_edit;
 // edit handlers, the board sketch host and the regression tests read, named
 // here so they do not reach into `state` or `updates` (layer ratchet,
 // docs/architecture/layer-ratchet.md).
+pub use sketch_import::land_sketch_import;
 pub(crate) use state::COURTYARD_SLACK_MM;
 pub use state::board_checks::GapOffer;
 pub(crate) use state::board_checks::mm as format_check_mm;
@@ -88,9 +90,9 @@ pub use state::pad_scope::PadScope;
 pub use state::sketch_overlay::{CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget};
 pub use state::{
     CheckLine, CheckStatus, EditorPad, FOOTPRINT_HEIGHT_BUFFER, FootprintEditorState, GridDef,
-    GridDisplay, PadLinkMsg, PadLinkOffer, PadSide, PadStackTab, SketchCanvasText, SketchOverlay,
-    SnapOptions, SnappingMode, check_lines, pad_field, pad_field_buffer_key,
-    sketch_pad_field_buffer_key,
+    GridDisplay, PadInstance, PadLinkMsg, PadLinkOffer, PadPatternKind, PadSide, PadSketchSource,
+    PadStackTab, SketchCanvasText, SketchOverlay, SnapOptions, SnappingMode, check_lines,
+    pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,
 };
 pub(crate) use updates::hold_patterned_pad_edit;
 

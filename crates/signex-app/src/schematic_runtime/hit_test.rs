@@ -167,7 +167,7 @@ fn hit_wire(wire: &signex_types::schematic::Wire, point: Point, widths: WireWidt
 
 fn hit_bus(bus: &signex_types::schematic::Bus, point: Point, widths: WireWidths<'_>) -> bool {
     let tolerance = widths
-        .bus_mm()
+        .bus_mm(bus)
         .max(signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM);
     point_to_segment_distance(point, bus.start, bus.end) <= tolerance
 }

@@ -230,4 +230,9 @@ define_ids! {
     PROJECT_DEFAULTS_PREVIEW_STROKE = "project-defaults-preview-stroke";
     PROJECT_DEFAULTS_PREVIEW_TEXT = "project-defaults-preview-text";
     PROJECT_DEFAULTS_PREVIEW_JUNCTION = "project-defaults-preview-junction";
+    // The larger preview window (mockup rows 31 and 36).
+    PROJECT_PREVIEW_EXPAND = "project-preview-expand";
+    PROJECT_PREVIEW_CLOSE = "project-preview-close";
+    PROJECT_PREVIEW_HINT_VALUES = "project-preview-hint-values";
+    PROJECT_PREVIEW_HINT_SHEET = "project-preview-hint-sheet";
 }

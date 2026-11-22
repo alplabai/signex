@@ -293,10 +293,15 @@ project-defaults-refused = Not applied: enter { $min } to { $max } mm.
 project-defaults-refused-pt = Not applied: enter { $min } to { $max } pt.
 project-defaults-caption = Grey values are the built-in defaults. An edited field has an accent border and a reset button; an invalid value has a red border, a tinted fill and a warning icon.
 project-defaults-preview = Preview
-project-defaults-preview-caption = schematic canvas · empty = built-in
+project-defaults-preview-caption = schematic canvas · click a value to edit · empty = built-in
 project-defaults-preview-wire = wire { $value }
 project-defaults-preview-bus = bus { $value }
 project-defaults-preview-line = line { $value }
 project-defaults-preview-stroke = stroke { $value }
 project-defaults-preview-text = text { $value } pt
 project-defaults-preview-junction = ⌀ { $value }
+# The larger preview window (mockup rows 31 and 36).
+project-preview-expand = Expand preview
+project-preview-close = Close
+project-preview-hint-values = Click a value on the drawing to edit it · Tab moves to the next · Esc closes
+project-preview-hint-sheet = Esc closes

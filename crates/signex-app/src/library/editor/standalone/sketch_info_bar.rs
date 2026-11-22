@@ -68,19 +68,32 @@ fn caption_and_parameters<'a>(
     } else {
         DialogButtonKind::Secondary
     };
-    row![
+    let mut bar = row![
         text(caption)
             .size(TS.caption)
             .color(theme_ext::text_secondary(tokens)),
-        dialog_button(
-            t!(i18n, ids::SKETCH_INFO_PARAMETERS),
-            kind,
-            Some(parameters),
-            tokens,
-        ),
     ]
     .spacing(SP.m)
-    .align_y(Alignment::Center)
+    .align_y(Alignment::Center);
+    // Mockup row 179: Import DXF… beside Parameters, on a board only.
+    if editor.state.sketch_host() == SketchHost::Board {
+        let import = LibraryMessage::PrimitiveEditorEvent {
+            path: editor.path.clone(),
+            msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchImportDxfRequested),
+        };
+        bar = bar.push(dialog_button(
+            t!(i18n, ids::BOARD_SKETCH_DXF_OPEN),
+            DialogButtonKind::Secondary,
+            Some(import),
+            tokens,
+        ));
+    }
+    bar.push(dialog_button(
+        t!(i18n, ids::SKETCH_INFO_PARAMETERS),
+        kind,
+        Some(parameters),
+        tokens,
+    ))
     .boxed()
 }
 
@@ -211,6 +224,28 @@ mod tests {
                 "{t:?} reaches the table"
             );
         }
+    }
+
+    /// Mockup row 179: Import DXF… sits before Parameters on a board sketch
+    /// and a footprint sketch has none.
+    #[test]
+    fn only_a_board_sketch_offers_import_dxf() {
+        let board: signex_types::pcb::PcbBoard =
+            serde_json::from_value(serde_json::json!({ "uuid": uuid::Uuid::nil() }))
+                .expect("a board");
+        let session =
+            crate::app::BoardSketchSession::open(std::path::Path::new("bar.snxpcb"), &board);
+        let tokens = theme_tokens(ThemeId::GraphiteDark);
+        let i18n = signex_i18n::I18n::en_us();
+        let texts = lay_out_texts(
+            super::overlay(&session.editor, &tokens, &i18n),
+            iced::Size::new(1400.0, 900.0),
+        );
+        let import = find(&texts, "Import DXF…").bounds;
+        let parameters = find(&texts, "Parameters").bounds;
+        assert!(import.x < parameters.x);
+        let footprint = bar_texts(EditorMode::Sketch);
+        assert!(!footprint.iter().any(|t| t.text == "Import DXF…"));
     }
 
     #[test]

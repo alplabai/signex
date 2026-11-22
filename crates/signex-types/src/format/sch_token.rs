@@ -25,27 +25,35 @@ pub const SNXSCH_FORMAT_NO_ERC_RULES: &str = "snxsch/1.2";
 /// 1.3 read-only. Format: `docs/architecture/snxsch-refinement-objects.md`.
 pub const SNXSCH_FORMAT_REFINEMENT: &str = "snxsch/1.3";
 
+/// Written when a bus stores its own width or colour (#2813). A 1.3 build
+/// drops unknown keys of a typed bus row on save, so it opens 1.4 read-only.
+pub const SNXSCH_FORMAT_BUS_STYLE: &str = "snxsch/1.4";
+
 /// `.snxsch` version policy: a newer minor opens read-only. A save writes the
 /// lowest token its content needs ([`snxsch_token`]).
 pub const SNXSCH_VERSION: FormatVersion = FormatVersion {
-    current: SNXSCH_FORMAT_REFINEMENT,
+    current: SNXSCH_FORMAT_BUS_STYLE,
     readable: &[
         "snxsch/1",
         SNXSCH_FORMAT_V1,
         SNXSCH_FORMAT_NO_ERC_RULES,
         SNXSCH_FORMAT_REFINEMENT,
+        SNXSCH_FORMAT_BUS_STYLE,
     ],
     newer_minor: NewerMinor::ReadOnly,
     missing: MissingToken::Refused,
 };
 
-/// The token a save of `sheet` writes: [`SNXSCH_FORMAT_REFINEMENT`] with
-/// Schematic Refinement content, else [`SNXSCH_FORMAT_NO_ERC_RULES`] when a
-/// No-ERC directive names rules, else [`SNXSCH_FORMAT_V1`]. From content, not
-/// the token the file loaded with, so a sheet whose last such object is
-/// removed goes back to the lower token.
+/// The token a save of `sheet` writes: [`SNXSCH_FORMAT_BUS_STYLE`] when a bus
+/// has its own style, else [`SNXSCH_FORMAT_REFINEMENT`] with Schematic
+/// Refinement content, else [`SNXSCH_FORMAT_NO_ERC_RULES`] when a No-ERC
+/// directive names rules, else [`SNXSCH_FORMAT_V1`]. From content, not the
+/// token the file loaded with, so a sheet whose last such object is removed
+/// goes back to the lower token.
 pub fn snxsch_token(sheet: &SchematicSheet) -> &'static str {
-    if needs_refinement(sheet) {
+    if sheet.buses.iter().any(crate::schematic::Bus::has_own_style) {
+        SNXSCH_FORMAT_BUS_STYLE
+    } else if needs_refinement(sheet) {
         SNXSCH_FORMAT_REFINEMENT
     } else if sheet
         .no_erc_directives

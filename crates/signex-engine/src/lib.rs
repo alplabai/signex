@@ -141,7 +141,7 @@ use history::HistoryStep;
 pub use history::{ClassPickMarker, UndoGroupId};
 pub use multi_edit::{
     LabelGroup, MultiEdit, SelectionGroups, Shared, SymbolGroup, WireGroup,
-    edit_commands as multi_edit_commands, selection_groups,
+    edit_commands as multi_edit_commands, selected_symbols, selection_groups,
 };
 pub use net_class_table::{
     HISTORY_LIMIT as NET_CLASS_HISTORY_LIMIT, NetClassCommand, NetClassError, NetClassHistory,
@@ -823,6 +823,8 @@ impl Engine {
             | Command::SetSymbolFlag { .. }
             | Command::SetWireWidth { .. }
             | Command::SetWireColor { .. }
+            | Command::SetBusWidth { .. }
+            | Command::SetBusColor { .. }
             | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }

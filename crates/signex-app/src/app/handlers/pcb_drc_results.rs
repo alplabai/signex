@@ -217,12 +217,16 @@ impl Signex {
     }
 
     /// Before the first run: which base rules the project's rule text
-    /// writes, and the default clearance the run will use (#87).
+    /// writes, and the clearance the run will use (#87): the board's own,
+    /// read as a run reads it, else the default.
     pub(crate) fn fill_drc_idle(
         &self,
         panel: &mut crate::panels::DrcPanel,
         pcb: &signex_types::pcb::PcbBoard,
     ) {
+        panel.checked_clearance_mm = signex_drc::DrcRules::for_board(pcb, &[])
+            .ok()
+            .map(|rules| signex_drc::findings::mm(rules.clearance).to_string());
         if let Some((text, _)) = self
             .rules_project_for(None)
             .and_then(|id| self.rules_text_of(id))

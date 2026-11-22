@@ -86,6 +86,8 @@ pub enum CommandKind {
     SetSymbolFlag,
     SetWireWidth,
     SetWireColor,
+    SetBusWidth,
+    SetBusColor,
     SetSymbolBodyStyle,
     UpdateSymbolTextSize,
     UpdateSymbolLibId,
@@ -270,6 +272,17 @@ pub enum Command {
     /// colour. The wire colour wins over a per-net colour and a class colour.
     SetWireColor {
         wire_id: Uuid,
+        color: Option<signex_types::theme::Color>,
+    },
+    /// Set a bus's own stroke width in mm; 0 clears it to the project's bus
+    /// width.
+    SetBusWidth {
+        bus_id: Uuid,
+        width_mm: f64,
+    },
+    /// Set a bus's own colour; `None` clears it to the theme bus colour.
+    SetBusColor {
+        bus_id: Uuid,
         color: Option<signex_types::theme::Color>,
     },
     /// Show the normal or the alternate (De Morgan) body of a symbol's library
@@ -798,6 +811,8 @@ impl Command {
             Command::SetSymbolFlag { .. } => CommandKind::SetSymbolFlag,
             Command::SetWireWidth { .. } => CommandKind::SetWireWidth,
             Command::SetWireColor { .. } => CommandKind::SetWireColor,
+            Command::SetBusWidth { .. } => CommandKind::SetBusWidth,
+            Command::SetBusColor { .. } => CommandKind::SetBusColor,
             Command::SetSymbolBodyStyle { .. } => CommandKind::SetSymbolBodyStyle,
             Command::UpdateSymbolTextSize { .. } => CommandKind::UpdateSymbolTextSize,
             Command::UpdateSymbolLibId { .. } => CommandKind::UpdateSymbolLibId,

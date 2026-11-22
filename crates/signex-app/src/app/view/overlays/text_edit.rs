@@ -94,17 +94,18 @@ impl Signex {
         ];
         if self.ui_state.text_edit_opens <= TEXT_EDIT_HINT_USES {
             let hint_h = TS.caption * crate::styles::LINE_HEIGHT + 2.0 * SP.xs;
-            let hint = self
-                .ui_state
-                .i18n
-                .message_plain(signex_i18n::ids::OVERLAY_TEXT_EDIT_HINT, &[]);
+            let hint_id = hint_message(
+                crate::app::handlers::canvas::next_part_field(engine.document(), edit_state)
+                    .is_some(),
+            );
+            let hint = self.ui_state.i18n.message_plain(hint_id, &[]);
             let hint_w = signex_types::font::estimate_text_width_px(&hint, TS.caption, None)
                 + 2.0 * SP.m
                 + 2.0;
             layers.push(positioned(
                 hint_left(left, hint_w, self.canvas_bounds()),
                 top - hint_h - SP.xs,
-                key_hint(tokens, &self.ui_state.i18n),
+                key_hint(hint_id, tokens, &self.ui_state.i18n),
             ));
         }
         Some(iced::widget::Stack::with_children(layers).boxed())
@@ -247,8 +248,18 @@ fn anchor_cross<'a>(accent: iced::Color) -> Element<'a, Message> {
     .boxed()
 }
 
+/// The hint's words: Tab is named only where it has a field to go to.
+fn hint_message(has_next_field: bool) -> signex_i18n::MessageId {
+    if has_next_field {
+        signex_i18n::ids::OVERLAY_TEXT_EDIT_HINT_NEXT_FIELD
+    } else {
+        signex_i18n::ids::OVERLAY_TEXT_EDIT_HINT
+    }
+}
+
 /// The pill above the editor naming its keys.
 fn key_hint<'a>(
+    hint: signex_i18n::MessageId,
     tokens: &signex_types::theme::ThemeTokens,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, Message> {
@@ -256,13 +267,10 @@ fn key_hint<'a>(
     let (raised, line, ink3) = (r.raised, crate::styles::ti(tokens.border), r.ink3);
     let shadow = crate::styles::floating_shadow(tokens);
     container(
-        signex_widgets::text(signex_i18n::t!(
-            i18n,
-            signex_i18n::ids::OVERLAY_TEXT_EDIT_HINT
-        ))
-        .size(TS.caption)
-        .color(ink3)
-        .wrapping(iced::widget::text::Wrapping::None),
+        signex_widgets::text(signex_i18n::t!(i18n, hint))
+            .size(TS.caption)
+            .color(ink3)
+            .wrapping(iced::widget::text::Wrapping::None),
     )
     .padding([SP.xs, SP.m])
     .style(move |_: &iced::Theme| container::Style {
@@ -317,7 +325,11 @@ mod tests {
         let en = signex_i18n::I18n::en_us();
         let layers = iced::widget::Stack::with_children(vec![
             positioned(0.0, 0.0, Space::new().width(20.0).height(20.0).boxed()),
-            positioned(0.0, 40.0, key_hint(tokens, &en)),
+            positioned(
+                0.0,
+                40.0,
+                key_hint(signex_i18n::ids::OVERLAY_TEXT_EDIT_HINT, tokens, &en),
+            ),
         ]);
         let texts =
             crate::layout_probe::lay_out_texts(layers.boxed(), iced::Size::new(800.0, 200.0));
@@ -329,12 +341,26 @@ mod tests {
         assert!(hint.bounds.height < 2.0 * TS.caption * crate::styles::LINE_HEIGHT);
     }
 
-    /// Tab between fields is not wired, so the hint names only the two
-    /// keys that work.
+    /// A text with no next field has only two keys that work, so its hint
+    /// names only those.
     #[test]
     fn the_hint_names_only_the_keys_that_work() {
         let hint = signex_i18n::I18n::en_us_ref()
             .message_plain(signex_i18n::ids::OVERLAY_TEXT_EDIT_HINT, &[]);
         assert_eq!(hint, "Enter apply · Esc cancel");
+    }
+
+    /// Mockup row 65: the hint names Tab only where a next field exists.
+    #[test]
+    fn the_hint_names_tab_where_it_has_a_field_to_go_to() {
+        let en = signex_i18n::I18n::en_us_ref();
+        assert_eq!(
+            en.message_plain(hint_message(true), &[]),
+            "Enter apply · Esc cancel · Tab next field"
+        );
+        assert_eq!(
+            en.message_plain(hint_message(false), &[]),
+            "Enter apply · Esc cancel"
+        );
     }
 }

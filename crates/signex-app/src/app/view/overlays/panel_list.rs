@@ -122,8 +122,12 @@ struct OpenDocuments {
 
 impl OpenDocuments {
     /// Whether the list offers `kind`. Layers also serves the footprint
-    /// editor, which docks it on its tab.
+    /// editor, which docks it on its tab. On a board Net Classes is a mode
+    /// of the PCB panel (mockup rows 7 and 106), so it has no row of its own.
     fn offers(self, kind: PanelKind) -> bool {
+        if kind == PanelKind::NetClasses && self.pcb {
+            return false;
+        }
         let board_met =
             !kind.needs_pcb() || self.pcb || (kind == PanelKind::Layers && self.footprint);
         (!kind.needs_schematic() || self.schematic) && board_met
@@ -186,7 +190,7 @@ fn panel_row<'a>(
     };
     let mut line = row![
         container(check).width(CHECK_COLUMN),
-        signex_widgets::text(t!(i18n, kind.message()))
+        signex_widgets::text(t!(i18n, kind.list_message()))
             .size(TS.body)
             .color(crate::styles::ti(tokens.text))
             .width(Length::Fill),
@@ -283,6 +287,24 @@ mod tests {
         for kind in [PanelKind::Layers, PanelKind::PcbNets, PanelKind::Drc] {
             assert!(board.offers(kind), "{kind:?} with a board");
         }
+    }
+
+    /// Mockup rows 7 and 106: on a board the merged panel is listed as Nets
+    /// and Net Classes is its mode; a sheet keeps the Net Classes row.
+    #[test]
+    fn a_board_lists_nets_and_folds_net_classes_into_it() {
+        let board = OpenDocuments {
+            schematic: false,
+            pcb: true,
+            footprint: false,
+        };
+        assert!(!board.offers(PanelKind::NetClasses));
+        assert!(board.offers(PanelKind::PcbNets));
+        let i18n = signex_i18n::I18n::en_us();
+        let row = t!(i18n, PanelKind::PcbNets.list_message()).into_string();
+        assert_eq!(row, "Nets");
+        let title = t!(i18n, PanelKind::PcbNets.message()).into_string();
+        assert_eq!(title, "PCB");
     }
 
     /// Mockup row 7, under the decision of 2026-11-22: the foot caption does

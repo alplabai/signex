@@ -14,6 +14,7 @@
 //! (`save_primitive_tab_at`); the editor view only owns the widget
 //! tree.
 
+mod bake_legend;
 mod board_sketch;
 pub(crate) mod dof_chip;
 mod footprint;

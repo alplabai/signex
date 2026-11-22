@@ -2293,6 +2293,7 @@ fn a_bus_and_bus_entry_on_the_new_path_are_harmless() {
         uuid: Uuid::now_v7(),
         start: Point::new(45.0, 52.0),
         end: Point::new(45.0, 58.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(signex_types::schematic::BusEntry {
         uuid: Uuid::now_v7(),

@@ -545,6 +545,9 @@ fn route_primitive_edit(editor: &mut crate::app::FootprintDocument, msg: Footpri
         FootprintEditorMsg::SketchCloseGapRequested { keep, merge } => {
             sketch::close_gap::apply(editor, keep, merge)
         }
+        // The board host answers it before this router; a footprint has no
+        // such button.
+        FootprintEditorMsg::SketchImportDxfRequested => {}
     }
 }
 
@@ -750,6 +753,8 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         PadScopeAnswered(_) => false,
         // Close gap records its own step (`record_edit`), only when it joins.
         SketchCloseGapRequested { .. } => false,
+        // Opens a file dialog; the import records its own step.
+        SketchImportDxfRequested => false,
         // All other variants either add/remove/move geometry,
         // mutate pad attributes, or rebuild the sketch — they all
         // need a history snapshot.

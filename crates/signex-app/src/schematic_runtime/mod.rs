@@ -624,7 +624,8 @@ fn collect_item_bounds_with(
     for bus in &snapshot.buses {
         out.push(ItemBound {
             item: SelectedItem::new(bus.uuid, SelectedKind::Bus),
-            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y).expand(widths.bus_mm()),
+            bbox: Aabb::new(bus.start.x, bus.start.y, bus.end.x, bus.end.y)
+                .expand(widths.bus_mm(bus)),
             anchor: Point::new(
                 (bus.start.x + bus.end.x) * 0.5,
                 (bus.start.y + bus.end.y) * 0.5,

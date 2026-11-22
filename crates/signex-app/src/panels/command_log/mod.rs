@@ -4,6 +4,7 @@
 //! the app runs in `app::handlers::command_log`. Rules: `docs/COMMAND_LOG.md`.
 
 mod detail;
+mod layout;
 mod table;
 mod toolbar;
 
@@ -150,8 +151,44 @@ fn message(msg: CommandLogMsg) -> PanelMsg {
     PanelMsg::CommandLog(msg)
 }
 
-/// The panel.
+/// The panel, laid out for the width its dock gives it.
 pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+    iced::widget::responsive(move |size| sized_view(ctx, size.width)).boxed()
+}
+
+/// The list beside the detail pane of the row it shows.
+fn split_view<'a>(
+    ctx: &'a PanelContext,
+    state: &'a CommandLogState,
+    visible: &[&'a LogRow],
+    width: f32,
+) -> Element<'a, PanelMsg> {
+    let shown = state.shown_row(visible);
+    let detail_width = layout::detail_width(width);
+    let table_width = if shown.is_some() {
+        width - detail_width
+    } else {
+        width
+    };
+    let main = if visible.is_empty() {
+        no_match(ctx)
+    } else {
+        table::view(ctx, state, visible, shown.map(|row| row.seq), table_width)
+    };
+    let mut split: Row<Element<'a, PanelMsg>> = Row::new().height(Length::Fill);
+    split = split.push(
+        container(main)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .boxed(),
+    );
+    if let Some(row) = shown {
+        split = split.push(detail::view(ctx, state, row, detail_width));
+    }
+    split.boxed()
+}
+
+fn sized_view<'a>(ctx: &'a PanelContext, width: f32) -> Element<'a, PanelMsg> {
     let state: &'a CommandLogState = &ctx.command_log;
     let visible = state.log.visible();
     let counts = state.log.counts();
@@ -159,27 +196,11 @@ pub fn view<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let body = if empty {
         empty_hint(ctx)
     } else {
-        let shown = state.shown_row(&visible);
-        let main = if visible.is_empty() {
-            no_match(ctx)
-        } else {
-            table::view(ctx, state, &visible, shown.map(|row| row.seq))
-        };
-        let mut split: Row<Element<'a, PanelMsg>> = Row::new().height(Length::Fill);
-        split = split.push(
-            container(main)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .boxed(),
-        );
-        if let Some(row) = shown {
-            split = split.push(detail::view(ctx, state, row));
-        }
-        split.boxed()
+        split_view(ctx, state, &visible, width)
     };
     let mut col: Column<Element<'a, PanelMsg>> =
         Column::new().width(Length::Fill).height(Length::Fill);
-    col = col.push(toolbar::bar(ctx, state, &counts, empty));
+    col = col.push(toolbar::bar(ctx, state, &counts, empty, width));
     if state.more_open {
         col = col.push(toolbar::more_strip(ctx, state));
     }

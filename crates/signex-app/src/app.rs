@@ -160,6 +160,8 @@ pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};
 pub use signex_history::History;
 pub(crate) use signex_history::SavePoint;
 #[cfg(test)]
+pub(crate) use state::BoardSketchSession;
+#[cfg(test)]
 pub(crate) use state::WindowKind;
 pub use state::net_class_styles::{ResolveFailed, ResolvedStyles};
 pub use state::pcb_edit::{BoardEditError, CheckedStep};

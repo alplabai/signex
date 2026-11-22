@@ -69,7 +69,8 @@ message. The chrome catalog draws a sample of it.
   orientation, title block), edited with the Project setup fields, beside a
   preview of that sheet in the schematic canvas colours: the outline, the
   zone border and title block of the canvas's own frame, and the size in
-  mm. An undo puts the order back for the sheets it names; a sheet added or
+  mm. Its expand button opens the sheet in a larger window, which Close, Esc
+  or a press beside it closes. An undo puts the order back for the sheets it names; a sheet added or
   renamed since keeps its page. The PDF export does not follow this list:
   it numbers pages by the sheet hierarchy (the root sheet, then the other
   pages by file key), and changing that would renumber the nets of an
@@ -143,9 +144,13 @@ message. The chrome catalog draws a sample of it.
   draws a small schematic in the canvas colours with the values in effect
   (power port, wires with a junction, a resistor, a net label, a bus with
   entries, a shape) and writes each value beside its item, grey italic while
-  the field is empty. The drawing is not editable; values are edited in the fields. Not built yet: editing a
-  value on the drawing and the junction and bus drag handles (follow-up
-  issue "Project tab previews: edit values on the drawing", #2685).
+  the field is empty. A click on a value opens it for typing on the drawing:
+  Enter commits, Tab commits and moves to the next value, Esc cancels, and
+  an emptied value returns to the built-in one. It is the field's own edit
+  and one undo step; a refused value keeps the label open and shows the
+  field's refusal. Handles on the junction and the bus drag their value
+  (one undo step; Esc puts the value back). The expand button opens the
+  drawing in a larger window, which Close, Esc or a press beside it closes.
 
 Each section but Variants shows its title and help line over its content in
 a column that scrolls inside the tab. Variants (mockup row 32) shows its

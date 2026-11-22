@@ -5,12 +5,16 @@
 //! mockup row 36; see docs/PROJECT_TAB.md.
 
 mod field;
+mod labels;
 mod preview;
 mod view;
 
 #[cfg(test)]
+mod labels_tests;
+
+#[cfg(test)]
 pub(super) use preview::{LabelLook, value_labels};
-pub(super) use view::view;
+pub(super) use view::{popup_drawing, view};
 
 use signex_types::numeric::{FiniteParseError, parse_finite_f64};
 use signex_types::project::{SchematicDefaultField, SchematicDefaultOverrides};

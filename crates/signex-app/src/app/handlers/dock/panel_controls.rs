@@ -230,6 +230,9 @@ impl Signex {
         match panel_msg {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
+                // Typed pitches were read in the old unit.
+                self.document_state.panel_ctx.visible_grid_draft = None;
+                self.document_state.panel_ctx.snap_grid_draft = None;
             }
             crate::panels::PanelMsg::RunErc => {
                 follow = self.handle_run_erc();
@@ -484,6 +487,28 @@ impl Signex {
                     true,
                 );
             }
+            crate::panels::PanelMsg::EditBusWidth(bus_id, preset) => {
+                self.apply_engine_command(
+                    signex_engine::Command::SetBusWidth {
+                        bus_id: *bus_id,
+                        width_mm: preset.stroke_mm(),
+                    },
+                    true,
+                    true,
+                );
+            }
+            crate::panels::PanelMsg::EditBusColor(bus_id, color) => {
+                self.document_state.panel_ctx.wire_color_picker =
+                    crate::panels::WireColorPicker::Closed;
+                self.apply_engine_command(
+                    signex_engine::Command::SetBusColor {
+                        bus_id: *bus_id,
+                        color: *color,
+                    },
+                    true,
+                    true,
+                );
+            }
             crate::panels::PanelMsg::ToggleWireColorPicker => {
                 use crate::panels::WireColorPicker as Picker;
                 let ctx = &mut self.document_state.panel_ctx;
@@ -588,6 +613,7 @@ impl Signex {
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;
                 self.document_state.panel_ctx.grid_size_mm = *size;
+                self.document_state.panel_ctx.snap_grid_draft = None;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 let size = *size;
@@ -598,6 +624,7 @@ impl Signex {
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
                 self.document_state.panel_ctx.visible_grid_mm = *size;
+                self.document_state.panel_ctx.visible_grid_draft = None;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }

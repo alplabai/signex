@@ -51,10 +51,13 @@ pub(super) fn view_footprint_editor_properties<'a>(
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     if let Some(target) = pad_target(fp) {
-        let col = Column::new()
+        let mut col = Column::new()
             .spacing(0)
             .width(Length::Fill)
             .push(pad::view_pad_header(fp, target, tokens, i18n));
+        if let Some(section) = pad::view_driven_by(fp, target, palette, i18n) {
+            col = col.push(section);
+        }
         return scrolled(pad::view_pad_form(
             col,
             fp,

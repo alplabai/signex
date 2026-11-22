@@ -191,6 +191,7 @@ fn dragging_a_bus_on_the_canvas_carries_entry_and_wire() {
             uuid: bus_id,
             start: Point::new(0.0, 0.0),
             end: Point::new(0.0, 20.0),
+            ..Default::default()
         }],
         bus_entries: vec![BusEntry {
             uuid: entry_id,

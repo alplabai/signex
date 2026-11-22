@@ -51,6 +51,7 @@ pub(crate) fn bus_commands(segments: &[(Point, Point)]) -> Vec<signex_engine::Co
                 uuid: uuid::Uuid::now_v7(),
                 start: seg.0,
                 end: seg.1,
+                ..Bus::default()
             },
         })
         .collect()

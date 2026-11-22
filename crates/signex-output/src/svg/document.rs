@@ -180,10 +180,11 @@ impl SvgRenderContext {
                     SvgPathCommand::LineTo(pt(xform.x(bus.end.x), xform.px_y(bus.end.y))),
                 ],
                 style: SvgStyle {
-                    stroke_alpha: 1.0,
-                    stroke_rgb: Some(palette.bus),
+                    stroke_alpha: bus.color.map_or(1.0, |c| f32::from(c.a) / 255.0),
+                    stroke_rgb: Some(bus.color.map_or(palette.bus, wire_style::rgb)),
                     fill_rgb: None,
-                    stroke_width: (opts.schematic_defaults.bus_mm() * xform.mm_to_unit) as f32,
+                    stroke_width: (opts.schematic_defaults.bus_line_mm(bus.stroke_width)
+                        * xform.mm_to_unit) as f32,
                 },
             });
         }

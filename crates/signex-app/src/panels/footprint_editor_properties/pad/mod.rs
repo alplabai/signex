@@ -7,6 +7,7 @@
 //! sub-forms consume, re-exported below.
 
 mod choices;
+mod driven_by;
 mod field;
 mod form;
 mod header;
@@ -15,6 +16,7 @@ mod layer_titles;
 mod rule_row;
 mod table;
 
+pub(super) use driven_by::view_driven_by;
 pub(in crate::panels::footprint_editor_properties) use field::{
     Shown, number_input, with_refusals,
 };

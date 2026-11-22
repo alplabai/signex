@@ -24,6 +24,7 @@ fn bus_sheet(
         uuid: Uuid::now_v7(),
         start: pt(0.0, 0.0),
         end: pt(0.0, 40.0),
+        ..Default::default()
     });
     sheet
         .labels
@@ -178,6 +179,7 @@ fn a_width_mismatch_narrows_the_join_at_each_level_of_a_two_level_hierarchy() {
         uuid: Uuid::now_v7(),
         start: pt(100.0, 0.0),
         end: pt(100.0, 40.0),
+        ..Default::default()
     });
     mid.bus_entries.push(BusEntry {
         uuid: Uuid::now_v7(),

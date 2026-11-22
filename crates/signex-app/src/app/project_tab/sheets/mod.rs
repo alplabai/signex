@@ -12,7 +12,7 @@ mod view;
 #[cfg(test)]
 mod tests;
 
-pub(super) use view::view;
+pub(super) use view::{popup_drawing, view};
 
 use std::path::Path;
 

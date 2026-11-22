@@ -62,6 +62,9 @@ pub enum MultiEditMsg {
     DraftSubmitted(MultiField),
     /// A checkbox or segmented button: applied at once.
     Picked(MultiEdit),
+    /// A row of the Footprint dropdown, by its `library:footprint` binding:
+    /// every selected part is built with it (mockup row 51).
+    FootprintPicked(String),
 }
 
 /// The edit the text `typed` in `field` asks for, a length read in mm, or

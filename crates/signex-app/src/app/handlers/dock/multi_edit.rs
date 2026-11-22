@@ -35,6 +35,10 @@ impl Signex {
                 }
             }
             MultiEditMsg::Picked(edit) => self.apply_multi_edit(edit),
+            MultiEditMsg::FootprintPicked(binding) => {
+                self.document_state.panel_ctx.multi_draft = None;
+                self.apply_common_footprint(binding);
+            }
         }
         true
     }

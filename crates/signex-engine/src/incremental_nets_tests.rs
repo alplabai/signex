@@ -168,6 +168,7 @@ fn bus_entries_do_not_disturb_the_ghost() {
         uuid: Uuid::now_v7(),
         start: Point::new(20.0, 30.0),
         end: Point::new(20.0, 70.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: Uuid::now_v7(),

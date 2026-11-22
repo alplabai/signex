@@ -564,6 +564,7 @@ impl Signex {
         let document_options = self.document_state.panel_ctx.document_options.clone();
         let projects_view = self.document_state.panel_ctx.projects_view.clone();
         let mut pcb_layers_ui = self.document_state.panel_ctx.pcb_layers_ui.clone();
+        let pcb_panel = self.document_state.panel_ctx.pcb_panel.clone();
         let selection_count = self.document_state.panel_ctx.selection_count;
         let selected_uuid = self.document_state.panel_ctx.selected_uuid;
         let selected_kind = self.document_state.panel_ctx.selected_kind;
@@ -571,6 +572,13 @@ impl Signex {
         let multi_groups = self.document_state.panel_ctx.multi_groups.clone();
         let placed = self.document_state.panel_ctx.placed.clone();
         let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
+        let multi_footprint_choices = self
+            .document_state
+            .panel_ctx
+            .multi_footprint_choices
+            .clone();
+        let visible_grid_draft = self.document_state.panel_ctx.visible_grid_draft.clone();
+        let snap_grid_draft = self.document_state.panel_ctx.snap_grid_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let footprint_choices = self.document_state.panel_ctx.footprint_choices.clone();
         let footprint_card = self.document_state.panel_ctx.footprint_card.clone();
@@ -738,9 +746,8 @@ impl Signex {
             navigator,
             library_row_detail: self.compute_library_row_detail(),
             component_sheet: self.compute_component_sheet(),
-            pcb_nets: self
-                .active_pcb_snapshot()
-                .map(crate::panels::PcbNetsSummary::of),
+            pcb_nets: self.pcb_nets_summary(),
+            pcb_panel,
             // Kept in step with the net index by `refresh_net_nav`.
             net_inspector: self.document_state.panel_ctx.net_inspector.clone(),
             // Kept: `sync_unions_panel` and `refresh_harness_panel` own these.
@@ -762,6 +769,9 @@ impl Signex {
             multi_groups,
             placed,
             multi_draft,
+            multi_footprint_choices,
+            visible_grid_draft,
+            snap_grid_draft,
             symbol_choices,
             footprint_choices,
             footprint_card,

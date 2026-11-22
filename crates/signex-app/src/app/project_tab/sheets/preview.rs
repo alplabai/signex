@@ -5,7 +5,7 @@
 //! (`signex_output::template::lower_sheet_frame`), scaled to fit.
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{canvas, column, container, row};
+use iced::widget::{canvas, column, container, row, stack};
 use iced::{
     Alignment, Border, Color, Element, Length, Point, Rectangle, Size, Theme, Widget as _, mouse,
 };
@@ -17,8 +17,10 @@ use signex_types::theme::{CanvasColors, ThemeTokens};
 use signex_widgets::text;
 
 use super::super::look::{mono_font, ui_font};
+use super::super::preview_ui::{PreviewPopup, expand_layer};
 use super::super::table::{SP, TS};
 use crate::app::Message;
+use crate::app::state::ProjectId;
 use crate::styles::{HAIRLINE, Radii, ti, tokens::resolve};
 
 /// Height of the drawing (200 px); it is as wide as its column, up to
@@ -268,9 +270,32 @@ impl SheetPreview {
     }
 }
 
+/// The sheet alone at `height`, for the larger preview window.
+pub(super) fn large<'a>(
+    defaults: &SheetDefaults,
+    height: f32,
+    canvas_colors: &CanvasColors,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let (size, orientation) = sheet_of(defaults);
+    let program = SheetPreview::of(
+        defaults,
+        size.dimensions_mm(orientation),
+        canvas_colors,
+        i18n,
+        tokens,
+    );
+    canvas(program)
+        .width(Length::Fill)
+        .height(Length::Fixed(height))
+        .boxed()
+}
+
 /// The preview column (`.lp`): the uppercase "Preview" and the size caption
-/// over the drawing.
+/// over the drawing, with the expand button on it.
 pub(super) fn view<'a>(
+    project_id: ProjectId,
     defaults: &SheetDefaults,
     canvas_colors: &CanvasColors,
     i18n: &I18n,
@@ -308,22 +333,23 @@ pub(super) fn view<'a>(
     .spacing(SP.s + SP.xs * 0.5)
     .align_y(Alignment::Center);
     let border = ti(tokens.border);
-    let drawing = container(
-        canvas(program)
-            .width(Length::Fill)
-            .height(Length::Fixed(PREVIEW_H)),
-    )
-    .padding(HAIRLINE)
-    .clip(true)
-    .style(move |_: &Theme| container::Style {
-        border: Border {
-            width: HAIRLINE,
-            color: border,
-            radius: Radii::GRAPHITE.button.into(),
-            ..Border::default()
-        },
-        ..container::Style::default()
-    });
+    let sheet: Element<'a, Message> = canvas(program)
+        .width(Length::Fill)
+        .height(Length::Fixed(PREVIEW_H))
+        .boxed();
+    let expand = expand_layer(project_id, PreviewPopup::Sheet, i18n, tokens);
+    let drawing = container(stack![sheet, expand])
+        .padding(HAIRLINE)
+        .clip(true)
+        .style(move |_: &Theme| container::Style {
+            border: Border {
+                width: HAIRLINE,
+                color: border,
+                radius: Radii::GRAPHITE.button.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
     column![head, drawing]
         .spacing(SP.s)
         .width(Length::Fill.max(PREVIEW_MAX_W))

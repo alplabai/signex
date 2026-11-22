@@ -175,6 +175,10 @@ fn locked_targets(cmd: &Command) -> Option<(Vec<Uuid>, &'static str)> {
         Command::SetWireWidth { wire_id, .. } | Command::SetWireColor { wire_id, .. } => {
             (vec![*wire_id], "edited")
         }
+        // A bus has no lock, but a locked union freezes its member buses.
+        Command::SetBusWidth { bus_id, .. } | Command::SetBusColor { bus_id, .. } => {
+            (vec![*bus_id], "edited")
+        }
         // A locked harness connector keeps its type, size and entries.
         Command::UpdateHarnessConnector { uuid, .. } => (vec![*uuid], "edited"),
         Command::PlaceHarnessEntry { connector_id, .. } => (vec![*connector_id], "edited"),

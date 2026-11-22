@@ -197,6 +197,9 @@ pub enum TextEditMsg {
     /// A command (F2, V, U, F) asked to edit a field in place; the target
     /// is the object under the cursor, else the single selection.
     Requested(TextEditTarget),
+    /// Tab in the editor on a part's field: keep the text and go on to the
+    /// part's next field (mockup row 65).
+    NextFieldRequested,
 }
 
 /// Which text a field-edit command asks for (#1670).

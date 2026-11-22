@@ -1,7 +1,7 @@
 //! The live preview under the cards (mockup row 36): a small schematic in the
 //! canvas colours drawn with the resolved defaults, each value written
-//! beside its item. A pure `canvas::Program`: nothing on the drawing is
-//! editable and it has no handles.
+//! beside its item. A pure `canvas::Program`; the press targets, the open
+//! field and the handles are the overlay in `labels`.
 
 use iced::advanced::text::Alignment as TextAlign;
 use iced::alignment::Vertical;
@@ -12,6 +12,7 @@ use signex_types::net_class::NetLineStyle;
 use signex_types::project::{SchematicDefaultField, SchematicDefaultOverrides};
 use signex_types::schematic::{FillType, SchematicDefaults};
 use signex_types::theme::{CanvasColors, ThemeTokens};
+use signex_widgets::dimension_label::LabelAnchor;
 
 use super::super::table::TS;
 use super::shown_number;
@@ -23,14 +24,21 @@ const PREVIEW_HEIGHT_EMS: f32 = 17.5;
 /// scale. The drawing scales with the canvas height, so the constants below
 /// are layout units of this height, not widget sizes.
 pub(super) const VIEW_HEIGHT: f32 = TS.body * PREVIEW_HEIGHT_EMS;
+/// Width the drawing is laid out for (600 px), so a label sits at the same
+/// place on the drawing and in the overlay above it.
+pub(super) const VIEW_WIDTH: f32 = TS.body * 50.0;
 /// Layout units per millimetre of a drawn width.
-const PX_PER_MM: f32 = 8.0;
+pub(super) const PX_PER_MM: f32 = 8.0;
+/// Centre of the T-junction, in layout units.
+pub(super) const JUNCTION: (f32, f32) = (70.0, 100.0);
+/// Height of the bus line, in layout units.
+pub(super) const BUS_Y: f32 = 48.0;
 /// Thinnest drawn stroke, so a tiny width still shows.
 const MIN_STROKE_PX: f32 = 0.6;
 /// Pitch of the grid dots, in layout units.
 const GRID_PX: f32 = VIEW_HEIGHT / 10.5;
 /// Size of the value labels.
-const LABEL_PX: f32 = TS.caption;
+pub(super) const LABEL_PX: f32 = TS.caption;
 /// Layout units per pt of the text size default.
 const PX_PER_PT: f32 = 1.15;
 /// Stroke of the power and ground symbols.
@@ -192,7 +200,7 @@ fn stroke(color: Color, px: f32, unit: f32) -> Stroke<'static> {
 }
 
 /// The drawn width of a default in mm.
-fn width_px(mm: f64) -> f32 {
+pub(super) fn width_px(mm: f64) -> f32 {
     (mm as f32 * PX_PER_MM).max(MIN_STROKE_PX)
 }
 
@@ -290,7 +298,7 @@ impl Preview {
         pen.line((16.0, 100.0), (120.0, 100.0), wire);
         pen.line((70.0, 100.0), (70.0, 150.0), wire);
         let radius = width_px(self.values.junction_diameter_mm) / 2.0;
-        let junction = Path::circle(pen.at(70.0, 100.0), radius * unit);
+        let junction = Path::circle(pen.at(JUNCTION.0, JUNCTION.1), radius * unit);
         pen.frame.fill(&junction, self.ink.junction);
         for (y, half) in [(150.0, 12.0), (155.0, 8.0), (160.0, 4.0)] {
             pen.line((70.0 - half, y), (70.0 + half, y), port);
@@ -353,12 +361,12 @@ impl Preview {
         let bus_px = width_px(self.values.bus_width_mm);
         let mut bus = stroke(self.ink.bus, bus_px, unit);
         bus.line_cap = canvas::LineCap::Round;
-        pen.line((340.0, 48.0), (wide - 20.0, 48.0), bus);
+        pen.line((340.0, BUS_Y), (wide - 20.0, BUS_Y), bus);
         let fs = self.text_px();
         let font = self.text_font;
         pen.words(
             BUS_LABEL.into(),
-            (342.0, 48.0 - bus_px / 2.0 - 5.0),
+            (342.0, BUS_Y - bus_px / 2.0 - 5.0),
             fs,
             self.ink.net_label,
             font,
@@ -366,7 +374,7 @@ impl Preview {
         );
         let entry = stroke(self.ink.wire, width_px(self.values.wire_width_mm), unit);
         for (index, x) in [400.0_f32, 450.0, 500.0, 550.0].into_iter().enumerate() {
-            pen.line((x, 48.0), (x + 10.0, 58.0), entry);
+            pen.line((x, BUS_Y), (x + 10.0, 58.0), entry);
             pen.line((x + 10.0, 58.0), (x + 10.0, 94.0), entry);
             pen.words(
                 format!("{BUS_MEMBER}{index}"),
@@ -398,21 +406,12 @@ impl Preview {
 
     /// Each value beside its item.
     fn draw_labels(&self, pen: &mut Pen<'_>, wide: f32) {
-        let (top_left, size) = shape_box(wide);
         for label in &self.labels {
-            let (at, align) = match label.field {
-                SchematicDefaultField::WireWidth => ((96.0, 92.0), TextAlign::Center),
-                SchematicDefaultField::JunctionDiameter => ((80.0, 122.0), TextAlign::Left),
-                SchematicDefaultField::SymbolLineWidth => ((160.0, 150.0), TextAlign::Center),
-                SchematicDefaultField::TextSize => ((255.0, 122.0), TextAlign::Center),
-                SchematicDefaultField::BusWidth => ((wide - 22.0, 70.0), TextAlign::Right),
-                SchematicDefaultField::ShapeStroke => (
-                    (
-                        top_left.0 + size.0 / 2.0,
-                        top_left.1 + size.1 / 2.0 + LABEL_PX / 2.0,
-                    ),
-                    TextAlign::Center,
-                ),
+            let (at, anchor) = label_place(label.field, wide);
+            let align = match anchor {
+                LabelAnchor::Start => TextAlign::Left,
+                LabelAnchor::Middle => TextAlign::Center,
+                LabelAnchor::End => TextAlign::Right,
             };
             let (color, font) = match label.look {
                 LabelLook::Set => (self.ink.label, self.label_font),
@@ -426,6 +425,26 @@ impl Preview {
             };
             pen.words(label.words.clone(), at, LABEL_PX, color, font, align);
         }
+    }
+}
+
+/// Where `field`'s words are written (their baseline, in layout units) and
+/// how they sit on that point, on a drawing `wide` layout units across.
+pub(super) fn label_place(field: SchematicDefaultField, wide: f32) -> ((f32, f32), LabelAnchor) {
+    let (top_left, size) = shape_box(wide);
+    match field {
+        SchematicDefaultField::WireWidth => ((96.0, 92.0), LabelAnchor::Middle),
+        SchematicDefaultField::JunctionDiameter => ((80.0, 122.0), LabelAnchor::Start),
+        SchematicDefaultField::SymbolLineWidth => ((160.0, 150.0), LabelAnchor::Middle),
+        SchematicDefaultField::TextSize => ((255.0, 122.0), LabelAnchor::Middle),
+        SchematicDefaultField::BusWidth => ((wide - 22.0, 70.0), LabelAnchor::End),
+        SchematicDefaultField::ShapeStroke => (
+            (
+                top_left.0 + size.0 / 2.0,
+                top_left.1 + size.1 / 2.0 + LABEL_PX / 2.0,
+            ),
+            LabelAnchor::Middle,
+        ),
     }
 }
 

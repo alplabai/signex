@@ -54,6 +54,17 @@ fn the_bus_width_falls_back_project_built_in_and_beats_the_wire() {
     );
 }
 
+/// #2813: a bus's own width beats the project's; unset follows it.
+#[test]
+fn a_bus_line_uses_its_own_width_then_the_project_then_the_built_in() {
+    let p = project(0.0, 0.6);
+    assert_eq!(p.bus_line_mm(1.0), 1.0, "own beats the project");
+    assert_eq!(p.bus_line_mm(0.0), 0.6, "unset follows the project");
+    assert_eq!(B.bus_line_mm(0.0), 0.45, "built-in last");
+    assert_eq!(B.bus_line_mm(0.01), 0.15, "never under the floor");
+    assert_eq!(B.bus_line_mm(f64::NAN), 0.45, "an unusable width is unset");
+}
+
 #[test]
 fn a_pin_draws_as_wide_as_a_wire_by_default() {
     let unset_symbol = B.symbol_stroke_mm([0.0, 0.0]);

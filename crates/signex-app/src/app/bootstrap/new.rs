@@ -401,6 +401,7 @@ impl Signex {
                 selected_segment,
                 preferences_draft_selected_segment: selected_segment,
                 i18n: std::sync::Arc::clone(&i18n),
+                project_preview: Default::default(),
                 // Mockup row 144a — seeded again (with its preview and the system
                 // language name) each time Preferences opens.
                 preferences_pages: Box::new(crate::preferences::PreferencesPagesState::new(
@@ -684,6 +685,7 @@ impl Signex {
                     library_row_detail: None,
                     component_sheet: None,
                     pcb_nets: None,
+                    pcb_panel: Default::default(),
                     net_inspector: Default::default(),
                     compiled_design: Default::default(),
                     unions: Default::default(),
@@ -699,6 +701,9 @@ impl Signex {
                     multi_groups: Default::default(),
                     placed: Default::default(),
                     multi_draft: None,
+                    multi_footprint_choices: vec![],
+                    visible_grid_draft: None,
+                    snap_grid_draft: None,
                     symbol_choices: vec![],
                     footprint_choices: vec![],
                     footprint_card: None,
