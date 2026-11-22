@@ -9,6 +9,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, SegmentedStyle, text, text_input};
 
 use super::super::super::PanelMsg;
+use crate::library::editor::footprint::pad_field;
 use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale, ti};
 
@@ -22,6 +23,8 @@ pub(in crate::panels::footprint_editor_properties) enum Refusal {
     NotPositive,
     /// The size leaves a trapezoid with no copper.
     NoCopper,
+    /// A corner radius outside `pad_field::CORNER_RADIUS_PCT`.
+    CornerRadiusRange,
 }
 
 impl Refusal {
@@ -41,11 +44,20 @@ impl Refusal {
         }
     }
 
+    /// Why `text` was not taken as a corner radius.
+    fn of_corner_radius(text: &str) -> Option<Self> {
+        let Ok(value) = signex_types::numeric::parse_finite_f64(text) else {
+            return Some(Refusal::NotANumber);
+        };
+        (!pad_field::CORNER_RADIUS_PCT.contains(&value)).then_some(Refusal::CornerRadiusRange)
+    }
+
     fn message(self) -> MessageId {
         match self {
             Refusal::NotANumber => ids::EDITORS_FP_PAD_INVALID_NUMBER,
             Refusal::NotPositive => ids::EDITORS_FP_PAD_INVALID_POSITIVE,
             Refusal::NoCopper => ids::EDITORS_FP_PAD_INVALID_NO_COPPER,
+            Refusal::CornerRadiusRange => ids::EDITORS_FP_PAD_INVALID_CORNER_RADIUS,
         }
     }
 }
@@ -75,6 +87,21 @@ impl Shown {
         match buffer {
             Some(text) => Self {
                 refusal: Refusal::of(text, positive, fits),
+                text: text.clone(),
+            },
+            None => Self::value(stored),
+        }
+    }
+
+    /// A corner radius field: `buffer` (refused text) when present, with
+    /// the reason it was refused, else `stored`.
+    pub(in crate::panels::footprint_editor_properties) fn corner_radius(
+        buffer: Option<&String>,
+        stored: String,
+    ) -> Self {
+        match buffer {
+            Some(text) => Self {
+                refusal: Refusal::of_corner_radius(text),
                 text: text.clone(),
             },
             None => Self::value(stored),
@@ -213,5 +240,20 @@ mod tests {
             Some(Refusal::NoCopper)
         );
         assert_eq!(Refusal::of("2", true, |v| v > 1.0), None);
+    }
+
+    #[test]
+    fn a_corner_radius_is_refused_outside_its_range() {
+        for fine in ["0", "25", "50"] {
+            assert_eq!(Refusal::of_corner_radius(fine), None, "{fine}");
+        }
+        for bad in ["60", "-1", "50.1"] {
+            assert_eq!(
+                Refusal::of_corner_radius(bad),
+                Some(Refusal::CornerRadiusRange),
+                "{bad}"
+            );
+        }
+        assert_eq!(Refusal::of_corner_radius("x"), Some(Refusal::NotANumber));
     }
 }

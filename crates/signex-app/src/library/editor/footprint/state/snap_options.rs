@@ -115,6 +115,13 @@ impl Default for SnapOptions {
 }
 
 impl SnapOptions {
+    /// What Snap Distance and Axis Snap Range take, in mm.
+    pub const REACH_RANGE_MM: std::ops::RangeInclusive<f64> = 0.001..=100.0;
+    /// The `numeric_buffers` key of Snap Distance's refused text.
+    pub const DISTANCE_BUFFER: &'static str = "snap.distance";
+    /// The `numeric_buffers` key of Axis Snap Range's refused text.
+    pub const AXIS_RANGE_BUFFER: &'static str = "snap.axis_range";
+
     /// Whether the cursor rounds to the grid: the Grids switch of the Snap
     /// menu and Properties is on, and the step is usable.
     pub fn snaps_to_grid(&self) -> bool {

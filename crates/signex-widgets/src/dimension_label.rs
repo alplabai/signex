@@ -341,6 +341,26 @@ impl DimensionLabels {
         })
     }
 
+    /// Whether `event` must not reach [`Self::update`] because it would
+    /// close the open field on refused text. Enter, Tab, a blur and a press
+    /// on another label wait; Esc still closes the field.
+    pub fn event_refused(
+        &self,
+        event: &DimensionLabelMessage,
+        labels: &[DimensionLabel<'_>],
+    ) -> bool {
+        use DimensionLabelMessage as M;
+        let open = self.editing_index();
+        match *event {
+            M::DraftSubmitted | M::TabPressed { .. } => self.draft_refused(labels),
+            M::LabelPressed(i) | M::HandlePressed(i) => {
+                open.is_some_and(|o| o != i) && self.draft_refused(labels)
+            }
+            M::DraftBlurred(i) => open == Some(i) && self.draft_refused(labels),
+            _ => false,
+        }
+    }
+
     /// Index of the label whose handle is held.
     pub fn dragging_index(&self) -> Option<usize> {
         self.drag.map(|d| d.index)
@@ -800,6 +820,36 @@ mod tests {
         }
         s.update(DimensionLabelMessage::DraftEdited("0.25".into()), &items);
         assert!(!s.draft_refused(&items));
+    }
+
+    /// Everything that would close the field waits on refused text, except
+    /// Esc; a number lets them all through.
+    #[test]
+    fn refused_text_holds_every_event_that_would_close_the_field() {
+        use DimensionLabelMessage as M;
+        let items = labels();
+        let mut s = DimensionLabels::default();
+        s.update(M::LabelPressed(1), &items);
+        s.update(M::DraftEdited("abc".into()), &items);
+        let closing = [
+            M::DraftSubmitted,
+            M::TabPressed { backward: false },
+            M::DraftBlurred(1),
+            M::LabelPressed(0),
+            M::HandlePressed(0),
+        ];
+        for event in &closing {
+            assert!(s.event_refused(event, &items), "{event:?}");
+        }
+        assert!(!s.event_refused(&M::EscapePressed, &items));
+        assert!(
+            !s.event_refused(&M::DraftBlurred(0), &items),
+            "another label"
+        );
+        s.update(M::DraftEdited("0.25".into()), &items);
+        for event in &closing {
+            assert!(!s.event_refused(event, &items), "{event:?}");
+        }
     }
 
     #[test]

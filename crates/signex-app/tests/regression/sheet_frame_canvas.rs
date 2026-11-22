@@ -199,10 +199,10 @@ fn custom_edges_persist_and_stay_within_the_pdf_limits() {
     assert_eq!(page_mm(&app), (400.0, 210.0));
 
     type_edge(&mut app, PaperEdge::Height, "2");
-    assert_eq!(stored_paper(&app), "Custom 400x10");
+    assert_eq!(stored_paper(&app), "Custom 400x210");
 
     type_edge(&mut app, PaperEdge::Width, "100000");
-    assert_eq!(stored_paper(&app), "Custom 5080x10");
+    assert_eq!(stored_paper(&app), "Custom 400x210");
 
     let (size, orientation) = SheetSize::parse(&stored_paper(&app));
     assert!(size.is_recognized());
@@ -222,6 +222,37 @@ fn type_edge(app: &mut Signex, edge: PaperEdge, text: &str) {
         panel(app, PanelMsg::CustomPaperEdgeTyping(edge, typed.clone()));
     }
     panel(app, PanelMsg::CommitCustomPaperEdge(edge));
+}
+
+/// #2792 — an edge outside the custom range changes nothing and its text
+/// stays in the box; fixing it commits, and both ends of the range are taken.
+#[test]
+fn a_custom_edge_outside_the_range_is_refused_with_its_text_kept() {
+    let mut app = app_with_title_block();
+    type_edge(&mut app, PaperEdge::Width, "400");
+    let sheet = app.document_state.active_path.clone().expect("a sheet");
+    for bad in ["2", "9.99", "5080.1", "abc"] {
+        type_edge(&mut app, PaperEdge::Width, bad);
+        assert_eq!(stored_paper(&app), "Custom 400x210", "{bad}");
+        assert_eq!(
+            app.document_state
+                .drafts
+                .paper_edge_text(&sheet, PaperEdge::Width)
+                .as_deref(),
+            Some(bad),
+            "the box keeps {bad}"
+        );
+    }
+    type_edge(&mut app, PaperEdge::Width, "5080");
+    type_edge(&mut app, PaperEdge::Height, "10");
+    assert_eq!(stored_paper(&app), "Custom 5080x10");
+    assert!(
+        app.document_state
+            .drafts
+            .paper_edge_text(&sheet, PaperEdge::Width)
+            .is_none(),
+        "a value taken ends the draft"
+    );
 }
 
 /// #1082 — typing `400` keystroke by keystroke does not clamp the partial `4`
