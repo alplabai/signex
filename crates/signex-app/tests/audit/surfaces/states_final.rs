@@ -77,13 +77,13 @@ fn pointer_rows() -> Vec<Surface> {
             "m166-menu",
             "View > Window > Layouts open",
             open_sheet,
-            // The View menu is taller than 900 px. Window follows 34 rows
+            // The View menu is taller than 900 px. Window follows 36 rows
             // and 4 separators; Layouts follows 3 rows and a separator.
             WindowSel::MainPointerTall(
                 &[
                     PointerStep::Click("View"),
-                    PointerStep::HoverAt(260, 1037),
-                    PointerStep::HoverAt(480, 1130),
+                    PointerStep::HoverAt(260, 1093),
+                    PointerStep::HoverAt(480, 1186),
                 ],
                 1400,
             ),

@@ -547,6 +547,41 @@ fn open_board_sketch(
     Ok(())
 }
 
+/// A 10 x 10 mm square on BOARD and a hole on HOLES.
+const SKETCH_DXF: &str = "0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n\
+0\nSECTION\n2\nENTITIES\n\
+0\nLINE\n8\nBOARD\n10\n0\n20\n0\n11\n10\n21\n0\n\
+0\nLINE\n8\nBOARD\n10\n10\n20\n0\n11\n10\n21\n10\n\
+0\nLINE\n8\nBOARD\n10\n10\n20\n10\n11\n0\n21\n10\n\
+0\nLINE\n8\nBOARD\n10\n0\n20\n10\n11\n0\n21\n0\n\
+0\nCIRCLE\n8\nHOLES\n10\n5\n20\n5\n40\n1\n\
+0\nENDSEC\n0\nEOF\n";
+
+fn open_board_sketch_dxf(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &fixture::Fixture,
+) -> Result<(), String> {
+    open_board_sketch(app, r, fx)?;
+    let board = app
+        .interaction_state
+        .board_sketch
+        .as_ref()
+        .ok_or("no board sketch")?
+        .board_path
+        .clone();
+    let source = signex_engine::pcb::dxf::DxfSource::read(SKETCH_DXF).map_err(|e| e.to_string())?;
+    let _ = app.update(signex_app::app::Message::Pcb(signex_app::app::PcbMsg::DxfImport(
+        signex_app::app::DxfImportMsg::SketchRead {
+            board,
+            path: "lid.dxf".into(),
+            source: Ok(std::sync::Arc::new(source)),
+        },
+    )));
+    let _ = render::draw_main(r, app);
+    Ok(())
+}
+
 fn board_sketch_rows() -> Vec<Surface> {
     vec![
         Surface {
@@ -570,9 +605,13 @@ fn board_sketch_rows() -> Vec<Surface> {
             window: WindowSel::Auto,
             checks: BOARD_SKETCH,
         },
-        missing("m179c", "Import DXF into the sketch", |_, _, _| {
-            Err("not built: Import DXF picks a file and imports at once; board sketch has no import dialog".into())
-        }),
+        Surface {
+            id: "m179c",
+            title: "Import DXF into the sketch",
+            open: open_board_sketch_dxf,
+            window: WindowSel::Auto,
+            checks: BOARD_SKETCH,
+        },
         Surface {
             id: "m179d",
             title: "Outline checks",
