@@ -7,7 +7,9 @@
 
 use signex_app::app::{Message, Signex, SymbolDocument, TabInfo, TabKind};
 use signex_app::dock::DockMessage;
-use signex_app::library::editor::symbol::{PartChip, PartStep, SymbolPropsMsg, SymbolPropsTab};
+use signex_app::library::editor::symbol::{
+    BodyScope, PartChip, PartStep, SymbolPropsMsg, SymbolPropsTab, SymbolSelection,
+};
 use signex_app::library::messages::{LibraryMessage, PrimitiveEdit, SymbolEditorMsg};
 use signex_app::panels::{PanelMsg, SymbolEditorSelection};
 use signex_library::{Symbol, SymbolFile};
@@ -120,6 +122,27 @@ fn the_parts_stepper_adds_a_part_and_steps_back() {
     );
     assert_eq!(app.document_state.symbol_editors[&path].active_part, 1);
     assert_eq!(shown(&app).active_part, 1);
+}
+
+/// Mockup row 123: Applies to retags the selection as one undo step, and
+/// the row follows.
+#[test]
+fn applies_to_retags_the_selection_as_one_undo_step() {
+    let (mut app, path) = symbol_app();
+    let editor = app.document_state.symbol_editors.get_mut(&path).unwrap();
+    editor.selected = Some(SymbolSelection::All);
+    let before = editor.history.undo_len();
+    props(&mut app, SymbolPropsMsg::BodyScopePicked(BodyScope::Both));
+    let editor = &app.document_state.symbol_editors[&path];
+    assert!(
+        editor
+            .primitive()
+            .pins
+            .iter()
+            .all(|p| p.body_style == signex_library::BODY_COMMON)
+    );
+    assert_eq!(editor.history.undo_len(), before + 1);
+    assert_eq!(shown(&app).body_scope.scope, Some(BodyScope::Both));
 }
 
 #[test]

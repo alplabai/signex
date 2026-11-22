@@ -72,6 +72,8 @@ pub struct SymbolEditorPanelContext {
     pub active_has_part_zero: bool,
     /// The body (normal or alternate) the editor shows.
     pub active_body: signex_types::schematic::BodyStyle,
+    /// The Parts section's Applies to row (mockup row 123).
+    pub body_scope: crate::library::editor::symbol::BodyScopeRow,
     /// The shapes and pins of the part and body the editor shows, for the
     /// Symbol tab's illustration.
     pub part_drawing: PartDrawing,

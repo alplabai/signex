@@ -5,6 +5,8 @@
 use signex_types::schematic::BodyStyle;
 use signex_widgets::property_illustration::{IllustrationHover, IllustrationMsg};
 
+use super::BodyScope;
+
 /// The tab the Properties panel shows while nothing is selected.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SymbolPropsTab {
@@ -47,6 +49,8 @@ pub enum SymbolPropsMsg {
     PinTableToggled,
     PartStepPressed(PartStep),
     BodyPicked(BodyStyle),
+    /// Applies to: retag the selection for both bodies or the shown one.
+    BodyScopePicked(BodyScope),
     IllustrationHovered(IllustrationMsg),
 }
 
@@ -78,7 +82,8 @@ impl SymbolPropsUi {
             }
             SymbolPropsMsg::AddPinPressed
             | SymbolPropsMsg::PartStepPressed(_)
-            | SymbolPropsMsg::BodyPicked(_) => return false,
+            | SymbolPropsMsg::BodyPicked(_)
+            | SymbolPropsMsg::BodyScopePicked(_) => return false,
         }
         true
     }
@@ -128,6 +133,13 @@ mod tests {
         ] {
             assert!(!ui.apply(&msg), "{msg:?}");
         }
+        assert_eq!(ui, SymbolPropsUi::default());
+    }
+
+    #[test]
+    fn the_applies_to_choice_is_left_to_the_editor() {
+        let mut ui = SymbolPropsUi::default();
+        assert!(!ui.apply(&SymbolPropsMsg::BodyScopePicked(BodyScope::Both)));
         assert_eq!(ui, SymbolPropsUi::default());
     }
 

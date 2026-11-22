@@ -88,6 +88,7 @@ define_ids! {
     EDITORS_SYMPROPS_GRAPHICS = "editors-symprops-graphics";
     EDITORS_SYMPROPS_SECTION_PARTS = "editors-symprops-section-parts";
     EDITORS_SYMPROPS_PART = "editors-symprops-part";
+    EDITORS_SYMPROPS_APPLIES_TO = "editors-symprops-applies-to";
     EDITORS_SYMPROPS_PREVIOUS_PART = "editors-symprops-previous-part";
     EDITORS_SYMPROPS_NEXT_PART = "editors-symprops-next-part";
     EDITORS_SYMPROPS_PREVIOUS_PART_TIP = "editors-symprops-previous-part-tip";

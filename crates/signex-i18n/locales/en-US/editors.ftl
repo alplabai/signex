@@ -574,6 +574,8 @@ editors-symprops-uuid = UUID
 editors-symprops-graphics = Graphics
 editors-symprops-section-parts = Parts
 editors-symprops-part = Part
+# Whether the selected items belong to both bodies or only the body shown.
+editors-symprops-applies-to = Applies to
 # Part stepper buttons.
 editors-symprops-previous-part = ‹
 editors-symprops-next-part = ›

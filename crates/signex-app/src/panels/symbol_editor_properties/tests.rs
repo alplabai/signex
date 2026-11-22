@@ -89,6 +89,7 @@ fn ctx(pins: Vec<SymbolPinSummary>, selected: SymbolEditorSelection) -> SymbolEd
         active_max_part: 2,
         active_has_part_zero: true,
         active_body: signex_types::schematic::BodyStyle::Normal,
+        body_scope: Default::default(),
         part_drawing: PartDrawing::default(),
         props: Default::default(),
         display: SymbolDisplayOptions::default(),
@@ -436,6 +437,34 @@ fn the_pin_table_opens_from_the_pins_tab_and_toggles_hidden_in_place() {
         messages
             .iter()
             .any(|m| matches!(m, PanelMsg::SymEditorTogglePinHidden(6))),
+        "{messages:?}"
+    );
+}
+
+/// Mockup row 123: Applies to acts on a selection, and with nothing selected
+/// it shows the scope but sends nothing.
+#[test]
+fn applies_to_sends_its_choice_only_with_a_selection() {
+    use crate::library::editor::symbol::{BodyScope, BodyScopeRow};
+    let fx = Fixture::new();
+    let mut sym = ctx(opamp_pins(), SymbolEditorSelection::None);
+    let both = t!(fx.i18n, ids::EDITORS_SYMBOL_BODY_BOTH).into_string();
+    let click = |sym: &SymbolEditorPanelContext| {
+        let rows = super::symbol::view(sym, &fx.form(), iced::Color::BLACK);
+        messages_on_click(stacked(rows), DOCK, &both)
+    };
+    sym.body_scope = BodyScopeRow {
+        scope: Some(BodyScope::Both),
+        can_assign: false,
+    };
+    assert!(click(&sym).is_empty());
+    sym.body_scope.can_assign = true;
+    let messages = click(&sym);
+    assert!(
+        messages.iter().any(|m| matches!(
+            m,
+            PanelMsg::SymbolProps(SymbolPropsMsg::BodyScopePicked(BodyScope::Both))
+        )),
         "{messages:?}"
     );
 }

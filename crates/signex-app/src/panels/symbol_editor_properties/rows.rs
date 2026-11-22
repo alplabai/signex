@@ -422,8 +422,23 @@ impl<'f> Form<'f> {
         &self,
         options: Vec<(Localized, bool, PanelMsg)>,
     ) -> Element<'a, PanelMsg> {
+        self.segmented_maybe(
+            options
+                .into_iter()
+                .map(|(label, active, msg)| (label, active, Some(msg)))
+                .collect(),
+        )
+    }
+
+    /// [`Self::segmented`] whose cells may be disabled: `None` keeps the
+    /// cell's lit state and greys its label.
+    pub fn segmented_maybe<'a>(
+        &self,
+        options: Vec<(Localized, bool, Option<PanelMsg>)>,
+    ) -> Element<'a, PanelMsg> {
         let mut cells: Vec<Element<'a, PanelMsg>> = Vec::with_capacity(options.len());
         for (label, active, msg) in options {
+            let enabled = msg.is_some();
             let cell = button(
                 text(label)
                     .size(TS.body)
@@ -432,10 +447,14 @@ impl<'f> Form<'f> {
                     .ellipsis(iced::widget::text::Ellipsis::End),
             )
             .padding([SP.xs, SP.xs])
-            .on_press(msg)
+            .on_press_maybe(msg)
             .style(move |theme: &Theme, status: button::Status| {
                 let hovered = matches!(status, button::Status::Hovered);
-                form_look::segment_cell(theme, active, hovered && !active)
+                let mut style = form_look::segment_cell(theme, active, hovered && !active);
+                if !enabled {
+                    style.text_color = form_look::FormLook::of(theme).ink4;
+                }
+                style
             });
             cells.push(cell.boxed());
         }

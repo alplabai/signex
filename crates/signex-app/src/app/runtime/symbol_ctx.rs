@@ -171,6 +171,7 @@ pub(super) fn build_symbol_editor_panel_ctx(
         active_max_part,
         active_has_part_zero,
         active_body: editor.active_body,
+        body_scope: sym_state::body_scope_row(sym, &editor.selected, editor.view()),
         part_drawing: SymbolEditorPanelContext::part_drawing_of(
             sym,
             |g| sym_state::graphic_on_part(g, editor.view()),

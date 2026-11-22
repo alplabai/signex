@@ -10,7 +10,7 @@ use super::super::{ColorFieldProps, PanelMsg, SymbolEditorPanelContext, color_fi
 use super::illustration::{self, field};
 use super::rows::{Form, SP, props};
 use super::{part_name, pins_tab};
-use crate::library::editor::symbol::{PartStep, SymbolPropsMsg, SymbolPropsTab};
+use crate::library::editor::symbol::{BodyScope, PartStep, SymbolPropsMsg, SymbolPropsTab};
 use crate::styles::PillTone;
 
 /// Section keys (`PanelMsg::ToggleSection`).
@@ -229,7 +229,31 @@ fn parts_rows<'a>(sym: &SymbolEditorPanelContext, form: &Form<'_>) -> Vec<Elemen
             ]),
             None,
         ),
+        applies_to_row(sym, form),
     ]
+}
+
+/// Applies to (mockup row 123): the canvas bar's Both / This only on the
+/// selection. With nothing selected it shows the shown items' scope, disabled.
+fn applies_to_row<'a>(sym: &SymbolEditorPanelContext, form: &Form<'_>) -> Element<'a, PanelMsg> {
+    let i18n = form.i18n;
+    let row = sym.body_scope;
+    let cell = |scope: BodyScope, id: signex_i18n::MessageId| {
+        (
+            t!(i18n, id),
+            row.scope == Some(scope),
+            row.can_assign
+                .then(|| props(SymbolPropsMsg::BodyScopePicked(scope))),
+        )
+    };
+    form.field(
+        t!(i18n, ids::EDITORS_SYMPROPS_APPLIES_TO),
+        form.segmented_maybe(vec![
+            cell(BodyScope::Both, ids::EDITORS_SYMBOL_BODY_BOTH),
+            cell(BodyScope::ThisOnly, ids::EDITORS_SYMBOL_BODY_THIS_ONLY),
+        ]),
+        None,
+    )
 }
 
 fn graphical_rows<'a>(
