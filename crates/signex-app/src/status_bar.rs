@@ -74,6 +74,9 @@ pub(crate) struct SurfaceReadout {
     /// A project is open and this window shows no document (mockup row 2):
     /// the bar keeps the cursor columns, empty, and Panels.
     pub no_document: bool,
+    /// Skipped libraries still missing (mockup row 138); above zero the bar
+    /// shows the Library Missing chip.
+    pub missing_libraries: usize,
 }
 
 /// The board's active layer pill: a caption, the name and the colour the

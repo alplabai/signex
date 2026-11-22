@@ -20,9 +20,24 @@ pub struct MissingLibraries {
     open_owner: Option<ProjectId>,
     /// Library a Locate file pick is in flight for.
     locating: Option<PathBuf>,
+    /// Libraries whose dialog was skipped; the status bar chip lists those
+    /// an open project still names and that are still not mounted.
+    skipped: Vec<PathBuf>,
 }
 
 impl MissingLibraries {
+    /// Remember that the dialog of `path` was skipped.
+    pub fn skip(&mut self, path: &Path) {
+        if !self.skipped.iter().any(|p| p == path) {
+            self.skipped.push(path.to_path_buf());
+        }
+    }
+
+    /// Every library whose dialog was skipped, oldest first.
+    pub fn skipped(&self) -> &[PathBuf] {
+        &self.skipped
+    }
+
     /// Remember which library the Locate pick in flight is for.
     pub fn start_locating(&mut self, path: PathBuf) {
         self.locating = Some(path);

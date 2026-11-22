@@ -79,11 +79,17 @@ pub(super) fn filter_field<'a>(
     .center_y(FILTER_HEIGHT)
     .width(Length::Fill)
     .style(crate::styles::field(tokens, false));
+    // The header row holds the side insets.
     container(field)
-        .padding([8.0, EDGE])
+        .padding([8.0, 0.0])
         .width(Length::Fill)
         .boxed()
 }
+
+/// Width the filter keeps beside Add and Previews, so its text stays
+/// readable; when the dock cannot hold all three, Previews wraps below
+/// (mockup row 52).
+const FILTER_ROW_W: f32 = TS.body * 10.5;
 
 /// Height of a source chip.
 const CHIP_HEIGHT: f32 = 22.0;
@@ -110,15 +116,14 @@ pub(super) fn header_row<'a>(
     .on_press(LibraryMessage::ComponentsPanelAddMenuToggled)
     .style(crate::panels::form_look::ghost_button);
     row![
-        container(filter).width(Length::Fill),
+        container(filter).width(Length::Fixed(FILTER_ROW_W)),
         add,
-        container(previews_switch(row_style, tokens, i18n)).padding(Padding {
-            right: EDGE,
-            ..Padding::ZERO
-        })
+        previews_switch(row_style, tokens, i18n),
     ]
     .spacing(CHEVRON_GAP)
+    .padding([0.0, EDGE])
     .align_y(Alignment::Center)
+    .wrap()
     .boxed()
 }
 
@@ -374,6 +379,23 @@ pub(super) fn separator(tokens: &ThemeTokens) -> Color {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Mockup row 52: in a narrow dock the filter keeps its width and Add
+    /// sits after it.
+    #[test]
+    fn the_filter_keeps_its_width_in_a_narrow_dock() {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us_ref();
+        let header = header_row(
+            filter_field("", &tokens, i18n),
+            ComponentsRowStyle::default(),
+            &tokens,
+            i18n,
+        );
+        let texts = crate::layout_probe::lay_out_texts(header, iced::Size::new(240.0, 120.0));
+        let add = crate::layout_probe::find(&texts, "Add");
+        assert!(add.bounds.x >= FILTER_ROW_W, "Add at {:?}", add.bounds);
+    }
 
     #[test]
     fn section_chevron_box_is_the_shared_one_for_the_body_size() {

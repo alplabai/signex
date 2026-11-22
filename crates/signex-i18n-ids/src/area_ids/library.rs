@@ -177,6 +177,10 @@ define_ids! {
     LIBRARY_PRIMITIVE_PICKER_COPYING = "library-primitive-picker-copying";
     LIBRARY_PRIMITIVE_PICKER_OPENING = "library-primitive-picker-opening";
     LIBRARY_PRIMITIVE_PICKER_NOT_LISTED = "library-primitive-picker-not-listed";
+    LIBRARY_PRIMITIVE_PICKER_PICK = "library-primitive-picker-pick";
+    LIBRARY_PRIMITIVE_PICKER_PREVIEW_EMPTY = "library-primitive-picker-preview-empty";
+    LIBRARY_PRIMITIVE_PICKER_PREVIEW_FACTS = "library-primitive-picker-preview-facts";
+    LIBRARY_RECOVERY_MISSING_CHIP = "library-recovery-missing-chip";
     LIBRARY_DOCUMENT_OPTIONS_NOTE = "library-document-options-note";
     LIBRARY_DOCUMENT_OPTIONS_SHEET_COLOR = "library-document-options-sheet-color";
     LIBRARY_DOCUMENT_OPTIONS_GRID = "library-document-options-grid";

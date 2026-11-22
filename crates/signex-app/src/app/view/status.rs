@@ -50,6 +50,7 @@ impl Signex {
                 opens_grid_popover: self.status_sheet_tab(window_id).is_some(),
                 board: self.status_board(window_id),
                 no_document: self.status_shows_no_document(window_id),
+                missing_libraries: self.skipped_missing_libraries().len(),
             },
             &self.ui_state.i18n,
         );

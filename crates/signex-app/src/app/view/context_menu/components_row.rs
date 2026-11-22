@@ -1,4 +1,5 @@
-//! Right-click menu of a Components panel row (Place, Edit Component) and
+//! Right-click menu of a Components panel row (Place, Edit Component, Copy
+//! Part Number) and
 //! the card that follows a row dragged toward the canvas (#2535).
 
 use super::*;
@@ -37,6 +38,13 @@ pub(super) fn components_row_menu_entries(
             &text(i18n, menu_ids::CTX_COMPONENTS_ROW_EDIT),
             "",
             pick(ComponentsRowAction::Open),
+        ),
+        DropdownEntry::Separator,
+        dd_msg(
+            Some(crate::icons::icon_dd_copy(theme)),
+            &text(i18n, menu_ids::CTX_COMPONENTS_ROW_COPY_PART_NUMBER),
+            "",
+            pick(ComponentsRowAction::CopyPartNumber),
         ),
     ]
 }
@@ -216,8 +224,8 @@ mod tests {
             .collect()
     }
 
-    /// Place (with Enter on the right) and Edit Component, both with an
-    /// icon so the labels align; no Copy Part Number (an open decision).
+    /// Place (with Enter on the right), Edit Component and, below a
+    /// separator, Copy Part Number, all with an icon so the labels align.
     #[test]
     fn the_menu_offers_place_with_its_key_and_edit_component() {
         let entries =
@@ -231,6 +239,7 @@ mod tests {
             [
                 ("Place".to_owned(), Some("Enter".to_owned())),
                 ("Edit Component".to_owned(), None),
+                ("Copy Part Number".to_owned(), None),
             ]
         );
     }
@@ -299,7 +308,7 @@ mod tests {
         let menu = overlay.remove(1);
         let texts = lay_out_texts(menu, iced::Size::new(1400.0, 900.0));
 
-        for label in ["Place", "Edit Component"] {
+        for label in ["Place", "Edit Component", "Copy Part Number"] {
             let alone = natural::<()>(
                 // The size the dropdown draws its labels at.
                 signex_widgets::text(signex_widgets::raw(label))

@@ -339,7 +339,18 @@ pub(super) fn derive_columns(
     }
     let mut sorted: Vec<(String, usize)> = counts.into_iter().collect();
     sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    for (key, _) in sorted.into_iter().take(MAX_PARAM_COLUMNS) {
+    // A key the class template already gave a column keeps that one.
+    let templated: std::collections::BTreeSet<String> = columns
+        .iter()
+        .filter_map(|c| match &c.kind {
+            ColumnKind::Parameter(key) => Some(key.clone()),
+            _ => None,
+        })
+        .collect();
+    let extra = sorted
+        .into_iter()
+        .filter(|(key, _)| !templated.contains(key));
+    for (key, _) in extra.take(MAX_PARAM_COLUMNS) {
         columns.push(GridColumn {
             label: crate::library::range_filter::parameter_label(&key),
             kind: ColumnKind::Parameter(key),
@@ -417,6 +428,23 @@ mod sort_tests {
             content_hash: [0u8; 32],
             server_revision: None,
         }
+    }
+
+    /// Mockup row 118: a parameter of the class template and of the rows
+    /// gets one column.
+    #[test]
+    fn a_template_parameter_held_by_the_rows_gets_one_column() {
+        let mut rows = vec![row_with(10.0, "ohm")];
+        rows[0].class = ComponentClass::new("resistor");
+        let registry = signex_library::TemplateRegistry::new_with_builtins();
+        let pricing = std::collections::HashMap::new();
+        let prices = super::super::price::PriceView::new(&pricing, chrono::Utc::now(), &rows);
+        let columns = derive_columns(&rows, uuid::Uuid::nil(), &registry, "resistors", &prices);
+        let values = columns
+            .iter()
+            .filter(|c| matches!(&c.kind, ColumnKind::Parameter(k) if k == "value"))
+            .count();
+        assert_eq!(values, 1);
     }
 
     fn param_row(value: ParamValue) -> ComponentRow {

@@ -226,6 +226,32 @@ fn open_path(app: &Signex) -> Option<std::path::PathBuf> {
     }
 }
 
+/// Mockup row 138: a skipped library holds the chip while its project lists
+/// it, the chip reopens the dialog, and leaving the project clears it.
+#[test]
+fn a_skipped_library_holds_the_chip_until_it_leaves_the_project() {
+    use crate::library::recovery::LibraryMissingChoice::Cancel;
+    let skip = |app: &mut Signex| {
+        let _ = app.update(Message::Library(LibraryMessage::RecoveryLibraryMissing(
+            Cancel,
+        )));
+    };
+    let (mut app, _task) = Signex::new();
+    let (a, b, _, _dir) = two_missing(&mut app);
+    skip(&mut app);
+    skip(&mut app);
+    assert!(app.library.recovery.is_none());
+    assert_eq!(app.skipped_missing_libraries(), [a.clone(), b]);
+
+    app.reopen_skipped_library();
+    assert_eq!(open_path(&app), Some(a));
+    skip(&mut app);
+    assert_eq!(app.skipped_missing_libraries().len(), 2, "no duplicate");
+
+    app.document_state.projects[0].data.libraries.clear();
+    assert!(app.skipped_missing_libraries().is_empty());
+}
+
 #[test]
 fn two_missing_libraries_raise_two_dialogs_in_turn() {
     let (mut app, _task) = Signex::new();

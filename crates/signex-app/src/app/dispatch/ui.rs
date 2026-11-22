@@ -247,6 +247,10 @@ impl Signex {
                 self.handle_altium_import_cancel();
                 Task::none()
             }
+            UiMsg::StatusBar(StatusBarRequest::LibraryMissingChipClicked) => {
+                self.reopen_skipped_library();
+                Task::none()
+            }
             // `status_bar_message` names the window; a bare one is the main
             // window's.
             UiMsg::StatusBar(StatusBarRequest::GridReadoutRightClicked) => {

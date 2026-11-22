@@ -37,6 +37,7 @@ impl Signex {
             copy_confirm: None,
             copying: false,
             opening_library: None,
+            selection: Default::default(),
         });
         self.list_loose_symbols_task(kind)
     }
@@ -101,6 +102,12 @@ impl Signex {
             }
             PrimitivePickerMsg::LooseListed { read, from_browse } => {
                 self.handle_loose_listed(&read, from_browse)
+            }
+            PrimitivePickerMsg::RowHighlighted(choice) => {
+                self.handle_picker_row_highlighted(choice)
+            }
+            PrimitivePickerMsg::PreviewLoaded { generation, result } => {
+                self.handle_picker_preview_loaded(generation, result)
             }
             PrimitivePickerMsg::PickLoose(symbol) => self.handle_loose_chosen(symbol),
             PrimitivePickerMsg::CopyConfirmed => self.handle_copy_confirmed(),

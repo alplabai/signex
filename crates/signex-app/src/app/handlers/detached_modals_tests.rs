@@ -178,6 +178,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 copy_confirm: None,
                 copying: false,
                 opening_library: None,
+                selection: Default::default(),
             })
         }
         ModalId::LibraryDocumentOptions => {
