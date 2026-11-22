@@ -176,7 +176,12 @@ fn entry<'a, M: Clone + 'a>(
     if is_current {
         // A mark, not language.
         let mark = "\u{2713}";
-        line = line.push(text(UserText::new(mark)).size(TS.caption).color(ink).boxed());
+        line = line.push(
+            text(UserText::new(mark))
+                .size(TS.caption)
+                .color(ink)
+                .boxed(),
+        );
     }
     let soft = r.accent_soft;
     let idle = crate::styles::menu_item(tokens);
