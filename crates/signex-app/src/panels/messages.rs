@@ -1011,12 +1011,14 @@ pub enum PanelMsg {
     /// The user backed out of that Delete.
     SchLibraryDeleteCancelled,
     UpdateDrawingEdit(crate::app::contracts::DrawingFieldEdit),
-    /// Numeric text_input keystroke for a drawing field. The string
-    /// is stored verbatim in panel_ctx.drawing_edit_buf so empty /
-    /// partial input survives between frames; the handler parses
-    /// best-effort and fires UpdateDrawingEdit when the value is a
-    /// valid f64.
+    /// Numeric text_input keystroke for a drawing field. The string is
+    /// stored verbatim in panel_ctx.drawing_edit_buf so empty / partial
+    /// input survives between frames; a value the field can store is
+    /// previewed on the sheet until the field is left (#2768).
     DrawingFieldTyping(DrawingFieldId, String),
+    /// Enter in a drawing field, or the field lost the focus: the typed
+    /// value becomes one undo step.
+    DrawingFieldLeft(DrawingFieldId),
     /// The Properties of a Bezier, dimension or table (#1267, #1300).
     Annotation(super::AnnotationPanelMsg),
     /// Open / close the border-colour picker overlay for a child sheet.

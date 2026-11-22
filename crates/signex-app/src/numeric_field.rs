@@ -18,6 +18,15 @@ pub(crate) fn parse_field_f64(text: &str) -> Option<f64> {
     }
 }
 
+/// A typed line width: empty is 0, the default width; a number must be zero
+/// or more. `None` is refused (#2767).
+pub(crate) fn typed_line_width(text: &str) -> Option<f64> {
+    if text.trim().is_empty() {
+        return Some(0.0);
+    }
+    parse_finite_f64(text).ok().filter(|width| *width >= 0.0)
+}
+
 /// What a typed field's text is, for callers that treat "not a number"
 /// (fall back to text) differently from "refused" (keep the old value).
 #[derive(Clone, Copy, Debug, PartialEq)]

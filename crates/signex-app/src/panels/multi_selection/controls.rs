@@ -184,6 +184,9 @@ pub(in crate::panels) struct PairField<'a> {
     pub unit: signex_i18n::Localized,
     pub on_input: Box<dyn Fn(String) -> PanelMsg + 'a>,
     pub on_submit: Option<PanelMsg>,
+    pub on_blur: Option<PanelMsg>,
+    /// The error colour while the box holds text it refuses.
+    pub error: Option<Color>,
 }
 
 fn pair_half<'a>(half: PairField<'a>, muted: Color) -> Element<'a, PanelMsg> {
@@ -193,13 +196,16 @@ fn pair_half<'a>(half: PairField<'a>, muted: Color) -> Element<'a, PanelMsg> {
         unit,
         on_input,
         on_submit,
+        on_blur,
+        error,
     } = half;
     let mut input = signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value)
         .size(TS.body)
         .padding(SP.s)
         .width(Length::Fill)
         .on_input(on_input)
-        .style(form_look::text_input_style);
+        .on_blur_maybe(on_blur)
+        .style(form_look::refusable_input_style(error));
     if let Some(submit) = on_submit {
         input = input.on_submit(submit);
     }

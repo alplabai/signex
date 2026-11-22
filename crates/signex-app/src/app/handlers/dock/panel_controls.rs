@@ -82,6 +82,10 @@ impl Signex {
         &mut self,
         matches: impl Fn(&std::path::Path) -> bool,
     ) {
+        // A drawing value still being typed is written with the sheet (#2768).
+        if (self.document_state.live_drawing_edit.as_ref()).is_some_and(|l| matches(&l.path)) {
+            self.commit_live_drawing_edit();
+        }
         let picked = self.document_state.drafts.take_title_blocks_where(&matches);
         let active = self.document_state.active_path.clone();
         let (mine, others): (Vec<_>, Vec<_>) = picked
@@ -128,6 +132,7 @@ impl Signex {
             .into_iter()
             .chain(self.document_state.drafts.sheet_variable_sheets())
             .chain(self.typed_note_sheets())
+            .chain((self.document_state.live_drawing_edit.iter()).map(|live| live.path.clone()))
             .filter(|sheet| {
                 sheet == anchor
                     || project.is_some_and(|id| {
@@ -531,63 +536,10 @@ impl Signex {
                 }
             }
             crate::panels::PanelMsg::DrawingFieldTyping(field_id, text) => {
-                // Rebind the buffer ownership when selection changes
-                // so a prior drawing's half-typed text doesn't bleed
-                // into the newly selected one.
-                let current_uuid = self.document_state.panel_ctx.selected_uuid;
-                if self.document_state.panel_ctx.drawing_edit_buf_for != current_uuid {
-                    self.document_state.panel_ctx.drawing_edit_buf.clear();
-                    self.document_state.panel_ctx.drawing_edit_buf_for = current_uuid;
-                }
-                self.document_state
-                    .panel_ctx
-                    .drawing_edit_buf
-                    .insert(*field_id, text.clone());
-                // Emit the engine update only when the string parses
-                // cleanly — empty / partial input stays in the buffer
-                // so the user can keep typing.
-                if let Some(typed) = crate::numeric_field::parse_field_f64(text) {
-                    // A typed Y is read from the sheet's page origin (#2034).
-                    let v = match self.document_state.active_engine() {
-                        Some(engine) if field_id.is_page_y() => engine.document().page_y(typed),
-                        _ => typed,
-                    };
-                    use crate::app::contracts::DrawingFieldEdit as E;
-                    use crate::panels::DrawingFieldId as F;
-                    let edit = match field_id {
-                        F::LineStartX => E::LineStartX(v),
-                        F::LineStartY => E::LineStartY(v),
-                        F::LineEndX => E::LineEndX(v),
-                        F::LineEndY => E::LineEndY(v),
-                        F::LineWidth => E::Width(v),
-                        F::RectStartX => E::RectStartX(v),
-                        F::RectStartY => E::RectStartY(v),
-                        F::RectWidth => E::RectWidthMm(v),
-                        F::RectHeight => E::RectHeightMm(v),
-                        F::RectBorder => E::Width(v),
-                        F::CircleCenterX => E::CircleCenterX(v),
-                        F::CircleCenterY => E::CircleCenterY(v),
-                        F::CircleRadius => E::CircleRadius(v),
-                        F::CircleBorder => E::Width(v),
-                        F::ArcCenterX => E::ArcCenterX(v),
-                        F::ArcCenterY => E::ArcCenterY(v),
-                        F::ArcRadius => E::ArcRadius(v),
-                        F::ArcStartAngle => E::ArcStartAngle(v),
-                        F::ArcEndAngle => E::ArcEndAngle(v),
-                        F::ArcWidth => E::Width(v),
-                        F::PolyBorder => E::Width(v),
-                    };
-                    if let Some(uuid) = current_uuid.filter(|_| {
-                        matches!(
-                            self.document_state.panel_ctx.selected_kind,
-                            Some(signex_types::schematic::SelectedKind::Drawing)
-                        )
-                    }) {
-                        follow = self.update(crate::app::Message::Edit(
-                            EditMsg::UpdateDrawingField(uuid, edit),
-                        ));
-                    }
-                }
+                self.type_drawing_field(*field_id, text);
+            }
+            crate::panels::PanelMsg::DrawingFieldLeft(field_id) => {
+                self.leave_drawing_field(*field_id);
             }
             crate::panels::PanelMsg::UpdateDrawingEdit(edit) => {
                 // Fire the engine-side update only if exactly one

@@ -5,6 +5,9 @@ use crate::dock::DockMessage;
 use super::super::*;
 
 mod child_sheet_identity;
+mod drawing_field_edit;
+#[cfg(test)]
+mod drawing_field_edit_tests;
 mod floating_layout;
 mod harness_panel;
 #[cfg(test)]

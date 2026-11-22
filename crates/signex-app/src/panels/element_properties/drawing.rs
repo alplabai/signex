@@ -108,8 +108,16 @@ fn shown(field: DrawingFieldId, stored: f64, ctx: &PanelContext) -> String {
         .unwrap_or_else(|| format!("{stored:.3}"))
 }
 
-/// One half of a paired row: axis mark, box and unit. Each parsable
-/// keystroke is applied, as in every drawing field.
+/// The error colour while `field` holds text it cannot store (#2767).
+fn refused_ink(field: DrawingFieldId, ctx: &PanelContext) -> Option<Color> {
+    ctx.drawing_edit_buf
+        .get(&field)
+        .filter(|typed| field.refuses(typed))
+        .map(|_| crate::styles::ti(ctx.tokens.error))
+}
+
+/// One half of a paired row: axis mark, box and unit. A value the box can
+/// store previews while typed and commits on Enter or on leaving the box.
 fn half<'a>(
     ctx: &PanelContext,
     axis: MessageId,
@@ -122,7 +130,9 @@ fn half<'a>(
         value: shown(field, stored, ctx),
         unit: t!(ctx.i18n, unit),
         on_input: Box::new(move |s| PanelMsg::DrawingFieldTyping(field, s)),
-        on_submit: None,
+        on_submit: Some(PanelMsg::DrawingFieldLeft(field)),
+        on_blur: Some(PanelMsg::DrawingFieldLeft(field)),
+        error: refused_ink(field, ctx),
     }
 }
 
@@ -143,7 +153,9 @@ fn num_row<'a>(
     .padding(SP.s)
     .width(Length::Fill)
     .on_input(move |s| PanelMsg::DrawingFieldTyping(field, s))
-    .style(form_look::text_input_style);
+    .on_submit(PanelMsg::DrawingFieldLeft(field))
+    .on_blur(PanelMsg::DrawingFieldLeft(field))
+    .style(form_look::refusable_input_style(refused_ink(field, ctx)));
     let control = row![
         input,
         text(t!(ctx.i18n, unit)).size(TS.caption).color(muted)

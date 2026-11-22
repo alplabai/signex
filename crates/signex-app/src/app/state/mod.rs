@@ -163,6 +163,8 @@ pub enum ReorderPicker {
 pub struct NetColorCustomState {
     pub show: bool,
     pub draft: iced::Color,
+    /// The draft when the picker opened: Cancel puts it back (#2770).
+    pub draft_at_open: iced::Color,
     /// The net the picker colours when it was opened from a palette row;
     /// `None` arms the net-colour pen, as the Active Bar entry does.
     pub net: Option<String>,
@@ -179,6 +181,7 @@ impl Default for NetColorCustomState {
         Self {
             show: false,
             draft: iced::Color::from_rgb(0.40, 0.40, 0.93),
+            draft_at_open: iced::Color::from_rgb(0.40, 0.40, 0.93),
             net: None,
             sheet: None,
             hex: None,
@@ -206,6 +209,17 @@ pub struct MoveSelectionState {
     /// The sheet the dialog was opened on: Apply moves that sheet's
     /// selection, not whichever sheet the main window shows (#1910).
     pub sheet: Option<std::path::PathBuf>,
+}
+
+/// The drawing field whose typed value is previewed on a sheet, not yet an
+/// undo step (#2768). The preview itself is in that sheet's engine.
+#[derive(Debug, Clone)]
+pub(crate) struct LiveDrawingEdit {
+    pub(crate) path: std::path::PathBuf,
+    pub(crate) drawing: uuid::Uuid,
+    pub(crate) field: crate::panels::DrawingFieldId,
+    /// Whether Properties was open when typing began: closing it commits.
+    pub(crate) panel_open: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -552,6 +566,10 @@ pub struct DocumentState {
     /// The one store of half-typed title-block and paper-edge text (#2027);
     /// every panel context holds a handle to it.
     pub drafts: crate::panels::PanelDrafts,
+    /// The drawing field being typed, if any (#2768).
+    pub(crate) live_drawing_edit: Option<LiveDrawingEdit>,
+    /// The sheet symbol the Line Width box's typed text belongs to (#2767).
+    pub(crate) line_width_draft_owner: Option<uuid::Uuid>,
     pub panel_ctx: crate::panels::PanelContext,
     /// The panel context of each undocked document window, so its dock
     /// panels show and edit that window's sheet (#1966).
