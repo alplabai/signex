@@ -426,10 +426,11 @@ pub(super) fn with_tip<'a>(
 ) -> Element<'a, PanelMsg> {
     tooltip(
         content,
-        container(text(look.t(tip)).size(TS.body)).padding([SP.xs, SP.s]),
+        container(text(look.t(tip)).size(TS.body))
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(look.tokens())),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(crate::styles::context_menu(look.tokens()))
     .boxed()
 }
 

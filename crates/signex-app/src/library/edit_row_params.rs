@@ -384,10 +384,10 @@ fn unit_cell<'a>(
                 .font(mono)
                 .color(ink4),
             container(text(t!(i18n, ids::LIBRARY_EDIT_ROW_UNIT_KEPT)).size(TS.caption))
-                .padding([SP.xs, SP.s + SP.xs]),
+                .padding([SP.xs, SP.s + SP.xs])
+                .style(crate::styles::context_menu(tokens)),
             iced::widget::tooltip::Position::Bottom,
         )
-        .style(crate::styles::context_menu(tokens))
         .boxed(),
     }
 }

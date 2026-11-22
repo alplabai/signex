@@ -62,14 +62,15 @@ pub(crate) fn title_actions<'a>(
     panels::title_actions(kind, ctx)
         .into_iter()
         .map(|action| {
-            let tip = container(text(action.tip).size(TS.caption)).padding([SP.xs, SP.s]);
+            let tip = container(text(action.tip).size(TS.caption))
+                .padding([SP.xs, SP.s])
+                .style(styles::context_menu(&ctx.tokens));
             signex_widgets::tooltip(
                 icon_button(action.icon, &ctx.tokens)
                     .on_press_maybe(action.on_press.map(DockMessage::Panel)),
                 tip,
                 iced::widget::tooltip::Position::Bottom,
             )
-            .style(styles::context_menu(&ctx.tokens))
             .boxed()
         })
         .collect()
@@ -228,10 +229,10 @@ impl DockArea {
                 // name shows in a tooltip (#2468).
                 if squeezed.is_some() {
                     let tip = container(text(t!(ctx.i18n, panel.message())).size(tab_size))
-                        .padding([SP.xs, SP.s]);
+                        .padding([SP.xs, SP.s])
+                        .style(styles::context_menu(&ctx.tokens));
                     tab_row = tab_row.push(
                         signex_widgets::tooltip(tab, tip, iced::widget::tooltip::Position::Bottom)
-                            .style(styles::context_menu(&ctx.tokens))
                             .boxed(),
                     );
                 } else {

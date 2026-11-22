@@ -274,10 +274,11 @@ fn table_row<'a>(
         Some(note) => tooltip(
             line,
             // raw: composed from the catalog and the fixed key's action name.
-            container(text(raw(note)).size(TS.caption)).padding([SP.xs, SP.m]),
+            container(text(raw(note)).size(TS.caption))
+                .padding([SP.xs, SP.m])
+                .style(styles::context_menu(tokens)),
             tooltip::Position::FollowCursor,
         )
-        .style(styles::context_menu(tokens))
         .boxed(),
         None => line,
     }
