@@ -81,7 +81,11 @@ impl Signex {
             }
             ProjectSection::VersionControl => {
                 let facts = self.version_control_facts(project);
-                version_control::view(project, &facts, i18n, tokens)
+                let git = version_control::GitView {
+                    state: &self.ui_state.project_git,
+                    now: self.library.clock,
+                };
+                version_control::view(project, &facts, git, i18n, tokens)
             }
             ProjectSection::SchematicDefaults => schematic_defaults::view(
                 project,

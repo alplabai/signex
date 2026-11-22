@@ -273,6 +273,9 @@ pub enum ProjectMsg {
     Tab(crate::app::ProjectTabMsg),
     /// A Rules tab message (#2398), routed to the `rules_tab` slice.
     Rules(crate::app::RulesTabMsg),
+    /// The project's repository, branch switcher and author (mockup rows 35
+    /// and 39), routed to the `project_git` slice.
+    Git(crate::app::ProjectGitMsg),
     /// The off-thread `.snxprj` write a Project tab Ctrl+S started finished.
     FileSaved(Box<crate::persist::ProjectSaveDone>),
     /// Result of the `Add Existing to Project…` file picker. Carries

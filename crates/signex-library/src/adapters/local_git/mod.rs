@@ -29,6 +29,7 @@
 //! the legacy schema in favour of user-defined columns.
 
 pub mod project;
+pub mod project_repo;
 mod symbol_index;
 mod symbol_problems;
 

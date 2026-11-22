@@ -196,6 +196,33 @@ define_ids! {
     PROJECT_VCS_STATE_CHECKING = "project-vcs-state-checking";
     PROJECT_VCS_STATUS = "project-vcs-status";
     PROJECT_VCS_OPEN_HISTORY = "project-vcs-open-history";
+    // Branch, last commit and author (mockup rows 35 and 39).
+    PROJECT_VCS_BRANCH = "project-vcs-branch";
+    PROJECT_VCS_BRANCH_COUNT = "project-vcs-branch-count";
+    PROJECT_VCS_BRANCH_DETACHED = "project-vcs-branch-detached";
+    PROJECT_VCS_BRANCH_CURRENT = "project-vcs-branch-current";
+    PROJECT_VCS_BRANCH_AHEAD = "project-vcs-branch-ahead";
+    PROJECT_VCS_BRANCH_BEHIND = "project-vcs-branch-behind";
+    PROJECT_VCS_BRANCH_AHEAD_BEHIND = "project-vcs-branch-ahead-behind";
+    PROJECT_VCS_SWITCHER_HEADING = "project-vcs-switcher-heading";
+    PROJECT_VCS_SWITCHED = "project-vcs-switched";
+    PROJECT_VCS_SWITCH_UNSAVED = "project-vcs-switch-unsaved";
+    PROJECT_VCS_SWITCH_BUSY = "project-vcs-switch-busy";
+    PROJECT_VCS_SWITCH_UNKNOWN = "project-vcs-switch-unknown";
+    PROJECT_VCS_SWITCH_NO_COMMITS = "project-vcs-switch-no-commits";
+    PROJECT_VCS_SWITCH_PROJECT_FILE = "project-vcs-switch-project-file";
+    PROJECT_VCS_SWITCH_LFS = "project-vcs-switch-lfs";
+    PROJECT_VCS_SWITCH_OVERWRITE = "project-vcs-switch-overwrite";
+    PROJECT_VCS_SWITCH_FAILED = "project-vcs-switch-failed";
+    PROJECT_VCS_LAST_COMMIT = "project-vcs-last-commit";
+    PROJECT_VCS_LAST_COMMIT_LINE = "project-vcs-last-commit-line";
+    PROJECT_VCS_NO_COMMITS = "project-vcs-no-commits";
+    PROJECT_VCS_READ_FAILED = "project-vcs-read-failed";
+    PROJECT_VCS_AUTHOR = "project-vcs-author";
+    PROJECT_VCS_AUTHOR_HELP = "project-vcs-author-help";
+    PROJECT_VCS_AUTHOR_PLACEHOLDER = "project-vcs-author-placeholder";
+    PROJECT_VCS_AUTHOR_INVALID = "project-vcs-author-invalid";
+    PROJECT_VCS_AUTHOR_FAILED = "project-vcs-author-failed";
     // Schematic defaults (mockup row 36).
     PROJECT_DEFAULTS_HELP = "project-defaults-help";
     PROJECT_DEFAULTS_LINES = "project-defaults-lines";

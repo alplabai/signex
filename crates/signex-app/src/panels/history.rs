@@ -333,7 +333,7 @@ fn short_sha(full: &str) -> String {
 /// `signex_widgets::history_pane::format_relative` does but is
 /// inlined here so the panel doesn't need to expose the widget's
 /// internal helper.
-fn format_relative_simple(
+pub(crate) fn format_relative_simple(
     i18n: &I18n,
     time: chrono::DateTime<Utc>,
     now: chrono::DateTime<Utc>,
