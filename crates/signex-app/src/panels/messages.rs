@@ -1,7 +1,7 @@
 //! Panel message type -- the `PanelMsg` enum every panel surface emits.
 
-use super::*;
 pub use super::field_edits::{FootprintFeatureEdit, SheetFrameEdit};
+use super::*;
 
 /// Panel-level message wrapping widget messages.
 #[derive(Debug, Clone)]
