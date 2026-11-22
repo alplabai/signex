@@ -58,7 +58,7 @@ pub(crate) use commands::{
 };
 pub use general::ProjectGeneralFacts;
 pub use parameters::ParameterGroup;
-pub use preview_ui::{PreviewPopup, ProjectPreviewMsg, ProjectPreviewUi};
+pub use preview_ui::{ProjectPreviewMsg, ProjectPreviewUi};
 pub use requirements::{RequirementsMsg, RequirementsTabState};
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,

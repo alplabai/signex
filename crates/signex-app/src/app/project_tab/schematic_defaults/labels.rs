@@ -151,7 +151,7 @@ fn typed_draft(
 impl Signex {
     /// A message of the drawing's labels: a typed value goes through the
     /// field's edit, a drag writes the value it reaches, Esc puts it back.
-    pub(super) fn act_on_default_labels(
+    pub(in crate::app::project_tab) fn act_on_default_labels(
         &mut self,
         project_id: ProjectId,
         message: DimensionLabelMessage,
