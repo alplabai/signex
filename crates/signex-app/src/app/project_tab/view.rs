@@ -10,8 +10,8 @@ use signex_widgets::{raw, text};
 use super::preview_ui::{self, PreviewPopup, ProjectPreviewMsg, preview_message};
 use super::section_list::section_list;
 use super::{
-    ProjectSection, erc_annotation, general, libraries, parameters, requirements,
-    schematic_defaults, setup, sheets, variants, version_control,
+    ProjectSection, ProjectTabMsg, RowDragMsg, erc_annotation, general, libraries, parameters,
+    requirements, schematic_defaults, setup, sheets, variants, version_control,
 };
 use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
@@ -49,6 +49,7 @@ impl Signex {
         let tab = self.document_state.project_tabs.get(&project_id);
         let selected = tab.map(|tab| tab.section).unwrap_or_default();
         let setup_draft = tab.and_then(|tab| tab.setup_draft.as_ref());
+        let row_drag = tab.and_then(|tab| tab.row_drag.as_ref());
         let users = &self.ui_state.setup_profiles;
         let content = match selected {
             ProjectSection::General => general::view(&self.ui_state.i18n, project, tokens),
@@ -56,6 +57,7 @@ impl Signex {
             ProjectSection::Sheets => sheets::view(
                 project,
                 &self.project_sheet_rows(project),
+                row_drag,
                 setup_draft,
                 users,
                 &self.document_state.panel_ctx.canvas_colors,
@@ -72,6 +74,7 @@ impl Signex {
             ProjectSection::Libraries => libraries::view(
                 project_id,
                 &self.project_library_rows(project),
+                row_drag,
                 i18n,
                 tokens,
             ),
@@ -133,6 +136,14 @@ impl Signex {
             let msg = ProjectPreviewMsg::Labels(DimensionLabelMessage::PointerReleased);
             preview_message(project_id, msg)
         });
+        // A row held by its grip drops wherever the button is let go.
+        let row_released = row_drag.is_some().then(|| {
+            general::tab_message(ProjectTabMsg::RowDragged {
+                project_id,
+                msg: RowDragMsg::Released,
+            })
+        });
+        let released = row_released.or(released);
         let mut area = mouse_area(page);
         if let Some(released) = released {
             area = area.on_release(released);

@@ -143,6 +143,7 @@ define_ids! {
     PROJECT_LIBRARIES_STATE_READ_ONLY = "project-libraries-state-read-only";
     PROJECT_LIBRARIES_STATE_MISSING = "project-libraries-state-missing";
     PROJECT_LIBRARIES_STATE_NOT_MOUNTED = "project-libraries-state-not-mounted";
+    PROJECT_LIBRARIES_LOCATE = "project-libraries-locate";
     PROJECT_LIBRARIES_EMPTY = "project-libraries-empty";
     PROJECT_ERC_ANNOTATION_HELP = "project-erc-annotation-help";
     PROJECT_ERC_TITLE = "project-erc-title";

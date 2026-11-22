@@ -4,14 +4,17 @@
 //! buttons. Pure view helpers in the Graphite look.
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{Column, Row, Space, column, container, hover, row, scrollable};
+use iced::widget::{
+    Column, Row, Space, Stack, column, container, hover, mouse_area, row, scrollable,
+};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::project::ListMove;
 use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
-use super::look::{Glyph, icon_button, mono_font, ui_font};
+use super::look::{Glyph, ICON, glyph, icon_button, mono_font, ui_font};
+use super::row_drag::GRIP_W;
 use crate::app::Message;
 use crate::styles::{HAIRLINE, Radii, Spacing, TypeScale, tokens as ink};
 
@@ -174,11 +177,20 @@ pub(in crate::app::project_tab) fn icon_move_buttons<'a>(
 }
 
 /// One row of a [`grid_table`]: a cell per column, the row's buttons (shown
-/// while the pointer is over the row) and whether it is a row in error.
+/// while the pointer is over the row), whether it is a row in error, and its
+/// drag grip, drawn over an empty first cell.
 pub(in crate::app::project_tab) struct TableRow<'a> {
     pub cells: Vec<Element<'a, Message>>,
     pub actions: Option<Element<'a, Message>>,
     pub is_error: bool,
+    pub grip: Option<RowGrip>,
+}
+
+/// What a row's drag grip sends, and whether a held row would drop here.
+pub(in crate::app::project_tab) struct RowGrip {
+    pub on_press: Message,
+    pub on_enter: Message,
+    pub is_drop_target: bool,
 }
 
 /// The Graphite table (`.tbl`): a bordered card with an uppercase heading
@@ -337,7 +349,48 @@ fn grid_row<'a>(
             .bottom(hairline_if(!is_last)),
             ..container::Style::default()
         });
-    hover(base, hover_layer(overlay, radius, tokens)).boxed()
+    let shown = hover(base, hover_layer(overlay, radius, tokens)).boxed();
+    match line.grip {
+        Some(grip) => with_grip(shown, grip, tokens),
+        None => shown,
+    }
+}
+
+/// `shown` with its grip over the first column. The grip takes the press;
+/// the whole row reports the pointer entering it, and a held row's drop
+/// place is marked by an accent line along its top.
+fn with_grip<'a>(
+    shown: Element<'a, Message>,
+    grip: RowGrip,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let handle = mouse_area(
+        container(glyph(Glyph::Grip, ICON, ink::resolve(tokens).ink4))
+            .center_x(Length::Fixed(GRIP_W))
+            .center_y(Length::Fixed(ROW_H)),
+    )
+    .interaction(iced::mouse::Interaction::Grab)
+    .on_press(grip.on_press);
+    let grip_layer = row![handle, Space::new().width(Length::Fill)].width(Length::Fill);
+    let mut layers: Stack<Element<'a, Message>> = Stack::new()
+        .width(Length::Fill)
+        .height(Length::Fixed(ROW_H))
+        .push(shown)
+        .push(grip_layer.boxed());
+    if grip.is_drop_target {
+        let accent = crate::styles::ti(tokens.accent);
+        layers = layers.push(
+            container(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fixed(HAIRLINE * 2.0))
+                .style(move |_: &Theme| container::Style {
+                    background: Some(Background::Color(accent)),
+                    ..container::Style::default()
+                })
+                .boxed(),
+        );
+    }
+    mouse_area(layers).on_enter(grip.on_enter).boxed()
 }
 
 /// The layer a grid row shows while the pointer is over it: the hover fill

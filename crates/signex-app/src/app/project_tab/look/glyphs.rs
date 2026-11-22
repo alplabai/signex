@@ -38,11 +38,12 @@ pub(in crate::app::project_tab) enum Glyph {
     Target,
     Save,
     Expand,
+    Grip,
 }
 
 impl Glyph {
     /// Every glyph, in declaration order.
-    pub(in crate::app::project_tab) const ALL: [Glyph; 27] = [
+    pub(in crate::app::project_tab) const ALL: [Glyph; 28] = [
         Glyph::Up,
         Glyph::Down,
         Glyph::Lock,
@@ -70,6 +71,7 @@ impl Glyph {
         Glyph::Target,
         Glyph::Save,
         Glyph::Expand,
+        Glyph::Grip,
     ];
 
     /// Position in [`Glyph::ALL`] and in the parsed handles.
@@ -107,6 +109,7 @@ impl Glyph {
             Glyph::Target => TARGET,
             Glyph::Save => SAVE,
             Glyph::Expand => EXPAND,
+            Glyph::Grip => GRIP,
         }
     }
 }
@@ -138,9 +141,10 @@ const BRANCH: &[u8] = crate::app::project_git::BRANCH_GLYPH;
 const TARGET: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/></svg>"##;
 const SAVE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 3.75h12.75l3.75 3.75v12.75h-16.5z"/><path d="M7.5 3.75v5.25h7.5V3.75M7.5 20.25v-6h9v6"/></svg>"##;
 const EXPAND: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7"/></svg>"##;
+const GRIP: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>"##;
 
 /// The glyphs parsed once, in [`Glyph::ALL`] order.
-static HANDLES: LazyLock<[svg::Handle; 27]> =
+static HANDLES: LazyLock<[svg::Handle; 28]> =
     LazyLock::new(|| Glyph::ALL.map(|g| svg::Handle::from_memory(g.source())));
 
 /// `g` drawn `size` px square in `color`.

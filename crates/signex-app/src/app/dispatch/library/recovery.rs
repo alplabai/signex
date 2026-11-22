@@ -229,6 +229,25 @@ pub(super) fn handle_recovery_library_missing_locate_result(
     task
 }
 
+impl Signex {
+    /// Locate… on a Project tab's Missing library row (mockup row 33): mount
+    /// `picked` and, only once it has mounted, repoint the entries that
+    /// listed `missing`. A Library Missing dialog for it has nothing left to
+    /// ask. A pick that does not open raises its own dialog or error card.
+    pub(crate) fn repoint_missing_library(
+        &mut self,
+        missing: &std::path::Path,
+        picked: std::path::PathBuf,
+    ) -> Task<Message> {
+        let task = self.open_library_at_as(picked.clone(), true);
+        if self.library.library_at(&picked).is_some() {
+            relocate_project_entries(self, missing, &picked);
+            self.library.forget_missing_library(missing);
+        }
+        task
+    }
+}
+
 /// Point every project entry that listed `old` at `new`, and mark those
 /// projects dirty. Unsaved until the user saves the project.
 fn relocate_project_entries(app: &mut Signex, old: &std::path::Path, new: &std::path::Path) {

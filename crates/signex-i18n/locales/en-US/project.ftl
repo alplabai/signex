@@ -202,6 +202,8 @@ project-libraries-state-mounted = Mounted
 project-libraries-state-read-only = Mounted, read-only
 project-libraries-state-missing = Missing
 project-libraries-state-not-mounted = Not mounted
+# Button on a Missing library row: pick the file where it moved to.
+project-libraries-locate = Locate…
 project-libraries-empty = This project mounts no libraries. Right-click the project in the project tree, then Add New to Project ▸ Component Library.
 
 # ERC and annotation section (#1692).

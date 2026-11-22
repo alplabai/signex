@@ -22,6 +22,7 @@ mod open;
 mod parameters;
 mod preview_ui;
 mod requirements;
+mod row_drag;
 mod schematic_defaults;
 mod section_list;
 mod setup;
@@ -62,6 +63,7 @@ pub use parameters::ParameterGroup;
 pub(crate) use preview_ui::PreviewPopup;
 pub use preview_ui::{ProjectPreviewMsg, ProjectPreviewUi};
 pub use requirements::{RequirementsMsg, RequirementsTabState};
+pub use row_drag::{RowDrag, RowDragMsg, RowKey};
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,
     project_run_requirements, project_set_requirement,
@@ -202,6 +204,8 @@ pub struct ProjectTabState {
     /// Enter refused the typed variable name; the reason is read again
     /// from the draft. Cleared by the next keystroke.
     pub parameter_rename_refused: bool,
+    /// A Sheets or Libraries row held by its grip (mockup rows 31 and 33).
+    pub row_drag: Option<RowDrag>,
 }
 
 /// Messages of a Project tab, namespaced under `ProjectMsg::Tab`. Each
@@ -392,6 +396,23 @@ pub enum ProjectTabMsg {
         project_id: ProjectId,
         path: std::path::PathBuf,
         step: signex_types::project::ListMove,
+    },
+    /// A Sheets or Libraries row's grip was pressed, dragged or let go.
+    RowDragged {
+        project_id: ProjectId,
+        msg: RowDragMsg,
+    },
+    /// Locate… on a Missing library row (mockup row 33): the file picker
+    /// for the library that resolved to `missing`.
+    LibraryLocateRequested {
+        project_id: ProjectId,
+        missing: std::path::PathBuf,
+    },
+    /// The Locate… picker answered (`None`: cancelled).
+    LibraryLocatePicked {
+        project_id: ProjectId,
+        missing: std::path::PathBuf,
+        picked: Option<std::path::PathBuf>,
     },
     /// The annotate undo choice (#1692); `None` follows Preferences.
     AnnotateUndoPicked {

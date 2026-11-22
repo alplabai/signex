@@ -1,9 +1,10 @@
 //! Libraries section of the Project tab (#1691): the libraries the project
 //! mounts, in list order, with where each lives, its kind and whether it is
 //! mounted (and read-only) now, and Move up / Move down on row hover
-//! (mockup row 33). A move is one step of the General history. Adding,
-//! removing and renaming stay in the project tree, which owns the mount and
-//! the file work; a line under the table says so.
+//! (mockup row 33). A move is one step of the General history. A Missing
+//! row offers Locate…, the Library Missing dialog's repoint (decided
+//! 2026-11-22). Adding, removing and renaming stay in the project tree, which
+//! owns the file work; a line under the table says so.
 
 mod view;
 
@@ -14,11 +15,13 @@ pub(super) use view::view;
 
 use std::path::{Path, PathBuf};
 
+use iced::Task;
 use signex_i18n::{MessageId, ids};
 use signex_types::project::{LibraryEntryKind, ListMove};
 
-use crate::app::Signex;
+use super::ProjectTabMsg;
 use crate::app::state::{LoadedProject, ProjectId};
+use crate::app::{Message, ProjectMsg, Signex};
 
 /// Whether a project's library is mounted now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,5 +150,49 @@ impl Signex {
         if let Err(problem) = self.apply_project_section(project_id, &command) {
             crate::diagnostics::log_warning(format!("Project tab: {problem}"));
         }
+    }
+
+    /// Locate… on a Missing row: pick the moved `.snxlib`, off the update
+    /// thread.
+    pub(super) fn pick_located_library(
+        &mut self,
+        project_id: ProjectId,
+        missing: PathBuf,
+    ) -> Task<Message> {
+        if self.document_state.project_by_id(project_id).is_none() {
+            return Task::none();
+        }
+        let i18n = &self.ui_state.i18n;
+        let dialog = self
+            .ui_state
+            .io
+            .picker
+            .dialog()
+            .title_in(i18n, ids::FILE_DIALOG_LOCATE_LIBRARY)
+            .filter_in(i18n, ids::FILE_FILTER_LIBRARY, &["snxlib"]);
+        Task::perform(async move { dialog.pick_file().await }, move |picked| {
+            Message::Project(ProjectMsg::Tab(ProjectTabMsg::LibraryLocatePicked {
+                project_id,
+                missing: missing.clone(),
+                picked,
+            }))
+        })
+    }
+
+    /// The Locate… picker answered: mount the pick and repoint the entries
+    /// that listed the missing path. The project is left dirty, unsaved.
+    pub(super) fn finish_library_locate(
+        &mut self,
+        project_id: ProjectId,
+        missing: &Path,
+        picked: Option<PathBuf>,
+    ) -> Task<Message> {
+        let Some(picked) = picked else {
+            return Task::none();
+        };
+        if self.document_state.project_by_id(project_id).is_none() {
+            return Task::none();
+        }
+        self.repoint_missing_library(missing, picked)
     }
 }
