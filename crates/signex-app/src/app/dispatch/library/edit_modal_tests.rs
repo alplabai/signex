@@ -756,14 +756,10 @@ fn the_delete_confirm_names_the_row_and_its_close_cancels() {
         "Delete Component?",
         "Delete R-1500?",
         "Delete row R-1500 from R? This cannot be undone from the UI.",
+        "Placed parts keep their embedded copy.",
     ] {
         assert!(texts.iter().any(|t| t == wanted), "{wanted}: {texts:?}");
     }
-    // The mockup row 137 caption is only a proposal: it is not drawn until accepted.
-    assert!(
-        !texts.iter().any(|t| t.contains("embedded copy")),
-        "{texts:?}"
-    );
     let clicked = crate::layout_probe::messages_on_click(build(), size, "\u{00D7}");
     assert!(
         clicked

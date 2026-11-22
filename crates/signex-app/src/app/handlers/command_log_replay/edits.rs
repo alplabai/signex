@@ -70,12 +70,17 @@ impl Signex {
                     .arg("command", row.label.clone()),
             );
         }
-        if let ReplayInput::Editor { path, targets, .. } = input {
+        if let ReplayInput::Editor { path, targets, .. }
+        | ReplayInput::PadDrag { path, targets, .. } = input
+        {
             return match self.missing_editor_targets(path, targets) {
                 None => Some(document_closed(path)),
                 Some(missing) if !missing.is_empty() => Some(targets_gone(path, &missing)),
                 Some(_) => None,
             };
+        }
+        if let ReplayInput::EditorPanel { path, targets, .. } = input {
+            return self.editor_panel_refusal(path, targets);
         }
         let Some(document) = row.document.as_deref() else {
             return Some(Translatable::new(ids::COMMAND_LOG_REPLAY_NO_TARGETS));
@@ -99,34 +104,67 @@ impl Signex {
         row: &LogRow,
         input: &ReplayInput,
     ) -> (CommandOutcome, Task<Message>) {
-        let document = row.document.as_deref();
-        match (input, document) {
-            (ReplayInput::Sheet { commands, .. }, Some(document)) => {
-                (self.run_sheet_commands(document, commands), Task::none())
+        match input {
+            ReplayInput::Editor {
+                path,
+                targets,
+                messages,
+            } => self.run_editor_input(path, targets, messages),
+            ReplayInput::PadDrag {
+                path,
+                targets,
+                idx,
+                start,
+                to,
+            } => self.run_pad_drag(path, targets, *idx, (to.0 - start.0, to.1 - start.1)),
+            ReplayInput::EditorPanel {
+                path,
+                targets,
+                message,
+            } => self.run_editor_panel(path, targets, message),
+            _ => {
+                let outcome = match row.document.as_deref() {
+                    Some(document) => self.run_document_input(document, input),
+                    None => CommandOutcome::disabled(no_change()),
+                };
+                (outcome, Task::none())
             }
-            (ReplayInput::Board { commands, .. }, Some(document)) => {
-                (self.run_board_commands(document, commands), Task::none())
+        }
+    }
+
+    /// An input that runs on the row's sheet or board.
+    fn run_document_input(&mut self, document: &Path, input: &ReplayInput) -> CommandOutcome {
+        match input {
+            ReplayInput::Sheet { commands, .. } => self.run_sheet_commands(document, commands),
+            ReplayInput::Board { commands, .. } => self.run_board_commands(document, commands),
+            ReplayInput::BoardMove {
+                footprints,
+                delta,
+                leaves_tracks,
+            } => self.run_board_move(document, footprints, *delta, *leaves_tracks),
+            ReplayInput::ReuseBlock {
+                name,
+                anchor,
+                degrees,
+            } => match self.place_reuse_block(document, name, *anchor, *degrees) {
+                Ok(_) => CommandOutcome::Ran,
+                Err(why) => CommandOutcome::disabled(why),
+            },
+            ReplayInput::FootprintSwap {
+                footprints,
+                template,
+            } => {
+                let before = self.board_revision(document);
+                self.swap_footprints(document, footprints, Ok(template.clone()));
+                let outcome = if self.board_revision(document) == before {
+                    CommandOutcome::disabled(no_change())
+                } else {
+                    CommandOutcome::Ran
+                };
+                self.repaint_board_selection(document);
+                outcome
             }
-            (
-                ReplayInput::BoardMove {
-                    footprints,
-                    delta,
-                    leaves_tracks,
-                },
-                Some(document),
-            ) => (
-                self.run_board_move(document, footprints, *delta, *leaves_tracks),
-                Task::none(),
-            ),
-            (
-                ReplayInput::Editor {
-                    path,
-                    targets,
-                    messages,
-                },
-                _,
-            ) => self.run_editor_input(path, targets, messages),
-            _ => (CommandOutcome::disabled(no_change()), Task::none()),
+            _ => CommandOutcome::disabled(no_change()),
         }
     }
 
@@ -239,8 +277,18 @@ fn input_targets(input: &ReplayInput) -> RecordedTargets {
                 .map(|id| ItemRef::Footprint(*id))
                 .collect(),
         ),
-        ReplayInput::Editor { .. } | ReplayInput::MadeNewObjects => {
-            RecordedTargets::Sheet(Vec::new())
+        ReplayInput::ReuseBlock { anchor, .. } => {
+            RecordedTargets::Board(vec![ItemRef::Footprint(*anchor)])
         }
+        ReplayInput::FootprintSwap { footprints, .. } => RecordedTargets::Board(
+            footprints
+                .iter()
+                .map(|id| ItemRef::Footprint(*id))
+                .collect(),
+        ),
+        ReplayInput::Editor { .. }
+        | ReplayInput::PadDrag { .. }
+        | ReplayInput::EditorPanel { .. }
+        | ReplayInput::MadeNewObjects => RecordedTargets::Sheet(Vec::new()),
     }
 }

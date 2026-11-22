@@ -7,10 +7,12 @@
 //! - [`capture`]: recording a finished edit.
 //! - [`run`]: Replay on selection targets; [`edits`]: on recorded edits.
 //! - [`editors`]: the footprint and symbol editors.
+//! - [`editor_panel`]: their Properties panel edits and pad drags.
 //! - [`selection`]: holding and putting back the person's selection.
 
 mod book;
 mod capture;
+mod editor_panel;
 mod editors;
 mod edits;
 mod run;

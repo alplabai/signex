@@ -27,7 +27,7 @@ use crate::panels::command_log::{
 mod replay;
 pub(crate) use replay::ReplayBook;
 #[cfg(test)]
-#[path = "command_log_tests.rs"]
+#[path = "tests/command_log/mod.rs"]
 mod tests;
 
 /// The default name Save log as… offers.

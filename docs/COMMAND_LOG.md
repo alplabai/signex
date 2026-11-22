@@ -106,18 +106,28 @@ panel says what it will list.
   - **Operands:** runs through the command's operand handler
     (`CommandArgs::parse_operands`, then `run_operands`), as the CLI does.
   - **Recorded targets** (delete, cut, copy, duplicate, rotate, mirror, flip,
-    drawing order): the command's own handler runs on exactly those items, in
-    their document, in the window or tab that shows it, then the person's
-    selection comes back. Duplicate leaves the clipboard as it was.
+    drawing order, Via Stitching, Teardrops, Gloss, Keepout and Board Shape
+    from Selection, Tune, lock, Swap Pins and Gates): the command's own handler
+    runs on exactly those items, in their document, in the window or tab that
+    shows it, then the person's selection comes back. What it creates gets new
+    ids, and a command that edits several documents keeps its one undo step
+    per document. Duplicate leaves the clipboard as it was. In project-wide
+    numbering it counts the designators of every project sheet, and is refused
+    if one of those sheets is not open.
   - **Recorded edit** (Move and drags with their offset, Properties values,
-    unions, board tools and dialogs): the same engine or board commands run
-    again on the same items. A board move repeats its offset from where the
-    footprints are now. A new union gets a new id.
-  - **Footprint and symbol editors:** the recorded messages run on the recorded
-    pads or pins of that editor document, with the person's selection and tool
-    put back. Pads and pins are named by index and number: an index holding
-    another number counts as gone. A symbol selection is dropped if the replay
-    changed the pin or graphic count its indices rely on.
+    unions, dialogs): the same engine or board commands run again on the same
+    items. A board move repeats its offset from where the footprints are now.
+    A new union gets a new id. Place Reuse Block places its block on its anchor
+    again with new ids. Change Footprint runs again from the footprint it read,
+    with its linked sheets.
+  - **Footprint and symbol editors:** the recorded messages or Properties
+    panel edit run on the recorded pads, pins, silk or sketch entities of that
+    editor document, with the person's selection and tool put back. A pad or
+    sketch drag is one row and repeats its offset. Pads and pins are named by
+    index and number: an index holding another number counts as gone. A silk
+    item is named by index and counts as gone if the silk count changed. A
+    symbol selection is dropped if the replay changed the pin or graphic count
+    its indices rely on.
   - **No target** (place wire, a view command): runs again as it is, with the
     current selection held aside. Select All and Unselect All run as they are:
     the selection is what they change.
@@ -125,17 +135,14 @@ panel says what it will list.
     target is gone (the reason names it; Replay never runs on the survivors);
     its document is not open; a tool is in progress and the run would need a
     tab switch or would act on the tool; or the row has nothing repeatable:
-    - a tool started and cancelled;
+    - a tool or dialog started and cancelled, which no later edit can attach
+      to;
     - a step of a tool in progress (Remove Last Vertex, Undo Last Segment);
     - a pick at the pointer (Select Node, Toggle Selection);
     - Find Similar, whose result is a selection made in its dialog;
-    - Save as Reuse Block, which writes a named file.
-  - **Not built yet** (refused or not recorded): a dialog or tool that made new
-    objects from its own values (Place Reuse Block, Via Stitching, Teardrops,
-    Keepout or Board Shape from Selection when they add items); an editor
-    command on a sketch or silk selection; editor Properties panel edits other
-    than pin number and name; footprint editor pad drags; multi-document
-    grouped board edits.
+    - Save as Reuse Block, which writes a named file;
+    - a Sync Sheet Entries that added sheet pins, whose recorded commands name
+      ids that now exist.
 - **Copy as CLI** copies the row as a `signex-cli run` line (the Usage of
   `docs/CLI.md`): `signex-cli run <project file> <command-id> --arg
   name=value ...`. Each value is the text `--arg` takes (a point as `x,y`),
