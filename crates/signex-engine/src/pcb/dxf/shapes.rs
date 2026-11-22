@@ -152,7 +152,7 @@ pub fn board_outline(drawing: &DxfDrawing, origin: BoardOrigin) -> Option<Vec<Po
     )
 }
 
-fn on_circle(center: Point, radius: f64, deg: f64) -> Point {
+pub(super) fn on_circle(center: Point, radius: f64, deg: f64) -> Point {
     let r = deg.to_radians();
     Point::new(center.x + radius * r.cos(), center.y + radius * r.sin())
 }
@@ -162,7 +162,10 @@ fn same(a: Point, b: Point) -> bool {
 }
 
 /// Each segment of a polyline: its ends and bulge, the closing one too.
-fn polyline_segments(vertices: &[(Point, f64)], closed: bool) -> Vec<(Point, Point, f64)> {
+pub(super) fn polyline_segments(
+    vertices: &[(Point, f64)],
+    closed: bool,
+) -> Vec<(Point, Point, f64)> {
     let n = vertices.len();
     let count = if closed { n } else { n.saturating_sub(1) };
     (0..count)
@@ -174,7 +177,7 @@ fn polyline_segments(vertices: &[(Point, f64)], closed: bool) -> Vec<(Point, Poi
 /// The counter-clockwise arc a bulged segment from `a` to `b` is: its
 /// centre, radius and ends in counter-clockwise order. `None` for a
 /// straight segment.
-fn bulge_arc(a: Point, b: Point, bulge: f64) -> Option<(Point, f64, Point, Point)> {
+pub(super) fn bulge_arc(a: Point, b: Point, bulge: f64) -> Option<(Point, f64, Point, Point)> {
     if bulge == 0.0 {
         return None;
     }

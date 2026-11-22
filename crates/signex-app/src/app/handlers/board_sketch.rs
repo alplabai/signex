@@ -75,7 +75,7 @@ impl Signex {
 
     /// Re-bake the open bake preview of the board sketch against its
     /// board's nets and components; a closed preview drops its result.
-    fn refresh_board_sketch_preview(&mut self) {
+    pub(super) fn refresh_board_sketch_preview(&mut self) {
         self.sync_board_sketch_router();
         let Some(session) = self.interaction_state.board_sketch.as_mut() else {
             return;
@@ -440,6 +440,9 @@ impl Signex {
     /// Apply one sketch editor message to the working copy, as the
     /// footprint editor applies it to a footprint tab.
     pub(crate) fn apply_board_sketch_edit(&mut self, msg: FootprintEditorMsg) -> Task<Message> {
+        if matches!(msg, FootprintEditorMsg::SketchImportDxfRequested) {
+            return self.request_sketch_dxf_file();
+        }
         let Some(session) = self.interaction_state.board_sketch.as_mut() else {
             return Task::none();
         };
@@ -461,6 +464,9 @@ impl Signex {
         let session = self.board_sketch_in_view()?;
         let state = &session.editor.state;
         let sketch = |event| Some(Message::Pcb(PcbMsg::Sketch(event)));
+        if session.dxf_dialog.is_some() {
+            return Some(super::pcb_dxf_sketch::dialog_cancelled());
+        }
         if state.sketch_exit.confirming_discard {
             return sketch(BoardSketchMsg::DiscardCancelled);
         }

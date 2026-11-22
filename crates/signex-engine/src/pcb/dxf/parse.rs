@@ -40,6 +40,10 @@ pub struct DxfDrawing {
     pub entities: Vec<DxfEntity>,
     /// Entities of a kind this reader does not draw (text, blocks, hatches).
     pub skipped: usize,
+    /// The DXF layer of each of `entities`, index for index.
+    pub layers: Vec<String>,
+    /// The DXF layer of each entity counted in `skipped`.
+    pub skipped_layers: Vec<String>,
 }
 
 /// One group: a code and its value line.
@@ -52,11 +56,20 @@ struct Group<'a> {
 pub fn parse_dxf(text: &str) -> Result<DxfDrawing, DxfError> {
     let groups = groups(text)?;
     let scale = units_to_mm(&groups)?;
+    read_entities(&groups, scale)
+}
+
+/// The drawing in `text` in the file's own units, and the factor from those
+/// units to mm, for an import that lets the user choose the units.
+pub fn parse_dxf_raw(text: &str) -> Result<(DxfDrawing, f64), DxfError> {
+    let groups = groups(text)?;
+    let to_mm = units_to_mm(&groups)?;
+    Ok((read_entities(&groups, 1.0)?, to_mm))
+}
+
+fn read_entities(groups: &[Group<'_>], scale: f64) -> Result<DxfDrawing, DxfError> {
     let mut drawing = DxfDrawing::default();
-    let mut i = match entities_start(&groups) {
-        Some(i) => i,
-        None => return Err(DxfError::NoEntities),
-    };
+    let mut i = entities_start(groups).ok_or(DxfError::NoEntities)?;
     while i < groups.len() {
         let g = &groups[i];
         if g.code != 0 {
@@ -66,29 +79,38 @@ pub fn parse_dxf(text: &str) -> Result<DxfDrawing, DxfError> {
         if g.value == "ENDSEC" || g.value == "EOF" {
             break;
         }
-        let end = next_entity(&groups, i + 1);
+        let end = next_entity(groups, i + 1);
         let fields = &groups[i + 1..end];
         let sign = plane_x(fields);
-        match g.value {
-            "LINE" => drawing.entities.push(line(fields, scale)?),
-            "ARC" => drawing.entities.push(in_plane(arc(fields, scale)?, sign)),
-            "CIRCLE" => drawing
-                .entities
-                .push(in_plane(circle(fields, scale)?, sign)),
-            "LWPOLYLINE" => drawing
-                .entities
-                .push(in_plane(lw_polyline(fields, scale)?, sign)),
+        let (entity, after) = match g.value {
+            "LINE" => (line(fields, scale)?, end),
+            "ARC" => (in_plane(arc(fields, scale)?, sign), end),
+            "CIRCLE" => (in_plane(circle(fields, scale)?, sign), end),
+            "LWPOLYLINE" => (in_plane(lw_polyline(fields, scale)?, sign), end),
             "POLYLINE" => {
-                let (entity, after) = polyline(&groups, i, scale)?;
-                drawing.entities.push(in_plane(entity, sign));
-                i = after;
+                let (entity, after) = polyline(groups, i, scale)?;
+                (in_plane(entity, sign), after)
+            }
+            _ => {
+                drawing.skipped += 1;
+                drawing.skipped_layers.push(layer_of(fields));
+                i = end;
                 continue;
             }
-            _ => drawing.skipped += 1,
-        }
-        i = end;
+        };
+        drawing.entities.push(entity);
+        drawing.layers.push(layer_of(fields));
+        i = after;
     }
     Ok(drawing)
+}
+
+/// The entity's layer (group code 8); DXF's default layer `0` without one.
+fn layer_of(fields: &[Group<'_>]) -> String {
+    fields
+        .iter()
+        .find(|g| g.code == 8)
+        .map_or_else(|| "0".to_string(), |g| g.value.to_string())
 }
 
 fn groups(text: &str) -> Result<Vec<Group<'_>>, DxfError> {

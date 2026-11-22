@@ -30,6 +30,7 @@ pub mod expr;
 pub mod geom;
 pub mod heal;
 pub mod id;
+pub mod import;
 pub mod mirrored_angle;
 pub mod parameter;
 pub mod parameter_refs;

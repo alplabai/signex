@@ -7,6 +7,7 @@
 //! sub-forms consume, re-exported below.
 
 mod choices;
+mod driven_by;
 mod field;
 mod form;
 mod header;
@@ -18,6 +19,7 @@ mod table;
 pub(in crate::panels::footprint_editor_properties) use field::{
     Shown, number_input, with_refusals,
 };
+pub(super) use driven_by::view_driven_by;
 pub(super) use form::{PadEditTarget, view_pad_form};
 #[cfg(test)]
 pub(super) use header::selected_pad_heading;

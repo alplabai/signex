@@ -60,6 +60,7 @@ mod pcb_drc_results;
 #[cfg(test)]
 mod pcb_drc_results_tests;
 pub(crate) mod pcb_dxf_import;
+pub(crate) mod pcb_dxf_sketch;
 pub(crate) use pcb_drc_check::DRC_CHECK;
 pub(crate) use pcb_drc_check::LOOSE_BOARD_WARNING;
 pub(crate) use pcb_drc_results::DrcWaiverText;

@@ -11,6 +11,7 @@ mod board_3d;
 mod board_net_classes;
 mod board_project;
 mod board_sketch;
+mod board_sketch_dxf;
 mod bom_preview;
 #[cfg(test)]
 mod case_fold_tests;
@@ -75,6 +76,9 @@ pub use agent_edits::AgentEdits;
 pub use board_3d::{Board3dSession, BuiltScene};
 pub use board_net_classes::BoardNetClassPanelState;
 pub use board_sketch::BoardSketchSession;
+pub use board_sketch_dxf::{
+    DXF_LAYER_TARGETS, DxfLayerTarget, SketchDxfDialog, SketchDxfMsg, SketchDxfProblem,
+};
 pub use bom_preview::{BomIssueLine, BomPreviewState, BomSidebarTab, ColumnResizeState};
 pub(crate) use document_load::SheetInstall;
 pub use error_notice::{

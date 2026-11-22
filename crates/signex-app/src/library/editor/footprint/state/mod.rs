@@ -35,6 +35,7 @@ pub mod mode;
 pub mod pad;
 pub mod pad_link;
 pub mod pad_scope;
+mod pad_source;
 pub mod placement;
 pub mod properties_view;
 pub mod selection;
@@ -59,6 +60,7 @@ pub use pad::{
     PadPassthrough, PadSide, PadStackUi, ShapeParamMap,
 };
 pub use pad_link::{PadLinkFocus, PadLinkMsg, PadLinkOffer};
+pub use pad_source::{PadInstance, PadPatternKind, PadSketchSource};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use properties_view::{
     FOOTPRINT_HEIGHT_BUFFER, pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,

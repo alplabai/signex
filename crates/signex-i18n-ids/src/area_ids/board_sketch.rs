@@ -43,4 +43,25 @@ define_ids! {
     BOARD_SKETCH_FAB_SECTION = "board-sketch-fab-section";
     BOARD_SKETCH_FAB_ROUTER = "board-sketch-fab-router";
     BOARD_SKETCH_FAB_ROUTER_NONE = "board-sketch-fab-router-none";
+    BOARD_SKETCH_DXF_OPEN = "board-sketch-dxf-open";
+    BOARD_SKETCH_DXF_TITLE = "board-sketch-dxf-title";
+    BOARD_SKETCH_DXF_FILE = "board-sketch-dxf-file";
+    BOARD_SKETCH_DXF_UNITS = "board-sketch-dxf-units";
+    BOARD_SKETCH_DXF_UNITS_FILE = "board-sketch-dxf-units-file";
+    BOARD_SKETCH_DXF_UNITS_MM = "board-sketch-dxf-units-mm";
+    BOARD_SKETCH_DXF_UNITS_MIL = "board-sketch-dxf-units-mil";
+    BOARD_SKETCH_DXF_UNITS_INCH = "board-sketch-dxf-units-inch";
+    BOARD_SKETCH_DXF_SCALE = "board-sketch-dxf-scale";
+    BOARD_SKETCH_DXF_SCALE_HINT = "board-sketch-dxf-scale-hint";
+    BOARD_SKETCH_DXF_SKIP = "board-sketch-dxf-skip";
+    BOARD_SKETCH_DXF_SKETCH_ONLY = "board-sketch-dxf-sketch-only";
+    BOARD_SKETCH_DXF_JOIN = "board-sketch-dxf-join";
+    BOARD_SKETCH_DXF_CHECK = "board-sketch-dxf-check";
+    BOARD_SKETCH_DXF_BAD_SCALE = "board-sketch-dxf-bad-scale";
+    BOARD_SKETCH_DXF_OUT_OF_RANGE = "board-sketch-dxf-out-of-range";
+    BOARD_SKETCH_DXF_NOTHING = "board-sketch-dxf-nothing";
+    BOARD_SKETCH_DXF_IMPORT = "board-sketch-dxf-import";
+    BOARD_SKETCH_DXF_CANCEL = "board-sketch-dxf-cancel";
+    BOARD_SKETCH_DXF_IMPORTED = "board-sketch-dxf-imported";
+    BOARD_SKETCH_DXF_REJECTED = "board-sketch-dxf-rejected";
 }

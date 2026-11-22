@@ -525,4 +525,18 @@ pub enum DxfImportMsg {
         text: Result<String, String>,
         waiting: Option<crate::app::agent::WaitingCommand>,
     },
+    /// The file dialog of a board sketch's Import DXF answered (mockup row
+    /// 179c); `None` is a cancel.
+    SketchPicked {
+        board: std::path::PathBuf,
+        path: Option<std::path::PathBuf>,
+    },
+    /// That file was read off the UI thread, or why it could not be.
+    SketchRead {
+        board: std::path::PathBuf,
+        path: std::path::PathBuf,
+        source: Result<std::sync::Arc<signex_engine::pcb::dxf::DxfSource>, String>,
+    },
+    /// A choice, Import or Cancel in the sketch's Import DXF dialog.
+    SketchDialog(crate::app::state::SketchDxfMsg),
 }

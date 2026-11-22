@@ -95,6 +95,9 @@ pub(super) fn build_footprint_editor_panel_ctx(
                     hole_rotation_deg: pad.hole_rotation_deg,
                     copper_offset_x_mm: pad.copper_offset_x_mm,
                     copper_offset_y_mm: pad.copper_offset_y_mm,
+                    sketch_source: editor
+                        .state
+                        .pad_sketch_source(editor.primitive().sketch.as_ref(), idx),
                 }
             })
         })

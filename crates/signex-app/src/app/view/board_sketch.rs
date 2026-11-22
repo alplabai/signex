@@ -51,7 +51,16 @@ impl Signex {
             &self.document_state.panel_ctx.ui_font_name,
         )
         .map(Message::Library);
-        Some(stack![canvas, menu, self.board_sketch_bar(session)].boxed())
+        let mut layers = stack![canvas, menu, self.board_sketch_bar(session)];
+        // Over everything: the sketch waits for Import or Cancel (mockup row 179c).
+        if let Some(dialog) = session.dxf_dialog.as_deref() {
+            layers = layers.push(super::board_sketch_dxf::overlay(
+                dialog,
+                tokens,
+                &self.ui_state.i18n,
+            ));
+        }
+        Some(layers.boxed())
     }
 
     /// The mode bar, with the bake preview card above it while open: the
