@@ -106,6 +106,18 @@ fn the_summary_lines_name_the_tier_layers_and_rules() {
     );
 }
 
+/// The size picker names the size alone: Orientation carries the direction,
+/// so a portrait sheet never reads "landscape" (mockup rows 21, 22, 31, 37).
+#[test]
+fn the_size_picker_names_the_size_alone() {
+    let options = super::customize::size_options();
+    assert_eq!(options.len(), signex_types::project::SHEET_SIZES.len());
+    for (value, label) in options {
+        assert_eq!(value, label);
+        assert!(!label.contains("landscape"), "{label}");
+    }
+}
+
 #[test]
 fn the_stack_up_has_a_copper_layer_per_count_and_a_dielectric_between() {
     for copper in 1..=32u8 {
