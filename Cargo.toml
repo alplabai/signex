@@ -219,7 +219,7 @@ iced_graphics = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c21
 iced_program = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
 iced_renderer = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
 iced_runtime = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
-iced_vello_cpu ={ git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
+iced_vello_cpu = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
 iced_wgpu = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
 iced_widget = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }
 iced_winit = { git = "https://github.com/alplabai/iced", rev = "cc3924c4c0c210e14380915510d7aa9b3ddc0e53" }

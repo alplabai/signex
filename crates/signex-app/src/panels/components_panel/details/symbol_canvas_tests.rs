@@ -303,16 +303,59 @@ fn the_grid_follows_the_preferences() {
         ..DOTS
     }));
     let dotted = pixels(marked_program(DOTS));
-    // A grid line crosses the whole sample as one run; dots never do.
-    let has_line_row = |shot: &[u8]| {
-        let area = PAPER_MARGIN;
-        (area.y as u32..(area.y + area.height) as u32).any(|y| {
+    assert!(
+        !full_grid_rows(&lines).is_empty(),
+        "Lines draws strokes across the paper"
+    );
+    assert!(full_grid_rows(&dotted).is_empty(), "Dots draws no stroke");
+
+    // Lines draws no dots: every grid pixel lies on a line. A wide pitch
+    // keeps the lines apart so a stray dot would stand between them.
+    for pitch_mm in [1.27, 5.08] {
+        let shot = pixels(marked_program(SheetGrid {
+            pitch_mm,
+            style: GridStyle::Lines,
+            ..DOTS
+        }));
+        assert_eq!(
+            off_line_grid_pixels(&shot),
+            0,
+            "Lines draws no dots at {pitch_mm} mm"
+        );
+    }
+}
+
+/// The rows of the sample region that are grid-coloured across its whole width.
+fn full_grid_rows(shot: &[u8]) -> Vec<u32> {
+    let area = PAPER_MARGIN;
+    (area.y as u32..(area.y + area.height) as u32)
+        .filter(|&y| {
             (area.x as u32..(area.x + area.width) as u32)
                 .all(|x| marker_at(shot, x, y) == Some(Marker::Grid))
         })
-    };
-    assert!(has_line_row(&lines), "Lines draws strokes across the paper");
-    assert!(!has_line_row(&dotted), "Dots draws no stroke");
+        .collect()
+}
+
+/// The columns of the sample region that are grid-coloured across its whole height.
+fn full_grid_columns(shot: &[u8]) -> Vec<u32> {
+    let area = PAPER_MARGIN;
+    (area.x as u32..(area.x + area.width) as u32)
+        .filter(|&x| {
+            (area.y as u32..(area.y + area.height) as u32)
+                .all(|y| marker_at(shot, x, y) == Some(Marker::Grid))
+        })
+        .collect()
+}
+
+/// Grid pixels in the sample region on neither a full grid row nor a full grid column.
+fn off_line_grid_pixels(shot: &[u8]) -> usize {
+    let area = PAPER_MARGIN;
+    let (rows, columns) = (full_grid_rows(shot), full_grid_columns(shot));
+    (area.y as u32..(area.y + area.height) as u32)
+        .flat_map(|y| (area.x as u32..(area.x + area.width) as u32).map(move |x| (x, y)))
+        .filter(|&(x, y)| marker_at(shot, x, y) == Some(Marker::Grid))
+        .filter(|(x, y)| !rows.contains(y) && !columns.contains(x))
+        .count()
 }
 
 #[test]

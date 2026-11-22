@@ -140,8 +140,7 @@ fn rasterise(quads: Vec<(Quad, Background)>) -> Vec<u8> {
         text_size: Pixels(16.0),
         ..renderer::Settings::default()
     });
-    // As the compositor does before every frame: vello_cpu clips the root
-    // layer to these bounds, and its unbounded default clips everything.
+    // As the compositor does before every frame.
     renderer.reset(Rectangle::with_size(Size::new(W as f32, H as f32)));
     for (quad, background) in quads {
         renderer.fill_quad(quad, background);
