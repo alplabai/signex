@@ -10,6 +10,10 @@ use super::super::*;
 impl Signex {
     pub(super) fn sync_placed_panel(&mut self) {
         let selected = &self.interaction_state.active_canvas().selected;
+        let selected_one = match selected.as_slice() {
+            [one] => Some(*one),
+            _ => None,
+        };
         let (item, geometry, locked, end, note) =
             match (selected.as_slice(), self.document_state.active_engine()) {
                 ([one], Some(engine)) => {
@@ -59,5 +63,6 @@ impl Signex {
             _ => None,
         };
         placed.sync_note(selected_note);
+        placed.sync_port_name(sheet_path.as_deref(), selected_one);
     }
 }

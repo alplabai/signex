@@ -227,6 +227,28 @@ fn switching_the_selection_on_a_typo_does_not_commit_the_preview() {
     assert_eq!(buffered(&app), None, "no text follows to the other shape");
 }
 
+/// Mockup row 48: a pick in the Color popover closes it and is one undo step.
+#[test]
+fn a_colour_pick_closes_the_popover_as_one_step() {
+    use crate::app::contracts::DrawingFieldEdit;
+    use crate::panels::WireColorPicker;
+    use signex_types::schematic::StrokeColor;
+    let (mut app, path) = app();
+    panel(&mut app, PanelMsg::ToggleWireColorPicker);
+    let red = StrokeColor {
+        r: 0xC0,
+        g: 0x39,
+        b: 0x2B,
+        a: 255,
+    };
+    let edit = DrawingFieldEdit::StrokeColor(Some(red));
+    panel(&mut app, PanelMsg::UpdateDrawingEdit(edit));
+    let picker = app.document_state.panel_ctx.wire_color_picker;
+    assert_eq!(picker, WireColorPicker::Closed);
+    undo(&mut app);
+    assert!(!can_undo(&app, &path));
+}
+
 #[test]
 fn an_emptied_box_left_shows_the_stored_value_again() {
     let (mut app, path) = app();

@@ -107,6 +107,10 @@ properties-body-normal = Normal
 properties-body-alternate = Alternate (De Morgan)
 properties-body-alternate-missing = Alternate (not in symbol; drawn as Normal)
 properties-body-no-alternate-tip = This library symbol has no alternate (De Morgan) body
+# The Alternate segment of the Body control; its tooltip has the full name.
+properties-body-alternate-short = Alternate
+# A power port's typed name could not be applied because the port is gone.
+properties-port-name-not-applied = Properties: the name typed for a power port on { $sheet } was not applied, the port is no longer there. The name was: { $name }
 
 ## Footprint card
 

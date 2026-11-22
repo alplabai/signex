@@ -11,6 +11,9 @@
 //! - HUD / previews (cursor, wire and placement previews): uncached, redrawn
 //!   every frame.
 
+mod bezier_grip;
+#[cfg(test)]
+mod bezier_grip_tests;
 mod camera;
 pub(crate) mod cursor;
 mod drag_layers;
@@ -114,6 +117,8 @@ pub struct CanvasState {
     ghost: drag_preview::GhostState,
     /// Set while the drag holds one end of a selected wire by its grip.
     wire_grip: Option<wire_grip::WireGrip>,
+    /// Set while a drag holds one handle of a selected Bezier.
+    bezier_drag: Option<bezier_grip::BezierDrag>,
     // ─── Double-click detection ───
     /// Timestamp of last left-click (for double-click detection).
     last_click_time: Option<std::time::Instant>,
@@ -1009,6 +1014,11 @@ pub enum CanvasEvent {
         y: f64,
         /// How this gesture treats wires (#1266).
         connections: MoveConnections,
+    },
+    /// A handle drag dropped a Bezier with these four points (world coords).
+    BezierPointsDragged {
+        drawing: uuid::Uuid,
+        points: [signex_types::schematic::Point; 4],
     },
 }
 

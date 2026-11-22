@@ -61,6 +61,8 @@ define_ids! {
     PROPERTIES_BODY_NORMAL = "properties-body-normal";
     PROPERTIES_BODY_ALTERNATE = "properties-body-alternate";
     PROPERTIES_BODY_ALTERNATE_MISSING = "properties-body-alternate-missing";
+    PROPERTIES_BODY_ALTERNATE_SHORT = "properties-body-alternate-short";
+    PROPERTIES_PORT_NAME_NOT_APPLIED = "properties-port-name-not-applied";
     PROPERTIES_BODY_NO_ALTERNATE_TIP = "properties-body-no-alternate-tip";
     PROPERTIES_FOOTPRINT_PADS = "properties-footprint-pads";
     PROPERTIES_FOOTPRINT_PITCH_PADS = "properties-footprint-pitch-pads";

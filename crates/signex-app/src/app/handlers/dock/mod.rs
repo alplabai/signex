@@ -27,6 +27,8 @@ mod note_draft_window_close_tests;
 mod panel_controls;
 mod panel_open;
 mod part_actions;
+#[cfg(test)]
+mod port_name_tests;
 mod part_field_issues;
 mod placed_edit;
 mod pre_placement_position;

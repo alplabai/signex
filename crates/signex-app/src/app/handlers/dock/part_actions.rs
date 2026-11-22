@@ -39,4 +39,16 @@ impl Signex {
         ctx.part_panel
             .sync_pin_focus(&mut ctx.collapsed_sections, is_pin_focused);
     }
+
+    /// Whether a pin focus on `symbol` folds the part sections. A power
+    /// port's panel shows no pin facts in exchange, so its Location stays
+    /// open (mockup row 45).
+    pub(crate) fn pin_focus_folds(&self, symbol: Option<uuid::Uuid>) -> bool {
+        symbol.is_some_and(|id| {
+            let is_power = self.document_state.active_engine().is_some_and(|engine| {
+                (engine.document().symbols.iter()).any(|s| s.uuid == id && s.is_power)
+            });
+            !is_power
+        })
+    }
 }
