@@ -78,7 +78,8 @@ impl Signex {
     }
 
     /// The editor of a dialog's `target`, whatever tab main shows by then.
-    /// `None` once it is closed or its board has left sketch mode.
+    /// `None` once it is closed, its board has left sketch mode, or the
+    /// Import DXF card holds that sketch.
     pub(crate) fn footprint_editor_at_mut(
         &mut self,
         target: &std::path::Path,
@@ -86,6 +87,9 @@ impl Signex {
         let sketch = &self.interaction_state.board_sketch;
         if sketch.as_ref().is_some_and(|s| s.board_path == target) {
             let session = self.interaction_state.board_sketch.as_mut()?;
+            if session.dxf_dialog.is_some() {
+                return None;
+            }
             return Some(&mut *session.editor);
         }
         if !self.editor_edit_allowed(target) {

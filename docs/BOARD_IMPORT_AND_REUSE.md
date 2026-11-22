@@ -38,11 +38,14 @@ sketch mode, Import DXF… on the sketch bar and DXF as Board Outline... open a
 dialog instead of importing at once: file, units (from the file, mm, mil, in),
 scale, and a target per DXF layer (Board outline, Cutout, Keepout, Mounting
 hole, Sketch only, Skip), with a live count of edges, healed gaps and open
-ends. Nothing changes until Import. Cancel or Esc drops the dialog and leaves
+ends. Nothing changes until Import, and the dialog holds the sketch: Undo,
+Redo and sketch edits wait for it. Cancel or Esc drops the dialog and leaves
 no undo step. Import adds sketch entities to the working copy as one sketch
-undo step; the board changes at Bake. With "Add H / V and Coincident" on, ends
-within the 0.05 mm heal tolerance share a point and level or plumb lines take
-Horizontal or Vertical. The commands run with operands and the menu rows
+undo step; the board changes at Bake. A circle on a Board outline layer that
+also holds lines or arcs lands as a Mounting hole. With "Add H / V and
+Coincident" on, ends of pieces with the same target within the 0.05 mm heal
+tolerance share a point and level or plumb lines take Horizontal or Vertical.
+The commands run with operands and the menu rows
 outside sketch mode import as described above.
 
 **Reading.** The file is picked and read off the UI thread

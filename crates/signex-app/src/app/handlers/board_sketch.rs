@@ -167,9 +167,11 @@ impl Signex {
         self.board_sketch_in_view().map(|session| &*session.editor)
     }
 
-    /// [`Self::board_sketch_editor`], mutable.
+    /// [`Self::board_sketch_editor`], to edit: `None` while the Import DXF
+    /// card holds the sketch.
     pub(crate) fn board_sketch_editor_mut(&mut self) -> Option<&mut FootprintDocument> {
         self.board_sketch_in_view_mut()
+            .filter(|session| session.dxf_dialog.is_none())
             .map(|session| &mut *session.editor)
     }
 
@@ -440,6 +442,20 @@ impl Signex {
     /// Apply one sketch editor message to the working copy, as the
     /// footprint editor applies it to a footprint tab.
     pub(crate) fn apply_board_sketch_edit(&mut self, msg: FootprintEditorMsg) -> Task<Message> {
+        // The Import DXF card holds the sketch; only the answer of a solve
+        // already running still lands, or that solve would never finish.
+        let held = self
+            .interaction_state
+            .board_sketch
+            .as_ref()
+            .is_some_and(|session| session.dxf_dialog.is_some());
+        let answer = matches!(
+            msg,
+            FootprintEditorMsg::SketchSolved { .. } | FootprintEditorMsg::RedundancyChecked { .. }
+        );
+        if held && !answer {
+            return Task::none();
+        }
         if matches!(msg, FootprintEditorMsg::SketchImportDxfRequested) {
             return self.request_sketch_dxf_file();
         }
@@ -487,21 +503,27 @@ impl Signex {
 
     /// `(can_undo, can_redo)` of the working copy when the board at `path`
     /// is in sketch mode: Undo steps the sketch, not the board, until the
-    /// mode is left.
+    /// mode is left. Neither while the Import DXF card holds the sketch.
     pub(crate) fn board_sketch_history(&self, path: &Path) -> Option<(bool, bool)> {
         let session = self.interaction_state.board_sketch.as_ref()?;
         let history = &session.editor.history;
-        (session.board_path == path).then(|| (history.can_undo(), history.can_redo()))
+        let free = session.dxf_dialog.is_none();
+        (session.board_path == path)
+            .then(|| (free && history.can_undo(), free && history.can_redo()))
     }
 
     /// Step the working copy's history when the board at `path` is in
-    /// sketch mode; `None` when it is not.
+    /// sketch mode; `None` when it is not. `Some(false)` while the Import
+    /// DXF card holds the sketch, so the step cannot fall to the board.
     pub(crate) fn step_board_sketch_history(&mut self, path: &Path, undo: bool) -> Option<bool> {
         let session = self
             .interaction_state
             .board_sketch
             .as_mut()
             .filter(|session| session.board_path == path)?;
+        if session.dxf_dialog.is_some() {
+            return Some(false);
+        }
         let moved = if undo {
             session.editor.undo()
         } else {
