@@ -172,6 +172,54 @@ pub(in crate::panels::symbol_editor_properties) fn graphic(
             }))
             .part(stroke_leader(first, i18n))
         }
+        GraphicKindSummary::Bezier { points } => bezier_parts(base, points, i18n)?,
+        kind @ (GraphicKindSummary::EllipticalArc { .. }
+        | GraphicKindSummary::RoundRectangle { .. }) => {
+            let outline = curve_outline(kind);
+            let fit = Fit::of(&outline, MARGIN, false)?;
+            let points: Vec<Point> = outline.iter().map(|v| fit.point(*v)).collect();
+            let first = *points.first()?;
+            let is_closed = matches!(kind, GraphicKindSummary::RoundRectangle { .. });
+            let base = if is_closed {
+                base.part(body(Primitive::Polyline {
+                    points: points.clone(),
+                    is_closed,
+                }))
+            } else {
+                base
+            };
+            base.part(edge(Primitive::Polyline { points, is_closed }))
+                .part(stroke_leader(first, i18n))
+        }
+        GraphicKindSummary::Pie {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => {
+            let fit = round_fit(*center, *radius)?;
+            let (c, r) = (fit.point(*center), fit.length(*radius));
+            let ring: Vec<Point> = signex_library::SymbolGraphicKind::Pie {
+                center: *center,
+                radius: *radius,
+                start_deg: *start_deg,
+                end_deg: *end_deg,
+            }
+            .flattened_outline()
+            .into_iter()
+            .map(|v| fit.point(v))
+            .collect();
+            base.part(body(Primitive::Polyline {
+                points: ring.clone(),
+                is_closed: true,
+            }))
+            .part(edge(Primitive::Polyline {
+                points: ring,
+                is_closed: true,
+            }))
+            .part(radius_callout(c, r, i18n))
+            .part(center_label(c))
+        }
         GraphicKindSummary::Text { content, .. } => base
             .part(
                 Part::label(
@@ -196,6 +244,84 @@ pub(in crate::panels::symbol_editor_properties) fn graphic(
             ),
     };
     Some(ill)
+}
+
+/// The drawn outline of an elliptical arc or round rectangle.
+fn curve_outline(kind: &GraphicKindSummary) -> Vec<[f64; 2]> {
+    use signex_library::SymbolGraphicKind as K;
+    match *kind {
+        GraphicKindSummary::EllipticalArc {
+            center,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => K::EllipticalArc {
+            center,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        }
+        .flattened_outline(),
+        GraphicKindSummary::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        } => K::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        }
+        .flattened_outline(),
+        _ => Vec::new(),
+    }
+}
+
+/// A Bezier: the curve, its control arms, and a leader on each point.
+fn bezier_parts(base: Illustration, points: &[[f64; 2]; 4], i18n: &I18n) -> Option<Illustration> {
+    let curve = signex_library::SymbolGraphicKind::Bezier { points: *points }.flattened_outline();
+    let fit = Fit::of(&curve, MARGIN, false)?;
+    let [start, c1, c2, end] = points.map(|p| fit.point(p));
+    let arm = |from: Point, to: Point| Part::new(Primitive::Line { from, to }, Style::dashed());
+    Some(
+        base.part(arm(start, c1))
+            .part(arm(end, c2))
+            .part(
+                Part::new(
+                    Primitive::Polyline {
+                        points: curve.iter().map(|v| fit.point(*v)).collect(),
+                        is_closed: false,
+                    },
+                    Style::edge(),
+                )
+                .linked(field::G_STROKE),
+            )
+            .part(corner_leader(
+                start,
+                ids::EDITORS_SYMPROPS_CALLOUT_START,
+                field::G_START,
+                i18n,
+            ))
+            .part(corner_leader(
+                c1,
+                ids::PROPERTIES_BEZIER_C1,
+                field::G_CONTROL_1,
+                i18n,
+            ))
+            .part(corner_leader(
+                c2,
+                ids::PROPERTIES_BEZIER_C2,
+                field::G_CONTROL_2,
+                i18n,
+            ))
+            .part(corner_leader(
+                end,
+                ids::EDITORS_SYMPROPS_CALLOUT_END,
+                field::G_END,
+                i18n,
+            )),
+    )
 }
 
 /// The fit of a circle or arc of `radius` round `center`.

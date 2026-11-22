@@ -1,5 +1,6 @@
 //! Delete + hit-testing + graphic-handle geometry for the symbol editor.
 
+use super::curve_grips::{curve_handles, move_curve_handle};
 use super::*;
 
 /// Delete whatever is currently selected. Returns `Some(new_sel)` if
@@ -249,6 +250,21 @@ fn hit_test_graphic_body(sym: &Symbol, idx: usize, x: f64, y: f64) -> bool {
                 polygon_outline_hit(x, y, vertices, GRAPHIC_BODY_TOL)
             }
         }
+        SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::EllipticalArc { .. } => {
+            g.kind.flattened_outline().windows(2).any(|w| {
+                point_to_segment_dist_sq([x, y], w[0], w[1]) <= GRAPHIC_BODY_TOL * GRAPHIC_BODY_TOL
+            })
+        }
+        // Every interior point counts, as for a Rectangle.
+        SymbolGraphicKind::RoundRectangle { .. } => {
+            let ring = g.kind.flattened_outline();
+            point_in_polygon([x, y], &ring) || polygon_outline_hit(x, y, &ring, GRAPHIC_BODY_TOL)
+        }
+        SymbolGraphicKind::Pie { .. } => {
+            let ring = g.kind.flattened_outline();
+            (g.fill.is_some() && point_in_polygon([x, y], &ring))
+                || polygon_outline_hit(x, y, &ring, GRAPHIC_BODY_TOL)
+        }
     }
 }
 
@@ -287,6 +303,11 @@ pub fn graphic_handle_position(
     handle: GraphicHandle,
 ) -> Option<[f64; 2]> {
     let g = sym.graphics.get(idx)?;
+    if let Some(handles) = curve_handles(&g.kind) {
+        return handles
+            .into_iter()
+            .find_map(|(h, pos)| (h == handle).then_some(pos));
+    }
     Some(match (&g.kind, handle) {
         (SymbolGraphicKind::Rectangle { from, to }, GraphicHandle::RectCorner(c)) => match c {
             0 => [from[0], to[1]],   // TL
@@ -316,6 +337,12 @@ pub fn graphic_handle_position(
                 radius,
                 start_deg,
                 ..
+            }
+            | SymbolGraphicKind::Pie {
+                center,
+                radius,
+                start_deg,
+                ..
             },
             GraphicHandle::ArcStart,
         ) => {
@@ -324,6 +351,12 @@ pub fn graphic_handle_position(
         }
         (
             SymbolGraphicKind::Arc {
+                center,
+                radius,
+                end_deg,
+                ..
+            }
+            | SymbolGraphicKind::Pie {
                 center,
                 radius,
                 end_deg,
@@ -337,6 +370,9 @@ pub fn graphic_handle_position(
         (SymbolGraphicKind::Text { position, .. }, GraphicHandle::TextAnchor) => *position,
         (SymbolGraphicKind::Polygon { vertices }, GraphicHandle::PolygonVertex(i)) => {
             *vertices.get(i as usize)?
+        }
+        (SymbolGraphicKind::Bezier { points }, GraphicHandle::BezierPoint(i)) => {
+            *points.get(i as usize)?
         }
         _ => return None,
     })
@@ -375,7 +411,20 @@ pub fn graphic_handles(sym: &Symbol, idx: usize) -> Vec<(GraphicHandle, [f64; 2]
         SymbolGraphicKind::Circle { center, radius } => {
             vec![(GraphicHandle::CircleRadius, [center[0] + radius, center[1]])]
         }
+        SymbolGraphicKind::EllipticalArc { .. } | SymbolGraphicKind::RoundRectangle { .. } => {
+            curve_handles(&g.kind).unwrap_or_default()
+        }
+        SymbolGraphicKind::Bezier { points } => (0u8..)
+            .zip(points)
+            .map(|(i, p)| (GraphicHandle::BezierPoint(i), *p))
+            .collect(),
         SymbolGraphicKind::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        }
+        | SymbolGraphicKind::Pie {
             center,
             radius,
             start_deg,
@@ -470,6 +519,9 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
     let Some(g) = sym.graphics.get_mut(idx) else {
         return;
     };
+    if move_curve_handle(&mut g.kind, handle, x, y) {
+        return;
+    }
     match (&mut g.kind, handle) {
         (SymbolGraphicKind::Rectangle { from, to }, GraphicHandle::RectCorner(c)) => match c {
             0 => {
@@ -522,6 +574,9 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
         (
             SymbolGraphicKind::Arc {
                 center, start_deg, ..
+            }
+            | SymbolGraphicKind::Pie {
+                center, start_deg, ..
             },
             GraphicHandle::ArcStart,
         ) => {
@@ -537,6 +592,9 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
         }
         (
             SymbolGraphicKind::Arc {
+                center, end_deg, ..
+            }
+            | SymbolGraphicKind::Pie {
                 center, end_deg, ..
             },
             GraphicHandle::ArcEnd,
@@ -554,6 +612,11 @@ pub fn move_graphic_handle(sym: &mut Symbol, idx: usize, handle: GraphicHandle, 
             if let Some(v) = vertices.get_mut(i as usize) {
                 v[0] = x;
                 v[1] = y;
+            }
+        }
+        (SymbolGraphicKind::Bezier { points }, GraphicHandle::BezierPoint(i)) => {
+            if let Some(p) = points.get_mut(i as usize) {
+                *p = [x, y];
             }
         }
         _ => {}

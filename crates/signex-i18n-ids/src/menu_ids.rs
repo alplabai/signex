@@ -147,6 +147,10 @@ define_ids! {
         CTX_SHAPE_RECTANGLE = "ctx-shape-rectangle";
         CTX_SHAPE_CIRCLE = "ctx-shape-circle";
         CTX_SHAPE_ARC = "ctx-shape-arc";
+        CTX_SHAPE_ELLIPTICAL_ARC = "ctx-shape-elliptical-arc";
+        CTX_SHAPE_BEZIER = "ctx-shape-bezier";
+        CTX_SHAPE_ROUND_RECTANGLE = "ctx-shape-round-rectangle";
+        CTX_SHAPE_PIE_CHART = "ctx-shape-pie-chart";
         CTX_DESELECT_ALL = "ctx-deselect-all";
         CTX_FIT_TO_WINDOW = "ctx-fit-to-window";
         CTX_SYMBOL_JOIN_POLYGON = "ctx-symbol-join-polygon";

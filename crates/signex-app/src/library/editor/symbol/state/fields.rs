@@ -145,6 +145,12 @@ fn body_extent(sym: &Symbol, view: PartView) -> (f64, f64, f64, f64) {
             }
             SymbolGraphicKind::Text { position, .. } => pts.push(*position),
             SymbolGraphicKind::Polygon { vertices } => pts.extend(vertices.iter().copied()),
+            kind @ (SymbolGraphicKind::Bezier { .. }
+            | SymbolGraphicKind::Pie { .. }
+            | SymbolGraphicKind::EllipticalArc { .. }
+            | SymbolGraphicKind::RoundRectangle { .. }) => {
+                pts.extend(kind.flattened_outline());
+            }
         }
     }
     if pts.is_empty() {

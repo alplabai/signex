@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use signex_i18n::{I18n, ids, menu_ids, t};
+use signex_i18n::{I18n, ids, t};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -393,12 +393,13 @@ fn shapes_entries(
                 .active(is_armed),
         )
     };
-    // A shape with no tool yet: greyed, with the reason on hover.
-    let unbuilt = |label: &'static str| -> DropdownEntry<LibraryMessage> {
+    // A shape with no glyph: the icon column stays empty (mockup row 141).
+    let plain = |label: &'static str, tool: SymbolToolMsg, armed: SymbolTool| {
+        let is_armed = active_tool == armed;
         DropdownEntry::Item(
-            DropdownItem::passive(label)
-                .disabled(true)
-                .tooltip(i18n.message_plain(menu_ids::MENU_PLANNED_TOOLTIP, &[])),
+            DropdownItem::new(label, sym(path.clone(), SymbolEditorMsg::SetTool(tool)))
+                .checked(is_armed)
+                .active(is_armed),
         )
     };
     vec![
@@ -415,8 +416,17 @@ fn shapes_entries(
             SymbolTool::PlaceArc,
             ic::icon_dd_arc(tid),
         ),
-        unbuilt("Elliptical Arc"),
-        unbuilt("Bezier"),
+        plain(
+            "Elliptical Arc",
+            SymbolToolMsg::PlaceEllipticalArc,
+            SymbolTool::PlaceEllipticalArc,
+        ),
+        shape(
+            "Bezier",
+            SymbolToolMsg::PlaceBezier,
+            SymbolTool::PlaceBezier,
+            ic::icon_dd_bezier(tid),
+        ),
         shape(
             "Polygon",
             SymbolToolMsg::PlacePolygon,
@@ -429,20 +439,25 @@ fn shapes_entries(
             SymbolTool::PlaceRectangle,
             ic::icon_dd_rect(tid),
         ),
-        unbuilt("Round Rectangle"),
+        plain(
+            "Round Rectangle",
+            SymbolToolMsg::PlaceRoundRectangle,
+            SymbolTool::PlaceRoundRectangle,
+        ),
         shape(
             "Ellipse / Circle",
             SymbolToolMsg::PlaceCircle,
             SymbolTool::PlaceCircle,
             ic::icon_dd_circle(tid),
         ),
-        unbuilt("Pie Chart"),
+        plain("Pie Chart", SymbolToolMsg::PlacePie, SymbolTool::PlacePie),
     ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use signex_i18n::menu_ids;
     use signex_types::theme::ThemeId;
 
     /// Look up a dropdown row by its exact label — robust against the
@@ -585,7 +600,7 @@ mod tests {
             &i18n,
         );
         let reason = i18n.message_plain(menu_ids::MENU_PLANNED_TOOLTIP, &[]);
-        let unbuilt = ["Elliptical Arc", "Bezier", "Round Rectangle", "Pie Chart"];
+        let unbuilt: [&str; 0] = [];
         let mut seen = 0;
         for entry in &entries {
             let DropdownEntry::Item(item) = entry else {
@@ -603,6 +618,45 @@ mod tests {
             }
         }
         assert_eq!(seen, unbuilt.len());
+    }
+
+    /// #2838: the built curve rows arm their own tools and show as armed.
+    #[test]
+    fn the_bezier_and_pie_rows_arm_their_tools() {
+        let i18n = I18n::en_us();
+        for (label, armed) in [
+            ("Bezier", SymbolTool::PlaceBezier),
+            ("Pie Chart", SymbolTool::PlacePie),
+            ("Elliptical Arc", SymbolTool::PlaceEllipticalArc),
+            ("Round Rectangle", SymbolTool::PlaceRoundRectangle),
+        ] {
+            let entries = shapes_entries(
+                armed,
+                PathBuf::from("t.snxsym"),
+                ThemeId::GraphiteDark,
+                &i18n,
+            );
+            let row = entries.iter().find_map(|e| match e {
+                DropdownEntry::Item(item) if item.label == label => Some(item),
+                _ => None,
+            });
+            assert!(
+                row.is_some_and(|item| item.active),
+                "{label} is highlighted"
+            );
+            let expected = match item_msg(&entries, label) {
+                SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceBezier) => SymbolTool::PlaceBezier,
+                SymbolEditorMsg::SetTool(SymbolToolMsg::PlacePie) => SymbolTool::PlacePie,
+                SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceEllipticalArc) => {
+                    SymbolTool::PlaceEllipticalArc
+                }
+                SymbolEditorMsg::SetTool(SymbolToolMsg::PlaceRoundRectangle) => {
+                    SymbolTool::PlaceRoundRectangle
+                }
+                other => panic!("{label}: {other:?}"),
+            };
+            assert_eq!(expected, armed);
+        }
     }
 
     /// Mockup row 141: the Shapes menu opens under a "Shapes" header and highlights

@@ -16,6 +16,13 @@ use crate::library::editor::symbol::rect_extent;
 
 const GEOMETRY: &str = "symprops.geometry";
 const STYLE: &str = "symprops.style";
+/// A Bezier's four point rows, named as on the schematic's Bezier.
+const BEZIER_ROWS: [(MessageId, &str); 4] = [
+    (ids::PROPERTIES_BEZIER_START, field::G_START),
+    (ids::PROPERTIES_BEZIER_CONTROL_1, field::G_CONTROL_1),
+    (ids::PROPERTIES_BEZIER_CONTROL_2, field::G_CONTROL_2),
+    (ids::PROPERTIES_BEZIER_END, field::G_END),
+];
 
 pub(super) fn view<'a>(
     sym: &'a SymbolEditorPanelContext,
@@ -57,6 +64,10 @@ fn kind_title(kind: &GraphicKindSummary) -> MessageId {
         GraphicKindSummary::Arc { .. } => ids::EDITORS_SYMPROPS_ARC,
         GraphicKindSummary::Text { .. } => ids::EDITORS_SYMPROPS_TEXT,
         GraphicKindSummary::Polygon { .. } => ids::EDITORS_SYMPROPS_POLYGON,
+        GraphicKindSummary::Bezier { .. } => ids::PROPERTIES_BEZIER_TITLE,
+        GraphicKindSummary::Pie { .. } => ids::EDITORS_SYMPROPS_PIE,
+        GraphicKindSummary::EllipticalArc { .. } => ids::EDITORS_SYMPROPS_ELLIPTICAL_ARC,
+        GraphicKindSummary::RoundRectangle { .. } => ids::EDITORS_SYMPROPS_ROUND_RECTANGLE,
     }
 }
 
@@ -124,7 +135,79 @@ fn geometry_rows<'a>(g: &GraphicSummary, form: &Form<'_>) -> Vec<Element<'a, Pan
                 field::G_RADIUS,
             ),
         ],
+        GraphicKindSummary::EllipticalArc {
+            center,
+            radius_x,
+            radius_y,
+            start_deg,
+            end_deg,
+        } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_CENTER_X_Y,
+                (F::CenterX, center[0]),
+                (F::CenterY, center[1]),
+                field::G_CENTER,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_RADIUS_X_Y,
+                (F::RadiusX, *radius_x),
+                (F::RadiusY, *radius_y),
+                field::G_RADIUS,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_START_ANGLE,
+                (F::StartDeg, *start_deg),
+                field::G_START_ANGLE,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_END_ANGLE,
+                (F::EndDeg, *end_deg),
+                field::G_END_ANGLE,
+            ),
+        ],
+        GraphicKindSummary::RoundRectangle {
+            from,
+            to,
+            corner_radius,
+        } => vec![
+            pair(
+                ids::EDITORS_SYMPROPS_START_X_Y,
+                (F::FromX, from[0]),
+                (F::FromY, from[1]),
+                field::G_START,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_END_X_Y,
+                (F::ToX, to[0]),
+                (F::ToY, to[1]),
+                field::G_END,
+            ),
+            pair(
+                ids::EDITORS_SYMPROPS_WIDTH_HEIGHT,
+                (F::Width, rect_extent(from[0], to[0])),
+                (F::Height, rect_extent(from[1], to[1])),
+                field::G_SIZE,
+            ),
+            single(
+                ids::EDITORS_SYMPROPS_CORNER_RADIUS,
+                (F::CornerRadius, *corner_radius),
+                field::G_RADIUS,
+            ),
+        ],
+        GraphicKindSummary::Bezier { points } => (0u8..)
+            .zip(points)
+            .zip(BEZIER_ROWS)
+            .map(|((i, p), (label, id))| {
+                pair(label, (F::BezierX(i), p[0]), (F::BezierY(i), p[1]), id)
+            })
+            .collect(),
         GraphicKindSummary::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        }
+        | GraphicKindSummary::Pie {
             center,
             radius,
             start_deg,
@@ -212,6 +295,8 @@ fn style_rows<'a>(
         GraphicKindSummary::Rectangle { .. }
             | GraphicKindSummary::Circle { .. }
             | GraphicKindSummary::Polygon { .. }
+            | GraphicKindSummary::Pie { .. }
+            | GraphicKindSummary::RoundRectangle { .. }
     );
     if closed {
         rows.push(form.linked(

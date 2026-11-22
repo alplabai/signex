@@ -415,15 +415,15 @@ fn symbol_file_tokens_follow_the_shared_version_policy() {
                 created = \"2026-05-04T00:00:00Z\"\n\
                 updated = \"2026-05-04T00:00:00Z\"\n\
                 symbols = []\n";
-    for token in ["snxsym/v1", "snxsym/v2", "snxsym/v3"] {
+    for token in ["snxsym/v1", "snxsym/v2", "snxsym/v3", "snxsym/v4"] {
         let file = SymbolFile::from_toml_str(&format!("format = \"{token}\"\n{body}"))
             .unwrap_or_else(|e| panic!("{token}: {e}"));
         assert_eq!(file.format, token);
     }
-    match SymbolFile::from_toml_str(&format!("format = \"snxsym/v4\"\n{body}")) {
+    match SymbolFile::from_toml_str(&format!("format = \"snxsym/v5\"\n{body}")) {
         Err(error @ SymbolFileError::UnsupportedFormat(_)) => {
             let message = error.to_string();
-            assert!(message.contains("snxsym/v4"), "{message}");
+            assert!(message.contains("snxsym/v5"), "{message}");
             assert!(message.contains("newer Signex"), "{message}");
         }
         other => panic!("expected UnsupportedFormat, got {other:?}"),

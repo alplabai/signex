@@ -16,7 +16,17 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
                 SymbolToolMsg::PlaceArc => SymbolTool::PlaceArc,
                 SymbolToolMsg::PlaceText => SymbolTool::PlaceText,
                 SymbolToolMsg::PlacePolygon => SymbolTool::PlacePolygon,
+                SymbolToolMsg::PlaceBezier => SymbolTool::PlaceBezier,
+                SymbolToolMsg::PlacePie => SymbolTool::PlacePie,
+                SymbolToolMsg::PlaceEllipticalArc => SymbolTool::PlaceEllipticalArc,
+                SymbolToolMsg::PlaceRoundRectangle => SymbolTool::PlaceRoundRectangle,
             };
+            // A Bezier needs all four clicks: leaving the tool drops the
+            // partial curve rather than placing one.
+            if editor.tool == SymbolTool::PlaceBezier && new_tool != SymbolTool::PlaceBezier {
+                editor.polygon_vertices.clear();
+                editor.canvas_cache.clear();
+            }
             // Footprint parity ("leaving Place Polygon commits (>= 3
             // vertices) / discards it (< 3)"): flush the in-flight
             // stash HERE, synchronously, in the same handler that

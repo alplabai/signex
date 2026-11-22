@@ -345,6 +345,10 @@ pub enum SymbolToolMsg {
     PlaceArc,
     PlaceText,
     PlacePolygon,
+    PlaceBezier,
+    PlacePie,
+    PlaceEllipticalArc,
+    PlaceRoundRectangle,
 }
 
 /// v0.13.3 — selection-aware constraint kind tag. The dispatcher
@@ -456,6 +460,10 @@ pub enum GraphicHandleMsg {
     /// Polygon vertex at the given index — pure-data alias of
     /// `editor::symbol::state::GraphicHandle::PolygonVertex`.
     PolygonVertex(u32),
+    /// Bezier point — `0=start, 1=C1, 2=C2, 3=end`.
+    BezierPoint(u8),
+    /// Elliptical arc radius grip — `0=X, 1=Y`.
+    EllipseRadius(u8),
 }
 
 /// Pivot mode for Symbol-graphic rotate operations.

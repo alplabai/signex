@@ -14,6 +14,7 @@
 //! - [`middle_zoom`] — the middle-button drag zoom.
 
 mod camera;
+pub(super) mod ellipse;
 mod keys;
 mod middle_zoom;
 mod pointer;
