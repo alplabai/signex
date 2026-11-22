@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
+use signex_sketch::attr::{CustomPadShape, PadAttr, PadShape, PasteAperturePattern};
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
@@ -239,6 +240,11 @@ fn splice(
     sketch.entities.push(arc);
     move_line_end(sketch, arms[0].line, corner, start);
     move_line_end(sketch, arms[1].line, corner, end);
+    // Left in, no residual reads it: a frozen Point, always under-constrained.
+    if is_orphan(sketch, corner) {
+        sketch.entities.retain(|e| e.id != corner);
+        at.remove(&corner);
+    }
     let to_first = construction_radius(sketch, plane, center, start);
     let to_second = construction_radius(sketch, plane, center, end);
     // Three rows on the arc's five free coordinates leave the two the
@@ -264,6 +270,39 @@ fn splice(
             id: ConstraintId::new(),
             kind,
         }));
+}
+
+/// Whether `corner` is a bare Point nothing in the sketch names any more.
+fn is_orphan(sketch: &SketchData, corner: SketchEntityId) -> bool {
+    let is_bare = sketch
+        .entities
+        .iter()
+        .find(|e| e.id == corner)
+        .is_some_and(|e| *e == Entity::new(e.id, e.plane, e.kind.clone()));
+    let on_entity = sketch.entities.iter().any(|e| {
+        (e.id != corner && e.point_refs().contains(&corner))
+            || e.pad.as_ref().is_some_and(|pad| pad_names(pad, corner))
+    });
+    let constrained = sketch.constraints.iter().any(|c| c.kind.touches(corner));
+    let in_a_pattern = sketch
+        .arrays
+        .iter()
+        .any(|a| a.kind.entity_refs().contains(&corner))
+        || sketch.pattern_mirrors.iter().any(|m| m.line == corner);
+    is_bare && !on_entity && !constrained && !in_a_pattern
+}
+
+/// Whether a pad's outline ledger, custom shape or paste apertures name `id`.
+fn pad_names(pad: &PadAttr, id: SketchEntityId) -> bool {
+    let in_shape = matches!(
+        &pad.shape,
+        PadShape::Custom(CustomPadShape::SketchProfile { source }) if source.contains(&id)
+    );
+    let in_paste = matches!(
+        &pad.paste_apertures,
+        PasteAperturePattern::Custom { source } if source.contains(&id)
+    );
+    pad.owned.contains(&id) || in_shape || in_paste
 }
 
 /// A construction line from the arc's centre to one tangent point.
@@ -314,6 +353,8 @@ mod tests {
     use signex_sketch::id::ConstraintId;
     use signex_sketch::parameter::resolve;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
+    use signex_sketch::solver::dof::DofColor;
+    use signex_types::sketch::board_attr::ComponentAnchorAttr;
 
     use super::super::checks::{CheckState, outline_checks_with};
     use super::*;
@@ -647,6 +688,85 @@ mod tests {
         );
         let after = checks(&sketch, &edited);
         assert_eq!(after.inside_corners, CheckState::Passed, "{after:?}");
+    }
+
+    /// The L with every point pinned: five Fixed, and the corner by the
+    /// directions of its two lines, which a fillet may keep.
+    fn fully_constrained_l() -> (SketchData, Vec<SketchEntityId>) {
+        let mut sketch = l_outline(5.0);
+        let (points, lines) = l_ids(&sketch);
+        for index in [0, 1, 2, 4, 5] {
+            constrain(
+                &mut sketch,
+                ConstraintKind::Fixed {
+                    point: points[index],
+                },
+            );
+        }
+        constrain(&mut sketch, ConstraintKind::Horizontal { line: lines[2] });
+        constrain(&mut sketch, ConstraintKind::Vertical { line: lines[3] });
+        (sketch, points)
+    }
+
+    fn all_full(solve: &FullSolveOutput) -> bool {
+        solve.colours.values().all(|c| *c == DofColor::Full)
+    }
+
+    /// The old corner stayed as a frozen Point, always Under, so the DOF
+    /// chip read under-constrained.
+    #[test]
+    fn a_fully_constrained_sketch_stays_fully_constrained_after_a_fillet() {
+        let (mut sketch, points) = fully_constrained_l();
+        assert!(all_full(&solved(&sketch)), "the fixture is fully pinned");
+
+        assert_eq!(fillet_the_l(&mut sketch).applied, 1);
+
+        assert!(
+            !sketch.entities.iter().any(|e| e.id == points[3]),
+            "the old corner is gone"
+        );
+        assert!(sketch.dangling_refs().is_empty());
+        let after = solved(&sketch);
+        assert!(after.over_constraints.is_empty(), "no conflict");
+        assert!(all_full(&after), "{:?}", after.colours);
+    }
+
+    #[test]
+    fn a_corner_carrying_a_component_anchor_stays_after_the_fillet() {
+        let mut sketch = l_outline(5.0);
+        let (points, _) = l_ids(&sketch);
+        sketch.entities[3].component_anchor = Some(ComponentAnchorAttr::default());
+
+        assert_eq!(fillet_the_l(&mut sketch).applied, 1);
+
+        assert!(sketch.entities.iter().any(|e| e.id == points[3]));
+    }
+
+    #[test]
+    fn a_point_a_pad_outline_owns_is_not_an_orphan() {
+        let plane = PlaneId::new();
+        let corner = SketchEntityId::new();
+        let mut pad = Entity::new(
+            SketchEntityId::new(),
+            plane,
+            EntityKind::Point { x: 1.0, y: 1.0 },
+        );
+        pad.pad = Some(PadAttr {
+            owned: vec![corner],
+            ..PadAttr::default()
+        });
+        let mut sketch = SketchData::default();
+        sketch.entities.push(Entity::new(
+            corner,
+            plane,
+            EntityKind::Point { x: 0.0, y: 0.0 },
+        ));
+        sketch.entities.push(pad);
+
+        assert!(!is_orphan(&sketch, corner));
+
+        sketch.entities[1].pad = None;
+        assert!(is_orphan(&sketch, corner));
     }
 
     /// The review's case: a pattern of a corner Point repeats the cutout, so

@@ -130,7 +130,10 @@ clipped.
     again with new ids. Change Footprint runs again from the footprint it read,
     with its linked sheets. An edit that stores a whole drawing, directive or
     harness connector changes only the fields it changed when recorded, so a
-    later move or edit of another field stays.
+    later move or edit of another field stays. A list it changed (table rows,
+    say) is merged element by element when the elements changed since are
+    other ones; a list that changed length or was edited at the same element
+    is refused, as the sheet has moved on.
   - **Footprint and symbol editors:** the recorded messages or Properties
     panel edit run on the recorded pads, pins, silk or sketch entities of that
     editor document, with the person's selection and tool put back. A pad or
