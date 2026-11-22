@@ -22,7 +22,6 @@ use signex_i18n::{MessageId, ids};
 use signex_types::schematic::{LabelType, SchematicSheet};
 
 use crate::app::Message;
-pub use crate::app::core::rail_rename::RailRenames;
 pub(crate) use crate::app::core::rail_rename::{RailRead, RailRename, RunningRename};
 use crate::app::project_sheets::ProjectSheetPlan;
 use crate::app::sheet_write::SheetWriteRefusal;
