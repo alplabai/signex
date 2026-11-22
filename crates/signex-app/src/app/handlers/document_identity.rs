@@ -61,6 +61,7 @@ impl Signex {
                 .footprint_editors
                 .insert(new_path.to_path_buf(), editor);
         }
+        self.document_state.rekey_undo_sheets(old_path, new_path);
         if self.document_state.active_path.as_deref() == Some(old_path) {
             self.document_state.active_path = Some(new_path.to_path_buf());
         }

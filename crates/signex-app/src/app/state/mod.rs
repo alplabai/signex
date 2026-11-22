@@ -506,6 +506,9 @@ pub struct DocumentState {
     /// its earlier-run recovery copy checked (#1208). `open_schematic_tab`
     /// queues the path, `update` starts the check.
     pub recovery_check_due: Vec<std::path::PathBuf>,
+    /// Saved tabless engines kept only because an undo group still has a
+    /// step in them (#2760); see `app/parked_sheets.rs`.
+    pub(crate) held_for_undo: std::collections::HashSet<std::path::PathBuf>,
     /// Dirty documents that no editor draft holds; see `dirty.rs`, the only
     /// reader and writer. Ask `is_document_dirty`, never this field.
     pub(crate) dirty_docs: dirty::DirtyDocuments,

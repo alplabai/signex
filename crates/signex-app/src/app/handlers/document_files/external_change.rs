@@ -258,6 +258,7 @@ impl Signex {
         let Some(path) = self.disk_conflict_path().filter(|_| offered) else {
             return Task::none();
         };
+        self.show_parked_conflict(&path);
         // Save As writes the active tab, so the conflicted document must be it.
         if !self.activate_tab_for_path(&path) {
             crate::diagnostics::log_warning(format!(
@@ -359,6 +360,18 @@ impl Signex {
         }
     }
 
+    /// Save As and Reload act on a tab: a conflicted sheet that is parked gets
+    /// its tab back, with its unsaved edits (#2760).
+    fn show_parked_conflict(&mut self, path: &Path) {
+        let tabbed = self.document_state.tabs.iter().any(|tab| tab.path == path);
+        if !tabbed && self.document_state.engines.contains_key(path) {
+            let title = path
+                .file_stem()
+                .map_or_else(|| file_label(path), |s| s.to_string_lossy().into_owned());
+            self.attach_parked_schematic_tab(path.to_path_buf(), title);
+        }
+    }
+
     /// The user chose Reload from disk: read the file and replace the document.
     /// The unsaved edits are dropped only when the read succeeds.
     pub(crate) fn handle_disk_conflict_reload(&mut self) -> Task<Message> {
@@ -372,6 +385,7 @@ impl Signex {
             ));
             return Task::none();
         }
+        self.show_parked_conflict(&path);
         let read_path = path.clone();
         let is_pcb = super::save_async::is_pcb_path(&path);
         // Edits made while the read runs are not in the file being read.

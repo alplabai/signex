@@ -1,0 +1,269 @@
+//! A sheet a project-wide run parked is an open document (#2760): an outside
+//! change is never overwritten, an earlier recovery copy survives autosave,
+//! one undo still restores it after a save, and it follows a rename.
+
+use std::path::{Path, PathBuf};
+
+use signex_engine::AnnotateMode::ResetAndRenumber;
+
+use super::annotate_tests::{
+    child_path, child_refs, logged_since, notice_detail, project, root_refs, unit,
+};
+use crate::annotate_undo::AnnotateUndo;
+use crate::app::path_ops::settle_task;
+use crate::app::state::NoticeAction;
+use crate::app::{AnnotateMsg, EditMsg, Message, Signex, TabInfo, TabKind};
+use crate::autosave::AutosaveMsg;
+use crate::menu_bar::MenuMessage;
+use crate::persist::ContentHash;
+
+/// An open root (R5) and an unopened child (R7), one-step undo.
+fn fixture() -> (Signex, PathBuf, PathBuf) {
+    let (mut app, dir) = project(vec![unit("R5", 1, 0.0)], vec![unit("R7", 1, 0.0)]);
+    app.ui_state.annotate_undo = AnnotateUndo::Project;
+    app.document_state.tabs.push(TabInfo {
+        title: "a_root.snxsch".into(),
+        path: dir.join("a_root.snxsch"),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    let child = child_path(&dir);
+    (app, dir, child)
+}
+
+fn send(app: &mut Signex, message: Message) {
+    let task = app.update(message);
+    settle_task(app, task);
+}
+
+fn annotate(app: &mut Signex) {
+    send(app, Message::Annotate(AnnotateMsg::Run(ResetAndRenumber)));
+}
+
+fn save_all(app: &mut Signex) {
+    send(app, Message::Menu(MenuMessage::SaveAll));
+}
+
+fn undo(app: &mut Signex) {
+    send(app, Message::Edit(EditMsg::Undo));
+}
+
+fn held_refs(app: &Signex, path: &Path) -> Vec<String> {
+    (app.document_state.engines[path].document().symbols.iter())
+        .map(|symbol| symbol.reference.clone())
+        .collect()
+}
+
+fn card_names(app: &Signex, path: &Path) -> bool {
+    let action = (app.document_state.error_notice.as_ref()).and_then(|n| n.action.as_ref());
+    matches!(action, Some(NoticeAction::DiskChanged { path: card, .. }) if card == path)
+}
+
+// ---- An outside change.
+
+#[test]
+fn every_parked_sheet_records_the_bytes_the_run_read() {
+    let (mut app, dir, child) = fixture();
+    let read = ContentHash::of(&std::fs::read(&child).expect("child"));
+    annotate(&mut app);
+    let baseline = app.document_state.document_saves.baseline(&child);
+    let carried = app.document_state.engines[&child]
+        .document()
+        .unknown
+        .source_hash;
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(baseline, Some(read));
+    assert_eq!(carried, None, "undo snapshots do not carry the fingerprint");
+}
+
+#[test]
+fn reset_duplicates_parks_with_the_same_baseline() {
+    let (mut app, dir) = project(vec![unit("R1", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
+    let child = child_path(&dir);
+    let read = ContentHash::of(&std::fs::read(&child).expect("child"));
+    let task = app.handle_reset_duplicate_designators();
+    settle_task(&mut app, task);
+    let baseline = app.document_state.document_saves.baseline(&child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(baseline, Some(read));
+}
+
+#[test]
+fn save_all_does_not_overwrite_a_parked_sheet_changed_on_disk() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    std::fs::write(&child, b"written by another program").expect("outside change");
+    let since = crate::diagnostics::newest_entry_id();
+
+    save_all(&mut app);
+
+    let on_disk = std::fs::read(&child).expect("child");
+    let dirty = app.document_state.is_document_dirty(&child);
+    let said = logged_since(since, "changed on disk");
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(on_disk, b"written by another program");
+    assert!(dirty, "the numbering is still unsaved");
+    assert!(said, "the user is told");
+}
+
+#[test]
+fn the_idle_poll_reports_a_parked_sheet_changed_on_disk() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    std::fs::write(&child, b"written by another program").expect("outside change");
+
+    let poll = app.start_document_disk_poll();
+    settle_task(&mut app, poll);
+
+    let told = card_names(&app, &child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(told, "the changed-on-disk card names the parked sheet");
+}
+
+// ---- An earlier run's recovery copy.
+
+#[test]
+fn an_autosave_tick_does_not_replace_an_earlier_runs_recovery_copy() {
+    let (mut app, dir, child) = fixture();
+    let recovery = dir.join("recovery");
+    app.document_state.autosave.set_dir(Some(recovery.clone()));
+    app.ui_state.autosave_enabled = true;
+    crate::autosave::sidecar::write(&recovery, &child, b"edits from an earlier run")
+        .expect("sidecar");
+    let sidecar = crate::autosave::sidecar::sidecar_path(&recovery, &child);
+    let before = std::fs::read(&sidecar).expect("sidecar");
+
+    // The tick lands while the recovery check is still running.
+    let read = app.handle_annotate(ResetAndRenumber);
+    let numbered = crate::persist::run_task::outputs(read).remove(0);
+    let checks = app.update(numbered);
+    send(&mut app, Message::Autosave(AutosaveMsg::Ticked));
+    let during = std::fs::read(&sidecar).expect("sidecar");
+    settle_task(&mut app, checks);
+    // And once it has reported.
+    send(&mut app, Message::Autosave(AutosaveMsg::Ticked));
+    let after = std::fs::read(&sidecar).expect("sidecar");
+    let offered = (app.document_state.autosave.current_offer()).map(|offer| offer.path.clone());
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(during, before, "not replaced before the check reported");
+    assert_eq!(after, before, "not replaced while the offer is up");
+    assert_eq!(offered, Some(child), "the copy is offered");
+}
+
+// ---- Undo after a save.
+
+#[test]
+fn annotate_save_all_then_one_undo_restores_every_sheet() {
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    save_all(&mut app);
+    let saved = child_refs(&dir);
+    let clean = !app.document_state.is_document_dirty(&child);
+
+    undo(&mut app);
+
+    let (root, held) = (root_refs(&app, &dir), held_refs(&app, &child));
+    let dirty = app.document_state.is_document_dirty(&child);
+    let on_disk = child_refs(&dir);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(saved, ["R2"], "Save All wrote the numbering");
+    assert!(clean);
+    assert_eq!(
+        (root, held),
+        (vec!["R5".to_string()], vec!["R7".to_string()])
+    );
+    assert!(dirty, "the undone sheet differs from its saved file");
+    assert_eq!(on_disk, ["R2"], "the undo writes nothing");
+}
+
+#[test]
+fn a_saved_engine_is_released_once_its_undo_group_is_gone() {
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    save_all(&mut app);
+    let kept = app.document_state.engines.contains_key(&child);
+
+    app.document_state.undo_groups.clear();
+    app.sync_undo_depth();
+
+    let released = !app.document_state.engines.contains_key(&child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(kept, "the group still needs the engine");
+    assert!(released, "a clean tabless engine would shadow the file");
+}
+
+// ---- Reset Duplicates is refused whole.
+
+#[test]
+fn reset_duplicates_with_an_unreadable_sheet_changes_nothing() {
+    let (mut app, dir) = project(
+        vec![unit("R1", 1, 0.0), unit("R1", 1, 10.0)],
+        vec![unit("R7", 1, 0.0)],
+    );
+    let child = child_path(&dir);
+    std::fs::write(&child, "not a schematic").expect("corrupt the child");
+
+    let task = app.handle_reset_duplicate_designators();
+    settle_task(&mut app, task);
+
+    let root = root_refs(&app, &dir);
+    let notice = notice_detail(&app);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(root, ["R1", "R1"], "no partial reset");
+    assert!(notice.contains("z_child.snxsch"), "{notice}");
+    assert!(notice.contains("Nothing was changed"), "{notice}");
+}
+
+#[test]
+fn reset_duplicates_with_a_blocked_sheet_changes_nothing() {
+    let (mut app, dir) = project(vec![unit("R1", 1, 0.0)], vec![unit("R1", 1, 0.0)]);
+    let child = child_path(&dir);
+    let task = app.handle_reset_duplicate_designators();
+    // The read of the child starts after the run's own sheets were read.
+    app.document_state.pending_opens.begin(child.clone());
+    settle_task(&mut app, task);
+
+    let (root, parked) = (
+        root_refs(&app, &dir),
+        app.document_state.engines.contains_key(&child),
+    );
+    let notice = notice_detail(&app);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(root, ["R1"], "no partial reset");
+    assert!(!parked);
+    assert!(notice.contains("z_child.snxsch"), "{notice}");
+    assert!(notice.contains("Nothing was changed"), "{notice}");
+}
+
+// ---- A rename while parked.
+
+#[test]
+fn a_parked_sheet_renamed_on_disk_is_still_restored_by_one_undo() {
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    let renamed = dir.join("z_renamed.snxsch");
+    std::fs::rename(&child, &renamed).expect("rename");
+    app.rekey_document(&child, &renamed);
+    let baseline_moved = app
+        .document_state
+        .document_saves
+        .baseline(&renamed)
+        .is_some();
+    let original = std::fs::read(&renamed).expect("renamed");
+
+    undo(&mut app);
+
+    let root = root_refs(&app, &dir);
+    let dropped = !app.document_state.engines.contains_key(&renamed);
+    let clean = !app.document_state.is_document_dirty(&renamed);
+    let on_disk = std::fs::read(&renamed).expect("renamed");
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(baseline_moved, "the disk baseline follows the rename");
+    assert_eq!(root, ["R5"]);
+    assert!(dropped && clean, "the undo reached the renamed sheet");
+    assert_eq!(on_disk, original);
+}

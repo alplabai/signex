@@ -185,6 +185,7 @@ impl DocumentState {
                 // then refused whole (`dropped`).
                 self.clear_document_dirty(path);
                 self.engines.remove(path);
+                self.document_saves.forget_disk_records(path);
                 dropped_now.push(path.clone());
             } else {
                 self.settle_group_member(path, patch, &mut events);

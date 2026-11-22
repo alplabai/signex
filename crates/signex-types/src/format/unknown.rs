@@ -102,6 +102,11 @@ pub struct SheetUnknown {
     /// the sheet takes it once ([`SchematicSheet::take_load_repairs`]).
     #[serde(skip)]
     pub load_repairs: Vec<super::SheetLoadRepair>,
+    /// SHA-256 of the exact file bytes this copy was parsed from, set by the
+    /// app's sheet reader. Never written. A run that keeps the copy as an
+    /// unsaved document takes it as the save's disk baseline (#2760).
+    #[serde(skip)]
+    pub source_hash: Option<[u8; 32]>,
 }
 
 impl SheetUnknown {

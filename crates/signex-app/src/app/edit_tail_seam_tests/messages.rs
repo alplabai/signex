@@ -93,7 +93,6 @@ struct Words {
     noun: &'static str,
     kept: &'static str,
     holds: &'static str,
-    done: &'static str,
 }
 
 const fn words(
@@ -103,7 +102,6 @@ const fn words(
     noun: &'static str,
     kept: &'static str,
     holds: &'static str,
-    done: &'static str,
 ) -> Words {
     Words {
         kind,
@@ -112,7 +110,6 @@ const fn words(
         noun,
         kept,
         holds,
-        done,
     }
 }
 
@@ -124,7 +121,6 @@ const KINDS: [Words; 10] = [
         "annotate",
         "annotated designators",
         "designators",
-        "annotated",
     ),
     words(
         UndoGroupKind::Reprefix,
@@ -133,7 +129,6 @@ const KINDS: [Words; 10] = [
         "re-prefix",
         "re-prefixed designators",
         "designators",
-        "re-prefixed",
     ),
     words(
         UndoGroupKind::Replace,
@@ -142,7 +137,6 @@ const KINDS: [Words; 10] = [
         "replace",
         "replaced text",
         "text",
-        "replaced",
     ),
     words(
         UndoGroupKind::Footprints,
@@ -151,7 +145,6 @@ const KINDS: [Words; 10] = [
         "footprint assignment",
         "assigned footprints",
         "footprints",
-        "assigned",
     ),
     words(
         UndoGroupKind::SheetNumbers,
@@ -160,7 +153,6 @@ const KINDS: [Words; 10] = [
         "sheet numbering",
         "new sheet numbers",
         "sheet numbers",
-        "renumbered",
     ),
     words(
         UndoGroupKind::BackAnnotate,
@@ -169,7 +161,6 @@ const KINDS: [Words; 10] = [
         "back annotate",
         "back-annotated designators and values",
         "designators and values",
-        "back-annotated",
     ),
     words(
         UndoGroupKind::AgentEdit,
@@ -178,7 +169,6 @@ const KINDS: [Words; 10] = [
         "agent edit",
         "agent edits",
         "contents",
-        "edited",
     ),
     words(
         UndoGroupKind::FootprintSwap,
@@ -187,7 +177,6 @@ const KINDS: [Words; 10] = [
         "footprint change",
         "changed footprints",
         "footprints",
-        "changed",
     ),
     words(
         UndoGroupKind::PartSwap,
@@ -196,7 +185,6 @@ const KINDS: [Words; 10] = [
         "pin or gate swap",
         "swapped pin connections",
         "pin connections",
-        "swapped",
     ),
     words(
         UndoGroupKind::SheetEntrySync,
@@ -205,7 +193,6 @@ const KINDS: [Words; 10] = [
         "sheet entry sync",
         "synced ports",
         "ports",
-        "synced",
     ),
 ];
 

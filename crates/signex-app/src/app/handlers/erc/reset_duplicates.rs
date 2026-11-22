@@ -128,6 +128,13 @@ impl Signex {
         for (path, why) in &set.unreadable {
             crate::diagnostics::log_info(format!("{LABEL}: sheet '{}' {why}", path.display()));
         }
+        // A sheet it cannot reach may hold the other half of a duplicate, and
+        // one undo could not restore a project only partly reset.
+        let mut paths: Vec<PathBuf> = set.sheets.keys().cloned().collect();
+        paths.sort();
+        if self.refuse_reset_all_that_skips(LABEL, &set, &paths) {
+            return Task::none();
+        }
         if duplicates.is_empty() {
             crate::diagnostics::log_info(format!("{LABEL}: no duplicates found"));
             self.report_read_only_skipped(LABEL, &read_only);
@@ -161,9 +168,7 @@ impl Signex {
         Task::none()
     }
 
-    /// The writable sheets the reset changes, each with its placements. A
-    /// sheet with no engine whose file a restore, a read or a save still owns
-    /// is left out, and named.
+    /// The writable sheets the reset changes, each with its placements.
     fn reset_targets(
         &self,
         set: &ProjectSheetSet,
@@ -174,11 +179,6 @@ impl Signex {
         let mut edits = BTreeMap::new();
         for (path, sheet) in &set.sheets {
             if read_only.contains(path) {
-                continue;
-            }
-            if !self.document_state.engines.contains_key(path)
-                && self.unopened_write_blocked(LABEL, path)
-            {
                 continue;
             }
             let places = placements_of(placed, path);

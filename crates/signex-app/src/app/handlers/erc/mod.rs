@@ -14,6 +14,8 @@ mod annotate_pass;
 mod annotate_placements;
 mod annotate_preview;
 #[cfg(test)]
+mod annotate_parked_tests;
+#[cfg(test)]
 mod annotate_reset_tests;
 #[cfg(test)]
 mod annotate_tests;

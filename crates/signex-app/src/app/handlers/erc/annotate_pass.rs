@@ -233,7 +233,7 @@ impl Signex {
             // so designators stay unique project-wide, and loaded into a parked
             // engine, dirty and unsaved, in the same undo group as every other
             // sheet. Nothing is written behind the user's back (#669, #2760).
-            let Some(document) = project_set.sheets.get(path).cloned() else {
+            let Some(mut document) = project_set.sheets.get(path).cloned() else {
                 continue;
             };
             if self.unopened_write_blocked("Annotate", path) {
@@ -243,6 +243,7 @@ impl Signex {
                 }
                 continue;
             }
+            let read_hash = document.take_source_hash();
             match annotate_unopened_in_memory(
                 document,
                 path,
@@ -253,6 +254,7 @@ impl Signex {
             ) {
                 Ok(Some(engine)) => {
                     self.document_state.insert_engine(path.clone(), engine);
+                    self.settle_parked_sheet(path, read_hash);
                     parked_here.insert(path.clone());
                     newly_dirty.push(path.clone());
                     self.document_state.mark_document_dirty(path);
@@ -345,7 +347,7 @@ impl Signex {
         let mut not_rolled_back = std::collections::HashSet::new();
         for path in touched {
             if parked.contains(path) {
-                self.document_state.remove_engine(path);
+                self.abandon_parked_sheet(path);
             } else if let Some(engine) = self.document_state.engines.get_mut(path) {
                 // Discarded, not undone: an undo would leave the half run on
                 // the redo stack for Ctrl+Y to bring back. No library drift

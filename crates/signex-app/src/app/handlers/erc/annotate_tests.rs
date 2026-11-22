@@ -530,12 +530,12 @@ fn assert_unopened_sheet_untouched_while(
     let refs = child_refs(&dir);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(refs, [expected], "the sheet file was not rewritten");
-    // Annotate here is Reset & Renumber, which refuses the run rather than
-    // number around the sheet (#1753); Reset Duplicates still skips it.
+    // Both refuse the run whole rather than go around the sheet (#1753,
+    // #2760); Annotate here is Reset & Renumber.
     let said = if pass == "Annotate" {
         format!("{pass} was not run: it would skip z_child.snxsch ({reason})")
     } else {
-        format!("{pass}: z_child.snxsch was left unchanged, {reason}")
+        format!("{pass} was not run: it could not reach z_child.snxsch ({reason})")
     };
     assert!(logged_since(since, &said), "the skip is reported");
 }

@@ -155,11 +155,18 @@ History restore or Replace write is not): the save moves `documents_epoch` and
 the run is dropped (#1753). The Annotate dialog disables Run, Reset and
 Re-prefix while a run is going. A Reset & Renumber that would skip a sheet
 (read-only, unreadable, or owned by a save, restore or read) refuses the whole
-run. Reset All refuses for an unreadable or owned sheet, and leaves a read-only
-one unchanged and named. Incremental and Reset Duplicates still skip such a
-sheet. One run at a time: a second request is refused with a notice rather than
-queued, because a queued run would number the project as it was when the first
-started.
+run. Reset All and Reset Duplicates refuse for an unreadable or owned sheet, and
+leave a read-only one unchanged and named. Incremental still skips such a sheet.
+One run at a time: a second request is refused with a notice rather than queued,
+because a queued run would number the project as it was when the first started.
+
+**Parked sheets** (`app/parked_sheets.rs`). Every run that loads a sheet into a
+tabless engine records the hash of the bytes its read parsed as the save
+baseline, so a save and the idle poll show the changed-on-disk card, and runs the
+open-time recovery check before autosave may write for it. After a save the
+engine stays while an undo group has a step in it, so one undo still restores
+every sheet (that sheet is then unsaved again); it is released once the group
+has left its history. A rename carries the sheet's undo groups with it.
 
 **Failures.** A reset or re-prefix whose sheet fails while numbering rolls every
 sheet back, and the parked engines it loaded are dropped. Incremental logs the
