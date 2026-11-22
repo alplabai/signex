@@ -299,7 +299,6 @@ impl Signex {
         {
             return Ok(false);
         }
-        tab.rules_step_newest = false;
         document.sync_project_history_dirty(project_id, true);
         // The list order is a title block's Sheet N of M: redraw the sheets.
         let pages_moved = matches!(
@@ -369,7 +368,6 @@ impl Signex {
         let tab = document.project_tabs.entry(project_id).or_default();
         let defaults_before = project.data.schematic_defaults.clone();
         if tab.general_history.apply(&mut project.data, command) {
-            tab.rules_step_newest = false;
             let defaults_moved = project.data.schematic_defaults != defaults_before;
             document.sync_project_history_dirty(project_id, true);
             self.after_project_general_change(defaults_moved);

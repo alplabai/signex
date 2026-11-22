@@ -27,13 +27,11 @@ thread_local! {
 
 impl Signex {
     /// Bring the harness panels up to date. They are rebuilt only when what
-    /// they read changed (see [`Self::harness_facts_key`]); otherwise only
-    /// the typed draft is dropped, as a rebuild drops it.
+    /// they read changed (see [`Self::harness_facts_key`]). A rebuild drops
+    /// the typed draft; refused text changes nothing, so it stays in its box.
     pub(crate) fn refresh_harness_panel(&mut self) {
         let key = self.harness_facts_key();
-        let held = &mut self.document_state.panel_ctx.harness;
-        if held.built_from == Some(key) {
-            held.draft = None;
+        if self.document_state.panel_ctx.harness.built_from == Some(key) {
             return;
         }
         let mut facts = self.harness_panel_facts();
@@ -188,6 +186,7 @@ impl Signex {
             return None;
         };
         let mut task = Task::none();
+        let mut refused_text = None;
         match msg.clone() {
             HarnessPanelMsg::TypePicked {
                 connector,
@@ -197,7 +196,7 @@ impl Signex {
                 connector,
                 field,
                 text,
-            } => self.type_harness_field(connector, field, text),
+            } => refused_text = self.type_harness_field(connector, field, text),
             HarnessPanelMsg::RenameFixClicked {
                 connector,
                 entry,
@@ -267,6 +266,10 @@ impl Signex {
             }
         }
         self.refresh_harness_panel();
+        // A rebuild for an earlier change must not take the refused text.
+        if refused_text.is_some() {
+            self.document_state.panel_ctx.harness.draft = refused_text;
+        }
         Some(task)
     }
 
@@ -287,20 +290,24 @@ impl Signex {
         self.end_directive_edit_run();
     }
 
-    /// A keystroke in a placement box: the text stays as a draft; a number
-    /// is applied at once (typing in one connector is one undo step).
-    fn type_harness_field(&mut self, id: uuid::Uuid, field: HarnessField, text: String) {
-        self.document_state.panel_ctx.harness.draft = Some((field, text.clone()));
-        let Ok(value) = text.trim().parse::<f64>() else {
-            return;
+    /// A keystroke in a placement box. A number the field can hold is applied
+    /// at once (typing in one connector is one undo step). Anything else
+    /// changes nothing and is returned, as the draft its box keeps.
+    fn type_harness_field(
+        &mut self,
+        id: uuid::Uuid,
+        field: HarnessField,
+        text: String,
+    ) -> Option<(HarnessField, String)> {
+        let parsed = crate::numeric_field::parse_field_f64(&text);
+        let Some(value) = parsed.filter(|value| harness_field_holds(field, *value)) else {
+            return Some((field, text));
         };
-        let Some(mut c) = self
+        self.document_state.panel_ctx.harness.draft = None;
+        let mut c = self
             .document_state
             .edit_engine()
-            .and_then(|e| e.document().harness.connector(id).cloned())
-        else {
-            return;
-        };
+            .and_then(|e| e.document().harness.connector(id).cloned())?;
         match field {
             HarnessField::X => c.position.x = value,
             HarnessField::Y => c.position.y = value,
@@ -308,6 +315,7 @@ impl Signex {
             HarnessField::EntryPitch => c.entry_pitch = value,
         }
         self.update_harness_connector(c);
+        None
     }
 
     /// Apply `edit` to the project's definitions as one step of the project's
@@ -389,6 +397,15 @@ impl Signex {
             engine.end_field_edit_run();
             self.document_state.sync_history_dirty(&path);
         }
+    }
+}
+
+/// Whether `field` can hold the finite `value`: a size is above zero, as the
+/// engine requires of a connector; a position is any number.
+fn harness_field_holds(field: HarnessField, value: f64) -> bool {
+    match field {
+        HarnessField::X | HarnessField::Y => true,
+        HarnessField::Width | HarnessField::EntryPitch => value > 0.0,
     }
 }
 

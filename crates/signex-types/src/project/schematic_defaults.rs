@@ -10,8 +10,8 @@ use super::{ProjectData, UnknownJson};
 use crate::format::MAX_TEXT_SIZE_MM;
 use crate::net_class::NetLineStyle;
 use crate::schematic::{
-    FillType, SCHEMATIC_DEFAULT_FONT, SCHEMATIC_PT_TO_MM, SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM,
-    SCHEMATIC_RENDER_MIN_STROKE_MM, SchematicDefaults, is_set_width,
+    FillType, SCHEMATIC_DEFAULT_FONT, SCHEMATIC_PT_TO_MM, SCHEMATIC_RENDER_MIN_STROKE_MM,
+    SchematicDefaults, is_set_width,
 };
 
 /// The `.snxprj` key of the schematic defaults.
@@ -48,8 +48,12 @@ pub struct SchematicDefaultOverrides {
     pub unknown: UnknownJson,
 }
 
-/// Widest a wire, symbol line, shape stroke or junction default may be (mm).
+/// Widest a wire, symbol line or shape stroke default may be (mm).
 pub const MAX_DEFAULT_WIDTH_MM: f64 = 5.0;
+/// Smallest junction diameter default (mm).
+const MIN_JUNCTION_DIAMETER_MM: f64 = 0.2;
+/// Largest junction diameter default (mm).
+const MAX_JUNCTION_DIAMETER_MM: f64 = 2.0;
 /// Widest a bus default may be (mm).
 pub const MAX_BUS_WIDTH_MM: f64 = 10.0;
 /// Smallest default text size (pt), so placed text never rounds to 0.
@@ -106,13 +110,16 @@ impl SchematicDefaultField {
     pub fn range(self) -> std::ops::RangeInclusive<f64> {
         match self {
             Self::BusWidth => SCHEMATIC_RENDER_MIN_STROKE_MM..=MAX_BUS_WIDTH_MM,
-            // A junction never draws under its radius floor.
-            Self::JunctionDiameter => {
-                2.0 * SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM..=MAX_DEFAULT_WIDTH_MM
-            }
+            Self::JunctionDiameter => MIN_JUNCTION_DIAMETER_MM..=MAX_JUNCTION_DIAMETER_MM,
             Self::TextSize => MIN_TEXT_SIZE_PT..=MAX_TEXT_SIZE_MM / SCHEMATIC_PT_TO_MM,
             _ => SCHEMATIC_RENDER_MIN_STROKE_MM..=MAX_DEFAULT_WIDTH_MM,
         }
+    }
+
+    /// Whether typed text outside [`Self::range`] is refused rather than
+    /// stored clamped.
+    pub fn refuses_out_of_range(self) -> bool {
+        matches!(self, Self::JunctionDiameter)
     }
 
     /// `value` clamped into [`Self::range`].

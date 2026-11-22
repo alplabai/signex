@@ -21,8 +21,9 @@ pub(super) enum DefaultInput {
     Clear,
     /// A number above zero, clamped into the field's range.
     Set(f64),
-    /// Mid-edit, not a number, or not above zero: keep the draft text and
-    /// change nothing (the house rule in `numeric_field`).
+    /// Mid-edit, not a number, not above zero, or outside the range of a
+    /// field that refuses it: keep the draft text and change nothing (the
+    /// house rule in `numeric_field`).
     Keep,
 }
 
@@ -32,7 +33,9 @@ pub(super) fn parse_override(field: SchematicDefaultField, text: &str) -> Defaul
         return DefaultInput::Clear;
     }
     match crate::numeric_field::parse_field_f64(text) {
-        Some(v) if v > 0.0 => DefaultInput::Set(field.clamped(v)),
+        Some(v) if v > 0.0 && (field.range().contains(&v) || !field.refuses_out_of_range()) => {
+            DefaultInput::Set(field.clamped(v))
+        }
         _ => DefaultInput::Keep,
     }
 }

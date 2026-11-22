@@ -154,9 +154,6 @@ pub struct ProjectTabState {
     /// The project's Rules tab (#2398): sub-tab, search, the cell being
     /// typed in, the text view and the cached flags.
     pub rules: crate::app::RulesTabState,
-    /// The newest edit of the project went to its rule history, not to
-    /// `general_history`: what `undo document=<.snxprj>` steps first.
-    pub rules_step_newest: bool,
     /// The variant name being typed over, until Enter renames it.
     pub variant_rename: Option<VariantRenameDraft>,
     /// Why the last variant edit was refused; cleared by the next edit.

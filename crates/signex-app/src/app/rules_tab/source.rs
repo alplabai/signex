@@ -13,7 +13,7 @@ use signex_types::project::DrcRuleSet;
 
 use super::RulesText;
 use crate::app::command::{CommandArgs, OperandValue};
-use crate::app::document::UndoTarget;
+use crate::app::document::{DocumentKey, UndoTarget};
 use crate::app::document_ids::DocumentKind;
 use crate::app::state::ProjectId;
 use crate::app::state::rules_history::RuleState;
@@ -274,11 +274,23 @@ impl Signex {
         self.rerun_erc_after_rules_edit(moved)
     }
 
-    /// Edit ▸ Undo / Redo in the main window: a Rules tab steps its rule
-    /// history as [`Self::step_rules_tab`]; any other tab as before.
+    /// Edit ▸ Undo / Redo in the main window: a Rules tab, or a Project tab
+    /// whose next step is a rule step, steps the rule history as
+    /// [`Self::step_rules_tab`]; any other tab as before.
     pub(crate) fn step_main_window_history(&mut self, undo: bool) -> Task<Message> {
-        if let UndoTarget::RulesTab(id) = self.undo_target(None) {
-            return self.step_rules_tab(id, undo);
+        match self.undo_target(None) {
+            UndoTarget::RulesTab(id) => return self.step_rules_tab(id, undo),
+            UndoTarget::Document(DocumentKey::Project(id))
+                if self.project_step_is_rules(id, undo) =>
+            {
+                self.close_text_edit(if undo {
+                    "the document was undone"
+                } else {
+                    "the document was redone"
+                });
+                return self.step_rules_tab(id, undo);
+            }
+            _ => {}
         }
         if undo {
             self.handle_undo_requested();
@@ -286,15 +298,6 @@ impl Signex {
             self.handle_redo_requested();
         }
         Task::none()
-    }
-
-    /// Whether `id`'s newest step is on its rule history (a Rules tab,
-    /// `rules_*` or ERC dialog edit) rather than its Project tab's.
-    pub(crate) fn rules_step_is_newest(&self, id: ProjectId) -> bool {
-        self.document_state
-            .project_tabs
-            .get(&id)
-            .is_some_and(|tab| tab.rules_step_newest)
     }
 
     /// The project a `rules_*` command names with `document`: the project

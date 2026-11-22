@@ -102,6 +102,11 @@ impl Signex {
             canvas.clear_content_cache();
             self.sync_panel_ctx_from_visible_document();
             self.refresh_pcb_layers_panel();
+            let nets = self
+                .active_pcb_snapshot()
+                .map(crate::panels::PcbNetsSummary::of);
+            self.document_state.panel_ctx.pcb_nets = nets;
+            self.document_state.panel_ctx.layer_stack = self.layer_stack_facts();
         } else {
             self.repaint_undocked_boards(path);
         }

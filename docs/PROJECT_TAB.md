@@ -136,7 +136,9 @@ message. The chrome catalog draws a sample of it.
   override exactly as emptying the field does; a value that is not a usable
   number, or one that was clamped into the field's range, gives the box an
   error border, a tinted fill and a warning icon, and a clamped value says
-  under the field what is used instead. The two pickers show "Built-in (…)"
+  under the field what is used instead. Junction diameter takes 0.2 to 2 mm
+  and is never clamped as typed: a value outside is refused, the stored
+  default stays and the box keeps the text. The two pickers show "Built-in (…)"
   while unset. Under the cards a live preview draws a small schematic in
   the canvas colours with the values in effect (power port, wires with a
   junction, a resistor, a net label, a bus with entries, a shape) and writes
