@@ -11,10 +11,14 @@ use serde::{Deserialize, Serialize};
 
 use super::{FormatError, UnknownFields};
 use crate::pcb::{LayerDef, PcbBoard, PcbSetup};
-use crate::pcb_stack::{LayerStack, StackLayer};
+use crate::pcb_stack::{LayerStack, StackLayer, clean_stack_name};
 
 #[derive(Serialize)]
 pub(super) struct StackBlock<'a> {
+    /// The stackup's name (mockup row 105); a named board writes
+    /// `snxpcb/1.8`. First, so it stays ahead of the block's tables.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stack_name: Option<&'a str>,
     layers: Vec<String>,
     /// Parallel to `layers`; omitted when every type is empty.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -39,6 +43,9 @@ pub(super) struct StackBlock<'a> {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub(super) struct StackRaw {
+    /// Absent on a stackup without a name.
+    #[serde(default)]
+    stack_name: Option<String>,
     #[serde(default)]
     layers: Vec<String>,
     /// Parallel to `layers`; absent in 1.0 files.
@@ -63,6 +70,7 @@ pub(super) struct StackRaw {
 pub(super) fn block(board: &PcbBoard) -> StackBlock<'_> {
     let layers = &board.layers;
     StackBlock {
+        stack_name: board.stackup.as_ref().and_then(|s| s.name.as_deref()),
         layers: layers.iter().map(|l| l.name.clone()).collect(),
         layer_types: if layers.iter().any(|l| !l.layer_type.is_empty()) {
             layers.iter().map(|l| l.layer_type.clone()).collect()
@@ -112,8 +120,9 @@ pub(super) struct StackRead {
     pub display_names: UnknownFields,
 }
 
-/// Rebuild the layer list, the setup and the foreign `[stackup]` keys.
-pub(super) fn read(s: StackRaw) -> Result<StackRead, FormatError> {
+/// Rebuild the layer list, the setup and the foreign `[stackup]` keys. A name
+/// on a file without rows names the stack `thickness_mm` derives.
+pub(super) fn read(s: StackRaw, thickness_mm: f64) -> Result<StackRead, FormatError> {
     if s.layer_types.len() > s.layers.len() {
         return Err(FormatError::LayerTypesExceedLayers {
             layers: s.layers.len(),
@@ -137,7 +146,7 @@ pub(super) fn read(s: StackRaw) -> Result<StackRead, FormatError> {
         }
     }
     let mut display_names = s.display_names;
-    let layers = s
+    let layers: Vec<LayerDef> = s
         .layers
         .into_iter()
         .enumerate()
@@ -153,10 +162,19 @@ pub(super) fn read(s: StackRaw) -> Result<StackRead, FormatError> {
     for (token, value) in display_names {
         kept.insert_value(&token, value);
     }
+    let name = s.stack_name.as_deref().and_then(clean_stack_name);
+    let stackup = match (s.rows, name) {
+        (Some(rows), name) => Some(LayerStack { name, layers: rows }),
+        (None, Some(name)) => Some(LayerStack {
+            name: Some(name),
+            ..LayerStack::derived(&layers, thickness_mm)
+        }),
+        (None, None) => None,
+    };
     Ok(StackRead {
         layers,
         setup: s.setup,
-        stackup: s.rows.map(|layers| LayerStack { layers }),
+        stackup,
         unknown: s.unknown,
         display_names: kept,
     })

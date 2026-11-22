@@ -47,6 +47,7 @@ pcb-stack-kind-overlay = Silkscreen
 
 ## Toolbar.
 pcb-stack-stackup = Stackup
+pcb-stack-name-tip = The stackup's name, saved with the board. Press Enter to apply; empty shows the board's file name.
 pcb-stack-add = Add
 pcb-stack-remove = Remove
 pcb-stack-move-up = Move Up

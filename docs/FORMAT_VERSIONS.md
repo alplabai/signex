@@ -20,8 +20,9 @@ format declares only its own table row below.
   with its own width or colour, which writes `snxsch/1.4`
   (`docs/architecture/snxsch-wire-color.md`). A board
   stays `snxpcb/1.4`, byte for byte, writes `snxpcb/1.5` when a layer has a
-  colour of its own and `snxpcb/1.6` when it has rooms (#2457), so a build
-  that reads only the lower token opens it read-only.
+  colour of its own, `snxpcb/1.6` when it has rooms (#2457) and `snxpcb/1.8`
+  when its stackup has a name (#2833), so a build that reads only the lower
+  token opens it read-only.
 - **Load** reads every token in the format's readable list. `snxsch/1` and
   `snxsch/1.0` are the same version.
 - **A newer token** is refused on load with an error that names the token,
@@ -42,6 +43,7 @@ format declares only its own table row below.
 | `.snxsch` | `snxsch/1.1`, `1.2` with a No-ERC rule list, `1.3` with Schematic Refinement content, `1.4` with a bus's own width or colour | `snxsch/1`, `1.1`, `1.2`, `1.3`, `1.4` | opens read-only | refused |
 | `.snxpcb` | `snxpcb/1.4`; `1.5` with layer colours; `1.6` with rooms | `snxpcb/1` to `snxpcb/1.6` | opens read-only | refused |
 | `.snxpcb`, board sketch targets | `snxpcb/1.7` while the board sketch carries a slot, pour, mechanical drawing or component anchor (decision 2, 2026-11-20), or a reference dimension, pattern link, pattern mirror or pad override (decisions 5, 9, 10), rooms or not; else the token above, byte for byte | adds `snxpcb/1.7` | opens read-only | refused |
+| `.snxpcb`, stackup name | `snxpcb/1.8` while `[stackup]` carries `stack_name` (mockup row 105, #2833), whatever else the board holds; else the tokens above, byte for byte | adds `snxpcb/1.8` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1`, or `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides) | `snxfpt/1`, `1.1`, `1.2` | refused | refused |

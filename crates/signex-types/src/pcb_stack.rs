@@ -131,8 +131,18 @@ impl StackLayer {
 /// The physical stack of a board, top to bottom.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct LayerStack {
+    /// The stackup's own name (mockup row 105); `None` shows the board's
+    /// file name. Set only by the board engine's `SetStackupName`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     #[serde(default)]
     pub layers: Vec<StackLayer>,
+}
+
+/// A typed stackup name as stored: trimmed, `None` when nothing is left.
+pub fn clean_stack_name(text: &str) -> Option<String> {
+    let name = text.trim();
+    (!name.is_empty()).then(|| name.to_string())
 }
 
 impl LayerStack {
@@ -203,7 +213,10 @@ impl LayerStack {
             StackLayer::new(StackLayerKind::Paste),
             StackLayer::new(StackLayerKind::Overlay),
         ]);
-        Self { layers: rows }
+        Self {
+            name: None,
+            layers: rows,
+        }
     }
 }
 

@@ -30,6 +30,7 @@ define_ids! {
     PCB_STACK_KIND_PASTE = "pcb-stack-kind-paste";
     PCB_STACK_KIND_OVERLAY = "pcb-stack-kind-overlay";
     PCB_STACK_STACKUP = "pcb-stack-stackup";
+    PCB_STACK_NAME_TIP = "pcb-stack-name-tip";
     PCB_STACK_ADD = "pcb-stack-add";
     PCB_STACK_REMOVE = "pcb-stack-remove";
     PCB_STACK_MOVE_UP = "pcb-stack-move-up";
