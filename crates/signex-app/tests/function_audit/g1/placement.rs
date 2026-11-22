@@ -82,6 +82,8 @@ fn m41_the_form_values_reach_the_placed_label() {
 #[test]
 fn m41_esc_drops_the_edits_places_nothing_and_goes_back_to_placing() {
     let mut b = paused_in(Tool::Label);
+    let form = b.app.document_state.panel_ctx.pre_placement.as_ref();
+    let rotation_at_tab = form.expect("Tab opens the form").rotation;
     type_point(&mut b, "101.6", "76.2");
     b.panel(PanelMsg::SetPrePlacementRotation(90.0));
     esc(&mut b);
@@ -89,10 +91,14 @@ fn m41_esc_drops_the_edits_places_nothing_and_goes_back_to_placing() {
     assert!(!b.dirty());
     assert_eq!(b.app.interaction_state.current_tool, Tool::Label);
     assert!(!b.app.interaction_state.active_canvas().placement_paused);
+    // Decision 2026-11-20 (#2529): back to how it was at the Tab, here no form.
+    assert!(b.app.document_state.panel_ctx.pre_placement.is_none());
+
+    let _ = b.app.update(Message::Tool(ToolMessage::PrePlacementTab));
     let form = b.app.document_state.panel_ctx.pre_placement.as_ref();
-    let form = form.expect("the tool keeps its form");
+    let form = form.expect("the next Tab opens the form");
     assert_eq!(form.position.value(PositionField::X), None);
-    assert_eq!(form.rotation, 0.0);
+    assert_eq!(form.rotation, rotation_at_tab, "the dropped edit is gone");
 }
 
 #[test]

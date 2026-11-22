@@ -30,19 +30,20 @@ fn panel(app: &mut Signex, msg: PanelMsg) {
     settle(app, Message::Dock(DockMessage::Panel(msg)));
 }
 
-/// One sheet with two parts that share the designator R1.
+/// One sheet with two parts that share the designator R1. The sheet embeds
+/// their library body: ERC does not see a part without one.
 fn duplicate_rig() -> Rig {
-    rig(
-        sheet(
-            vec![
-                part(FIRST, "R1", "10k", 0.0),
-                part(SECOND, "R1", "10k", 20.0),
-            ],
-            Vec::new(),
-        ),
-        &[],
-        None,
-    )
+    let mut content = sheet(
+        vec![
+            part(FIRST, "R1", "10k", 0.0),
+            part(SECOND, "R1", "10k", 20.0),
+        ],
+        Vec::new(),
+    );
+    let body: signex_types::schematic::LibSymbol =
+        serde_json::from_str(r#"{"id":"Device:R"}"#).expect("a library body");
+    content.lib_symbols.insert(body.id.clone(), body);
+    rig(content, &[], None)
 }
 
 fn stored_severity(rig: &Rig) -> Option<Severity> {

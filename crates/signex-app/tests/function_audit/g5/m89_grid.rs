@@ -87,6 +87,13 @@ fn the_cell_reset_drops_the_rows_own_value_and_undo_brings_it_back() {
 fn the_first_edit_of_machine_rules_stores_them_in_the_project_and_undo_unstores_them() {
     let mut rig = Rig::new(None, &[]);
     rig.app.ui_state.machine_drc_rules.dsl = Some(SIG_RULE.to_string());
+    // Any update re-reads the rules; left to the cell press, the regrid it
+    // causes would close the editor that press just opened.
+    let project_id = rig.id;
+    rig.send(RulesTabMsg::DomainPicked {
+        project_id,
+        domain: Domain::Clearance,
+    });
     assert!(rig.rules().is_none(), "the project stores no rules yet");
 
     rig.type_in_all_row("0.25");
