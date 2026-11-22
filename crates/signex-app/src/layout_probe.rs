@@ -295,7 +295,7 @@ pub(crate) fn natural<M>(element: Element<'_, M, Theme, iced::Renderer>, label: 
 }
 
 pub(crate) fn headless_renderer() -> iced::Renderer {
-    iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(renderer::Settings {
+    iced::Renderer::Secondary(iced_vello_cpu::Renderer::new(renderer::Settings {
         font: Font::DEFAULT,
         text_size: Pixels(16.0),
         ..renderer::Settings::default()

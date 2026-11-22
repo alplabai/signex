@@ -19,7 +19,7 @@ workspace = true
 
 [dev-dependencies]
 # Headless pixel tests of the tab pill quads (`tab_pill/tests.rs`).
-iced_tiny_skia = "0.15.0-dev"
+iced_vello_cpu = "0.15.0-dev"
 tiny-skia = "0.12"
 # `I18n::en_us_ref` for the widget tests.
 signex-i18n = { workspace = true, features = ["test-support"] }

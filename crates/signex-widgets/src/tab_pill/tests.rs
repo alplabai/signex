@@ -2,14 +2,14 @@
 //!
 //! `reference_quads` is a verbatim copy of the drawing code from before
 //! the per-side border API was adopted. The pixel tests rasterise both it
-//! and `pill_quads` through the real `iced_tiny_skia` renderer and require
+//! and `pill_quads` through the real `iced_vello_cpu` renderer and require
 //! every channel to be within 1/255.
 
 use super::*;
 use iced::advanced::Renderer as _;
 use iced::advanced::renderer;
 use iced::{Font, Pixels};
-use iced_tiny_skia::graphics::Viewport;
+use iced_vello_cpu::graphics::Viewport;
 
 const W: u32 = 120;
 const H: u32 = 32;
@@ -136,7 +136,7 @@ fn reference_quads(bounds: Rectangle, style: &TabPillStyle) -> Vec<(Quad, Backgr
 
 /// Rasterise `quads` on a mid-grey surface; returns RGBA bytes.
 fn rasterise(quads: Vec<(Quad, Background)>) -> Vec<u8> {
-    let mut renderer = iced_tiny_skia::Renderer::new(renderer::Settings {
+    let mut renderer = iced_vello_cpu::Renderer::new(renderer::Settings {
         font: Font::DEFAULT,
         text_size: Pixels(16.0),
         ..renderer::Settings::default()
