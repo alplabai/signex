@@ -273,8 +273,9 @@ fn load_sheet_with(
         // and the project walk names the sheet once per session. The hash is
         // of these very bytes: a run that parks the copy compares saves to it.
         Ok(mut parsed) => {
-            parsed.sheet.unknown.source_hash =
-                Some(Box::new(crate::persist::ContentHash::of(text.as_bytes()).to_raw()));
+            parsed.sheet.unknown.source_hash = Some(Box::new(
+                crate::persist::ContentHash::of(text.as_bytes()).to_raw(),
+            ));
             Ok(Some(parsed.sheet))
         }
         Err(e) => Err(format!("could not be parsed ({e})")),
