@@ -66,6 +66,18 @@ pub struct RequirementsTabState {
     pub last_run: Option<Arc<RequirementsRun>>,
 }
 
+/// How many of `entries` failed the last run that finished (none before a
+/// run, or when the run itself could not finish).
+pub(super) fn failed_count(
+    entries: &[signex_types::project::RequirementEntry],
+    state: Option<&RequirementsTabState>,
+) -> usize {
+    state
+        .and_then(|state| state.last_run.as_deref())
+        .and_then(|run| run.report.as_ref().ok())
+        .map_or(0, |report| view::outcome_counts(report, entries).failed)
+}
+
 impl RequirementsTabState {
     /// Forget what was typed: the boxes show the stored values again.
     pub(super) fn clear_drafts(&mut self) {
