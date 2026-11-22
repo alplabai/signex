@@ -62,6 +62,8 @@ fn m48_a_typed_rectangle_width_resizes_it_and_undo_restores_it() {
     let (mut b, _) = rect_bench();
     typing(&mut b, DrawingFieldId::RectWidth, "40");
     assert_eq!(rect(&b).0, 40.0);
+    // The preview commits when the field is left (#2768).
+    b.panel(PanelMsg::DrawingFieldLeft(DrawingFieldId::RectWidth));
     assert!(b.dirty());
     b.undo();
     assert_eq!(rect(&b).0, 20.0);
