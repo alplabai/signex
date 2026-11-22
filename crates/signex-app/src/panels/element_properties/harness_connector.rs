@@ -215,7 +215,7 @@ pub(super) fn push_harness_connector_sections<'a>(
     let field = |field: HarnessField| {
         let shown = match &facts.draft {
             Some((f, text)) if *f == field => text.clone(),
-            _ => format!("{:.2}", field_value(c, field, c.position.y)),
+            _ => format!("{:.2}", field_value(c, field, ctx.shown_y(c.position.y))),
         };
         form_edit_row(t!(i18n, field_label(field)), &shown, muted, move |text| {
             PanelMsg::Harness(HarnessPanelMsg::FieldTyped {

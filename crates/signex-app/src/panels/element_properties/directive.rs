@@ -128,6 +128,8 @@ pub struct DirectivePanel {
     /// How the sheet shows Y: a typed Y maps through it.
     pub page: (PageOrigin, f64),
     pub draft: Option<(DraftField, String)>,
+    /// The draft is text its field refuses, so its box shows it is invalid.
+    pub draft_refused: bool,
     pub hover: IllustrationHover,
     pub hovered_net: Option<String>,
 }
@@ -204,6 +206,7 @@ impl DirectivePanel {
                 signex_types::schematic::paper_height_mm(&sheet.paper_size),
             ),
             draft: None,
+            draft_refused: false,
             hover: IllustrationHover::default(),
             hovered_net: None,
         })
@@ -216,6 +219,12 @@ impl DirectivePanel {
             Some((typed, text)) if *typed == field => text.clone(),
             _ => value.map(format_value).unwrap_or_default(),
         }
+    }
+
+    /// The error colour while `field` holds text it refuses (#2767).
+    pub(super) fn refused_ink(&self, field: DraftField, ctx: &PanelContext) -> Option<Color> {
+        let holds_draft = matches!(&self.draft, Some((typed, _)) if *typed == field);
+        (self.draft_refused && holds_draft).then(|| crate::styles::ti(ctx.tokens.error))
     }
 
     /// The caught nets: inside, or crossing the edge when the blanket
@@ -526,17 +535,19 @@ pub(super) fn caption_row<'a>(
 /// The row inset, as the house rows pad.
 const PAD_X: f32 = PROPERTY_ROW_PAD_X as f32;
 
-/// A typed value box, `width` wide.
+/// A typed value box, `width` wide, outlined in `error` while it holds text
+/// its field refuses.
 pub(super) fn value_input<'a>(
     value: String,
     on_input: impl Fn(String) -> PanelMsg + 'a,
     width: f32,
+    error: Option<Color>,
 ) -> Element<'a, PanelMsg> {
     signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value)
         .on_input(on_input)
         .size(TS.body)
         .padding([SP.xs, SP.s])
-        .style(super::super::form_look::text_input_style)
+        .style(super::super::form_look::refusable_input_style(error))
         .width(Length::Fixed(width))
         .boxed()
 }

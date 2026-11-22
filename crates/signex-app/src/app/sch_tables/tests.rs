@@ -170,6 +170,30 @@ fn a_cell_edit_and_a_column_toggle_are_one_undo_step_each() {
 }
 
 #[test]
+fn a_table_refuses_a_size_or_padding_it_cannot_store() {
+    let mut app = app_with_tool(Tool::Table);
+    click(&mut app, (0.0, 0.0));
+    let id = table_id(&app);
+    let before = only_drawing(&app).clone();
+    for edit in [
+        AnnotationEdit::TableTextSize(0.0),
+        AnnotationEdit::TableTextSize(-3.0),
+        AnnotationEdit::TableTextSize(0.49),
+        AnnotationEdit::TableCellPadding(-1.0),
+        AnnotationEdit::TableCellPadding(10.01),
+    ] {
+        assert!(!app.apply_annotation_edit_to(id, &edit), "{edit:?}");
+        assert_eq!(*only_drawing(&app), before, "{edit:?}");
+    }
+    assert!(app.apply_annotation_edit_to(id, &AnnotationEdit::TableTextSize(0.5)));
+    assert!(app.apply_annotation_edit_to(id, &AnnotationEdit::TableCellPadding(10.0)));
+    let SchDrawing::Table(t) = only_drawing(&app) else {
+        panic!("a table");
+    };
+    assert_eq!((t.style.text_size, t.style.cell_padding), (0.5, 10.0));
+}
+
+#[test]
 fn a_csv_import_replaces_columns_and_rows_in_one_step() {
     let mut app = app_with_tool(Tool::Table);
     click(&mut app, (0.0, 0.0));

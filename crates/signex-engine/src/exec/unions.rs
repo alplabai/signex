@@ -112,7 +112,9 @@ impl Engine {
     }
 
     /// A rename or tag edit is a typing run (one undo step for the keys of
-    /// one field); a lock change is a step of its own.
+    /// one field); a lock change is a step of its own. A locked union refuses
+    /// a new name or tags, also in the command that unlocks it. Stored text is
+    /// compared normalized, so one saved untidy can still be unlocked.
     fn update_union(
         &mut self,
         before: SchematicSheet,
@@ -127,11 +129,15 @@ impl Engine {
             return Err(UnionRefusal::NameEmpty.into());
         }
         let tags = normalized_tags(tags);
-        let slot = &mut self.document.unions[at];
+        let slot = &self.document.unions[at];
         let lock_changed = slot.locked != locked;
         if slot.name == name && slot.tags == tags && !lock_changed {
             return Ok(CommandResult::unchanged());
         }
+        if slot.name.trim() != name || normalized_tags(&slot.tags) != tags {
+            self.refuse_locked_union(at, "changed")?;
+        }
+        let slot = &mut self.document.unions[at];
         slot.name = name.to_string();
         slot.tags = tags;
         slot.locked = locked;

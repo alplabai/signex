@@ -12,6 +12,16 @@ use signex_types::schematic::{
 const MIN_TABLE_TEXT_MM: f64 = 0.5;
 const MAX_TABLE_PADDING_MM: f64 = 10.0;
 
+/// Whether a table can store this text size; anything else is refused.
+pub(crate) fn table_text_size_holds(size: f64) -> bool {
+    size >= MIN_TABLE_TEXT_MM
+}
+
+/// Whether a table can store this cell padding; anything else is refused.
+pub(crate) fn table_padding_holds(padding: f64) -> bool {
+    (0.0..=MAX_TABLE_PADDING_MM).contains(&padding)
+}
+
 /// Which kind of source a table's Source pick list chooses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableSourceKind {
@@ -192,9 +202,17 @@ fn apply_to_table(t: &mut SchTable, edit: &AnnotationEdit) -> bool {
         },
         AnnotationEdit::TableRefresh(r) => t.refresh = *r,
         AnnotationEdit::TableColumnShown(key, shown) => return t.set_column_shown(key, *shown),
-        AnnotationEdit::TableTextSize(v) => t.style.text_size = v.max(MIN_TABLE_TEXT_MM),
+        AnnotationEdit::TableTextSize(v) => {
+            if !table_text_size_holds(*v) {
+                return false;
+            }
+            t.style.text_size = *v;
+        }
         AnnotationEdit::TableCellPadding(v) => {
-            t.style.cell_padding = v.clamp(0.0, MAX_TABLE_PADDING_MM);
+            if !table_padding_holds(*v) {
+                return false;
+            }
+            t.style.cell_padding = *v;
         }
         AnnotationEdit::TableBorders(b) => t.style.borders = *b,
         AnnotationEdit::TableHeaderFill(on) => t.style.header_fill = *on,

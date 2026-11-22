@@ -304,13 +304,13 @@ impl Signex {
             return Some((field, text));
         };
         self.document_state.panel_ctx.harness.draft = None;
-        let mut c = self
-            .document_state
-            .edit_engine()
-            .and_then(|e| e.document().harness.connector(id).cloned())?;
+        let (mut c, stored_y) = self.document_state.edit_engine().and_then(|e| {
+            let sheet = e.document();
+            Some((sheet.harness.connector(id).cloned()?, sheet.page_y(value)))
+        })?;
         match field {
             HarnessField::X => c.position.x = value,
-            HarnessField::Y => c.position.y = value,
+            HarnessField::Y => c.position.y = stored_y,
             HarnessField::Width => c.width = value,
             HarnessField::EntryPitch => c.entry_pitch = value,
         }
