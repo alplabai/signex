@@ -16,11 +16,13 @@ mod lib;
 mod new_features;
 mod output_prefs;
 mod pcb;
+pub mod pointer;
 mod project;
 mod sch_a;
 mod sch_b;
 mod states;
 mod states_drawn;
+mod states_final;
 mod states_more;
 mod view_click;
 
@@ -39,5 +41,6 @@ pub fn groups() -> Vec<(&'static str, Vec<Surface>)> {
         ("states", states::rows()),
         ("states_drawn", states_drawn::rows()),
         ("states_more", states_more::rows()),
+        ("states_final", states_final::rows()),
     ]
 }

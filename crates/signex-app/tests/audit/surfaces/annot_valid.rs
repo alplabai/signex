@@ -104,14 +104,8 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m82",
             title: "Back Annotate Schematics",
-            open: |app, r, fx| {
-                helpers_d::sample_with_board(app, r, fx)?;
-                command(app, "back_annotate_schematics")?;
-                reached(
-                    app.ui_state.back_annotate.is_some(),
-                    "back_annotate_schematics opened no dialog from the sample sheet",
-                )
-            },
+            // A linked board that differs from the sheet in each group.
+            open: super::states_final::open_back_annotate_changes,
             window: WindowSel::Auto,
             checks: BACK_ANNOTATE,
         },

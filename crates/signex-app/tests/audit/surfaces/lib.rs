@@ -991,7 +991,7 @@ fn open_browser_row(
 }
 
 /// Browser ▸ Edit Details on the first stock row.
-fn open_edit_row(app: &mut Signex, fx: &Fixture) -> Result<(), String> {
+pub(super) fn open_edit_row(app: &mut Signex, fx: &Fixture) -> Result<(), String> {
     let (table, row_id) = open_browser_row(app, fx)?;
     settle_support::settle(
         app,
