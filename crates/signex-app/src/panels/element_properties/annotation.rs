@@ -93,6 +93,9 @@ pub struct AnnotationPanelState {
     pub dimension_tool: Option<Box<DimensionToolForm>>,
 }
 
+/// Widget id of the Override box in the paused dimension tool's form.
+pub const DIMENSION_OVERRIDE_INPUT: &str = "signex.dimension_tool.override";
+
 /// What Properties shows for the armed dimension tool (mockup row 157).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DimensionToolForm {
@@ -101,6 +104,8 @@ pub struct DimensionToolForm {
     pub is_aligned: bool,
     pub has_from: bool,
     pub has_to: bool,
+    /// Tab paused the tool: the Override box takes typing while it is off.
+    pub is_paused: bool,
 }
 
 /// The armed dimension tool's form, scrolling in the panel.
@@ -251,6 +256,23 @@ impl<'a> Rows<'a> {
 
     /// A box showing `value` or its draft; typing applies once it parses.
     pub fn input(&self, field: AnnotationField, value: String) -> Element<'a, PanelMsg> {
+        self.input_box(field, value, String::new()).boxed()
+    }
+
+    /// The paused tool's Override box: empty until typed in, with the
+    /// measured value showing as its placeholder.
+    pub fn override_tool_input(&self, value: String, measured: String) -> Element<'a, PanelMsg> {
+        self.input_box(AnnotationField::OverrideText, value, measured)
+            .id(iced::widget::Id::new(DIMENSION_OVERRIDE_INPUT))
+            .boxed()
+    }
+
+    fn input_box(
+        &self,
+        field: AnnotationField,
+        value: String,
+        placeholder: String,
+    ) -> iced::widget::TextInput<'a, PanelMsg> {
         let draft = match &self.ctx.annotation.draft {
             Some((id, f, draft)) if *id == self.id && *f == field => Some(draft.clone()),
             _ => None,
@@ -260,14 +282,13 @@ impl<'a> Rows<'a> {
             .filter(|typed| field.refuses(typed))
             .map(|_| ti(self.ctx.tokens.error));
         let shown = draft.unwrap_or(value);
-        text_input(signex_i18n::UserText::new(String::new()), shown)
+        text_input(signex_i18n::UserText::new(placeholder), shown)
             .size(TS.body)
             .padding([SP.xs, SP.s])
             .on_input(move |s| msg(AnnotationPanelMsg::FieldTyped(field, s)))
             .on_submit(msg(AnnotationPanelMsg::FieldSubmitted(field)))
             .style(form_look::refusable_input_style(error))
             .width(Length::Fill)
-            .boxed()
     }
 
     /// `prefix` (X, Y) beside a box.

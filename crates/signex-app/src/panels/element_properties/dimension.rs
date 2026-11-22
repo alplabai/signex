@@ -35,7 +35,7 @@ pub(super) fn view_dimension_properties<'a>(
         rows.t(title),
         signex_i18n::UserText::new(d.label()),
     );
-    body(&rows, header, d, (true, true))
+    body(&rows, header, d, (true, true), false)
 }
 
 /// The armed tool's form (mockup row 157): the same rows, editing what the
@@ -56,7 +56,13 @@ pub(super) fn view_dimension_tool<'a>(
         rows.t(title),
         rows.t(ids::PROPERTIES_DIMENSION_TOOL_CAPTION),
     );
-    body(&rows, header, d, (form.has_from, form.has_to))
+    body(
+        &rows,
+        header,
+        d,
+        (form.has_from, form.has_to),
+        form.is_paused,
+    )
 }
 
 /// Header, illustration, Measure and Text; `clicked` says whether From and
@@ -66,6 +72,7 @@ fn body<'a>(
     header: Element<'a, PanelMsg>,
     d: &SchDimension,
     clicked: (bool, bool),
+    is_paused: bool,
 ) -> Element<'a, PanelMsg> {
     Column::new()
         .spacing(0)
@@ -80,7 +87,7 @@ fn body<'a>(
         .push(rows.section(
             "dimension_text",
             ids::PROPERTIES_DIMENSION_SECTION_TEXT,
-            text_rows(rows, d, clicked.1),
+            text_rows(rows, d, clicked.1, is_paused),
         ))
         .boxed()
 }
@@ -165,6 +172,7 @@ fn text_rows<'a>(
     rows: &Rows<'a>,
     d: &SchDimension,
     has_measure: bool,
+    is_paused: bool,
 ) -> Vec<Element<'a, PanelMsg>> {
     vec![
         units_row(rows, d),
@@ -177,7 +185,7 @@ fn text_rows<'a>(
                 AnnotationEdit::Arrows,
             ),
         ),
-        override_row(rows, d, has_measure),
+        override_row(rows, d, has_measure, is_paused),
     ]
 }
 
@@ -220,26 +228,36 @@ fn precision_row<'a>(rows: &Rows<'a>, d: &SchDimension) -> Element<'a, PanelMsg>
     )
 }
 
-/// The Override text header, which switches its Text row.
-fn override_row<'a>(rows: &Rows<'a>, d: &SchDimension, has_measure: bool) -> Element<'a, PanelMsg> {
-    let shown = d.override_text.clone().unwrap_or_else(|| {
-        if has_measure {
-            d.measured_text()
-        } else {
-            String::new()
-        }
-    });
+/// The Override text header, which switches its Text row. While the tool is
+/// paused the box stays live with the header off: typing turns it on.
+fn override_row<'a>(
+    rows: &Rows<'a>,
+    d: &SchDimension,
+    has_measure: bool,
+    is_paused: bool,
+) -> Element<'a, PanelMsg> {
+    let measured = if has_measure {
+        d.measured_text()
+    } else {
+        String::new()
+    };
+    let input = if is_paused {
+        rows.override_tool_input(d.override_text.clone().unwrap_or_default(), measured)
+    } else {
+        rows.input(
+            AnnotationField::OverrideText,
+            d.override_text.clone().unwrap_or(measured),
+        )
+    };
     signex_widgets::enable_section::EnableSection::new(
         rows.t(ids::PROPERTIES_DIMENSION_OVERRIDE),
         d.override_text.is_some(),
     )
     .on_toggle(|on| super::annotation::picked(AnnotationEdit::OverrideEnabled(on)))
+    .live_while_off(is_paused)
     .view(
         crate::panels::enable_section::enable_section_style(&rows.ctx.tokens),
-        rows.field(
-            rows.t(ids::PROPERTIES_DIMENSION_OVERRIDE_TEXT),
-            rows.input(AnnotationField::OverrideText, shown),
-        ),
+        rows.field(rows.t(ids::PROPERTIES_DIMENSION_OVERRIDE_TEXT), input),
     )
 }
 

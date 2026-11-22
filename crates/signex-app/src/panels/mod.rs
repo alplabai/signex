@@ -124,7 +124,8 @@ mod contrast_tests;
 mod planned_tests;
 
 pub use element_properties::{
-    AnnotationField, AnnotationPanelMsg, AnnotationPanelState, DimensionToolForm,
+    AnnotationField, AnnotationPanelMsg, AnnotationPanelState, DIMENSION_OVERRIDE_INPUT,
+    DimensionToolForm,
 };
 pub(crate) use element_properties::{
     BODY_ALTERNATE, BODY_ALTERNATE_MISSING, BODY_NORMAL, BODY_NORMAL_CAN_SWITCH,

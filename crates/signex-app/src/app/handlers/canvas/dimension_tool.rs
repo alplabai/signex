@@ -53,6 +53,7 @@ impl Signex {
             is_aligned,
             has_from: from.is_some(),
             has_to: to.is_some(),
+            is_paused: self.interaction_state.active_canvas().placement_paused,
         }))
     }
 
@@ -99,6 +100,11 @@ impl Signex {
             // A pick pins the direction even when it matches the drag's.
             AnnotationEdit::Direction(direction) => {
                 tool.dimension.direction = Some(*direction);
+                return;
+            }
+            // An emptied box holds nothing typed: Override is off again.
+            AnnotationEdit::OverrideText(text) if form.is_paused && text.is_empty() => {
+                tool.dimension.override_text = None;
                 return;
             }
             // Nothing is measured yet, so there is no value to start from.
@@ -167,6 +173,30 @@ impl Signex {
         let tool = &mut self.interaction_state.annotation_tool;
         tool.paused_with =
             is_armed.then(|| Box::new((tool.dimension.clone(), tool.points.clone())));
+        if is_armed {
+            self.sync_annotation_draft();
+        }
+    }
+
+    /// Tab paused the armed tool: the keys go to the Override box.
+    pub(crate) fn focus_dimension_override(&self) -> Task<Message> {
+        if self.armed_dimension_tool().is_none() {
+            return Task::none();
+        }
+        iced::widget::operation::focus(iced::widget::Id::new(
+            crate::panels::DIMENSION_OVERRIDE_INPUT,
+        ))
+    }
+
+    /// The pause ended: the box lets go, so Space and Tab reach the tool.
+    pub(crate) fn release_dimension_override(&mut self) -> Task<Message> {
+        if self.armed_dimension_tool().is_none()
+            || self.interaction_state.active_canvas().placement_paused
+        {
+            return Task::none();
+        }
+        self.sync_annotation_draft();
+        super::super::detached_modals::unfocus_text_inputs()
     }
 
     /// Esc while paused: drop the form's edits.
