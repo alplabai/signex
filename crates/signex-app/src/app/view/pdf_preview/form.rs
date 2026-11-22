@@ -177,7 +177,7 @@ pub(super) fn num_field<'a>(
         .padding([SP.s, SP.m])
         .size(TS.body)
         .width(width)
-        .style(crate::panels::form_look::text_input_style);
+        .style(crate::panels::form_look::greyable_input_style);
     match on_input {
         Some(on_input) => field
             .on_input(move |v| Message::PrintPreview(on_input(v)))
