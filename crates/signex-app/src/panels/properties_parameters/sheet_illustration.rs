@@ -36,6 +36,11 @@ const TITLE_WIDTH_SHARE: f32 = 0.42;
 const TITLE_HEIGHT_SHARE: f32 = 0.2;
 const CALLOUT_GAP: f32 = 9.0;
 const ORIGIN_ARM: f32 = 6.0;
+/// How far below the paper's top the Zones callout sits, clear of Origin.
+const ZONES_CALLOUT_DROP: f32 = 14.0;
+/// How far below the paper's bottom the Title Block callout sits, clear of
+/// a lower-left Origin.
+const TITLE_CALLOUT_DROP: f32 = 11.0;
 
 /// What the illustration shows: the sheet's page settings.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -191,6 +196,44 @@ fn origin(paper: Rectangle, facts: &SheetFacts, i18n: &I18n) -> Vec<Part> {
     ]
 }
 
+/// The named Zones and Title Block callouts (mockup row 40), in the column
+/// right of the paper; each drops out with the part it names.
+fn part_callouts(paper: Rectangle, facts: &SheetFacts, i18n: &I18n) -> Vec<Part> {
+    let frame = inset(paper, BORDER_INSET);
+    let (right, bottom) = (frame.x + frame.width, frame.y + frame.height);
+    let label_x = AREA.x + AREA.width + 8.0;
+    let zones_y = paper.y + ZONES_CALLOUT_DROP;
+    let mut parts = vec![
+        Part::leader(Leader {
+            at: Point::new(right, bottom),
+            label_at: Point::new(label_x, paper.y + paper.height + TITLE_CALLOUT_DROP),
+            label: t!(i18n, ids::PROPERTIES_ILLUSTRATION_TITLE_BLOCK).into(),
+            anchor: Anchor::Start,
+        })
+        .linked(TITLE_BLOCK)
+        .requires(TITLE_BLOCK),
+    ];
+    if facts.vertical_zones > 0 || facts.horizontal_zones > 0 {
+        let label = t!(
+            i18n,
+            ids::PROPERTIES_ILLUSTRATION_ZONES,
+            "down" => u32::from(facts.vertical_zones),
+            "across" => u32::from(facts.horizontal_zones)
+        );
+        parts.push(
+            Part::leader(Leader {
+                at: Point::new(right, zones_y),
+                label_at: Point::new(label_x, zones_y),
+                label: label.into(),
+                anchor: Anchor::Start,
+            })
+            .linked(ZONES)
+            .requires(BORDER),
+        );
+    }
+    parts
+}
+
 /// The W and H callouts, linked to the fields that set the size.
 fn size_callouts(paper: Rectangle, facts: &SheetFacts, i18n: &I18n) -> Vec<Part> {
     let (width_field, height_field) = if facts.is_custom {
@@ -242,6 +285,7 @@ pub fn sheet_illustration(facts: &SheetFacts, i18n: &I18n) -> Illustration {
         .part(title_block(paper))
         .parts(origin(paper, facts, i18n))
         .parts(size_callouts(paper, facts, i18n))
+        .parts(part_callouts(paper, facts, i18n))
         .feature(BORDER, facts.show_border)
         .feature(TITLE_BLOCK, facts.show_title_block)
 }
@@ -326,6 +370,38 @@ mod tests {
         );
         assert!(shows(&custom, &PAPER_WIDTH) && shows(&custom, &PAPER_HEIGHT));
         assert!(!shows(&custom, &PAPER));
+    }
+
+    fn leader_labels(illustration: &Illustration) -> Vec<String> {
+        illustration
+            .visible_parts()
+            .filter_map(|p| match &p.primitive {
+                Primitive::Leader(l) => {
+                    Some(l.label.as_str().replace(['\u{2068}', '\u{2069}'], ""))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Mockup row 40: Zones and Title Block are named callouts, and each
+    /// drops out with the part it names.
+    #[test]
+    fn the_zones_and_title_block_have_named_callouts() {
+        let i18n = I18n::en_us();
+        let shown = leader_labels(&sheet_illustration(&a4(), &i18n));
+        assert!(shown.iter().any(|l| l == "Zones 4 × 6"), "{shown:?}");
+        assert!(shown.iter().any(|l| l == "Title Block"), "{shown:?}");
+        let bare = leader_labels(&sheet_illustration(
+            &SheetFacts {
+                show_border: false,
+                show_title_block: false,
+                ..a4()
+            },
+            &i18n,
+        ));
+        assert!(!bare.iter().any(|l| l.starts_with("Zones")), "{bare:?}");
+        assert!(!bare.iter().any(|l| l == "Title Block"), "{bare:?}");
     }
 
     /// A portrait sheet is drawn taller than wide.

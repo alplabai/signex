@@ -23,8 +23,9 @@ use crate::panels::command_log::{
     COPIED_FOR, CommandLogMsg, CopyTarget, JumpTarget, LogOutcome, LogRow, LogSource,
 };
 
-#[path = "command_log_replay.rs"]
+#[path = "command_log_replay/mod.rs"]
 mod replay;
+pub(crate) use replay::ReplayBook;
 #[cfg(test)]
 #[path = "command_log_tests.rs"]
 mod tests;
@@ -126,20 +127,29 @@ impl Signex {
         let ticket = self.command_log_enter();
         // The window's document as it ran: a command may close or switch it.
         let document = self.command_document(window, &operands);
+        let is_outer = ticket.started.is_some();
+        if is_outer {
+            self.begin_replay_capture();
+        }
         let (outcome, task) = run(self);
+        let captured = if is_outer {
+            self.end_replay_capture()
+        } else {
+            None
+        };
         if let Some(took) = self.command_log_leave(ticket) {
             let logged = dispatch_outcome(command.as_str(), &outcome);
+            let ran = !logged.is_failed();
             let source = self.dispatch_source(window);
-            let document = if targets.is_some() {
+            let document = if targets.is_some() || captured.is_some() {
                 document
             } else {
                 self.command_document(window, &operands)
             };
             let seq =
                 self.record_command(command.as_str(), operands, logged, took, source, document);
-            if let (Some(seq), Some(targets)) = (seq, targets) {
-                self.ui_state.command_log.log.keep_targets(seq, targets);
-                self.sync_command_log_panel_ctx();
+            if let Some(seq) = seq {
+                self.keep_replay_input(seq, command, targets, captured, ran);
             }
         }
         (outcome, task)

@@ -12,6 +12,7 @@ use signex_types::pcb::PcbBoard;
 use signex_types::theme::{ThemeId, theme_tokens};
 
 use super::print::parts;
+use super::print_art::art_x;
 use super::print_plan::{page_cards, unticked_sets};
 use crate::app::{BoardOutputMsg, BoardPrintFlag, BoardPrintState, Message, PcbMsg};
 use crate::layout_probe::{find, lay_out_texts, messages_on_click, messages_on_click_at};
@@ -124,6 +125,30 @@ fn the_cards_follow_the_page_plan() {
             .all(|c| !c.mirrored),
         "no mirrored tag when mirroring is off"
     );
+}
+
+/// Mockup row 116: each card's sketch takes its set's colour, flips on a
+/// mirrored page, goes black with the Black ink and follows the Show options.
+#[test]
+fn the_card_art_follows_the_options() {
+    let i18n = I18n::en_us();
+    let mut options = state(&[BoardLayerSet::Top, BoardLayerSet::Bottom]).options;
+    let cards = page_cards(&options, None, &i18n);
+    assert_ne!(cards[0].art.ink, cards[1].art.ink, "one colour per set");
+    assert_eq!(cards[0].art.ink.a, 1.0, "opaque on the paper");
+    assert!(!cards[0].art.mirrored && cards[1].art.mirrored);
+    assert_eq!(art_x(35.0, false), 35.0);
+    assert_eq!(art_x(35.0, true), 115.0);
+    assert!(cards[0].art.outline && cards[0].art.drills && cards[0].art.title_block);
+
+    options.monochrome = true;
+    options.outline = false;
+    options.drill_marks = false;
+    options.title_block = false;
+    for card in page_cards(&options, None, &i18n) {
+        assert_eq!(card.art.ink, iced::Color::BLACK);
+        assert!(!card.art.outline && !card.art.drills && !card.art.title_block);
+    }
 }
 
 #[test]

@@ -82,10 +82,10 @@ fn read_only_line<'a>(
         container(
             text(t!(i18n, ids::EDITORS_COMPONENT_COPY_TO_LIBRARY_UNAVAILABLE)).size(TS.caption),
         )
-        .padding([SP.xs, SP.s]),
+        .padding([SP.xs, SP.s])
+        .style(crate::styles::context_menu(tokens)),
         iced::widget::tooltip::Position::Top,
     )
-    .style(crate::styles::context_menu(tokens))
     .boxed();
     row![
         text(t!(i18n, ids::EDITORS_COMPONENT_READ_ONLY_FOOTER))
@@ -180,10 +180,10 @@ fn editable_line<'a>(
                 text(t!(i18n, ids::EDITORS_COMPONENT_SAVE_BLOCKED, "field" => field))
                     .size(TS.caption),
             )
-            .padding([SP.xs, SP.s]),
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(tokens)),
             iced::widget::tooltip::Position::Top,
         )
-        .style(crate::styles::context_menu(tokens))
         .boxed(),
         None => save,
     };

@@ -101,17 +101,12 @@ where
     clippy::disallowed_methods,
     reason = "the house widgets wrap the raw iced widgets (#2056)"
 )]
-pub fn tooltip<'a, W, V, Theme>(
-    content: W,
-    tip: V,
-    position: tooltip_mod::Position,
-) -> Tooltip<'a, W, V, Theme>
+pub fn tooltip<W, V>(content: W, tip: V, position: tooltip_mod::Position) -> Tooltip<W, V>
 where
     W: Content,
     V: Content,
-    Theme: container::Catalog + 'a,
 {
-    widget::tooltip(content, tip, position)
+    widget::tooltip(content, tip).position(position)
 }
 
 /// A widget the house `button` and `tooltip` accept as content. Everything
@@ -132,7 +127,7 @@ impl Content for Space {}
 impl<M, W> Content for MouseArea<'_, M, W> {}
 impl<M, W, T: widget::scrollable::Catalog> Content for Scrollable<'_, M, W, T> {}
 impl<M, W, T: widget::button::Catalog> Content for Button<'_, M, W, T> {}
-impl<W, V, T: container::Catalog> Content for Tooltip<'_, W, V, T> {}
+impl<W, V> Content for Tooltip<W, V> {}
 impl<P, M, T, R> Content for Canvas<P, M, T, R>
 where
     R: iced::advanced::graphics::geometry::Renderer,

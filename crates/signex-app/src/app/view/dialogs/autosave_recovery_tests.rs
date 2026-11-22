@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime};
 
 use signex_i18n::{DateLength, I18n, LanguagePref};
 
-use super::{clock_time, instant_before};
+use super::{clock_time, elided_path, instant_before, saved_caption_chars};
 use crate::app::Signex;
 use crate::autosave::RecoveryOffer;
 use crate::layout_probe::{LaidOutText, find, lay_out_texts};
@@ -116,6 +116,29 @@ fn the_notes_follow_which_version_is_newer() {
     assert!(has(&newer_file, "cannot be undone with"));
     assert!(has(&newer_file, later), "the Decide later caption is kept");
     assert!(has(&newer_file, "autosaved 2 days ago · "));
+}
+
+/// Mockup row 15: a long saved path gives up its middle, so the line fits
+/// beside the pill and keeps the file name and the time.
+#[test]
+fn a_long_saved_path_keeps_its_file_name_and_time() {
+    let path = format!("/home/user/{}/power.snxsch", "deep/folder/".repeat(12));
+    let cut = elided_path(&path, 30);
+    assert_eq!(cut.chars().count(), 30, "{cut}");
+    assert!(cut.starts_with("/home") && cut.ends_with("power.snxsch"));
+    assert_eq!(elided_path("power.snxsch", 30), "power.snxsch");
+
+    let long = RecoveryOffer {
+        path: path.into(),
+        ..offer(true)
+    };
+    let shown: Vec<String> = laid_out(&long).iter().map(|t| plain(&t.text)).collect();
+    let line = shown
+        .iter()
+        .find(|t| t.contains("power.snxsch · "))
+        .expect("the saved row");
+    assert!(line.contains('…'), "{line}");
+    assert!(line.chars().count() <= saved_caption_chars(540.0), "{line}");
 }
 
 /// The footer order is unchanged by the redraw: Restore, then Discard, at

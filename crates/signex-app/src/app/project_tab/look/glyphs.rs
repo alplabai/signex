@@ -36,11 +36,12 @@ pub(in crate::app::project_tab) enum Glyph {
     Gear,
     Branch,
     Target,
+    Save,
 }
 
 impl Glyph {
     /// Every glyph, in declaration order.
-    pub(in crate::app::project_tab) const ALL: [Glyph; 25] = [
+    pub(in crate::app::project_tab) const ALL: [Glyph; 26] = [
         Glyph::Up,
         Glyph::Down,
         Glyph::Lock,
@@ -66,6 +67,7 @@ impl Glyph {
         Glyph::Gear,
         Glyph::Branch,
         Glyph::Target,
+        Glyph::Save,
     ];
 
     /// Position in [`Glyph::ALL`] and in the parsed handles.
@@ -101,6 +103,7 @@ impl Glyph {
             Glyph::Gear => GEAR,
             Glyph::Branch => BRANCH,
             Glyph::Target => TARGET,
+            Glyph::Save => SAVE,
         }
     }
 }
@@ -130,9 +133,10 @@ const SLIDERS: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
 const GEAR: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.2 2.2M16.2 16.2l2.2 2.2M5.6 18.4l2.2-2.2M16.2 7.8l2.2-2.2"/></svg>"##;
 const BRANCH: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="5" r="2"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="7" r="2"/><path d="M7 7v10M17 9c0 4-10 2-10 6"/></svg>"##;
 const TARGET: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/></svg>"##;
+const SAVE: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 3.75h12.75l3.75 3.75v12.75h-16.5z"/><path d="M7.5 3.75v5.25h7.5V3.75M7.5 20.25v-6h9v6"/></svg>"##;
 
 /// The glyphs parsed once, in [`Glyph::ALL`] order.
-static HANDLES: LazyLock<[svg::Handle; 25]> =
+static HANDLES: LazyLock<[svg::Handle; 26]> =
     LazyLock::new(|| Glyph::ALL.map(|g| svg::Handle::from_memory(g.source())));
 
 /// `g` drawn `size` px square in `color`.

@@ -51,6 +51,8 @@ pub struct PasteArrayState {
     pub grid_mm: f64,
     /// The preview callout under the pointer.
     pub hover: IllustrationHover,
+    /// The preview is drawn at its taller size.
+    pub preview_expanded: bool,
 }
 
 /// A dialog whose fields all parse.
@@ -99,6 +101,7 @@ impl PasteArrayState {
             copy_size_mm: None,
             grid_mm: 0.0,
             hover: IllustrationHover::default(),
+            preview_expanded: false,
         }
     }
 
@@ -215,6 +218,8 @@ pub enum PasteArrayMsg {
     DesignatorsChosen(PasteDesignators),
     /// The pointer moved over the preview's spacing callouts.
     PreviewHovered(IllustrationMsg),
+    /// The preview's expand button was pressed.
+    PreviewExpandToggled,
     /// OK: place the array.
     ApplyPressed,
     Closed,

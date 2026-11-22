@@ -233,6 +233,45 @@ fn clear_and_select_all_move_the_count_the_thumbnails_and_the_footer() {
     assert_eq!(footer(&app), all);
 }
 
+/// Mockup row 111: away from Specific the page field is empty, so it reads
+/// its placeholder, and the typed list comes back with Specific.
+#[test]
+fn the_page_field_shows_its_list_only_for_specific() {
+    use super::sheets::pages_field_text;
+    use signex_output::PageRange;
+    assert_eq!(pages_field_text(&PageRange::All, "1-2, 4"), "");
+    assert_eq!(pages_field_text(&PageRange::Current, "1-2, 4"), "");
+    assert_eq!(
+        pages_field_text(&PageRange::Specific(vec![1, 2, 4]), "1-2, 4"),
+        "1-2, 4"
+    );
+}
+
+/// Mockup row 111, both Graphite themes: a field that takes no input (the
+/// page list, the Scale percent under Fit to Page) sits on the sunken fill in
+/// faint ink; a live field keeps the field look.
+#[test]
+fn an_inert_field_is_greyed_in_both_themes() {
+    use crate::panels::form_look::{greyable_input_style, text_input_style};
+    use iced::widget::text_input::Status;
+    use signex_types::theme::{ThemeId, theme_tokens};
+    for &id in ThemeId::BUILTINS {
+        let theme = Signex::id_to_iced_theme(id);
+        let r = crate::styles::tokens::resolve(&theme_tokens(id));
+        let inert = greyable_input_style(&theme, Status::Disabled);
+        assert_eq!(
+            inert.background,
+            iced::Background::Color(r.sunken),
+            "{id:?}"
+        );
+        assert_eq!(inert.value, r.ink4, "{id:?}");
+        let live = greyable_input_style(&theme, Status::Active);
+        let plain = text_input_style(&theme, Status::Active);
+        assert_eq!(live.background, plain.background, "{id:?}");
+        assert_eq!(live.value, plain.value, "{id:?}");
+    }
+}
+
 /// The expanded names take input only while Use Physical Structure is
 /// ticked.
 #[test]

@@ -4,20 +4,21 @@
 //! step on the project's data and marks the `.snxprj` dirty; the file is
 //! written by the normal Save, like every other section.
 
-use iced::widget::{column, container, row};
-use iced::{Element, Length, Widget as _};
+use iced::widget::{container, row};
+use iced::{Alignment, Element, Length, Widget as _};
 use signex_engine::ProjectGeneralCommand;
-use signex_i18n::I18n;
+use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 
 use super::ProjectTabMsg;
+use super::look::{ButtonKind, CardHeader, Glyph, card, text_button, warn_line};
+use super::table::{SP, TS, section_with_action};
 use crate::app::new_project::{
     NewProjectMsg, NewProjectState, ProfileStored, import_rule_file, store_profile,
 };
 use crate::app::state::{LoadedProject, ProjectId};
-use crate::app::view::dialogs::new_project::{cards, customize};
+use crate::app::view::dialogs::new_project::{cards, customize, user_cards};
 use crate::app::{Message, ProjectMsg, Signex};
-use crate::styles::Spacing;
 use signex_types::project::UserProfile;
 
 fn edited(project_id: ProjectId) -> impl Fn(NewProjectMsg) -> Message + Clone + Send + 'static {
@@ -29,9 +30,9 @@ fn edited(project_id: ProjectId) -> impl Fn(NewProjectMsg) -> Message + Clone + 
     }
 }
 
-/// The section: profile cards, then the rules and the sheet
-/// defaults side by side. `draft` is the half-edited state, else the stored
-/// values are shown.
+/// The section (mockup row 37): the page header with Save as profile, the
+/// profile cards, then the PCB rules and Schematic cards side by side.
+/// `draft` is the half-edited state, else the stored values are shown.
 pub(super) fn view<'a>(
     project: &LoadedProject,
     draft: Option<&NewProjectState>,
@@ -40,7 +41,6 @@ pub(super) fn view<'a>(
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let sp = Spacing::default();
     let stored;
     let state = match draft {
         Some(draft) => draft,
@@ -49,43 +49,87 @@ pub(super) fn view<'a>(
             &stored
         }
     };
-    let wrap = edited(project.id);
-    let unreadable = project.data.has_unreadable_project_defaults().then(|| {
-        signex_widgets::text(signex_i18n::t!(
-            i18n,
-            signex_i18n::ids::DIALOG_NEW_PROJECT_SETUP_UNREADABLE
-        ))
-        .size(crate::styles::TypeScale::default().caption)
-        .color(crate::styles::ti(tokens.text_secondary))
-    });
-    let body: Element<'a, NewProjectMsg> = column![
-        cards::profiles(state, users, i18n, tokens),
-        row![
-            container(customize::pcb_rules(state, true, i18n, tokens))
-                .width(Length::FillPortion(1)),
-            container(customize::schematic(state, i18n, tokens)).width(Length::FillPortion(1)),
-        ]
-        .spacing(sp.xl),
-    ]
-    .spacing(sp.xl + sp.s)
-    .boxed();
-    let mut col: iced::widget::Column<Element<'a, Message>> = column![].spacing(sp.m);
-    if let Some(note) = unreadable {
-        col = col.push(note.boxed());
+    let mut body: Vec<Element<'a, Message>> = Vec::new();
+    if project.data.has_unreadable_project_defaults() {
+        let note = signex_widgets::text(t!(i18n, ids::DIALOG_NEW_PROJECT_SETUP_UNREADABLE))
+            .size(TS.caption)
+            .boxed();
+        body.push(warn_line(Glyph::Warn, note, None, tokens));
     }
-    let body = col
-        .push(body.map(wrap).boxed())
-        .push(super::agent_journals::view(
-            project,
-            journal_lines_draft,
-            i18n,
+    body.push(
+        cards::tab_choices(state, users, i18n, tokens)
+            .map(edited(project.id))
+            .boxed(),
+    );
+    body.push(rule_cards(project.id, state, i18n, tokens));
+    body.push(super::agent_journals::view(
+        project,
+        journal_lines_draft,
+        i18n,
+        tokens,
+    ));
+    section_with_action(
+        ids::PROJECT_SECTION_SETUP,
+        ids::PROJECT_SETUP_HELP,
+        save_action(project.id, state, i18n, tokens),
+        body,
+        i18n,
+        tokens,
+    )
+}
+
+/// The header's Save as profile button, or its name field while open.
+fn save_action<'a>(
+    project_id: ProjectId,
+    state: &NewProjectState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let wrap = edited(project_id);
+    if state.save_profile_name.is_some() {
+        return user_cards::save_as(state, i18n, tokens).map(wrap).boxed();
+    }
+    text_button(
+        Some(Glyph::Save),
+        t!(i18n, ids::SETUP_PROFILE_SAVE_AS),
+        Some(wrap(NewProjectMsg::SaveProfileOpened)),
+        ButtonKind::Outline,
+        tokens,
+    )
+}
+
+/// The PCB rules and Schematic cards, side by side.
+fn rule_cards<'a>(
+    project_id: ProjectId,
+    state: &NewProjectState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let titled = |title: Localized, fields: Element<'a, NewProjectMsg>| {
+        let header = CardHeader {
+            title,
+            trailing: Vec::new(),
+        };
+        container(card(
+            Some(header),
+            fields.map(edited(project_id)).boxed(),
             tokens,
-        ));
-    let page = container(body)
-        .width(Length::Fill)
-        .padding([sp.xl, sp.xl])
-        .boxed();
-    super::table::page_scroller(page, tokens)
+        ))
+        .width(Length::FillPortion(1))
+    };
+    row![
+        titled(
+            t!(i18n, ids::PROJECT_SETUP_PCB_RULES),
+            customize::pcb_rule_fields(state, true, i18n, tokens),
+        ),
+        titled(
+            t!(i18n, ids::PROJECT_SETUP_SCHEMATIC),
+            customize::schematic_fields(state, i18n, tokens),
+        ),
+    ]
+    .spacing(SP.l)
+    .align_y(Alignment::Start)
+    .boxed()
 }
 
 /// Which stored part an edit of the section touches.

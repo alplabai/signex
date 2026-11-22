@@ -76,10 +76,12 @@ impl Signex {
         }
         let document = &self.document_state;
         let tokens = &document.panel_ctx.tokens;
-        let (has_sch, has_pcb) = (document.panel_ctx.has_schematic, document.panel_ctx.has_pcb);
-        let groups = grouped_panels(|kind| {
-            (!kind.needs_schematic() || has_sch) && (!kind.needs_pcb() || has_pcb)
-        });
+        let open = OpenDocuments {
+            schematic: document.panel_ctx.has_schematic,
+            pcb: document.panel_ctx.has_pcb,
+            footprint: self.active_footprint_editor_path().is_some(),
+        };
+        let groups = grouped_panels(|kind| open.offers(kind));
         let rows: usize = groups.iter().map(|(_, kinds)| kinds.len()).sum();
         let mut list: Column<Element<'_, Message>> = Column::new().spacing(0);
         for (group, kinds) in &groups {
@@ -88,6 +90,7 @@ impl Signex {
                 list = list.push(panel_row(kind, self.panel_region(kind), tokens, &ui.i18n));
             }
         }
+        list = list.push(foot_caption(&ui.i18n, tokens));
         let popup = container(
             list.width(crate::status_bar::POPUP_WIDTH - 2.0 * crate::status_bar::POPUP_PADDING),
         )
@@ -95,7 +98,8 @@ impl Signex {
         .style(crate::status_bar::popup(tokens));
         // Directly above the Panels button, its bottom edge just above the bar.
         let (ww, wh) = ui.window_size;
-        let popup_h = crate::status_bar::panel_list_height(rows, groups.len());
+        let popup_h = crate::status_bar::panel_list_height(rows, groups.len())
+            + crate::status_bar::panel_list_foot_height();
         let status_h = crate::status_bar::status_bar_height(tokens);
         let left =
             (ww - crate::status_bar::POPUP_WIDTH - crate::status_bar::POPUP_RIGHT_MARGIN).max(0.0);
@@ -106,6 +110,41 @@ impl Signex {
             (left, top),
         )
     }
+}
+
+/// Which documents the panel list is offering panels for.
+#[derive(Debug, Clone, Copy)]
+struct OpenDocuments {
+    schematic: bool,
+    pcb: bool,
+    footprint: bool,
+}
+
+impl OpenDocuments {
+    /// Whether the list offers `kind`. Layers also serves the footprint
+    /// editor, which docks it on its tab.
+    fn offers(self, kind: PanelKind) -> bool {
+        let board_met =
+            !kind.needs_pcb() || self.pcb || (kind == PanelKind::Layers && self.footprint);
+        (!kind.needs_schematic() || self.schematic) && board_met
+    }
+}
+
+/// The caption at the foot of the list: where the tool documents went
+/// (mockup row 7). It names only what opens as a tab today.
+fn foot_caption<'a>(
+    i18n: &signex_i18n::I18n,
+    tokens: &signex_types::theme::ThemeTokens,
+) -> Element<'a, Message> {
+    container(
+        signex_widgets::text(t!(i18n, ids::PANELS_LIST_FOOT))
+            .size(TS.caption)
+            .color(crate::styles::tokens::resolve(tokens).ink4),
+    )
+    .padding(crate::status_bar::popup_caption_padding())
+    .height(crate::status_bar::panel_list_foot_height())
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// A group caption: the section size, muted, in capitals for the language.
@@ -213,6 +252,50 @@ mod tests {
             PanelRegion::of_site(PanelSite::Floating(0)),
             PanelRegion::Floating
         );
+    }
+
+    /// Mockup row 7: a project with no board offers no board panels; Net
+    /// Classes stays (it edits the project's table) and a footprint tab keeps
+    /// its Layers panel.
+    #[test]
+    fn board_panels_need_a_board_and_layers_also_serves_a_footprint() {
+        let sheet = OpenDocuments {
+            schematic: true,
+            pcb: false,
+            footprint: false,
+        };
+        for kind in [
+            PanelKind::Layers,
+            PanelKind::PcbNets,
+            PanelKind::LayerStack,
+            PanelKind::Drc,
+        ] {
+            assert!(!sheet.offers(kind), "{kind:?} without a board");
+        }
+        assert!(sheet.offers(PanelKind::NetClasses));
+        let footprint = OpenDocuments {
+            footprint: true,
+            ..sheet
+        };
+        assert!(footprint.offers(PanelKind::Layers));
+        assert!(!footprint.offers(PanelKind::PcbNets));
+        let board = OpenDocuments { pcb: true, ..sheet };
+        for kind in [PanelKind::Layers, PanelKind::PcbNets, PanelKind::Drc] {
+            assert!(board.offers(kind), "{kind:?} with a board");
+        }
+    }
+
+    /// Mockup row 7, under the decision of 2026-11-22: the foot caption does
+    /// not send anyone to a BOM Studio or Export Jobs tab, which are still
+    /// panels in this list.
+    #[test]
+    fn the_foot_caption_names_only_what_opens_as_a_tab() {
+        let i18n = signex_i18n::I18n::en_us();
+        let foot = t!(i18n, ids::PANELS_LIST_FOOT).into_string();
+        assert!(foot.contains("open as tabs"), "{foot}");
+        for listed in ["BOM Studio", "Export Jobs", "Layer Stack"] {
+            assert!(!foot.contains(listed), "{foot}");
+        }
     }
 
     /// The app's own region answer: a panel in the dock reads its region; a

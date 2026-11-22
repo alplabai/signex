@@ -149,6 +149,73 @@ fn the_general_page_scrolls() {
     assert!(!scrolled.iter().any(is_rename), "{scrolled:?}");
 }
 
+/// Mockup row 37: Save as profile is in the page header above the cards, and
+/// the rules and sheet fields sit in two titled cards.
+#[test]
+fn the_setup_page_has_its_header_and_titled_cards() {
+    let app = app();
+    let project_id = app.document_state.projects[0].id;
+    let window = iced::Size::new(1200.0, 1400.0);
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(project_id), window);
+    let y = |label: &str| crate::layout_probe::find(&texts, label).bounds.y;
+    assert!(
+        y("Save as profile…") < y("Standard"),
+        "header above the cards"
+    );
+    assert!(y("Standard") < y("PCB rules"), "cards above the rules");
+    assert_eq!(y("PCB rules"), y("Schematic"), "the two cards side by side");
+    assert!(texts.iter().all(|t| t.text != "PCB RULES"));
+    let at = crate::layout_probe::find(&texts, "Save as profile…")
+        .bounds
+        .center();
+    let messages = crate::layout_probe::messages_for_events(
+        app.view_project_tab(project_id),
+        window,
+        at,
+        &left_click(),
+    );
+    assert!(messages.iter().any(|m| matches!(
+        m,
+        Message::Project(ProjectMsg::Tab(ProjectTabMsg::SetupEdited {
+            msg: NewProjectMsg::SaveProfileOpened,
+            ..
+        }))
+    )));
+}
+
+/// Mockup row 37: Orientation is two segments, and a pick is stored.
+#[test]
+fn the_setup_orientation_segment_picks_portrait() {
+    let mut app = app();
+    let project_id = app.document_state.projects[0].id;
+    let window = iced::Size::new(1200.0, 1400.0);
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(project_id), window);
+    let at = crate::layout_probe::find(&texts, "Portrait")
+        .bounds
+        .center();
+    let messages = crate::layout_probe::messages_for_events(
+        app.view_project_tab(project_id),
+        window,
+        at,
+        &left_click(),
+    );
+    assert!(!messages.is_empty(), "the segment takes the click");
+    for message in messages {
+        let _ = app.update(message);
+    }
+    let sheet = app.document_state.projects[0]
+        .data
+        .project_defaults
+        .sheet
+        .clone()
+        .expect("the pick is stored");
+    assert!(
+        sheet.paper_size.ends_with("portrait"),
+        "{}",
+        sheet.paper_size
+    );
+}
+
 #[test]
 fn a_profile_and_a_clearance_are_stored_as_a_project_edit() {
     let mut app = app();

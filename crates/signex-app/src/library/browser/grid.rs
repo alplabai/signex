@@ -523,10 +523,11 @@ pub(super) fn with_tooltip<'a>(
 ) -> Element<'a, LibraryMessage> {
     signex_widgets::tooltip(
         content,
-        container(text(tip).size(BROWSER_HEADER_SIZE)).padding([SP.xs, SP.s]),
+        container(text(tip).size(BROWSER_HEADER_SIZE))
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(tokens)),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(crate::styles::context_menu(tokens))
     .boxed()
 }
 

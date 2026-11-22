@@ -444,10 +444,11 @@ fn tip_text<'a>(
 ) -> Element<'a, PanelMsg> {
     tooltip(
         content,
-        container(text(tip).size(TS.body)).padding([SP.xs, SP.s]),
+        container(text(tip).size(TS.body))
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(look.tokens())),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(crate::styles::context_menu(look.tokens()))
     .boxed()
 }
 
@@ -566,6 +567,9 @@ pub fn parse_number(text: &str) -> Option<f64> {
         .trim();
     bare.parse::<f64>().ok().filter(|v| v.is_finite())
 }
+
+#[cfg(test)]
+mod two_field_tests;
 
 #[cfg(test)]
 mod tests {

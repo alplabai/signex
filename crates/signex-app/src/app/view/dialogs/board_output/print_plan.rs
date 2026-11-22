@@ -2,15 +2,17 @@
 //! `BoardPrintOptions::page_plan`, live with the options, naming the page's
 //! sets and the layers it holds (`BoardPrintOptions::page_layers`), tagged
 //! "mirrored" on a mirrored bottom page. With no set ticked it shows its
-//! empty state instead. The cards are not rendered thumbnails.
+//! empty state instead. The cards are not rendered thumbnails: each draws
+//! the sketch in `print_art`.
 
 use iced::widget::{Column, Row, Space, column, container, row};
-use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
+use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_output::{BoardLayerSet, BoardPrintOptions};
 use signex_types::pcb::PcbBoard;
 use signex_types::theme::ThemeTokens;
 
+use super::print_art::PageArt;
 use super::{SP, TS, kit};
 use crate::app::Message;
 use crate::app::board_output::set_label;
@@ -18,9 +20,6 @@ use crate::styles::{PillTone, Radii, chrome_px, tokens};
 
 /// Height of a card's page (150 px).
 const PAGE_H: f32 = chrome_px(150.0 * 11.0 / 12.0);
-/// The board sketched on a card's page (110 x 70 px).
-const BOARD_W: f32 = chrome_px(110.0 * 11.0 / 12.0);
-const BOARD_H: f32 = chrome_px(70.0 * 11.0 / 12.0);
 /// Gap between the cards (14 px).
 const CARD_GAP: f32 = SP.l + SP.xs;
 
@@ -34,6 +33,8 @@ pub(super) struct PageCard {
     /// The layers the page holds, joined.
     pub layers: String,
     pub mirrored: bool,
+    /// The sketch on the card's page.
+    pub art: PageArt,
 }
 
 /// The cards of `options`' page plan, in print order. `board` names the
@@ -65,6 +66,7 @@ pub(super) fn page_cards(
                 title,
                 layers,
                 mirrored,
+                art: PageArt::of(options, &sets, mirrored),
             }
         })
         .collect()
@@ -156,7 +158,7 @@ fn card_view<'a>(card: PageCard, i18n: &I18n, tokens: &ThemeTokens) -> Element<'
     }
     let mut col: Column<Element<'a, Message>> = Column::new()
         .spacing(SP.s)
-        .push(paper(true, sketch(tokens), tokens))
+        .push(paper(true, card.art.view(), tokens))
         .push(title.boxed());
     if !card.layers.is_empty() {
         col = col.push(kit::caption(
@@ -182,7 +184,7 @@ fn add_set_card<'a>(off: String, i18n: &I18n, tokens: &ThemeTokens) -> Element<'
     .boxed()
 }
 
-/// A page: `filled` paper in the raised fill, or an outline alone, with
+/// A page: `filled` white paper in both themes, or an outline alone, with
 /// `content` centred on it.
 fn paper<'a>(
     filled: bool,
@@ -190,7 +192,7 @@ fn paper<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
-    let fill = filled.then_some(Background::Color(r.raised));
+    let fill = filled.then_some(Background::Color(Color::WHITE));
     let line = r.line_strong;
     container(content)
         .width(Length::Fill)
@@ -202,24 +204,6 @@ fn paper<'a>(
             border: Border {
                 width: 1.0,
                 color: line,
-                radius: Radii::GRAPHITE.small.into(),
-                ..Border::default()
-            },
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
-/// The board drawn on a card's page: its outline as a rounded frame.
-fn sketch<'a>(tokens: &ThemeTokens) -> Element<'a, Message> {
-    let ink = tokens::resolve(tokens).ink4;
-    container(Space::new())
-        .width(Length::Fixed(BOARD_W))
-        .height(Length::Fixed(BOARD_H))
-        .style(move |_: &Theme| container::Style {
-            border: Border {
-                width: 1.0,
-                color: ink,
                 radius: Radii::GRAPHITE.small.into(),
                 ..Border::default()
             },

@@ -381,6 +381,7 @@ impl Signex {
             label: &label,
             expected_revision: revision,
         };
+        self.ui_state.command_replay.mark_board_properties_edit();
         if let Err(error) = self.execute_board_commands(path, commands, Some(step)) {
             self.refuse_primitive_edit(what, error.to_string());
         }

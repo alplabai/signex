@@ -259,8 +259,9 @@ pub(super) fn prefixed<'a>(
 }
 
 /// Narrowest a prefixed field gets beside its partner: its padding, the
-/// prefix and a six-character value.
-const PREFIXED_FIELD_MIN: f32 = 2.0 * SP.s + SP.xs + TS.caption + TS.body * 3.75;
+/// prefix and a six-character value, so X and Y share a row at the default
+/// 300 px dock (mockup row 95).
+const PREFIXED_FIELD_MIN: f32 = 2.0 * SP.s + SP.xs + TS.caption + TS.body * 3.4;
 
 /// Two prefixed fields and the unit after them, on one row while each keeps
 /// room for its value, else stacked with the unit beside them.

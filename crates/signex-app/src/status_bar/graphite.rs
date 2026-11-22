@@ -100,6 +100,13 @@ pub fn panel_list_height(rows: usize, captions: usize) -> f32 {
     popup_height(rows) + captions as f32 * popup_caption_height()
 }
 
+/// Height of the panel list's foot caption: three caption lines inside the
+/// group caption's padding.
+pub fn panel_list_foot_height() -> f32 {
+    let padding = popup_caption_padding();
+    padding.top + 3.0 * TS.caption * LINE_HEIGHT + padding.bottom
+}
+
 /// The chrome mono face (coordinates, grid, snap).
 pub fn mono_font() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
@@ -296,6 +303,15 @@ pub(super) fn cursor_texts(i18n: &I18n, unit: Unit, x: f64, y: f64) -> (Localize
     (
         t!(i18n, ids::PANELS_STATUS_BAR_X, "value" => xs),
         t!(i18n, ids::PANELS_STATUS_BAR_Y, "value" => ys),
+    )
+}
+
+/// The X and Y columns with no document to read a position from.
+pub(super) fn no_cursor_texts(i18n: &I18n) -> (Localized, Localized) {
+    const NO_VALUE: &str = "—";
+    (
+        t!(i18n, ids::PANELS_STATUS_BAR_X, "value" => NO_VALUE),
+        t!(i18n, ids::PANELS_STATUS_BAR_Y, "value" => NO_VALUE),
     )
 }
 

@@ -5,11 +5,11 @@
 use iced::alignment::Vertical;
 use iced::widget::{Column, Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
-use signex_i18n::{I18n, UserText, ids, t};
+use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, text};
 
-use super::look::{Glyph, ICON, glyph, mono_font, pill, ui_font};
+use super::look::{Glyph, ICON, field_label, glyph, mono_font, pill, ui_font};
 use super::table::{SP, TS};
 use super::{ProjectSection, ProjectTabMsg, requirements};
 use crate::app::state::{LoadedProject, ProjectId};
@@ -44,6 +44,13 @@ pub(super) const GROUPS: [&[ProjectSection]; 3] = [
         ProjectSection::Setup,
     ],
     &[ProjectSection::VersionControl, ProjectSection::Requirements],
+];
+
+/// The heading of each of [`GROUPS`], in the same order.
+pub(super) const GROUP_HEADINGS: [MessageId; 3] = [
+    ids::PROJECT_SECTION_GROUP_PROJECT,
+    ids::PROJECT_SECTION_GROUP_RULES,
+    ids::PROJECT_SECTION_GROUP_TRACKING,
 ];
 
 /// What the badges of the list read, taken from the Model.
@@ -289,7 +296,15 @@ fn entry<'a>(
         .boxed()
 }
 
-/// The list: the header, then each group's rows with a gap between groups.
+/// A group's small heading, its left edge on the rows' icons.
+fn group_heading<'a>(id: MessageId, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
+    container(field_label(t!(i18n, id), tokens))
+        .padding([SP.xs, EDGE_W + SP.xs + SP.m])
+        .boxed()
+}
+
+/// The list: the header, then each group under its heading, with a gap
+/// between groups.
 pub(super) fn section_list<'a>(
     project: &LoadedProject,
     facts: &SectionFacts,
@@ -299,8 +314,10 @@ pub(super) fn section_list<'a>(
 ) -> Element<'a, Message> {
     let mut groups: Column<Element<'a, Message>> =
         Column::new().spacing(SP.l).padding([SP.m, SP.s]);
-    for sections in GROUPS {
-        let mut group: Column<Element<'a, Message>> = Column::new().spacing(SP.xs);
+    for (sections, heading) in GROUPS.into_iter().zip(GROUP_HEADINGS) {
+        let mut group: Column<Element<'a, Message>> = Column::new()
+            .spacing(SP.xs)
+            .push(group_heading(heading, i18n, tokens));
         for section in sections {
             group = group.push(entry(project.id, *section, selected, facts, i18n, tokens));
         }

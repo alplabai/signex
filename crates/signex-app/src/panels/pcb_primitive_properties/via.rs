@@ -23,7 +23,9 @@ use signex_widgets::{Label, button, chips};
 use super::drawing::via as drawing;
 use super::linked::{Segment, segments};
 use super::mask::{flag_box, greyed_unless, via_mask_section};
-use super::rows::{Look, Section, labelled, mm_field, net_row, pair, stack, value_box, with_tip};
+use super::rows::{
+    Look, Section, labelled, mm_field, net_row, pair, stack, sunken_value, value_box, with_tip,
+};
 use super::stack_rows::{
     caption, illustration, later_link, linked, mode_tiles, pill, size_rows, tagged, unstored,
     unstored_row, warn_callout,
@@ -133,7 +135,7 @@ fn definition<'a>(look: Look<'a>, f: &'a ViaFacts) -> Option<Element<'a, PanelMs
     let from_type = |value: Option<String>| {
         tagged(
             look,
-            value_box(look, UserText::new(value.unwrap_or_default())),
+            sunken_value(look, UserText::new(value.unwrap_or_default())),
             Some(ids::PCB_PRIM_FROM_TYPE),
         )
     };

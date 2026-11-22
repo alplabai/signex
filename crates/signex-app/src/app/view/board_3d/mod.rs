@@ -6,6 +6,7 @@
 //! windows stay flat. Layout follows mockup rows 109 and 175.
 
 mod icons;
+mod legend;
 mod overlays;
 mod toolbar;
 mod view_cube;
@@ -14,7 +15,7 @@ use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Space, column, container, shader, stack};
 use iced::{Alignment, Background, Element, Length, Padding, Radians, Widget as _, gradient};
 use signex_gfx::camera3d::{LightingPreset, ViewPreset};
-use signex_i18n::{MessageId, ids};
+use signex_i18n::{I18n, MessageId, ids};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 
@@ -119,6 +120,12 @@ impl Metrics {
             popover_shadow: [6.0 * em, 20.0 * em],
             chevron: 12.0 * em,
         }
+    }
+
+    /// Where the view cube starts: under the toolbar's band, so the two
+    /// never overlap whatever the view's width (mockup row 175).
+    const fn cube_top(&self) -> f32 {
+        self.bar_top + self.button + 2.0 * self.bar_pad + self.popover_gap
     }
 }
 
@@ -310,12 +317,7 @@ impl Signex {
                 bottom: M.hint_bottom,
                 ..Padding::ZERO
             });
-        let cube = container(view_cube::view_cube(i18n, session.side, &look))
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Horizontal::Right)
-            .align_y(Vertical::Top)
-            .padding(M.cube_inset);
+        let cube = cube_corner(i18n, session, &look);
 
         let bar = toolbar::toolbar(i18n, session, &look);
         // The popovers hang under their own buttons (the toolbar draws
@@ -339,5 +341,55 @@ impl Signex {
                 ..Padding::ZERO
             });
         stack![bottom_left, hint, cube, top].boxed()
+    }
+}
+
+/// The top right corner: the view cube under the toolbar's band, and the
+/// stack legend under it while the view is tall enough.
+fn cube_corner<'a>(i18n: &I18n, session: &Board3dSession, look: &Look) -> Element<'a, Message> {
+    let mut corner = column![view_cube::view_cube(i18n, session.side, look)]
+        .spacing(M.popover_gap * 2.0)
+        .align_x(Alignment::End);
+    if legend::legend_fits(session.viewport[1]) {
+        corner = corner.push(legend::stack_legend(i18n, look));
+    }
+    container(corner)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(Horizontal::Right)
+        .align_y(Vertical::Top)
+        .padding(Padding {
+            top: M.cube_top(),
+            right: M.cube_inset,
+            ..Padding::ZERO
+        })
+        .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use iced::Size;
+    use signex_types::theme::{ThemeId, theme_tokens};
+
+    use super::*;
+    use crate::layout_probe::root_size;
+
+    /// Mockup row 175: the cube starts below the toolbar as laid out, so it
+    /// is clear of it at any view width.
+    #[test]
+    fn the_view_cube_starts_below_the_toolbar() {
+        let tokens = theme_tokens(ThemeId::GraphiteLight);
+        let look = Look::of(&tokens);
+        let session = Board3dSession::open(Path::new("board.snxpcb"));
+        let bar = toolbar::toolbar(I18n::en_us_ref(), &session, &look);
+        let size = root_size(bar, Size::new(2000.0, 200.0));
+        assert!(
+            M.bar_top + size.height <= M.cube_top(),
+            "the toolbar ends at {} and the cube starts at {}",
+            M.bar_top + size.height,
+            M.cube_top()
+        );
     }
 }

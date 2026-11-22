@@ -86,11 +86,11 @@ fn finding<'a>(ctx: &'a PanelContext, v: &'a ErcDiagnosticEntry) -> Element<'a, 
             ))
             .size(TS.caption),
         )
-        .padding([SP.xs, SP.s]),
+        .padding([SP.xs, SP.s])
+        .style(crate::styles::context_menu(tokens)),
         iced::widget::tooltip::Position::Top,
     )
     .gap(SP.xs)
-    .style(crate::styles::context_menu(tokens))
     .boxed();
     let mut actions = Vec::new();
     if v.rule_kind == Some(signex_erc::RuleKind::UnusedPin) {

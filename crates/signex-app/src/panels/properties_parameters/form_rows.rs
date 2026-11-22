@@ -63,10 +63,10 @@ pub fn with_value_tip<'a, M: 'a>(field: Element<'a, M>, value: &str) -> Element<
                 .size(TS.body)
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         )
-        .padding([SP.xs, SP.s]),
+        .padding([SP.xs, SP.s])
+        .style(form_look::value_tip),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(form_look::value_tip)
     .boxed()
 }
 

@@ -60,8 +60,15 @@ impl Signex {
         {
             return (MutationOutcome::Failed, Some(reason));
         }
+        let recorded = self.sheet_edit_to_record(&commands);
         let edit = self.document_state.execute_batch_on_edit_path(commands);
-        self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info)
+        let done = self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        if done.0 == MutationOutcome::Changed
+            && let Some(commands) = recorded
+        {
+            self.note_sheet_edit(commands);
+        }
+        done
     }
 
     /// Project an edit's events on the active canvas; its outcome and refusal.
@@ -139,10 +146,19 @@ impl Signex {
         if let Some(reason) = self.refuse_if_channel_view() {
             return (MutationOutcome::Failed, Some(reason));
         }
+        let recorded = record_history
+            .then(|| self.sheet_edit_to_record(std::slice::from_ref(&command)))
+            .flatten();
         let edit = self
             .document_state
             .execute_on_edit_path(command, record_history);
-        self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info)
+        let done = self.project_sheet_edit(edit, clear_overlay_cache, update_selection_info);
+        if done.0 == MutationOutcome::Changed
+            && let Some(commands) = recorded
+        {
+            self.note_sheet_edit(commands);
+        }
+        done
     }
 
     /// Mark the active document as having unsaved edits, without running a

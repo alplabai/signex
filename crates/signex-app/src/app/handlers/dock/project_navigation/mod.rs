@@ -231,10 +231,18 @@ impl Signex {
                 );
             }
             ProjectTreeAction::ExpandAll => {
-                set_expanded_recursive(&mut self.document_state.panel_ctx.project_tree, true);
+                let panel = &mut self.document_state.panel_ctx;
+                set_expanded_recursive(&mut panel.project_tree, true);
+                panel
+                    .projects_view
+                    .set_groups_collapsed(&panel.project_tree, false);
             }
             ProjectTreeAction::CollapseAll => {
-                set_expanded_recursive(&mut self.document_state.panel_ctx.project_tree, false);
+                let panel = &mut self.document_state.panel_ctx;
+                set_expanded_recursive(&mut panel.project_tree, false);
+                panel
+                    .projects_view
+                    .set_groups_collapsed(&panel.project_tree, true);
             }
             ProjectTreeAction::Refresh => {
                 self.document_state.panel_ctx.project_tree =

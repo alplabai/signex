@@ -29,6 +29,16 @@ pub(super) fn sheets_summary(preview: &PreviewState) -> (usize, usize) {
     (ticked, preview.sheet_files.len())
 }
 
+/// What the page field shows: the typed list while Specific is chosen, else
+/// nothing, so the greyed field reads its placeholder (mockup row 111). The
+/// typed list is kept for the next switch back to Specific.
+pub(super) fn pages_field_text<'a>(range: &PageRange, typed: &'a str) -> &'a str {
+    match range {
+        PageRange::All | PageRange::Current => "",
+        PageRange::Specific(_) | PageRange::Range(..) => typed,
+    }
+}
+
 impl Signex {
     /// The Sheets section body: the links, then one checkbox per sheet.
     pub(super) fn view_pdf_sheets<'a>(&'a self, preview: &'a PreviewState) -> Element<'a, Message> {
@@ -106,18 +116,22 @@ impl Signex {
         let tokens = &self.document_state.panel_ctx.tokens;
         let field = text_input(
             t!(i18n, ids::PLACEHOLDER_PDF_PAGE),
-            &preview.specific_page_input,
+            pages_field_text(
+                &preview.pdf_options.page_range,
+                &preview.specific_page_input,
+            ),
         )
         .padding([SP.s, SP.m])
         .size(TS.body)
-        .width(Length::Fill)
-        .style(crate::panels::form_look::refusable_input_style(
-            refused.then(|| crate::styles::ti(tokens.error)),
-        ));
+        .width(Length::Fill);
         let field = if current == PagesChoice::Specific {
-            field.on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
-        } else {
             field
+                .style(crate::panels::form_look::refusable_input_style(
+                    refused.then(|| crate::styles::ti(tokens.error)),
+                ))
+                .on_input(|v| Message::PrintPreview(PrintPreviewMsg::SetSpecificPageInput(v)))
+        } else {
+            field.style(crate::panels::form_look::greyable_input_style)
         };
         column![switch, field]
             .spacing(SP.s)

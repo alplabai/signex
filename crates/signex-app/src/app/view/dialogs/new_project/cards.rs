@@ -239,8 +239,7 @@ fn tier_card<'a>(
         head,
         text(t!(i18n, blurb))
             .size(TS.body)
-            .color(tokens::resolve(tokens).ink3)
-            .wrapping(iced::widget::text::Wrapping::None),
+            .color(tokens::resolve(tokens).ink3),
         container(specs(profile, users, i18n, tokens)).padding([SP.xs, 0.0]),
         container(layer_row).padding(iced::Padding {
             top: SP.xs,
@@ -385,6 +384,24 @@ pub(crate) fn choices<'a>(
         super::user_cards::Caption::Pcb,
         i18n,
         tokens,
+    ))
+    .boxed()
+}
+
+/// The Project tab's form of [`choices`] (mockup row 37): its page header
+/// holds Save as profile, and Your profiles is one compact row.
+pub(crate) fn tab_choices<'a>(
+    state: &NewProjectState,
+    users: &[UserProfile],
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    let mut col = column![tier_grid(state, users, i18n, tokens)].spacing(SP.m);
+    if let Some(bar) = edit_bar(state, users, i18n, tokens) {
+        col = col.push(bar);
+    }
+    col.push(super::user_cards::compact_section(
+        state, users, i18n, tokens,
     ))
     .boxed()
 }

@@ -84,6 +84,53 @@ fn undo(app: &mut Signex) {
     engine.undo().expect("undo");
 }
 
+/// Mockup row 151: selecting a sheet symbol brings its Repeat rows, and
+/// leaving it takes them away, with no other refresh in between.
+#[test]
+fn a_selection_change_refreshes_the_repeat_rows() {
+    let mut app = app_editing("Repeat(CH, 1, 4)", None);
+
+    app.update_selection_info();
+    let rows = app
+        .document_state
+        .panel_ctx
+        .compiled_design
+        .sheet_symbol
+        .as_ref();
+    assert_eq!(rows.map(|r| r.sheet_symbol), Some(SYMBOL));
+
+    app.interaction_state.active_canvas_mut().selected.clear();
+    app.update_selection_info();
+    assert!(
+        app.document_state
+            .panel_ctx
+            .compiled_design
+            .sheet_symbol
+            .is_none()
+    );
+}
+
+/// Mockup row 51: the footer's breakdown follows the selection.
+#[test]
+fn a_selection_change_refreshes_the_kinds_the_footer_counts() {
+    let mut app = app_editing("plain", Some("other"));
+    app.interaction_state.active_canvas_mut().selected = vec![
+        SelectedItem::new(SYMBOL, SelectedKind::ChildSheet),
+        SelectedItem::new(OTHER, SelectedKind::ChildSheet),
+    ];
+
+    app.update_selection_info();
+
+    let kinds: Vec<_> = app
+        .document_state
+        .panel_ctx
+        .selection_form
+        .kinds
+        .iter()
+        .collect();
+    assert_eq!(kinds, [(SelectedKind::ChildSheet, 2)]);
+}
+
 #[test]
 fn off_restores_the_designator_a_typed_repeat_replaced() {
     let mut app = app_editing("buck_channel", None);

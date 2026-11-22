@@ -74,7 +74,8 @@ fn run_scan(inputs: ScanInputs) -> ProjectScan {
                 .as_ref()
                 .filter(|_| scope.placements.len() > 1)
                 .and_then(|p| scope.placements.iter().position(|q| q == p))
-                .map(|i| format!("placement {} of {}", i + 1, scope.placements.len()));
+                .map(|i| format!("placement {} of {}", i + 1, scope.placements.len()))
+                .or_else(|| signex_engine::value_part_name(sheet, &hit, &scope));
             scan.matches.push(FindMatch {
                 sheet: Some(path.clone()),
                 hit,

@@ -575,6 +575,7 @@ impl Signex {
                 )),
                 tab_overflow_menu_open: false,
                 command_log: Default::default(),
+                command_replay: Default::default(),
                 workspace_layouts: Box::new(workspace_layouts),
             },
             document_state: DocumentState {

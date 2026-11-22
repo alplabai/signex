@@ -20,6 +20,33 @@ project-section-erc-annotation = ERC and annotation
 project-section-version-control = Version control
 project-section-schematic-defaults = Schematic defaults
 project-section-setup = Project setup
+# The section list's group headings (mockup row 29).
+project-section-group-project = PROJECT
+project-section-group-rules = RULES & DEFAULTS
+project-section-group-tracking = TRACKING
+
+# General section (mockup row 29).
+project-general-help = The project's name, description and the designator standard new parts follow.
+project-general-name = Name
+project-general-rename = Rename…
+project-general-description = Description
+project-general-designator-standard = Designator standard
+project-general-library-designator = Library designator
+# $standards is the picker's choices, joined with a middle dot.
+project-general-designator-hint = { $standards }
+project-general-designator-newer = Set by a newer Signex version — kept unchanged
+project-general-files = Files
+project-general-directory = Directory
+project-general-root-schematic = Root schematic
+project-general-pcb-file = PCB file
+project-general-libraries = Libraries
+project-general-show-in-libraries = Show in Libraries
+
+# Project setup section (mockup row 37).
+project-setup-help = The board rules and sheet defaults the project was created with. New PCBs and schematics start from these.
+project-setup-pcb-rules = PCB rules
+project-setup-schematic = Schematic
+project-setup-your-profiles = YOUR PROFILES
 
 # Row actions shared by the sections' tables.
 project-move-up = Move up

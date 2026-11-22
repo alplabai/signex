@@ -320,7 +320,6 @@ fn style_section<'a>(
                 stroke_color,
                 border_open,
                 border_advanced,
-                palette,
                 /* is_border */ true,
                 i18n,
             );
@@ -329,7 +328,6 @@ fn style_section<'a>(
                 fill_color,
                 fill_open,
                 fill_advanced,
-                palette,
                 /* is_border */ false,
                 i18n,
             );
@@ -437,35 +435,20 @@ fn entries_section<'a>(
     )
 }
 
-/// One swatch row in the child-sheet Style section.
-///
-/// Click flow:
-///   1. Click swatch → expands an inline preset palette panel below
-///      the row (full panel width, like the canvas-font popup) with
-///      a 12-colour grid plus "Custom…" and (when an override is
-///      active) "Reset to Default".
-///   2. Click the swatch again to collapse, or click "Custom…" to
-///      switch to the iced_aw HSV / RGB ColorPicker overlay.
-///
-/// Both the palette pick and the advanced-picker submit reuse the
-/// same `EditChildSheet*Color` message so engine command + undo/redo
-/// round-trip is identical for both paths.
+/// One colour field of the child-sheet Style section (mockup row 46): the
+/// swatch, its code or Default and a chevron, opening the preset popover.
+/// Custom… switches to the HSV / RGB picker. Both picks send the same
+/// `EditChildSheet*Color` message, so undo is identical for both.
 fn child_sheet_color_row<'a>(
     sheet_id: uuid::Uuid,
     current: Option<signex_types::schematic::StrokeColor>,
     show_picker: bool,
     show_advanced: bool,
-    palette: PanelPalette,
     is_border: bool,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
+    use crate::panels::wire_style_rows::{PopoverColorRow, WireColorPicker, popover_color_row};
     use std::rc::Rc;
-
-    let PanelPalette {
-        muted,
-        border: border_c,
-        ..
-    } = palette;
 
     // StrokeColor → [u8; 4] RGBA so the generic widget stays agnostic
     // of the schematic colour type.
@@ -498,15 +481,18 @@ fn child_sheet_color_row<'a>(
     } else {
         ids::PROPERTIES_SHEET_FILL
     };
-    color_field(
-        ColorFieldProps {
-            label: t!(i18n, label).into(),
+    let picker = if show_advanced {
+        WireColorPicker::Advanced
+    } else if show_picker {
+        WireColorPicker::Palette
+    } else {
+        WireColorPicker::Closed
+    };
+    popover_color_row(
+        PopoverColorRow {
+            label: t!(i18n, label),
             current: current_rgba,
-            none_label: t!(i18n, ids::PROPERTIES_COLOR_DEFAULT).into(),
-            show_palette: show_picker,
-            show_advanced,
-            muted,
-            border_c,
+            picker,
             on_toggle,
             on_advanced: PanelMsg::OpenChildSheetAdvancedPicker(sheet_id, is_border),
             on_cancel: PanelMsg::CancelChildSheetColorPicker,

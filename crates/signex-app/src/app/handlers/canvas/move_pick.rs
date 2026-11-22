@@ -12,6 +12,7 @@ impl Signex {
     /// this also covers a move already floating (tab switch, reload, undo,
     /// tool change).
     pub(crate) fn cancel_move_pick(&mut self) {
+        self.ui_state.command_replay.drop_pending_move();
         self.ui_state.move_pick = None;
         let cancel = |canvas: &mut crate::canvas::CanvasSlot| {
             canvas.move_pick = None;

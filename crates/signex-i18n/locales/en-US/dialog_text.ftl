@@ -418,6 +418,10 @@ dialog-move-selection-move = Move
 dialog-move-selection-help = Positive X moves right, positive Y moves up. Grid { $grid } { $unit }: { $x } × { $y } steps.
 # The same line when an offset is not a whole number of grid steps.
 dialog-move-selection-help-off-grid = Positive X moves right, positive Y moves up. Grid { $grid } { $unit }: off grid.
+# Caption of the framed preview.
+dialog-move-selection-preview = Preview
+# After the names drawn on the preview; $count is how many items are not named.
+dialog-move-selection-preview-more = +{ $count }
 
 ## Net colour palette (#2528)
 # Header subtitle. $count is how many nets the active sheet labels.
