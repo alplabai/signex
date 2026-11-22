@@ -152,29 +152,18 @@ fn grid_preview<'a>(
         .preview_labels
         .view(&labels, style)
         .map(|m| msg(GridPropertiesMsg::PreviewLabelEdited(m)));
-    let (tip, ink) = if st.preview_expanded {
-        (ids::DIALOG_GRID_COLLAPSE, r.ink3)
+    let tip = if st.preview_expanded {
+        ids::DIALOG_GRID_COLLAPSE
     } else {
-        (ids::DIALOG_GRID_EXPAND, r.ink3)
+        ids::DIALOG_GRID_EXPAND
     };
-    let expand = signex_widgets::tooltip(
-        signex_widgets::button(
-            container(signex_widgets::chevron::chevron(
-                st.preview_expanded,
-                TS.body,
-                ink,
-            ))
-            .padding(SP.xs)
-            .boxed(),
-        )
-        .padding(SP.xs)
-        .on_press(msg(GridPropertiesMsg::PreviewExpandToggled))
-        .style(crate::styles::ghost_button(tokens))
-        .boxed(),
-        text(t!(i18n, tip)).size(TS.caption).boxed(),
-        iced::widget::tooltip::Position::Left,
-    )
-    .boxed();
+    let expand = expand_button(
+        st.preview_expanded,
+        tip,
+        msg(GridPropertiesMsg::PreviewExpandToggled),
+        i18n,
+        tokens,
+    );
     let corner = container(expand)
         .padding(SP.s)
         .width(Length::Fill)
@@ -183,6 +172,43 @@ fn grid_preview<'a>(
         .width(Length::Fixed(size.width))
         .height(Length::Fixed(size.height));
     container(frame).center_x(Length::Fill).boxed()
+}
+
+/// The expand-arrows glyph of a preview, or the shrink one once expanded.
+pub(in crate::app::view::dialogs) fn expand_glyph(expanded: bool) -> &'static [u8] {
+    if expanded {
+        crate::preferences::GLYPH_SHRINK
+    } else {
+        crate::preferences::GLYPH_EXPAND
+    }
+}
+
+/// The button at a preview's top right that draws it taller, or back.
+pub(in crate::app::view::dialogs) fn expand_button<'a>(
+    expanded: bool,
+    tip: MessageId,
+    on_press: Message,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let ink = crate::styles::tokens::resolve(tokens).ink3;
+    let glyph = iced::widget::svg(crate::icons::static_glyph(expand_glyph(expanded)))
+        .width(TS.body)
+        .height(TS.body)
+        .style(move |_: &iced::Theme, _| iced::widget::svg::Style {
+            color: Some(ink),
+            ..Default::default()
+        });
+    signex_widgets::tooltip(
+        signex_widgets::button(container(glyph).padding(SP.xs).boxed())
+            .padding(SP.xs)
+            .on_press(on_press)
+            .style(crate::styles::ghost_button(tokens))
+            .boxed(),
+        text(t!(i18n, tip)).size(TS.caption).boxed(),
+        iced::widget::tooltip::Position::Left,
+    )
+    .boxed()
 }
 
 /// The segmented-control look from the theme tokens.

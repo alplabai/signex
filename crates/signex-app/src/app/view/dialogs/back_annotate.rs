@@ -456,6 +456,13 @@ fn row_view<'a>(
 
 /// The caption of a flagged rename: where its new designator already is.
 fn duplicate_text(state: &BackAnnotateState, flag: &DuplicateRename, i18n: &I18n) -> Localized {
+    if flag.contested {
+        return t!(
+            i18n,
+            ids::BACK_ANNOTATE_DUPLICATE_CONTESTED,
+            "designator" => flag.designator.as_str()
+        );
+    }
     match state.part_sheet_name(&flag.holder) {
         Some(sheet) => t!(
             i18n,

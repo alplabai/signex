@@ -25,7 +25,10 @@ use iced::Task;
 use signex_engine::SheetSyncDirection;
 
 pub use create::SymbolSheetReads;
-pub use state::{ChildRead, SheetSyncPreviews, SheetSyncProblem, SheetSyncState};
+pub use state::{
+    ChildRead, SheetSyncEntries, SheetSyncPreviewMode, SheetSyncPreviews, SheetSyncProblem,
+    SheetSyncState,
+};
 
 use crate::app::{Message, Signex};
 
@@ -59,6 +62,10 @@ pub enum SheetSyncMsg {
     },
     /// A direction was chosen.
     DirectionPicked(SheetSyncDirection),
+    /// After or Before was picked for the drawing.
+    PreviewModePicked(SheetSyncPreviewMode),
+    /// The drawing's expand button was pressed.
+    PreviewExpandToggled,
     ApplyRequested,
     /// Apply's re-stat of the closed child sheet finished: the files that
     /// changed on disk since read `generation`, or why they could not be
@@ -94,6 +101,18 @@ impl Signex {
                     if state.previews.is_some() {
                         state.problem = None;
                     }
+                }
+                Task::none()
+            }
+            SheetSyncMsg::PreviewModePicked(mode) => {
+                if let Some(state) = self.ui_state.sheet_sync.as_mut() {
+                    state.preview_mode = mode;
+                }
+                Task::none()
+            }
+            SheetSyncMsg::PreviewExpandToggled => {
+                if let Some(state) = self.ui_state.sheet_sync.as_mut() {
+                    state.preview_expanded = !state.preview_expanded;
                 }
                 Task::none()
             }

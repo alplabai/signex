@@ -101,6 +101,32 @@ fn unticking_cascades_to_the_rename_it_uncovers() {
     );
 }
 
+/// Mockup row 82: two renames onto one free designator both start unticked
+/// and keep their reason; ticking one leaves the other flagged by its holder.
+#[test]
+fn two_renames_onto_a_free_designator_stay_flagged_once_unticked() {
+    let mut l = list(
+        &[(1, "J1"), (2, "C2")],
+        vec![rename(1, "J1", "J19"), rename(2, "C2", "J19")],
+    );
+    untick_duplicate_renames(&mut l, None);
+    assert!(l.rows.iter().all(|r| !r.on), "both start unticked");
+    let flagged = duplicate_renames(&l);
+    for (me, other) in [(1, 2), (2, 1)] {
+        let flag = flagged.get(&key(me)).expect("flagged while unticked");
+        assert_eq!(flag.designator, "J19");
+        assert_eq!(flag.holder, (InstancePath::root(), unit(other)));
+        assert!(flag.contested, "no part holds J19 yet");
+    }
+
+    l.set_on(&key(1), true);
+    let flagged = duplicate_renames(&l);
+    assert!(!flagged.contains_key(&key(1)), "J1 to J19 is now unique");
+    let left = flagged.get(&key(2)).expect("C2 to J19 still collides");
+    assert_eq!(left.holder, (InstancePath::root(), unit(1)));
+    assert!(!left.contested, "J1 holds J19 once its row applies");
+}
+
 /// A Refresh keeps the user's choice: a flagged rename ticked before stays
 /// ticked; a new one starts unticked.
 #[test]

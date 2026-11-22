@@ -27,6 +27,7 @@ mod keymap;
 mod language;
 mod pages_state;
 mod pages_view;
+pub(crate) use pages_view::controls::{GLYPH_EXPAND, GLYPH_SHRINK};
 mod profiles;
 mod schematic_display;
 mod setting_row;

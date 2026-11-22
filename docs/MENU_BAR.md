@@ -935,8 +935,10 @@ from operands; see [CLI.md](CLI.md#bottom-up-hierarchy).
 Design ▸ Synchronize Sheet Entries and Ports... (`sync_sheet_entries`) opens a
 dialog for the selected sheet symbol. Choose the side that wins: **Sheet to
 sheet symbol** changes the symbol's entries, **Sheet symbol to sheet** changes
-the sheet's hierarchical ports. The dialog lists the names that would be added,
-removed and renamed, and Apply makes exactly those changes as one undo step.
+the sheet's hierarchical ports. The dialog draws the written side after Apply
+or as it is now (After / Before, with an expand button) and lists each entry
+that would be added, removed or renamed with its I/O type. None of this changes
+a sheet: Apply makes exactly the listed changes as one undo step.
 Esc and Cancel close it without a change. A rename is read only when, for one
 direction (input, output, ...), exactly one name is gone and one is new; it
 keeps the entry's place and wires, or the port label's place. Sheet to sheet
