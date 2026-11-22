@@ -135,8 +135,8 @@ fn label_face<'a, M: 'a>(
         .wrapping(iced::widget::text::Wrapping::None)
         .ellipsis(iced::widget::text::Ellipsis::End);
     match font {
-        Some(font) => face.font(font).into(),
-        None => face.into(),
+        Some(font) => iced::Widget::boxed(face.font(font)),
+        None => iced::Widget::boxed(face),
     }
 }
 
