@@ -787,6 +787,9 @@ pub struct UiState {
     /// The Command Log (#2458): every command this session ran and what its
     /// panel shows. Session only; boxed, a pointer of the size budget (#2412).
     pub command_log: Box<crate::panels::CommandLogState>,
+    /// What each Command Log row took, for Replay. Beside the log, not in
+    /// the copy the panel holds. Boxed: the size budget (#2412).
+    pub(crate) command_replay: Box<crate::app::handlers::command_log::ReplayBook>,
     /// Workspace layouts (mockup row 166): the list, its store, and the Save Layout
     /// and Manage Layouts dialogs while open. Boxed: the size budget (#2412).
     pub workspace_layouts: Box<crate::workspace_layouts::WorkspaceLayoutsState>,

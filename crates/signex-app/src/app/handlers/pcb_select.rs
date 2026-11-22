@@ -145,6 +145,7 @@ impl Signex {
         let carried = self.has_own_pcb_carry();
         if carried {
             self.interaction_state.pcb_carry = None;
+            self.ui_state.command_replay.drop_pending_move();
         }
         if self.interaction_state.pcb_selection.clear() || carried || unlit {
             self.refresh_pcb_highlight();

@@ -531,15 +531,23 @@ impl Signex {
             let skip = carry.snap_skip(board);
             let view = self.pcb_snap_view();
             let delta = carry_delta(board, &carry.footprints, &skip, from, to, view);
-            if carry.leaves_tracks {
+            let commands = if carry.leaves_tracks {
                 placement::move_footprints_only(board, &carry.footprints, delta)
             } else {
                 placement::move_commands(board, &carry.footprints, delta)
-            }
+            };
+            (delta, commands)
         });
         self.end_pcb_carry();
-        if let Some(built) = built {
+        if let Some((delta, built)) = built {
+            // The Command Log keeps the offset, not the absolute positions.
+            self.ui_state.command_replay.note_board_drop(
+                carry.footprints.clone(),
+                delta,
+                carry.leaves_tracks,
+            );
             self.run_placement("Move", built);
+            self.ui_state.command_replay.forget_board_marks();
         }
     }
 
