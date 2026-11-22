@@ -21,6 +21,15 @@ use signex_widgets::{button, text};
 use super::{PanelContext, PanelMsg};
 use crate::styles::{Spacing, TypeScale};
 
+mod model;
+mod repo_view;
+
+pub use model::{
+    HistoryBranchScope, HistoryCommitMsg, HistoryFilter, HistoryFilterMsg, HistoryPanelMsg,
+    HistoryRepoEvent, HistoryRepoView, HistorySwitcherMsg, HistoryUi, RefPrompt, RefPromptKind,
+    SwitchBlock, can_create_branch, changed_files, document_to_show, visible_commits,
+};
+
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
@@ -63,6 +72,14 @@ pub struct HistoryPanelState {
     /// document and its undo stack, so they would be lost); the matching
     /// row then asks "Discard unsaved edits and restore?" (#110).
     pub pending_restore: Option<String>,
+    /// The repository graph of the last load; `None` until it lands.
+    pub repo: Option<std::sync::Arc<HistoryRepoView>>,
+    /// The graph rows the filters keep, recomputed in `update`.
+    pub visible: std::sync::Arc<Vec<signex_widgets::history_graph::GraphCommit>>,
+    /// The graph load for the current target is still running.
+    pub repo_loading: bool,
+    /// Filters, selection and the switcher.
+    pub ui: HistoryUi,
 }
 
 /// What the History panel's off-thread load found for the active file.
@@ -115,7 +132,21 @@ pub fn view_history<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let state = &ctx.history;
     let i18n = &ctx.i18n;
 
+    if state.mode == HistoryRenderMode::Ready
+        && let Some(repo) = &state.repo
+    {
+        return repo_view::view(ctx, repo);
+    }
+
     let inner: Element<'a, PanelMsg> = match &state.mode {
+        // The file's list is in but the graph is not: one Loading card,
+        // not a flash of the plain list.
+        HistoryRenderMode::Ready if state.repo_loading => message_card(
+            t!(i18n, ids::PANELS_HISTORY_LOADING),
+            muted,
+            border,
+            panel_bg,
+        ),
         HistoryRenderMode::NoActiveFile => message_card(
             t!(i18n, ids::PANELS_HISTORY_NO_ACTIVE_FILE),
             muted,

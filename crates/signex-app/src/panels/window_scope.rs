@@ -198,6 +198,7 @@ impl PanelMsg {
             | Self::FpEditorSelectSketchEntity { .. }
             | Self::HistoryRestoreClicked { .. }
             | Self::HistoryRestoreCancelled { .. }
+            | Self::History(..)
             | Self::FpEditorRestorePadStackDefaults { .. }
             | Self::FpEditorDismissPadStackOffer { .. }
             | Self::FpEditorHoverOverConstraint { .. }

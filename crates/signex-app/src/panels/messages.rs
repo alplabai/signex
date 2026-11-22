@@ -432,6 +432,8 @@ pub enum PanelMsg {
     /// Cancel on the History panel's "Discard unsaved edits and restore"
     /// confirmation row.
     HistoryRestoreCancelled,
+    /// The History panel's header, filters, graph and branch switcher.
+    History(super::history::HistoryPanelMsg),
     /// #1073 — restore paste (both sides) and thermal relief on the sketch
     /// pads that still carry the pre-#1052 all-false stack. One undo step;
     /// the document stays unsaved.
