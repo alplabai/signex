@@ -17,12 +17,13 @@ use signex_app::app::{
 };
 use signex_app::dock::{DockMessage, PanelPosition};
 use signex_app::library::LibraryMessage;
-use signex_app::library::editor::footprint::EditorMode;
 use signex_app::library::editor::footprint::sketch_mode::SketchCanvasMsg;
+use signex_app::library::editor::footprint::{EditorMode, SketchTool};
 use signex_app::library::messages::{FootprintEditorMsg, PrimitiveEdit, RoleTag};
 use signex_app::panels::PanelKind;
 use signex_sketch::SketchData;
 use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+use signex_sketch::attr::{PadAttr, PadShape};
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::{ConstraintId, SketchEntityId};
@@ -57,17 +58,9 @@ fn footprint_rows() -> Vec<Surface> {
             open_sketch(app, r, fx, draft.sketch).map(|_| ())
         }),
         row("m188-menu", "Constraint menu", open_constraint_menu),
-        row("m190-roles", "Bake: roles", |app, r, fx| {
-            open_roles(app, r, fx, 4).map(|_| ())
-        }),
-        row("m190-errors", "Bake: open courtyard", |app, r, fx| {
-            let path = open_roles(app, r, fx, 3)?;
-            edit(app, &path, FootprintEditorMsg::SketchBakePreviewToggled)
-        }),
-        row("m190-baked", "Bake: result", |app, r, fx| {
-            let path = open_roles(app, r, fx, 4)?;
-            edit(app, &path, FootprintEditorMsg::SketchBakeRequested)
-        }),
+        row("m190-roles", "Bake: roles", open_role_picker),
+        row("m190-errors", "Bake: open courtyard", open_refused_bake),
+        row("m190-baked", "Bake: result", open_baked_pad),
         row("m191-linear", "Linear pattern", |app, r, fx| {
             let (draft, _) = patterned(false);
             open_sketch(app, r, fx, draft.sketch).map(|_| ())
@@ -437,29 +430,6 @@ fn open_constraint_menu(
     )
 }
 
-/// A body with `courtyard_edges` of its edges given the courtyard role: all
-/// four close the profile, three leave it open.
-fn open_roles(
-    app: &mut Signex,
-    r: &mut iced::Renderer,
-    fx: &Fixture,
-    courtyard_edges: usize,
-) -> Result<PathBuf, String> {
-    let (draft, lines, _) = dimensioned_body();
-    let path = open_sketch(app, r, fx, draft.sketch)?;
-    for id in lines.into_iter().take(courtyard_edges) {
-        edit(
-            app,
-            &path,
-            FootprintEditorMsg::SketchSetRole {
-                id,
-                role: RoleTag::Courtyard,
-            },
-        )?;
-    }
-    Ok(path)
-}
-
 /// A stock footprint in sketch mode with the entity driving a pad selected.
 fn open_pad_geometry(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
     fixture::mount_stock(app, fx)?;
@@ -520,5 +490,210 @@ fn open_detached_panel(
     reached(
         app.document_state.dock.floating.is_empty(),
         "the floating panel did not detach",
+    )
+}
+
+/// An edge of the body selected: Properties shows its Role picker. The app
+/// has no list of every closed profile.
+fn open_role_picker(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+    let (draft, lines, _) = dimensioned_body();
+    let edge = lines[0];
+    let path = open_sketch(app, r, fx, draft.sketch)?;
+    for id in lines {
+        let role = RoleTag::Courtyard;
+        edit(app, &path, FootprintEditorMsg::SketchSetRole { id, role })?;
+    }
+    let select = FootprintEditorMsg::SketchSelect {
+        id: Some(edge),
+        shift: false,
+    };
+    edit(app, &path, select)
+}
+
+/// A courtyard with a 0.02 mm gap, after a Bake click: the editor stays in
+/// sketch mode, selects the open ends and names the gap.
+fn open_refused_bake(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+    let mut draft = Draft::new();
+    let ends = [
+        draft.point(-2.0, -2.0),
+        draft.point(2.0, -2.0),
+        draft.point(2.0, 2.0),
+        draft.point(-2.0, 2.0),
+        draft.point(-2.0, -1.98),
+    ];
+    let lines: Vec<_> = ends.windows(2).map(|e| draft.line(e[0], e[1])).collect();
+    let path = open_sketch(app, r, fx, draft.sketch)?;
+    // The refused bake's warnings would stay in the log of later rows.
+    h::unlogged(|| {
+        for id in lines {
+            let role = RoleTag::Courtyard;
+            edit(app, &path, FootprintEditorMsg::SketchSetRole { id, role })?;
+        }
+        edit(app, &path, FootprintEditorMsg::SketchBakeRequested)
+    })?;
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .ok_or("the footprint is not open")?;
+    reached(
+        editor.state.mode == EditorMode::Sketch && editor.state.sketch_exit.preview,
+        "Bake did not stop on the open courtyard",
+    )
+}
+
+/// The stock footprint baked from sketch mode, with pad 1 selected.
+fn open_baked_pad(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+    fixture::mount_stock(app, fx)?;
+    h::open(app, &fx.footprint)?;
+    let _ = render::draw_main(r, app);
+    let path = &fx.footprint;
+    edit(app, path, FootprintEditorMsg::SetMode(EditorMode::Sketch))?;
+    edit(app, path, FootprintEditorMsg::SketchBakeRequested)?;
+    edit(app, path, FootprintEditorMsg::SelectPad(Some(0)))?;
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get(path)
+        .ok_or("the footprint is not open")?;
+    reached(
+        editor.state.mode == EditorMode::Normal && !editor.state.pads.is_empty(),
+        "Bake did not leave sketch mode with pads",
+    )
+}
+
+/// A row of four pads mirrored about a centerline by the Mirror tool, which
+/// stays armed.
+pub(super) fn open_mirrored_row(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    let mut draft = Draft::new();
+    let source = draft.point(-2.7, 1.905);
+    if let Some(entity) = draft.sketch.entities.iter_mut().find(|e| e.id == source) {
+        entity.pad = Some(PadAttr {
+            number: "1".into(),
+            shape: PadShape::Rect,
+            size_x_expr: "1.55mm".into(),
+            size_y_expr: "0.6mm".into(),
+            ..PadAttr::default()
+        });
+    }
+    let array = ArrayId::new();
+    draft.sketch.arrays.push(Array {
+        id: array,
+        kind: ArrayKind::Linear {
+            source,
+            count_expr: "4".into(),
+            dx_expr: "0mm".into(),
+            dy_expr: "-1.27mm".into(),
+        },
+        numbering: NumberingScheme::default(),
+    });
+    let (a, b) = (draft.point(0.0, -3.5), draft.point(0.0, 3.5));
+    let centerline = draft.line(a, b);
+    if let Some(entity) = draft
+        .sketch
+        .entities
+        .iter_mut()
+        .find(|e| e.id == centerline)
+    {
+        entity.centerline = true;
+    }
+    let path = open_sketch(app, r, fx, draft.sketch)?;
+    let steps = [
+        FootprintEditorMsg::SketchSetTool(SketchTool::Mirror),
+        FootprintEditorMsg::SketchCanvas(SketchCanvasMsg::PatternSelected(Some(array))),
+        FootprintEditorMsg::SketchToolClick {
+            x_mm: 0.0,
+            y_mm: 0.0,
+            snap_id: None,
+        },
+    ];
+    for step in steps {
+        edit(app, &path, step)?;
+    }
+    let mirrored = app
+        .document_state
+        .footprint_editors
+        .get(&path)
+        .and_then(|editor| editor.primitive().sketch.as_ref())
+        .is_some_and(|sketch| !sketch.pattern_mirrors.is_empty());
+    reached(mirrored, "the Mirror click added no pattern mirror")
+}
+
+/// An L-shaped outline with a hole, in a project whose fab profile names a
+/// 2 mm router: the inside corner fails, the other checks pass.
+pub(super) fn open_outline_checks(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    let mut draft = Draft::new();
+    let corners = [
+        (0.0, -14.0),
+        (50.0, -14.0),
+        (50.0, 0.0),
+        (25.0, 0.0),
+        (25.0, 14.0),
+        (0.0, 14.0),
+    ]
+    .map(|(x, y)| draft.point(x, y));
+    let lines: Vec<_> = (0..corners.len())
+        .map(|i| draft.line(corners[i], corners[(i + 1) % corners.len()]))
+        .collect();
+    mark_outline(&mut draft, &lines);
+    let center = draft.point(10.0, -6.0);
+    let hole = draft.circle(center, 1.6);
+
+    let dir = h::new_dir(fx, "outline-checks")?;
+    let mut board = helpers_d::primitives_board()?;
+    board.sketch = Some(BoardSketch {
+        sketch: draft.sketch,
+        ..Default::default()
+    });
+    let path = dir.join("outline.snxpcb");
+    let text = SnxPcb::new(board)
+        .write_string()
+        .map_err(|e| format!("encode board: {e:?}"))?;
+    std::fs::write(&path, text).map_err(|e| format!("write board: {e}"))?;
+    let sheet = dir.join("linear-regulator.snxsch");
+    h::copy_sample_sheet(fx, &sheet)?;
+    let project = h::write_project(
+        &dir,
+        "outline",
+        &["linear-regulator.snxsch"],
+        Some("outline.snxpcb"),
+    )?;
+    h::open(app, &project)?;
+    let loaded = app
+        .document_state
+        .projects
+        .last_mut()
+        .ok_or("the project did not open")?;
+    loaded.data.set_router_tool_diameter(Some(2.0));
+    h::open(app, &path)?;
+    h::show_board(app, r);
+    h::command(app, "board_sketch")?;
+    let _ = render::draw_main(r, app);
+    reached(
+        app.interaction_state.board_sketch.is_some(),
+        "board_sketch did not enter sketch mode",
+    )?;
+    let role = RoleTag::MountingHole;
+    edit(
+        app,
+        &path,
+        FootprintEditorMsg::SketchSetRole { id: hole, role },
+    )?;
+    let router = app
+        .interaction_state
+        .board_sketch
+        .as_ref()
+        .and_then(|session| session.editor.state.sketch_exit.router_tool_diameter);
+    reached(
+        router == Some(2.0),
+        "the sketch did not read the router tool",
     )
 }

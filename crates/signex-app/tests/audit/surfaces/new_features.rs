@@ -11,8 +11,8 @@ use crate::fixture;
 use crate::render::{self, Crop};
 use crate::surface::{Check, Surface, WindowSel};
 use signex_app::app::{
-    BoardSketchMsg, CompareBoardMsg, CompiledDesignMsg, EditMsg, FileMsg, Message, PasteIntent,
-    PasteRequest, PcbMsg, PdfOptionMsg, PrintPreviewMsg, Signex, StatusBarRequest, UiMsg,
+    CompareBoardMsg, CompiledDesignMsg, EditMsg, FileMsg, Message, PasteIntent, PasteRequest,
+    PdfOptionMsg, PrintPreviewMsg, Signex, StatusBarRequest, UiMsg,
 };
 use signex_app::library::editor::footprint::parameters_table::SketchParametersMsg;
 use signex_app::library::editor::footprint::{EditorMode, SketchTool};
@@ -571,13 +571,13 @@ fn open_board_sketch_dxf(
         .board_path
         .clone();
     let source = signex_engine::pcb::dxf::DxfSource::read(SKETCH_DXF).map_err(|e| e.to_string())?;
-    let _ = app.update(signex_app::app::Message::Pcb(signex_app::app::PcbMsg::DxfImport(
-        signex_app::app::DxfImportMsg::SketchRead {
+    let _ = app.update(signex_app::app::Message::Pcb(
+        signex_app::app::PcbMsg::DxfImport(signex_app::app::DxfImportMsg::SketchRead {
             board,
             path: "lid.dxf".into(),
             source: Ok(std::sync::Arc::new(source)),
-        },
-    )));
+        }),
+    ));
     let _ = render::draw_main(r, app);
     Ok(())
 }
@@ -615,13 +615,9 @@ fn board_sketch_rows() -> Vec<Surface> {
         Surface {
             id: "m179d",
             title: "Outline checks",
-            // The bake preview open, so Properties shows the outline checks
-            // against what a bake writes.
-            open: |app, r, fx| {
-                open_board_sketch(app, r, fx)?;
-                let toggle = BoardSketchMsg::BakePreviewToggled;
-                h::settle(app, Message::Pcb(PcbMsg::Sketch(toggle)))
-            },
+            // A drawn outline with a sharp inside corner, under a fab profile
+            // that names the router, so every check runs.
+            open: super::states_sketch::open_outline_checks,
             window: WindowSel::Auto,
             checks: BOARD_SKETCH,
         },
@@ -765,14 +761,8 @@ fn footprint_sketch_rows() -> Vec<Surface> {
         Surface {
             id: "m191",
             title: "Mirror (B1) and patterns",
-            // Mirror armed; Linear and Circular Pattern are
-            // SketchTool::LinearPattern and SketchTool::CircularPattern.
-            open: |app, r, fx| {
-                open_footprint_sketch(app, r, fx)?;
-                let tool = FootprintEditorMsg::SketchSetTool(SketchTool::Mirror);
-                h::fp_edit(app, &fx.footprint, tool);
-                Ok(())
-            },
+            // A pad row mirrored about a centerline with the armed tool.
+            open: super::states_sketch::open_mirrored_row,
             window: WindowSel::Auto,
             checks: MIRROR,
         },
