@@ -121,10 +121,10 @@ pub(super) fn view<'a>(
     let press = mouse_area(cell).on_press(act(frame, GridMessage::CellPressed(at)));
     tooltip(
         press,
-        text(source_tip(frame, &show, at, is_all)).size(TS.caption),
+        iced::widget::container(text(source_tip(frame, &show, at, is_all)).size(TS.caption))
+            .style(crate::styles::card(frame.tokens)),
         tooltip::Position::Bottom,
     )
-    .style(crate::styles::card(frame.tokens))
     .boxed()
 }
 

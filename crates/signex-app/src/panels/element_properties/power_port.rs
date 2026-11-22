@@ -241,11 +241,13 @@ fn push_net_flags<'a>(
     let gated = |content: Element<'a, PanelMsg>| match veil {
         Some(veil) => signex_widgets::tooltip(
             signex_widgets::inert::Inert::new(content, veil).boxed(),
-            container(text(t!(i18n, ids::PROPERTIES_POWER_NET_EXCLUDES)).size(TS.body))
-                .padding([SP.xs, SP.s]),
+            iced::widget::container(
+                container(text(t!(i18n, ids::PROPERTIES_POWER_NET_EXCLUDES)).size(TS.body))
+                    .padding([SP.xs, SP.s]),
+            )
+            .style(crate::panels::form_look::value_tip),
             iced::widget::tooltip::Position::Bottom,
         )
-        .style(crate::panels::form_look::value_tip)
         .boxed(),
         None => content,
     };
@@ -315,10 +317,12 @@ fn style_grid<'a>(
             .style(crate::panels::form_look::option_tile(active));
         signex_widgets::tooltip(
             pressed,
-            container(text(t!(i18n, style_label(style))).size(TS.body)).padding([SP.xs, SP.s]),
+            iced::widget::container(
+                container(text(t!(i18n, style_label(style))).size(TS.body)).padding([SP.xs, SP.s]),
+            )
+            .style(crate::panels::form_look::value_tip),
             iced::widget::tooltip::Position::Bottom,
         )
-        .style(crate::panels::form_look::value_tip)
         .boxed()
     };
     let tiles = style_tiles(lib_id);

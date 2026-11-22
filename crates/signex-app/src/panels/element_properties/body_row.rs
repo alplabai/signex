@@ -83,11 +83,7 @@ pub(super) fn push_body_row<'a>(
         )),
         // The only way out of a dangling alternate is back to Normal.
         BODY_ALTERNATE_MISSING => c.push(row(&[BodyChoice::Normal], BodyChoice::AlternateMissing)),
-        BODY_NORMAL => c.push(iced::widget::Widget::boxed(signex_widgets::tooltip::<
-            _,
-            _,
-            iced::Theme,
-        >(
+        BODY_NORMAL => c.push(iced::widget::Widget::boxed(signex_widgets::tooltip(
             form_input_row_untipped(
                 t!(i18n, ids::PROPERTIES_BODY),
                 &i18n.message_plain(ids::PROPERTIES_BODY_NORMAL, &[]),

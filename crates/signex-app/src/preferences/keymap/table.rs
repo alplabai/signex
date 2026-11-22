@@ -273,11 +273,12 @@ fn table_row<'a>(
     match shadow_note(i18n, &row_model.trigger_config).filter(|_| !row_model.unbound) {
         Some(note) => tooltip(
             line,
-            // raw: composed from the catalog and the fixed key's action name.
-            container(text(raw(note)).size(TS.caption)).padding([SP.xs, SP.m]),
+            iced::widget::container(
+                container(text(raw(note)).size(TS.caption)).padding([SP.xs, SP.m]),
+            )
+            .style(styles::context_menu(tokens)),
             tooltip::Position::FollowCursor,
         )
-        .style(styles::context_menu(tokens))
         .boxed(),
         None => line,
     }

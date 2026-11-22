@@ -268,10 +268,9 @@ fn show_group<'a>(
                     .padding([SP.xs, SP.s]);
             tooltip(
                 kit::dependent(false, tick, tokens),
-                note,
+                iced::widget::container(note).style(crate::styles::context_menu(tokens)),
                 tooltip::Position::Bottom,
             )
-            .style(crate::styles::context_menu(tokens))
             .boxed()
         };
         col = col.push(control);

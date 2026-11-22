@@ -61,10 +61,9 @@ fn title_actions<'a>(kind: PanelKind, ctx: &panels::PanelContext) -> Vec<Element
             let tip = container(text(action.tip).size(TS.caption)).padding([SP.xs, SP.s]);
             signex_widgets::tooltip(
                 icon_button(action.icon, &ctx.tokens).on_press(DockMessage::Panel(action.on_press)),
-                tip,
+                iced::widget::container(tip).style(styles::context_menu(&ctx.tokens)),
                 iced::widget::tooltip::Position::Bottom,
             )
-            .style(styles::context_menu(&ctx.tokens))
             .boxed()
         })
         .collect()
@@ -225,9 +224,12 @@ impl DockArea {
                     let tip = container(text(t!(ctx.i18n, panel.message())).size(tab_size))
                         .padding([SP.xs, SP.s]);
                     tab_row = tab_row.push(
-                        signex_widgets::tooltip(tab, tip, iced::widget::tooltip::Position::Bottom)
-                            .style(styles::context_menu(&ctx.tokens))
-                            .boxed(),
+                        signex_widgets::tooltip(
+                            tab,
+                            iced::widget::container(tip).style(styles::context_menu(&ctx.tokens)),
+                            iced::widget::tooltip::Position::Bottom,
+                        )
+                        .boxed(),
                     );
                 } else {
                     tab_row = tab_row.push(tab.boxed());

@@ -47,7 +47,7 @@ iced's `()` renderer only exists in debug builds.
 - **Code path.** The real widgets: `UserInterface::build`, `update` (the drag is
   real `CursorMoved`/`ButtonPressed` events), `draw`, then
   `iced_wgpu::Renderer::screenshot`, which uploads, renders and reads back. So
-  GPU work is inside the timing. Never tiny-skia.
+  GPU work is inside the timing. Never the software renderer (vello_cpu).
 - **Floor.** An empty sheet through the same stack: 2.0 ms at dpr 1, 6.7 ms at
   dpr 2. It is the readback plus the empty backdrop (paper, grid, frame), not
   the sheet; read every number net of it. No

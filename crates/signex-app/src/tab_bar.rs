@@ -190,10 +190,12 @@ pub fn view<'a>(
             match tab_tooltip(&tab.path, is_read_only, tooltips_enabled, i18n) {
                 Some(tip) => tooltip(
                     tab_el,
-                    container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
+                    iced::widget::container(
+                        container(text(tip).size(TAB_FONT_SIZE)).padding([SP.xs, 6.0]),
+                    )
+                    .style(styles::context_menu(tokens)),
                     tooltip::Position::Bottom,
                 )
-                .style(styles::context_menu(tokens))
                 .boxed(),
                 None => tab_el,
             };

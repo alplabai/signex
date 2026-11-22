@@ -5,7 +5,7 @@
 //! builds a laid-out widget tree, so no test could see a size or a position:
 //! a button squeezed to a sliver with its label wrapped onto five lines
 //! (#604) passed every gate. This lays an [`Element`] out against a window
-//! size with a headless tiny-skia renderer, so text is measured with real
+//! size with a headless vello_cpu renderer, so text is measured with real
 //! fonts, and reports the bounds of every text widget in it.
 //!
 //! The fonts are whatever the system and iced's defaults provide, not the
@@ -257,6 +257,8 @@ pub(crate) fn draw_pixels<M>(
         &layout::Limits::new(Size::ZERO, window),
     );
     let size = tree.size;
+    // As the compositor does before every frame.
+    iced::advanced::Renderer::reset(&mut renderer, Rectangle::with_size(window));
     element.draw(
         &tree,
         &mut renderer,
@@ -295,7 +297,7 @@ pub(crate) fn natural<M>(element: Element<'_, M, Theme, iced::Renderer>, label: 
 }
 
 pub(crate) fn headless_renderer() -> iced::Renderer {
-    iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(renderer::Settings {
+    iced::Renderer::Secondary(iced_vello_cpu::Renderer::new(renderer::Settings {
         font: Font::DEFAULT,
         text_size: Pixels(16.0),
         ..renderer::Settings::default()

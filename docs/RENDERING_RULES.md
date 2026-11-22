@@ -277,12 +277,12 @@ same retained geometry and the same rules for its idle frames, on a surface of
 its own (`gpu_text_surface`), so the CPU content layer and the GPU text layer
 are never reused as each other (#2128).
 
-Two things follow from the widget drawing in its own clip layer:
+Three things follow from the widget drawing in its own clip layer:
 
 - A sibling drawn over the canvas area after it, outside a `Stack`, would
   render under the canvas. None exists: the badge and every overlay are
   `Stack` children, which iced draws in layers of their own.
-- On the tiny-skia fallback the damage diff of text ignores the group
+- On vello_cpu (the software fallback) the damage diff of text ignores the group
   transformation, so a translated cached text-only region may not repaint
   until something else dirties it. The wgpu renderer is the shipped path.
 - A hairline edge that lands exactly on a half-device-pixel tie is rounded

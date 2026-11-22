@@ -73,10 +73,12 @@ where
         let cell = match tip {
             Some(tip) => signex_widgets::tooltip(
                 cell,
-                container(text(tip).size(TS.caption)).padding([SP.xs, SP.s]),
+                iced::widget::container(
+                    container(text(tip).size(TS.caption)).padding([SP.xs, SP.s]),
+                )
+                .style(form_look::value_tip),
                 signex_widgets::tooltip::Position::Bottom,
             )
-            .style(form_look::value_tip)
             .boxed(),
             None => cell,
         };
