@@ -12,7 +12,7 @@ use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
 use signex_sketch::sketch::{PatternMirror, SketchData};
 use signex_types::pcb::{PcbBoard, Point};
 use signex_types::pcb_graphic::BoardGraphicKind;
-use signex_types::pcb_layer::{CopperLayer, PcbLayer};
+use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, PcbLayer};
 use signex_types::sketch::board_attr::{ComponentAnchorAttr, MechanicalAttr};
 use uuid::Uuid;
 
@@ -318,6 +318,100 @@ fn a_mirrored_mechanical_arc_stays_counter_clockwise() {
     assert!(close(image.center, 20.0, 0.0), "{image:?}");
     assert!(close(image.start, 20.0, 5.0), "{image:?}");
     assert!(close(image.end, 15.0, 0.0), "{image:?}");
+}
+
+/// A closed mechanical rectangle, and its corner Point for a pattern to name.
+fn mechanical_rect(s: &mut Sketch) -> (Vec<SketchEntityId>, SketchEntityId) {
+    let edges = s.rect(0.0, 0.0, 2.0, 1.0);
+    for &edge in &edges {
+        s.get(edge).mechanical = Some(MechanicalAttr::default());
+    }
+    let EntityKind::Line { start, .. } = s.get(edges[0]).kind else {
+        unreachable!("a rectangle edge is a line");
+    };
+    (edges, start)
+}
+
+#[test]
+fn a_pattern_of_one_corner_repeats_the_whole_closed_mechanical_shape() {
+    let mut s = Sketch::new();
+    let (edges, corner) = mechanical_rect(&mut s);
+    s.pattern(row(corner, "3", "5mm", "0mm"));
+
+    let graphics = bake_board_items(&s.data, &board()).unwrap().graphics;
+
+    assert_eq!(graphics.len(), 12, "four edges at three places");
+    let ids: std::collections::HashSet<_> = graphics.iter().map(|g| g.uuid).collect();
+    assert_eq!(ids.len(), 12, "each instance has its own uuid");
+    assert!(edges.iter().all(|edge| ids.contains(&edge.0)));
+    for x in [0.0, 5.0, 10.0] {
+        let at_place = graphics
+            .iter()
+            .filter(|g| {
+                g.start
+                    .is_some_and(|p| p.x >= x - 1e-9 && p.x <= x + 2.0 + 1e-9)
+            })
+            .count();
+        assert_eq!(at_place, 4, "the whole rectangle at x = {x}");
+    }
+}
+
+#[test]
+fn a_closed_mechanical_shape_turned_onto_itself_writes_once() {
+    let mut s = Sketch::new();
+    let (edges, _) = mechanical_rect(&mut s);
+    let centre = s.point(1.0, 0.5);
+    s.pattern(ArrayKind::Polar {
+        source: edges[0],
+        center: centre,
+        count_expr: "2".into(),
+        sweep_angle_expr: "360deg".into(),
+        depopulation: None,
+    });
+
+    let graphics = bake_board_items(&s.data, &board()).unwrap().graphics;
+
+    assert_eq!(graphics.len(), 4, "a half turn lands on the same rectangle");
+}
+
+/// An open chain repeats as a whole too; an edge it does not touch, or one
+/// touching it on another layer, is another shape.
+#[test]
+fn a_pattern_repeats_the_connected_open_chain_on_its_layer_only() {
+    let mut s = Sketch::new();
+    let (a, b, c) = (s.point(0.0, 0.0), s.point(4.0, 0.0), s.point(4.0, 3.0));
+    let first = s.add(EntityKind::Line { start: a, end: b });
+    let second = s.add(EntityKind::Line { start: b, end: c });
+    let other_layer = s.add(EntityKind::Line { start: b, end: a });
+    let apart = s.line((0.0, 20.0), (4.0, 20.0));
+    for edge in [first, second, apart] {
+        s.get(edge).mechanical = Some(MechanicalAttr::default());
+    }
+    s.get(other_layer).mechanical = Some(MechanicalAttr {
+        layer: MechanicalLayer::new(2).unwrap(),
+    });
+    s.pattern(row(c, "2", "10mm", "0mm"));
+
+    let graphics = bake_board_items(&s.data, &board()).unwrap().graphics;
+
+    let written = |source: SketchEntityId| graphics.iter().filter(|g| g.uuid == source.0).count();
+    assert_eq!(graphics.len(), 6, "2 x 2 chain edges, and the two others");
+    assert_eq!((written(first), written(second)), (1, 1));
+    assert_eq!((written(other_layer), written(apart)), (1, 1));
+}
+
+#[test]
+fn baking_a_patterned_closed_mechanical_shape_twice_gives_the_same_board() {
+    let mut s = Sketch::new();
+    let (_, corner) = mechanical_rect(&mut s);
+    s.pattern(row(corner, "3", "5mm", "0mm"));
+    let board = board();
+
+    let first = bake_board_with_items(&s.data, &board).unwrap();
+    let second = bake_board_with_items(&s.data, &board).unwrap();
+
+    assert_eq!(first, second);
+    assert_eq!(first.1.graphics.len(), 12);
 }
 
 #[test]
