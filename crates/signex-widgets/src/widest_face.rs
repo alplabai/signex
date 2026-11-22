@@ -122,8 +122,8 @@ mod tests {
 
     fn laid_out_width(plain: f32, emphasised: f32, is_emphasised: bool, room: f32) -> f32 {
         let mut element: Element<'static, (), Theme, ()> = WidestFace::new(
-            Space::new().width(plain).height(10).into(),
-            Space::new().width(emphasised).height(10).into(),
+            iced::Widget::boxed(Space::new().width(plain).height(10)),
+            iced::Widget::boxed(Space::new().width(emphasised).height(10)),
             is_emphasised,
         )
         .into();
