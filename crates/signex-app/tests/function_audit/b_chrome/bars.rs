@@ -269,7 +269,7 @@ fn m6_the_snap_pill_toggles_snap() {
 
 /// Row m6: the unit "is still the click target that cycles mm / mil / in".
 #[test]
-fn m6_the_unit_button_cycles_mm_mil_and_inch() {
+fn m6_the_unit_button_cycles_mm_mil_inch_and_micrometre() {
     let mut desk = desk();
     desk.sheet("a.snxsch", "A4");
     desk.app.ui_state.unit = Unit::Mm;
@@ -277,6 +277,8 @@ fn m6_the_unit_button_cycles_mm_mil_and_inch() {
     assert_eq!(desk.app.ui_state.unit, Unit::Mil);
     status(&mut desk.app, StatusBarRequest::CycleUnit);
     assert_eq!(desk.app.ui_state.unit, Unit::Inch);
+    status(&mut desk.app, StatusBarRequest::CycleUnit);
+    assert_eq!(desk.app.ui_state.unit, Unit::Micrometer);
     status(&mut desk.app, StatusBarRequest::CycleUnit);
     assert_eq!(desk.app.ui_state.unit, Unit::Mm);
 }

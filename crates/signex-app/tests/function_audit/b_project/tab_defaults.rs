@@ -101,8 +101,9 @@ fn m36_a_value_past_the_range_is_stored_at_the_end_of_the_range() {
 /// Row m36, 2026-11-18 pass: "The out-of-range junction (5 mm) draws at the
 /// clamped 2 mm", under the note "Out of range (0.2 to 2): 2 is used".
 #[test]
-fn m36_a_5_mm_junction_is_clamped_to_2_mm() {
+fn m36_a_5_mm_junction_is_refused() {
     let mut b = on(ProjectSection::SchematicDefaults);
+    type_default(&mut b, Field::JunctionDiameter, "2");
     type_default(&mut b, Field::JunctionDiameter, "5");
     assert_eq!(stored(&b, Field::JunctionDiameter), Some(2.0));
 }
