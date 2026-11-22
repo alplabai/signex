@@ -241,7 +241,25 @@ impl Signex {
                     row_id: k.row_id,
                 }))
             }
+            ComponentsRowAction::CopyPartNumber => match self.components_row_part_number(&k) {
+                Some(part_number) => iced::clipboard::write(part_number).discard(),
+                None => Task::none(),
+            },
         }
+    }
+
+    /// The internal part number of the row `key` names, while it is listed.
+    fn components_row_part_number(
+        &self,
+        key: &crate::library::state::ComponentsPanelRowKey,
+    ) -> Option<String> {
+        self.library
+            .library_at(&key.library_path)?
+            .tables
+            .get(&key.table)?
+            .iter()
+            .find(|row| row.row_id == key.row_id.0)
+            .map(|row| row.internal_pn.to_string())
     }
 
     /// The pointer moved while a row is pressed: past the threshold the

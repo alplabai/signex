@@ -763,4 +763,7 @@ pub enum StatusBarRequest {
     /// Right-click on a sheet's Grid read-out: opens or closes the Grid &
     /// Snap popover above it (mockup row 6).
     GridReadoutRightClicked,
+    /// Click on the Library Missing chip: reopens the dialog of a skipped
+    /// library (mockup row 138).
+    LibraryMissingChipClicked,
 }

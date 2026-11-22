@@ -512,6 +512,14 @@ impl Signex {
                 tokens,
                 &self.ui_state.i18n,
                 windowed,
+                crate::library::browser::PreviewLook {
+                    canvas_colors: self.document_state.panel_ctx.canvas_colors,
+                    grid: self.sheet_grid(),
+                    device_px_per_logical_px: self
+                        .document_state
+                        .panel_ctx
+                        .device_px_per_logical_px,
+                },
             )
             .map(Message::Library)
             .boxed(),

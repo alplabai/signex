@@ -52,6 +52,8 @@ pub(super) enum Segment {
     BoardCounters,
     /// The board view's angle.
     ViewAngle,
+    /// A skipped library is still missing; a click reopens its dialog.
+    LibraryMissing,
     Zoom,
     Panels,
 }
@@ -85,6 +87,9 @@ pub(super) fn segments(r: &Readout<'_>) -> Vec<Segment> {
     if r.surface.view_angle.is_some() {
         out.push(S::ViewAngle);
     }
+    if r.surface.missing_libraries > 0 {
+        out.push(S::LibraryMissing);
+    }
     if out.len() > before_zoom {
         out.push(S::Rule);
     }
@@ -104,7 +109,11 @@ fn no_document_segments(r: &Readout<'_>) -> Vec<Segment> {
     if r.board_import.is_some() {
         out.push(S::Import);
     }
-    out.extend([S::Spacer, S::Panels]);
+    out.push(S::Spacer);
+    if r.surface.missing_libraries > 0 {
+        out.push(S::LibraryMissing);
+    }
+    out.push(S::Panels);
     out
 }
 
@@ -168,6 +177,14 @@ fn segment_view<'a>(
             super::board::board_counters(r.surface.board.as_ref()?, tokens, i18n)
         }
         Segment::ViewAngle => view_angle(r.surface.view_angle.clone()?, tokens),
+        Segment::LibraryMissing => button(mono_message(
+            t!(i18n, ids::LIBRARY_RECOVERY_MISSING_CHIP, "count" => r.surface.missing_libraries),
+            signex_widgets::theme_ext::warning_color(tokens),
+        ))
+        .padding([1.5, 6.0])
+        .style(selection_pill(tokens))
+        .on_press(StatusBarRequest::LibraryMissingChipClicked)
+        .boxed(),
         Segment::Zoom => mono_message(zoom_text(i18n, r.zoom), muted).boxed(),
         Segment::Panels => panels(tokens, i18n),
     })
@@ -427,6 +444,7 @@ mod tests {
             opens_grid_popover: false,
             board: Some(BoardReadout::default()),
             no_document: false,
+            missing_libraries: 0,
         }
     }
 
@@ -530,6 +548,19 @@ mod tests {
         let (x, y) = no_cursor_texts(&I18n::en_us());
         assert!(x.into_string().contains('—'));
         assert!(y.into_string().contains('—'));
+    }
+
+    /// Mockup row 138: the chip shows with and without a document in view.
+    #[test]
+    fn a_skipped_missing_library_keeps_its_chip_on_the_bar() {
+        for no_document in [false, true] {
+            let surface = SurfaceReadout {
+                no_document,
+                missing_libraries: 1,
+                ..SurfaceReadout::default()
+            };
+            assert!(segments(&readout(None, surface)).contains(&S::LibraryMissing));
+        }
     }
 
     /// Running work stays on the no-document bar: an import keeps its cancel.

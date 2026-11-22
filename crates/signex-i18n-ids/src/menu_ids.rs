@@ -88,6 +88,7 @@ define_ids! {
         CTX_DOCK_BACK = "ctx-dock-back";
         CTX_COMPONENTS_ROW_PLACE = "ctx-components-row-place";
         CTX_COMPONENTS_ROW_EDIT = "ctx-components-row-edit";
+        CTX_COMPONENTS_ROW_COPY_PART_NUMBER = "ctx-components-row-copy-part-number";
         CTX_GRID_1_MIL = "ctx-grid-1-mil";
         CTX_GRID_5_MIL = "ctx-grid-5-mil";
         CTX_GRID_10_MIL = "ctx-grid-10-mil";

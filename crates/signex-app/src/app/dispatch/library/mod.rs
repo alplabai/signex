@@ -71,6 +71,7 @@ mod primitive_copy;
 #[cfg(test)]
 mod primitive_copy_tests;
 mod primitive_picker;
+mod primitive_preview;
 #[cfg(test)]
 mod range_filter_tests;
 mod read_only;

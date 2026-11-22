@@ -156,6 +156,7 @@ ctx-dock-back = Dock back
 # Menu of a component row of the Components panel (the verb "place").
 ctx-components-row-place = Place
 ctx-components-row-edit = Edit Component
+ctx-components-row-copy-part-number = Copy Part Number
 # Grid sizes of the footprint editor's grid picker. The unit is part of the text.
 ctx-grid-1-mil = 1 Mil
 ctx-grid-5-mil = 5 Mil

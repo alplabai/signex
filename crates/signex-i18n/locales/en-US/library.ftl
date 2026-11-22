@@ -354,7 +354,13 @@ library-recovery-missing-title = Library Missing
 library-recovery-missing-intro-title = The library file is missing
 library-recovery-missing-intro-text = The project refers to a library that is not on disk.
 # $library is the missing library's name.
-library-recovery-missing-caption = Skip for now opens the project anyway: parts from { $library } keep their embedded copies.
+library-recovery-missing-caption = Skip for now opens the project anyway: parts from { $library } keep their embedded copies, and a "Library Missing" chip stays in the status bar until the library is located.
+# Status bar chip while a skipped library of an open project is still gone; a
+# click reopens its dialog. $count is how many are missing.
+library-recovery-missing-chip = { $count ->
+        [one] Library Missing
+       *[other] Library Missing ({ $count })
+    }
 # Git Repository Missing: dialog title, intro, banners and caption.
 library-recovery-git-title = Git Repository Missing
 library-recovery-git-intro-title = The library's history is missing
@@ -568,6 +574,18 @@ library-primitive-picker-opening = Opening library…
 # Link without copying found the library open but without the symbol; nothing
 # is bound. $library is the library, $name the symbol.
 library-primitive-picker-not-listed = { $library } does not list { $name }; nothing was linked.
+# Footer button: binds the row highlighted in the list.
+library-primitive-picker-pick = Pick
+# The preview column before a row is highlighted.
+library-primitive-picker-preview-empty = Click a row to preview it.
+# Under a symbol's preview.
+library-primitive-picker-preview-facts = { $pins ->
+        [one] { $pins } pin
+       *[other] { $pins } pins
+    } · { $parts ->
+        [one] { $parts } part
+       *[other] { $parts } parts
+    }
 
 ## Document Options dialog of a library (mockup row 132)
 # Header note: $name is the library's display name.
