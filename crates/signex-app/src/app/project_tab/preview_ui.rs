@@ -216,7 +216,7 @@ pub(super) fn window<'a>(
         .center(Length::Fill)
         .padding(SP.l)
         .boxed();
-    stack![opaque(backdrop).boxed(), centred]
+    stack![opaque(backdrop).capture_scroll(true).boxed(), centred]
         .width(Length::Fill)
         .height(Length::Fill)
         .boxed()

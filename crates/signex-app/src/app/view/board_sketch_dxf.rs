@@ -87,6 +87,7 @@ pub(super) fn overlay<'a>(
             .align_x(Horizontal::Right)
             .align_y(Vertical::Bottom),
     )
+    .capture_scroll(true)
     .boxed()
 }
 

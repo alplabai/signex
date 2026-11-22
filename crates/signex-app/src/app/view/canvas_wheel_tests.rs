@@ -53,6 +53,33 @@ fn the_fixture_shows_the_zoom_pill() {
     );
 }
 
+/// A window locked by a detached dialog keeps the wheel from what is under it.
+#[test]
+fn a_locked_window_keeps_the_wheel_from_the_canvas() {
+    let (app, _) = app();
+    let under = iced::widget::mouse_area(
+        iced::widget::Space::new()
+            .width(iced::Length::Fill)
+            .height(iced::Length::Fill),
+    )
+    .on_scroll(|_| Message::CanvasEvent(CanvasEvent::ViewMoved));
+    let view = iced::widget::Stack::new()
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .push(under.boxed())
+        .push(app.locked_window_layer());
+    let messages = messages_on_scroll_at(
+        view.boxed(),
+        WINDOW,
+        Point::new(WINDOW.width / 2.0, WINDOW.height / 2.0),
+        ScrollDelta::Lines { x: 0.0, y: 1.0 },
+    );
+    assert!(
+        !moved_view(&messages),
+        "the wheel went through the lock: {messages:?}"
+    );
+}
+
 #[test]
 fn a_mouse_wheel_over_the_canvas_zooms_it() {
     let (app, main) = app();
