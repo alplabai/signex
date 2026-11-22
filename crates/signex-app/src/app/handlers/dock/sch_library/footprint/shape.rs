@@ -10,6 +10,7 @@
 use super::super::*;
 
 use crate::app::FootprintDocument;
+use crate::library::editor::footprint::state::SnapOptions;
 
 /// The active footprint's sketch entity `id`, if it has a sketch and
 /// the entity exists.
@@ -214,25 +215,45 @@ impl Signex {
         true
     }
 
-    /// v0.13 — Altium "Snap Distance" setter.
+    /// Snap Distance setter.
     pub(crate) fn handle_fp_set_snap_distance(&mut self, raw: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(v) = crate::numeric_field::parse_field_f64(&raw)
-        {
-            editor.state.snap_options.snap_distance_mm = v.clamp(0.001, 100.0);
-            editor.canvas_cache.clear();
-        }
-        self.refresh_panel_ctx();
-        true
+        self.fp_set_snap_reach(SnapOptions::DISTANCE_BUFFER, &raw, |opts, v| {
+            opts.snap_distance_mm = v
+        })
     }
 
-    /// v0.13 — Altium "Axis Snap Range" setter.
+    /// Axis Snap Range setter.
     pub(crate) fn handle_fp_set_axis_snap_range(&mut self, raw: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut()
-            && let Some(v) = crate::numeric_field::parse_field_f64(&raw)
-        {
-            editor.state.snap_options.axis_snap_range_mm = v.clamp(0.001, 100.0);
-            editor.canvas_cache.clear();
+        self.fp_set_snap_reach(SnapOptions::AXIS_RANGE_BUFFER, &raw, |opts, v| {
+            opts.axis_snap_range_mm = v
+        })
+    }
+
+    /// A snap reach typed in its box. A value in range is stored; anything
+    /// else changes nothing and stays in the box under `buffer` (#2792).
+    fn fp_set_snap_reach(
+        &mut self,
+        buffer: &str,
+        raw: &str,
+        store: impl FnOnce(&mut SnapOptions, f64),
+    ) -> bool {
+        // `parse_field_f64` reports a `nan` / `inf` to Messages.
+        let typed = crate::numeric_field::parse_field_f64(raw)
+            .filter(|value| SnapOptions::REACH_RANGE_MM.contains(value));
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            match typed {
+                Some(value) => {
+                    editor.state.numeric_buffers.remove(buffer);
+                    store(&mut editor.state.snap_options, value);
+                    editor.canvas_cache.clear();
+                }
+                None => {
+                    editor
+                        .state
+                        .numeric_buffers
+                        .insert(buffer.to_owned(), raw.to_owned());
+                }
+            }
         }
         self.refresh_panel_ctx();
         true

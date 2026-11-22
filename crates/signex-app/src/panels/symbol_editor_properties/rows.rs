@@ -316,11 +316,12 @@ impl<'f> Form<'f> {
         value: f64,
         unit: Option<Localized>,
     ) -> Element<'a, PanelMsg> {
+        let refused = key.refused_in(self.draft).then_some(self.look.err);
         let field = numeric_input("", key, value, self.draft)
             .size(TS.body)
             .padding([SP.xs, SP.s])
             .font(mono())
-            .style(form_look::text_input_style)
+            .style(form_look::refusable_input_style(refused))
             .width(Length::Fill);
         match unit {
             Some(unit) => row![field, text(unit).size(TS.caption).color(self.look.ink4)]

@@ -136,14 +136,11 @@ fn value_row<'a, M: 'a>(
     .boxed()
 }
 
-/// A typed mm value clamped to 1..=MAX_PAGE_EDGE_MM. Refused or half-typed
-/// text keeps `current`: `clamp` passes NaN through, so a typed `nan` would
-/// otherwise reach the canvas paper size (#828). The sheet-size model then
-/// raises it to the smallest custom edge.
-pub fn typed_mm(text: &str, current: f32) -> f32 {
-    crate::numeric_field::parse_field_f64(text)
-        .map_or(current, |v| v as f32)
-        .clamp(1.0, signex_types::schematic::MAX_PAGE_EDGE_MM as f32)
+/// A typed custom page edge in mm. `None` is refused: not a finite number
+/// (#828), or outside the edges a custom page can have (#2792).
+pub fn typed_mm(text: &str) -> Option<f64> {
+    use signex_types::schematic::{MAX_PAGE_EDGE_MM, MIN_CUSTOM_EDGE_MM};
+    crate::numeric_field::typed_in_range(text, MIN_CUSTOM_EDGE_MM..=MAX_PAGE_EDGE_MM)
 }
 
 /// Which custom paper edge a draft belongs to.
@@ -155,7 +152,7 @@ pub enum PaperEdge {
 
 /// A half-typed custom paper edge, tied to the sheet it was typed on. It is
 /// committed as one undoable edit on Enter, so partial input such as the `4`
-/// of `400` is never clamped to the minimum edge mid-typing.
+/// of `400` is never applied mid-typing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PaperEdgeDraft {
     pub sheet: std::path::PathBuf,
@@ -590,21 +587,28 @@ mod tests {
         assert_eq!(text_on(Color::from_rgb(0.99, 0.96, 0.89)), Color::BLACK);
     }
 
-    /// #828 — `f32::clamp(NaN)` is NaN, so a typed `nan` must be refused
-    /// before the clamp, not by it.
+    /// #828 — a typed `nan` must never reach the canvas paper size.
     #[test]
     fn typed_mm_keeps_the_current_value_on_refused_or_half_typed_text() {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "", "-", "1,5"] {
-            assert_eq!(typed_mm(bad, 297.0), 297.0, "{bad:?}");
+            assert_eq!(typed_mm(bad), None, "{bad:?}");
         }
     }
 
     #[test]
     fn typed_mm_clamps_a_finite_value() {
-        assert_eq!(typed_mm(" 210 ", 297.0), 210.0);
-        assert_eq!(typed_mm("0", 297.0), 1.0);
-        assert_eq!(typed_mm("9000", 297.0), 5080.0);
-        // Finite as f64 but infinite as f32: the clamp still bounds it.
-        assert_eq!(typed_mm("1e300", 297.0), 5080.0);
+        assert_eq!(typed_mm(" 210 "), Some(210.0));
+        assert_eq!(typed_mm("0"), None);
+        assert_eq!(typed_mm("9000"), None);
+        // Finite as f64 but infinite as f32: still outside the range.
+        assert_eq!(typed_mm("1e300"), None);
+    }
+
+    #[test]
+    fn typed_mm_takes_both_ends_of_the_custom_range() {
+        assert_eq!(typed_mm("10"), Some(10.0));
+        assert_eq!(typed_mm("5080"), Some(5080.0));
+        assert_eq!(typed_mm("9.99"), None);
+        assert_eq!(typed_mm("5080.1"), None);
     }
 }

@@ -253,7 +253,11 @@ fn field<'a>(tag: LabelTag, draft: &'a str, c: &PreviewColours) -> Element<'a, P
     let bounds = tag.bounds;
     let width = bounds.width.max(FIELD_MIN_EM * LABEL_SIZE);
     let x = bounds.center_x() - width / 2.0;
-    let edge = if tag.valid { c.accent } else { c.err };
+    let edge = if tag.valid && parse_fast_grid_field(draft).is_ok() {
+        c.accent
+    } else {
+        c.err
+    };
     let (fill, ink, selection) = (c.field, c.ink, c.accent_text);
     let index = tag.index;
     let input = text_input(UserText::new(String::new()), draft)

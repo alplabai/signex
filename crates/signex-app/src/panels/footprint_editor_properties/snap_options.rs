@@ -13,8 +13,9 @@ use super::body::{
     Ctx, check_cell, check_grid, fields, full_width_segment, gated, is_open, mini_head, section,
 };
 use super::illustration::linked_field;
-use super::rows::{edit_row, edit_row_note};
+use super::rows::{edit_row, refusable_edit_row};
 use crate::library::editor::footprint::SnappingMode;
+use crate::library::editor::footprint::state::SnapOptions;
 
 const KEY: &str = "fp_snap_options";
 
@@ -167,30 +168,37 @@ pub(super) fn view_snap_options<'a>(
         PanelMsg::FpEditorSetSnappingMode,
     ));
 
-    let distance = edit_row(
+    // A refused reach keeps its text, outlined, until it is fixed (#2792).
+    let error = crate::styles::ti(tokens.error);
+    let reach = |buffer: &str, stored: f64| {
+        let typed = fp.numeric_buffers.get(buffer);
+        let refused = typed.is_some_and(|text| {
+            let reads =
+                crate::numeric_field::typed_in_range(text, SnapOptions::REACH_RANGE_MM).is_some();
+            crate::numeric_field::text_refused(text, reads)
+        });
+        let shown = typed.cloned().unwrap_or_else(|| format!("{stored:.3}"));
+        (shown, refused.then_some(error))
+    };
+    let (distance_text, distance_error) =
+        reach(SnapOptions::DISTANCE_BUFFER, opts.snap_distance_mm);
+    let distance = refusable_edit_row(
         &t!(i18n, ids::EDITORS_FP_PROPS_SNAP_DISTANCE).into_string(),
-        &format!("{:.3}", opts.snap_distance_mm),
+        &distance_text,
+        distance_error,
+        None,
         muted,
         PanelMsg::FpEditorSetSnapDistance,
     );
-    let axis_label = t!(i18n, ids::EDITORS_FP_PROPS_AXIS_SNAP_RANGE).into_string();
-    let axis_value = format!("{:.3}", opts.axis_snap_range_mm);
-    let axis_range = if opts.snap_to_axes {
-        edit_row(
-            &axis_label,
-            &axis_value,
-            muted,
-            PanelMsg::FpEditorSetAxisSnapRange,
-        )
-    } else {
-        edit_row_note(
-            &axis_label,
-            &axis_value,
-            t!(i18n, ids::EDITORS_FP_PROPS_AXES_OFF),
-            muted,
-            PanelMsg::FpEditorSetAxisSnapRange,
-        )
-    };
+    let (axis_text, axis_error) = reach(SnapOptions::AXIS_RANGE_BUFFER, opts.axis_snap_range_mm);
+    let axis_range = refusable_edit_row(
+        &t!(i18n, ids::EDITORS_FP_PROPS_AXIS_SNAP_RANGE).into_string(),
+        &axis_text,
+        axis_error,
+        (!opts.snap_to_axes).then(|| t!(i18n, ids::EDITORS_FP_PROPS_AXES_OFF)),
+        muted,
+        PanelMsg::FpEditorSetAxisSnapRange,
+    );
     let dependents = Column::new()
         .width(Length::Fill)
         .push(cells(cx, targets(cx)))

@@ -2,6 +2,8 @@
 //! [`signex_types::numeric`]; this adds the part the app owns, telling
 //! the user (Messages panel) when a value was refused.
 
+use std::ops::RangeInclusive;
+
 use signex_types::numeric::{FiniteParseError, parse_finite_f64};
 
 /// Parse a typed numeric field. `None` means "leave the stored value
@@ -25,6 +27,20 @@ pub(crate) fn typed_line_width(text: &str) -> Option<f64> {
         return Some(0.0);
     }
     parse_finite_f64(text).ok().filter(|width| *width >= 0.0)
+}
+
+/// Whether a box shows `text` as invalid (#2767): `reads` says it holds a
+/// value the box can store; empty and a lone `-` are the start of one.
+pub(crate) fn text_refused(text: &str, reads: bool) -> bool {
+    !matches!(text.trim(), "" | "-") && !reads
+}
+
+/// A typed number inside `range`. `None` is refused, never pulled to a bound
+/// (#2767). Silent, so a view can ask it too.
+pub(crate) fn typed_in_range(text: &str, range: RangeInclusive<f64>) -> Option<f64> {
+    parse_finite_f64(text)
+        .ok()
+        .filter(|value| range.contains(value))
 }
 
 /// What a typed field's text is, for callers that treat "not a number"
@@ -103,6 +119,24 @@ mod grid_step_tests {
         assert!(validated_grid_step("nan").is_err());
         assert!(validated_grid_step("inf").is_err());
         assert!(validated_grid_step("1.27mm").is_err());
+    }
+
+    #[test]
+    fn a_number_outside_the_range_is_refused_not_pulled_in() {
+        assert_eq!(typed_in_range(" 10 ", 10.0..=20.0), Some(10.0));
+        assert_eq!(typed_in_range("20", 10.0..=20.0), Some(20.0));
+        for bad in ["9.99", "20.01", "abc", "nan", "inf", ""] {
+            assert_eq!(typed_in_range(bad, 10.0..=20.0), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn empty_and_a_lone_minus_are_not_shown_as_invalid() {
+        for start in ["", "  ", "-", " - "] {
+            assert!(!text_refused(start, false), "{start:?}");
+        }
+        assert!(text_refused("abc", false));
+        assert!(!text_refused("1.5", true));
     }
 
     #[test]

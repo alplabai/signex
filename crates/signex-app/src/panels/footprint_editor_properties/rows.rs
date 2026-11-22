@@ -76,6 +76,38 @@ pub(super) fn edit_row_note<'a>(
     control_row(key, field.boxed(), label_c)
 }
 
+/// An editable number row outlined in `error` while its text is refused,
+/// with an optional muted note after the field.
+pub(super) fn refusable_edit_row<'a>(
+    key: &str,
+    value: &str,
+    error: Option<Color>,
+    note: Option<signex_i18n::Localized>,
+    label_c: Color,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+) -> Element<'a, PanelMsg> {
+    let input = text_input(raw(""), value.to_owned())
+        .on_input(on_input)
+        .size(TS.body)
+        .padding(SP.s)
+        .style(form_look::refusable_input_style(error))
+        .width(Length::Fill);
+    // One tree for both, so a note coming and going keeps the field's focus.
+    let gap = if note.is_some() { SP.s } else { 0.0 };
+    let note: Element<'a, PanelMsg> = match note {
+        Some(note) => text(note)
+            .size(TS.caption)
+            .color(label_c)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed(),
+        None => iced::widget::Space::new().boxed(),
+    };
+    let field = row![input, note]
+        .spacing(gap)
+        .align_y(iced::Alignment::Center);
+    control_row(key, field.boxed(), label_c)
+}
+
 /// A row with `control` in the value column.
 pub(super) fn control_row<'a>(
     key: &str,

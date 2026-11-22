@@ -832,6 +832,7 @@ editors-fp-pad-no-through-hole-paste = No paste on through-hole pads and holes.
 editors-fp-pad-invalid-number = Enter a number
 editors-fp-pad-invalid-positive = Must be greater than 0
 editors-fp-pad-invalid-no-copper = Leaves no copper with this trapezoid
+editors-fp-pad-invalid-corner-radius = Must be 0 to 50
 # Illustration labels. $value is a length in mm, already formatted.
 editors-fp-pad-callout-title = Pad { $number } · { $layer }
 editors-fp-pad-callout-size-x = Size X { $value }

@@ -99,27 +99,6 @@ impl GridPropertiesState {
         }
     }
 
-    /// Whether `event` is refused before the labels see it. Enter, Tab,
-    /// a blur and a press on another label wait while the text is not a
-    /// length, so the label stays open with it. Esc still closes the
-    /// label.
-    fn label_event_refused(
-        &self,
-        event: &DimensionLabelMessage,
-        labels: &[DimensionLabel<'_>],
-    ) -> bool {
-        use DimensionLabelMessage as M;
-        let open = self.preview_labels.editing_index();
-        match *event {
-            M::DraftSubmitted | M::TabPressed { .. } => self.preview_labels.draft_refused(labels),
-            M::LabelPressed(i) | M::HandlePressed(i) => {
-                open.is_some_and(|o| o != i) && self.preview_labels.draft_refused(labels)
-            }
-            M::DraftBlurred(i) => open == Some(i) && self.preview_labels.draft_refused(labels),
-            _ => false,
-        }
-    }
-
     /// Routes a preview label event: Enter, and a blur of the open label,
     /// commit the typed value into the draft, and are refused while the
     /// text is not a length. A click elsewhere (OK, Cancel, a field)
@@ -128,7 +107,7 @@ impl GridPropertiesState {
     /// caller focuses it.
     pub(crate) fn label_edited(&mut self, event: DimensionLabelMessage, i18n: &I18n) -> bool {
         let (kinds, labels) = self.update_labels(i18n);
-        if self.label_event_refused(&event, &labels) {
+        if self.preview_labels.event_refused(&event, &labels) {
             return false;
         }
         // A press on the other label can arrive before the open field's

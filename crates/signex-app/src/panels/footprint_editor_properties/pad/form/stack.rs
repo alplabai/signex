@@ -55,14 +55,12 @@ pub(super) fn push<'a>(
     };
 
     if matches!(current_shape, PadShapeChoice::RoundedRectangle) {
-        let corner = Shown::from_buffer(
+        let corner = Shown::corner_radius(
             form.buffer(pad_field::CORNER_RADIUS),
             v.stack
                 .corner_radius_pct
                 .map(|pct| format!("{pct:.0}"))
                 .unwrap_or_default(),
-            false,
-            |_| true,
         );
         let input = number_input(
             &corner,

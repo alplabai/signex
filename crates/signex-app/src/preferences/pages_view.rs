@@ -138,7 +138,8 @@ impl PagesViewState {
 
     /// Run a pitch label event against the labels of `drafts`. A value set
     /// on the drawing comes back as field text, so the handler writes it
-    /// through the field's own draft message.
+    /// through the field's own draft message. Text that is not a length
+    /// keeps the label open and changes nothing (#2792); Esc closes it.
     pub(crate) fn snap_label_event(
         &mut self,
         message: DimensionLabelMessage,
@@ -149,6 +150,9 @@ impl PagesViewState {
             pitch_label(0, &drafts[0], i18n),
             pitch_label(1, &drafts[1], i18n),
         ];
+        if self.snap_labels.event_refused(&message, &labels) {
+            return SnapLabelStep::default();
+        }
         let outcome = self.snap_labels.update(message, &labels);
         SnapLabelStep {
             committed: outcome
@@ -271,5 +275,28 @@ mod tests {
         let step = state.snap_label_event(DimensionLabelMessage::DraftSubmitted, &drafts, &en);
         assert_eq!(step.committed, Some((1, "0.635".to_string())));
         assert_eq!(state.snap_label_editing(), None);
+    }
+
+    #[test]
+    fn a_pitch_that_is_not_a_length_stays_open_with_its_text() {
+        use DimensionLabelMessage as M;
+        let en = I18n::en_us();
+        let drafts = ["1.27".to_string(), "2.54".to_string()];
+        let mut state = PagesViewState::default();
+        let _ = state.snap_label_event(M::LabelPressed(0), &drafts, &en);
+        let _ = state.snap_label_event(M::DraftEdited("abc".into()), &drafts, &en);
+        for event in [
+            M::DraftSubmitted,
+            M::TabPressed { backward: false },
+            M::DraftBlurred(0),
+            M::LabelPressed(1),
+        ] {
+            let step = state.snap_label_event(event, &drafts, &en);
+            assert_eq!(step, SnapLabelStep::default());
+            assert_eq!(state.snap_label_editing(), Some(0));
+            assert_eq!(state.snap_labels().draft(), Some("abc"));
+        }
+        let _ = state.snap_label_event(M::EscapePressed, &drafts, &en);
+        assert_eq!(state.snap_label_editing(), None, "Esc still closes it");
     }
 }

@@ -118,7 +118,7 @@ fn invalid_text_reverts_to_the_stored_value_on_submit() {
     type_into(&mut app, X, "4x");
     assert_eq!(shown(&app, X).as_deref(), Some("4x"));
     panel(&mut app, PanelMsg::NumericFieldSubmitted(X));
-    assert_eq!(shown(&app, X).as_deref(), Some("4.000"));
+    assert_eq!(shown(&app, X).as_deref(), Some("4x"));
     assert_eq!(pin(&app, &path).position[0], 4.0);
 }
 
@@ -135,15 +135,15 @@ fn another_boxs_submit_keeps_this_boxs_draft() {
 
 #[test]
 fn typing_half_into_pin_length_stores_it_and_never_shows_the_clamp() {
-    // Pin length is `value.max(0.1)`: the `0` keystroke stores 0.1. The box
-    // must keep showing what was typed, not snap to `0.100`.
+    // A pin is at least 0.1 long: the `0` keystroke is refused. The box must
+    // keep showing what was typed.
     let (mut app, path) = symbol_app();
     let len = NumericFieldKey::PinLength(0);
     for text in ["0", "0.", "0.5"] {
         type_into(&mut app, len, text);
         assert_eq!(shown(&app, len).as_deref(), Some(text), "after {text:?}");
         // Any panel refresh between keystrokes re-checks the draft against
-        // the stored (clamped) value; it must still show what was typed.
+        // the stored value; it must still show what was typed.
         panel(&mut app, PanelMsg::SymEditorSelectPin(0));
         assert_eq!(
             shown(&app, len).as_deref(),
@@ -158,10 +158,110 @@ fn typing_half_into_pin_length_stores_it_and_never_shows_the_clamp() {
 fn pin_length_clamp_shows_once_the_box_is_submitted() {
     let (mut app, path) = symbol_app();
     let len = NumericFieldKey::PinLength(0);
+    let before = pin(&app, &path).length;
     type_into(&mut app, len, "0");
-    assert_eq!(pin(&app, &path).length, 0.1);
+    assert_eq!(pin(&app, &path).length, before);
+    panel(&mut app, PanelMsg::NumericFieldSubmitted(len));
+    assert_eq!(shown(&app, len).as_deref(), Some("0"));
+}
+
+/// #2792: a value the field cannot store changes nothing, stays in the box
+/// through Enter and reads as refused; a good value then ends the draft.
+#[test]
+fn a_refused_pin_length_keeps_the_pin_and_the_text() {
+    let (mut app, path) = symbol_app();
+    let len = NumericFieldKey::PinLength(0);
+    let before = pin(&app, &path).length;
+    for bad in ["0", "0.09", "-1", "abc"] {
+        type_into(&mut app, len, bad);
+        panel(&mut app, PanelMsg::NumericFieldSubmitted(len));
+        assert_eq!(pin(&app, &path).length, before, "{bad}");
+        assert_eq!(shown(&app, len).as_deref(), Some(bad), "{bad}");
+        assert!(len.refused_in(app.document_state.panel_ctx.numeric_draft.as_ref()));
+    }
+    type_into(&mut app, len, "0.1");
+    assert_eq!(pin(&app, &path).length, 0.1, "the minimum is taken");
     panel(&mut app, PanelMsg::NumericFieldSubmitted(len));
     assert_eq!(shown(&app, len).as_deref(), Some("0.100"));
+}
+
+/// #2792: a message that skips the box is held to the same rule.
+#[test]
+fn the_pin_length_setter_refuses_what_the_box_refuses() {
+    let (mut app, path) = symbol_app();
+    let before = pin(&app, &path).length;
+    panel(
+        &mut app,
+        PanelMsg::SymEditorSetPinLength {
+            pin_idx: 0,
+            value: 0.05,
+        },
+    );
+    assert_eq!(pin(&app, &path).length, before);
+}
+
+/// #2792: stroke, radius and text size refuse what they cannot store.
+#[test]
+fn a_refused_graphic_value_leaves_the_graphic_alone() {
+    let (mut app, path) = symbol_app();
+    sym_edit(
+        &mut app,
+        &path,
+        SymbolEditorMsg::AddArc {
+            cx: 0.0,
+            cy: 0.0,
+            radius: 2.0,
+            start_deg: 10.0,
+            end_deg: 90.0,
+        },
+    );
+    panel(&mut app, PanelMsg::SymEditorSelectGraphic(0));
+    let graphic = |app: &Signex| {
+        app.document_state.symbol_editors[&path]
+            .primitive()
+            .graphics[0]
+            .clone()
+    };
+    let before = graphic(&app);
+    for (field, bad) in [
+        (GraphicFieldId::StrokeWidth, "-0.1"),
+        (GraphicFieldId::Radius, "0"),
+        (GraphicFieldId::Radius, "-2"),
+    ] {
+        let key = NumericFieldKey::Graphic { idx: 0, field };
+        type_into(&mut app, key, bad);
+        panel(&mut app, PanelMsg::NumericFieldSubmitted(key));
+        assert_eq!(graphic(&app), before, "{field:?} {bad}");
+        assert_eq!(shown(&app, key).as_deref(), Some(bad), "{field:?}");
+    }
+}
+
+/// #2792: the pre-placement shape width refuses a negative width at its
+/// setter, the path a typed value takes.
+#[test]
+fn a_negative_shape_width_is_refused() {
+    use signex_app::panels::{PrePlacementData, PrePlacementKind};
+    let (mut app, _task) = Signex::new();
+    let mut pre = PrePlacementData::new(
+        String::new(),
+        PrePlacementKind::Other,
+        String::new(),
+        0.0,
+        0.0,
+    );
+    pre.shape_width_mm = 0.3;
+    app.document_state.panel_ctx.pre_placement = Some(pre);
+    panel(&mut app, PanelMsg::SetPrePlacementShapeWidth(-1.0));
+    let stored = |app: &Signex| {
+        app.document_state
+            .panel_ctx
+            .pre_placement
+            .as_ref()
+            .map(|pp| pp.shape_width_mm)
+    };
+    assert_eq!(stored(&app), Some(0.3));
+    panel(&mut app, PanelMsg::SetPrePlacementShapeWidth(0.0));
+    assert_eq!(stored(&app), Some(0.0), "zero is the default width");
 }
 
 #[test]
@@ -261,7 +361,7 @@ fn undo_after_typing_restores_the_box_to_the_stored_value() {
 #[test]
 fn non_finite_text_never_reaches_the_pin() {
     // #828: `nan`, `inf` and an overflow are refused, so the stored value is
-    // kept; Enter then shows it again.
+    // kept; #2767: Enter leaves the refused text in the box.
     let (mut app, path) = symbol_app();
     type_into(&mut app, X, "2");
     for text in ["nan", "inf", "-inf", "1e999"] {
@@ -269,5 +369,5 @@ fn non_finite_text_never_reaches_the_pin() {
         assert_eq!(pin(&app, &path).position[0], 2.0, "{text} was applied");
     }
     panel(&mut app, PanelMsg::NumericFieldSubmitted(X));
-    assert_eq!(shown(&app, X).as_deref(), Some("2.000"));
+    assert_eq!(shown(&app, X).as_deref(), Some("1e999"));
 }

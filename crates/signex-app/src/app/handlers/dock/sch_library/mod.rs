@@ -486,10 +486,10 @@ impl Signex {
             PanelMsg::FpEditorSetSketchPadCopperOffsetY { id, value } => {
                 self.fp_sketch_pad_mm_edited(*id, PadMm::OffsetY, value)
             }
-            // #599 — out of range clamps to the nearest bound, an
-            // unreadable buffer is refused; neither clears the value.
+            // #599, #2792 — out of range or unreadable text is refused and
+            // stays in the box; neither clears the value.
             PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value } => {
-                match fp_resolve_optional_number(
+                let stored = fp_resolve_optional_number(
                     "Corner radius %, sketch pad",
                     value,
                     fp_parse_optional_number_in(
@@ -497,7 +497,13 @@ impl Signex {
                         CORNER_RADIUS_PCT_MIN,
                         CORNER_RADIUS_PCT_MAX,
                     ),
-                ) {
+                );
+                self.sketch_pad_field_typed(
+                    *id,
+                    crate::library::editor::footprint::pad_field::CORNER_RADIUS,
+                    stored.is_none().then_some(value.as_str()),
+                );
+                match stored {
                     Some(stored) => self.with_selected_sketch_pad(*id, |attr| {
                         attr.stack.corner_radius_pct = stored
                     }),
@@ -826,7 +832,7 @@ fn apply_graphic_field(
     use crate::panels::GraphicFieldId;
     use signex_library::SymbolGraphicKind;
     if matches!(field, GraphicFieldId::StrokeWidth) {
-        g.stroke_width = value.max(0.0);
+        g.stroke_width = value;
         return;
     }
     match (&mut g.kind, field) {
@@ -863,7 +869,7 @@ fn apply_graphic_field(
         (
             SymbolGraphicKind::Circle { radius, .. } | SymbolGraphicKind::Arc { radius, .. },
             GraphicFieldId::Radius,
-        ) => *radius = value.max(0.1),
+        ) => *radius = value,
         // Reduce each endpoint into `[0, 360)` on write. The Properties
         // `text_input` accepts any `f64` including negatives, and the CCW-
         // wraparound render/hit-test `rem_euclid` both endpoints anyway, so
@@ -889,7 +895,7 @@ fn apply_graphic_field(
         (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionY) => {
             position[1] = value
         }
-        (SymbolGraphicKind::Text { size, .. }, GraphicFieldId::TextSize) => *size = value.max(0.1),
+        (SymbolGraphicKind::Text { size, .. }, GraphicFieldId::TextSize) => *size = value,
         _ => {}
     }
 }

@@ -20,6 +20,10 @@ pub mod pad_field {
     pub const PASTE_BOTTOM: &str = "paste_bottom";
     pub const MASK_TOP: &str = "mask_top";
     pub const MASK_BOTTOM: &str = "mask_bottom";
+
+    /// The corner radius a pad takes, in percent of its short side: 50 % is
+    /// a fully rounded end and nothing above it is expressible.
+    pub const CORNER_RADIUS_PCT: std::ops::RangeInclusive<f64> = 0.0..=50.0;
 }
 
 /// The `numeric_buffers` key of the footprint's refused Height text.

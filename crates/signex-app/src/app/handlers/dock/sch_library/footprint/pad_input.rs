@@ -117,6 +117,28 @@ impl Signex {
         }
     }
 
+    /// Keeps `refused` as the typed text of `field` on the sketch pad `id`,
+    /// or drops the entry when the value was taken. Never dirties.
+    pub(in crate::app::handlers::dock::sch_library) fn sketch_pad_field_typed(
+        &mut self,
+        id: SketchEntityId,
+        field: &str,
+        refused: Option<&str>,
+    ) {
+        let key = sketch_pad_field_buffer_key(id, field);
+        let Some(editor) = self.active_footprint_editor_mut() else {
+            return;
+        };
+        match refused {
+            Some(text) => {
+                editor.state.numeric_buffers.insert(key, text.to_owned());
+            }
+            None => {
+                editor.state.numeric_buffers.remove(&key);
+            }
+        }
+    }
+
     /// Keeps `refused` as the typed text of `field` on the selected pad
     /// `idx` (the next pad when `None`), or drops the entry when `refused`
     /// is `None` because the value was taken. View state: never dirties.
