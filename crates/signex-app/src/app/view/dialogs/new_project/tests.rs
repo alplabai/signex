@@ -8,6 +8,21 @@ use super::cards::{SELECTED_BORDER, card_style};
 use super::preview::{Layer, stack_rows};
 use crate::styles::{ti, tokens};
 
+/// Mockup row 22: only a board of a project with a saved setup says it
+/// starts from that setup.
+#[test]
+fn the_new_pcb_intro_follows_whether_the_project_saved_a_setup() {
+    use super::document_setup::intro_id;
+    use crate::app::SetupKind;
+    use signex_i18n::ids;
+    assert_eq!(intro_id(SetupKind::Pcb, true), ids::SETUP_PCB_INTRO);
+    assert_eq!(
+        intro_id(SetupKind::Pcb, false),
+        ids::SETUP_PCB_INTRO_NO_SETUP
+    );
+    assert_eq!(intro_id(SetupKind::Sheet, false), ids::SETUP_SHEET_INTRO);
+}
+
 #[test]
 fn the_selected_card_has_the_accent_border_and_the_soft_fill() {
     for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {

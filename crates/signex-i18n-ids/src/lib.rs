@@ -1014,6 +1014,7 @@ define_ids! {
     SETUP_SHEET_NO_PROJECT = "setup-sheet-no-project";
     SETUP_SHEET_TITLE = "setup-sheet-title";
     SETUP_PCB_INTRO = "setup-pcb-intro";
+    SETUP_PCB_INTRO_NO_SETUP = "setup-pcb-intro-no-setup";
     SETUP_SHEET_INTRO = "setup-sheet-intro";
     SETUP_CREATE_PCB = "setup-create-pcb";
     SETUP_CREATE_SHEET = "setup-create-sheet";

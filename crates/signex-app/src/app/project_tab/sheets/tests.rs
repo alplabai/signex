@@ -148,6 +148,19 @@ fn new_sheets_picks_portrait_from_its_segment() {
     )));
 }
 
+/// Mockup row 31: a project storing no sheet defaults shows the A4 sheet
+/// New Schematic really starts from, and showing it stores nothing.
+#[test]
+fn new_sheets_shows_the_a4_a_new_schematic_starts_from() {
+    use crate::app::NewProjectState;
+    let (app, _) = app();
+    let data = &app.document_state.projects[0].data;
+    assert!(data.project_defaults.sheet.is_none());
+    let shown = NewProjectState::of_project(data, &app.ui_state.setup_profiles);
+    assert_eq!(shown.setup.sheet.paper_size, "A4");
+    assert!(data.project_defaults.sheet.is_none());
+}
+
 /// A4 landscape and portrait both fit inside the drawing with the label band
 /// clear and centred across; the portrait sheet is drawn smaller, since the
 /// drawing is wider than tall.
