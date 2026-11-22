@@ -253,7 +253,7 @@ fn the_resave_puts_the_live_profiles_back_over_the_stale_file() {
     let older = legacy_set();
     let live = {
         let mut set = ShortcutProfileSet::built_ins().unwrap();
-        set.set_active_profile("altium").unwrap();
+        set.set_active_profile("signex_standard").unwrap();
         set
     };
     let stale = migrate_active_to_mod(&older).unwrap();

@@ -166,8 +166,8 @@ fn open_board_with(board: PcbBoard) -> Fixture {
     app.ui_state.first_run_tour_open = false;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     let task = app.update(Message::File(FileMsg::Opened(Some(path))));
     crate::drive::drive(&mut app, task);
@@ -295,7 +295,7 @@ fn round_rect_centre_and_turn(shape: Shape) -> (PointNm, f64) {
 fn the_rotate_key_turns_the_footprint_and_its_pads_clockwise() {
     let mut f = open_board();
     select_u1(&mut f.app);
-    // Altium: Shift+Space turns clockwise; the board's y axis points down.
+    // Signex Standard: Shift+Space turns clockwise; the board's y axis points down.
     let edited = one_step(&mut f, key(KeyToken::Space, true));
     let u1 = fp(&edited, U1);
     assert_eq!(u1.rotation, 90.0);

@@ -23,15 +23,19 @@ fn custom_profile_creation_copies_active_profile() {
         .unwrap()
         .with_platform(Platform::Windows);
     editor
-        .create_custom_from_active("custom-altium", "Custom Altium")
+        .create_custom_from_active("custom-standard", "Custom Standard")
         .unwrap();
 
     let profiles = editor.profiles();
-    assert!(profiles.iter().any(|profile| profile.id == "custom-altium"));
     assert!(
         profiles
             .iter()
-            .any(|profile| profile.id == "custom-altium" && profile.active)
+            .any(|profile| profile.id == "custom-standard")
+    );
+    assert!(
+        profiles
+            .iter()
+            .any(|profile| profile.id == "custom-standard" && profile.active)
     );
 }
 
@@ -44,7 +48,7 @@ fn editor_rows_mark_pointer_gestures_as_not_keyboard_editable() {
     let double_click = rows
         .iter()
         .find(|row| row.trigger == "DoubleClick")
-        .expect("Altium profile should include DoubleClick reference trigger");
+        .expect("Signex Standard profile should include DoubleClick reference trigger");
     assert!(!double_click.keyboard_editable);
 }
 
@@ -54,7 +58,7 @@ fn custom_profile_trigger_edit_updates_compiled_keymap() {
         .unwrap()
         .with_platform(Platform::Windows);
     editor
-        .create_custom_from_active("custom-altium", "Custom Altium")
+        .create_custom_from_active("custom-standard", "Custom Standard")
         .unwrap();
     let command = AppCommandId::new("save_document").unwrap();
 
@@ -166,7 +170,7 @@ fn built_in_profile_trigger_edit_is_rejected() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("built-in profile `altium` cannot be modified"));
+    assert!(error.contains("built-in profile `signex_standard` cannot be modified"));
     assert!(editor.has_invalid_trigger_drafts());
 }
 
@@ -182,7 +186,7 @@ fn valid_trigger_edit_marks_editor_as_differing() {
     let live = ShortcutProfileSet::built_ins().unwrap();
     let mut editor = KeymapEditorModel::new(live.clone()).with_platform(Platform::Windows);
     editor
-        .create_custom_from_active("custom-altium", "Custom Altium")
+        .create_custom_from_active("custom-standard", "Custom Standard")
         .unwrap();
     let slot = slot_of(&editor, "save_document", "Ctrl+S");
     editor
@@ -220,7 +224,7 @@ fn switching_active_profile_marks_editor_as_differing() {
     assert!(editor.differs_from(&live));
 }
 
-// #1378 — altium.toml binds `place_wire` twice in the global context
+// #1378 — signex_standard.toml binds `place_wire` twice in the global context
 // (`P W` and `Ctrl+W`). Editing one row used to rewrite the last binding
 // for the command+context, and the drafts were shared between the rows.
 #[test]
@@ -229,7 +233,7 @@ fn editing_one_of_two_bindings_for_a_command_edits_only_that_one() {
         .unwrap()
         .with_platform(Platform::Windows);
     editor
-        .create_custom_from_active("custom-altium", "Custom Altium")
+        .create_custom_from_active("custom-standard", "Custom Standard")
         .unwrap();
     let first = slot_of(&editor, "place_wire", "P W");
     let second = slot_of(&editor, "place_wire", "Ctrl+W");
@@ -258,7 +262,7 @@ fn an_invalid_draft_marks_only_its_own_row() {
         .unwrap()
         .with_platform(Platform::Windows);
     editor
-        .create_custom_from_active("custom-altium", "Custom Altium")
+        .create_custom_from_active("custom-standard", "Custom Standard")
         .unwrap();
     let first = slot_of(&editor, "place_wire", "P W");
     let second = slot_of(&editor, "place_wire", "Ctrl+W");
@@ -283,7 +287,7 @@ fn editing_a_slot_that_no_longer_exists_is_an_error() {
         .unwrap()
         .with_platform(Platform::Windows);
     editor
-        .create_custom_from_active("custom-altium", "Custom Altium")
+        .create_custom_from_active("custom-standard", "Custom Standard")
         .unwrap();
     let gone = BindingSlot {
         binding: usize::MAX,

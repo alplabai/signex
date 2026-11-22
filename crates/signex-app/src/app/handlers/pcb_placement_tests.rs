@@ -98,11 +98,11 @@ fn rotate_key(window: Option<iced::window::Id>) -> Message {
     })
 }
 
-fn altium(app: &mut Signex) {
+fn signex_standard(app: &mut Signex) {
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
 }
 
@@ -176,7 +176,7 @@ fn with_no_board_rotate_greys_without_a_target_and_flip_selection_always() {
 fn a_parked_board_is_not_reached_by_its_old_selection() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, path) = app_with_board(dir.path());
-    altium(&mut app);
+    signex_standard(&mut app);
     click(&mut app, 10.0, 10.0);
     let _ = app.update(rotate_key(None));
     let edited = live(&app, &path);
@@ -205,7 +205,7 @@ fn a_parked_board_is_not_reached_by_its_old_selection() {
 fn an_undocked_window_selects_and_edits_its_own_board() {
     let dir = tempfile::tempdir().unwrap();
     let (mut app, a) = app_with_board(dir.path());
-    altium(&mut app);
+    signex_standard(&mut app);
     let b = dir.path().join("other.snxpcb");
     app.open_pcb_tab(b.clone(), "other".into(), board());
     let active = app

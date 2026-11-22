@@ -1,4 +1,4 @@
-//! #962 — under the Altium profile Space rotates the selected symbol 90
+//! #962 — under the Signex Standard profile Space rotates the selected symbol 90
 //! degrees counter-clockwise and Shift+Space 90 degrees clockwise. Drives
 //! the real keymap path (`UiMsg::KeymapStroke` -> `active_keymap` ->
 //! command bridge -> engine) and Undo.
@@ -46,8 +46,8 @@ fn app_with_selected_symbol(mirror_x: bool, mirror_y: bool) -> Signex {
     app.ui_state.first_run_tour_open = false;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app.document_state.engines.insert(path.clone(), engine);
     app.document_state.tabs.push(TabInfo {

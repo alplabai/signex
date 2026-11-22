@@ -160,8 +160,8 @@ Every row that carries a command id runs that id; no row keeps an action of its
 own. Two rows point at an id other than the one their key suggests (#1991):
 
 - View ▸ Cycle Grid Size runs `next_grid`, which steps the snap grid (the `N`
-  key in the Classic profile). `cycle_snap_grid_forward` (`G` in the Altium
-  profile) still opens the footprint editor's grid picker.
+  key in the Classic profile). `cycle_snap_grid_forward` (`G` in the Signex
+  Standard profile) still opens the footprint editor's grid picker.
 - Project ▸ Electrical Rules Check runs `open_erc_dialog`, which opens the ERC
   dialog to choose the rules. `run_erc` (F8) runs ERC at once. The row shows no
   key, as `open_erc_dialog` has no default binding.
@@ -352,7 +352,7 @@ command palette; no keymap preset binds it.
 Tools ▸ Cross Select Mode runs `toggle_cross_select_mode` and shows a check
 mark while the mode is on, which it is by default. While on, a selection on
 one side is selected in every sheet or board window on screen on the other
-side; it never opens a document or takes focus. The Altium preset binds it to
+side; it never opens a document or takes focus. The Signex Standard profile binds it to
 Ctrl+Shift+X. How parts and nets are matched: `DECISIONS.md`, 2026-11-09.
 
 ## Design ▸ Update PCB Document, File ▸ New ▸ PCB {#design-update-pcb}
@@ -470,7 +470,7 @@ On a board (#2488), File ▸ Export ▸ STEP 3D Model... (`export_board_step`)
 asks where to save and writes the board body and its parts as a STEP model;
 greyed without a board in view. Rules: `BOARD_OUTPUT.md`, "STEP export".
 
-Ctrl+F4 (Close Document, Altium profile) is a macOS system default ("Move
+Ctrl+F4 (Close Document, Signex Standard profile) is a macOS system default ("Move
 focus to active or next window") and may never reach Signex there; the menu
 row always works.
 
@@ -484,7 +484,7 @@ formats and frame: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md).
 
 ## File: close, save all {#file-close-save-all}
 
-Close Document (the `close_active_document` command, Ctrl+F4 in the Altium
+Close Document (the `close_active_document` command, Ctrl+F4 in the Signex Standard
 profile, closes the active tab like the tab menu's Close and parks a dirty
 draft) is greyed when no tab is open. Project ▸ Close Project (the project tree's Close
 Project for the active project, behind its unsaved-changes gate) is greyed when
@@ -1085,7 +1085,7 @@ the other kind does nothing and says why in the Messages panel.
 Five View rows act on the board in view and are greyed without one (#2223):
 Toggle Ratsnest, Next Layer, Previous Layer, Toggle Layer Visibility (the
 active layer) and Show All Layers. Next and Previous Layer show the keys of
-the active keymap: `Shift++` and `-` in the Altium and Classic profiles, which
+the active keymap: `Shift++` and `-` in the Signex Standard and Classic profiles, which
 bind `+`, `Shift++`, `*` and `Shift+*` to Next Layer and `-` to Previous Layer
 in the `pcb` context. The Layers panel row sits with the other panel rows and,
 like them, works without a document (the panel shows its empty state). In an

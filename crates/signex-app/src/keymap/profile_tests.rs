@@ -1,3 +1,4 @@
+use super::profile::RENAMED_PROFILE_ID;
 use super::{
     AppCommandId, CompiledKeymap, KeyStroke, KeyToken, Modifiers, Platform, ProfileLoadError,
     ShortcutBinding, ShortcutBindingAction, ShortcutContext, ShortcutProfile, ShortcutProfileKind,
@@ -11,7 +12,7 @@ use std::str::FromStr;
 fn loads_built_in_profiles() {
     let set = ShortcutProfileSet::built_ins().unwrap();
     assert_eq!(set.profiles().count(), 2);
-    assert_eq!(set.active_profile().id, "altium");
+    assert_eq!(set.active_profile().id, "signex_standard");
 }
 
 #[test]
@@ -32,10 +33,10 @@ fn copies_built_in_profile_as_custom() {
     let set = ShortcutProfileSet::built_ins().unwrap();
     let custom = set
         .active_profile()
-        .copy_as_custom("my-altium", "My Altium")
+        .copy_as_custom("my-standard", "My Standard")
         .unwrap();
     assert_eq!(custom.kind, ShortcutProfileKind::Custom);
-    assert_eq!(custom.base_profile.as_deref(), Some("altium"));
+    assert_eq!(custom.base_profile.as_deref(), Some("signex_standard"));
     assert_eq!(custom.bindings.len(), set.active_profile().bindings.len());
 }
 
@@ -83,7 +84,7 @@ fn exports_and_imports_custom_profile_toml() {
     let set = ShortcutProfileSet::built_ins().unwrap();
     let custom = set
         .active_profile()
-        .copy_as_custom("my-altium", "My Altium")
+        .copy_as_custom("my-standard", "My Standard")
         .unwrap();
 
     let exported = export_custom_profile(&custom).unwrap();
@@ -105,24 +106,24 @@ fn persistence_round_trip_keeps_bundled_profiles_and_active_custom_profile() {
     let mut set = ShortcutProfileSet::built_ins().unwrap();
     let custom = set
         .active_profile()
-        .copy_as_custom("my-altium", "My Altium")
+        .copy_as_custom("my-standard", "My Standard")
         .unwrap();
     set.insert_custom_profile(custom).unwrap();
-    set.set_active_profile("my-altium").unwrap();
+    set.set_active_profile("my-standard").unwrap();
 
     save_profile_set_at(&path, &set).unwrap();
 
     let source = std::fs::read_to_string(&path).unwrap();
-    assert!(source.contains("active_profile = \"my-altium\""));
-    assert!(source.contains("profile_id = \"my-altium\""));
-    assert!(!source.contains("profile_id = \"altium\""));
+    assert!(source.contains("active_profile = \"my-standard\""));
+    assert!(source.contains("profile_id = \"my-standard\""));
+    assert!(!source.contains("profile_id = \"signex_standard\""));
     assert!(!source.contains("profile_id = \"classic\""));
 
     let loaded = load_profile_set_at(&path).unwrap();
-    assert_eq!(loaded.active_profile().id, "my-altium");
-    assert!(loaded.profile("altium").is_some());
+    assert_eq!(loaded.active_profile().id, "my-standard");
+    assert!(loaded.profile("signex_standard").is_some());
     assert!(loaded.profile("classic").is_some());
-    assert!(loaded.profile("my-altium").is_some());
+    assert!(loaded.profile("my-standard").is_some());
 
     // A successful atomic save strands no `.tmp` sibling.
     assert!(!crate::test_support::has_stray_tmp(path.parent().unwrap()));
@@ -180,13 +181,13 @@ version = 1
 
 [keyboard_shortcuts]
 schema_version = 1
-profile_id = "altium"
-profile_name = "Altium"
+profile_id = "signex_standard"
+profile_name = "Signex Standard"
 profile_kind = "built_in"
 "#;
 
     let err = import_custom_profile(source).unwrap_err().to_string();
-    assert!(err.contains("built-in profile `altium` cannot be modified"));
+    assert!(err.contains("built-in profile `signex_standard` cannot be modified"));
 }
 
 #[test]
@@ -203,11 +204,11 @@ file_kind = "keyboard_shortcuts"
 version = 1
 
 [keyboard_shortcuts]
-active_profile = "altium"
+active_profile = "signex_standard"
 
 [[keyboard_shortcuts.profiles]]
 schema_version = 1
-profile_id = "altium"
+profile_id = "signex_standard"
 profile_name = "Shadow"
 profile_kind = "custom"
 "#,
@@ -215,7 +216,7 @@ profile_kind = "custom"
     .unwrap();
 
     let err = load_profile_set_at(&path).unwrap_err().to_string();
-    assert!(err.contains("built-in profile `altium` cannot be modified"));
+    assert!(err.contains("built-in profile `signex_standard` cannot be modified"));
 }
 
 // ─── #595 — a refused load must stay visible, and must never be
@@ -261,13 +262,13 @@ fn load_reports_error_when_the_file_cannot_be_parsed() {
 fn load_reports_error_when_the_active_profile_id_does_not_resolve() {
     let tmp = tempfile::tempdir().unwrap();
     let path = config_path_for_dir(tmp.path());
-    seed_saved_profiles(&path, "my-altium");
+    seed_saved_profiles(&path, "my-standard");
 
     // Round-trip a real saved document and edit only the active id, so
     // the fixture stays valid against the current schema.
     let saved = std::fs::read_to_string(&path).unwrap();
     let rotted = saved.replace(
-        "active_profile = \"my-altium\"",
+        "active_profile = \"my-standard\"",
         "active_profile = \"renamed-elsewhere\"",
     );
     assert_ne!(
@@ -292,7 +293,7 @@ fn load_succeeds_when_the_file_is_absent() {
     assert!(!path.exists());
 
     let set = load_profile_set_at(&path).unwrap();
-    assert_eq!(set.active_profile().id, "altium");
+    assert_eq!(set.active_profile().id, "signex_standard");
     assert!(!path.exists(), "loading must not create the file");
 }
 
@@ -588,7 +589,7 @@ fn discarding_removes_the_backup_and_is_a_no_op_when_there_is_none() {
     );
 }
 
-// #1378 — `T A` / `T A E` in altium.toml. A prefix pair is a legitimate
+// #1378 — `T A` / `T A E` in signex_standard.toml. A prefix pair is a legitimate
 // "waits for the next key (or the chord timeout)" pair, not a conflict: the
 // built-in profile is read-only, so a warning on it could never be cleared.
 #[test]
@@ -604,7 +605,7 @@ fn a_chord_that_prefixes_a_longer_one_is_not_a_conflict() {
     );
     assert!(
         lookup.command.is_some() && lookup.pending,
-        "fixture check: altium really has the prefix pair"
+        "fixture check: signex_standard really has the prefix pair"
     );
     assert!(
         keymap
@@ -652,7 +653,7 @@ fn an_unbind_binding_does_not_make_a_shorter_chord_wait() {
 /// the same context; the later one silently wins at lookup.
 #[test]
 fn no_built_in_profile_binds_a_stroke_to_two_commands() {
-    for id in ["classic", "altium"] {
+    for id in ["classic", "signex_standard"] {
         let mut set = ShortcutProfileSet::built_ins().unwrap();
         set.set_active_profile(id).unwrap();
         let conflicts = set.compile_active().conflicts();
@@ -792,5 +793,150 @@ fn ctrl_shift_z_redoes_in_every_built_in_profile() {
             .count();
         assert_eq!(owners, 1, "Ctrl+Shift+Z has one owner in {}", profile.id);
         assert_eq!(keymap.shortcut_label(&redo).as_deref(), Some("Ctrl+Y"));
+    }
+}
+
+// ─── #2759 — the default built-in profile is Signex Standard. A file saved
+// ─── under its previous id loads under the new one.
+
+/// A saved shortcuts file: `active` is the active id, and a custom profile
+/// `mine` is derived from `base` with one binding of its own.
+fn saved_file_on(active: &str, base: &str) -> String {
+    format!(
+        r#"
+[signex_settings]
+application = "signex"
+file_kind = "keyboard_shortcuts"
+version = 1
+
+[keyboard_shortcuts]
+active_profile = "{active}"
+
+[[keyboard_shortcuts.profiles]]
+schema_version = 1
+profile_id = "mine"
+profile_name = "Mine"
+profile_kind = "custom"
+base_profile = "{base}"
+
+[[keyboard_shortcuts.profiles.sections]]
+context = "global"
+
+[keyboard_shortcuts.profiles.sections.bindings]
+"Ctrl+S" = "save_document"
+"#
+    )
+}
+
+#[test]
+fn a_saved_active_profile_moves_to_the_new_id_and_the_file_waits_for_a_save() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let source = saved_file_on(RENAMED_PROFILE_ID, RENAMED_PROFILE_ID);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, &source).unwrap();
+
+    let set = load_profile_set_at(&path).unwrap();
+
+    assert_eq!(set.active_profile().id, "signex_standard");
+    assert_eq!(set.active_profile().name, "Signex Standard");
+    assert!(set.profile(RENAMED_PROFILE_ID).is_none());
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        source,
+        "loading must not rewrite the file"
+    );
+
+    save_profile_set_at(&path, &set).unwrap();
+
+    let saved = std::fs::read_to_string(&path).unwrap();
+    assert!(saved.contains("active_profile = \"signex_standard\""));
+    assert!(saved.contains("base_profile = \"signex_standard\""));
+    assert!(!saved.contains(RENAMED_PROFILE_ID), "{saved}");
+}
+
+#[test]
+fn a_custom_profile_derived_from_the_old_id_keeps_working() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, saved_file_on("mine", RENAMED_PROFILE_ID)).unwrap();
+
+    let set = load_profile_set_at(&path).unwrap();
+
+    let mine = set.active_profile();
+    assert_eq!(mine.id, "mine");
+    assert_eq!(mine.base_profile.as_deref(), Some("signex_standard"));
+    assert_eq!(mine.bindings.len(), 1);
+    let base = mine.base_profile.as_deref().unwrap();
+    assert!(set.profile(base).is_some(), "its base resolves");
+}
+
+#[test]
+fn an_imported_profile_derived_from_the_old_id_names_the_new_one() {
+    let source = format!(
+        r#"
+[signex_settings]
+application = "signex"
+file_kind = "keyboard_shortcuts"
+version = 1
+
+[keyboard_shortcuts]
+schema_version = 1
+profile_id = "shared"
+profile_name = "Shared"
+profile_kind = "custom"
+base_profile = "{RENAMED_PROFILE_ID}"
+"#
+    );
+
+    let imported = import_custom_profile(&source).unwrap();
+
+    assert_eq!(imported.base_profile.as_deref(), Some("signex_standard"));
+}
+
+/// The old id stays reserved: a custom profile cannot take it and show up
+/// as a second entry beside the built-in.
+#[test]
+fn a_custom_profile_under_the_old_id_is_refused_as_a_shadow_of_the_built_in() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let source = saved_file_on("mine", "classic").replace(
+        "profile_id = \"mine\"",
+        &format!("profile_id = \"{RENAMED_PROFILE_ID}\""),
+    );
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, source).unwrap();
+
+    let err = load_profile_set_at(&path).unwrap_err().to_string();
+
+    assert!(err.contains("built-in profile `signex_standard` cannot be modified"));
+}
+
+#[test]
+fn the_built_ins_list_signex_standard_first_and_never_the_old_name() {
+    let set = ShortcutProfileSet::built_ins().unwrap();
+    let listed: Vec<(&str, &str)> = set
+        .profiles()
+        .map(|profile| (profile.id.as_str(), profile.name.as_str()))
+        .collect();
+    assert_eq!(
+        listed,
+        [
+            ("signex_standard", "Signex Standard"),
+            ("classic", "Classic")
+        ]
+    );
+    for profile in set.profiles() {
+        let shown = format!(
+            "{} {} {}",
+            profile.id,
+            profile.name,
+            profile.description.as_deref().unwrap_or_default()
+        );
+        assert!(
+            !shown.to_lowercase().contains(RENAMED_PROFILE_ID),
+            "{shown}"
+        );
     }
 }
