@@ -69,6 +69,8 @@ pub struct BranchSwitcherMessages<'a, M> {
     pub on_pick: Box<dyn Fn(&BranchRow) -> M + 'a>,
     /// New branch here…; `None` draws it disabled (no valid new name typed).
     pub on_create: Option<M>,
+    /// An action under the notice, with its words: the caller's way past it.
+    pub on_save_and_switch: Option<(Label<'a>, M)>,
 }
 
 /// Whether `name` matches the find field, ignoring case.
@@ -295,6 +297,7 @@ pub fn branch_popover<'a, M: Clone + 'a>(
     let BranchSwitcherMessages {
         on_query,
         on_create,
+        on_save_and_switch,
         ..
     } = messages;
     let find = text_input(t!(i18n, ids::PANELS_HISTORY_BRANCH_FIND), state.query)
@@ -323,6 +326,10 @@ pub fn branch_popover<'a, M: Clone + 'a>(
                 .padding(Padding::from([s.em(POPOVER_PAD_EM), s.em(ROW_PAD_EM)]))
                 .boxed(),
         );
+    }
+    if let Some((label, message)) = on_save_and_switch {
+        let words = text(label).size(s.text_size).color(s.ink).boxed();
+        body = body.push(menu_row(&s, None, words, None, Some(message)));
     }
     container(body)
         .width(s.em(POPOVER_WIDTH_EM))

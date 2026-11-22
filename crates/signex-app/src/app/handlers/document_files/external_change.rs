@@ -386,6 +386,12 @@ impl Signex {
             return Task::none();
         }
         self.show_parked_conflict(&path);
+        self.start_disk_reload(path)
+    }
+
+    /// Read `path` again on a worker and replace its open document. The
+    /// document's edits are dropped only when the read succeeds.
+    pub(crate) fn start_disk_reload(&mut self, path: PathBuf) -> Task<Message> {
         let read_path = path.clone();
         let is_pcb = super::save_async::is_pcb_path(&path);
         // Edits made while the read runs are not in the file being read.

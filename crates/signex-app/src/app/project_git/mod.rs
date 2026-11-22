@@ -3,21 +3,28 @@
 //! Project tab and the History panel share. The state and message live here,
 //! so both surfaces show and drive one switcher.
 //!
-//! All git work runs off the update thread, through
-//! `signex_library::adapters::local_git::project_repo`. A switch is refused
-//! while the project has unsaved edits: Signex never saves on its own.
+//! All git work runs off the update thread. `switch` is the one branch switch
+//! both surfaces call. Unsaved edits stop it: Signex saves only when the user
+//! presses Save and switch, which a branch with another project file offers.
 
+mod reopen;
+mod switch;
 mod update;
 pub(crate) mod view;
 
 #[cfg(test)]
+mod switch_tests;
+#[cfg(test)]
 mod tests;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use signex_library::adapters::local_git::project_repo::{RepoFacts, SwitchRefusal};
+use signex_library::repo_branches::BranchTarget;
 
 use crate::app::state::ProjectId;
+use crate::app::state::sheet_refs::SheetRefs;
 
 /// The branch glyph, 24 x 24 stroke art tinted when shown; the Project tab's
 /// glyph set reads the same source.
@@ -32,6 +39,32 @@ pub enum SwitchBlock {
     WorkRunning,
     /// The repository refused it.
     Refused(SwitchRefusal),
+}
+
+/// The surface a switch was asked from, which hears why it did not happen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SwitchSurface {
+    ProjectTab(ProjectId),
+    History,
+}
+
+/// One asked-for branch switch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwitchRequest {
+    pub surface: SwitchSurface,
+    pub root: PathBuf,
+    pub target: BranchTarget,
+}
+
+/// A switch that landed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SwitchDone {
+    pub root: PathBuf,
+    pub branch: String,
+    /// Every path it changed, relative to `root`.
+    pub changed: Vec<PathBuf>,
+    /// The open projects' `.snxprj` files among them, still to reopen.
+    pub reopen: Vec<PathBuf>,
 }
 
 /// Why the typed author was not written.
@@ -76,9 +109,20 @@ impl RepoView {
 pub struct ProjectGitState {
     repos: HashMap<ProjectId, RepoView>,
     switcher: Option<ProjectId>,
+    /// A switch waiting on Save and switch.
+    save_offer: Option<SwitchRequest>,
+    /// A switch whose save landed and whose commit is still running.
+    parked: Option<SwitchRequest>,
 }
 
 impl ProjectGitState {
+    /// Whether the Project tab of `project` offers Save and switch.
+    pub(crate) fn offers_save_and_switch(&self, project: ProjectId) -> bool {
+        self.save_offer
+            .as_ref()
+            .is_some_and(|offer| offer.surface == SwitchSurface::ProjectTab(project))
+    }
+
     /// `project`'s repository as last read, if it has been.
     pub(crate) fn repo(&self, project: ProjectId) -> Option<&RepoView> {
         self.repos.get(&project)
@@ -113,21 +157,26 @@ pub enum ProjectGitMsg {
     /// The branch button was pressed: the switcher opens or closes.
     SwitcherToggled { project_id: ProjectId },
     /// A branch was picked in the switcher.
-    BranchPicked {
-        project_id: ProjectId,
-        name: String,
-    },
+    BranchPicked { project_id: ProjectId, name: String },
     /// A switch finished.
     BranchSwitched {
         project_id: ProjectId,
-        name: String,
-        result: Result<(), SwitchRefusal>,
+        result: Result<SwitchDone, SwitchRefusal>,
+    },
+    /// The read of whether the picked branch has another project file.
+    SwitchChecked {
+        request: Box<SwitchRequest>,
+        result: Result<bool, SwitchRefusal>,
+    },
+    /// Save and switch was pressed.
+    SaveAndSwitchPressed,
+    /// The sheet references for reopening a switched project were read.
+    ReopenRefsResolved {
+        done: Box<SwitchDone>,
+        result: Result<Box<SheetRefs>, String>,
     },
     /// The Author field as typed.
-    AuthorEdited {
-        project_id: ProjectId,
-        text: String,
-    },
+    AuthorEdited { project_id: ProjectId, text: String },
     /// Enter in the Author field: the typed author goes to git config.
     AuthorSubmitted { project_id: ProjectId },
     /// The git config write finished.

@@ -46,7 +46,8 @@ fn repo_with_branch() -> (tempfile::TempDir, git2::Repository) {
 }
 
 fn switch(root: &Path, name: &str) -> Result<(), SwitchRefusal> {
-    switch_branch(root, name, Path::new(PROJECT))
+    let target = crate::repo_branches::BranchTarget::Local(name.into());
+    crate::repo_branches::switch_branch(root, &target, &[]).map(|_| ())
 }
 
 #[test]
@@ -99,8 +100,10 @@ fn a_switch_never_overwrites_a_changed_file() {
     assert_eq!(facts.branch.as_deref(), Some("main"));
 }
 
+/// Decision 2026-11-22: the app closes and reopens the project, so the
+/// repository layer no longer refuses a differing project file.
 #[test]
-fn a_branch_with_another_project_file_is_refused() {
+fn a_branch_with_another_project_file_is_checked_out() {
     let (dir, repo) = repo_with_branch();
     repo.set_head("refs/heads/other").unwrap();
     let mut force = git2::build::CheckoutBuilder::new();
@@ -110,30 +113,38 @@ fn a_branch_with_another_project_file_is_refused() {
     commit_all(&repo, "project edit");
     repo.set_head("refs/heads/main").unwrap();
     repo.checkout_head(Some(&mut force)).unwrap();
-    assert_eq!(
-        switch(dir.path(), "other"),
-        Err(SwitchRefusal::ProjectFileDiffers)
-    );
+    assert_eq!(switch(dir.path(), "other"), Ok(()));
     assert_eq!(
         fs::read_to_string(dir.path().join(PROJECT)).unwrap(),
-        "project"
+        "changed"
     );
 }
 
-/// A checkout would leave the pointer where the model's bytes were.
+/// A checkout would leave the pointer where the model's bytes were, so a
+/// pointer whose content is not stored refuses the switch.
 #[test]
-fn a_branch_differing_in_an_lfs_file_is_refused() {
+fn a_branch_differing_in_an_lfs_file_without_its_content_is_refused() {
     let (dir, repo) = repo_with_branch();
-    fs::write(
-        dir.path().join(".gitattributes"),
-        "*.snxsch filter=lfs diff=lfs merge=lfs -text\n",
-    )
-    .unwrap();
+    repo.set_head("refs/heads/other").unwrap();
+    let mut force = git2::build::CheckoutBuilder::new();
+    force.force();
+    repo.checkout_head(Some(&mut force)).unwrap();
+    let (pointer, _) = super::super::lfs::pointer_for(b"model bytes");
+    fs::write(dir.path().join("m.step"), pointer).unwrap();
+    commit_all(&repo, "add model");
+    repo.set_head("refs/heads/main").unwrap();
+    repo.checkout_head(Some(&mut force)).unwrap();
+    // `main` lacks the model; a forced checkout leaves it as an untracked file.
+    let _ = fs::remove_file(dir.path().join("m.step"));
     assert!(matches!(
         switch(dir.path(), "other"),
-        Err(SwitchRefusal::LfsFileDiffers(path)) if path == "a.snxsch"
+        Err(SwitchRefusal::LfsContentMissing(path)) if path == "m.step"
     ));
     assert_eq!(repo.head().unwrap().name().unwrap(), "refs/heads/main");
+    assert_eq!(
+        fs::read_to_string(dir.path().join("a.snxsch")).unwrap(),
+        "main\n"
+    );
 }
 
 #[test]

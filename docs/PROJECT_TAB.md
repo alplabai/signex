@@ -129,12 +129,17 @@ message. The chrome catalog draws a sample of it.
   gives the status, the Branch button with the branch switcher it shares
   with the History panel (`app/project_git`), the last commit and "Open
   History panel"; without one, Enable Version Control… (the project tree's
-  dialog) is the primary button. A switch is refused, naming why, while a
-  document of the project has unsaved edits or a save or commit runs, when
-  it would overwrite a file changed since its last commit, and when the
-  branches differ in the `.snxprj` or in a Git LFS file (the open project
-  and the LFS content cannot follow a checkout yet). Open documents that
-  changed raise the File Changed on Disk card, which offers Reload. Below it,
+  dialog) is the primary button. Both surfaces run one switch
+  (`app/project_git/switch.rs`). It is refused, naming why, while a document
+  has unsaved edits or a save or commit runs, when it would overwrite a file
+  changed since its last commit, when an open library differs, when the
+  branch's `.snxprj` does not parse, and when a Git LFS file's content is not
+  in `.git/lfs/objects`; a refused or failed switch leaves the project and the
+  working tree as they were. When the branch's `.snxprj` differs, unsaved
+  edits offer Save and switch, and the project closes and reopens from the new
+  file with its tabs. LFS content is restored from `.git/lfs/objects`. Clean
+  documents reload; a document edited during the switch keeps its edits and
+  raises the File Changed on Disk card. Below it,
   "Commit every save" (`enable_git`) is a switch with its help under the
   label: turning it on needs a repository, turning it off keeps the
   repository, and a note says so when it cannot be turned on. "Commits in

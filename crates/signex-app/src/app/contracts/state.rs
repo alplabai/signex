@@ -284,6 +284,8 @@ pub enum SaveAllNext {
     CloseLibrary { library_path: std::path::PathBuf },
     /// File ▸ Save All: report the outcome and do nothing else.
     Nothing,
+    /// Run the branch switch Save and switch asked for.
+    SwitchBranch(Box<crate::app::project_git::SwitchRequest>),
 }
 
 /// A Save All whose loose documents' volumes have been probed off-thread;

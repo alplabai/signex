@@ -517,6 +517,7 @@ impl LocalGitAdapter {
 }
 
 mod adapter;
+pub(crate) mod branch_switch;
 mod commit_lock;
 mod disk_sync;
 /// `add_all` callback: stage everything except a write-lock file (#832).

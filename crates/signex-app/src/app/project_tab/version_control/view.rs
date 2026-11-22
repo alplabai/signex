@@ -174,8 +174,9 @@ fn present_body<'a>(
     );
     let mut rows: Column<Element<'a, Message>> = Column::new().push(status).push(branch);
     if git.state.is_switcher_open(project_id) {
+        let offers_save = git.state.offers_save_and_switch(project_id);
         rows = rows.push(
-            project_git::view::switcher(project_id, repo, i18n, tokens)
+            project_git::view::switcher(project_id, repo, offers_save, i18n, tokens)
                 .map(Message::from)
                 .boxed(),
         );

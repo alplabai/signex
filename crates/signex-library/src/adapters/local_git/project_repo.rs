@@ -1,9 +1,7 @@
-//! What a project's repository holds right now, and the three things the
-//! app does to it outside a commit: read it, switch its branch and set the
-//! commit author in its git config (mockup rows 35 and 39).
-//!
-//! A switch never overwrites work and never leaves a file the app cannot
-//! follow: see [`switch_branch`].
+//! What a project's repository holds right now: reading it, and setting the
+//! commit author in its git config (mockup rows 35 and 39). The branch switch
+//! is `crate::repo_branches::switch_branch`; [`SwitchRefusal`] is why one did
+//! not happen.
 
 use std::path::Path;
 
@@ -44,19 +42,22 @@ pub struct RepoFacts {
     pub author: Option<String>,
 }
 
-/// Why a branch switch did not happen. Nothing was changed.
+/// Why a branch switch did not happen. The project and the working tree are
+/// as they were.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SwitchRefusal {
-    /// No local branch of that name.
+    /// No branch of that name.
     UnknownBranch,
     /// No commit yet, so there is nothing to switch from.
     NoCommits,
-    /// The two branches hold different project files, which the open
-    /// project cannot follow.
-    ProjectFileDiffers,
-    /// A Git LFS file differs; a checkout would leave its pointer in place
-    /// of the content.
-    LfsFileDiffers(String),
+    /// A file the app holds in memory without watching it differs on the
+    /// target branch (an open library or primitive); its path.
+    HeldFileDiffers(String),
+    /// The target branch has no readable project file for the open project;
+    /// its path.
+    ProjectFileUnreadable(String),
+    /// A Git LFS file's content is not in `.git/lfs/objects`; its path.
+    LfsContentMissing(String),
     /// A file changed since its last commit would be overwritten.
     WouldOverwrite,
     /// git failed; the system's reason.
@@ -65,10 +66,6 @@ pub enum SwitchRefusal {
 
 fn backend(what: &str, e: git2::Error) -> LibraryError {
     LibraryError::Backend(format!("{what}: {e}"))
-}
-
-fn failed(what: &str, e: git2::Error) -> SwitchRefusal {
-    SwitchRefusal::Failed(format!("{what}: {e}"))
 }
 
 /// The branch HEAD names, even when it has no commit yet.
@@ -188,73 +185,6 @@ pub fn write_author(project_root: &Path, author: Option<(&str, &str)>) -> Result
         }
     }
     Ok(())
-}
-
-/// Refuse a switch whose changed files the app could not follow.
-fn check_changed_files(
-    repo: &git2::Repository,
-    from: &git2::Tree<'_>,
-    to: &git2::Tree<'_>,
-    project_file: &Path,
-) -> Result<(), SwitchRefusal> {
-    let diff = repo
-        .diff_tree_to_tree(Some(from), Some(to), None)
-        .map_err(|e| failed("git diff", e))?;
-    for delta in diff.deltas() {
-        for path in [delta.old_file().path(), delta.new_file().path()]
-            .into_iter()
-            .flatten()
-        {
-            if path == project_file {
-                return Err(SwitchRefusal::ProjectFileDiffers);
-            }
-            if super::lfs::is_lfs_path(repo, path).map_err(|e| failed("git attributes", e))? {
-                return Err(SwitchRefusal::LfsFileDiffers(path.display().to_string()));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Check out the local branch `name`. `project_file` is the `.snxprj`,
-/// relative to `project_root`.
-///
-/// The checkout is git's safe one: a file changed since its last commit that
-/// the switch would replace refuses the whole switch before anything is
-/// written. Unsaved edits in the app are the caller's to refuse.
-pub fn switch_branch(
-    project_root: &Path,
-    name: &str,
-    project_file: &Path,
-) -> Result<(), SwitchRefusal> {
-    let repo = git2::Repository::open(project_root).map_err(|e| failed("git open", e))?;
-    let _lock =
-        super::commit_lock::lock_repo_for_commit(repo.path()).map_err(SwitchRefusal::Failed)?;
-    let branch = repo
-        .find_branch(name, git2::BranchType::Local)
-        .map_err(|_| SwitchRefusal::UnknownBranch)?;
-    let refname = branch
-        .get()
-        .name()
-        .map_err(|e| failed("git branch name", e))?
-        .to_owned();
-    let to = branch
-        .get()
-        .peel_to_tree()
-        .map_err(|e| failed("git branch tree", e))?;
-    let from = repo
-        .head()
-        .and_then(|head| head.peel_to_tree())
-        .map_err(|_| SwitchRefusal::NoCommits)?;
-    check_changed_files(&repo, &from, &to, project_file)?;
-    let mut checkout = git2::build::CheckoutBuilder::new();
-    checkout.safe();
-    repo.checkout_tree(to.as_object(), Some(&mut checkout))
-        .map_err(|e| match e.code() {
-            git2::ErrorCode::Conflict => SwitchRefusal::WouldOverwrite,
-            _ => failed("git checkout", e),
-        })?;
-    repo.set_head(&refname).map_err(|e| failed("git set head", e))
 }
 
 #[cfg(test)]

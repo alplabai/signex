@@ -19,7 +19,7 @@ use signex_widgets::{HistoryGraph, HistoryGraphStyle, Label, button, text, text_
 
 use super::model::{
     HistoryBranchScope, HistoryCommitMsg, HistoryFilterMsg, HistoryPanelMsg, HistoryRepoView,
-    HistorySwitcherMsg, RefPromptKind, SwitchBlock, can_create_branch, document_to_show,
+    HistorySwitcherMsg, RefPromptKind, can_create_branch, document_to_show,
 };
 use crate::panels::{PanelContext, PanelMsg, form_look, panel_scrollable};
 use crate::styles::tokens::resolve;
@@ -390,11 +390,15 @@ fn with_switcher<'a>(
     s: &HistoryGraphStyle,
 ) -> Element<'a, PanelMsg> {
     let ui = &ctx.history.ui;
-    let notice: Option<Label<'a>> = ui.switch_block.as_ref().map(|block| match block {
-        SwitchBlock::Unsaved(file) => {
-            t!(ctx.i18n, ids::PANELS_HISTORY_SWITCH_BLOCKED_DIRTY, "file" => file.clone()).into()
-        }
-        SwitchBlock::Busy => t!(ctx.i18n, ids::PANELS_HISTORY_SWITCH_BLOCKED_BUSY).into(),
+    let notice: Option<Label<'a>> = ui
+        .switch_block
+        .as_ref()
+        .map(|block| crate::app::project_git::view::block_words(block, &ctx.i18n).into());
+    let on_save_and_switch = ui.save_offered.then(|| {
+        (
+            Label::from(t!(ctx.i18n, ids::PROJECT_VCS_SWITCH_SAVE_AND_SWITCH)),
+            switcher_msg(HistorySwitcherMsg::SaveAndSwitchPressed),
+        )
     });
     let on_create = can_create_branch(&repo.branches, &ui.switcher_query)
         .then(|| switcher_msg(HistorySwitcherMsg::CreatePressed));
@@ -417,6 +421,7 @@ fn with_switcher<'a>(
                 })
             }),
             on_create,
+            on_save_and_switch,
         },
     );
     let backdrop = mouse_area(Space::new().width(Length::Fill).height(Length::Fill))
