@@ -57,7 +57,9 @@ command-log-replay-no-targets = Not replayed: this row recorded no targets, and 
 command-log-replay-not-finished = Not replayed: { $command } was started but never finished, so it recorded nothing to repeat.
 command-log-replay-nothing-to-repeat = Not replayed: { $command } has nothing to repeat: it is a step of a tool in progress, a pick at the pointer, or a named save.
 command-log-replay-made-objects = Not replayed: { $command } made new objects from values only its tool held.
-command-log-replay-tool-active = Not replayed: a tool is in progress, and running this on { $document } would disturb it. Finish or cancel the tool first.
+# $command is the command's label.
+command-log-replay-state-changed = Not replayed: { $document } changed after { $command } ran, and running it again would undo those changes.
+command-log-replay-tool-active =Not replayed: a tool is in progress, and running this on { $document } would disturb it. Finish or cancel the tool first.
 command-log-replay-no-change = The replayed command changed nothing.
 command-log-replay-numbers-unread = Not replayed: the copy needs numbers from the whole project, and a sheet of { $document }'s project is not open. Open its sheets and replay again.
 # $missing lists each missing item's kind and id.

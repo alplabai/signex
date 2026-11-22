@@ -211,6 +211,48 @@ fn only_a_named_power_port_starts_a_rail_rename() {
     assert_eq!((rename.old.as_str(), rename.new.as_str()), ("+3V3", "X"));
 }
 
+/// The parent says `Power.snxsch`, the engine holds `power.snxsch` with an
+/// unsaved port no file has: the read counts it under the engine's spelling.
+#[test]
+fn an_open_sheet_spelled_differently_is_read_from_its_engine() {
+    use crate::app::project_sheets::ProjectSheetPlan;
+    use crate::app::state::scope::CaseFold;
+    use signex_types::schematic::ChildSheet;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let top = dir.path().join("top.snxsch");
+    let held = dir.path().join("power.snxsch");
+    let parent = SchematicSheet {
+        child_sheets: vec![ChildSheet {
+            filename: "Power.snxsch".into(),
+            ..serde_json::from_value(child_sheet_json()).expect("a sheet symbol")
+        }],
+        ..Default::default()
+    };
+    let unsaved = SchematicSheet {
+        symbols: vec![power_port(PORT, "VCC")],
+        ..Default::default()
+    };
+    let open = [(top.clone(), parent), (held.clone(), unsaved)];
+    let keys: std::collections::HashSet<PathBuf> = open.iter().map(|(p, _)| p.clone()).collect();
+    let plan = ProjectSheetPlan::for_test(open.into_iter().collect(), top, CaseFold::FOLD);
+
+    let read = super::read_rail(&plan, &keys, "VCC");
+
+    assert!(read.open.contains(&held), "open: {:?}", read.open);
+    assert!(read.loaded.is_empty());
+}
+
+fn child_sheet_json() -> serde_json::Value {
+    serde_json::json!({
+        "uuid": Uuid::from_u128(0x74),
+        "name": "Power",
+        "filename": "Power.snxsch",
+        "position": { "x": 0.0, "y": 0.0 },
+        "size": [30.0, 30.0],
+    })
+}
+
 #[test]
 fn the_rail_is_its_power_ports_and_power_labels_only() {
     let flag = Symbol {

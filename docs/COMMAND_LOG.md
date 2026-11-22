@@ -128,7 +128,9 @@ clipped.
     items. A board move repeats its offset from where the footprints are now.
     A new union gets a new id. Place Reuse Block places its block on its anchor
     again with new ids. Change Footprint runs again from the footprint it read,
-    with its linked sheets.
+    with its linked sheets. An edit that stores a whole drawing, directive or
+    harness connector changes only the fields it changed when recorded, so a
+    later move or edit of another field stays.
   - **Footprint and symbol editors:** the recorded messages or Properties
     panel edit run on the recorded pads, pins, silk or sketch entities of that
     editor document, with the person's selection and tool put back. A pad or
@@ -151,7 +153,8 @@ clipped.
     - Find Similar, whose result is a selection made in its dialog;
     - Save as Reuse Block, which writes a named file;
     - a Sync Sheet Entries that added sheet pins, whose recorded commands name
-      ids that now exist.
+      ids that now exist, and one whose recorded entry list would now add a
+      pin or drop a pin made since.
 - **Copy as CLI** copies the row as a `signex-cli run` line (the Usage of
   `docs/CLI.md`): `signex-cli run <project file> <command-id> --arg
   name=value ...`. Each value is the text `--arg` takes (a point as `x,y`),

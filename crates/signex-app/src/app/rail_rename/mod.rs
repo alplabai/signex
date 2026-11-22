@@ -13,7 +13,7 @@ mod apply;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -23,7 +23,7 @@ use signex_types::schematic::{LabelType, SchematicSheet};
 
 use crate::app::Message;
 pub(crate) use crate::app::core::rail_rename::{RailRead, RailRename, RunningRename};
-use crate::app::project_sheets::ProjectSheetPlan;
+use crate::app::project_sheets::{ProjectSheetPlan, fold_key};
 use crate::app::sheet_write::SheetWriteRefusal;
 
 /// Reads a rename may start before it gives up on sheets that keep changing.
@@ -121,14 +121,17 @@ fn holds_rail(sheet: &SchematicSheet, old: &str) -> bool {
 /// The disk half: the project's sheets, and copies of the closed ones holding
 /// the rail with the stamps they were read at.
 fn read_rail(plan: &ProjectSheetPlan, open: &HashSet<PathBuf>, old: &str) -> RailRead {
-    let (set, mut read_stamps) = plan.assemble_stamped();
+    let fold = plan.fold();
+    let held: HashMap<String, &PathBuf> = open.iter().map(|p| (fold_key(p, fold), p)).collect();
+    let (set, mut read_stamps) = plan.assemble_stamped_by_fold();
     let mut read = RailRead {
         unreadable: set.unreadable,
         ..RailRead::default()
     };
     for (path, sheet) in set.sheets {
-        if open.contains(&path) {
-            read.open.push(path);
+        // The engine's spelling: the walk has the sheet symbol's.
+        if let Some(held_path) = held.get(&fold_key(&path, fold)) {
+            read.open.push((*held_path).clone());
         } else if holds_rail(&sheet, old) {
             let stamp = read_stamps.remove(&path).flatten();
             read.stamps.insert(path.clone(), stamp);

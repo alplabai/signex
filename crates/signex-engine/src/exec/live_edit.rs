@@ -55,7 +55,21 @@ impl Engine {
     /// when the drawings ended as they began, which records nothing.
     pub fn commit_live_edit(&mut self) -> Option<PatchPair> {
         let live = self.live_edit.take()?;
-        if live.before.drawings == self.document.drawings {
+        let ended_as_it_began = live.before.drawings == self.document.drawings;
+        self.land_live_edit(live, ended_as_it_began)
+    }
+
+    /// [`Engine::commit_live_edit`] for an edit that has already changed the
+    /// document: the preview ended at `pre_image`, that edit's snapshot.
+    pub(crate) fn commit_live_edit_under(&mut self, pre_image: &SchematicSheet) {
+        if let Some(live) = self.live_edit.take() {
+            let ended_as_it_began = live.before.drawings == pre_image.drawings;
+            self.land_live_edit(live, ended_as_it_began);
+        }
+    }
+
+    fn land_live_edit(&mut self, live: LiveEdit, ended_as_it_began: bool) -> Option<PatchPair> {
+        if ended_as_it_began {
             return None;
         }
         self.record_grouped_history(live.before, live.patch, None);
@@ -181,6 +195,26 @@ mod tests {
         assert!(engine.document().no_connects.is_empty());
         engine.undo().unwrap();
         assert_eq!(right(&engine), 20.0);
+    }
+
+    /// The edit puts the saved value back, but its pre-image holds the
+    /// preview: the preview stays a step, so undo reaches the saved value.
+    #[test]
+    fn an_edit_restoring_the_old_value_keeps_the_preview_as_a_step() {
+        let (mut engine, id) = engine();
+        engine.preview_drawing(rect(id, 30.0)).unwrap();
+        engine
+            .execute(Command::UpdateSchDrawing {
+                drawing: rect(id, 20.0),
+            })
+            .unwrap();
+        assert_eq!(engine.history.undo_len(), 2);
+        engine.undo().unwrap();
+        assert_eq!(right(&engine), 30.0);
+        assert!(!engine.is_at_save_point());
+        engine.undo().unwrap();
+        assert_eq!(right(&engine), 20.0);
+        assert!(engine.is_at_save_point());
     }
 
     #[test]

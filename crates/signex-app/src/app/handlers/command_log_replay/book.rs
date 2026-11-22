@@ -29,6 +29,9 @@ pub(super) enum ReplayInput {
     Sheet {
         commands: Vec<Command>,
         targets: Vec<SelectedItem>,
+        /// What the commands that replace a whole object replaced, oldest
+        /// first: Replay carries only what they changed (`rebase`).
+        pre_images: Vec<Command>,
     },
     /// Board commands, and the items they act on.
     Board {
@@ -133,17 +136,24 @@ impl ReplayInput {
                 Self::Sheet {
                     mut commands,
                     mut targets,
+                    mut pre_images,
                 },
                 Self::Sheet {
                     commands: more,
                     targets: more_targets,
+                    pre_images: more_images,
                 },
             ) => {
                 commands.extend(more);
                 targets.extend(more_targets);
                 targets.sort_by_key(|item| item.uuid);
                 targets.dedup();
-                Self::Sheet { commands, targets }
+                pre_images.extend(more_images);
+                Self::Sheet {
+                    commands,
+                    targets,
+                    pre_images,
+                }
             }
             (
                 Self::Board {
@@ -180,10 +190,12 @@ impl ReplayInput {
                 Self::Sheet {
                     commands: a,
                     targets: at,
+                    ..
                 },
                 Self::Sheet {
                     commands: b,
                     targets: bt,
+                    ..
                 },
             ) => at == bt && kinds(a) == kinds(b),
             (
@@ -215,6 +227,32 @@ impl ReplayInput {
                     && std::mem::discriminant(am.as_ref()) == std::mem::discriminant(bm.as_ref())
             }
             _ => false,
+        }
+    }
+
+    /// `self`, the next keystroke of `earlier`'s edit, keeping what stood
+    /// before the first keystroke.
+    pub(super) fn continuing(self, earlier: &Self) -> Self {
+        match (self, earlier) {
+            (
+                Self::Sheet {
+                    commands,
+                    targets,
+                    pre_images,
+                },
+                Self::Sheet {
+                    pre_images: first, ..
+                },
+            ) => {
+                let mut kept = first.clone();
+                kept.extend(pre_images);
+                Self::Sheet {
+                    commands,
+                    targets,
+                    pre_images: kept,
+                }
+            }
+            (input, _) => input,
         }
     }
 

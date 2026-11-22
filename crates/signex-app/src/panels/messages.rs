@@ -85,6 +85,7 @@ pub enum PanelMsg {
     FpEditorSetNextPadTrapezoidDeltaX(String),
     FpEditorSetNextPadTrapezoidDeltaY(String),
     FpEditorSetNextPadTemplate(String),
+    FpEditorSetNextPadTemplateLibrary(String),
     FpEditorSetNextPadPasteMarginTop(String),
     FpEditorSetNextPadPasteMarginBottom(String),
     FpEditorToggleNextPadPasteEnabledTop(bool),
@@ -150,6 +151,10 @@ pub enum PanelMsg {
         value: String,
     },
     FpEditorSetSelectedPadTemplate {
+        idx: usize,
+        value: String,
+    },
+    FpEditorSetSelectedPadTemplateLibrary {
         idx: usize,
         value: String,
     },

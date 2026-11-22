@@ -1,6 +1,6 @@
 //! The pad's Template dropdown (mockup row 125): "(custom)", then the
 //! templates the footprint's pads use, with the template's library as a tag.
-//! A name no other pad uses stays editable in a Name field under it.
+//! A name no other pad uses stays editable in Name and Library fields under it.
 
 use iced::widget::{Column, Row, container, pick_list};
 use iced::{Alignment, Element, Length, Widget as _};
@@ -9,7 +9,7 @@ use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{Label, text};
 
 use super::super::super::super::{PadOutlineSummary, PanelMsg};
-use super::{Form, PadEditTarget, pad_input_row_w, pad_template_msg};
+use super::{Form, PadEditTarget, pad_input_row_w, pad_template_library_msg, pad_template_msg};
 use crate::styles::{Spacing, TypeScale};
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -95,7 +95,7 @@ fn pick_msg(target: PadEditTarget, choice: TemplateChoice) -> PanelMsg {
     }
 }
 
-/// The Template row, and the Name field while the name is the pad's own.
+/// The Template row, and Name and Library while the name is the pad's own.
 pub(super) fn push<'a>(
     col: Column<Element<'a, PanelMsg>>,
     form: &Form<'_>,
@@ -159,6 +159,14 @@ pub(super) fn push<'a>(
         "",
         v.template.clone(),
         move |s| pad_template_msg(target, s),
+        muted,
+    ))
+    .push(pad_input_row_w(
+        form.fw(),
+        t!(i18n, ids::EDITORS_PAD_TEMPLATE_LIBRARY),
+        "",
+        offered.current.library.clone(),
+        move |s| pad_template_library_msg(target, s),
         muted,
     ))
 }

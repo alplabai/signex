@@ -579,6 +579,12 @@ impl Signex {
             PanelMsg::FpEditorSetArraySweep { array_id, sweep } => {
                 self.fp_editor_set_array_sweep(*array_id, *sweep)
             }
+            PanelMsg::FpEditorSetNextPadTemplateLibrary(v) => {
+                self.fp_editor_set_next_pad_template_library(v.clone())
+            }
+            PanelMsg::FpEditorSetSelectedPadTemplateLibrary { idx, value } => {
+                self.fp_editor_set_selected_pad_template_library(*idx, value.clone())
+            }
             PanelMsg::FpEditorPickNextPadTemplate { template, library } => {
                 self.fp_editor_pick_next_pad_template(template.clone(), library.clone())
             }
