@@ -48,17 +48,11 @@ fn select(b: &mut Bench, row: usize) {
 }
 
 #[test]
-fn the_layer_stack_command_docks_the_manager() {
+fn the_layer_stack_command_opens_its_document_tab() {
     let mut b = open(four_layers());
-    b.app.document_state.dock.close_panel(PanelKind::LayerStack);
     b.view_only(|b| b.command("board_layer_stack"));
-    assert!(
-        b.app
-            .document_state
-            .dock
-            .locate(PanelKind::LayerStack)
-            .is_some()
-    );
+    // Layer Stack is a document tab (DECISIONS 2026-11-18).
+    assert!(b.app.document_state.tabs.iter().any(|t| t.kind.is_layer_stack()));
 }
 
 #[test]

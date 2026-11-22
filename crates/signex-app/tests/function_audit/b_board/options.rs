@@ -245,15 +245,9 @@ fn edit_board_shape_opens_board_sketch_and_leaves_the_board_unchanged() {
 #[test]
 fn the_board_materials_link_opens_the_layer_stack() {
     let mut b = open(all_kinds());
-    b.app.document_state.dock.close_panel(PanelKind::LayerStack);
     b.view_only(|b| b.board_panel(PcbBoardMsg::LayerStackOpened));
-    assert!(
-        b.app
-            .document_state
-            .dock
-            .locate(PanelKind::LayerStack)
-            .is_some()
-    );
+    // Layer Stack is a document tab (DECISIONS 2026-11-18).
+    assert!(b.app.document_state.tabs.iter().any(|t| t.kind.is_layer_stack()));
 }
 
 #[test]

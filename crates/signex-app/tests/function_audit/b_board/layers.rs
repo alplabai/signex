@@ -163,16 +163,10 @@ fn the_3d_switch_shows_the_board_in_3d_and_back() {
 #[test]
 fn the_more_menus_layer_stack_row_opens_the_layer_stack() {
     let mut b = open(four_layers());
-    b.app.document_state.dock.close_panel(PanelKind::LayerStack);
     layers_panel(&mut b, LayersPanelMsg::MoreMenuToggled);
     b.panel(PanelMsg::LayersPanel(LayersPanelMsg::LayerStackPicked));
-    assert!(
-        b.app
-            .document_state
-            .dock
-            .locate(PanelKind::LayerStack)
-            .is_some()
-    );
+    // Layer Stack is a document tab (DECISIONS 2026-11-18).
+    assert!(b.app.document_state.tabs.iter().any(|t| t.kind.is_layer_stack()));
     assert!(!b.app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
 }
 
