@@ -41,6 +41,8 @@ pub fn rows() -> Vec<Surface> {
             title: "Start row context menu",
             open: |app, _, fx| {
                 app.ui_state.recent_projects = RecentProjects::from_paths([fx.sample.clone()]);
+                // The menu opens at the pointer: on the recent project's row.
+                app.interaction_state.last_mouse_pos = (720.0, 420.0);
                 let _ = app.update(start_screen::message(StartScreenMsg::RowRightClicked(
                     fx.sample.clone(),
                 )));

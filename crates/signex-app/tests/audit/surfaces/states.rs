@@ -21,7 +21,9 @@ use signex_app::app::{
 use signex_app::canvas::CanvasEvent;
 use signex_app::dock::DockMessage;
 use signex_app::menu_bar::MenuMessage;
-use signex_app::panels::{ErcWaiverMsg, LayersPanelMsg, LayersTab, PanelKind, PanelMsg};
+use signex_app::panels::{
+    ErcPanelMsg, ErcWaiverMsg, LayersPanelMsg, LayersTab, PanelKind, PanelMsg,
+};
 use signex_app::preferences::PrefNav;
 use signex_app::toolbar::ToolMessage;
 use signex_output::BoardReportKind;
@@ -348,14 +350,14 @@ pub(super) fn edit_sample_file(
     write_sheet(&path, sheet)
 }
 
-fn write_sheet(path: &Path, sheet: SchematicSheet) -> Result<(), String> {
+pub(super) fn write_sheet(path: &Path, sheet: SchematicSheet) -> Result<(), String> {
     let text = SnxSchematic::new(sheet)
         .write_string()
         .map_err(|e| format!("encode sheet: {e:?}"))?;
     std::fs::write(path, text).map_err(|e| format!("write sheet: {e}"))
 }
 
-fn child_sheet(name: &str, filename: &str, x: f64) -> ChildSheet {
+pub(super) fn child_sheet(name: &str, filename: &str, x: f64) -> ChildSheet {
     ChildSheet {
         uuid: Uuid::now_v7(),
         name: name.to_string(),
@@ -372,7 +374,7 @@ fn child_sheet(name: &str, filename: &str, x: f64) -> ChildSheet {
     }
 }
 
-fn root_sheet(children: Vec<ChildSheet>) -> SchematicSheet {
+pub(super) fn root_sheet(children: Vec<ChildSheet>) -> SchematicSheet {
     SchematicSheet {
         uuid: Uuid::now_v7(),
         paper_size: "A4".to_string(),
@@ -397,19 +399,39 @@ fn pre_placement(
     )
 }
 
-/// A custom column and three edited cells.
-fn open_parameter_edits(
+/// The sample's seven parts doubled to fourteen, four parameter columns and
+/// three edited cells.
+pub(super) fn open_parameter_edits(
     app: &mut Signex,
     r: &mut iced::Renderer,
     fx: &Fixture,
 ) -> Result<(), String> {
+    edit_sample_file(fx, |sheet| {
+        let parts: Vec<_> = sheet
+            .symbols
+            .iter()
+            .filter(|s| !s.reference.starts_with('#'))
+            .cloned()
+            .collect();
+        for (i, part) in parts.into_iter().enumerate() {
+            let prefix = part
+                .reference
+                .trim_end_matches(|c: char| c.is_ascii_digit())
+                .to_string();
+            let mut copy = part;
+            copy.uuid = Uuid::now_v7();
+            copy.reference = format!("{prefix}{}", 10 + i);
+            copy.position.y += 63.5;
+            sheet.symbols.push(copy);
+        }
+    })?;
     fixture::open_sample(app, r, fx);
     drive(app, Message::ParameterManager(ParameterManagerMsg::Open))?;
-    for msg in [
-        ParameterManagerMsg::NewKeyChanged("Tolerance".into()),
-        ParameterManagerMsg::ColumnAdded,
-    ] {
-        let _ = app.update(Message::ParameterManager(msg));
+    for key in ["Tolerance", "Voltage", "Manufacturer", "MPN"] {
+        let _ = app.update(Message::ParameterManager(
+            ParameterManagerMsg::NewKeyChanged(key.into()),
+        ));
+        let _ = app.update(Message::ParameterManager(ParameterManagerMsg::ColumnAdded));
     }
     let parts: Vec<Uuid> = app
         .document_state
@@ -418,6 +440,7 @@ fn open_parameter_edits(
         .document()
         .symbols
         .iter()
+        .filter(|s| !s.reference.starts_with('#'))
         .take(3)
         .map(|s| s.uuid)
         .collect();
@@ -524,13 +547,27 @@ fn commit_sample(fx: &Fixture) -> Result<(), String> {
     Ok(())
 }
 
-/// A root placing two copies of the sample, with unannotated parts and, on
-/// the second sheet, a locked U1.
-fn open_hierarchy(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+/// The child sheets of the hierarchy fixture: name, file and whether U1 is
+/// locked there.
+const HIERARCHY: [(&str, &str, bool); 5] = [
+    ("Power", "power.snxsch", false),
+    ("MCU", "mcu.snxsch", true),
+    ("USB", "usb.snxsch", false),
+    ("Sensors", "sensors.snxsch", false),
+    ("IO", "io.snxsch", false),
+];
+
+/// A root placing five copies of the sample, six sheets in all, with
+/// unannotated parts and, on the MCU sheet, a locked U1.
+pub(super) fn open_hierarchy(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
     let dir = h::new_dir(fx, "hierarchy")?;
     let source = std::fs::read_to_string(fx.sample.with_extension("snxsch"))
         .map_err(|e| format!("read sample: {e}"))?;
-    for (file, lock) in [("power.snxsch", false), ("mcu.snxsch", true)] {
+    for (_, file, lock) in HIERARCHY {
         let mut sheet = SnxSchematic::parse(&source)
             .map_err(|e| format!("parse sample: {e:?}"))?
             .sheet;
@@ -547,19 +584,15 @@ fn open_hierarchy(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Res
         write_sheet(&dir.join(file), sheet)?;
     }
     let top = dir.join("top.snxsch");
-    write_sheet(
-        &top,
-        root_sheet(vec![
-            child_sheet("Power", "power.snxsch", 50.8),
-            child_sheet("MCU", "mcu.snxsch", 127.0),
-        ]),
-    )?;
-    let prj = h::write_project(
-        &dir,
-        "dcdc-buck",
-        &["top.snxsch", "power.snxsch", "mcu.snxsch"],
-        None,
-    )?;
+    let children = HIERARCHY
+        .iter()
+        .enumerate()
+        .map(|(i, (name, file, _))| child_sheet(name, file, 12.7 + i as f64 * 55.88))
+        .collect();
+    write_sheet(&top, root_sheet(children))?;
+    let mut sheets = vec!["top.snxsch"];
+    sheets.extend(HIERARCHY.iter().map(|(_, file, _)| *file));
+    let prj = h::write_project(&dir, "dcdc-buck", &sheets, None)?;
     h::open(app, &prj)?;
     h::open(app, &top)?;
     h::show_sheet(app, r);
@@ -593,23 +626,28 @@ fn open_erc_waive(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Res
         world_y: 101.6,
     }));
     let _ = app.update(Message::Edit(EditMsg::RotateSelectedClockwise));
-    let (key, message, sheet) = app
+    // The bottom dock is too short: the form under the row lands below it.
+    super::states_more::dock_right(app, PanelKind::Erc)?;
+    let (index, key, message, sheet) = app
         .document_state
         .panel_ctx
         .erc_diagnostics
         .iter()
         .find_map(|e| {
             let key = e.waiver_key.clone()?;
-            Some((key, e.message.clone(), e.sheet_path.clone()))
+            Some((e.global_index, key, e.message.clone(), e.sheet_path.clone()))
         })
         .ok_or("no finding can be waived")?;
-    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::ErcWaiver(
-        ErcWaiverMsg::Started {
+    for panel in [
+        PanelMsg::ErcView(ErcPanelMsg::RowEntered(index)),
+        PanelMsg::ErcWaiver(ErcWaiverMsg::Started {
             key,
             message,
             sheet,
-        },
-    ))));
+        }),
+    ] {
+        let _ = app.update(Message::Dock(DockMessage::Panel(panel)));
+    }
     let _ = render::draw_main(r, app);
     reached(
         app.ui_state.erc_waive_draft.is_some(),
@@ -633,6 +671,17 @@ pub(super) fn open_drc_findings(
     track.start.y = 0.1;
     track.end.y = 0.1;
     track.net = 2;
+    // Three shorter VCC tracks beside the GND track, each its own finding.
+    for (i, (from, to)) in [(0.0, 3.0), (3.5, 6.5), (7.0, 10.0)]
+        .into_iter()
+        .enumerate()
+    {
+        let mut near = track.clone();
+        near.uuid = Uuid::from_u128(0xD10 + i as u128);
+        near.start = signex_types::pcb::Point::new(from, 0.4);
+        near.end = signex_types::pcb::Point::new(to, 0.4);
+        board.segments.push(near);
+    }
     board.segments.push(track);
     let path = fx.pcb.with_file_name("drc-findings.snxpcb");
     let text = SnxPcb::new(board)

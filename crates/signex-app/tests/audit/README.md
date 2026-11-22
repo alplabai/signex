@@ -37,7 +37,9 @@ needs a software Vulkan driver (lavapipe) or the run skips.
 A further state of a row is an entry in `surfaces/states.rs` with the id
 `<row>-<state>`, written as `<row>-<state>-<theme>.png`. Run them all with
 `AUDIT_ONLY=states`. Its `open` fails when the state was not reached.
-`surfaces/states_drawn.rs` holds more of them (`AUDIT_ONLY=states_drawn`).
+`surfaces/states_drawn.rs` and `surfaces/states_more.rs` hold more of them
+(`AUDIT_ONLY=states_drawn,states_more`). `canvas_pick::pick_in` selects an
+object with real canvas clicks, so Properties follows.
 A message whose type the crate does not export is reached with
 `view_click::click_view`, which clicks the widget that sends it.
 

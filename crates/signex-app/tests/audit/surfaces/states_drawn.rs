@@ -207,12 +207,8 @@ fn board_rows() -> Vec<Surface> {
     ]
 }
 
-/// The palette searching a net the sample carries as VBUS.
-pub(super) fn open_palette_vbus(
-    app: &mut Signex,
-    r: &mut iced::Renderer,
-    fx: &Fixture,
-) -> Result<(), String> {
+/// The sample's +5V net renamed VBUS, the net the mockup rows name.
+pub(super) fn rename_to_vbus(fx: &Fixture) -> Result<(), String> {
     super::states::edit_sample_file(fx, |sheet| {
         for label in sheet.labels.iter_mut().filter(|l| l.text == "+5V") {
             label.text = "VBUS".to_string();
@@ -220,7 +216,16 @@ pub(super) fn open_palette_vbus(
         for part in sheet.symbols.iter_mut().filter(|s| s.value == "+5V") {
             part.value = "VBUS".to_string();
         }
-    })?;
+    })
+}
+
+/// The palette searching a net the sample carries as VBUS.
+pub(super) fn open_palette_vbus(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    rename_to_vbus(fx)?;
     fixture::open_sample(app, r, fx);
     super::helpers_d::sample_project(app, fx);
     let _ = app.update(Message::CommandPalette(CommandPaletteMsg::Open));

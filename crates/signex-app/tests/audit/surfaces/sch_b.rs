@@ -10,8 +10,8 @@ use crate::surface::{Check, Surface, WindowSel};
 use signex_app::active_bar::{ActiveBarMenu, ActiveBarMsg};
 use signex_app::app::{
     ContextMenuMsg, ContextSubmenu, EditMsg, InputMsg, Message, MoveSelectionMsg, NetColorMsg,
-    OverlayMsg, ParameterManagerMsg, PasteIntent, PasteRequest, SelectionFilterMsg, Signex,
-    TextEditMsg, TextEditTarget, Tool, UiMsg,
+    OverlayMsg, PasteIntent, PasteRequest, SelectionFilterMsg, Signex, TextEditMsg, TextEditTarget,
+    Tool, UiMsg,
 };
 use signex_app::dock::DockMessage;
 use signex_app::find_replace::{FindReplaceMsg, FindScope};
@@ -258,12 +258,10 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m70",
             title: "Parameter Manager",
-            // The table on the sample sheet; the filter-no-match and
+            // Fourteen parts, four columns, three cells changed. The focus
+            // of a cell in edit is widget state; the filter-no-match and
             // no-schematic states are not driven.
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                drive(app, Message::ParameterManager(ParameterManagerMsg::Open))
-            },
+            open: super::states::open_parameter_edits,
             window: WindowSel::Auto,
             checks: PARAMETER_MANAGER,
         },

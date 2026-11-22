@@ -6,14 +6,13 @@
 
 use super::checks;
 use super::helpers_f::{self as h, REPEATED_SHEET};
+use super::states_more;
 use crate::fixture;
 use crate::render::{self, Crop};
 use crate::surface::{Check, Surface, WindowSel};
-use signex_app::active_bar::ActiveBarAction;
-use signex_app::app::unions::{UnionPopoverMsg, UnionsMsg};
 use signex_app::app::{
     BoardSketchMsg, CompareBoardMsg, CompiledDesignMsg, EditMsg, FileMsg, Message, PasteIntent,
-    PasteRequest, PcbMsg, PdfOptionMsg, PrintPreviewMsg, Signex, StatusBarRequest, Tool, UiMsg,
+    PasteRequest, PcbMsg, PdfOptionMsg, PrintPreviewMsg, Signex, StatusBarRequest, UiMsg,
 };
 use signex_app::library::editor::footprint::parameters_table::SketchParametersMsg;
 use signex_app::library::editor::footprint::{EditorMode, SketchTool};
@@ -22,8 +21,7 @@ use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::PanelKind;
 use signex_app::panels::compiled_design::CompiledStatus;
 use signex_app::status_bar::BoardCounter;
-use signex_app::toolbar::ToolMessage;
-use signex_types::schematic::{SchDrawing, SchematicSheet, SelectedKind};
+use signex_types::schematic::{SchDrawing, SchematicSheet};
 
 pub fn rows() -> Vec<Surface> {
     let mut rows = sch_rows();
@@ -64,26 +62,10 @@ fn sch_rows() -> Vec<Surface> {
         Surface {
             id: "m152",
             title: "Signal harnesses",
-            // A harness connector with one entry, selected: Properties shows
-            // the harness. The definitions view is
+            // A harness connector with one entry, picked with a click:
+            // Properties shows the harness. The definitions view is
             // HarnessPanelMsg::DefinitionsOpened.
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                h::arm(app, ActiveBarAction::PlaceHarnessConnector);
-                h::click(app, 170.18, 50.8);
-                h::click(app, 180.34, 50.8);
-                h::arm(app, ActiveBarAction::PlaceHarnessEntry);
-                h::click(app, 170.68, 51.8);
-                select_tool(app);
-                let id = sheet(app)?
-                    .harness
-                    .connectors
-                    .first()
-                    .map(|c| c.uuid)
-                    .ok_or("the connector tool placed nothing")?;
-                h::select_one(app, id, SelectedKind::HarnessConnector);
-                Ok(())
-            },
+            open: states_more::open_harness_selected,
             window: WindowSel::Auto,
             checks: HARNESS,
         },
@@ -91,27 +73,10 @@ fn sch_rows() -> Vec<Surface> {
             id: "m153",
             title: "Net directives",
             // A net blanket round the circuit, a differential pair mark and
-            // net parameters on the +5V wire; the blanket selected. The
-            // modal (Design > Differential Pair Classes) is
+            // Net Parameters on VBUS, picked with a click. The modal
+            // (Design > Differential Pair Classes) is
             // `open_diff_pair_classes`.
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                h::arm(app, ActiveBarAction::PlaceBlanket);
-                h::click(app, 38.1, 88.9);
-                h::click(app, 147.32, 127.0);
-                h::arm(app, ActiveBarAction::PlaceDiffPair);
-                h::click(app, 129.54, 99.06);
-                h::arm(app, ActiveBarAction::PlaceParameterSet);
-                h::click(app, 71.12, 99.06);
-                select_tool(app);
-                let id = sheet(app)?
-                    .directives
-                    .first()
-                    .map(|d| d.uuid())
-                    .ok_or("the blanket tool placed nothing")?;
-                h::select_one(app, id, SelectedKind::Directive);
-                Ok(())
-            },
+            open: states_more::open_net_parameters_selected,
             window: WindowSel::Auto,
             checks: DIRECTIVES,
         },
@@ -158,60 +123,27 @@ fn sch_rows() -> Vec<Surface> {
         Surface {
             id: "m156",
             title: "Schematic tables + table of contents",
-            // A placed table beside the circuit. The contents sheet (Project
-            // > Add Table of Contents Sheet) writes a file, so it is left out.
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                h::arm(app, ActiveBarAction::DrawTable);
-                h::click(app, 162.56, 139.7);
-                select_tool(app);
-                Ok(())
-            },
+            // A filled table beside the circuit, picked with a click. The
+            // contents sheet is `m156-contents`.
+            open: states_more::open_table_selected,
             window: WindowSel::Auto,
             checks: TABLES,
         },
         Surface {
             id: "m157",
             title: "Bezier + dimension annotation",
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                h::arm(app, ActiveBarAction::DrawBezier);
-                for (x, y) in [
-                    (167.64, 63.5),
-                    (172.72, 45.72),
-                    (190.5, 45.72),
-                    (195.58, 63.5),
-                ] {
-                    h::click(app, x, y);
-                }
-                h::arm(app, ActiveBarAction::PlaceLinearDimension);
-                for (x, y) in [(63.5, 132.08), (121.92, 132.08), (93.98, 139.7)] {
-                    h::click(app, x, y);
-                }
-                select_tool(app);
-                Ok(())
-            },
+            // The bezier picked with a click, so its handles show. The
+            // dimension being placed is `m157-placing`.
+            open: states_more::open_bezier_selected,
             window: WindowSel::Auto,
             checks: DRAWINGS,
         },
         Surface {
             id: "m158",
             title: "Named unions",
-            // The Unions panel over a union of C1, U1 and C2. The Create
-            // Union popover is the state before Confirmed.
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                h::select_parts(app, &["C1", "U1", "C2"])?;
-                for msg in [
-                    UnionsMsg::CreateRequested,
-                    UnionsMsg::Popover(UnionPopoverMsg::NameEdited("Regulator".into())),
-                    UnionsMsg::Popover(UnionPopoverMsg::Confirmed),
-                ] {
-                    let _ = app.update(Message::Edit(EditMsg::Unions(msg)));
-                }
-                h::open_panel(app, PanelKind::Unions);
-                Ok(())
-            },
+            // The Unions panel over a tagged union of C1, U1 and C2. The
+            // Create Union popover is `m158-popover`.
+            open: states_more::open_tagged_union,
             window: WindowSel::Auto,
             checks: UNIONS,
         },
@@ -235,10 +167,6 @@ const UNIONS: &[Check] = &[
     ("the union is made", one_union),
     ("the Unions panel is docked", unions_docked),
 ];
-
-fn select_tool(app: &mut Signex) {
-    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
-}
 
 fn sheet(app: &Signex) -> Result<&SchematicSheet, String> {
     Ok(app
@@ -379,12 +307,10 @@ fn release_rows() -> Vec<Surface> {
         Surface {
             id: "m163",
             title: "Rooms from Sheets",
-            // Design > Rooms > Create Rooms from Sheets on the project's
-            // board. The Place > Room tool is `place_board_room`.
-            open: |app, r, fx| {
-                h::open_board_project(app, r, fx, true)?;
-                h::command(app, "create_rooms_from_sheets")
-            },
+            // Design > Rooms > Create Rooms from Sheets on a project whose
+            // root places two sheets. The Place > Room tool is
+            // `place_board_room`.
+            open: states_more::open_create_rooms,
             window: WindowSel::Auto,
             checks: BOARD,
         },
@@ -454,7 +380,7 @@ fn release_rows() -> Vec<Surface> {
                 ] {
                     h::settle(app, Message::from(msg))?;
                 }
-                Ok(())
+                states_more::fold_pdf_sections(app, r)
             },
             window: WindowSel::Auto,
             checks: PDF,

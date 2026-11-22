@@ -15,7 +15,7 @@ use signex_app::app::{
 use signex_app::library::reprefix_lookup::{ReprefixLookup, RowFacts};
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::PanelKind;
-use signex_app::preferences::{PrefMsg, PrefNav, ProfilesMsg};
+use signex_app::preferences::{PrefMsg, PrefNav, ProfilePageMsg, ProfilesMsg};
 use signex_drc_dsl::table::catalog::Domain;
 use signex_types::schematic::{
     ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind,
@@ -247,6 +247,15 @@ pub fn rows() -> Vec<Surface> {
                     app,
                     Message::Preferences(PreferencesMsg::Inner(PrefMsg::Profiles(
                         ProfilesMsg::Selected("Signex Default".into()),
+                    ))),
+                );
+                // The decided one-rule editor, as a click on a rule opens it.
+                settle_support::settle(
+                    app,
+                    Message::Preferences(PreferencesMsg::Inner(PrefMsg::Profiles(
+                        ProfilesMsg::Page(ProfilePageMsg::RuleOpened(
+                            signex_erc::RuleKind::UnusedPin,
+                        )),
                     ))),
                 );
                 Ok(())

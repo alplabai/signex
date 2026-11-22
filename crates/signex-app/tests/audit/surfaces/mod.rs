@@ -6,6 +6,7 @@
 use crate::surface::Surface;
 
 mod annot_valid;
+mod canvas_pick;
 pub mod checks;
 mod global;
 mod helpers_c;
@@ -20,6 +21,7 @@ mod sch_a;
 mod sch_b;
 mod states;
 mod states_drawn;
+mod states_more;
 mod view_click;
 
 /// Every group, by the name `AUDIT_ONLY` accepts, with its rows.
@@ -36,5 +38,6 @@ pub fn groups() -> Vec<(&'static str, Vec<Surface>)> {
         ("new_features", new_features::rows()),
         ("states", states::rows()),
         ("states_drawn", states_drawn::rows()),
+        ("states_more", states_more::rows()),
     ]
 }

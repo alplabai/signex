@@ -98,11 +98,6 @@ pub fn select_parts(app: &mut Signex, refs: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-/// Select one object of the active sheet.
-pub fn select_one(app: &mut Signex, id: Uuid, kind: SelectedKind) {
-    app.interaction_state.active_canvas_mut().selected = vec![SelectedItem::new(id, kind)];
-}
-
 /// One footprint-editor (or board-sketch) event for the document at `path`.
 pub fn fp_edit(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
     let _ = app.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
