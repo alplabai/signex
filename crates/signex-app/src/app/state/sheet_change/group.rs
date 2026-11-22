@@ -47,6 +47,19 @@ impl DocumentState {
         undo: bool,
         undocked: &HashSet<PathBuf>,
     ) -> GroupStep {
+        let woken = self.wake_held_members(group);
+        let step = self.step_awake_undo_group(group, undo, undocked);
+        self.rest_woken(&woken, undocked);
+        step
+    }
+
+    /// [`Self::step_undo_group`] once its held members are back in `engines`.
+    fn step_awake_undo_group(
+        &mut self,
+        group: UndoGroupId,
+        undo: bool,
+        undocked: &HashSet<PathBuf>,
+    ) -> GroupStep {
         let mut step = GroupStep::default();
         let Some(active_path) = self.active_path.clone() else {
             return step;

@@ -253,6 +253,15 @@ impl Signex {
         group: signex_engine::UndoGroupId,
         undo: bool,
     ) -> bool {
+        let woken = self.document_state.wake_held_members(group);
+        let stepped = self.step_awake_board_group(group, undo);
+        let undocked = self.undocked_sheet_paths();
+        self.document_state.rest_woken(&woken, &undocked);
+        stepped
+    }
+
+    /// [`Self::step_board_undo_group`] once its held sheets are in `engines`.
+    fn step_awake_board_group(&mut self, group: signex_engine::UndoGroupId, undo: bool) -> bool {
         let Some(recorded) = self.document_state.undo_groups.get(&group).cloned() else {
             return false;
         };

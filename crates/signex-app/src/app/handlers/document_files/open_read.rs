@@ -157,6 +157,9 @@ impl Signex {
                 if self.focus_alias_if_open(&path, &disk) {
                     return Task::none();
                 }
+                if self.attach_held_engine(&path, &title, disk.hash) {
+                    return Task::none();
+                }
                 self.open_schematic_tab(path.clone(), title, *sheet);
                 self.record_disk_read(&path, disk);
                 // A recovery copy from an earlier run is reconciled with the

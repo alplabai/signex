@@ -363,8 +363,8 @@ impl Signex {
     /// Save As and Reload act on a tab: a conflicted sheet that is parked gets
     /// its tab back, with its unsaved edits (#2760).
     fn show_parked_conflict(&mut self, path: &Path) {
-        let tabbed = self.document_state.tabs.iter().any(|tab| tab.path == path);
-        if !tabbed && self.document_state.engines.contains_key(path) {
+        let shown = self.document_is_held_open(path);
+        if !shown && self.document_state.engines.contains_key(path) {
             let title = path
                 .file_stem()
                 .map_or_else(|| file_label(path), |s| s.to_string_lossy().into_owned());

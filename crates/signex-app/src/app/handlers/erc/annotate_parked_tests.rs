@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 
 use signex_engine::AnnotateMode::ResetAndRenumber;
 
+use signex_types::format::SnxSchematic;
+
 use super::annotate_tests::{
-    child_path, child_refs, logged_since, notice_detail, project, root_refs, unit,
+    child_path, child_refs, logged_since, notice_detail, project, root_refs, sheet_of, unit,
 };
 use crate::annotate_undo::AnnotateUndo;
 use crate::app::path_ops::settle_task;
@@ -186,15 +188,120 @@ fn a_saved_engine_is_released_once_its_undo_group_is_gone() {
     let (mut app, dir, child) = fixture();
     annotate(&mut app);
     save_all(&mut app);
-    let kept = app.document_state.engines.contains_key(&child);
+    let kept = app.document_state.held_for_undo.contains_key(&child);
 
     app.document_state.undo_groups.clear();
     app.sync_undo_depth();
 
-    let released = !app.document_state.engines.contains_key(&child);
+    let released = !app.document_state.held_for_undo.contains_key(&child);
     std::fs::remove_dir_all(&dir).ok();
     assert!(kept, "the group still needs the engine");
-    assert!(released, "a clean tabless engine would shadow the file");
+    assert!(released, "nothing can undo into it any more");
+}
+
+/// What another program puts in the child: one part, R9.
+fn change_child_outside(child: &Path) {
+    let text = SnxSchematic::new(sheet_of(&[], vec![unit("R9", 1, 0.0)]))
+        .write_string()
+        .expect("encode");
+    std::fs::write(child, text).expect("outside change");
+}
+
+#[test]
+fn a_held_engine_is_never_read_as_the_document() {
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    save_all(&mut app);
+    change_child_outside(&child);
+
+    let root = dir.join("a_root.snxsch");
+    let (_, set) =
+        crate::app::project_sheets::assemble_project_sheets_for(&app.document_state, &root);
+    let seen = set.sheets[&child].symbols[0].reference.clone();
+    let in_engines = app.document_state.engines.contains_key(&child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(seen, "R9", "netlist, ERC and export read the newer file");
+    assert!(!in_engines, "the holder is not an open document");
+}
+
+#[test]
+fn a_newer_file_releases_the_held_engine_and_the_undo_names_the_sheet() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    save_all(&mut app);
+    change_child_outside(&child);
+    let poll = app.start_document_disk_poll();
+    settle_task(&mut app, poll);
+    let released = !app.document_state.held_for_undo.contains_key(&child);
+    let since = crate::diagnostics::newest_entry_id();
+
+    undo(&mut app);
+
+    let named = logged_since(since, "closed since");
+    let (root, on_disk) = (root_refs(&app, &dir), child_refs(&dir));
+    let dirty = app.document_state.is_document_dirty(&child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(released);
+    assert!(named, "the undo says it did not reach the sheet");
+    assert_eq!(root, ["R5"]);
+    assert_eq!(on_disk, ["R9"], "the newer file stands");
+    assert!(!dirty);
+}
+
+#[test]
+fn opening_a_saved_sheet_keeps_its_undo() {
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    save_all(&mut app);
+
+    assert!(app.open_or_focus_sheet_path(child.clone()));
+    undo(&mut app);
+
+    let (root, held) = (root_refs(&app, &dir), held_refs(&app, &child));
+    let dirty = app.document_state.is_document_dirty(&child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(
+        (root, held),
+        (vec!["R5".to_string()], vec!["R7".to_string()])
+    );
+    assert!(dirty, "the undone sheet differs from its saved file");
+}
+
+#[test]
+fn opening_a_sheet_changed_on_disk_reads_the_file_and_releases_the_engine() {
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    save_all(&mut app);
+    change_child_outside(&child);
+
+    assert!(app.open_or_focus_sheet_path(child.clone()));
+
+    let held = held_refs(&app, &child);
+    let released = !app.document_state.held_for_undo.contains_key(&child);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(held, ["R9"]);
+    assert!(released);
+}
+
+#[test]
+fn a_save_landing_after_an_undo_leaves_the_sheet_unsaved_through_redo_and_undo() {
+    let (mut app, dir, child) = fixture();
+    annotate(&mut app);
+    let write = app.update(Message::Menu(MenuMessage::SaveAll));
+    undo(&mut app);
+    settle_task(&mut app, write);
+    send(&mut app, Message::Edit(EditMsg::Redo));
+
+    undo(&mut app);
+
+    let dirty = app.document_state.is_document_dirty(&child);
+    let kept = app.document_state.engines.contains_key(&child);
+    let on_disk = child_refs(&dir);
+    std::fs::remove_dir_all(&dir).ok();
+    assert_eq!(on_disk, ["R2"], "the write landed");
+    assert!(kept, "the undone sheet is not dropped as if clean");
+    assert!(dirty, "the file holds the annotated bytes");
 }
 
 // ---- Reset Duplicates is refused whole.

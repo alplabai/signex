@@ -414,6 +414,7 @@ impl Signex {
             .filter(|p| gone(p))
             .count();
         doc.engines.retain(|p, _| !gone(p));
+        doc.held_for_undo.retain(|p, _| !gone(p));
         doc.symbol_editors.retain(|p, _| !gone(p));
         doc.footprint_editors.retain(|p, _| !gone(p));
         doc.discard_documents_where(&gone);

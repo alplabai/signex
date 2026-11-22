@@ -424,6 +424,9 @@ impl Signex {
         crate::diagnostics::log_info(format!("[save] Wrote {}", path.display()));
         // The file on disk now differs from what any earlier read saw.
         self.document_state.note_documents_changed();
+        // Whatever revision this was, the file no longer holds what the run
+        // that parked the sheet read: an undo cannot read clean (#2760).
+        self.document_state.forget_parked_mark(path);
         // No engine backs `path` any more (renamed or closed meanwhile): the
         // bytes landed, but there is nothing to mark clean or to commit
         // under a name that no longer describes the document.
@@ -480,7 +483,6 @@ impl Signex {
     /// project git commit.
     fn finish_clean_save(&mut self, path: &std::path::Path, saved: crate::app::state::CommitBytes) {
         self.document_state.mark_document_clean(path);
-        self.document_state.forget_parked_mark(path);
         // The tab closed mid-save and parked the engine because it was
         // dirty; now it is clean nothing needs it, unless a project-wide undo
         // step still has to restore this sheet (#2760).

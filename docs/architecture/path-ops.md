@@ -163,10 +163,15 @@ because a queued run would number the project as it was when the first started.
 **Parked sheets** (`app/parked_sheets.rs`). Every run that loads a sheet into a
 tabless engine records the hash of the bytes its read parsed as the save
 baseline, so a save and the idle poll show the changed-on-disk card, and runs the
-open-time recovery check before autosave may write for it. After a save the
-engine stays while an undo group has a step in it, so one undo still restores
-every sheet (that sheet is then unsaved again); it is released once the group
-has left its history. A rename carries the sheet's undo groups with it.
+open-time recovery check before autosave may write for it. After a save, while
+an undo group has a step in it, the engine moves from `engines` to
+`held_for_undo`: only an undo holder, never a source of content, so netlist, ERC,
+Update PCB, export and Annotate all read the file. One undo wakes it, so every
+sheet is restored (that sheet is then unsaved again). Opening the sheet attaches
+it when the read matches its baseline. When the file has changed, the idle poll
+or the open releases it and a later undo names the sheet. If an undo lands before
+the poll, the woken sheet is unsaved and its save shows the changed-on-disk card.
+A rename carries the sheet's undo groups with it.
 
 **Failures.** A reset or re-prefix whose sheet fails while numbering rolls every
 sheet back, and the parked engines it loaded are dropped. Incremental logs the
