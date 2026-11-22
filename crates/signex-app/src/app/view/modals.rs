@@ -118,7 +118,8 @@ impl Signex {
             tokens,
             TS.caption,
         )
-        .map(|_| Message::noop());
+        .map(|_| Message::noop())
+        .boxed();
         crate::app::view::dialogs::preview_frame(
             t!(i18n, ids::DIALOG_MOVE_SELECTION_PREVIEW),
             drawing,
