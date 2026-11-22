@@ -1,6 +1,6 @@
 //! Mockup group `output-prefs` (rows m111-m117, m143-m150).
 
-use crate::fixture;
+use crate::fixture::{self, Fixture};
 use crate::settle_support;
 use crate::surface::{Check, Surface, WindowSel};
 use signex_app::annotate_undo::AnnotateUndo;
@@ -103,10 +103,7 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m143",
             title: "Preferences shell + nav",
-            open: |app, _, _| {
-                settle_support::settle(app, Message::Preferences(PreferencesMsg::Open));
-                Ok(())
-            },
+            open: |app, _, fx| open_broken_prefs(app, fx),
             window: WindowSel::Auto,
             checks: PREFERENCES,
         },
@@ -174,6 +171,31 @@ fn prefs_page(app: &mut Signex, nav: PrefNav) -> Result<(), String> {
     settle_support::settle(app, Message::Preferences(PreferencesMsg::Open));
     settle_support::settle(app, Message::Preferences(PreferencesMsg::Nav(nav)));
     Ok(())
+}
+
+/// The shell as mockup row 143 draws it: the broken-file banner, the nav
+/// search in use and an unsaved change on Annotation. The banner carries the
+/// loader's own error for a broken copy, so the user's prefs file is not
+/// touched; it is set after Open, whose probe reads the real file.
+fn open_broken_prefs(app: &mut Signex, fx: &Fixture) -> Result<(), String> {
+    let broken = fx.pcb.with_file_name("broken-prefs.json");
+    std::fs::write(&broken, "{ \"theme\": ").map_err(|e| format!("write prefs copy: {e}"))?;
+    let error = signex_app::fonts::check_prefs_file_at(&broken)
+        .err()
+        .ok_or("the broken prefs copy loaded")?;
+    prefs_page(app, PrefNav::Annotation)?;
+    app.ui_state.prefs_load_error = Some(error.to_string());
+    for msg in [
+        PrefMsg::NavSearchChanged("an".into()),
+        PrefMsg::DraftAnnotateUndo(AnnotateUndo::PerSheet),
+    ] {
+        settle_support::settle(app, inner(msg));
+    }
+    if app.ui_state.preferences_dirty {
+        Ok(())
+    } else {
+        Err("the Annotate undo change left the dialog clean".into())
+    }
 }
 
 fn inner(msg: PrefMsg) -> Message {

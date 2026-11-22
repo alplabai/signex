@@ -6,6 +6,7 @@
 use crate::surface::Surface;
 
 mod annot_valid;
+mod board_counters;
 mod canvas_pick;
 pub mod checks;
 mod global;

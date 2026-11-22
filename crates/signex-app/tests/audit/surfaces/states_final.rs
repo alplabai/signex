@@ -15,6 +15,7 @@ use signex_app::app::{
     Tool, UiMsg,
 };
 use signex_app::dock::DockMessage;
+use signex_app::keymap::ShortcutTrigger;
 use signex_app::library::LibraryMessage;
 use signex_app::library::messages::BrowserEditMsg;
 use signex_app::panels::{PanelKind, PanelMsg, ProjectsMsg};
@@ -311,6 +312,51 @@ fn open_measurement(
     prefix: SiPrefix,
 ) -> Result<(), String> {
     lib::open_edit_row(app, fx)?;
+    add_measurement(app, fx, value, unit, prefix)
+}
+
+/// The Edit row modal with the two measurement slots mockup row 139 draws.
+pub(super) fn open_measurement_pair(app: &mut Signex, fx: &Fixture) -> Result<(), String> {
+    lib::open_edit_row(app, fx)?;
+    let edit = |msg| {
+        Message::Library(LibraryMessage::BrowserEdit {
+            library_path: fx.stock.clone(),
+            msg,
+        })
+    };
+    for (name, value) in [("value", "4.7"), ("tcr", "100")] {
+        for msg in [
+            BrowserEditMsg::AddSlotParam { name: name.into() },
+            BrowserEditMsg::SetParamValue {
+                key: name.into(),
+                value: value.into(),
+            },
+        ] {
+            settle_support::settle(app, edit(msg));
+        }
+    }
+    settle_support::settle(
+        app,
+        edit(BrowserEditMsg::ParamPrefixPicked {
+            key: "value".into(),
+            prefix: SiPrefix::Kilo,
+        }),
+    );
+    let keys = param_keys(app, fx);
+    reached(
+        ["value", "tcr"].iter().all(|k| keys.iter().any(|h| h == k)),
+        "the Resistor template did not add its value and tcr slots",
+    )
+}
+
+/// Add a parameter row holding this measurement to the open modal.
+fn add_measurement(
+    app: &mut Signex,
+    fx: &Fixture,
+    value: &str,
+    unit: &str,
+    prefix: SiPrefix,
+) -> Result<(), String> {
     let edit = |msg| {
         Message::Library(LibraryMessage::BrowserEdit {
             library_path: fx.stock.clone(),
@@ -511,16 +557,15 @@ pub(super) fn open_back_annotate_changes(
     )
 }
 
-/// The recorder open on Smart Paste.
-fn open_recorder(app: &mut Signex, _: &mut iced::Renderer, _: &Fixture) -> Result<(), String> {
-    prefs_page(app, PrefNav::Keyboard);
+/// Open the recorder on the row bound to catalog command `id`.
+fn record_on(app: &mut Signex, id: &str) -> Result<(), String> {
     let row = app
         .ui_state
         .preferences_keymap_editor
         .rows_in(signex_i18n::I18n::en_us_ref())
         .into_iter()
-        .find(|row| row.label.contains("Smart Paste") && row.command.is_some())
-        .ok_or("the Keyboard page lists no Smart Paste row")?;
+        .find(|row| row.command.as_ref().is_some_and(|c| c.as_str() == id))
+        .ok_or_else(|| format!("the Keyboard page lists no {id} row"))?;
     let command = row.command.ok_or("the row has no command")?;
     let _ = app.update(inner(PrefMsg::KeymapRecorderOpen {
         slot: row.slot,
@@ -529,9 +574,48 @@ fn open_recorder(app: &mut Signex, _: &mut iced::Renderer, _: &Fixture) -> Resul
         context: row.context,
         trigger: row.trigger,
     }));
+    Ok(())
+}
+
+/// Press `keys` into the open recorder, as the keyboard subscription does.
+fn press(app: &mut Signex, keys: &str) -> Result<(), String> {
+    let trigger = ShortcutTrigger::parse(keys).map_err(|e| format!("{keys}: {e:?}"))?;
+    let ShortcutTrigger::KeySequence(strokes) = trigger else {
+        return Err(format!("{keys} is not a key sequence"));
+    };
+    let _ = app.update(inner(PrefMsg::KeymapRecorderClear));
+    for stroke in strokes {
+        let _ = app.update(inner(PrefMsg::KeymapRecorderKeyPressed(stroke)));
+    }
+    Ok(())
+}
+
+/// A custom profile where Rubber Stamp takes Smart Paste's stroke, then the
+/// recorder on Smart Paste holding a new stroke. A conflict needs one shared
+/// context, and Place Via is PCB-only while Smart Paste is global. The search
+/// brings the row, and the popover anchored to it, onto the first screen.
+fn open_recorder(app: &mut Signex, _: &mut iced::Renderer, _: &Fixture) -> Result<(), String> {
+    prefs_page(app, PrefNav::Keyboard);
+    let _ = app.update(inner(PrefMsg::KeymapCreateCustomProfile));
+    record_on(app, "rubber_stamp_copy")?;
+    press(app, "Mod+Shift+V")?;
+    let _ = app.update(inner(PrefMsg::KeymapRecorderApply));
     reached(
-        app.ui_state.preferences_keymap_recorder.is_some(),
-        "the recorder did not open",
+        !app.ui_state
+            .preferences_keymap_editor
+            .active_conflicts()
+            .is_empty(),
+        "the shared stroke raised no conflict",
+    )?;
+    let _ = app.update(inner(PrefMsg::KeymapSearchChanged("Smart Paste".into())));
+    record_on(app, "smart_paste")?;
+    press(app, "Ctrl+Alt+V")?;
+    reached(
+        app.ui_state
+            .preferences_keymap_recorder
+            .as_ref()
+            .is_some_and(|recorder| recorder.recording && !recorder.strokes.is_empty()),
+        "the recorder is not recording a stroke",
     )
 }
 

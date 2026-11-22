@@ -5,7 +5,7 @@ use super::helpers_c::drive;
 use super::helpers_d::reached;
 use super::helpers_f as h;
 use super::view_click::click_view;
-use super::{annot_valid, project};
+use super::{annot_valid, board_counters, project};
 use crate::fixture::{self, Fixture};
 use crate::render::{self, Crop};
 use crate::settle_support;
@@ -195,15 +195,17 @@ fn board_rows() -> Vec<Surface> {
         row("m164-grid", "Counter: Grid", |app, r, fx| {
             counter_popover(app, r, fx, BoardCounter::Grid)
         }),
-        row("m164-unrouted", "Counter: Unrouted", |app, r, fx| {
-            counter_popover(app, r, fx, BoardCounter::Unrouted)
-        }),
-        row("m164-drc", "Counter: DRC", |app, r, fx| {
-            counter_popover(app, r, fx, BoardCounter::Drc)
-        }),
-        row("m164-selection", "Counter: Selection", |app, r, fx| {
-            counter_popover(app, r, fx, BoardCounter::Selected)
-        }),
+        row(
+            "m164-unrouted",
+            "Counter: Unrouted",
+            board_counters::open_unrouted,
+        ),
+        row("m164-drc", "Counter: DRC", board_counters::open_drc),
+        row(
+            "m164-selection",
+            "Counter: Selection",
+            board_counters::open_selection,
+        ),
     ]
 }
 
@@ -321,13 +323,18 @@ fn active_bar_menu(
     Ok(())
 }
 
-fn counter_popover(
+pub(super) fn counter_popover(
     app: &mut Signex,
     r: &mut iced::Renderer,
     fx: &Fixture,
     counter: BoardCounter,
 ) -> Result<(), String> {
     fixture::open_board(app, r, fx);
+    show_counter(app, counter)
+}
+
+/// Click `counter` on the status bar of the board in view.
+pub(super) fn show_counter(app: &mut Signex, counter: BoardCounter) -> Result<(), String> {
     let window = app.ui_state.main_window_id;
     let _ = app.update(Message::Ui(UiMsg::StatusBar(
         StatusBarRequest::BoardCounterClicked { window, counter },
