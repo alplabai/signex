@@ -464,12 +464,22 @@ pub struct TitleAction {
 
 /// The title-bar actions of `kind`: Clear of the ERC panel (#85) while it
 /// holds results, Copy and Clear of the Messages panel (#86), Recompile of
-/// Compiled Design (mockup row 154), Refresh of Annotations (row 165) and
-/// Create Union of Unions (row 158).
+/// Compiled Design (mockup row 154), Refresh of Annotations (row 165),
+/// Create Union of Unions (row 158) and the + of Projects (row 19): Add New,
+/// or New Project with no project open.
 pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
-    use signex_i18n::{ids, t};
+    use signex_i18n::{ids, menu_ids, t};
     let tid = ctx.theme_id;
     match kind {
+        PanelKind::Projects => vec![TitleAction {
+            icon: crate::icons::icon_plus(tid),
+            tip: if ctx.project_tree.is_empty() {
+                t!(ctx.i18n, ids::PANELS_PROJECTS_NEW_PROJECT)
+            } else {
+                t!(ctx.i18n, menu_ids::CTX_TREE_ADD_NEW)
+            },
+            on_press: Some(PanelMsg::Projects(ProjectsMsg::AddNewPressed)),
+        }],
         PanelKind::Erc if ctx.erc_ran || !ctx.erc_diagnostics.is_empty() => vec![TitleAction {
             icon: crate::icons::icon_dd_delete(tid),
             tip: t!(ctx.i18n, ids::PANELS_ERC_CLEAR_TOOLTIP),

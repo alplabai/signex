@@ -132,6 +132,24 @@ fn filter_menu_is_a_single_custom_entry() {
     assert!(matches!(entry, DropdownEntry::Custom(_)));
 }
 
+/// Mockup row 61: the Selection Filter is a compact card with All / None,
+/// every chip and Save current inside it, in both themes.
+#[test]
+fn the_filter_menu_is_a_compact_card_holding_its_controls() {
+    let width = dropdown_min_width(ActiveBarMenu::Filter).expect("a pinned width");
+    for tid in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+        let tokens = signex_types::theme::theme_tokens(tid);
+        let filters = std::collections::HashSet::new();
+        let entry = filter_entry(signex_i18n::I18n::en_us_ref(), &tokens, &filters, &[]);
+        let card = signex_widgets::active_bar_dropdown::view(vec![entry], &tokens, Some(width));
+        let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1440.0, 900.0));
+        for label in ["All", "None", "Sheet Symbols", "Other", "Save current"] {
+            let bounds = crate::layout_probe::find(&texts, label).bounds;
+            assert!(bounds.x + bounds.width <= width, "{label}: {bounds:?}");
+        }
+    }
+}
+
 /// Graphite mockup #61: the Power menu groups its ports under three subheads, labels each
 /// with the short name and keeps the full "Place … power port" text as the
 /// row's tooltip; every port glyph is drawn in the power colour.

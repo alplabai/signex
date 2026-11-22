@@ -344,6 +344,7 @@ impl Signex {
                             Err(_) => Task::none(),
                         }
                     }
+                    ProjectsMsg::AddNewPressed => self.open_project_add_new_menu(),
                     ProjectsMsg::NewProjectPressed => {
                         self.update(Message::Menu(MenuMessage::NewProject))
                     }

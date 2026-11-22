@@ -8,8 +8,7 @@ use super::super::items::dd_planned_pill;
 use crate::icons as ic;
 use signex_types::theme::ThemeId;
 
-/// The Planned flyout rows. Variants... stays here until the Variant Manager
-/// tab exists.
+/// The Planned flyout rows.
 pub(in crate::app::view::context_menu) fn planned_entries(
     i18n: &I18n,
     tid: ThemeId,
@@ -19,7 +18,6 @@ pub(in crate::app::view::context_menu) fn planned_entries(
             ic::icon_menu_cloud(tid),
             menu_ids::CTX_TREE_MAKE_AVAILABLE_ONLINE,
         ),
-        (ic::icon_menu_layers(tid), menu_ids::CTX_TREE_VARIANTS),
         (ic::icon_menu_package(tid), menu_ids::CTX_TREE_PACKAGER),
         (ic::icon_menu_export(tid), menu_ids::CTX_TREE_RELEASER),
         (ic::icon_menu_share(tid), menu_ids::CTX_TREE_SHARE),

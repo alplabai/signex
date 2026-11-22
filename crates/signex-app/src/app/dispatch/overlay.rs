@@ -416,6 +416,7 @@ impl Signex {
                         x,
                         y,
                         key,
+                        add_new_only: false,
                         window: self.interaction_state.acting_window,
                     });
                 Task::none()

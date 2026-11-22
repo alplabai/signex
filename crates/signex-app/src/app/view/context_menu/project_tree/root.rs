@@ -1,7 +1,7 @@
 //! The project root's rows (mockup row 20), grouped by intent: add (Add New ›, Add
 //! Existing...), check and sync (Validate, Update PCB Document), file (Save,
-//! Rename..., Explore), settings (Project Options..., Enable Version
-//! Control...), close, then the Planned › launcher.
+//! Rename..., Explore), settings (Project Options..., Variant Manager, Enable
+//! Version Control...), close, then the Planned › launcher.
 
 use super::*;
 
@@ -92,6 +92,12 @@ impl Signex {
             "open_project_options",
             &self.keymap_shortcut_label("open_project_options"),
             key.first().cloned(),
+        ));
+        v.push(dd_msg(
+            Some(ic::icon_menu_layers(tid)),
+            &text(i18n, menu_ids::CTX_TREE_VARIANTS),
+            "",
+            act(A::OpenVariantManager(key.clone())),
         ));
         // Enable Version Control: only while the project dir has no `.git/`.
         if project_dir.is_some_and(|dir| self.offers_enable_version_control(dir)) {
