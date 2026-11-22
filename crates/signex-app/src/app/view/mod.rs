@@ -434,6 +434,7 @@ impl Signex {
             iced::widget::mouse_area(hint)
                 .on_press(Message::Window(WindowMsg::LockedWindowClicked)),
         )
+        .capture_scroll(true)
         .boxed()
     }
 

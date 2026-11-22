@@ -79,7 +79,7 @@ pub(super) fn overlay<'a>(
         .push(
             row![
                 Space::new().width(Length::Fill),
-                opaque(card),
+                opaque(card).capture_scroll(true),
                 Space::new().width(SP.m),
             ]
             .boxed(),
