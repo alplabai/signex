@@ -411,6 +411,27 @@ fn a_gone_part_chip_goes_nowhere() {
     assert!(app.interaction_state.active_canvas().selected.is_empty());
 }
 
+/// Mockup row 165: Refresh is in the panel's title bar.
+#[test]
+fn the_title_bar_refresh_reads_the_notebook_files_again() {
+    let (tmp, mut app, _b) = opened();
+    assert_eq!(view(&app).total, 5);
+    let press =
+        signex_app::panels::title_actions(PanelKind::Annotations, &app.document_state.panel_ctx)
+            .into_iter()
+            .next()
+            .expect("a listed panel has Refresh")
+            .on_press
+            .expect("Refresh is enabled");
+    fs::write(
+        tmp.path().join("notebook/late.snxnbk"),
+        "#annotation(kind: \"note\", title: \"Late\")[Added after the scan.]\n",
+    )
+    .expect("write the new notebook");
+    settle(&mut app, Message::Dock(DockMessage::Panel(press)));
+    assert_eq!(view(&app).total, 6);
+}
+
 #[test]
 fn a_project_without_notebook_files_shows_the_empty_state() {
     let tmp = TempDir::new().expect("tempdir");

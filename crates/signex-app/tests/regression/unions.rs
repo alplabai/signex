@@ -34,6 +34,34 @@ fn panel(app: &mut Signex, msg: UnionsMsg) {
     let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::Unions(msg))));
 }
 
+/// Mockup row 158: Create Union is the panel's title-bar +, off with nothing
+/// selected.
+#[test]
+fn the_title_bar_plus_opens_the_create_popover_for_the_selection() {
+    let mut app = app_with_sheet(populated_sheet());
+    let _ = app.update(Message::Menu(
+        signex_app::menu_bar::MenuMessage::OpenUnionsPanel,
+    ));
+    panel(&mut app, UnionsMsg::FilterEdited(String::new()));
+    let plus = |app: &Signex| {
+        signex_app::panels::title_actions(
+            signex_app::panels::PanelKind::Unions,
+            &app.document_state.panel_ctx,
+        )
+        .into_iter()
+        .next()
+        .expect("the panel has a + in its title bar")
+        .on_press
+    };
+    assert!(plus(&app).is_none(), "nothing is selected");
+
+    select(&mut app, &[("R1", 1), ("R2", 1)], false);
+    panel(&mut app, UnionsMsg::FilterEdited(String::new()));
+    let press = plus(&app).expect("a selection can be grouped");
+    let _ = app.update(Message::Dock(DockMessage::Panel(press)));
+    assert!(app.ui_state.unions.popover.is_some());
+}
+
 /// R1 and R2 grouped as "Input filter" through the popover.
 fn app_with_union() -> Signex {
     let mut app = app_with_sheet(populated_sheet());

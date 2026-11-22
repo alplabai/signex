@@ -14,7 +14,7 @@ use iced::{Alignment, Background, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::chips::{ChipMetrics, ChipStyle, chip};
-use signex_widgets::{SegmentedStyle, button, segmented, text, text_input};
+use signex_widgets::{SegmentedStyle, segmented, text, text_input};
 
 use super::{PanelContext, PanelMsg, empty_state_card};
 use crate::app::unions::{UnionScope, UnionsMsg};
@@ -47,7 +47,6 @@ pub(crate) fn segmented_style(tokens: &ThemeTokens) -> SegmentedStyle {
 }
 
 const SEARCH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M9 9l3.5 3.5" stroke="currentColor" stroke-width="1.3"/></svg>"#;
-const PLUS: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.4"/></svg>"#;
 
 fn handle(cell: &'static OnceLock<svg::Handle>, bytes: &'static [u8]) -> svg::Handle {
     cell.get_or_init(|| svg::Handle::from_memory(bytes)).clone()
@@ -108,10 +107,10 @@ pub(super) fn rule<'a>(tokens: &ThemeTokens) -> Element<'a, PanelMsg> {
         .boxed()
 }
 
-/// Filter field and Create from selection, the scope switch, the tag chips.
+/// Filter field, the scope switch, the tag chips. Create Union is in the
+/// dock title bar (`title_actions`).
 fn head(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     static SEARCH_ICON: OnceLock<svg::Handle> = OnceLock::new();
-    static PLUS_ICON: OnceLock<svg::Handle> = OnceLock::new();
     let v = &ctx.unions;
     let tokens = &ctx.tokens;
     let r = resolve(tokens);
@@ -124,19 +123,6 @@ fn head(ctx: &PanelContext) -> Element<'_, PanelMsg> {
     ]
     .spacing(SP.s)
     .align_y(Alignment::Center);
-    let create = signex_widgets::tooltip(
-        button(icon(handle(&PLUS_ICON, PLUS), ti(tokens.text_secondary)))
-            .padding(SP.xs)
-            .style(crate::styles::ghost_button(tokens))
-            .on_press_maybe(v.can_create.then_some(um(UnionsMsg::CreateRequested))),
-        container(text(t!(ctx.i18n, ids::UNIONS_PANEL_CREATE)).size(TS.caption))
-            .padding([SP.xs, SP.s])
-            .style(crate::styles::context_menu(tokens)),
-        iced::widget::tooltip::Position::Bottom,
-    );
-    let top = row![filter, create]
-        .spacing(SP.s)
-        .align_y(Alignment::Center);
     let scope = segmented(
         [
             (
@@ -171,7 +157,7 @@ fn head(ctx: &PanelContext) -> Element<'_, PanelMsg> {
             Some(um(UnionsMsg::TagChipToggled(tag.clone()))),
         ));
     }
-    column![top, scope, tags.wrap().vertical_spacing(SP.xs)]
+    column![filter, scope, tags.wrap().vertical_spacing(SP.xs)]
         .spacing(SP.s)
         .boxed()
 }

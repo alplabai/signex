@@ -1,5 +1,5 @@
-//! The tools block above the list: the search field with Refresh, the kind
-//! chips with their counts, and the Part, Status and Date filter fields.
+//! The tools block above the list: the search field, the kind chips with
+//! their counts, and the Part, Status and Date filter fields.
 
 use iced::widget::{Column, Row, container, pick_list, row, svg};
 use iced::{Alignment, Background, Border, Color, Element, Length, Padding, Theme, Widget as _};
@@ -24,7 +24,6 @@ const GLYPH: f32 = TS.body;
 
 const SEARCH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.2 10.2l3.3 3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>"#;
 const CLEAR: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>"#;
-const REFRESH: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M13 8a5 5 0 11-1.5-3.6M13 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>"#;
 
 /// The block: search, chips, filters; 8 / 8 / 4 padding, a soft rule under.
 pub(super) fn tools<'a>(ctx: &'a PanelContext, view: &'a AnnotationsView) -> Element<'a, PanelMsg> {
@@ -58,7 +57,7 @@ pub(super) fn glyph<'a>(bytes: &'static [u8], size: f32, ink: Color) -> Element<
         .boxed()
 }
 
-/// The search field, and Refresh (the mock-up's More ▸ Refresh) beside it.
+/// The search field; Refresh is in the dock title bar (`title_actions`).
 fn search<'a>(ctx: &'a PanelContext, view: &'a AnnotationsView) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let r = resolve(tokens);
@@ -68,7 +67,7 @@ fn search<'a>(ctx: &'a PanelContext, view: &'a AnnotationsView) -> Element<'a, P
         .padding([0.0, PAD_TIGHT])
         .style(bare_input(tokens))
         .width(Length::Fill);
-    let field = container(
+    container(
         row![glyph(SEARCH, GLYPH, r.ink4), input]
             .align_y(Alignment::Center)
             .padding(Padding {
@@ -78,23 +77,8 @@ fn search<'a>(ctx: &'a PanelContext, view: &'a AnnotationsView) -> Element<'a, P
     )
     .width(Length::Fill)
     .center_y(METRICS.field)
-    .style(crate::styles::field(tokens, false));
-    let refresh = button(glyph(REFRESH, GLYPH, r.ink3))
-        .width(METRICS.field)
-        .height(METRICS.field)
-        .padding(0)
-        .on_press(msg(AnnotationsMsg::RefreshRequested))
-        .style(crate::styles::menu_item(tokens));
-    let refresh = crate::panels::graphite::hint_tooltip(
-        container(refresh).center(METRICS.field).boxed(),
-        t!(ctx.i18n, ids::ANNOTATIONS_REFRESH),
-        tokens,
-        iced::widget::tooltip::Position::Bottom,
-    );
-    row![field, refresh]
-        .spacing(PAD_TIGHT)
-        .align_y(Alignment::Center)
-        .boxed()
+    .style(crate::styles::field(tokens, false))
+    .boxed()
 }
 
 /// A search field without its own frame: the field container draws it.
