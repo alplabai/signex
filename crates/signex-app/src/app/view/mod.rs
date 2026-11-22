@@ -306,7 +306,10 @@ impl Signex {
                 .style(crate::styles::chrome_separator(&document.panel_ctx.tokens))
                 .boxed(),
         );
-        if !document.tabs.is_empty() && !visible_paths.is_empty() {
+        // A Layer Stack tab stays on the main strip while its board is
+        // undocked, so it can be the strip's only tab.
+        let shows_page = is_main_window && document.tabs.iter().any(|t| t.kind.is_layer_stack());
+        if !document.tabs.is_empty() && (!visible_paths.is_empty() || shows_page) {
             // Resolve "really dragging" — Some only after the
             // cursor has travelled past a 6 px threshold from
             // the press origin. Without this, every click-to-
@@ -331,6 +334,7 @@ impl Signex {
                     document.active_tab,
                     dragging,
                     &visible_paths,
+                    is_main_window,
                     &self.tab_strip_marks(window_id, &dirty_paths, &read_only_paths),
                     &document.panel_ctx.tokens,
                 )
@@ -445,6 +449,9 @@ impl Signex {
         }
         if let Some(project_id) = self.rules_tab_in_window(is_main) {
             return self.view_rules_tab(project_id);
+        }
+        if self.layer_stack_tab_in_window(is_main) {
+            return self.view_layer_stack_tab();
         }
 
         // Component Preview, symbol / footprint editor and Library Browser

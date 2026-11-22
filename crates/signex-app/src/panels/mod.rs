@@ -551,7 +551,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         // The log keeps its header and footer in place and scrolls its rows.
         PanelKind::CommandLog => return command_log::view(ctx),
         PanelKind::Drc => drc_results::view(ctx),
-        PanelKind::LayerStack => layer_stack::view(ctx),
+        // Opens as a document tab (`show_panel`); never docked.
+        PanelKind::LayerStack => iced::widget::Space::new().boxed(),
         // One Layers panel follows the active tab (#2359): a footprint's
         // layers on a footprint tab, else the board's (or its empty state).
         PanelKind::Layers if ctx.footprint_editor.is_some() => {

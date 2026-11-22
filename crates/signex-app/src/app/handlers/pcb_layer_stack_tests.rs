@@ -100,8 +100,10 @@ fn two_inner_layers_join_the_layer_tabs_and_the_total() {
     let command = AppCommandId::new("board_layer_stack").unwrap();
     let _ = app.update(Message::Menu(MenuMessage::Command(command)));
     assert!(
-        app.is_panel_open(PanelKind::LayerStack),
-        "the command opens it"
+        app.document_state.tabs[app.document_state.active_tab]
+            .kind
+            .is_layer_stack(),
+        "the command opens its tab"
     );
 
     let shown = facts(&app);

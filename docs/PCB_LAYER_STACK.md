@@ -30,16 +30,30 @@ and a copper layer left out while items or a board-sketch keepout are on
 it. Its inverse, `RestoreLayerStack`, puts back the stack, layer list,
 thickness, copper names and dropped sizes exactly.
 
-The manager (Design ▸ Layer Stack Manager..., `board_layer_stack`) is a
-table, one row per layer: Name, Type (a copper row switches between Signal
-and Plane), Material, Thickness, Er (dielectric and mask rows) and Weight
-(copper rows), with the total thickness and copper count above it. Add
-Signal, Add Plane and Add Dielectric insert below the selected row, kept
-between the outer copper rows; a new copper layer brings a dielectric with
-it. Remove takes the selected row, and a dielectric next to a copper one.
-Move Up and Move Down swap the row with its neighbour. Each is one step
-through `signex_engine::pcb::stack_edit`. An impedance column waits for a
-trace-width choice.
+The manager (Design ▸ Layer Stack Manager..., `board_layer_stack`) is a page
+tab of the board (mockup row 105; docs/PROJECT_TAB.md, "Page tabs"), opened by
+every Layer Stack entry point and never docked. The tab has the board's path,
+so it shows the board's dirty dot, and Save and Undo act on the board. It
+always sits after the board's tab, because path lookups take the first tab;
+closing it leaves the board alone, and closing the board closes it.
+
+Its Stack sub-tab is a table, one row per layer: Name, Type (a copper row
+switches between Signal and Plane), Material, Thickness, Er (dielectric and
+mask rows) and Weight (copper rows). Beside it are a to-scale cross-section
+with the drill spans and an oblique preview of the board slab; a row with no
+thickness is drawn as a mark. The toolbar's Add inserts a signal, plane or
+dielectric below the selected row, kept between the outer copper rows; a new
+copper layer brings a dielectric with it. Remove takes the selected row, and
+a dielectric next to a copper one. Move Up and Move Down swap the row with its
+neighbour. Each is one step through `signex_engine::pcb::stack_edit`. The
+mm / µm / mil switch is view state: the board stays in mm. Symmetric stack
+reads whether the stack mirrors; Presets, Import and Export are greyed with
+their reason. An impedance column waits for a trace-width choice.
+
+The Via Types / Drill Pairs sub-tab lists what the board's vias make
+(`signex_engine::pcb::drill_pairs`, `via_types`): each pair's span, depth
+through the stack, smallest drill, aspect ratio and via count, and each type's
+drill, finished hole, pad, protection and use count. Neither table is stored.
 
 ## Per-layer sizes {#sizes}
 

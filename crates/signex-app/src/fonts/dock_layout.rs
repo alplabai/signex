@@ -67,6 +67,8 @@ pub(crate) fn region_from_json(region: &serde_json::Value) -> crate::dock::Regio
         .map(|arr| {
             arr.iter()
                 .filter_map(|val| val.as_str().and_then(parse_panel_kind))
+                // Layer Stack is a document tab now, never docked.
+                .filter(|kind| *kind != crate::panels::PanelKind::LayerStack)
                 .collect()
         })
         .unwrap_or_default();
@@ -476,6 +478,24 @@ mod tests {
         assert_eq!(
             dock.panel_kinds(PanelPosition::Bottom),
             [PanelKind::Messages, PanelKind::CommandLog]
+        );
+    }
+
+    /// Mockup row 105: Layer Stack is a document tab, so a layout saved while
+    /// it was a dock panel loads without it.
+    #[test]
+    fn a_saved_layout_drops_the_layer_stack_panel() {
+        let json = serde_json::json!({
+            "dock": {
+                "left": { "panels": ["projects"], "collapsed": false },
+                "right": { "panels": ["properties", "layer_stack"], "collapsed": false },
+                "bottom": { "panels": ["messages"], "collapsed": false },
+            }
+        });
+        let dock = read_dock_layout_from(Some(&json)).expect("the layout loads");
+        assert_eq!(
+            dock.panel_kinds(PanelPosition::Right),
+            [PanelKind::Properties]
         );
     }
 

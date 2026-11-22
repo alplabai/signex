@@ -30,6 +30,12 @@ impl Signex {
             self.pick_library_panel_kind(alias_kind);
             return self.show_panel(PanelKind::Library);
         }
+        // Layer Stack is a document tab (DECISIONS 2026-11-18, mockup row
+        // 105): its panel-list row and command open the tab.
+        if kind == PanelKind::LayerStack {
+            self.open_layer_stack_tab();
+            return Task::none();
+        }
         // On a board, Net Classes is a mode of the PCB panel (mockup row 106).
         if kind == PanelKind::NetClasses && self.has_active_pcb() {
             self.document_state.panel_ctx.pcb_panel.mode = crate::panels::PcbPanelMode::NetClasses;

@@ -151,6 +151,17 @@ impl LayerStack {
         self.layers.iter().filter(|l| l.kind.is_copper())
     }
 
+    /// Whether the stack mirrors about its centre line (mockup row 105):
+    /// dielectric material and thickness, and copper weight. Names and the
+    /// Signal / Plane type are not compared.
+    pub fn is_symmetric(&self) -> bool {
+        let rows = &self.layers;
+        rows.iter()
+            .zip(rows.iter().rev())
+            .take(rows.len() / 2)
+            .all(|(a, b)| rows_mirror(a, b))
+    }
+
     /// The stack a board without a stored one shows: overlay, paste and mask
     /// on each face, its copper layers (planes as the layer list marks
     /// them) with FR-4 between them, sized so the total is the board's
@@ -194,6 +205,17 @@ impl LayerStack {
         ]);
         Self { layers: rows }
     }
+}
+
+/// Whether two rows mirrored about the centre line match.
+fn rows_mirror(a: &StackLayer, b: &StackLayer) -> bool {
+    const SAME_MM: f64 = 1e-6;
+    if a.kind.is_copper() && b.kind.is_copper() {
+        return (a.copper_weight_oz - b.copper_weight_oz).abs() < SAME_MM;
+    }
+    a.kind == b.kind
+        && a.material == b.material
+        && (a.thickness_mm - b.thickness_mm).abs() < SAME_MM
 }
 
 /// The copper layers `layers` lists, top to bottom, and whether each is a
