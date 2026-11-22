@@ -9,10 +9,14 @@ use signex_types::schematic::{SchematicSheet, SelectedItem, SelectedKind, Symbol
 
 use super::replay::{ContinuesAs, ReplayScope, replay_scope};
 use crate::app::command::CommandArgs;
-use crate::app::{Signex, TabInfo, TabKind};
+use crate::app::{
+    FootprintDocument, FootprintSwapMsg, Message, PcbMsg, Signex, TabInfo, TabKind, UiMsg,
+};
+use crate::dock::DockMessage;
 use crate::keymap::AppCommandId;
 use crate::library::editor::symbol::SymbolSelection;
-use crate::library::messages::{PrimitiveEdit, SymbolEditorMsg};
+use crate::library::messages::{FootprintEditorMsg, PrimitiveEdit, SymbolEditorMsg};
+use crate::panels::PanelMsg;
 use crate::panels::command_log::{CommandLogMsg, LogOutcome, LogRow, LogSource};
 
 fn part(reference: &str, id: u128) -> Symbol {
@@ -223,6 +227,15 @@ fn each_command_family_has_its_replay_scope() {
     );
     assert_eq!(replay_scope("duplicate"), ReplayScope::OnTargets);
     assert_eq!(replay_scope("delete_selection"), ReplayScope::OnTargets);
+    for creates in [
+        "stitch_vias",
+        "add_teardrops",
+        "keepout_from_selection",
+        "board_shape_from_selection",
+        "swap_pins",
+    ] {
+        assert_eq!(replay_scope(creates), ReplayScope::OnTargets, "{creates}");
+    }
     assert_eq!(replay_scope("select_connection"), ReplayScope::SelectsFrom);
     assert_eq!(replay_scope("select_all"), ReplayScope::SetsSelection);
     assert_eq!(replay_scope("place_wire"), ReplayScope::NoTarget);
@@ -577,6 +590,245 @@ fn a_targeted_row_with_no_recorded_targets_is_refused() {
     replay(&mut app, seq);
     assert!(has(&app, &path, 2), "the current selection is not taken");
     assert!(failure(&newest(&app)).contains("recorded no targets"));
+}
+
+/// A footprint tab in view with two pads.
+fn app_with_footprint() -> (Signex, PathBuf) {
+    let (mut app, _boot) = Signex::new();
+    let path = PathBuf::from("replay.snxfpt");
+    let file = signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("F"));
+    app.document_state
+        .footprint_editors
+        .insert(path.clone(), FootprintDocument::new(path.clone(), file));
+    app.document_state.tabs.push(TabInfo {
+        title: "F".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::FootprintEditor(path.clone()),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.sync_active_tab();
+    for x_mm in [0.0, 5.08] {
+        footprint_edit(
+            &mut app,
+            &path,
+            FootprintEditorMsg::AddPad { x_mm, y_mm: 0.0 },
+        );
+    }
+    assert_eq!(pads(&app, &path).len(), 2, "two pads");
+    (app, path)
+}
+
+fn footprint_edit(app: &mut Signex, path: &Path, msg: FootprintEditorMsg) {
+    let _ = app.handle_primitive_editor_event(path.to_path_buf(), PrimitiveEdit::Footprint(msg));
+}
+
+fn pads(app: &Signex, path: &Path) -> Vec<(String, (f64, f64))> {
+    app.document_state.footprint_editors[path]
+        .state
+        .pads
+        .iter()
+        .map(|pad| (pad.number.clone(), pad.position_mm))
+        .collect()
+}
+
+fn pick_pad(app: &mut Signex, path: &Path, index: usize) {
+    let editor = app
+        .document_state
+        .footprint_editors
+        .get_mut(path)
+        .expect("the editor");
+    editor.state.selected_pad = Some(index);
+    editor.state.selected_pads_extra.clear();
+}
+
+#[test]
+fn a_footprint_delete_replays_on_its_pad_not_the_one_selected() {
+    let (mut app, path) = app_with_footprint();
+    let before = pads(&app, &path);
+    pick_pad(&mut app, &path, 0);
+    footprint_edit(&mut app, &path, FootprintEditorMsg::DeleteSelected);
+    let seq = newest(&app).seq;
+    assert_eq!(pads(&app, &path), before[1..]);
+    run(&mut app, "undo");
+    assert_eq!(pads(&app, &path), before);
+    pick_pad(&mut app, &path, 1);
+
+    replay(&mut app, seq);
+
+    assert_eq!(
+        pads(&app, &path),
+        before[1..],
+        "the recorded pad went, not the selected one"
+    );
+}
+
+#[test]
+fn a_pad_drag_is_one_row_and_replays_its_offset() {
+    let (mut app, path) = app_with_footprint();
+    let start = pads(&app, &path);
+    pick_pad(&mut app, &path, 0);
+    let (x, y) = start[0].1;
+    let tick = |x_mm, y_mm| FootprintEditorMsg::MovePad { idx: 0, x_mm, y_mm };
+    footprint_edit(&mut app, &path, tick(x + 1.27, y));
+    let row = newest(&app);
+    assert_eq!(row.command, "move_selection");
+    footprint_edit(&mut app, &path, tick(x + 2.54, y));
+    assert_eq!(newest(&app).seq, row.seq, "one drag, one row");
+    pick_pad(&mut app, &path, 1);
+
+    replay(&mut app, row.seq);
+
+    let now = pads(&app, &path);
+    assert!((now[0].1.0 - (x + 5.08)).abs() < 1e-6, "{now:?}");
+    assert_eq!(now[1], start[1], "the pad selected now stayed");
+    let editor = &app.document_state.footprint_editors[&path];
+    assert_eq!(
+        editor.state.selected_pad,
+        Some(1),
+        "the selection came back"
+    );
+}
+
+#[test]
+fn a_symbol_properties_edit_replays_its_value() {
+    let (mut app, path) = app_with_symbol();
+    app.document_state.tabs.push(TabInfo {
+        title: "S".into(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::SymbolEditor(path.clone()),
+    });
+    app.document_state.active_tab = app.document_state.tabs.len() - 1;
+    app.sync_active_tab();
+    pick_pin(&mut app, &path, 0);
+    let length = |app: &Signex| app.document_state.symbol_editors[&path].primitive().pins[0].length;
+    let before = length(&app);
+    let wanted = before + 2.54;
+    let _ = app.update(Message::Dock(DockMessage::Panel(
+        PanelMsg::SymEditorSetPinLength {
+            pin_idx: 0,
+            value: wanted,
+        },
+    )));
+    let row = newest(&app);
+    assert_eq!(row.command, "edit_object_properties");
+    symbol_edit(&mut app, &path, SymbolEditorMsg::Undo);
+    assert_eq!(length(&app), before);
+    pick_pin(&mut app, &path, 1);
+
+    replay(&mut app, row.seq);
+
+    assert_eq!(length(&app), wanted);
+}
+
+#[test]
+fn a_cancelled_dialog_leaves_no_row_waiting_for_a_later_edit() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1, 2]);
+    run(&mut app, "create_union");
+    let started = newest(&app).seq;
+    assert!(app.ui_state.unions.popover.is_some(), "the dialog opened");
+    app.ui_state.unions.popover = None;
+    let _ = app.update(Message::Ui(UiMsg::Noop));
+
+    let created = app.apply_engine_command(
+        Command::CreateUnion {
+            union: signex_types::schematic::SchUnion {
+                uuid: uuid::Uuid::from_u128(88),
+                name: "Later".to_string(),
+                tags: Vec::new(),
+                members: vec![uuid::Uuid::from_u128(1), uuid::Uuid::from_u128(2)],
+                locked: false,
+            },
+        },
+        true,
+        true,
+    );
+    assert!(created);
+    assert_ne!(newest(&app).seq, started, "the later edit has its own row");
+    let unions = app.document_state.engines[&path].document().unions.len();
+
+    replay(&mut app, started);
+
+    assert!(failure(&newest(&app)).contains("never finished"));
+    assert_eq!(
+        app.document_state.engines[&path].document().unions.len(),
+        unions
+    );
+}
+
+#[test]
+fn a_duplicate_is_refused_while_a_project_sheet_is_not_open() {
+    let (mut app, path) = app_with_parts();
+    app.ui_state.paste_designators = crate::paste_prefs::PasteDesignators::NextFree;
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    let child: signex_types::schematic::ChildSheet = serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(40), "name": "Child", "filename": "closed-child.snxsch",
+        "position": {"x": 50.0, "y": 50.0}, "size": [20.0, 20.0]
+    }))
+    .expect("a sheet symbol");
+    let mut sheet = app.document_state.engines[&path].document().clone();
+    sheet.child_sheets.push(child);
+    let engine =
+        signex_engine::Engine::new_with_path(sheet, Some(path.clone())).expect("an engine");
+    app.document_state.engines.insert(path.clone(), engine);
+    let parts = app.document_state.engines[&path].document().symbols.len();
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("is not open"));
+    assert_eq!(
+        app.document_state.engines[&path].document().symbols.len(),
+        parts
+    );
+}
+
+#[test]
+fn a_footprint_swap_replays_from_its_recorded_footprint() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.path().to_string_lossy(),
+        &[],
+    );
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), board_with_two_parts());
+    let target = uuid::Uuid::from_u128(1);
+    let mut template = app
+        .document_state
+        .pcb_board(&path)
+        .expect("the board")
+        .footprints[1]
+        .clone();
+    template.footprint_id = "New:Part".to_string();
+    let _ = app.update(Message::Pcb(PcbMsg::FootprintSwap(
+        FootprintSwapMsg::Resolved {
+            board: path.clone(),
+            footprints: vec![target],
+            result: Ok(Box::new(template)),
+        },
+    )));
+    let row = newest(&app);
+    assert_eq!(row.command, "change_footprint");
+    let id_of = |app: &Signex| {
+        app.document_state
+            .pcb_board(&path)
+            .expect("the board")
+            .footprints[0]
+            .footprint_id
+            .clone()
+    };
+    assert_eq!(id_of(&app), "New:Part");
+    assert!(app.step_board_history(&path, true), "undone");
+    assert_ne!(id_of(&app), "New:Part");
+
+    replay(&mut app, row.seq);
+
+    assert_eq!(id_of(&app), "New:Part");
 }
 
 /// `cycle_selection_mode` has no target and needs no document: it runs again.

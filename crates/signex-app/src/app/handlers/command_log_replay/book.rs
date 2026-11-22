@@ -10,13 +10,14 @@ use pcb_geom::ItemRef;
 use serde_json::Value;
 use signex_engine::Command;
 use signex_engine::pcb::BoardCommand;
-use signex_types::pcb::Point;
+use signex_types::pcb::{Footprint, Point};
 use signex_types::schematic::SelectedItem;
 use uuid::Uuid;
 
 use super::editors::EditorTargets;
 use super::scope::ContinuesAs;
-use crate::library::messages::PrimitiveEdit;
+use crate::library::messages::{FootprintEditorMsg, PrimitiveEdit, SymbolEditorMsg};
+use crate::panels::PanelMsg;
 
 /// Longest text of a recorded input in a row's arguments.
 const SUMMARY_CHARS: usize = 600;
@@ -40,14 +41,40 @@ pub(super) enum ReplayInput {
         delta: Point,
         leaves_tracks: bool,
     },
+    /// A reuse block placed around an anchor; a replay makes new objects.
+    ReuseBlock {
+        name: String,
+        anchor: Uuid,
+        degrees: f64,
+    },
+    /// Footprints given a library footprint. A replay runs the swap again,
+    /// with its linked sheets, as one undo step per document.
+    FootprintSwap {
+        footprints: Vec<Uuid>,
+        template: Box<Footprint>,
+    },
     /// Messages to an editor document, on its recorded selection.
     Editor {
         path: PathBuf,
         targets: EditorTargets,
         messages: Vec<PrimitiveEdit>,
     },
-    /// The operation made new objects from values only its dialog or tool
-    /// held; its commands name ids that now exist.
+    /// A footprint editor pad dragged from `start` to `to`.
+    PadDrag {
+        path: PathBuf,
+        targets: EditorTargets,
+        idx: usize,
+        start: (f64, f64),
+        to: (f64, f64),
+    },
+    /// A Properties panel edit of an editor document.
+    EditorPanel {
+        path: PathBuf,
+        targets: EditorTargets,
+        message: Box<PanelMsg>,
+    },
+    /// The operation made new objects from values only its tool held, and
+    /// has no recorded form that can mint new ids.
     MadeNewObjects,
 }
 
@@ -65,10 +92,38 @@ impl ReplayInput {
                 delta.x,
                 delta.y
             ),
+            Self::ReuseBlock {
+                name,
+                anchor,
+                degrees,
+            } => format!("block {name} on {anchor} at {degrees}"),
+            Self::FootprintSwap {
+                footprints,
+                template,
+            } => format!(
+                "{} footprints to {}",
+                footprints.len(),
+                template.footprint_id
+            ),
             Self::Editor { messages, .. } => format!("{messages:?}"),
+            Self::PadDrag { idx, start, to, .. } => {
+                format!("pad {idx} by ({}, {})", to.0 - start.0, to.1 - start.1)
+            }
+            Self::EditorPanel { message, .. } => format!("{message:?}"),
             Self::MadeNewObjects => "new objects".to_string(),
         };
         Value::String(text.chars().take(SUMMARY_CHARS).collect())
+    }
+
+    /// The catalog command a row of this input is named after, when the
+    /// input says it.
+    pub(super) fn row_command(&self) -> Option<&'static str> {
+        match self {
+            Self::BoardMove { .. } => Some("move_selection"),
+            Self::ReuseBlock { .. } => Some("place_board_reuse_block"),
+            Self::FootprintSwap { .. } => Some("change_footprint"),
+            _ => None,
+        }
     }
 
     /// `self` and `next`, run in one dispatch, as one input.
@@ -143,6 +198,117 @@ impl ReplayInput {
                     ..
                 },
             ) => a == b && same_pin_field(am, bm),
+            (
+                Self::EditorPanel {
+                    path: a,
+                    targets: at,
+                    message: am,
+                },
+                Self::EditorPanel {
+                    path: b,
+                    targets: bt,
+                    message: bm,
+                },
+            ) => {
+                a == b
+                    && at == bt
+                    && std::mem::discriminant(am.as_ref()) == std::mem::discriminant(bm.as_ref())
+            }
+            _ => false,
+        }
+    }
+
+    /// `next`, the next tick of the drag `self` recorded, as one input from
+    /// the drag's start. `None` when it is not the same drag.
+    pub(super) fn drag_continued_by(&self, next: &Self) -> Option<Self> {
+        use FootprintEditorMsg as M;
+        match (self, next) {
+            (
+                Self::PadDrag {
+                    path,
+                    targets,
+                    idx,
+                    start,
+                    ..
+                },
+                Self::PadDrag {
+                    path: next_path,
+                    idx: next_idx,
+                    to,
+                    ..
+                },
+            ) if path == next_path && idx == next_idx => Some(Self::PadDrag {
+                path: path.clone(),
+                targets: targets.clone(),
+                idx: *idx,
+                start: *start,
+                to: *to,
+            }),
+            (
+                Self::Editor {
+                    path,
+                    targets,
+                    messages,
+                },
+                Self::Editor {
+                    path: next_path,
+                    messages: next_messages,
+                    ..
+                },
+            ) if path == next_path => {
+                let total = match (messages.as_slice(), next_messages.as_slice()) {
+                    (
+                        [PrimitiveEdit::Footprint(M::SketchMovePoint { id, dx, dy })],
+                        [
+                            PrimitiveEdit::Footprint(M::SketchMovePoint {
+                                id: next,
+                                dx: more_x,
+                                dy: more_y,
+                            }),
+                        ],
+                    ) if id == next => M::SketchMovePoint {
+                        id: *id,
+                        dx: dx + more_x,
+                        dy: dy + more_y,
+                    },
+                    (
+                        [PrimitiveEdit::Footprint(M::SketchMoveLine { id, dx, dy })],
+                        [
+                            PrimitiveEdit::Footprint(M::SketchMoveLine {
+                                id: next,
+                                dx: more_x,
+                                dy: more_y,
+                            }),
+                        ],
+                    ) if id == next => M::SketchMoveLine {
+                        id: *id,
+                        dx: dx + more_x,
+                        dy: dy + more_y,
+                    },
+                    _ => return None,
+                };
+                Some(Self::Editor {
+                    path: path.clone(),
+                    targets: targets.clone(),
+                    messages: vec![PrimitiveEdit::Footprint(total)],
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether this is one tick of a drag, which may add no undo step of its
+    /// own after the first.
+    pub(super) fn is_drag_tick(&self) -> bool {
+        use FootprintEditorMsg as M;
+        match self {
+            Self::PadDrag { .. } => true,
+            Self::Editor { messages, .. } => matches!(
+                messages.as_slice(),
+                [PrimitiveEdit::Footprint(
+                    M::SketchMovePoint { .. } | M::SketchMoveLine { .. }
+                )]
+            ),
             _ => false,
         }
     }
@@ -150,7 +316,7 @@ impl ReplayInput {
 
 /// Whether both are one edit of the same pin's number, or of its name.
 fn same_pin_field(a: &[PrimitiveEdit], b: &[PrimitiveEdit]) -> bool {
-    use crate::library::messages::SymbolEditorMsg as M;
+    use SymbolEditorMsg as M;
     match (a, b) {
         (
             [PrimitiveEdit::Symbol(M::SetPinNumber { idx: x, .. })],
@@ -168,6 +334,7 @@ fn same_pin_field(a: &[PrimitiveEdit], b: &[PrimitiveEdit]) -> bool {
 #[derive(Debug, Clone)]
 pub(super) struct PendingTool {
     pub(super) seq: u64,
+    pub(super) command: String,
     pub(super) takes: ContinuesAs,
     pub(super) document: Option<PathBuf>,
 }
@@ -181,14 +348,20 @@ pub(crate) struct ReplayBook {
     pub(super) pending: Option<PendingTool>,
     /// A Replay is running: what it does is not recorded again.
     pub(super) replaying: bool,
-    /// The offset of the board drop about to run.
-    pub(super) board_move: Option<ReplayInput>,
+    /// What the board edit about to run is, when its commands do not say.
+    pub(super) board_input: Option<ReplayInput>,
     /// The next board edit is a Properties panel edit.
     pub(super) board_properties: bool,
     /// The last point of a symbol editor drag.
     pub(super) symbol_drag: Option<(PathBuf, f64, f64)>,
-    /// The newest row made by a panel edit, and when.
+    /// The newest row made by a panel edit or drag, and when.
     pub(super) last_gesture: Option<(u64, Instant)>,
+    /// A Properties panel edit is running: it is the one recorded.
+    pub(super) panel_edit_running: bool,
+    /// Change Footprint is between its picker and its read.
+    pub(super) swap_in_transit: bool,
+    /// How deep `Signex::update` is nested.
+    update_depth: u32,
 }
 
 impl ReplayBook {
@@ -217,7 +390,7 @@ impl ReplayBook {
 
     /// The board edit these marks were for did not land.
     pub(crate) fn forget_board_marks(&mut self) {
-        self.board_move = None;
+        self.board_input = None;
         self.board_properties = false;
     }
 
@@ -233,10 +406,44 @@ impl ReplayBook {
         delta: Point,
         leaves_tracks: bool,
     ) {
-        self.board_move = Some(ReplayInput::BoardMove {
+        self.board_input = Some(ReplayInput::BoardMove {
             footprints,
             delta,
             leaves_tracks,
         });
+    }
+
+    /// The board edit about to run places the reuse block `name`.
+    pub(crate) fn note_reuse_block(&mut self, name: &str, anchor: Uuid, degrees: f64) {
+        self.board_input = Some(ReplayInput::ReuseBlock {
+            name: name.trim().to_string(),
+            anchor,
+            degrees,
+        });
+    }
+
+    /// The swap about to run gives `footprints` the footprint `template`.
+    pub(crate) fn note_footprint_swap(&mut self, footprints: Vec<Uuid>, template: Box<Footprint>) {
+        self.swap_in_transit = false;
+        self.board_input = Some(ReplayInput::FootprintSwap {
+            footprints,
+            template,
+        });
+    }
+
+    /// Change Footprint's picker is about to open, or its pick is being read.
+    pub(crate) fn note_swap_in_transit(&mut self, in_transit: bool) {
+        self.swap_in_transit = in_transit;
+    }
+
+    /// `Signex::update` starts; whether it is the outermost.
+    pub(crate) fn enter_update(&mut self) {
+        self.update_depth += 1;
+    }
+
+    /// `Signex::update` ends; whether it was the outermost.
+    pub(crate) fn leave_update(&mut self) -> bool {
+        self.update_depth = self.update_depth.saturating_sub(1);
+        self.update_depth == 0
     }
 }

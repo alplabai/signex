@@ -1,19 +1,23 @@
 //! Replay's entry, and the commands whose real handler runs again on the
 //! recorded selection targets.
 
-use std::path::Path;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use iced::Task;
 use pcb_geom::ItemRef;
 use serde_json::Map;
 use signex_i18n::{RenderTranslatable, Translatable, ids};
+use signex_types::designator::seed_counters;
 
 use super::book::ReplayInput;
-use super::scope::{ReplayScope, replay_scope};
+use super::scope::{ReplayScope, acts_on_all_when_empty, replay_scope};
 use super::selection::{Shown, TabKey, board_selection};
 use crate::app::command::{CommandArgs, CommandOutcome};
 use crate::app::core::command_log::{RECORDED_TARGETS, RecordedTargets};
 use crate::app::handlers::clipboard_workflows::{CopyOutcome, DEFAULT_PASTE_OFFSET_MM};
+use crate::app::project_sheets::{plan_project_sheets_for, resolve_child_reference_quiet};
+use crate::app::state::PasteCounters;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
 use crate::panels::command_log::{LogRow, LogSource};
@@ -45,7 +49,8 @@ impl Signex {
         };
         if let Some(board) = board {
             let items: Vec<ItemRef> = board.selection().items().collect();
-            return (!items.is_empty()).then_some(RecordedTargets::Board(items));
+            let keeps = !items.is_empty() || acts_on_all_when_empty(command.as_str());
+            return keeps.then_some(RecordedTargets::Board(items));
         }
         let (canvas, engine) = match undocked {
             Some(id) => (
@@ -135,6 +140,13 @@ impl Signex {
         // (a part in hand turns), and a tab switch would end it.
         if !matches!(shown, Shown::Window(_)) && self.tool_in_progress() {
             self.refuse_replay(row, tool_active(document));
+            return Task::none();
+        }
+        if command.as_str() == "duplicate"
+            && matches!(targets, RecordedTargets::Sheet(_))
+            && !self.read_duplicate_numbers(document)
+        {
+            self.refuse_replay(row, numbers_unread(document));
             return Task::none();
         }
         self.ui_state.command_replay.replaying = true;
@@ -273,6 +285,57 @@ impl Signex {
             .1
     }
 
+    /// Make the project's designators ready for a Duplicate on `document`.
+    /// Project-wide numbering is read from the open sheets only, as a replay
+    /// cannot wait for a disk read: `false` when one of them is not open.
+    fn read_duplicate_numbers(&mut self, document: &Path) -> bool {
+        let mode = self
+            .interaction_state
+            .paste_designators_override
+            .unwrap_or(self.ui_state.paste_designators);
+        if !mode.reads_project() {
+            return true;
+        }
+        let Some(references) = self.open_project_references(document) else {
+            return false;
+        };
+        self.interaction_state.paste_counters = Some(PasteCounters {
+            target: document.to_path_buf(),
+            counters: seed_counters(references.iter().map(String::as_str)),
+            used: references.iter().map(|r| r.trim().to_owned()).collect(),
+        });
+        true
+    }
+
+    /// Every numbered designator of `document`'s project, walking its pages
+    /// and child sheets. `None` when one of those sheets is not open.
+    fn open_project_references(&self, document: &Path) -> Option<Vec<String>> {
+        let plan = plan_project_sheets_for(&self.document_state, document);
+        let mut queue: Vec<PathBuf> = plan.pages().to_vec();
+        queue.push(plan.root().to_path_buf());
+        queue.push(document.to_path_buf());
+        let mut seen = HashSet::new();
+        let mut references = Vec::new();
+        while let Some(path) = queue.pop() {
+            if !seen.insert(path.clone()) {
+                continue;
+            }
+            let sheet = self.document_state.engines.get(&path)?.document();
+            references.extend(
+                sheet
+                    .symbols
+                    .iter()
+                    .filter(|s| !s.is_power && !s.reference.starts_with('#'))
+                    .map(|s| s.reference.clone()),
+            );
+            let folder = path.parent()?;
+            for child in &sheet.child_sheets {
+                queue.push(resolve_child_reference_quiet(folder, &child.filename).ok()?);
+            }
+        }
+        Some(references)
+    }
+
     /// Duplicate the selection beside itself; the person's clipboards stay.
     fn duplicate_keeping_clipboard(&mut self) -> bool {
         let state = &self.interaction_state;
@@ -345,6 +408,11 @@ pub(super) fn tool_active(document: &Path) -> Translatable {
 
 pub(super) fn document_busy(document: &Path) -> Translatable {
     Translatable::new(ids::COMMAND_LOG_REPLAY_DOCUMENT_BUSY)
+        .arg("document", document_name(document))
+}
+
+fn numbers_unread(document: &Path) -> Translatable {
+    Translatable::new(ids::COMMAND_LOG_REPLAY_NUMBERS_UNREAD)
         .arg("document", document_name(document))
 }
 

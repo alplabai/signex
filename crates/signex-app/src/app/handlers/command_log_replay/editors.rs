@@ -3,6 +3,7 @@
 //! index that now holds another number counts as gone.
 
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use iced::Task;
 use signex_sketch::id::SketchEntityId;
@@ -11,19 +12,28 @@ use super::book::ReplayInput;
 use super::run::no_change;
 use super::scope::EditFamily;
 use crate::app::command::CommandOutcome;
-use crate::app::{Message, Signex};
+use crate::app::{FootprintDocument, Message, Signex, SymbolDocument};
 use crate::library::editor::footprint::EditorPad;
 use crate::library::editor::symbol::SymbolSelection;
 use crate::library::messages::{FootprintEditorMsg, PrimitiveEdit, SymbolEditorMsg};
 
+/// Drag ticks this close together are one drag and one row.
+const DRAG_RUN: Duration = Duration::from_secs(2);
+
 /// An editor document's selection as recorded.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum EditorTargets {
     Footprint {
         footprint: usize,
         primary: Option<usize>,
         extra: Vec<usize>,
         pads: Vec<(usize, String)>,
+        /// The silk item selected, and how many there were: its index means
+        /// the same item only while the count holds.
+        silk: Option<(usize, usize)>,
+        sketch: Option<SketchEntityId>,
+        sketch_secondary: Option<SketchEntityId>,
+        sketch_extra: Vec<SketchEntityId>,
     },
     Symbol {
         symbol: usize,
@@ -36,14 +46,13 @@ pub(crate) enum EditorTargets {
 /// An editor message about to run that may finish an edit.
 pub(crate) struct EditorEditProbe {
     history: (u64, usize),
-    targets: EditorTargets,
-    messages: Vec<PrimitiveEdit>,
+    input: ReplayInput,
     family: EditFamily,
     row: &'static str,
 }
 
 /// The editor selection set aside while Replay runs.
-enum HeldEditor {
+pub(super) enum HeldEditor {
     Footprint {
         primary: Option<usize>,
         extra: Vec<(usize, String)>,
@@ -62,16 +71,127 @@ enum HeldEditor {
 
 /// What a footprint message records: the row it is named after, its family
 /// and whether it acts on the selection.
-fn footprint_edit(msg: &FootprintEditorMsg) -> Option<(&'static str, EditFamily)> {
+fn footprint_edit(msg: &FootprintEditorMsg) -> Option<(&'static str, EditFamily, bool)> {
     use FootprintEditorMsg as M;
     Some(match msg {
-        M::DeleteSelected => ("delete_selection", EditFamily::Other),
-        M::ActiveBarRotateSelection => ("rotate_selection", EditFamily::Other),
-        M::ActiveBarFlipSelection => ("flip_selection", EditFamily::Other),
+        M::DeleteSelected | M::DeleteSilkF => ("delete_selection", EditFamily::Other, true),
+        M::ActiveBarRotateSelection => ("rotate_selection", EditFamily::Other, true),
+        M::ActiveBarFlipSelection => ("flip_selection", EditFamily::Other, true),
         M::ActiveBarNudgeSelection | M::ActiveBarAlignSelectionToGrid | M::MoveByConfirm => {
-            ("move_selection", EditFamily::Move)
+            ("move_selection", EditFamily::Move, true)
+        }
+        M::MovePad { .. } | M::SketchMovePoint { .. } | M::SketchMoveLine { .. } => {
+            ("move_selection", EditFamily::Move, false)
+        }
+        M::SketchAddConstraintForSelection(_) | M::SketchMakePadFromProfile => {
+            ("edit_object_properties", EditFamily::Properties, true)
+        }
+        M::SketchSetRole { .. }
+        | M::SketchUnlinkCornerRadius { .. }
+        | M::SketchResizeRoundPad { .. }
+        | M::SketchCloseGapRequested { .. }
+        | M::SketchEditParameter { .. } => {
+            ("edit_object_properties", EditFamily::Properties, false)
         }
         _ => return None,
+    })
+}
+
+/// The selection of the footprint editor `editor`, as recorded.
+pub(super) fn footprint_targets(editor: &FootprintDocument) -> EditorTargets {
+    let state = &editor.state;
+    let pads = state
+        .selected_pad_indices()
+        .into_iter()
+        .map(|i| (i, state.pads[i].number.clone()))
+        .collect();
+    EditorTargets::Footprint {
+        footprint: editor.active_idx,
+        primary: state.selected_pad,
+        extra: state.selected_pads_extra.clone(),
+        pads,
+        silk: state
+            .selected_silk_f
+            .map(|i| (i, editor.primitive().silk_f.len())),
+        sketch: state.selected_sketch,
+        sketch_secondary: state.selected_sketch_secondary,
+        sketch_extra: state.selected_sketch_extra.clone(),
+    }
+}
+
+/// The selection of the symbol editor `editor`, as recorded.
+pub(super) fn symbol_targets(editor: &SymbolDocument) -> EditorTargets {
+    let (pins, graphics) = symbol_selection_items(editor, editor.selected.as_ref());
+    EditorTargets::Symbol {
+        symbol: editor.active_idx,
+        selection: editor.selected.clone(),
+        pins,
+        graphics,
+    }
+}
+
+impl EditorTargets {
+    /// Whether nothing is selected.
+    fn is_empty(&self) -> bool {
+        match self {
+            Self::Footprint {
+                pads,
+                silk,
+                sketch,
+                sketch_secondary,
+                sketch_extra,
+                ..
+            } => {
+                pads.is_empty()
+                    && silk.is_none()
+                    && sketch.is_none()
+                    && sketch_secondary.is_none()
+                    && sketch_extra.is_empty()
+            }
+            Self::Symbol { selection, .. } => selection.is_none(),
+        }
+    }
+}
+
+/// The recorded input of the footprint message `msg`.
+fn footprint_input(
+    path: &Path,
+    editor: &FootprintDocument,
+    mut targets: EditorTargets,
+    msg: &FootprintEditorMsg,
+) -> Option<ReplayInput> {
+    use FootprintEditorMsg as M;
+    let messages = match msg {
+        M::MovePad { idx, x_mm, y_mm } => {
+            let pad = editor.state.pads.get(*idx)?;
+            if let EditorTargets::Footprint { pads, .. } = &mut targets
+                && !pads.iter().any(|(i, _)| i == idx)
+            {
+                pads.push((*idx, pad.number.clone()));
+            }
+            return Some(ReplayInput::PadDrag {
+                path: path.to_path_buf(),
+                targets,
+                idx: *idx,
+                start: pad.position_mm,
+                to: (*x_mm, *y_mm),
+            });
+        }
+        M::MoveByConfirm => {
+            let modal = editor.state.move_by_modal.as_ref()?;
+            vec![
+                M::MoveByOpen,
+                M::MoveBySetX(modal.dx_buf.clone()),
+                M::MoveBySetY(modal.dy_buf.clone()),
+                M::MoveByConfirm,
+            ]
+        }
+        other => vec![other.clone()],
+    };
+    Some(ReplayInput::Editor {
+        path: path.to_path_buf(),
+        targets,
+        messages: messages.into_iter().map(PrimitiveEdit::Footprint).collect(),
     })
 }
 
@@ -99,41 +219,18 @@ impl Signex {
         path: &Path,
         msg: &FootprintEditorMsg,
     ) -> Option<EditorEditProbe> {
-        if !self.records_replay_input() {
+        if !self.records_replay_input() || self.ui_state.command_replay.panel_edit_running {
             return None;
         }
-        let (row, family) = footprint_edit(msg)?;
+        let (row, family, needs_selection) = footprint_edit(msg)?;
         let editor = self.document_state.footprint_editors.get(path)?;
-        let indices = editor.state.selected_pad_indices();
-        // Silk and sketch items have no recorded form: the row keeps none.
-        if indices.is_empty() {
+        let targets = footprint_targets(editor);
+        if needs_selection && targets.is_empty() {
             return None;
         }
-        let pads = indices
-            .iter()
-            .map(|&i| (i, editor.state.pads[i].number.clone()))
-            .collect();
-        let messages = match msg {
-            FootprintEditorMsg::MoveByConfirm => {
-                let modal = editor.state.move_by_modal.as_ref()?;
-                vec![
-                    FootprintEditorMsg::MoveByOpen,
-                    FootprintEditorMsg::MoveBySetX(modal.dx_buf.clone()),
-                    FootprintEditorMsg::MoveBySetY(modal.dy_buf.clone()),
-                    FootprintEditorMsg::MoveByConfirm,
-                ]
-            }
-            other => vec![other.clone()],
-        };
         Some(EditorEditProbe {
             history: (editor.history.position() as u64, editor.history.undo_len()),
-            targets: EditorTargets::Footprint {
-                footprint: editor.active_idx,
-                primary: editor.state.selected_pad,
-                extra: editor.state.selected_pads_extra.clone(),
-                pads,
-            },
-            messages: messages.into_iter().map(PrimitiveEdit::Footprint).collect(),
+            input: footprint_input(path, editor, targets, msg)?,
             family,
             row,
         })
@@ -146,7 +243,7 @@ impl Signex {
         path: &Path,
         msg: &SymbolEditorMsg,
     ) -> Option<EditorEditProbe> {
-        if !self.records_replay_input() {
+        if !self.records_replay_input() || self.ui_state.command_replay.panel_edit_running {
             return None;
         }
         if let SymbolEditorMsg::MoveSelected { x, y } = msg {
@@ -178,47 +275,58 @@ impl Signex {
             }));
         }
         messages.push(PrimitiveEdit::Symbol(msg.clone()));
-        let (pins, graphics) = symbol_selection_items(editor, editor.selected.as_ref());
         Some(EditorEditProbe {
             history: (editor.history_generation, 0),
-            targets: EditorTargets::Symbol {
-                symbol: editor.active_idx,
-                selection: editor.selected.clone(),
-                pins,
-                graphics,
+            input: ReplayInput::Editor {
+                path: path.to_path_buf(),
+                targets: symbol_targets(editor),
+                messages,
             },
-            messages,
             family,
             row,
         })
     }
 
-    /// The message ran: when it made an undo step, record it.
+    /// The message ran: when it made an undo step, record it. A later tick
+    /// of a drag joins the row of its first.
     pub(crate) fn finish_editor_edit(&mut self, path: &Path, probe: Option<EditorEditProbe>) {
         let Some(probe) = probe else {
             return;
         };
-        let now = match &probe.targets {
-            EditorTargets::Footprint { .. } => self
-                .document_state
-                .footprint_editors
-                .get(path)
-                .map(|e| (e.history.position() as u64, e.history.undo_len())),
-            EditorTargets::Symbol { .. } => self
-                .document_state
-                .symbol_editors
-                .get(path)
-                .map(|e| (e.history_generation, 0)),
-        };
+        if probe.input.is_drag_tick() && self.continue_drag_row(path, probe.row, &probe.input) {
+            return;
+        }
+        let now = self.editor_history(path);
         if now.is_none() || now == Some(probe.history) {
             return;
         }
-        let input = ReplayInput::Editor {
-            path: path.to_path_buf(),
-            targets: probe.targets,
-            messages: probe.messages,
+        self.note_finished_edit(
+            path.to_path_buf(),
+            probe.family,
+            Some(probe.row),
+            probe.input,
+        );
+    }
+
+    /// `tick` continues the drag of the newest row: that row takes it.
+    fn continue_drag_row(&mut self, path: &Path, row: &str, tick: &ReplayInput) -> bool {
+        let book = &self.ui_state.command_replay;
+        let Some((seq, at)) = book.last_gesture else {
+            return false;
         };
-        self.note_finished_edit(path.to_path_buf(), probe.family, Some(probe.row), input);
+        let newest = self.ui_state.command_log.log.rows().next_back();
+        let is_newest = newest.is_some_and(|new| {
+            new.seq == seq && new.command == row && new.document.as_deref() == Some(path)
+        });
+        if !is_newest || at.elapsed() >= DRAG_RUN {
+            return false;
+        }
+        let Some(joined) = book.input_of(seq).and_then(|i| i.drag_continued_by(tick)) else {
+            return false;
+        };
+        self.ui_state.command_replay.last_gesture = Some((seq, Instant::now()));
+        self.set_replay_input(seq, joined);
+        true
     }
 
     /// The targets no longer in the editor at `path`; `None` when it is not
@@ -230,23 +338,44 @@ impl Signex {
     ) -> Option<Vec<String>> {
         match targets {
             EditorTargets::Footprint {
-                footprint, pads, ..
+                footprint,
+                pads,
+                silk,
+                sketch,
+                sketch_secondary,
+                sketch_extra,
+                ..
             } => {
                 let editor = self.document_state.footprint_editors.get(path)?;
                 let same = editor.active_idx == *footprint;
-                Some(
-                    pads.iter()
-                        .filter(|(i, number)| {
-                            !same
-                                || editor
-                                    .state
-                                    .pads
-                                    .get(*i)
-                                    .is_none_or(|pad| pad.number != *number)
-                        })
-                        .map(|(_, number)| format!("Pad {number}"))
-                        .collect(),
-                )
+                let mut gone: Vec<String> = pads
+                    .iter()
+                    .filter(|(i, number)| {
+                        !same
+                            || editor
+                                .state
+                                .pads
+                                .get(*i)
+                                .is_none_or(|pad| pad.number != *number)
+                    })
+                    .map(|(_, number)| format!("Pad {number}"))
+                    .collect();
+                let shape = editor.primitive();
+                if let Some((index, count)) = silk
+                    && (!same || shape.silk_f.len() != *count)
+                {
+                    gone.push(format!("Silk {index}"));
+                }
+                let entities = shape.sketch.as_ref().map(|s| s.entities.as_slice());
+                let has = |id: &SketchEntityId| {
+                    same && entities.is_some_and(|all| all.iter().any(|e| e.id == *id))
+                };
+                let ids = sketch.iter().chain(sketch_secondary).chain(sketch_extra);
+                gone.extend(
+                    ids.filter(|id| !has(*id))
+                        .map(|id| format!("Sketch entity {id:?}")),
+                );
+                Some(gone)
             }
             EditorTargets::Symbol {
                 symbol,
@@ -298,7 +427,7 @@ impl Signex {
         (outcome, Task::batch(tasks))
     }
 
-    fn editor_history(&self, path: &Path) -> Option<(u64, usize)> {
+    pub(super) fn editor_history(&self, path: &Path) -> Option<(u64, usize)> {
         let docs = &self.document_state;
         docs.footprint_editors
             .get(path)
@@ -310,9 +439,21 @@ impl Signex {
             })
     }
 
-    fn put_editor_targets(&mut self, path: &Path, targets: &EditorTargets) -> Option<HeldEditor> {
+    pub(super) fn put_editor_targets(
+        &mut self,
+        path: &Path,
+        targets: &EditorTargets,
+    ) -> Option<HeldEditor> {
         match targets {
-            EditorTargets::Footprint { primary, extra, .. } => {
+            EditorTargets::Footprint {
+                primary,
+                extra,
+                silk,
+                sketch,
+                sketch_secondary,
+                sketch_extra,
+                ..
+            } => {
                 let state = &mut self.document_state.footprint_editors.get_mut(path)?.state;
                 let held = HeldEditor::Footprint {
                     primary: state.selected_pad,
@@ -322,13 +463,17 @@ impl Signex {
                         .iter()
                         .filter_map(|&i| Some((i, pad_number(&state.pads, i)?)))
                         .collect(),
-                    silk: state.selected_silk_f.take(),
-                    sketch: state.selected_sketch.take(),
-                    sketch_secondary: state.selected_sketch_secondary.take(),
-                    sketch_extra: std::mem::take(&mut state.selected_sketch_extra),
+                    silk: state.selected_silk_f,
+                    sketch: state.selected_sketch,
+                    sketch_secondary: state.selected_sketch_secondary,
+                    sketch_extra: state.selected_sketch_extra.clone(),
                 };
                 state.selected_pad = *primary;
                 state.selected_pads_extra = extra.clone();
+                state.selected_silk_f = silk.map(|(index, _)| index);
+                state.selected_sketch = *sketch;
+                state.selected_sketch_secondary = *sketch_secondary;
+                state.selected_sketch_extra = sketch_extra.clone();
                 Some(held)
             }
             EditorTargets::Symbol { selection, .. } => {
@@ -347,7 +492,7 @@ impl Signex {
     /// Put the person's selection back. Pads are found again by number, as
     /// a delete shifts indices; a symbol selection is dropped if the replay
     /// changed the number of pins or graphics its indices count in.
-    fn give_back_editor_selection(&mut self, path: &Path, held: HeldEditor) {
+    pub(super) fn give_back_editor_selection(&mut self, path: &Path, held: HeldEditor) {
         match held {
             HeldEditor::Footprint {
                 primary,
@@ -404,7 +549,7 @@ fn find_pad(pads: &[EditorPad], index: usize, number: &str) -> Option<usize> {
 
 /// The pins (with their numbers) and graphics `selection` names.
 fn symbol_selection_items(
-    editor: &crate::app::SymbolDocument,
+    editor: &SymbolDocument,
     selection: Option<&SymbolSelection>,
 ) -> (Vec<(usize, String)>, Vec<usize>) {
     let shape = editor.primitive();

@@ -70,12 +70,17 @@ impl Signex {
                     .arg("command", row.label.clone()),
             );
         }
-        if let ReplayInput::Editor { path, targets, .. } = input {
+        if let ReplayInput::Editor { path, targets, .. }
+        | ReplayInput::PadDrag { path, targets, .. } = input
+        {
             return match self.missing_editor_targets(path, targets) {
                 None => Some(document_closed(path)),
                 Some(missing) if !missing.is_empty() => Some(targets_gone(path, &missing)),
                 Some(_) => None,
             };
+        }
+        if let ReplayInput::EditorPanel { path, targets, .. } = input {
+            return self.editor_panel_refusal(path, targets);
         }
         let Some(document) = row.document.as_deref() else {
             return Some(Translatable::new(ids::COMMAND_LOG_REPLAY_NO_TARGETS));
@@ -126,6 +131,56 @@ impl Signex {
                 },
                 _,
             ) => self.run_editor_input(path, targets, messages),
+            (
+                ReplayInput::PadDrag {
+                    path,
+                    targets,
+                    idx,
+                    start,
+                    to,
+                },
+                _,
+            ) => self.run_pad_drag(path, targets, *idx, (to.0 - start.0, to.1 - start.1)),
+            (
+                ReplayInput::EditorPanel {
+                    path,
+                    targets,
+                    message,
+                },
+                _,
+            ) => self.run_editor_panel(path, targets, message),
+            (
+                ReplayInput::ReuseBlock {
+                    name,
+                    anchor,
+                    degrees,
+                },
+                Some(document),
+            ) => {
+                let placed = self.place_reuse_block(document, name, *anchor, *degrees);
+                let outcome = match placed {
+                    Ok(_) => CommandOutcome::Ran,
+                    Err(why) => CommandOutcome::disabled(why),
+                };
+                (outcome, Task::none())
+            }
+            (
+                ReplayInput::FootprintSwap {
+                    footprints,
+                    template,
+                },
+                Some(document),
+            ) => {
+                let before = self.board_revision(document);
+                self.swap_footprints(document, footprints, Ok(template.clone()));
+                let outcome = if self.board_revision(document) == before {
+                    CommandOutcome::disabled(no_change())
+                } else {
+                    CommandOutcome::Ran
+                };
+                self.repaint_board_selection(document);
+                (outcome, Task::none())
+            }
             _ => (CommandOutcome::disabled(no_change()), Task::none()),
         }
     }
@@ -239,8 +294,18 @@ fn input_targets(input: &ReplayInput) -> RecordedTargets {
                 .map(|id| ItemRef::Footprint(*id))
                 .collect(),
         ),
-        ReplayInput::Editor { .. } | ReplayInput::MadeNewObjects => {
-            RecordedTargets::Sheet(Vec::new())
+        ReplayInput::ReuseBlock { anchor, .. } => {
+            RecordedTargets::Board(vec![ItemRef::Footprint(*anchor)])
         }
+        ReplayInput::FootprintSwap { footprints, .. } => RecordedTargets::Board(
+            footprints
+                .iter()
+                .map(|id| ItemRef::Footprint(*id))
+                .collect(),
+        ),
+        ReplayInput::Editor { .. }
+        | ReplayInput::PadDrag { .. }
+        | ReplayInput::EditorPanel { .. }
+        | ReplayInput::MadeNewObjects => RecordedTargets::Sheet(Vec::new()),
     }
 }

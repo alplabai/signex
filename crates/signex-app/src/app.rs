@@ -187,7 +187,11 @@ impl Signex {
         }
         let before = self.active_tab_path();
         let popover = self.watch_grid_snap_popover();
+        self.ui_state.command_replay.enter_update();
         let mut tasks = vec![self.dispatch_update(message)];
+        if self.ui_state.command_replay.leave_update() {
+            self.expire_replay_pending();
+        }
         // Text typed into a note that is no longer selected (another pick, a
         // tab switch) goes to its own sheet as one edit.
         self.settle_owed_note_drafts();

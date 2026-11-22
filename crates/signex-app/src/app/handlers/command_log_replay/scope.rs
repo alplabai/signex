@@ -47,6 +47,12 @@ impl ContinuesAs {
     }
 }
 
+/// Whether the board command `id` acts on the whole board when nothing is
+/// selected, so an empty selection is its recorded input.
+pub(super) fn acts_on_all_when_empty(id: &str) -> bool {
+    matches!(id, "stitch_vias" | "add_teardrops" | "remove_teardrops")
+}
+
 /// The scope of the command `id`.
 ///
 /// `NothingToRepeat` is for a step of a tool in progress (`remove_last_vertex`,
@@ -80,7 +86,22 @@ pub(in crate::app::handlers) fn replay_scope(id: &str) -> ReplayScope {
         | "create_sheet_from_sheet_symbol"
         | "open_datasheet"
         | "edit_library_symbol"
-        | "edit_selected_symbol_in_symbol_editor" => ReplayScope::OnTargets,
+        | "edit_selected_symbol_in_symbol_editor"
+        // Their handlers run again and mint new ids for what they add.
+        | "stitch_vias"
+        | "add_teardrops"
+        | "remove_teardrops"
+        | "gloss_selected_routes"
+        | "board_shape_from_selection"
+        | "keepout_from_selection"
+        | "repour_selected"
+        | "tune_net_length"
+        | "tune_diff_pair"
+        | "lock_board_items"
+        | "unlock_board_items"
+        // One undo step per document, as the handler groups them.
+        | "swap_pins"
+        | "swap_gates" => ReplayScope::OnTargets,
         "select_connection" | "select_expand_connection" => ReplayScope::SelectsFrom,
         "select_all" | "unselect_all" => ReplayScope::SetsSelection,
         "move_selection" | "move_object" | "move_selection_xy" | "drag_keep_connections" => {
@@ -91,21 +112,8 @@ pub(in crate::app::handlers) fn replay_scope(id: &str) -> ReplayScope {
         }
         "change_footprint"
         | "change_component"
-        | "swap_pins"
-        | "swap_gates"
         | "place_board_reuse_block"
-        | "repour_selected"
-        | "lock_board_items"
-        | "unlock_board_items"
-        | "stitch_vias"
-        | "add_teardrops"
-        | "remove_teardrops"
-        | "gloss_selected_routes"
-        | "board_shape_from_selection"
-        | "keepout_from_selection"
         | "arrange_in_box"
-        | "tune_net_length"
-        | "tune_diff_pair"
         | "sync_sheet_entries"
         | "edit_blanket"
         | "edit_no_erc_rules" => ReplayScope::Continues(ContinuesAs::Other),

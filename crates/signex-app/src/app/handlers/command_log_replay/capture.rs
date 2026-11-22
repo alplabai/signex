@@ -17,6 +17,7 @@ use super::scope::{EditFamily, ReplayScope, replay_scope};
 use crate::app::Signex;
 use crate::app::core::command_log::{RECORDED_INPUT, RecordedTargets};
 use crate::keymap::AppCommandId;
+use crate::library::state::PickerMode;
 use crate::panels::command_log::{LogOutcome, LogSource};
 
 /// Keystrokes of one field this close together are one row.
@@ -247,19 +248,81 @@ impl Signex {
     pub(crate) fn note_board_edit(&mut self, path: &Path, commands: Vec<BoardCommand>) {
         let book = &mut self.ui_state.command_replay;
         let from_panel = std::mem::take(&mut book.board_properties);
-        let dropped = book.board_move.take();
+        let dropped = book.board_input.take();
         let family = board_family(&commands, from_panel);
-        let row = match family {
+        let by_family = match family {
             EditFamily::Move => Some("move_selection"),
             EditFamily::Properties => Some("edit_object_properties"),
             _ => None,
         };
+        let row = dropped
+            .as_ref()
+            .and_then(ReplayInput::row_command)
+            .or(by_family);
         let input = match dropped {
             Some(input) => input,
             None if board_makes_objects(&commands) => ReplayInput::MadeNewObjects,
             None => self.board_input(path, commands),
         };
         self.note_finished_edit(path.to_path_buf(), family, row, input);
+    }
+
+    /// A footprint swap ran: when its board edit was grouped with its sheets
+    /// the gateway did not record it, so its input is recorded here.
+    pub(crate) fn finish_footprint_swap_record(&mut self, board: &Path, before: u64) {
+        let Some(input) = self.ui_state.command_replay.board_input.take() else {
+            return;
+        };
+        if self.records_replay_input() && self.board_revision(board) != before {
+            let row = input.row_command();
+            self.note_finished_edit(board.to_path_buf(), EditFamily::Other, row, input);
+        }
+    }
+
+    /// Drop a waiting row whose dialog or tool closed without an edit. Runs
+    /// after the outermost message, so an Apply that closes its dialog and
+    /// edits in one message has already handed over its input.
+    pub(crate) fn expire_replay_pending(&mut self) {
+        let Some(command) = self
+            .ui_state
+            .command_replay
+            .pending
+            .as_ref()
+            .map(|tool| tool.command.clone())
+        else {
+            return;
+        };
+        if !self.tool_surface_open(&command) {
+            self.ui_state.command_replay.pending = None;
+        }
+    }
+
+    /// Whether the dialog or tool `command` started is still up.
+    fn tool_surface_open(&mut self, command: &str) -> bool {
+        match command {
+            // Their cancels drop the row themselves (`drop_pending_move`):
+            // a floating Move has no state here to read.
+            "move_selection" | "move_object" | "drag_keep_connections" => true,
+            "move_selection_xy" => self.ui_state.move_selection.open,
+            "create_union" => self.ui_state.unions.popover.is_some(),
+            "sync_sheet_entries" => self.ui_state.sheet_sync.is_some(),
+            "arrange_in_box" => self.interaction_state.pcb_arrange_box.is_some(),
+            "change_component" => self.library.picker.as_ref().is_some_and(|picker| {
+                matches!(
+                    picker.mode,
+                    PickerMode::ChangeComponent(_) | PickerMode::ChangePreview(_)
+                )
+            }),
+            "change_footprint" => {
+                let picker_up = self.library.primitive_picker.is_some();
+                let book = &mut self.ui_state.command_replay;
+                if picker_up {
+                    book.swap_in_transit = false;
+                }
+                picker_up || book.swap_in_transit
+            }
+            _ => false,
+        }
     }
 
     fn board_input(&self, path: &Path, commands: Vec<BoardCommand>) -> ReplayInput {
@@ -417,6 +480,7 @@ impl Signex {
                 .and_then(|row| row.document.clone());
             self.ui_state.command_replay.pending = Some(PendingTool {
                 seq,
+                command: command.as_str().to_string(),
                 takes,
                 document,
             });

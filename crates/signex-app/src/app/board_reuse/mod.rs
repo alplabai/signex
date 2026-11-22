@@ -274,8 +274,14 @@ impl Signex {
                 label: &label,
                 expected_revision: revision,
             };
+            // The Command Log keeps the block and anchor: a replay places
+            // it again with new ids.
+            self.ui_state
+                .command_replay
+                .note_reuse_block(name, anchor, degrees);
             self.execute_board_commands(board, placement.commands, Some(step))
                 .map_err(|error| error.to_string())?;
+            self.ui_state.command_replay.forget_board_marks();
         }
         let placed = PlacedBlock {
             name: name.trim().to_string(),

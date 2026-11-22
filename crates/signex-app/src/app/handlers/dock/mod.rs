@@ -162,7 +162,10 @@ impl Signex {
             {
                 return self.finish_update();
             }
-            if let Some(task) = self.handle_dock_sch_library_message(panel_msg) {
+            let replay_probe = self.probe_panel_edit(panel_msg);
+            let handled = self.handle_dock_sch_library_message(panel_msg);
+            self.finish_panel_edit(replay_probe);
+            if let Some(task) = handled {
                 return Task::batch([task, self.finish_update()]);
             }
         }
