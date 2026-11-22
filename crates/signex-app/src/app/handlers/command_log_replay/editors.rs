@@ -348,33 +348,15 @@ impl Signex {
             } => {
                 let editor = self.document_state.footprint_editors.get(path)?;
                 let same = editor.active_idx == *footprint;
-                let mut gone: Vec<String> = pads
-                    .iter()
-                    .filter(|(i, number)| {
-                        !same
-                            || editor
-                                .state
-                                .pads
-                                .get(*i)
-                                .is_none_or(|pad| pad.number != *number)
-                    })
-                    .map(|(_, number)| format!("Pad {number}"))
-                    .collect();
+                let mut gone = gone_pads(editor, same, pads);
                 let shape = editor.primitive();
                 if let Some((index, count)) = silk
                     && (!same || shape.silk_f.len() != *count)
                 {
                     gone.push(format!("Silk {index}"));
                 }
-                let entities = shape.sketch.as_ref().map(|s| s.entities.as_slice());
-                let has = |id: &SketchEntityId| {
-                    same && entities.is_some_and(|all| all.iter().any(|e| e.id == *id))
-                };
                 let ids = sketch.iter().chain(sketch_secondary).chain(sketch_extra);
-                gone.extend(
-                    ids.filter(|id| !has(id))
-                        .map(|id| format!("Sketch entity {id:?}")),
-                );
+                gone.extend(gone_sketch_entities(editor, same, ids));
                 Some(gone)
             }
             EditorTargets::Symbol {
@@ -385,18 +367,7 @@ impl Signex {
             } => {
                 let editor = self.document_state.symbol_editors.get(path)?;
                 let same = editor.active_idx == *symbol;
-                let shape = editor.primitive();
-                let gone_pins = pins
-                    .iter()
-                    .filter(|(i, number)| {
-                        !same || shape.pins.get(*i).is_none_or(|pin| pin.number != *number)
-                    })
-                    .map(|(_, number)| format!("Pin {number}"));
-                let gone_graphics = graphics
-                    .iter()
-                    .filter(|i| !same || **i >= shape.graphics.len())
-                    .map(|i| format!("Graphic {i}"));
-                Some(gone_pins.chain(gone_graphics).collect())
+                Some(gone_symbol_items(editor, same, pins, graphics))
             }
         }
     }
@@ -533,6 +504,49 @@ impl Signex {
             }
         }
     }
+}
+
+/// The recorded pads no longer at their index with their number.
+fn gone_pads(editor: &FootprintDocument, same: bool, pads: &[(usize, String)]) -> Vec<String> {
+    let all = &editor.state.pads;
+    pads.iter()
+        .filter(|(i, number)| !same || all.get(*i).is_none_or(|pad| pad.number != *number))
+        .map(|(_, number)| format!("Pad {number}"))
+        .collect()
+}
+
+/// The recorded sketch entities no longer in the footprint.
+fn gone_sketch_entities<'a>(
+    editor: &FootprintDocument,
+    same: bool,
+    ids: impl Iterator<Item = &'a SketchEntityId>,
+) -> Vec<String> {
+    let shape = editor.primitive();
+    let entities = shape.sketch.as_ref().map(|s| s.entities.as_slice());
+    let has =
+        |id: &SketchEntityId| same && entities.is_some_and(|all| all.iter().any(|e| e.id == *id));
+    ids.filter(|id| !has(id))
+        .map(|id| format!("Sketch entity {id:?}"))
+        .collect()
+}
+
+/// The recorded pins and graphics no longer in the symbol.
+fn gone_symbol_items(
+    editor: &SymbolDocument,
+    same: bool,
+    pins: &[(usize, String)],
+    graphics: &[usize],
+) -> Vec<String> {
+    let shape = editor.primitive();
+    let gone_pins = pins
+        .iter()
+        .filter(|(i, number)| !same || shape.pins.get(*i).is_none_or(|pin| pin.number != *number))
+        .map(|(_, number)| format!("Pin {number}"));
+    let gone_graphics = graphics
+        .iter()
+        .filter(|i| !same || **i >= shape.graphics.len())
+        .map(|i| format!("Graphic {i}"));
+    gone_pins.chain(gone_graphics).collect()
 }
 
 fn pad_number(pads: &[EditorPad], index: usize) -> Option<String> {

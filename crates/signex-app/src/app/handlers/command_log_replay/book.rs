@@ -221,7 +221,6 @@ impl ReplayInput {
     /// `next`, the next tick of the drag `self` recorded, as one input from
     /// the drag's start. `None` when it is not the same drag.
     pub(super) fn drag_continued_by(&self, next: &Self) -> Option<Self> {
-        use FootprintEditorMsg as M;
         match (self, next) {
             (
                 Self::PadDrag {
@@ -256,43 +255,52 @@ impl ReplayInput {
                     ..
                 },
             ) if path == next_path => {
-                let total = match (messages.as_slice(), next_messages.as_slice()) {
-                    (
-                        [PrimitiveEdit::Footprint(M::SketchMovePoint { id, dx, dy })],
-                        [
-                            PrimitiveEdit::Footprint(M::SketchMovePoint {
-                                id: next,
-                                dx: more_x,
-                                dy: more_y,
-                            }),
-                        ],
-                    ) if id == next => M::SketchMovePoint {
-                        id: *id,
-                        dx: dx + more_x,
-                        dy: dy + more_y,
-                    },
-                    (
-                        [PrimitiveEdit::Footprint(M::SketchMoveLine { id, dx, dy })],
-                        [
-                            PrimitiveEdit::Footprint(M::SketchMoveLine {
-                                id: next,
-                                dx: more_x,
-                                dy: more_y,
-                            }),
-                        ],
-                    ) if id == next => M::SketchMoveLine {
-                        id: *id,
-                        dx: dx + more_x,
-                        dy: dy + more_y,
-                    },
-                    _ => return None,
-                };
+                let total = Self::joined_sketch_move(messages, next_messages)?;
                 Some(Self::Editor {
                     path: path.clone(),
                     targets: targets.clone(),
                     messages: vec![PrimitiveEdit::Footprint(total)],
                 })
             }
+            _ => None,
+        }
+    }
+
+    /// Two sketch drag ticks on the same entity as one move.
+    fn joined_sketch_move(
+        first: &[PrimitiveEdit],
+        next: &[PrimitiveEdit],
+    ) -> Option<FootprintEditorMsg> {
+        use FootprintEditorMsg as M;
+        match (first, next) {
+            (
+                [PrimitiveEdit::Footprint(M::SketchMovePoint { id, dx, dy })],
+                [
+                    PrimitiveEdit::Footprint(M::SketchMovePoint {
+                        id: next,
+                        dx: more_x,
+                        dy: more_y,
+                    }),
+                ],
+            ) if id == next => Some(M::SketchMovePoint {
+                id: *id,
+                dx: dx + more_x,
+                dy: dy + more_y,
+            }),
+            (
+                [PrimitiveEdit::Footprint(M::SketchMoveLine { id, dx, dy })],
+                [
+                    PrimitiveEdit::Footprint(M::SketchMoveLine {
+                        id: next,
+                        dx: more_x,
+                        dy: more_y,
+                    }),
+                ],
+            ) if id == next => Some(M::SketchMoveLine {
+                id: *id,
+                dx: dx + more_x,
+                dy: dy + more_y,
+            }),
             _ => None,
         }
     }

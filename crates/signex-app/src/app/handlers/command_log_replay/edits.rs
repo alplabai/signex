@@ -104,73 +104,56 @@ impl Signex {
         row: &LogRow,
         input: &ReplayInput,
     ) -> (CommandOutcome, Task<Message>) {
-        let document = row.document.as_deref();
-        match (input, document) {
-            (ReplayInput::Sheet { commands, .. }, Some(document)) => {
-                (self.run_sheet_commands(document, commands), Task::none())
-            }
-            (ReplayInput::Board { commands, .. }, Some(document)) => {
-                (self.run_board_commands(document, commands), Task::none())
-            }
-            (
-                ReplayInput::BoardMove {
-                    footprints,
-                    delta,
-                    leaves_tracks,
-                },
-                Some(document),
-            ) => (
-                self.run_board_move(document, footprints, *delta, *leaves_tracks),
-                Task::none(),
-            ),
-            (
-                ReplayInput::Editor {
-                    path,
-                    targets,
-                    messages,
-                },
-                _,
-            ) => self.run_editor_input(path, targets, messages),
-            (
-                ReplayInput::PadDrag {
-                    path,
-                    targets,
-                    idx,
-                    start,
-                    to,
-                },
-                _,
-            ) => self.run_pad_drag(path, targets, *idx, (to.0 - start.0, to.1 - start.1)),
-            (
-                ReplayInput::EditorPanel {
-                    path,
-                    targets,
-                    message,
-                },
-                _,
-            ) => self.run_editor_panel(path, targets, message),
-            (
-                ReplayInput::ReuseBlock {
-                    name,
-                    anchor,
-                    degrees,
-                },
-                Some(document),
-            ) => {
-                let placed = self.place_reuse_block(document, name, *anchor, *degrees);
-                let outcome = match placed {
-                    Ok(_) => CommandOutcome::Ran,
-                    Err(why) => CommandOutcome::disabled(why),
+        match input {
+            ReplayInput::Editor {
+                path,
+                targets,
+                messages,
+            } => self.run_editor_input(path, targets, messages),
+            ReplayInput::PadDrag {
+                path,
+                targets,
+                idx,
+                start,
+                to,
+            } => self.run_pad_drag(path, targets, *idx, (to.0 - start.0, to.1 - start.1)),
+            ReplayInput::EditorPanel {
+                path,
+                targets,
+                message,
+            } => self.run_editor_panel(path, targets, message),
+            _ => {
+                let outcome = match row.document.as_deref() {
+                    Some(document) => self.run_document_input(document, input),
+                    None => CommandOutcome::disabled(no_change()),
                 };
                 (outcome, Task::none())
             }
-            (
-                ReplayInput::FootprintSwap {
-                    footprints,
-                    template,
-                },
-                Some(document),
-            ) => {
+        }
+    }
+
+    /// An input that runs on the row's sheet or board.
+    fn run_document_input(&mut self, document: &Path, input: &ReplayInput) -> CommandOutcome {
+        match input {
+            ReplayInput::Sheet { commands, .. } => self.run_sheet_commands(document, commands),
+            ReplayInput::Board { commands, .. } => self.run_board_commands(document, commands),
+            ReplayInput::BoardMove {
+                footprints,
+                delta,
+                leaves_tracks,
+            } => self.run_board_move(document, footprints, *delta, *leaves_tracks),
+            ReplayInput::ReuseBlock {
+                name,
+                anchor,
+                degrees,
+            } => match self.place_reuse_block(document, name, *anchor, *degrees) {
+                Ok(_) => CommandOutcome::Ran,
+                Err(why) => CommandOutcome::disabled(why),
+            },
+            ReplayInput::FootprintSwap {
+                footprints,
+                template,
+            } => {
                 let before = self.board_revision(document);
                 self.swap_footprints(document, footprints, Ok(template.clone()));
                 let outcome = if self.board_revision(document) == before {
@@ -179,9 +162,9 @@ impl Signex {
                     CommandOutcome::Ran
                 };
                 self.repaint_board_selection(document);
-                (outcome, Task::none())
+                outcome
             }
-            _ => (CommandOutcome::disabled(no_change()), Task::none()),
+            _ => CommandOutcome::disabled(no_change()),
         }
     }
 

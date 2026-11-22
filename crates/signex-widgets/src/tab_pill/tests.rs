@@ -133,7 +133,7 @@ fn reference_quads(bounds: Rectangle, style: &TabPillStyle) -> Vec<(Quad, Backgr
     quads
 }
 
-/// Rasterise `quads` on a mid-grey surface; returns BGRA bytes.
+/// Rasterise `quads` on a mid-grey surface; returns RGBA bytes.
 fn rasterise(quads: Vec<(Quad, Background)>) -> Vec<u8> {
     let mut renderer = iced_vello_cpu::Renderer::new(renderer::Settings {
         font: Font::DEFAULT,
@@ -235,8 +235,8 @@ fn shared_divider_is_a_single_border_column() {
     let px = row(pill_quads, &first, &second);
     let at = |x: u32, y: u32| {
         let i = ((y * W + x) * 4) as usize;
-        // The headless screenshot is BGRA; read it back as RGB.
-        [px[i + 2], px[i + 1], px[i]]
+        // The headless screenshot is RGBA.
+        [px[i], px[i + 1], px[i + 2]]
     };
     let border = [0.30f32, 0.32, 0.38].map(|c| (c * 255.0).round() as u8);
     let fill = [0.12f32, 0.13, 0.16].map(|c| (c * 255.0).round() as u8);
