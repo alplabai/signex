@@ -75,6 +75,7 @@ mod waiver_form;
 pub use waiver_form::{UserIdentity, WaiverReason};
 mod footprint_context;
 mod footprint_outline;
+mod footprint_place_block;
 mod footprint_properties_msg;
 pub use footprint_properties_msg::FpPropertiesMsg;
 mod footprint_subform_msg;
@@ -176,6 +177,7 @@ pub use footprint_context::{
 };
 pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
 pub use footprint_outline::{OutlineSegment, PadOutlineSummary, segments as outline_segments};
+pub use footprint_place_block::FootprintPlaceBlock;
 pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library_row::{ComponentSheet, LibraryRowDetail};

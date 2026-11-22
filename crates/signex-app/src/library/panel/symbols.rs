@@ -26,7 +26,10 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     let Some(sym) = ctx.symbol_editor.as_ref() else {
         return KindView {
             crumb: Crumb::Note(t!(i18n, ids::LIBRARY_PANEL_NO_SYMBOL_FILE)),
-            tools: Tools::default(),
+            tools: Tools {
+                place_blocked: Some(ids::LIBRARY_PANEL_PLACE_SYMBOLS),
+                ..Tools::default()
+            },
             list: frame::list_note(t!(i18n, ids::PANELS_SCH_LIBRARY_EMPTY), 0.0, tokens),
         };
     };
@@ -39,8 +42,8 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
             "count" => sym.symbols_in_file.len()
         ),
     };
-    // Place and Edit stay off as in the SCH Library panel: the symbol is
-    // already open in its tab and placing from here is not wired. Delete
+    // Place stays off with its reason until symbols have this flow (mockup
+    // row 119). Edit stays off: the symbol is already open in its tab. Delete
     // acts on the active symbol only while the filter shows its row.
     let needle = i18n.fold_for_search(library.panel_search.trim());
     let active_shown = sym
@@ -49,6 +52,7 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
         .any(|entry| entry.idx == sym.active_idx && shows(entry, &needle, i18n));
     let tools = Tools {
         place: None,
+        place_blocked: Some(ids::LIBRARY_PANEL_PLACE_SYMBOLS),
         add: Some(panel(PanelMsg::SchLibraryAddSymbol)),
         edit: None,
         delete: (sym.symbols_in_file.len() > 1 && active_shown)

@@ -366,6 +366,27 @@ fn edit_follows_the_footprint_the_editor_shows() {
     assert!(tools.delete.is_none());
 }
 
+/// Mockup row 119: with no way to place, Place sends nothing and its tooltip
+/// gives the reason, in Footprints and in Symbols.
+#[test]
+fn place_is_off_with_its_reason_in_footprints_and_symbols() {
+    let app = app_with_one_footprint();
+    let ctx = &app.document_state.panel_ctx;
+    let tools = footprints::view(&app.library, ctx).tools;
+    assert!(tools.place.is_none());
+    assert_eq!(
+        tools.place_blocked,
+        Some(ids::LIBRARY_PANEL_PLACE_NOT_IN_LIBRARY),
+        "this file is in no open library"
+    );
+
+    let app = app_with_one_symbol();
+    let ctx = &app.document_state.panel_ctx;
+    let tools = symbols::view(&app.library, ctx).tools;
+    assert!(tools.place.is_none());
+    assert_eq!(tools.place_blocked, Some(ids::LIBRARY_PANEL_PLACE_SYMBOLS));
+}
+
 #[test]
 fn a_file_is_named_by_the_open_library_that_holds_it() {
     let mut state = LibraryState::default();

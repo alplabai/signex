@@ -92,6 +92,7 @@ mod pcb_one_grid_tests;
 mod pcb_origin;
 #[cfg(test)]
 mod pcb_origin_tests;
+mod pcb_footprint_place;
 mod pcb_parking;
 mod pcb_part_place;
 pub(crate) mod pcb_placement;

@@ -82,15 +82,8 @@ impl Signex {
                 follow = self.handle_fp_library_edit_internal(idx);
                 true
             }
-            // v0.18.8 — `Place` button. PCB Component placement is
-            // not wired yet; log a warn so the action is observable
-            // without a visible no-op.
             PanelMsg::FpLibraryPlaceInternal(idx) => {
-                tracing::warn!(
-                    target: "signex::library",
-                    idx = idx,
-                    "Footprint Library: Place is not yet wired (PCB integration pending)",
-                );
+                follow = self.place_library_footprint(*idx);
                 true
             }
             PanelMsg::FpEditorToggleAutoFitCourtyard => {

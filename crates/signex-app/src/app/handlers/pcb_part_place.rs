@@ -127,11 +127,18 @@ impl Signex {
         let prefix = self.placement_prefix_for(board, &resolved.placement);
         let part = PartToPlace::new(resolved.footprint, prefix, resolved.placement.value)
             .map_err(|why| refused(&pn, &why.to_string()))?;
+        self.put_part_on_cursor(board, &pn, part);
+        Ok(())
+    }
+
+    /// Put `part`, called `label` in the hint, on the cursor of `board`, the
+    /// board in view in the acting window.
+    pub(super) fn put_part_on_cursor(&mut self, board: &Path, label: &str, part: PartToPlace) {
         crate::diagnostics::log_info(
             t!(
                 self.ui_state.i18n,
                 ids::PCB_PLACE_PART_HINT,
-                "part" => pn.as_str(),
+                "part" => label,
                 "footprint" => part.footprint_name()
             )
             .into_string(),
@@ -142,7 +149,6 @@ impl Signex {
         self.interaction_state.pcb_query.measure = None;
         self.interaction_state.pcb_carry = Some(PcbCarry::place(board.to_path_buf(), window, part));
         self.refresh_pcb_highlight();
-        Ok(())
     }
 
     /// The Place carry of the board this window shows.
