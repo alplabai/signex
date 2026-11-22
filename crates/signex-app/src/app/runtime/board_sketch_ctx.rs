@@ -18,7 +18,7 @@ pub(super) fn sketch_role_rows(
     usize,
 ) {
     use crate::library::editor::footprint::sketch_mode::roles::profile_role_rows;
-    use crate::library::editor::footprint::state::EditorMode;
+    use crate::library::editor::footprint::EditorMode;
     use signex_types::sketch::SketchHost;
     let host = editor.state.sketch_host();
     match editor.primitive().sketch.as_ref() {

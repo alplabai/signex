@@ -45,7 +45,7 @@ impl Signex {
             }
             SketchFixMsg::EditInSketchClicked => {
                 self.send_to_footprint_editor(FootprintEditorMsg::SetMode(
-                    crate::library::editor::footprint::state::EditorMode::Sketch,
+                    crate::library::editor::footprint::EditorMode::Sketch,
                 ))
             }
         })

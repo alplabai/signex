@@ -84,6 +84,7 @@ pub(crate) mod form_look;
 pub(crate) mod graphite;
 pub(crate) mod illustration;
 mod library_row;
+mod field_edits;
 mod messages;
 pub(crate) mod messages_row;
 mod multi_selection;
