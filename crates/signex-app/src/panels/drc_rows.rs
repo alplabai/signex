@@ -173,6 +173,7 @@ fn waive_form<'a>(
     let form = reason_form(
         ReasonFormView {
             reason: &draft.reason,
+            placeholder: t!(ctx.i18n, ids::DRC_PANEL_WAIVE_PLACEHOLDER),
             error,
         },
         ReasonFormEvents {

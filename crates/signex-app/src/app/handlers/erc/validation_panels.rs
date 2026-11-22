@@ -76,19 +76,17 @@ impl Signex {
         })
     }
 
-    /// Cache the identity, and give it to a form opened while asking whose
-    /// Author is still empty.
+    /// Cache the identity, give it to a form opened while asking, and let
+    /// that form's Waive go ahead.
     pub(crate) fn handle_waiver_identity_resolved(&mut self, name: Option<String>) {
         let identity = UserIdentity::resolved(name);
         let author = identity.author();
         self.ui_state.validation_panels.identity = identity;
-        if let Some(draft) = self
-            .ui_state
-            .erc_waive_draft
-            .as_mut()
-            .filter(|d| d.author.trim().is_empty())
-        {
-            draft.author.clone_from(&author);
+        if let Some(draft) = self.ui_state.erc_waive_draft.as_mut() {
+            draft.awaits_identity = false;
+            if draft.author.trim().is_empty() {
+                draft.author.clone_from(&author);
+            }
         }
         if let Some(draft) = self.interaction_state.pcb_drc.waive_draft.as_mut() {
             draft.awaits_identity = false;
@@ -100,17 +98,13 @@ impl Signex {
     }
 }
 
-/// The git author name (environment, then config), else the login name.
-/// Reads git config and the environment: run it off the update loop.
+/// The git author name (environment, then config); `None` when git has no
+/// identity, so the waiver's author is stored empty (mockup row 88). Reads
+/// git config and the environment: run it off the update loop.
 fn user_identity_name() -> Option<String> {
     signex_library::git_identity::identity_for_default_config()
         .ok()
         .map(|(name, _email)| name)
-        .or_else(|| {
-            ["USER", "USERNAME", "LOGNAME"]
-                .iter()
-                .find_map(|key| std::env::var(key).ok())
-        })
         .filter(|name| !name.trim().is_empty())
 }
 

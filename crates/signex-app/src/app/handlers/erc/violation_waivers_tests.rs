@@ -77,7 +77,7 @@ fn waive_net_t(app: &mut Signex, reason: &str) {
         },
     );
     send(app, typed_reason(reason.into()));
-    send(app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
+    app.handle_waiver_identity_resolved(Some("A. Designer".into()));
     send(app, ErcWaiverMsg::Confirmed);
     app.run_erc_blocking();
 }
@@ -191,7 +191,7 @@ fn waive_where(
         },
     );
     send(app, typed_reason("accepted".into()));
-    send(app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
+    app.handle_waiver_identity_resolved(Some("A. Designer".into()));
     send(app, ErcWaiverMsg::Confirmed);
     entry
 }
@@ -316,7 +316,7 @@ fn confirm_refuses_a_finding_whose_objects_changed_since_the_run() {
     }
     open_with(&mut app.document_state, &top_path, moved);
     send(&mut app, typed_reason("ok".into()));
-    send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
+    app.handle_waiver_identity_resolved(Some("me".into()));
     send(&mut app, ErcWaiverMsg::Confirmed);
     let draft = app
         .ui_state
@@ -356,7 +356,7 @@ fn confirm_refuses_a_finding_whose_objects_changed_since_the_run() {
     );
     open_with(&mut app.document_state, &dir2.join("top.snxsch"), top);
     send(&mut app, typed_reason("ok".into()));
-    send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
+    app.handle_waiver_identity_resolved(Some("me".into()));
     send(&mut app, ErcWaiverMsg::Confirmed);
     let draft = app
         .ui_state
@@ -394,7 +394,7 @@ fn a_waive_started_before_a_rerun_still_targets_its_finding() {
         },
     );
     send(&mut app, typed_reason("ok".into()));
-    send(&mut app, ErcWaiverMsg::AuthorChanged("me".into()));
+    app.handle_waiver_identity_resolved(Some("me".into()));
     send(&mut app, ErcWaiverMsg::Confirmed);
     app.run_erc_blocking();
     assert_eq!(flagged(&app), ["NET_C"]);
@@ -494,7 +494,7 @@ fn reopening_the_same_finding_keeps_the_typed_reason() {
     let on_wire = |e: &crate::panels::ErcDiagnosticEntry| e.select.is_some_and(|s| s.uuid == wire);
     start(&mut app, &on_wire);
     send(&mut app, typed_reason("test stub".into()));
-    send(&mut app, ErcWaiverMsg::AuthorChanged("A. Designer".into()));
+    app.handle_waiver_identity_resolved(Some("A. Designer".into()));
     // The sheet changes, Confirm is refused, the user re-runs and waives again.
     let mut nudged = sheet;
     if let Some(w) = nudged.wires.iter_mut().find(|w| w.uuid == wire) {
@@ -549,8 +549,79 @@ fn a_new_form_starts_with_the_cached_identity_as_author() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
+/// Open the form on the first `RULE` finding.
+fn start_on_rule(app: &mut Signex) {
+    let entry = app
+        .build_erc_diagnostic_entries()
+        .into_iter()
+        .find(|e| e.rule_id == RULE)
+        .expect("row");
+    send(
+        app,
+        ErcWaiverMsg::Started {
+            key: entry.waiver_key.expect("waivable"),
+            message: entry.message,
+            sheet: entry.sheet_path,
+        },
+    );
+}
+
+/// Mockup row 88: Waive waits for the git read, then stores its name.
+#[test]
+fn the_erc_form_waits_for_git_and_takes_its_author() {
+    let (mut app, dir, _) = app_with_two_failing_nets();
+    app.run_erc_blocking();
+    start_on_rule(&mut app);
+    send(&mut app, typed_reason("by design".into()));
+    let draft = app.ui_state.erc_waive_draft.as_ref().expect("editor");
+    assert!(draft.awaits_identity);
+    send(&mut app, ErcWaiverMsg::Confirmed);
+    assert!(
+        app.erc_violation_waiver_entries().is_empty(),
+        "waits for the author"
+    );
+    assert!(app.ui_state.erc_waive_draft.is_some(), "the form stays open");
+
+    app.handle_waiver_identity_resolved(Some("C. Alp".into()));
+    send(&mut app, ErcWaiverMsg::Confirmed);
+    let entries = app.erc_violation_waiver_entries();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].reason, "by design");
+    assert_eq!(entries[0].author, "C. Alp");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// Mockup row 88: with no git identity the author is stored empty, the
+/// waiver survives a save and load, and it still hides its finding.
+#[test]
+fn with_no_git_identity_the_author_is_stored_empty_and_the_waiver_holds() {
+    let (mut app, dir, _) = app_with_two_failing_nets();
+    app.run_erc_blocking();
+    start_on_rule(&mut app);
+    send(&mut app, typed_reason("by design".into()));
+    app.handle_waiver_identity_resolved(None);
+    send(&mut app, ErcWaiverMsg::Confirmed);
+    app.run_erc_blocking();
+    assert_eq!(flagged(&app).len(), 1, "one of the two nets is waived");
+
+    let project = &app.document_state.projects[0];
+    signex_types::project::write_project(&project.path, &project.data).expect("save");
+    let loaded = signex_types::project::parse_project(&project.path).expect("load");
+    let stored = &loaded.rules.as_ref().expect("rules").erc_waivers;
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].author, "");
+    app.document_state.projects[0].data = loaded;
+    app.run_erc_blocking();
+    assert_eq!(flagged(&app).len(), 1, "still waived after the reload");
+    assert_eq!(
+        app.erc_violation_waiver_entries()[0].status,
+        ErcWaiverStatus::Waiving(1)
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 /// AV-13: a form opened before the identity is known starts empty and takes
-/// the name when it lands, unless the user typed an Author first.
+/// the name when it lands.
 #[test]
 fn the_identity_fills_an_empty_author_when_it_lands() {
     let (mut app, dir, _) = app_with_two_failing_nets();
