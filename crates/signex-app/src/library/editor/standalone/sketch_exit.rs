@@ -378,7 +378,7 @@ pub fn preview_card<'a, M: Clone + 'a>(
     // Capped so the failing place on the canvas stays visible (mockup row 179d).
     container(card)
         .padding([SP.s, SP.m])
-        .max_width(TS.body * PREVIEW_CARD_MAX_EM)
+        .width(Length::Fixed(TS.body * PREVIEW_CARD_MAX_EM))
         .style(crate::styles::modal_card(tokens))
         .boxed()
 }

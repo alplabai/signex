@@ -63,7 +63,7 @@ pub use parameters::ParameterGroup;
 pub(crate) use preview_ui::PreviewPopup;
 pub use preview_ui::{ProjectPreviewMsg, ProjectPreviewUi};
 pub use requirements::{RequirementsMsg, RequirementsTabState};
-pub use row_drag::{RowDrag, RowDragMsg, RowKey};
+pub use row_drag::{RowDrag, RowDragMsg};
 pub(crate) use sheets::sheet_thumbnail;
 pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,

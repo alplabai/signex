@@ -134,7 +134,7 @@ impl Signex {
                     i18n,
                     tokens,
                 )
-                .map(|layer| layer.map(edit)),
+                .map(|layer| iced::Widget::boxed(layer.map(edit))),
             ),
             SetupKind::Sheet => container(left).height(Length::Fill).boxed(),
         };

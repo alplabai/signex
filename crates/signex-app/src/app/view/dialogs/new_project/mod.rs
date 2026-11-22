@@ -114,7 +114,8 @@ impl Signex {
         .boxed();
         let body = with_larger_preview(
             columns,
-            board_rules::expanded_layer(state, canvas_colors, i18n, tokens).map(|e| e.map(np)),
+            board_rules::expanded_layer(state, canvas_colors, i18n, tokens)
+                .map(|e| iced::Widget::boxed(e.map(np))),
         );
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))
             .size(TS.body)

@@ -195,7 +195,7 @@ pub(super) fn cross_section<'a>(
     let drawing = canvas::Canvas::new(program)
         .width(Length::Fill)
         .height(Length::Fill);
-    framed(ctx, drawing.into(), Length::Fill)
+    framed(ctx, iced::Widget::boxed(drawing), Length::Fill)
 }
 
 pub(super) fn preview<'a>(
@@ -209,7 +209,7 @@ pub(super) fn preview<'a>(
     let drawing = canvas::Canvas::new(program)
         .width(Length::Fill)
         .height(height);
-    framed(ctx, drawing.into(), height)
+    framed(ctx, iced::Widget::boxed(drawing), height)
 }
 
 /// A drawing inside a hairline frame.

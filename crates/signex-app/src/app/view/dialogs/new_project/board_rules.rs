@@ -218,7 +218,8 @@ fn drawing<'a>(
                 .preview
                 .labels
                 .view(&shown, label_style(zoom))
-                .map(|m| msg(SetupPreviewMsg::Labels(m))),
+                .map(|m| msg(SetupPreviewMsg::Labels(m)))
+                .boxed(),
         );
     }
     iced::widget::Stack::with_children(layers)
