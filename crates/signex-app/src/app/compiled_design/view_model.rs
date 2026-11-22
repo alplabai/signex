@@ -21,6 +21,13 @@ impl Signex {
         *self.document_state.panel_ctx.compiled_design = self.compiled_design_view();
     }
 
+    /// Point the sheet symbol's Repeat rows at the current selection. A
+    /// selection change refreshes only this part of the view.
+    pub(crate) fn sync_sheet_symbol_repeat_view(&mut self) {
+        self.document_state.panel_ctx.compiled_design.sheet_symbol =
+            self.sheet_symbol_repeat_view();
+    }
+
     /// The view of the multi-channel surfaces for the active document.
     pub(crate) fn compiled_design_view(&self) -> CompiledDesignView {
         CompiledDesignView {

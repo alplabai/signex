@@ -282,6 +282,9 @@ impl Signex {
         self.sync_pin_focus_sections(clicked_pin.is_some());
         self.sync_placed_panel();
         self.refresh_directive_panel();
+        self.sync_sheet_symbol_repeat_view();
+        self.document_state.panel_ctx.selection_form.kinds =
+            crate::panels::SelectionKinds::of(&self.interaction_state.active_canvas().selected);
         let selected = &self.interaction_state.active_canvas_mut().selected;
         self.document_state.panel_ctx.selection_count = selected.len();
         self.document_state.panel_ctx.selection_info.clear();

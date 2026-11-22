@@ -134,6 +134,23 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
     }
 }
 
+/// [`text_input_style`] for a value that reads inline in a list: no fill or
+/// outline until the box is hovered or focused.
+pub(crate) fn inline_value_input_style(
+    theme: &Theme,
+    status: text_input::Status,
+) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if !matches!(
+        status,
+        text_input::Status::Hovered | text_input::Status::Focused { .. }
+    ) {
+        style.background = Background::Color(Color::TRANSPARENT);
+        style.border.color = Color::TRANSPARENT;
+    }
+    style
+}
+
 /// [`text_input_style`] with the outline in `error` while the box holds text
 /// it refuses (#2767).
 pub(crate) fn refusable_input_style(

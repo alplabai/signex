@@ -261,7 +261,7 @@ pub(super) fn title_block_rows<'a>(
                 .on_submit(PanelMsg::CommitTitleBlockField(field))
                 .size(TS.body)
                 .padding(SP.xs)
-                .style(crate::panels::form_look::text_input_style)
+                .style(crate::panels::form_look::inline_value_input_style)
                 .width(Length::Fill);
             if shown.is_empty() && source == TitleBlockSource::Unset {
                 // "Not set" reads as a muted italic value, inline.
@@ -297,6 +297,20 @@ fn today_of(ctx: &PanelContext) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Mockup row 40: a title-block value, "Not set" included, reads inline
+    /// and shows its box only on hover or focus.
+    #[test]
+    fn a_value_box_shows_only_on_hover_or_focus() {
+        use crate::panels::form_look::inline_value_input_style as style;
+        use iced::widget::text_input::Status;
+        let theme = Theme::Dark;
+        let none = Color::TRANSPARENT;
+        assert_eq!(style(&theme, Status::Active).border.color, none);
+        assert_ne!(style(&theme, Status::Hovered).border.color, none);
+        let focused = Status::Focused { is_hovered: false };
+        assert_ne!(style(&theme, focused).border.color, none);
+    }
 
     /// Each field's catalog name reads as `TitleBlockField::label`, the
     /// English the panel showed before.

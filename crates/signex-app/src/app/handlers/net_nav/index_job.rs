@@ -110,13 +110,15 @@ impl Signex {
         }
     }
 
-    /// A landed index fills the net of each pin of the selected symbol.
+    /// A landed index fills the net of each pin of the selected symbol, or
+    /// the Net Name of the selected wire or bus.
     fn refresh_pin_rows(&mut self) {
-        let one_symbol = matches!(
+        use signex_types::schematic::SelectedKind as K;
+        let reads_nets = matches!(
             self.interaction_state.active_canvas().selected.as_slice(),
-            [item] if item.kind == signex_types::schematic::SelectedKind::Symbol
+            [item] if matches!(item.kind, K::Symbol | K::Wire | K::Bus)
         );
-        if one_symbol {
+        if reads_nets {
             self.update_selection_info();
         }
     }
