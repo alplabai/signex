@@ -265,7 +265,7 @@ fn read(board: &PcbBoard, target: Target) -> Option<TargetState> {
         Target::Sketch => S::Sketch(board.sketch.clone().map(Box::new)),
         Target::Grid => S::Grid(board.setup.as_ref().map(|setup| setup.grid_size)),
         Target::Options => S::Options(Box::new(board.options.clone())),
-        Target::Panel => S::Panel(board.options.panel.clone().map(Box::new)),
+        Target::Panel => S::Panel(board.options.panel.map(Box::new)),
         Target::Stack => S::Stack(Box::new((
             board.stackup.clone(),
             board.layers.clone(),
