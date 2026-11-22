@@ -76,6 +76,13 @@ shared_collections! {
     unions: SchUnion,
 }
 
+impl SheetSnapshot {
+    /// The sheet symbol `id` as this snapshot holds it.
+    pub(super) fn child_sheet(&self, id: uuid::Uuid) -> Option<&ChildSheet> {
+        self.child_sheets.iter().find(|cs| cs.uuid == id)
+    }
+}
+
 fn share_or_wrap<T: PartialEq>(items: Vec<T>, previous: Option<&Arc<Vec<T>>>) -> Arc<Vec<T>> {
     match previous {
         Some(prev) if **prev == items => Arc::clone(prev),

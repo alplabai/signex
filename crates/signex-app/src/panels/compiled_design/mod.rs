@@ -149,6 +149,9 @@ pub struct SheetSymbolRepeatView {
     pub channel_text: String,
     pub from_text: String,
     pub to_text: String,
+    /// Enter refused the typed From / To: the box shows it is invalid.
+    pub is_from_refused: bool,
+    pub is_to_refused: bool,
     pub naming: ChannelNaming,
     pub menu: NamingMenuView,
     /// The symbol's entries: name and whether it is a `Repeat(…)` entry.

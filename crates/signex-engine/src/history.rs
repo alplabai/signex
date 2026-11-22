@@ -1,4 +1,4 @@
-use signex_types::schematic::SchematicSheet;
+use signex_types::schematic::{ChannelRepeat, SchematicSheet};
 
 use crate::EngineError;
 use crate::patch::{DocumentPatch, PatchPair};
@@ -300,6 +300,18 @@ impl Engine {
             .redo_steps()
             .last()
             .and_then(HistoryStep::group)
+    }
+
+    /// The newest designator of sheet symbol `id` on the undo stack that is
+    /// not a `Repeat(...)`: what switching its repeat off goes back to.
+    pub fn earlier_plain_sheet_name(&self, id: uuid::Uuid) -> Option<&str> {
+        self.history.undo_steps().iter().rev().find_map(|step| {
+            let HistoryStep::Edit(entry) = step else {
+                return None;
+            };
+            let name = entry.snapshot.child_sheet(id)?.name.trim();
+            (!name.is_empty() && ChannelRepeat::parse(name).is_none()).then_some(name)
+        })
     }
 
     /// Monotonic position in the edit timeline: how many recorded edits
