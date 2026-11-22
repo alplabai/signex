@@ -115,16 +115,28 @@ impl Signex {
             self.apply_note_draft(draft);
         }
         for draft in self.take_port_name_drafts(matches, true) {
+            let name = draft.text.clone();
+            let waiting = self.document_state.rail_rename.queue.len();
             self.apply_port_name_draft(draft);
+            // A project's rail needs its closed sheets read first, which a
+            // save cannot wait for here.
+            if self.document_state.rail_rename.queue.len() > waiting {
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+                crate::diagnostics::log_warning(
+                    t!(i18n, ids::PROPERTIES_RAIL_RENAME_WAITS, "name" => name.as_str())
+                        .into_string(),
+                );
+            }
         }
     }
 
     /// Drop the typed note and power port boxes of the sheets `matches`
     /// picks, unapplied: a discard throws them away with the sheet's other
-    /// edits.
+    /// edits, along with a rail rename still waiting on its reads.
     pub(crate) fn drop_note_drafts_where(&mut self, matches: &dyn Fn(&Path) -> bool) {
         drop(self.take_note_drafts(matches, true));
         drop(self.take_port_name_drafts(matches, true));
+        self.document_state.rail_rename.drop_where(matches);
     }
 
     /// The sheets with a typed note or power port box not applied yet, the
@@ -160,17 +172,25 @@ impl Signex {
             .collect()
     }
 
-    /// Rename a power port on its own sheet through the engine: one edit, one
-    /// undo step. A port that is gone keeps nothing, so the typed name is
-    /// quoted in Messages instead of being dropped silently.
+    /// Rename a power port through the engine. A named port takes its whole
+    /// rail as one undo step (`app/rail_rename`); a port with no name yet is
+    /// on no rail and changes alone. A port that is gone keeps nothing, so the
+    /// typed name is quoted in Messages instead of being dropped silently.
     fn apply_port_name_draft(&mut self, draft: PortNameDraft) {
         let PortNameDraft { sheet, item, text } = draft;
-        let on_sheet = self
-            .document_state
-            .engines
-            .get(&sheet)
-            .is_some_and(|e| e.document().symbols.iter().any(|s| s.uuid == item.uuid));
-        if !on_sheet {
+        let stored = (self.document_state.engines.get(&sheet)).and_then(|engine| {
+            let mut symbols = engine.document().symbols.iter();
+            symbols
+                .find(|s| s.uuid == item.uuid)
+                .map(|s| s.value.clone())
+        });
+        if let Some(old) = stored.clone().filter(|old| !old.is_empty()) {
+            self.rename_rail(crate::app::rail_rename::RailRename::new(
+                sheet, item.uuid, old, text,
+            ));
+            return;
+        }
+        if stored.is_none() {
             let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
             let shown = sheet.display().to_string();
             crate::diagnostics::log_warning(

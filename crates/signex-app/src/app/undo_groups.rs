@@ -66,6 +66,8 @@ pub enum UndoGroupKind {
     PartSwap,
     /// Synchronize Sheet Entries and Ports writing a sheet's ports (#1276).
     SheetEntrySync,
+    /// A power port's rename across its rail (mockup row 45).
+    RailRename,
 }
 
 impl UndoGroupSheets {
@@ -81,6 +83,7 @@ impl UndoGroupSheets {
             UndoGroupKind::FootprintSwap => "footprint change",
             UndoGroupKind::PartSwap => "pin or gate swap",
             UndoGroupKind::SheetEntrySync => "sheet entry sync",
+            UndoGroupKind::RailRename => "power rail rename",
         }
     }
 
@@ -105,6 +108,7 @@ impl UndoGroupSheets {
             UndoGroupKind::FootprintSwap => "Change Footprint",
             UndoGroupKind::PartSwap => "Pin or gate swap",
             UndoGroupKind::SheetEntrySync => "Sheet entry sync",
+            UndoGroupKind::RailRename => "Rename power rail",
         }
     }
 

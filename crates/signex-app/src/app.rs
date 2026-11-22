@@ -60,6 +60,8 @@ pub mod project_entry_disk;
 pub(crate) mod project_git;
 mod project_tab;
 pub(crate) mod projector;
+pub(crate) mod rail_rename;
+pub use rail_rename::RailRenameMsg;
 pub(crate) mod rooms;
 mod rules_tab;
 pub(crate) mod sch_tables;
@@ -200,6 +202,8 @@ impl Signex {
         // Text typed into a note that is no longer selected (another pick, a
         // tab switch) goes to its own sheet as one edit.
         self.settle_owed_note_drafts();
+        // A power port's rename in a project reads its closed sheets first.
+        tasks.push(self.start_rail_rename());
         // So does a drawing value still typed when its field's drawing goes.
         self.settle_live_drawing_edit();
         self.drop_line_width_text_of_another_symbol();

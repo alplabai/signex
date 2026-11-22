@@ -123,7 +123,7 @@ fn leaving_the_port_applies_the_typed_name_to_it() {
         PlacedEditMsg::PortNameSubmitted { item: item(OTHER) },
     );
     assert_eq!(name(&app, PORT), "+5V");
-    assert_eq!(name(&app, OTHER), "+3V3", "only the port typed in");
+    assert_eq!(name(&app, OTHER), "+5V", "the whole rail renames");
     assert!(app.document_state.engines[&path].can_undo());
 }
 
