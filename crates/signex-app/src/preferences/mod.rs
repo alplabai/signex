@@ -393,6 +393,8 @@ pub struct PrefsView<'a> {
     pub profiles: &'a crate::app::rule_profile_ui::ProfileManager,
     /// A profile edit is still on its way to its file.
     pub profiles_saving: bool,
+    /// Why edits of `User Default` are not reaching its file, if they are not.
+    pub machine_rules_issue: Option<crate::app::rule_profile_ui::MachineRulesIssue<'a>>,
     /// The profile new projects start from; `None` is automatic.
     pub default_profile: Option<&'a str>,
     pub distributor_settings: &'a crate::library::state::DistributorSettings,
@@ -484,6 +486,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         i18n,
         profiles,
         profiles_saving,
+        machine_rules_issue,
         default_profile,
         panel_tokens,
         ..
@@ -507,6 +510,7 @@ fn build_content<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
         PrefNav::RuleProfiles => content_profiles(
             profiles,
             profiles_saving,
+            machine_rules_issue,
             default_profile,
             panel_tokens,
             i18n,

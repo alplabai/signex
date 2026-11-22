@@ -53,8 +53,12 @@ fn icon_button(
 }
 
 /// The icon actions the active panel puts in its title bar, each with its
-/// tooltip; one with no message is drawn disabled.
-fn title_actions<'a>(kind: PanelKind, ctx: &panels::PanelContext) -> Vec<Element<'a, DockMessage>> {
+/// tooltip; one with no message is drawn disabled. A detached panel window
+/// draws the same ones.
+pub(crate) fn title_actions<'a>(
+    kind: PanelKind,
+    ctx: &panels::PanelContext,
+) -> Vec<Element<'a, DockMessage>> {
     panels::title_actions(kind, ctx)
         .into_iter()
         .map(|action| {

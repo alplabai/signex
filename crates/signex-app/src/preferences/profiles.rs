@@ -14,8 +14,10 @@ use iced::{Element, Length};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::{raw, text};
 
-use crate::app::rule_profile_ui::{ProfileEditorTab, ProfileManager, ProfileNameAction};
-use crate::rule_profiles::ProfileListing;
+use crate::app::rule_profile_ui::{
+    MachineRulesIssue, ProfileEditorTab, ProfileManager, ProfileNameAction,
+};
+use crate::rule_profiles::{ProfileKind, ProfileListing};
 
 /// The profile column: 300 px at the 12 px body.
 const LIST_W: f32 = TS.body * 25.0;
@@ -103,6 +105,7 @@ fn page(msg: ProfilePageMsg) -> PrefMsg {
 pub(super) fn content_profiles<'a>(
     manager: &'a ProfileManager,
     saving: bool,
+    machine_issue: Option<MachineRulesIssue<'a>>,
     default_profile: Option<&'a str>,
     tokens: &'a signex_types::theme::ThemeTokens,
     i18n: &'a I18n,
@@ -153,10 +156,19 @@ pub(super) fn content_profiles<'a>(
         });
     }
 
-    // "Saved" is claimed only when no edit is on its way and none failed.
-    let is_saved = !saving && !manager.busy && !matches!(manager.status, Some((true, _)));
-    let right: Element<'a, PrefMsg> = match manager.selected_profile() {
-        Some(listed) => editor::view(manager, listed, is_saved, tokens, i18n),
+    let selected = manager.selected_profile();
+    let notice = selected
+        .filter(|l| l.kind == ProfileKind::UserDefault)
+        .and(machine_issue);
+    // "Saved" is claimed only when no edit is on its way and this profile's
+    // shown rules are the ones in its file.
+    let is_saved = !saving
+        && !manager.busy
+        && notice.is_none()
+        && !selected.is_some_and(|l| manager.write_failed(&l.profile.name));
+    let notice = notice.map(|issue| issue.localized(i18n));
+    let right: Element<'a, PrefMsg> = match selected {
+        Some(listed) => editor::view(manager, listed, is_saved, notice, tokens, i18n),
         None => text(t!(i18n, ids::PREFERENCES_PROFILES_NONE_SELECTED))
             .size(TS.body)
             .style(text_muted)
@@ -198,5 +210,128 @@ mod tests {
             xa.message_plain(ids::PREFERENCES_PROFILES_TITLE, &[]),
             "Rule Profiles"
         );
+    }
+
+    mod saved_pill {
+        use std::sync::Arc;
+
+        use signex_erc::{RuleKind, Severity};
+        use signex_types::project::ErcRules;
+
+        use super::super::content_profiles;
+        use crate::app::{ErcMsg, Message, PreferencesMsg, Signex};
+        use crate::preferences::{PrefMsg, ProfileAction, ProfilesMsg};
+        use crate::rule_profiles::{self, USER_DEFAULT_PROFILE_NAME};
+
+        fn send(app: &mut Signex, msg: ProfilesMsg) {
+            let _ = app.update(Message::Preferences(PreferencesMsg::Inner(
+                PrefMsg::Profiles(msg),
+            )));
+        }
+
+        fn write_failed(app: &mut Signex) {
+            let _ = app.update(Message::Erc(ErcMsg::ProfileWriteFinished(Arc::new(Err(
+                "disk full.".to_string(),
+            )))));
+        }
+
+        fn relist(app: &mut Signex, lib: &std::path::Path) {
+            let listing = rule_profiles::list_library(Some(lib));
+            send(app, ProfilesMsg::Listed(Arc::new(listing)));
+        }
+
+        fn page(app: &Signex) -> Vec<String> {
+            let element = content_profiles(
+                &app.ui_state.profile_manager,
+                !app.ui_state.profile_writes.is_idle(),
+                app.machine_rules_issue(),
+                None,
+                &app.document_state.panel_ctx.tokens,
+                &app.ui_state.i18n,
+            );
+            crate::layout_probe::lay_out_texts(element, iced::Size::new(1000.0, 900.0))
+                .into_iter()
+                .map(|t| t.text)
+                .collect()
+        }
+
+        fn shows_saved(app: &Signex) -> bool {
+            page(app).iter().any(|t| t == "Saved")
+        }
+
+        fn app_with_library(lib: &std::path::Path) -> Signex {
+            rule_profiles::write_user_default(lib, ErcRules::default()).unwrap();
+            rule_profiles::save_named_profile(lib, "Company", "1.0", ErcRules::default(), false)
+                .unwrap();
+            let (mut app, _) = Signex::new();
+            app.ui_state.erc_severity_override.clear();
+            app.ui_state.pin_matrix_overrides.clear();
+            relist(&mut app, lib);
+            app
+        }
+
+        /// #2765: after a failed write of the machine's rules the page does
+        /// not claim Saved, says why, and shows the rule ERC runs with.
+        #[test]
+        fn a_failed_machine_write_is_not_saved_and_the_page_agrees_with_erc() {
+            let lib = tempfile::tempdir().unwrap();
+            let mut app = app_with_library(lib.path());
+            send(
+                &mut app,
+                ProfilesMsg::Selected(USER_DEFAULT_PROFILE_NAME.into()),
+            );
+            assert!(shows_saved(&app));
+
+            send(
+                &mut app,
+                ProfilesMsg::SeverityChanged(RuleKind::UnusedPin, Severity::Off),
+            );
+            write_failed(&mut app);
+            relist(&mut app, lib.path());
+
+            let texts = page(&app);
+            assert!(!texts.iter().any(|t| t == "Saved"), "{texts:#?}");
+            assert!(
+                texts
+                    .iter()
+                    .any(|t| t.contains("not saving") && t.contains("disk full")),
+                "{texts:#?}"
+            );
+            let listed = app.ui_state.profile_manager.selected_profile().unwrap();
+            let shown = signex_erc::project_rules::resolve(&listed.profile.erc).severity;
+            assert_eq!(shown.get(&RuleKind::UnusedPin), Some(&Severity::Off));
+            assert_eq!(
+                shown.get(&RuleKind::UnusedPin),
+                app.ui_state.erc_severity_override.get(&RuleKind::UnusedPin),
+            );
+        }
+
+        /// #2765: a refused name says nothing about any file, and a failed
+        /// write hides Saved on its own profile only, until the files are read.
+        #[test]
+        fn an_old_error_hides_saved_only_on_the_profile_it_belongs_to() {
+            let lib = tempfile::tempdir().unwrap();
+            let mut app = app_with_library(lib.path());
+            send(&mut app, ProfilesMsg::Selected("Company".into()));
+            let refused: Result<ProfileAction, String> = Err("That name is taken.".into());
+            send(&mut app, ProfilesMsg::ActionFinished(Arc::new(refused)));
+            assert!(shows_saved(&app), "a refused name hid Saved");
+
+            send(
+                &mut app,
+                ProfilesMsg::SeverityChanged(RuleKind::UnusedPin, Severity::Off),
+            );
+            write_failed(&mut app);
+            assert!(!shows_saved(&app), "the failed profile still claims Saved");
+            send(
+                &mut app,
+                ProfilesMsg::Selected(USER_DEFAULT_PROFILE_NAME.into()),
+            );
+            assert!(shows_saved(&app), "another profile lost Saved");
+
+            send(&mut app, ProfilesMsg::Selected("Company".into()));
+            relist(&mut app, lib.path());
+            assert!(shows_saved(&app), "the page now shows what the file holds");
+        }
     }
 }

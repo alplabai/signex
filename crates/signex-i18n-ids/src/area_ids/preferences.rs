@@ -47,6 +47,9 @@ define_ids! {
     PREFERENCES_PROFILES_NAME = "preferences-profiles-name";
     PREFERENCES_PROFILES_SAVED = "preferences-profiles-saved";
     PREFERENCES_PROFILES_SAVED_LINE = "preferences-profiles-saved-line";
+    PREFERENCES_PROFILES_MACHINE_READ_ONLY = "preferences-profiles-machine-read-only";
+    PREFERENCES_PROFILES_MACHINE_LOADING = "preferences-profiles-machine-loading";
+    PREFERENCES_PROFILES_MACHINE_NOT_SAVING = "preferences-profiles-machine-not-saving";
     PREFERENCES_PROFILES_RULE_TITLE = "preferences-profiles-rule-title";
     PREFERENCES_PROFILES_RULE_SUMMARY = "preferences-profiles-rule-summary";
     PREFERENCES_PROFILES_READ_ONLY = "preferences-profiles-read-only";

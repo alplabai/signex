@@ -1,7 +1,7 @@
 //! A dock panel in its own OS window (mockup row 8). The window is borderless where the
 //! dialog windows are: the Graphite title strip (panel name, the main
-//! window's active document in `ink4`, Dock back and the close) moves it,
-//! and its edges resize it. The
+//! window's active document in `ink4`, the panel's own actions, Dock back and
+//! the close) moves it, and its edges resize it. The
 //! body is the panel itself, following the main window's active document.
 //! Dock back and the close both close the window, which re-docks the panel
 //! in its home region (`WindowMsg::SecondaryWindowClosed`).
@@ -30,6 +30,8 @@ pub(super) struct StripFacts {
     pub(super) window: iced::window::Id,
     pub(super) panel_name: signex_i18n::Localized,
     pub(super) document: Option<String>,
+    /// The panel's title-bar actions (Refresh, Create Union, Recompile, ...).
+    pub(super) actions: Vec<Element<'static, Message>>,
     pub(super) dock_back_tip: signex_i18n::Localized,
     pub(super) theme: ThemeId,
 }
@@ -101,6 +103,9 @@ pub(super) fn title_strip(
             .width(Length::Fill)
             .boxed(),
     );
+    for action in facts.actions {
+        line = line.push(action);
+    }
     let dock_back = button(centred(glyph(
         crate::icons::icon_chrome_dock_back(facts.theme),
         ink2,
@@ -160,6 +165,28 @@ pub(super) fn title_strip(
         .boxed()
 }
 
+/// The panel's actions in a window the OS decorates: there is no title strip
+/// to hold them, so they get a right-aligned row over the body.
+fn native_action_row(
+    actions: Vec<Element<'static, Message>>,
+    background: Color,
+) -> Element<'static, Message> {
+    let mut line: iced::widget::Row<Element<'static, Message>> =
+        iced::widget::Row::new().align_y(iced::Alignment::Center);
+    for action in actions {
+        line = line.push(action);
+    }
+    container(line)
+        .padding(SP.xs)
+        .width(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Right)
+        .style(move |_: &iced::Theme| container::Style {
+            background: Some(Background::Color(background)),
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
 impl Signex {
     /// The whole detached panel window `window` showing `kind`: the title
     /// strip over the panel body, inside the resize edges.
@@ -188,7 +215,19 @@ impl Signex {
                 .boxed(),
         }
         .map(Message::Dock);
+        // Sent like the body's messages: a detached panel acts on the main
+        // window's document.
+        let actions: Vec<Element<'static, Message>> = crate::dock::title_actions(kind, ctx)
+            .into_iter()
+            .map(|action| action.map(Message::Dock).boxed())
+            .collect();
         let document = &self.document_state;
+        let borderless = self.dialog_window_is_borderless(window);
+        let (strip_actions, native_actions) = if borderless {
+            (actions, Vec::new())
+        } else {
+            (Vec::new(), actions)
+        };
         let facts = StripFacts {
             window,
             panel_name: signex_i18n::t!(i18n, kind.message()),
@@ -196,6 +235,7 @@ impl Signex {
                 .tabs
                 .get(document.active_tab)
                 .map(|tab| tab.title.clone()),
+            actions: strip_actions,
             dock_back_tip: signex_i18n::t!(i18n, signex_i18n::menu_ids::CTX_DOCK_BACK),
             theme: self.ui_state.effective_theme_id(),
         };
@@ -210,8 +250,14 @@ impl Signex {
             });
         // A window the OS decorates (native macOS controls) keeps its own
         // title bar, as the dialog windows do.
-        if !self.dialog_window_is_borderless(window) {
-            return body.boxed();
+        if !borderless {
+            if native_actions.is_empty() {
+                return body.boxed();
+            }
+            return column![native_action_row(native_actions, panel_bg), body]
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .boxed();
         }
         stack![
             column![title_strip(facts, &ctx.tokens), body]
@@ -235,9 +281,46 @@ mod tests {
             window: iced::window::Id::unique(),
             panel_name: signex_i18n::t!(en, PanelKind::Projects.message()),
             document: document.map(str::to_owned),
+            actions: Vec::new(),
             dock_back_tip: signex_i18n::t!(en, signex_i18n::menu_ids::CTX_DOCK_BACK),
             theme: ThemeId::GraphiteLight,
         }
+    }
+
+    /// #2764: a detached panel keeps its header actions, in the borderless
+    /// strip and in a window the OS decorates, and a click reaches the panel.
+    #[test]
+    fn a_detached_panel_window_keeps_its_header_actions() {
+        use crate::app::state::WindowKind;
+        use crate::dock::DockMessage;
+        use crate::panels::{MessagesPanelMsg, PanelMsg};
+        const WINDOW: iced::Size = iced::Size::new(600.0, 400.0);
+        let (mut app, _boot) = Signex::new();
+        let id = iced::window::Id::unique();
+        app.ui_state
+            .windows
+            .insert(id, WindowKind::DetachedPanel(PanelKind::Messages));
+        let clears = |messages: Vec<Message>| {
+            messages.iter().any(|m| {
+                matches!(
+                    m,
+                    Message::Dock(DockMessage::Panel(PanelMsg::MessagesView(
+                        MessagesPanelMsg::Cleared
+                    )))
+                )
+            })
+        };
+
+        // Clear is the last action, just inside the row's right edge.
+        let native = iced::Point::new(WINDOW.width - SP.xs - 4.0, SP.xs + 4.0);
+        let sent = crate::layout_probe::messages_on_click_at(app.view(id), WINDOW, None, native);
+        assert!(clears(sent), "no Clear in the OS-decorated window");
+
+        app.ui_state.borderless_dialog_windows.insert(id);
+        let right = WINDOW.width - CLOSE_W - SP.m - ICON_BUTTON - SP.m;
+        let strip = iced::Point::new(right - 4.0, STRIP_H / 2.0);
+        let sent = crate::layout_probe::messages_on_click_at(app.view(id), WINDOW, None, strip);
+        assert!(clears(sent), "no Clear in the title strip");
     }
 
     /// The strip names the panel and the active document, in Graphite

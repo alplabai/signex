@@ -48,6 +48,7 @@ impl Signex {
                 self.ui_state
                     .profile_manager
                     .apply_listing((*listing).clone());
+                self.keep_unsaved_machine_rules_shown();
                 Task::none()
             }
             ProfilesMsg::Selected(name) => {
