@@ -335,8 +335,9 @@ is tinted red; an undone one is struck through.
   narrow the list.
 - Click a row to see its arguments, the full error of a failed command
   (**Copy error** copies it), and the command as a `signex-cli run` line
-  (**Copy as CLI**). **Replay** runs it again with the same arguments, and
-  refuses a row that recorded none rather than act on the current selection;
+  (**Copy as CLI**). **Replay** runs it again on the items it acted on and
+  leaves your selection as it was. If one of those items is gone or its
+  document is closed, Replay says what is missing and changes nothing;
   **Jump to** shows the part, net or point it named.
 - Zoom, pan and selection commands are hidden until **More ▸ Show view
   commands** is on.

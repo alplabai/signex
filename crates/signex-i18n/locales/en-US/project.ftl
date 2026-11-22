@@ -259,10 +259,11 @@ project-defaults-fill-none = No fill
 project-defaults-fill-outline = Outline colour
 project-defaults-fill-background = Background colour
 project-defaults-reset = Reset to built-in ({ $value })
-project-defaults-clamped = Out of range ({ $min } to { $max }): { $used } is used.
 # A typed value the field refuses: the stored default stays. $min and $max are
 # millimetres.
 project-defaults-refused = Not applied: enter { $min } to { $max } mm.
+# The same for the text size. $min and $max are points.
+project-defaults-refused-pt = Not applied: enter { $min } to { $max } pt.
 project-defaults-caption = Grey values are the built-in defaults. An edited field has an accent border and a reset button; an invalid value has a red border, a tinted fill and a warning icon.
 project-defaults-preview = Preview
 project-defaults-preview-caption = schematic canvas · empty = built-in
@@ -272,4 +273,3 @@ project-defaults-preview-line = line { $value }
 project-defaults-preview-stroke = stroke { $value }
 project-defaults-preview-text = text { $value } pt
 project-defaults-preview-junction = ⌀ { $value }
-project-defaults-preview-clamped = { $label } ({ $typed } clamped)

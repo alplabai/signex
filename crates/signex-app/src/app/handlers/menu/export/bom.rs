@@ -84,6 +84,7 @@ impl Signex {
             issue_lines: Vec::new(),
             selected_row: None,
             scroll_x: 0.0,
+            export_pending: false,
         };
         preview.refresh_rows();
         self.document_state.bom_preview = Some(preview);
@@ -287,9 +288,13 @@ impl Signex {
     /// and finish in `handle_export_bom_finished`. Mirrors the
     /// PrintPreview → Export PDF pattern.
     pub(crate) fn handle_bom_preview_export(&mut self) -> Option<Task<Message>> {
-        let Some(preview) = self.document_state.bom_preview.as_ref() else {
+        let Some(preview) = self.document_state.bom_preview.as_mut() else {
             return Some(Task::none());
         };
+        preview.export_pending = true;
+        // A column drag cannot drop while the settings wait for the save.
+        preview.column_drag = None;
+        preview.column_drag_press_x = None;
         let options = preview.options.clone();
         let source = preview.source.clone();
         let (ext, format_filter) = match options.format {
@@ -334,6 +339,40 @@ impl Signex {
         ))
     }
 
+    /// Whether `msg` would change what Export writes while an Export is in
+    /// its save dialog or write. Those edits are not taken (#2792); viewing
+    /// the table, and Cancel, still work.
+    pub(crate) fn bom_edit_waits_for_save(&self, msg: &BomPreviewMsg) -> bool {
+        let pending = self
+            .document_state
+            .bom_preview
+            .as_ref()
+            .is_some_and(|preview| preview.export_pending);
+        pending
+            && matches!(
+                msg,
+                BomPreviewMsg::SetGrouping(..)
+                    | BomPreviewMsg::SetFormat(..)
+                    | BomPreviewMsg::NotFittedIncludedToggled(..)
+                    | BomPreviewMsg::SetRule(..)
+                    | BomPreviewMsg::ToggleColumn(..)
+                    | BomPreviewMsg::SetVariant(..)
+                    | BomPreviewMsg::ColumnDragStart(..)
+                    | BomPreviewMsg::ColumnDragDrop(..)
+                    | BomPreviewMsg::Export
+            )
+    }
+
+    /// The Export of `source` ended without closing its dialog: it takes
+    /// edits again.
+    fn end_bom_export(&mut self, source: &std::path::Path) {
+        if let Some(preview) = self.document_state.bom_preview.as_mut()
+            && preview.source == source
+        {
+            preview.export_pending = false;
+        }
+    }
+
     /// A BOM's write landed: report it, and close the dialog open for its
     /// document only when the file was written.
     pub(crate) fn handle_bom_written(
@@ -341,6 +380,7 @@ impl Signex {
         source: PathBuf,
         outcome: crate::app::contracts::ExportWriteOutcome,
     ) -> Task<Message> {
+        self.end_bom_export(&source);
         let is_written = outcome.result.is_ok();
         let reported = self.handle_export_written(outcome);
         let is_open_for_source = self
@@ -410,6 +450,7 @@ impl Signex {
             Ok(p) => p,
             Err(e) => {
                 log::info!("BOM export not written: {e}");
+                self.end_bom_export(&source);
                 return Task::none();
             }
         };
@@ -418,6 +459,7 @@ impl Signex {
             match super::build_bom_export_scope_for_source(&self.document_state, &source) {
                 Some(c) => c,
                 None => {
+                    self.end_bom_export(&source);
                     self.refuse_export(
                         signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_BOM_SOURCE_CLOSED)
                             .arg("path", source.display().to_string()),
@@ -480,6 +522,7 @@ impl Signex {
                 });
             }
             Err(e) => {
+                self.end_bom_export(&source);
                 self.report_export_failure(
                     signex_i18n::Translatable::new(signex_i18n::ids::NOTICE_BOM_EXPORT_FAILED)
                         .arg("error", e.to_string()),

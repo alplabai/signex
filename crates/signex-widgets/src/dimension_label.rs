@@ -349,16 +349,35 @@ impl DimensionLabels {
         event: &DimensionLabelMessage,
         labels: &[DimensionLabel<'_>],
     ) -> bool {
+        self.event_held(event, self.draft_refused(labels))
+    }
+
+    /// [`Self::event_refused`] for a caller with a stricter rule: `refused`
+    /// says whether the open field's text is refused.
+    pub fn event_held(&self, event: &DimensionLabelMessage, refused: bool) -> bool {
         use DimensionLabelMessage as M;
         let open = self.editing_index();
-        match *event {
-            M::DraftSubmitted | M::TabPressed { .. } => self.draft_refused(labels),
-            M::LabelPressed(i) | M::HandlePressed(i) => {
-                open.is_some_and(|o| o != i) && self.draft_refused(labels)
+        refused
+            && match *event {
+                M::DraftSubmitted | M::TabPressed { .. } => true,
+                M::LabelPressed(i) | M::HandlePressed(i) => open.is_some_and(|o| o != i),
+                M::DraftBlurred(i) => open == Some(i),
+                _ => false,
             }
-            M::DraftBlurred(i) => open == Some(i) && self.draft_refused(labels),
-            _ => false,
+    }
+
+    /// What the open field would commit: `None` while it holds the text it
+    /// opened with, or text that is not a length.
+    pub fn pending_value(&self, labels: &[DimensionLabel<'_>]) -> Option<DimensionCommitted> {
+        let editing = self.editing.as_ref()?;
+        if editing.draft.trim() == editing.opened.trim() {
+            return None;
         }
+        let value = labels.get(editing.index)?.format.parse(&editing.draft)?;
+        Some(DimensionCommitted {
+            index: editing.index,
+            value,
+        })
     }
 
     /// Index of the label whose handle is held.

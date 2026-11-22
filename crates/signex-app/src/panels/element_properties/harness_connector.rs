@@ -135,6 +135,12 @@ pub(crate) fn field_value(c: &HarnessConnector, field: HarnessField, page_y: f64
     }
 }
 
+/// Whether `field`'s box shows refused text: the panel keeps a draft only
+/// for text the field did not take; empty and a lone `-` are a start.
+fn draft_refused(draft: Option<&(HarnessField, String)>, field: HarnessField) -> bool {
+    draft.is_some_and(|(of, text)| *of == field && crate::numeric_field::text_refused(text, false))
+}
+
 pub(super) fn push_harness_connector_sections<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     ctx: &'a PanelContext,
@@ -217,13 +223,21 @@ pub(super) fn push_harness_connector_sections<'a>(
             Some((f, text)) if *f == field => text.clone(),
             _ => format!("{:.2}", field_value(c, field, ctx.shown_y(c.position.y))),
         };
-        form_edit_row(t!(i18n, field_label(field)), &shown, muted, move |text| {
-            PanelMsg::Harness(HarnessPanelMsg::FieldTyped {
-                connector: uuid,
-                field,
-                text,
-            })
-        })
+        let refused =
+            draft_refused(facts.draft.as_ref(), field).then(|| crate::styles::ti(ctx.tokens.error));
+        form_edit_row_refusable(
+            t!(i18n, field_label(field)),
+            &shown,
+            muted,
+            refused,
+            move |text| {
+                PanelMsg::Harness(HarnessPanelMsg::FieldTyped {
+                    connector: uuid,
+                    field,
+                    text,
+                })
+            },
+        )
     };
     let rows = [
         field(HarnessField::X),
@@ -424,4 +438,23 @@ fn colour_row<'a>(
     .spacing(SP.s)
     .align_y(iced::Alignment::Center)
     .boxed()
+}
+
+#[cfg(test)]
+mod refused_look_tests {
+    use super::{HarnessField, draft_refused};
+
+    /// #2792: Width and Entry pitch outline the text they refused, in their
+    /// own box only.
+    #[test]
+    fn a_refused_draft_marks_only_its_own_box() {
+        for field in [HarnessField::Width, HarnessField::EntryPitch] {
+            let draft = (field, "0".to_string());
+            assert!(draft_refused(Some(&draft), field), "{field:?}");
+            assert!(!draft_refused(Some(&draft), HarnessField::X));
+            let start = (field, "-".to_string());
+            assert!(!draft_refused(Some(&start), field), "a number's start");
+        }
+        assert!(!draft_refused(None, HarnessField::Width));
+    }
 }

@@ -14,6 +14,7 @@ use signex_i18n::{ids, t};
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 use crate::app::command::{CommandArgs, CommandOutcome};
+use crate::app::core::command_log::RecordedTargets;
 use crate::app::document_ids::DocumentTarget;
 use crate::app::{Message, Signex};
 use crate::keymap::AppCommandId;
@@ -22,6 +23,8 @@ use crate::panels::command_log::{
     COPIED_FOR, CommandLogMsg, CopyTarget, JumpTarget, LogOutcome, LogRow, LogSource,
 };
 
+#[path = "command_log_replay.rs"]
+mod replay;
 #[cfg(test)]
 #[path = "command_log_tests.rs"]
 mod tests;
@@ -107,13 +110,37 @@ impl Signex {
         window: Option<iced::window::Id>,
         run: impl FnOnce(&mut Self) -> (CommandOutcome, Task<Message>),
     ) -> (CommandOutcome, Task<Message>) {
+        self.logged_command_on(command, operands, None, window, run)
+    }
+
+    /// [`Self::logged_command`] for a command that acts on `targets`, read
+    /// before it ran: its row keeps them for Replay.
+    pub(crate) fn logged_command_on(
+        &mut self,
+        command: &AppCommandId,
+        operands: Map<String, Value>,
+        targets: Option<RecordedTargets>,
+        window: Option<iced::window::Id>,
+        run: impl FnOnce(&mut Self) -> (CommandOutcome, Task<Message>),
+    ) -> (CommandOutcome, Task<Message>) {
         let ticket = self.command_log_enter();
+        // The window's document as it ran: a command may close or switch it.
+        let document = self.command_document(window, &operands);
         let (outcome, task) = run(self);
         if let Some(took) = self.command_log_leave(ticket) {
             let logged = dispatch_outcome(command.as_str(), &outcome);
             let source = self.dispatch_source(window);
-            let document = self.command_document(window, &operands);
-            self.record_command(command.as_str(), operands, logged, took, source, document);
+            let document = if targets.is_some() {
+                document
+            } else {
+                self.command_document(window, &operands)
+            };
+            let seq =
+                self.record_command(command.as_str(), operands, logged, took, source, document);
+            if let (Some(seq), Some(targets)) = (seq, targets) {
+                self.ui_state.command_log.log.keep_targets(seq, targets);
+                self.sync_command_log_panel_ctx();
+            }
         }
         (outcome, task)
     }
@@ -376,9 +403,8 @@ impl Signex {
         ])
     }
 
-    /// Replay: run the row's command again, with the arguments it was given,
-    /// as the person's command. It is logged as a new row. A row with no
-    /// arguments is refused: its command would take the current selection.
+    /// Replay: run the row's command again as the person's command, on what
+    /// it acted on, and log it as a new row. Rules: `docs/COMMAND_LOG.md`.
     fn replay_logged_command(&mut self, seq: u64) -> Task<Message> {
         let Some(row) = self.ui_state.command_log.log.row(seq).cloned() else {
             return Task::none();
@@ -392,13 +418,8 @@ impl Signex {
             crate::diagnostics::log_warning(line.into_string());
             return Task::none();
         };
-        if row.operands.is_empty() {
-            let reason = signex_i18n::Translatable::new(ids::COMMAND_LOG_REPLAY_NO_ARGUMENTS);
-            let reason = signex_i18n::RenderTranslatable::render_en_us(&reason);
-            // Also in Messages: a paused log or a filter can hide the new row.
-            crate::diagnostics::log_warning(&reason);
-            self.record_refused_replay(&row, reason);
-            return Task::none();
+        if !row.has_given_operands() {
+            return self.replay_without_operands(&row, &command);
         }
         let texts = row.operand_texts();
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
@@ -416,10 +437,15 @@ impl Signex {
         }
     }
 
-    /// Log a Replay that did not run as a new failed GUI row with `reason`.
+    /// Log a Replay that did not run as a new failed GUI row with `reason`,
+    /// on the document and targets of the row it replays.
     fn record_refused_replay(&mut self, row: &LogRow, reason: String) {
-        let document = self.command_document(None, &row.operands);
-        self.record_command(
+        let document = row
+            .document
+            .clone()
+            .or_else(|| self.command_document(None, &row.operands));
+        let targets = self.ui_state.command_log.log.targets_of(row.seq).cloned();
+        let seq = self.record_command(
             row.command.as_str(),
             row.operands.clone(),
             LogOutcome::Failed(reason),
@@ -427,6 +453,10 @@ impl Signex {
             LogSource::Gui { window: None },
             document,
         );
+        if let (Some(seq), Some(targets)) = (seq, targets) {
+            self.ui_state.command_log.log.keep_targets(seq, targets);
+            self.sync_command_log_panel_ctx();
+        }
     }
 
     /// Jump to: show the object the row's arguments name on its sheet, the

@@ -161,13 +161,10 @@ fn replay_runs_the_command_again_as_a_new_gui_row() {
     assert_eq!(replayed.command, "place_wire");
     assert_eq!(replayed.source, LogSource::Gui { window: None });
     assert!(replayed.seq > first.seq);
-    assert!(
-        matches!(
-            &replayed.outcome,
-            LogOutcome::Failed(reason) if reason.contains("no recorded arguments")
-        ),
-        "a row with no arguments is refused: {:?}",
-        replayed.outcome
+    assert_eq!(
+        replayed.outcome,
+        LogOutcome::Failed("No schematic is open".to_string()),
+        "place_wire has no target, so it ran again and met the same refusal"
     );
 }
 

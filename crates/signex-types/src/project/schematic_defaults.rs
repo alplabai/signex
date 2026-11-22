@@ -116,13 +116,8 @@ impl SchematicDefaultField {
         }
     }
 
-    /// Whether typed text outside [`Self::range`] is refused rather than
-    /// stored clamped.
-    pub fn refuses_out_of_range(self) -> bool {
-        matches!(self, Self::JunctionDiameter)
-    }
-
-    /// `value` clamped into [`Self::range`].
+    /// `value` clamped into [`Self::range`]: how a value already in a file
+    /// resolves. Typed text outside the range is refused by the Project tab.
     pub fn clamped(self, value: f64) -> f64 {
         value.clamp(*self.range().start(), *self.range().end())
     }

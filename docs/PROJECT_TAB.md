@@ -133,18 +133,17 @@ message. The chrome catalog draws a sample of it.
   Font, Junction diameter (mm), then New shape fill. A number box carries
   its unit as a suffix and shows the built-in value in grey while empty.
   An edited field has an accent border and a reset button, which clears the
-  override exactly as emptying the field does; a value that is not a usable
-  number, or one that was clamped into the field's range, gives the box an
-  error border, a tinted fill and a warning icon, and a clamped value says
-  under the field what is used instead. Junction diameter takes 0.2 to 2 mm
-  and is never clamped as typed: a value outside is refused, the stored
-  default stays and the box keeps the text. The two pickers show "Built-in (…)"
-  while unset. Under the cards a live preview draws a small schematic in
-  the canvas colours with the values in effect (power port, wires with a
-  junction, a resistor, a net label, a bus with entries, a shape) and writes
-  each value beside its item: grey italic while the field is empty, in the
-  warning colour with the typed number when it was clamped. The drawing is
-  not editable; values are edited in the fields. Not built yet: editing a
+  override exactly as emptying the field does. A typed value is never
+  clamped: one that is not a usable number or is outside the field's range
+  is refused, the stored default stays and the box keeps the text, with an
+  error border, a tinted fill and a warning icon; a number outside the range
+  also gets a note under the field naming the allowed range. A value already
+  in a `.snxprj` is not rewritten and resolves into the range. The two
+  pickers show "Built-in (…)" while unset. Under the cards a live preview
+  draws a small schematic in the canvas colours with the values in effect
+  (power port, wires with a junction, a resistor, a net label, a bus with
+  entries, a shape) and writes each value beside its item, grey italic while
+  the field is empty. The drawing is not editable; values are edited in the fields. Not built yet: editing a
   value on the drawing and the junction and bus drag handles (follow-up
   issue "Project tab previews: edit values on the drawing", #2685).
 

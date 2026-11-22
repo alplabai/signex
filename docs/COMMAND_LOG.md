@@ -30,10 +30,12 @@ The model is `app::core::command_log` (UI-free); the app records rows in
   click on the canvas), panel interactions, and the panel's own actions.
 
 Each row keeps the time with milliseconds, the source, the catalog id and its
-label in the UI language, the operands as given (name to value; a GUI command
-has none), the outcome, how long the synchronous part of the dispatch took,
-the document it acted on (its `document` operand, else the window's document)
-and that document's project file.
+label in the UI language, the operands as given (name to value), the outcome,
+how long the synchronous part of the dispatch took, the document it acted on
+(its `document` operand, else the window's document) and that document's
+project file. A GUI command has no operands; one that acts on the selection
+records its targets (kind and stable id) as the `recorded_targets` argument,
+shown in the detail pane and the saved log and left out of the CLI line.
 
 ## Sources
 
@@ -90,12 +92,24 @@ panel says what it will list.
   `time`, `source`, `client`, `pid`, `window`, `id`, `args`, `result`, `text`,
   `took_ms`, `document`, `undoable`, `undone_at`), off the update thread.
   Nothing is written to disk unless asked.
-- **Replay** runs the row's command again with its recorded arguments, as the
-  person's command, and logs it as a new GUI row. A row with arguments runs
-  through the command's operand handler (`CommandArgs::parse_operands`, then
-  `run_operands`), as the CLI does. A row without is refused with the reason
-  (a new failed row and a Messages line), because its command would take the
-  current selection. A failed row fails the same way until its cause is fixed.
+- **Replay** runs the row's command again on what it acted on, as the person's
+  command, and logs it as a new GUI row; it is one undo step. A failed row
+  fails the same way until its cause is fixed. By the kind of row:
+  - **Operands:** runs through the command's operand handler
+    (`CommandArgs::parse_operands`, then `run_operands`), as the CLI does.
+  - **Recorded targets** (delete, cut, copy, rotate, mirror, flip, drawing
+    order): runs on exactly those items, in their document, in the window or
+    tab that shows it, then puts the person's selection back. A sheet behind
+    the one in view is brought forward for the run and left again, which ends
+    a placement in progress on the sheet in view.
+  - **Refused, nothing changes** (a new failed row and a Messages line): a
+    target is gone (the reason names it; Replay never runs on the survivors),
+    its document is not open, the row recorded no targets (a command run in a
+    footprint or symbol editor), or the command keeps working on the selection
+    after it starts (Move, Duplicate, Properties, a dialog on the selection).
+  - **No target** (place wire, a view command): runs again as it is, with the
+    current selection held aside. Select All and Unselect All run as they are:
+    the selection is what they change.
 - **Copy as CLI** copies the row as a `signex-cli run` line (the Usage of
   `docs/CLI.md`): `signex-cli run <project file> <command-id> --arg
   name=value ...`. Each value is the text `--arg` takes (a point as `x,y`),

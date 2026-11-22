@@ -45,7 +45,7 @@ impl Signex {
                 dialog_button(
                     t!(i18n, export_label(preview.options.format)),
                     DialogButtonKind::Primary,
-                    Some(Message::BomPreview(BomPreviewMsg::Export)),
+                    (!preview.export_pending).then_some(Message::BomPreview(BomPreviewMsg::Export)),
                     tokens,
                 ),
             ]

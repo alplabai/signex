@@ -14,7 +14,7 @@ use signex_widgets::dimension_label::{
 };
 
 use crate::canvas::grid::{
-    FAST_GRIDS_MM, fast_grid_field_text, parse_fast_grid_field, pitch_mm_exact,
+    FAST_GRIDS_MM, fast_grid_field_text, fast_grid_mm, parse_fast_grid_field, pitch_mm_exact,
 };
 
 pub(in crate::preferences) mod controls;
@@ -138,8 +138,9 @@ impl PagesViewState {
 
     /// Run a pitch label event against the labels of `drafts`. A value set
     /// on the drawing comes back as field text, so the handler writes it
-    /// through the field's own draft message. Text that is not a length
-    /// keeps the label open and changes nothing (#2792); Esc closes it.
+    /// through the field's own draft message. Text that is not a length, or
+    /// a length no fast grid can hold, keeps the label open and changes
+    /// nothing (#2792); Esc closes it.
     pub(crate) fn snap_label_event(
         &mut self,
         message: DimensionLabelMessage,
@@ -150,7 +151,10 @@ impl PagesViewState {
             pitch_label(0, &drafts[0], i18n),
             pitch_label(1, &drafts[1], i18n),
         ];
-        if self.snap_labels.event_refused(&message, &labels) {
+        if self
+            .snap_labels
+            .event_held(&message, self.pitch_refused(&labels))
+        {
             return SnapLabelStep::default();
         }
         let outcome = self.snap_labels.update(message, &labels);
@@ -160,6 +164,24 @@ impl PagesViewState {
                 .map(|c| (c.index, fast_grid_field_text(c.value as f32))),
             focus_field: outcome.focus_input,
         }
+    }
+
+    /// Whether the open pitch label holds text it refuses: Preferences OK
+    /// and Apply leave the dialog open on it, as Grid Properties OK does.
+    pub(crate) fn snap_label_refused(&self, drafts: &[String; 2], i18n: &I18n) -> bool {
+        self.pitch_refused(&[
+            pitch_label(0, &drafts[0], i18n),
+            pitch_label(1, &drafts[1], i18n),
+        ])
+    }
+
+    /// Not a length, or a length that does not survive as an `f32` grid.
+    fn pitch_refused(&self, labels: &[DimensionLabel<'_>]) -> bool {
+        self.snap_labels.draft_refused(labels)
+            || self
+                .snap_labels
+                .pending_value(labels)
+                .is_some_and(|pending| fast_grid_mm(pending.value).is_err())
     }
 
     /// Focus the open pitch field and select its text.
@@ -298,5 +320,25 @@ mod tests {
         }
         let _ = state.snap_label_event(M::EscapePressed, &drafts, &en);
         assert_eq!(state.snap_label_editing(), None, "Esc still closes it");
+    }
+
+    /// 1e300 is a finite `f64`, but as an `f32` grid it would be infinity.
+    #[test]
+    fn a_pitch_too_large_for_a_grid_is_refused_and_stays_open() {
+        use DimensionLabelMessage as M;
+        let en = I18n::en_us();
+        let drafts = ["1.27".to_string(), "2.54".to_string()];
+        let mut state = PagesViewState::default();
+        let _ = state.snap_label_event(M::LabelPressed(0), &drafts, &en);
+        assert!(!state.snap_label_refused(&drafts, &en), "as it opened");
+        let _ = state.snap_label_event(M::DraftEdited("1e300".into()), &drafts, &en);
+        assert!(state.snap_label_refused(&drafts, &en));
+        let step = state.snap_label_event(M::DraftSubmitted, &drafts, &en);
+        assert_eq!(step, SnapLabelStep::default(), "nothing is committed");
+        assert_eq!(state.snap_labels().draft(), Some("1e300"));
+        let _ = state.snap_label_event(M::DraftEdited("0.5".into()), &drafts, &en);
+        assert!(!state.snap_label_refused(&drafts, &en));
+        let step = state.snap_label_event(M::DraftSubmitted, &drafts, &en);
+        assert_eq!(step.committed, Some((0, "0.5".to_string())));
     }
 }

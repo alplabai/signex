@@ -434,12 +434,24 @@ pub fn form_edit_row<'a>(
     label_c: Color,
     on_input: impl Fn(String) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
+    form_edit_row_refusable(label, value, label_c, None, on_input)
+}
+
+/// [`form_edit_row`] whose box is outlined in `refused` while it holds text
+/// the field refused.
+pub fn form_edit_row_refusable<'a>(
+    label: impl Into<signex_widgets::Label<'a>>,
+    value: &str,
+    label_c: Color,
+    refused: Option<Color>,
+    on_input: impl Fn(String) -> PanelMsg + 'a,
+) -> Element<'a, PanelMsg> {
     let input =
         signex_widgets::text_input(signex_i18n::UserText::new(String::new()), value.to_string())
             .on_input(on_input)
             .size(TS.body)
             .padding(SP.s)
-            .style(form_look::text_input_style)
+            .style(form_look::refusable_input_style(refused))
             .width(Length::Fill)
             .boxed();
     container(

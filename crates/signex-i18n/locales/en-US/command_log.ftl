@@ -52,7 +52,13 @@ command-log-replay = Replay
 command-log-jump-to = Jump to { $target }
 command-log-jump-to-object = Jump to object
 command-log-replay-failed-hint = Replay runs it again with the same arguments; it fails the same way until the cause is fixed.
-command-log-replay-no-arguments = Not replayed: this row has no recorded arguments, and Replay never acts on the current selection.
+command-log-replay-no-targets = Not replayed: this row recorded no targets, and Replay never acts on the current selection.
+# $command is the command's label.
+command-log-replay-live-selection = Not replayed: { $command } keeps working on the selection after it starts, so it cannot run on recorded targets.
+# $missing lists each missing item's kind and id.
+command-log-replay-target-gone = Not replayed: { $count } recorded targets are no longer in { $document }: { $missing }
+command-log-replay-document-closed = Not replayed: { $document } is not open.
+command-log-replay-document-busy = Not replayed: { $document } cannot be brought forward right now.
 command-log-client-window = Signex window 1
 command-log-client-undocked = Signex window of { $document }
 command-log-client-pid = pid { $pid }

@@ -302,47 +302,33 @@ fn a_defaults_change_clears_every_schematic_canvas() {
     });
 }
 
-/// Review of #2026: a typed default outside its range is stored clamped,
-/// the field says so, and a file value out of range resolves clamped
-/// without being rewritten.
+/// Caner (2026-11-22): a typed default outside its range is refused on every
+/// field, the box keeps the text and names the range. A file value out of
+/// range still resolves into it without being rewritten.
 #[test]
-fn an_out_of_range_default_is_clamped_and_reported() {
-    use signex_types::project::MAX_DEFAULT_WIDTH_MM;
+fn an_out_of_range_default_is_refused_and_names_the_range() {
+    use super::schematic_defaults::{FieldState, field_state, refused_range};
     let (mut app, _sheet, _window) = app();
-    edit(&mut app, SchematicDefaultField::WireWidth, "12");
-    let stored = app.document_state.projects[0]
-        .data
-        .schematic_defaults
-        .wire_width_mm;
-    assert_eq!(stored, Some(MAX_DEFAULT_WIDTH_MM));
-    let draft = "12".to_string();
-    let note =
-        super::schematic_defaults::clamp_note(SchematicDefaultField::WireWidth, Some(&draft))
-            .expect("the field reports the clamp");
-    let range = SchematicDefaultField::WireWidth.range();
-    assert_eq!(
-        note.used, MAX_DEFAULT_WIDTH_MM,
-        "the note names the value used"
-    );
-    assert_eq!(stored, Some(note.used), "and that is the stored value");
-    assert_eq!((note.min, note.max), (*range.start(), *range.end()));
-    edit(&mut app, SchematicDefaultField::WireWidth, "0.01");
-    assert_eq!(
-        app.document_state.projects[0]
-            .data
-            .schematic_defaults
-            .wire_width_mm,
-        Some(0.15)
-    );
-    // Text: a tiny size never places at 0 pt.
-    edit(&mut app, SchematicDefaultField::TextSize, "0.2");
-    let pre = app.document_state.new_pre_placement(
-        String::new(),
-        crate::panels::PrePlacementKind::Other,
-        String::new(),
-        (0.0, 0.0),
-    );
-    assert_eq!(pre.font_size_pt, 1);
+    let project_id = app.document_state.projects[0].id;
+    for field in SchematicDefaultField::ALL {
+        let range = field.range();
+        let (low, high) = (*range.start(), *range.end());
+        edit(&mut app, field, &format!("{low}"));
+        for bad in [format!("{}", low * 0.9), format!("{}", high * 1.1)] {
+            edit(&mut app, field, &bad);
+            let stored = app.document_state.projects[0]
+                .data
+                .schematic_defaults
+                .get(field);
+            assert_eq!(stored, Some(low), "{field:?} refuses {bad}");
+            let draft = app.document_state.project_tabs[&project_id]
+                .default_drafts
+                .get(&field);
+            assert_eq!(draft, Some(&bad), "{field:?} keeps the text");
+            assert_eq!(refused_range(field, draft), Some((low, high)));
+            assert_eq!(field_state(field, draft, Some(low)), FieldState::Invalid);
+        }
+    }
 
     let raw = signex_types::project::SchematicDefaultOverrides {
         bus_width_mm: Some(50.0),
@@ -393,7 +379,7 @@ fn unusable_input_keeps_the_default_and_only_empty_text_clears() {
 /// the stored default stays, the box keeps the text and reads invalid.
 #[test]
 fn a_junction_default_outside_the_range_is_refused_with_the_text_kept() {
-    use super::schematic_defaults::{FieldState, clamp_note, field_state};
+    use super::schematic_defaults::{FieldState, field_state, refused_range};
     let field = SchematicDefaultField::JunctionDiameter;
     assert_eq!(field.range(), 0.2..=2.0);
     let (mut app, _sheet, _window) = app();
@@ -416,7 +402,7 @@ fn a_junction_default_outside_the_range_is_refused_with_the_text_kept() {
             .default_drafts
             .get(&field);
         assert_eq!(draft.map(String::as_str), Some(bad), "the text stays");
-        assert_eq!(clamp_note(field, draft), None, "nothing was clamped");
+        assert_eq!(refused_range(field, draft), Some((0.2, 2.0)));
         assert_eq!(field_state(field, draft, Some(2.0)), FieldState::Invalid);
     }
 }
@@ -441,17 +427,23 @@ fn a_refused_junction_value_names_the_allowed_range() {
     }
     assert_eq!(
         refused_range(SchematicDefaultField::WireWidth, Some(&typed("12"))),
-        None,
-        "a clamping field keeps its clamp note"
+        Some((0.15, 5.0)),
+        "every field names its range"
     );
-    let words = signex_i18n::I18n::en_us().message_plain(
-        ids::PROJECT_DEFAULTS_REFUSED,
-        &[
-            ("min", Arg::from("0.2".to_string())),
-            ("max", Arg::from("2".to_string())),
-        ],
+    assert_eq!(
+        refused_range(junction, Some(&typed("1e999"))),
+        Some((0.2, 2.0)),
+        "a number too large for f64 is outside the range too"
     );
+    let i18n = signex_i18n::I18n::en_us();
+    let args = [
+        ("min", Arg::from("0.2".to_string())),
+        ("max", Arg::from("2".to_string())),
+    ];
+    let words = i18n.message_plain(ids::PROJECT_DEFAULTS_REFUSED, &args);
     assert_eq!(words, "Not applied: enter 0.2 to 2 mm.");
+    let points = i18n.message_plain(ids::PROJECT_DEFAULTS_REFUSED_PT, &args);
+    assert_eq!(points, "Not applied: enter 0.2 to 2 pt.");
 }
 
 /// Review of #2026: a late edit for a project that is no longer loaded
@@ -495,8 +487,7 @@ fn a_rectangle_placed_on_a_project_sheet_stores_the_project_shape_stroke() {
 }
 
 /// Mockup row 36: a field box is built-in while empty, edited while it holds
-/// an override, and invalid when its typed text is not a usable number or
-/// was clamped.
+/// an override, and invalid when its typed text is refused.
 #[test]
 fn a_default_field_reads_built_in_edited_or_invalid() {
     use super::schematic_defaults::{FieldState, field_state};
@@ -534,7 +525,7 @@ fn a_default_field_reads_built_in_edited_or_invalid() {
     assert_eq!(
         field_state(wire, Some(&typed("12")), Some(MAX_DEFAULT_WIDTH_MM)),
         FieldState::Invalid,
-        "a clamped number"
+        "a number outside the range"
     );
 }
 
@@ -542,9 +533,10 @@ fn a_default_field_reads_built_in_edited_or_invalid() {
 /// the override and empties the box.
 #[test]
 fn the_reset_button_clears_the_override_like_an_empty_field() {
-    use super::schematic_defaults::{FieldState, clamp_note, field_state};
+    use super::schematic_defaults::{FieldState, field_state, refused_range};
     let (mut app, _sheet, _window) = app();
     let bus = SchematicDefaultField::BusWidth;
+    edit(&mut app, bus, "0.5");
     edit(&mut app, bus, "50");
     let project_id = app.document_state.projects[0].id;
     let state = |app: &Signex| {
@@ -557,23 +549,23 @@ fn the_reset_button_clears_the_override_like_an_empty_field() {
             .get(bus);
         (
             field_state(bus, draft, stored),
-            clamp_note(bus, draft),
+            refused_range(bus, draft),
             stored,
         )
     };
     let (look, note, stored) = state(&app);
-    assert_eq!(look, FieldState::Invalid, "50 mm was clamped");
+    assert_eq!(look, FieldState::Invalid, "50 mm was refused");
     assert!(note.is_some());
-    assert_eq!(stored, Some(signex_types::project::MAX_BUS_WIDTH_MM));
+    assert_eq!(stored, Some(0.5), "the stored default stays");
     // What the reset button sends.
     edit(&mut app, bus, "");
     assert_eq!(state(&app), (FieldState::BuiltIn, None, None));
 }
 
-/// Mockup row 36: the preview writes each value beside its item, grey while
-/// the field is empty and with the typed number when it was clamped.
+/// Mockup row 36: the preview writes each value in effect beside its item,
+/// grey while the field is empty. A refused draft is not a value in effect.
 #[test]
-fn the_preview_labels_read_built_in_set_or_clamped() {
+fn the_preview_labels_read_built_in_or_set() {
     use super::schematic_defaults::{LabelLook, value_labels};
     use signex_types::project::{MAX_DEFAULT_WIDTH_MM, SchematicDefaultOverrides};
     let overrides = SchematicDefaultOverrides {
@@ -581,10 +573,8 @@ fn the_preview_labels_read_built_in_set_or_clamped() {
         shape_stroke_mm: Some(MAX_DEFAULT_WIDTH_MM),
         ..Default::default()
     };
-    let drafts =
-        std::collections::HashMap::from([(SchematicDefaultField::ShapeStroke, "9".to_string())]);
     let i18n = signex_i18n::I18n::en_us();
-    let labels = value_labels(&overrides, Some(&drafts), &i18n);
+    let labels = value_labels(&overrides, &i18n);
     assert_eq!(labels.len(), SchematicDefaultField::ALL.len());
     let label = |field| {
         labels
@@ -599,10 +589,6 @@ fn the_preview_labels_read_built_in_set_or_clamped() {
     assert_eq!(label(SchematicDefaultField::BusWidth).look, LabelLook::Set);
     assert!(label(SchematicDefaultField::BusWidth).words.contains("0.5"));
     let stroke = label(SchematicDefaultField::ShapeStroke);
-    assert_eq!(stroke.look, LabelLook::Clamped);
-    assert!(
-        stroke.words.contains('5') && stroke.words.contains('9'),
-        "{}",
-        stroke.words
-    );
+    assert_eq!(stroke.look, LabelLook::Set);
+    assert!(stroke.words.contains('5'), "{}", stroke.words);
 }
