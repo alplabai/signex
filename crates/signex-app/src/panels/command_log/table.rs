@@ -2,12 +2,14 @@
 //! per listed command, oldest at the top. A failed row is tinted, the picked
 //! row takes the soft accent and an undone row is struck through.
 
-use iced::widget::{Column, Row, container, row};
+use iced::widget::scrollable::{Direction, Scrollbar};
+use iced::widget::{Column, Row, container, row, scrollable};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{button, rich_text, span, text};
 
+use super::layout::{self, TableColumns};
 use super::{
     CM, CommandLogMsg, CommandLogState, LogRow, PanelContext, PanelMsg, SP, TS, message, mono,
     result_glyph, source_pill, text_tooltip, took_text, weighted,
@@ -17,12 +19,6 @@ use crate::styles::{
     tokens::{composite_over, hover_overlay, resolve},
 };
 
-/// Column widths of the mock (Arguments takes the rest).
-const TIME_W: f32 = 100.0;
-const SOURCE_W: f32 = 82.0;
-const COMMAND_W: f32 = 206.0;
-const RESULT_W: f32 = 196.0;
-const TOOK_W: f32 = 64.0;
 /// Side padding of a cell (the mock's 8 px).
 const CELL_PAD: f32 = SP.m;
 /// Strength of the error tint of a failed row over the panel.
@@ -35,16 +31,19 @@ const ID_SIZE: f32 = TS.body * 10.5 / 12.0;
 const RESULT_ICON: f32 = TS.body * 13.0 / 12.0;
 
 /// The header and the rows in a scroller that keeps the newest row in view
-/// while Follow newest is on.
+/// while Follow newest is on. A table too narrow for its columns' least
+/// widths scrolls sideways, header and rows together.
 pub(super) fn view<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
     visible: &[&'a LogRow],
     shown: Option<u64>,
+    width: f32,
 ) -> Element<'a, PanelMsg> {
+    let columns = layout::columns(width);
     let mut rows: Column<Element<'a, PanelMsg>> = Column::new().width(Length::Fill);
     for &row in visible {
-        rows = rows.push(table_row(ctx, row, shown == Some(row.seq)));
+        rows = rows.push(table_row(ctx, row, shown == Some(row.seq), columns));
     }
     let scroller = crate::panels::panel_scrollable(rows.boxed());
     let scroller = if state.follow_newest {
@@ -52,11 +51,26 @@ pub(super) fn view<'a>(
     } else {
         scroller
     };
+    let overflow = columns.overflow(width);
+    let table_width = if overflow {
+        Length::Fixed(columns.total())
+    } else {
+        Length::Fill
+    };
     let mut col: Column<Element<'a, PanelMsg>> =
-        Column::new().width(Length::Fill).height(Length::Fill);
-    col = col.push(header(ctx));
+        Column::new().width(table_width).height(Length::Fill);
+    col = col.push(header(ctx, columns));
     col = col.push(scroller.boxed());
-    col.boxed()
+    if !overflow {
+        return col.boxed();
+    }
+    scrollable(col.boxed())
+        .direction(Direction::Horizontal(
+            Scrollbar::new().width(SP.xs).scroller_width(SP.xs),
+        ))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .boxed()
 }
 
 /// One fixed-width (or filling) cell, its content centred vertically.
@@ -74,7 +88,7 @@ fn cell<'a>(content: Element<'a, PanelMsg>, width: Length, right: bool) -> Eleme
     }
 }
 
-fn header<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
+fn header<'a>(ctx: &'a PanelContext, columns: TableColumns) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let i18n: &I18n = &ctx.i18n;
     let ink3 = resolve(tokens).ink3;
@@ -89,32 +103,32 @@ fn header<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let line = row![
         cell(
             caption(ids::COMMAND_LOG_COLUMN_TIME),
-            Length::Fixed(TIME_W),
+            Length::Fixed(columns.time),
             false
         ),
         cell(
             caption(ids::COMMAND_LOG_COLUMN_SOURCE),
-            Length::Fixed(SOURCE_W),
+            Length::Fixed(columns.source),
             false
         ),
         cell(
             caption(ids::COMMAND_LOG_COLUMN_COMMAND),
-            Length::Fixed(COMMAND_W),
+            Length::Fixed(columns.command),
             false
         ),
         cell(
             caption(ids::COMMAND_LOG_COLUMN_ARGUMENTS),
-            Length::Fill,
+            Length::Fixed(columns.arguments),
             false
         ),
         cell(
             caption(ids::COMMAND_LOG_COLUMN_RESULT),
-            Length::Fixed(RESULT_W),
+            Length::Fixed(columns.result),
             false
         ),
         cell(
             caption(ids::COMMAND_LOG_COLUMN_TOOK),
-            Length::Fixed(TOOK_W),
+            Length::Fixed(columns.took),
             true
         ),
     ]
@@ -156,7 +170,12 @@ fn row_fill(tokens: &ThemeTokens, row: &LogRow, picked: bool) -> Option<Color> {
 }
 
 /// One command: a button over its cells that picks it.
-fn table_row<'a>(ctx: &'a PanelContext, row: &'a LogRow, picked: bool) -> Element<'a, PanelMsg> {
+fn table_row<'a>(
+    ctx: &'a PanelContext,
+    row: &'a LogRow,
+    picked: bool,
+    columns: TableColumns,
+) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let i18n: &I18n = &ctx.i18n;
     let r = resolve(tokens);
@@ -184,23 +203,23 @@ fn table_row<'a>(ctx: &'a PanelContext, row: &'a LogRow, picked: bool) -> Elemen
     let cells: Row<Element<'a, PanelMsg>> = row![
         cell(
             mono_cell(row.at.format("%H:%M:%S%.3f").to_string(), muted),
-            Length::Fixed(TIME_W),
+            Length::Fixed(columns.time),
             false
         ),
         cell(
             source_pill(tokens, i18n, &row.source),
-            Length::Fixed(SOURCE_W),
+            Length::Fixed(columns.source),
             false
         ),
         cell(
             command_cell(row, ink, muted),
-            Length::Fixed(COMMAND_W),
+            Length::Fixed(columns.command),
             false
         ),
-        cell(arguments_cell, Length::Fill, false),
+        cell(arguments_cell, Length::Fixed(columns.arguments), false),
         cell(
             result_cell(tokens, i18n, row),
-            Length::Fixed(RESULT_W),
+            Length::Fixed(columns.result),
             false
         ),
         cell(
@@ -210,7 +229,7 @@ fn table_row<'a>(ctx: &'a PanelContext, row: &'a LogRow, picked: bool) -> Elemen
                 .color(muted)
                 .wrapping(iced::widget::text::Wrapping::None)
                 .boxed(),
-            Length::Fixed(TOOK_W),
+            Length::Fixed(columns.took),
             true
         ),
     ]

@@ -10,9 +10,9 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::text;
 
 use super::{
-    CLI_CLIENT, CommandLogMsg, CommandLogState, CopyTarget, DETAIL_WIDTH, GLYPH_THEME, JumpTarget,
-    LogSource, Look, PanelContext, PanelMsg, SP, TS, icon, icon_button, labelled_button, message,
-    mono, source_pill, took_text, weighted,
+    CLI_CLIENT, CommandLogMsg, CommandLogState, CopyTarget, GLYPH_THEME, JumpTarget, LogSource,
+    Look, PanelContext, PanelMsg, SP, TS, icon, icon_button, labelled_button, message, mono,
+    source_pill, took_text, weighted,
 };
 use crate::styles::{self, HAIRLINE, Radii, ti, tokens::resolve};
 
@@ -30,6 +30,7 @@ pub(super) fn view<'a>(
     ctx: &'a PanelContext,
     state: &'a CommandLogState,
     row: &'a super::LogRow,
+    width: f32,
 ) -> Element<'a, PanelMsg> {
     let tokens = &ctx.tokens;
     let i18n: &I18n = &ctx.i18n;
@@ -127,7 +128,7 @@ pub(super) fn view<'a>(
     );
     let edge = ti(tokens.border);
     container(body)
-        .width(DETAIL_WIDTH)
+        .width(width)
         .height(Length::Fill)
         .style(move |_: &Theme| container::Style {
             border: Border {
