@@ -133,7 +133,11 @@ fn an_unset_junction_draws_at_a_small_project_default() {
         ..B
     };
     assert_eq!(p.junction_radius_mm(0.0), 0.1);
-    assert_eq!(p.junction_radius_mm(0.4), 0.35, "a stored size keeps the floor");
+    assert_eq!(
+        p.junction_radius_mm(0.4),
+        0.35,
+        "a stored size keeps the floor"
+    );
 }
 
 #[test]

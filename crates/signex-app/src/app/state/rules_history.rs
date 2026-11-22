@@ -137,7 +137,10 @@ mod order_tests {
         assert!(history.steps_before_general(true, 1), "then the rule step");
         history.undo(state()).expect("a step");
         assert!(!history.steps_before_general(true, 1), "none left");
-        assert!(!history.steps_before_general(false, 0), "General redo first");
+        assert!(
+            !history.steps_before_general(false, 0),
+            "General redo first"
+        );
         assert!(history.steps_before_general(false, 1), "then the rule step");
         history.redo(state()).expect("a step");
         assert!(!history.steps_before_general(false, 1), "none left");

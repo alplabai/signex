@@ -52,7 +52,10 @@ fn undo_in_the_tab_walks_general_and_rule_steps_in_edit_order() {
             text: "before".to_string(),
         },
     );
-    tab(&mut app, ProjectTabMsg::ErcRulesStoreRequested { project_id });
+    tab(
+        &mut app,
+        ProjectTabMsg::ErcRulesStoreRequested { project_id },
+    );
     let before = Some("before".to_string());
     assert_eq!(read(&app), (before.clone(), true));
     step(&mut app, EditMsg::Undo);
@@ -60,7 +63,11 @@ fn undo_in_the_tab_walks_general_and_rule_steps_in_edit_order() {
     step(&mut app, EditMsg::Undo);
     assert_eq!(read(&app), (None, false), "then the older edit");
     step(&mut app, EditMsg::Redo);
-    assert_eq!(read(&app), (before.clone(), false), "redo in the same order");
+    assert_eq!(
+        read(&app),
+        (before.clone(), false),
+        "redo in the same order"
+    );
     step(&mut app, EditMsg::Redo);
     assert_eq!(read(&app), (before, true));
 }
