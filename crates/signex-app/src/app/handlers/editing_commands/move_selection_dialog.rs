@@ -26,12 +26,15 @@ pub(crate) fn window_height() -> f32 {
 }
 
 /// The offset `text` stands for in mm, typed in `unit`, for both the preview
-/// and Apply. 0 while the text is not a number (empty, `-`: mid-edit).
-/// `Err` (the reason) for `nan` / `inf` or a value that overflows, before or
-/// after the unit conversion: an infinite offset would send the selection
-/// to infinity.
+/// and Apply. 0 while the box is empty or holds a lone `-` (mid-edit).
+/// `Err` (the reason) for letters (#2767), and for `nan` / `inf` or a value
+/// that overflows, before or after the unit conversion: an infinite offset
+/// would send the selection to infinity.
 pub(crate) fn offset_mm(text: &str, unit: Unit) -> Result<f64, String> {
-    use signex_types::numeric::{FiniteParseError, parse_finite_f64};
+    use signex_types::numeric::parse_finite_f64;
+    if matches!(text.trim(), "" | "-") {
+        return Ok(0.0);
+    }
     match parse_finite_f64(text) {
         Ok(value) => {
             let mm = value * signex_types::measure::mm_per(unit);
@@ -41,8 +44,7 @@ pub(crate) fn offset_mm(text: &str, unit: Unit) -> Result<f64, String> {
                 Err(format!("{:?} is out of range", text.trim()))
             }
         }
-        Err(FiniteParseError::NotANumber(_)) => Ok(0.0),
-        Err(err @ FiniteParseError::NonFinite(_)) => Err(err.to_string()),
+        Err(err) => Err(err.to_string()),
     }
 }
 
@@ -111,6 +113,52 @@ mod tests {
         for bad in ["nan", "NaN", "inf", "-inf", "1e999", "-1e999"] {
             assert!(offset_mm(bad, Unit::Mm).is_err(), "{bad:?}");
         }
+    }
+
+    /// #2767: letters are refused, not read as a zero offset.
+    #[test]
+    fn an_offset_refuses_letters() {
+        for bad in ["abc", "1.5mm", "1,5", "--"] {
+            assert!(offset_mm(bad, Unit::Mm).is_err(), "{bad:?}");
+        }
+    }
+
+    /// #2766: Move closes the dialog's window on every way out.
+    #[test]
+    fn every_way_out_of_apply_closes_the_window() {
+        use signex_types::schematic::PageOrigin;
+        let window_count = |app: &Signex| app.ui_state.windows.len();
+        for (dx, keep_selection) in [("5.08", true), ("0", true), ("5.08", false)] {
+            let (mut app, _window) = app_on_sheet(PageOrigin::LowerLeft);
+            let before = window_count(&app);
+            let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Open));
+            assert_eq!(window_count(&app), before + 1);
+            if !keep_selection {
+                app.interaction_state.active_canvas_mut().selected.clear();
+            }
+            let _ = app.update(Message::MoveSelection(MoveSelectionMsg::DxChanged(
+                dx.to_string(),
+            )));
+            let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
+            assert!(!app.ui_state.move_selection.open, "{dx} {keep_selection}");
+            assert_eq!(window_count(&app), before, "{dx} {keep_selection}");
+        }
+    }
+
+    /// A refused offset keeps the dialog and its window to fix the box.
+    #[test]
+    fn a_refused_offset_keeps_the_window() {
+        use signex_types::schematic::PageOrigin;
+        let (mut app, _window) = app_on_sheet(PageOrigin::LowerLeft);
+        let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Open));
+        let open = app.ui_state.windows.len();
+        let _ = app.update(Message::MoveSelection(MoveSelectionMsg::DxChanged(
+            "abc".to_string(),
+        )));
+        let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
+        assert!(app.ui_state.move_selection.open);
+        assert_eq!(app.ui_state.windows.len(), open);
+        assert_eq!(app.ui_state.move_selection.dx, "abc");
     }
 
     /// A finite number that overflows once converted to mm is refused too.

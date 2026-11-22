@@ -146,11 +146,14 @@ fn offset_field<'a>(
     let muted = crate::styles::ti(tokens.text_secondary);
     let ink3 = crate::styles::tokens::resolve(tokens).ink3;
     let suffix = UserText::new(unit.to_string());
+    let refused = offset_mm(value, unit).is_err();
     let mut input = text_input(
         t!(app.ui_state.i18n, ids::PLACEHOLDER_MOVE_OFFSET),
         value.to_owned(),
     )
-    .style(crate::panels::form_look::text_input_style)
+    .style(crate::panels::form_look::refusable_input_style(
+        refused.then(|| crate::styles::ti(tokens.error)),
+    ))
     .on_input(on_input)
     .on_submit(Message::MoveSelection(MoveSelectionMsg::Apply))
     .padding(iced::Padding {

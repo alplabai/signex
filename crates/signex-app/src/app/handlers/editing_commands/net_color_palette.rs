@@ -193,6 +193,13 @@ impl Signex {
             }
             NetColorMsg::CustomShow(show) => {
                 let custom = &mut self.ui_state.net_color_custom;
+                if show && !custom.show {
+                    custom.draft_at_open = custom.draft;
+                }
+                // Cancel: the pick is not offered again on the next open.
+                if !show && custom.show {
+                    custom.draft = custom.draft_at_open;
+                }
                 custom.show = show;
                 if !show {
                     custom.net = None;
@@ -234,6 +241,9 @@ impl Signex {
                     .map(|c| iced::Color::from_rgb8(c.r, c.g, c.b));
                 let sheet = self.document_state.active_path.clone();
                 let custom = &mut self.ui_state.net_color_custom;
+                if !custom.show {
+                    custom.draft_at_open = custom.draft;
+                }
                 if let Some(seed) = seed {
                     custom.draft = seed;
                 }

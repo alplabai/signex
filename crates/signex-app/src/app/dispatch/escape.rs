@@ -36,6 +36,10 @@ impl Signex {
     ) -> Task<Message> {
         // #1378 - Esc abandons a pending chord, a waiting `T A` included.
         self.cancel_pending_chord();
+        // Esc in a drawing's number box puts the old value back (#2768).
+        if self.restore_drawing_field() {
+            return self.finish_update();
+        }
         // Esc in the status bar's angle field closes it and goes no further
         // (#2316): the board's tool and selection stay.
         if self.close_view_angle_entry_in(window) {

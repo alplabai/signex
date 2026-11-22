@@ -191,6 +191,9 @@ impl Signex {
         // Text typed into a note that is no longer selected (another pick, a
         // tab switch) goes to its own sheet as one edit.
         self.settle_owed_note_drafts();
+        // So does a drawing value still typed when its field's drawing goes.
+        self.settle_live_drawing_edit();
+        self.drop_line_width_text_of_another_symbol();
         // The Grid & Snap popover goes with its sheet or under a new dialog.
         self.sync_grid_snap_popover(popover);
         // Cross select follows whatever this message selected, and a Cross

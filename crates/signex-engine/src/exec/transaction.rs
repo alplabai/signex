@@ -50,6 +50,7 @@ impl Engine {
         if self.history_suppressed || self.transaction.is_some() {
             return Err(EngineError::TransactionOpen);
         }
+        self.commit_live_edit();
         // A run of typing in one cell ends here: the transaction is its own entry.
         self.field_edit_run = None;
         self.transaction = Some(Transaction {

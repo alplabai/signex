@@ -292,20 +292,20 @@ impl Signex {
                     true,
                 );
             }
-            crate::panels::PanelMsg::ChildSheetStrokeWidthTyping(_uuid, value) => {
+            crate::panels::PanelMsg::ChildSheetStrokeWidthTyping(uuid, value) => {
                 self.document_state.panel_ctx.child_sheet_stroke_width_buf = Some(value.clone());
+                self.document_state.line_width_draft_owner = Some(*uuid);
             }
             crate::panels::PanelMsg::CommitChildSheetStrokeWidth(uuid) => {
-                let parsed = self
+                // Refused text stays in the box to be fixed (#2767).
+                let typed = self
                     .document_state
                     .panel_ctx
                     .child_sheet_stroke_width_buf
-                    .as_ref()
-                    .and_then(|s| crate::numeric_field::parse_field_f64(s));
-                self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
-                if let Some(width) = parsed
-                    && width >= 0.0
-                {
+                    .as_deref()
+                    .and_then(crate::numeric_field::typed_line_width);
+                if let Some(width) = typed {
+                    self.document_state.panel_ctx.child_sheet_stroke_width_buf = None;
                     self.apply_engine_command(
                         signex_engine::Command::UpdateChildSheetStyle {
                             sheet_id: *uuid,
@@ -353,6 +353,19 @@ impl Signex {
         }
 
         true
+    }
+
+    /// Refused Line Width text belongs to its sheet symbol: a panel showing
+    /// another selection drops it. Run after every message.
+    pub(crate) fn drop_line_width_text_of_another_symbol(&mut self) {
+        let docs = &mut self.document_state;
+        let owner = docs.line_width_draft_owner;
+        let panels = std::iter::once(&mut docs.panel_ctx).chain(docs.window_panel_ctx.values_mut());
+        for ctx in panels {
+            if ctx.child_sheet_stroke_width_buf.is_some() && ctx.selected_uuid != owner {
+                ctx.child_sheet_stroke_width_buf = None;
+            }
+        }
     }
 }
 

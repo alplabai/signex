@@ -134,6 +134,20 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
     }
 }
 
+/// [`text_input_style`] with the outline in `error` while the box holds text
+/// it refuses (#2767).
+pub(crate) fn refusable_input_style(
+    error: Option<Color>,
+) -> impl Fn(&Theme, text_input::Status) -> text_input::Style {
+    move |theme, status| {
+        let mut style = text_input_style(theme, status);
+        if let Some(error) = error {
+            style.border.color = error;
+        }
+        style
+    }
+}
+
 /// `checkbox` style for a form toggle.
 pub(crate) fn checkbox_style(theme: &Theme, status: checkbox::Status) -> checkbox::Style {
     let base = checkbox::primary(theme, status);

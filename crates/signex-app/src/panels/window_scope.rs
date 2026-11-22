@@ -348,6 +348,7 @@ impl PanelMsg {
             | Self::SchLibraryDeleteCancelled { .. }
             | Self::UpdateDrawingEdit { .. }
             | Self::DrawingFieldTyping { .. }
+            | Self::DrawingFieldLeft { .. }
             | Self::Annotation { .. }
             | Self::ToggleChildSheetBorderPicker { .. }
             | Self::ToggleChildSheetFillPicker { .. }

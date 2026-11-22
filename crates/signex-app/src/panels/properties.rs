@@ -51,6 +51,45 @@ impl DrawingFieldId {
                 | Self::ArcCenterY
         )
     }
+
+    /// The edit this box makes with `value`.
+    pub fn edit(self, value: f64) -> crate::app::contracts::DrawingFieldEdit {
+        use crate::app::contracts::DrawingFieldEdit as E;
+        match self {
+            Self::LineStartX => E::LineStartX(value),
+            Self::LineStartY => E::LineStartY(value),
+            Self::LineEndX => E::LineEndX(value),
+            Self::LineEndY => E::LineEndY(value),
+            Self::RectStartX => E::RectStartX(value),
+            Self::RectStartY => E::RectStartY(value),
+            Self::RectWidth => E::RectWidthMm(value),
+            Self::RectHeight => E::RectHeightMm(value),
+            Self::CircleCenterX => E::CircleCenterX(value),
+            Self::CircleCenterY => E::CircleCenterY(value),
+            Self::CircleRadius => E::CircleRadius(value),
+            Self::ArcCenterX => E::ArcCenterX(value),
+            Self::ArcCenterY => E::ArcCenterY(value),
+            Self::ArcRadius => E::ArcRadius(value),
+            Self::ArcStartAngle => E::ArcStartAngle(value),
+            Self::ArcEndAngle => E::ArcEndAngle(value),
+            Self::LineWidth
+            | Self::RectBorder
+            | Self::CircleBorder
+            | Self::ArcWidth
+            | Self::PolyBorder => E::Width(value),
+        }
+    }
+
+    /// Whether `text` reads as a value this box can store.
+    pub fn reads(self, text: &str) -> bool {
+        signex_types::numeric::parse_finite_f64(text).is_ok_and(|v| self.edit(v).is_valid())
+    }
+
+    /// Whether the box shows `text` as invalid: not a value it can store and
+    /// not the start of one (empty, a lone `-`).
+    pub fn refuses(self, text: &str) -> bool {
+        !matches!(text.trim(), "" | "-") && !self.reads(text)
+    }
 }
 
 // ─── Properties Panel (matched to Altium Designer) ───────────

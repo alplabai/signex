@@ -152,6 +152,7 @@ impl Engine {
     /// The document now matches the file just written: remember this point
     /// of the history, so undoing or redoing back to it is clean again.
     pub fn mark_saved(&mut self) {
+        self.commit_live_edit();
         self.history.mark_saved();
     }
 
@@ -177,6 +178,7 @@ impl Engine {
     /// never touches the document or its save point, and it keeps the
     /// sheet's redo branch: a pick does not change the sheet.
     pub fn record_class_pick(&mut self, marker: ClassPickMarker) {
+        self.commit_live_edit();
         self.field_edit_run = None;
         self.history.record_inert(HistoryStep::Pick(marker));
     }
@@ -328,6 +330,7 @@ impl Engine {
     }
 
     pub fn undo(&mut self) -> Result<Option<PatchPair>, EngineError> {
+        self.commit_live_edit();
         self.field_edit_run = None;
         // An empty stack, or a marker the app has yet to step, changes
         // nothing, so it moves no revision.
@@ -384,6 +387,7 @@ impl Engine {
     }
 
     pub fn redo(&mut self) -> Result<Option<PatchPair>, EngineError> {
+        self.commit_live_edit();
         self.field_edit_run = None;
         // As in `undo`: nothing to move, no revision.
         if self.next_class_pick(false).is_some() {
@@ -432,6 +436,8 @@ impl Engine {
             self.absorb_into_transaction(patch_pair);
             return;
         }
+        // An open preview is the step under this one (`exec/live_edit.rs`).
+        self.commit_live_edit();
 
         // Share every collection the step left unchanged with the entry
         // before it, so a long history holds one copy of each.

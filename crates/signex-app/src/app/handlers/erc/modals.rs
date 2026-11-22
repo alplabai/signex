@@ -398,11 +398,10 @@ impl Signex {
                 return self
                     .run_in_window_document(window, |app| app.handle_move_selection_apply());
             }
-            self.ui_state.move_selection.open = false;
             crate::diagnostics::log_info(
                 "Move Selection closed: the sheet it was opened on is no longer shown",
             );
-            return Task::none();
+            return self.finish_move_selection();
         }
         // Classify both axes before acting: a refused axis must not be read
         // as "0 on that axis" while the other still moves the selection.
@@ -414,15 +413,13 @@ impl Signex {
             return Task::none();
         };
         if dx == 0.0 && dy == 0.0 {
-            self.ui_state.move_selection.open = false;
-            return Task::none();
+            return self.finish_move_selection();
         }
         let items = self.interaction_state.active_canvas_mut().selected.clone();
         if items.is_empty() {
-            self.ui_state.move_selection.open = false;
-            return Task::none();
+            return self.finish_move_selection();
         }
-        self.ui_state.move_selection.open = false;
+        let closed = self.finish_move_selection();
         // Through the mutation gateway, not `engine.execute` directly: the
         // gateway consumes the `CommandResult` this used to discard, so the
         // sheet is marked dirty — without it the quit guard sees a
@@ -440,7 +437,13 @@ impl Signex {
             true,
             true,
         );
-        Task::none()
+        closed
+    }
+
+    /// The dialog is done: its state and its own window both go (#2766).
+    fn finish_move_selection(&mut self) -> Task<Message> {
+        self.ui_state.move_selection.open = false;
+        self.close_detached_modal(super::super::super::state::ModalId::MoveSelection)
     }
 }
 

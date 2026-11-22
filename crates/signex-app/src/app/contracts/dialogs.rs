@@ -693,3 +693,30 @@ pub enum DrawingFieldEdit {
     /// the drawing itself: it is stored per sheet.
     Placement(signex_types::schematic::DrawingPlacement),
 }
+
+impl DrawingFieldEdit {
+    /// Whether the value can be stored (#2767): a size or radius is above
+    /// zero, a stroke is zero or more, and every number is finite.
+    pub fn is_valid(self) -> bool {
+        match self {
+            Self::Width(v) => v.is_finite() && v >= 0.0,
+            Self::RectWidthMm(v)
+            | Self::RectHeightMm(v)
+            | Self::CircleRadius(v)
+            | Self::ArcRadius(v) => v.is_finite() && v > 0.0,
+            Self::LineStartX(v)
+            | Self::LineStartY(v)
+            | Self::LineEndX(v)
+            | Self::LineEndY(v)
+            | Self::RectStartX(v)
+            | Self::RectStartY(v)
+            | Self::CircleCenterX(v)
+            | Self::CircleCenterY(v)
+            | Self::ArcCenterX(v)
+            | Self::ArcCenterY(v)
+            | Self::ArcStartAngle(v)
+            | Self::ArcEndAngle(v) => v.is_finite(),
+            Self::Fill(_) | Self::StrokeColor(_) | Self::Placement(_) => true,
+        }
+    }
+}

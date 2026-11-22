@@ -579,6 +579,8 @@ impl Signex {
             },
             document_state: DocumentState {
                 drafts: drafts.clone(),
+                live_drawing_edit: None,
+                line_width_draft_owner: None,
                 dock,
                 dock_layout_sync,
                 search_prefs,

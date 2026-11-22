@@ -307,6 +307,7 @@ fn style_section<'a>(
         ctx.child_sheet_fill_advanced_open,
     );
     let stroke_width_buf = ctx.child_sheet_stroke_width_buf.clone();
+    let refused_ink = crate::styles::ti(ctx.tokens.error);
     let i18n: &'a signex_i18n::I18n = &ctx.i18n;
     ctx.collapsible(
         "sel_child_sheet_style",
@@ -354,6 +355,7 @@ fn style_section<'a>(
                         stroke_width,
                         stroke_width_buf,
                         palette.muted,
+                        refused_ink,
                         i18n,
                     ),
                 ))
@@ -535,16 +537,19 @@ fn child_sheet_stroke_width_row<'a>(
     stored_value: f64,
     buffered: Option<String>,
     muted: Color,
+    error: Color,
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     let placeholder = t!(i18n, ids::PLACEHOLDER_CHILD_SHEET_LINE_WIDTH);
+    let refused = (buffered.as_deref())
+        .is_some_and(|typed| crate::numeric_field::typed_line_width(typed).is_none());
     let input = signex_widgets::text_input(placeholder, line_width_text(stored_value, buffered))
         .size(TS.body)
         .padding(SP.s)
         .width(Length::Fill)
         .on_input(move |s| PanelMsg::ChildSheetStrokeWidthTyping(sheet_id, s))
         .on_submit(PanelMsg::CommitChildSheetStrokeWidth(sheet_id))
-        .style(form_look::text_input_style);
+        .style(form_look::refusable_input_style(refused.then_some(error)));
     let control = row![
         input,
         text(t!(i18n, ids::PROPERTIES_UNIT_MM))

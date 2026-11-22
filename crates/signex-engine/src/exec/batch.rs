@@ -119,6 +119,9 @@ impl Engine {
     /// stack holds an entry, and when called inside a batch. The checks are
     /// real (release builds too); the engine is left untouched on refusal.
     pub fn execute_unrecorded(&mut self, cmd: Command) -> Result<CommandResult, EngineError> {
+        if !self.history_suppressed {
+            self.commit_live_edit();
+        }
         if self.history_suppressed || self.history.can_undo() || self.history.can_redo() {
             return Err(EngineError::UnrecordedEditRefused);
         }

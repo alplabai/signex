@@ -15,6 +15,7 @@ mod drawings;
 mod edits;
 mod font_family;
 pub(crate) mod guarded;
+pub(crate) mod live_edit;
 mod ownership;
 pub(crate) mod pin_changes;
 mod place;

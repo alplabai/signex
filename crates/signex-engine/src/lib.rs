@@ -258,6 +258,9 @@ pub struct Engine {
     /// The parameter cell the last recorded edit wrote, while typing in it
     /// goes on; see [`Engine::end_field_edit_run`].
     field_edit_run: Option<history::FieldEditRun>,
+    /// The drawing field being typed, shown but not yet in the history
+    /// (`exec/live_edit.rs`, #2768).
+    live_edit: Option<exec::live_edit::LiveEdit>,
     /// Full-sheet pre-image clones taken by `execute` (test hook for the
     /// one-snapshot-per-batch guarantee).
     #[cfg(test)]
@@ -506,6 +509,7 @@ impl Engine {
             transaction: None,
             batch_ids: Default::default(),
             field_edit_run: None,
+            live_edit: None,
             #[cfg(test)]
             pre_image_clones: 0,
             revision: crate::next_revision(),
@@ -554,6 +558,7 @@ impl Engine {
             transaction: None,
             batch_ids: Default::default(),
             field_edit_run: None,
+            live_edit: None,
             #[cfg(test)]
             pre_image_clones: 0,
             revision: crate::next_revision(),
@@ -954,6 +959,7 @@ impl Engine {
 
     /// Unguarded: installs `document` even over a read-only sheet. Test-only by convention.
     pub fn set_document(&mut self, document: SchematicSheet) {
+        self.live_edit = None;
         self.history.forget();
         self.bump_revision();
         self.bump_connectivity_revision();

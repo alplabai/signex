@@ -109,6 +109,23 @@ fn invalid_hex_is_rejected_without_a_panic() {
     }
 }
 
+/// #2770: Cancel discards the pick, so the next open does not start from it.
+#[test]
+fn cancel_puts_the_draft_back_as_it_was_before_the_open() {
+    let (mut app, _path) = app_with_nets(&["A", "B"]);
+    let before = hex_of(app.ui_state.net_color_custom.draft);
+    let send = |app: &mut Signex, msg: NetColorMsg| {
+        let _ = app.update(Message::NetColor(msg));
+    };
+    send(&mut app, NetColorMsg::CustomOpenedFor("A".into()));
+    send(&mut app, NetColorMsg::CustomHexChanged("#112233".into()));
+    send(&mut app, NetColorMsg::CustomShow(false));
+    assert_eq!(hex_of(app.ui_state.net_color_custom.draft), before);
+
+    send(&mut app, NetColorMsg::CustomOpenedFor("B".into()));
+    assert_eq!(hex_of(app.ui_state.net_color_custom.draft), before);
+}
+
 /// Typing in Hex moves the draft only when the code parses, and the RGB
 /// fields follow; an RGB edit hands the field back to the draft.
 #[test]
