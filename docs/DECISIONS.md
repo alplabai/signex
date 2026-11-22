@@ -487,3 +487,4 @@ removed or changed row: `crates/signex-app/src/menu_bar/testdata/menu_bar.golden
 | 2026-11-22 | A Grid pad pattern offers row by row, column by column, and down-then-up (DIP) numbering (mockup row 126). | Caner (2026-11-22) | #2829 | not yet pinned; #2829 pins it |
 | 2026-11-22 | In a narrow docked tab the component editor's General columns shrink so PIN TO PAD stays visible, and Cancel and Save stay on screen (mockup row 128). | Caner (2026-11-22) | #2829 | not yet pinned; #2829 pins it |
 | 2026-11-22 | Find Similar keeps its five rows for a placed part; the drawn Name row is dropped because a placed part has no Name property (mockup row 68). | Caner (2026-11-22) | — | no code change; the mockup row follows |
+| 2026-11-22 | The Impedance and Back Drill sub-tabs of Layer Stack are not in the Community Release; their edition is decided later (mockup row 105). | Caner (2026-11-22) | #2833 | no code change; the mockup row follows |
