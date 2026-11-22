@@ -28,6 +28,8 @@ const SEG_LETTER_W: f32 = TS.body * 26.0 / 12.0;
 const SEG_OFF_W: f32 = TS.body * 34.0 / 12.0;
 const SEG_ON_W: f32 = TS.body * 40.0 / 12.0;
 const ICON: f32 = TS.body * 13.0 / 12.0;
+/// The Severity column of the page's table head: the control's width.
+const SEVERITY_COL: f32 = SEG_LETTER_W * 3.0 + SEG_OFF_W + SP.s;
 
 /// The header row and the grouped rule list.
 pub(super) fn view<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'static, M> {
@@ -53,24 +55,28 @@ pub(super) fn view<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'s
         i18n,
         Some((editor.on_changed_only)(!editor.changed_only)),
     );
-    let header = row![
+    let is_page = editor.on_open_rule.is_some();
+    let lead: Element<'static, M> = if is_page {
+        Space::new().width(Length::Fill).boxed()
+    } else {
         container(section_heading(
             i18n,
             ids::DIALOG_RULES_SEVERITY_HEADING,
-            tokens
+            tokens,
         ))
-        .width(Length::Fill),
-        changed_chip,
-        filter_field(editor, &r),
-    ]
-    .spacing(SP.s * 1.5)
-    .align_y(Alignment::Center)
-    .padding(Padding {
-        top: SP.m,
-        right: SP.l,
-        bottom: SP.s,
-        left: SP.l,
-    });
+        .width(Length::Fill)
+        .clip(true)
+        .boxed()
+    };
+    let header = row![lead, changed_chip, filter_field(editor, &r),]
+        .spacing(SP.s * 1.5)
+        .align_y(Alignment::Center)
+        .padding(Padding {
+            top: SP.m,
+            right: SP.l,
+            bottom: SP.s,
+            left: SP.l,
+        });
 
     let mut list: Column<Element<'static, M>> = Column::new().padding(Padding {
         top: 0.0,
@@ -116,7 +122,76 @@ pub(super) fn view<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'s
         }
     }
 
-    column![header, list].width(Length::Fill).boxed()
+    let mut pane = column![header].width(Length::Fill);
+    if is_page {
+        pane = pane.push(table_head(editor));
+    }
+    pane.push(list.boxed()).boxed()
+}
+
+/// The Rule / Severity head of the page's table (mockup row 148).
+fn table_head<M: Clone + 'static>(editor: &RuleEditor<'_, M>) -> Element<'static, M> {
+    let tokens = editor.tokens;
+    let (fill, edge, ink) = (
+        ti(tokens.toolbar_bg),
+        ti(tokens.border),
+        ti(tokens.text_secondary),
+    );
+    container(
+        row![
+            text(t!(editor.i18n, ids::DIALOG_RULES_COLUMN_RULE))
+                .size(TS.body)
+                .color(ink)
+                .width(Length::Fill),
+            text(t!(editor.i18n, ids::DIALOG_RULES_COLUMN_SEVERITY))
+                .size(TS.body)
+                .color(ink)
+                .width(SEVERITY_COL),
+        ]
+        .align_y(Alignment::Center),
+    )
+    .padding([SP.s, SP.l])
+    .width(Length::Fill)
+    .style(move |_: &Theme| container::Style {
+        background: Some(Background::Color(fill)),
+        border: Border {
+            width: crate::styles::HAIRLINE,
+            color: edge,
+            radius: Radii::GRAPHITE.small.into(),
+            ..Border::default()
+        },
+        ..container::Style::default()
+    })
+    .boxed()
+}
+
+/// One rule alone, as the editor opened for it shows it.
+pub(super) fn one_rule<M: Clone + 'static>(
+    editor: &RuleEditor<'_, M>,
+    rule: RuleKind,
+) -> Element<'static, M> {
+    let r = resolve(editor.tokens);
+    let current = super::effective_severity(editor.severity, rule);
+    row![
+        container(rule_name(editor, rule))
+            .width(Length::Fill)
+            .clip(true),
+        severity_control(editor, &r, rule, current),
+    ]
+    .spacing(SP.m)
+    .align_y(Alignment::Center)
+    .height(ROW_H)
+    .boxed()
+}
+
+/// A rule's name on one line.
+fn rule_name<M: 'static>(editor: &RuleEditor<'_, M>, rule: RuleKind) -> Element<'static, M> {
+    // raw: the rule names come from signex-erc (#2062).
+    text(raw(rule.label().to_string()))
+        .size(TS.body)
+        .color(ti(editor.tokens.text))
+        .wrapping(iced::widget::text::Wrapping::None)
+        .boxed()
 }
 
 /// The "Filter rules" field: a search glyph and the input on the field fill.
@@ -186,14 +261,22 @@ fn rule_line<M: Clone + 'static>(
             },
             ..container::Style::default()
         });
+    // Clipped to its column: a long name never runs under the control.
+    let name = container(rule_name(editor, rule_row.rule))
+        .width(Length::Fill)
+        .clip(true);
+    let name: Element<'static, M> = match editor.on_open_rule {
+        Some(open) => button(name)
+            .padding(0)
+            .width(Length::Fill)
+            .on_press(open(rule_row.rule))
+            .style(crate::styles::ghost_button(editor.tokens))
+            .boxed(),
+        None => name.boxed(),
+    };
     row![
         dot,
-        // raw: the rule names come from signex-erc (#2062).
-        text(raw(rule_row.rule.label().to_string()))
-            .size(TS.body)
-            .color(ti(editor.tokens.text))
-            .wrapping(iced::widget::text::Wrapping::None)
-            .width(Length::Fill),
+        name,
         severity_control(editor, r, rule_row.rule, rule_row.severity),
     ]
     .spacing(SP.m)

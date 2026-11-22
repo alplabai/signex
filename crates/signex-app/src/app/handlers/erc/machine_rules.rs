@@ -134,10 +134,11 @@ impl Signex {
     /// queue was idle, else nothing (the write waits its turn).
     pub(crate) fn submit_profile_write(&mut self, key: &str, write: QueuedWrite) -> Task<Message> {
         if rule_profiles::profiles_dir().is_none() {
-            crate::diagnostics::log_warning(
-                "This platform has no config folder for rule profiles, so the change is kept \
-                 for this session only.",
-            );
+            let why = "This platform has no config folder for rule profiles, so the change is \
+                       kept for this session only.";
+            crate::diagnostics::log_warning(why);
+            // The page's Saved pill reads this: the change reached no file.
+            self.ui_state.profile_manager.status = Some((true, why.into()));
             return Task::none();
         }
         match self.ui_state.profile_writes.submit(key, write) {

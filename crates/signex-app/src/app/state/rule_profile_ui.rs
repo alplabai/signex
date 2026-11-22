@@ -40,6 +40,7 @@ impl SaveProfileDialog {
 }
 
 pub use crate::app::core::rule_list_filter::RuleListFilter;
+pub use crate::app::core::rule_profile_page::{ProfileEditorTab, ProfileNameAction};
 
 /// Preferences ▸ Rule Profiles. Edits apply at once, like the ERC dialog's:
 /// each one is written to the profile's file, not held as a draft.
@@ -55,6 +56,12 @@ pub struct ProfileManager {
     pub selected: Option<String>,
     /// Text of the name field used by New / Duplicate / Rename.
     pub name_input: String,
+    /// The action the name field is open for; closed, the page shows none.
+    pub name_prompt: Option<ProfileNameAction>,
+    /// The half of the rule editor the page shows.
+    pub editor_tab: ProfileEditorTab,
+    /// The one rule open in the rule editor, over the tab's table.
+    pub open_rule: Option<signex_erc::RuleKind>,
     /// Delete waiting for confirmation, by profile name.
     pub confirm_delete: Option<String>,
     /// Outcome of the last action: `(is_error, sentence)`.
@@ -97,6 +104,8 @@ impl ProfileManager {
             .as_deref()
             .is_some_and(|name| self.listing.profiles.iter().any(|l| l.profile.name == name));
         if !keep {
+            self.name_prompt = None;
+            self.open_rule = None;
             self.selected = self
                 .listing
                 .profiles
@@ -129,6 +138,8 @@ impl ProfileManager {
         self.confirm_delete = None;
         self.confirm_reset = None;
         self.status = None;
+        self.name_prompt = None;
+        self.open_rule = None;
     }
 
     /// Whether `name` is the machine's own rule set.

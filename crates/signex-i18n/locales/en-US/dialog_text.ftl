@@ -289,6 +289,9 @@ dialog-net-color-quick-pick = Quick Pick
 dialog-rules-changed-only = Changed only
 dialog-rules-filter-placeholder = Filter rules
 dialog-rules-no-match = No rule matches the filter.
+# Column heads of the rule table on the Rule Profiles page.
+dialog-rules-column-rule = Rule
+dialog-rules-column-severity = Severity
 # Subheads of the rule list.
 dialog-rules-group-pins = Pins
 dialog-rules-group-nets = Nets
@@ -302,7 +305,7 @@ dialog-rules-legend-warning = Warning
 dialog-rules-legend-info = Info
 dialog-rules-legend-off = No report
 dialog-rules-legend-changed = Changed
-dialog-rules-legend-changed-rule = Changed rule
+dialog-rules-legend-changed-rule = Rule differs
 dialog-rules-matrix-caption = Pin type conflict is on/off only: its findings take their severity from this matrix.
 
 ## Help ▸ About Signex (#2262)

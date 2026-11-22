@@ -237,16 +237,19 @@ preferences-file-start-fresh = Start a fresh preferences file
 
 ## Rule Profiles
 preferences-profiles-title = Rule Profiles
-preferences-profiles-help = A profile is a named set of ERC rules. A new project starts with a copy of the default profile. Changes here are saved to the profile's file at once.
+preferences-profiles-help = A profile is a named set of ERC rules. A new project starts with a copy of the default profile.
 preferences-profiles-reading = Reading the profile library...
-preferences-profiles-automatic = Automatic (User Default if you have one, else { -brand-name } Default)
-# Notes after a profile's name and version.
+# Heading of the profile list.
+preferences-profiles-list-heading = Profiles
+preferences-profiles-automatic-name = Automatic
+preferences-profiles-automatic-note = User Default if you have one, else { -brand-name } Default
+# Under the profile list.
+preferences-profiles-hint = The radio marks the default for new projects. Click a row to edit it.
+# Notes under a profile's name and version.
 preferences-profiles-note-builtin = shipped, read-only
 preferences-profiles-note-user-default = this machine's rules
 # $name and $version are the profile's.
 preferences-profiles-row = { $name }  v{ $version }
-# $name and $version are the profile's; $note is one of the notes above.
-preferences-profiles-row-note = { $name }  v{ $version }  ({ $note })
 preferences-profiles-is-default = Default for new projects
 preferences-profiles-use-as-default = Use as default
 preferences-profiles-new = New
@@ -256,15 +259,27 @@ preferences-profiles-rename = Rename
 preferences-profiles-delete-confirm = Delete "{ $name }"? Projects that recorded it keep their rules but can no longer find it for Update from profile.
 preferences-profiles-keep = Keep
 preferences-profiles-name = Name
-# $name is the profile's name.
-preferences-profiles-editing = Editing "{ $name }". Changes are saved to the profile's file immediately.
+# Pill beside the profile's name once its edits reached its file.
+preferences-profiles-saved = Saved
+preferences-profiles-saved-line = Changes are saved to the profile's file immediately.
+# Title of the rule editor opened for one rule; $name is the profile's name.
+preferences-profiles-rule-title = Rule Profile: { $name }
+# $rules counts every rule; $changed and $cells count what differs.
+preferences-profiles-rule-summary = Preferences ▸ Rule Profiles · { $rules } rules · { $changed ->
+        [one] 1 rule
+       *[other] { $changed } rules
+    } and { $cells ->
+        [one] 1 matrix cell
+       *[other] { $cells } matrix cells
+    } differ from the shipped profile
 # $name is the profile's name.
 preferences-profiles-read-only = "{ $name }" is read-only. Duplicate it to change the rules.
 preferences-profiles-none-selected = No profile is selected.
 # $name is the profile's name.
 preferences-profiles-reset-confirm = Put every rule of "{ $name }" back to the { -brand-name } Default values?
 preferences-profiles-reset = Reset
-preferences-profiles-reset-to-default = Reset to { -brand-name } Default
+# The ellipsis says the button asks before it acts.
+preferences-profiles-reset-to-default = Reset to { -brand-name } Default…
 
 ## Designators on paste: the choices (also in Paste Array)
 # The pasted part keeps its designator unless the project already uses it.
