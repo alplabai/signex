@@ -19,6 +19,7 @@ mod layer_set;
 mod layer_tab;
 mod menus;
 mod placement;
+pub(in crate::app::view) use placement::clamp_menu_origin;
 mod project_tree;
 mod start_row;
 mod submenu;

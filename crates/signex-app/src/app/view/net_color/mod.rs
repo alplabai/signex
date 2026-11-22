@@ -3,6 +3,7 @@
 
 mod custom_picker;
 mod palette;
+mod row_flyout;
 
 use iced::widget::canvas::{self, Frame, Path, Stroke};
 use iced::widget::{Space, Widget, canvas as canvas_widget, container};
