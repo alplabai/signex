@@ -10,7 +10,7 @@
 use super::super::*;
 
 use crate::app::FootprintDocument;
-use crate::library::editor::footprint::state::SnapOptions;
+use crate::library::editor::footprint::SnapOptions;
 
 /// The active footprint's sketch entity `id`, if it has a sketch and
 /// the entity exists.

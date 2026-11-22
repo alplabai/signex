@@ -86,7 +86,7 @@ pub(super) fn refusable_edit_row<'a>(
     label_c: Color,
     on_input: impl Fn(String) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
-    let input = text_input(raw(""), value.to_owned())
+    let input = text_input(signex_i18n::UserText::new(String::new()), value.to_owned())
         .on_input(on_input)
         .size(TS.body)
         .padding(SP.s)

@@ -49,7 +49,7 @@ fn refusal_logged(app: &Signex) -> bool {
 /// else changes nothing and stays in the box; a good value clears it.
 #[test]
 fn a_snap_reach_outside_its_range_is_refused_with_its_text_kept() {
-    use signex_app::library::editor::footprint::state::SnapOptions;
+    use signex_app::library::editor::footprint::SnapOptions;
     type Msg = fn(String) -> PanelMsg;
     let fields: [(Msg, &str, fn(&SnapOptions) -> f64); 2] = [
         (
