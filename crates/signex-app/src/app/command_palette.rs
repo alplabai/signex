@@ -181,8 +181,11 @@ pub fn group_for_display(rows: &mut [(CommandEntry, i32)], by_relevance: bool) {
 pub struct CommandEntry {
     pub source: CommandSource,
     pub label: String,
-    /// Secondary text shown in muted style after the label (file path,
-    /// symbol value, etc.). Empty when not applicable.
+    /// A component's value, drawn after its designator in the label cell.
+    /// Empty on every other row.
+    pub value: String,
+    /// The row's context, right-aligned (sheet, terminal count, project); a
+    /// command's is its binding. Empty when not applicable.
     pub detail: String,
     pub action: CommandAction,
 }
@@ -269,6 +272,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             // not "Wire"). That split is exactly why #281 added the
             // second field.
             label: metadata.label_in(&app.ui_state.i18n),
+            value: String::new(),
             // #374 — the binding from the ACTIVE profile, not the
             // catalog's suggested `keybind`, because a profile always
             // overrides the default.
@@ -292,6 +296,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
                     app.ui_state.i18n.message_plain(panel.message(), &[]).into(),
                 )],
             ),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::Panel(panel),
         });
@@ -325,15 +330,13 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     if let Some(index) = index {
         for d in &index.designators {
             let mut detail = vec![shown(&d.path)];
-            if !d.value.is_empty() {
-                detail.insert(0, d.value.clone());
-            }
             if let Some(label) = &d.placement_label {
                 detail.push(label.clone());
             }
             out.push(CommandEntry {
                 source: CommandSource::Symbol,
                 label: d.designator.clone(),
+                value: d.value.clone(),
                 detail: detail.join(" · "),
                 action: CommandAction::Reveal {
                     path: d.path.clone(),
@@ -353,7 +356,8 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::Symbol,
                 label: reference.clone(),
-                detail: value.clone(),
+                value: value.clone(),
+                detail: String::new(),
                 action: CommandAction::FocusSymbol {
                     reference: reference.clone(),
                 },
@@ -374,6 +378,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::Net,
                 label: net.name.clone(),
+                value: String::new(),
                 detail: format!(
                     "{} terminal{}",
                     net.terminals,
@@ -416,6 +421,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::Sheet,
                 label: sheet.name.clone(),
+                value: String::new(),
                 detail: shown(&sheet.path),
                 action: CommandAction::Reveal {
                     path: sheet.path.clone(),
@@ -434,6 +440,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label: root.clone(),
+                value: String::new(),
                 detail: project.data.name.clone(),
                 action: CommandAction::OpenFile(abs),
             });
@@ -443,6 +450,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label: sheet.filename.clone(),
+                value: String::new(),
                 detail: project.data.name.clone(),
                 action: CommandAction::OpenFile(abs),
             });
@@ -452,6 +460,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label: pcb.clone(),
+                value: String::new(),
                 detail: project.data.name.clone(),
                 action: CommandAction::OpenFile(abs),
             });
@@ -467,6 +476,7 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
             out.push(CommandEntry {
                 source: CommandSource::File,
                 label,
+                value: String::new(),
                 detail: project.data.name.clone(),
                 action: CommandAction::OpenFile(abs),
             });
@@ -474,6 +484,29 @@ pub fn build_catalog(app: &super::Signex) -> Vec<CommandEntry> {
     }
 
     out
+}
+
+/// Added to a row whose own name is the query, above any fuzzy score: typing
+/// `GND` leads with the net `GND`, not a component whose value is GND.
+const EXACT_LABEL_BONUS: i32 = 1 << 20;
+
+/// What a query is matched against: the label, then value and detail.
+fn search_text(entry: &CommandEntry) -> String {
+    [
+        entry.label.as_str(),
+        entry.value.as_str(),
+        entry.detail.as_str(),
+    ]
+    .into_iter()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
+/// Whether `label` is the query, under the search fold.
+fn is_exact_label(i18n: &I18n, query: &str, label: &str) -> bool {
+    let fold = |c: char| i18n.fold_char_for_search(c);
+    query.trim().chars().map(fold).eq(label.chars().map(fold))
 }
 
 /// Filter the catalog by query and rank the survivors. Returns indices
@@ -507,12 +540,7 @@ pub fn rank_results_in(i18n: &I18n, catalog: &[CommandEntry], query: &str) -> Ve
         .iter()
         .enumerate()
         .filter_map(|(idx, entry)| {
-            let target = if entry.detail.is_empty() {
-                entry.label.clone()
-            } else {
-                format!("{} {}", entry.label, entry.detail)
-            };
-            fuzzy_score_in(i18n, query, &target).map(|score| {
+            fuzzy_score_in(i18n, query, &search_text(entry)).map(|score| {
                 let source_bonus = match entry.source {
                     CommandSource::Command => 5,
                     CommandSource::Symbol => 3,
@@ -520,7 +548,12 @@ pub fn rank_results_in(i18n: &I18n, catalog: &[CommandEntry], query: &str) -> Ve
                     CommandSource::Sheet => 2,
                     CommandSource::File => 1,
                 };
-                (idx, score + source_bonus)
+                let exact = if is_exact_label(i18n, query, &entry.label) {
+                    EXACT_LABEL_BONUS
+                } else {
+                    0
+                };
+                (idx, score + source_bonus + exact)
             })
         })
         .collect();
@@ -625,6 +658,7 @@ mod tests {
         CommandEntry {
             source,
             label: label.to_string(),
+            value: String::new(),
             detail: detail.to_string(),
             action: CommandAction::OpenFile(PathBuf::new()),
         }
@@ -678,6 +712,49 @@ mod tests {
         assert_eq!(labels(&rows)[0], "Validate Bus Wiring");
     }
 
+    /// Mockup row 9: the row named exactly what was typed leads, so NETS comes
+    /// first for `GND` even over a short component row whose value is GND.
+    #[test]
+    fn an_exact_net_name_leads_a_component_with_that_value() {
+        let mut component = entry(CommandSource::Symbol, "#P1", "a.snxsch");
+        component.value = "GND".into();
+        let catalog = vec![
+            component,
+            entry(CommandSource::Command, "Align to grid", ""),
+            entry(CommandSource::Net, "GND", "12 terminals"),
+        ];
+        let mut rows: Vec<(CommandEntry, i32)> = rank_results(&catalog, "gnd")
+            .into_iter()
+            .map(|(idx, score)| (catalog[idx].clone(), score))
+            .collect();
+        group_for_display(&mut rows, true);
+        assert_eq!(labels(&rows)[0], "GND");
+        assert_eq!(rows[0].0.source, CommandSource::Net);
+    }
+
+    /// A component is still found by its value, now a field of its own.
+    #[test]
+    fn a_component_is_found_by_its_value() {
+        let mut component = entry(CommandSource::Symbol, "R1", "");
+        component.value = "10k".into();
+        assert_eq!(rank_results(&[component], "10k").len(), 1);
+    }
+
+    /// Before the index arrives a placed symbol's value is the row's value,
+    /// not its right-aligned context.
+    #[test]
+    fn a_placed_symbol_row_carries_its_value_apart_from_its_context() {
+        let (mut app, _task) = crate::app::Signex::new();
+        app.document_state.panel_ctx.placed_symbols =
+            vec![("R1".into(), "10k".into(), String::new(), String::new())];
+        let catalog = build_catalog(&app);
+        let row = catalog
+            .iter()
+            .find(|e| e.source == CommandSource::Symbol)
+            .expect("the placed symbol's row");
+        assert_eq!((row.value.as_str(), row.detail.as_str()), ("10k", ""));
+    }
+
     /// Two groups whose best rows score the same keep the fixed order.
     #[test]
     fn groups_with_equal_best_scores_follow_group_rank() {
@@ -702,6 +779,7 @@ mod tests {
         let entries = vec![CommandEntry {
             source: CommandSource::Command,
             label: "Open Preferences".into(),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::Command(AppCommandId::new("open_preferences").unwrap()),
         }];
@@ -813,18 +891,21 @@ mod tests {
             CommandEntry {
                 source: CommandSource::Command,
                 label: "Preferences".into(),
+                value: String::new(),
                 detail: String::new(),
                 action: CommandAction::Command(AppCommandId::new("open_preferences").unwrap()),
             },
             CommandEntry {
                 source: CommandSource::Command,
                 label: "Save".into(),
+                value: String::new(),
                 detail: String::new(),
                 action: CommandAction::Command(AppCommandId::new("save_document").unwrap()),
             },
             CommandEntry {
                 source: CommandSource::File,
                 label: "preferences.bak".into(),
+                value: String::new(),
                 detail: String::new(),
                 action: CommandAction::OpenFile(std::path::PathBuf::from("preferences.bak")),
             },
@@ -842,6 +923,7 @@ mod tests {
         let row = |label: &str| CommandEntry {
             source: CommandSource::Net,
             label: label.into(),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::OpenFile(PathBuf::new()),
         };
