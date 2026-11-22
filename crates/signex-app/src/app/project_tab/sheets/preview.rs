@@ -270,14 +270,15 @@ impl SheetPreview {
     }
 }
 
-/// The sheet alone at `height`, for the larger preview window.
-pub(super) fn large<'a>(
+/// The sheet alone at `height`, for a larger preview window or the New
+/// Project dialog's preview column.
+pub(crate) fn large<'a, M: 'a>(
     defaults: &SheetDefaults,
     height: f32,
     canvas_colors: &CanvasColors,
     i18n: &I18n,
     tokens: &ThemeTokens,
-) -> Element<'a, Message> {
+) -> Element<'a, M> {
     let (size, orientation) = sheet_of(defaults);
     let program = SheetPreview::of(
         defaults,

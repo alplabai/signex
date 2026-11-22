@@ -370,6 +370,14 @@ impl Signex {
             InputConsumer::KeymapRecorder => self.claim_keymap_recorder(target, event),
             InputConsumer::CommandPalette => self.claim_command_palette(target, event),
             InputConsumer::RulePreview => {
+                use crate::app::new_project::preview::SetupPreviewKey;
+                let own_window =
+                    target == InputTarget::DetachedModal(crate::app::state::ModalId::NewProject);
+                match self.setup_preview_key(own_window, target.paints_overlay_stack(), event) {
+                    Some(SetupPreviewKey::Consume(message)) => return Claim::consume(message),
+                    Some(SetupPreviewKey::Swallow) => return Claim::Swallow,
+                    None => {}
+                }
                 let key = self
                     .rules_drawing_key(window, event)
                     .or_else(|| self.project_preview_key(window, event));

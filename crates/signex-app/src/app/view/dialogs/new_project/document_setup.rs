@@ -7,7 +7,7 @@ use iced::{Element, Length, Widget as _};
 use signex_i18n::{I18n, ids, t};
 use signex_widgets::text;
 
-use super::{SP, TS, cards, customize, preview, s, summary, user_cards};
+use super::{SP, TS, board_rules, cards, customize, preview, s, summary, user_cards};
 use crate::app::new_project::NewProjectMsg;
 use crate::app::{DocumentSetupMsg, DocumentSetupState, Message, SetupKind, Signex};
 use crate::styles::{DialogButtonKind, dialog_button, dialog_footer_split, ti, tokens};
@@ -121,12 +121,21 @@ impl Signex {
         let left =
             scrollable(container(col).padding([SP.xl + SP.s, SP.xl + SP.m])).width(Length::Fill);
         let body: Element<'a, Message> = match state.kind {
-            SetupKind::Pcb => row![
-                left,
-                preview::pane(draft, ids::SETUP_PCB_PREVIEW_NOTE, i18n, tokens).map(edit)
-            ]
-            .height(Length::Fill)
-            .boxed(),
+            SetupKind::Pcb => super::with_larger_preview(
+                row![
+                    left,
+                    preview::pane(draft, ids::SETUP_PCB_PREVIEW_NOTE, None, i18n, tokens).map(edit)
+                ]
+                .height(Length::Fill)
+                .boxed(),
+                board_rules::expanded_layer(
+                    draft,
+                    &self.document_state.panel_ctx.canvas_colors,
+                    i18n,
+                    tokens,
+                )
+                .map(|layer| layer.map(edit)),
+            ),
             SetupKind::Sheet => container(left).height(Length::Fill).boxed(),
         };
         let hint = text(t!(i18n, ids::DIALOG_NEW_PROJECT_FOOTER_HINT))

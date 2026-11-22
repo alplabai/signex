@@ -158,6 +158,17 @@ define_ids! {
     DIALOG_NEW_PROJECT_PREVIEW_BOARD = "dialog-new-project-preview-board";
     DIALOG_NEW_PROJECT_PREVIEW_SHEET = "dialog-new-project-preview-sheet";
     DIALOG_NEW_PROJECT_PREVIEW_NOTE = "dialog-new-project-preview-note";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES = "dialog-new-project-preview-rules";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES_HINT = "dialog-new-project-preview-rules-hint";
+    DIALOG_NEW_PROJECT_PREVIEW_RULES_LINE = "dialog-new-project-preview-rules-line";
+    DIALOG_NEW_PROJECT_PREVIEW_SHEET_HEADING = "dialog-new-project-preview-sheet-heading";
+    DIALOG_NEW_PROJECT_PREVIEW_EXPAND = "dialog-new-project-preview-expand";
+    DIALOG_NEW_PROJECT_PREVIEW_CLOSE = "dialog-new-project-preview-close";
+    DIALOG_NEW_PROJECT_PREVIEW_DRILL_ERROR = "dialog-new-project-preview-drill-error";
+    DIALOG_NEW_PROJECT_RULE_CAP_WIDTH = "dialog-new-project-rule-cap-width";
+    DIALOG_NEW_PROJECT_RULE_CAP_CLEARANCE = "dialog-new-project-rule-cap-clearance";
+    DIALOG_NEW_PROJECT_RULE_CAP_DRILL = "dialog-new-project-rule-cap-drill";
+    DIALOG_NEW_PROJECT_RULE_CAP_VIA = "dialog-new-project-rule-cap-via";
     DIALOG_NEW_PROJECT_STACK_SILK_TOP = "dialog-new-project-stack-silk-top";
     DIALOG_NEW_PROJECT_STACK_MASK_TOP = "dialog-new-project-stack-mask-top";
     DIALOG_NEW_PROJECT_STACK_COPPER_TOP = "dialog-new-project-stack-copper-top";

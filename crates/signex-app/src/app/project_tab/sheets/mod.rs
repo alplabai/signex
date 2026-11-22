@@ -12,6 +12,7 @@ mod view;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use preview::large as sheet_thumbnail;
 pub(super) use view::{popup_drawing, view};
 
 use std::path::Path;

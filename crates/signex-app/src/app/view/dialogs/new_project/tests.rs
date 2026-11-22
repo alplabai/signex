@@ -8,6 +8,28 @@ use super::cards::{SELECTED_BORDER, card_style};
 use super::preview::{Layer, stack_rows};
 use crate::styles::{ti, tokens};
 
+/// Mockup rows 21 and 22: the column and both larger views build, and the
+/// drawing's Expand opens and Esc's message closes them.
+#[test]
+fn the_dialog_renders_its_previews_and_larger_views() {
+    use crate::app::new_project::{DialogPreview, NewProjectMsg, SetupPreviewMsg};
+    use crate::app::{Message, Signex};
+    let (mut app, _task) = Signex::new();
+    let _ = app.open_new_project_dialog();
+    let _ = app.view_new_project_dialog();
+    for view in [DialogPreview::BoardRules, DialogPreview::Sheet] {
+        let open = NewProjectMsg::Preview(SetupPreviewMsg::Expanded(Some(view)));
+        let _ = app.update(Message::from(open));
+        let state = app.ui_state.new_project.as_ref().unwrap();
+        assert_eq!(state.preview.expanded, Some(view));
+        let _ = app.view_new_project_dialog();
+        let close = NewProjectMsg::Preview(SetupPreviewMsg::Expanded(None));
+        let _ = app.update(Message::from(close));
+    }
+    let state = app.ui_state.new_project.as_ref().unwrap();
+    assert_eq!(state.preview.expanded, None);
+}
+
 /// Mockup row 22: only a board of a project with a saved setup says it
 /// starts from that setup.
 #[test]
