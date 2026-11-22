@@ -80,7 +80,7 @@ generator above by `#[path]`, so both benches draw the same board.
   second build when there were events (the app's `view` runs again after the
   canvas's message), `draw`, then `iced_wgpu::Renderer::screenshot`, which
   uploads, renders and reads back. GPU time is inside the frame; vsync and
-  surface present are not. Never tiny-skia.
+  surface present are not. Never the software renderer (vello_cpu).
 - **Window.** 1600 x 1300 logical, dpr 1 (`SIGNEX_BENCH_DPR` overrides).
 - **Snapshot.** `PcbSnapshot::from_board_with_view` with the default layer
   view, no ratsnest and no DRC markers.

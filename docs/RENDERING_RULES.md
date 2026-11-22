@@ -282,9 +282,6 @@ Two things follow from the widget drawing in its own clip layer:
 - A sibling drawn over the canvas area after it, outside a `Stack`, would
   render under the canvas. None exists: the badge and every overlay are
   `Stack` children, which iced draws in layers of their own.
-- On the tiny-skia fallback the damage diff of text ignores the group
-  transformation, so a translated cached text-only region may not repaint
-  until something else dirties it. The wgpu renderer is the shipped path.
 - A hairline edge that lands exactly on a half-device-pixel tie is rounded
   where it fell at the build offset, so a reused frame can differ from a
   freshly built one by one device pixel at that edge. A fresh build decides

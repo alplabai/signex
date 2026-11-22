@@ -182,110 +182,137 @@ fn the_first_draw_and_any_change_rebuild_but_the_same_symbol_does_not() {
     );
 }
 
-fn dump(program: &SymbolSheetPreview, state: &PreviewState) -> String {
-    let renderer = crate::layout_probe::headless_renderer();
-    canvas::Program::<()>::draw(
-        program,
-        state,
-        &renderer,
-        &Theme::Dark,
-        BOX,
-        mouse::Cursor::Unavailable,
-    )
-    .iter()
-    .map(|layer| format!("{layer:?}"))
-    .collect()
+/// A draw of `program` as RGBA pixels, through the headless software
+/// renderer and the canvas widget (the preview's cache and all).
+fn pixels(program: SymbolSheetPreview) -> Vec<u8> {
+    let canvas = canvas::Canvas::new(program)
+        .width(Length::Fill)
+        .height(Length::Fill);
+    let element = container::<_, Theme>(canvas).boxed();
+    crate::layout_probe::draw_pixels(element, BOX.size())
 }
 
-/// A colour no theme paints with, so its paint calls can be found in a dump
-/// (the renderer lists its channels as blue, green, red).
-fn marker(r: u8, g: u8, b: u8) -> (signex_types::theme::Color, String) {
-    let color = signex_types::theme::Color { r, g, b, a: 255 };
-    let channel = |v: u8| format!("FiniteF32({:?})", f32::from(v) / 255.0);
-    let text = format!(
-        "r: NormalizedF32({}), g: NormalizedF32({}), b: NormalizedF32({})",
-        channel(b),
-        channel(g),
-        channel(r)
-    );
-    (color, text)
+#[derive(Clone, Copy, PartialEq)]
+enum Marker {
+    Paper,
+    Grid,
+    Body,
 }
 
-/// The dump split into its path primitives, in paint order.
-fn primitives(dump: &str) -> Vec<&str> {
-    dump.split("Fill { path")
-        .flat_map(|part| part.split("Stroke { path"))
-        .collect()
+/// Paper red, grid green, symbol body blue: pure channels no theme paints
+/// with, so a pixel's dominant channel names what painted it.
+fn marker(r: u8, g: u8, b: u8) -> signex_types::theme::Color {
+    signex_types::theme::Color { r, g, b, a: 255 }
 }
 
-/// Paper red, grid green, symbol body blue.
-fn marked_program(grid: SheetGrid) -> (SymbolSheetPreview, [String; 3]) {
-    let (paper, paper_text) = marker(255, 0, 0);
-    let (grid_color, grid_text) = marker(0, 255, 0);
-    let (body, body_text) = marker(0, 0, 255);
+fn marker_at(pixels: &[u8], x: u32, y: u32) -> Option<Marker> {
+    let at = ((y * BOX.width as u32 + x) * 4) as usize;
+    let [r, g, b] = [pixels[at], pixels[at + 1], pixels[at + 2]].map(i32::from);
+    match (
+        r > 160 && g < 90 && b < 90,
+        g > 160 && r < 90 && b < 90,
+        b > 160 && r < 90 && g < 90,
+    ) {
+        (true, ..) => Some(Marker::Paper),
+        (_, true, _) => Some(Marker::Grid),
+        (.., true) => Some(Marker::Body),
+        _ => None,
+    }
+}
+
+fn count(pixels: &[u8], marker: Marker, area: Rectangle) -> usize {
+    (area.y as u32..(area.y + area.height) as u32)
+        .flat_map(|y| (area.x as u32..(area.x + area.width) as u32).map(move |x| (x, y)))
+        .filter(|&(x, y)| marker_at(pixels, x, y) == Some(marker))
+        .count()
+}
+
+/// The paper's inside, clear of its border and of the part in the middle of it.
+const PAPER_MARGIN: Rectangle = Rectangle {
+    x: 12.0,
+    y: 12.0,
+    width: 60.0,
+    height: 40.0,
+};
+
+fn marked_program(grid: SheetGrid) -> SymbolSheetPreview {
     let mut p = program(body_symbol(), grid);
-    p.colors.paper = paper;
-    p.colors.grid = grid_color;
-    p.colors.body = body;
-    (p, [paper_text, grid_text, body_text])
+    p.colors.paper = marker(255, 0, 0);
+    p.colors.grid = marker(0, 255, 0);
+    p.colors.body = marker(0, 0, 255);
+    p.colors.body_fill = marker(0, 0, 255);
+    p
 }
 
+/// The pixels the part's body covers, inset so antialiasing at its edge is out.
+fn body_area(p: &SymbolSheetPreview) -> Rectangle {
+    let (sheet, symbol) = preview_sheet(&p.lib);
+    let extent = symbol_bounds(&sheet, &symbol);
+    let transform = fit_transform(extent, BOX.size(), UNSCALED);
+    let low = transform.world_to_screen((extent.min_x, extent.min_y));
+    let high = transform.world_to_screen((extent.max_x, extent.max_y));
+    Rectangle::new(
+        iced::Point::new(low.x + 3.0, low.y + 3.0),
+        Size::new(high.x - low.x - 6.0, high.y - low.y - 6.0),
+    )
+}
+
+/// The stacking order shows in what survives: the grid lies over the paper,
+/// so grid pixels exist, and the part lies over the grid, so none of them
+/// show inside its filled body. Were the grid drawn first the paper would
+/// hide it, and were the part drawn first the grid would cross its body.
 #[test]
 fn the_preview_paints_paper_then_grid_then_the_symbol() {
-    let (p, [paper, grid, body]) = marked_program(DOTS);
-    let dump = dump(&p, &PreviewState::default());
-    let items = primitives(&dump);
-    let first = |text: &str, skip_border: bool| {
-        items
-            .iter()
-            .position(|item| item.contains(text) && !(skip_border && item.contains("Stroke")))
-    };
-    let paper_at = first(&paper, false).expect("the paper is painted");
-    let grid_at = first(&grid, true).expect("the grid is painted");
-    let symbol_at = first(&body, false).expect("the symbol is painted");
+    let p = marked_program(DOTS);
+    let body = body_area(&p);
+    let shot = pixels(p);
     assert!(
-        paper_at < grid_at && grid_at < symbol_at,
-        "paper {paper_at}, grid {grid_at}, symbol {symbol_at}"
+        count(&shot, Marker::Paper, PAPER_MARGIN) > 0,
+        "the paper is painted"
     );
-}
-
-/// Grid-coloured fills (dots) and strokes (lines, the paper border) of a draw.
-fn grid_marks(p: &SymbolSheetPreview, grid_text: &str) -> (usize, usize) {
-    let dump = dump(p, &PreviewState::default());
-    primitives(&dump)
-        .into_iter()
-        .filter(|item| item.contains(grid_text))
-        .fold((0, 0), |(fills, strokes), item| {
-            if item.contains("stroke: Stroke") {
-                (fills, strokes + 1)
-            } else {
-                (fills + 1, strokes)
-            }
-        })
+    assert!(
+        count(&shot, Marker::Grid, PAPER_MARGIN) > 0,
+        "the grid is painted over the paper"
+    );
+    assert!(
+        count(&shot, Marker::Body, body) > 0,
+        "the symbol is painted"
+    );
+    assert_eq!(
+        count(&shot, Marker::Grid, body),
+        0,
+        "the symbol is painted over the grid"
+    );
 }
 
 #[test]
 fn the_grid_follows_the_preferences() {
-    let (fine, [_, grid_text, _]) = marked_program(DOTS);
-    let (coarse, _) = marked_program(SheetGrid {
-        pitch_mm: 5.08,
-        ..DOTS
-    });
-    let (lines, _) = marked_program(SheetGrid {
-        style: GridStyle::Lines,
-        ..DOTS
-    });
-    let (fine_dots, _) = grid_marks(&fine, &grid_text);
-    let (coarse_dots, _) = grid_marks(&coarse, &grid_text);
+    let dots = |pitch_mm| {
+        let shot = pixels(marked_program(SheetGrid { pitch_mm, ..DOTS }));
+        count(&shot, Marker::Grid, PAPER_MARGIN)
+    };
+    let (fine_dots, coarse_dots) = (dots(1.27), dots(5.08));
     assert!(
         fine_dots > coarse_dots,
         "pitch: {fine_dots} vs {coarse_dots}"
     );
     assert!(coarse_dots > 0, "the coarse grid still shows");
 
-    let (line_fills, line_strokes) = grid_marks(&lines, &grid_text);
-    assert_eq!(line_fills, 0, "Lines draws no dots");
-    assert!(line_strokes > 1, "Lines draws strokes beyond the border");
+    let lines = pixels(marked_program(SheetGrid {
+        style: GridStyle::Lines,
+        ..DOTS
+    }));
+    let dotted = pixels(marked_program(DOTS));
+    // A grid line crosses the whole sample as one run; dots never do.
+    let has_line_row = |shot: &[u8]| {
+        let area = PAPER_MARGIN;
+        (area.y as u32..(area.y + area.height) as u32).any(|y| {
+            (area.x as u32..(area.x + area.width) as u32)
+                .all(|x| marker_at(shot, x, y) == Some(Marker::Grid))
+        })
+    };
+    assert!(has_line_row(&lines), "Lines draws strokes across the paper");
+    assert!(!has_line_row(&dotted), "Dots draws no stroke");
 }
 
 #[test]
@@ -361,13 +388,20 @@ fn hold_ctrl(state: &mut PreviewState, p: &SymbolSheetPreview) {
 
 #[test]
 fn the_grid_toggle_hides_the_grid() {
-    let (on, [_, grid_text, _]) = marked_program(DOTS);
-    let (off, _) = marked_program(SheetGrid {
+    let on = pixels(marked_program(DOTS));
+    let off = pixels(marked_program(SheetGrid {
         visible: false,
         ..DOTS
-    });
-    assert!(grid_marks(&on, &grid_text).0 > 0, "grid shown when on");
-    assert_eq!(grid_marks(&off, &grid_text).0, 0, "grid hidden when off");
+    }));
+    assert!(
+        count(&on, Marker::Grid, PAPER_MARGIN) > 0,
+        "grid shown when on"
+    );
+    assert_eq!(
+        count(&off, Marker::Grid, PAPER_MARGIN),
+        0,
+        "grid hidden when off"
+    );
 }
 
 fn shown(p: &SymbolSheetPreview) -> PreviewState {
