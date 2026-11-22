@@ -809,6 +809,7 @@ mod bus_entry;
 pub use bus_entry::*;
 mod bus_name;
 pub use bus_name::*;
+mod bus_style;
 mod field_style;
 mod instance_path;
 pub use field_style::{field_effective_style, readable_text_style};

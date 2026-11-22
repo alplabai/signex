@@ -7,6 +7,7 @@
 
 mod batch;
 mod break_wire;
+mod bus_style;
 pub(crate) mod change_component;
 mod child_sheet_size;
 mod designator_in;

@@ -287,6 +287,7 @@ fn fixture() -> SchematicSheet {
             uuid: uid(BUS, n),
             start: pt(80.0, 5.0 * n as f64),
             end: pt(90.0, 5.0 * n as f64),
+            ..Default::default()
         });
         s.bus_entries.push(BusEntry {
             uuid: uid(BUS_ENTRY, n),
@@ -442,7 +443,7 @@ fn assert_covers(
     );
 }
 
-const ALL_KINDS: [CommandKind; 77] = [
+const ALL_KINDS: [CommandKind; 79] = [
     CommandKind::SetRunEnd,
     CommandKind::UpdateTextNoteProps,
     CommandKind::ReplaceDocument,
@@ -460,6 +461,8 @@ const ALL_KINDS: [CommandKind; 77] = [
     CommandKind::SetSymbolFlag,
     CommandKind::SetWireWidth,
     CommandKind::SetWireColor,
+    CommandKind::SetBusWidth,
+    CommandKind::SetBusColor,
     CommandKind::SetSymbolBodyStyle,
     CommandKind::UpdateSymbolTextSize,
     CommandKind::UpdateSymbolLibId,
@@ -542,6 +545,8 @@ fn every_kind_is_listed(kind: CommandKind) {
         | CommandKind::SetSymbolFlag
         | CommandKind::SetWireWidth
         | CommandKind::SetWireColor
+        | CommandKind::SetBusWidth
+        | CommandKind::SetBusColor
         | CommandKind::SetSymbolBodyStyle
         | CommandKind::UpdateSymbolTextSize
         | CommandKind::UpdateSymbolLibId
@@ -858,6 +863,20 @@ fn samples() -> Vec<(String, Command)> {
         },
     );
     add(
+        "SetBusColor",
+        Command::SetBusColor {
+            bus_id: uid(BUS, 1),
+            color: Some(signex_types::theme::Color::new(255, 0, 0, 255)),
+        },
+    );
+    add(
+        "SetBusWidth",
+        Command::SetBusWidth {
+            bus_id: uid(BUS, 1),
+            width_mm: 0.5,
+        },
+    );
+    add(
         "SetSymbolBodyStyle",
         Command::SetSymbolBodyStyle {
             symbol_id: sym,
@@ -983,6 +1002,7 @@ fn samples() -> Vec<(String, Command)> {
                 uuid: uid(BUS, NEW),
                 start: pt(0.0, 200.0),
                 end: pt(9.0, 200.0),
+                ..Default::default()
             },
         },
     );

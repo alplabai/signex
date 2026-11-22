@@ -222,6 +222,7 @@ mod follow_tests {
             uuid: bus_id,
             start: Point::new(0.0, 0.0),
             end: Point::new(0.0, 20.0),
+            ..Default::default()
         });
         s.bus_entries.push(BusEntry {
             uuid: entry_id,
@@ -310,6 +311,7 @@ mod follow_tests {
             uuid: bus_id,
             start: Point::new(30.0, 40.0),
             end: Point::new(30.0, 60.0),
+            ..Default::default()
         });
         sheet.bus_entries.push(BusEntry {
             uuid: Uuid::now_v7(),

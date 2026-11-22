@@ -88,6 +88,7 @@ fn add_bus(sheet: &mut SchematicSheet, rng: &mut Lcg) {
         uuid: Uuid::now_v7(),
         start: Point::new(x, y),
         end: Point::new(x, y + 10.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: Uuid::now_v7(),

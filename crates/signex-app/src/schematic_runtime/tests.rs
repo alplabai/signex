@@ -71,6 +71,7 @@ fn hit_test_picks_the_right_wire_and_bus_among_many() {
         uuid: bus_uuid,
         start: Point::new(50.0, 0.0),
         end: Point::new(60.0, 0.0),
+        ..Default::default()
     });
 
     for (i, uuid) in wires.iter().enumerate() {

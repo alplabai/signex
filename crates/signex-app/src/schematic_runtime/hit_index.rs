@@ -77,7 +77,7 @@ impl HitIndex {
                     let bus = &snapshot.buses[bus_index];
                     bus_index += 1;
                     let tolerance = widths
-                        .bus_mm()
+                        .bus_mm(bus)
                         .max(signex_types::schematic::SCHEMATIC_HIT_BUS_TOLERANCE_MM);
                     segment_entry(item.item, bus.start, bus.end, tolerance)
                 }

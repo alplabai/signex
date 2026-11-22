@@ -295,6 +295,8 @@ impl PanelMsg {
             | Self::SetPrePlacementWireColor { .. }
             | Self::EditWireWidth { .. }
             | Self::EditWireColor { .. }
+            | Self::EditBusWidth { .. }
+            | Self::EditBusColor { .. }
             | Self::ToggleWireColorPicker { .. }
             | Self::OpenWireColorAdvancedPicker { .. }
             | Self::CancelWireColorPicker { .. }

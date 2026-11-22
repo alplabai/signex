@@ -147,6 +147,7 @@ pub(crate) mod multi_channel {
             uuid: Uuid::from_u128(0x200),
             start: pt(80.0, 15.0),
             end: pt(120.0, 15.0),
+            ..Default::default()
         });
         s.labels
             .push(label("VOUT_3V3[1..4]", pt(100.0, 15.0), LabelType::Net));
@@ -197,6 +198,7 @@ pub(crate) mod multi_channel {
             uuid: Uuid::from_u128(0x500),
             start: pt(0.0, 0.0),
             end: pt(0.0, 50.0),
+            ..Default::default()
         });
         s.labels.push(label(
             "VOUT_3V3[1..4]",

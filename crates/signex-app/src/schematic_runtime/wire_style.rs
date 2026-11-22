@@ -125,10 +125,10 @@ impl WireWidths<'_> {
         drawn_wire_width_mm(wire, class, &self.defaults)
     }
 
-    /// The width a bus is drawn at.
+    /// The width `bus` is drawn at.
     #[must_use]
-    pub fn bus_mm(&self) -> f64 {
-        self.defaults.bus_mm()
+    pub fn bus_mm(&self, bus: &signex_types::schematic::Bus) -> f64 {
+        self.defaults.bus_line_mm(bus.stroke_width)
     }
 }
 

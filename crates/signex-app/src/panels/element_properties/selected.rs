@@ -162,6 +162,7 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     // ── Style ──: width preset and own colour, undoable.
     if let (Some(id), Some((width, color))) = (uuid, ctx.selected_wire_style) {
         let picker = ctx.wire_color_picker;
+        let is_bus = selected_kind == Some(SelectedKind::Bus);
         col = col.push(
             ctx.collapsible(
                 "sel_wire_style",
@@ -171,11 +172,11 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                     Column::new()
                         .spacing(0)
                         .width(Length::Fill)
-                        .push(wire_width_grid(id, width, st, &ctx.i18n))
+                        .push(run_width_grid(id, is_bus, width, st, &ctx.i18n))
                         .push(crate::panels::wire_color_row(
                             color,
                             picker,
-                            std::rc::Rc::new(move |c| PanelMsg::EditWireColor(id, c)),
+                            std::rc::Rc::new(move |c| color_picked(id, is_bus, c)),
                             muted,
                             border_c,
                             &ctx.i18n,
@@ -342,10 +343,33 @@ pub(super) fn wire_width_cells(current: WireWidthPreset) -> [[(WireWidthPreset, 
     [[cell(a), cell(b)], [cell(c), cell(d)]]
 }
 
-/// The Width row of a selected wire: the four presets as a 2 x 2 segmented
-/// control, so no label is cut off.
-fn wire_width_grid<'a>(
+/// The edit a Width pick sends for the selected wire or bus.
+fn width_picked(id: uuid::Uuid, is_bus: bool, preset: WireWidthPreset) -> PanelMsg {
+    if is_bus {
+        PanelMsg::EditBusWidth(id, preset)
+    } else {
+        PanelMsg::EditWireWidth(id, preset)
+    }
+}
+
+/// The edit a Color pick sends for the selected wire or bus.
+fn color_picked(
     id: uuid::Uuid,
+    is_bus: bool,
+    color: Option<signex_types::theme::Color>,
+) -> PanelMsg {
+    if is_bus {
+        PanelMsg::EditBusColor(id, color)
+    } else {
+        PanelMsg::EditWireColor(id, color)
+    }
+}
+
+/// The Width row of a selected wire or bus: the four presets as a 2 x 2
+/// segmented control, so no label is cut off.
+fn run_width_grid<'a>(
+    id: uuid::Uuid,
+    is_bus: bool,
     current: WireWidthPreset,
     st: PanelStyle,
     i18n: &signex_i18n::I18n,
@@ -357,7 +381,7 @@ fn wire_width_grid<'a>(
             seg_btn(
                 t!(i18n, super::super::wire_style_rows::preset_label(preset)),
                 active,
-                PanelMsg::EditWireWidth(id, preset),
+                width_picked(id, is_bus, preset),
                 st.palette.input_bg,
                 st.primary,
                 st.muted,
@@ -655,6 +679,56 @@ mod tests {
             .map(|(p, _)| *p)
             .collect();
         assert_eq!(active, [WireWidthPreset::Medium]);
+    }
+
+    /// Mockup row 43: a bus's Style picks send the bus edits, a wire's the
+    /// wire edits.
+    #[test]
+    fn style_picks_send_the_edit_of_the_selected_kind() {
+        use crate::panels::PanelMsg;
+        use signex_types::schematic::WireWidthPreset::Large;
+        let id = uuid::Uuid::from_u128(1);
+        assert!(matches!(
+            super::width_picked(id, true, Large),
+            PanelMsg::EditBusWidth(got, Large) if got == id
+        ));
+        assert!(matches!(
+            super::width_picked(id, false, Large),
+            PanelMsg::EditWireWidth(got, Large) if got == id
+        ));
+        assert!(matches!(
+            super::color_picked(id, true, None),
+            PanelMsg::EditBusColor(got, None) if got == id
+        ));
+        assert!(matches!(
+            super::color_picked(id, false, None),
+            PanelMsg::EditWireColor(got, None) if got == id
+        ));
+    }
+
+    /// Mockup row 43: a selected bus shows the Style section.
+    #[test]
+    fn a_selected_bus_shows_the_style_section() {
+        use signex_types::schematic::{SelectedKind, WireWidthPreset};
+        let (app, _task) = crate::app::Signex::new();
+        let mut ctx = app.document_state.panel_ctx.clone();
+        ctx.selected_kind = Some(SelectedKind::Bus);
+        ctx.selected_uuid = Some(uuid::Uuid::now_v7());
+        ctx.selected_wire_style = Some((WireWidthPreset::Large, None));
+        let view = super::view_selected_element_properties(
+            &ctx,
+            iced::Color::WHITE,
+            iced::Color::WHITE,
+            iced::Color::BLACK,
+        );
+        let texts: Vec<String> =
+            crate::layout_probe::lay_out_texts(view, iced::Size::new(400.0, 4000.0))
+                .into_iter()
+                .map(|t| t.text)
+                .collect();
+        for want in ["STYLE", "Smallest", "Small", "Medium", "Large"] {
+            assert!(texts.iter().any(|t| t == want), "lacks {want}: {texts:?}");
+        }
     }
 
     /// The single-object views end in the "1 object selected" footer, a

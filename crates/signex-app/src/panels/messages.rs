@@ -806,6 +806,10 @@ pub enum PanelMsg {
     EditWireWidth(uuid::Uuid, signex_types::schematic::WireWidthPreset),
     /// Properties of a selected wire: its colour, as an undoable edit.
     EditWireColor(uuid::Uuid, Option<signex_types::theme::Color>),
+    /// Properties of a selected bus: its width, as an undoable edit.
+    EditBusWidth(uuid::Uuid, signex_types::schematic::WireWidthPreset),
+    /// Properties of a selected bus: its colour, as an undoable edit.
+    EditBusColor(uuid::Uuid, Option<signex_types::theme::Color>),
     /// Open or close the wire colour palette.
     ToggleWireColorPicker,
     /// Switch the wire colour picker to the full HSV / RGB picker.

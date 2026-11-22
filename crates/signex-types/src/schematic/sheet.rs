@@ -163,11 +163,30 @@ pub struct TextNote {
     pub locked: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Bus {
     pub uuid: Uuid,
     pub start: Point,
     pub end: Point,
+    /// Stroke width in mm; 0.0 draws at the project's bus width. Either style
+    /// key makes the sheet `snxsch/1.4` (docs/FORMAT_VERSIONS.md).
+    #[serde(default, skip_serializing_if = "super::bus_style::is_unset")]
+    pub stroke_width: f64,
+    /// Own colour; `None` draws in the theme's bus colour.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "super::bus_style::color"
+    )]
+    pub color: Option<crate::theme::Color>,
+}
+
+impl Bus {
+    /// Whether the bus carries a width or colour of its own.
+    #[must_use]
+    pub fn has_own_style(&self) -> bool {
+        !super::bus_style::is_unset(&self.stroke_width) || self.color.is_some()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
