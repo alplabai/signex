@@ -321,6 +321,10 @@ pub struct SymbolDocument {
     /// on the undo stack). Cleared by `SymbolDragCommit` (emitted on
     /// `ButtonReleased`).
     pub mid_drag: bool,
+    /// `(graphic, radius at drag start, radius last written)` while a grip
+    /// drags a Round Rectangle, so its clamp depends only on the current
+    /// size. A stored radius other than the last written one is a new start.
+    pub drag_corner_radius: Option<(usize, f64, f64)>,
     /// Which placed graphic's fill colour-picker is open, plus whether
     /// it has been expanded to the HSV / RGB overlay. `None` = closed.
     /// Transient UI-only state: never serialized, never snapshotted for
@@ -429,6 +433,7 @@ impl SymbolDocument {
             history_generation: 0,
             last_edit_key: None,
             mid_drag: false,
+            drag_corner_radius: None,
             graphic_fill_picker: None,
             local_color_picker: None,
             polygon_vertices: Vec::new(),

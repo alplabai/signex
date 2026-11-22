@@ -365,6 +365,76 @@ fn a_grip_resize_lowers_the_stored_radius_in_one_undo_step() {
     assert_eq!(editor.primitive().graphics[0].kind, before);
 }
 
+/// Ticks of one grip drag of the top edge, without the release.
+fn drag_top_edge(editor: &mut SymEditor, heights: &[f64]) {
+    for &y in heights {
+        apply_symbol_primitive_edit(
+            editor,
+            SymbolEditorMsg::MoveGraphicHandle {
+                idx: 0,
+                handle: crate::library::messages::GraphicHandleMsg::RectEdge(0),
+                x: 5.0,
+                y,
+            },
+        );
+    }
+}
+
+#[test]
+fn a_there_and_back_drag_keeps_the_radius_in_one_undo_step() {
+    let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
+    large_round_rect(&mut editor);
+    let before = editor.primitive().graphics[0].kind.clone();
+    let undo_before = editor.history.undo_len();
+    drag_top_edge(&mut editor, &[1.0]);
+    assert_eq!(stored_radius(&editor), 0.5, "clamped while small");
+    drag_top_edge(&mut editor, &[10.0]);
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DragCommit);
+    assert_eq!(stored_radius(&editor), 5.0);
+    assert_eq!(editor.history.undo_len(), undo_before + 1);
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::Undo);
+    assert_eq!(editor.primitive().graphics[0].kind, before);
+}
+
+#[test]
+fn a_drag_through_zero_height_keeps_the_radius() {
+    let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
+    large_round_rect(&mut editor);
+    drag_top_edge(&mut editor, &[0.0]);
+    assert_eq!(stored_radius(&editor), 0.0);
+    drag_top_edge(&mut editor, &[10.0]);
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DragCommit);
+    assert_eq!(stored_radius(&editor), 5.0);
+}
+
+/// The drag-start radius lasts one drag: a released small shape keeps its
+/// clamped radius when a later drag grows it.
+#[test]
+fn the_next_drag_starts_from_the_committed_radius() {
+    let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
+    large_round_rect(&mut editor);
+    drag_top_edge(&mut editor, &[2.0]);
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DragCommit);
+    drag_top_edge(&mut editor, &[10.0]);
+    apply_symbol_primitive_edit(&mut editor, SymbolEditorMsg::DragCommit);
+    assert_eq!(stored_radius(&editor), 1.0);
+}
+
+/// A radius written outside the drag is the new start, not overwritten.
+#[test]
+fn a_radius_edited_during_a_drag_is_not_rewound() {
+    let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
+    large_round_rect(&mut editor);
+    drag_top_edge(&mut editor, &[8.0]);
+    if let SymbolGraphicKind::RoundRectangle { corner_radius, .. } =
+        &mut editor.primitive_mut().graphics[0].kind
+    {
+        *corner_radius = 2.0;
+    }
+    drag_top_edge(&mut editor, &[10.0]);
+    assert_eq!(stored_radius(&editor), 2.0);
+}
+
 #[test]
 fn align_to_grid_that_shrinks_a_round_rectangle_lowers_its_radius() {
     let mut editor = new_editor(SymbolTool::PlaceRoundRectangle);
