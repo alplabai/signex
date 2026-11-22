@@ -3,8 +3,8 @@
 //! readable, and a read-only value is sunken.
 
 use iced::{Background, Element, Size, Theme, Widget as _};
-use signex_types::theme::{ThemeId, theme_tokens};
 use signex_i18n::UserText;
+use signex_types::theme::{ThemeId, theme_tokens};
 use signex_widgets::{Label, text};
 
 use super::rows::{field_insets, labelled_row, mono, pair_row, segmented_style, unit_input};
@@ -43,8 +43,10 @@ fn segment_labels_never_overlap_and_stay_whole_at_220_and_300_px() {
         let texts = lay_out_texts(format_row(), Size::new(dock, 400.0));
         let at = FORMATS.map(|label| find(&texts, label).bounds);
         for (i, a) in at.iter().enumerate() {
-            let whole =
-                natural::<PanelMsg>(text(fixture_label(FORMATS[i])).size(TS.caption).boxed(), FORMATS[i]);
+            let whole = natural::<PanelMsg>(
+                text(fixture_label(FORMATS[i])).size(TS.caption).boxed(),
+                FORMATS[i],
+            );
             assert!(
                 a.width + 1.0 >= whole.width,
                 "{} is cut at {dock} px: {a:?} vs {whole:?}",
@@ -73,7 +75,13 @@ fn pair_view<'a>() -> Element<'a, PanelMsg> {
 
 #[test]
 fn a_paired_value_fits_side_by_side_at_300_px_and_stacks_at_220_px() {
-    let value = natural::<PanelMsg>(text(fixture_label(VALUE)).size(TS.body).font(mono()).boxed(), VALUE);
+    let value = natural::<PanelMsg>(
+        text(fixture_label(VALUE))
+            .size(TS.body)
+            .font(mono())
+            .boxed(),
+        VALUE,
+    );
     let (left, right) = field_insets(true, true);
     for dock in DOCKS {
         let inputs = lay_out_inputs(pair_view(), Size::new(dock, 400.0));
