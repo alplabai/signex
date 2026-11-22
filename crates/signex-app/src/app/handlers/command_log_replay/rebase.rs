@@ -101,7 +101,7 @@ fn rebase_one(
             Command::UpdateSchDrawing { drawing: was },
             Command::UpdateSchDrawing { drawing: now },
         ) => Some(Command::UpdateSchDrawing {
-            drawing: with_field_changes(was, drawing, &now, |key| drawing_stores(was, key))?,
+            drawing: with_field_changes(was, drawing, &now, |key| drawing_stores(was, &now, key))?,
         }),
         (
             Command::UpdateDirective { directive },
@@ -126,8 +126,9 @@ fn rebase_one(
 /// are derived from other fields: a Rect's corners and an Arc's three points
 /// (rebuilt from each other), a dimension's direction and offset, an override
 /// first taken from the measured text, a table's source and a bound table's
-/// rows (built from the design).
-fn drawing_stores(drawing: &SchDrawing, key: &str) -> bool {
+/// rows (built from the design). A table's rows and columns are placed by
+/// index, so they count as stored only while `live` keeps the same source.
+fn drawing_stores(drawing: &SchDrawing, live: &SchDrawing, key: &str) -> bool {
     match drawing {
         SchDrawing::Line { .. } => {
             matches!(key, "start" | "end" | "width" | "stroke_color" | "locked")
@@ -166,8 +167,9 @@ fn drawing_stores(drawing: &SchDrawing, key: &str) -> bool {
             ) || (key == "override_text" && d.override_text.is_some())
         }
         SchDrawing::Table(t) => {
-            matches!(key, "refresh" | "style" | "locked" | "columns")
-                || (key == "rows" && !t.source.is_bound())
+            let same_source = matches!(live, SchDrawing::Table(l) if l.source == t.source);
+            matches!(key, "refresh" | "style" | "locked")
+                || (same_source && (key == "columns" || (key == "rows" && !t.source.is_bound())))
         }
     }
 }
@@ -375,7 +377,8 @@ mod tests {
     use super::*;
     use crate::app::sch_tables::{AnnotationEdit, apply_annotation_edit};
     use signex_types::schematic::{
-        DimensionDirection, FillType, Point, SchDimension, SchDrawing, SchTable, SheetPin,
+        DimensionDirection, FillType, PinSort, Point, SchDimension, SchDrawing, SchTable, SheetPin,
+        TableSource,
     };
     use uuid::Uuid;
 
@@ -499,6 +502,40 @@ mod tests {
         };
 
         assert!(replayed(was, edit, moved).is_none());
+    }
+
+    /// `drawing`, a table, bound to a part's pins since.
+    fn bound_since(drawing: SchDrawing) -> SchDrawing {
+        let SchDrawing::Table(mut table) = drawing else {
+            panic!("a table");
+        };
+        table.source = TableSource::ComponentPins {
+            designator: "U1".to_string(),
+            sort: PinSort::Number,
+        };
+        SchDrawing::Table(table)
+    }
+
+    /// The cell would land in a row the new source generates.
+    #[test]
+    fn a_cell_edit_is_refused_once_the_table_source_changed() {
+        let now = replayed(
+            table(&[&["a", "b"]]),
+            table(&[&["x", "b"]]),
+            bound_since(table(&[&["a", "y"]])),
+        );
+        assert!(now.is_none());
+    }
+
+    /// The index would now name another column of the new source.
+    #[test]
+    fn a_column_edit_is_refused_once_the_table_source_changed() {
+        let now = replayed(
+            table_column("a", true),
+            table_column("x", true),
+            bound_since(table_column("a", true)),
+        );
+        assert!(now.is_none());
     }
 
     /// A stored field beside a moved point still merges.

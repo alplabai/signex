@@ -58,15 +58,16 @@ fn image(sheet: &SchematicSheet, item: &SelectedItem) -> Option<Value> {
 
 /// A fingerprint of what a move reads besides its targets: everything that
 /// makes a net (wires, buses and entries, dots, labels, no-connects, symbols
-/// and their library pins, sheet symbols with their entries, harnesses). A
-/// hash, so a row does not keep a copy of the sheet.
+/// and their library pins, sheet symbols with their entries, harnesses) and
+/// the directives that apply by position, such as a Compile Mask. A hash, so
+/// a row does not keep a copy of the sheet.
 fn network(sheet: &SchematicSheet) -> Option<u64> {
     let bodies: BTreeMap<_, _> = sheet.lib_symbols.iter().collect();
     let parts = (
         (&sheet.wires, &sheet.buses, &sheet.bus_entries),
         (&sheet.junctions, &sheet.labels, &sheet.no_connects),
         (&sheet.symbols, &bodies, &sheet.child_sheets),
-        (&sheet.no_erc_directives, &sheet.harness),
+        (&sheet.no_erc_directives, &sheet.directives, &sheet.harness),
     );
     let bytes = serde_json::to_vec(&parts).ok()?;
     let mut hasher = DefaultHasher::new();
@@ -315,6 +316,23 @@ mod tests {
                 }],
             }))
             .expect("a sheet symbol"),
+        );
+
+        assert!(!guard.holds(&live));
+    }
+
+    /// The review's case: a move into a mask drops the item from the netlist.
+    #[test]
+    fn a_move_is_refused_after_a_compile_mask_is_drawn() {
+        let (mut live, guard) = moved_wire_guard();
+        live.directives.push(
+            serde_json::from_value(serde_json::json!({
+                "type": "compile_mask",
+                "uuid": Uuid::from_u128(0x75),
+                "start": {"x": -1.0, "y": 4.0},
+                "end": {"x": 11.0, "y": 6.0},
+            }))
+            .expect("a compile mask"),
         );
 
         assert!(!guard.holds(&live));

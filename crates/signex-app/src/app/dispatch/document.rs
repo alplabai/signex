@@ -93,6 +93,11 @@ impl Signex {
             EditMsg::PasteArrayRequested => self.request_paste(PasteIntent::Array),
             EditMsg::PasteTextRead { request, text } => self.handle_paste_text_read(request, text),
             EditMsg::PasteCountersSeeded { request, seed } => {
+                // An open Paste Array dialog's read is not a waiting paste.
+                if request.intent != PasteIntent::ArraySeed {
+                    let path = request.path.as_deref();
+                    self.ui_state.command_replay.note_paste_answered(path);
+                }
                 self.handle_paste_counters_seeded(request, &seed)
             }
             EditMsg::PasteArray(msg) => self.handle_paste_array_message(msg),

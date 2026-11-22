@@ -204,9 +204,16 @@ fn a_cancelled_move_tool_has_nothing_to_replay() {
 #[test]
 fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
     let (mut app, path) = app_with_parts();
+    // Keep reads no project numbers, so the first copy lands within `run`.
+    app.ui_state.paste_designators = crate::paste_prefs::PasteDesignators::Keep;
     select(&mut app, &[1]);
     run(&mut app, "duplicate");
     let seq = newest(&app).seq;
+    assert_eq!(
+        app.document_state.engines[&path].document().symbols.len(),
+        3,
+        "the first copy landed"
+    );
     // The copy lands at a fixed offset: its place must be free to replay.
     undo(&mut app, &path);
     let parts = app.document_state.engines[&path].document().symbols.len();
@@ -239,7 +246,10 @@ fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
 #[test]
 fn a_duplicate_replay_onto_its_own_copy_is_refused() {
     let (mut app, path) = app_with_parts();
+    // Keep reads no project numbers, so the first copy lands within `run`.
+    app.ui_state.paste_designators = crate::paste_prefs::PasteDesignators::Keep;
     select(&mut app, &[1]);
+    let (x, y) = position(&app, &path, 1);
     run(&mut app, "duplicate");
     let seq = newest(&app).seq;
     let places = |app: &Signex| -> Vec<(f64, f64)> {
@@ -249,11 +259,88 @@ fn a_duplicate_replay_onto_its_own_copy_is_refused() {
             .collect()
     };
     let before = places(&app);
+    let offset = crate::app::handlers::clipboard_workflows::DEFAULT_PASTE_OFFSET_MM;
+    assert_eq!(before.len(), 3, "the first copy landed");
+    assert!(
+        before
+            .iter()
+            .any(|p| (p.0 - (x + offset)).abs() < 1e-6 && (p.1 - (y + offset)).abs() < 1e-6),
+        "at the offset: {before:?}"
+    );
 
     replay(&mut app, seq);
 
     assert!(failure(&newest(&app)).contains("already holds a copy"));
     assert_eq!(places(&app), before, "nothing was placed");
+}
+
+/// The answer of the numbering read a Duplicate started: its copy lands.
+fn answer_paste_numbers(app: &mut Signex) {
+    let request = crate::app::PasteRequest {
+        intent: crate::app::PasteIntent::Duplicate,
+        epoch: app.interaction_state.placement_epoch,
+        path: app.document_state.active_path.clone(),
+        dialog: 0,
+        from_agent: false,
+    };
+    let seed = crate::app::handlers::paste::PasteSeed::default();
+    let _ = app.update(Message::Edit(crate::app::EditMsg::PasteCountersSeeded {
+        request,
+        seed: std::sync::Arc::new(seed),
+    }));
+}
+
+fn symbol_count(app: &Signex, path: &std::path::Path) -> usize {
+    app.document_state.engines[path].document().symbols.len()
+}
+
+/// Default numbering: the first copy waits for the project's numbers.
+#[test]
+fn a_duplicate_replay_is_refused_while_its_paste_waits_for_numbers() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    assert_eq!(symbol_count(&app, &path), 2, "the paste is still waiting");
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("still waiting"));
+    assert_eq!(symbol_count(&app, &path), 2, "the replay placed nothing");
+    answer_paste_numbers(&mut app);
+    assert_eq!(symbol_count(&app, &path), 3, "only the paste's own copy");
+}
+
+#[test]
+fn a_duplicate_replay_after_its_numbers_answer_is_refused_on_the_copy() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    answer_paste_numbers(&mut app);
+    assert_eq!(symbol_count(&app, &path), 3, "the copy landed");
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
+    assert_eq!(symbol_count(&app, &path), 3);
+}
+
+#[test]
+fn two_duplicate_replays_in_a_row_place_one_copy() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    answer_paste_numbers(&mut app);
+    undo(&mut app, &path);
+    assert_eq!(symbol_count(&app, &path), 2);
+
+    replay(&mut app, seq);
+    replay(&mut app, seq);
+
+    assert_eq!(symbol_count(&app, &path), 3, "at most one copy");
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
 }
 
 #[test]
