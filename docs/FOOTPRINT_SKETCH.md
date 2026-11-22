@@ -96,12 +96,15 @@ defaults (line width 0.12 mm, clearance 0.20 mm, marker on), which is not
 written, so such a file keeps its lower token; anything else writes
 `snxfpt/1.3`.
 
+The pin 1 dot sits on pad 1's outer side, or on the first other side clear of
+every pad by the clearance; with no clear side there is no dot.
+
 `signex_bake::bake_generated` rebuilds the strokes after a setting edit, a
-pad write-back (saves included) and a sketch bake. They are stored in
-`generated.silk` and `generated.assembly`, apart from `silk_f` and `fab_f`:
-a re-bake never touches hand-drawn entries or their selection, and a stroke
-cannot be selected or edited by hand. Placing the footprint copies them to
-the board's top silkscreen and fab layers.
+pad write-back (saves included), a 3D body mint and a sketch bake. They are
+stored in `generated.silk` and `generated.assembly`, apart from `silk_f` and
+`fab_f`: a re-bake never touches hand-drawn entries or their selection, and a
+stroke cannot be selected or edited by hand. Placing the footprint copies them
+to the board's top silkscreen and fab layers.
 
 - **Body:** the 3D body outline's extent, else the extent of the hand-drawn
   front fab graphics. With neither, no outline is generated and the section

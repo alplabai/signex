@@ -124,6 +124,110 @@ fn the_body_falls_back_to_the_drawn_fab_outline() {
     assert_eq!(body_extent(&fp), Some([-1.0, -3.0, 1.0, 3.0]));
 }
 
+/// A pin 1 notch dips into the body: only the arc's real sweep counts.
+#[test]
+fn a_partial_fab_arc_bounds_the_body_by_its_sweep() {
+    let mut fp = part();
+    fp.body_3d.outline = None;
+    fp.fab_f.push(FpGraphic::drawn(
+        FpGraphicKind::Rectangle {
+            from: [-1.5, -2.45],
+            to: [1.5, 2.45],
+        },
+        0.1,
+        false,
+    ));
+    fp.fab_f.push(FpGraphic::drawn(
+        FpGraphicKind::Arc {
+            center: [0.0, 2.45],
+            radius: 0.5,
+            start_deg: 180.0,
+            end_deg: 360.0,
+        },
+        0.1,
+        false,
+    ));
+    let [x0, y0, x1, y1] = body_extent(&fp).unwrap();
+    for (got, want) in [(x0, -1.5), (y0, -2.45), (x1, 1.5), (y1, 2.45)] {
+        assert!((got - want).abs() < 1e-9, "{got} != {want}");
+    }
+}
+
+#[test]
+fn an_arc_across_the_wrap_reaches_the_extreme_inside_its_sweep() {
+    let mut fp = part();
+    fp.body_3d.outline = None;
+    // 300 -> 60 runs through 0: it reaches +x, and neither +y nor -y.
+    fp.fab_f.push(FpGraphic::drawn(
+        FpGraphicKind::Arc {
+            center: [0.0, 0.0],
+            radius: 2.0,
+            start_deg: 300.0,
+            end_deg: 60.0,
+        },
+        0.1,
+        false,
+    ));
+    let [x0, y0, x1, y1] = body_extent(&fp).unwrap();
+    let half_chord = 2.0 * 60f64.to_radians().sin();
+    assert!((x0 - 1.0).abs() < 1e-9, "{x0}");
+    assert!((x1 - 2.0).abs() < 1e-9, "{x1}");
+    assert!((y0 + half_chord).abs() < 1e-9, "{y0}");
+    assert!((y1 - half_chord).abs() < 1e-9, "{y1}");
+}
+
+fn inline_part(pad_one_at: usize) -> Footprint {
+    let mut fp = Footprint::empty("INLINE");
+    fp.pads = [-1.0, 0.0, 1.0]
+        .iter()
+        .enumerate()
+        .map(|(i, &x)| Pad {
+            number: if i == pad_one_at {
+                "1".into()
+            } else {
+                format!("{}", i + 2)
+            },
+            shape: PadShape::Rect,
+            size: [0.6, 1.0],
+            position: [x, 0.0],
+            ..Pad::default()
+        })
+        .collect();
+    fp.generated.silk_outline = true;
+    fp.generated.silk_line_width_mm = 0.12;
+    fp.generated.pad_clearance_mm = 0.2;
+    fp
+}
+
+/// A central pad 1 has neighbours on its x sides: the dot goes above or
+/// below it, clear of their copper.
+#[test]
+fn the_pin_one_dot_leaves_a_side_with_a_neighbouring_pad() {
+    let mut fp = inline_part(1);
+    bake_generated(&mut fp);
+    let dot = dots(&fp.generated.silk);
+    assert_eq!(dot.len(), 1);
+    assert!(dot[0][0].abs() < 1e-9, "{dot:?}");
+    assert!((dot[0][1] + 0.82).abs() < 1e-9, "{dot:?}");
+}
+
+/// Pads packed on every side of pad 1 leave no clear place for a dot.
+#[test]
+fn with_no_clear_side_there_is_no_dot() {
+    let mut fp = inline_part(1);
+    for (position, number) in [([0.0, 1.0], "8"), ([0.0, -1.0], "9")] {
+        fp.pads.push(Pad {
+            number: number.into(),
+            shape: PadShape::Rect,
+            size: [0.6, 1.0],
+            position,
+            ..Pad::default()
+        });
+    }
+    bake_generated(&mut fp);
+    assert!(dots(&fp.generated.silk).is_empty());
+}
+
 #[test]
 fn without_a_body_no_outline_is_made_up() {
     let mut fp = part();

@@ -264,7 +264,11 @@ pub(super) fn make_pad_from_profile(editor: &mut crate::app::FootprintDocument) 
         return;
     }
 
-    let trace = signex_bake::profile::trace_closed_profile(sketch_for_walk, solve, line_id);
+    let trace = if signex_bake::closed_profiles::closes_at_a_fork(sketch_for_walk, line_id) {
+        Err(signex_bake::profile::TraceError::Branching)
+    } else {
+        signex_bake::profile::trace_closed_profile(sketch_for_walk, solve, line_id)
+    };
     let vertices = match trace {
         Ok(v) if v.len() >= 3 => v,
         Ok(_) => {

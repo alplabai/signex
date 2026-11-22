@@ -265,8 +265,11 @@ A failing inside corner is ringed on the canvas with a callout such as
 `R 0.00 < R 1.00`, and stays visible over the bake preview. **Add fillets**
 under the checks rounds each sharp corner between two lines to the router's
 radius, as one undo step (mockup row 179d). A corner that is already an arc,
-or whose lines are too short for the radius, is left alone and said in
-Messages.
+whose lines are too short for the radius, or that something depends on is
+left alone and said in Messages. A corner is depended on when a constraint,
+pattern, pad or other entity names its Point, or when an equal-length or
+midpoint constraint measures one of its lines; a constraint on a line's
+direction still holds after the trim and does not stop the fillet.
 
 ## Close gap {#close-gap}
 
@@ -280,7 +283,9 @@ is wider than the 0.05 mm heal tolerance` and offers no button. Close gap
 joins the two end points into one (every edge, constraint and pattern that
 named the removed end names the kept one; a fixed end is kept), re-solves,
 and is one undo step. The open ends are found by one helper on both hosts,
-`signex_bake::open_ends`.
+`signex_bake::open_ends`. An end pairs only with an end on the same plane and
+of the same role, and Close gap refuses two ends of different roles, so it
+never welds a courtyard to a keepout.
 
 ## Drawing the board {#drawing-the-board}
 
