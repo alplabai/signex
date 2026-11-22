@@ -360,6 +360,7 @@ impl Signex {
         // else None when the workspace is empty.
         self.document_state.note_documents_changed();
         self.cancel_replace_job("the project was closed");
+        self.forget_switch_requests_of(target_id);
         self.document_state.projects.retain(|p| p.id != target_id);
         let projects = &self.document_state.projects;
         self.library.forget_missing_libraries_of(target_id, |path| {

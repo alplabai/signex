@@ -211,6 +211,18 @@ fn layer_stack_in_the_more_menu_opens_the_layer_stack() {
     assert!(!app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
 }
 
+/// Esc closes the more menu and goes no further: the armed tool stays.
+#[test]
+fn esc_closes_the_more_menu_and_leaves_the_tool() {
+    let (mut app, _path) = open();
+    app.document_state.dock.show_panel(PanelKind::Layers);
+    app.interaction_state.current_tool = crate::app::Tool::Wire;
+    layers(&mut app, LayersPanelMsg::MoreMenuToggled);
+    let _ = app.handle_escape_pressed(None);
+    assert!(!app.document_state.panel_ctx.pcb_layers_ui.more_menu_open);
+    assert_eq!(app.interaction_state.current_tool, crate::app::Tool::Wire);
+}
+
 /// View From Bottom Side in the more menu flips the view and closes the
 /// menu, as the menu's other live rows do.
 #[test]

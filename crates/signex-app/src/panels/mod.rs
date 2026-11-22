@@ -10,6 +10,7 @@ use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use signex_widgets::{button, raw, text};
 
 pub mod annotations;
+mod click_away;
 pub mod compiled_design;
 pub mod components_panel;
 mod element_properties;

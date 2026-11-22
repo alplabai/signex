@@ -32,8 +32,12 @@ impl Signex {
             M::BranchSwitched { project_id, result } => {
                 self.finish_branch_switch(SwitchSurface::ProjectTab(project_id), result)
             }
-            M::SwitchChecked { request, result } => {
-                self.finish_switch_check(*request, result);
+            M::SwitchChecked {
+                request,
+                pick,
+                result,
+            } => {
+                self.finish_switch_check(*request, pick, result);
                 Task::none()
             }
             M::SaveAndSwitchPressed => self.save_then_switch(),
@@ -146,6 +150,7 @@ impl Signex {
             .is_some_and(|facts| facts.branch.as_deref() == Some(name.as_str()));
         if is_current {
             git.switcher = None;
+            git.parked = None;
             return Task::none();
         }
         self.request_branch_switch(SwitchRequest {

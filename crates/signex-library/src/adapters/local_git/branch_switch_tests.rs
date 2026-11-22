@@ -177,6 +177,142 @@ fn a_switch_keeps_content_whose_object_was_pruned() {
     assert_eq!(fs::read(dir.path().join("m.step")).unwrap(), MODEL_MAIN);
 }
 
+/// `main` ignores `outputs/`; `rev-b` tracks `outputs/bom.csv`. `main` is
+/// checked out with a hand-edited copy of that ignored file.
+fn ignored_file_repo() -> (tempfile::TempDir, git2::Repository) {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    repo.set_head("refs/heads/main").unwrap();
+    fs::write(dir.path().join(".gitignore"), "outputs/\n").unwrap();
+    fs::write(dir.path().join("a.snxsch"), "main\n").unwrap();
+    let first = commit_all(&repo, "first");
+    repo.branch("rev-b", &repo.find_commit(first).unwrap(), false)
+        .unwrap();
+    check_out(&repo, "rev-b");
+    fs::create_dir_all(dir.path().join("outputs")).unwrap();
+    fs::write(dir.path().join("outputs/bom.csv"), "branch\n").unwrap();
+    let mut index = repo.index().unwrap();
+    index.add_path(Path::new("outputs/bom.csv")).unwrap();
+    index.write().unwrap();
+    commit_all(&repo, "track the bom");
+    check_out(&repo, "main");
+    fs::create_dir_all(dir.path().join("outputs")).unwrap();
+    fs::write(dir.path().join("outputs/bom.csv"), "hand edited\n").unwrap();
+    (dir, repo)
+}
+
+/// Data-loss guard: no commit holds an ignored file, so it is never replaced.
+#[test]
+fn an_ignored_file_at_a_path_the_branch_adds_refuses_the_switch() {
+    let (dir, repo) = ignored_file_repo();
+
+    let result = switch(dir.path(), &BranchTarget::Local("rev-b".into()), &[]);
+
+    assert_eq!(result, Err(SwitchRefusal::WouldOverwrite));
+    assert_eq!(head(&repo), "main");
+    assert_eq!(
+        fs::read_to_string(dir.path().join("outputs/bom.csv")).unwrap(),
+        "hand edited\n"
+    );
+}
+
+/// One added path that cannot be removed (here a folder) must not stop the
+/// other files from coming back, and it is named.
+#[test]
+fn rollback_restores_the_other_files_and_names_the_one_it_could_not() {
+    let (dir, repo) = lfs_repo();
+    let from = repo.head().unwrap().peel_to_tree().unwrap();
+    fs::create_dir(dir.path().join("added")).unwrap();
+    fs::write(dir.path().join("a.snxsch"), "side\n").unwrap();
+
+    let plain = [PathBuf::from("added"), PathBuf::from("a.snxsch")];
+    let lost = restore_plain(&repo, dir.path(), &from, &plain);
+
+    assert_eq!(lost, vec!["added".to_owned()]);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("a.snxsch")).unwrap(),
+        "main\n"
+    );
+}
+
+/// Rollback never deletes through a path that leaves the working tree.
+#[test]
+fn rollback_leaves_a_path_outside_the_tree_alone() {
+    let parent = tempfile::tempdir().unwrap();
+    let work = parent.path().join("work");
+    fs::create_dir(&work).unwrap();
+    let repo = git2::Repository::init(&work).unwrap();
+    repo.set_head("refs/heads/main").unwrap();
+    fs::write(work.join("a.snxsch"), "main\n").unwrap();
+    commit_all(&repo, "first");
+    let outside = parent.path().join("x");
+    fs::write(&outside, "keep\n").unwrap();
+    let from = repo.head().unwrap().peel_to_tree().unwrap();
+
+    let lost = restore_plain(&repo, &work, &from, &[PathBuf::from("../x")]);
+
+    assert!(lost.is_empty(), "{lost:?}");
+    assert_eq!(fs::read_to_string(outside).unwrap(), "keep\n");
+}
+
+/// The tracked LFS folder became a link: the switch refuses before it reads
+/// or writes through it.
+#[cfg(unix)]
+#[test]
+fn an_lfs_path_behind_a_link_refuses_the_switch() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = git2::Repository::init(dir.path()).unwrap();
+    repo.set_head("refs/heads/main").unwrap();
+    let main_pointer = store_object(&repo, MODEL_MAIN);
+    fs::create_dir(dir.path().join("models")).unwrap();
+    fs::write(dir.path().join("models/m.step"), &main_pointer).unwrap();
+    let first = commit_all(&repo, "first");
+    repo.branch("side", &repo.find_commit(first).unwrap(), false)
+        .unwrap();
+    check_out(&repo, "side");
+    let side_pointer = store_object(&repo, MODEL_SIDE);
+    fs::write(dir.path().join("models/m.step"), &side_pointer).unwrap();
+    commit_all(&repo, "on side");
+    check_out(&repo, "main");
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("m.step"), MODEL_MAIN).unwrap();
+    fs::remove_dir_all(dir.path().join("models")).unwrap();
+    std::os::unix::fs::symlink(outside.path(), dir.path().join("models")).unwrap();
+
+    let result = switch(dir.path(), &side(), &[]);
+
+    assert_eq!(
+        result,
+        Err(SwitchRefusal::UnsafePath("models/m.step".into()))
+    );
+    assert_eq!(fs::read(outside.path().join("m.step")).unwrap(), MODEL_MAIN);
+}
+
+/// A linked worktree reads LFS objects from the store the main checkout uses.
+#[test]
+fn a_linked_worktree_finds_the_shared_lfs_objects() {
+    let (_dir, repo) = lfs_repo();
+    let holder = tempfile::tempdir().unwrap();
+    let worktree = repo
+        .worktree("linked", &holder.path().join("linked"), None)
+        .unwrap();
+    let linked = git2::Repository::open_from_worktree(&worktree).unwrap();
+    let (_, oid) = pointer_for(MODEL_SIDE);
+
+    assert!(lfs::object_holds(&lfs::object_path(&linked, &oid), &oid));
+}
+
+/// LFS exists to keep large content out of the object database.
+#[test]
+fn a_switch_stores_no_lfs_content_as_a_git_blob() {
+    let (dir, repo) = lfs_repo();
+    let content_id = git2::Oid::hash_object(git2::ObjectType::Blob, MODEL_SIDE).unwrap();
+
+    switch(dir.path(), &side(), &[]).unwrap();
+
+    assert!(!repo.odb().unwrap().exists(content_id));
+}
+
 #[test]
 fn a_pointer_names_only_a_sha256_hash() {
     let (pointer, oid) = pointer_for(b"x");

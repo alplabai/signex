@@ -94,37 +94,54 @@ impl Signex {
         let Some(board) = self.layer_stack_board() else {
             return;
         };
+        if let Some(idx) = self.ensure_layer_stack_tab(board) {
+            self.focus_layer_stack_tab(idx);
+        }
+    }
+
+    /// `board`'s Layer Stack tab, added right after the board's when missing.
+    /// `None` when the board has no tab.
+    fn ensure_layer_stack_tab(&mut self, board: PathBuf) -> Option<usize> {
         let tabs = &self.document_state.tabs;
-        let Some(owner) = tab_at(tabs, &board, false) else {
-            return;
-        };
-        let idx = match tab_at(tabs, &board, true) {
-            Some(idx) => idx,
-            None => {
-                let project_id = tabs[owner].project_id;
-                let title = self.layer_stack_title(&board, project_id);
-                let at = owner + 1;
-                self.document_state.tabs.insert(
-                    at,
-                    TabInfo {
-                        title,
-                        path: board,
-                        cached_document: None,
-                        project_id,
-                        kind: TabKind::LayerStack,
-                    },
-                );
-                // The tab went in before any tab after the board.
-                if self.document_state.active_tab >= at {
-                    self.document_state.active_tab += 1;
-                }
-                at
-            }
-        };
+        let owner = tab_at(tabs, &board, false)?;
+        if let Some(idx) = tab_at(tabs, &board, true) {
+            return Some(idx);
+        }
+        let project_id = tabs[owner].project_id;
+        let title = self.layer_stack_title(&board, project_id);
+        let at = owner + 1;
+        self.document_state.tabs.insert(
+            at,
+            TabInfo {
+                title,
+                path: board,
+                cached_document: None,
+                project_id,
+                kind: TabKind::LayerStack,
+            },
+        );
+        // The tab went in before any tab after the board.
+        if self.document_state.active_tab >= at {
+            self.document_state.active_tab += 1;
+        }
+        Some(at)
+    }
+
+    fn focus_layer_stack_tab(&mut self, idx: usize) {
         if idx != self.document_state.active_tab {
             self.park_active_schematic_session();
             self.document_state.active_tab = idx;
             self.sync_active_tab();
+        }
+    }
+
+    /// Bring back a Layer Stack tab a branch switch's reopen closed, once its
+    /// board has a tab again.
+    pub(crate) fn restore_layer_stack_tab(&mut self, board: PathBuf, takes_focus: bool) {
+        if let Some(idx) = self.ensure_layer_stack_tab(board)
+            && takes_focus
+        {
+            self.focus_layer_stack_tab(idx);
         }
     }
 

@@ -176,9 +176,41 @@ impl Signex {
                 if let Some(overlay_msg) = self.escape_overlay_message() {
                     return self.update(overlay_msg);
                 }
+                if let Some(dismiss) = self.panel_menu_escape() {
+                    return self.update(dismiss);
+                }
                 self.escape_editor_or_tool_reset()
             }
         }
+    }
+
+    /// Esc closes a menu open in a panel the user can see, and nothing behind
+    /// it. Below the modal ladder: a dialog paints over the panels.
+    fn panel_menu_escape(&self) -> Option<Message> {
+        use crate::panels::history::{HistoryCommitMsg, HistoryPanelMsg, HistorySwitcherMsg};
+        use crate::panels::{LayersPanelMsg, PanelKind, PanelMsg};
+        let docs = &self.document_state;
+        let history = docs
+            .dock
+            .is_frontmost(PanelKind::History)
+            .then_some(&docs.history.ui)
+            .and_then(|ui| {
+                if ui.switcher_open {
+                    Some(HistoryPanelMsg::Switcher(HistorySwitcherMsg::Dismissed))
+                } else if ui.more_open {
+                    Some(HistoryPanelMsg::Commit(HistoryCommitMsg::MoreToggled))
+                } else {
+                    None
+                }
+            })
+            .map(PanelMsg::History);
+        let layers = (docs.panel_ctx.pcb_layers_ui.more_menu_open
+            && self.has_active_pcb()
+            && docs.dock.is_frontmost(PanelKind::Layers))
+        .then_some(PanelMsg::LayersPanel(LayersPanelMsg::MoreMenuDismissed));
+        history
+            .or(layers)
+            .map(|msg| Message::Dock(crate::dock::DockMessage::Panel(msg)))
     }
 
     /// Stop a floating-panel drag in flight, leaving the panel floating.
@@ -459,6 +491,47 @@ mod tests {
 
     fn detach(app: &mut Signex, modal: ModalId) -> iced::window::Id {
         open_window(app, WindowKind::DetachedModal(modal))
+    }
+
+    /// The History panel in front, with the tool armed that a fall-through
+    /// Esc would reset.
+    fn history_in_front() -> Signex {
+        use crate::panels::PanelKind;
+        let mut app = quiet_app();
+        app.document_state.dock.show_panel(PanelKind::History);
+        app.interaction_state.current_tool = Tool::Wire;
+        app
+    }
+
+    #[test]
+    fn esc_closes_the_history_switcher_and_leaves_the_tool() {
+        let mut app = history_in_front();
+        app.document_state.history.ui.switcher_open = true;
+        let _ = app.handle_escape_pressed(None);
+        assert!(!app.document_state.history.ui.switcher_open);
+        assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    }
+
+    #[test]
+    fn esc_closes_the_history_more_row_and_leaves_the_tool() {
+        let mut app = history_in_front();
+        app.document_state.history.ui.more_open = true;
+        let _ = app.handle_escape_pressed(None);
+        assert!(!app.document_state.history.ui.more_open);
+        assert_eq!(app.interaction_state.current_tool, Tool::Wire);
+    }
+
+    /// A menu left open in a panel behind another tab is not on screen, so
+    /// it does not take the key.
+    #[test]
+    fn esc_ignores_a_menu_in_a_panel_behind_another_tab() {
+        use crate::panels::PanelKind;
+        let mut app = history_in_front();
+        app.document_state.history.ui.switcher_open = true;
+        let _ = app.document_state.dock.close_panel(PanelKind::History);
+        let _ = app.handle_escape_pressed(None);
+        assert!(app.document_state.history.ui.switcher_open);
+        assert_eq!(app.interaction_state.current_tool, Tool::Select);
     }
 
     // ── #547: a detached modal's own window ─────────────────────────
