@@ -67,9 +67,10 @@ pub(crate) use requirements::{
     project_add_requirement, project_enable_requirement, project_remove_requirement,
     project_run_requirements, project_set_requirement,
 };
-pub use row_drag::{RowDrag, RowDragMsg};
+pub use row_drag::RowDragMsg;
 pub(crate) use sheets::sheet_thumbnail;
 
+pub use crate::app::core::row_drag::RowDrag;
 use crate::app::state::ProjectId;
 
 /// A section of the Project tab, in list order (#1084).

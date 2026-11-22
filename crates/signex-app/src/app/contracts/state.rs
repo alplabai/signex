@@ -285,7 +285,7 @@ pub enum SaveAllNext {
     /// File ▸ Save All: report the outcome and do nothing else.
     Nothing,
     /// Run the branch switch Save and switch asked for.
-    SwitchBranch(Box<crate::app::project_git::SwitchRequest>),
+    SwitchBranch(Box<crate::app::core::branch_switch::SwitchRequest>),
 }
 
 /// A Save All whose loose documents' volumes have been probed off-thread;

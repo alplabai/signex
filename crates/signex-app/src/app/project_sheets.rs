@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 
 use signex_types::schematic::SchematicSheet;
 
+pub(crate) use crate::app::core::file_stamp::DiskStamps;
 use crate::app::state::DocumentState;
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::library::closed_sheets::FileStamp;
@@ -412,10 +413,6 @@ impl ProjectSheetPlan {
         (set, stamps.into_inner())
     }
 }
-
-/// The stamp of each sheet a read took from disk (`None`: it could not be
-/// stated).
-pub(crate) type DiskStamps = HashMap<PathBuf, Option<FileStamp>>;
 
 /// The plan for `source`'s project. Every open engine is snapshotted, so a
 /// sheet the hierarchy walk reaches that is open (declared or not, whoever

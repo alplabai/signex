@@ -553,7 +553,7 @@ pub struct DocumentState {
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
     /// Power rail renames waiting on their project's sheets (mockup row 45).
-    pub(crate) rail_rename: crate::app::rail_rename::RailRenames,
+    pub(crate) rail_rename: crate::app::core::rail_rename::RailRenames,
     /// An agent's edit list in progress, and the labels of its undo steps (#2178).
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
