@@ -1,7 +1,8 @@
 //! Imported drawing to sketch geometry (mockup row 179c). Each piece becomes
-//! a sketch entity. With `join` on, ends within the one heal tolerance share
-//! a point (Coincident by construction) and exactly level or plumb lines take
-//! Horizontal or Vertical. Pure: the caller adds the result to a sketch.
+//! a sketch entity. With `join` on, ends of one tag within the one heal
+//! tolerance share a point (Coincident by construction) and exactly level or
+//! plumb lines take Horizontal or Vertical. Pure: the caller adds the result
+//! to a sketch.
 
 use std::collections::HashMap;
 
@@ -34,7 +35,9 @@ pub enum ImportShape {
     },
 }
 
-/// A shape and the caller's tag for it (the layer it came from).
+/// A shape and the caller's tag for it. Ends join only within one tag: a
+/// profile walk counts every edge at a point, so a shared corner between two
+/// targets would make the outline branch.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ImportPiece {
     pub shape: ImportShape,
@@ -73,7 +76,8 @@ struct Ends {
     ids: Vec<SketchEntityId>,
     at: Vec<(f64, f64)>,
     uses: Vec<u32>,
-    cells: HashMap<(i64, i64), Vec<usize>>,
+    /// The ends of each tag, by tolerance cell.
+    cells: HashMap<(usize, i64, i64), Vec<usize>>,
     healed: usize,
 }
 
@@ -96,13 +100,13 @@ impl Ends {
         )
     }
 
-    /// The nearest end within the tolerance, and how far it is.
-    fn nearest(&self, p: (f64, f64)) -> Option<(usize, f64)> {
+    /// The nearest end of `tag` within the tolerance, and how far it is.
+    fn nearest(&self, p: (f64, f64), tag: usize) -> Option<(usize, f64)> {
         let (cx, cy) = Self::cell(p);
         let mut best: Option<(usize, f64)> = None;
         for x in cx - 1..=cx + 1 {
             for y in cy - 1..=cy + 1 {
-                for &i in self.cells.get(&(x, y)).into_iter().flatten() {
+                for &i in self.cells.get(&(tag, x, y)).into_iter().flatten() {
                     let gap = (self.at[i].0 - p.0).hypot(self.at[i].1 - p.1);
                     if heals(gap) && best.is_none_or(|(_, b)| gap < b) {
                         best = Some((i, gap));
@@ -113,10 +117,10 @@ impl Ends {
         best
     }
 
-    /// The end at `p`: a joined one, else a new one.
-    fn end(&mut self, p: (f64, f64)) -> usize {
+    /// The end of `tag` at `p`: a joined one, else a new one.
+    fn end(&mut self, p: (f64, f64), tag: usize) -> usize {
         if self.join
-            && let Some((i, gap)) = self.nearest(p)
+            && let Some((i, gap)) = self.nearest(p, tag)
         {
             self.healed += usize::from(gap > SAME_MM);
             return i;
@@ -125,17 +129,18 @@ impl Ends {
         self.ids.push(SketchEntityId::new());
         self.at.push(p);
         self.uses.push(0);
-        self.cells.entry(Self::cell(p)).or_default().push(i);
+        let (cx, cy) = Self::cell(p);
+        self.cells.entry((tag, cx, cy)).or_default().push(i);
         i
     }
 
-    /// Two ends of one edge; `None` when they are one point.
-    fn pair(&mut self, a: (f64, f64), b: (f64, f64)) -> Option<(usize, usize)> {
+    /// Two ends of one edge of `tag`; `None` when they are one point.
+    fn pair(&mut self, a: (f64, f64), b: (f64, f64), tag: usize) -> Option<(usize, usize)> {
         if (a.0 - b.0).hypot(a.1 - b.1) <= SAME_MM {
             return None;
         }
         let healed = self.healed;
-        let (i, j) = (self.end(a), self.end(b));
+        let (i, j) = (self.end(a, tag), self.end(b, tag));
         if i == j {
             self.healed = healed;
             return None;
@@ -159,7 +164,7 @@ pub fn build_import(pieces: &[ImportPiece], plane: PlaneId, join: bool) -> Sketc
         let id = SketchEntityId::new();
         let kind = match piece.shape {
             ImportShape::Line { a, b } => {
-                let Some((i, j)) = ends.pair(a, b) else {
+                let Some((i, j)) = ends.pair(a, b, piece.tag) else {
                     check.dropped += 1;
                     continue;
                 };
@@ -173,7 +178,7 @@ pub fn build_import(pieces: &[ImportPiece], plane: PlaneId, join: bool) -> Sketc
                 }
             }
             ImportShape::Arc { center, start, end } => {
-                let Some((i, j)) = ends.pair(start, end) else {
+                let Some((i, j)) = ends.pair(start, end, piece.tag) else {
                     check.dropped += 1;
                     continue;
                 };
@@ -288,6 +293,28 @@ mod tests {
         let import = build_import(&[line((0.0, 0.0), (0.01, 0.0))], PlaneId::new(), true);
         assert_eq!(import.check.dropped, 1);
         assert!(import.entities.is_empty());
+    }
+
+    #[test]
+    fn ends_join_within_one_tag_and_never_across_two() {
+        let tagged = |tag| {
+            square(0.0)
+                .into_iter()
+                .map(move |p| ImportPiece { tag, ..p })
+        };
+        let points = |import: &SketchImport| {
+            import
+                .entities
+                .iter()
+                .filter(|e| matches!(e.kind, EntityKind::Point { .. }))
+                .count()
+        };
+        let same: Vec<_> = tagged(1).chain(tagged(1)).collect();
+        assert_eq!(points(&build_import(&same, PlaneId::new(), true)), 4);
+        let two: Vec<_> = tagged(1).chain(tagged(2)).collect();
+        let import = build_import(&two, PlaneId::new(), true);
+        assert_eq!(points(&import), 8, "each tag keeps its own corners");
+        assert_eq!(import.check.open_ends, 0, "both loops still close");
     }
 
     #[test]

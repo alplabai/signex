@@ -3,6 +3,7 @@
 //! here touches the sketch: Import builds the geometry from these choices and
 //! Cancel drops them.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use signex_engine::pcb::dxf::{
@@ -126,10 +127,17 @@ impl SketchDxfDialog {
         let factor = self.units.to_mm(self.source.file_to_mm) * scale;
         let edges = dxf_edges(&self.source.drawing, self.origin, factor)
             .map_err(|_| SketchDxfProblem::Range)?;
+        let with_path: HashSet<usize> = edges
+            .iter()
+            .filter(|edge| !matches!(edge.shape, DxfEdgeShape::Circle { .. }))
+            .map(|edge| edge.layer)
+            .collect();
         let pieces: Vec<ImportPiece> = edges
             .iter()
-            .filter(|edge| self.targets.get(edge.layer).copied().flatten().is_some())
-            .map(piece)
+            .filter_map(|edge| {
+                let role = self.piece_role(edge, &with_path)?;
+                Some(piece(edge, role_tag(role)))
+            })
             .collect();
         if pieces.is_empty() {
             return Err(SketchDxfProblem::NothingPicked);
@@ -137,14 +145,37 @@ impl SketchDxfDialog {
         Ok(build_import(&pieces, plane, self.join))
     }
 
-    /// The role of an edge from layer row `tag`.
+    /// What `edge` becomes; `None` on a skipped layer. A board has one
+    /// outline, so a circle beside the lines or arcs of an outline layer is
+    /// a hole in it. `with_path`: the layers holding a line or arc.
+    fn piece_role(&self, edge: &DxfEdge, with_path: &HashSet<usize>) -> Option<SketchRole> {
+        let target = self.targets.get(edge.layer).copied().flatten()?;
+        let is_circle = matches!(edge.shape, DxfEdgeShape::Circle { .. });
+        let beside_path = is_circle && with_path.contains(&edge.layer);
+        Some(if target == SketchRole::BoardOutline && beside_path {
+            SketchRole::MountingHole
+        } else {
+            target
+        })
+    }
+
+    /// The role of an edge whose piece has `tag` (see [`role_tag`]).
     pub fn role_of(&self, tag: usize) -> SketchRole {
-        self.targets
+        DXF_LAYER_TARGETS
             .get(tag)
             .copied()
             .flatten()
             .unwrap_or(SketchRole::Unassigned)
     }
+}
+
+/// The tag of pieces of `role`, its place in [`DXF_LAYER_TARGETS`]: ends join
+/// only within one tag, so only among pieces of one role.
+fn role_tag(role: SketchRole) -> usize {
+    DXF_LAYER_TARGETS
+        .iter()
+        .position(|target| *target == Some(role))
+        .unwrap_or(DXF_LAYER_TARGETS.len())
 }
 
 /// A layer of circles starts as mounting holes, the first other drawn layer
@@ -167,7 +198,7 @@ fn default_targets(rows: &[DxfLayerRow], has_outline: bool) -> Vec<DxfLayerTarge
         .collect()
 }
 
-fn piece(edge: &DxfEdge) -> ImportPiece {
+fn piece(edge: &DxfEdge, tag: usize) -> ImportPiece {
     let xy = |p: Point| (p.x, p.y);
     let shape = match edge.shape {
         DxfEdgeShape::Line { a, b } => ImportShape::Line { a: xy(a), b: xy(b) },
@@ -181,10 +212,7 @@ fn piece(edge: &DxfEdge) -> ImportPiece {
             radius,
         },
     };
-    ImportPiece {
-        shape,
-        tag: edge.layer,
-    }
+    ImportPiece { shape, tag }
 }
 
 #[cfg(test)]
@@ -230,6 +258,62 @@ mod tests {
     #[test]
     fn a_sketch_with_an_outline_gets_no_second_one_by_default() {
         assert_eq!(dialog(true).targets[0], Some(SketchRole::Unassigned));
+    }
+
+    /// A square and two holes, all on layer 0.
+    const ONE_LAYER: &str = "0\nSECTION\n2\nENTITIES\n\
+0\nLINE\n8\n0\n10\n0\n20\n0\n11\n10\n21\n0\n\
+0\nLINE\n8\n0\n10\n10\n20\n0\n11\n10\n21\n10\n\
+0\nLINE\n8\n0\n10\n10\n20\n10\n11\n0\n21\n10\n\
+0\nLINE\n8\n0\n10\n0\n20\n10\n11\n0\n21\n0\n\
+0\nCIRCLE\n8\n0\n10\n3\n20\n3\n40\n1\n\
+0\nCIRCLE\n8\n0\n10\n7\n20\n7\n40\n1\n\
+0\nENDSEC\n0\nEOF\n";
+
+    /// One circle alone on its layer.
+    const ROUND: &str = "0\nSECTION\n2\nENTITIES\n\
+0\nCIRCLE\n8\n0\n10\n5\n20\n5\n40\n5\n\
+0\nENDSEC\n0\nEOF\n";
+
+    /// The role each circle and each other edge of `file` lands with when
+    /// its one layer is on Board Outline.
+    fn roles_on_an_outline_layer(file: &str) -> (Vec<SketchRole>, Vec<SketchRole>) {
+        let source = Arc::new(DxfSource::read(file).expect("the file reads"));
+        let mut d = SketchDxfDialog::open("f.dxf".into(), source, BoardOrigin::default(), false);
+        d.apply(SketchDxfMsg::TargetPicked {
+            row: 0,
+            target: Some(SketchRole::BoardOutline),
+        });
+        let import = d.build(PlaneId::new()).expect("it builds");
+        let role = |id: signex_sketch::id::SketchEntityId| {
+            let tag = import.edges.iter().find(|(edge, _)| *edge == id)?.1;
+            Some(d.role_of(tag))
+        };
+        let (mut circles, mut others) = (Vec::new(), Vec::new());
+        for entity in &import.entities {
+            let Some(role) = role(entity.id) else {
+                continue;
+            };
+            match entity.kind {
+                signex_sketch::entity::EntityKind::Circle { .. } => circles.push(role),
+                _ => others.push(role),
+            }
+        }
+        (circles, others)
+    }
+
+    #[test]
+    fn circles_beside_an_outline_on_one_layer_land_as_holes() {
+        let (circles, others) = roles_on_an_outline_layer(ONE_LAYER);
+        assert_eq!(circles, [SketchRole::MountingHole; 2]);
+        assert_eq!(others, [SketchRole::BoardOutline; 4]);
+    }
+
+    #[test]
+    fn a_circle_alone_on_an_outline_layer_stays_the_outline() {
+        let (circles, others) = roles_on_an_outline_layer(ROUND);
+        assert_eq!(circles, [SketchRole::BoardOutline]);
+        assert!(others.is_empty());
     }
 
     #[test]
