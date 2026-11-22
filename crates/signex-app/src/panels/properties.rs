@@ -10,34 +10,7 @@ use signex_i18n::{ids, t};
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
-/// Stable identifiers for every numeric drawing-field editor so the
-/// panel keeps a transient string buffer per field across rerenders.
-/// Erasing a text_input leaves an empty string in the buffer until
-/// the user types a valid f64, at which point UpdateDrawingEdit fires.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DrawingFieldId {
-    LineStartX,
-    LineStartY,
-    LineEndX,
-    LineEndY,
-    LineWidth,
-    RectStartX,
-    RectStartY,
-    RectWidth,
-    RectHeight,
-    RectBorder,
-    CircleCenterX,
-    CircleCenterY,
-    CircleRadius,
-    CircleBorder,
-    ArcCenterX,
-    ArcCenterY,
-    ArcRadius,
-    ArcStartAngle,
-    ArcEndAngle,
-    ArcWidth,
-    PolyBorder,
-}
+pub use crate::app::core::drawing_field::DrawingFieldId;
 
 impl DrawingFieldId {
     /// A Y coordinate on the sheet: shown and typed from the page origin.

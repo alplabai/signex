@@ -211,16 +211,7 @@ pub struct MoveSelectionState {
     pub sheet: Option<std::path::PathBuf>,
 }
 
-/// The drawing field whose typed value is previewed on a sheet, not yet an
-/// undo step (#2768). The preview itself is in that sheet's engine.
-#[derive(Debug, Clone)]
-pub(crate) struct LiveDrawingEdit {
-    pub(crate) path: std::path::PathBuf,
-    pub(crate) drawing: uuid::Uuid,
-    pub(crate) field: crate::panels::DrawingFieldId,
-    /// Whether Properties was open when typing began: closing it commits.
-    pub(crate) panel_open: bool,
-}
+pub(crate) use crate::app::core::drawing_field::LiveDrawingEdit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModalId {
