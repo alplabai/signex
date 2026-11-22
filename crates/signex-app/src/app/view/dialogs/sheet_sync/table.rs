@@ -33,7 +33,7 @@ pub(super) fn changed_rows(entries: &[SheetSyncEntry]) -> Vec<&SheetSyncEntry> {
         .iter()
         .filter(|entry| entry.change != SheetEntryChange::Kept)
         .collect();
-    rows.sort_by_key(|entry| rank(*entry));
+    rows.sort_by_key(|entry| rank(entry));
     rows
 }
 

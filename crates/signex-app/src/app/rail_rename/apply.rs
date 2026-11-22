@@ -84,9 +84,7 @@ impl Signex {
             return Task::none();
         };
         let plan = plan_project_sheets_for(&self.document_state, &rename.sheet);
-        let open: HashSet<PathBuf> = (self.document_state.engines.iter())
-            .map(|(path, _)| path.clone())
-            .collect();
+        let open: HashSet<PathBuf> = self.document_state.engines.keys().cloned().collect();
         let old = rename.old.clone();
         let epoch = self.document_state.documents_epoch;
         let state = &mut self.document_state.rail_rename;

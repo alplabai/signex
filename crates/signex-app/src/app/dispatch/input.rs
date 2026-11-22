@@ -374,7 +374,7 @@ impl Signex {
                 let own_window =
                     target == InputTarget::DetachedModal(crate::app::state::ModalId::NewProject);
                 match self.setup_preview_key(own_window, target.paints_overlay_stack(), event) {
-                    Some(SetupPreviewKey::Consume(message)) => return Claim::consume(message),
+                    Some(SetupPreviewKey::Consume(message)) => return Claim::consume(*message),
                     Some(SetupPreviewKey::Swallow) => return Claim::Swallow,
                     None => {}
                 }

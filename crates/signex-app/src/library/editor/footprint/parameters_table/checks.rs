@@ -27,10 +27,13 @@ fn share_copper(a: &EditorPad, b: &EditorPad) -> bool {
     on_all(a) || on_all(b) || a.layers.iter().any(|l| b.layers.contains(l))
 }
 
+/// A pad and its outline box.
+type PadBox<'a> = (&'a EditorPad, (f64, f64, f64, f64));
+
 /// The designators of the pad pairs whose outlines overlap, at most
 /// [`MAX_OVERLAPS`]. Sorted along X, so a large footprint stays cheap.
 pub(super) fn overlapping_pads(pads: &[EditorPad]) -> Vec<(String, String)> {
-    let mut boxes: Vec<(&EditorPad, (f64, f64, f64, f64))> =
+    let mut boxes: Vec<PadBox<'_>> =
         pads.iter().map(|pad| (pad, pad.bbox_mm())).collect();
     boxes.sort_by(|a, b| a.1.0.total_cmp(&b.1.0));
     let mut out = Vec::new();

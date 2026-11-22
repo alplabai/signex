@@ -32,6 +32,7 @@ const ACTIONS_W: f32 = TS.body * 7.5;
 /// How much taller the sheet is in the larger preview window.
 const POPUP_HEIGHT_FACTOR: f32 = 2.5;
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::app::project_tab) fn view<'a>(
     project: &LoadedProject,
     rows: &[SheetRow],

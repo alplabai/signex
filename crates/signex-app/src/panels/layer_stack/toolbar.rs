@@ -7,6 +7,7 @@ use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{MessageId, UserText, ids, t};
 use signex_types::pcb_stack::StackLayerKind;
 use signex_widgets::doc_tab_shell::Toolbar;
+use signex_widgets::PickListPlaceholder as _;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{ToggleSwitchStyle, button, segmented, text, text_input, toggle_switch};
 
@@ -146,7 +147,7 @@ fn add_list<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a
         })
         .collect();
     let list = pick_list(None::<KindChoice>, options, |c: &KindChoice| c.to_string())
-        .placeholder(t!(ctx.i18n, ids::PCB_STACK_ADD).into_string())
+        .placeholder_label(t!(ctx.i18n, ids::PCB_STACK_ADD))
         .graphite()
         .text_size(TS.dense)
         .padding([SP.xs, SP.s]);

@@ -154,7 +154,7 @@ pub(super) fn waive_editor<'a>(
         },
         ReasonFormEvents {
             reason: |action| PanelMsg::ErcWaiver(ErcWaiverMsg::ReasonActed(action)),
-            confirm: (!draft.awaits_identity).then(|| PanelMsg::ErcWaiver(ErcWaiverMsg::Confirmed)),
+            confirm: (!draft.awaits_identity).then_some(PanelMsg::ErcWaiver(ErcWaiverMsg::Confirmed)),
             cancel: PanelMsg::ErcWaiver(ErcWaiverMsg::Cancelled),
         },
         &ctx.i18n,

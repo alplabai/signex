@@ -530,7 +530,7 @@ impl Signex {
             .iter()
             .enumerate()
             .skip(idx.saturating_add(1))
-            .filter(|(_, tab)| !left_main(*tab))
+            .filter(|(_, tab)| !left_main(tab))
             .map(|(i, _)| i)
             .collect()
     }

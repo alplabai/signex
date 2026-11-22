@@ -76,7 +76,7 @@ pub enum SetupPreviewMsg {
 
 /// What a key press means to an open preview.
 pub(crate) enum SetupPreviewKey {
-    Consume(Message),
+    Consume(Box<Message>),
     /// Enter belongs to the open value's field and must not create.
     Swallow,
 }
@@ -115,7 +115,7 @@ impl SetupPreview {
             return Some(SetupPreviewKey::Swallow);
         }
         self.key_message(key, modifiers)
-            .map(|msg| SetupPreviewKey::Consume(wrap(msg)))
+            .map(|msg| SetupPreviewKey::Consume(Box::new(wrap(msg))))
     }
 }
 

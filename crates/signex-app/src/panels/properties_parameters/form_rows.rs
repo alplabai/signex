@@ -84,17 +84,6 @@ pub fn form_input_row<'a, M: 'a>(
     value_row(label, value, label_c, input_bg, true)
 }
 
-/// [`form_input_row`] without the value tooltip, for a row that carries a
-/// tooltip of its own.
-pub fn form_input_row_untipped<'a, M: 'a>(
-    label: impl Into<signex_widgets::Label<'a>>,
-    value: &str,
-    label_c: Color,
-    input_bg: Color,
-) -> Element<'a, M> {
-    value_row(label, value, label_c, input_bg, false)
-}
-
 fn value_row<'a, M: 'a>(
     label: impl Into<signex_widgets::Label<'a>>,
     value: &str,
