@@ -372,7 +372,7 @@ impl Signex {
                 };
                 let ids = sketch.iter().chain(sketch_secondary).chain(sketch_extra);
                 gone.extend(
-                    ids.filter(|id| !has(*id))
+                    ids.filter(|id| !has(id))
                         .map(|id| format!("Sketch entity {id:?}")),
                 );
                 Some(gone)
