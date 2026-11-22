@@ -3,7 +3,7 @@
 //! the Delete confirm, and Save as profile with its name field. Shared by
 //! every setup dialog and the Project tab.
 
-use iced::widget::{Space, column, row};
+use iced::widget::{Space, column, container, row};
 use iced::{Alignment, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::project::{ProfileNameProblem, UserProfile, saved_profiles};
@@ -235,7 +235,7 @@ fn name_problem_text(problem: ProfileNameProblem, i18n: &I18n) -> Localized {
 
 /// The Save as profile control: a ghost button, or the name field with Save
 /// and Cancel while it is open.
-fn save_as<'a>(
+pub(crate) fn save_as<'a>(
     state: &NewProjectState,
     i18n: &I18n,
     tokens: &ThemeTokens,
@@ -318,9 +318,24 @@ pub(crate) fn section<'a>(
             )
             .boxed();
     }
+    col = col.push(saved_rows(state, &saved, caption, i18n, tokens));
+    for open in open_parts(state, &saved, i18n, tokens) {
+        col = col.push(open);
+    }
+    col.boxed()
+}
+
+/// One row per saved profile (wrapping), or the Rename field in its place.
+fn saved_rows<'a>(
+    state: &NewProjectState,
+    saved: &[&UserProfile],
+    caption: Caption,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
     let renaming = state.renaming.as_ref().map(|r| r.id.as_str());
     let mut rows: Vec<Element<'a, NewProjectMsg>> = Vec::new();
-    for profile in &saved {
+    for profile in saved {
         if renaming == Some(profile.id.as_str()) {
             if let Some(field) = rename_field(state, i18n, tokens) {
                 rows.push(field);
@@ -329,18 +344,62 @@ pub(crate) fn section<'a>(
             rows.push(ucard(state, profile, caption, i18n, tokens));
         }
     }
-    col = col.push(row(rows).spacing(SP.m).wrap().boxed());
+    row(rows).spacing(SP.m).wrap().boxed()
+}
+
+/// The open menu and the Delete confirm of the saved profiles, if any.
+fn open_parts<'a>(
+    state: &NewProjectState,
+    saved: &[&UserProfile],
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Vec<Element<'a, NewProjectMsg>> {
+    let mut parts = Vec::new();
     let menu = saved
         .iter()
         .find(|p| state.profile_menu.as_ref() == Some(&ProfileTarget::Saved(p.id.clone())));
     if let Some(profile) = menu {
-        col = col.push(profile_menu(profile, i18n, tokens));
+        parts.push(profile_menu(profile, i18n, tokens));
     }
     let confirming = saved
         .iter()
         .find(|p| state.remove_confirm.as_deref() == Some(p.id.as_str()));
     if let Some(profile) = confirming {
-        col = col.push(remove_confirm(profile, i18n, tokens));
+        parts.push(remove_confirm(profile, i18n, tokens));
+    }
+    parts
+}
+
+/// Your profiles on one line for the Project tab (mockup row 37): the small
+/// label, then the rows. Save as profile sits in the page header there.
+pub(crate) fn compact_section<'a>(
+    state: &NewProjectState,
+    users: &[UserProfile],
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    let label = text(t!(i18n, ids::PROJECT_SETUP_YOUR_PROFILES))
+        .size(TS.caption)
+        .font(iced::Font {
+            weight: iced::font::Weight::Medium,
+            ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
+        })
+        .color(tokens::resolve(tokens).ink3);
+    let saved: Vec<&UserProfile> = saved_profiles(users).collect();
+    if saved.is_empty() {
+        let none = text(t!(i18n, ids::SETUP_PROFILES_NONE))
+            .size(TS.body)
+            .color(tokens::muted_text(tokens));
+        return row![label, none]
+            .spacing(SP.m)
+            .align_y(Alignment::Center)
+            .boxed();
+    }
+    let rows = container(saved_rows(state, &saved, Caption::Pcb, i18n, tokens)).width(Length::Fill);
+    let line = row![label, rows].spacing(SP.m).align_y(Alignment::Center);
+    let mut col = column![line].spacing(SP.m);
+    for open in open_parts(state, &saved, i18n, tokens) {
+        col = col.push(open);
     }
     col.boxed()
 }

@@ -110,9 +110,6 @@ dialog-new-project-sch-title-block-none = None
 
 dialog-new-project-sch-designators = Designators
 
-# A sheet size in the picker.
-dialog-new-project-sheet-landscape = { $size } landscape
-
 dialog-new-project-preview-heading = PREVIEW
 
 # Bold start of the board line.

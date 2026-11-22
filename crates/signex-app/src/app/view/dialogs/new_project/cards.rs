@@ -388,6 +388,24 @@ pub(crate) fn choices<'a>(
     .boxed()
 }
 
+/// The Project tab's form of [`choices`] (mockup row 37): its page header
+/// holds Save as profile, and Your profiles is one compact row.
+pub(crate) fn tab_choices<'a>(
+    state: &NewProjectState,
+    users: &[UserProfile],
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    let mut col = column![tier_grid(state, users, i18n, tokens)].spacing(SP.m);
+    if let Some(bar) = edit_bar(state, users, i18n, tokens) {
+        col = col.push(bar);
+    }
+    col.push(super::user_cards::compact_section(
+        state, users, i18n, tokens,
+    ))
+    .boxed()
+}
+
 /// "Start from a profile": the heading, then [`choices`].
 pub(crate) fn profiles<'a>(
     state: &NewProjectState,

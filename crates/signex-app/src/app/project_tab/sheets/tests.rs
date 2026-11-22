@@ -112,6 +112,42 @@ fn add_schematic_for_a_closed_project_does_nothing() {
     assert!(app.document_state.projects.is_empty());
 }
 
+/// The New sheets card shows Orientation as two segments: Portrait is on
+/// screen while Landscape is selected, and a click picks it. Designators
+/// stays (decision 2026-11-22).
+#[test]
+fn new_sheets_picks_portrait_from_its_segment() {
+    use crate::app::{NewProjectMsg, ProjectSection};
+    let (mut app, id) = app();
+    send(
+        &mut app,
+        ProjectTabMsg::SectionSelected {
+            project_id: id,
+            section: ProjectSection::Sheets,
+        },
+    );
+    let window = Size::new(1200.0, 900.0);
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(id), window);
+    let _ = crate::layout_probe::find(&texts, "Designators");
+    let at = crate::layout_probe::find(&texts, "Portrait")
+        .bounds
+        .center();
+    use iced::mouse::{Button, Event as Mouse};
+    let click = [
+        iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+        iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+    ];
+    let messages =
+        crate::layout_probe::messages_for_events(app.view_project_tab(id), window, at, &click);
+    assert!(messages.iter().any(|m| matches!(
+        m,
+        Message::Project(ProjectMsg::Tab(ProjectTabMsg::SetupEdited {
+            msg: NewProjectMsg::SheetOrientationPicked(SheetOrientation::Portrait),
+            ..
+        }))
+    )));
+}
+
 /// A4 landscape and portrait both fit inside the drawing with the label band
 /// clear and centred across; the portrait sheet is drawn smaller, since the
 /// drawing is wider than tall.

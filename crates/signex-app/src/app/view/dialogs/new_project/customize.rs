@@ -9,7 +9,7 @@ use signex_types::project::{FabTemplate, PcbField, PcbValueError, SHEET_SIZES, S
 use signex_types::schematic::{SheetOrientation, SheetSize};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{PickListPlaceholder as _, button, text, text_input};
+use signex_widgets::{Label, PickListPlaceholder as _, button, segmented, text, text_input};
 
 use super::{SP, TS, labelled_row};
 use crate::app::new_project::{NewProjectMsg, NewProjectState, RULE_FIELDS};
@@ -17,6 +17,9 @@ use crate::styles::{Radii, ti, tokens};
 
 /// Width of a value box (a rule field, the layer count).
 const VALUE_W: f32 = 64.0;
+/// Width of a schematic control (180 px): the Orientation segments' two
+/// labels fit on one line.
+const SHEET_CONTROL_W: f32 = TS.body * 15.0;
 
 /// The disclosure: header button, and the two columns when open.
 pub(super) fn section<'a>(
@@ -266,10 +269,25 @@ fn fab_tier<'a>(
     )
 }
 
-/// The board rules column. `with_fab_tier`: the Fab tier field shows; New
-/// PCB leaves it out while the project-setup summary row stands for the
-/// tier (#2538, F06).
+/// The board rules column under its heading. `with_fab_tier`: the Fab tier
+/// field shows; New PCB leaves it out while the project-setup summary row
+/// stands for the tier (#2538, F06).
 pub(crate) fn pcb_rules<'a>(
+    state: &NewProjectState,
+    with_fab_tier: bool,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    let col = column![
+        heading(ids::DIALOG_NEW_PROJECT_PCB_HEADING, i18n, tokens),
+        pcb_rule_fields(state, with_fab_tier, i18n, tokens),
+    ]
+    .spacing(SP.m);
+    container(col.padding(SP.l)).boxed()
+}
+
+/// The board rule fields alone, for a surface that titles them itself.
+pub(crate) fn pcb_rule_fields<'a>(
     state: &NewProjectState,
     with_fab_tier: bool,
     i18n: &I18n,
@@ -285,7 +303,7 @@ pub(crate) fn pcb_rules<'a>(
     } else {
         ids::DIALOG_NEW_PROJECT_FAB_NOTE
     };
-    let mut col = column![heading(ids::DIALOG_NEW_PROJECT_PCB_HEADING, i18n, tokens)].spacing(SP.m);
+    let mut col: iced::widget::Column<Element<'a, NewProjectMsg>> = column![].spacing(SP.m);
     if with_fab_tier {
         col = col.push(fab_tier(state, i18n, tokens));
     }
@@ -321,7 +339,7 @@ pub(crate) fn pcb_rules<'a>(
     for field in RULE_FIELDS {
         col = col.push(rule_row(state, field, i18n, tokens));
     }
-    container(col.padding(SP.l)).boxed()
+    col.boxed()
 }
 
 /// One dropdown entry: the value and the words shown for it.
@@ -354,52 +372,56 @@ where
         .on_select(move |o: Opt<T>| on_select(o.value))
         .on_open(NewProjectMsg::DropdownToggled(true))
         .on_close(NewProjectMsg::DropdownToggled(false))
-        .width(Length::Fixed(VALUE_W * 2.2));
+        .width(Length::Fixed(SHEET_CONTROL_W));
     labelled_row(t!(i18n, caption), picker.boxed(), tokens)
 }
 
-pub(crate) fn schematic<'a>(
-    state: &NewProjectState,
+/// The sheet sizes by name: the Orientation control carries the direction.
+pub(super) fn size_options() -> Vec<(String, String)> {
+    SHEET_SIZES
+        .iter()
+        .map(|size| ((*size).to_string(), (*size).to_string()))
+        .collect()
+}
+
+/// Orientation as two segments (mockup rows 21, 22, 31 and 37).
+fn orientation_row<'a>(
+    orientation: SheetOrientation,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, NewProjectMsg> {
-    let sheet = &state.setup.sheet;
-    let sizes: Vec<(String, String)> = SHEET_SIZES
-        .iter()
-        .map(|size| {
-            let label = t!(i18n, ids::DIALOG_NEW_PROJECT_SHEET_LANDSCAPE, "size" => *size);
-            ((*size).to_string(), label.into_string())
-        })
-        .collect();
-    let (size, orientation) = SheetSize::parse(&sheet.paper_size);
-    let size_choice = choice(
-        ids::DIALOG_NEW_PROJECT_SCH_SIZE,
-        &size.token(SheetOrientation::Landscape),
-        sizes,
-        NewProjectMsg::SheetSizePicked,
-        i18n,
-        tokens,
-    );
-    let orientation_choice = choice(
-        ids::SETUP_SHEET_ORIENTATION,
-        &orientation,
-        vec![
-            (
-                SheetOrientation::Landscape,
-                t!(i18n, ids::SETUP_SHEET_LANDSCAPE).into_string(),
-            ),
-            (
-                SheetOrientation::Portrait,
-                t!(i18n, ids::SETUP_SHEET_PORTRAIT).into_string(),
-            ),
-        ],
+    let options = [
+        (
+            SheetOrientation::Landscape,
+            Label::from(t!(i18n, ids::SETUP_SHEET_LANDSCAPE)),
+        ),
+        (
+            SheetOrientation::Portrait,
+            Label::from(t!(i18n, ids::SETUP_SHEET_PORTRAIT)),
+        ),
+    ];
+    let control = container(segmented(
+        options,
+        orientation,
+        tokens::resolve(tokens).segmented(TS.body).fill_width(true),
         NewProjectMsg::SheetOrientationPicked,
-        i18n,
+    ))
+    .width(Length::Fixed(SHEET_CONTROL_W));
+    labelled_row(
+        t!(i18n, ids::SETUP_SHEET_ORIENTATION),
+        control.boxed(),
         tokens,
-    );
-    let block_choice = choice(
+    )
+}
+
+fn title_block_choice<'a>(
+    is_shown: bool,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    choice(
         ids::DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK,
-        &sheet.show_title_block,
+        &is_shown,
         vec![
             (
                 true,
@@ -411,6 +433,38 @@ pub(crate) fn schematic<'a>(
             ),
         ],
         NewProjectMsg::TitleBlockPicked,
+        i18n,
+        tokens,
+    )
+}
+
+/// The schematic column under its heading.
+pub(crate) fn schematic<'a>(
+    state: &NewProjectState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    let col = column![
+        heading(ids::DIALOG_NEW_PROJECT_SHEET_HEADING, i18n, tokens),
+        schematic_fields(state, i18n, tokens),
+    ]
+    .spacing(SP.m);
+    container(col.padding(SP.l)).boxed()
+}
+
+/// The sheet fields alone, for a surface that titles them itself.
+pub(crate) fn schematic_fields<'a>(
+    state: &NewProjectState,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, NewProjectMsg> {
+    let sheet = &state.setup.sheet;
+    let (size, orientation) = SheetSize::parse(&sheet.paper_size);
+    let size_choice = choice(
+        ids::DIALOG_NEW_PROJECT_SCH_SIZE,
+        &size.token(SheetOrientation::Landscape),
+        size_options(),
+        NewProjectMsg::SheetSizePicked,
         i18n,
         tokens,
     );
@@ -425,13 +479,12 @@ pub(crate) fn schematic<'a>(
         i18n,
         tokens,
     );
-    let col = column![
-        heading(ids::DIALOG_NEW_PROJECT_SHEET_HEADING, i18n, tokens),
+    column![
         size_choice,
-        orientation_choice,
-        block_choice,
+        orientation_row(orientation, i18n, tokens),
+        title_block_choice(sheet.show_title_block, i18n, tokens),
         designators,
     ]
-    .spacing(SP.m);
-    container(col.padding(SP.l)).boxed()
+    .spacing(SP.m)
+    .boxed()
 }
