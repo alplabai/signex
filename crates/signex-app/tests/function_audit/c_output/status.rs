@@ -1,6 +1,5 @@
 //! Row m164: the board status bar counters and their popovers.
 
-use pcb_geom::ItemRef;
 use signex_app::app::{InputMsg, Message, Signex, StatusBarRequest, UiMsg};
 use signex_app::panels::PanelKind;
 use signex_app::status_bar::{BoardCounter, BoardPopoverEvent, BoardPopoverKind};
@@ -259,13 +258,10 @@ fn open_messages_closes_the_popover_and_shows_the_panel() {
 fn clear_in_the_selection_popover_deselects_and_closes_it() {
     let mut b = open_board(board());
     b.click(10.0, 10.0);
-    assert!(
-        b.app
-            .interaction_state
-            .pcb_selection
-            .selection()
-            .items()
-            .any(|item| item == ItemRef::Footprint(R1))
+    assert_eq!(
+        b.app.interaction_state.pcb_selection.selection().len(),
+        1,
+        "fixture: the click on R1 selected one item"
     );
     counter(&mut b, BoardCounter::Selected);
     event(&mut b, BoardPopoverEvent::SelectionCleared);

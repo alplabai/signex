@@ -152,7 +152,12 @@ fn a_click_on_a_part_selects_it_and_a_click_on_the_bare_board_clears_it() {
 
 #[test]
 fn the_stack_runs_from_copper_finish_through_mask_to_silkscreen() {
-    let b = in_3d();
+    // A plated hole's wall takes the finish over the board's full height, up
+    // to the mask's own, so this reads the pads' finish on a board with no via.
+    let mut board = audit_board();
+    board.vias.clear();
+    let mut b = open_board(board);
+    b.command("view_board_3d");
     let board = b.board();
     let colors = board_3d_colors();
     let built = session!(b).scene(&board, 0, &PcbLayerView::default(), colors);

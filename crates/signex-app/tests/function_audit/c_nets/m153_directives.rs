@@ -11,7 +11,7 @@ use signex_types::schematic::{
 };
 use uuid::Uuid;
 
-use super::support::{Bench, bench, empty_sheet, net_label, wire};
+use super::support::{Bench, bench, empty_sheet, net_label, wire, wired_part};
 
 fn flag_bench() -> (Bench, Uuid) {
     let mut sheet = empty_sheet();
@@ -191,6 +191,8 @@ fn blanket_bench() -> (Bench, Uuid) {
     sheet.labels.push(net_label("SW", (20.0, 20.0)));
     sheet.wires.push(wire((50.0, 30.0), (70.0, 30.0)));
     sheet.labels.push(net_label("VOUT", (70.0, 30.0)));
+    wired_part(&mut sheet, "R1", (30.0, 20.0));
+    wired_part(&mut sheet, "R2", (50.0, 30.0));
     let id = Uuid::now_v7();
     sheet.directives.push(SchDirective::Blanket {
         uuid: id,
@@ -306,7 +308,8 @@ fn m153_the_edge_checkbox_catches_the_crossing_net_and_undo_lets_it_go() {
     assert_eq!(catch_of(&b, "VOUT"), Some(BlanketCatch::EdgeIncluded));
     assert!(b.dirty());
     b.undo();
-    edit_blanket(&mut b, id, BlanketEdit::IncludeEdgeNets(false));
+    // Undo clears the selection, and the Properties with it.
+    show_panel(&mut b, id, true);
     assert_eq!(catch_of(&b, "VOUT"), Some(BlanketCatch::EdgeOnly));
     assert!(!b.dirty());
 }

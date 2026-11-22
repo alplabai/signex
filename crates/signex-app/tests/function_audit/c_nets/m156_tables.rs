@@ -177,6 +177,8 @@ fn m156_text_size_and_cell_padding_restyle_the_table_and_undo_restores() {
     assert!(b.dirty());
     b.undo();
     assert_eq!(table(&b).style, before);
+    // Undo clears the selection, and the Properties with it.
+    b.select_everything();
     type_in(&mut b, AnnotationField::TableCellPadding, "1.5");
     assert_eq!(table(&b).style.cell_padding, 1.5);
     b.undo();

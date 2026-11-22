@@ -202,7 +202,12 @@ fn a_confirmed_delete_removes_the_file_and_the_row() {
     rig.pane(ProfilesMsg::DeleteConfirmed);
 
     assert!(!file_of("C Design Gone").exists());
-    assert_eq!(rig.selected(), None);
+    // The fresh listing moves the selection to its first profile.
+    let selected = rig.selected();
+    assert!(
+        selected.is_some() && selected != Some("C Design Gone"),
+        "{selected:?}"
+    );
     assert!(
         !rig.prefs
             .app

@@ -6,16 +6,16 @@ use signex_app::panels::compiled_design::{CompiledMode, CompiledPanelView, Compi
 use signex_types::schematic::{SelectedItem, SelectedKind};
 
 use super::support::{
-    ProjectBench, empty_sheet, net_label, part, project_bench, sheet_symbol, wire,
+    ProjectBench, empty_sheet, net_label, project_bench, sheet_symbol, wire, wired_part,
 };
 
-/// `root` places `child` twice as `Repeat(CH, 1, 2)`; the child holds R5 and
-/// the net FB.
+/// `root` places `child` twice as `Repeat(CH, 1, 2)`; the child holds R5,
+/// whose pin is on the net FB.
 fn repeated() -> ProjectBench {
     let mut root = empty_sheet();
     root.child_sheets.push(sheet_symbol("Repeat(CH, 1, 2)"));
     let mut child = empty_sheet();
-    child.symbols.push(part("R5", (50.8, 50.8)));
+    wired_part(&mut child, "R5", (45.72, 40.64));
     child.wires.push(wire((40.64, 40.64), (45.72, 40.64)));
     child.labels.push(net_label("FB", (40.64, 40.64)));
     project_bench(root, child)

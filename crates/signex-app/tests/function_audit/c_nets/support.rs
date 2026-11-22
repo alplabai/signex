@@ -10,8 +10,8 @@ use signex_app::dock::DockMessage;
 use signex_app::panels::PanelMsg;
 use signex_types::project::{ProjectData, SheetEntry};
 use signex_types::schematic::{
-    ChildSheet, FillType, Label, LabelType, LibSymbol, Point, SchematicSheet, SelectedItem,
-    SelectedKind, Symbol, Wire,
+    ChildSheet, FillType, Label, LabelType, LibPin, LibSymbol, Pin, PinDirection, PinShapeStyle,
+    Point, SchematicSheet, SelectedItem, SelectedKind, Symbol, Wire,
 };
 use uuid::Uuid;
 
@@ -36,6 +36,33 @@ pub(super) fn part(reference: &str, at: (f64, f64)) -> Symbol {
         unit: 1,
         ..Default::default()
     }
+}
+
+/// Place a part whose one pin lands on `at`. A net exists only where a pin
+/// lands, so a wire that must form a net needs one of these on it.
+pub(super) fn wired_part(sheet: &mut SchematicSheet, reference: &str, at: (f64, f64)) {
+    let mut body: LibSymbol = serde_json::from_str(r#"{"id":"lib:pin"}"#).expect("a library body");
+    body.pins.push(LibPin {
+        unit: 0,
+        body_style: 0,
+        pin: Pin {
+            direction: PinDirection::Passive,
+            shape_style: PinShapeStyle::Plain,
+            position: Point::new(0.0, 0.0),
+            rotation: 0.0,
+            length: 2.54,
+            name: "1".to_string(),
+            number: "1".to_string(),
+            visible: true,
+            name_visible: true,
+            number_visible: true,
+        },
+    });
+    sheet.lib_symbols.insert(body.id.clone(), body);
+    sheet.symbols.push(Symbol {
+        lib_id: "lib:pin".to_string(),
+        ..part(reference, at)
+    });
 }
 
 pub(super) fn wire(a: (f64, f64), b: (f64, f64)) -> Wire {
