@@ -5,6 +5,9 @@ use crate::dock::DockMessage;
 use super::super::*;
 
 mod child_sheet_identity;
+mod doc_grid;
+#[cfg(test)]
+mod doc_grid_tests;
 mod drawing_field_edit;
 #[cfg(test)]
 mod drawing_field_edit_tests;
@@ -125,6 +128,10 @@ impl Signex {
             }
             if let crate::panels::PanelMsg::PcbBoard(msg) = panel_msg {
                 let task = self.handle_pcb_board_panel(msg);
+                return Task::batch([task, self.finish_update()]);
+            }
+            if let crate::panels::PanelMsg::DocGrid(msg) = panel_msg {
+                let task = self.handle_doc_grid(msg);
                 return Task::batch([task, self.finish_update()]);
             }
             if let crate::panels::PanelMsg::Drc(msg) = panel_msg {

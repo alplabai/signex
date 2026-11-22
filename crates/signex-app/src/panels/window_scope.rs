@@ -50,6 +50,7 @@ impl PanelMsg {
             | Self::ToggleSnap { .. }
             | Self::SetGridSize { .. }
             | Self::SetVisibleGridSize { .. }
+            | Self::DocGrid { .. }
             | Self::ToggleSnapHotspots { .. }
             | Self::SetUiFont { .. }
             | Self::SetCanvasFont { .. }

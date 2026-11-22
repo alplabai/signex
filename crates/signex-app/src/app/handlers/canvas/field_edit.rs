@@ -21,6 +21,25 @@ pub(crate) fn editor_placeholder(kind: SelectedKind) -> Option<signex_i18n::Mess
     }
 }
 
+/// The field Tab goes on to from `state` (mockup row 65): designator, value,
+/// footprint, and no further. A power port's one text is its net name, so
+/// it has no next field.
+pub(crate) fn next_part_field(
+    sheet: &signex_types::schematic::SchematicSheet,
+    state: &TextEditState,
+) -> Option<SelectedKind> {
+    let next = match state.kind {
+        SelectedKind::SymbolRefField => SelectedKind::SymbolValField,
+        SelectedKind::SymbolValField => SelectedKind::Symbol,
+        _ => return None,
+    };
+    let is_port = sheet
+        .symbols
+        .iter()
+        .any(|s| s.uuid == state.uuid && s.is_power);
+    (!is_port).then_some(next)
+}
+
 /// The item a `target` command edits when pointed at `item`, if it can.
 fn item_for(target: TextEditTarget, item: SelectedItem) -> Option<SelectedItem> {
     use SelectedKind::*;
@@ -204,6 +223,33 @@ impl Signex {
             crate::diagnostics::log_warning(nothing_to_edit(target));
             return Task::none();
         }
+        Self::focus_text_edit()
+    }
+
+    /// Tab in the editor: commit the field as Enter does and open the
+    /// part's next one. On a field with no next one the editor stays as it
+    /// is. A move is not a new use, so the key hint's count stays.
+    pub(crate) fn advance_text_edit(&mut self) -> Task<Message> {
+        let next = self
+            .interaction_state
+            .editing_text
+            .as_ref()
+            .zip(self.document_state.active_engine())
+            .and_then(|(state, engine)| next_part_field(engine.document(), state));
+        let Some(next) = next else {
+            return Task::none();
+        };
+        let Some(state) = self.interaction_state.editing_text.take() else {
+            return Task::none();
+        };
+        let item = SelectedItem::new(state.uuid, next);
+        let is_stale = self.stale_text_edit(&state).is_some();
+        self.commit_text_edit(state);
+        let opens = self.ui_state.text_edit_opens;
+        if is_stale || !self.begin_text_edit(item) {
+            return Task::none();
+        }
+        self.ui_state.text_edit_opens = opens;
         Self::focus_text_edit()
     }
 

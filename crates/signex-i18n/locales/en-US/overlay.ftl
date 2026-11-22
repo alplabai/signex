@@ -69,3 +69,5 @@ overlay-locked-window-hint = A dialog is open: click to show it, Esc to cancel
 overlay-read-only-badge-tooltip = This sheet was saved by a newer { -brand-name }. Edits are off so nothing it wrote is lost. Update { -brand-name } to edit it.
 # Key hint above the in-place text editor, shown for its first few uses.
 overlay-text-edit-hint = Enter apply · Esc cancel
+# The same hint on a part's field that has a next field to Tab to.
+overlay-text-edit-hint-next-field = Enter apply · Esc cancel · Tab next field

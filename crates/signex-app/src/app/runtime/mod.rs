@@ -304,6 +304,10 @@ impl Signex {
             }
             _ => Default::default(),
         };
+        let selected_items = selected.clone();
+        self.document_state.panel_ctx.multi_footprint_choices =
+            self.common_footprint_choices(&selected_items);
+        let selected = &self.interaction_state.active_canvas_mut().selected;
 
         if selected.len() != 1 {
             if !selected.is_empty() {

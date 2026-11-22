@@ -385,6 +385,29 @@ fn a_power_port_is_a_port_and_its_partner_is_the_same_rail_elsewhere() {
     assert_eq!(ids(&idx.partners(&key("root.sch"), id(70), None)), [id(71)]);
 }
 
+/// Mockup row 58: a power port is listed once, as its port, and the pin
+/// count holds the parts' pins alone. Stepping still visits both.
+#[test]
+fn a_power_port_is_listed_once_and_left_out_of_the_pin_count() {
+    let mut root = empty_sheet();
+    add_lib(&mut root, "R");
+    add_lib(&mut root, "P");
+    place(&mut root, "R1", "R", pt(5.0, 0.0));
+    root.symbols[0].uuid = id(100);
+    place_power(&mut root, "#PWR1", "P", "VCC", pt(0.0, 0.0));
+    root.symbols[1].uuid = id(70);
+    root.wires.push(wire(pt(0.0, 0.0), pt(5.0, 0.0)));
+    let idx = indexed(&root, &[]);
+    let net = idx.nets_of(&key("root.sch"), id(100))[0];
+
+    let listed = idx.listed_members(net);
+    let port: Vec<_> = listed.iter().filter(|m| m.id == id(70)).collect();
+    assert_eq!(port.len(), 1, "{listed:?}");
+    assert_eq!(port[0].kind, NetMemberKind::PowerPort);
+    assert_eq!(idx.component_pin_count(net), 1);
+    assert_eq!(idx.steps(net).len(), 3, "the pin stays a step");
+}
+
 #[test]
 fn an_auto_name_is_never_trusted_to_find_a_net_again() {
     assert!(is_auto_name("N$12"));

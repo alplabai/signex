@@ -1060,6 +1060,8 @@ pub enum PanelMsg {
     SetGridSize(f32),
     /// Set visible grid size (mm) — independent of snap grid.
     SetVisibleGridSize(f32),
+    /// The typed text of Document Options' grid rows (mockup row 40).
+    DocGrid(super::DocGridMsg),
     /// Toggle snap to electrical object hotspots.
     ToggleSnapHotspots,
     /// Change the UI font (saved to prefs; applies on next restart).

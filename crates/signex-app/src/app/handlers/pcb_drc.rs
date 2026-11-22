@@ -227,6 +227,7 @@ impl Signex {
             panel.default_clearance_mm =
                 Some(format!("{:.1}", pcb_geom::nm_to_mm(report.rules.clearance)));
         }
+        panel.checked_clearance_mm = Some(findings::mm(report.rules.clearance).to_string());
         panel.written_clearance = report.rules.sets_written_clearance();
         panel.rules_not_applied = report.rules.rules_not_applied;
         panel.rule_text_unparsed = report.rules.texts_not_applied > 0;

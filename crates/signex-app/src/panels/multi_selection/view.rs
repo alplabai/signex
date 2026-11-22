@@ -6,6 +6,7 @@ use super::super::*;
 use super::controls::{Cell, control_row, counted_section, inset_caption, segmented_cells};
 use super::{MultiEditMsg, MultiField, MultiKind, SelectionFormMsg, shared_number, shared_text};
 use crate::panels::form_look;
+use crate::panels::typed_pick::TypedPick;
 use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
@@ -185,6 +186,55 @@ fn text_box<'a>(
     control_row(label, control, muted)
 }
 
+/// Footprint (mockup row 51): a dropdown of the footprints the selected
+/// parts' library rows have in common, which also takes typing. With none
+/// in common it is the plain text box.
+fn footprint_box<'a>(
+    ctx: &'a PanelContext,
+    footprint: &Shared<String>,
+    muted: Color,
+) -> Element<'a, PanelMsg> {
+    let label: Label<'a> = t!(ctx.i18n, ids::PANELS_MULTI_FOOTPRINT).into();
+    let field = MultiField::SymbolFootprint;
+    let is_mixed = matches!(footprint, Shared::Mixed);
+    if ctx.multi_footprint_choices.is_empty() {
+        return text_box(
+            ctx,
+            label,
+            field,
+            shared_text(footprint),
+            is_mixed,
+            None,
+            muted,
+        );
+    }
+    let drafted = (ctx.multi_draft.as_ref())
+        .filter(|(f, _)| *f == field)
+        .map(|(_, typed)| typed.clone());
+    let placeholder: Label<'a> = if is_mixed {
+        t!(ctx.i18n, ids::PLACEHOLDER_MIXED).into()
+    } else {
+        signex_i18n::UserText::new(String::new()).into()
+    };
+    let (changed, submitted) = (field.clone(), field);
+    let control = TypedPick {
+        placeholder,
+        shown: drafted.unwrap_or_else(|| shared_text(footprint)),
+        error: None,
+        unit: None,
+    }
+    .view(
+        ctx.multi_footprint_choices.clone(),
+        |choice: &crate::panels::FootprintChoiceItem| choice.label.clone(),
+        move |s| PanelMsg::MultiEdit(MultiEditMsg::DraftChanged(changed.clone(), s)),
+        PanelMsg::MultiEdit(MultiEditMsg::DraftSubmitted(submitted)),
+        |choice: crate::panels::FootprintChoiceItem| {
+            PanelMsg::MultiEdit(MultiEditMsg::FootprintPicked(choice.binding))
+        },
+    );
+    control_row(label, control, muted)
+}
+
 /// The form field look; a mixed field's placeholder is the muted italic
 /// `<mixed>` (italic is the font, set by the caller's face).
 fn mixed_input_style(
@@ -244,15 +294,7 @@ fn parts_section<'a>(ctx: &'a PanelContext, muted: Color) -> Element<'a, PanelMs
                 None,
                 muted,
             ));
-            c = c.push(text_box(
-                ctx,
-                t!(i18n, ids::PANELS_MULTI_FOOTPRINT).into(),
-                MultiField::SymbolFootprint,
-                shared_text(&g.footprint),
-                matches!(g.footprint, Shared::Mixed),
-                None,
-                muted,
-            ));
+            c = c.push(footprint_box(ctx, &g.footprint, muted));
             c = c.push(flag_row(
                 i18n,
                 ids::PANELS_MULTI_DNP,

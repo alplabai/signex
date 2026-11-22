@@ -10,14 +10,16 @@ use super::doc_rows::{enable_box, label_row, segmented_row, unless_off};
 use super::document_options::{hover_row, illustration_view};
 use super::grid_illustration::{GridFacts, HOTSPOTS, SNAP_GRID, VISIBLE_GRID, grid_illustration};
 use crate::choice::Choice;
+use crate::panels::doc_grid::{DocGridField, DocGridMsg, pitch_text, pitch_unit, typed_pitch_mm};
+use crate::panels::element_properties::rows::unit_suffix;
 use crate::panels::form_look;
+use crate::panels::typed_pick::TypedPick;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use iced::widget::column;
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::schematic::SheetOrientation;
 use signex_widgets::Label;
-use signex_widgets::dropdown_style::GraphiteDropdown as _;
 
 /// Default type / spacing scales; equal to the old literals at the default size.
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -196,38 +198,47 @@ fn selection_filters_body<'a>(
     c
 }
 
-/// The grid pitch pick list in `unit`; picking reports the pitch in mm.
+/// The grid pitch dropdown in the panel's unit (mockup row 40): a row of the
+/// list sets the pitch at once, typed text on Enter. Text the snap limits
+/// refuse stays in the box, marked.
 fn grid_pick<'a>(
+    ctx: &'a PanelContext,
+    field: DocGridField,
     current_mm: f32,
-    unit: Unit,
-    on_size: impl Fn(f32) -> PanelMsg + 'a,
 ) -> Element<'a, PanelMsg> {
     use crate::canvas::grid::{GRID_SIZE_LABELS, GRID_SIZE_LABELS_MIL, GRID_SIZES_MM};
+    let unit = pitch_unit(ctx.unit);
     let labels: &'static [&'static str] = if unit == Unit::Mil {
         GRID_SIZE_LABELS_MIL
     } else {
         GRID_SIZE_LABELS
     };
-    let selected: Option<&'static str> = GRID_SIZES_MM
+    let options: Vec<(&'static str, f32)> = labels
         .iter()
-        .zip(labels.iter())
-        .find(|(size, _)| (**size - current_mm).abs() < 1e-4)
-        .map(|(_, label)| *label);
-    // The pitches with their unit symbol (mm, mil), not language.
-    iced::widget::pick_list(selected, labels, |l: &&'static str| (*l).to_string())
-        .graphite()
-        .on_select(move |picked: &'static str| {
-            let mm = GRID_SIZE_LABELS
-                .iter()
-                .chain(GRID_SIZE_LABELS_MIL.iter())
-                .zip(GRID_SIZES_MM.iter().chain(GRID_SIZES_MM.iter()))
-                .find(|(l, _)| **l == picked)
-                .map_or(2.54, |(_, v)| *v);
-            on_size(mm)
-        })
-        .padding([SP.xs, 6.0])
-        .width(Length::Fill)
-        .boxed()
+        .copied()
+        .zip(GRID_SIZES_MM.iter().copied())
+        .collect();
+    let draft = match field {
+        DocGridField::Visible => ctx.visible_grid_draft.as_ref(),
+        DocGridField::Snap => ctx.snap_grid_draft.as_ref(),
+    };
+    let is_refused = draft.is_some_and(|text| typed_pitch_mm(text, unit).is_err());
+    TypedPick {
+        placeholder: UserText::new(String::new()).into(),
+        shown: draft
+            .cloned()
+            .unwrap_or_else(|| pitch_text(current_mm, unit)),
+        error: is_refused.then(|| crate::styles::ti(ctx.tokens.error)),
+        unit: Some(unit_suffix(&ctx.i18n, unit).into()),
+    }
+    .view(
+        options,
+        // The pitches with their unit symbol (mm, mil), not language.
+        |(label, _): &(&'static str, f32)| (*label).to_string(),
+        move |text| PanelMsg::DocGrid(DocGridMsg::DraftChanged(field, text)),
+        PanelMsg::DocGrid(DocGridMsg::DraftSubmitted(field)),
+        move |(_, mm)| field.set_message(mm),
+    )
 }
 
 /// Visible Grid / Snap Grid: the enable box first, in the label column; the
@@ -238,11 +249,11 @@ fn grid_row<'a>(
     is_on: bool,
     on_toggle: PanelMsg,
     current_mm: f32,
-    on_size: impl Fn(f32) -> PanelMsg + 'a,
+    field: DocGridField,
 ) -> Element<'a, PanelMsg> {
     label_row(
         enable_box(label, is_on, on_toggle),
-        unless_off(is_on, &ctx.tokens, grid_pick(current_mm, ctx.unit, on_size)),
+        unless_off(is_on, &ctx.tokens, grid_pick(ctx, field, current_mm)),
     )
 }
 
@@ -289,7 +300,7 @@ fn general_section<'a>(
         ctx.grid_visible,
         PanelMsg::ToggleGrid,
         ctx.visible_grid_mm,
-        PanelMsg::SetVisibleGridSize,
+        DocGridField::Visible,
     );
     c = c.push(hover_row(VISIBLE_GRID, hover, &ctx.tokens, visible));
     let snap = grid_row(
@@ -298,7 +309,7 @@ fn general_section<'a>(
         ctx.snap_enabled,
         PanelMsg::ToggleSnap,
         ctx.grid_size_mm,
-        PanelMsg::SetGridSize,
+        DocGridField::Snap,
     );
     c = c.push(hover_row(SNAP_GRID, hover, &ctx.tokens, snap));
     let hotspots = form_check_row_shortcut(

@@ -571,6 +571,13 @@ impl Signex {
         let multi_groups = self.document_state.panel_ctx.multi_groups.clone();
         let placed = self.document_state.panel_ctx.placed.clone();
         let multi_draft = self.document_state.panel_ctx.multi_draft.clone();
+        let multi_footprint_choices = self
+            .document_state
+            .panel_ctx
+            .multi_footprint_choices
+            .clone();
+        let visible_grid_draft = self.document_state.panel_ctx.visible_grid_draft.clone();
+        let snap_grid_draft = self.document_state.panel_ctx.snap_grid_draft.clone();
         let symbol_choices = self.document_state.panel_ctx.symbol_choices.clone();
         let footprint_choices = self.document_state.panel_ctx.footprint_choices.clone();
         let footprint_card = self.document_state.panel_ctx.footprint_card.clone();
@@ -762,6 +769,9 @@ impl Signex {
             multi_groups,
             placed,
             multi_draft,
+            multi_footprint_choices,
+            visible_grid_draft,
+            snap_grid_draft,
             symbol_choices,
             footprint_choices,
             footprint_card,

@@ -78,14 +78,18 @@ const SP: Spacing = Spacing::DEFAULT;
 
 /// Room an axis tag (X, Y, W, H) takes inside a field, in captions.
 const AXIS_EM: f32 = 1.0;
-/// Room a unit (mm, mil, pt) takes inside a field, in captions.
+/// Text size of a field's unit tag: the smallest step, so a seven-character
+/// value fits beside it in a pair at the 300 px dock (mockup row 43).
+const UNIT_SIZE: f32 = TS.badge;
+/// Room a unit (mm, mil, pt) takes inside a field, in [`UNIT_SIZE`]s.
 const UNIT_EM: f32 = 1.8;
-/// Room a six-character value (`88.900`) takes in the mono face, in bodies.
-const PAIR_VALUE_EM: f32 = 3.75;
+/// Room a seven-character value (`110.940`) takes in the mono face, in
+/// bodies: seven advances of 0.6.
+const PAIR_VALUE_EM: f32 = 4.2;
 /// Narrowest a field of a pair gets beside its partner: the tags, their
-/// insets and a six-character value. Below it the pair stacks.
+/// insets and a seven-character value. Below it the pair stacks.
 pub(in crate::panels) const PAIR_FIELD_MIN: f32 =
-    TS.caption * (AXIS_EM + UNIT_EM) + 2.0 * SP.s + 2.0 * SP.xs + TS.body * PAIR_VALUE_EM;
+    TS.caption * AXIS_EM + UNIT_SIZE * UNIT_EM + 2.0 * SP.s + 2.0 * SP.xs + TS.body * PAIR_VALUE_EM;
 /// Height of a count pill, as a ratio of the body size (16 px at 12 px).
 const PILL_HEIGHT_EM: f32 = 16.0 / 12.0;
 /// Side padding of a count pill (6 px at 12 px).
@@ -185,14 +189,11 @@ pub(in crate::panels) fn pair_line<'a>(
 
 /// The left and right text insets of a field with these tags.
 pub(super) fn field_insets(has_axis: bool, has_unit: bool) -> (f32, f32) {
-    let tag = |is_shown: bool, em: f32| {
-        if is_shown {
-            TS.caption * em + SP.xs
-        } else {
-            0.0
-        }
-    };
-    (SP.s + tag(has_axis, AXIS_EM), SP.s + tag(has_unit, UNIT_EM))
+    let tag = |is_shown: bool, room: f32| if is_shown { room + SP.xs } else { 0.0 };
+    (
+        SP.s + tag(has_axis, TS.caption * AXIS_EM),
+        SP.s + tag(has_unit, UNIT_SIZE * UNIT_EM),
+    )
 }
 
 /// The axis tag and the unit drawn over a field, left and right.
@@ -206,7 +207,7 @@ fn field_tags<'a>(axis: Option<Label<'a>>, unit: Option<Label<'a>>) -> Element<'
     }
     tags = tags.push(Space::new().width(Length::Fill).boxed());
     if let Some(unit) = unit {
-        tags = tags.push(text(unit).size(TS.caption).style(ink4).boxed());
+        tags = tags.push(text(unit).size(UNIT_SIZE).style(ink4).boxed());
     }
     tags.boxed()
 }
@@ -266,7 +267,7 @@ pub(in crate::panels) fn sunken_value<'a>(
             .boxed(),
     );
     if let Some(unit) = unit {
-        content = content.push(text(unit).size(TS.caption).style(ink4).boxed());
+        content = content.push(text(unit).size(UNIT_SIZE).style(ink4).boxed());
     }
     container(content)
         .padding(SP.s)

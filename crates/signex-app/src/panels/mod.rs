@@ -178,6 +178,10 @@ pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library_row::{ComponentSheet, LibraryRowDetail};
 pub(super) use library_row::{view_component_sheet, view_library_row_properties};
+mod doc_grid;
+pub(crate) use doc_grid::typed_pitch_mm;
+pub use doc_grid::{DocGridField, DocGridMsg};
+mod typed_pick;
 pub use messages::{PanelMsg, SheetFrameEdit};
 pub use multi_selection::{
     MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,

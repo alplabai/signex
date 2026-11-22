@@ -153,6 +153,13 @@ pub struct PanelContext {
     pub multi_groups: signex_engine::SelectionGroups,
     /// The multi-selection text box being typed in, with its text.
     pub multi_draft: Option<(super::MultiField, String)>,
+    /// The footprints every selected part's library row offers (mockup row
+    /// 51); empty when they share none.
+    pub multi_footprint_choices: Vec<FootprintChoiceItem>,
+    /// Text typed in Document Options' Visible Grid, until Enter or a pick.
+    pub visible_grid_draft: Option<String>,
+    /// Text typed in Document Options' Snap Grid, until Enter or a pick.
+    pub snap_grid_draft: Option<String>,
     /// The drawings the selected placed symbol's library row offers, when
     /// it has alternates; empty otherwise (#1230).
     pub symbol_choices: Vec<SymbolChoiceItem>,

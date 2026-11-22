@@ -230,6 +230,9 @@ impl Signex {
         match panel_msg {
             crate::panels::PanelMsg::SetUnit(unit) => {
                 self.ui_state.unit = *unit;
+                // Typed pitches were read in the old unit.
+                self.document_state.panel_ctx.visible_grid_draft = None;
+                self.document_state.panel_ctx.snap_grid_draft = None;
             }
             crate::panels::PanelMsg::RunErc => {
                 follow = self.handle_run_erc();
@@ -588,6 +591,7 @@ impl Signex {
             crate::panels::PanelMsg::SetGridSize(size) => {
                 self.ui_state.grid_size_mm = *size;
                 self.document_state.panel_ctx.grid_size_mm = *size;
+                self.document_state.panel_ctx.snap_grid_draft = None;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
                 let size = *size;
@@ -598,6 +602,7 @@ impl Signex {
             crate::panels::PanelMsg::SetVisibleGridSize(size) => {
                 self.ui_state.visible_grid_mm = *size;
                 self.document_state.panel_ctx.visible_grid_mm = *size;
+                self.document_state.panel_ctx.visible_grid_draft = None;
                 self.interaction_state.active_canvas_mut().clear_bg_cache();
                 self.interaction_state.pcb_canvas.clear_bg_cache();
             }

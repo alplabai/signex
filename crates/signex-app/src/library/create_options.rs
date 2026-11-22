@@ -61,8 +61,8 @@ pub fn view<'a>(
         tokens,
     );
     // Disable-when-off: LFS stays visible, greyed and inert, until Git is
-    // on (the handler clears it when Git turns off). The veil dims the
-    // card's quads; text draws above it, so the card greys its own words.
+    // on (the handler clears it when Git turns off). As in the mockup, the
+    // words take the faintest ink and the veil then dims the whole card.
     let lfs = match dependents_veil(ti(tokens.paper), state.enable_git) {
         Some(veil) => Inert::new(lfs, veil).boxed(),
         None => lfs,

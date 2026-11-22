@@ -267,6 +267,15 @@ pub(super) fn idle_top<'a>(ctx: &'a PanelContext, drc: &DrcPanel) -> Element<'a,
     col.boxed()
 }
 
+/// The clearance in mm the Clearance rule's line says DRC checks until a
+/// rule is written: the board's real one (mockup row 87).
+fn clearance_checked(drc: &DrcPanel) -> String {
+    drc.checked_clearance_mm
+        .clone()
+        .or_else(|| drc.default_clearance_mm.clone())
+        .unwrap_or_else(|| format!("{:.1}", signex_drc::DEFAULT_CLEARANCE_MM))
+}
+
 /// One base rule: name, rule text in mono, how to write it (with "Write
 /// it" while it is not written), and its state pill.
 fn base_rule<'a>(ctx: &'a PanelContext, drc: &DrcPanel, rule: BaseRule) -> Element<'a, PanelMsg> {
@@ -296,11 +305,7 @@ fn base_rule<'a>(ctx: &'a PanelContext, drc: &DrcPanel, rule: BaseRule) -> Eleme
         );
     }
     let how = if rule == BaseRule::Clearance {
-        let mm = drc
-            .default_clearance_mm
-            .clone()
-            .unwrap_or_else(|| format!("{:.1}", signex_drc::DEFAULT_CLEARANCE_MM));
-        t!(i18n, how, "clearance" => mm)
+        t!(i18n, how, "clearance" => clearance_checked(drc))
     } else {
         t!(i18n, how)
     };
@@ -380,6 +385,18 @@ mod tests {
             assert!(rule.is_always());
         }
         assert_eq!(BaseRule::ALL.iter().filter(|r| r.is_always()).count(), 3);
+    }
+
+    /// Mockup row 87: the line states the board's own clearance, and only
+    /// a panel with no reading falls back on the default.
+    #[test]
+    fn the_clearance_line_states_the_boards_real_clearance() {
+        let own = DrcPanel {
+            checked_clearance_mm: Some("0.25".into()),
+            ..DrcPanel::default()
+        };
+        assert_eq!(clearance_checked(&own), "0.25");
+        assert_eq!(clearance_checked(&DrcPanel::default()), "0.2");
     }
 
     #[test]

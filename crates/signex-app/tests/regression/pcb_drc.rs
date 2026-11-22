@@ -261,6 +261,34 @@ fn the_default_clearance_is_said_and_a_set_rule_is_not() {
     assert_eq!(panel.default_clearance_mm, None);
 }
 
+/// Mockup row 87: before a run, a board with its own clearance and no
+/// written rule is said to be checked with that clearance, with no
+/// "no clearance rule set" banner.
+#[test]
+fn the_idle_panel_states_the_boards_own_clearance() {
+    let mut set = board();
+    set.setup = Some(signex_types::pcb::PcbSetup {
+        grid_size: 0.0,
+        trace_width: 0.0,
+        via_diameter: 0.0,
+        via_drill: 0.0,
+        clearance: 0.25,
+        track_min_width: 0.0,
+        via_min_diameter: 0.0,
+        via_min_drill: 0.0,
+    });
+    let (app, _tmp, _path) = open(set);
+    let panel = app
+        .document_state
+        .panel_ctx
+        .pcb_drc
+        .as_ref()
+        .expect("panel");
+    assert!(!panel.ran);
+    assert_eq!(panel.checked_clearance_mm.as_deref(), Some("0.25"));
+    assert_eq!(panel.default_clearance_mm, None);
+}
+
 /// Load a `User Default` profile whose `drc` layer holds `dsl`.
 fn load_profile_dsl(app: &mut Signex, dsl: Option<&str>) {
     use signex_app::app::ErcMsg;
