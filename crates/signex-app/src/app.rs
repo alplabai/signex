@@ -45,6 +45,7 @@ pub mod gerber_read;
 mod handlers;
 #[cfg(test)]
 pub(crate) mod hierarchy_fixture;
+mod layer_stack_tab;
 mod library_delete;
 mod load_gateway;
 mod mutation_gateway;
@@ -56,8 +57,11 @@ pub mod path_op_jobs;
 pub mod path_ops;
 pub(crate) mod pin_junction_repair;
 pub mod project_entry_disk;
+pub(crate) mod project_git;
 mod project_tab;
 pub(crate) mod projector;
+pub(crate) mod rail_rename;
+pub use rail_rename::RailRenameMsg;
 pub(crate) mod rooms;
 mod rules_tab;
 pub(crate) mod sch_tables;
@@ -66,6 +70,7 @@ pub(crate) mod sheet_repairs;
 pub(crate) mod sheet_sync;
 pub(crate) mod sheet_write;
 pub mod unions;
+pub use project_git::ProjectGitMsg;
 pub use project_tab::{ProjectGeneralFacts, ProjectSection, ProjectTabMsg, ProjectTabState};
 pub use rules_tab::{RulesTabMsg, RulesTabState};
 pub use sch_tables::TablesMsg;
@@ -197,6 +202,8 @@ impl Signex {
         // Text typed into a note that is no longer selected (another pick, a
         // tab switch) goes to its own sheet as one edit.
         self.settle_owed_note_drafts();
+        // A power port's rename in a project reads its closed sheets first.
+        tasks.push(self.start_rail_rename());
         // So does a drawing value still typed when its field's drawing goes.
         self.settle_live_drawing_edit();
         self.drop_line_width_text_of_another_symbol();

@@ -180,6 +180,9 @@ pub struct ProjectTreeContextMenuState {
     /// `Some(key)` = right-click on a specific node; `None` = right-click
     /// in empty tree area, offering only the generic actions.
     pub key: Option<signex_widgets::tree_view::TreeKey>,
+    /// The Projects title bar + opened it: only the Add New rows of the
+    /// project at `key` show (mockup row 19).
+    pub add_new_only: bool,
     /// The undocked window the menu was opened in (`None`: the main window).
     /// Only that window paints it, and the tree it names is that window's.
     pub window: Option<iced::window::Id>,
@@ -281,6 +284,8 @@ pub enum SaveAllNext {
     CloseLibrary { library_path: std::path::PathBuf },
     /// File ▸ Save All: report the outcome and do nothing else.
     Nothing,
+    /// Run the branch switch Save and switch asked for.
+    SwitchBranch(Box<crate::app::core::branch_switch::SwitchRequest>),
 }
 
 /// A Save All whose loose documents' volumes have been probed off-thread;
@@ -456,6 +461,9 @@ pub enum ProjectTreeAction {
     /// Project root: Project Options… opens (or focuses) the project's
     /// Project tab (#1202).
     OpenProjectOptions(signex_widgets::tree_view::TreeKey),
+    /// Project root: Variant Manager opens the Project tab on its Variants
+    /// section (mockup row 20).
+    OpenVariantManager(signex_widgets::tree_view::TreeKey),
     /// Project root: open a file dialog and add the picked file
     /// to the project. Files outside the project directory are copied
     /// in; files already inside just trigger a tree refresh.
@@ -521,6 +529,7 @@ impl ProjectTreeAction {
             | ValidateProject(k)
             | OpenProjectRenameDialog(k)
             | OpenProjectOptions(k)
+            | OpenVariantManager(k)
             | AddExistingToProject(k)
             | AddNewSchematic(k)
             | AddNewPcb(k)
@@ -763,4 +772,7 @@ pub enum StatusBarRequest {
     /// Right-click on a sheet's Grid read-out: opens or closes the Grid &
     /// Snap popover above it (mockup row 6).
     GridReadoutRightClicked,
+    /// Click on the Library Missing chip: reopens the dialog of a skipped
+    /// library (mockup row 138).
+    LibraryMissingChipClicked,
 }

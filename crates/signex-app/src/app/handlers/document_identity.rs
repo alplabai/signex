@@ -40,6 +40,8 @@ impl Signex {
                 _ => {}
             }
         }
+        // A loose board's Layer Stack tab is titled by the board's file name.
+        self.refresh_page_tab_titles();
         // Pending drafts belong to the sheet, not to the name it had.
         self.document_state.drafts.rekey(old_path, new_path);
         if let Some(mut engine) = self.document_state.remove_engine(old_path) {
@@ -97,6 +99,7 @@ impl Signex {
             .rekey_parked_pcb_board(old_path, new_path);
         self.rekey_board_sketch(old_path, new_path);
         self.rekey_board_3d(old_path, new_path);
+        self.rekey_only_unrouted(old_path, new_path);
         self.document_state.autosave.rekey(old_path, new_path);
         self.rekey_page_setup(old_path, new_path);
         // Renaming does not rewrite the parents' sheet symbols, so the

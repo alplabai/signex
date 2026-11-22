@@ -1044,6 +1044,7 @@ fn the_primitive_picker_target_follows_the_rename() {
         copy_confirm: None,
         copying: false,
         opening_library: None,
+        selection: Default::default(),
     });
     submit_rename(&mut f.app, &f.alpha.clone(), "alpha2.snxlib");
 

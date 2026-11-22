@@ -8,10 +8,12 @@
 //! in every filename (ADR-0001 §5 — group by folder, no redundant prefix).
 
 mod board;
+mod generated;
 mod grid;
 mod library;
 mod pad;
 mod pad_input;
+mod pad_library;
 mod pad_stack;
 mod pad_trapezoid;
 mod properties_view;

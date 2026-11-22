@@ -6,6 +6,8 @@
 //! rename rule and the placement rules: docs/DECISIONS.md, "Bottom-up
 //! hierarchy".
 
+use std::collections::BTreeSet;
+
 use signex_net::{SheetPinContacts, pt_key};
 use signex_types::object_id::IdSource;
 use signex_types::schematic::{
@@ -52,6 +54,21 @@ impl SheetSyncPreview {
     /// Nothing to change: both sides already agree.
     pub fn is_empty(&self) -> bool {
         self.added.is_empty() && self.removed.is_empty() && self.renamed.is_empty()
+    }
+
+    /// This preview without the removals of `kept`, the names the user left
+    /// out; additions and renames stay.
+    pub fn leaving_out(&self, kept: &BTreeSet<String>) -> Self {
+        Self {
+            added: self.added.clone(),
+            removed: self
+                .removed
+                .iter()
+                .filter(|name| !kept.contains(*name))
+                .cloned()
+                .collect(),
+            renamed: self.renamed.clone(),
+        }
     }
 }
 

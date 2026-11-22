@@ -107,7 +107,8 @@ impl Signex {
     /// still running.
     pub(crate) fn start_document_disk_poll(&mut self) -> Task<Message> {
         let d = &self.document_state;
-        if d.disk_poll.in_flight {
+        // A running branch switch is not an outside change.
+        if d.disk_poll.in_flight || d.branch_switch.is_some() {
             return Task::none();
         }
         // A parked sheet has no tab but is an open document all the same.
@@ -159,7 +160,12 @@ impl Signex {
             };
             let open = d.engines.contains_key(&path) || d.tabs.iter().any(|tab| tab.path == path);
             // A write begun since the read owns the file's state now.
+            let in_switch = d
+                .branch_switch
+                .as_ref()
+                .is_some_and(|root| path.starts_with(root));
             if !open
+                || in_switch
                 || d.document_saves.is_saving(&path)
                 || d.disk_poll.reloading.contains(&path)
                 || d.pending_restores.contains(&path)

@@ -689,7 +689,7 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   one built off the UI thread; after an edit the last list stays shown until
   the new index lands.
 - Each row shows the net's name, its first matching net class as a pill and,
-  on the right, how many component pins it connects (Graphite mockup #58).
+  on the right, how many component pins it connects (Graphite mockup row 58).
   Named nets come first, then auto-named ones. The filter matches the net
   name or the class name.
 - Clicking a net expands it, on the selection fill, to its pins, labels,
@@ -866,7 +866,7 @@ three-level submenu. Rules, dialogs and storage:
 
 ## Sheet right-click menu {#sheet-context-menu}
 
-The schematic canvas menu (#2419, Graphite mockup #62, `app/view/context_menu/menus.rs`) shows
+The schematic canvas menu (#2419, Graphite mockup row 62, `app/view/context_menu/menus.rs`) shows
 rows by what was right-clicked and makes each command row live by the
 command's own enablement rule (`app/command/needs.rs`), the rule the menu bar
 greys the same row by and a keystroke is dropped by. A muted first line names
@@ -935,8 +935,10 @@ from operands; see [CLI.md](CLI.md#bottom-up-hierarchy).
 Design ▸ Synchronize Sheet Entries and Ports... (`sync_sheet_entries`) opens a
 dialog for the selected sheet symbol. Choose the side that wins: **Sheet to
 sheet symbol** changes the symbol's entries, **Sheet symbol to sheet** changes
-the sheet's hierarchical ports. The dialog lists the names that would be added,
-removed and renamed, and Apply makes exactly those changes as one undo step.
+the sheet's hierarchical ports. The dialog draws the written side after Apply
+or as it is now (After / Before, with an expand button) and lists each entry
+that would be added, removed or renamed with its I/O type. None of this changes
+a sheet: Apply makes exactly the listed changes as one undo step.
 Esc and Cancel close it without a change. A rename is read only when, for one
 direction (input, output, ...), exactly one name is gone and one is new; it
 keeps the entry's place and wires, or the port label's place. Sheet to sheet

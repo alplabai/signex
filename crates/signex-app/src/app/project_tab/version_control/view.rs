@@ -4,9 +4,10 @@
 
 use iced::widget::{Column, Space, container, row};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme, Widget as _};
-use signex_i18n::{I18n, MessageId, ids, t};
+use signex_i18n::{I18n, Localized, MessageId, ids, t};
+use signex_library::adapters::local_git::project_repo::LastCommit;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{ToggleSwitchStyle, text, toggle_switch};
+use signex_widgets::{ToggleSwitchStyle, text, text_input, toggle_switch};
 
 use super::super::ProjectTabMsg;
 use super::super::general::tab_message;
@@ -15,11 +16,15 @@ use super::super::look::{
 };
 use super::super::table::{SP, TS, section};
 use super::{Repository, VersionControlFacts, may_toggle_commit_on_save};
+use crate::app::project_git::{self, ProjectGitState, RepoView};
 use crate::app::state::{LoadedProject, ProjectId};
-use crate::app::{Message, OverlayMsg};
+use crate::app::{Message, OverlayMsg, ProjectGitMsg};
 use crate::panels::PanelKind;
-use crate::styles::tokens::{on_accent, resolve};
+use crate::styles::tokens::{danger, on_accent, resolve};
 use crate::styles::{PillTone, Radii, ti};
+
+/// Width of the Author field (240 px).
+const AUTHOR_W: f32 = TS.body * 20.0;
 
 /// The words and tone of the repository pill in the Repository card header.
 pub(super) fn repository_pill(repository: Repository) -> (MessageId, PillTone) {
@@ -40,15 +45,24 @@ pub(super) fn open_history_message() -> Message {
     Message::Overlay(OverlayMsg::OpenPanel(PanelKind::History))
 }
 
+/// What the section reads from the `project_git` slice, and the clock the
+/// last commit's age is told from.
+#[derive(Clone, Copy)]
+pub(in crate::app::project_tab) struct GitView<'g> {
+    pub state: &'g ProjectGitState,
+    pub now: chrono::DateTime<chrono::Utc>,
+}
+
 pub(in crate::app::project_tab) fn view<'a>(
     project: &LoadedProject,
     facts: &VersionControlFacts,
+    git: GitView<'_>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let body = vec![
-        repository_card(project.id, facts.repository, i18n, tokens),
-        commit_card(project, facts, i18n, tokens),
+        repository_card(project.id, facts.repository, git, i18n, tokens),
+        commit_card(project, facts, git.state.repo(project.id), i18n, tokens),
     ];
     section(
         ids::PROJECT_SECTION_VERSION_CONTROL,
@@ -59,11 +73,123 @@ pub(in crate::app::project_tab) fn view<'a>(
     )
 }
 
-/// The Repository card: the state pill in the header; the status and Open
-/// History panel with a repository, Enable Version Control… without one.
+/// The last commit in one line: short id, subject and age.
+pub(super) fn last_commit_words(
+    commit: &LastCommit,
+    now: chrono::DateTime<chrono::Utc>,
+    i18n: &I18n,
+) -> Localized {
+    let time = chrono::DateTime::from_timestamp(commit.seconds, 0).unwrap_or(now);
+    let age = crate::panels::history::format_relative_simple(i18n, time, now).into_string();
+    t!(
+        i18n,
+        ids::PROJECT_VCS_LAST_COMMIT_LINE,
+        "sha" => commit.short_sha.as_str(),
+        "subject" => commit.subject.as_str(),
+        "age" => age
+    )
+}
+
+/// The Last commit value, or why the repository could not be read.
+fn last_commit_value<'a>(
+    repo: Option<&RepoView>,
+    now: chrono::DateTime<chrono::Utc>,
+    i18n: &I18n,
+) -> Element<'a, Message> {
+    let words = match repo {
+        Some(RepoView {
+            read_error: Some(why),
+            ..
+        }) => t!(i18n, ids::PROJECT_VCS_READ_FAILED, "why" => why.as_str()),
+        Some(RepoView {
+            facts: Some(facts), ..
+        }) => match &facts.last_commit {
+            Some(commit) => last_commit_words(commit, now, i18n),
+            None => t!(i18n, ids::PROJECT_VCS_NO_COMMITS),
+        },
+        _ => t!(i18n, ids::PROJECT_VCS_STATE_CHECKING),
+    };
+    text(words)
+        .size(TS.body)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End)
+        .boxed()
+}
+
+/// The Branch value: the switcher's button and how many branches there are.
+fn branch_value<'a>(
+    project_id: ProjectId,
+    repo: Option<&RepoView>,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let button = project_git::view::branch_button(project_id, repo, i18n, tokens)
+        .map(Message::from)
+        .boxed();
+    let count = repo
+        .and_then(|repo| repo.facts.as_ref())
+        .map_or(0, |facts| facts.branches.len());
+    let note = text(t!(i18n, ids::PROJECT_VCS_BRANCH_COUNT, "count" => count))
+        .size(TS.caption)
+        .color(resolve(tokens).ink3)
+        .boxed();
+    row![button, note]
+        .spacing(SP.m)
+        .align_y(Alignment::Center)
+        .boxed()
+}
+
+/// A repository's rows: status, branch (with the open switcher), last
+/// commit and Open History panel.
+fn present_body<'a>(
+    project_id: ProjectId,
+    git: GitView<'_>,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let repo = git.state.repo(project_id);
+    let status = kv_row(
+        t!(i18n, ids::PROJECT_VCS_STATUS),
+        text(t!(i18n, ids::PROJECT_VCS_REPOSITORY_PRESENT))
+            .size(TS.body)
+            .boxed(),
+        tokens,
+    );
+    let branch = kv_row(
+        t!(i18n, ids::PROJECT_VCS_BRANCH),
+        branch_value(project_id, repo, i18n, tokens),
+        tokens,
+    );
+    let last = kv_row(
+        t!(i18n, ids::PROJECT_VCS_LAST_COMMIT),
+        last_commit_value(repo, git.now, i18n),
+        tokens,
+    );
+    let history = text_button(
+        Some(Glyph::History),
+        t!(i18n, ids::PROJECT_VCS_OPEN_HISTORY),
+        Some(open_history_message()),
+        ButtonKind::Small,
+        tokens,
+    );
+    let mut rows: Column<Element<'a, Message>> = Column::new().push(status).push(branch);
+    if git.state.is_switcher_open(project_id) {
+        let offers_save = git.state.offers_save_and_switch(project_id);
+        rows = rows.push(
+            project_git::view::switcher(project_id, repo, offers_save, i18n, tokens)
+                .map(Message::from)
+                .boxed(),
+        );
+    }
+    rows.push(last).push(history).spacing(SP.m + SP.xs).boxed()
+}
+
+/// The Repository card: the state pill in the header; the rows of
+/// [`present_body`] with a repository, Enable Version Control… without one.
 fn repository_card<'a>(
     project_id: ProjectId,
     repository: Repository,
+    git: GitView<'_>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -79,27 +205,7 @@ fn repository_card<'a>(
     };
     let muted = |id: MessageId| text(t!(i18n, id)).size(TS.body).color(resolve(tokens).ink3);
     let body = match repository {
-        Repository::Present => {
-            let status = kv_row(
-                t!(i18n, ids::PROJECT_VCS_STATUS),
-                text(t!(i18n, ids::PROJECT_VCS_REPOSITORY_PRESENT))
-                    .size(TS.body)
-                    .boxed(),
-                tokens,
-            );
-            let history = text_button(
-                Some(Glyph::History),
-                t!(i18n, ids::PROJECT_VCS_OPEN_HISTORY),
-                Some(open_history_message()),
-                ButtonKind::Small,
-                tokens,
-            );
-            Column::new()
-                .push(status)
-                .push(history)
-                .spacing(SP.m + SP.xs)
-                .boxed()
-        }
+        Repository::Present => present_body(project_id, git, i18n, tokens),
         Repository::Absent => {
             let enable = tab_message(ProjectTabMsg::EnableVersionControlRequested { project_id });
             row![
@@ -121,11 +227,49 @@ fn repository_card<'a>(
     card(Some(header), body, tokens)
 }
 
+/// The Author row: who commits are written as, read from and written to the
+/// repository's git config (decision 2026-11-22). Greyed without a
+/// repository; Enter writes it.
+fn author_row<'a>(
+    project_id: ProjectId,
+    repository: Repository,
+    repo: Option<&RepoView>,
+    i18n: &I18n,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let shown = repo.map_or("", RepoView::author_text).to_string();
+    let mut input = text_input(t!(i18n, ids::PROJECT_VCS_AUTHOR_PLACEHOLDER), shown)
+        .style(crate::panels::form_look::text_input_style)
+        .size(TS.body)
+        .padding(SP.s)
+        .width(Length::Fixed(AUTHOR_W));
+    if repository == Repository::Present {
+        input = input
+            .on_input(move |text| Message::from(ProjectGitMsg::AuthorEdited { project_id, text }))
+            .on_submit(Message::from(ProjectGitMsg::AuthorSubmitted { project_id }));
+    }
+    let line = option_row(
+        t!(i18n, ids::PROJECT_VCS_AUTHOR),
+        t!(i18n, ids::PROJECT_VCS_AUTHOR_HELP),
+        input.boxed(),
+        tokens,
+    );
+    let Some(problem) = repo.and_then(|repo| repo.author_problem.as_ref()) else {
+        return line;
+    };
+    let why = text(project_git::view::author_problem_words(problem, i18n))
+        .size(TS.caption)
+        .color(danger(tokens))
+        .boxed();
+    Column::new().push(line).push(why).spacing(SP.xs).boxed()
+}
+
 /// The Commit every save switch with its help under the label, why it may
-/// not be turned on, and the commits still running.
+/// not be turned on, the commits still running, and the Author row.
 fn commit_card<'a>(
     project: &LoadedProject,
     facts: &VersionControlFacts,
+    repo: Option<&RepoView>,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
@@ -173,6 +317,7 @@ fn commit_card<'a>(
         .align_y(Alignment::Center);
         body = body.push(pending.boxed());
     }
+    body = body.push(author_row(project_id, facts.repository, repo, i18n, tokens));
     card(None, body.boxed(), tokens)
 }
 

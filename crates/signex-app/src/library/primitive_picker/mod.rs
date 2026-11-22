@@ -5,6 +5,9 @@
 
 mod copy_confirm;
 mod list;
+mod preview;
+
+pub(crate) use preview::read_drawing;
 
 use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Space, column, container, row, scrollable};
@@ -15,6 +18,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::theme_ext;
 use signex_widgets::{Label, button, text};
 
+use super::browser::PreviewLook;
 use super::messages::{LibraryMessage, PrimitivePickerMsg};
 use super::modal_chrome::{cancel_btn, footer_strip, header_with_note_closing, notice_banner};
 use super::picker::{empty_card, mono, search_field};
@@ -63,12 +67,13 @@ fn target_pn(state: &LibraryState, picker: &PrimitivePickerState) -> Option<Stri
         .map(|c| c.internal_pn.as_str().to_owned())
 }
 
-pub fn view<'a>(
+pub(crate) fn view<'a>(
     state: &'a LibraryState,
     picker: &'a PrimitivePickerState,
     tokens: &'a ThemeTokens,
     i18n: &I18n,
     windowed: bool,
+    look: PreviewLook,
 ) -> Element<'a, LibraryMessage> {
     // The copy confirm takes the picker's place, as Change Component's
     // preview does in the component picker.
@@ -103,6 +108,9 @@ pub fn view<'a>(
 
     let needle = i18n.fold_for_search(picker.filter.trim());
     let items = list_items(i18n, state, picker, &needle);
+    // Pick and the preview act on the highlighted row only while the
+    // filter shows it.
+    let highlighted = shown_highlight(&items, picker);
     let list: Element<'a, LibraryMessage> = if items.is_empty() {
         let id = if state.open_libraries.is_empty() {
             ids::LIBRARY_PRIMITIVE_PICKER_NO_LIBRARIES
@@ -111,9 +119,13 @@ pub fn view<'a>(
         };
         empty_card(t!(i18n, id), tokens)
     } else {
-        rows_view(&items, picker.scroll_y, tokens, i18n)
+        rows_view(&items, picker.scroll_y, highlighted, tokens, i18n)
     };
     let rule = r.line_soft;
+    let list = row![
+        container(list).width(Length::Fill).height(Length::Fill),
+        preview::pane(&picker.selection, highlighted.is_some(), look, tokens, i18n),
+    ];
     let list = container(list)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -145,11 +157,19 @@ pub fn view<'a>(
             Some(msg(PrimitivePickerMsg::Browse)),
             tokens,
         )],
-        vec![cancel_btn(
-            t!(i18n, ids::DIALOG_BUTTON_CANCEL),
-            msg(PrimitivePickerMsg::Cancel),
-            tokens,
-        )],
+        vec![
+            cancel_btn(
+                t!(i18n, ids::DIALOG_BUTTON_CANCEL),
+                msg(PrimitivePickerMsg::Cancel),
+                tokens,
+            ),
+            dialog_button(
+                t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_PICK),
+                DialogButtonKind::Primary,
+                highlighted.map(pick_message),
+                tokens,
+            ),
+        ],
         tokens,
     );
 
@@ -163,12 +183,31 @@ pub fn view<'a>(
     .boxed()
 }
 
+/// The highlighted choice, while the list shows its row.
+fn shown_highlight<'p>(items: &[ListItem], picker: &'p PrimitivePickerState) -> Option<&'p Choice> {
+    picker.selection.highlighted.as_ref().filter(|wanted| {
+        items
+            .iter()
+            .any(|item| matches!(item, ListItem::Row { choice, .. } if choice == *wanted))
+    })
+}
+
+/// What the Pick button sends for the highlighted row: the same messages a
+/// bind has always gone through, so the rename guard still sees them.
+fn pick_message(choice: &Choice) -> LibraryMessage {
+    msg(match choice {
+        Choice::Pick(reference) => PrimitivePickerMsg::Pick(*reference),
+        Choice::Loose(symbol) => PrimitivePickerMsg::PickLoose(symbol.clone()),
+    })
+}
+
 /// The virtualised list: only the entries in view (plus overscan) become
 /// widgets; two spacers of the skipped height keep the scrollbar and the
 /// total height unchanged.
 fn rows_view<'a>(
     items: &[ListItem],
     scroll_y: f32,
+    highlighted: Option<&Choice>,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, LibraryMessage> {
@@ -182,19 +221,18 @@ fn rows_view<'a>(
             ListItem::Header { group, count } => group_head(group, *count, tokens, i18n),
             ListItem::Row { file, name, choice } => {
                 let label = row_label(i18n, file, name.as_deref());
-                let (on_press, meta) = match choice {
-                    Choice::Pick(reference) => (msg(PrimitivePickerMsg::Pick(*reference)), None),
-                    // A symbol of a library that is not open: choosing it
-                    // offers to link it or copy it.
-                    Choice::Loose(symbol) => (
-                        msg(PrimitivePickerMsg::PickLoose(symbol.clone())),
-                        symbol
-                            .library
-                            .is_some()
-                            .then(|| t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY)),
-                    ),
+                // A symbol of a library that is not open: Pick offers to
+                // link it or copy it.
+                let meta = match choice {
+                    Choice::Pick(_) => None,
+                    Choice::Loose(symbol) => symbol
+                        .library
+                        .is_some()
+                        .then(|| t!(i18n, ids::LIBRARY_PRIMITIVE_PICKER_OPEN_LIBRARY)),
                 };
-                primitive_row(label, meta, on_press, tokens)
+                let on_press = msg(PrimitivePickerMsg::RowHighlighted(choice.clone()));
+                let is_highlighted = highlighted == Some(choice);
+                primitive_row(label, meta, is_highlighted, on_press, tokens)
             }
         });
     }
@@ -289,10 +327,11 @@ fn group_head<'a>(
 }
 
 /// One primitive (`.li`): its words in mono, then an optional muted meta at
-/// the right end. A click picks at once.
+/// the right end. A click highlights it; the highlighted row is tinted.
 fn primitive_row<'a>(
     label: Label<'static>,
     meta: Option<signex_i18n::Localized>,
+    is_highlighted: bool,
     on_press: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
@@ -321,14 +360,19 @@ fn primitive_row<'a>(
         );
     }
     let hover = crate::styles::tokens::hover_overlay(tokens);
+    let tint = crate::styles::tokens::selection_tint(tokens);
     button(line)
         .padding(0)
         .width(Length::Fill)
         .height(ROW_H)
         .on_press(on_press)
         .style(move |_: &Theme, status: iced::widget::button::Status| {
-            let background = matches!(status, iced::widget::button::Status::Hovered)
-                .then_some(Background::Color(hover));
+            let background = if is_highlighted {
+                Some(Background::Color(tint))
+            } else {
+                matches!(status, iced::widget::button::Status::Hovered)
+                    .then_some(Background::Color(hover))
+            };
             iced::widget::button::Style {
                 background,
                 border: Border {
@@ -444,6 +488,46 @@ mod tests {
         assert_eq!(list_window(0.0, 5), 0..5);
     }
 
+    /// Mockup row 131: Pick sends the bind a row click used to, and only
+    /// for a highlighted row the filter still shows.
+    #[test]
+    fn pick_follows_the_highlighted_row_the_list_shows() {
+        let reference =
+            signex_library::PrimitiveRef::new(uuid::Uuid::from_u128(1), uuid::Uuid::from_u128(2));
+        let choice = Choice::Pick(reference);
+        assert!(matches!(
+            pick_message(&choice),
+            LibraryMessage::PrimitivePicker(PrimitivePickerMsg::Pick(r)) if r == reference
+        ));
+        let mut picker = PrimitivePickerState {
+            kind: PrimitiveKind::Footprint,
+            target: crate::library::state::PrimitivePickerTarget::BrowserRow(
+                crate::library::state::EditorAddress::new(
+                    "l.snxlib".into(),
+                    "t".into(),
+                    signex_library::RowId::new(),
+                ),
+            ),
+            filter: String::new(),
+            error: None,
+            scroll_y: 0.0,
+            loose: Vec::new(),
+            copy_confirm: None,
+            copying: false,
+            opening_library: None,
+            selection: Default::default(),
+        };
+        let shown = [ListItem::Row {
+            file: "r.snxfpt".into(),
+            name: None,
+            choice: choice.clone(),
+        }];
+        assert!(shown_highlight(&shown, &picker).is_none(), "none yet");
+        picker.selection.highlight(choice);
+        assert!(shown_highlight(&shown, &picker).is_some());
+        assert!(shown_highlight(&[], &picker).is_none(), "filtered out");
+    }
+
     /// The titles read the catalog.
     #[test]
     fn titles_come_from_the_catalog() {
@@ -495,6 +579,7 @@ mod tests {
                 let _ = primitive_row(
                     row_label(i18n, "resistor.snxsym", Some("R")),
                     meta,
+                    false,
                     msg(PrimitivePickerMsg::Cancel),
                     &tokens,
                 );

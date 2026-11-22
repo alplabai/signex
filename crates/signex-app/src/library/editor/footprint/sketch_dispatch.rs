@@ -265,6 +265,11 @@ pub fn set_entity_role(footprint: &mut Footprint, id: SketchEntityId, role: Role
     if !role.fits(&entity.kind) {
         return;
     }
+    // A pad needs a point: a profile becomes one through `profile_roles`,
+    // and this entity keeps the role it has.
+    if role == RoleTag::Pad && !matches!(entity.kind, EntityKind::Point { .. }) {
+        return;
+    }
 
     // Clear every role attr first — fresh slate before assigning.
     entity.pad = None;

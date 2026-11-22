@@ -28,6 +28,7 @@ mod hole;
 mod paste_mask;
 mod properties;
 mod stack;
+mod template;
 mod view;
 
 pub(in crate::panels::footprint_editor_properties) use view::view_pad_form;
@@ -61,7 +62,6 @@ pub(in crate::panels::footprint_editor_properties) struct PadFormValues {
     pub(super) side: crate::library::editor::footprint::state::PadSide,
     pub(super) rotation_deg: f64,
     pub(super) template: String,
-    pub(super) template_library: String,
     pub(super) shape: signex_library::PadShape,
     pub(super) kind: signex_library::PadKind,
     pub(super) size_x_mm: f64,
@@ -95,6 +95,8 @@ pub(in crate::panels::footprint_editor_properties) struct PadFormValues {
     pub(super) numeric_buffers: std::collections::HashMap<String, String>,
     /// The selected pad's position, mm; `None` for the next pad placed.
     pub(super) position_mm: Option<[f64; 2]>,
+    /// What the Template dropdown offers (mockup row 125).
+    pub(super) template_choices: template::TemplateChoices,
 }
 
 impl PadFormValues {
@@ -106,7 +108,6 @@ impl PadFormValues {
             side: fp.next_pad_side,
             rotation_deg: fp.next_pad_rotation_deg,
             template: fp.next_pad_template.clone(),
-            template_library: fp.next_pad_template_library.clone(),
             shape: fp.next_pad_shape.clone(),
             kind: fp.next_pad_kind,
             size_x_mm: fp.next_pad_size_x_mm,
@@ -128,6 +129,12 @@ impl PadFormValues {
             copper_offset_y_mm: fp.next_pad_copper_offset_y_mm,
             numeric_buffers: fp.numeric_buffers.clone(),
             position_mm: None,
+            template_choices: template::choices(
+                &fp.pad_outlines,
+                None,
+                &fp.next_pad_template,
+                &fp.next_pad_template_library,
+            ),
         }
     }
     pub(in crate::panels::footprint_editor_properties) fn from_selected_pad(
@@ -139,7 +146,6 @@ impl PadFormValues {
             side: pad.side,
             rotation_deg: pad.rotation_deg,
             template: pad.template.clone(),
-            template_library: pad.template_library.clone(),
             shape: pad.shape.clone(),
             kind: pad.kind,
             size_x_mm: pad.size_mm[0],
@@ -166,6 +172,12 @@ impl PadFormValues {
             copper_offset_y_mm: pad.copper_offset_y_mm,
             numeric_buffers: fp.numeric_buffers.clone(),
             position_mm: Some(pad.position_mm),
+            template_choices: template::choices(
+                &fp.pad_outlines,
+                Some(pad.idx),
+                &pad.template,
+                &pad.template_library,
+            ),
         }
     }
 }

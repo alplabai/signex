@@ -58,10 +58,13 @@ pub fn with_value_tip<'a, M: 'a>(field: Element<'a, M>, value: &str) -> Element<
     }
     signex_widgets::tooltip(
         field,
-        container(
-            text(signex_i18n::UserText::new(value.to_string()))
-                .size(TS.body)
-                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+        iced::widget::container(
+            container(
+                text(signex_i18n::UserText::new(value.to_string()))
+                    .size(TS.body)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            )
+            .padding([SP.xs, SP.s]),
         )
         .padding([SP.xs, SP.s])
         .style(form_look::value_tip),
@@ -79,17 +82,6 @@ pub fn form_input_row<'a, M: 'a>(
     input_bg: Color,
 ) -> Element<'a, M> {
     value_row(label, value, label_c, input_bg, true)
-}
-
-/// [`form_input_row`] without the value tooltip, for a row that carries a
-/// tooltip of its own.
-pub fn form_input_row_untipped<'a, M: 'a>(
-    label: impl Into<signex_widgets::Label<'a>>,
-    value: &str,
-    label_c: Color,
-    input_bg: Color,
-) -> Element<'a, M> {
-    value_row(label, value, label_c, input_bg, false)
 }
 
 fn value_row<'a, M: 'a>(

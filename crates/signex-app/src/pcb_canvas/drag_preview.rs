@@ -15,7 +15,7 @@ use iced::widget::canvas;
 use iced::{Rectangle, Renderer};
 use pcb_geom::{BoardTextField, TrackEnds};
 use signex_gfx::scene::Scene;
-use signex_renderer::pcb::{FootprintTextInput, PcbSnapshot};
+use signex_renderer::pcb::{BoardPaint, FootprintTextInput, PcbSnapshot};
 use signex_types::pcb::Point;
 use uuid::Uuid;
 
@@ -169,12 +169,18 @@ impl PcbCanvas {
         viewport: Rectangle,
         camera: &BoardCamera,
     ) {
-        let paint = self
-            .renderer_snapshot
+        let paint = self.drag_preview_text_paint();
+        paint_texts(frame, self.drag_preview_texts(), &paint, camera, viewport);
+    }
+
+    /// The board's paint for the carried texts: the board under them may be
+    /// dimmed by Show only unrouted, what is carried never is.
+    pub(crate) fn drag_preview_text_paint(&self) -> BoardPaint {
+        self.renderer_snapshot
             .as_ref()
             .map(|s| s.paint.clone())
-            .unwrap_or_default();
-        paint_texts(frame, self.drag_preview_texts(), &paint, camera, viewport);
+            .unwrap_or_default()
+            .with_board_dimmed(false)
     }
 
     /// The carried footprints tessellated for a `viewport` of the highlight

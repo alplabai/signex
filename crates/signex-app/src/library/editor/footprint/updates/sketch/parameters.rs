@@ -9,12 +9,13 @@
 use signex_sketch::SketchData;
 use signex_sketch::mirrored_angle::parameter_from_mirrored_angle;
 use signex_sketch::parameter_refs::{
-    DeleteParameterError, DeletePolicy, delete_parameter, parameter_from_dimension,
+    DeleteParameterError, DeletePolicy, check_new_name, delete_parameter, parameter_from_dimension,
     rename_parameter, resolve_rows, unique_name, used_by,
 };
 
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::parameters_table::SketchParametersMsg;
+use crate::library::editor::footprint::parameters_table::state::ParametersImport;
 use crate::library::editor::footprint::parameters_table::update as table;
 use crate::library::editor::footprint::sketch_conflict::mutate_solve_or_revert;
 use crate::library::editor::footprint::sketch_dispatch::report_solve_failure;
@@ -58,8 +59,63 @@ pub(in crate::library::editor::footprint::updates) fn apply(
         SketchParametersMsg::ParameterFromConstraintRequested { constraint } => {
             make_parameter(editor, constraint)
         }
+        SketchParametersMsg::ImportSourcePicked { source, parameters } => {
+            offer_import(editor, source, parameters)
+        }
+        SketchParametersMsg::ImportRowToggled { name } => {
+            if let Some(import) = editor
+                .state
+                .parameters_table
+                .as_deref_mut()
+                .and_then(|t| t.import.as_mut())
+            {
+                import.toggle(&name);
+            }
+        }
+        SketchParametersMsg::ImportConfirmed => confirm_import(editor),
+        SketchParametersMsg::ImportCancelled => {
+            if let Some(t) = editor.state.parameters_table.as_deref_mut() {
+                t.import = None;
+            }
+        }
     }
     remember_values(editor);
+}
+
+/// List a picked footprint's parameters. The table may have closed while
+/// the picker was up; then there is nothing to show them in.
+fn offer_import(editor: &mut FootprintDocument, source: String, parameters: Vec<(String, String)>) {
+    let sketch = current_sketch(editor);
+    if let Some(t) = editor.state.parameters_table.as_deref_mut() {
+        t.menu = None;
+        t.rename = None;
+        t.delete_prompt = None;
+        t.import = Some(ParametersImport::of(source, parameters, &sketch.parameters));
+    }
+}
+
+/// Copy the ticked parameters as one undo step. A name taken since the list
+/// opened is skipped, so nothing is overwritten.
+fn confirm_import(editor: &mut FootprintDocument) {
+    let Some(import) = editor
+        .state
+        .parameters_table
+        .as_deref_mut()
+        .and_then(|t| t.import.take())
+    else {
+        return;
+    };
+    let mut sketch = current_sketch(editor);
+    let mut added = false;
+    for row in import.picked() {
+        if check_new_name(&sketch.parameters, &row.name).is_ok() {
+            sketch.parameters.insert(row.name.clone(), row.expr.clone());
+            added = true;
+        }
+    }
+    if added {
+        commit(editor, sketch);
+    }
 }
 
 /// The existing parameter edit, with the row focused for the autocomplete.

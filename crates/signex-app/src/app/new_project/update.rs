@@ -168,6 +168,12 @@ impl Signex {
                 self.ui_state.new_project = None;
                 Task::none()
             }
+            M::Preview(preview) => match self.ui_state.new_project.as_mut() {
+                Some(state) => state
+                    .act_on_preview(preview)
+                    .map(|msg| Message::from(M::Preview(msg))),
+                None => Task::none(),
+            },
             setup => {
                 let ui = &mut self.ui_state;
                 let Some(state) = ui.new_project.as_mut() else {

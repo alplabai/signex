@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use signex_i18n::{I18n, ids, t};
+use signex_i18n::{I18n, ids, menu_ids, t};
 use signex_types::theme::ThemeId;
 use signex_widgets::active_bar_dropdown::{DropdownEntry, DropdownItem};
 
@@ -393,6 +393,14 @@ fn shapes_entries(
                 .active(is_armed),
         )
     };
+    // A shape with no tool yet: greyed, with the reason on hover.
+    let unbuilt = |label: &'static str| -> DropdownEntry<LibraryMessage> {
+        DropdownEntry::Item(
+            DropdownItem::passive(label)
+                .disabled(true)
+                .tooltip(i18n.message_plain(menu_ids::MENU_PLANNED_TOOLTIP, &[])),
+        )
+    };
     vec![
         DropdownEntry::Header(t!(i18n, ids::EDITORS_SYMBOL_BAR_SHAPES).into_string()),
         shape(
@@ -407,8 +415,8 @@ fn shapes_entries(
             SymbolTool::PlaceArc,
             ic::icon_dd_arc(tid),
         ),
-        DropdownEntry::Item(stub("Elliptical Arc", path.clone())),
-        DropdownEntry::Item(stub("Bezier", path.clone())),
+        unbuilt("Elliptical Arc"),
+        unbuilt("Bezier"),
         shape(
             "Polygon",
             SymbolToolMsg::PlacePolygon,
@@ -421,14 +429,14 @@ fn shapes_entries(
             SymbolTool::PlaceRectangle,
             ic::icon_dd_rect(tid),
         ),
-        DropdownEntry::Item(stub("Round Rectangle", path.clone())),
+        unbuilt("Round Rectangle"),
         shape(
             "Ellipse / Circle",
             SymbolToolMsg::PlaceCircle,
             SymbolTool::PlaceCircle,
             ic::icon_dd_circle(tid),
         ),
-        DropdownEntry::Item(stub("Pie Chart", path)),
+        unbuilt("Pie Chart"),
     ]
 }
 
@@ -563,6 +571,38 @@ mod tests {
                 "Pie Chart",
             ]
         );
+    }
+
+    /// DECISIONS 2026-11-22: a shape with no tool yet keeps its row, greyed,
+    /// with a reason and no action; a shape with a tool stays live.
+    #[test]
+    fn the_unbuilt_shapes_are_disabled_with_a_reason() {
+        let i18n = I18n::en_us();
+        let entries = shapes_entries(
+            SymbolTool::Select,
+            PathBuf::from("t.snxsym"),
+            ThemeId::GraphiteDark,
+            &i18n,
+        );
+        let reason = i18n.message_plain(menu_ids::MENU_PLANNED_TOOLTIP, &[]);
+        let unbuilt = ["Elliptical Arc", "Bezier", "Round Rectangle", "Pie Chart"];
+        let mut seen = 0;
+        for entry in &entries {
+            let DropdownEntry::Item(item) = entry else {
+                continue;
+            };
+            if unbuilt.contains(&item.label.as_str()) {
+                seen += 1;
+                assert!(item.disabled, "{} is greyed", item.label);
+                assert!(item.on_press.is_none(), "{} does nothing", item.label);
+                assert_eq!(item.tooltip.as_ref(), Some(&reason), "{}", item.label);
+            } else {
+                assert!(!item.disabled, "{} stays live", item.label);
+                assert!(item.on_press.is_some(), "{} stays live", item.label);
+                assert!(item.tooltip.is_none(), "{} has no reason", item.label);
+            }
+        }
+        assert_eq!(seen, unbuilt.len());
     }
 
     /// Mockup row 141: the Shapes menu opens under a "Shapes" header and highlights

@@ -155,6 +155,8 @@ pub struct NewProjectState {
     pub(crate) editing: Option<ProfileTarget>,
     /// The saved profile being renamed, with the name as typed.
     pub(crate) renaming: Option<Renaming>,
+    /// The previews' open value, held handle and larger view.
+    pub(crate) preview: super::SetupPreview,
 }
 
 /// A Rename in progress: the saved profile and the name as typed, with
@@ -190,6 +192,7 @@ impl NewProjectState {
             profile_menu: None,
             editing: None,
             renaming: None,
+            preview: super::SetupPreview::default(),
         }
     }
 
@@ -444,10 +447,10 @@ impl NewProjectState {
         data: &signex_types::project::ProjectData,
         users: &[UserProfile],
     ) -> Self {
-        let mut state = Self::of_setup(
-            ProjectSetup::for_project(&data.project_defaults, data.designator_standard(), users)
-                .setup,
-        );
+        // What a new sheet really starts from (mockup row 31), so the card
+        // and New Schematic never show two sizes.
+        let setup = crate::app::document_setup::new_document_setup(data, users).setup;
+        let mut state = Self::of_setup(setup);
         state.customize_open = true;
         state
     }

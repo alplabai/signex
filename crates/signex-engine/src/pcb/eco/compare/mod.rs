@@ -498,4 +498,6 @@ impl CompareReport {
 }
 
 #[cfg(test)]
+mod lock_row_tests;
+#[cfg(test)]
 mod tests;

@@ -48,6 +48,9 @@ setup-sheet-title = New Schematic
 # Intro line of the New PCB dialog; $project is the project name.
 setup-pcb-intro = A new board for { $project }, starting from the project's setup. Every value stays editable after it is made.
 
+# Intro line of the New PCB dialog for a project with no saved setup.
+setup-pcb-intro-no-setup = A new board for { $project }. This project has no saved setup yet, so pick a profile.
+
 # Intro line of the New Schematic dialog; $project is the project name.
 setup-sheet-intro = A new sheet for { $project }, starting from the project's setup. Create asks where to save it; every value stays editable later.
 

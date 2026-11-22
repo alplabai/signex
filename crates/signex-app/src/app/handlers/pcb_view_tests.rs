@@ -89,6 +89,18 @@ fn press(app: &mut Signex, window: iced::window::Id, keys: &str) {
     }));
 }
 
+/// #2821: Show only unrouted acts on the board of the window it came from.
+#[test]
+fn show_only_unrouted_in_an_undocked_window_is_that_windows_board() {
+    let (mut app, a, b, _main, undocked) = two_windows();
+    let _ = app.update(Message::Pcb(PcbMsg::ViewInWindow {
+        window: undocked,
+        event: PcbViewMsg::OnlyUnroutedToggled,
+    }));
+    assert!(app.pcb_layer_view(&b).only_unrouted());
+    assert!(!app.pcb_layer_view(&a).only_unrouted(), "A untouched");
+}
+
 #[test]
 fn a_layer_key_in_an_undocked_window_steps_that_windows_board() {
     let (mut app, a, b, main, undocked) = two_windows();

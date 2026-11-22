@@ -19,7 +19,10 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
     let Some(fp) = ctx.footprint_editor.as_ref() else {
         return KindView {
             crumb: Crumb::Note(t!(i18n, ids::LIBRARY_PANEL_NO_FOOTPRINT_FILE)),
-            tools: Tools::default(),
+            tools: Tools {
+                place_blocked: Some(ids::LIBRARY_PANEL_NO_FOOTPRINT_FILE),
+                ..Tools::default()
+            },
             list: frame::list_note(t!(i18n, ids::PANELS_FOOTPRINT_LIBRARY_EMPTY), 0.0, tokens),
         };
     };
@@ -41,19 +44,26 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
             "count" => fp.internal_footprints.len()
         ),
     };
-    // Edit and Delete act on the highlighted footprint only while the
-    // filter shows its row.
+    // Edit and Delete act on a footprint only while the filter shows its
+    // row. Edit also takes the row the editor shows, which draws selected
+    // (mockup row 119); Delete needs an explicit highlight.
     let needle = i18n.fold_for_search(library.panel_search.trim());
-    let selected = fp.internal_selected_idx.filter(|&idx| {
+    let in_view = |idx: &usize| {
         fp.internal_footprints
-            .get(idx)
+            .get(*idx)
             .is_some_and(|row| shows(row, &needle, i18n))
-    });
-    // Place stays off: placing a footprint from here is not wired yet.
+    };
+    let selected = fp.internal_selected_idx.filter(in_view);
+    let edited = fp
+        .internal_selected_idx
+        .or_else(|| fp.internal_footprints.iter().position(|row| row.is_active))
+        .filter(in_view);
+    let (place, place_blocked) = place_tool(fp, edited);
     let tools = Tools {
-        place: None,
+        place,
+        place_blocked,
         add: Some(panel(PanelMsg::FpLibraryAddInternal)),
-        edit: selected.map(|i| panel(PanelMsg::FpLibraryEditInternal(i))),
+        edit: edited.map(|i| panel(PanelMsg::FpLibraryEditInternal(i))),
         delete: selected.map(|i| panel(PanelMsg::FpLibraryDeleteInternal(i))),
         delete_blocked: None,
     };
@@ -61,6 +71,21 @@ pub(super) fn view<'a>(library: &'a LibraryState, ctx: &'a PanelContext) -> Kind
         crumb,
         tools,
         list: list(fp, &library.panel_search, ctx),
+    }
+}
+
+/// What Place does for the row Edit would act on: its message, or why it is
+/// off (mockup row 119).
+fn place_tool(
+    fp: &FootprintEditorPanelContext,
+    row: Option<usize>,
+) -> (Option<DockMessage>, Option<signex_i18n::MessageId>) {
+    let Some(idx) = row else {
+        return (None, Some(ids::LIBRARY_PANEL_PLACE_NO_ROW));
+    };
+    match fp.internal_footprints.get(idx).and_then(|r| r.place_block) {
+        Some(block) => (None, Some(block.reason())),
+        None => (Some(panel(PanelMsg::FpLibraryPlaceInternal(idx))), None),
     }
 }
 

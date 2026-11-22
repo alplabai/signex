@@ -150,6 +150,7 @@ impl PanelMsg {
             | Self::FpEditorSetFootprintDefaultDesignator { .. }
             | Self::FpEditorSetFootprintComponentType { .. }
             | Self::FpEditorSetFootprintHeight { .. }
+            | Self::FpEditorGeneratedFeature { .. }
             | Self::FpEditorSetSilkLineFromX { .. }
             | Self::FpEditorSetSilkLineFromY { .. }
             | Self::FpEditorSetSilkLineToX { .. }
@@ -200,6 +201,7 @@ impl PanelMsg {
             | Self::FpEditorSelectSketchEntity { .. }
             | Self::HistoryRestoreClicked { .. }
             | Self::HistoryRestoreCancelled { .. }
+            | Self::History(..)
             | Self::FpEditorRestorePadStackDefaults { .. }
             | Self::FpEditorDismissPadStackOffer { .. }
             | Self::FpEditorHoverOverConstraint { .. }
@@ -211,6 +213,9 @@ impl PanelMsg {
             | Self::FpEditorSetCutoutThrough { .. }
             | Self::FpEditorEditArrayParam { .. }
             | Self::FpEditorSetArrayNumberingScheme { .. }
+            | Self::FpEditorSetArraySweep { .. }
+            | Self::FpEditorPickNextPadTemplate { .. }
+            | Self::FpEditorPickSelectedPadTemplate { .. }
             | Self::FpEditorSetBgaSkipLetters { .. }
             | Self::FpEditorSetBgaStartRow { .. }
             | Self::FpEditorSetBgaStartCol { .. }

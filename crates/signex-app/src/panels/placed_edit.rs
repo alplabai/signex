@@ -61,6 +61,11 @@ pub enum PlacedEditMsg {
         item: SelectedItem,
         layout: NoteLayout,
     },
+    /// A keystroke in a power port's Name box: kept until Enter or until the
+    /// port is left, so a rename is one undo step (mockup row 45).
+    PortNameTyped { item: SelectedItem, text: String },
+    /// Enter in a power port's Name box.
+    PortNameSubmitted { item: SelectedItem },
 }
 
 /// What a text note's Rotation and Justify rows set.
@@ -98,6 +103,14 @@ impl NoteLayout {
 pub struct PlacedDraft {
     pub item: SelectedItem,
     pub field: PlacedField,
+    pub text: String,
+}
+
+/// A power port's Name box while typed: the sheet and port it belongs to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PortNameDraft {
+    pub sheet: PathBuf,
+    pub item: SelectedItem,
     pub text: String,
 }
 
@@ -182,9 +195,50 @@ pub struct PlacedPanel {
     pub notes_owed: Vec<NoteDraft>,
     /// The text size of the selected text note, in stored mm.
     pub note_size_mm: Option<f64>,
+    /// The selected power port's Name box, while typed.
+    pub port_name: Option<PortNameDraft>,
+    /// Typed names whose port is no longer selected: owed to their sheets,
+    /// applied by the update loop like [`Self::notes_owed`].
+    pub port_names_owed: Vec<PortNameDraft>,
 }
 
 impl PlacedPanel {
+    /// The Name box of the port `item`: what is typed, else `stored`.
+    pub fn port_name_text(&self, item: SelectedItem, stored: &str) -> String {
+        match &self.port_name {
+            Some(draft) if draft.item == item => draft.text.clone(),
+            _ => stored.to_string(),
+        }
+    }
+
+    /// Owe a typed name once its port is no longer the selected object on
+    /// `sheet`. Nothing is written here.
+    pub fn sync_port_name(&mut self, sheet: Option<&Path>, selected: Option<SelectedItem>) {
+        let is_kept = self
+            .port_name
+            .as_ref()
+            .is_none_or(|d| Some(d.item) == selected && Some(d.sheet.as_path()) == sheet);
+        if !is_kept {
+            self.port_names_owed.extend(self.port_name.take());
+        }
+    }
+
+    /// Take the typed names of the sheets `matches` picks: the owed ones and,
+    /// with `selected`, the one still in the box. Each comes back once.
+    pub fn take_typed_port_names(
+        &mut self,
+        matches: &dyn Fn(&Path) -> bool,
+        selected: bool,
+    ) -> Vec<PortNameDraft> {
+        let owed = std::mem::take(&mut self.port_names_owed);
+        let (mut taken, kept): (Vec<_>, Vec<_>) = owed.into_iter().partition(|d| matches(&d.sheet));
+        self.port_names_owed = kept;
+        if selected && self.port_name.as_ref().is_some_and(|d| matches(&d.sheet)) {
+            taken.extend(self.port_name.take());
+        }
+        taken
+    }
+
     /// The text of `field` of `item` while it is being typed, else `shown`.
     pub fn text(&self, item: SelectedItem, field: &PlacedField, shown: String) -> String {
         match &self.draft {
@@ -320,6 +374,30 @@ mod tests {
         panel.sync_note(Some((a(), note(1), "old")));
         let shown = panel.note.as_ref().map(|d| d.content.text());
         assert_eq!(shown.as_deref(), Some("old"));
+    }
+
+    fn port(n: u128) -> SelectedItem {
+        SelectedItem::new(uuid::Uuid::from_u128(n), SelectedKind::Symbol)
+    }
+
+    #[test]
+    fn a_typed_port_name_is_owed_once_its_port_is_left() {
+        let mut panel = PlacedPanel {
+            port_name: Some(PortNameDraft {
+                sheet: a().to_path_buf(),
+                item: port(1),
+                text: "+5V".into(),
+            }),
+            ..PlacedPanel::default()
+        };
+        panel.sync_port_name(Some(a()), Some(port(1)));
+        assert!(panel.port_names_owed.is_empty(), "still selected");
+        assert_eq!(panel.port_name_text(port(1), "+3V3"), "+5V");
+        panel.sync_port_name(Some(a()), Some(port(2)));
+        assert_eq!(panel.port_name, None);
+        assert_eq!(panel.port_name_text(port(1), "+3V3"), "+3V3");
+        assert_eq!(panel.take_typed_port_names(&|_| true, false).len(), 1);
+        assert!(panel.take_typed_port_names(&|_| true, true).is_empty());
     }
 
     #[test]

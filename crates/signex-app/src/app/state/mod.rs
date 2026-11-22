@@ -552,6 +552,8 @@ pub struct DocumentState {
     /// grouped entry consults this to find the sheets that must move with it.
     pub undo_groups:
         std::collections::HashMap<signex_engine::UndoGroupId, crate::app::UndoGroupSheets>,
+    /// Power rail renames waiting on their project's sheets (mockup row 45).
+    pub(crate) rail_rename: crate::app::core::rail_rename::RailRenames,
     /// An agent's edit list in progress, and the labels of its undo steps (#2178).
     pub agent_edits: AgentEdits,
     /// The last runs of `check_erc`, for a later run's baseline (#2199).
@@ -660,6 +662,9 @@ pub struct DocumentState {
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
     pub pending_restores: crate::app::document_read::InFlightReads,
+    /// The repository a History branch switch is checking out. Saves and
+    /// restores of its files are refused until the switch reports back.
+    pub branch_switch: Option<PathBuf>,
     /// #859 — renames and deletes whose disk work runs on a worker. Saves,
     /// opens, restores and second moves of an overlapping path are refused
     /// until the completion message drops the entry.

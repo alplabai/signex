@@ -23,6 +23,8 @@ mod update_matrix;
 mod view;
 
 #[cfg(test)]
+mod domain_bar_tests;
+#[cfg(test)]
 mod matrix_preview_tests;
 #[cfg(test)]
 mod matrix_tests;

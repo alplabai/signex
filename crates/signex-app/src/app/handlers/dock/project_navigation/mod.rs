@@ -177,8 +177,45 @@ impl Signex {
                 x,
                 y,
                 key,
+                add_new_only: false,
                 window: self.interaction_state.acting_window,
             });
+    }
+
+    /// The + in the Projects title bar (mockup row 19): the Add New menu of
+    /// the active project at the pointer, or New Project with none open.
+    pub(crate) fn open_project_add_new_menu(&mut self) -> Task<Message> {
+        let Some(key) = self.project_add_new_target() else {
+            return self.update(Message::Menu(crate::menu_bar::MenuMessage::NewProject));
+        };
+        let (x, y) = self.interaction_state.last_mouse_pos;
+        self.close_all_context_menus();
+        self.interaction_state.project_tree_context_menu =
+            Some(crate::app::ProjectTreeContextMenuState {
+                x,
+                y,
+                key: Some(key),
+                add_new_only: true,
+                window: self.interaction_state.acting_window,
+            });
+        Task::none()
+    }
+
+    /// The root row of the project the + adds to: the active project, else
+    /// the first one the acting window's tree lists.
+    fn project_add_new_target(&self) -> Option<signex_widgets::tree_view::TreeKey> {
+        use signex_widgets::tree_view::key_of;
+        let document = &self.document_state;
+        let tree = self
+            .interaction_state
+            .acting_window
+            .map_or(&document.panel_ctx, |w| self.panel_ctx_for(w))
+            .project_tree
+            .as_slice();
+        let active = document
+            .active_project
+            .and_then(|id| document.projects.iter().position(|p| p.id == id));
+        key_of(tree, &[active.unwrap_or(0)]).or_else(|| key_of(tree, &[0]))
     }
 
     pub(crate) fn handle_project_tree_action(
@@ -305,6 +342,11 @@ impl Signex {
             ProjectTreeAction::OpenProjectOptions(_) => {
                 if let Some(&project_idx) = tree_path.first() {
                     self.open_project_tab(project_idx);
+                }
+            }
+            ProjectTreeAction::OpenVariantManager(_) => {
+                if let Some(&project_idx) = tree_path.first() {
+                    return self.open_variant_manager(project_idx);
                 }
             }
             ProjectTreeAction::AddExistingToProject(_) => {

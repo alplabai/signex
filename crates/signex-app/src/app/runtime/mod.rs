@@ -10,6 +10,7 @@ mod footprint_card;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod history_repo;
 mod label_class_pick;
 pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;
@@ -280,7 +281,8 @@ impl Signex {
             .as_ref()
             .map(|c| (c.symbol, c.pin.clone()));
         self.sync_focused_pin(clicked_pin.clone());
-        self.sync_pin_focus_sections(clicked_pin.is_some());
+        let folds = self.pin_focus_folds(clicked_pin.as_ref().map(|(symbol, _)| *symbol));
+        self.sync_pin_focus_sections(folds);
         self.sync_placed_panel();
         self.refresh_directive_panel();
         self.sync_sheet_symbol_repeat_view();

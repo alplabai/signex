@@ -261,6 +261,19 @@ the board's project on entry and after every edit; Properties shows it in a
 **Every outline check warns only; Bake still applies the sketch**
 (`DECISIONS.md`, Caner 2026-11-20, decision 3).
 
+A failing inside corner is ringed on the canvas with a callout such as
+`R 0.00 < R 1.00`, and stays visible over the bake preview. **Add fillets**
+under the checks rounds each sharp corner between two lines to the router's
+radius, as one undo step (mockup row 179d). Each arc has a construction
+radius to each tangent point, held Perpendicular to its line, and a radius
+dimension, so it stays tangent through later dimension edits and adds no
+degree of freedom over the corner it replaces. A corner that is already an arc,
+whose lines are too short for the radius, or that something depends on is
+left alone and said in Messages. A corner is depended on when a constraint,
+pattern, pad or other entity names its Point, or when an equal-length or
+midpoint constraint measures one of its lines; a constraint on a line's
+direction still holds after the trim and does not stop the fillet.
+
 ## Close gap {#close-gap}
 
 An open profile whose two nearest open ends are at most **0.05 mm** apart
@@ -273,7 +286,9 @@ is wider than the 0.05 mm heal tolerance` and offers no button. Close gap
 joins the two end points into one (every edge, constraint and pattern that
 named the removed end names the kept one; a fixed end is kept), re-solves,
 and is one undo step. The open ends are found by one helper on both hosts,
-`signex_bake::open_ends`.
+`signex_bake::open_ends`. An end pairs only with an end on the same plane and
+of the same role, and Close gap refuses two ends of different roles, so it
+never welds a courtyard to a keepout.
 
 ## Drawing the board {#drawing-the-board}
 
@@ -380,6 +395,9 @@ overrides in `[board_sketch.sketch]` as a footprint sketch does
 expands them ([Patterned board items](#patterned-board-items)). A board
 sketch holding any of them, or a reference dimension, is saved as
 `snxpcb/1.7`, so an older build opens it read-only instead of dropping them.
+A pattern that repeats a baked target, or a numbering sweep other than row by
+row, writes `snxpcb/1.8`: a build before the expansion would lose the
+instances on its next bake (`docs/FORMAT_VERSIONS.md`).
 
 ## Patterned board items {#patterned-board-items}
 
@@ -468,6 +486,7 @@ sketch without them commits through `SetBoardSketch` as before.
 
 The `.snxpcb` token is `snxpcb/1.7` while the board sketch carries any of
 `board_slot`, `pour`, `mechanical` or `component_anchor`
-(`SketchData::carries_board_targets`), else what it was (1.4, or 1.5 with
-layer colours), byte for byte. Still to do: the drill and route output emits a
+(`SketchData::carries_board_targets`), `snxpcb/1.8` when a pattern repeats a
+target (`SketchData::repeats_baked_target`), else what it was (1.4, or 1.5
+with layer colours), byte for byte. Still to do: the drill and route output emits a
 Slot cutout as a stadium cutout, not a routed slot.

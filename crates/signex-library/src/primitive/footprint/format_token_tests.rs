@@ -5,7 +5,7 @@
 //! name rather than dropping the links on save.
 
 use signex_sketch::SketchData;
-use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+use signex_sketch::array::{Array, ArrayId, ArrayKind, GridSweep, NumberingScheme};
 use signex_sketch::attr::PadAttr;
 use signex_sketch::constraint::{Constraint, ConstraintKind, DimTarget};
 use signex_sketch::entity::{Entity, EntityKind};
@@ -229,10 +229,128 @@ fn a_1_1_only_build_refuses_a_1_2_file_by_name() {
     assert!(message.contains("snxfpt/1.2"), "{message}");
     assert!(message.contains("newer Signex"), "{message}");
     // This build reads every token it ever wrote.
-    for token in ["snxfpt/1", "snxfpt/1.1", "snxfpt/1.2"] {
+    for token in ["snxfpt/1", "snxfpt/1.1", "snxfpt/1.2", "snxfpt/1.3"] {
         assert_eq!(
             FOOTPRINT_FILE_VERSION.read(Some(token)).as_deref(),
             Ok(token)
         );
     }
+}
+
+/// A footprint with generated features, its strokes included.
+fn generated_file() -> FootprintFile {
+    let stamp = DateTime::<Utc>::from_timestamp(1_790_000_000, 0).unwrap();
+    let mut fp = Footprint::with_identity("GENERATED", Uuid::from_u128(9), stamp);
+    fp.generated = GeneratedFeatures {
+        silk_outline: true,
+        silk_line_width_mm: 0.15,
+        pad_clearance_mm: 0.25,
+        pin_one_marker: false,
+        assembly_outline: true,
+        silk: vec![FpGraphic::drawn(
+            FpGraphicKind::Line {
+                from: [-1.0, 0.0],
+                to: [1.0, 0.0],
+            },
+            0.15,
+            false,
+        )],
+        assembly: Vec::new(),
+    };
+    FootprintFile::with_identity(fp, Uuid::from_u128(10), stamp)
+}
+
+#[test]
+fn generated_features_round_trip_as_snxfpt_1_3() {
+    let file = generated_file();
+    let text = file.to_toml_string().expect("serialise");
+    assert!(text.starts_with("format = \"snxfpt/1.3\"\n"), "{text}");
+    let back = FootprintFile::from_toml_str(&text).expect("1.3 reads");
+    assert_eq!(back.footprints[0].generated, file.footprints[0].generated);
+    assert_eq!(back.to_toml_string().expect("serialise"), text);
+}
+
+#[test]
+fn a_footprint_whose_features_go_back_to_default_saves_as_1_1() {
+    let mut file = generated_file();
+    file.footprints[0].generated = GeneratedFeatures::default();
+    let text = file.to_toml_string().expect("serialise");
+    assert!(text.starts_with("format = \"snxfpt/1.1\"\n"), "{text}");
+    assert!(!text.contains("generated"), "{text}");
+}
+
+#[test]
+fn a_1_2_build_refuses_generated_features_by_name() {
+    const SNXFPT_1_2_ONLY: FormatVersion = FormatVersion {
+        current: "snxfpt/1.2",
+        readable: &["snxfpt/1", "snxfpt/1.1", "snxfpt/1.2"],
+        newer_minor: NewerMinor::Refused,
+        missing: MissingToken::Refused,
+    };
+    let refused = SNXFPT_1_2_ONLY
+        .read(Some(generated_file().format_token()))
+        .expect_err("a 1.2 build refuses 1.3");
+    assert_eq!(refused.found(), Some("snxfpt/1.3"));
+}
+
+/// The fixture with its linear array numbered in `sweep` order.
+fn swept_sketch(sweep: GridSweep) -> SketchData {
+    let f = fixture();
+    let mut sketch = f.sketch;
+    if let Some(array) = sketch.arrays.iter_mut().find(|a| a.id == f.linear) {
+        array.numbering = NumberingScheme::LinearIncrement {
+            start_expr: "1".into(),
+            step_expr: "1".into(),
+            sweep,
+        };
+    }
+    sketch
+}
+
+#[test]
+fn a_numbering_sweep_round_trips_as_snxfpt_1_3() {
+    for sweep in [GridSweep::ColumnByColumn, GridSweep::DownThenUp] {
+        let sketch = swept_sketch(sweep);
+        let (text, back) = round_trip(sketch.clone());
+        assert!(text.starts_with("format = \"snxfpt/1.3\"\n"), "{text}");
+        assert_eq!(back, sketch, "the sweep survives");
+    }
+}
+
+#[test]
+fn a_row_by_row_sweep_stays_snxfpt_1_1() {
+    let file = file_of(swept_sketch(GridSweep::RowByRow));
+    assert_eq!(file.format_token(), "snxfpt/1.1");
+    let text = file.to_toml_string().expect("serialise");
+    assert!(!text.contains("sweep ="), "{text}");
+}
+
+#[test]
+fn a_footprint_whose_sweep_goes_back_saves_as_1_1() {
+    let text = file_of(swept_sketch(GridSweep::DownThenUp))
+        .to_toml_string()
+        .expect("serialise");
+    let mut file = FootprintFile::from_toml_str(&text).expect("1.3 reads");
+    if let Some(sketch) = file.footprints[0].sketch.as_mut() {
+        for array in &mut sketch.arrays {
+            array.numbering = NumberingScheme::default();
+        }
+    }
+    let saved = file.to_toml_string().expect("serialise");
+    assert!(saved.starts_with("format = \"snxfpt/1.1\"\n"), "{saved}");
+}
+
+#[test]
+fn a_1_2_build_refuses_a_numbering_sweep_by_name() {
+    const SNXFPT_1_2_ONLY: FormatVersion = FormatVersion {
+        current: "snxfpt/1.2",
+        readable: &["snxfpt/1", "snxfpt/1.1", "snxfpt/1.2"],
+        newer_minor: NewerMinor::Refused,
+        missing: MissingToken::Refused,
+    };
+    let file = file_of(swept_sketch(GridSweep::DownThenUp));
+    let refused = SNXFPT_1_2_ONLY
+        .read(Some(file.format_token()))
+        .expect_err("a 1.2 build refuses 1.3");
+    assert_eq!(refused.found(), Some("snxfpt/1.3"));
 }

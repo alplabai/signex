@@ -91,6 +91,35 @@ fn a_move_at_the_end_records_nothing() {
     assert!(!history.can_undo());
 }
 
+/// Mockup rows 31 and 33: a drop is one step, however far the row moved.
+#[test]
+fn a_dropped_row_is_one_undo_step() {
+    let mut data = project();
+    let mut history = ProjectGeneralHistory::default();
+    let dropped = apply(
+        &mut history,
+        &mut data,
+        ProjectSectionCommand::PlaceSheet {
+            filename: "a.snxsch".into(),
+            to: 2,
+        },
+    );
+    assert_eq!(dropped, Ok(true));
+    assert_eq!(data.sheet_order(), ["b.snxsch", "c.snxsch", "a.snxsch"]);
+    assert!(history.undo(&mut data));
+    assert_eq!(data.sheet_order(), ["a.snxsch", "b.snxsch", "c.snxsch"]);
+    assert!(!history.can_undo());
+    let same = apply(
+        &mut history,
+        &mut data,
+        ProjectSectionCommand::PlaceLibrary {
+            path: PathBuf::from("x.snxlib"),
+            to: 0,
+        },
+    );
+    assert_eq!(same, Ok(false), "a drop on its own place records nothing");
+}
+
 #[test]
 fn variant_edits_are_steps_and_a_refused_one_records_nothing() {
     let mut data = project();

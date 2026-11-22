@@ -9,11 +9,14 @@
 //!   (autocomplete, value and unit).
 //! - [`update`]: the table's own state transitions; the document edits
 //!   are `updates::sketch::parameters`.
-//! - [`view`]: the overlay card.
+//! - [`view`]: the overlay card, with `import_view` (Import from another
+//!   footprint) and `checks` (the live checks under the rows).
 //!
 //! The domain (where a name is used, rename, delete, per-row values) is
 //! `signex_sketch::parameter_refs`.
 
+mod checks;
+mod import_view;
 pub mod state;
 pub mod update;
 pub mod view;
@@ -55,6 +58,18 @@ pub enum SketchParametersMsg {
     DeleteCancelled,
     /// Make parameter was picked on a dimension (mockup row 188).
     ParameterFromConstraintRequested { constraint: ConstraintId },
+    /// A footprint was picked for Import from another footprint, with its
+    /// parameters as (name, expression).
+    ImportSourcePicked {
+        source: String,
+        parameters: Vec<(String, String)>,
+    },
+    /// A row of the import list was ticked or unticked.
+    ImportRowToggled { name: String },
+    /// Import answered the import list.
+    ImportConfirmed,
+    /// Cancel answered the import list.
+    ImportCancelled,
 }
 
 impl SketchParametersMsg {

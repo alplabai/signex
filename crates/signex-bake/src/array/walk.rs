@@ -13,7 +13,7 @@ use signex_sketch::array::{GridDepopulation, NumberingScheme};
 use signex_sketch::expr::eval::{EvalContext, eval};
 use signex_sketch::id::SketchEntityId;
 
-use super::numbering::{derive_pad_number, derive_pad_number_2d};
+use super::numbering::{derive_pad_number, derive_swept_pad_number};
 use crate::eval_util::strip_eq_prefix;
 
 /// One instance of an array.
@@ -193,11 +193,12 @@ impl Walk<'_> {
                 } else {
                     &mut *warnings
                 };
-                let number = derive_pad_number_2d(
+                let number = derive_swept_pad_number(
                     self.numbering,
                     i,
                     j,
                     nx,
+                    Some(ny),
                     &mut ctx,
                     number_warnings,
                     source,

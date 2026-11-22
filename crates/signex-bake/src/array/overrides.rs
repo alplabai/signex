@@ -16,7 +16,7 @@ use signex_sketch::solver::FullSolveOutput;
 use signex_sketch::solver::state::point_xy;
 
 use super::links::{Basis, Expansion, Instance};
-use super::numbering::{derive_pad_number, derive_pad_number_2d};
+use super::numbering::{derive_pad_number, derive_swept_pad_number};
 use crate::pad::bake_one_pad;
 
 /// The pad an instance bakes from: `source` with the instance's override,
@@ -47,11 +47,12 @@ fn number_at(
 ) -> String {
     let flat = usize::try_from(flat).unwrap_or(usize::MAX);
     match basis.nx {
-        Some(nx) if nx > 0 => derive_pad_number_2d(
+        Some(nx) if nx > 0 => derive_swept_pad_number(
             basis.numbering,
             flat % nx,
             flat / nx,
             nx,
+            basis.ny,
             ctx,
             warnings,
             source,

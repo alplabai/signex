@@ -218,6 +218,7 @@ fn four_layers() -> LayerStack {
             copper("BottomCopper"),
             mask(),
         ],
+        ..LayerStack::default()
     }
 }
 

@@ -229,6 +229,7 @@ fn every_popover_draws() {
                 pour_will_connect: false,
             }],
             route_key: String::new(),
+            only_unrouted: true,
         }),
         BoardPopoverModel::Drc(DrcList {
             last_run: None,

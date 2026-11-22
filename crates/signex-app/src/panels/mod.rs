@@ -10,6 +10,7 @@ use signex_widgets::tree_view::{TreeIcon, TreeMsg, TreeNode, TreeView};
 use signex_widgets::{button, raw, text};
 
 pub mod annotations;
+mod click_away;
 pub mod compiled_design;
 pub mod components_panel;
 mod element_properties;
@@ -74,10 +75,13 @@ pub use validation_state::ValidationPanels;
 mod waiver_form;
 pub use waiver_form::{UserIdentity, WaiverReason};
 mod footprint_context;
+mod footprint_outline;
+mod footprint_place_block;
 mod footprint_properties_msg;
 pub use footprint_properties_msg::FpPropertiesMsg;
 mod footprint_subform_msg;
 pub use footprint_subform_msg::{FpSubformMsg, expansion_buffer_key};
+mod field_edits;
 pub(crate) mod form_look;
 pub(crate) mod graphite;
 pub(crate) mod illustration;
@@ -153,8 +157,8 @@ pub use properties_parameters::{
 pub(super) use properties_parameters::{
     canvas_font_popup, empty_section_row, font_style_row, form_check_row, form_check_row_shortcut,
     form_choice_row, form_edit_row, form_edit_row_refusable, form_font_link_row, form_input_row,
-    form_input_row_untipped, form_label, form_pick_row, justification_grid, label_anchor,
-    net_params_add_bar, net_params_tabs, seg_btn, thin_sep,
+    form_label, form_pick_row, justification_grid, label_anchor, net_params_add_bar,
+    net_params_tabs, seg_btn, thin_sep,
 };
 use properties_parameters::{view_properties_general, view_properties_parameters};
 use symbol_editor_properties::view_symbol_editor_properties;
@@ -173,7 +177,9 @@ pub use footprint_context::{
     MountingHoleProps, NumberingSchemeKindUi, OverConstraintSummary, PadShapeParamSummary,
     PourSummary, RejectedConflictSummary, SilkKindGeometry, SketchPadAttrSummary, SnapOptionFlag,
 };
-pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, PadOutlineSummary, SketchStateSummary};
+pub use footprint_context::{PATTERN_PREVIEW_MAX_INSTANCES, SketchStateSummary};
+pub use footprint_outline::{OutlineSegment, PadOutlineSummary, segments as outline_segments};
+pub use footprint_place_block::FootprintPlaceBlock;
 pub use illustration::{HoverSubject, PanelIllustrationHover};
 pub use layer_stack::{LayerStackFacts, LayerStackMsg, StackField};
 pub use library_row::{ComponentSheet, LibraryRowDetail};
@@ -182,7 +188,7 @@ mod doc_grid;
 pub(crate) use doc_grid::typed_pitch_mm;
 pub use doc_grid::{DocGridField, DocGridMsg};
 mod typed_pick;
-pub use messages::{PanelMsg, SheetFrameEdit};
+pub use messages::{FootprintFeatureEdit, PanelMsg, SheetFrameEdit};
 pub use multi_selection::{
     MultiEditMsg, MultiField, MultiKind, SelectionForm, SelectionFormMsg, SelectionKinds,
     edit_from_text_in as multi_edit_from_text,
@@ -214,7 +220,8 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::{PcbNetsSummary, PcbPanelMode, PcbPanelMsg, PcbPanelUi};
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{
-    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel, RunNet,
+    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel, PortNameDraft,
+    RunNet,
 };
 pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
@@ -464,12 +471,22 @@ pub struct TitleAction {
 
 /// The title-bar actions of `kind`: Clear of the ERC panel (#85) while it
 /// holds results, Copy and Clear of the Messages panel (#86), Recompile of
-/// Compiled Design (mockup row 154), Refresh of Annotations (row 165) and
-/// Create Union of Unions (row 158).
+/// Compiled Design (mockup row 154), Refresh of Annotations (row 165),
+/// Create Union of Unions (row 158) and the + of Projects (row 19): Add New,
+/// or New Project with no project open.
 pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
-    use signex_i18n::{ids, t};
+    use signex_i18n::{ids, menu_ids, t};
     let tid = ctx.theme_id;
     match kind {
+        PanelKind::Projects => vec![TitleAction {
+            icon: crate::icons::icon_plus(tid),
+            tip: if ctx.project_tree.is_empty() {
+                t!(ctx.i18n, ids::PANELS_PROJECTS_NEW_PROJECT)
+            } else {
+                t!(ctx.i18n, menu_ids::CTX_TREE_ADD_NEW)
+            },
+            on_press: Some(PanelMsg::Projects(ProjectsMsg::AddNewPressed)),
+        }],
         PanelKind::Erc if ctx.erc_ran || !ctx.erc_diagnostics.is_empty() => vec![TitleAction {
             icon: crate::icons::icon_dd_delete(tid),
             tip: t!(ctx.i18n, ids::PANELS_ERC_CLEAR_TOOLTIP),
@@ -493,6 +510,11 @@ pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
             on_press: (ctx.compiled_design.panel.status
                 != compiled_design::CompiledStatus::NoProject)
                 .then(|| compiled_design::msg(crate::app::CompiledDesignMsg::CompileRequested)),
+        }],
+        PanelKind::History if ctx.history.active_path.is_some() => vec![TitleAction {
+            icon: crate::icons::icon_chrome_refresh(tid),
+            tip: t!(ctx.i18n, ids::PANELS_HISTORY_REFRESH),
+            on_press: Some(PanelMsg::History(history::HistoryPanelMsg::RefreshPressed)),
         }],
         PanelKind::Annotations if ctx.annotations.status == annotations::ListStatus::Ready => {
             vec![TitleAction {
@@ -533,7 +555,8 @@ pub fn view_panel<'a>(kind: PanelKind, ctx: &'a PanelContext) -> Element<'a, Pan
         // The log keeps its header and footer in place and scrolls its rows.
         PanelKind::CommandLog => return command_log::view(ctx),
         PanelKind::Drc => drc_results::view(ctx),
-        PanelKind::LayerStack => layer_stack::view(ctx),
+        // Opens as a document tab (`show_panel`); never docked.
+        PanelKind::LayerStack => iced::widget::Space::new().boxed(),
         // One Layers panel follows the active tab (#2359): a footprint's
         // layers on a footprint tab, else the board's (or its empty state).
         PanelKind::Layers if ctx.footprint_editor.is_some() => {

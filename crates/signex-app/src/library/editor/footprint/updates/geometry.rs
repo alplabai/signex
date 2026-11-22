@@ -307,6 +307,7 @@ fn mint_body3d(editor: &mut crate::app::FootprintDocument) {
     editor.push_history();
     editor.with_parts(|_state, primitive| {
         crate::library::editor::footprint::body3d_mint::mint_box_from_courtyard(primitive);
+        signex_bake::bake_generated(primitive);
     });
     editor.state.active_bar_menu = None;
     editor.canvas_cache.clear();
@@ -317,6 +318,7 @@ fn mint_extruded_body3d(editor: &mut crate::app::FootprintDocument) {
     editor.push_history();
     editor.with_parts(|_state, primitive| {
         crate::library::editor::footprint::body3d_mint::mint_extruded_from_fab(primitive);
+        signex_bake::bake_generated(primitive);
     });
     editor.state.active_bar_menu = None;
     editor.canvas_cache.clear();
@@ -332,5 +334,72 @@ fn footprint_sketch_is_active(fp: &signex_library::primitive::footprint::Footpri
     match fp.sketch.as_ref() {
         Some(s) => !s.entities.is_empty(),
         None => false,
+    }
+}
+
+#[cfg(test)]
+mod body_mint_tests {
+    use std::path::PathBuf;
+
+    use signex_library::primitive::footprint::{FpGraphic, FpGraphicKind};
+    use signex_library::{Footprint, FootprintFile, Polygon};
+
+    use crate::app::FootprintDocument;
+    use crate::library::editor::footprint::updates::apply_footprint_primitive_edit;
+    use crate::library::messages::FootprintEditorMsg;
+
+    /// A 4 x 2 fab body inside a 6 x 4 courtyard, assembly outline on.
+    fn editor(with_body_on_courtyard: bool) -> FootprintDocument {
+        let mut fp = Footprint::empty("t");
+        fp.fab_f.push(FpGraphic::drawn(
+            FpGraphicKind::Rectangle {
+                from: [-2.0, -1.0],
+                to: [2.0, 1.0],
+            },
+            0.1,
+            false,
+        ));
+        fp.courtyard = Polygon::new(vec![[-3.0, -2.0], [3.0, -2.0], [3.0, 2.0], [-3.0, 2.0]]);
+        if with_body_on_courtyard {
+            fp.body_3d.outline = Some(fp.courtyard.clone());
+        }
+        fp.generated.assembly_outline = true;
+        signex_bake::bake_generated(&mut fp);
+        FootprintDocument::new(PathBuf::from("t.snxfpt"), FootprintFile::from_footprint(fp))
+    }
+
+    fn assembly_max_x(editor: &FootprintDocument) -> f64 {
+        editor
+            .primitive()
+            .generated
+            .assembly
+            .iter()
+            .filter_map(|g| match g.kind {
+                FpGraphicKind::Line { from, to } => Some(from[0].max(to[0])),
+                _ => None,
+            })
+            .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+    #[test]
+    fn a_box_body_rebuilds_the_generated_outline_in_its_undo_step() {
+        let mut editor = editor(false);
+        assert_eq!(assembly_max_x(&editor), 2.0);
+
+        apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::MintBody3d);
+
+        assert_eq!(assembly_max_x(&editor), 3.0, "follows the courtyard body");
+        assert!(editor.undo());
+        assert_eq!(assembly_max_x(&editor), 2.0, "one undo step");
+    }
+
+    #[test]
+    fn an_extruded_body_rebuilds_the_generated_outline() {
+        let mut editor = editor(true);
+        assert_eq!(assembly_max_x(&editor), 3.0);
+
+        apply_footprint_primitive_edit(&mut editor, FootprintEditorMsg::MintExtrudedBody3d);
+
+        assert_eq!(assembly_max_x(&editor), 2.0, "back on the fab outline");
     }
 }

@@ -618,6 +618,14 @@ pub enum PrimitivePickerMsg {
         read: std::sync::Arc<crate::library::loose_symbols::LooseRead>,
         from_browse: bool,
     },
+    /// A row was clicked: highlight it and preview it (mockup row 131).
+    RowHighlighted(crate::library::state::PrimitiveChoice),
+    /// The highlighted row's drawing was read; `Ok(None)` for a kind with
+    /// no drawing. `generation` drops a read of an earlier highlight.
+    PreviewLoaded {
+        generation: u64,
+        result: Result<Option<std::sync::Arc<crate::library::state::PrimitiveDrawing>>, String>,
+    },
     /// A loose symbol was chosen: ask whether to copy (or link) it.
     PickLoose(crate::library::loose_symbols::LooseSymbol),
     /// "Copy into <library>" was chosen.

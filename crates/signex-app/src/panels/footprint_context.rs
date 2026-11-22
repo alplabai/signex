@@ -92,9 +92,15 @@ pub struct FootprintEditorPanelContext {
     /// Role picker offers (#2518).
     pub sketch_host: signex_types::sketch::SketchHost,
     /// v0.16.2 — `true` when the primary selected sketch entity is a
-    /// Point. Drives the "Pad role applies to Points only" hint on
-    /// the Role pick_list.
+    /// Point. A non-point gets the closed-profile Pad hint on the Role
+    /// pick_list.
     pub selected_sketch_is_point: bool,
+    /// What the last Bake wrote, until the selection changes (mockup row 190).
+    pub bake_outcome: Option<crate::library::editor::footprint::sketch_mode::BakeOutcome>,
+    /// The Roles section's rows, in a footprint sketch (mockup row 190).
+    pub profile_roles: Vec<crate::library::editor::footprint::sketch_mode::roles::ProfileRoleRow>,
+    /// How many centerlines the sketch has; they never bake.
+    pub centerline_count: usize,
     /// v0.16.3 — `true` when the Pads-mode tool is `PlacePad`. Drives
     /// visibility of the "Pad placement defaults" form on the
     /// Properties panel (designator override + size_x / size_y / side).
@@ -239,7 +245,17 @@ pub struct FootprintEditorPanelContext {
     /// How far the generated courtyard grows past the pads, in mm.
     pub courtyard_expansion_mm: f64,
     /// The editor's pads as the Footprint sections' illustration draws them.
-    pub pad_outlines: Vec<PadOutlineSummary>,
+    pub pad_outlines: Vec<super::footprint_outline::PadOutlineSummary>,
+    /// The front silkscreen's straight strokes (mockup row 124).
+    pub silk_segments: Vec<super::footprint_outline::OutlineSegment>,
+    /// The front assembly drawing's straight strokes (mockup row 124).
+    pub assembly_segments: Vec<super::footprint_outline::OutlineSegment>,
+    /// The footprint's generated feature settings (mockup row 124).
+    pub generated: signex_library::primitive::footprint::GeneratedFeatures,
+    /// The body the generated outlines follow, `[min_x, min_y, max_x, max_y]`.
+    pub body_extent_mm: Option<[f64; 4]>,
+    /// The Pin 1 marker is on and no dot could be placed (mockup row 124).
+    pub pin_one_dot_missing: bool,
     /// The sketch's solve state, as the canvas chip names it.
     pub sketch_state: SketchStateSummary,
 }
@@ -316,6 +332,8 @@ pub struct ArraySummary {
     /// the Properties panel can surface editable rows for each. `None`
     /// for Linear / Explicit numbering schemes.
     pub bga_config: Option<BgaConfigSummary>,
+    /// The sweep of a 1, 2, 3 numbering; `None` under any other scheme.
+    pub sweep: Option<signex_sketch::array::GridSweep>,
     /// Every instance with its offset and number, from the bake's own walk
     /// (`signex_bake::array::preview_array`); the pattern drawing shows it.
     pub preview: signex_bake::array::ArrayPreview,
@@ -503,6 +521,8 @@ pub struct FootprintLibInternalRow {
     /// `true` when this index matches the editor's `active_idx` —
     /// the row that the canvas / Properties panel currently shows.
     pub is_active: bool,
+    /// Why Place cannot put this footprint on a board; `None` when it can.
+    pub place_block: Option<super::FootprintPlaceBlock>,
 }
 
 /// Editor mode mirror — kept in this crate so the panel doesn't need
@@ -749,6 +769,9 @@ pub struct BoardSketchProps {
     /// The project's router tool diameter in mm (mockup row 179d), for the Fab
     /// profile group; `None` when its fab profile names none.
     pub router_tool_diameter: Option<f64>,
+    /// The radius Add fillets applies; `None` when no failing corner can
+    /// take a fillet (mockup row 179d).
+    pub fillet_radius: Option<f64>,
 }
 
 /// A mounting hole's fields as the Properties panel edits them.
@@ -759,21 +782,6 @@ pub struct MountingHoleProps {
     pub plated: bool,
     /// The net name; empty means no net.
     pub net: String,
-}
-
-/// One pad as the Footprint sections' illustration draws it.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PadOutlineSummary {
-    /// Centre in mm.
-    pub position_mm: [f64; 2],
-    /// Width and height in mm, before rotation.
-    pub size_mm: [f64; 2],
-    pub rotation_deg: f64,
-    /// The four corners turned by the rotation, in mm.
-    pub corners_mm: [[f64; 2]; 4],
-    pub shape: signex_library::PadShape,
-    /// The pad has a drill hole.
-    pub has_drill: bool,
 }
 
 /// The sketch's solve state: the tone of its pill and the catalog message

@@ -66,6 +66,7 @@ board-status-pour-will-connect = · pour will connect
 board-status-route-next = Route next
 # { $key } is the key that arms Interactive Routing.
 board-status-route-next-key = Route next ({ $key })
+board-status-show-only-unrouted = Show only unrouted
 board-status-all-routed = Every connection is routed
 
 ## DRC popover

@@ -11,7 +11,10 @@ use signex_i18n::{RenderTranslatable, Translatable, ids};
 use signex_types::pcb::Point;
 
 use super::book::ReplayInput;
-use super::run::{document_busy, document_closed, no_change, targets_gone, tool_active};
+use super::rebase;
+use super::run::{
+    document_busy, document_closed, document_name, no_change, targets_gone, tool_active,
+};
 use super::selection::Shown;
 use crate::app::command::CommandOutcome;
 use crate::app::core::command_log::RecordedTargets;
@@ -92,6 +95,20 @@ impl Signex {
         if !missing.is_empty() {
             return Some(targets_gone(document, &missing));
         }
+        if let ReplayInput::Sheet {
+            commands,
+            pre_images,
+            ..
+        } = input
+            && let Some(engine) = self.document_state.engines.get(document)
+            && rebase::is_stale(engine.document(), commands, pre_images)
+        {
+            return Some(
+                Translatable::new(ids::COMMAND_LOG_REPLAY_STATE_CHANGED)
+                    .arg("command", row.label.clone())
+                    .arg("document", document_name(document)),
+            );
+        }
         // A sheet behind the one in view needs a tab switch, which would end
         // the tool. A board edit runs by path and needs none.
         let needs_switch =
@@ -135,7 +152,18 @@ impl Signex {
     /// An input that runs on the row's sheet or board.
     fn run_document_input(&mut self, document: &Path, input: &ReplayInput) -> CommandOutcome {
         match input {
-            ReplayInput::Sheet { commands, .. } => self.run_sheet_commands(document, commands),
+            ReplayInput::Sheet {
+                commands,
+                pre_images,
+                ..
+            } => {
+                let engine = self.document_state.engines.get(document);
+                let now = engine.and_then(|e| rebase::rebased(e.document(), commands, pre_images));
+                match now {
+                    Some(commands) => self.run_sheet_commands(document, &commands),
+                    None => CommandOutcome::disabled(no_change()),
+                }
+            }
             ReplayInput::Board { commands, .. } => self.run_board_commands(document, commands),
             ReplayInput::BoardMove {
                 footprints,

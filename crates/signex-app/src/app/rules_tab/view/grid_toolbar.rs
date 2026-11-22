@@ -12,7 +12,7 @@ use signex_drc_dsl::table::RuleKind;
 use signex_drc_dsl::table::catalog::Domain;
 use signex_i18n::{Localized, ids, t};
 use signex_widgets::chips::{
-    ChipMetrics, ChipStyle, ChipTone, TabChip, TabChipStyle, chip, tab_chips,
+    ChipMetrics, ChipStyle, ChipTone, TabChip, TabChipStyle, chip, wrapping_tab_chips,
 };
 use signex_widgets::constraint_grid::GridMessage;
 use signex_widgets::{button, segmented, text, text_input};
@@ -73,7 +73,7 @@ pub(super) fn domains<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             None => tab,
         }
     });
-    let bar = tab_chips(
+    let bar = wrapping_tab_chips(
         tabs,
         frame.grid().domain(),
         style,
@@ -86,9 +86,9 @@ pub(super) fn domains<'a>(frame: &Frame<'a>) -> Element<'a, Message> {
             })
         },
     );
+    // The tabs take what the switch and Run DRC leave, and wrap in it.
     row![
-        bar,
-        Space::new().width(Length::Fill),
+        container(bar).width(Length::Fill),
         view_switch(frame),
         run_drc(frame),
     ]

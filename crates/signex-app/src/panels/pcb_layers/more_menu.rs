@@ -4,7 +4,7 @@
 //! Export... (greyed until a view can be saved to a file), View From Bottom
 //! Side and Layer Stack.... A click outside the card closes it.
 
-use iced::widget::{Column, Space, Stack, mouse_area, opaque, row};
+use iced::widget::{Column, Space, Stack, opaque, row};
 use iced::{Element, Length, Widget};
 use signex_i18n::{MessageId, ids, t};
 use signex_renderer::pcb::LayerSetId;
@@ -12,6 +12,7 @@ use signex_widgets::active_bar_dropdown::{self, DropdownEntry, DropdownItem};
 
 use super::metrics::MENU;
 use super::{LayersPanelMsg, PcbLayersPanel, SP, more_menu_top};
+use crate::panels::click_away::click_away_backdrop;
 use crate::panels::{PanelContext, PanelMsg};
 
 fn panel_msg(msg: LayersPanelMsg) -> PanelMsg {
@@ -69,8 +70,7 @@ pub(super) fn overlay<'a>(
     ctx: &'a PanelContext,
 ) -> Element<'a, PanelMsg> {
     let card = active_bar_dropdown::view(entries(panel), &ctx.tokens, Some(MENU));
-    let backdrop = mouse_area(Space::new().width(Length::Fill).height(Length::Fill))
-        .on_press(panel_msg(LayersPanelMsg::MoreMenuDismissed));
+    let backdrop = click_away_backdrop(panel_msg(LayersPanelMsg::MoreMenuDismissed));
     // The card takes every press inside it, a greyed row's too, so only a
     // press outside reaches the backdrop.
     let anchored = Column::<Element<'a, PanelMsg>>::new()
@@ -86,7 +86,7 @@ pub(super) fn overlay<'a>(
         );
     Stack::new()
         .push(body)
-        .push(backdrop.boxed())
+        .push(backdrop)
         .push(anchored.boxed())
         .boxed()
 }

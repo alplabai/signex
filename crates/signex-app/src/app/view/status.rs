@@ -50,6 +50,7 @@ impl Signex {
                 opens_grid_popover: self.status_sheet_tab(window_id).is_some(),
                 board: self.status_board(window_id),
                 no_document: self.status_shows_no_document(window_id),
+                missing_libraries: self.skipped_missing_libraries().len(),
             },
             &self.ui_state.i18n,
         );
@@ -57,14 +58,13 @@ impl Signex {
             .boxed()
     }
 
-    /// Whether `window` is on the project hint: a project is open and the
-    /// window shows no tab and no canvas content (mockup row 2).
+    /// Whether `window` shows no document: the Start screen (mockup row 1) or
+    /// the project hint (mockup row 2), with no tab and no canvas content.
     fn status_shows_no_document(&self, window: iced::window::Id) -> bool {
         let document = &self.document_state;
-        document.active_project.is_some()
-            && document
-                .tab_shown_in_window(window, &self.ui_state)
-                .is_none()
+        document
+            .tab_shown_in_window(window, &self.ui_state)
+            .is_none()
             && self.pcb_for_window(window).is_none()
             && self
                 .interaction_state
@@ -201,14 +201,29 @@ mod tests {
         Signex::status_bar_message(window, None, StatusBarRequest::GridReadoutRightClicked)
     }
 
+    /// Mockup row 1: the Start screen has no document, so its bar carries no
+    /// grid, snap, tool or zoom read-out.
+    #[test]
+    fn the_start_screen_bar_shows_no_document_read_outs() {
+        let (app, window) = app_with_window();
+        let shown = crate::layout_probe::lay_out_texts(
+            app.view_status_bar(window),
+            iced::Size::new(1200.0, 40.0),
+        );
+        assert!(shown.iter().any(|t| t.text.contains("Panels")));
+        for gone in ["Grid", "Snap", "Select", "%"] {
+            assert!(!shown.iter().any(|t| t.text.contains(gone)), "{gone}");
+        }
+    }
+
     /// Mockup row 2: a project with no document in view drops the grid, snap,
     /// tool and zoom; opening a tab brings them back.
     #[test]
     fn the_project_hint_bar_shows_no_document_state() {
         let (mut app, window) = app_with_window();
         assert!(
-            !app.status_shows_no_document(window),
-            "the Start screen keeps its bar"
+            app.status_shows_no_document(window),
+            "mockup row 1: the Start screen has no document"
         );
         app.document_state.active_project = Some(app.document_state.mint_project_id());
         assert!(app.status_shows_no_document(window));

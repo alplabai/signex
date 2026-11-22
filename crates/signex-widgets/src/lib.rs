@@ -4,6 +4,7 @@
 //! No Iced fork — composition only.
 
 pub mod active_bar;
+pub mod branch_switcher;
 pub mod chevron;
 pub mod chips;
 pub mod compact_group;

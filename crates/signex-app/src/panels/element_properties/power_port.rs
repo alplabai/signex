@@ -1,6 +1,7 @@
 //! Properties of a selected power port (mockup row 45), in the order every placed
 //! object keeps: the illustration, Location, Properties (Name, the Style
-//! tiles, the library rows, Font, Font Size with B / I / U / T), Net, Net
+//! tiles, the library rows, Font, Font Size with B / I / U / T), Net (the
+//! Name above is the net's name, so Net has no second name field), Net
 //! Parameters and State ▸ Locked. High Speed and Differential Pair are
 //! greyed and take no input while Power Net is on (decision A-m45): a power
 //! rail is neither.
@@ -9,10 +10,11 @@ use super::super::*;
 use super::font_row::font_family_row;
 use super::illustrations;
 use super::rows::{PanelStyle, info_row, rotation_degrees};
+use crate::panels::PlacedEditMsg;
 use crate::styles::{Spacing, TypeScale};
 use iced::Widget;
 use signex_i18n::{MessageId, ids, t};
-use signex_types::schematic::PowerPortStyle;
+use signex_types::schematic::{PowerPortStyle, SelectedItem, SelectedKind};
 use signex_widgets::CheckboxLabel as _;
 use signex_widgets::property_illustration::{IllustrationHover, Ink, property_illustration};
 
@@ -124,12 +126,7 @@ pub(super) fn push_power_port_sections<'a>(
             &ctx.collapsed_sections,
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
-                c = c.push(form_edit_row(
-                    t!(i18n, ids::PROPERTIES_NAME),
-                    &name,
-                    muted,
-                    move |s| PanelMsg::EditSymbolValue(id, s),
-                ));
+                c = c.push(name_row(ctx, id, &name, look));
                 c = c.push(style_grid(ctx, id, &tiles_lib, rotation, st));
                 c = super::library_rows::push_library_rows(
                     c,
@@ -163,8 +160,9 @@ pub(super) fn push_power_port_sections<'a>(
         .boxed(),
     );
 
-    // ── Net ──: the names, then the net flags.
-    let net_name = value;
+    // ── Net ──: the read-only Physical Name, then the net flags. Name above
+    // is the net's name (DECISIONS 2026-11-22, mockup row 45).
+    let physical_name = value;
     col = col.push(
         ctx.collapsible(
             "sel_net",
@@ -173,14 +171,8 @@ pub(super) fn push_power_port_sections<'a>(
             move || {
                 let mut c = Column::new().spacing(0).width(Length::Fill);
                 c = c.push(form_input_row(
-                    t!(i18n, ids::PROPERTIES_NET_NAME),
-                    &net_name,
-                    muted,
-                    input_bg,
-                ));
-                c = c.push(form_input_row(
                     t!(i18n, ids::PROPERTIES_PHYSICAL_NAME),
-                    &net_name,
+                    &physical_name,
                     muted,
                     input_bg,
                 ));
@@ -215,6 +207,42 @@ pub(super) fn push_power_port_sections<'a>(
 
     // ── State ──: a power port locks like any part.
     super::selected::push_state_section(col, ctx, locked, PanelMsg::ToggleSymbolLocked(id), muted)
+}
+
+/// The one Name field. It names the port's net: what is typed stays a draft
+/// until Enter or until the port is left, so a rename is one undo step. A
+/// locked port shows it read-only.
+fn name_row<'a>(
+    ctx: &'a PanelContext,
+    id: uuid::Uuid,
+    stored: &str,
+    look: super::placed_rows::RowLook,
+) -> Element<'a, PanelMsg> {
+    let label = t!(ctx.i18n, ids::PROPERTIES_NAME);
+    if ctx.placed.locked.is_some() {
+        return form_input_row(label, stored, look.muted, look.input_bg);
+    }
+    let item = SelectedItem::new(id, SelectedKind::Symbol);
+    let input = signex_widgets::text_input(
+        signex_i18n::UserText::new(String::new()),
+        ctx.placed.port_name_text(item, stored),
+    )
+    .on_input(move |text| PanelMsg::PlacedEdit(PlacedEditMsg::PortNameTyped { item, text }))
+    .on_submit(PanelMsg::PlacedEdit(PlacedEditMsg::PortNameSubmitted {
+        item,
+    }))
+    .size(TS.body)
+    .padding(SP.s)
+    .style(crate::panels::form_look::text_input_style)
+    .width(Length::FillPortion(PROPERTY_CONTROL_PORTION));
+    container(
+        row![property_label(label, look.muted), input]
+            .spacing(SP.m)
+            .align_y(iced::Alignment::Center),
+    )
+    .padding([2, PROPERTY_ROW_PAD_X])
+    .width(Length::Fill)
+    .boxed()
 }
 
 /// Power Net and High Speed side by side, then Differential Pair. While

@@ -445,7 +445,7 @@ impl Signex {
         let session = self.own_board_tool()?;
         let preview = self.board_tool_preview()?;
         let line = self.route_ratsnest_line(session, &preview);
-        let snapshot = self.pcb_snapshot_for(&session.path, &preview);
+        let snapshot = self.pcb_ghost_snapshot_for(&session.path, &preview);
         Some(match line {
             Some(line) => snapshot.with_ratsnest(&[line], &Default::default()),
             None => snapshot,

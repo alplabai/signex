@@ -25,6 +25,7 @@ fn the_project_row_offers_update_pcb_for_that_project() {
         x: 0.0,
         y: 0.0,
         key: Some(key.clone()),
+        add_new_only: false,
         window: None,
     };
     let rows = app.project_tree_entries(&ctx).expect("the menu has rows");

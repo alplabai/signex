@@ -6,6 +6,7 @@
 //! - [`book`]: the recorded input of each row.
 //! - [`capture`]: recording a finished edit.
 //! - [`run`]: Replay on selection targets; [`edits`]: on recorded edits.
+//! - [`rebase`]: a recorded whole object on the sheet as it is now.
 //! - [`editors`]: the footprint and symbol editors.
 //! - [`editor_panel`]: their Properties panel edits and pad drags.
 //! - [`selection`]: holding and putting back the person's selection.
@@ -15,6 +16,7 @@ mod capture;
 mod editor_panel;
 mod editors;
 mod edits;
+mod rebase;
 mod run;
 mod scope;
 mod selection;

@@ -257,6 +257,8 @@ pub(crate) fn draw_pixels<M>(
         &layout::Limits::new(Size::ZERO, window),
     );
     let size = tree.size;
+    // As the compositor does before every frame.
+    iced::advanced::Renderer::reset(&mut renderer, Rectangle::with_size(window));
     element.draw(
         &tree,
         &mut renderer,

@@ -70,6 +70,8 @@ mod board_free_tests;
 #[cfg(test)]
 mod board_options_tests;
 #[cfg(test)]
+mod board_pattern_token_tests;
+#[cfg(test)]
 mod board_sketch_targets_tests;
 #[cfg(test)]
 mod board_sketch_tests;
@@ -155,8 +157,8 @@ pub use pcb_rows::{
 };
 pub use pcb_token::{
     SNXPCB_FORMAT_BOARD_SKETCH_TARGETS, SNXPCB_FORMAT_LAYER_COLORS, SNXPCB_FORMAT_ROOMS,
-    SNXPCB_FORMAT_V1, SNXPCB_VERSION, snxpcb_opens_read_only, snxpcb_read, snxpcb_refuse_save,
-    snxpcb_token,
+    SNXPCB_FORMAT_V1, SNXPCB_FORMAT_V1_8, SNXPCB_VERSION, snxpcb_opens_read_only, snxpcb_read,
+    snxpcb_refuse_save, snxpcb_token,
 };
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use sch_token::{
@@ -991,7 +993,7 @@ impl SnxPcb {
         let mut stack = None;
         let (layers, setup, stackup_unknown) = match raw.stackup {
             Some(s) => {
-                let read = stackup::read(s)?;
+                let read = stackup::read(s, raw.thickness)?;
                 stackup_display_names = read.display_names;
                 stack = read.stackup;
                 (read.layers, read.setup, read.unknown)

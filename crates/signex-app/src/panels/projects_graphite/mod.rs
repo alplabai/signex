@@ -57,6 +57,8 @@ pub enum ProjectsMsg {
     GroupToggled(String),
     /// The gear on a project card was pressed: that project's options.
     OptionsPressed(crate::app::ProjectId),
+    /// The + in the panel's title bar was pressed (mockup row 19).
+    AddNewPressed,
     /// New Project… on the empty panel was pressed.
     NewProjectPressed,
     /// Open… on the empty panel was pressed.
@@ -81,6 +83,7 @@ impl ProjectsView {
             }
             ProjectsMsg::RecentToggled => self.recent_collapsed = !self.recent_collapsed,
             ProjectsMsg::OptionsPressed(_)
+            | ProjectsMsg::AddNewPressed
             | ProjectsMsg::NewProjectPressed
             | ProjectsMsg::OpenPressed
             | ProjectsMsg::RecentProjectPressed(_) => {}

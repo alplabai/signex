@@ -88,3 +88,5 @@ back-annotate-show-row = Show
 # The caption of a flagged rename. $sheet is the sheet file of the part that has the designator.
 back-annotate-duplicate-on-sheet = { $designator } already exists on { $sheet }
 back-annotate-duplicate-exists = { $designator } already exists on another part
+# The caption of an unticked rename when another unticked rename wants the same designator.
+back-annotate-duplicate-contested = Another rename also changes a part to { $designator }; tick one of them

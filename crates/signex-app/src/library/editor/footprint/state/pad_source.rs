@@ -149,6 +149,22 @@ mod tests {
         );
     }
 
+    /// Mockup row 192: Edit in Sketch on a pattern instance focuses the
+    /// source, outlines that instance, and Back to pad returns to it.
+    #[test]
+    fn edit_in_sketch_on_an_instance_focuses_its_source_and_outlines_it() {
+        let (mut state, sketch, source) = patterned();
+        state.pads[0].position_mm = (5.0, 0.0);
+        state.pads[0].sketch_entity_id = None;
+        state.edit_pad_in_sketch(0, Some(&sketch));
+        let focus = state.live_pad_link().expect("the focus holds");
+        assert_eq!((focus.entity, focus.is_instance), (source, true));
+        assert_eq!(state.selected_sketch, Some(source));
+        assert!(state.pad_link_instance_outline().is_some());
+        state.return_to_pad(source);
+        assert_eq!(state.selected_pad, Some(0));
+    }
+
     #[test]
     fn a_pad_with_no_sketch_geometry_has_no_source() {
         let (mut state, sketch, _) = patterned();

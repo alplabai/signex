@@ -402,6 +402,7 @@ impl Signex {
                 preferences_draft_selected_segment: selected_segment,
                 i18n: std::sync::Arc::clone(&i18n),
                 project_preview: Default::default(),
+                project_git: Default::default(),
                 // Mockup row 144a — seeded again (with its preview and the system
                 // language name) each time Preferences opens.
                 preferences_pages: Box::new(crate::preferences::PreferencesPagesState::new(
@@ -629,6 +630,7 @@ impl Signex {
                 pcb_revisions: std::collections::HashMap::new(),
                 parked_pcb_boards: std::collections::HashMap::new(),
                 undo_groups: std::collections::HashMap::new(),
+                rail_rename: Default::default(),
                 agent_edits: Default::default(),
                 check_runs: Default::default(),
                 reuse_blocks: Default::default(),
@@ -787,6 +789,7 @@ impl Signex {
                 paused_git_projects: std::collections::HashSet::new(),
                 pending_opens: Default::default(),
                 pending_restores: Default::default(),
+                branch_switch: None,
                 pending_path_ops: crate::app::path_ops::PendingPathOps::default(),
                 new_project_writes: std::collections::HashSet::new(),
                 dir_case: Default::default(),

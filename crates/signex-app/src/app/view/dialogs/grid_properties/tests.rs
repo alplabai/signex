@@ -52,6 +52,14 @@ fn notes(prims: &[Primitive]) -> usize {
         .count()
 }
 
+/// Mockup row 142: the preview's corner control is the expand-arrows glyph,
+/// and the shrink glyph once expanded.
+#[test]
+fn the_preview_control_draws_expand_arrows() {
+    assert_eq!(super::expand_glyph(false), crate::preferences::GLYPH_EXPAND);
+    assert_eq!(super::expand_glyph(true), crate::preferences::GLYPH_SHRINK);
+}
+
 /// Mockup row 142: the dialog is "Grid Properties" with the "Cartesian · mm" note.
 #[test]
 fn the_title_is_grid_properties_with_the_cartesian_note() {

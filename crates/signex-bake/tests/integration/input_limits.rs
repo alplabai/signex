@@ -226,6 +226,7 @@ fn an_array_source_pad_is_baked_once_with_the_arrays_numbering() {
         numbering: NumberingScheme::LinearIncrement {
             start_expr: "1".into(),
             step_expr: "1".into(),
+            sweep: Default::default(),
         },
     });
     let solve = solved(&data);

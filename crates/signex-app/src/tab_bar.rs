@@ -124,14 +124,23 @@ pub struct TabMarks<'p> {
 }
 
 /// The tabs `tabs` shows in a window whose `visible_paths` they are in, in
-/// strip order.
+/// strip order. A Layer Stack tab shares its board's path but lives on the
+/// main strip only, wherever its board is.
 pub(crate) fn visible_tab_indices(
     tabs: &[TabInfo],
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
+    is_main: bool,
 ) -> Vec<usize> {
     tabs.iter()
         .enumerate()
-        .filter_map(|(i, tab)| visible_paths.contains(&tab.path).then_some(i))
+        .filter_map(|(i, tab)| {
+            let shown = if tab.kind.is_layer_stack() {
+                is_main
+            } else {
+                visible_paths.contains(&tab.path)
+            };
+            shown.then_some(i)
+        })
         .collect()
 }
 
@@ -140,6 +149,7 @@ pub fn view<'a>(
     active: usize,
     dragging: Option<usize>,
     visible_paths: &std::collections::HashSet<std::path::PathBuf>,
+    is_main: bool,
     marks: &TabMarks<'_>,
     tokens: &ThemeTokens,
 ) -> Element<'a, TabMessage> {
@@ -160,7 +170,7 @@ pub fn view<'a>(
     // the strip; the rest go behind the "+N" button (mockup row 5). The last shown
     // tab draws the right edge; the others share their L/R divider as a
     // single 1 px line.
-    let visible_indices = visible_tab_indices(tabs, visible_paths);
+    let visible_indices = visible_tab_indices(tabs, visible_paths, is_main);
     let fit = overflow::strip_split(tabs, &visible_indices, active, marks);
     let last_idx = fit.shown.last().copied();
 
@@ -364,7 +374,7 @@ mod tests {
             strip_width: 1200.0,
             overflow_open: false,
         };
-        let strip = super::view(&[], 0, None, &none, &marks, &tokens);
+        let strip = super::view(&[], 0, None, &none, true, &marks, &tokens);
         assert_eq!(strip.size().height, fixed);
     }
 

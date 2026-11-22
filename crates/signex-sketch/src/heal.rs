@@ -11,7 +11,7 @@
 use thiserror::Error;
 
 use crate::constraint::ConstraintKind;
-use crate::entity::EntityKind;
+use crate::entity::{Entity, EntityKind};
 use crate::id::{ConstraintId, SketchEntityId};
 use crate::sketch::SketchData;
 use crate::solver::FullSolveOutput;
@@ -42,6 +42,10 @@ pub enum CloseGapError {
     /// Both ends belong to one edge: joining them would collapse it.
     #[error("the two ends are one edge's ends; joining them would collapse it")]
     Collapses,
+    /// The ends belong to profiles of different roles or planes: joining
+    /// them would merge two objects into one loop.
+    #[error("the two ends belong to different profiles")]
+    DifferentProfiles,
 }
 
 /// What Close gap changed.
@@ -100,6 +104,11 @@ pub fn close_gap(
     if end_a == end_b || joins_one_edge(sketch, end_a, end_b) {
         return Err(CloseGapError::Collapses);
     }
+    let conflicting =
+        edges_at(sketch, end_a).any(|a| edges_at(sketch, end_b).any(|b| !edges_can_join(a, b)));
+    if conflicting {
+        return Err(CloseGapError::DifferentProfiles);
+    }
     let is_fixed = |id| {
         sketch
             .constraints
@@ -128,6 +137,44 @@ pub fn close_gap(
         kept,
         removed,
         dropped_constraints,
+    })
+}
+
+/// The closed-profile roles of `entity`, one slot per role: the board
+/// outline, a cutout, a keepout, a pour, a courtyard, and a mask opening,
+/// mask exclusion or paste aperture.
+pub fn profile_roles(entity: &Entity) -> [bool; 8] {
+    [
+        entity.board_outline,
+        entity.board_cutout.is_some(),
+        entity.keepout.is_some(),
+        entity.pour.is_some(),
+        entity.courtyard.is_some(),
+        entity.mask_opening.is_some(),
+        entity.mask_exclude.is_some(),
+        entity.paste_aperture.is_some(),
+    ]
+}
+
+/// Whether an open end of edge `a` may pair with one of edge `b`: they are
+/// on one plane and, when both carry a role, share one.
+pub fn edges_can_join(a: &Entity, b: &Entity) -> bool {
+    let (roles_a, roles_b) = (profile_roles(a), profile_roles(b));
+    let both_tagged = roles_a.contains(&true) && roles_b.contains(&true);
+    let share_a_role = roles_a.iter().zip(roles_b).any(|(x, y)| *x && y);
+    a.plane == b.plane && (!both_tagged || share_a_role)
+}
+
+/// The baking lines and arcs that end on `point`.
+fn edges_at(sketch: &SketchData, point: SketchEntityId) -> impl Iterator<Item = &Entity> {
+    sketch.entities.iter().filter(move |e| {
+        !e.bake_skipped()
+            && match e.kind {
+                EntityKind::Line { start, end } | EntityKind::Arc { start, end, .. } => {
+                    start == point || end == point
+                }
+                EntityKind::Point { .. } | EntityKind::Circle { .. } => false,
+            }
     })
 }
 
@@ -212,8 +259,8 @@ fn repoint_constraint(kind: &mut ConstraintKind, swap: &impl Fn(&mut SketchEntit
 mod tests {
     use super::*;
     use crate::Solver;
+    use crate::attr::{CourtyardAttr, KeepoutAttr, KeepoutKinds};
     use crate::constraint::Constraint;
-    use crate::entity::Entity;
     use crate::parameter::resolve;
     use crate::plane::{Plane, PlaneId, PlaneKind};
 
@@ -381,6 +428,52 @@ mod tests {
             close_gap(&mut sketch, &solve, p[1], p[2]),
             Err(CloseGapError::Collapses)
         );
+    }
+
+    #[test]
+    fn ends_of_two_different_roles_are_never_joined() {
+        let Open {
+            mut sketch,
+            p,
+            lines,
+        } = open(0.01);
+        for entity in &mut sketch.entities {
+            if entity.id == lines[0] {
+                entity.courtyard = Some(CourtyardAttr {});
+            } else if entity.id == lines[1] {
+                entity.keepout = Some(KeepoutAttr {
+                    layer: signex_types::pcb_layer::PcbLayer::Copper(
+                        signex_types::pcb_layer::CopperLayer::Top,
+                    ),
+                    kinds: KeepoutKinds::ALL_COPPER,
+                });
+            }
+        }
+        let before = sketch.clone();
+        let solve = solved(&sketch);
+
+        assert_eq!(
+            close_gap(&mut sketch, &solve, p[1], p[2]),
+            Err(CloseGapError::DifferentProfiles)
+        );
+        assert_eq!(sketch, before, "a refusal changes nothing");
+    }
+
+    #[test]
+    fn ends_of_one_role_still_join() {
+        let Open {
+            mut sketch,
+            p,
+            lines,
+        } = open(0.01);
+        for entity in &mut sketch.entities {
+            if lines.contains(&entity.id) {
+                entity.courtyard = Some(CourtyardAttr {});
+            }
+        }
+        let solve = solved(&sketch);
+
+        assert!(close_gap(&mut sketch, &solve, p[1], p[2]).is_ok());
     }
 
     #[test]

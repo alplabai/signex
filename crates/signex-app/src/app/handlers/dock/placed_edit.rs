@@ -11,7 +11,8 @@ use std::path::Path;
 
 use super::super::super::*;
 use crate::app::command::PlacedRefusal;
-use crate::panels::{NoteDraft, PlacedDraft, PlacedEditMsg, PlacedField};
+use crate::panels::{NoteDraft, PlacedDraft, PlacedEditMsg, PlacedField, PortNameDraft};
+use signex_i18n::{ids, t};
 use signex_types::schematic::{Point, SelectedItem, SelectedKind};
 
 /// How much of a note's text a "not applied" message quotes.
@@ -72,49 +73,141 @@ impl Signex {
                     say_refusal(&refusal);
                 }
             }
+            PlacedEditMsg::PortNameTyped { item, text } => {
+                if let Some(sheet) = self.document_state.active_path.clone() {
+                    self.document_state.panel_ctx.placed.port_name = Some(PortNameDraft {
+                        sheet,
+                        item: *item,
+                        text: text.clone(),
+                    });
+                }
+            }
+            PlacedEditMsg::PortNameSubmitted { item } => {
+                let placed = &mut self.document_state.panel_ctx.placed;
+                if placed.port_name.as_ref().is_some_and(|d| d.item == *item)
+                    && let Some(draft) = placed.port_name.take()
+                {
+                    self.apply_port_name_draft(draft);
+                }
+            }
         }
         true
     }
 
-    /// Apply the typed note boxes whose note is no longer selected, each to
-    /// its own sheet. Run by the update loop after every message, never by a
-    /// refresh, so a refresh writes no document.
+    /// Apply the typed note and power port boxes whose object is no longer
+    /// selected, each to its own sheet. Run by the update loop after every
+    /// message, never by a refresh, so a refresh writes no document.
     pub(crate) fn settle_owed_note_drafts(&mut self) {
         let owed = self.take_note_drafts(&|_| true, false);
         for draft in owed {
             self.apply_note_draft(draft);
         }
+        for draft in self.take_port_name_drafts(&|_| true, false) {
+            self.apply_port_name_draft(draft);
+        }
     }
 
-    /// Apply every typed note box of the sheets `matches` picks, the selected
-    /// note's included: before a save, a close, an export or a quit, so what
-    /// the box shows is what is written.
+    /// Apply every typed note and power port box of the sheets `matches`
+    /// picks, the selected object's included: before a save, a close, an
+    /// export or a quit, so what the box shows is what is written.
     pub(crate) fn commit_note_drafts_where(&mut self, matches: &dyn Fn(&Path) -> bool) {
         for draft in self.take_note_drafts(matches, true) {
             self.apply_note_draft(draft);
         }
+        for draft in self.take_port_name_drafts(matches, true) {
+            let name = draft.text.clone();
+            let waiting = self.document_state.rail_rename.queue.len();
+            self.apply_port_name_draft(draft);
+            // A project's rail needs its closed sheets read first, which a
+            // save cannot wait for here.
+            if self.document_state.rail_rename.queue.len() > waiting {
+                let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+                crate::diagnostics::log_warning(
+                    t!(i18n, ids::PROPERTIES_RAIL_RENAME_WAITS, "name" => name.as_str())
+                        .into_string(),
+                );
+            }
+        }
     }
 
-    /// Drop the typed note boxes of the sheets `matches` picks, unapplied:
-    /// a discard throws their text away with the sheet's other edits.
+    /// Drop the typed note and power port boxes of the sheets `matches`
+    /// picks, unapplied: a discard throws them away with the sheet's other
+    /// edits, along with a rail rename still waiting on its reads.
     pub(crate) fn drop_note_drafts_where(&mut self, matches: &dyn Fn(&Path) -> bool) {
         drop(self.take_note_drafts(matches, true));
+        drop(self.take_port_name_drafts(matches, true));
+        self.document_state.rail_rename.drop_where(matches);
     }
 
-    /// The sheets with a typed note box not applied yet, the owed and the
-    /// selected ones, in the main window's Properties and every undocked
-    /// window's: a scope (a project, an export) adds them to the sheets it
-    /// commits.
+    /// The sheets with a typed note or power port box not applied yet, the
+    /// owed and the selected ones, in the main window's Properties and every
+    /// undocked window's: a scope (a project, an export) adds them to the
+    /// sheets it commits.
     pub(crate) fn typed_note_sheets(&self) -> Vec<std::path::PathBuf> {
         let docs = &self.document_state;
         std::iter::once(&docs.panel_ctx.placed)
             .chain(docs.window_panel_ctx.values().map(|ctx| &ctx.placed))
             .flat_map(|placed| {
                 let selected = placed.note.iter().filter(|d| d.edited);
-                placed.notes_owed.iter().chain(selected)
+                let notes = placed.notes_owed.iter().chain(selected);
+                let names = placed.port_names_owed.iter().chain(placed.port_name.iter());
+                notes
+                    .map(|draft| draft.sheet.clone())
+                    .chain(names.map(|draft| draft.sheet.clone()))
             })
-            .map(|draft| draft.sheet.clone())
             .collect()
+    }
+
+    /// The typed power port names of the sheets `matches` picks, from the
+    /// main window's Properties and every undocked window's.
+    fn take_port_name_drafts(
+        &mut self,
+        matches: &dyn Fn(&Path) -> bool,
+        selected: bool,
+    ) -> Vec<PortNameDraft> {
+        let docs = &mut self.document_state;
+        std::iter::once(&mut docs.panel_ctx.placed)
+            .chain(docs.window_panel_ctx.values_mut().map(|c| &mut c.placed))
+            .flat_map(|placed| placed.take_typed_port_names(matches, selected))
+            .collect()
+    }
+
+    /// Rename a power port through the engine. A named port takes its whole
+    /// rail as one undo step (`app/rail_rename`); a power flag or a port with
+    /// no name yet is on no rail and changes alone. A port that is gone keeps
+    /// nothing, so the typed name is quoted in Messages instead of being
+    /// dropped silently.
+    fn apply_port_name_draft(&mut self, draft: PortNameDraft) {
+        let PortNameDraft { sheet, item, text } = draft;
+        if let Some(rename) = self.rail_rename_on(&sheet, item.uuid, &text) {
+            self.rename_rail(rename);
+            return;
+        }
+        let on_sheet = self
+            .document_state
+            .engines
+            .get(&sheet)
+            .is_some_and(|e| e.document().symbols.iter().any(|s| s.uuid == item.uuid));
+        if !on_sheet {
+            let i18n = std::sync::Arc::clone(&self.ui_state.i18n);
+            let shown = sheet.display().to_string();
+            crate::diagnostics::log_warning(
+                t!(i18n, ids::PROPERTIES_PORT_NAME_NOT_APPLIED,
+                    "sheet" => shown.as_str(),
+                    "name" => text.as_str())
+                .into_string(),
+            );
+            return;
+        }
+        let command = signex_engine::Command::UpdateText {
+            target: signex_engine::TextTarget::SymbolValue(item.uuid),
+            value: text,
+        };
+        if self.document_state.active_path.as_deref() == Some(sheet.as_path()) {
+            self.apply_engine_command(command, true, true);
+        } else {
+            self.apply_command_to_sheet(&sheet, command);
+        }
     }
 
     /// The owed note boxes (and with `selected` the typed selected boxes) of

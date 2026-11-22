@@ -305,17 +305,17 @@ pub(super) fn build_footprint_editor_panel_ctx(
     let selected_sketch_entity_id = editor.state.selected_sketch;
     let (selected_sketch_role, selected_sketch_is_point) = match selected_sketch_entity_id {
         Some(id) => {
-            use crate::library::editor::footprint::sketch_dispatch::current_role_of;
+            use crate::library::editor::footprint::sketch_mode::roles::shown_role;
             use crate::library::messages::RoleTag;
             use signex_sketch::entity::EntityKind;
             editor
                 .primitive()
                 .sketch
                 .as_ref()
-                .and_then(|s| s.entities.iter().find(|e| e.id == id))
-                .map(|e| {
+                .and_then(|s| Some((s, s.entities.iter().find(|e| e.id == id)?)))
+                .map(|(s, e)| {
                     (
-                        current_role_of(e).on_host(editor.state.sketch_host()),
+                        shown_role(s, e, editor.state.sketch_host()),
                         matches!(e.kind, EntityKind::Point { .. }),
                     )
                 })
@@ -323,6 +323,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
         }
         None => (crate::library::messages::RoleTag::Unassigned, false),
     };
+    let (profile_roles, centerline_count) = super::board_sketch_ctx::sketch_role_rows(editor);
 
     // v0.16.3 — pad-placement defaults exposed for the Properties
     // panel form. Form is visible whenever Pads mode + PlacePad tool
@@ -426,6 +427,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             name: fp.name.clone(),
             pad_count: fp.pads.len(),
             is_active: i == editor.active_idx,
+            place_block: app.footprint_place_block(i),
         })
         .collect();
     let internal_selected_idx = editor.panel_selected_idx;
@@ -571,6 +573,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
             numbering,
             repicking_polar_center,
             bga_config,
+            sweep: match &array.numbering {
+                NumberingScheme::LinearIncrement { sweep, .. } => Some(*sweep),
+                _ => None,
+            },
             preview,
             source_number: source
                 .and_then(|e| e.pad.as_ref())
@@ -657,6 +663,10 @@ pub(super) fn build_footprint_editor_panel_ctx(
         selected_sketch_role,
         sketch_host: editor.state.sketch_host(),
         selected_sketch_is_point,
+        bake_outcome: crate::library::editor::footprint::sketch_mode::exit::shown_outcome(editor)
+            .cloned(),
+        profile_roles,
+        centerline_count,
         placement_active,
         placement_paused,
         next_pad_designator_override,
@@ -731,8 +741,28 @@ pub(super) fn build_footprint_editor_panel_ctx(
                 corners_mm: pad.rotated_corners_mm().map(|(x, y)| [x, y]),
                 shape: pad.shape.clone(),
                 has_drill: pad.drill_diameter_mm.is_some(),
+                number: pad.number.clone(),
+                template: pad.template.clone(),
+                template_library: pad.template_library.clone(),
             })
             .collect(),
+        silk_segments: crate::panels::outline_segments(
+            &[
+                editor.primitive().silk_f.as_slice(),
+                editor.primitive().generated.silk.as_slice(),
+            ]
+            .concat(),
+        ),
+        assembly_segments: crate::panels::outline_segments(
+            &[
+                editor.primitive().fab_f.as_slice(),
+                editor.primitive().generated.assembly.as_slice(),
+            ]
+            .concat(),
+        ),
+        generated: editor.primitive().generated.clone(),
+        body_extent_mm: signex_bake::body_extent(editor.primitive()),
+        pin_one_dot_missing: signex_bake::pin_one_dot_is_missing(editor.primitive()),
         sketch_state: {
             let (tone, label) = crate::library::editor::standalone::dof_chip::dof_state(editor);
             crate::panels::SketchStateSummary { tone, label }

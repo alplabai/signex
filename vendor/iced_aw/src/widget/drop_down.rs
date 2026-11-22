@@ -382,23 +382,20 @@ where
             ),
         };
 
-        if new_position.x + size.width > self.viewport.width {
-            new_position.x -= size.width;
-        }
-
-        if new_position.x < 0.0 {
-            new_position.x = 0.0;
-        }
-
-        if new_position.y + size.height > self.viewport.height {
-            new_position.y -= size.height;
-        }
-        if new_position.y < 0.0 {
-            new_position.y = 0.0;
-        }
+        new_position = kept_in_window(new_position, size, bounds);
 
         Layout::new(size).move_to(new_position)
     }
+}
+
+/// `position` moved only as far as it takes to keep `size` inside `window`.
+/// Overlay positions are window coordinates, so the window is the limit: the
+/// underlay's clip rectangle has its own origin.
+fn kept_in_window(position: Point, size: Size, window: Size) -> Point {
+    Point::new(
+        position.x.min(window.width - size.width).max(0.0),
+        position.y.min(window.height - size.height).max(0.0),
+    )
 }
 
 impl<Message, Theme, Renderer> overlay::Overlay<Message, Theme, Renderer>
@@ -501,6 +498,29 @@ mod tests {
     }
 
     type TestDropDown<'a> = DropDown<'a, TestMessage, iced_widget::Theme, iced_widget::Renderer>;
+
+    // ============================================================================
+    // Placement Tests
+    // ============================================================================
+
+    /// Mockup row 43: a popover in a right dock stays under its field, though
+    /// its window position is past the width of the dock's clip rectangle.
+    #[test]
+    fn a_popover_that_fits_the_window_stays_where_it_was_asked() {
+        let at = Point::new(1242.0, 600.0);
+        let kept = kept_in_window(at, Size::new(184.0, 170.0), Size::new(1440.0, 900.0));
+        assert_eq!(kept, at);
+    }
+
+    #[test]
+    fn a_popover_past_the_window_edge_moves_only_back_inside() {
+        let kept = kept_in_window(
+            Point::new(1300.0, 800.0),
+            Size::new(184.0, 170.0),
+            Size::new(1440.0, 900.0),
+        );
+        assert_eq!(kept, Point::new(1256.0, 730.0));
+    }
 
     // ============================================================================
     // Construction Tests

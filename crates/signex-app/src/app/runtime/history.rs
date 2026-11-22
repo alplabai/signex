@@ -155,6 +155,7 @@ impl Signex {
             if let Some(p) = self.document_state.history.active_path.clone() {
                 self.document_state.history.dirty = history_dirty(self, &p);
             }
+            self.sync_switch_block();
             self.document_state.panel_ctx.history = self.document_state.history.clone();
             return Task::none();
         }
@@ -164,6 +165,9 @@ impl Signex {
         self.document_state.history.active_path = target.clone();
         self.document_state.history.pending_restore = None;
         self.document_state.history.entries = Vec::new();
+        self.document_state.history.repo = None;
+        self.document_state.history.visible = Default::default();
+        self.document_state.history.repo_loading = target.is_some();
 
         let Some(target) = target else {
             self.document_state.history.loading = false;
@@ -182,7 +186,8 @@ impl Signex {
         let generation = self.document_state.history.generation;
         let response_path = target.clone();
         let window = self.interaction_state.acting_window;
-        Task::perform(
+        let graph = self.load_history_repo_task(target.clone());
+        let entries = Task::perform(
             async move {
                 tokio::task::spawn_blocking(move || load_history(&target))
                     .await
@@ -196,7 +201,8 @@ impl Signex {
                     result,
                 })
             },
-        )
+        );
+        Task::batch([entries, graph])
     }
 
     /// Apply an async per-file history load, discarding results from a
@@ -297,7 +303,9 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
         // A restored `.snxprj` would replace the whole loaded project
         // (libraries, sheets, variants) under every open document; not
         // offered until the Project tab can reload it safely (#1084).
-        crate::app::TabKind::Project(_) | crate::app::TabKind::Rules(_) => None,
+        crate::app::TabKind::Project(_)
+        | crate::app::TabKind::Rules(_)
+        | crate::app::TabKind::LayerStack => None,
         _ => Some(active.path.clone()),
     }
 }
@@ -306,13 +314,7 @@ fn history_target_of(active: &crate::app::TabInfo) -> Option<std::path::PathBuf>
 /// Run from `spawn_blocking`.
 fn load_history(target: &std::path::Path) -> Result<crate::panels::history::HistoryLoad, String> {
     use crate::panels::history::HistoryLoad;
-    // A library directory is represented by its `library.toml` (mirrors
-    // `LocalGitAdapter::history`'s pathspec handling).
-    let full_path = if target.is_dir() {
-        target.join("library.toml")
-    } else {
-        target.to_path_buf()
-    };
+    let full_path = tracked_file(target);
     let Some((project_dir, rel_path)) = locate_in_repo(&full_path) else {
         return Ok(HistoryLoad::NoRepo);
     };
@@ -334,6 +336,17 @@ fn load_history(target: &std::path::Path) -> Result<crate::panels::history::Hist
         .map_err(|e| e.to_string())
 }
 
+/// The file whose history `target` shows: a library directory is
+/// represented by its `library.toml` (mirrors `LocalGitAdapter::history`'s
+/// pathspec handling). Blocking.
+pub(super) fn tracked_file(target: &std::path::Path) -> std::path::PathBuf {
+    if target.is_dir() {
+        target.join("library.toml")
+    } else {
+        target.to_path_buf()
+    }
+}
+
 /// The git working tree `full_path` participates in, as
 /// `(project_dir, rel_path)` for `signex_library::project_file_history`.
 ///
@@ -342,7 +355,9 @@ fn load_history(target: &std::path::Path) -> Result<crate::panels::history::Hist
 /// `.snxfpt` etc.) the `.git/` typically sits at the `.snxlib` directory;
 /// for project files it sits at the project root. The walk is capped at
 /// 12 levels so a misrooted path can't climb forever. Blocking.
-fn locate_in_repo(full_path: &std::path::Path) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+pub(super) fn locate_in_repo(
+    full_path: &std::path::Path,
+) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
     let mut current = full_path.parent();
     for _ in 0..12 {
         let dir = current?;

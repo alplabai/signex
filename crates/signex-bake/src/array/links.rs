@@ -134,6 +134,9 @@ impl Place {
 pub(crate) struct Basis<'a> {
     pub numbering: &'a NumberingScheme,
     pub nx: Option<usize>,
+    /// The rows of a plain grid, for its sweep; `None` for a pattern of a
+    /// pattern, which numbers row by row.
+    pub ny: Option<usize>,
 }
 
 /// One instance of a pattern.
@@ -309,6 +312,9 @@ impl<'a, 'w> Walk<'a, 'w> {
                 basis: Basis {
                     numbering: &array.numbering,
                     nx: walked.nx,
+                    ny: walked
+                        .nx
+                        .and_then(|nx| usize::try_from(walked.count).ok()?.checked_div(nx)),
                 },
                 instances,
             }));
@@ -345,6 +351,7 @@ impl<'a, 'w> Walk<'a, 'w> {
             basis: Basis {
                 numbering: &array.numbering,
                 nx,
+                ny: None,
             },
             instances,
         }))

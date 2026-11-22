@@ -78,7 +78,8 @@ impl Signex {
     }
 
     /// The editor of a dialog's `target`, whatever tab main shows by then.
-    /// `None` once it is closed or its board has left sketch mode.
+    /// `None` once it is closed, its board has left sketch mode, or the
+    /// Import DXF card holds that sketch.
     pub(crate) fn footprint_editor_at_mut(
         &mut self,
         target: &std::path::Path,
@@ -86,6 +87,9 @@ impl Signex {
         let sketch = &self.interaction_state.board_sketch;
         if sketch.as_ref().is_some_and(|s| s.board_path == target) {
             let session = self.interaction_state.board_sketch.as_mut()?;
+            if session.dxf_dialog.is_some() {
+                return None;
+            }
             return Some(&mut *session.editor);
         }
         if !self.editor_edit_allowed(target) {
@@ -286,13 +290,6 @@ impl Signex {
     pub(crate) fn fp_editor_set_next_pad_template(&mut self, value: String) -> bool {
         if let Some(editor) = self.active_footprint_editor_mut() {
             editor.state.next_pad_defaults.template = value;
-        }
-        self.refresh_panel_ctx();
-        true
-    }
-    pub(crate) fn fp_editor_set_next_pad_template_library(&mut self, value: String) -> bool {
-        if let Some(editor) = self.active_footprint_editor_mut() {
-            editor.state.next_pad_defaults.template_library = value;
         }
         self.refresh_panel_ctx();
         true
@@ -714,13 +711,29 @@ impl Signex {
         self.with_selected_pad_field(idx, Some("pad_template"), |pad| pad.template = value);
         true
     }
-    pub(crate) fn fp_editor_set_selected_pad_template_library(
+    /// A Template row for the next pad: the name and its library together.
+    pub(crate) fn fp_editor_pick_next_pad_template(
+        &mut self,
+        template: String,
+        library: String,
+    ) -> bool {
+        if let Some(editor) = self.active_footprint_editor_mut() {
+            editor.state.next_pad_defaults.template = template;
+            editor.state.next_pad_defaults.template_library = library;
+        }
+        self.refresh_panel_ctx();
+        true
+    }
+    /// A Template row for the selected pad, as one undo step.
+    pub(crate) fn fp_editor_pick_selected_pad_template(
         &mut self,
         idx: usize,
-        value: String,
+        template: String,
+        library: String,
     ) -> bool {
-        self.with_selected_pad_field(idx, Some("pad_template_library"), |pad| {
-            pad.template_library = value
+        self.with_selected_pad_field(idx, None, |pad| {
+            pad.template = template;
+            pad.template_library = library;
         });
         true
     }

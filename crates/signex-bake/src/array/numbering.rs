@@ -21,6 +21,7 @@ pub(super) fn derive_pad_number(
         NumberingScheme::LinearIncrement {
             start_expr,
             step_expr,
+            ..
         } => match linear_increment_number(start_expr, step_expr, i, ctx) {
             Ok(number) => number,
             Err(why) => {
@@ -129,6 +130,7 @@ pub(super) fn derive_pad_number_2d(
         NumberingScheme::LinearIncrement {
             start_expr,
             step_expr,
+            ..
         } => {
             // Row-major: (j, i) → idx = j*nx + i.
             let idx = j * nx + i;
@@ -176,10 +178,90 @@ pub(super) fn derive_pad_number_2d(
     }
 }
 
+/// The number of grid cell `(i, j)` under the scheme's sweep (mockup row
+/// 126). `ny` is `None` for a pattern of a pattern, which numbers row by row.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the cell, the grid's size and the numbering context"
+)]
+pub(super) fn derive_swept_pad_number(
+    numbering: &NumberingScheme,
+    i: usize,
+    j: usize,
+    nx: usize,
+    ny: Option<usize>,
+    ctx: &mut EvalContext,
+    warnings: &mut Vec<String>,
+    source: SketchEntityId,
+) -> String {
+    let (i, j) = match (numbering, ny) {
+        (NumberingScheme::LinearIncrement { sweep, .. }, Some(ny)) if nx > 0 => {
+            let place = sweep.sequence(i, j, nx, ny);
+            (place % nx, place / nx)
+        }
+        _ => (i, j),
+    };
+    derive_pad_number_2d(numbering, i, j, nx, ctx, warnings, source)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
+
+    /// Mockup row 126: a 2 × 4 grid in each sweep, read column by column.
+    #[test]
+    fn a_grid_sweep_orders_the_numbers() {
+        use signex_sketch::array::GridSweep;
+        let numbers = |sweep| {
+            let scheme = NumberingScheme::LinearIncrement {
+                start_expr: "1".into(),
+                step_expr: "1".into(),
+                sweep,
+            };
+            let (mut ctx, mut warnings) = (test_ctx(), Vec::new());
+            let source = SketchEntityId::new();
+            let mut out = Vec::new();
+            for i in 0..2 {
+                for j in 0..4 {
+                    out.push(derive_swept_pad_number(
+                        &scheme,
+                        i,
+                        j,
+                        2,
+                        Some(4),
+                        &mut ctx,
+                        &mut warnings,
+                        source,
+                    ));
+                }
+            }
+            assert!(warnings.is_empty(), "{warnings:?}");
+            out
+        };
+        assert_eq!(
+            numbers(GridSweep::RowByRow),
+            ["1", "3", "5", "7", "2", "4", "6", "8"]
+        );
+        assert_eq!(
+            numbers(GridSweep::ColumnByColumn),
+            ["1", "2", "3", "4", "5", "6", "7", "8"]
+        );
+        assert_eq!(
+            numbers(GridSweep::DownThenUp),
+            ["1", "2", "3", "4", "8", "7", "6", "5"]
+        );
+    }
+
+    /// A mirrored instance sits past the last row and keeps its place after
+    /// the grid's own numbers, in every sweep.
+    #[test]
+    fn an_instance_past_the_last_row_numbers_after_the_grid() {
+        use signex_sketch::array::GridSweep;
+        for sweep in GridSweep::ALL {
+            assert_eq!(sweep.sequence(1, 4, 2, 4), 9, "{sweep:?}");
+        }
+    }
 
     fn test_ctx() -> EvalContext {
         EvalContext {
@@ -194,6 +276,7 @@ mod tests {
         NumberingScheme::LinearIncrement {
             start_expr: "1 +".to_string(),
             step_expr: "1".to_string(),
+            sweep: Default::default(),
         }
     }
 
@@ -294,6 +377,7 @@ mod tests {
         let scheme = NumberingScheme::LinearIncrement {
             start_expr: "= 10".to_string(),
             step_expr: "2".to_string(),
+            sweep: Default::default(),
         };
 
         let number = derive_pad_number(&scheme, 3, &mut ctx, &mut warnings, source);

@@ -58,7 +58,10 @@ mod tests {
 
     fn named(operands: &[&str]) -> Result<Option<Uuid>, String> {
         let command = AppCommandId::new("swap_pins").unwrap();
-        let mut texts = vec!["document=/b.snxpcb", "pins=1,2"];
+        // `/b.snxpcb` has no drive, so it is not absolute on Windows.
+        let board_path = std::env::temp_dir().join("b.snxpcb");
+        let document = format!("document={}", board_path.display());
+        let mut texts = vec![document.as_str(), "pins=1,2"];
         texts.extend_from_slice(operands);
         let args = CommandArgs::parse_operands(&command, &texts).expect("operands parse");
         component_by_uuid(&board(), &args).map_err(|reason| reason.render_en_us())

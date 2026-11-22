@@ -300,6 +300,8 @@ impl FootprintCanvas<'_> {
         ) && let Some(sketch) = self.sketch
         {
             draw_sketch_overlay(frame, cstate, sketch, self.state, conflict_colour);
+            // mockup row 179e — the instances a circle pattern places.
+            super::sketch::draw_pattern_instances(frame, cstate, sketch, self.state);
             // v0.22 Phase E2 — DOF direction-arrow overlay.
             draw_dof_direction_arrows(frame, cstate, sketch, self.state);
             draw_sketch_tool_preview(frame, cstate, sketch, self.state);
@@ -316,5 +318,13 @@ impl FootprintCanvas<'_> {
         }
         // mockup row 190 — the bake preview, over the sketch it faints.
         self.draw_bake_preview(frame, cstate);
+        // mockup rows 179d, 190 — the failing places, over the preview's veil.
+        if matches!(
+            self.state.mode,
+            crate::library::editor::footprint::state::EditorMode::Sketch
+        ) && let Some(sketch) = self.sketch
+        {
+            super::sketch::draw_failure_marks(frame, cstate, sketch, self.state, conflict_colour);
+        }
     }
 }

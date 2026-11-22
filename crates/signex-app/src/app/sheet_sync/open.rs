@@ -8,7 +8,10 @@ use std::sync::Arc;
 use iced::Task;
 use signex_types::schematic::{ChildSheet, SchematicSheet};
 
-use super::{ChildRead, SheetSyncMsg, SheetSyncPreviews, SheetSyncProblem, SheetSyncState};
+use super::{
+    ChildRead, SheetSyncEntries, SheetSyncMsg, SheetSyncPreviewMode, SheetSyncPreviews,
+    SheetSyncProblem, SheetSyncState,
+};
 use crate::app::{Message, Signex};
 use crate::library::closed_sheets::FileStamp;
 
@@ -33,6 +36,18 @@ pub(super) fn previews_of(symbol: &ChildSheet, child: &SchematicSheet) -> SheetS
             &signex_engine::exposed_sheet_ports(child),
         ),
         to_sheet: signex_engine::port_changes_from_symbol(symbol, child),
+    }
+}
+
+/// The written side of each direction under `previews`.
+pub(super) fn entries_of(
+    symbol: &ChildSheet,
+    child: &SchematicSheet,
+    previews: &SheetSyncPreviews,
+) -> SheetSyncEntries {
+    SheetSyncEntries {
+        to_symbol: signex_engine::symbol_entries_after_sync(symbol, child, &previews.to_symbol),
+        to_sheet: signex_engine::sheet_ports_after_sync(symbol, child, &previews.to_sheet),
     }
 }
 
@@ -80,6 +95,10 @@ impl Signex {
             direction: signex_engine::SheetSyncDirection::default(),
             read: None,
             previews: None,
+            entries: None,
+            kept_ports: std::collections::BTreeSet::new(),
+            preview_mode: SheetSyncPreviewMode::default(),
+            preview_expanded: false,
             checking: false,
             problem: None,
         }));
@@ -127,14 +146,19 @@ impl Signex {
         let Some(state) = self.ui_state.sheet_sync.as_ref() else {
             return;
         };
-        let result = self
-            .sheet_sync_sides(state)
-            .map(|(symbol, child)| previews_of(&symbol, &child));
+        let result = self.sheet_sync_sides(state).map(|(symbol, child)| {
+            let previews = previews_of(&symbol, &child);
+            let entries = entries_of(&symbol, &child, &previews);
+            (previews, entries)
+        });
         let Some(state) = self.ui_state.sheet_sync.as_mut() else {
             return;
         };
         match result {
-            Ok(previews) => state.previews = Some(previews),
+            Ok((previews, entries)) => {
+                state.previews = Some(previews);
+                state.entries = Some(entries);
+            }
             Err(problem) => state.problem = Some(problem),
         }
     }

@@ -45,6 +45,50 @@ fn bake_leaves_sketch_mode_and_keeps_the_edits() {
     assert_eq!(entity_count(&editor), drawn);
 }
 
+/// DECISIONS 2026-11-22, mockup row 190: after Bake, Properties shows the
+/// pad count and what was written, until the selection changes.
+#[test]
+fn bake_shows_its_outcome_until_the_selection_changes() {
+    use crate::library::messages::RoleTag;
+    let mut editor = editor_in_sketch();
+    draw_a_point(&mut editor);
+    let point = editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .and_then(|sketch| sketch.entities.last())
+        .map(|entity| entity.id)
+        .expect("the point");
+    apply_footprint_primitive_edit(
+        &mut editor,
+        M::SketchSetRole {
+            id: point,
+            role: RoleTag::Pad,
+        },
+    );
+    apply_footprint_primitive_edit(&mut editor, M::SketchBakeRequested);
+
+    let outcome = shown_outcome(&editor).expect("the outcome shows after Bake");
+    assert_eq!(outcome.pads, 1);
+    assert!(outcome.written.contains(&(BakedKind::Pads, 1)));
+
+    editor.state.selected_pad = Some(0);
+    assert!(shown_outcome(&editor).is_none(), "a new selection ends it");
+    settle_outcome(&mut editor);
+    editor.state.selected_pad = None;
+    assert!(
+        shown_outcome(&editor).is_none(),
+        "and it does not come back"
+    );
+}
+
+#[test]
+fn a_bake_preview_records_no_outcome() {
+    let mut editor = editor_in_sketch();
+    apply_footprint_primitive_edit(&mut editor, M::SketchBakePreviewToggled);
+    assert!(shown_outcome(&editor).is_none());
+}
+
 #[test]
 fn discard_without_edits_leaves_without_asking() {
     let mut editor = editor_in_sketch();

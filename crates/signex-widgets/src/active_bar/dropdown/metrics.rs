@@ -150,16 +150,16 @@ impl MenuMetrics {
             .map(|rows| rows + 2.0 * self.panel_pad)
     }
 
-    /// Top of the open submenu's launcher row (a submenu row marked active),
-    /// measured from the top of the card; `None` when no launcher is open or
-    /// a `Custom` row above it has no known height.
+    /// Top of the open submenu's launcher row (a submenu row marked active
+    /// or selected), measured from the top of the card; `None` when no
+    /// launcher is open or a `Custom` row above it has no known height.
     pub fn active_submenu_top<M: Clone>(&self, entries: &[DropdownEntry<M>]) -> Option<f32> {
         let has_icons = has_icons(entries);
         let mut y = self.panel_pad;
         for entry in entries {
             if let DropdownEntry::Item(item) = entry
                 && item.submenu
-                && item.active
+                && (item.active || item.selected)
             {
                 return Some(y);
             }

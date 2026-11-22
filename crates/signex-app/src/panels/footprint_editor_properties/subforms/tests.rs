@@ -298,6 +298,31 @@ fn bga_rows_grey_unless_the_bga_scheme_is_active() {
     assert!(pattern::bga_rows_enabled(pattern));
 }
 
+/// Mockup row 126: a grid numbered 1, 2, 3 carries its sweep, and the
+/// sweep reaches the numbers the drawing shows; BGA numbering has none.
+#[test]
+fn a_grid_shows_its_sweep_in_the_numbers() {
+    use signex_sketch::array::GridSweep;
+    let ctx = grid_ctx(NumberingScheme::LinearIncrement {
+        start_expr: "1".into(),
+        step_expr: "1".into(),
+        sweep: GridSweep::DownThenUp,
+    });
+    let pattern = ctx.selected_array.as_ref().expect("a pattern");
+    assert_eq!(pattern.sweep, Some(GridSweep::DownThenUp));
+    let ArrayPreview::Instances(all) = &pattern.preview else {
+        panic!("a literal grid resolves");
+    };
+    let labels: Vec<&str> = all.iter().map(|c| c.number.as_str()).collect();
+    assert_eq!(labels, vec!["1", "4", "2", "3"], "cells walk row by row");
+    let ctx = grid_ctx(NumberingScheme::BgaRowCol {
+        skip_letters: true,
+        start_row: 'A',
+        start_col: 1,
+    });
+    assert_eq!(ctx.selected_array.as_ref().unwrap().sweep, None);
+}
+
 #[test]
 fn the_kind_segment_shows_the_kind_and_offers_no_other() {
     let ctx = grid_ctx(NumberingScheme::default());

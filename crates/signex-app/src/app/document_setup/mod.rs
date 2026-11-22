@@ -12,7 +12,9 @@ mod update;
 pub(crate) use command::{new_pcb_document, new_schematic_sheet};
 
 use signex_types::designator::DesignatorStandard;
-use signex_types::project::{ProjectDefaults, ProjectSetup, SheetDefaults};
+use signex_types::project::{
+    ProjectData, ProjectDefaults, ProjectSetup, ResolvedSetup, SheetDefaults, UserProfile,
+};
 
 use crate::app::new_project::{NewProjectMsg, NewProjectState};
 use crate::app::state::ProjectId;
@@ -126,6 +128,22 @@ impl From<DocumentSetupMsg> for crate::app::Message {
     fn from(msg: DocumentSetupMsg) -> Self {
         Self::Project(crate::app::ProjectMsg::DocumentSetup(msg))
     }
+}
+
+/// The setup a new document of the project `data` starts from. A project
+/// that stores no sheet defaults and names no saved profile gets the blank
+/// sheet Add New always made (A4), not the New Project default.
+pub(crate) fn new_document_setup(data: &ProjectData, users: &[UserProfile]) -> ResolvedSetup {
+    let mut resolved =
+        ProjectSetup::for_project(&data.project_defaults, data.designator_standard(), users);
+    if data.project_defaults.sheet.is_none() && resolved.setup.user_profile.is_none() {
+        let blank = crate::app::handlers::document_files::blank_schematic_sheet_for_new_doc();
+        resolved.setup.sheet = SheetDefaults {
+            paper_size: blank.paper_size,
+            show_title_block: blank.frame.show_title_block,
+        };
+    }
+    resolved
 }
 
 /// Whether `defaults` hold a saved setup for a `kind` document: a named

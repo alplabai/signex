@@ -283,7 +283,7 @@ editors-pad-kind-unknown = Unknown
 editors-footprint-dof = DOF
 editors-footprint-dof-fully-constrained = Fully constrained
 editors-footprint-unlink-corner-radius = Unlink corner radius
-editors-footprint-role-points-only = Pad role applies to Points only
+editors-footprint-role-pad-hint = Pad makes the closed profile of this line or arc a custom pad; a point is a simple pad
 # A silk graphic baked from the sketch: edited in Sketch mode only.
 editors-footprint-silk-from-sketch = From sketch: edit in Sketch mode
 # Pad placement form. TAB is the key that pauses placement.
@@ -301,6 +301,10 @@ editors-pad-locked = Locked
 editors-pad-template = Template
 # The library the pad template comes from.
 editors-pad-template-library = Library
+# The Template row for a pad with no named template.
+editors-pad-template-custom = (custom)
+# The name of a template only this pad uses.
+editors-pad-template-name = Name
 # Pad features of each board side.
 editors-pad-top-side = Top Side
 editors-pad-bottom-side = Bottom Side
@@ -394,8 +398,27 @@ editors-fp-props-courtyard-size = { $width } × { $height } mm
 editors-fp-props-expansion = Expansion
 # A length in millimetres. $value is a number.
 editors-fp-props-length-mm = { $value } mm
+# Enable header: a silkscreen outline generated on the part's body.
+editors-fp-props-silk-outline = Silkscreen outline
+# Note at the right of the Silkscreen outline header.
+editors-fp-props-silk-clipped = clipped at pads
+# Stroke width of the generated silkscreen outline.
+editors-fp-props-line-width = Line width
+# How far the silkscreen outline stays from the pads.
+editors-fp-props-pad-clearance = Pad clearance
+# Checkbox text of the Pin 1 marker row.
+editors-fp-props-pin-one-dot = Dot beside pad 1
+# Note under the Pin 1 marker row when it is on and no dot could be placed.
+editors-fp-props-pin-one-no-dot = No dot placed: needs a pad 1 with a clear side
+# Size of the part's body. $width and $height are millimetre numbers.
+editors-fp-props-assembly-body = body { $width } × { $height }
+# Note when a generated outline has no body to follow.
+editors-fp-props-no-body = needs a 3D body or fab outline
 # Leader label of the courtyard in the illustration.
 editors-fp-props-illustration-courtyard = Courtyard
+editors-fp-props-illustration-silkscreen = Silkscreen
+editors-fp-props-illustration-assembly = Assembly outline
+editors-fp-props-illustration-pin-one = Pin 1 marker
 editors-fp-props-section-snap = Snap Options
 editors-fp-props-snapping = Snapping
 editors-fp-props-snap-all-layers = All Layers
@@ -848,6 +871,7 @@ editors-fp-pad-no-through-hole-paste = No paste on through-hole pads and holes.
 # Why a typed value was not taken. The field keeps the last good value.
 editors-fp-pad-invalid-number = Enter a number
 editors-fp-pad-invalid-positive = Must be greater than 0
+editors-fp-pad-invalid-negative = Must be 0 or more
 editors-fp-pad-invalid-no-copper = Leaves no copper with this trapezoid
 editors-fp-pad-invalid-corner-radius = Must be 0 to 50
 # Illustration labels. $value is a length in mm, already formatted.
@@ -945,6 +969,10 @@ editors-role-pattern-scheme = Scheme
 editors-role-pattern-scheme-linear = Linear (1, 2, 3, …)
 editors-role-pattern-scheme-bga = BGA (A1, A2, …)
 editors-role-pattern-scheme-explicit = Explicit list
+editors-role-pattern-sweep = Sweep
+editors-role-pattern-sweep-row = Row by row
+editors-role-pattern-sweep-column = Column by column
+editors-role-pattern-sweep-dip = Down then up (DIP)
 editors-role-pattern-start-row-col = Start row / col
 editors-role-pattern-delete = Delete pattern
 # Drawing callouts; $value is a length in mm.

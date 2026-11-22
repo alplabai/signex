@@ -285,6 +285,8 @@ pub(super) fn filter_field<'a>(
 #[derive(Default)]
 pub(super) struct Tools {
     pub place: Option<DockMessage>,
+    /// Why Place is disabled, shown as its tooltip.
+    pub place_blocked: Option<signex_i18n::MessageId>,
     pub add: Option<DockMessage>,
     pub edit: Option<DockMessage>,
     pub delete: Option<DockMessage>,
@@ -302,14 +304,20 @@ pub(super) fn toolbar<'a>(
 ) -> Element<'a, DockMessage> {
     let Tools {
         place,
+        place_blocked,
         add,
         edit,
         delete,
         delete_blocked,
     } = tools;
     let delete_tip = t!(i18n, delete_blocked.unwrap_or(ids::LIBRARY_PANEL_DELETE));
+    let place_button = tool_button(PLACE, t!(i18n, ids::LIBRARY_PANEL_PLACE), place, tokens);
+    let place_tool = match place_blocked {
+        Some(reason) => hint_tooltip(place_button, t!(i18n, reason), tokens, Position::Bottom),
+        None => place_button,
+    };
     let bar = row![
-        tool_button(PLACE, t!(i18n, ids::LIBRARY_PANEL_PLACE), place, tokens),
+        place_tool,
         tool_button(PLUS, t!(i18n, ids::LIBRARY_PANEL_ADD), add, tokens),
         tool_button(EDIT, t!(i18n, ids::LIBRARY_PANEL_EDIT), edit, tokens),
         Space::new().width(Length::Fill).boxed(),

@@ -46,6 +46,19 @@ impl Signex {
                     app.apply_history_loaded(generation, path, result)
                 })
             }
+            UiMsg::HistoryRepo {
+                window: None,
+                event,
+            } => self.apply_history_repo_event(event),
+            UiMsg::HistoryRepo {
+                window: Some(window),
+                event,
+            } => {
+                if !self.is_document_window(window) {
+                    return Task::none();
+                }
+                self.run_in_window(window, false, |app| app.apply_history_repo_event(event))
+            }
             UiMsg::ThemeChanged(id) => {
                 self.ui_state.theme_id = id;
                 self.ui_state.preferences_draft_theme = id;
@@ -245,6 +258,10 @@ impl Signex {
                 .dispatch_pcb_message(PcbMsg::ViewRotation(ViewRotationMsg::AngleEntrySubmitted)),
             UiMsg::StatusBar(StatusBarRequest::CancelBoardImport) => {
                 self.handle_altium_import_cancel();
+                Task::none()
+            }
+            UiMsg::StatusBar(StatusBarRequest::LibraryMissingChipClicked) => {
+                self.reopen_skipped_library();
                 Task::none()
             }
             // `status_bar_message` names the window; a bare one is the main

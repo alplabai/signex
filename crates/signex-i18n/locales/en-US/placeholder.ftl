@@ -40,7 +40,6 @@ placeholder-child-sheet-path = sheet.snxsch
 # Child sheet Properties: the line width in millimetres.
 placeholder-child-sheet-line-width = 0.1524
 placeholder-erc-waiver-reason = Reason (required)
-placeholder-erc-waiver-author = Author (required)
 # A field of a multi-selection whose objects hold different values.
 placeholder-mixed = <mixed>
 

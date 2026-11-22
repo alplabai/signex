@@ -13,15 +13,38 @@ use uuid::Uuid;
 pub type PartKey = (InstancePath, Vec<Uuid>);
 
 /// Why a rename row is flagged: its new designator and a part that holds
-/// that designator after the rows that apply now.
+/// that designator after the rows that apply now, or, when `contested`, the
+/// part of another unticked rename to the same designator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DuplicateRename {
     pub designator: String,
     pub holder: PartKey,
+    pub contested: bool,
+}
+
+/// The part of another open rename row to `designator`.
+fn rival_rename<'l>(
+    list: &'l BackChangeList,
+    own: (&InstancePath, &[Uuid]),
+    designator: &str,
+) -> Option<(&'l InstancePath, &'l [Uuid])> {
+    list.rows
+        .iter()
+        .filter(|r| r.blocked.is_none())
+        .find_map(|r| match &r.change {
+            BackChange::Designator {
+                sheet, units, to, ..
+            } if to.as_str() == designator && (*sheet != *own.0 || units.as_slice() != own.1) => {
+                Some((sheet, units.as_slice()))
+            }
+            _ => None,
+        })
 }
 
 /// Every open rename row whose new designator another part holds once the
-/// rows that apply now are carried out, ticked or not.
+/// rows that apply now are carried out, ticked or not. An unticked row is
+/// also flagged while another open rename wants the same designator, so two
+/// renames unticked for colliding keep their reason.
 pub fn duplicate_renames(list: &BackChangeList) -> BTreeMap<BackKey, DuplicateRename> {
     let renamed: HashMap<(&InstancePath, &[Uuid]), &str> = list
         .rows
@@ -49,18 +72,26 @@ pub fn duplicate_renames(list: &BackChangeList) -> BTreeMap<BackKey, DuplicateRe
             continue;
         };
         let own = (sheet, units.as_slice());
-        let other = holders
+        let held = holders
             .get(to.as_str())
-            .and_then(|parts| parts.iter().find(|part| **part != own));
-        if let Some((holder_sheet, holder_units)) = other {
-            flagged.insert(
-                row.key,
-                DuplicateRename {
-                    designator: to.clone(),
-                    holder: (InstancePath::clone(holder_sheet), holder_units.to_vec()),
-                },
-            );
-        }
+            .and_then(|parts| parts.iter().find(|part| **part != own))
+            .copied();
+        let (holder, contested) = match held {
+            Some(part) => (part, false),
+            None if row.applies() => continue,
+            None => match rival_rename(list, own, to) {
+                Some(part) => (part, true),
+                None => continue,
+            },
+        };
+        flagged.insert(
+            row.key,
+            DuplicateRename {
+                designator: to.clone(),
+                holder: (InstancePath::clone(holder.0), holder.1.to_vec()),
+                contested,
+            },
+        );
     }
     flagged
 }

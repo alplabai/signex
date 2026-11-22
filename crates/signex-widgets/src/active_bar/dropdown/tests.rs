@@ -121,6 +121,25 @@ fn the_open_launcher_top_counts_the_rows_and_separators_above_it() {
     );
 }
 
+/// Mockup row 104: a launcher drawn as the selected row anchors its flyout
+/// as an active one does.
+#[test]
+fn a_selected_launcher_anchors_the_flyout() {
+    let m = MenuMetrics::GRAPHITE;
+    let entries = vec![
+        DropdownEntry::Item(DropdownItem::new("Alpha", ())),
+        DropdownEntry::Item(
+            DropdownItem::new("Hide layers", ())
+                .submenu()
+                .selected(true),
+        ),
+    ];
+    assert_eq!(
+        m.active_submenu_top(&entries),
+        Some(m.panel_pad + m.item_height(false))
+    );
+}
+
 /// A swatch row reserves the icon column, so a net-colour row's label lines
 /// up with the icon rows below it.
 #[test]

@@ -201,12 +201,15 @@ pub(super) fn push_harness_connector_sections<'a>(
                         },
                         muted,
                     ))
-                    .push(link_row(
+                    .push(super::part_panel::link_row(
                         t!(i18n, ids::PANELS_HARNESS_DEFINITION),
-                        t!(i18n, ids::PANELS_HARNESS_DEFINITION_LINK,
+                        &t!(i18n, ids::PANELS_HARNESS_DEFINITION_LINK,
                             "type" => current.as_str(),
-                            "count" => def_entries),
+                            "count" => def_entries)
+                        .into_string(),
+                        PanelMsg::Harness(HarnessPanelMsg::DefinitionsOpened),
                         muted,
+                        &ctx.tokens,
                     ))
                     .push(colour_row(
                         t!(i18n, ids::PANELS_HARNESS_COLOUR),
@@ -396,24 +399,6 @@ fn entries_list<'a>(
     .boxed()
 }
 
-/// `label | link`: the Definition row, which opens the definitions view.
-fn link_row<'a>(
-    label: signex_i18n::Localized,
-    link: signex_i18n::Localized,
-    muted: Color,
-) -> Element<'a, PanelMsg> {
-    row![
-        property_label(label, muted),
-        signex_widgets::button(text(link).size(TS.body))
-            .padding(0)
-            .on_press(PanelMsg::Harness(HarnessPanelMsg::DefinitionsOpened)),
-    ]
-    .padding([4.0, SP.m])
-    .spacing(SP.s)
-    .align_y(iced::Alignment::Center)
-    .boxed()
-}
-
 /// `label | swatch caption`: the one project harness colour.
 fn colour_row<'a>(
     label: signex_i18n::Localized,
@@ -438,6 +423,48 @@ fn colour_row<'a>(
     .spacing(SP.s)
     .align_y(iced::Alignment::Center)
     .boxed()
+}
+
+#[cfg(test)]
+mod definition_link_tests {
+    use super::*;
+
+    /// Mockup row 152: the Definition row is a plain link that opens the
+    /// definitions view.
+    #[test]
+    fn the_definition_link_opens_the_definitions_view() {
+        const LINK: &str = "SPI_BUS - 4 entries - edit...";
+        let window = iced::Size::new(320.0, 60.0);
+        let en = signex_i18n::I18n::en_us();
+        let (app, _boot) = crate::app::Signex::new();
+        let tokens = app.document_state.panel_ctx.tokens;
+        let row = || {
+            super::super::part_panel::link_row(
+                t!(en, ids::PANELS_HARNESS_DEFINITION),
+                LINK,
+                PanelMsg::Harness(HarnessPanelMsg::DefinitionsOpened),
+                Color::BLACK,
+                &tokens,
+            )
+        };
+        let shown = crate::layout_probe::lay_out_texts(row(), window);
+        let link = shown.iter().find(|t| t.text == LINK).expect("the link");
+        let over = iced::Point::new(link.bounds.x + 2.0, link.bounds.center_y());
+        let button = iced::mouse::Button::Left;
+        let events = [
+            iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: over }),
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(button)),
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(button)),
+        ];
+        let pressed = crate::layout_probe::messages_for_events(row(), window, over, &events);
+        assert!(
+            matches!(
+                pressed.as_slice(),
+                [PanelMsg::Harness(HarnessPanelMsg::DefinitionsOpened)]
+            ),
+            "{pressed:?}"
+        );
+    }
 }
 
 #[cfg(test)]

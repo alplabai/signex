@@ -306,6 +306,13 @@ impl Signex {
             SelectedKind::TextNote => vec![text_command(signex_engine::TextTarget::TextNote(uuid))],
             SelectedKind::SymbolRefField => self.designator_edit_commands(uuid, state.text.clone()),
             SelectedKind::SymbolValField => {
+                // A power port's value is its rail's name (mockup row 45).
+                let sheet = self.document_state.active_path.clone();
+                let rail = sheet.and_then(|path| self.rail_rename_on(&path, uuid, &state.text));
+                if let Some(rename) = rail {
+                    self.rename_rail(rename);
+                    return;
+                }
                 vec![text_command(signex_engine::TextTarget::SymbolValue(uuid))]
             }
             SelectedKind::Symbol => vec![signex_engine::Command::UpdateSymbolFootprint {

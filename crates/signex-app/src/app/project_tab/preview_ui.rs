@@ -138,6 +138,18 @@ impl Signex {
             .document_state
             .tab_shown_in_window(window, &self.ui_state)?;
         let project_id = shown.kind.as_project()?;
+        // Esc lets go of a row held by its grip, moving nothing.
+        let holds_row = self
+            .document_state
+            .project_tabs
+            .get(&project_id)
+            .is_some_and(|tab| tab.is_dragging_row());
+        if holds_row && matches!(key.as_ref(), Key::Named(Named::Escape)) {
+            return Some(tab_message(ProjectTabMsg::RowDragged {
+                project_id,
+                msg: super::RowDragMsg::Cancelled,
+            }));
+        }
         let ui = &self.ui_state.project_preview;
         let msg = match ui.labels_of(project_id).key_message(key, *modifiers) {
             Some(message) => ProjectPreviewMsg::Labels(message),

@@ -83,7 +83,7 @@ repository = "https://github.com/alplabai/signex"
 
 [workspace.dependencies]
 # UI framework
-iced = { version = "0.15.0-dev", features = ["wgpu", "canvas", "advanced", "svg", "image", "tokio"] }
+iced = { version = "0.15.0-dev", features = ["wgpu", "canvas", "advanced", "svg", "image", "tokio", "vello-cpu-multithreading"] }
 iced_aw = { path = "vendor/iced_aw", version = "0.13.1", default-features = false, features = [
     "tabs", "tab_bar", "card", "context_menu", "number_input",
     "color_picker", "menu", "drop_down", "selection_list",

@@ -227,12 +227,13 @@ fn dirty_dot<'a>(t: &ThemeTokens, i18n: &I18n) -> Element<'a, PrefMsg> {
 /// What the footer says left of its buttons, in the mock's order: the
 /// Language page says when the language changes; otherwise unsaved changes
 /// show the warn pill; otherwise the Appearance page says themes preview
-/// live.
+/// live and the Rule Profiles page that its edits save at once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FooterNote {
     LanguageApplies,
     Unsaved,
     ThemePreviews,
+    RuleProfilesSave,
     Nothing,
 }
 
@@ -241,6 +242,7 @@ pub(super) fn footer_note(nav: PrefNav, dirty: bool) -> FooterNote {
         (PrefNav::Language, _) => FooterNote::LanguageApplies,
         (_, true) => FooterNote::Unsaved,
         (PrefNav::Appearance, false) => FooterNote::ThemePreviews,
+        (PrefNav::RuleProfiles, false) => FooterNote::RuleProfilesSave,
         _ => FooterNote::Nothing,
     }
 }
@@ -268,6 +270,12 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
             .size(TS.body)
             .color(ink3)
             .boxed(),
+        FooterNote::RuleProfilesSave => {
+            text(t!(v.i18n, ids::PREFERENCES_RULE_PROFILES_FOOTER_NOTE))
+                .size(TS.body)
+                .color(ink3)
+                .boxed()
+        }
         FooterNote::Nothing => Space::new().boxed(),
     };
     // A pitch label holding refused text stays open: Save refuses it, and
@@ -337,6 +345,20 @@ mod tests {
             FooterNote::ThemePreviews
         );
         assert_eq!(footer_note(PrefNav::Annotation, false), FooterNote::Nothing);
+    }
+
+    /// Mockup row 148: the page says its edits save at once; unsaved changes
+    /// of another page still take the footer.
+    #[test]
+    fn the_rule_profiles_page_says_it_saves_at_once() {
+        assert_eq!(
+            footer_note(PrefNav::RuleProfiles, false),
+            FooterNote::RuleProfilesSave
+        );
+        assert_eq!(
+            footer_note(PrefNav::RuleProfiles, true),
+            FooterNote::Unsaved
+        );
     }
 
     #[test]

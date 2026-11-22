@@ -6,7 +6,7 @@
 //! Both paths are driven through the real widgets: `UserInterface::build`,
 //! `update` (the drag is real mouse events), `draw`, then
 //! `iced_wgpu::Renderer::screenshot`, which uploads, renders and reads back, so
-//! the GPU work is inside the timing. Never tiny-skia.
+//! the GPU work is inside the timing. Never the software renderer (vello_cpu).
 //!
 //! ```text
 //! cargo test -p signex-app --release --lib render_bench -- --ignored --nocapture --test-threads=1

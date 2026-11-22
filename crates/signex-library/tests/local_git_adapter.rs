@@ -189,6 +189,7 @@ fn fixture_footprint(name: &str) -> Footprint {
         default_designator: String::new(),
         component_type: signex_library::primitive::footprint::ComponentType::Standard,
         height_mm: None,
+        generated: Default::default(),
     }
 }
 

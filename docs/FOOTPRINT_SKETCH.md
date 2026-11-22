@@ -87,6 +87,38 @@ build reads a file with markers (it ignores the key) and drops them when it
 saves. The format token stays `snxfpt/1` and `FOOTPRINT_SCHEMA_VERSION`
 is unchanged.
 
+### Generated features {#generated-features}
+
+Silkscreen outline, Pad clearance, Pin 1 marker and Assembly outline (mockup
+row 124, #2834) are switches and values on the footprint, edited in the
+Courtyard & Silkscreen section as one undo step each. All off at the
+defaults (line width 0.12 mm, clearance 0.20 mm, marker on), which is not
+written, so such a file keeps its lower token; anything else writes
+`snxfpt/1.3`.
+
+The pin 1 dot sits on pad 1's outer side, or on the first other side clear of
+every pad by the clearance; with no clear side there is no dot. While the
+silkscreen outline and the marker are on and no dot is placed, for that reason
+or because no pad is numbered 1, the section shows a note saying so.
+
+`signex_bake::bake_generated` rebuilds the strokes after a setting edit, a
+pad write-back (saves included), a 3D body mint and a sketch bake. They are
+stored in `generated.silk` and `generated.assembly`, apart from `silk_f` and
+`fab_f`: a re-bake never touches hand-drawn entries or their selection, and a
+stroke cannot be selected or edited by hand. Placing the footprint copies them
+to the board's top silkscreen and fab layers.
+
+- **Body:** the 3D body outline's extent, else the extent of the hand-drawn
+  front fab graphics. With neither, no outline is generated and the section
+  says what is missing.
+- **Silkscreen outline:** the body rectangle, with the part of each edge
+  within the clearance plus half the line width of a pad's turned extent
+  removed.
+- **Pin 1 marker:** a solid dot on the outer side of the pad numbered 1, the
+  clearance away from its copper. No such pad, no dot.
+- **Assembly outline:** the body rectangle on the front fab layer, at the
+  stock parts' 0.1 mm line.
+
 ## Redundant constraints
 
 `FullSolveOutput.redundant_constraints` names consistent constraints whose
@@ -204,10 +236,28 @@ reads **Bake preview · Discard changes · Bake**:
   other fields are baked from the same solve when the canvas redraws
   (`canvas/draw/sketch/bake_overlay.rs`). The card also lists the last
   bake's warnings, the features it left out; they name no entity, so a
-  click on them does nothing.
+  click on them does nothing. One gap is one line, naming the object and
+  its place, and the canvas rings it.
+
+After **Bake**, Properties shows the outcome: `Baked · N pads`, what was
+written, and Edit in Sketch, until the selection changes or the footprint no
+longer holds those counts (mockup row 190).
 
 The Linetype control is a three-way segment, Normal / Construction /
 Centerline; it replaces the click-to-cycle pill.
+
+## Roles {#roles}
+
+With nothing selected, Properties in a footprint sketch has a **Roles**
+section: one row per closed profile with its role, then Solder mask (from the
+pad rule, no entity), the centerlines (they never bake), and Bake preview and
+Bake (mockup row 190). A role picked on a row applies to the whole profile as
+one undo step.
+
+A closed profile of lines and arcs can take the **Pad** role: a centre Point
+carries the pad, and its custom shape is traced from the loop. Picking Pad on
+any edge of the loop does the same, and an edge of that loop reads Pad. Another
+role on the loop removes the pad. A Point stays a simple pad.
 
 ## Parameters {#parameters}
 
@@ -493,9 +543,11 @@ A pad made in the sketch keeps the id of the entity that drives it
   a profile of N edges), its pattern instance, found from its position by
   `signex_bake::instance_at`, and its size.
 
-Not done yet: the outline of the pattern instance a pad came from (pads do
-not record their instance yet), and locking the pad's Size fields to "from
-sketch".
+- Edit in Sketch on a pattern instance focuses the pattern's source, found
+  by `signex_bake::instance_at`, and outlines that instance dashed (mockup
+  row 192). Back to pad returns to the instance.
+
+Not done yet: locking the pad's Size fields to "from sketch".
 
 ## Pattern links {#pattern-links}
 

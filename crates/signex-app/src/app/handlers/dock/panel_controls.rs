@@ -344,6 +344,7 @@ impl Signex {
                             Err(_) => Task::none(),
                         }
                     }
+                    ProjectsMsg::AddNewPressed => self.open_project_add_new_menu(),
                     ProjectsMsg::NewProjectPressed => {
                         self.update(Message::Menu(MenuMessage::NewProject))
                     }
@@ -578,6 +579,14 @@ impl Signex {
                 self.leave_drawing_field(*field_id);
             }
             crate::panels::PanelMsg::UpdateDrawingEdit(edit) => {
+                // A colour pick closes the popover it came from.
+                if matches!(
+                    edit,
+                    crate::app::contracts::DrawingFieldEdit::StrokeColor(_)
+                ) {
+                    self.document_state.panel_ctx.wire_color_picker =
+                        crate::panels::WireColorPicker::Closed;
+                }
                 // Fire the engine-side update only if exactly one
                 // drawing is selected — the panel shows post-placement
                 // fields only in that case.

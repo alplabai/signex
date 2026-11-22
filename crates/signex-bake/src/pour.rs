@@ -19,6 +19,7 @@ use std::collections::HashMap;
 
 use crate::eval_util::{build_ctx, opt_eval_mm};
 use crate::layer_label::layer_id;
+use crate::open_ends::warn_open_profiles;
 use crate::profile::TraceError;
 use crate::traced_loops::TracedLoops;
 
@@ -31,6 +32,7 @@ pub fn bake_pours(
     warnings: &mut Vec<String>,
 ) -> Result<(), SketchError> {
     let ctx = build_ctx(sketch, params_canonical);
+    let mut open = false;
     let mut loops = TracedLoops::default();
     for entity in &sketch.entities {
         if entity.bake_skipped() {
@@ -58,10 +60,7 @@ pub fn bake_pours(
         let vertices = match loops.trace(&attribute, sketch, solve, entity.id) {
             Ok(v) => v,
             Err(TraceError::OpenChain) => {
-                warnings.push(format!(
-                    "entity {}: PourAttr profile is not closed (open chain); skipping",
-                    entity.id
-                ));
+                open = true;
                 continue;
             }
             Err(TraceError::Branching) => {
@@ -111,6 +110,9 @@ pub fn bake_pours(
             min_thickness,
             priority: attr.priority.min(u8::MAX as u32) as u8,
         });
+    }
+    if open {
+        warn_open_profiles(sketch, solve, "Pour", |e| e.pour.is_some(), warnings);
     }
     Ok(())
 }

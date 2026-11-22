@@ -22,6 +22,7 @@ mod format_token;
 mod format_token_tests;
 #[cfg(test)]
 mod format_version_tests;
+mod generated;
 mod load_repair;
 mod mount_style;
 mod pad;
@@ -34,6 +35,7 @@ mod silk_marker;
 mod tests;
 
 use format_token::{FOOTPRINT_FILE_VERSION, SNXFPT_FORMAT_V1_1};
+pub use generated::{DEFAULT_PAD_CLEARANCE_MM, DEFAULT_SILK_LINE_WIDTH_MM, GeneratedFeatures};
 pub use load_repair::LoadRepair;
 pub use mount_style::MountStyle;
 pub use pad::*;
@@ -466,6 +468,9 @@ pub struct Footprint {
     pub component_type: ComponentType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub height_mm: Option<f64>,
+    /// Generated silkscreen, pin 1 and assembly features (`snxfpt/1.3`).
+    #[serde(default, skip_serializing_if = "GeneratedFeatures::is_default")]
+    pub generated: GeneratedFeatures,
 }
 
 /// v0.21 — Altium-parity component type. Drives whether the part
@@ -670,6 +675,8 @@ struct FootprintWire {
     component_type: ComponentType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     height_mm: Option<f64>,
+    #[serde(default, skip_serializing_if = "GeneratedFeatures::is_default")]
+    generated: GeneratedFeatures,
     // FootprintWire (per-footprint) wire fields below; the
     // FootprintFile (file-level) wire ends here.
 }
@@ -748,6 +755,7 @@ impl FootprintFile {
                 default_designator: fw.default_designator,
                 component_type: fw.component_type,
                 height_mm: fw.height_mm,
+                generated: fw.generated,
             };
             footprint.repair_stored_sketch();
             footprints.push(footprint);
@@ -801,6 +809,7 @@ impl FootprintFile {
                 default_designator: fp.default_designator.clone(),
                 component_type: fp.component_type,
                 height_mm: fp.height_mm,
+                generated: fp.generated.clone(),
             });
         }
         let wire = FootprintFileWire {
@@ -874,6 +883,7 @@ impl Footprint {
             default_designator: String::new(),
             component_type: ComponentType::Standard,
             height_mm: None,
+            generated: GeneratedFeatures::default(),
         }
     }
 }

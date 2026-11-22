@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 
 use signex_types::schematic::SchematicSheet;
 
+pub(crate) use crate::app::core::file_stamp::DiskStamps;
 use crate::app::state::DocumentState;
 use crate::app::state::scope::{CaseFold, path_key_with};
 use crate::library::closed_sheets::FileStamp;
@@ -385,6 +386,16 @@ impl ProjectSheetPlan {
         self.fold
     }
 
+    #[cfg(test)]
+    pub(crate) fn for_test(open: OpenSheets, root: PathBuf, fold: CaseFold) -> Self {
+        Self {
+            open,
+            pages: Vec::new(),
+            root,
+            fold,
+        }
+    }
+
     pub(crate) fn assemble(&self) -> ProjectSheetSet {
         assemble_project_sheets_from(&self.open, &self.pages, &self.root, self.fold)
     }
@@ -392,10 +403,30 @@ impl ProjectSheetPlan {
     /// [`Self::assemble`], plus the stamp of every sheet read from disk,
     /// taken just before it was read, so a later write can be told apart.
     pub(crate) fn assemble_stamped(&self) -> (ProjectSheetSet, DiskStamps) {
+        self.assemble_stamped_with(&|path| self.open.get(path).cloned())
+    }
+
+    /// [`Self::assemble_stamped`] that also finds an open sheet a reference
+    /// spells differently under the project's fold, so its unsaved content
+    /// counts and not the file behind it.
+    pub(crate) fn assemble_stamped_by_fold(&self) -> (ProjectSheetSet, DiskStamps) {
+        let held: HashMap<String, &SchematicSheet> = (self.open.iter())
+            .map(|(path, sheet)| (path_key_with(path, self.fold), sheet))
+            .collect();
+        self.assemble_stamped_with(&|path| {
+            let key = path_key_with(path, self.fold);
+            held.get(&key).map(|sheet| (*sheet).clone())
+        })
+    }
+
+    fn assemble_stamped_with(
+        &self,
+        find_open: &dyn Fn(&Path) -> Option<SchematicSheet>,
+    ) -> (ProjectSheetSet, DiskStamps) {
         let stamps = std::cell::RefCell::new(DiskStamps::new());
         let set = assemble_project_sheets_with(
             &|path| {
-                let open = self.open.get(path).cloned();
+                let open = find_open(path);
                 if open.is_none() {
                     stamps
                         .borrow_mut()
@@ -412,10 +443,6 @@ impl ProjectSheetPlan {
         (set, stamps.into_inner())
     }
 }
-
-/// The stamp of each sheet a read took from disk (`None`: it could not be
-/// stated).
-pub(crate) type DiskStamps = HashMap<PathBuf, Option<FileStamp>>;
 
 /// The plan for `source`'s project. Every open engine is snapshotted, so a
 /// sheet the hierarchy walk reaches that is open (declared or not, whoever

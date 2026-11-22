@@ -123,6 +123,10 @@ impl Signex {
                     ))
                 })
             }
+            E::OnlyUnroutedToggled => self.dispatch_pcb_message(PcbMsg::ViewInWindow {
+                window,
+                event: PcbViewMsg::OnlyUnroutedToggled,
+            }),
             E::ViolationZoomed(key) => self.run_in_window(window, true, |app| {
                 app.zoom_to_violation(&key);
                 Task::none()

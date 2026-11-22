@@ -131,8 +131,18 @@ impl StackLayer {
 /// The physical stack of a board, top to bottom.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct LayerStack {
+    /// The stackup's own name (mockup row 105); `None` shows the board's
+    /// file name. Set only by the board engine's `SetStackupName`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     #[serde(default)]
     pub layers: Vec<StackLayer>,
+}
+
+/// A typed stackup name as stored: trimmed, `None` when nothing is left.
+pub fn clean_stack_name(text: &str) -> Option<String> {
+    let name = text.trim();
+    (!name.is_empty()).then(|| name.to_string())
 }
 
 impl LayerStack {
@@ -149,6 +159,17 @@ impl LayerStack {
     /// The copper rows, top to bottom.
     pub fn copper(&self) -> impl Iterator<Item = &StackLayer> {
         self.layers.iter().filter(|l| l.kind.is_copper())
+    }
+
+    /// Whether the stack mirrors about its centre line (mockup row 105):
+    /// dielectric material and thickness, and copper weight. Names and the
+    /// Signal / Plane type are not compared.
+    pub fn is_symmetric(&self) -> bool {
+        let rows = &self.layers;
+        rows.iter()
+            .zip(rows.iter().rev())
+            .take(rows.len() / 2)
+            .all(|(a, b)| rows_mirror(a, b))
     }
 
     /// The stack a board without a stored one shows: overlay, paste and mask
@@ -192,8 +213,22 @@ impl LayerStack {
             StackLayer::new(StackLayerKind::Paste),
             StackLayer::new(StackLayerKind::Overlay),
         ]);
-        Self { layers: rows }
+        Self {
+            name: None,
+            layers: rows,
+        }
     }
+}
+
+/// Whether two rows mirrored about the centre line match.
+fn rows_mirror(a: &StackLayer, b: &StackLayer) -> bool {
+    const SAME_MM: f64 = 1e-6;
+    if a.kind.is_copper() && b.kind.is_copper() {
+        return (a.copper_weight_oz - b.copper_weight_oz).abs() < SAME_MM;
+    }
+    a.kind == b.kind
+        && a.material == b.material
+        && (a.thickness_mm - b.thickness_mm).abs() < SAME_MM
 }
 
 /// The copper layers `layers` lists, top to bottom, and whether each is a

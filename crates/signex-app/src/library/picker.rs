@@ -17,6 +17,7 @@
 //! └────────────────────────────────────────────────────────────────────┘
 //! ```
 
+use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{Space, column, container, row, scrollable};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
@@ -367,6 +368,25 @@ fn lifecycle_cell<'a>(
         .boxed()
 }
 
+/// A table cell's value on one line, ended with an ellipsis: the row height
+/// is fixed, so a wrapped second line would be clipped (mockup row 129).
+fn one_line_cell<'a>(
+    value: &'a str,
+    font: Option<iced::Font>,
+    ink: Color,
+) -> Element<'a, LibraryMessage> {
+    let cell = text(UserText::new(value))
+        .size(TS.body)
+        .color(ink)
+        .width(Length::Fill)
+        .wrapping(Wrapping::None)
+        .ellipsis(Ellipsis::End);
+    match font {
+        Some(font) => cell.font(font).boxed(),
+        None => cell.boxed(),
+    }
+}
+
 /// One part: PN and MPN in mono, the state, the description muted. The
 /// selected row takes the selection tint and a leading accent bar.
 fn part_row<'a>(
@@ -384,20 +404,9 @@ fn part_row<'a>(
             .width(cell_width(column))
             .clip(true)
     };
-    let pn = text(UserText::new(summary.internal_pn.as_str()))
-        .size(TS.body)
-        .font(mono())
-        .color(ink)
-        .boxed();
-    let mpn = text(UserText::new(summary.mpn.as_str()))
-        .size(TS.body)
-        .font(mono())
-        .color(ink)
-        .boxed();
-    let description = text(UserText::new(summary.description.as_str()))
-        .size(TS.body)
-        .color(muted)
-        .boxed();
+    let pn = one_line_cell(summary.internal_pn.as_str(), Some(mono()), ink);
+    let mpn = one_line_cell(summary.mpn.as_str(), Some(mono()), ink);
+    let description = one_line_cell(summary.description.as_str(), None, muted);
     let line = row![
         cell(pn, 0),
         cell(lifecycle_cell(summary.state, i18n, tokens), 1),
@@ -478,6 +487,22 @@ mod tests {
         };
         assert_eq!(note(3, 359), "3 libraries · 359 parts");
         assert_eq!(note(1, 1), "1 library · 1 part");
+    }
+
+    /// Mockup row 129: a value wider than its cell stays on one line.
+    #[test]
+    fn a_long_cell_value_stays_on_one_line() {
+        use crate::layout_probe::lay_out_texts;
+        let height = |value: &str| {
+            lay_out_texts(
+                one_line_cell(value, None, Color::BLACK),
+                iced::Size::new(60.0, 200.0),
+            )[0]
+            .bounds
+            .height
+        };
+        let long = "Polarized capacitor with a long description";
+        assert!((height(long) - height("C")).abs() < 0.5);
     }
 
     /// The table head, the empty card, the state cells and the search field

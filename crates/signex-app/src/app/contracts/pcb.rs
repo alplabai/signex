@@ -340,6 +340,9 @@ pub enum PcbViewMsg {
     /// The Layers panel lists only the layers the board uses, or every
     /// layer again (Used On, #2363).
     UsedLayersOnlySet(bool),
+    /// The user turned Show only unrouted on or off (the Unrouted popover,
+    /// mockup row 164): view state, never a board edit or an undo step.
+    OnlyUnroutedToggled,
     /// The user showed or hid one kind of object; `None`: every kind the
     /// view can hide (View Options, #2363).
     ObjectVisibilitySet {

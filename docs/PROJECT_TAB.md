@@ -8,15 +8,16 @@ history, which the ERC dialog and the Rules tab share.
 
 ## Page tabs (#2523)
 
-The Project tab and the Rules tab are page tabs: document tabs that show one
-of a project's pages rather than a drawing. The later page kinds (Layer Stack
-Manager, Length Matching, Polygon Manager, BOM Studio, Export Job, Variant
-Manager, Design Notebook) join them. Two rules hold for every page tab, in
+The Project, Rules and Layer Stack tabs are page tabs: document tabs that show
+one of a project's pages rather than a drawing. The later page kinds (Length
+Matching, Polygon Manager, BOM Studio, Export Job, Variant Manager, Design
+Notebook) join them. Two rules hold for every page tab, in
 `app/page_tab.rs`:
 
 - **Title.** `<project> — <page>`, for example `dcdc-buck — Rules` or
   `sensor-node — Layer Stack`. The project part is the project's name (the
-  `.snxprj` file stem when the name is blank) and follows a project rename;
+  `.snxprj` file stem when the name is blank; for a Layer Stack tab of a board
+  with no project, the board's file stem) and follows a project rename;
   the page part is a catalog message, read in the current language. The tab
   strip also shows the kind glyph and the close button.
 - **Dirty.** A page tab has no unsaved state of its own. It shows the accent
@@ -25,8 +26,11 @@ Manager, Design Notebook) join them. Two rules hold for every page tab, in
   owner's path is the tab's path, so a page kind never adds a second dirty
   source (#661).
 
-A shared page shell, `signex_widgets::doc_tab_shell`, is ready for page
-bodies; the Project and Rules tabs do not use it yet. It draws, from the top,
+A Layer Stack tab shares its board's path, and path lookups take the first
+tab, so it always sits after the board's tab (`app/layer_stack_tab.rs`).
+
+A shared page shell, `signex_widgets::doc_tab_shell`, holds the Layer Stack
+tab; the Project and Rules tabs do not use it yet. It draws, from the top,
 a toolbar row (items from the left, wrapping when the tab is
 narrow, and an end group of totals or pills at the right), a strip of
 sub-tabs (the active one in the ink colour with an accent underline; a
@@ -104,9 +108,12 @@ message. The chrome catalog draws a sample of it.
   the project, shared, global) and the mount state read from the app as a
   pill (mounted, mounted read-only with a lock, missing at the last probe,
   not mounted); a missing library shows a warning glyph before its name.
-  Move up / Move down are icon buttons on row hover, as in Sheets. Adding,
-  removing and renaming stay in the project tree; a line under the table
-  says where.
+  Move up / Move down are icon buttons on row hover, as in Sheets, and a
+  grip in front of each row (Sheets too) drags it: a drop is one undo step,
+  Esc cancels. A missing library offers Locate…, the Library Missing
+  dialog's repoint: the picked file mounts, the project's entry follows and
+  the project is left unsaved. Adding, removing and renaming stay in the
+  project tree; a line under the table says where.
 - **ERC and annotation** — two cards. The ERC rules card names where the
   rules come from in a header pill (User Default for this machine's
   Preferences, Stored in project, or Newer version for an unreadable set
@@ -119,13 +126,27 @@ message. The chrome catalog draws a sample of it.
   project (`annotation.annotate_undo`) or following Preferences.
 - **Version control** — the Repository card shows the last probe of the
   project folder as a pill (Present, None, Checking…). With a repository it
-  gives the status and "Open History panel"; without one, Enable Version
-  Control… (the project tree's dialog) is the primary button. Below it,
+  gives the status, the Branch button with the branch switcher it shares
+  with the History panel (`app/project_git`), the last commit and "Open
+  History panel"; without one, Enable Version Control… (the project tree's
+  dialog) is the primary button. Both surfaces run one switch
+  (`app/project_git/switch.rs`). It is refused, naming why, while a document
+  has unsaved edits or a save or commit runs, when it would overwrite a file
+  changed since its last commit, when an open library differs, when the
+  branch's `.snxprj` does not parse, and when a Git LFS file's content is not
+  in `.git/lfs/objects`; a refused or failed switch leaves the project and the
+  working tree as they were. When the branch's `.snxprj` differs, unsaved
+  edits offer Save and switch, and the project closes and reopens from the new
+  file with its tabs. LFS content is restored from `.git/lfs/objects`. Clean
+  documents reload; a document edited during the switch keeps its edits and
+  raises the File Changed on Disk card. Below it,
   "Commit every save" (`enable_git`) is a switch with its help under the
   label: turning it on needs a repository, turning it off keeps the
   repository, and a note says so when it cannot be turned on. "Commits in
-  progress" shows only while commits run. The branch, the last commit, the
-  commit author and remotes are not shown yet. The Enable Version Control
+  progress" shows only while commits run. **Author** shows the identity git
+  resolves; Enter writes `Name <email>` to the repository's own git config,
+  and an empty field removes it there so the user-level identity applies. It
+  is never stored in the project file. Remotes are not shown yet. The Enable Version Control
   dialog's own "Commit every save" switch (on by default) decides whether a
   successful Enable turns `enable_git` on, as the same General step.
 - **Schematic defaults** (#2026, mockup row 36) — two cards side by

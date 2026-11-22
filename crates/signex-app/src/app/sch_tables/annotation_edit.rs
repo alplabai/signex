@@ -54,6 +54,8 @@ pub enum Axis {
 pub enum AnnotationEdit {
     /// Point `index` of a Bezier (0 start, 1 C1, 2 C2, 3 end).
     BezierPoint(usize, Axis, f64),
+    /// All four points of a Bezier, from one handle drag on the sheet.
+    BezierPoints([Point; 4]),
     Width(f64),
     LineStyle(NetLineStyle),
     Ends(LineEnds),
@@ -107,6 +109,10 @@ pub(crate) fn apply_annotation_edit(
                     _ => &mut b.end,
                 };
                 set_axis(p, *axis, *v);
+                true
+            }
+            AnnotationEdit::BezierPoints([start, c1, c2, end]) => {
+                (b.start, b.c1, b.c2, b.end) = (*start, *c1, *c2, *end);
                 true
             }
             AnnotationEdit::Width(w) => {

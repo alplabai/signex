@@ -349,6 +349,44 @@ fn edit_and_delete_are_off_while_the_filter_hides_the_highlighted_footprint() {
     assert!(matches!(tools(&app), (Some(_), Some(_))));
 }
 
+/// Mockup row 119: the row the editor shows draws selected, so Edit is live
+/// on it with no separate highlight; Delete still waits for one.
+#[test]
+fn edit_follows_the_footprint_the_editor_shows() {
+    let app = app_with_one_footprint();
+    let ctx = &app.document_state.panel_ctx;
+    let fp = ctx.footprint_editor.as_ref().expect("footprint editor");
+    assert_eq!(fp.internal_selected_idx, None, "nothing highlighted");
+    assert!(fp.internal_footprints[0].is_active);
+    let tools = footprints::view(&app.library, ctx).tools;
+    assert!(matches!(
+        tools.edit,
+        Some(DockMessage::Panel(PanelMsg::FpLibraryEditInternal(0)))
+    ));
+    assert!(tools.delete.is_none());
+}
+
+/// Mockup row 119: with no way to place, Place sends nothing and its tooltip
+/// gives the reason, in Footprints and in Symbols.
+#[test]
+fn place_is_off_with_its_reason_in_footprints_and_symbols() {
+    let app = app_with_one_footprint();
+    let ctx = &app.document_state.panel_ctx;
+    let tools = footprints::view(&app.library, ctx).tools;
+    assert!(tools.place.is_none());
+    assert_eq!(
+        tools.place_blocked,
+        Some(ids::LIBRARY_PANEL_PLACE_NOT_IN_LIBRARY),
+        "this file is in no open library"
+    );
+
+    let app = app_with_one_symbol();
+    let ctx = &app.document_state.panel_ctx;
+    let tools = symbols::view(&app.library, ctx).tools;
+    assert!(tools.place.is_none());
+    assert_eq!(tools.place_blocked, Some(ids::LIBRARY_PANEL_PLACE_SYMBOLS));
+}
+
 #[test]
 fn a_file_is_named_by_the_open_library_that_holds_it() {
     let mut state = LibraryState::default();

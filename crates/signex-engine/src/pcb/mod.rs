@@ -22,6 +22,7 @@ pub mod draw;
 mod draw_free;
 #[cfg(test)]
 mod draw_free_tests;
+pub mod drill_pairs;
 pub mod dxf;
 pub mod eco;
 mod engine;

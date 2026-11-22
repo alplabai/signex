@@ -72,6 +72,7 @@ fn footprint_json_roundtrip_with_body3d() {
         default_designator: String::new(),
         component_type: ComponentType::Standard,
         height_mm: None,
+        generated: GeneratedFeatures::default(),
     };
     let json = serde_json::to_string(&fp).unwrap();
     let back: Footprint = serde_json::from_str(&json).unwrap();

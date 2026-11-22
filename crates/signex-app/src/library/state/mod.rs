@@ -420,6 +420,8 @@ pub struct PrimitivePickerState {
     pub copying: bool,
     /// The unmounted `.snxlib` the picker asked to open and is waiting on.
     pub opening_library: Option<std::path::PathBuf>,
+    /// The highlighted row and its preview (mockup row 131).
+    pub selection: PickerSelection,
 }
 
 /// The pick a copy of a loose symbol was made for (#1841).
@@ -468,6 +470,9 @@ pub enum PrimitivePickerTarget {
         footprints: Vec<Uuid>,
         suggested: Vec<signex_library::PrimitiveRef>,
     },
+    /// Import from another footprint (mockup row 189): the sketch editor at
+    /// `editor` lists the picked footprint's parameters. Reads only.
+    SketchParameters { editor: std::path::PathBuf },
 }
 
 impl PrimitivePickerTarget {
@@ -478,7 +483,9 @@ impl PrimitivePickerTarget {
             | Self::EditRowModal(a)
             | Self::BrowserRow(a)
             | Self::PreviewAlternate(a) => Some(a),
-            Self::DesignPart { .. } | Self::BoardFootprint { .. } => None,
+            Self::DesignPart { .. }
+            | Self::BoardFootprint { .. }
+            | Self::SketchParameters { .. } => None,
         }
     }
 
@@ -964,6 +971,8 @@ pub enum ComponentsRowAction {
     Place,
     /// Open the row's Component Preview tab for editing.
     Open,
+    /// Copy the row's internal part number to the clipboard.
+    CopyPartNumber,
 }
 
 /// The row context menu: the row it acts on and where it opened.
@@ -1043,6 +1052,7 @@ mod panel_rows_tests;
 mod picker_cache;
 #[cfg(test)]
 mod picker_cache_tests;
+mod picker_preview;
 mod placed_part;
 mod preview;
 mod preview_history;
@@ -1065,6 +1075,7 @@ pub use methods::*;
 pub use panel_kind::{LibraryPanelKind, LibraryPanelPick, LibraryPanelState, LibraryPanelTab};
 pub use panel_rows::PanelRows;
 pub use picker_cache::{PickerEntry, PickerRows};
+pub use picker_preview::{PickerSelection, PrimitiveChoice, PrimitiveDrawing};
 pub use placed_part::{ChangePreview, DatasheetChoice, PickerMode};
 pub use preview::*;
 pub use preview_history::{EditScope, RowHistory};

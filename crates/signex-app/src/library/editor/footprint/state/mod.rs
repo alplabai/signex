@@ -63,7 +63,8 @@ pub use pad_link::{PadLinkFocus, PadLinkMsg, PadLinkOffer};
 pub use pad_source::{PadInstance, PadPatternKind, PadSketchSource};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
 pub use properties_view::{
-    FOOTPRINT_HEIGHT_BUFFER, pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,
+    FOOTPRINT_HEIGHT_BUFFER, PAD_CLEARANCE_BUFFER, SILK_LINE_WIDTH_BUFFER, pad_field,
+    pad_field_buffer_key, sketch_pad_field_buffer_key,
 };
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
 pub use sketch_overlay::SketchOverlay;
@@ -743,6 +744,7 @@ impl FootprintEditorState {
         if let Some(sketch) = fp.sketch.as_mut() {
             super::pad_to_sketch::mirror_pad_attrs_into_sketch(&canvas.pads, sketch);
         }
+        signex_bake::bake_generated(fp);
     }
 }
 

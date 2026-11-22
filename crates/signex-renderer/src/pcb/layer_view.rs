@@ -68,6 +68,9 @@ pub struct PcbLayerView {
     hidden_objects: HashSet<BoardObject>,
     /// The Layers panel lists only the layers the board uses (#2363).
     used_only: bool,
+    /// Show only unrouted (mockup row 164): the board is dimmed except its
+    /// ratsnest lines, until the board closes.
+    only_unrouted: bool,
 }
 
 impl Default for PcbLayerView {
@@ -85,6 +88,7 @@ impl Default for PcbLayerView {
             paint: BoardPaint::default(),
             hidden_objects: HashSet::new(),
             used_only: false,
+            only_unrouted: false,
         }
     }
 }
@@ -368,6 +372,21 @@ impl PcbLayerView {
         self.ratsnest_visible = !self.ratsnest_visible;
     }
 
+    /// Whether the ratsnest is drawn: Show only unrouted draws it whatever
+    /// the stored visibility, which it leaves alone.
+    pub fn ratsnest_drawn(&self) -> bool {
+        self.ratsnest_visible || self.only_unrouted
+    }
+
+    /// Whether the board is dimmed except its unrouted ratsnest lines.
+    pub fn only_unrouted(&self) -> bool {
+        self.only_unrouted
+    }
+
+    pub fn set_only_unrouted(&mut self, on: bool) {
+        self.only_unrouted = on;
+    }
+
     pub fn origin_marker_visible(&self) -> bool {
         self.origin_marker_visible
     }
@@ -640,7 +659,8 @@ impl PcbSnapshot {
             board_features,
             texts: drawings.texts,
             graphics: drawings.graphics,
-            paint: board_paint(view, board),
+            paint: board_paint(view, board)
+                .with_board_dimmed(view.is_some_and(PcbLayerView::only_unrouted)),
         }
     }
 }

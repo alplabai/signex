@@ -18,4 +18,19 @@ pub enum SketchFixMsg {
         keep: SketchEntityId,
         merge: SketchEntityId,
     },
+    /// Add fillets on the failing inside corners (mockup row 179d), one undo
+    /// step.
+    AddFilletsClicked,
+    /// A role picked on a row of the Roles section (mockup row 190): the
+    /// closed profile through `seed` takes it, one undo step.
+    ProfileRolePicked {
+        seed: SketchEntityId,
+        role: crate::library::messages::RoleTag,
+    },
+    /// Bake preview in the Roles section.
+    BakePreviewClicked,
+    /// Bake in the Roles section.
+    BakeClicked,
+    /// Edit in Sketch on the Bake outcome (mockup row 190).
+    EditInSketchClicked,
 }

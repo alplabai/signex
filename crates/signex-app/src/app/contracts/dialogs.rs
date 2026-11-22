@@ -660,6 +660,8 @@ pub enum EditMsg {
     /// Bottom-up hierarchy (#1276): a sheet symbol from a sheet, and the
     /// sheet entry sync with its preview.
     SheetSync(crate::app::SheetSyncMsg),
+    /// A power rail rename's sheet reads finished (mockup row 45).
+    RailRename(crate::app::RailRenameMsg),
     /// Schematic tables (#1300): contents sheet, CSV, cell edits.
     Tables(crate::app::TablesMsg),
     /// Named unions (mockup row 158): the canvas menu rows, the keymap and the Create

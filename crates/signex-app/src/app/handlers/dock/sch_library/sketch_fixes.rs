@@ -23,17 +23,40 @@ impl Signex {
                 self.fp_editor_convert_conflicting_constraint(constraint)
             }
             SketchFixMsg::CloseGapClicked { keep, merge } => {
-                let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) else {
-                    return Some(Task::none());
-                };
-                self.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
-                    path,
-                    msg: PrimitiveEdit::Footprint(FootprintEditorMsg::SketchCloseGapRequested {
-                        keep,
-                        merge,
-                    }),
-                }))
+                self.send_to_footprint_editor(FootprintEditorMsg::SketchCloseGapRequested {
+                    keep,
+                    merge,
+                })
             }
+            SketchFixMsg::AddFilletsClicked => {
+                self.send_to_footprint_editor(FootprintEditorMsg::SketchAddFilletsRequested)
+            }
+            SketchFixMsg::ProfileRolePicked { seed, role } => {
+                self.send_to_footprint_editor(FootprintEditorMsg::SketchProfileRolePicked {
+                    seed,
+                    role,
+                })
+            }
+            SketchFixMsg::BakePreviewClicked => {
+                self.send_to_footprint_editor(FootprintEditorMsg::SketchBakePreviewToggled)
+            }
+            SketchFixMsg::BakeClicked => {
+                self.send_to_footprint_editor(FootprintEditorMsg::SketchBakeRequested)
+            }
+            SketchFixMsg::EditInSketchClicked => self.send_to_footprint_editor(
+                FootprintEditorMsg::SetMode(crate::library::editor::footprint::EditorMode::Sketch),
+            ),
         })
+    }
+
+    /// `msg` for the footprint editor in view; nothing without one.
+    fn send_to_footprint_editor(&mut self, msg: FootprintEditorMsg) -> Task<Message> {
+        let Some(path) = self.active_footprint_editor().map(|e| e.path.clone()) else {
+            return Task::none();
+        };
+        self.update(Message::Library(LibraryMessage::PrimitiveEditorEvent {
+            path,
+            msg: PrimitiveEdit::Footprint(msg),
+        }))
     }
 }

@@ -78,6 +78,7 @@ fn tools(library: &LibraryState, ctx: &PanelContext, key: Option<ComponentsPanel
                 row_id: key.row_id,
             })
         }),
+        place_blocked: None,
         add: writable.then(|| {
             frame::lib(LibraryMessage::BrowserAddComponent {
                 library_path: key.library_path.clone(),

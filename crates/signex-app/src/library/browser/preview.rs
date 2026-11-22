@@ -414,7 +414,8 @@ fn footprint_tile<'a>(
     )
 }
 
-/// The file a primitive lives in, else its listed name, else a dash.
+/// The file a primitive lives in (its listed name for a file named by a
+/// uuid), else its listed name, else a dash.
 fn primitive_label(
     reference: Option<&signex_library::PrimitiveRef>,
     dir: &str,
@@ -427,7 +428,7 @@ fn primitive_label(
     };
     library_state
         .primitive_file(reference, dir, ext)
-        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .and_then(|p| crate::library::primitive_label::shown_file_name(&p, listed, ext))
         .or_else(|| listed.map(str::to_string))
         .unwrap_or_default()
 }

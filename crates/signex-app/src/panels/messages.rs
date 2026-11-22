@@ -1,5 +1,6 @@
 //! Panel message type -- the `PanelMsg` enum every panel surface emits.
 
+pub use super::field_edits::{FootprintFeatureEdit, SheetFrameEdit};
 use super::*;
 
 /// Panel-level message wrapping widget messages.
@@ -243,6 +244,8 @@ pub enum PanelMsg {
     FpEditorSetFootprintDefaultDesignator(String),
     FpEditorSetFootprintComponentType(signex_library::primitive::footprint::ComponentType),
     FpEditorSetFootprintHeight(String),
+    /// A generated feature's switch or value was edited (mockup row 124).
+    FpEditorGeneratedFeature(FootprintFeatureEdit),
     /// v0.21 — Selected silk graphic edits (Line + Text only;
     /// Arc/Region/Fill/etc are sketch-mode-authored).
     FpEditorSetSilkLineFromX(String),
@@ -437,6 +440,8 @@ pub enum PanelMsg {
     /// Cancel on the History panel's "Discard unsaved edits and restore"
     /// confirmation row.
     HistoryRestoreCancelled,
+    /// The History panel's header, filters, graph and branch switcher.
+    History(super::history::HistoryPanelMsg),
     /// #1073 — restore paste (both sides) and thermal relief on the sketch
     /// pads that still carry the pre-#1052 all-false stack. One undo step;
     /// the document stays unsaved.
@@ -499,6 +504,23 @@ pub enum PanelMsg {
     FpEditorSetArrayNumberingScheme {
         array_id: signex_sketch::array::ArrayId,
         scheme: NumberingSchemeKindUi,
+    },
+    /// The Sweep of a grid numbered 1, 2, 3 was picked (mockup row 126).
+    FpEditorSetArraySweep {
+        array_id: signex_sketch::array::ArrayId,
+        sweep: signex_sketch::array::GridSweep,
+    },
+    /// A Template row was picked for the next pad (mockup row 125): the name
+    /// and its library together; both empty is "(custom)".
+    FpEditorPickNextPadTemplate {
+        template: String,
+        library: String,
+    },
+    /// A Template row was picked for the selected pad (mockup row 125).
+    FpEditorPickSelectedPadTemplate {
+        idx: usize,
+        template: String,
+        library: String,
     },
     /// v0.25 polish — toggle BGA `skip_letters`. Active only when the
     /// array's numbering is BgaRowCol; ignored for Linear / Explicit.
@@ -630,9 +652,8 @@ pub enum PanelMsg {
     /// promote `panel_selected_idx` to `active_idx` so the canvas
     /// switches to the selected sibling.
     FpLibraryEditInternal(usize),
-    /// v0.18.8 — `Place` button: place the selected internal
-    /// footprint as a Component on the active PCB. Stubbed until
-    /// the PCB integration lands; for now no-op + tracing-warn.
+    /// `Place` button: put this internal footprint on the cursor of the
+    /// open board (mockup row 119).
     FpLibraryPlaceInternal(usize),
     /// Run the design-rule check of the board in view (#2222).
     RunDrc,
@@ -1155,32 +1176,4 @@ pub enum PanelMsg {
     FpSubform(super::FpSubformMsg),
     /// A sketch fix picked in Properties for the sketch in view.
     SketchFix(super::SketchFixMsg),
-}
-
-/// One change to the active sheet's frame settings (#1134).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SheetFrameEdit {
-    ShowBorder(bool),
-    ShowTitleBlock(bool),
-    /// Zones lettered A, B, C… down the sides.
-    VerticalZones(u8),
-    /// Zones numbered 1, 2, 3… along the top and bottom.
-    HorizontalZones(u8),
-}
-
-impl SheetFrameEdit {
-    /// `settings` with this change applied.
-    pub fn apply(
-        self,
-        settings: signex_types::schematic::SheetFrameSettings,
-    ) -> signex_types::schematic::SheetFrameSettings {
-        let mut settings = settings;
-        match self {
-            Self::ShowBorder(on) => settings.show_border = on,
-            Self::ShowTitleBlock(on) => settings.show_title_block = on,
-            Self::VerticalZones(n) => settings.vertical_zones = n,
-            Self::HorizontalZones(n) => settings.horizontal_zones = n,
-        }
-        settings
-    }
 }

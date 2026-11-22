@@ -12,6 +12,7 @@ mod checks;
 mod edge_chains;
 mod error;
 mod features;
+mod fillets;
 mod geometry;
 mod inside_corners;
 mod items;
@@ -28,6 +29,7 @@ pub use checks::{
     outline_checks_after, outline_checks_with, outline_checks_with_router,
 };
 pub use error::BoardBakeError;
+pub use fillets::{FilletReport, add_fillets, fillet_targets};
 pub use items::{bake_board_items, bake_board_with_items, baked_item_count};
 pub use slot::{Slot, slot_size};
 

@@ -53,4 +53,13 @@ define_ids! {
     SKETCH_PARAMETERS_NAME_RESERVED = "sketch-parameters-name-reserved";
     SKETCH_PARAMETERS_NAME_TAKEN = "sketch-parameters-name-taken";
     SKETCH_PARAMETERS_NAME_MISSING = "sketch-parameters-name-missing";
+    SKETCH_PARAMETERS_IMPORT = "sketch-parameters-import";
+    SKETCH_PARAMETERS_IMPORT_FROM = "sketch-parameters-import-from";
+    SKETCH_PARAMETERS_IMPORT_NONE = "sketch-parameters-import-none";
+    SKETCH_PARAMETERS_IMPORT_TAKEN = "sketch-parameters-import-taken";
+    SKETCH_PARAMETERS_IMPORT_APPLY = "sketch-parameters-import-apply";
+    SKETCH_PARAMETERS_CHECKS_TITLE = "sketch-parameters-checks-title";
+    SKETCH_PARAMETERS_CHECKS_PASSED = "sketch-parameters-checks-passed";
+    SKETCH_PARAMETERS_CHECK_ERROR = "sketch-parameters-check-error";
+    SKETCH_PARAMETERS_CHECK_OVERLAP = "sketch-parameters-check-overlap";
 }

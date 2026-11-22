@@ -2,16 +2,18 @@
 //! symbol and the footprint the row binds, with its status, the file and
 //! primitive it resolves to, and the Pick… button.
 
+use iced::widget::text::{Ellipsis, Wrapping};
 use iced::widget::{column, container, row, svg};
 use iced::{Alignment, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, UserText, ids, t};
 use signex_library::{PrimitiveRef, PrimitiveSummary};
 use signex_types::object_id::short_id;
 use signex_types::theme::ThemeTokens;
-use signex_widgets::{text, theme_ext};
+use signex_widgets::{Label, text, theme_ext};
 
 use super::super::messages::LibraryMessage;
 use super::super::modal_chrome::secondary_btn;
+use super::super::primitive_label;
 use super::super::state::LibraryState;
 use crate::styles::{Radii, ti};
 
@@ -81,23 +83,14 @@ pub(super) fn card<'a>(
         Binding::Unbound => (UNBOUND_GLYPH, r.ink4),
     };
     let what: Element<'a, LibraryMessage> = match binding {
-        Binding::Found(summary) => {
-            let name = UserText::new(summary.name.clone());
-            let label = match summary.file.as_deref().and_then(|f| f.file_name()) {
-                Some(file) => text(t!(
-                    i18n,
-                    ids::LIBRARY_EDIT_ROW_BINDING,
-                    "file" => file.to_string_lossy().into_owned(),
-                    "name" => name.as_str()
-                )),
-                None => text(name),
-            };
-            label
-                .size(TS.body)
-                .font(mono)
-                .color(ti(tokens.text))
-                .boxed()
-        }
+        Binding::Found(summary) => text(found_label(summary, i18n))
+            .size(TS.body)
+            .font(mono)
+            .color(ti(tokens.text))
+            .width(Length::Fill)
+            .wrapping(Wrapping::None)
+            .ellipsis(Ellipsis::End)
+            .boxed(),
         Binding::Missing(uuid) => text(t!(
             i18n,
             ids::LIBRARY_EDIT_ROW_BINDING_MISSING,
@@ -105,6 +98,9 @@ pub(super) fn card<'a>(
         ))
         .size(TS.body)
         .color(theme_ext::warning_color(tokens))
+        .width(Length::Fill)
+        .wrapping(Wrapping::None)
+        .ellipsis(Ellipsis::End)
         .boxed(),
         Binding::Unbound => text(texts.unbound).size(TS.body).color(r.ink4).boxed(),
     };
@@ -134,6 +130,29 @@ pub(super) fn card<'a>(
     .boxed()
 }
 
+/// What a found binding reads: `<file> · <name>`, or `<name>.<ext>` alone
+/// for a file named by a uuid (mockup row 130).
+fn found_label(summary: &PrimitiveSummary, i18n: &I18n) -> Label<'static> {
+    let name = UserText::new(summary.name.clone());
+    let Some(file) = summary.file.as_deref() else {
+        return name.into();
+    };
+    let ext = primitive_label::extension(summary.kind);
+    let Some(shown) = primitive_label::shown_file_name(file, Some(&summary.name), ext) else {
+        return name.into();
+    };
+    if primitive_label::is_named_by_id(file) {
+        return UserText::new(shown).into();
+    }
+    t!(
+        i18n,
+        ids::LIBRARY_EDIT_ROW_BINDING,
+        "file" => shown,
+        "name" => name.as_str()
+    )
+    .into()
+}
+
 /// A monochrome status glyph tinted `ink`.
 fn status_glyph<'a>(bytes: &'static [u8], ink: Color) -> Element<'a, LibraryMessage> {
     svg(svg::Handle::from_memory(bytes))
@@ -144,4 +163,40 @@ fn status_glyph<'a>(bytes: &'static [u8], ink: Color) -> Element<'a, LibraryMess
             ..Default::default()
         })
         .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_library::PrimitiveKind;
+
+    fn summary(file: &str) -> PrimitiveSummary {
+        PrimitiveSummary {
+            uuid: uuid::Uuid::nil(),
+            name: "R_0402_1005".into(),
+            kind: PrimitiveKind::Footprint,
+            used_by_count: 0,
+            file: Some(file.into()),
+        }
+    }
+
+    fn words(summary: &PrimitiveSummary) -> String {
+        found_label(summary, I18n::en_us_ref())
+            .as_str()
+            .replace(['\u{2068}', '\u{2069}'], "")
+    }
+
+    /// Mockup row 130: a real file reads `file · name`; a uuid file reads
+    /// the footprint's name instead of the id.
+    #[test]
+    fn a_binding_never_shows_a_uuid_file_name() {
+        assert_eq!(
+            words(&summary("chip-passives.snxfpt")),
+            "chip-passives.snxfpt · R_0402_1005"
+        );
+        assert_eq!(
+            words(&summary("019df45d-af63-7823-b5c3-0123456789ab.snxfpt")),
+            "R_0402_1005.snxfpt"
+        );
+    }
 }

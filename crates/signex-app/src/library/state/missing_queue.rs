@@ -20,9 +20,24 @@ pub struct MissingLibraries {
     open_owner: Option<ProjectId>,
     /// Library a Locate file pick is in flight for.
     locating: Option<PathBuf>,
+    /// Libraries whose dialog was skipped; the status bar chip lists those
+    /// an open project still names and that are still not mounted.
+    skipped: Vec<PathBuf>,
 }
 
 impl MissingLibraries {
+    /// Remember that the dialog of `path` was skipped.
+    pub fn skip(&mut self, path: &Path) {
+        if !self.skipped.iter().any(|p| p == path) {
+            self.skipped.push(path.to_path_buf());
+        }
+    }
+
+    /// Every library whose dialog was skipped, oldest first.
+    pub fn skipped(&self) -> &[PathBuf] {
+        &self.skipped
+    }
+
     /// Remember which library the Locate pick in flight is for.
     pub fn start_locating(&mut self, path: PathBuf) {
         self.locating = Some(path);
@@ -84,6 +99,19 @@ impl LibraryState {
             self.missing.open_owner = Some(owner);
             self.recovery = Some(RecoveryDialog::LibraryMissing { path });
             return;
+        }
+    }
+
+    /// `path` was repointed elsewhere: its queued dialog goes, and an open
+    /// one closes (the next queued one opens).
+    pub fn forget_missing_library(&mut self, path: &Path) {
+        self.missing.waiting.retain(|(waiting, _)| waiting != path);
+        let is_open = matches!(
+            &self.recovery,
+            Some(RecoveryDialog::LibraryMissing { path: open }) if open == path
+        );
+        if is_open {
+            self.finish_recovery();
         }
     }
 

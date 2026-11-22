@@ -290,6 +290,13 @@ impl Signex {
         if !self.overlay_belongs_to(tree_ctx.window, window_id) {
             return Vec::new();
         }
+        if tree_ctx.add_new_only {
+            return Self::menu_overlay(
+                Message::ContextMenu(ContextMenuMsg::CloseProjectTree),
+                self.view_context_submenu(ContextSubmenu::AddNewToProject, window_id),
+                (tree_ctx.x, tree_ctx.y),
+            );
+        }
         let card = self.view_project_tree_context_menu(tree_ctx);
         let mut menu =
             super::context_menu::AnchoredMenu::new(card.element, (tree_ctx.x, tree_ctx.y));

@@ -116,6 +116,34 @@ impl Signex {
     }
 }
 
+impl Signex {
+    /// The skipped libraries the status bar chip counts (mockup row 138):
+    /// an open project still lists them and they are still not mounted, so
+    /// locating or removing one clears it with no extra bookkeeping.
+    pub(crate) fn skipped_missing_libraries(&self) -> Vec<std::path::PathBuf> {
+        let skipped = self.library.missing.skipped();
+        if skipped.is_empty() {
+            return Vec::new();
+        }
+        let listed = self.open_project_library_paths();
+        skipped
+            .iter()
+            .filter(|path| listed.contains(path) && self.library.library_at(path).is_none())
+            .cloned()
+            .collect()
+    }
+
+    /// The chip was clicked: raise the first skipped library's dialog.
+    pub(crate) fn reopen_skipped_library(&mut self) {
+        let Some(path) = self.skipped_missing_libraries().into_iter().next() else {
+            return;
+        };
+        if let Some(owner) = self.owning_project_of_library(&path) {
+            self.library.raise_missing_library(&path, owner);
+        }
+    }
+}
+
 /// Handle the user's choice from the *Library missing* recovery dialog.
 pub(super) fn handle_recovery_library_missing(
     app: &mut Signex,
@@ -123,6 +151,9 @@ pub(super) fn handle_recovery_library_missing(
 ) -> Task<Message> {
     match choice {
         LibraryMissingChoice::Cancel => {
+            if let Some(RecoveryDialog::LibraryMissing { path }) = app.library.recovery.clone() {
+                app.library.missing.skip(&path);
+            }
             app.library.finish_recovery();
             Task::none()
         }
@@ -227,6 +258,25 @@ pub(super) fn handle_recovery_library_missing_locate_result(
         }
     }
     task
+}
+
+impl Signex {
+    /// Locate… on a Project tab's Missing library row (mockup row 33): mount
+    /// `picked` and, only once it has mounted, repoint the entries that
+    /// listed `missing`. A Library Missing dialog for it has nothing left to
+    /// ask. A pick that does not open raises its own dialog or error card.
+    pub(crate) fn repoint_missing_library(
+        &mut self,
+        missing: &std::path::Path,
+        picked: std::path::PathBuf,
+    ) -> Task<Message> {
+        let task = self.open_library_at_as(picked.clone(), true);
+        if self.library.library_at(&picked).is_some() {
+            relocate_project_entries(self, missing, &picked);
+            self.library.forget_missing_library(missing);
+        }
+        task
+    }
 }
 
 /// Point every project entry that listed `old` at `new`, and mark those

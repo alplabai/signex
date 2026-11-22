@@ -56,18 +56,16 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
     if missing {
         col = col.push(missing_banner(ctx, sheet));
     }
-    match repeat_view {
-        Some(view) => {
-            col = col.push(super::child_sheet_repeat::caption(ctx, view));
-            col = col.push(super::child_sheet_repeat::illustration(ctx, view));
-        }
-        None => {
-            col = col.push(illustration_view(
-                ctx,
-                sheet_symbol_illustration(sheet, &ctx.i18n),
-            ));
-        }
+    if let Some(view) = repeat_view {
+        col = col.push(super::child_sheet_repeat::caption(ctx, view));
     }
+    // Only a repeated sheet draws as a stack (mockup row 151); one sheet
+    // shows its entries' direction shapes on their edges (mockup row 46).
+    let repeated_view = repeat_view.filter(|view| shows_channels(view));
+    col = col.push(match repeated_view {
+        Some(view) => super::child_sheet_repeat::illustration(ctx, view),
+        None => illustration_view(ctx, sheet_symbol_illustration(sheet, &ctx.i18n)),
+    });
     col = col.push(
         container(
             text(t!(ctx.i18n, ids::PROPERTIES_SHEET_ENTRIES_NOTE))
@@ -87,16 +85,29 @@ pub(in crate::panels) fn view_child_sheet_properties<'a>(
         ctx,
         sheet,
         missing,
-        repeat_view.is_some(),
+        repeated_view.is_some(),
         muted,
     ));
     col = col.push(style_section(ctx, sheet, palette));
     col = col.push(match repeat_view {
-        // Repeat, Channel naming and the per-channel Entries (#1279).
-        Some(view) => super::child_sheet_repeat::sections(ctx, view),
+        // Repeat and Channel naming (#1279). Entries are per channel on a
+        // repeated sheet and name + direction on one sheet.
+        Some(view) if shows_channels(view) => {
+            let entries = super::child_sheet_repeat::entries(ctx, view);
+            super::child_sheet_repeat::sections(ctx, view, entries)
+        }
+        Some(view) => {
+            let entries = entries_section(ctx, sheet, muted);
+            super::child_sheet_repeat::sections(ctx, view, entries)
+        }
         None => entries_section(ctx, sheet, muted),
     });
     col.boxed()
+}
+
+/// Whether the symbol repeats, so its drawing and Entries are per channel.
+fn shows_channels(view: &crate::panels::compiled_design::SheetSymbolRepeatView) -> bool {
+    view.repeat.is_some()
 }
 
 /// The basename of a file reference, folded for comparison.

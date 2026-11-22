@@ -171,10 +171,13 @@ pub(super) fn library_and_id_row<'a>(
         .style(super::super::form_look::read_only_value);
     let tip = signex_widgets::tooltip(
         value,
-        container(
-            signex_widgets::text(signex_i18n::UserText::new(lib_id))
-                .size(TS.body)
-                .font(mono),
+        iced::widget::container(
+            container(
+                signex_widgets::text(signex_i18n::UserText::new(lib_id))
+                    .size(TS.body)
+                    .font(mono),
+            )
+            .padding([SP.xs, 6.0]),
         )
         .padding([SP.xs, 6.0])
         .style(crate::styles::context_menu(tokens)),

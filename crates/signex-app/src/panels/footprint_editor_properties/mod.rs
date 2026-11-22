@@ -21,6 +21,7 @@ const SP: Spacing = Spacing::DEFAULT;
 const SCROLLBAR_GUTTER: f32 = 12.0;
 
 // Submodule declarations (split from the original 4570-line file).
+mod bake_outcome;
 mod board;
 mod body;
 mod conflicts;
@@ -29,6 +30,7 @@ mod managers;
 mod pad;
 mod pad_stack_check;
 mod redundant;
+mod roles;
 mod rows;
 mod sections;
 mod selection;
@@ -51,10 +53,11 @@ pub(super) fn view_footprint_editor_properties<'a>(
     i18n: &signex_i18n::I18n,
 ) -> Element<'a, PanelMsg> {
     if let Some(target) = pad_target(fp) {
-        let mut col = Column::new()
-            .spacing(0)
-            .width(Length::Fill)
-            .push(pad::view_pad_header(fp, target, tokens, i18n));
+        let mut col = Column::new().spacing(0).width(Length::Fill);
+        if let Some(outcome) = fp.bake_outcome.as_ref() {
+            col = bake_outcome::view_bake_outcome(col, outcome, tokens, i18n);
+        }
+        col = col.push(pad::view_pad_header(fp, target, tokens, i18n));
         if let Some(section) = pad::view_driven_by(fp, target, palette, i18n) {
             col = col.push(section);
         }

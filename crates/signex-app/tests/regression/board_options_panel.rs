@@ -6,7 +6,7 @@
 use signex_app::app::{FileMsg, Message, Signex};
 use signex_app::dock::DockMessage;
 use signex_app::panels::pcb_board_properties::{BOARD_WIDTH, size_readout};
-use signex_app::panels::{PanelKind, PanelMsg, PcbBoardMsg};
+use signex_app::panels::{PanelMsg, PcbBoardMsg};
 use signex_types::coord::Unit;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::Point;
@@ -57,11 +57,16 @@ fn edit_board_shape_runs_board_sketch() {
 #[test]
 fn the_board_materials_link_opens_the_layer_stack() {
     let mut f = open_board();
-    f.app.document_state.dock.close_panel(PanelKind::LayerStack);
-    let dock = |f: &Fixture| f.app.document_state.dock.locate(PanelKind::LayerStack);
-    assert!(dock(&f).is_none());
+    let open = |f: &Fixture| {
+        f.app
+            .document_state
+            .tabs
+            .iter()
+            .any(|t| t.kind.is_layer_stack())
+    };
+    assert!(!open(&f));
     properties(&mut f, PcbBoardMsg::LayerStackOpened);
-    assert!(dock(&f).is_some(), "the link opens the Layer Stack");
+    assert!(open(&f), "the link opens the Layer Stack tab");
 }
 
 #[test]

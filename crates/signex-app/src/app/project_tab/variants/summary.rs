@@ -1,6 +1,7 @@
 //! The Variant Manager's summary cards (#1293): per variant the parts it
 //! fits, the cost (no price source yet: "—") and its changes against Base;
-//! the active variant's card is highlighted. Four cards to a row.
+//! the active variant's card is highlighted. At most four cards to a row,
+//! each wide enough for its lines; a narrow pane wraps them.
 
 use iced::widget::{Column, Row, Space, column, container, row};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
@@ -15,22 +16,22 @@ use crate::styles::{PillTone, Radii, ti};
 
 /// Cards in one row.
 const PER_ROW: usize = 4;
+/// Width of a card in body ems (mockup row 32).
+const CARD_EMS: f32 = 13.5;
 /// Strength of the accent fill of the active card.
 const ACTIVE_FILL: f32 = 0.35;
 
-/// Every variant's card, in rows of four.
+/// Every variant's card, at most four to a row and wrapping when the pane
+/// cannot hold them at their width.
 pub(super) fn view<'a>(m: &Manager<'_>) -> Element<'a, Message> {
     let variants: Vec<Option<&str>> = m.variants().collect();
     let mut rows: Column<Element<'a, Message>> = Column::new().spacing(SP.m);
     for chunk in variants.chunks(PER_ROW) {
-        let mut line: Row<Element<'a, Message>> = Row::new().spacing(SP.m);
+        let mut line: Row<Element<'a, Message>> = Row::new().spacing(SP.m).width(Length::Fill);
         for &variant in chunk {
-            line = line.push(card(m, variant, Length::Fill));
+            line = line.push(card(m, variant, Length::Fixed(TS.body * CARD_EMS)));
         }
-        for _ in chunk.len()..PER_ROW {
-            line = line.push(Space::new().width(Length::Fill).boxed());
-        }
-        rows = rows.push(line.boxed());
+        rows = rows.push(line.wrap().boxed());
     }
     rows.boxed()
 }
@@ -116,6 +117,7 @@ pub(super) fn card<'a>(
     container(column![head, facts].spacing(SP.s))
         .width(width)
         .padding([SP.s * 1.5, SP.m])
+        .clip(true)
         .style(move |_: &Theme| container::Style {
             background: Some(Background::Color(fill)),
             border: Border {
@@ -152,4 +154,19 @@ fn fact<'a>(
     ]
     .spacing(SP.m)
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup row 32: the longest line of a card, its caption beside a
+    /// four-digit change count in the mono face, fits inside the padding.
+    #[test]
+    fn a_card_holds_its_longest_line() {
+        const MONO_ADVANCE_EM: f32 = 0.6;
+        let chars = "vs Base".len() + "9999 changes".len();
+        let line = chars as f32 * TS.caption * MONO_ADVANCE_EM + SP.m;
+        assert!(line + 2.0 * SP.m <= TS.body * CARD_EMS);
+    }
 }
