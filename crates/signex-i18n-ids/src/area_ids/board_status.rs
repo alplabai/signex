@@ -44,6 +44,7 @@ define_ids! {
     BOARD_STATUS_POUR_WILL_CONNECT = "board-status-pour-will-connect";
     BOARD_STATUS_ROUTE_NEXT = "board-status-route-next";
     BOARD_STATUS_ROUTE_NEXT_KEY = "board-status-route-next-key";
+    BOARD_STATUS_SHOW_ONLY_UNROUTED = "board-status-show-only-unrouted";
     BOARD_STATUS_ALL_ROUTED = "board-status-all-routed";
     BOARD_STATUS_DRC_TITLE = "board-status-drc-title";
     BOARD_STATUS_DRC_LAST_RUN = "board-status-drc-last-run";

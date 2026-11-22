@@ -177,6 +177,7 @@ impl Signex {
     /// The unrouted connections of the board, most unrouted net first.
     fn unrouted_list(&self, path: &Path, board: &PcbBoard) -> UnroutedList {
         let route_key = self.ui_state.active_keymap.shortcut_label_for_id(ROUTE);
+        let only_unrouted = self.pcb_layer_view(path).only_unrouted();
         let revision = self.board_revision(path);
         let Some(counts) = self
             .interaction_state
@@ -187,6 +188,7 @@ impl Signex {
                 unrouted: 0,
                 nets: Vec::new(),
                 route_key,
+                only_unrouted,
             };
         };
         let name_of = |net: u32| {
@@ -214,6 +216,7 @@ impl Signex {
             unrouted: counts.unrouted,
             nets,
             route_key,
+            only_unrouted,
         }
     }
 

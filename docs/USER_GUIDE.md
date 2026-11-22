@@ -258,7 +258,9 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
     example `C1-1 → U1-2`, and *pour will connect* when a pour of that net is
     on the board (those connections count as unrouted until the pour reaches
     the pads). **Zoom** shows the net's connections; **Route next** zooms to
-    the first one and starts Interactive Routing.
+    the first one and starts Interactive Routing. **Show only unrouted** dims
+    the board except its unrouted connection lines; it changes nothing in the
+    document and turns off when the board closes.
   - **DRC:** when the last check ran and how many edits the board has had
     since, its violations with a **Zoom** each, **Run DRC** and **Open
     Messages**.

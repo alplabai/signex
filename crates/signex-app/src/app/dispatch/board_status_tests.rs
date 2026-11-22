@@ -358,6 +358,83 @@ fn route_next_frames_the_connection_and_arms_routing() {
     assert_eq!(open_kind(&app), None);
 }
 
+/// What a click on the Show only unrouted button of the open popover sends.
+fn only_unrouted_click(app: &Signex, main: iced::window::Id) -> Vec<Message> {
+    let card = app.board_popover_card(main).expect("the Unrouted popover");
+    let label = signex_i18n::t!(
+        app.ui_state.i18n,
+        signex_i18n::ids::BOARD_STATUS_SHOW_ONLY_UNROUTED
+    );
+    crate::layout_probe::messages_on_click(card, iced::Size::new(1600.0, 900.0), &label.to_string())
+}
+
+fn canvas_is_dimmed(app: &Signex) -> bool {
+    app.interaction_state
+        .pcb_canvas
+        .active_renderer_snapshot()
+        .expect("a board snapshot")
+        .paint
+        .is_board_dimmed()
+}
+
+/// DECISIONS 2026-11-22 (mockup row 164, #2821): view-only, no document
+/// change or undo step, and it clears when the board closes.
+#[test]
+fn show_only_unrouted_is_view_only_and_clears_when_the_board_closes() {
+    let (mut app, path, main) = app_with_board();
+    let revision = app.board_revision(&path);
+    let dirty = app.document_state.is_document_dirty(&path);
+    click(&mut app, main, BoardCounter::Unrouted);
+    for message in only_unrouted_click(&app, main) {
+        let _ = app.update(message);
+    }
+    assert!(app.pcb_layer_view(&path).only_unrouted());
+    assert!(canvas_is_dimmed(&app));
+    // Every board edit, undo or redo moves the revision.
+    assert_eq!(app.board_revision(&path), revision, "no document change");
+    assert_eq!(app.document_state.is_document_dirty(&path), dirty);
+    assert_eq!(
+        open_kind(&app),
+        Some((main, BoardPopoverKind::Unrouted)),
+        "the popover stays open"
+    );
+    event(&mut app, BoardPopoverEvent::OnlyUnroutedToggled);
+    assert!(!app.pcb_layer_view(&path).only_unrouted());
+    assert!(!canvas_is_dimmed(&app), "a second press brings it back");
+
+    event(&mut app, BoardPopoverEvent::OnlyUnroutedToggled);
+    let tab = app.document_state.active_tab;
+    let _ = app.close_tab_now(tab);
+    assert!(!app.pcb_layer_view(&path).only_unrouted());
+}
+
+/// What is on the cursor stays visible while the board is dimmed.
+#[test]
+fn a_ghost_on_the_cursor_is_not_dimmed() {
+    let (mut app, path, main) = app_with_board();
+    click(&mut app, main, BoardCounter::Unrouted);
+    event(&mut app, BoardPopoverEvent::OnlyUnroutedToggled);
+    let board = app.active_pcb().expect("a board");
+    assert!(app.pcb_snapshot_for(&path, board).paint.is_board_dimmed());
+    assert!(
+        !app.pcb_ghost_snapshot_for(&path, board)
+            .paint
+            .is_board_dimmed()
+    );
+}
+
+/// A renamed board keeps the toggle; its old path does not.
+#[test]
+fn show_only_unrouted_follows_a_renamed_board() {
+    let (mut app, path, main) = app_with_board();
+    click(&mut app, main, BoardCounter::Unrouted);
+    event(&mut app, BoardPopoverEvent::OnlyUnroutedToggled);
+    let renamed = PathBuf::from("/w/renamed.snxpcb");
+    app.rekey_document(&path, &renamed);
+    assert!(app.pcb_layer_view(&renamed).only_unrouted());
+    assert!(!app.pcb_layer_view(&path).only_unrouted());
+}
+
 // ─── The layer switcher preference (Caner, 2026-11-21) ───────────────────
 
 /// What a left click on the Layer pill of `window`'s bar sends.
