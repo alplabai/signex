@@ -421,7 +421,7 @@ fn open_recorder(app: &mut Signex, _: &mut iced::Renderer, _: &Fixture) -> Resul
     let row = app
         .ui_state
         .preferences_keymap_editor
-        .rows()
+        .rows_in(signex_i18n::I18n::en_us_ref())
         .into_iter()
         .find(|row| row.label.contains("Smart Paste") && row.command.is_some())
         .ok_or("the Keyboard page lists no Smart Paste row")?;

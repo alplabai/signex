@@ -140,6 +140,7 @@ fn m9_a_command_with_nothing_to_act_on_is_refused() {
     state.results = vec![CommandEntry {
         source: CommandSource::Command,
         label: "Place Wire".to_string(),
+        value: String::new(),
         detail: String::new(),
         action: CommandAction::Command(AppCommandId::new("place_wire").expect("a command")),
     }];

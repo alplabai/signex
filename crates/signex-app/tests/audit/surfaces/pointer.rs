@@ -46,8 +46,8 @@ impl<T> Operation<T> for Labels {
     }
 }
 
-fn locate<T>(
-    ui: &mut UserInterface<'_, Message, T, iced::Renderer>,
+fn locate<'a, T: 'a>(
+    ui: &mut UserInterface<'a, Message, T, iced::Renderer>,
     r: &iced::Renderer,
     step: PointerStep,
 ) -> Result<Point, String> {
@@ -69,8 +69,8 @@ fn locate<T>(
     })
 }
 
-fn send<T>(
-    ui: &mut UserInterface<'_, Message, T, iced::Renderer>,
+fn send<'a, T: 'a>(
+    ui: &mut UserInterface<'a, Message, T, iced::Renderer>,
     events: &[Event],
     cursor: Cursor,
     r: &mut iced::Renderer,
