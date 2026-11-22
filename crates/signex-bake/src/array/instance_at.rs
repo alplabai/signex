@@ -13,7 +13,7 @@ use crate::eval_util::opt_eval_length;
 
 /// How close (mm) a pad must sit to an instance's place to be it: well
 /// under any pitch, well over the float noise of two placements.
-const SAME_PLACE_MM: f64 = 1e-6;
+pub(super) const SAME_PLACE_MM: f64 = 1e-6;
 
 /// The pattern instance a pad baked at `position` is, as `(pattern, i, j)`
 /// keyed like [`SketchData::override_for`]: `(array, i, j)` of a plain
