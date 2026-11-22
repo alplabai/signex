@@ -179,7 +179,7 @@ fn close_row<'a>(
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     dialog_row(vec![
-        file_kind_icon(icon_path, tokens),
+        file_kind_icon(icon_path),
         text(UserText::new(name))
             .size(TS.body)
             .color(ti(tokens.text))

@@ -263,7 +263,7 @@ fn track_list<'a>(
                 })
                 .boxed();
             let shown = track_display_path(item);
-            let icon = file_kind_icon(std::path::Path::new(&shown), tokens);
+            let icon = file_kind_icon(std::path::Path::new(&shown));
             let name = text(UserText::new(shown))
                 .size(TS.body)
                 .font(mono)

@@ -106,5 +106,9 @@ pub(in crate::app::project_tab) fn view<'a>(
     ]
     .spacing(sp.l)
     .width(Length::Fill.max(ts.body * SECTION_MAX_EMS));
-    container(body).padding([sp.xl, sp.xl]).boxed()
+    let page = container(body)
+        .width(Length::Fill)
+        .padding([sp.xl, sp.xl])
+        .boxed();
+    crate::app::project_tab::table::page_scroller(page, tokens)
 }
