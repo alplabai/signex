@@ -87,9 +87,9 @@ pub use state::pad_link::driving_profile;
 pub use state::pad_scope::PadScope;
 pub use state::sketch_overlay::{CanvasMenu, MenuTarget, PatternField, ValueEdit, ValueTarget};
 pub use state::{
-    CheckLine, CheckStatus, EditorPad, FootprintEditorState, GridDef, GridDisplay, PadLinkMsg,
-    PadLinkOffer, PadSide, PadStackTab, SketchCanvasText, SketchOverlay, SnappingMode, check_lines,
-    pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,
+    CheckLine, CheckStatus, EditorPad, FOOTPRINT_HEIGHT_BUFFER, FootprintEditorState, GridDef,
+    GridDisplay, PadLinkMsg, PadLinkOffer, PadSide, PadStackTab, SketchCanvasText, SketchOverlay,
+    SnappingMode, check_lines, pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,
 };
 pub(crate) use updates::hold_patterned_pad_edit;
 

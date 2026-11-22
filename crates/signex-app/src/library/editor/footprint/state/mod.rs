@@ -60,7 +60,9 @@ pub use pad::{
 };
 pub use pad_link::{PadLinkFocus, PadLinkMsg, PadLinkOffer};
 pub use placement::{PlaceArcPending, PlacementInput, PlacementInputKind};
-pub use properties_view::{pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key};
+pub use properties_view::{
+    FOOTPRINT_HEIGHT_BUFFER, pad_field, pad_field_buffer_key, sketch_pad_field_buffer_key,
+};
 pub use selection_filter::{FpSelectionMode, SelectionFilter, SelectionFilterKind};
 pub use sketch_overlay::SketchOverlay;
 pub use snap_options::{

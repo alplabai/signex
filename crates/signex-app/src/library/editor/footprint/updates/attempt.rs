@@ -20,7 +20,8 @@ pub(super) struct EditAttempt {
     /// A sketch drag tick: when it changed nothing it is not an edit.
     is_drag_tick: bool,
     /// A message that may be refused without changing anything (deleting
-    /// sketch-owned silk, #1718): then it is not an edit either.
+    /// sketch-owned silk, #1718; a constraint the selection cannot take,
+    /// mockup row 188): then it is not an edit either.
     may_be_refused: bool,
 }
 
@@ -66,7 +67,11 @@ impl EditAttempt {
             dirty_before: editor.is_dirty(),
             point_before: editor.history.point(),
             is_drag_tick,
-            may_be_refused: matches!(msg, FootprintEditorMsg::DeleteSilkF),
+            may_be_refused: matches!(
+                msg,
+                FootprintEditorMsg::DeleteSilkF
+                    | FootprintEditorMsg::SketchAddConstraintForSelection(_)
+            ),
         }
     }
 

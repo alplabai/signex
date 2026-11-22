@@ -184,7 +184,9 @@ input | Linetype | Snap ▾, and the mode bar at the canvas's bottom left
 reads **Bake preview · Discard changes · Bake**:
 
 - **Bake** keeps the edits and goes back to the pads view. The footprint
-  bakes on every solve, so nothing more is written.
+  bakes on every solve, so nothing more is written. An open profile stops
+  it: the editor stays in sketch mode, selects the open ends and opens the
+  bake preview.
 - **Discard changes** goes back to the pads view without the edits. Sketch
   mode keeps the footprint as it found it (`sketch_mode::exit`); when the
   footprint differs from that, Discard changes asks first, then restores

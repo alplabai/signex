@@ -17,6 +17,8 @@ mod attempt;
 mod attempt_tests;
 mod context_menu;
 mod geometry;
+#[cfg(test)]
+mod no_edit_tests;
 mod pad_scope;
 mod selection;
 mod sketch;
@@ -600,7 +602,22 @@ fn mutates_footprint_state(msg: &FootprintEditorMsg) -> bool {
         CursorAt { .. }
         | ViewScaleChanged { .. }
         | SelectPad(_)
+        | SelectPads(_)
         | SelectSilkF(_)
+        | SetSelectionMode2d(_)
+        | SelectAllOnLayer
+        | LassoArm
+        | LassoAddVertex { .. }
+        | LassoCancel
+        | LassoCommit
+        | TouchingLineArm
+        | TouchingLineFirst { .. }
+        | TouchingLineCancel
+        | TouchingLineCommit { .. }
+        | SelectOverlapped
+        | SelectNextOverlapped
+        | SelectOffGridPads
+        | SketchSelectMany(_)
         | ToggleLayer(_)
         | LayersShowAllClicked
         | LayersTopSideOnlyClicked
