@@ -509,6 +509,8 @@ pub struct FootprintLibInternalRow {
     /// `true` when this index matches the editor's `active_idx` —
     /// the row that the canvas / Properties panel currently shows.
     pub is_active: bool,
+    /// Why Place cannot put this footprint on a board; `None` when it can.
+    pub place_block: Option<super::FootprintPlaceBlock>,
 }
 
 /// Editor mode mirror — kept in this crate so the panel doesn't need

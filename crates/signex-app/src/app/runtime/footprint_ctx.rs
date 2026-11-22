@@ -426,6 +426,7 @@ pub(super) fn build_footprint_editor_panel_ctx(
             name: fp.name.clone(),
             pad_count: fp.pads.len(),
             is_active: i == editor.active_idx,
+            place_block: app.footprint_place_block(i),
         })
         .collect();
     let internal_selected_idx = editor.panel_selected_idx;

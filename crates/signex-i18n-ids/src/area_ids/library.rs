@@ -247,6 +247,16 @@ define_ids! {
     LIBRARY_PANEL_EDIT = "library-panel-edit";
     LIBRARY_PANEL_DELETE = "library-panel-delete";
     LIBRARY_PANEL_DELETE_NEEDS_BROWSER = "library-panel-delete-needs-browser";
+    LIBRARY_PANEL_PLACE_NO_ROW = "library-panel-place-no-row";
+    LIBRARY_PANEL_PLACE_NO_BOARD = "library-panel-place-no-board";
+    LIBRARY_PANEL_PLACE_SEVERAL_BOARDS = "library-panel-place-several-boards";
+    LIBRARY_PANEL_PLACE_READ_ONLY_BOARD = "library-panel-place-read-only-board";
+    LIBRARY_PANEL_PLACE_BOARD_IN_SKETCH = "library-panel-place-board-in-sketch";
+    LIBRARY_PANEL_PLACE_UNSAVED = "library-panel-place-unsaved";
+    LIBRARY_PANEL_PLACE_NOT_IN_LIBRARY = "library-panel-place-not-in-library";
+    LIBRARY_PANEL_PLACE_NOT_FIRST = "library-panel-place-not-first";
+    LIBRARY_PANEL_PLACE_UNDOCKED = "library-panel-place-undocked";
+    LIBRARY_PANEL_PLACE_SYMBOLS = "library-panel-place-symbols";
     LIBRARY_PANEL_PARTS_OF = "library-panel-parts-of";
     LIBRARY_PANEL_PADS = "library-panel-pads";
     LIBRARY_PANEL_COUNT = "library-panel-count";

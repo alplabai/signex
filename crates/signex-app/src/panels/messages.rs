@@ -644,9 +644,8 @@ pub enum PanelMsg {
     /// promote `panel_selected_idx` to `active_idx` so the canvas
     /// switches to the selected sibling.
     FpLibraryEditInternal(usize),
-    /// v0.18.8 — `Place` button: place the selected internal
-    /// footprint as a Component on the active PCB. Stubbed until
-    /// the PCB integration lands; for now no-op + tracing-warn.
+    /// `Place` button: put this internal footprint on the cursor of the
+    /// open board (mockup row 119).
     FpLibraryPlaceInternal(usize),
     /// Run the design-rule check of the board in view (#2222).
     RunDrc,

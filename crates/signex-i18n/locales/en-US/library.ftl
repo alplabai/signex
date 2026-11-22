@@ -206,6 +206,17 @@ library-panel-delete = Delete
 # Tooltip on the disabled Delete of the Parts kind: the delete confirmation
 # runs in the library's Library Browser tab.
 library-panel-delete-needs-browser = Open the library in the Library Browser to delete a row
+# Tooltips on the disabled Place of the Library panel: why it cannot act.
+library-panel-place-no-row = Select a footprint in the list to place it
+library-panel-place-no-board = Open a board to place this footprint
+library-panel-place-several-boards = Several boards are open; keep one open to place this footprint
+library-panel-place-read-only-board = The open board is read-only in this version of Signex
+library-panel-place-board-in-sketch = Leave sketch mode on the board to place this footprint
+library-panel-place-unsaved = Save this footprint to place it
+library-panel-place-not-in-library = Only a footprint saved in an open library can be placed
+library-panel-place-not-first = Only the first footprint of a file can be placed
+library-panel-place-undocked = Dock this footprint's tab to place it
+library-panel-place-symbols = Placing a symbol from here is not available yet; use the Parts list
 # Section under the symbol list. $symbol is the active symbol's name.
 library-panel-parts-of = Parts of { $symbol }
 # Pad count of a footprint row. $count is a whole number.
