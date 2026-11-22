@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use signex_engine::{Command, SheetPort, SymbolEntryRenames};
 use signex_types::schematic::{
-    ChildSheet, SchDirective, SchDrawing, SchematicSheet, normalize_port_name,
+    ChildSheet, SchDirective, SchDrawing, SchematicSheet, TableColumn, normalize_port_name,
 };
 
 /// The object `command` replaces, as it stands on `sheet`, in the same form.
@@ -167,9 +167,11 @@ fn drawing_stores(drawing: &SchDrawing, live: &SchDrawing, key: &str) -> bool {
             ) || (key == "override_text" && d.override_text.is_some())
         }
         SchDrawing::Table(t) => {
-            // A source switched away and back keeps the other source's columns.
+            // A source switched back keeps the other's columns; a CSV import
+            // reuses the keys, so the titles must match too.
+            let named = |c: &TableColumn| (c.key.clone(), c.title.clone());
             let same_source = matches!(live, SchDrawing::Table(l) if l.source == t.source
-                && l.columns.iter().map(|c| &c.key).eq(t.columns.iter().map(|c| &c.key)));
+                && l.columns.iter().map(named).eq(t.columns.iter().map(named)));
             matches!(key, "refresh" | "style" | "locked")
                 || (same_source && (key == "columns" || (key == "rows" && !t.source.is_bound())))
         }
@@ -567,6 +569,35 @@ mod tests {
             table(&[&["a", "b"]]),
             table(&[&["x", "b"]]),
             rekeyed_since(table(&[&["a", "y"]])),
+        );
+        assert!(now.is_none());
+    }
+
+    /// A CSV import keeps the keys, so only the title shows the column changed.
+    fn retitled_since(drawing: SchDrawing) -> SchDrawing {
+        let SchDrawing::Table(mut table) = drawing else {
+            panic!("a table");
+        };
+        table.columns[0].title = "Footprint".into();
+        SchDrawing::Table(table)
+    }
+
+    #[test]
+    fn a_cell_edit_is_refused_once_a_column_was_retitled() {
+        let now = replayed(
+            table(&[&["a", "b"]]),
+            table(&[&["x", "b"]]),
+            retitled_since(table(&[&["a", "y"]])),
+        );
+        assert!(now.is_none());
+    }
+
+    #[test]
+    fn a_column_edit_is_refused_once_a_column_was_retitled() {
+        let now = replayed(
+            table_column("a", true),
+            table_column("a", false),
+            retitled_since(table_column("a", true)),
         );
         assert!(now.is_none());
     }
