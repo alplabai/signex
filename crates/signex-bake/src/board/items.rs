@@ -6,7 +6,7 @@
 //! sketch's own items from the rest. See `docs/PCB_SKETCH.md`, "Targets".
 
 use signex_sketch::baked_kinds::BakedKind;
-use signex_sketch::entity::EntityKind;
+use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::sketch::SketchData;
 use signex_types::format::{UnknownFields, pcb_layer_token};
 use signex_types::pcb::{
@@ -20,6 +20,7 @@ use signex_types::zone_pour::POUR_FILL;
 
 use super::features::{expression, finite, named_net};
 use super::geometry::{boundary, circle, point};
+use super::patterned::{boundary_places, own_sources, places, refuse_pattern};
 use super::{BoardBakeError, Context, baked, solved};
 use crate::eval_util::{build_ctx, opt_eval_mm};
 use crate::traced_loops::TracedLoops;
@@ -91,12 +92,12 @@ fn pours(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<Zone>, BoardBakeError
             &Some(thermal.spoke_width_expr.clone()),
             "pour thermal spoke width",
         )?;
-        out.push(Zone {
+        let zone = Zone {
             uuid: entity.id.0,
             net: net.map_or(0, |n| n.number),
             net_name: net.map(|n| n.name.clone()).unwrap_or_default(),
             layer: pcb_layer_token(attr.layer),
-            outline,
+            outline: Vec::new(),
             holes: Vec::new(),
             priority: attr.priority,
             fill_type: POUR_FILL.to_string(),
@@ -111,78 +112,128 @@ fn pours(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<Zone>, BoardBakeError
             // A sketch pour bakes live copper; shelving is a board edit.
             shelved: false,
             unknown: UnknownFields::default(),
-        });
+        };
+        let kind = BakedKind::BoardPours;
+        for place in boundary_places(ctx, entity, &outline, kind, "pour pattern")? {
+            out.push(Zone {
+                uuid: place.uuid,
+                outline: place.ring(&outline),
+                ..zone.clone()
+            });
+        }
     }
     Ok(out)
 }
 
-/// A board drawing on its mechanical layer for each line, arc or circle
-/// tagged `mechanical`.
-fn mechanical(ctx: &Context<'_>) -> Result<Vec<BoardGraphic>, BoardBakeError> {
+/// A mechanical edge at its solved place.
+#[derive(Clone, Copy)]
+struct Drawn {
+    kind: BoardGraphicKind,
+    start: Point,
+    end: Point,
+    center: Option<Point>,
+    radius: f64,
+}
+
+impl Drawn {
+    /// The points that say where it is; a circle turned about its centre
+    /// stays the same circle.
+    fn shape(&self) -> Vec<Point> {
+        match (self.kind, self.center) {
+            (BoardGraphicKind::Circle, Some(c)) => vec![c],
+            (_, Some(c)) => vec![self.start, self.end, c],
+            (_, None) => vec![self.start, self.end],
+        }
+    }
+}
+
+fn drawn(ctx: &Context<'_>, entity: &Entity) -> Result<Drawn, BoardBakeError> {
     const KIND: BakedKind = BakedKind::Mechanical;
+    Ok(match entity.kind {
+        EntityKind::Line { start, end } => Drawn {
+            kind: BoardGraphicKind::Line,
+            start: point(ctx, start, KIND)?,
+            end: point(ctx, end, KIND)?,
+            center: None,
+            radius: 0.0,
+        },
+        // A board arc runs counter-clockwise from `start` to `end`.
+        EntityKind::Arc {
+            center,
+            start,
+            end,
+            sweep_ccw,
+        } => {
+            let (from, to) = if sweep_ccw {
+                (start, end)
+            } else {
+                (end, start)
+            };
+            let (c, from) = (point(ctx, center, KIND)?, point(ctx, from, KIND)?);
+            Drawn {
+                kind: BoardGraphicKind::Arc,
+                start: from,
+                end: point(ctx, to, KIND)?,
+                center: Some(c),
+                radius: (from.x - c.x).hypot(from.y - c.y),
+            }
+        }
+        EntityKind::Circle { .. } => {
+            let (c, radius) = circle(ctx, entity, KIND)?;
+            let through = Point {
+                x: c.x + radius,
+                y: c.y,
+            };
+            Drawn {
+                kind: BoardGraphicKind::Circle,
+                start: through,
+                end: through,
+                center: Some(c),
+                radius,
+            }
+        }
+        EntityKind::Point { .. } => {
+            return Err(BoardBakeError::NotAnEdge {
+                kind: KIND,
+                entity: entity.id,
+            });
+        }
+    })
+}
+
+/// A board drawing on its mechanical layer at each place of each line, arc
+/// or circle tagged `mechanical`.
+fn mechanical(ctx: &Context<'_>) -> Result<Vec<BoardGraphic>, BoardBakeError> {
     let mut out = Vec::new();
     for entity in ctx.tagged(|e| e.mechanical.is_some()) {
         let Some(attr) = entity.mechanical else {
             continue;
         };
-        let (kind, start, end, center, radius) = match entity.kind {
-            EntityKind::Line { start, end } => (
-                BoardGraphicKind::Line,
-                point(ctx, start, KIND)?,
-                point(ctx, end, KIND)?,
-                None,
-                0.0,
-            ),
-            // A board arc runs counter-clockwise from `start` to `end`.
-            EntityKind::Arc {
-                center,
-                start,
-                end,
-                sweep_ccw,
-            } => {
-                let (from, to) = if sweep_ccw {
-                    (start, end)
-                } else {
-                    (end, start)
-                };
-                let (c, from) = (point(ctx, center, KIND)?, point(ctx, from, KIND)?);
-                let radius = (from.x - c.x).hypot(from.y - c.y);
-                (
-                    BoardGraphicKind::Arc,
-                    from,
-                    point(ctx, to, KIND)?,
-                    Some(c),
-                    radius,
-                )
-            }
-            EntityKind::Circle { .. } => {
-                let (c, radius) = circle(ctx, entity, KIND)?;
-                let through = Point {
-                    x: c.x + radius,
-                    y: c.y,
-                };
-                (BoardGraphicKind::Circle, through, through, Some(c), radius)
-            }
-            EntityKind::Point { .. } => {
-                return Err(BoardBakeError::NotAnEdge {
-                    kind: KIND,
-                    entity: entity.id,
-                });
-            }
-        };
-        out.push(BoardGraphic {
-            uuid: entity.id.0,
-            graphic_type: kind.token().to_string(),
-            layer: pcb_layer_token(PcbLayer::Mechanical(attr.layer)),
-            width: PCB_DEFAULT_GRAPHIC_WIDTH_MM,
-            start: (kind != BoardGraphicKind::Circle).then_some(start),
-            end: Some(end),
-            center,
-            radius,
-            points: Vec::new(),
-            text: String::new(),
-            font_size: 0.0,
-        });
+        let edge = drawn(ctx, entity)?;
+        let sources = own_sources(entity);
+        for place in places(ctx, entity, &sources, &edge.shape(), "mechanical pattern")? {
+            // A reflection turns an arc clockwise: swap its ends to keep it
+            // counter-clockwise.
+            let flip = place.mirrors() && edge.kind == BoardGraphicKind::Arc;
+            let (start, end) = if flip {
+                (edge.end, edge.start)
+            } else {
+                (edge.start, edge.end)
+            };
+            out.push(BoardGraphic {
+                uuid: place.uuid,
+                graphic_type: edge.kind.token().to_string(),
+                layer: pcb_layer_token(PcbLayer::Mechanical(attr.layer)),
+                width: PCB_DEFAULT_GRAPHIC_WIDTH_MM,
+                start: (edge.kind != BoardGraphicKind::Circle).then(|| place.at(start)),
+                end: Some(place.at(end)),
+                center: edge.center.map(|c| place.at(c)),
+                radius: edge.radius,
+                points: Vec::new(),
+                text: String::new(),
+                font_size: 0.0,
+            });
+        }
     }
     Ok(out)
 }
@@ -201,6 +252,7 @@ fn anchors(
         if !matches!(entity.kind, EntityKind::Point { .. }) {
             return Err(BoardBakeError::AnchorNotAPoint { entity: entity.id });
         }
+        refuse_pattern(ctx, entity, BakedKind::ComponentAnchors)?;
         let Some(wanted) = attr.footprint else {
             return Err(BoardBakeError::AnchorWithoutComponent { entity: entity.id });
         };
@@ -223,7 +275,6 @@ fn anchors(
 #[cfg(test)]
 mod tests {
     use signex_sketch::attr::{BoardCutoutAttr, PourAttr, ThermalRelief};
-    use signex_sketch::entity::Entity;
     use signex_sketch::id::SketchEntityId;
     use signex_sketch::plane::{Plane, PlaneId, PlaneKind};
     use signex_types::pcb_layer::{CopperLayer, MechanicalLayer, TechnicalLayer};

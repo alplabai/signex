@@ -9,7 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use signex_sketch::baked_kinds::BakedKind;
-use signex_sketch::entity::EntityKind;
+use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::geom::{
     Point2, Segment2, SegmentIntersection, point_in_polygon, point_to_segment_distance,
     segment_segment_intersection,
@@ -22,6 +22,7 @@ use signex_types::pcb::Point;
 use super::features::hole_places;
 use super::geometry::{boundary, circle};
 use super::inside_corners::tight_corners;
+use super::patterned::boundary_places;
 use super::{BoardBakeError, Context};
 use crate::eval_util::{build_ctx, eval_mm};
 use crate::open_ends::open_ends;
@@ -208,6 +209,7 @@ pub fn outline_checks_with(
         sketch,
         solve,
         params,
+        instances: Default::default(),
     };
     let not_checked = |why| CheckState::NotChecked(why);
     let all_not_checked = |why| (not_checked(why), not_checked(why), not_checked(why));
@@ -421,7 +423,7 @@ fn openings_outside(ctx: &Context<'_>, outline: &ClosedOutline) -> Vec<Finding> 
         let attribute = format!("{:?}", entity.board_cutout);
         let kind = BakedKind::Cutouts;
         if let Ok(Some(polygon)) = boundary(ctx, &mut cutout_loops, &attribute, entity, kind)
-            && !polygon_inside(&polygon, outline)
+            && !every_instance_inside(ctx, entity, &polygon, kind, outline)
         {
             out.push(Finding::OpeningOutside {
                 entity: entity.id,
@@ -434,7 +436,7 @@ fn openings_outside(ctx: &Context<'_>, outline: &ClosedOutline) -> Vec<Finding> 
         let attribute = format!("{:?}", entity.keepout);
         let kind = BakedKind::Keepouts;
         if let Ok(Some(polygon)) = boundary(ctx, &mut keepout_loops, &attribute, entity, kind)
-            && !polygon_inside(&polygon, outline)
+            && !every_instance_inside(ctx, entity, &polygon, kind, outline)
         {
             out.push(Finding::OpeningOutside {
                 entity: entity.id,
@@ -472,6 +474,23 @@ fn openings_outside(ctx: &Context<'_>, outline: &ClosedOutline) -> Vec<Finding> 
         }
     }
     out
+}
+
+/// Whether every instance the bake writes of `polygon` is inside the
+/// outline; a refused pattern is the bake's to report.
+fn every_instance_inside(
+    ctx: &Context<'_>,
+    entity: &Entity,
+    polygon: &[Point],
+    kind: BakedKind,
+    outline: &ClosedOutline,
+) -> bool {
+    match boundary_places(ctx, entity, polygon, kind, "opening pattern") {
+        Ok(places) => places
+            .iter()
+            .all(|place| polygon_inside(&place.ring(polygon), outline)),
+        Err(_) => polygon_inside(polygon, outline),
+    }
 }
 
 /// Every corner of `polygon` inside the outline and no edge crossing it.

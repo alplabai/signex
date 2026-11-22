@@ -40,6 +40,7 @@ pub fn slot_size(
         sketch,
         solve,
         params: &params,
+        instances: Default::default(),
     };
     check(&ctx, seed).ok()
 }
