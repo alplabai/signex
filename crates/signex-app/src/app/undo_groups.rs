@@ -35,6 +35,9 @@ pub struct UndoGroupSheets {
     /// of a sheet that was not open). Back at their loaded state after an undo,
     /// they are clean, not unsaved.
     pub parked: Vec<std::path::PathBuf>,
+    /// Sheets with no unsaved edits when the run began. One whose tab closes
+    /// before the undo joins `parked`: it holds nothing the file lacks.
+    pub clean_before: Vec<std::path::PathBuf>,
     /// Parked sheets an undo took back to disk state and dropped. Their
     /// history is gone, so the group can no longer be redone as a whole.
     pub dropped: Vec<std::path::PathBuf>,
@@ -230,7 +233,11 @@ impl Signex {
         for path in &recorded.live {
             match self.document_state.engines.get(path) {
                 Some(engine) if direction.top(engine) == Some(group) => sheets.push(path.clone()),
-                Some(engine) if (undo && engine.has_undo_group(group)) || (!undo && owed(path)) => {
+                // A redo with no history at all: reopened, not edited.
+                Some(engine)
+                    if (undo && engine.has_undo_group(group))
+                        || (!undo && owed(path) && (engine.can_undo() || engine.can_redo())) =>
+                {
                     blocked.push(path.clone());
                 }
                 _ if owed(path) => skipped.push(path.clone()),

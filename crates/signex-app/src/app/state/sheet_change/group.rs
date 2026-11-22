@@ -76,6 +76,10 @@ impl DocumentState {
             ));
             return step;
         }
+        // Only now: a pass can move a sheet off its save point.
+        for path in &sheets.members {
+            self.pass_dead_class_picks(path, undo);
+        }
         step.ran = true;
         let moved = self.step_group_members(group, undo, &recorded, sheets.members, undocked);
         let (moved_any, active_patch, events) = moved;
@@ -100,7 +104,7 @@ impl DocumentState {
     /// The group's live sheets and the active one, sorted into the members
     /// that move and the ones that refuse the step.
     fn sort_group_sheets(
-        &mut self,
+        &self,
         group: UndoGroupId,
         undo: bool,
         recorded: &UndoGroupSheets,
@@ -113,10 +117,6 @@ impl DocumentState {
         paths.sort();
         let mut sheets = GroupSheets::default();
         for path in paths {
-            // A pick whose class edit was already undone is no later edit.
-            // Passing it stays even if the group step is then refused: it
-            // only moves that sheet's dead markers.
-            self.pass_dead_class_picks(&path, undo);
             let Some(engine) = self.engines.get(&path) else {
                 // A redo owes nothing to a sheet the undo did not revert.
                 if undo || recorded.undone.contains(&path) {
@@ -124,11 +124,10 @@ impl DocumentState {
                 }
                 continue;
             };
-            let top = if undo {
-                engine.next_undo_group()
-            } else {
-                engine.next_redo_group()
-            };
+            // A pick whose class edit was already undone is no later edit.
+            // It is read past here and moved only once the step goes ahead.
+            let top = engine
+                .group_past_dead_picks(undo, |marker| !self.net_class_pick_is_live(marker, undo));
             if top == Some(group) {
                 sheets.members.push(path);
                 continue;
@@ -136,15 +135,17 @@ impl DocumentState {
             // Undo: gone from this sheet's undo stack (reopened, or history
             // trimmed) means it cannot go back with the others; a newer edit
             // above a present entry blocks. Redo: only the sheets the undo
-            // reverted can owe one.
-            let expected = if undo {
-                engine.has_undo_group(group)
+            // reverted can owe one; with no history at all it was reopened,
+            // not edited.
+            let (expected, edited) = if undo {
+                (true, engine.has_undo_group(group))
             } else {
-                recorded.undone.contains(&path)
+                let owed = recorded.undone.contains(&path);
+                (owed, owed && (engine.can_undo() || engine.can_redo()))
             };
-            if expected {
+            if edited {
                 sheets.blocked.push(path);
-            } else if undo {
+            } else if expected {
                 sheets.out_of_reach.push(path);
             }
         }
@@ -203,8 +204,9 @@ impl DocumentState {
         (moved, active_patch, events)
     }
 
-    /// A parked sheet an undo took back to what was loaded from disk has
-    /// nothing to save; a redo marks it dirty again.
+    /// A parked sheet an undo took back to what its file holds (no step left,
+    /// or at the save point of a sheet whose tab closed) has nothing to save;
+    /// a redo marks it dirty again.
     fn is_back_at_disk(
         &self,
         path: &Path,
@@ -215,7 +217,7 @@ impl DocumentState {
             && self
                 .engines
                 .get(path)
-                .is_some_and(|engine| !engine.has_document_step(true))
+                .is_some_and(|engine| !engine.has_document_step(true) || engine.is_at_save_point())
             // A save of the re-prefixed bytes may still be landing; its
             // `mark_saved` refuses on the revision mismatch, so clearing the
             // mark now would lose this undo on disk.

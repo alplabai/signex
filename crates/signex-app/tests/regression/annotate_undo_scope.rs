@@ -366,6 +366,36 @@ fn redo_is_refused_whole_naming_a_sheet_closed_after_the_undo() {
     ));
 }
 
+/// Reopened after the undo: its history is empty, so it was not "edited".
+#[test]
+fn redo_refused_for_a_sheet_reopened_after_the_undo_gives_the_right_reason() {
+    let _ = signex_app::diagnostics::init_logging();
+    let mut p = project_with_child(AnnotateUndo::Project, "reopened-redo-child.snxsch");
+    annotate(&mut p.app);
+    undo(&mut p.app);
+    reopen_child(&mut p);
+    let before = signex_app::diagnostics::newest_entry_id().unwrap_or(0);
+
+    redo(&mut p.app);
+
+    assert_eq!(refs(&p.app, &p.root), ["U?", "C?"], "nothing is redone");
+    let lines: Vec<String> = signex_app::diagnostics::recent_entries()
+        .iter()
+        .filter(|e| e.id > before && e.message.contains("reopened-redo-child.snxsch"))
+        .map(|e| e.message.clone())
+        .collect();
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("was saved and closed")),
+        "{lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|line| line.contains("was edited after")),
+        "{lines:?}"
+    );
+}
+
 /// A DEAD net-class pick marker (its class edit is already undone, here: no
 /// such project) is no later edit: it is passed and the project-wide undo
 /// goes ahead with no "edited after" refusal (#661). A live one blocks; see

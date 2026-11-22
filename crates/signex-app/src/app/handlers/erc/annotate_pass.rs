@@ -156,6 +156,8 @@ impl Signex {
         let mut failed = false;
         let mut parked_here: std::collections::HashSet<std::path::PathBuf> = Default::default();
         let mut newly_dirty: Vec<std::path::PathBuf> = Vec::new();
+        let active_was_clean = (active_path.as_deref())
+            .is_some_and(|path| !self.document_state.is_document_dirty(path));
         for (sheet, path) in ordered_paths.iter().enumerate() {
             let scope = signex_engine::AnnotateScope {
                 parts: &parts,
@@ -289,6 +291,10 @@ impl Signex {
         }
         let changed_sheets = touched_sheets.live.len();
         touched_sheets.parked = parked_here.iter().cloned().collect();
+        touched_sheets.clean_before = newly_dirty;
+        if any_active_changed && active_was_clean {
+            touched_sheets.clean_before.extend(active_path.clone());
+        }
         if let Some(group) = undo_group {
             self.set_undo_group_sheets(group, touched_sheets);
         }

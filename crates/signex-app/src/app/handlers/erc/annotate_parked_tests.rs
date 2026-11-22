@@ -353,6 +353,107 @@ fn reset_duplicates_with_a_blocked_sheet_changes_nothing() {
     assert!(notice.contains("Nothing was changed"), "{notice}");
 }
 
+// ---- Saves outside the async path, closed tabs and refused steps.
+
+/// The blocking save of Exclude from Project must end the run's undo for the
+/// sheet it wrote, or Ctrl+Z reverts the root alone.
+#[test]
+fn excluding_a_parked_sheet_with_save_refuses_the_undo_whole() {
+    let _ = crate::diagnostics::init_logging();
+    let (mut app, dir, child) = fixture();
+    let pages = &mut app.document_state.projects[0].data.sheets;
+    let mut page = pages[0].clone();
+    page.filename = "z_child.snxsch".to_string();
+    pages.push(page);
+    annotate(&mut app);
+    app.ui_state.remove_dialog = Some(crate::app::RemoveDialogState {
+        target_path: child.clone(),
+        tree_path: vec![0, 1],
+        project_id: Some(app.document_state.projects[0].id),
+        display_name: "z_child.snxsch".to_string(),
+        is_outside_project: false,
+        unsaved_prompt: true,
+        is_directory_package: false,
+        choice: None,
+    });
+    send(
+        &mut app,
+        Message::Remove(crate::app::RemoveMsg::ExcludeDirty(
+            crate::app::ExcludeDirtyChoice::Save,
+        )),
+    );
+    let released = !app.document_state.engines.contains_key(&child);
+    let saved = child_refs(&dir);
+    let since = crate::diagnostics::newest_entry_id();
+
+    undo(&mut app);
+
+    let root = root_refs(&app, &dir);
+    let after = child_refs(&dir);
+    let named = logged_since(since, "z_child.snxsch was saved and closed");
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(released, "the blocking save releases the tabless engine");
+    assert_eq!(saved, ["R2"]);
+    assert_eq!(root, ["R1"], "the root did not revert alone");
+    assert_eq!(after, ["R2"]);
+    assert!(named, "the refusal names the sheet");
+}
+
+#[test]
+fn a_clean_sheet_whose_tab_closed_after_the_run_is_released_by_the_undo() {
+    let (mut app, dir, child) = fixture();
+    let root_path = dir.join("a_root.snxsch");
+    let on_disk = std::fs::read(&child).expect("child");
+    assert!(app.open_or_focus_sheet_path(child.clone()));
+    assert!(app.activate_tab_for_path(&root_path));
+    annotate(&mut app);
+    let idx = (app.document_state.tabs.iter())
+        .position(|tab| tab.path == child)
+        .expect("child tab");
+    let _close = app.close_tab_now(idx);
+    assert!(app.activate_tab_for_path(&root_path));
+    let parked = app.document_state.engines.contains_key(&child);
+
+    undo(&mut app);
+
+    let root = root_refs(&app, &dir);
+    let released = !app.document_state.engines.contains_key(&child);
+    let dirty = app.document_state.is_document_dirty(&child);
+    let unchanged = std::fs::read(&child).expect("child") == on_disk;
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(parked, "the unsaved sheet was parked when its tab closed");
+    assert_eq!(root, ["R5"]);
+    assert!(released && !dirty, "no clean tabless engine is left");
+    assert!(unchanged);
+}
+
+/// A refused step moves nothing, not even a dead class-pick marker.
+#[test]
+fn a_refused_undo_leaves_a_dead_pick_marker_where_it_was() {
+    let (mut app, dir, child) = fixture();
+    let root_path = dir.join("a_root.snxsch");
+    assert!(app.open_or_focus_sheet_path(child.clone()));
+    assert!(app.activate_tab_for_path(&root_path));
+    annotate(&mut app);
+    (app.document_state.engines.get_mut(&child))
+        .expect("child")
+        .record_class_pick(signex_engine::ClassPickMarker {
+            project: 1,
+            step: 1,
+        });
+    for group in app.document_state.undo_groups.values_mut() {
+        group.live.push(dir.join("gone.snxsch"));
+    }
+
+    undo(&mut app);
+
+    let marker = app.document_state.engines[&child].next_class_pick(true);
+    let root = root_refs(&app, &dir);
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(marker.is_some(), "the marker was not passed");
+    assert_eq!(root, ["R1"], "nothing moved");
+}
+
 // ---- A rename while parked.
 
 #[test]

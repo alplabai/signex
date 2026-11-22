@@ -228,6 +228,29 @@ impl Engine {
         steps.iter().rev().map(HistoryStep::marker)
     }
 
+    /// The group of the next edit one way, past the markers `is_dead` calls
+    /// dead, moving nothing. `None` when a live marker or an ungrouped edit
+    /// comes first.
+    pub fn group_past_dead_picks(
+        &self,
+        undo: bool,
+        is_dead: impl Fn(ClassPickMarker) -> bool,
+    ) -> Option<UndoGroupId> {
+        let steps = if undo {
+            self.history.undo_steps()
+        } else {
+            self.history.redo_steps()
+        };
+        for step in steps.iter().rev() {
+            match step.marker() {
+                Some(marker) if is_dead(marker) => {}
+                Some(_) => return None,
+                None => return step.group(),
+            }
+        }
+        None
+    }
+
     /// Is there an edit of the sheet (not just a marker) to undo or redo?
     pub fn has_document_step(&self, undo: bool) -> bool {
         self.steps_from_top(undo).any(|marker| marker.is_none())

@@ -168,7 +168,7 @@ unsaved parked sheet's undo groups with it.
 
 **Undo until you save** (Caner, 2026-11-22). One undo restores every sheet of a
 run while each is still in memory. A clean save of a tabless sheet releases its
-engine. A later undo or redo of the group is then refused whole, before any sheet
+engine, including the blocking save of Exclude from Project. A later undo or redo of the group is then refused whole, before any sheet
 moves, with one Messages line naming the sheets; the same holds for a sheet
 reopened since (a fresh history) or trimmed past the undo depth. A sheet with an
 open tab keeps its engine through the save, so it keeps its undo. If only the
