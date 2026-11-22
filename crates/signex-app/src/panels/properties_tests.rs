@@ -964,8 +964,7 @@ fn a_selected_label_titles_its_properties_section() {
 
 /// The words `ctx` draws the same in en-US and en-XA: text a call site
 /// rendered in `I18n::en_us()` instead of the panel's language. Only
-/// all-letter text is compared; digits and punctuation are skipped, and so
-/// are the unit symbols, which are the same in every language.
+/// all-letter text is compared; digits and punctuation are skipped.
 fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
     let english: Vec<String> = texts(&ctx).into_iter().map(|t| t.text).collect();
     ctx.i18n = std::sync::Arc::new(I18n::new(&signex_i18n::LanguagePref::Locale(
@@ -973,8 +972,7 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
     )));
     let xa: Vec<String> = texts(&ctx).into_iter().map(|t| t.text).collect();
     let is_words = |t: &str| {
-        !matches!(t, "mm" | "mil")
-            && t.chars().any(char::is_alphabetic)
+        t.chars().any(char::is_alphabetic)
             && t.chars().all(|c| c.is_alphabetic() || c == ' ' || c == '…')
     };
     english
@@ -985,10 +983,22 @@ fn same_in_en_xa(mut ctx: PanelContext) -> Vec<String> {
 
 /// #2059: Document Options and a selected part with its footprint card
 /// draw no catalog text in English under en-XA; only the design's own
-/// words (the part's footprint name) stay.
+/// words (the part's footprint name) stay. Unit symbols are not translated
+/// (DECISIONS 2026-11-07, `properties-unit-suffix`), so Document Options pins
+/// its exact tags: in mm the Units segment, whose English text matches, and
+/// the Visible and Snap Grid tags; in mil the two grid tags. One more
+/// hard-coded unit on the panel changes these lists.
 #[test]
 fn the_properties_panel_draws_no_english_under_en_xa() {
-    assert_eq!(same_in_en_xa(document_options()), Vec::<String>::new());
+    let in_unit = |unit| {
+        let mut ctx = document_options();
+        ctx.unit = unit;
+        ctx.grid_visible = true;
+        ctx.snap_enabled = true;
+        same_in_en_xa(ctx)
+    };
+    assert_eq!(in_unit(signex_types::coord::Unit::Mm), ["mm", "mm", "mm"]);
+    assert_eq!(in_unit(signex_types::coord::Unit::Mil), ["mil", "mil"]);
     assert_eq!(same_in_en_xa(document_parameters()), Vec::<String>::new());
     let mut part = one_selected(
         SelectedKindForTest::Symbol,

@@ -125,11 +125,11 @@ impl Signex {
     }
 
     /// The snapshot an undocked window draws of the board at `path`: its
-    /// view, with the ratsnest unless that view hides it.
+    /// view, with the ratsnest whenever that view draws it.
     pub(crate) fn undocked_pcb_snapshot(&self, path: &Path, board: &PcbBoard) -> PcbSnapshot {
         let fills = pcb_geom::zone_fills(board);
         let snapshot = self.pcb_snapshot_for(path, board).with_zone_fills(&fills);
-        if !self.pcb_layer_view(path).ratsnest_visible() {
+        if !self.pcb_layer_view(path).ratsnest_drawn() {
             return snapshot;
         }
         self.interaction_state

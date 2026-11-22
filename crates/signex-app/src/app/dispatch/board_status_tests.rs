@@ -423,6 +423,57 @@ fn a_ghost_on_the_cursor_is_not_dimmed() {
     );
 }
 
+/// #2821: with the ratsnest hidden, Show only unrouted still draws its lines
+/// on the main and undocked paths, and leaves the stored visibility alone.
+#[test]
+fn show_only_unrouted_draws_a_hidden_ratsnest_and_keeps_it_hidden() {
+    let (mut app, path, _main) = app_with_board();
+    let drawn = |app: &Signex| {
+        app.interaction_state
+            .pcb_canvas
+            .active_renderer_snapshot()
+            .expect("a board snapshot")
+            .ratsnest_lines
+            .len()
+    };
+    assert!(app.edit_pcb_view_at(&path, |view, _| view.toggle_ratsnest()));
+    assert_eq!(drawn(&app), 0, "hidden");
+    assert!(app.edit_pcb_view_at(&path, |view, _| view.set_only_unrouted(true)));
+    assert_ne!(drawn(&app), 0, "the mode shows the unrouted lines");
+    let board = app.active_pcb().expect("a board");
+    assert!(!app.undocked_pcb_snapshot(&path, board).ratsnest_lines.is_empty());
+    assert!(!app.pcb_layer_view(&path).ratsnest_visible());
+    assert!(app.edit_pcb_view_at(&path, |view, _| view.set_only_unrouted(false)));
+    assert_eq!(drawn(&app), 0, "hidden again when the mode ends");
+}
+
+/// #2821: a drag under the mode carries the ratsnest a hidden view would not.
+#[test]
+fn a_drag_under_show_only_unrouted_carries_a_hidden_ratsnest() {
+    let carried_lines = |only_unrouted: bool| {
+        let (mut app, path, _main) = app_with_board();
+        assert!(app.edit_pcb_view_at(&path, |view, _| {
+            view.toggle_ratsnest();
+            view.set_only_unrouted(only_unrouted);
+        }));
+        let _ = app.update(Message::PcbCanvas(
+            crate::pcb_canvas::PcbCanvasMsg::FootprintDragged {
+                from: Point::new(20.0, 0.0),
+                to: Point::new(25.0, 5.0),
+                tolerance_mm: 0.05,
+                leaves_tracks: false,
+            },
+        ));
+        app.interaction_state
+            .pcb_canvas
+            .drag_preview_scene()
+            .expect("a moving scene")
+            .overlay_lines
+            .len()
+    };
+    assert!(carried_lines(true) > carried_lines(false));
+}
+
 /// A renamed board keeps the toggle; its old path does not.
 #[test]
 fn show_only_unrouted_follows_a_renamed_board() {

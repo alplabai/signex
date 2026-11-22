@@ -372,6 +372,12 @@ impl PcbLayerView {
         self.ratsnest_visible = !self.ratsnest_visible;
     }
 
+    /// Whether the ratsnest is drawn: Show only unrouted draws it whatever
+    /// the stored visibility, which it leaves alone.
+    pub fn ratsnest_drawn(&self) -> bool {
+        self.ratsnest_visible || self.only_unrouted
+    }
+
     /// Whether the board is dimmed except its unrouted ratsnest lines.
     pub fn only_unrouted(&self) -> bool {
         self.only_unrouted

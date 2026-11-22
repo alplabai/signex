@@ -689,7 +689,7 @@ View since #2416 (it was in Tools); the key is `V N` in the default profile and
   one built off the UI thread; after an edit the last list stays shown until
   the new index lands.
 - Each row shows the net's name, its first matching net class as a pill and,
-  on the right, how many component pins it connects (Graphite mockup #58).
+  on the right, how many component pins it connects (Graphite mockup row 58).
   Named nets come first, then auto-named ones. The filter matches the net
   name or the class name.
 - Clicking a net expands it, on the selection fill, to its pins, labels,
@@ -866,7 +866,7 @@ three-level submenu. Rules, dialogs and storage:
 
 ## Sheet right-click menu {#sheet-context-menu}
 
-The schematic canvas menu (#2419, Graphite mockup #62, `app/view/context_menu/menus.rs`) shows
+The schematic canvas menu (#2419, Graphite mockup row 62, `app/view/context_menu/menus.rs`) shows
 rows by what was right-clicked and makes each command row live by the
 command's own enablement rule (`app/command/needs.rs`), the rule the menu bar
 greys the same row by and a keystroke is dropped by. A muted first line names
