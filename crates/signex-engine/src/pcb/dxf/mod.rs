@@ -11,7 +11,9 @@ mod shapes;
 #[cfg(test)]
 mod tests;
 
-pub use edges::{DxfEdge, DxfEdgeShape, DxfLayerRow, DxfSource, DxfUnits, dxf_edges, dxf_layer_rows};
+pub use edges::{
+    DxfEdge, DxfEdgeShape, DxfLayerRow, DxfSource, DxfUnits, dxf_edges, dxf_layer_rows,
+};
 pub use parse::{DxfDrawing, DxfEntity, parse_dxf, parse_dxf_raw};
 pub use shapes::{board_graphics, board_outline};
 

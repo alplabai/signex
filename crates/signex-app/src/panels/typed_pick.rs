@@ -53,12 +53,15 @@ impl<'a> TypedPick<'a> {
             .style(over_field_style(self.error));
         let mut over = row![input].align_y(Alignment::Center).width(Length::Fill);
         if let Some(unit) = self.unit {
-            over = over.push(text(unit).size(TS.caption).style(|theme: &Theme| {
-                iced::widget::text::Style {
-                    color: Some(FormLook::of(theme).ink3),
-                    ..Default::default()
-                }
-            }).boxed());
+            over = over.push(
+                text(unit)
+                    .size(TS.caption)
+                    .style(|theme: &Theme| iced::widget::text::Style {
+                        color: Some(FormLook::of(theme).ink3),
+                        ..Default::default()
+                    })
+                    .boxed(),
+            );
         }
         over = over.push(Space::new().width(CHEVRON_ROOM).boxed());
         stack![field, over].width(Length::Fill).boxed()
