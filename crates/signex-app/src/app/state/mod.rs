@@ -510,7 +510,7 @@ pub struct DocumentState {
     /// step in them (#2760). Not in `engines`, so nothing reads them as the
     /// document; see `app/parked_sheets.rs`.
     pub(crate) held_for_undo:
-        std::collections::HashMap<std::path::PathBuf, crate::app::parked_sheets::HeldEngine>,
+        std::collections::HashMap<std::path::PathBuf, crate::app::core::held_engine::HeldEngine>,
     /// Dirty documents that no editor draft holds; see `dirty.rs`, the only
     /// reader and writer. Ask `is_document_dirty`, never this field.
     pub(crate) dirty_docs: dirty::DirtyDocuments,

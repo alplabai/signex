@@ -8,6 +8,7 @@ pub(crate) mod compiled_design;
 pub(crate) mod component_class;
 pub(crate) mod document_key;
 pub(crate) mod document_times;
+pub(crate) mod held_engine;
 pub(crate) mod editor_address;
 pub(crate) mod event;
 pub(crate) mod locked_items;

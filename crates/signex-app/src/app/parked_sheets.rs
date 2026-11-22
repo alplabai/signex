@@ -10,16 +10,9 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::Signex;
-use super::state::{DocumentState, ProjectId};
+use super::state::DocumentState;
+use crate::app::core::held_engine::HeldEngine;
 use crate::persist::ContentHash;
-
-/// A saved sheet's engine, kept for the undo group that still has a step in it.
-#[derive(Debug)]
-pub(crate) struct HeldEngine {
-    pub(crate) engine: signex_engine::Engine,
-    /// The owning project: closing it ends the undo.
-    project: Option<ProjectId>,
-}
 
 impl Signex {
     /// A run installed a tabless engine for `path` from a copy with
