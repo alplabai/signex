@@ -219,7 +219,7 @@ impl Signex {
         // window's document.
         let actions: Vec<Element<'static, Message>> = crate::dock::title_actions(kind, ctx)
             .into_iter()
-            .map(|action| action.map(Message::Dock))
+            .map(|action| action.map(Message::Dock).boxed())
             .collect();
         let document = &self.document_state;
         let borderless = self.dialog_window_is_borderless(window);
