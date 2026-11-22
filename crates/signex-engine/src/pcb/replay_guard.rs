@@ -115,6 +115,25 @@ impl BoardReplayGuard {
         guard
     }
 
+    /// `items` as they stand on `board`, for a command that names them.
+    pub fn of_items(board: &PcbBoard, items: &[BoardItemId]) -> Self {
+        let mut targets: Vec<GuardedTarget> = Vec::with_capacity(items.len());
+        for item in items {
+            let target = Target::Item(*item);
+            if !targets.iter().any(|t| t.target == target) {
+                targets.push(GuardedTarget {
+                    target,
+                    before: read(board, target),
+                    after: None,
+                });
+            }
+        }
+        Self {
+            targets,
+            is_uncheckable: false,
+        }
+    }
+
     /// A guard for an edit whose targets were never read: it never holds.
     pub fn uncheckable() -> Self {
         Self {
@@ -161,6 +180,30 @@ impl BoardReplayGuard {
         !self.is_uncheckable
             && (self.targets.iter()).all(|guarded| read(board, guarded.target) == guarded.before)
     }
+
+    /// Whether every command of the edit has a target that can be checked.
+    pub fn is_checkable(&self) -> bool {
+        !self.is_uncheckable && !self.targets.is_empty()
+    }
+
+    /// Whether `commands`, built from the board as it is now, write nothing
+    /// this guard does not hold.
+    pub fn writes_only_its_targets(&self, board: &PcbBoard, commands: &[BoardCommand]) -> bool {
+        commands.iter().all(|command| {
+            targets_of(board, command).is_some_and(|targets| {
+                (targets.iter()).all(|target| self.targets.iter().any(|t| t.target == *target))
+            })
+        })
+    }
+
+    /// Whether the edit wrote the board item or footprint pad `id`.
+    pub fn covers(&self, id: Uuid) -> bool {
+        self.targets.iter().any(|guarded| match guarded.target {
+            Target::Item(item) => item.uuid() == id,
+            Target::Pad(_, pad) => pad == id,
+            _ => false,
+        })
+    }
 }
 
 impl Target {
@@ -172,18 +215,12 @@ impl Target {
     }
 }
 
-/// What `command` writes. Empty for a command that carries no recorded state
-/// and acts on what is there; `None` for one that cannot be checked: an
-/// inverse, or one that adds objects.
+/// What `command` writes; `None` for one that cannot be checked: an inverse,
+/// one that adds objects, or one that acts on what is there with no recorded
+/// value to compare.
 fn targets_of(board: &PcbBoard, command: &BoardCommand) -> Option<Vec<Target>> {
     use BoardCommand as C;
     Some(match command {
-        C::Flip { .. }
-        | C::DeleteItems { .. }
-        | C::RemoveRoom { .. }
-        | C::RemoveSetup
-        | C::FitRoomToParts { .. }
-        | C::PullPartsIntoRoom { .. } => Vec::new(),
         C::MoveFootprint { footprint, .. } => vec![Target::Place(*footprint)],
         C::Rotate { footprint, .. } => vec![Target::Rotation(*footprint)],
         C::ReplaceItems { items } => items.iter().map(|i| Target::Item(i.id())).collect(),
@@ -217,7 +254,13 @@ fn targets_of(board: &PcbBoard, command: &BoardCommand) -> Option<Vec<Target>> {
         C::SetStackupName { .. } => vec![Target::StackName],
         C::EditRoom { room } => vec![Target::Room(room.uuid)],
         C::MoveRoom { room, .. } => vec![Target::Room(*room)],
-        C::RestoreFace { .. }
+        C::Flip { .. }
+        | C::DeleteItems { .. }
+        | C::RemoveRoom { .. }
+        | C::RemoveSetup
+        | C::FitRoomToParts { .. }
+        | C::PullPartsIntoRoom { .. }
+        | C::RestoreFace { .. }
         | C::RestoreBoardSketchBake(_)
         | C::RestoreItems { .. }
         | C::AddItems { .. }

@@ -6,7 +6,7 @@ use std::path::Path;
 use iced::Task;
 use pcb_geom::ItemRef;
 use signex_engine::Command;
-use signex_engine::pcb::{BoardCommand, placement};
+use signex_engine::pcb::{BoardCommand, BoardReplayGuard, placement};
 use signex_i18n::{RenderTranslatable, Translatable, ids};
 use signex_types::pcb::Point;
 
@@ -42,6 +42,27 @@ fn board_outcome<E: std::fmt::Display>(
         Ok(_) => CommandOutcome::Ran,
         Err(error) => CommandOutcome::disabled(error.to_string()),
     }
+}
+
+/// Whether a recorded board move no longer fits: a target left where the move
+/// found or left it, or the offset would now also carry a track it never
+/// wrote. A move the board refuses goes on to say why.
+fn board_move_is_stale(
+    board: &signex_types::pcb::PcbBoard,
+    footprints: &std::collections::BTreeSet<uuid::Uuid>,
+    delta: Point,
+    leaves_tracks: bool,
+    guard: Option<&BoardReplayGuard>,
+) -> bool {
+    let Some(guard) = guard.filter(|guard| guard.holds(board)) else {
+        return true;
+    };
+    let built = if leaves_tracks {
+        placement::move_footprints_only(board, footprints, delta)
+    } else {
+        placement::move_commands(board, footprints, delta)
+    };
+    built.is_ok_and(|commands| !guard.writes_only_its_targets(board, &commands))
 }
 
 impl Signex {
@@ -99,12 +120,23 @@ impl Signex {
             ReplayInput::Sheet {
                 commands,
                 pre_images,
+                guard,
                 ..
-            } => (self.document_state.engines.get(document))
-                .is_some_and(|e| rebase::is_stale(e.document(), commands, pre_images)),
+            } => (self.document_state.engines.get(document)).is_some_and(|e| {
+                rebase::is_stale(e.document(), commands, pre_images)
+                    || guard.as_ref().is_some_and(|g| !g.holds(e.document()))
+            }),
             ReplayInput::Board { guard, .. } => {
                 (self.document_state.pcb_board(document)).is_none_or(|board| !guard.holds(board))
             }
+            ReplayInput::BoardMove {
+                footprints,
+                delta,
+                leaves_tracks,
+                guard,
+            } => (self.document_state.pcb_board(document)).is_none_or(|board| {
+                board_move_is_stale(board, footprints, *delta, *leaves_tracks, guard.as_ref())
+            }),
             _ => false,
         };
         if is_stale {
@@ -174,6 +206,7 @@ impl Signex {
                 footprints,
                 delta,
                 leaves_tracks,
+                ..
             } => self.run_board_move(document, footprints, *delta, *leaves_tracks),
             ReplayInput::ReuseBlock {
                 name,

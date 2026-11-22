@@ -53,58 +53,6 @@ pub(super) fn acts_on_all_when_empty(id: &str) -> bool {
     matches!(id, "stitch_vias" | "add_teardrops" | "remove_teardrops")
 }
 
-/// How a row with operands that edits a board replays.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum BoardOperandReplay {
-    /// Works from the board as it is now and mints what it adds.
-    Recomputes,
-    /// Sets a value: on its own result it changes nothing.
-    SetsValue,
-    /// On its own result it would do something else: runs only on the board
-    /// as it found it.
-    OnlyAsFound,
-}
-
-/// The rule of the operand command `id`; `None` for one that edits no board.
-/// A command not named here that did write a board counts as
-/// [`BoardOperandReplay::OnlyAsFound`]. Rules: `docs/COMMAND_LOG.md`, "Replay".
-pub(super) fn board_operand_replay(id: &str) -> Option<BoardOperandReplay> {
-    Some(match id {
-        "add_board_graphic"
-        | "import_dxf"
-        | "stitch_vias"
-        | "add_teardrops"
-        | "remove_teardrops"
-        | "gloss_selected_routes"
-        | "board_shape_from_selection"
-        | "keepout_from_selection"
-        | "arrange_in_box"
-        | "repour_all"
-        | "tune_net_length"
-        | "tune_diff_pair"
-        | "update_pcb_from_schematic"
-        | "place_board_reuse_block" => BoardOperandReplay::Recomputes,
-        "lock_board_items"
-        | "unlock_board_items"
-        | "set_via_span"
-        | "set_layer_sizes"
-        | "set_pad_shape"
-        | "set_board_graphic"
-        | "set_footprint_text"
-        | "panelize_board"
-        | "remove_board_panel"
-        | "set_board_panel"
-        | "set_layer_color"
-        | "reset_layer_colors"
-        | "reset_board_origin"
-        | "waive_drc_violation"
-        | "unwaive_drc_violation"
-        | "import_dxf_outline" => BoardOperandReplay::SetsValue,
-        "set_layer_stack" | "swap_pins" | "swap_gates" => BoardOperandReplay::OnlyAsFound,
-        _ => return None,
-    })
-}
-
 /// The scope of the command `id`.
 ///
 /// `NothingToRepeat` is for a step of a tool in progress (`remove_last_vertex`,

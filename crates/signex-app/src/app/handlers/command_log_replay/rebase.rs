@@ -40,6 +40,11 @@ fn replaces_whole_object(command: &Command) -> bool {
     )
 }
 
+/// Whether every one of `commands` stores a whole object with a pre-image.
+pub(super) fn only_replaces_objects(commands: &[Command]) -> bool {
+    !commands.is_empty() && commands.iter().all(replaces_whole_object)
+}
+
 fn same_object(a: &Command, b: &Command) -> bool {
     match (a, b) {
         (Command::UpdateSchDrawing { drawing: a }, Command::UpdateSchDrawing { drawing: b }) => {
@@ -129,7 +134,8 @@ fn with_changes<T: Serialize + DeserializeOwned>(before: &T, after: &T, live: &T
 }
 
 /// Objects are compared key by key, lists by [`carry_list`]; anything else is
-/// one value. A list left out of the file when empty counts as empty.
+/// one value. A list left out of the file when empty counts as empty. `None`
+/// when a field the edit changed holds something else now.
 fn carry_changes(before: &Value, after: &Value, live: &mut Value) -> Option<()> {
     if before == after {
         return Some(());
@@ -141,17 +147,19 @@ fn carry_changes(before: &Value, after: &Value, live: &mut Value) -> Option<()> 
         (before, after, &mut *live)
     {
         for (key, old) in was.iter().filter(|(key, _)| !now.contains_key(*key)) {
-            if old.is_array() && target.get(key).is_some_and(|value| value != old) {
+            if target.get(key).is_some_and(|value| value != old) {
                 return None;
             }
             target.remove(key);
         }
         for (key, value) in now {
             let Some(old) = was.get(key) else {
-                if value.is_array()
-                    && let Some(slot) = target.get_mut(key)
-                {
-                    carry_list(&Value::Array(Vec::new()), value, slot)?;
+                if let Some(slot) = target.get_mut(key) {
+                    if value.is_array() {
+                        carry_list(&Value::Array(Vec::new()), value, slot)?;
+                    } else if slot != value {
+                        return None;
+                    }
                     continue;
                 }
                 target.insert(key.clone(), value.clone());
@@ -168,20 +176,22 @@ fn carry_changes(before: &Value, after: &Value, live: &mut Value) -> Option<()> 
                     carry_list(old, value, &mut emptied)?;
                     target.insert(key.clone(), emptied);
                 }
-                None => {
-                    target.insert(key.clone(), value.clone());
-                }
+                None => return None,
             }
         }
         return Some(());
+    }
+    if *live != *before && *live != *after {
+        return None;
     }
     *live = after.clone();
     Some(())
 }
 
-/// Carry a list's change element by element. `None` unless all three have
-/// one length and no element changed on both sides to different values: a
-/// list that grew, shrank or was edited at the same place has no safe merge.
+/// Carry a list's change element by element, and an element that is an
+/// object field by field. `None` unless all three lists have one length and
+/// no single field changed on both sides to different values: a list that
+/// grew, shrank or was edited at the same field has no safe merge.
 fn carry_list(before: &Value, after: &Value, live: &mut Value) -> Option<()> {
     if before == after || *live == *after {
         return Some(());
@@ -189,6 +199,9 @@ fn carry_list(before: &Value, after: &Value, live: &mut Value) -> Option<()> {
     if *live == *before {
         *live = after.clone();
         return Some(());
+    }
+    if before.is_object() && after.is_object() && live.is_object() {
+        return carry_changes(before, after, live);
     }
     let (Value::Array(was), Value::Array(now), Value::Array(target)) = (before, after, live) else {
         return None;
@@ -311,6 +324,46 @@ mod tests {
         SchDrawing::Table(table)
     }
 
+    /// A table whose first column reads `title` and is `shown` or not.
+    fn table_column(title: &str, shown: bool) -> SchDrawing {
+        let mut table = SchTable::new_typed(ID, Point::new(0.0, 0.0));
+        table.columns[0].title = title.to_string();
+        table.columns[0].shown = shown;
+        SchDrawing::Table(table)
+    }
+
+    /// DECISIONS 2026-11-22: per field, inside a list's element too.
+    #[test]
+    fn a_nested_list_element_takes_the_edit_and_keeps_its_other_field() {
+        let now = replayed(
+            table_column("a", true),
+            table_column("x", true),
+            table_column("a", false),
+        );
+        assert_eq!(now, Some(table_column("x", false)));
+    }
+
+    #[test]
+    fn the_same_field_of_a_nested_list_element_changed_since_refuses() {
+        let now = replayed(
+            table_column("a", true),
+            table_column("x", true),
+            table_column("z", true),
+        );
+        assert!(now.is_none());
+    }
+
+    /// DECISIONS 2026-11-22: another field changed since stays.
+    #[test]
+    fn a_properties_replay_keeps_another_field_changed_since() {
+        let now = replayed(
+            rect(20.0, FillType::None),
+            rect(20.0, FillType::Background),
+            rect(50.0, FillType::None),
+        );
+        assert_eq!(now, Some(rect(50.0, FillType::Background)));
+    }
+
     /// The edit `was` to `edit`, replayed onto `live`; `None` when refused.
     fn replayed(was: SchDrawing, edit: SchDrawing, live: SchDrawing) -> Option<SchDrawing> {
         let edit = Command::UpdateSchDrawing { drawing: edit };
@@ -334,6 +387,18 @@ mod tests {
             table(&[&["x", "y"]]),
         );
         assert_eq!(now, Some(table(&[&["x", "y"]])));
+    }
+
+    /// The fill the recorded edit set was changed again since: the replay
+    /// would write over it.
+    #[test]
+    fn a_field_the_edit_changed_and_that_changed_since_refuses_the_replay() {
+        let now = replayed(
+            rect(20.0, FillType::None),
+            rect(20.0, FillType::Background),
+            rect(20.0, FillType::Outline),
+        );
+        assert!(now.is_none());
     }
 
     /// `links` is left out of the JSON while empty.

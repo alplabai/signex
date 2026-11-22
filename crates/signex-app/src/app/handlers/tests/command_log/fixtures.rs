@@ -101,6 +101,14 @@ pub(super) fn undo(app: &mut Signex, path: &Path) {
         .expect("an undo step");
 }
 
+/// The newest row is the refusal of a command off the safe list (DECISIONS
+/// 2026-11-22, "refuses unless proven safe").
+pub(super) fn assert_not_replayable(app: &Signex) {
+    let row = newest(app);
+    let reason = failure(&row);
+    assert!(reason.contains("can't be replayed"), "{reason}");
+}
+
 pub(super) fn failure(row: &LogRow) -> &str {
     match &row.outcome {
         LogOutcome::Failed(reason) => reason,

@@ -59,6 +59,10 @@ command-log-replay-nothing-to-repeat = Not replayed: { $command } has nothing to
 command-log-replay-made-objects = Not replayed: { $command } made new objects from values only its tool held.
 # $command is the command's label.
 command-log-replay-state-changed = Not replayed: { $document } changed after { $command } ran, and running it again would undo those changes.
+# $command is the command's label.
+command-log-replay-not-replayable = Not replayed: { $command } can't be replayed, because running it again has not been proven safe.
+# $command is the command's label.
+command-log-replay-nothing-to-check = Not replayed: { $command } recorded no state to check its target against, so running it again can't be proven safe.
 command-log-replay-tool-active =Not replayed: a tool is in progress, and running this on { $document } would disturb it. Finish or cancel the tool first.
 command-log-replay-no-change = The replayed command changed nothing.
 command-log-replay-numbers-unread = Not replayed: the copy needs numbers from the whole project, and a sheet of { $document }'s project is not open. Open its sheets and replay again.

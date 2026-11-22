@@ -60,6 +60,8 @@ define_ids! {
     COMMAND_LOG_REPLAY_NOTHING_TO_REPEAT = "command-log-replay-nothing-to-repeat";
     COMMAND_LOG_REPLAY_MADE_OBJECTS = "command-log-replay-made-objects";
     COMMAND_LOG_REPLAY_STATE_CHANGED = "command-log-replay-state-changed";
+    COMMAND_LOG_REPLAY_NOT_REPLAYABLE = "command-log-replay-not-replayable";
+    COMMAND_LOG_REPLAY_NOTHING_TO_CHECK = "command-log-replay-nothing-to-check";
     COMMAND_LOG_REPLAY_TOOL_ACTIVE = "command-log-replay-tool-active";
     COMMAND_LOG_REPLAY_NO_CHANGE = "command-log-replay-no-change";
     COMMAND_LOG_REPLAY_NUMBERS_UNREAD = "command-log-replay-numbers-unread";
