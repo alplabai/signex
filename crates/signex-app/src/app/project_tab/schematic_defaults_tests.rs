@@ -389,26 +389,36 @@ fn unusable_input_keeps_the_default_and_only_empty_text_clears() {
     assert_eq!(wire(&app), None, "empty text clears");
 }
 
-/// Review of #2026: a junction default below its draw floor is clamped to
-/// 0.7 mm and the field says so.
+/// #2783: a junction default takes 0.2 to 2 mm. A value outside is refused:
+/// the stored default stays, the box keeps the text and reads invalid.
 #[test]
-fn a_junction_default_below_the_floor_is_clamped_and_noted() {
-    let draft = "0.3".to_string();
+fn a_junction_default_outside_the_range_is_refused_with_the_text_kept() {
+    use super::schematic_defaults::{FieldState, clamp_note, field_state};
     let field = SchematicDefaultField::JunctionDiameter;
-    let note = super::schematic_defaults::clamp_note(field, Some(&draft)).expect("noted");
-    assert_eq!(note.used, 0.7, "the floor is used");
-    let range = field.range();
-    assert_eq!((note.min, note.max), (*range.start(), *range.end()));
-    assert_eq!(note.min, 0.7, "the range starts at the floor");
+    assert_eq!(field.range(), 0.2..=2.0);
     let (mut app, _sheet, _window) = app();
-    edit(&mut app, SchematicDefaultField::JunctionDiameter, "0.3");
-    assert_eq!(
+    let stored = |app: &Signex| {
         app.document_state.projects[0]
             .data
             .schematic_defaults
-            .junction_diameter_mm,
-        Some(0.7)
-    );
+            .junction_diameter_mm
+    };
+    for value in ["0.2", "0.3", "2"] {
+        edit(&mut app, field, value);
+        let want = value.parse::<f64>().expect("a number");
+        assert_eq!(stored(&app), Some(want), "{value} is in range");
+    }
+    let project_id = app.document_state.projects[0].id;
+    for bad in ["0.19", "2.01", "5"] {
+        edit(&mut app, field, bad);
+        assert_eq!(stored(&app), Some(2.0), "{bad} changes nothing");
+        let draft = app.document_state.project_tabs[&project_id]
+            .default_drafts
+            .get(&field);
+        assert_eq!(draft.map(String::as_str), Some(bad), "the text stays");
+        assert_eq!(clamp_note(field, draft), None, "nothing was clamped");
+        assert_eq!(field_state(field, draft, Some(2.0)), FieldState::Invalid);
+    }
 }
 
 /// Review of #2026: a late edit for a project that is no longer loaded
@@ -535,13 +545,11 @@ fn the_preview_labels_read_built_in_set_or_clamped() {
     use signex_types::project::{MAX_DEFAULT_WIDTH_MM, SchematicDefaultOverrides};
     let overrides = SchematicDefaultOverrides {
         bus_width_mm: Some(0.5),
-        junction_diameter_mm: Some(MAX_DEFAULT_WIDTH_MM),
+        shape_stroke_mm: Some(MAX_DEFAULT_WIDTH_MM),
         ..Default::default()
     };
-    let drafts = std::collections::HashMap::from([(
-        SchematicDefaultField::JunctionDiameter,
-        "9".to_string(),
-    )]);
+    let drafts =
+        std::collections::HashMap::from([(SchematicDefaultField::ShapeStroke, "9".to_string())]);
     let i18n = signex_i18n::I18n::en_us();
     let labels = value_labels(&overrides, Some(&drafts), &i18n);
     assert_eq!(labels.len(), SchematicDefaultField::ALL.len());
@@ -557,11 +565,11 @@ fn the_preview_labels_read_built_in_set_or_clamped() {
     );
     assert_eq!(label(SchematicDefaultField::BusWidth).look, LabelLook::Set);
     assert!(label(SchematicDefaultField::BusWidth).words.contains("0.5"));
-    let junction = label(SchematicDefaultField::JunctionDiameter);
-    assert_eq!(junction.look, LabelLook::Clamped);
+    let stroke = label(SchematicDefaultField::ShapeStroke);
+    assert_eq!(stroke.look, LabelLook::Clamped);
     assert!(
-        junction.words.contains('5') && junction.words.contains('9'),
+        stroke.words.contains('5') && stroke.words.contains('9'),
         "{}",
-        junction.words
+        stroke.words
     );
 }

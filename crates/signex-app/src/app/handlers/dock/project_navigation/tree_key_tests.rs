@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use crate::app::handlers::menu::export::tests::app_workspace;
+use crate::app::handlers::menu::export::tests::{app_workspace, open_with};
 use crate::app::{ContextMenuMsg, Message, ProjectTreeAction, Signex};
 use signex_widgets::tree_view::{TreeKey, key_of};
 
@@ -96,6 +96,31 @@ fn open_selects_the_keyed_sheet_after_a_reorder() {
         app.document_state.panel_ctx.project_tree_selected,
         Some(key)
     );
+}
+
+/// #2777: one pick of Open opens the row's document and leaves no memo for
+/// a click after it to read as the second of a double-click.
+#[test]
+fn one_pick_of_open_opens_the_document() {
+    let mut app = app_with_sheets();
+    // A parked dirty sheet opens with no file read.
+    let path = PathBuf::from("/proj").join("b.snxsch");
+    let sheet = signex_types::schematic::SchematicSheet {
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    open_with(&mut app.document_state, &path, sheet);
+    app.document_state.mark_document_dirty(&path);
+    let key = sheet_key(&app, "b.snxsch");
+
+    pick(&mut app, ProjectTreeAction::OpenNode(key.clone()));
+
+    assert!(app.document_state.tabs.iter().any(|tab| tab.path == path));
+    assert_eq!(
+        app.document_state.panel_ctx.project_tree_selected,
+        Some(key)
+    );
+    assert_eq!(app.interaction_state.last_tree_click.key(), None);
 }
 
 #[test]

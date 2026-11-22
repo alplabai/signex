@@ -124,6 +124,18 @@ fn a_junction_keeps_the_canvas_floor_and_takes_the_project_size() {
     assert_eq!(p.junction_radius_mm(1.2), 0.6, "an explicit size wins");
 }
 
+/// #2783: an unset junction draws at a project default below the stored
+/// size's floor, so the whole 0.2 to 2 mm range shows.
+#[test]
+fn an_unset_junction_draws_at_a_small_project_default() {
+    let p = SchematicDefaults {
+        junction_diameter_mm: 0.2,
+        ..B
+    };
+    assert_eq!(p.junction_radius_mm(0.0), 0.1);
+    assert_eq!(p.junction_radius_mm(0.4), 0.35, "a stored size keeps the floor");
+}
+
 #[test]
 fn a_wire_line_style_falls_back_class_project_built_in() {
     use crate::net_class::NetLineStyle as L;

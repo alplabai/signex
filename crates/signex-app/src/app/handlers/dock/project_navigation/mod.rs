@@ -86,7 +86,7 @@ impl Signex {
         &mut self,
         panel_msg: &crate::panels::PanelMsg,
     ) -> Option<Task<Message>> {
-        use signex_widgets::tree_view::{TreeIcon, TreeMsg, get_node, resolve_path};
+        use signex_widgets::tree_view::{TreeMsg, get_node, resolve_path};
 
         let mut follow = Task::none();
         let handled = match panel_msg {
@@ -107,20 +107,7 @@ impl Signex {
                 let path = &path;
                 let selected_node =
                     get_node(self.document_state.panel_ctx.project_tree.as_slice(), path);
-                let is_openable = selected_node.is_some_and(|node| {
-                    matches!(
-                        node.icon,
-                        TreeIcon::Schematic
-                            | TreeIcon::Pcb
-                            | TreeIcon::SnxSchematic
-                            | TreeIcon::SnxPcb
-                            | TreeIcon::SnxProject
-                            | TreeIcon::SnxFootprint
-                            | TreeIcon::SnxSimulation
-                            | TreeIcon::SnxLibrary
-                            | TreeIcon::SnxSymbol
-                    )
-                });
+                let is_openable = selected_node.is_some_and(tree_row_opens);
                 if !is_openable {
                     self.interaction_state.last_tree_click.clear();
                     // `follow` is still its initial `Task::none()` here —
@@ -144,18 +131,8 @@ impl Signex {
                     .interaction_state
                     .last_tree_click
                     .register(key.clone(), std::time::Instant::now());
-                if is_double {
-                    if let Some(missing) = self.missing_child_sheet_at(path) {
-                        follow = self.offer_create_child_sheet(&missing);
-                    } else if let Some(node) = selected_node {
-                        match self.open_project_tree_document(path, node.label.clone()) {
-                            Ok(task) => follow = task,
-                            Err(error) => crate::diagnostics::log_error(
-                                "Failed to open project tree document",
-                                &error,
-                            ),
-                        }
-                    }
+                if is_double && let Some(label) = selected_node.map(|node| node.label.clone()) {
+                    follow = self.open_tree_row(path, label);
                 }
                 true
             }
@@ -172,6 +149,21 @@ impl Signex {
             _ => false,
         };
         if handled { Some(follow) } else { None }
+    }
+
+    /// Open the document of the row at `path`, or offer to create a child
+    /// sheet that is missing.
+    fn open_tree_row(&mut self, path: &[usize], label: String) -> Task<Message> {
+        if let Some(missing) = self.missing_child_sheet_at(path) {
+            return self.offer_create_child_sheet(&missing);
+        }
+        match self.open_project_tree_document(path, label) {
+            Ok(task) => task,
+            Err(error) => {
+                crate::diagnostics::log_error("Failed to open project tree document", &error);
+                Task::none()
+            }
+        }
     }
 
     fn dispatch_show_project_tree_context_menu(
@@ -194,7 +186,6 @@ impl Signex {
         action: crate::app::ProjectTreeAction,
     ) -> Task<Message> {
         use crate::app::ProjectTreeAction;
-        use signex_widgets::tree_view::TreeMsg;
 
         // Dismiss the menu first — every action either takes effect
         // instantly or triggers a follow-up error, and a lingering
@@ -219,20 +210,17 @@ impl Signex {
 
         match action {
             ProjectTreeAction::OpenNode(_) => {
-                let path = tree_path;
-                // Reuse the existing leaf-open path. Wrapping the inner
-                // call in the same PanelMsg handler keeps the icon-gate
-                // logic (only schematic / pcb / snx* leaves open) in
-                // one place.
-                let key = signex_widgets::tree_view::key_of(
-                    self.document_state.panel_ctx.project_tree.as_slice(),
-                    &path,
-                );
-                if let Some(key) = key {
-                    let msg = crate::panels::PanelMsg::Tree(TreeMsg::Select(key));
-                    if let Some(task) = self.handle_dock_project_navigation_panel_message(&msg) {
-                        return task;
-                    }
+                // One pick opens: the double-click gate is the row's.
+                use signex_widgets::tree_view::{get_node, key_of};
+                let tree = self.document_state.panel_ctx.project_tree.as_slice();
+                let label = get_node(tree, &tree_path)
+                    .filter(|node| tree_row_opens(node))
+                    .map(|node| node.label.clone());
+                let key = key_of(tree, &tree_path);
+                self.interaction_state.last_tree_click.clear();
+                if let Some(label) = label {
+                    self.document_state.panel_ctx.project_tree_selected = key;
+                    return self.open_tree_row(&tree_path, label);
                 }
             }
             ProjectTreeAction::ToggleNode(_) => {
@@ -354,6 +342,23 @@ impl Signex {
 
 /// Recursively set every node's `expanded` state — used by
 /// Expand all / Collapse all menu items.
+/// Whether a row names a document the tree can open.
+fn tree_row_opens(node: &signex_widgets::tree_view::TreeNode) -> bool {
+    use signex_widgets::tree_view::TreeIcon;
+    matches!(
+        node.icon,
+        TreeIcon::Schematic
+            | TreeIcon::Pcb
+            | TreeIcon::SnxSchematic
+            | TreeIcon::SnxPcb
+            | TreeIcon::SnxProject
+            | TreeIcon::SnxFootprint
+            | TreeIcon::SnxSimulation
+            | TreeIcon::SnxLibrary
+            | TreeIcon::SnxSymbol
+    )
+}
+
 fn set_expanded_recursive(nodes: &mut [signex_widgets::tree_view::TreeNode], expanded: bool) {
     for node in nodes {
         node.expanded = expanded;

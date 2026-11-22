@@ -142,6 +142,33 @@ fn typing_a_width_in_properties_updates_the_connector_as_one_step() {
     assert!((doc(&app).harness.connectors[0].width - 10.16).abs() < 1e-9);
 }
 
+/// #2784: Width and Entry Pitch refuse what no connector can hold; the
+/// connector stays and the box keeps the text.
+#[test]
+fn a_size_that_is_not_a_positive_number_is_refused_with_the_text_kept() {
+    let mut app = app_with_connector();
+    let id = doc(&app).harness.connectors[0].uuid;
+    let before = doc(&app).harness.connectors[0].clone();
+    for field in [HarnessField::Width, HarnessField::EntryPitch] {
+        for bad in ["nan", "inf", "-inf", "-1", "0", "abc"] {
+            harness(
+                &mut app,
+                HarnessPanelMsg::FieldTyped {
+                    connector: id,
+                    field,
+                    text: bad.to_string(),
+                },
+            );
+            assert_eq!(doc(&app).harness.connectors[0], before, "{field:?} {bad}");
+            assert_eq!(
+                app.document_state.panel_ctx.harness.draft,
+                Some((field, bad.to_string())),
+                "the box keeps {bad}"
+            );
+        }
+    }
+}
+
 #[test]
 fn the_rename_fix_renames_the_entry_as_one_step() {
     let mut app = app_with_connector();

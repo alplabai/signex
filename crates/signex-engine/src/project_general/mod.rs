@@ -423,6 +423,12 @@ impl ProjectGeneralHistory {
     pub fn can_redo(&self) -> bool {
         self.history.can_redo()
     }
+
+    /// Position in the edit timeline, counting steps the depth cap dropped:
+    /// an edit or a redo raises it, an undo lowers it.
+    pub fn position(&self) -> usize {
+        self.history.position()
+    }
 }
 
 #[cfg(test)]
