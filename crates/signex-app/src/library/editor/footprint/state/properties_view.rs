@@ -22,6 +22,9 @@ pub mod pad_field {
     pub const MASK_BOTTOM: &str = "mask_bottom";
 }
 
+/// The `numeric_buffers` key of the footprint's refused Height text.
+pub const FOOTPRINT_HEIGHT_BUFFER: &str = "footprint.height";
+
 /// The `numeric_buffers` key of `field` on the selected pad `idx`, or on
 /// the next pad placed when `idx` is `None`.
 pub fn pad_field_buffer_key(idx: Option<usize>, field: &str) -> String {

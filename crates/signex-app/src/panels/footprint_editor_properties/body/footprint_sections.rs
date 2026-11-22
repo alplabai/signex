@@ -46,7 +46,9 @@ fn footprint_section<'a>(
     mut col: Column<Element<'a, PanelMsg>>,
     cx: Ctx<'a, '_>,
 ) -> Column<Element<'a, PanelMsg>> {
-    use super::super::rows::{edit_row, edit_row_note, pick_row};
+    use super::super::pad::{Shown, number_input, with_refusals};
+    use super::super::rows::{control_row, edit_row, edit_row_note, pick_row};
+    use crate::library::editor::footprint::FOOTPRINT_HEIGHT_BUFFER;
     use signex_library::primitive::footprint::ComponentType;
     let Ctx { fp, i18n, .. } = cx;
     let title = t!(i18n, ids::EDITORS_FP_PROPS_SECTION_FOOTPRINT);
@@ -89,15 +91,25 @@ fn footprint_section<'a>(
         PanelMsg::FpEditorSetFootprintComponentType,
         muted,
     ));
-    let height = fp
-        .footprint_height_mm
-        .map(|v| format!("{v:.3}"))
-        .unwrap_or_default();
-    col = col.push(edit_row(
+    // Refused text stays in the field with its reason (mockup row 124).
+    let height = Shown::from_buffer(
+        fp.numeric_buffers.get(FOOTPRINT_HEIGHT_BUFFER),
+        fp.footprint_height_mm
+            .map(|v| format!("{v:.3}"))
+            .unwrap_or_default(),
+        false,
+        |_| true,
+    );
+    let height_row = control_row(
         &key(ids::EDITORS_FP_PROPS_HEIGHT),
-        &height,
+        number_input(&height, PanelMsg::FpEditorSetFootprintHeight, cx.tokens),
         muted,
-        PanelMsg::FpEditorSetFootprintHeight,
+    );
+    col = col.push(with_refusals(
+        height_row,
+        &[height.refusal],
+        cx.tokens,
+        i18n,
     ));
     col = super::super::props_kv_row(
         col,

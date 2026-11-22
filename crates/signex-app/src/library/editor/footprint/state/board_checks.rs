@@ -43,6 +43,15 @@ impl FootprintEditorState {
             .iter()
             .find_map(GapOffer::of)
     }
+
+    /// The first open profile end of `sketch` at the last solve, paired or
+    /// lone. `None` when every profile is closed or nothing is solved.
+    pub fn first_open_end(&self, sketch: Option<&SketchData>) -> Option<OpenEnd> {
+        let solve = self.last_solve.as_ref()?;
+        open_ends(sketch?, solve, bakes_a_profile)
+            .into_iter()
+            .next()
+    }
 }
 
 /// How a line of the Outline checks list reads.
