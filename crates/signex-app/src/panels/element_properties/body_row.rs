@@ -86,7 +86,6 @@ pub(super) fn push_body_row<'a>(
         BODY_NORMAL => c.push(iced::widget::Widget::boxed(signex_widgets::tooltip::<
             _,
             _,
-            iced::Theme,
         >(
             form_input_row_untipped(
                 t!(i18n, ids::PROPERTIES_BODY),
