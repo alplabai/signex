@@ -180,7 +180,7 @@ impl Signex {
         }
     }
 
-    fn open_project_files(&self, root: &Path) -> Vec<PathBuf> {
+    fn project_files_under(&self, root: &Path) -> Vec<PathBuf> {
         self.document_state
             .projects
             .iter()
@@ -240,7 +240,7 @@ impl Signex {
     /// With unsaved edits, read whether the branch has another project file:
     /// that switch offers Save and switch.
     fn check_project_file_task(&self, request: SwitchRequest) -> Task<Message> {
-        let files = self.open_project_files(&request.root);
+        let files = self.project_files_under(&request.root);
         if files.is_empty() {
             return Task::none();
         }
@@ -330,7 +330,7 @@ impl Signex {
         {
             return Task::none();
         }
-        let project_files = self.open_project_files(&root);
+        let project_files = self.project_files_under(&root);
         let mut held = self.branch_switch_held_paths(&root);
         held.retain(|path| !project_files.contains(path));
         self.document_state.branch_switch = Some(root.clone());
