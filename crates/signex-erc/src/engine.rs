@@ -51,6 +51,7 @@ pub fn run_all_with_config(ctx: &ErcContext, config: &ErcConfig) -> Vec<Diagnost
     rules::part_without_footprint(ctx, &mut out);
     rules::part_without_value(ctx, &mut out);
     rules::part_without_mpn(ctx, &mut out);
+    rules::part_without_library_body(ctx, &mut out);
     rules::unannotated_designator(ctx, &mut out);
     rules::net_completeness(ctx, &mut out);
     rules::units_not_placed(ctx, &mut out);

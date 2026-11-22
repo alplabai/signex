@@ -261,6 +261,36 @@ fn a_hole_outside_or_across_the_edge_is_named() {
 }
 
 #[test]
+fn a_hole_whose_pattern_instance_leaves_the_board_is_named() {
+    use signex_sketch::array::{Array, ArrayId, ArrayKind, NumberingScheme};
+
+    let mut s = Sketch::new();
+    s.outline(&BOARD);
+    let hole = s.circle(40.0, 10.0, 1.5);
+    s.get(hole).mounting_hole = Some(MountingHoleAttr::default());
+    s.data.arrays.push(Array {
+        id: ArrayId::new(),
+        kind: ArrayKind::Linear {
+            source: hole,
+            count_expr: "3".into(),
+            dx_expr: "5mm".into(),
+            dy_expr: "0mm".into(),
+        },
+        numbering: NumberingScheme::default(),
+    });
+
+    let checks = s.checks();
+
+    assert_eq!(
+        findings(&checks.openings_inside),
+        [Finding::OpeningOutside {
+            entity: hole,
+            kind: BakedKind::MountingHoles,
+        }]
+    );
+}
+
+#[test]
 fn a_cutout_crossing_the_edge_is_named_by_its_seed_edge() {
     let mut s = Sketch::new();
     s.outline(&BOARD);

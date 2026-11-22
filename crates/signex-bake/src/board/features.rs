@@ -8,14 +8,19 @@
 use signex_sketch::baked_kinds::BakedKind;
 use signex_sketch::entity::{Entity, EntityKind};
 use signex_sketch::id::SketchEntityId;
-use signex_types::pcb::NetDef;
+use signex_types::pcb::{NetDef, Point};
 use signex_types::pcb_sketch::{PcbCutout, PcbHole, PcbKeepout, PcbVScore};
+use uuid::Uuid;
 
 use super::geometry::{boundary, circle, point};
 use super::{BoardBakeError, Context, slot};
+use crate::array::source_places;
 use crate::eval_util::{build_ctx, eval_dimensionless, eval_mm, opt_eval_mm};
 use crate::profile::trace_closed_profile_entities;
 use crate::traced_loops::TracedLoops;
+
+/// What a refused hole pattern is called in `BoardBakeError::Expression`.
+const HOLE_PATTERN: &str = "mounting hole pattern";
 
 pub(super) fn keepouts(ctx: &Context<'_>) -> Result<Vec<PcbKeepout>, BoardBakeError> {
     let mut loops = TracedLoops::default();
@@ -110,8 +115,57 @@ pub(super) fn named_net<'n>(
     }
 }
 
-/// A hole at each circle tagged `mounting_hole`: its solved centre, its
-/// diameter or the attribute's drill, and the named net's number.
+/// Where one mounting hole is written.
+pub(super) struct HolePlace {
+    pub(super) uuid: Uuid,
+    pub(super) position: Point,
+}
+
+/// Every place the hole `entity`, centred at `centre`, is drilled: the
+/// instances of the patterns of the circle or of its centre point, or the
+/// circle alone. A pattern that does not expand refuses the bake, since a
+/// dropped instance would pass DRC unseen.
+pub(super) fn hole_places(
+    ctx: &Context<'_>,
+    entity: &Entity,
+    centre: Point,
+) -> Result<Vec<HolePlace>, BoardBakeError> {
+    let EntityKind::Circle { center, .. } = entity.kind else {
+        return Err(BoardBakeError::HoleNotACircle { entity: entity.id });
+    };
+    let alone = || HolePlace {
+        uuid: entity.id.0,
+        position: centre,
+    };
+    if ctx.sketch.arrays.is_empty() {
+        return Ok(vec![alone()]);
+    }
+    let params_ast = crate::params::params_ast(ctx.sketch, ctx.params);
+    let sources = [entity.id, center];
+    let at = (centre.x, centre.y);
+    let places = source_places(ctx.sketch, ctx.solve, &params_ast, &sources, at)
+        .map_err(|message| expression(entity.id, HOLE_PATTERN, message))?;
+    let Some(places) = places else {
+        return Ok(vec![alone()]);
+    };
+    places
+        .into_iter()
+        .map(|place| -> Result<HolePlace, BoardBakeError> {
+            let (x, y) = place.at;
+            finite(x)
+                .and_then(|_| finite(y))
+                .map_err(|message| expression(entity.id, HOLE_PATTERN, message))?;
+            Ok(HolePlace {
+                uuid: place.uuid(entity.id.0),
+                position: Point { x, y },
+            })
+        })
+        .collect()
+}
+
+/// A hole at each place of each circle tagged `mounting_hole`
+/// ([`hole_places`]): its diameter or the attribute's drill, and the named
+/// net's number.
 pub(super) fn holes(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<PcbHole>, BoardBakeError> {
     let eval = build_ctx(ctx.sketch, ctx.params);
     let mut out = Vec::new();
@@ -138,14 +192,16 @@ pub(super) fn holes(ctx: &Context<'_>, nets: &[NetDef]) -> Result<Vec<PcbHole>, 
             BoardBakeError::UnknownNet { entity, net }
         })?
         .map(|n| n.number);
-        out.push(PcbHole {
-            uuid: entity.id.0,
-            position,
-            drill,
-            plated: attr.plated,
-            net,
-            unknown_columns: Default::default(),
-        });
+        for place in hole_places(ctx, entity, position)? {
+            out.push(PcbHole {
+                uuid: place.uuid,
+                position: place.position,
+                drill,
+                plated: attr.plated,
+                net,
+                unknown_columns: Default::default(),
+            });
+        }
     }
     Ok(out)
 }

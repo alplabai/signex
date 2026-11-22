@@ -116,16 +116,16 @@ impl SchematicDefaults {
         Self::resolve(width_mm, self.shape_stroke_mm)
     }
 
-    /// The radius a junction stored with `diameter_mm` draws and exports at,
-    /// never under [`SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM`].
+    /// The radius a junction stored with `diameter_mm` draws and exports at:
+    /// a stored size never under [`SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM`];
+    /// an unset one at the project's default, whose range is its own limit.
     #[must_use]
     pub fn junction_radius_mm(&self, diameter_mm: f64) -> f64 {
-        let diameter = if is_set_width(diameter_mm) {
-            diameter_mm
+        if is_set_width(diameter_mm) {
+            (diameter_mm * 0.5).max(SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
         } else {
-            self.junction_diameter_mm
-        };
-        (diameter * 0.5).max(SCHEMATIC_RENDER_JUNCTION_MIN_RADIUS_MM)
+            self.junction_diameter_mm * 0.5
+        }
     }
 
     /// The symbol's library stroke width, which its pins draw at: the most

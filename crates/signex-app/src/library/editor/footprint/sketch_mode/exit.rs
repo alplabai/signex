@@ -101,6 +101,37 @@ pub fn has_changes(editor: &FootprintDocument) -> bool {
         .is_some_and(|entry| entry.footprint != *editor.primitive())
 }
 
+/// Whether sketch mode has a start to compare with and the footprint and
+/// its pads still equal it. `false` on a host that keeps no start.
+pub fn is_unedited(editor: &FootprintDocument) -> bool {
+    editor
+        .state
+        .sketch_exit
+        .entry
+        .as_ref()
+        .is_some_and(|entry| {
+            entry.footprint == *editor.primitive() && entry.pads == editor.state.pads
+        })
+}
+
+/// An open profile stops the bake (mockup row 190): select its open ends and
+/// open the preview, which names the gap. `false` when no profile is open.
+fn show_open_profile(editor: &mut FootprintDocument) -> bool {
+    let Some(open) = editor
+        .state
+        .first_open_end(editor.primitive().sketch.as_ref())
+    else {
+        return false;
+    };
+    let state = &mut editor.state;
+    state.selected_sketch = open.ends.first().copied();
+    state.selected_sketch_secondary = open.ends.get(1).copied();
+    state.selected_sketch_extra.clear();
+    state.sketch_exit.preview = true;
+    editor.canvas_cache.clear();
+    true
+}
+
 /// Apply one exit message to a footprint in sketch mode.
 pub fn apply(editor: &mut FootprintDocument, msg: &FootprintEditorMsg) -> ExitOutcome {
     match msg {
@@ -111,7 +142,13 @@ pub fn apply(editor: &mut FootprintDocument, msg: &FootprintEditorMsg) -> ExitOu
             editor.canvas_cache.clear();
             ExitOutcome::Stay
         }
-        FootprintEditorMsg::SketchBakeRequested => ExitOutcome::Leave,
+        FootprintEditorMsg::SketchBakeRequested => {
+            if show_open_profile(editor) {
+                ExitOutcome::Stay
+            } else {
+                ExitOutcome::Leave
+            }
+        }
         FootprintEditorMsg::SketchDiscardRequested => {
             if has_changes(editor) {
                 editor.state.sketch_exit.confirming_discard = true;
@@ -152,6 +189,8 @@ fn restore_entry(editor: &mut FootprintDocument) {
     // A solve still in flight ran on the sketch that is gone.
     state.sketch_solve.supersede();
     editor.canvas_cache.clear();
+    // The restored footprint may differ from the last save.
+    editor.mark_dirty();
 }
 
 /// How many items of `kind` the footprint holds, for the bake preview.

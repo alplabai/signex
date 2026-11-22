@@ -817,18 +817,6 @@ impl Signex {
     }
 }
 
-/// v0.20 — parse a Properties-panel mm input as `Option<f64>`.
-/// Empty / whitespace = `None` (means "use rule"); non-numeric =
-/// `None` (the form re-displays the previous value, so the user
-/// can keep typing). Used by every per-side mask / paste row.
-pub(super) fn fp_parse_optional_mm(value: &str) -> Option<f64> {
-    let s = value.trim();
-    if s.is_empty() {
-        return None;
-    }
-    crate::numeric_field::parse_field_f64(s)
-}
-
 fn apply_graphic_field(
     g: &mut signex_library::SymbolGraphic,
     field: crate::panels::GraphicFieldId,

@@ -200,7 +200,6 @@ impl Signex {
         let tab = document.project_tabs.entry(project_id).or_default();
         let command = ProjectGeneralCommand::SetDiffPairClasses(classes);
         if tab.general_history.apply(&mut project.data, command) {
-            tab.rules_step_newest = false;
             // Classes feed the board, not ERC.
             document.sync_project_history_dirty(project_id, false);
             self.refresh_panel_ctx();

@@ -17,9 +17,11 @@ library. Two option cards:
 - "Use Git LFS for binary 3D models", indented under it, greyed and inert
   while Git is off (disable-when-off).
 
-A refused Create (the folder is the root of a repository with history) shows
-as an error banner with "Choose another location…", and Create stays disabled
-until the refusal clears.
+A refused Create shows as an error banner with "Choose another location…", and
+Create stays disabled until the refusal clears. Version control off clears a
+refusal for a folder that is the root of a repository with history. A library
+already at the path stays refused either way, and its banner adds "Open
+existing library".
 
 It is mounted as a full-screen overlay backdrop via
 `app/view/mod.rs::collect_overlays` when `LibraryState::create_options` is

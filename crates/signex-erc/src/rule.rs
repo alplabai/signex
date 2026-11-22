@@ -42,6 +42,7 @@ impl RuleId {
             RuleKind::PartWithoutFootprint => "builtin::part_without_footprint",
             RuleKind::PartWithoutValue => "builtin::part_without_value",
             RuleKind::PartWithoutMpn => "builtin::part_without_mpn",
+            RuleKind::PartWithoutLibraryBody => "builtin::part_without_library_body",
             RuleKind::UnannotatedDesignator => "builtin::unannotated_designator",
             RuleKind::SinglePinNet => "builtin::single_pin_net",
             RuleKind::NetWithNoDriver => "builtin::net_with_no_driver",
@@ -171,7 +172,7 @@ mod tests {
 
     /// Every built-in id string is persisted in saved profiles and project
     /// rule sets, so it must never follow a label rewording.
-    const PINNED_IDS: [(RuleKind, &str); 36] = [
+    const PINNED_IDS: [(RuleKind, &str); 37] = [
         (RuleKind::UnusedPin, "builtin::unused_pin"),
         (
             RuleKind::DuplicateRefDesignator,
@@ -232,6 +233,10 @@ mod tests {
         ),
         (RuleKind::PartWithoutValue, "builtin::part_without_value"),
         (RuleKind::PartWithoutMpn, "builtin::part_without_mpn"),
+        (
+            RuleKind::PartWithoutLibraryBody,
+            "builtin::part_without_library_body",
+        ),
         (
             RuleKind::UnannotatedDesignator,
             "builtin::unannotated_designator",

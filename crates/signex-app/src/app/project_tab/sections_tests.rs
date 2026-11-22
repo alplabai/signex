@@ -259,7 +259,7 @@ fn storing_erc_rules_from_the_tab_is_a_rule_history_step() {
         ProjectTabMsg::ErcRulesStoreRequested { project_id: id },
     );
     assert!(app.document_state.projects[0].data.rules.is_some());
-    assert!(app.document_state.project_tabs[&id].rules_step_newest);
+    assert!(app.project_step_is_rules(id, true));
     assert!(dirty(&app));
     // A second request stores nothing more.
     assert_eq!(app.store_erc_rules_of(id), Ok(false));

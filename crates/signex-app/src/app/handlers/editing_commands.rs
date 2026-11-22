@@ -37,8 +37,11 @@ impl Signex {
     /// One undo of the active sheet: its newest net-class pick or engine edit
     /// (net colours are engine edits), whichever came last. Whether a step ran.
     pub(crate) fn undo_active_sheet(&mut self) -> bool {
-        // A value still being typed is the newest step.
-        self.commit_live_drawing_edit();
+        // A value still being typed is the newest step; a typo that put the
+        // sheet back has already been this undo.
+        if self.commit_live_drawing_edit() {
+            return true;
+        }
         if self.step_net_class_pick(true) {
             return true;
         }

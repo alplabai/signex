@@ -338,6 +338,46 @@ fn removing_an_inner_layer_drops_its_via_sizes_saves_and_undoes_exactly() {
     );
 }
 
+/// #2776: a board edit and its undo reach the net table and the Layer Stack
+/// with no other panel refresh.
+#[test]
+fn the_net_table_and_the_stack_follow_an_edit_and_its_undo() {
+    use signex_engine::pcb::{BoardCommand, BoardItemId};
+    let dir = tempfile::tempdir().unwrap();
+    let mut with_net = board(true);
+    with_net.nets = serde_json::from_value(serde_json::json!([{"number": 1, "name": "GND"}]))
+        .expect("a net list");
+    with_net.segments[0].net = 1;
+    let segment = with_net.segments[0].uuid;
+    let mut app = app_workspace(&dir.path().to_string_lossy(), &[]);
+    let path = dir.path().join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), with_net);
+    app.refresh_panel_ctx();
+    let length = |app: &Signex| {
+        let nets = app.document_state.panel_ctx.pcb_nets.as_ref();
+        nets.expect("the net table").nets[0].length_mm
+    };
+    assert_eq!(length(&app), 5.0);
+    let delete = BoardCommand::DeleteItems {
+        items: vec![BoardItemId::Segment(segment)],
+    };
+    app.execute_board_commands(&path, vec![delete], None)
+        .expect("the command runs");
+    assert_eq!(length(&app), 0.0, "the edit");
+    undo(&mut app);
+    assert_eq!(length(&app), 5.0, "its undo");
+
+    let row = row_of(&facts(&app), StackLayerKind::Dielectric, 0);
+    let was = facts(&app).stack.layers[row].thickness_mm;
+    let mut stack = facts(&app).stack;
+    stack.layers[row].thickness_mm = was + 0.1;
+    app.apply_layer_stack(&path, stack).expect("stored");
+    assert!(facts(&app).stored);
+    undo(&mut app);
+    assert_eq!(facts(&app).stack.layers[row].thickness_mm, was);
+    assert!(!facts(&app).stored, "undo shows the derived stack again");
+}
+
 #[test]
 fn a_thickness_edit_keeps_the_layer_tab_order() {
     let dir = tempfile::tempdir().unwrap();

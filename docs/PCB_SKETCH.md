@@ -53,7 +53,7 @@ unseen. `BoardBakeError` names the problem:
 | `OutlineCount` | the outline tags more than one closed profile |
 | `HoleNotACircle`, `HoleDrill`, `UnknownNet` | a hole on a non-circle, a drill not above 0, a net name the board lacks |
 | `VScoreNotALine` | a V-score on an arc or circle |
-| `Expression` | a cutout radius, drill or V-score depth that does not evaluate to a finite number |
+| `Expression` | a cutout radius, drill or V-score depth that does not evaluate to a finite number, or a mounting hole's pattern that does not expand |
 
 **The outline is owned like a footprint's baked fields.** With an edge
 tagged `board_outline`, the bake returns the profile. With none tagged, it
@@ -304,9 +304,10 @@ stay open, since the overlay draws them over it. Decision: `DECISIONS.md`,
 - The board targets Slot, Pour, Room, Mechanical layer and Component
   anchor, and the Create rows Slot and Polygon (#2518): none is offered
   until it bakes. Modify offers Chamfer, Extend and Linear Pattern on both
-  hosts ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#modify-tools)); a board
-  bake still bakes one instance of a pattern, and patterns bake their
-  instances with #2517.
+  hosts ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#modify-tools)). A board
+  bake writes every instance of a patterned mounting hole
+  ([Patterned mounting holes](#patterned-mounting-holes)); a pattern of any
+  other board target still bakes its source alone (#2517).
   Since 2026-11-20 the Create rows Slot and Polygon are offered on a board
   as on a footprint, and bake as any closed profile
   ([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#create-tools)).
@@ -373,12 +374,33 @@ the same in both Graphite themes.
 
 A board sketch stores pattern sources, pattern mirrors and per-instance
 overrides in `[board_sketch.sketch]` as a footprint sketch does
-([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#pattern-links)), but only a
-footprint bake expands them for now: a board bake still bakes one instance
-per pattern until the instance walk of #2517, and ignores links and
-mirrors. A board sketch holding any of them, or a reference dimension, is
-saved as `snxpcb/1.7`, so an older build opens it read-only instead of
-dropping them.
+([FOOTPRINT_SKETCH.md](FOOTPRINT_SKETCH.md#pattern-links)). A board bake
+expands them for mounting holes; for any other board target it bakes the
+source alone (#2517). A board sketch holding any of them, or a reference
+dimension, is saved as `snxpcb/1.7`, so an older build opens it read-only
+instead of dropping them.
+
+## Patterned mounting holes {#patterned-mounting-holes}
+
+A pattern repeats a mounting hole when its innermost source is the circle or
+the circle's centre point (the pattern tools pick a Point). Mockup rows 179
+and 179e, #2772.
+
+- **Every instance is written** as its own `PcbHole` with the source's drill,
+  plating and net: linear, grid and polar patterns, a pattern of a pattern,
+  and live mirrors. Spacing and counts read the sketch parameters on each bake.
+- **Suppressed instances are not drilled**, the source's slot included, as a
+  footprint pattern leaves out that pad.
+- **One hole per position.** Two instances on one spot (a hole on its mirror
+  line) drill once.
+- **Uuids.** The hole at the source's position keeps the circle's uuid; every
+  other takes one derived from the circle, the pattern and the instance, so an
+  unchanged sketch re-bakes equal.
+- **A pattern that does not expand refuses the bake** with `Expression`
+  ("mounting hole pattern"): a count that is not a positive number or is over
+  the cap, a spacing that does not evaluate, a looped source chain.
+- **Outline checks** read every instance: a hole with one instance outside the
+  board is named by its circle.
 
 ## Targets {#targets}
 

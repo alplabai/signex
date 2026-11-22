@@ -189,8 +189,14 @@ impl Signex {
         let ds = &mut self.document_state;
         if record {
             ds.note_project_clean_state(id);
-            ds.rules_history.entry(id).or_default().record(before);
-            ds.project_tabs.entry(id).or_default().rules_step_newest = true;
+            let general = &mut ds.project_tabs.entry(id).or_default().general_history;
+            // Typing after this step is a step after it, not an older run.
+            general.close_run();
+            let position = general.position();
+            ds.rules_history
+                .entry(id)
+                .or_default()
+                .record_at(before, position);
         }
         if let Some(loaded) = ds.project_by_id_mut(id) {
             loaded.data.rules = state.rules;

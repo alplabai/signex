@@ -300,7 +300,6 @@ impl Signex {
         {
             return Ok(false);
         }
-        tab.rules_step_newest = false;
         let removed = match command {
             ProjectRequirementCommand::Remove { index } => Some(*index),
             _ => None,
