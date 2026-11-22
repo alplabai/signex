@@ -145,6 +145,22 @@ impl Signex {
         true
     }
 
+    /// Text typed in the form belongs to the dimension under way.
+    pub(crate) fn drop_dimension_form_draft(&mut self) {
+        let draft = &mut self.document_state.panel_ctx.annotation.draft;
+        if matches!(draft, Some((id, _, _)) if id.is_nil()) {
+            *draft = None;
+        }
+    }
+
+    /// The tool changed: a picked direction and a pause's saved values
+    /// belong to the tool they were made under.
+    pub(crate) fn leave_dimension_tool(&mut self) {
+        let tool = &mut self.interaction_state.annotation_tool;
+        tool.dimension.direction = None;
+        tool.paused_with = None;
+    }
+
     /// Tab paused the armed tool: keep what Esc puts back.
     pub(crate) fn note_dimension_tool_pause(&mut self) {
         let is_armed = self.armed_dimension_tool().is_some();

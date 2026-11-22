@@ -108,6 +108,7 @@ impl Signex {
             Vec::new()
         };
         if let [from, to, at] = clicked[..] {
+            self.drop_dimension_form_draft();
             let d = dimension_from_clicks(tool, from, to, at, style);
             // Two clicks on one spot measure nothing: nothing is placed.
             if d.measured_mm() > 0.0 {

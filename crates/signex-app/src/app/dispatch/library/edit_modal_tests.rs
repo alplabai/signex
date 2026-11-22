@@ -822,3 +822,22 @@ fn escape_closes_the_unit_menu_before_the_dialog() {
     let _ = app.handle_escape_pressed(None);
     assert!(app.library.library_browsers[&root].edit_modal.is_none());
 }
+
+/// Esc typed in a detached panel window leaves a main-window unit menu open.
+#[test]
+fn escape_in_another_window_leaves_the_unit_menu_open() {
+    let (mut app, root, row_id) = app_with_browser();
+    open_modal(&mut app, &root, row_id);
+    let _ = app.update(edit(&root, BrowserEditMsg::AddParam));
+    let key = "param_1".to_string();
+    let opened = BrowserEditMsg::UnitMenuOpened { key: key.clone() };
+    let _ = app.update(edit(&root, opened));
+    let panel = iced::window::Id::unique();
+    app.ui_state.windows.insert(
+        panel,
+        crate::app::WindowKind::DetachedPanel(crate::panels::PanelKind::Projects),
+    );
+
+    assert!(!app.close_unit_menu_in(Some(panel)));
+    assert_eq!(open_unit_menu(&app, &root), Some(key));
+}

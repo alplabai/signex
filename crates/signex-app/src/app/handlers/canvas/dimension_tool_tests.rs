@@ -218,6 +218,90 @@ fn esc_while_paused_drops_the_form_edits_and_keeps_the_points() {
 }
 
 #[test]
+fn a_direction_picked_under_linear_does_not_reach_aligned() {
+    let mut app = armed(Tool::LinearDimension);
+    panel(
+        &mut app,
+        AnnotationPanelMsg::Picked(AnnotationEdit::Direction(DimensionDirection::Horizontal)),
+    );
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(
+        Tool::AlignedDimension,
+    )));
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 12.7));
+    click(&mut app, (0.0, 12.7));
+    assert_eq!(dimensions(&app)[0].direction, DimensionDirection::Aligned);
+}
+
+#[test]
+fn a_direction_picked_under_aligned_does_not_reach_linear() {
+    let mut app = armed(Tool::AlignedDimension);
+    panel(
+        &mut app,
+        AnnotationPanelMsg::Picked(AnnotationEdit::Direction(DimensionDirection::Aligned)),
+    );
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(
+        Tool::LinearDimension,
+    )));
+    place(&mut app);
+    assert_eq!(
+        dimensions(&app)[0].direction,
+        DimensionDirection::Horizontal
+    );
+}
+
+/// The points differ in height: the flipped line lands past the other
+/// point, not between the two.
+#[test]
+fn space_clears_both_points_when_they_differ_in_height() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 10.16));
+    click(&mut app, (12.7, 0.0));
+    space(&mut app);
+    click(&mut app, (5.08, 15.24));
+    let d = dimensions(&app)[0];
+    assert_eq!(d.direction, DimensionDirection::Horizontal);
+    let line = d.from.y + d.offset;
+    let (low, high) = (d.from.y.min(d.to.y), d.from.y.max(d.to.y));
+    assert!(
+        line < low || line > high,
+        "the line at {line} sits between the points"
+    );
+    assert!((line - (d.from.y + d.to.y - 15.24)).abs() < 1e-9);
+}
+
+#[test]
+fn text_typed_for_one_dimension_leaves_with_it() {
+    let mut app = armed(Tool::LinearDimension);
+    click(&mut app, (0.0, 0.0));
+    click(&mut app, (12.7, 0.0));
+    tab(&mut app);
+    let field = AnnotationField::DimensionPoint(false, crate::app::sch_tables::Axis::X);
+    panel(
+        &mut app,
+        AnnotationPanelMsg::FieldTyped(field, "2.54".into()),
+    );
+    assert!(app.annotation_panel_state().draft.is_some());
+    tab(&mut app);
+    click(&mut app, (5.08, 5.08));
+    assert_eq!(app.annotation_panel_state().draft, None);
+}
+
+#[test]
+fn text_typed_in_the_form_leaves_with_the_tool() {
+    let mut app = armed(Tool::LinearDimension);
+    panel(
+        &mut app,
+        AnnotationPanelMsg::FieldTyped(AnnotationField::OverrideText, "J1".into()),
+    );
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Select)));
+    let _ = app.update(Message::Tool(ToolMessage::SelectTool(
+        Tool::LinearDimension,
+    )));
+    assert_eq!(app.annotation_panel_state().draft, None);
+}
+
+#[test]
 fn the_hint_names_tab_and_space_from_the_second_point() {
     let mut app = armed(Tool::LinearDimension);
     click(&mut app, (0.0, 0.0));

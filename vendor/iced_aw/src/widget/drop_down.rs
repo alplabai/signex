@@ -27,6 +27,7 @@ where
     alignment: Alignment,
     offset: Offset,
     expanded: bool,
+    opens_above_when_short: bool,
 }
 
 impl<'a, Message, Theme, Renderer> DropDown<'a, Message, Theme, Renderer>
@@ -49,7 +50,16 @@ where
             height: Length::Shrink,
             alignment: Alignment::Bottom,
             offset: Offset::from(5.0),
+            opens_above_when_short: false,
         }
+    }
+
+    /// With [`Alignment::Bottom`], open above the underlay when the overlay
+    /// does not fit below it and there is more room above.
+    #[must_use]
+    pub fn opens_above_when_short(mut self, opens_above: bool) -> Self {
+        self.opens_above_when_short = opens_above;
+        self
     }
 
     /// The width of the overlay
@@ -224,6 +234,7 @@ where
             layout.position() + translation,
             *viewport,
         );
+        overlay.opens_above_when_short = self.opens_above_when_short;
 
         overlay.layout = overlay.compute_layout(renderer, window);
 
@@ -262,6 +273,7 @@ struct DropDownOverlay<
     position: Point,
     viewport: Rectangle,
     layout: Layout,
+    opens_above_when_short: bool,
 }
 
 impl<'a, 'b, Message, Theme, Renderer> DropDownOverlay<'a, 'b, Message, Theme, Renderer>
@@ -294,6 +306,7 @@ where
             position,
             viewport,
             layout: Layout::new(Size::ZERO),
+            opens_above_when_short: false,
         }
     }
 }
@@ -329,7 +342,18 @@ where
         let ref_center_y = previous_position.y + self.underlay_bounds.height / 2.0;
         let max_height_symmetric = (ref_center_y.min(max.height - ref_center_y) * 2.0).max(0.0);
 
-        let limits = match self.alignment {
+        let alignment = if self.opens_above_when_short && *self.alignment == Alignment::Bottom {
+            self.element.layout(self.state, renderer, &limits);
+            if opens_above(self.state.size.height, height_below, height_above) {
+                &Alignment::Top
+            } else {
+                self.alignment
+            }
+        } else {
+            self.alignment
+        };
+
+        let limits = match alignment {
             Alignment::Top => with_max_height(limits, height_above),
             Alignment::TopStart | Alignment::TopEnd => with_max_height(
                 limits,
@@ -347,7 +371,7 @@ where
 
         let size = self.state.size;
 
-        let mut new_position = match self.alignment {
+        let mut new_position = match alignment {
             Alignment::TopStart => Point::new(
                 previous_position.x - size.width - self.offset.x,
                 previous_position.y - size.height + self.underlay_bounds.height - self.offset.y,
@@ -386,6 +410,12 @@ where
 
         Layout::new(size).move_to(new_position)
     }
+}
+
+/// Whether an overlay `wanted` tall goes above its underlay: it does not fit
+/// below, and above has more room.
+fn opens_above(wanted: f32, below: f32, above: f32) -> bool {
+    wanted > below && above > below
 }
 
 /// `position` moved only as far as it takes to keep `size` inside `window`.

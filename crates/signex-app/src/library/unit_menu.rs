@@ -64,6 +64,7 @@ pub(crate) fn unit_menu<'a, M: Clone + 'a>(
     DropDown::new(face, list, menu.is_open)
         .width(Length::Shrink)
         .alignment(DropAlignment::Bottom)
+        .opens_above_when_short(true)
         .offset(SP.xs)
         .boxed()
 }
@@ -135,7 +136,7 @@ fn list<'a, M: Clone + 'a>(
         entry(&choice, is_current, on_pick(token), tokens, i18n)
     });
     let body = Column::new().push(heading).extend(rows).width(Length::Fill);
-    // Scrolls when the room under a low row is shorter than the list.
+    // Scrolls when neither side of the row has room for the whole list.
     let body = scrollable(body)
         .direction(crate::styles::scrollbar::thin_vertical())
         .style(crate::styles::scrollbar::scrollbar_style(tokens));
@@ -200,6 +201,10 @@ fn entry<'a, M: Clone + 'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iced::advanced::shell::{Bus, Waker};
+    use iced::{Point, Size, mouse};
+    use iced_runtime::UserInterface;
+    use iced_runtime::user_interface::Cache;
 
     /// Mockup row 139: the units with a name carry it as a caption, "—"
     /// reads "no unit", and a glyph that is its own name has none.
@@ -216,5 +221,73 @@ mod tests {
         assert_eq!(name(Some(Unit::Watt)).as_deref(), Some("watt"));
         assert_eq!(name(Some(Unit::Percent)), None);
         assert_eq!(name(Some(Unit::PpmPerKelvin)), None);
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    enum Hit {
+        Opened,
+        Dismissed,
+        Picked(String),
+    }
+
+    const WINDOW: Size = Size::new(400.0, 480.0);
+
+    /// What a click at height `y` publishes with the open menu's face at
+    /// the top of the window, or at the bottom when `is_low`.
+    fn clicked(is_low: bool, y: f32) -> Vec<Hit> {
+        let tokens = signex_types::theme::theme_tokens(signex_types::theme::ThemeId::GraphiteLight);
+        let i18n = I18n::en_us();
+        let menu = UnitMenu {
+            selected: Some(Unit::Ohm),
+            is_open: true,
+            on_open: Hit::Opened,
+            on_dismiss: Hit::Dismissed,
+        };
+        let menu = unit_menu(menu, Hit::Picked, &tokens, &i18n);
+        let gap = Space::new().height(Length::Fill).boxed();
+        let page: Element<'_, Hit> = if is_low {
+            Column::new().push(gap).push(menu).boxed()
+        } else {
+            Column::new().push(menu).push(gap).boxed()
+        };
+        let mut renderer = crate::layout_probe::headless_renderer();
+        let mut ui = UserInterface::build(page, WINDOW, Cache::default(), &mut renderer);
+        let mut bus = Bus::new();
+        let at = Point::new(WINDOW.width / 2.0, y);
+        let events = [
+            mouse::Event::CursorMoved { position: at },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ]
+        .map(iced::Event::Mouse);
+        for event in events {
+            let _ = ui.update(
+                &iced::window::Headless,
+                &Waker::noop(),
+                std::slice::from_ref(&event),
+                mouse::Cursor::Available(at),
+                &mut renderer,
+                &mut bus,
+            );
+        }
+        bus.drain().map(|(hit, _)| hit).collect()
+    }
+
+    fn is_pick(hits: &[Hit]) -> bool {
+        matches!(hits, [Hit::Picked(_)])
+    }
+
+    /// On a low row the list opens above its face at full height, where the
+    /// room below would leave a sliver.
+    #[test]
+    fn the_menu_of_a_low_row_opens_above_it() {
+        assert!(is_pick(&clicked(true, WINDOW.height - 80.0)));
+        assert!(is_pick(&clicked(true, WINDOW.height - 160.0)));
+    }
+
+    #[test]
+    fn the_menu_of_a_high_row_still_opens_below_it() {
+        assert!(is_pick(&clicked(false, 80.0)));
+        assert_eq!(clicked(false, WINDOW.height - 10.0), vec![Hit::Dismissed]);
     }
 }

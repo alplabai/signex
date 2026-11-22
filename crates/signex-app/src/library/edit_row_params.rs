@@ -428,23 +428,7 @@ fn unit_segment<'a>(
     match segment {
         UnitSegment::InPrefix => None,
         UnitSegment::Fixed(u) => Some(label(u.glyph()).boxed()),
-        UnitSegment::Menu(selected) => {
-            let menu = UnitMenu {
-                selected,
-                is_open: edit.unit_menu_open.as_deref() == Some(key),
-                on_open: send(BrowserEditMsg::UnitMenuOpened {
-                    key: key.to_string(),
-                }),
-                on_dismiss: send(BrowserEditMsg::UnitMenuDismissed),
-            };
-            let on_pick = |unit| {
-                send(BrowserEditMsg::SetParamUnit {
-                    key: key.to_string(),
-                    unit,
-                })
-            };
-            Some(unit_menu(menu, on_pick, tokens, i18n))
-        }
+        UnitSegment::Menu(selected) => Some(menu_segment(edit, key, selected, tokens, i18n, send)),
         UnitSegment::KeptAsWritten(written) => Some(
             signex_widgets::tooltip(
                 label(written),
@@ -456,6 +440,32 @@ fn unit_segment<'a>(
             .boxed(),
         ),
     }
+}
+
+/// The unit menu of a row that picks its own unit.
+fn menu_segment<'a>(
+    edit: &'a EditRowModalState,
+    key: &str,
+    selected: Option<Unit>,
+    tokens: &'a ThemeTokens,
+    i18n: &I18n,
+    send: &(impl Fn(BrowserEditMsg) -> LibraryMessage + Clone + 'a),
+) -> Element<'a, LibraryMessage> {
+    let menu = UnitMenu {
+        selected,
+        is_open: edit.unit_menu_open.as_deref() == Some(key),
+        on_open: send(BrowserEditMsg::UnitMenuOpened {
+            key: key.to_string(),
+        }),
+        on_dismiss: send(BrowserEditMsg::UnitMenuDismissed),
+    };
+    let on_pick = |unit| {
+        send(BrowserEditMsg::SetParamUnit {
+            key: key.to_string(),
+            unit,
+        })
+    };
+    unit_menu(menu, on_pick, tokens, i18n)
 }
 
 /// The "template" pill after a template slot's key.

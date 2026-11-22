@@ -701,14 +701,17 @@ impl Signex {
         self.resolve_open_preview_tab(&address)
     }
 
-    /// Look up, off the UI thread, what the preview's shown tab needs that
-    /// is not resolved yet, so the panes are filled without a tab switch.
     /// Esc closes an Edit Component unit menu open in `window` and goes no
     /// further, so the dialog and its draft stay. A dialog in its own window
-    /// answers only there; one in the main window only outside those.
+    /// answers only there; one in the main window only to the main window's
+    /// Esc, never to one typed in another secondary window.
     pub(crate) fn close_unit_menu_in(&mut self, window: Option<iced::window::Id>) -> bool {
         let owners = &self.ui_state.library_modal_owners;
         let owner = window.and_then(|id| owners.get(&id));
+        let is_other_window = window.is_some_and(|id| self.ui_state.windows.contains_key(&id));
+        if owner.is_none() && is_other_window {
+            return false;
+        }
         let open = self
             .library
             .library_browsers
@@ -725,6 +728,8 @@ impl Signex {
         open.map(|modal| modal.unit_menu_open = None).is_some()
     }
 
+    /// Look up, off the UI thread, what the preview's shown tab needs that
+    /// is not resolved yet, so the panes are filled without a tab switch.
     fn resolve_open_preview_tab(&mut self, address: &EditorAddress) -> Task<Message> {
         let Some(tab) = self.library.editors.get(address).map(|e| e.active_tab) else {
             return Task::none();

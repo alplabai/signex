@@ -215,6 +215,7 @@ impl Signex {
             .annotation_tool
             .dimension
             .end_dimension();
+        self.drop_dimension_form_draft();
 
         // The main slot plus `canvases` is the full set of windows.
         let clear_canvas = |canvas: &mut crate::canvas::CanvasSlot| {

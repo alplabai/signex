@@ -132,29 +132,33 @@ fn measure_rows<'a>(
             rows.t(ids::PROPERTIES_DIMENSION_LENGTH),
             rows.value(signex_i18n::UserText::new(length)),
         ),
-        rows.field(
-            rows.t(ids::PROPERTIES_DIMENSION_DIRECTION),
-            rows.segmented(
-                [
-                    (
-                        DimensionDirection::Horizontal,
-                        ids::PROPERTIES_DIMENSION_HORIZONTAL,
-                    ),
-                    (
-                        DimensionDirection::Vertical,
-                        ids::PROPERTIES_DIMENSION_VERTICAL,
-                    ),
-                    (
-                        DimensionDirection::Aligned,
-                        ids::PROPERTIES_DIMENSION_ALIGNED_DIRECTION,
-                    ),
-                ]
-                .into_iter()
-                .map(|(v, label)| (label, d.direction == v, AnnotationEdit::Direction(v)))
-                .collect(),
-            ),
-        ),
+        direction_row(rows, d),
     ]
+}
+
+fn direction_row<'a>(rows: &Rows<'a>, d: &SchDimension) -> Element<'a, PanelMsg> {
+    rows.field(
+        rows.t(ids::PROPERTIES_DIMENSION_DIRECTION),
+        rows.segmented(
+            [
+                (
+                    DimensionDirection::Horizontal,
+                    ids::PROPERTIES_DIMENSION_HORIZONTAL,
+                ),
+                (
+                    DimensionDirection::Vertical,
+                    ids::PROPERTIES_DIMENSION_VERTICAL,
+                ),
+                (
+                    DimensionDirection::Aligned,
+                    ids::PROPERTIES_DIMENSION_ALIGNED_DIRECTION,
+                ),
+            ]
+            .into_iter()
+            .map(|(v, label)| (label, d.direction == v, AnnotationEdit::Direction(v)))
+            .collect(),
+        ),
+    )
 }
 
 fn text_rows<'a>(
@@ -162,51 +166,58 @@ fn text_rows<'a>(
     d: &SchDimension,
     has_measure: bool,
 ) -> Vec<Element<'a, PanelMsg>> {
-    let ctx = rows.ctx;
-    let precision_ids = [
-        ids::PROPERTIES_DIMENSION_PRECISION_0,
-        ids::PROPERTIES_DIMENSION_PRECISION_1,
-        ids::PROPERTIES_DIMENSION_PRECISION_2,
-        ids::PROPERTIES_DIMENSION_PRECISION_3,
-    ];
     vec![
-        rows.field(
-            rows.t(ids::PROPERTIES_DIMENSION_UNITS),
-            rows.segmented(
-                [
-                    (DimensionUnits::Mm, ids::PROPERTIES_DIMENSION_UNIT_MM),
-                    (DimensionUnits::Mil, ids::PROPERTIES_DIMENSION_UNIT_MIL),
-                    (DimensionUnits::In, ids::PROPERTIES_DIMENSION_UNIT_IN),
-                ]
-                .into_iter()
-                .map(|(v, label)| (label, d.units == v, AnnotationEdit::Units(v)))
-                .collect(),
-            ),
-        ),
-        rows.field(
-            rows.t(ids::PROPERTIES_DIMENSION_PRECISION),
-            rows.segmented(
-                (0u8..=3)
-                    .map(|p| {
-                        (
-                            precision_ids[usize::from(p)],
-                            d.precision.min(3) == p,
-                            AnnotationEdit::Precision(p),
-                        )
-                    })
-                    .collect(),
-            ),
-        ),
+        units_row(rows, d),
+        precision_row(rows, d),
         rows.field(
             rows.t(ids::PROPERTIES_DIMENSION_ARROWS),
             rows.dropdown(
-                Choice::named(&DimensionArrows::ALL, arrows_label, &ctx.i18n),
+                Choice::named(&DimensionArrows::ALL, arrows_label, &rows.ctx.i18n),
                 Some(d.arrows),
                 AnnotationEdit::Arrows,
             ),
         ),
         override_row(rows, d, has_measure),
     ]
+}
+
+fn units_row<'a>(rows: &Rows<'a>, d: &SchDimension) -> Element<'a, PanelMsg> {
+    rows.field(
+        rows.t(ids::PROPERTIES_DIMENSION_UNITS),
+        rows.segmented(
+            [
+                (DimensionUnits::Mm, ids::PROPERTIES_DIMENSION_UNIT_MM),
+                (DimensionUnits::Mil, ids::PROPERTIES_DIMENSION_UNIT_MIL),
+                (DimensionUnits::In, ids::PROPERTIES_DIMENSION_UNIT_IN),
+            ]
+            .into_iter()
+            .map(|(v, label)| (label, d.units == v, AnnotationEdit::Units(v)))
+            .collect(),
+        ),
+    )
+}
+
+fn precision_row<'a>(rows: &Rows<'a>, d: &SchDimension) -> Element<'a, PanelMsg> {
+    let precision_ids = [
+        ids::PROPERTIES_DIMENSION_PRECISION_0,
+        ids::PROPERTIES_DIMENSION_PRECISION_1,
+        ids::PROPERTIES_DIMENSION_PRECISION_2,
+        ids::PROPERTIES_DIMENSION_PRECISION_3,
+    ];
+    rows.field(
+        rows.t(ids::PROPERTIES_DIMENSION_PRECISION),
+        rows.segmented(
+            (0u8..=3)
+                .map(|p| {
+                    (
+                        precision_ids[usize::from(p)],
+                        d.precision.min(3) == p,
+                        AnnotationEdit::Precision(p),
+                    )
+                })
+                .collect(),
+        ),
+    )
 }
 
 /// The Override text header, which switches its Text row.

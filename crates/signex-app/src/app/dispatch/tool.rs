@@ -408,6 +408,7 @@ impl Signex {
                 // on purpose: only a switch to a different tool drops the buffers.
                 if tool != self.interaction_state.current_tool {
                     self.clear_drawing_buffers();
+                    self.leave_dimension_tool();
                 }
                 self.interaction_state.current_tool = tool;
                 // Re-label the floating cursor tag so the user sees which
