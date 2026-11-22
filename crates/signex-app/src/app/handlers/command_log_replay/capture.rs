@@ -13,6 +13,7 @@ use signex_engine::pcb::BoardCommand;
 use signex_types::schematic::SelectedItem;
 
 use super::book::{PendingTool, ReplayInput};
+use super::rebase;
 use super::scope::{EditFamily, ReplayScope, replay_scope};
 use crate::app::Signex;
 use crate::app::core::command_log::{RECORDED_INPUT, RecordedTargets};
@@ -209,15 +210,29 @@ impl Signex {
     }
 
     /// A copy of `commands` for [`Self::note_sheet_edit`], when recorded.
-    pub(crate) fn sheet_edit_to_record(&self, commands: &[Command]) -> Option<Vec<Command>> {
+    pub(crate) fn sheet_edit_to_record(&self, commands: &[Command]) -> Option<SheetEditRecord> {
         let whole_document = commands
             .iter()
             .any(|command| matches!(command, Command::ReplaceDocument { .. }));
-        (self.records_replay_input() && !whole_document).then(|| commands.to_vec())
+        if !self.records_replay_input() || whole_document {
+            return None;
+        }
+        let engine = (self.document_state.edit_path())
+            .and_then(|path| self.document_state.engines.get(path));
+        Some(SheetEditRecord {
+            commands: commands.to_vec(),
+            pre_images: engine.map_or_else(Vec::new, |engine| {
+                rebase::pre_images(engine.document(), commands)
+            }),
+        })
     }
 
-    /// `commands` changed the sheet being edited.
-    pub(crate) fn note_sheet_edit(&mut self, commands: Vec<Command>) {
+    /// The recorded commands changed the sheet being edited.
+    pub(crate) fn note_sheet_edit(&mut self, record: SheetEditRecord) {
+        let SheetEditRecord {
+            commands,
+            pre_images,
+        } = record;
         let Some(document) = self.document_state.edit_path().map(Path::to_path_buf) else {
             return;
         };
@@ -233,7 +248,11 @@ impl Signex {
             targets.extend(named_items(&commands));
             targets.sort_by_key(|item| item.uuid);
             targets.dedup();
-            ReplayInput::Sheet { commands, targets }
+            ReplayInput::Sheet {
+                commands,
+                targets,
+                pre_images,
+            }
         };
         self.note_finished_edit(document, family, row, input);
     }
@@ -389,6 +408,10 @@ impl Signex {
             && let Some(seq) = self.typing_run_row(id, &document, &input)
         {
             self.ui_state.command_replay.last_gesture = Some((seq, Instant::now()));
+            let input = match self.ui_state.command_replay.input_of(seq) {
+                Some(earlier) => input.continuing(&earlier),
+                None => input,
+            };
             self.set_replay_input(seq, input);
             return;
         }
@@ -492,3 +515,9 @@ impl Signex {
 
 /// The edits one dispatch made.
 pub(crate) struct ReplayCaptured(ReplayInput);
+
+/// A sheet edit about to run, with what it is about to replace.
+pub(crate) struct SheetEditRecord {
+    commands: Vec<Command>,
+    pre_images: Vec<Command>,
+}

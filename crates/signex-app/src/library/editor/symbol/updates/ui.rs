@@ -45,9 +45,7 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
             editor.active_bar_menu = None;
         }
         SymbolEditorMsg::ActiveBarStub(label) => {
-            crate::diagnostics::log_info(format!(
-                "Symbol active bar: {label} — coming soon (SchLib Altium parity)"
-            ));
+            crate::diagnostics::log_info(unbuilt_row_note(label));
             editor.active_bar_menu = None;
         }
         SymbolEditorMsg::ToggleSelectionFilter(kind) => {
@@ -56,6 +54,11 @@ pub(super) fn apply_symbol_ui(editor: &mut SymEditor, msg: SymbolEditorMsg) {
         }
         _ => {}
     }
+}
+
+/// The Messages line of an active bar row with no tool yet.
+fn unbuilt_row_note(label: &str) -> String {
+    format!("Symbol active bar: {label} — coming soon")
 }
 
 #[cfg(test)]
@@ -71,6 +74,14 @@ mod tests {
             PathBuf::from(format!("{name}.snxsym")),
             SymbolFile::from_symbol(Symbol::empty(name)),
         )
+    }
+
+    #[test]
+    fn an_unbuilt_row_says_only_that_it_is_coming() {
+        assert_eq!(
+            unbuilt_row_note("Bezier"),
+            "Symbol active bar: Bezier — coming soon"
+        );
     }
 
     /// Footprint parity: switching the tool away from `PlacePolygon`

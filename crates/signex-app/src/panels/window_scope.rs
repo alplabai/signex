@@ -95,6 +95,7 @@ impl PanelMsg {
             | Self::FpEditorSetNextPadTrapezoidDeltaX { .. }
             | Self::FpEditorSetNextPadTrapezoidDeltaY { .. }
             | Self::FpEditorSetNextPadTemplate { .. }
+            | Self::FpEditorSetNextPadTemplateLibrary { .. }
             | Self::FpEditorSetNextPadPasteMarginTop { .. }
             | Self::FpEditorSetNextPadPasteMarginBottom { .. }
             | Self::FpEditorToggleNextPadPasteEnabledTop { .. }
@@ -122,6 +123,7 @@ impl PanelMsg {
             | Self::FpEditorSetSelectedPadTrapezoidDeltaX { .. }
             | Self::FpEditorSetSelectedPadTrapezoidDeltaY { .. }
             | Self::FpEditorSetSelectedPadTemplate { .. }
+            | Self::FpEditorSetSelectedPadTemplateLibrary { .. }
             | Self::FpEditorSetSelectedPadPasteMarginTop { .. }
             | Self::FpEditorSetSelectedPadPasteMarginBottom { .. }
             | Self::FpEditorToggleSelectedPadPasteEnabledTop { .. }

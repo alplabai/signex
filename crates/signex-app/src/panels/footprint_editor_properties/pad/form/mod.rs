@@ -213,6 +213,7 @@ pad_msg_fns! {
     (pad_net_msg, String, FpEditorSetNextPadNet, FpEditorSetSelectedPadNet, value);
     (pad_rotation_msg, String, FpEditorSetNextPadRotation, FpEditorSetSelectedPadRotation, value);
     (pad_template_msg, String, FpEditorSetNextPadTemplate, FpEditorSetSelectedPadTemplate, value);
+    (pad_template_library_msg, String, FpEditorSetNextPadTemplateLibrary, FpEditorSetSelectedPadTemplateLibrary, value);
     (pad_size_x_msg, String, FpEditorSetNextPadSizeX, FpEditorSetSelectedPadSizeX, value);
     (pad_size_y_msg, String, FpEditorSetNextPadSizeY, FpEditorSetSelectedPadSizeY, value);
     (pad_drill_diameter_msg, String, FpEditorSetNextPadDrillDiameter, FpEditorSetSelectedPadDrillDiameter, value);

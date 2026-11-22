@@ -226,6 +226,34 @@ fn selected_pad_3(app: &Signex) -> &crate::library::editor::footprint::EditorPad
         .pads[2]
 }
 
+/// A template only this pad uses keeps a field for its library, so a typed
+/// name is never left holding a library nothing can correct.
+#[test]
+fn a_pads_own_template_keeps_its_library_field() {
+    let mut app = app_with_eight_pads();
+    edit(&mut app, FootprintEditorMsg::SelectPad(Some(2)));
+    panel(
+        &mut app,
+        PanelMsg::FpEditorPickSelectedPadTemplate {
+            idx: 2,
+            template: "T1".into(),
+            library: "LibA".into(),
+        },
+    );
+    assert_shows(&pad_texts(&app), &["Library"], &[]);
+
+    panel(
+        &mut app,
+        PanelMsg::FpEditorSetSelectedPadTemplateLibrary {
+            idx: 2,
+            value: "LibB".into(),
+        },
+    );
+
+    assert_eq!(selected_pad_3(&app).template, "T1");
+    assert_eq!(selected_pad_3(&app).template_library, "LibB");
+}
+
 /// Mockup rows 97 and 125: an SMD pad shows only its own layer. No pad stack
 /// mode, no inner or bottom rows; that layer's paste and mask as enable
 /// headers over their expansion; the read-only position as one X / Y row.

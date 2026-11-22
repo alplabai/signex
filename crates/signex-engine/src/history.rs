@@ -449,7 +449,7 @@ impl Engine {
             return;
         }
         // An open preview is the step under this one (`exec/live_edit.rs`).
-        self.commit_live_edit();
+        self.commit_live_edit_under(&snapshot);
 
         // Share every collection the step left unchanged with the entry
         // before it, so a long history holds one copy of each.
