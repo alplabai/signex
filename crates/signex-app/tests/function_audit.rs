@@ -13,6 +13,9 @@ mod settle_support;
 #[allow(dead_code)]
 #[path = "audit/fixture.rs"]
 mod fixture;
+#[allow(dead_code)]
+#[path = "audit/render.rs"]
+mod render;
 
 #[path = "function_audit/g1.rs"]
 mod g1;
