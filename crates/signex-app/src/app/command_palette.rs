@@ -509,6 +509,14 @@ fn is_exact_label(i18n: &I18n, query: &str, label: &str) -> bool {
     query.trim().chars().map(fold).eq(label.chars().map(fold))
 }
 
+/// Whether `text` holds `query` as one run, under the search fold: every
+/// result the palette draws contains what was typed (mockup row 9).
+fn contains_query(i18n: &I18n, query: &str, text: &str) -> bool {
+    let fold = |c: char| i18n.fold_char_for_search(c);
+    let query: String = query.chars().map(fold).collect();
+    text.chars().map(fold).collect::<String>().contains(&query)
+}
+
 /// Filter the catalog by query and rank the survivors. Returns indices
 /// into `catalog` paired with their score, descending by score (higher
 /// is better). Empty query passes everything through with a baseline
@@ -536,11 +544,16 @@ pub fn rank_results_in(i18n: &I18n, catalog: &[CommandEntry], query: &str) -> Ve
         return ranked;
     }
 
+    let query = query.trim();
     let mut ranked: Vec<(usize, i32)> = catalog
         .iter()
         .enumerate()
         .filter_map(|(idx, entry)| {
-            fuzzy_score_in(i18n, query, &search_text(entry)).map(|score| {
+            let text = search_text(entry);
+            if !contains_query(i18n, query, &text) {
+                return None;
+            }
+            fuzzy_score_in(i18n, query, &text).map(|score| {
                 let source_bonus = match entry.source {
                     CommandSource::Command => 5,
                     CommandSource::Symbol => 3,
@@ -688,7 +701,11 @@ mod tests {
     #[test]
     fn a_query_whose_best_hit_is_a_net_puts_nets_first() {
         let catalog = vec![
-            entry(CommandSource::Command, "Validate Bus Wiring", ""),
+            entry(
+                CommandSource::Command,
+                "Run the VBUS wiring check on every sheet of the project",
+                "",
+            ),
             entry(CommandSource::Net, "VBUS", "9 terminals"),
             entry(CommandSource::Net, "VBUS_SENSE", "2 terminals"),
             entry(
@@ -705,11 +722,42 @@ mod tests {
         group_for_display(&mut rows, true);
         assert_eq!(
             labels(&rows),
-            ["VBUS", "VBUS_SENSE", "D3", "Validate Bus Wiring"]
+            [
+                "VBUS",
+                "VBUS_SENSE",
+                "D3",
+                "Run the VBUS wiring check on every sheet of the project"
+            ]
         );
         // The fixed order would have put the command first.
         group_for_display(&mut rows, false);
-        assert_eq!(labels(&rows)[0], "Validate Bus Wiring");
+        assert_eq!(
+            labels(&rows)[0],
+            "Run the VBUS wiring check on every sheet of the project"
+        );
+    }
+
+    /// Mockup row 9: a row whose text only holds the query's letters apart
+    /// is not a result; a row holding it in its value or detail is.
+    #[test]
+    fn every_result_contains_the_query_as_typed() {
+        let mut component = entry(CommandSource::Symbol, "#P1", "a.snxsch");
+        component.value = "GND".into();
+        let catalog = vec![
+            entry(CommandSource::Command, "Align to grid", ""),
+            entry(CommandSource::Command, "Place aligned dimension", ""),
+            entry(CommandSource::Net, "GND", "12 terminals"),
+            component,
+            entry(CommandSource::Sheet, "power", "AGND plane"),
+        ];
+        let kept: Vec<&str> = rank_results(&catalog, " gnd ")
+            .into_iter()
+            .map(|(idx, _)| catalog[idx].label.as_str())
+            .collect();
+        assert_eq!(kept.len(), 3, "{kept:?}");
+        for label in ["GND", "#P1", "power"] {
+            assert!(kept.contains(&label), "{label}: {kept:?}");
+        }
     }
 
     /// Mockup row 9: the row named exactly what was typed leads, so NETS comes

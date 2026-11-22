@@ -56,6 +56,7 @@ fn rows_at(app: &Signex, path: &[usize]) -> Vec<DropdownEntry<Message>> {
         x: 0.0,
         y: 0.0,
         key: Some(key),
+        add_new_only: false,
         window: None,
     };
     app.project_tree_entries(&ctx).expect("the menu has rows")
@@ -101,6 +102,7 @@ fn the_project_root_menu_has_the_m20_rows_in_order() {
             "Explore",
             SEP,
             "Project Options...",
+            "Variant Manager",
             "Enable Version Control...",
             SEP,
             "Close Project Documents",
@@ -169,7 +171,83 @@ fn the_planned_launcher_is_muted_but_opens_its_flyout() {
     ));
 }
 
-/// The Planned flyout lists the five planned project features, each greyed
+/// Mockup row 19: the Projects title bar + opens the Add New rows of the
+/// project alone, at the pointer.
+#[test]
+fn the_title_bar_plus_opens_only_the_add_new_menu() {
+    use crate::panels::{PanelMsg, ProjectsMsg};
+    let mut app = app_with_tree();
+    let main = app.ui_state.main_window_id.expect("the main window");
+    let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::Projects(ProjectsMsg::AddNewPressed),
+    )));
+    let menu = app
+        .interaction_state
+        .project_tree_context_menu
+        .as_ref()
+        .expect("the menu opened");
+    assert!(menu.add_new_only);
+    let root = key_of(&app.document_state.panel_ctx.project_tree, &[0]);
+    assert_eq!(menu.key, root);
+    let texts = super::super::placement::tests::lay_out_layers(
+        app.project_tree_context_menu_overlay(main),
+        iced::Size::new(1000.0, 700.0),
+    );
+    assert!(texts.iter().any(|t| t.text == "Schematic"), "{texts:?}");
+    assert!(
+        !texts.iter().any(|t| t.text == "Validate Project"),
+        "{texts:?}"
+    );
+}
+
+/// Decision 2026-11-22: with no project open the + runs New Project.
+#[test]
+fn with_no_project_the_title_bar_plus_runs_new_project() {
+    use crate::panels::{PanelMsg, ProjectsMsg};
+    let (mut app, _boot) = Signex::new();
+    app.ui_state.main_window_id = Some(iced::window::Id::unique());
+    app.ui_state.main_window_opened = true;
+    app.ui_state.first_run_tour_open = false;
+    assert!(app.document_state.panel_ctx.project_tree.is_empty());
+    let _ = app.update(Message::Dock(crate::dock::DockMessage::Panel(
+        PanelMsg::Projects(ProjectsMsg::AddNewPressed),
+    )));
+    assert!(app.interaction_state.project_tree_context_menu.is_none());
+    assert!(app.ui_state.new_project.is_some());
+}
+
+/// Decision 2026-11-22: the Compiled Design and Unions headers keep their
+/// one action and have no three-dot menu (mockup rows 154 and 158).
+#[test]
+fn compiled_design_and_unions_have_no_more_menu() {
+    use crate::panels::{PanelKind, title_actions};
+    let (app, _boot) = Signex::new();
+    let mut ctx = app.document_state.panel_ctx.clone();
+    ctx.unions.has_sheet = true;
+    assert_eq!(title_actions(PanelKind::CompiledDesign, &ctx).len(), 1);
+    assert_eq!(title_actions(PanelKind::Unions, &ctx).len(), 1);
+}
+
+/// Mockup row 20: Variant Manager is a live row that opens the Project tab
+/// on its Variants section.
+#[test]
+fn the_variant_manager_row_opens_the_variants_section() {
+    let mut app = app_with_tree();
+    let id = app.document_state.projects[0].id;
+    let rows = rows_at(&app, &[0]);
+    let row = item(&rows, "Variant Manager");
+    assert!(!row.disabled);
+    let press = row.on_press.clone().expect("a live row");
+    let _ = app.update(press);
+    let tab = &app.document_state.tabs[app.document_state.active_tab];
+    assert!(matches!(tab.kind, crate::app::TabKind::Project(p) if p == id));
+    assert_eq!(
+        app.document_state.project_tabs[&id].section,
+        crate::app::ProjectSection::Variants
+    );
+}
+
+/// The Planned flyout lists the four planned project features, each greyed
 /// with the "planned" pill and publishing nothing.
 #[test]
 fn the_planned_flyout_lists_the_planned_rows_greyed_with_the_pill() {
@@ -178,7 +256,6 @@ fn the_planned_flyout_lists_the_planned_rows_greyed_with_the_pill() {
         layout(&rows),
         [
             "Make Project Available Online...",
-            "Variants...",
             "Project Packager...",
             "Project Releaser...",
             "Share...",
@@ -353,6 +430,7 @@ fn a_row_without_an_icon_lines_its_label_up_with_the_others() {
         x: 0.0,
         y: 0.0,
         key: Some(key),
+        add_new_only: false,
         window: None,
     };
     let card = app.view_project_tree_context_menu(&ctx);

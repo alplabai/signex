@@ -742,6 +742,7 @@ fn tree_root_rows(
         x: 0.0,
         y: 0.0,
         key: Some(vec![id]),
+        add_new_only: false,
         window: None,
     };
     app.project_tree_entries(&ctx)
@@ -769,6 +770,7 @@ fn tree_save_row_writes_the_active_schematic() {
             x: 0.0,
             y: 0.0,
             key: None,
+            add_new_only: false,
             window: None,
         });
     settle(&mut app, live_row(&rows, "save_document"));
@@ -982,6 +984,7 @@ fn the_tree_root_menu_opened_near_the_bottom_edge_stays_inside_the_window() {
                 x: 20.0,
                 y: anchor_y,
                 key: Some(vec![id.clone()]),
+                add_new_only: false,
                 window: None,
             });
         let texts = super::super::placement::tests::lay_out_layers(

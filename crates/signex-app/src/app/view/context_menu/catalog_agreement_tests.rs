@@ -77,7 +77,7 @@ const SURFACE_LOCAL: &[(&str, &str)] = &[
     ("Close Project Documents", "tree-addressed"),
     ("Close Project", "tree-addressed"),
     ("Explore", "tree-addressed"),
-    ("Variants...", "planned, tree-addressed"),
+    ("Variant Manager", "tree-addressed"),
     ("Project Packager...", "planned, tree-addressed"),
     ("Project Releaser...", "planned, tree-addressed"),
     ("Share...", "planned, tree-addressed"),
@@ -413,6 +413,7 @@ fn command_rows_read_label_and_shortcut_from_the_catalog() {
                     x: 0.0,
                     y: 0.0,
                     key: Some(key),
+                    add_new_only: false,
                     window: None,
                 };
                 let rows = app

@@ -108,27 +108,70 @@ fn no_document_segments(r: &Readout<'_>) -> Vec<Segment> {
     out
 }
 
-/// The Graphite status bar: the [`segments`] of `r` in a row.
+/// Where the right side of `body` (the bar without Panels) starts.
+fn right_side_start(body: &[Segment]) -> usize {
+    body.iter()
+        .position(|segment| {
+            matches!(
+                segment,
+                Segment::Selection | Segment::BoardCounters | Segment::ViewAngle | Segment::Zoom
+            )
+        })
+        .unwrap_or(body.len())
+}
+
+/// `part` of the bar as one row.
+fn segment_row<'a>(
+    part: &[Segment],
+    r: &Readout<'_>,
+    tokens: &ThemeTokens,
+    i18n: &I18n,
+) -> Row<Element<'a, StatusBarRequest>> {
+    part.iter()
+        .filter_map(|&segment| segment_view(segment, r, tokens, i18n))
+        .fold(Row::new(), |bar, element| bar.push(element))
+        .spacing(BAR_GAP)
+        .align_y(iced::Alignment::Center)
+}
+
+/// The Graphite status bar: the [`segments`] of `r`. Panels is laid out
+/// first and the right side next, so a narrow window clips the left side
+/// and never pushes Panels past the edge (mockup row 6).
 pub(super) fn view<'a>(
     r: &Readout<'_>,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Element<'a, StatusBarRequest> {
-    let bar = segments(r)
-        .into_iter()
-        .filter_map(|segment| segment_view(segment, r, tokens, i18n))
-        .fold(Row::new(), |bar, element| bar.push(element));
-    container(
-        bar.spacing(BAR_GAP)
-            .align_y(iced::Alignment::Center)
-            .width(Length::Fill),
-    )
-    .width(Length::Fill)
-    .height(ChromeMetrics::DEFAULT.status)
-    .padding(BAR_PADDING)
-    .align_y(iced::alignment::Vertical::Center)
-    .style(crate::styles::status_bar(tokens))
-    .boxed()
+    let shown = segments(r);
+    let (body, panels) = shown.split_at(shown.len().saturating_sub(1));
+    let (left, right) = body.split_at(right_side_start(body));
+    let mut main: Row<Element<'a, StatusBarRequest>> = Row::new()
+        .spacing(BAR_GAP)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill)
+        .clip(true)
+        .push(
+            segment_row(left, r, tokens, i18n)
+                .width(Length::Fill)
+                .clip(true)
+                .boxed(),
+        );
+    if !right.is_empty() {
+        main = main.push(segment_row(right, r, tokens, i18n).boxed());
+    }
+    let bar: Row<Element<'a, StatusBarRequest>> = Row::new()
+        .spacing(BAR_GAP)
+        .align_y(iced::Alignment::Center)
+        .width(Length::Fill)
+        .push(main.boxed())
+        .push(segment_row(panels, r, tokens, i18n).boxed());
+    container(bar)
+        .width(Length::Fill)
+        .height(ChromeMetrics::DEFAULT.status)
+        .padding(BAR_PADDING)
+        .align_y(iced::alignment::Vertical::Center)
+        .style(crate::styles::status_bar(tokens))
+        .boxed()
 }
 
 /// The widgets of `segment`; `None` when `r` has nothing for it.
@@ -546,6 +589,39 @@ mod tests {
             segments(&r),
             [S::Cursor, S::Saving, S::Import, S::Spacer, S::Panels]
         );
+    }
+
+    /// Mockup row 6: however narrow the window, Panels stays inside the bar.
+    #[test]
+    fn the_panels_button_stays_inside_a_narrow_board_bar() {
+        let i18n = I18n::en_us();
+        let tokens = signex_types::theme::theme_tokens(ThemeId::GraphiteLight);
+        let r = readout(None, board_surface(&i18n));
+        for width in [1440.0_f32, 1000.0, 640.0] {
+            let texts = crate::layout_probe::lay_out_texts(
+                view(&r, &tokens, &i18n),
+                iced::Size::new(width, 40.0),
+            );
+            let panels = texts
+                .iter()
+                .find(|t| t.text.contains("Panels"))
+                .expect("Panels is drawn");
+            assert!(
+                panels.bounds.x + panels.bounds.width <= width,
+                "{width}: {:?}",
+                panels.bounds
+            );
+        }
+    }
+
+    /// The bar splits before the first right-side segment.
+    #[test]
+    fn the_right_side_starts_at_the_counters_or_the_zoom() {
+        let i18n = I18n::en_us();
+        let board = segments(&readout(None, board_surface(&i18n)));
+        assert_eq!(board[right_side_start(&board)], S::BoardCounters);
+        let sheet = segments(&readout(None, SurfaceReadout::default()));
+        assert_eq!(sheet[right_side_start(&sheet)], S::Zoom);
     }
 
     /// The running import keeps its cancel segment.
