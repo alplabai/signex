@@ -1,7 +1,7 @@
 //! The Paste Array preview (#2527): a read-only line-art drawing of where the
 //! copies land, on the sheet grid, the original in the accent, with X / Y
-//! spacing callouts. No expand, no drag, no on-image edit: the fields stay
-//! the only place to edit.
+//! spacing callouts. It can be drawn taller; no drag, no on-image edit: the
+//! fields stay the only place to edit.
 
 use iced::{Point, Rectangle};
 use signex_i18n::UserText;
@@ -27,6 +27,18 @@ const FALLBACK_GRID_MM: f64 = 2.54;
 const MAX_GRID_LINES: f64 = 40.0;
 /// Margin around the copies, as a share of the larger extent.
 const MARGIN_SHARE: f64 = 0.15;
+/// Height of the drawing in captions, as it opens and expanded.
+const PREVIEW_EM: f32 = 16.0;
+const PREVIEW_EXPANDED_EM: f32 = 30.0;
+
+/// The drawing's height in captions.
+pub fn height_em(expanded: bool) -> f32 {
+    if expanded {
+        PREVIEW_EXPANDED_EM
+    } else {
+        PREVIEW_EM
+    }
+}
 
 /// How many copies the preview draws, and how many it only counts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,7 +133,7 @@ pub fn illustration(spec: PreviewSpec) -> Illustration {
 }
 
 /// Grid lines at the sheet pitch, doubled until they fit.
-fn grid(grid_mm: f64, ox: f64, oy: f64, view_w: f64, view_h: f64) -> Vec<Part> {
+pub(crate) fn grid(grid_mm: f64, ox: f64, oy: f64, view_w: f64, view_h: f64) -> Vec<Part> {
     let mut pitch = if grid_mm.is_finite() && grid_mm > 0.0 {
         grid_mm
     } else {
@@ -287,6 +299,12 @@ mod tests {
             .filter(|p| p.is_linked_to(&FIELD_Y))
             .count();
         assert_eq!((x, y), (1, 0), "no Y callout for a 0 Y spacing");
+    }
+
+    /// Mockup row 69: the expand button draws the preview taller.
+    #[test]
+    fn the_expanded_preview_is_taller() {
+        assert!(height_em(true) > height_em(false));
     }
 
     #[test]

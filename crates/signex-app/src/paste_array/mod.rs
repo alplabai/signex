@@ -6,6 +6,7 @@ mod preview;
 mod state;
 mod view;
 
+pub(crate) use preview::grid as preview_grid;
 pub use preview::{PREVIEW_MAX_DRAWN, PreviewPlan, preview_plan};
 pub use state::{
     MAX_COPIES, MAX_PLACED_ITEMS, PasteArrayField, PasteArrayInput, PasteArrayMsg, PasteArrayState,

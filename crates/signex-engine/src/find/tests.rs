@@ -54,6 +54,31 @@ fn apply(sheet: SchematicSheet, commands: Vec<Command>) -> SchematicSheet {
     engine.document().clone()
 }
 
+/// Mockup row 67: a Value result names its part, at each placement read.
+#[test]
+fn a_value_hit_names_its_part_at_the_scope_placements() {
+    let mut sheet = sheet();
+    let unplaced = DesignatorScope::default();
+    let hits = scan_sheet(&sheet, &q("10k"), &unplaced);
+    assert_eq!(
+        value_part_name(&sheet, &hits[0], &unplaced).as_deref(),
+        Some("R1")
+    );
+    let twice = DesignatorScope {
+        placements: vec![placement(1), placement(2)],
+        single: false,
+    };
+    assert_eq!(
+        value_part_name(&sheet, &hits[0], &twice).as_deref(),
+        Some("R1, R101")
+    );
+    let designator = scan_sheet(&sheet, &q("R1"), &unplaced);
+    assert_eq!(designator[0].kind, FindKind::Designator);
+    assert_eq!(value_part_name(&sheet, &designator[0], &unplaced), None);
+    sheet.symbols[0].is_power = true;
+    assert_eq!(value_part_name(&sheet, &hits[0], &unplaced), None);
+}
+
 #[test]
 fn an_empty_needle_finds_nothing() {
     assert!(scan_sheet(&sheet(), &q("  "), &DesignatorScope::default()).is_empty());
