@@ -10,17 +10,17 @@ pub(crate) static MOVE_DX_INPUT_ID: std::sync::LazyLock<iced::widget::Id> =
     std::sync::LazyLock::new(|| iced::widget::Id::new("signex.move_selection.dx"));
 
 /// Height of the line-art preview, in captions (the illustration's em).
-pub(crate) const PREVIEW_EM: f32 = 10.0;
+pub(crate) const PREVIEW_EM: f32 = 16.0;
 
-/// Height of the dialog's content: the fields, the preview, a two-line help
-/// line and the footer, from the type scale.
+/// Height of the dialog's content: the fields, the framed preview with its
+/// caption, a two-line help line and the footer, from the type scale.
 pub(crate) fn window_height() -> f32 {
     use crate::styles::{LINE_HEIGHT, Spacing, TypeScale};
     let (ts, sp) = (TypeScale::DEFAULT, Spacing::DEFAULT);
     let caption_line = ts.caption * LINE_HEIGHT;
     let field = ts.label * LINE_HEIGHT + 2.0 * sp.s + 2.0;
     let fields = caption_line + sp.s + field;
-    let preview = PREVIEW_EM * ts.caption;
+    let preview = caption_line + 3.0 * sp.xs + PREVIEW_EM * ts.caption + 2.0;
     let help = 2.0 * caption_line;
     sp.l + fields + sp.m + preview + sp.m + help + crate::styles::dense_footer_height()
 }

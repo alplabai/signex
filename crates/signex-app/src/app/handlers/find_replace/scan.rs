@@ -101,10 +101,15 @@ impl Signex {
         }
         let matches: Vec<FindMatch> = hits
             .into_iter()
-            .map(|hit| FindMatch {
-                sheet: path.clone(),
-                hit,
-                placement_label: None,
+            .map(|hit| {
+                let placement_label = self.document_state.active_engine().and_then(|engine| {
+                    signex_engine::value_part_name(engine.document(), &hit, &scope)
+                });
+                FindMatch {
+                    sheet: path.clone(),
+                    hit,
+                    placement_label,
+                }
             })
             .collect();
 
