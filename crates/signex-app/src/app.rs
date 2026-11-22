@@ -158,6 +158,8 @@ pub use new_project::{NewProjectMsg, NewProjectState, ProfileUndo};
 pub use sheet_numbering::{NumberingProblem, SheetNumberingMsg, SheetNumberingState};
 pub use sheet_sync::{SheetSyncMsg, SheetSyncProblem, SheetSyncState};
 pub use signex_history::History;
+#[cfg(test)]
+pub(crate) use state::BoardSketchSession;
 pub(crate) use signex_history::SavePoint;
 #[cfg(test)]
 pub(crate) use state::WindowKind;

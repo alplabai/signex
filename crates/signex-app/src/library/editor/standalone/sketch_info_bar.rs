@@ -234,7 +234,7 @@ mod tests {
             serde_json::from_value(serde_json::json!({ "uuid": uuid::Uuid::nil() }))
                 .expect("a board");
         let session =
-            crate::app::state::BoardSketchSession::open(std::path::Path::new("bar.snxpcb"), &board);
+            crate::app::BoardSketchSession::open(std::path::Path::new("bar.snxpcb"), &board);
         let tokens = theme_tokens(ThemeId::GraphiteDark);
         let i18n = signex_i18n::I18n::en_us();
         let texts = lay_out_texts(

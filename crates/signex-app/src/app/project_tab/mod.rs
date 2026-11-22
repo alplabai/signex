@@ -58,6 +58,8 @@ pub(crate) use commands::{
 };
 pub use general::ProjectGeneralFacts;
 pub use parameters::ParameterGroup;
+#[cfg(test)]
+pub(crate) use preview_ui::PreviewPopup;
 pub use preview_ui::{ProjectPreviewMsg, ProjectPreviewUi};
 pub use requirements::{RequirementsMsg, RequirementsTabState};
 pub(crate) use requirements::{
