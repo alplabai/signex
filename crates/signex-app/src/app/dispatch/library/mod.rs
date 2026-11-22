@@ -80,6 +80,8 @@ mod recovery_read_only_tests;
 mod refresh;
 mod registration;
 mod rename_guard;
+#[cfg(test)]
+mod row_flows_tests;
 mod row_summary;
 #[cfg(test)]
 mod row_summary_tests;
@@ -136,7 +138,13 @@ impl Signex {
                     ..
                 }
         );
+        let shown_row = self.shown_browser_row();
         let task = self.route_library_message(msg);
+        // Properties and its Pick buttons act on the row in the panel context
+        // (mockup row 127), so any change of selection rebuilds it.
+        if self.shown_browser_row() != shown_row {
+            self.refresh_panel_ctx();
+        }
         let task = Task::batch([
             task,
             self.refresh_components_details_if_stale(),
@@ -338,6 +346,9 @@ impl Signex {
             }
             LibraryMessage::LibraryCreateOptionsRelocateRequested => {
                 self.handle_library_create_options_relocate()
+            }
+            LibraryMessage::LibraryCreateOptionsOpenExistingRequested => {
+                self.handle_library_create_options_open_existing()
             }
             LibraryMessage::AddLibrarySymbolFilePicked { project_id, path } => {
                 self.handle_add_library_symbol_file_picked(project_id, path)

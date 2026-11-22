@@ -420,17 +420,48 @@ fn open_without_history(app: &mut Signex) -> Task<Message> {
     }
 }
 
-/// Handle the user's choice from the *Broken primitive binding* dialog.
-///
-/// v0.9 stub: the dispatch path that detects broken bindings hasn't
-/// landed yet (Stage 12+ wires the row-load checks). The handler
-/// therefore only knows how to close the dialog; the actual rebind /
-/// remove-row flows queue behind the detection plumbing. The dialog
-/// surface itself ships now so the overlay layer is in place.
+/// Handle the user's choice from the *Broken primitive binding* dialog
+/// (mockup row 138). Re-bind and Remove row go back through the router, so
+/// they meet the same read-only and library-rename refusals as the Browser's
+/// own Pick and Delete.
 pub(super) fn handle_recovery_broken_binding(
     app: &mut Signex,
-    _choice: BrokenBindingChoice,
+    choice: BrokenBindingChoice,
 ) -> Task<Message> {
+    let binding = match app.library.recovery.as_ref() {
+        Some(RecoveryDialog::BrokenPrimitiveBinding {
+            library_path,
+            table,
+            row_id,
+            kind,
+            ..
+        }) => Some((
+            library_path.clone(),
+            table.clone(),
+            RowId::from_uuid(*row_id),
+            *kind,
+        )),
+        _ => None,
+    };
     app.library.finish_recovery();
-    Task::none()
+    let Some((library_path, table, row_id, kind)) = binding else {
+        return Task::none();
+    };
+    let next = match choice {
+        BrokenBindingChoice::Cancel => return Task::none(),
+        BrokenBindingChoice::Rebind => LibraryMessage::OpenPrimitivePicker {
+            kind,
+            target: PrimitivePickerTarget::BrowserRow(EditorAddress::new(
+                library_path,
+                table,
+                row_id,
+            )),
+        },
+        BrokenBindingChoice::RemoveRow => LibraryMessage::BrowserDeleteRowConfirm {
+            library_path,
+            table,
+            row_id,
+        },
+    };
+    Task::done(Message::Library(next))
 }
