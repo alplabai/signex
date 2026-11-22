@@ -130,7 +130,7 @@ fn io(what: &str, e: impl std::fmt::Display) -> String {
 }
 
 /// A new folder `name` beside the fixture's copies.
-fn new_dir(fx: &Fixture, name: &str) -> Result<PathBuf, String> {
+pub fn new_dir(fx: &Fixture, name: &str) -> Result<PathBuf, String> {
     let root = fx
         .sample
         .parent()
@@ -154,7 +154,7 @@ fn sheet_entry(file: &str) -> SheetEntry {
 
 /// `<name>.snxprj` in `dir` over `sheets` (the first is the root) and an
 /// optional board.
-fn write_project(
+pub fn write_project(
     dir: &Path,
     name: &str,
     sheets: &[&str],
@@ -190,13 +190,13 @@ fn write_project(
     Ok(prj)
 }
 
-fn copy_sample_sheet(fx: &Fixture, to: &Path) -> Result<(), String> {
+pub fn copy_sample_sheet(fx: &Fixture, to: &Path) -> Result<(), String> {
     std::fs::copy(fx.sample.with_extension("snxsch"), to)
         .map(|_| ())
         .map_err(|e| io("copy the sample sheet", e))
 }
 
-fn open(app: &mut Signex, path: &Path) -> Result<(), String> {
+pub fn open(app: &mut Signex, path: &Path) -> Result<(), String> {
     settle(
         app,
         Message::File(FileMsg::Opened(Some(path.to_path_buf()))),

@@ -18,6 +18,7 @@ mod pcb;
 mod project;
 mod sch_a;
 mod sch_b;
+mod states;
 
 /// Every group, by the name `AUDIT_ONLY` accepts, with its rows.
 pub fn groups() -> Vec<(&'static str, Vec<Surface>)> {
@@ -31,5 +32,6 @@ pub fn groups() -> Vec<(&'static str, Vec<Surface>)> {
         ("output_prefs", output_prefs::rows()),
         ("lib", lib::rows()),
         ("new_features", new_features::rows()),
+        ("states", states::rows()),
     ]
 }

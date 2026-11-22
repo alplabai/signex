@@ -112,13 +112,16 @@ pub fn draw_window(
     wgpu_renderer.screenshot(&viewport, theme.palette().background.base.color)
 }
 
-/// The first dialog the app opened as its own window, if any.
+/// The newest dialog the app opened as its own window, if any: a confirm
+/// opened over a dialog is the one on top. Window ids only ever grow, while
+/// the map's order changes from run to run.
 pub fn detached_modal(app: &Signex) -> Option<iced::window::Id> {
-    app.ui_state.windows.iter().find_map(|(id, kind)| {
-        format!("{kind:?}")
-            .starts_with("DetachedModal")
-            .then_some(*id)
-    })
+    app.ui_state
+        .windows
+        .iter()
+        .filter(|(_, kind)| format!("{kind:?}").starts_with("DetachedModal"))
+        .map(|(id, _)| *id)
+        .max()
 }
 
 /// A rectangle of a drawn window, in physical pixels.

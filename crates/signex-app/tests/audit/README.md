@@ -34,5 +34,9 @@ needs a software Vulkan driver (lavapipe) or the run skips.
 3. Remove the row from the header comment. Checks shared by several groups
    go in `surfaces/checks.rs`.
 
+A further state of a row is an entry in `surfaces/states.rs` with the id
+`<row>-<state>`, written as `<row>-<state>-<theme>.png`. Run them all with
+`AUDIT_ONLY=states`. Its `open` fails when the state was not reached.
+
 `render.rs`, `fixture.rs` and `surface.rs` are shared with
 `graphite_screens.rs`, which renders a fixed list of these rows by name.

@@ -377,7 +377,7 @@ fn project_tab() -> Vec<Surface> {
 
 // ---- open helpers ---------------------------------------------------------
 
-fn tree_action(app: &mut Signex, action: ProjectTreeAction) {
+pub(super) fn tree_action(app: &mut Signex, action: ProjectTreeAction) {
     settle_support::settle(
         app,
         Message::ContextMenu(ContextMenuMsg::ProjectTreeAction(action)),
@@ -402,7 +402,7 @@ fn root_key(app: &Signex) -> Result<Vec<String>, String> {
 }
 
 /// The tree key of the sample's root sheet row.
-fn sheet_key(app: &Signex) -> Result<Vec<String>, String> {
+pub(super) fn sheet_key(app: &Signex) -> Result<Vec<String>, String> {
     let tree = &app.document_state.panel_ctx.project_tree;
     let path = find_row(tree, "linear-regulator", 0, &mut Vec::new())
         .ok_or("no sheet row for linear-regulator in the Projects tree")?;
@@ -481,7 +481,7 @@ fn open_section(
 }
 
 /// Project Options... on the loaded project, then `section` picked.
-fn show_section(
+pub(super) fn show_section(
     app: &mut Signex,
     r: &mut iced::Renderer,
     section: ProjectSection,
@@ -526,7 +526,7 @@ const RENAME: &[Check] = &[
     ("typing changes the name", rename_buffer_follows),
 ];
 
-const REMOVE: &[Check] = &[
+pub(super) const REMOVE: &[Check] = &[
     ("the Remove dialog targets the sheet", remove_targets_sheet),
     ("Close keeps the sheet on disk", remove_close),
 ];
@@ -552,7 +552,7 @@ const NETLIST_PROMPT: &[Check] = &[
     ("Cancel clears the prompt", netlist_cancel),
 ];
 
-const HISTORY: &[Check] = &[("the History panel is docked", history_docked)];
+pub(super) const HISTORY: &[Check] = &[("the History panel is docked", history_docked)];
 
 const GENERAL: &[Check] = &[
     ("the General section is shown", general_shown),

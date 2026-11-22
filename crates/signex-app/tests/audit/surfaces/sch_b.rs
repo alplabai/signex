@@ -111,16 +111,16 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m63",
             title: "Grid picker",
+            // The mockup's step ladder (`grid_picker_entries`). The app mounts
+            // it only on a footprint tab, so the row opens one; the schematic
+            // status-bar entry the mockup names does not exist.
             open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
+                helpers_c::open_footprint(app, r, fx)?;
+                app.interaction_state.last_mouse_pos = (360.0, 420.0);
                 // The `open_grid_picker` command.
                 let _ = app.update(Message::Ui(UiMsg::GridPickerOpen));
                 if app.interaction_state.grid_picker.is_none() {
-                    return Err(
-                        "not built: GridPickerOpen mounts the step ladder only on a \
-                                footprint editor tab; a schematic gets no grid picker"
-                            .into(),
-                    );
+                    return Err("GridPickerOpen mounted no ladder on a footprint tab".into());
                 }
                 Ok(())
             },

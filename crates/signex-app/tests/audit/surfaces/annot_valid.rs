@@ -5,6 +5,7 @@
 
 use super::checks;
 use super::helpers_d::{self, command, reached};
+use super::states;
 use crate::fixture::{self, Fixture};
 use crate::surface::{Check, Surface, WindowSel};
 use crate::{render, settle_support};
@@ -12,6 +13,7 @@ use signex_app::app::{
     AnnotateMsg, AssignFootprintsMsg, ErcMsg, Message, PreferencesMsg, ProjectMsg, RulesTabMsg,
     SheetNumberingMsg, SheetSyncMsg, Signex,
 };
+use signex_app::library::reprefix_lookup::{ReprefixLookup, RowFacts};
 use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::PanelKind;
 use signex_app::preferences::{PrefMsg, PrefNav, ProfilesMsg};
@@ -19,6 +21,8 @@ use signex_drc_dsl::table::catalog::Domain;
 use signex_types::schematic::{
     ChildSheet, FillType, Label, LabelType, Point, SchematicSheet, SelectedItem, SelectedKind,
 };
+use std::collections::HashMap;
+use std::sync::Arc;
 
 pub fn rows() -> Vec<Surface> {
     vec![
@@ -290,7 +294,18 @@ pub fn rows() -> Vec<Surface> {
 /// The sample with its project under DIN 40719-2 and the stock library
 /// mounted, the Annotate dialog open, then Re-prefix pressed. The confirm
 /// shows only when some placed part's prefix differs from the standard.
+///
+/// R1 is linked to a library row whose answer is handed to the planner, as
+/// the sample's parts have no library link of their own.
 fn open_reprefix(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+    const LIBRARY: uuid::Uuid = uuid::Uuid::from_u128(0x7701);
+    const ROW: uuid::Uuid = uuid::Uuid::from_u128(0x7702);
+    states::edit_sample_file(fx, |sheet| {
+        if let Some(part) = sheet.symbols.iter_mut().find(|s| s.reference == "R1") {
+            part.library_id = Some(LIBRARY);
+            part.row_id = Some(ROW);
+        }
+    })?;
     fixture::open_sample(app, r, fx);
     fixture::mount_stock(app, fx)?;
     let project = helpers_d::sample_project(app, fx);
@@ -302,9 +317,28 @@ fn open_reprefix(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Resu
     }
     settle_support::settle(app, Message::Annotate(AnnotateMsg::OpenDialog));
     settle_support::settle(app, Message::Annotate(AnnotateMsg::ReprefixPressed));
+    let facts = RowFacts {
+        internal_pn: "RES-0603".to_string(),
+        symbol: (LIBRARY, ROW),
+        class: "generic".to_string(),
+        prefix_override: Some("Q".to_string()),
+    };
+    let lookup = ReprefixLookup {
+        generation: app.ui_state.reprefix_generation,
+        project: helpers_d::project_mut(app, project).map(|p| p.path.clone()),
+        libraries: HashMap::from([(LIBRARY, HashMap::from([(ROW, facts)]))]),
+        problems: Vec::new(),
+    };
+    settle_support::settle(
+        app,
+        Message::Annotate(AnnotateMsg::ReprefixRowsResolved {
+            generation: lookup.generation,
+            result: Arc::new(Ok(lookup)),
+        }),
+    );
     reached(
         app.ui_state.reprefix_confirm.is_some(),
-        "ReprefixPressed under DIN 40719-2 found no part to re-prefix in the sample",
+        "the planner found no part to re-prefix for R1's linked row",
     )
 }
 
@@ -368,7 +402,7 @@ fn open_sheet_sync(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Re
 }
 
 /// The sample's project with its Rules tab open and in front.
-fn open_rules(
+pub(super) fn open_rules(
     app: &mut Signex,
     r: &mut iced::Renderer,
     fx: &Fixture,
