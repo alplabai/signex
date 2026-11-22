@@ -989,7 +989,7 @@ mod tests {
         ));
     }
 
-    /// #271 — `move_object` (Altium's `M M`) resolves to the interactive
+    /// #271 — `move_object` (the `M M` chord) resolves to the interactive
     /// Move, not to Move Selection or an unmapped no-op.
     #[test]
     fn move_object_resolves_to_the_interactive_move_action() {
