@@ -260,18 +260,20 @@ fn segmented_row<'a, V, const N: usize>(
 where
     V: Copy + PartialEq + 'a,
 {
-    let mut cells = iced::widget::Row::new().spacing(0).width(Length::Fill);
-    for (value, name) in options {
-        cells = cells.push(seg_btn(
-            name,
-            value == current,
-            on_pick(value),
-            st.palette.input_bg,
-            st.primary,
-            st.muted,
-        ));
-    }
-    let control = container(cells)
+    let cells: Vec<Element<'a, PanelMsg>> = options
+        .into_iter()
+        .map(|(value, name)| {
+            seg_btn(
+                name,
+                value == current,
+                on_pick(value),
+                st.palette.input_bg,
+                st.primary,
+                st.muted,
+            )
+        })
+        .collect();
+    let control = container(signex_widgets::FitRow::new(cells).fill(true))
         .padding(SP.xs)
         .style(crate::panels::form_look::segmented_frame)
         .width(Length::FillPortion(PROPERTY_CONTROL_PORTION))

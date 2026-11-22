@@ -80,9 +80,8 @@ fn width_cell<'a>(
         .size(TS.caption)
         .align_x(iced::alignment::Horizontal::Center)
         .wrapping(iced::widget::text::Wrapping::None)
-        .width(Length::Fill);
+        .ellipsis(iced::widget::text::Ellipsis::End);
     button(label)
-        .width(Length::Fill)
         .padding([SP.xs, SP.s])
         .on_press(on_pick(choice.value))
         .style(move |theme: &Theme, status| {
@@ -102,21 +101,17 @@ pub fn wire_width_row<'a>(
 ) -> Element<'a, PanelMsg> {
     let choices = Choice::named(&WireWidthPreset::ALL, preset_label, i18n);
     let selected = chosen(&choices, &current).map_or(current, |c| c.value);
-    let mut grid = Column::<Element<'a, PanelMsg>>::new()
-        .spacing(SP.xs)
-        .width(Length::Fill);
-    for presets in WIDTH_GRID {
-        let mut row = Row::<Element<'a, PanelMsg>>::new()
-            .spacing(SP.xs)
-            .width(Length::Fill);
-        for preset in presets {
-            if let Some(choice) = chosen(&choices, &preset) {
-                row = row.push(width_cell(&choice, preset == selected, &on_pick));
-            }
+    let mut cells: Vec<Element<'a, PanelMsg>> = Vec::with_capacity(WireWidthPreset::ALL.len());
+    for preset in WIDTH_GRID.into_iter().flatten() {
+        if let Some(choice) = chosen(&choices, &preset) {
+            cells.push(width_cell(&choice, preset == selected, &on_pick));
         }
-        grid = grid.push(row.boxed());
     }
-    let grid = container(grid)
+    let lines = signex_widgets::FitRow::new(cells)
+        .spacing(SP.xs)
+        .fill(true)
+        .max_columns(2);
+    let grid = container(lines)
         .padding(SP.xs)
         .width(Length::Fill)
         .style(form_look::segmented_frame)

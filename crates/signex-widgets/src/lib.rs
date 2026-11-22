@@ -34,6 +34,7 @@ pub mod theme_ext;
 pub mod toggle_switch;
 pub mod translate;
 pub mod tree_view;
+mod widest_face;
 
 // The dropdown widget now lives at `active_bar::dropdown`; keep the
 // flat `active_bar_dropdown` path so external

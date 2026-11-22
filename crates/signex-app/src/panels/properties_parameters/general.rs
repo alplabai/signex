@@ -490,7 +490,8 @@ pub(crate) fn seg_text(
     }
 }
 
-/// Segmented button (for units toggle etc).
+/// Segmented button (for units toggle etc), a cell of a
+/// [`signex_widgets::FitRow`], which sizes it.
 pub fn seg_btn<'a>(
     label: impl Into<Label<'a>>,
     active: bool,
@@ -504,10 +505,11 @@ pub fn seg_btn<'a>(
         text(label)
             .size(TS.body)
             .color(text_c)
-            .align_x(iced::alignment::Horizontal::Center),
+            .align_x(iced::alignment::Horizontal::Center)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .ellipsis(iced::widget::text::Ellipsis::End),
     )
-    .padding([SP.s, 0.0])
-    .width(Length::Fill)
+    .padding([SP.s, SP.xs])
     .on_press(msg)
     .style(move |theme: &Theme, status: iced::widget::button::Status| {
         let hovered = matches!(status, iced::widget::button::Status::Hovered);

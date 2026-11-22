@@ -98,10 +98,9 @@ fn tabs<'a>(ctx: &'a PanelContext, facts: &'a PcbComponentFacts) -> Element<'a, 
     let cell = |content: Row<Element<'a, PanelMsg>>, active: bool, index: usize| {
         button(
             container(content.spacing(SP.xs).align_y(iced::Alignment::Center))
-                .center_x(Length::Fill),
+                .align_x(iced::alignment::Horizontal::Center),
         )
         .padding([SP.xs, SP.s])
-        .width(Length::Fill)
         .on_press(PanelMsg::PropertiesTab(index))
         .style(move |theme: &Theme, status| {
             let hovered = matches!(status, iced::widget::button::Status::Hovered);
@@ -115,11 +114,12 @@ fn tabs<'a>(ctx: &'a PanelContext, facts: &'a PcbComponentFacts) -> Element<'a, 
         .push_boxed(text(t!(i18n, ids::PANELS_PROPERTIES_TAB_PARAMETERS)).size(TS.body))
         .push_boxed(count);
     container(
-        Row::new()
-            .push(cell(general, !on_parameters, 0))
-            .push(cell(parameters, on_parameters, 1))
-            .spacing(SP.xs)
-            .width(Length::Fill),
+        signex_widgets::FitRow::new(vec![
+            cell(general, !on_parameters, 0),
+            cell(parameters, on_parameters, 1),
+        ])
+        .spacing(SP.xs)
+        .fill(true),
     )
     .padding(SP.xs)
     .width(Length::Fill)

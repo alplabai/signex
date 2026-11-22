@@ -3,6 +3,7 @@
 //! modes, a two-page toggle). Stateless — the caller owns the selection and
 //! maps each pick to a message. Sizes derive from the text size.
 
+use crate::widest_face::WidestFace;
 use crate::{FitRow, Label, button, text};
 use iced::alignment::{Horizontal, Vertical};
 use iced::font::Weight;
@@ -19,6 +20,12 @@ const SEGMENT_PAD_EM: f32 = 10.0 / 12.0;
 const TRACK_RADIUS_EM: f32 = 7.0 / 12.0;
 const SHADOW_OFFSET_EM: f32 = 1.0 / 12.0;
 const SHADOW_BLUR_EM: f32 = 2.0 / 12.0;
+
+/// The face of the selected segment's label.
+const ACTIVE_FONT: Font = Font {
+    weight: Weight::Medium,
+    ..Font::DEFAULT
+};
 
 /// Colours for [`segmented`]; they come from the caller's tokens.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -112,6 +119,27 @@ pub fn segment_radius(track_radius: f32, track_pad: f32) -> f32 {
     (track_radius - track_pad).max(0.0)
 }
 
+/// A segment's label in `font`, or the renderer's default font for `None`.
+fn label_face<'a, M: 'a>(
+    label: Label<'a>,
+    size: f32,
+    ink: Color,
+    font: Option<Font>,
+) -> Element<'a, M> {
+    let face = text(label)
+        .size(size)
+        .color(ink)
+        .height(Length::Fill)
+        .align_y(Vertical::Center)
+        .align_x(Horizontal::Center)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .ellipsis(iced::widget::text::Ellipsis::End);
+    match font {
+        Some(font) => face.font(font).into(),
+        None => face.into(),
+    }
+}
+
 /// Segmented control over `options` (value, label). `on_select` maps the
 /// picked value to the caller's message; picking the selected one re-emits it.
 pub fn segmented<'a, V, M>(
@@ -139,20 +167,10 @@ where
         } else {
             style.ink
         };
-        let mut label = text(label)
-            .size(style.text_size)
-            .color(ink)
-            .height(Length::Fill)
-            .align_y(Vertical::Center)
-            .align_x(Horizontal::Center)
-            .wrapping(iced::widget::text::Wrapping::None)
-            .ellipsis(iced::widget::text::Ellipsis::End);
-        if is_active {
-            label = label.font(Font {
-                weight: Weight::Medium,
-                ..Font::DEFAULT
-            });
-        }
+        // Both faces are measured, so picking a segment cannot refold the row.
+        let plain = label_face(label.clone(), style.text_size, ink, None);
+        let medium = label_face(label, style.text_size, ink, Some(ACTIVE_FONT));
+        let label: Element<'a, M> = WidestFace::new(plain, medium, is_active).into();
         let seg = button(label)
             .padding(Padding::from([0.0, m.segment_pad_h]))
             .height(m.segment_height)

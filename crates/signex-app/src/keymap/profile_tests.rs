@@ -913,6 +913,135 @@ fn a_custom_profile_under_the_old_id_is_refused_as_a_shadow_of_the_built_in() {
     assert!(err.contains("built-in profile `signex_standard` cannot be modified"));
 }
 
+/// A file holding a custom profile `signex_standard` named "Team Keys" with
+/// one binding, and a custom `child` based on `child_base`.
+fn file_with_custom_standard(active: &str, child_base: &str) -> String {
+    format!(
+        r#"{}
+[[keyboard_shortcuts.profiles]]
+schema_version = 1
+profile_id = "signex_standard"
+profile_name = "Team Keys"
+profile_kind = "custom"
+
+[[keyboard_shortcuts.profiles.sections]]
+context = "global"
+
+[keyboard_shortcuts.profiles.sections.bindings]
+"Ctrl+K" = "save_document"
+"#,
+        saved_file_on(active, child_base).replace("\"mine\"", "\"child\"")
+    )
+}
+
+#[test]
+fn a_custom_profile_on_the_standard_id_survives_the_load_and_stays_active() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let source = file_with_custom_standard("signex_standard", "signex_standard");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, &source).unwrap();
+
+    let set = load_profile_set_at(&path).unwrap();
+
+    let kept = set.active_profile();
+    assert_eq!(kept.id, "signex_standard_custom");
+    assert_eq!(kept.name, "Team Keys");
+    assert_eq!(kept.kind, ShortcutProfileKind::Custom);
+    assert_eq!(kept.bindings.len(), 1);
+    assert_eq!(
+        set.profile("child").unwrap().base_profile.as_deref(),
+        Some("signex_standard_custom"),
+        "a profile based on it follows it"
+    );
+    assert_eq!(
+        set.profile("signex_standard").unwrap().kind,
+        ShortcutProfileKind::BuiltIn
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        source,
+        "loading must not rewrite the file"
+    );
+
+    save_profile_set_at(&path, &set).unwrap();
+    let reloaded = load_profile_set_at(&path).unwrap();
+    assert_eq!(reloaded.active_profile().id, "signex_standard_custom");
+    assert_eq!(reloaded.active_profile().name, "Team Keys");
+}
+
+/// The renamed id always meant the built-in, even beside a custom profile
+/// that holds the new id.
+#[test]
+fn the_old_id_still_means_the_built_in_beside_a_custom_standard() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        file_with_custom_standard(RENAMED_PROFILE_ID, RENAMED_PROFILE_ID),
+    )
+    .unwrap();
+
+    let set = load_profile_set_at(&path).unwrap();
+
+    assert_eq!(set.active_profile().id, "signex_standard");
+    assert_eq!(set.active_profile().kind, ShortcutProfileKind::BuiltIn);
+    assert_eq!(
+        set.profile("child").unwrap().base_profile.as_deref(),
+        Some("signex_standard")
+    );
+    assert_eq!(
+        set.profile("signex_standard_custom").unwrap().name,
+        "Team Keys"
+    );
+}
+
+#[test]
+fn the_new_id_of_a_custom_standard_avoids_ids_already_in_the_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let source = file_with_custom_standard("signex_standard", "classic")
+        .replace("\"child\"", "\"signex_standard_custom\"");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, source).unwrap();
+
+    let set = load_profile_set_at(&path).unwrap();
+
+    assert_eq!(set.active_profile().id, "signex_standard_custom_2");
+    assert_eq!(set.active_profile().name, "Team Keys");
+    assert_eq!(set.profile("signex_standard_custom").unwrap().name, "Mine");
+}
+
+#[test]
+fn a_backup_with_a_custom_profile_on_the_standard_id_restores_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = config_path_for_dir(tmp.path());
+    let bak = path.with_file_name("keyboard_shortcuts.toml.bak");
+    let source = file_with_custom_standard("signex_standard", "signex_standard");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&bak, &source).unwrap();
+
+    let restored = read_backup_profiles_at(&bak).expect("the backup is readable");
+
+    assert_eq!(restored.active_profile_reset, None);
+    let kept = restored.set.active_profile();
+    assert_eq!(kept.id, "signex_standard_custom");
+    assert_eq!(kept.name, "Team Keys");
+    assert_eq!(kept.bindings.len(), 1);
+    assert_eq!(
+        restored
+            .set
+            .profile("child")
+            .unwrap()
+            .base_profile
+            .as_deref(),
+        Some("signex_standard_custom")
+    );
+    assert_eq!(std::fs::read_to_string(&bak).unwrap(), source);
+    assert!(!path.exists(), "reading a backup writes nothing");
+}
+
 #[test]
 fn the_built_ins_list_signex_standard_first_and_never_the_old_name() {
     let set = ShortcutProfileSet::built_ins().unwrap();

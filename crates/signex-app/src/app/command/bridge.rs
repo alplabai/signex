@@ -729,7 +729,7 @@ mod tests {
 
     /// Catalog ids that `core_to_message` has no arm for, as measured on
     /// `trunk` @ `f211e7d1` (2026-07-25). Every one of them is bound to a
-    /// trigger in the shipped `assets/keyboard-shortcuts/{altium,classic}.toml`
+    /// trigger in the shipped `assets/keyboard-shortcuts/{signex_standard,classic}.toml`
     /// (a key sequence or a pointer gesture), so the user presses
     /// the key, `take_keymap_match` consumes the stroke, and nothing happens.
     ///

@@ -421,23 +421,24 @@ impl<'f> Form<'f> {
         &self,
         options: Vec<(Localized, bool, PanelMsg)>,
     ) -> Element<'a, PanelMsg> {
-        let mut cells: Row<Element<'a, PanelMsg>> = Row::new().width(Length::Fill);
+        let mut cells: Vec<Element<'a, PanelMsg>> = Vec::with_capacity(options.len());
         for (label, active, msg) in options {
             let cell = button(
                 text(label)
                     .size(TS.body)
-                    .align_x(iced::alignment::Horizontal::Center),
+                    .align_x(iced::alignment::Horizontal::Center)
+                    .wrapping(iced::widget::text::Wrapping::None)
+                    .ellipsis(iced::widget::text::Ellipsis::End),
             )
             .padding([SP.xs, SP.xs])
-            .width(Length::Fill)
             .on_press(msg)
             .style(move |theme: &Theme, status: button::Status| {
                 let hovered = matches!(status, button::Status::Hovered);
                 form_look::segment_cell(theme, active, hovered && !active)
             });
-            cells = cells.push(cell.boxed());
+            cells.push(cell.boxed());
         }
-        container(cells)
+        container(signex_widgets::FitRow::new(cells).fill(true))
             .padding(SP.xs)
             .width(Length::Fill)
             .style(form_look::segmented_frame)
