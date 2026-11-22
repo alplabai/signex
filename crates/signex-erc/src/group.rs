@@ -79,6 +79,7 @@ impl RuleKind {
             | RuleKind::PartWithoutFootprint
             | RuleKind::PartWithoutValue
             | RuleKind::PartWithoutMpn
+            | RuleKind::PartWithoutLibraryBody
             | RuleKind::UnitsNotPlaced
             | RuleKind::SymbolOutsideSheet => RuleGroup::Parts,
         }
@@ -105,7 +106,7 @@ mod tests {
     #[test]
     fn every_group_holds_its_rules() {
         let sizes: Vec<usize> = RuleGroup::ALL.iter().map(|g| g.rules().count()).collect();
-        assert_eq!(sizes, [4, 8, 4, 6, 7, 7]);
+        assert_eq!(sizes, [4, 8, 4, 6, 7, 8]);
     }
 
     #[test]
@@ -136,6 +137,7 @@ mod tests {
             (RuleKind::PartWithoutFootprint, Parts),
             (RuleKind::PartWithoutValue, Parts),
             (RuleKind::PartWithoutMpn, Parts),
+            (RuleKind::PartWithoutLibraryBody, Parts),
             (RuleKind::UnannotatedDesignator, Parts),
             (RuleKind::SinglePinNet, Nets),
             (RuleKind::NetWithNoDriver, Nets),

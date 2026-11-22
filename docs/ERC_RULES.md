@@ -53,6 +53,7 @@ set predates these rules runs them at their defaults (`resolve` lists them as
 | `part_without_footprint` | Info | A part placed on the board (`on_board`) none of whose units has a footprint. |
 | `part_without_value` | Info | A part none of whose units has a value. |
 | `part_without_mpn` | Off | A part none of whose units carries an MPN field (`MPN`, `Manufacturer Part Number`, `Part Number`, the fields the BOM reads). |
+| `part_without_library_body` | Error | A non-power part with a unit whose library body is not on the sheet (#2781). One finding per part, at the lowest such unit. |
 | `unannotated_designator` | Warning | A part shown under a designator that is empty or ends in `?`. |
 | `single_pin_net` | Warning | A net named by a local label that reaches exactly one part pin. |
 | `net_with_no_driver` | Warning | A net with an input pin and no pin that can drive it. |
@@ -76,6 +77,15 @@ findings:
 - The net rules and annotation are Warning. They point at wiring that is very
   likely wrong, and they skip every case they cannot judge (below), so they
   stay quiet on a sound design.
+
+### A part with no library body
+
+The body is what defines a part's pins and units, so ERC reports the gap as an
+Error instead of guessing them: the part has no pins in the run, no pin or net
+rule sees it, and the netlist leaves it out of every net. `units_not_placed`
+skips it too. The checks that read only the part's own fields still run:
+duplicate designator, unannotated, footprint, value, MPN and outside the sheet.
+Power ports are exempt, since they draw a built-in body.
 
 ### What the net rules skip
 

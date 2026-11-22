@@ -240,6 +240,11 @@ pub(crate) fn context_for(kind: RuleKind) -> ErcContext {
         RuleKind::PartWithoutFootprint | RuleKind::PartWithoutValue | RuleKind::PartWithoutMpn => {
             c.symbols.push(symbol("R1", pt(10.0, 10.0)));
         }
+        RuleKind::PartWithoutLibraryBody => {
+            let mut s = symbol("R1", pt(10.0, 10.0));
+            s.unit_count = 0;
+            c.symbols.push(s);
+        }
         RuleKind::UnannotatedDesignator => c.symbols.push(symbol("R?", pt(10.0, 10.0))),
         RuleKind::SinglePinNet => {
             c.wires.push(wire(pt(0.0, 0.0), pt(10.0, 0.0)));

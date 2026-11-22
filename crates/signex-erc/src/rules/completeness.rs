@@ -65,19 +65,48 @@ fn report_parts(
         }
         // The marker sits on the lowest-numbered unit (UUID breaks ties), the
         // one a reader looks for first, independent of document order.
-        let Some(&(first, designator)) = part.iter().min_by_key(|(s, _)| (s.unit, s.uuid)) else {
+        let Some(&placed) = part.iter().min_by_key(|(s, _)| (s.unit, s.uuid)) else {
             continue;
         };
-        let d = Diagnostic::new(kind, message(display(designator)), first.position)
-            .with_primary(sel(first.uuid, SelectedKind::Symbol));
-        // Only a symbol placed several times needs the designator to tell its
-        // findings apart; otherwise the uuid is the identity, and a
-        // re-annotation lapses a waiver instead of orphaning it.
-        out.push(if first.instance_designators.is_empty() {
-            d
-        } else {
-            d.tagged(designator.trim())
-        });
+        out.push(part_finding(kind, placed, message(display(placed.1))));
+    }
+}
+
+/// The finding of a part, on the placed unit `(first, designator)`.
+fn part_finding(kind: RuleKind, (first, designator): Placed, message: String) -> Diagnostic {
+    let d = Diagnostic::new(kind, message, first.position)
+        .with_primary(sel(first.uuid, SelectedKind::Symbol));
+    // Only a symbol placed several times needs the designator to tell its
+    // findings apart; otherwise the uuid is the identity, and a
+    // re-annotation lapses a waiver instead of orphaning it.
+    if first.instance_designators.is_empty() {
+        d
+    } else {
+        d.tagged(designator.trim())
+    }
+}
+
+/// One finding per part with a unit whose library body is missing, at the
+/// lowest such unit. Units can pin different body versions, so a sibling
+/// that has its body does not clear the part.
+pub(crate) fn part_without_library_body(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
+    for part in parts(ctx) {
+        let missing = part
+            .iter()
+            .filter(|(s, _)| !s.has_library_body())
+            .min_by_key(|(s, _)| (s.unit, s.uuid));
+        let Some(&placed) = missing else {
+            continue;
+        };
+        let message = format!(
+            "Part {} has no library body: its pins are not checked and join no net",
+            display(placed.1)
+        );
+        out.push(part_finding(
+            RuleKind::PartWithoutLibraryBody,
+            placed,
+            message,
+        ));
     }
 }
 

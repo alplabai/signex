@@ -20,7 +20,8 @@ pub(crate) use bus_runs::bus_runs_width_mismatch;
 mod clash_scope;
 mod completeness;
 pub(crate) use completeness::{
-    part_without_footprint, part_without_mpn, part_without_value, unannotated_designator,
+    part_without_footprint, part_without_library_body, part_without_mpn, part_without_value,
+    unannotated_designator,
 };
 mod local_label_other_sheets;
 pub(crate) use local_label_other_sheets::local_label_name_on_other_sheets;

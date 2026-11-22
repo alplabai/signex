@@ -1,6 +1,7 @@
 mod cross_sheet_designators;
 mod hierarchy_memo;
 mod local_label_other_sheets;
+mod missing_library_body;
 mod multi_unit;
 mod netlist_agreement;
 mod no_erc_directives;
