@@ -21,7 +21,10 @@ impl Signex {
         // ...and open documents against the disk (#1877).
         let disk_poll = self.start_document_disk_poll();
         // ...and the repository a Version control section is showing.
-        let repos = self.reread_shown_project_repos();
+        let repos = Task::batch([
+            self.reread_shown_project_repos(),
+            self.resume_parked_branch_switch(),
+        ]);
         match self.start_project_fs_probe(true) {
             Some(probe) => Task::batch([stat_pass, disk_poll, repos, probe]),
             None => Task::batch([stat_pass, disk_poll, repos]),

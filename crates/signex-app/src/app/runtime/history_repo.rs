@@ -5,16 +5,17 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use signex_i18n::{Translatable, ids};
-use signex_library::repo_branches::{self, BranchTarget, SwitchFailure};
+use signex_i18n::ids;
+use signex_library::repo_branches::{self, BranchTarget};
 use signex_library::repo_graph;
 
 use super::super::*;
 use super::history::{locate_in_repo, tracked_file};
+use crate::app::project_git::{SwitchRequest, SwitchSurface};
 use crate::app::state::{ErrorNotice, verbatim};
 use crate::panels::history::{
     HistoryCommitMsg, HistoryFilterMsg, HistoryPanelMsg, HistoryRepoEvent, HistoryRepoView,
-    HistorySwitcherMsg, RefPrompt, RefPromptKind, SwitchBlock, can_create_branch, changed_files,
+    HistorySwitcherMsg, RefPrompt, RefPromptKind, can_create_branch, changed_files,
     visible_commits,
 };
 
@@ -65,21 +66,8 @@ fn create_ref_task(
     })
 }
 
-fn switch_failure_detail(failure: &SwitchFailure) -> Translatable {
-    match failure {
-        SwitchFailure::HeldFileDiffers(file) => {
-            Translatable::new(ids::PANELS_HISTORY_SWITCH_HELD_FILE).arg("file", file.clone())
-        }
-        SwitchFailure::LfsFileDiffers(file) => {
-            Translatable::new(ids::PANELS_HISTORY_SWITCH_LFS_FILE).arg("file", file.clone())
-        }
-        SwitchFailure::LocalChanges => Translatable::new(ids::PANELS_HISTORY_SWITCH_LOCAL_CHANGES),
-        SwitchFailure::Git(error) => verbatim(error.clone()),
-    }
-}
-
 impl Signex {
-    fn publish_history(&mut self) {
+    pub(in crate::app) fn publish_history(&mut self) {
         self.document_state.panel_ctx.history = self.document_state.history.clone();
     }
 
@@ -253,12 +241,14 @@ impl Signex {
     fn handle_history_switcher(&mut self, msg: HistorySwitcherMsg) -> Task<Message> {
         match msg {
             HistorySwitcherMsg::Toggled => {
+                self.clear_save_offer();
                 let ui = &mut self.document_state.history.ui;
                 ui.switcher_open ^= true;
                 ui.switcher_query.clear();
                 self.sync_switch_block();
             }
             HistorySwitcherMsg::Dismissed => {
+                self.clear_save_offer();
                 self.document_state.history.ui.switcher_open = false;
             }
             HistorySwitcherMsg::QueryEdited(query) => {
@@ -270,8 +260,9 @@ impl Signex {
                 } else {
                     BranchTarget::Local(name)
                 };
-                return self.start_branch_switch(target);
+                return self.pick_history_branch(target);
             }
+            HistorySwitcherMsg::SaveAndSwitchPressed => return self.save_then_switch(),
             HistorySwitcherMsg::CreatePressed => return self.create_branch_from_query(),
         }
         Task::none()
@@ -292,113 +283,20 @@ impl Signex {
         create_ref_task(repo.root.clone(), RefPromptKind::Branch, name, None)
     }
 
-    /// Why a switch of the repository at `root` cannot start now. Unsaved
-    /// edits come first: they are what the user can act on.
-    pub(crate) fn branch_switch_block(&self, root: &Path) -> Option<SwitchBlock> {
-        let d = &self.document_state;
-        let unsaved = d
-            .dirty_document_paths()
-            .into_iter()
-            .filter(|path| path.starts_with(root))
-            .min();
-        if let Some(path) = unsaved {
-            let name = path.file_name().map_or_else(
-                || path.display().to_string(),
-                |n| n.to_string_lossy().into_owned(),
-            );
-            return Some(SwitchBlock::Unsaved(name));
-        }
-        let overlaps = |repo: &PathBuf| repo.starts_with(root) || root.starts_with(repo);
-        let committing = d.active_git_repos.iter().any(overlaps)
-            || d.inflight_git_commits
-                .iter()
-                .any(|(repo, _)| overlaps(repo));
-        let busy = committing
-            || d.document_saves.is_any_saving()
-            || !d.pending_restores.is_empty()
-            || d.branch_switch.is_some();
-        busy.then_some(SwitchBlock::Busy)
-    }
-
-    /// Keep the open switcher's notice true as saves start and finish.
-    pub(super) fn sync_switch_block(&mut self) {
-        if !self.document_state.history.ui.switcher_open {
-            return;
-        }
-        let block = self
-            .history_repo_root()
-            .and_then(|root| self.branch_switch_block(&root));
-        self.document_state.history.ui.switch_block = block;
-    }
-
-    /// Paths under `root`, relative to it, that the app holds in memory with
-    /// no check against the disk: the project files, the open libraries and
-    /// every open document other than a sheet or board, which the disk poll
-    /// watches. A library that is the repository itself gives an empty path,
-    /// which holds every file.
-    pub(crate) fn branch_switch_held_paths(&self, root: &Path) -> Vec<PathBuf> {
-        let d = &self.document_state;
-        let projects = d.projects.iter().map(|project| project.path.as_path());
-        let tabs = d
-            .tabs
-            .iter()
-            .filter(|tab| !matches!(tab.kind, TabKind::Schematic | TabKind::Pcb))
-            .map(|tab| tab.path.as_path());
-        let editors = d
-            .footprint_editors
-            .keys()
-            .chain(d.symbol_editors.keys())
-            .map(PathBuf::as_path);
-        let libraries = self
-            .library
-            .open_libraries
-            .iter()
-            .filter_map(|library| library.root_dir());
-        projects
-            .chain(tabs)
-            .chain(editors)
-            .chain(libraries)
-            .filter_map(|path| path.strip_prefix(root).ok())
-            .map(Path::to_path_buf)
-            .collect()
-    }
-
-    fn start_branch_switch(&mut self, target: BranchTarget) -> Task<Message> {
+    /// A branch row of the History switcher was pressed.
+    fn pick_history_branch(&mut self, target: BranchTarget) -> Task<Message> {
         let Some(root) = self.history_repo_root() else {
             return Task::none();
         };
-        if let Some(block) = self.branch_switch_block(&root) {
-            self.document_state.history.ui.switch_block = Some(block);
-            return Task::none();
-        }
-        let held = self.branch_switch_held_paths(&root);
-        self.document_state.branch_switch = Some(root.clone());
-        self.document_state.history.ui.switcher_open = false;
-        let job = move || repo_branches::switch_branch(&root, &target, &held);
-        let failed = |e: String| Err(SwitchFailure::Git(e));
-        Task::perform(on_worker(job, failed), |result| {
-            Message::Ui(UiMsg::HistoryRepo {
-                window: None,
-                event: HistoryRepoEvent::SwitchFinished(result),
-            })
+        self.request_branch_switch(SwitchRequest {
+            surface: SwitchSurface::History,
+            root,
+            target,
         })
     }
 
-    /// A save or restore of a file in the repository being switched would
-    /// race the checkout.
-    pub(crate) fn refuse_during_branch_switch(&self, path: &Path) -> anyhow::Result<()> {
-        match &self.document_state.branch_switch {
-            Some(root) if path.starts_with(root) => anyhow::bail!(
-                "A branch switch of {} is still running, so {} was left alone",
-                root.display(),
-                path.display()
-            ),
-            _ => Ok(()),
-        }
-    }
-
     /// Reload the History of the main window and of every undocked one.
-    fn reload_all_histories(&mut self) -> Task<Message> {
+    pub(in crate::app) fn reload_all_histories(&mut self) -> Task<Message> {
         for history in self.document_state.window_history.values_mut() {
             history.active_path = None;
         }
@@ -422,7 +320,9 @@ impl Signex {
                 Task::none()
             }
             HistoryRepoEvent::RefCreated(result) => self.finish_ref_created(result),
-            HistoryRepoEvent::SwitchFinished(result) => self.finish_branch_switch(result),
+            HistoryRepoEvent::SwitchFinished(result) => {
+                self.finish_branch_switch(SwitchSurface::History, result)
+            }
         };
         self.publish_history();
         task
@@ -492,30 +392,14 @@ impl Signex {
         }
         self.reload_all_histories()
     }
-
-    /// The switch is over: release the guard, say why if it was refused, and
-    /// read everything again. Open sheets and boards that now differ raise
-    /// the changed-on-disk card through the poll, which never overwrites.
-    fn finish_branch_switch(&mut self, result: Result<String, SwitchFailure>) -> Task<Message> {
-        self.document_state.branch_switch = None;
-        match result {
-            Ok(name) => crate::diagnostics::log_info(format!("[git] switched to {name}")),
-            Err(failure) => {
-                let detail = switch_failure_detail(&failure);
-                crate::diagnostics::log_warning(format!("[git] branch switch: {failure:?}"));
-                self.document_state.error_notice =
-                    Some(ErrorNotice::new(ids::PANELS_HISTORY_SWITCH_FAILED, detail));
-            }
-        }
-        let poll = self.start_document_disk_poll();
-        Task::batch([self.reload_all_histories(), poll])
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::project_git::SwitchBlock;
     use crate::panels::history::HistoryFilter;
+    use signex_library::adapters::local_git::project_repo::SwitchRefusal;
 
     fn app_with_repo(root: &Path) -> Signex {
         let (mut app, _boot) = Signex::new();
@@ -535,7 +419,7 @@ mod tests {
         app.document_state
             .mark_document_dirty(&root.join("power.snxsch"));
 
-        let task = app.start_branch_switch(BranchTarget::Local("side".into()));
+        let task = app.pick_history_branch(BranchTarget::Local("side".into()));
         drop(task);
 
         assert!(
@@ -544,7 +428,7 @@ mod tests {
         );
         assert_eq!(
             app.document_state.history.ui.switch_block,
-            Some(SwitchBlock::Unsaved("power.snxsch".into()))
+            Some(SwitchBlock::UnsavedEdits("power.snxsch".into()))
         );
     }
 
@@ -570,7 +454,10 @@ mod tests {
             app.refuse_during_branch_switch(Path::new("/work/other/a.snxsch"))
                 .is_ok()
         );
-        assert_eq!(app.branch_switch_block(&root), Some(SwitchBlock::Busy));
+        assert_eq!(
+            app.branch_switch_block(&root),
+            Some(SwitchBlock::WorkRunning)
+        );
     }
 
     /// A refused switch still releases the guard, or saves would stay
@@ -581,7 +468,8 @@ mod tests {
         let mut app = app_with_repo(&root);
         app.document_state.branch_switch = Some(root);
 
-        let task = app.finish_branch_switch(Err(SwitchFailure::LocalChanges));
+        let task =
+            app.finish_branch_switch(SwitchSurface::History, Err(SwitchRefusal::WouldOverwrite));
         drop(task);
 
         assert!(app.document_state.branch_switch.is_none());

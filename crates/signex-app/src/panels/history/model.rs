@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use signex_library::repo_branches::SwitchFailure;
+use signex_library::adapters::local_git::project_repo::SwitchRefusal;
 use signex_library::repo_graph::{
     RepoFileChange, RepoFileChangeKind, RepoRefKind, RepoRefTip, RepoSnapshot,
 };
@@ -234,15 +234,6 @@ pub struct RefPrompt {
     pub name: String,
 }
 
-/// Why the switcher cannot switch now.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SwitchBlock {
-    /// The named document has unsaved edits.
-    Unsaved(String),
-    /// A save, commit, restore or another switch is running.
-    Busy,
-}
-
 /// The panel's own view state, kept across reloads of the same file.
 #[derive(Debug, Clone, Default)]
 pub struct HistoryUi {
@@ -254,7 +245,9 @@ pub struct HistoryUi {
     pub prompt: Option<RefPrompt>,
     pub switcher_open: bool,
     pub switcher_query: String,
-    pub switch_block: Option<SwitchBlock>,
+    pub switch_block: Option<crate::app::project_git::SwitchBlock>,
+    /// The picked branch has another project file: Save and switch shows.
+    pub save_offered: bool,
     /// A save of the file makes a commit, so Commit… has something to do.
     pub commits_on_save: bool,
 }
@@ -290,7 +283,12 @@ pub enum HistorySwitcherMsg {
     Toggled,
     Dismissed,
     QueryEdited(String),
-    Picked { name: String, is_remote: bool },
+    Picked {
+        name: String,
+        is_remote: bool,
+    },
+    /// Save the repository's edits, then run the picked switch.
+    SaveAndSwitchPressed,
     CreatePressed,
 }
 
@@ -316,7 +314,7 @@ pub enum HistoryRepoEvent {
         result: Result<Vec<ChangedFile>, String>,
     },
     RefCreated(Result<(), String>),
-    SwitchFinished(Result<String, SwitchFailure>),
+    SwitchFinished(Result<crate::app::project_git::SwitchDone, SwitchRefusal>),
 }
 
 #[cfg(test)]

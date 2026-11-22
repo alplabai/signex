@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use iced::widget::{Column, Row, column, container, svg};
 use iced::{Alignment, Color, Element, Length, Theme, Widget as _};
-use signex_i18n::{I18n, Localized, UserText, ids, t};
+use signex_i18n::{I18n, Localized, RenderTranslatable, Translatable, UserText, ids, t};
 use signex_library::adapters::local_git::project_repo::{BranchFacts, SwitchRefusal};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, button, text};
@@ -132,25 +132,35 @@ fn branch_row<'a>(
         .boxed()
 }
 
+/// Why a switch was refused, for a notice card or the switcher's foot.
+pub(crate) fn refusal_detail(refusal: &SwitchRefusal) -> Translatable {
+    match refusal {
+        SwitchRefusal::UnknownBranch => Translatable::new(ids::PROJECT_VCS_SWITCH_UNKNOWN),
+        SwitchRefusal::NoCommits => Translatable::new(ids::PROJECT_VCS_SWITCH_NO_COMMITS),
+        SwitchRefusal::HeldFileDiffers(file) => {
+            Translatable::new(ids::PROJECT_VCS_SWITCH_HELD).arg("file", file.clone())
+        }
+        SwitchRefusal::ProjectFileUnreadable(file) => {
+            Translatable::new(ids::PROJECT_VCS_SWITCH_PROJECT_UNREADABLE).arg("file", file.clone())
+        }
+        SwitchRefusal::LfsContentMissing(file) => {
+            Translatable::new(ids::PROJECT_VCS_SWITCH_LFS).arg("file", file.clone())
+        }
+        SwitchRefusal::WouldOverwrite => Translatable::new(ids::PROJECT_VCS_SWITCH_OVERWRITE),
+        SwitchRefusal::Failed(why) => {
+            Translatable::new(ids::PROJECT_VCS_SWITCH_FAILED).arg("why", why.clone())
+        }
+    }
+}
+
 /// Why the last switch did not happen, in the catalog's words.
-pub(super) fn block_words(block: &SwitchBlock, i18n: &I18n) -> Localized {
+pub(crate) fn block_words(block: &SwitchBlock, i18n: &I18n) -> Localized {
     match block {
         SwitchBlock::UnsavedEdits(file) => {
             t!(i18n, ids::PROJECT_VCS_SWITCH_UNSAVED, "file" => file.as_str())
         }
         SwitchBlock::WorkRunning => t!(i18n, ids::PROJECT_VCS_SWITCH_BUSY),
-        SwitchBlock::Refused(refusal) => match refusal {
-            SwitchRefusal::UnknownBranch => t!(i18n, ids::PROJECT_VCS_SWITCH_UNKNOWN),
-            SwitchRefusal::NoCommits => t!(i18n, ids::PROJECT_VCS_SWITCH_NO_COMMITS),
-            SwitchRefusal::ProjectFileDiffers => t!(i18n, ids::PROJECT_VCS_SWITCH_PROJECT_FILE),
-            SwitchRefusal::LfsFileDiffers(file) => {
-                t!(i18n, ids::PROJECT_VCS_SWITCH_LFS, "file" => file.as_str())
-            }
-            SwitchRefusal::WouldOverwrite => t!(i18n, ids::PROJECT_VCS_SWITCH_OVERWRITE),
-            SwitchRefusal::Failed(why) => {
-                t!(i18n, ids::PROJECT_VCS_SWITCH_FAILED, "why" => why.as_str())
-            }
-        },
+        SwitchBlock::Refused(refusal) => refusal_detail(refusal).localized(i18n),
     }
 }
 
@@ -168,6 +178,7 @@ pub(crate) fn author_problem_words(problem: &AuthorProblem, i18n: &I18n) -> Loca
 pub(crate) fn switcher<'a>(
     project_id: ProjectId,
     repo: Option<&RepoView>,
+    offers_save: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, ProjectGitMsg> {
@@ -195,6 +206,19 @@ pub(crate) fn switcher<'a>(
                 .size(TS.caption)
                 .color(ti(tokens.warning))
                 .boxed(),
+        );
+    }
+    if offers_save {
+        body = body.push(
+            button(
+                text(t!(i18n, ids::PROJECT_VCS_SWITCH_SAVE_AND_SWITCH))
+                    .size(TS.caption)
+                    .boxed(),
+            )
+            .padding([SP.xs, SP.m])
+            .on_press(ProjectGitMsg::SaveAndSwitchPressed)
+            .style(crate::styles::outline_button(tokens))
+            .boxed(),
         );
     }
     container(body)

@@ -278,13 +278,21 @@ project-vcs-branch-behind = { $count } behind
 project-vcs-branch-ahead-behind = { $ahead } ahead · { $behind } behind
 project-vcs-switcher-heading = Local branches
 # Messages panel, after a branch switch.
-project-vcs-switched = Switched to branch { $branch }. Open documents that changed offer Reload.
+project-vcs-switched = Switched to branch { $branch }. Clean documents were reloaded; documents with edits offer Reload.
 project-vcs-switch-unsaved = { $file } has unsaved edits. Save or discard them before switching; Signex never saves for you.
-project-vcs-switch-busy = A save or commit is still running. Try again when it finishes.
+project-vcs-switch-busy = A save, commit or restore is still running. Try again when it finishes.
 project-vcs-switch-unknown = That branch no longer exists.
 project-vcs-switch-no-commits = The repository has no commit yet, so there is nothing to switch from.
-project-vcs-switch-project-file = This branch has a different project file. Close the project and switch in your Git tool, then open it again.
-project-vcs-switch-lfs = { $file } is stored with Git LFS and differs on this branch. Switch in your Git tool, which restores its content.
+# $file is a path inside the repository.
+project-vcs-switch-held = { $file } is open and differs on that branch. Close it, then switch.
+project-vcs-switch-project-unreadable = { $file } is missing or unreadable on that branch, so the project could not reopen. Nothing was changed.
+project-vcs-switch-lfs = The Git LFS content of { $file } on that branch is not in this repository. Fetch it with your Git tool, then switch.
+# Button under the unsaved-edits notice, for a branch with another project file.
+project-vcs-switch-save-and-switch = Save and switch
+# Error card: the branch did switch, the project did not follow.
+project-vcs-switch-reopen-title = Project not reopened
+project-vcs-switch-reopen-failed = The branch was switched, but { $file } could not be reopened: { $why }. Close the project and open it again.
+project-vcs-switch-reopen-held = The branch was switched, but { $file } has edits or work still running, so it stayed open with its old content. Save or discard them, then close the project and open it again.
 project-vcs-switch-overwrite = Files changed since their last commit would be overwritten. Commit them first.
 project-vcs-switch-failed = The branch was not switched: { $why }
 project-vcs-last-commit = Last commit

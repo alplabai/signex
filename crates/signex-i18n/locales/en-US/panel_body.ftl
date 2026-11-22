@@ -72,15 +72,8 @@ panels-history-branch-up-to-date = up to date
 panels-history-branch-ahead = { $count } ahead
 panels-history-branch-behind = { $count } behind
 panels-history-branch-ahead-behind = { $ahead } ahead · { $behind } behind
-# $file is the name of a document with unsaved edits.
-panels-history-switch-blocked-dirty = { $file } has unsaved edits. Save or discard them before switching; Signex never saves for you.
-panels-history-switch-blocked-busy = A save, commit or restore is still running. Switch when it finishes.
 # Error card when a switch was refused; nothing on disk changed.
 panels-history-switch-failed = Branch not switched
-# $file is a path inside the project.
-panels-history-switch-held-file = { $file } is open and differs on that branch. Close it, then switch.
-panels-history-switch-lfs-file = { $file } is stored with Git LFS, which Signex cannot check out. Switch with your git client.
-panels-history-switch-local-changes = Files on disk have changes this switch would overwrite. Commit or discard them, then switch.
 # Error card when a new branch or tag could not be created.
 panels-history-ref-failed = Branch or tag not created
 

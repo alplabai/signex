@@ -54,12 +54,7 @@ define_ids! {
     PANELS_HISTORY_BRANCH_AHEAD = "panels-history-branch-ahead";
     PANELS_HISTORY_BRANCH_BEHIND = "panels-history-branch-behind";
     PANELS_HISTORY_BRANCH_AHEAD_BEHIND = "panels-history-branch-ahead-behind";
-    PANELS_HISTORY_SWITCH_BLOCKED_DIRTY = "panels-history-switch-blocked-dirty";
-    PANELS_HISTORY_SWITCH_BLOCKED_BUSY = "panels-history-switch-blocked-busy";
     PANELS_HISTORY_SWITCH_FAILED = "panels-history-switch-failed";
-    PANELS_HISTORY_SWITCH_HELD_FILE = "panels-history-switch-held-file";
-    PANELS_HISTORY_SWITCH_LFS_FILE = "panels-history-switch-lfs-file";
-    PANELS_HISTORY_SWITCH_LOCAL_CHANGES = "panels-history-switch-local-changes";
     PANELS_HISTORY_REF_FAILED = "panels-history-ref-failed";
     PANELS_ERC_WAIVE = "panels-erc-waive";
     PANELS_ERC_WAIVER_CANCEL = "panels-erc-waiver-cancel";

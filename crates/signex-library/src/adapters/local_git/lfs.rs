@@ -7,7 +7,7 @@
 //! read from the repository's attributes, so every `filter=lfs` rule
 //! applies, whoever wrote it.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
@@ -47,6 +47,81 @@ fn is_pointer(content: &[u8]) -> bool {
     content.len() <= POINTER_MAX_LEN && content.starts_with(POINTER_VERSION)
 }
 
+/// The content hash an LFS pointer file names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LfsPointer {
+    pub(crate) oid: String,
+}
+
+/// Read `content` as an LFS pointer. The hash becomes a file name, so only
+/// 64 lowercase hex digits are accepted.
+pub(crate) fn parse_pointer(content: &[u8]) -> Option<LfsPointer> {
+    if !is_pointer(content) {
+        return None;
+    }
+    let text = std::str::from_utf8(content).ok()?;
+    let oid = text.lines().find_map(|l| l.strip_prefix("oid sha256:"))?;
+    let is_hash = oid.len() == 64 && oid.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+    is_hash.then(|| LfsPointer {
+        oid: oid.to_owned(),
+    })
+}
+
+/// The pointer blob `id` holds, if it is one. A zero id (no file on that
+/// side) and a non-blob entry (a submodule) hold none.
+pub(crate) fn pointer_in_blob(
+    repo: &git2::Repository,
+    id: git2::Oid,
+) -> Result<Option<LfsPointer>, git2::Error> {
+    if id.is_zero() {
+        return Ok(None);
+    }
+    match repo.odb()?.read_header(id) {
+        Ok((size, git2::ObjectType::Blob)) if size <= POINTER_MAX_LEN => {
+            Ok(parse_pointer(repo.find_blob(id)?.content()))
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Where the object of `oid` lives.
+pub(crate) fn object_path(repo: &git2::Repository, oid: &str) -> PathBuf {
+    repo.path()
+        .join("lfs")
+        .join("objects")
+        .join(&oid[0..2])
+        .join(&oid[2..4])
+        .join(oid)
+}
+
+/// Whether the file at `object` exists and hashes to `oid`.
+pub(crate) fn object_holds(object: &Path, oid: &str) -> bool {
+    std::fs::read(object).is_ok_and(|bytes| pointer_for(&bytes).1 == oid)
+}
+
+/// Whether a working file's `bytes` are the content `pointer` names, or the
+/// pointer itself (a checkout without git-lfs).
+pub(crate) fn holds_content_of(bytes: &[u8], pointer: &LfsPointer) -> bool {
+    parse_pointer(bytes).map_or_else(|| pointer_for(bytes).1 == pointer.oid, |p| p == *pointer)
+}
+
+/// Keep a working file's verified content in the object store before a
+/// switch replaces it: after a prune it can be the only copy.
+pub(crate) fn keep_content(
+    repo: &git2::Repository,
+    pointer: &LfsPointer,
+    bytes: &[u8],
+) -> std::io::Result<()> {
+    let object = object_path(repo, &pointer.oid);
+    if is_pointer(bytes) || object.exists() {
+        return Ok(());
+    }
+    if let Some(dir) = object.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    signex_types::atomic_io::atomic_write(&object, bytes)
+}
+
 /// Store `content` under `.git/lfs/objects/` (once per content) and write
 /// its pointer as a blob. A file that already is a pointer (a checkout
 /// without git-lfs) is stored as it is.
@@ -55,13 +130,7 @@ fn lfs_blob(repo: &git2::Repository, content: &[u8]) -> Result<git2::Oid, git2::
         return repo.blob(content);
     }
     let (pointer, oid) = pointer_for(content);
-    let object = repo
-        .path()
-        .join("lfs")
-        .join("objects")
-        .join(&oid[0..2])
-        .join(&oid[2..4])
-        .join(&oid);
+    let object = object_path(repo, &oid);
     if !object.exists() {
         let dir = object.parent().expect("object path has a parent");
         std::fs::create_dir_all(dir).map_err(io_error)?;

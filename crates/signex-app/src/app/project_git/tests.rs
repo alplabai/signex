@@ -118,7 +118,14 @@ fn picking_the_current_branch_closes_the_switcher() {
         },
     );
     assert!(!app.ui_state.project_git.is_switcher_open(id));
-    assert!(app.ui_state.project_git.repo(id).unwrap().switching.is_none());
+    assert!(
+        app.ui_state
+            .project_git
+            .repo(id)
+            .unwrap()
+            .switching
+            .is_none()
+    );
 }
 
 #[test]
@@ -130,7 +137,6 @@ fn a_refused_switch_says_why_and_keeps_the_switcher_open() {
         &mut app,
         ProjectGitMsg::BranchSwitched {
             project_id: id,
-            name: "other".into(),
             result: Err(SwitchRefusal::WouldOverwrite),
         },
     );
@@ -175,8 +181,9 @@ fn every_refusal_has_words() {
         SwitchBlock::WorkRunning,
         SwitchBlock::Refused(SwitchRefusal::UnknownBranch),
         SwitchBlock::Refused(SwitchRefusal::NoCommits),
-        SwitchBlock::Refused(SwitchRefusal::ProjectFileDiffers),
-        SwitchBlock::Refused(SwitchRefusal::LfsFileDiffers("m.step".into())),
+        SwitchBlock::Refused(SwitchRefusal::HeldFileDiffers("parts.snxlib".into())),
+        SwitchBlock::Refused(SwitchRefusal::ProjectFileUnreadable("p.snxprj".into())),
+        SwitchBlock::Refused(SwitchRefusal::LfsContentMissing("m.step".into())),
         SwitchBlock::Refused(SwitchRefusal::WouldOverwrite),
         SwitchBlock::Refused(SwitchRefusal::Failed("why".into())),
     ] {

@@ -1,18 +1,17 @@
-//! `update` of the project git slice: reads, the branch switch and the
-//! author write. Every git call runs on the blocking pool.
-
-use std::path::{Path, PathBuf};
+//! `update` of the project git slice: reads, the Project tab's branch pick
+//! and the author write. Every git call runs on the blocking pool; the
+//! switch itself is in `switch`.
 
 use iced::Task;
-use signex_i18n::{ids, t};
 use signex_library::adapters::local_git::project_repo::{
-    RepoFacts, SwitchRefusal, parse_author, read_repo_facts, switch_branch, write_author,
+    RepoFacts, parse_author, read_repo_facts, write_author,
 };
+use signex_library::repo_branches::BranchTarget;
 
-use super::{AuthorProblem, ProjectGitMsg, SwitchBlock};
+use super::{AuthorProblem, ProjectGitMsg, SwitchRequest, SwitchSurface};
 use crate::app::ProjectSection;
 use crate::app::handlers::dock::project_navigation::add_io::on_blocking_pool;
-use crate::app::state::{LoadedProject, ProjectId};
+use crate::app::state::ProjectId;
 use crate::app::{Message, Signex};
 
 impl Signex {
@@ -29,12 +28,16 @@ impl Signex {
                 Task::none()
             }
             M::SwitcherToggled { project_id } => self.toggle_branch_switcher(project_id),
-            M::BranchPicked { project_id, name } => self.switch_project_branch(project_id, name),
-            M::BranchSwitched {
-                project_id,
-                name,
-                result,
-            } => self.finish_branch_switch(project_id, &name, result),
+            M::BranchPicked { project_id, name } => self.pick_project_branch(project_id, name),
+            M::BranchSwitched { project_id, result } => {
+                self.finish_branch_switch(SwitchSurface::ProjectTab(project_id), result)
+            }
+            M::SwitchChecked { request, result } => {
+                self.finish_switch_check(*request, result);
+                Task::none()
+            }
+            M::SaveAndSwitchPressed => self.save_then_switch(),
+            M::ReopenRefsResolved { done, result } => self.finish_project_reopen(done, result),
             M::AuthorEdited { project_id, text } => {
                 if self.document_state.project_by_id(project_id).is_some() {
                     let repo = self.ui_state.project_git.repo_mut(project_id);
@@ -44,9 +47,7 @@ impl Signex {
                 Task::none()
             }
             M::AuthorSubmitted { project_id } => self.write_project_author(project_id),
-            M::AuthorWritten { project_id, result } => {
-                self.finish_author_write(project_id, result)
-            }
+            M::AuthorWritten { project_id, result } => self.finish_author_write(project_id, result),
         }
     }
 
@@ -117,6 +118,7 @@ impl Signex {
     }
 
     fn toggle_branch_switcher(&mut self, project_id: ProjectId) -> Task<Message> {
+        self.clear_save_offer();
         let git = &mut self.ui_state.project_git;
         if git.is_switcher_open(project_id) {
             git.switcher = None;
@@ -127,49 +129,12 @@ impl Signex {
         self.read_project_repo(project_id)
     }
 
-    /// What stops `project`'s branch from being switched now.
-    pub(super) fn branch_switch_block(&self, project: &LoadedProject) -> Option<SwitchBlock> {
-        let d = &self.document_state;
-        let dir = project.dir();
-        let dirty = d
-            .dirty_document_paths()
-            .into_iter()
-            .filter(|path| path.starts_with(dir))
-            .min();
-        if let Some(path) = dirty {
-            let name = path.file_name().map_or_else(
-                || path.display().to_string(),
-                |name| name.to_string_lossy().into_owned(),
-            );
-            return Some(SwitchBlock::UnsavedEdits(name));
-        }
-        let commit_root = Path::new(&project.data.dir);
-        let is_busy = d
-            .inflight_git_commits
-            .iter()
-            .any(|(root, _)| root.as_path() == commit_root)
-            || d.deferred_git_commits
-                .iter()
-                .any(|commit| commit.project == project.id)
-            || d.project_folder_renames.contains(&project.id)
-            || d.tabs.iter().any(|tab| {
-                tab.path.starts_with(dir)
-                    && (d.document_saves.is_saving(&tab.path)
-                        || d.pending_restores.contains(&tab.path))
-            });
-        is_busy.then_some(SwitchBlock::WorkRunning)
-    }
-
-    fn switch_project_branch(&mut self, project_id: ProjectId, name: String) -> Task<Message> {
+    /// A branch row of the Project tab's switcher was pressed.
+    fn pick_project_branch(&mut self, project_id: ProjectId, name: String) -> Task<Message> {
         let Some(project) = self.document_state.project_by_id(project_id) else {
             return Task::none();
         };
-        let block = self.branch_switch_block(project);
         let root = project.dir().to_path_buf();
-        let file = project
-            .path
-            .file_name()
-            .map_or_else(PathBuf::new, PathBuf::from);
         let git = &mut self.ui_state.project_git;
         let repo = git.repo_mut(project_id);
         if repo.switching.is_some() {
@@ -183,56 +148,11 @@ impl Signex {
             git.switcher = None;
             return Task::none();
         }
-        repo.block = block;
-        if repo.block.is_some() {
-            return Task::none();
-        }
-        repo.switching = Some(name.clone());
-        let picked = name.clone();
-        Task::perform(
-            on_blocking_pool(move || Ok(switch_branch(&root, &picked, &file))),
-            move |result| {
-                Message::from(ProjectGitMsg::BranchSwitched {
-                    project_id,
-                    name: name.clone(),
-                    result: result.unwrap_or_else(|why| Err(SwitchRefusal::Failed(why))),
-                })
-            },
-        )
-    }
-
-    fn finish_branch_switch(
-        &mut self,
-        project_id: ProjectId,
-        name: &str,
-        result: Result<(), SwitchRefusal>,
-    ) -> Task<Message> {
-        if self.document_state.project_by_id(project_id).is_none() {
-            self.ui_state.project_git.repos.remove(&project_id);
-            return Task::none();
-        }
-        let git = &mut self.ui_state.project_git;
-        let repo = git.repo_mut(project_id);
-        repo.switching = None;
-        if let Err(refusal) = result {
-            repo.block = Some(SwitchBlock::Refused(refusal));
-            return Task::none();
-        }
-        repo.block = None;
-        // Any read still running saw the old branch.
-        repo.is_reading = false;
-        git.switcher = None;
-        crate::diagnostics::log_info(
-            t!(self.ui_state.i18n, ids::PROJECT_VCS_SWITCHED, "branch" => name).into_string(),
-        );
-        // Open documents that changed are reported by the disk poll, which
-        // offers Reload; nothing is replaced behind the user.
-        let probe = self
-            .start_project_fs_probe(true)
-            .unwrap_or_else(Task::none);
-        let shown = self.document_state.history.active_path.clone();
-        let history = shown.map_or_else(Task::none, |path| self.reload_history_if_showing(&path));
-        Task::batch([self.read_project_repo(project_id), probe, history])
+        self.request_branch_switch(SwitchRequest {
+            surface: SwitchSurface::ProjectTab(project_id),
+            root,
+            target: BranchTarget::Local(name),
+        })
     }
 
     /// Enter in the Author field. Empty removes this repository's own

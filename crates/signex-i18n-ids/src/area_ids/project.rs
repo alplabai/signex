@@ -211,8 +211,13 @@ define_ids! {
     PROJECT_VCS_SWITCH_BUSY = "project-vcs-switch-busy";
     PROJECT_VCS_SWITCH_UNKNOWN = "project-vcs-switch-unknown";
     PROJECT_VCS_SWITCH_NO_COMMITS = "project-vcs-switch-no-commits";
-    PROJECT_VCS_SWITCH_PROJECT_FILE = "project-vcs-switch-project-file";
+    PROJECT_VCS_SWITCH_HELD = "project-vcs-switch-held";
+    PROJECT_VCS_SWITCH_PROJECT_UNREADABLE = "project-vcs-switch-project-unreadable";
     PROJECT_VCS_SWITCH_LFS = "project-vcs-switch-lfs";
+    PROJECT_VCS_SWITCH_SAVE_AND_SWITCH = "project-vcs-switch-save-and-switch";
+    PROJECT_VCS_SWITCH_REOPEN_TITLE = "project-vcs-switch-reopen-title";
+    PROJECT_VCS_SWITCH_REOPEN_FAILED = "project-vcs-switch-reopen-failed";
+    PROJECT_VCS_SWITCH_REOPEN_HELD = "project-vcs-switch-reopen-held";
     PROJECT_VCS_SWITCH_OVERWRITE = "project-vcs-switch-overwrite";
     PROJECT_VCS_SWITCH_FAILED = "project-vcs-switch-failed";
     PROJECT_VCS_LAST_COMMIT = "project-vcs-last-commit";

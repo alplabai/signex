@@ -27,7 +27,7 @@ mod repo_view;
 pub use model::{
     HistoryBranchScope, HistoryCommitMsg, HistoryFilter, HistoryFilterMsg, HistoryPanelMsg,
     HistoryRepoEvent, HistoryRepoView, HistorySwitcherMsg, HistoryUi, RefPrompt, RefPromptKind,
-    SwitchBlock, can_create_branch, changed_files, document_to_show, visible_commits,
+    can_create_branch, changed_files, document_to_show, visible_commits,
 };
 
 /// Default type / spacing scales; equal to the old literals at the default size.

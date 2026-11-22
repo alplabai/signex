@@ -1,11 +1,12 @@
 //! Branch and tag writes for the shared branch switcher: create a branch or
 //! tag, and switch the working tree to a branch. A switch never overwrites
-//! local work: it is a safe checkout, refused before any file is written.
+//! local work, and a failed one leaves the tree as it was.
 
 use std::path::{Path, PathBuf};
 
 use crate::adapter::LibraryError;
-use crate::adapters::local_git::lfs::is_lfs_path;
+use crate::adapters::local_git::branch_switch::failed;
+use crate::adapters::local_git::project_repo::SwitchRefusal;
 
 /// The branch a switch goes to.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,24 +15,6 @@ pub enum BranchTarget {
     /// `origin/feature`: switches to the local `feature`, created to track
     /// it when there is none.
     Remote(String),
-}
-
-/// Why a switch did not happen. No file was changed, except for
-/// [`SwitchFailure::Git`] raised after the checkout began.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SwitchFailure {
-    /// A file the app holds in memory without watching it differs on the
-    /// target branch (a project file, an open library or primitive).
-    HeldFileDiffers(String),
-    /// A Git LFS file differs; a checkout here would write its pointer.
-    LfsFileDiffers(String),
-    /// A file on disk has changes the switch would overwrite.
-    LocalChanges,
-    Git(String),
-}
-
-fn git_failure(what: &str, e: &git2::Error) -> SwitchFailure {
-    SwitchFailure::Git(format!("{what}: {e}"))
 }
 
 fn backend(what: &str, e: git2::Error) -> LibraryError {
@@ -80,97 +63,92 @@ pub fn create_tag(project_dir: &Path, name: &str, sha: &str) -> Result<(), Libra
 }
 
 /// The local branch name a target switches to.
-fn local_name(target: &BranchTarget) -> &str {
+pub(crate) fn local_name(target: &BranchTarget) -> &str {
     match target {
         BranchTarget::Local(name) => name,
         BranchTarget::Remote(full) => full.split_once('/').map_or(full.as_str(), |(_, n)| n),
     }
 }
 
+fn branch_tip<'r>(branch: &git2::Branch<'r>) -> Result<git2::Commit<'r>, SwitchRefusal> {
+    branch
+        .get()
+        .peel_to_commit()
+        .map_err(|e| failed("git branch", e))
+}
+
 /// The commit a switch to `target` checks out: the local branch's tip, or
 /// the remote's when no local branch of that name exists yet.
-fn target_commit<'r>(
+pub(crate) fn target_commit<'r>(
     repo: &'r git2::Repository,
     target: &BranchTarget,
-) -> Result<git2::Commit<'r>, git2::Error> {
-    let local = repo.find_branch(local_name(target), git2::BranchType::Local);
-    match (local, target) {
-        (Ok(branch), _) => branch.get().peel_to_commit(),
-        (Err(_), BranchTarget::Remote(full)) => repo
-            .find_branch(full, git2::BranchType::Remote)?
-            .get()
-            .peel_to_commit(),
-        (Err(e), BranchTarget::Local(_)) => Err(e),
+) -> Result<git2::Commit<'r>, SwitchRefusal> {
+    if let Ok(branch) = repo.find_branch(local_name(target), git2::BranchType::Local) {
+        return branch_tip(&branch);
     }
+    let BranchTarget::Remote(full) = target else {
+        return Err(SwitchRefusal::UnknownBranch);
+    };
+    let branch = repo
+        .find_branch(full, git2::BranchType::Remote)
+        .map_err(|_| SwitchRefusal::UnknownBranch)?;
+    branch_tip(&branch)
 }
 
-/// Refuse a switch that would change a held or LFS file.
-fn check_differing_files(
-    repo: &git2::Repository,
-    from: &git2::Tree<'_>,
-    to: &git2::Tree<'_>,
-    held: &[PathBuf],
-) -> Result<(), SwitchFailure> {
-    let diff = repo
-        .diff_tree_to_tree(Some(from), Some(to), None)
-        .map_err(|e| git_failure("git diff", &e))?;
-    for delta in diff.deltas() {
-        for path in [delta.old_file().path(), delta.new_file().path()]
-            .into_iter()
-            .flatten()
-        {
-            let shown = || path.to_string_lossy().replace('\\', "/");
-            if held.iter().any(|h| path.starts_with(h)) {
-                return Err(SwitchFailure::HeldFileDiffers(shown()));
-            }
-            if is_lfs_path(repo, path).map_err(|e| git_failure("git attributes", &e))? {
-                return Err(SwitchFailure::LfsFileDiffers(shown()));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Switch the working tree and HEAD to `target`. `held` lists the paths,
-/// relative to the repository root, that the app holds in memory without
-/// watching the disk: a switch that would change one is refused. Returns the
-/// local branch now checked out.
+/// Switch the working tree and HEAD to `target`, restoring Git LFS content;
+/// a refused or failed switch leaves them as they were. `held` lists the
+/// paths, relative to the repository root, that the app holds in memory
+/// without watching the disk: a switch that would change one is refused.
+/// Returns the local branch now checked out.
 pub fn switch_branch(
     project_dir: &Path,
     target: &BranchTarget,
     held: &[PathBuf],
-) -> Result<String, SwitchFailure> {
-    let repo = git2::Repository::open(project_dir).map_err(|e| git_failure("git open", &e))?;
-    let commit = target_commit(&repo, target).map_err(|e| git_failure("git branch", &e))?;
-    let to = commit.tree().map_err(|e| git_failure("git tree", &e))?;
+) -> Result<String, SwitchRefusal> {
+    crate::adapters::local_git::branch_switch::switch(project_dir, target, held)
+}
+
+/// The paths, relative to the repository root, a switch to `target` would
+/// change. Reads only.
+pub fn changed_paths(
+    project_dir: &Path,
+    target: &BranchTarget,
+) -> Result<Vec<PathBuf>, SwitchRefusal> {
+    let repo = git2::Repository::open(project_dir).map_err(|e| failed("git open", e))?;
+    let to = target_commit(&repo, target)?
+        .tree()
+        .map_err(|e| failed("git tree", e))?;
     let from = repo
         .head()
         .and_then(|head| head.peel_to_tree())
-        .map_err(|e| git_failure("git head", &e))?;
-    check_differing_files(&repo, &from, &to, held)?;
+        .map_err(|_| SwitchRefusal::NoCommits)?;
+    let diff = repo
+        .diff_tree_to_tree(Some(&from), Some(&to), None)
+        .map_err(|e| failed("git diff", e))?;
+    Ok(diff
+        .deltas()
+        .filter_map(|delta| delta.new_file().path().or(delta.old_file().path()))
+        .map(Path::to_path_buf)
+        .collect())
+}
 
-    let mut checkout = git2::build::CheckoutBuilder::new();
-    checkout.safe();
-    repo.checkout_tree(commit.as_object(), Some(&mut checkout))
-        .map_err(|e| match e.code() {
-            git2::ErrorCode::Conflict => SwitchFailure::LocalChanges,
-            _ => git_failure("git checkout", &e),
-        })?;
-
-    let name = local_name(target).to_owned();
-    if let BranchTarget::Remote(full) = target
-        && repo.find_branch(&name, git2::BranchType::Local).is_err()
-    {
-        let mut branch = repo
-            .branch(&name, &commit, false)
-            .map_err(|e| git_failure("git branch", &e))?;
-        branch
-            .set_upstream(Some(full))
-            .map_err(|e| git_failure("git upstream", &e))?;
-    }
-    repo.set_head(&format!("refs/heads/{name}"))
-        .map_err(|e| git_failure("git set head", &e))?;
-    Ok(name)
+/// The bytes `rel` holds on `target`; `None` when the branch lacks it.
+pub fn file_on_branch(
+    project_dir: &Path,
+    target: &BranchTarget,
+    rel: &Path,
+) -> Result<Option<Vec<u8>>, SwitchRefusal> {
+    let repo = git2::Repository::open(project_dir).map_err(|e| failed("git open", e))?;
+    let tree = target_commit(&repo, target)?
+        .tree()
+        .map_err(|e| failed("git tree", e))?;
+    let Ok(entry) = tree.get_path(rel) else {
+        return Ok(None);
+    };
+    let blob = repo
+        .find_blob(entry.id())
+        .map_err(|e| failed("git blob", e))?;
+    Ok(Some(blob.content().to_vec()))
 }
 
 #[cfg(test)]
@@ -235,7 +213,7 @@ mod tests {
 
         let result = switch_branch(dir.path(), &BranchTarget::Local("side".into()), &[]);
 
-        assert_eq!(result, Err(SwitchFailure::LocalChanges));
+        assert_eq!(result, Err(SwitchRefusal::WouldOverwrite));
         assert_eq!(head_name(&repo), first);
         let body = std::fs::read_to_string(dir.path().join("a.snxsch")).unwrap();
         assert_eq!(body, "unsaved to git");
@@ -255,7 +233,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(SwitchFailure::HeldFileDiffers("a.snxsch".into()))
+            Err(SwitchRefusal::HeldFileDiffers("a.snxsch".into()))
         );
         assert_eq!(head_name(&repo), first);
         let body = std::fs::read_to_string(dir.path().join("a.snxsch")).unwrap();
@@ -277,7 +255,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(SwitchFailure::HeldFileDiffers("a.snxsch".into()))
+            Err(SwitchRefusal::HeldFileDiffers("a.snxsch".into()))
         );
         assert_eq!(head_name(&repo), first);
     }
