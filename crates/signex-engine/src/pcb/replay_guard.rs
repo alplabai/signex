@@ -161,6 +161,20 @@ impl BoardReplayGuard {
         !self.is_uncheckable
             && (self.targets.iter()).all(|guarded| read(board, guarded.target) == guarded.before)
     }
+
+    /// Whether every command of the edit has a target that can be checked.
+    pub fn is_checkable(&self) -> bool {
+        !self.is_uncheckable && !self.targets.is_empty()
+    }
+
+    /// Whether the edit wrote the board item or footprint pad `id`.
+    pub fn covers(&self, id: Uuid) -> bool {
+        self.targets.iter().any(|guarded| match guarded.target {
+            Target::Item(item) => item.uuid() == id,
+            Target::Pad(_, pad) => pad == id,
+            _ => false,
+        })
+    }
 }
 
 impl Target {
@@ -172,18 +186,12 @@ impl Target {
     }
 }
 
-/// What `command` writes. Empty for a command that carries no recorded state
-/// and acts on what is there; `None` for one that cannot be checked: an
-/// inverse, or one that adds objects.
+/// What `command` writes; `None` for one that cannot be checked: an inverse,
+/// one that adds objects, or one that acts on what is there with no recorded
+/// value to compare.
 fn targets_of(board: &PcbBoard, command: &BoardCommand) -> Option<Vec<Target>> {
     use BoardCommand as C;
     Some(match command {
-        C::Flip { .. }
-        | C::DeleteItems { .. }
-        | C::RemoveRoom { .. }
-        | C::RemoveSetup
-        | C::FitRoomToParts { .. }
-        | C::PullPartsIntoRoom { .. } => Vec::new(),
         C::MoveFootprint { footprint, .. } => vec![Target::Place(*footprint)],
         C::Rotate { footprint, .. } => vec![Target::Rotation(*footprint)],
         C::ReplaceItems { items } => items.iter().map(|i| Target::Item(i.id())).collect(),
@@ -217,7 +225,13 @@ fn targets_of(board: &PcbBoard, command: &BoardCommand) -> Option<Vec<Target>> {
         C::SetStackupName { .. } => vec![Target::StackName],
         C::EditRoom { room } => vec![Target::Room(room.uuid)],
         C::MoveRoom { room, .. } => vec![Target::Room(*room)],
-        C::RestoreFace { .. }
+        C::Flip { .. }
+        | C::DeleteItems { .. }
+        | C::RemoveRoom { .. }
+        | C::RemoveSetup
+        | C::FitRoomToParts { .. }
+        | C::PullPartsIntoRoom { .. }
+        | C::RestoreFace { .. }
         | C::RestoreBoardSketchBake(_)
         | C::RestoreItems { .. }
         | C::AddItems { .. }

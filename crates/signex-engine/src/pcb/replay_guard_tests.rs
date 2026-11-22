@@ -262,6 +262,8 @@ fn a_command_that_cannot_be_checked_is_refused() {
     assert!(!guard.holds(&b));
 }
 
+/// DECISIONS 2026-11-22 "refuses unless proven safe": with no recorded value
+/// to compare, a Flip cannot be proven safe, so it is refused.
 #[test]
 fn a_command_with_no_recorded_state_is_not_refused() {
     let mut b = board();
@@ -272,5 +274,16 @@ fn a_command_with_no_recorded_state_is_not_refused() {
         }],
     );
 
-    assert!(guard.holds(&b));
+    assert!(!guard.holds(&b));
+    assert!(!guard.is_checkable());
+}
+
+#[test]
+fn a_guard_covers_only_the_items_it_wrote() {
+    let mut b = board();
+    let guard = widened(&mut b, SEG_1);
+
+    assert!(guard.is_checkable());
+    assert!(guard.covers(id(SEG_1)));
+    assert!(!guard.covers(id(SEG_2)));
 }

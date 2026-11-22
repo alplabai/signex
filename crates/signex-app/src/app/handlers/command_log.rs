@@ -428,11 +428,11 @@ impl Signex {
             crate::diagnostics::log_warning(line.into_string());
             return Task::none();
         };
+        if self.refuse_unproven_replay(&row) {
+            return Task::none();
+        }
         if !row.has_given_operands() {
             return self.replay_without_operands(&row, &command);
-        }
-        if self.refuse_stale_board_operands(&row) {
-            return Task::none();
         }
         let texts = row.operand_texts();
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();

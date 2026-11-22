@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use signex_engine::pcb::{BoardCommand, BoardItem};
-use signex_types::pcb::{PadShape, PcbBoard, Segment};
+use signex_types::pcb::{PadShape, PcbBoard, Point, Segment};
 use signex_types::pcb_stack::LayerStack;
 
 use super::super::operands_of;
+use super::super::replay::{SAFE_COMMANDS, replay_proof};
 use super::fixtures::*;
 use crate::app::Signex;
 use crate::app::command::CommandArgs;
@@ -165,11 +166,210 @@ fn an_operand_row_with_no_recorded_state_stays_refused() {
 
     replay(&mut app, seq);
     let refused = newest(&app);
-    assert!(failure(&refused).contains("changed after"));
+    assert!(failure(&refused).contains("recorded no state"));
     replay(&mut app, refused.seq);
 
     assert_eq!(track(&app, &path, FIRST).layer, "Inner1Copper");
-    assert!(failure(&newest(&app)).contains("changed after"));
+    assert!(failure(&newest(&app)).contains("recorded no state"));
+}
+
+/// A row with these operands on the board at `path`.
+fn logged(app: &mut Signex, path: &Path, id: &str, operands: &[&str]) -> u64 {
+    let document = format!("document={}", path.display());
+    let mut all = vec![document.as_str()];
+    all.extend(operands);
+    let command = AppCommandId::new(id).expect("an id");
+    let args = CommandArgs::parse_operands(&command, &all).expect("operands");
+    run_logged(app, id, &args)
+}
+
+const COLOUR: &str = "color=#112233";
+const OTHER_COLOUR: &str = "color=#445566";
+const TOP: &str = "layer=TopCopper";
+const COLUMNS: &str = "field=columns";
+
+/// Run the listed command `id`, then change what it wrote: its row. A listed
+/// command with no arm here fails the test below.
+fn run_then_change_its_target(app: &mut Signex, path: &Path, id: &str) -> u64 {
+    let track_id = format!("ids={}", uuid::Uuid::from_u128(FIRST));
+    let ids = track_id.as_str();
+    match id {
+        "edit_object_properties" => {
+            let seq = widen(app, path, &[FIRST]);
+            move_track(app, path, FIRST);
+            seq
+        }
+        "lock_board_items" => {
+            let seq = logged(app, path, id, &[ids]);
+            logged(app, path, "unlock_board_items", &[ids]);
+            move_track(app, path, FIRST);
+            seq
+        }
+        "unlock_board_items" => {
+            logged(app, path, "lock_board_items", &[ids]);
+            let seq = logged(app, path, id, &[ids]);
+            move_track(app, path, FIRST);
+            seq
+        }
+        "set_pad_shape" => {
+            let seq = run_logged(app, id, &pad_shape_args(path, "circle"));
+            run_logged(app, id, &pad_shape_args(path, "oval"));
+            seq
+        }
+        "panelize_board" => {
+            let seq = logged(app, path, id, &[]);
+            logged(app, path, "set_board_panel", &[COLUMNS, "value=3"]);
+            seq
+        }
+        "remove_board_panel" => {
+            logged(app, path, "panelize_board", &[]);
+            let seq = logged(app, path, id, &[]);
+            logged(app, path, "panelize_board", &[]);
+            logged(app, path, "set_board_panel", &[COLUMNS, "value=3"]);
+            seq
+        }
+        "set_board_panel" => {
+            logged(app, path, "panelize_board", &[]);
+            let seq = logged(app, path, id, &[COLUMNS, "value=3"]);
+            logged(app, path, id, &[COLUMNS, "value=4"]);
+            seq
+        }
+        "set_layer_color" => {
+            let seq = logged(app, path, id, &[TOP, COLOUR]);
+            logged(app, path, id, &[TOP, OTHER_COLOUR]);
+            seq
+        }
+        "reset_layer_colors" => {
+            logged(app, path, "set_layer_color", &[TOP, COLOUR]);
+            let seq = logged(app, path, id, &[]);
+            logged(app, path, "set_layer_color", &[TOP, OTHER_COLOUR]);
+            seq
+        }
+        "set_layer_stack" => {
+            let args = swapped_stack_args(app, path);
+            let seq = run_logged(app, id, &args);
+            let again = swapped_stack_args(app, path);
+            run_logged(app, id, &again);
+            seq
+        }
+        other => panic!("{other} is on the safe list with no changed-target test"),
+    }
+}
+
+#[test]
+fn every_listed_command_is_refused_once_its_target_changed() {
+    for (id, _) in SAFE_COMMANDS {
+        let dir = tempfile::tempdir().expect("a folder");
+        let (mut app, path) = if *id == "set_layer_stack" {
+            app_with_four_layers(dir.path())
+        } else {
+            app_with_tracks(dir.path())
+        };
+        let seq = run_then_change_its_target(&mut app, &path, id);
+        let revision = |app: &Signex| {
+            let engine = app.document_state.board_engine(&path);
+            engine.expect("the board").revision()
+        };
+        let before = revision(&app);
+
+        replay(&mut app, seq);
+
+        assert_eq!(revision(&app), before, "{id} wrote the board");
+        let row = newest(&app);
+        assert!(failure(&row).contains("changed after"), "{id}");
+    }
+}
+
+#[test]
+fn every_listed_command_is_in_the_catalog() {
+    for (id, _) in SAFE_COMMANDS {
+        assert!(crate::keymap::metadata_for_str(id).is_some(), "{id}");
+    }
+}
+
+#[test]
+fn an_unlisted_command_is_refused_and_says_why() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_tracks(dir.path());
+    let before = track(&app, &path, FIRST);
+    let mut operands = serde_json::Map::new();
+    operands.insert(
+        "document".to_string(),
+        serde_json::Value::String(path.display().to_string()),
+    );
+    let seq = app
+        .record_command(
+            "arrange_in_box",
+            operands,
+            LogOutcome::Ok(None),
+            Duration::ZERO,
+            LogSource::Gui { window: None },
+            Some(path.clone()),
+        )
+        .expect("logged");
+
+    replay(&mut app, seq);
+
+    assert_not_replayable(&app);
+    assert!(!failure(&newest(&app)).contains("changed after"));
+    assert_eq!(track(&app, &path, FIRST), before);
+}
+
+/// The review named these: each writes over later edits, resolves through
+/// live state, or has no guard.
+#[test]
+fn the_commands_with_no_proof_are_off_the_list() {
+    for id in [
+        "board_shape_from_selection",
+        "arrange_in_box",
+        "set_board_graphic",
+        "set_footprint_text",
+        "delete_net_class",
+        "set_net_class_rules",
+        "assign_board_net_class",
+        "undo",
+        "redo",
+        "swap_pins",
+        "swap_gates",
+        "import_dxf",
+        "import_dxf_outline",
+        "update_pcb_from_schematic",
+        "tune_net_length",
+        "tune_diff_pair",
+        "rules_set",
+        "project_add_variant",
+        "set_via_span",
+        "set_layer_sizes",
+        "reset_board_origin",
+        "waive_drc_violation",
+    ] {
+        assert_eq!(replay_proof(id), None, "{id}");
+    }
+}
+
+/// `lock` writes only the items not yet locked: one already locked has no
+/// recorded state, and a rerun would lock it again after a later unlock.
+#[test]
+fn a_lock_row_naming_an_item_it_did_not_write_is_refused() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_tracks(dir.path());
+    let first = uuid::Uuid::from_u128(FIRST);
+    let second = uuid::Uuid::from_u128(SECOND);
+    logged(
+        &mut app,
+        &path,
+        "lock_board_items",
+        &[&format!("ids={first}")],
+    );
+    let both = format!("ids={first},{second}");
+    let seq = logged(&mut app, &path, "lock_board_items", &[&both]);
+    logged(&mut app, &path, "unlock_board_items", &[&both]);
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("recorded no state"));
+    assert!(!track(&app, &path, FIRST).locked);
+    assert!(!track(&app, &path, SECOND).locked);
 }
 
 const FIRST: u128 = 11;
@@ -192,6 +392,9 @@ fn app_with_tracks(dir: &Path) -> (Signex, PathBuf) {
     let path = dir.join("board.snxpcb");
     let mut board = board_with_two_parts();
     board.segments = vec![new_track(FIRST, 0.0), new_track(SECOND, 5.0)];
+    board.outline = [(0.0, 0.0), (50.0, 0.0), (50.0, 40.0), (0.0, 40.0)]
+        .map(|(x, y)| Point::new(x, y))
+        .to_vec();
     app.open_pcb_tab(path.clone(), "board".into(), board);
     (app, path)
 }

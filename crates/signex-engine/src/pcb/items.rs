@@ -82,6 +82,11 @@ enum ListKind {
 }
 
 impl BoardItemId {
+    /// The item's uuid, whatever its kind.
+    pub(super) fn uuid(self) -> Uuid {
+        self.split().1
+    }
+
     fn split(self) -> (ListKind, Uuid) {
         match self {
             Self::Footprint(u) => (ListKind::Footprints, u),

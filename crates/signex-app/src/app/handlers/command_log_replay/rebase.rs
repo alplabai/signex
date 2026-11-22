@@ -40,6 +40,11 @@ fn replaces_whole_object(command: &Command) -> bool {
     )
 }
 
+/// Whether every one of `commands` stores a whole object with a pre-image.
+pub(super) fn only_replaces_objects(commands: &[Command]) -> bool {
+    !commands.is_empty() && commands.iter().all(replaces_whole_object)
+}
+
 fn same_object(a: &Command, b: &Command) -> bool {
     match (a, b) {
         (Command::UpdateSchDrawing { drawing: a }, Command::UpdateSchDrawing { drawing: b }) => {
@@ -129,7 +134,8 @@ fn with_changes<T: Serialize + DeserializeOwned>(before: &T, after: &T, live: &T
 }
 
 /// Objects are compared key by key, lists by [`carry_list`]; anything else is
-/// one value. A list left out of the file when empty counts as empty.
+/// one value. A list left out of the file when empty counts as empty. `None`
+/// when a field the edit changed holds something else now.
 fn carry_changes(before: &Value, after: &Value, live: &mut Value) -> Option<()> {
     if before == after {
         return Some(());
@@ -141,17 +147,19 @@ fn carry_changes(before: &Value, after: &Value, live: &mut Value) -> Option<()> 
         (before, after, &mut *live)
     {
         for (key, old) in was.iter().filter(|(key, _)| !now.contains_key(*key)) {
-            if old.is_array() && target.get(key).is_some_and(|value| value != old) {
+            if target.get(key).is_some_and(|value| value != old) {
                 return None;
             }
             target.remove(key);
         }
         for (key, value) in now {
             let Some(old) = was.get(key) else {
-                if value.is_array()
-                    && let Some(slot) = target.get_mut(key)
-                {
-                    carry_list(&Value::Array(Vec::new()), value, slot)?;
+                if let Some(slot) = target.get_mut(key) {
+                    if value.is_array() {
+                        carry_list(&Value::Array(Vec::new()), value, slot)?;
+                    } else if slot != value {
+                        return None;
+                    }
                     continue;
                 }
                 target.insert(key.clone(), value.clone());
@@ -168,12 +176,13 @@ fn carry_changes(before: &Value, after: &Value, live: &mut Value) -> Option<()> 
                     carry_list(old, value, &mut emptied)?;
                     target.insert(key.clone(), emptied);
                 }
-                None => {
-                    target.insert(key.clone(), value.clone());
-                }
+                None => return None,
             }
         }
         return Some(());
+    }
+    if *live != *before && *live != *after {
+        return None;
     }
     *live = after.clone();
     Some(())
@@ -334,6 +343,18 @@ mod tests {
             table(&[&["x", "y"]]),
         );
         assert_eq!(now, Some(table(&[&["x", "y"]])));
+    }
+
+    /// The fill the recorded edit set was changed again since: the replay
+    /// would write over it.
+    #[test]
+    fn a_field_the_edit_changed_and_that_changed_since_refuses_the_replay() {
+        let now = replayed(
+            rect(20.0, FillType::None),
+            rect(20.0, FillType::Background),
+            rect(20.0, FillType::Outline),
+        );
+        assert!(now.is_none());
     }
 
     /// `links` is left out of the JSON while empty.

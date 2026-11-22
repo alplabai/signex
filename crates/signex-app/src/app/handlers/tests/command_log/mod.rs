@@ -44,18 +44,17 @@ fn replay_acts_on_the_targets_and_puts_the_selection_back_as_one_undo_step() {
 
     replay(&mut app, seq);
 
-    assert!(!has(&app, &path, 1), "the recorded target was deleted");
+    // DECISIONS 2026-11-22, "refuses unless proven safe": Delete is off the list.
+    assert!(has(&app, &path, 1), "the recorded target stays");
     assert!(has(&app, &path, 2), "the current selection was not");
     assert_eq!(selected(&app), vec![item(2)], "and it is selected still");
     let row = newest(&app);
     assert!(row.seq > seq);
     assert_eq!(row.source, LogSource::Gui { window: None });
-    assert_eq!(row.outcome, LogOutcome::Ok(None));
-    undo(&mut app, &path);
-    assert!(has(&app, &path, 1), "one undo brings the target back");
+    assert_not_replayable(&app);
     assert!(
         !app.document_state.engines[&path].can_undo(),
-        "the replay was one undo step"
+        "the refusal left no undo step"
     );
 }
 
@@ -76,13 +75,7 @@ fn a_target_that_is_gone_refuses_the_whole_replay() {
     assert!(has(&app, &path, 2), "the survivor is not acted on");
     assert_eq!(app.document_state.engines[&path].revision(), revision);
     assert_eq!(selected(&app), vec![item(2)]);
-    let row = newest(&app);
-    let reason = failure(&row);
-    assert!(
-        reason.contains(&uuid::Uuid::from_u128(1).to_string()),
-        "{reason}"
-    );
-    assert!(reason.contains("replay-a.snxsch"), "{reason}");
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -96,10 +89,7 @@ fn a_closed_document_refuses_the_replay() {
 
     replay(&mut app, seq);
 
-    let row = newest(&app);
-    let reason = failure(&row);
-    assert!(reason.contains("is not open"), "{reason}");
-    assert!(reason.contains("replay-a.snxsch"), "{reason}");
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -117,7 +107,8 @@ fn replay_reaches_a_sheet_behind_the_one_in_view_and_comes_back() {
 
     replay(&mut app, seq);
 
-    assert!(!has(&app, &first, 1), "it ran on its own sheet");
+    assert!(has(&app, &first, 1), "Delete is off the safe list");
+    assert_not_replayable(&app);
     assert!(has(&app, &second, 9));
     assert_eq!(app.active_tab_path(), Some(second));
     assert_eq!(selected(&app), vec![item(9)]);
@@ -165,14 +156,14 @@ fn a_move_replays_its_offset_on_its_item_while_another_is_selected() {
 
     replay(&mut app, row.seq);
 
-    assert_eq!(position(&app, &path, 1), (x + 2.54, y + 5.08));
+    assert_eq!(position(&app, &path, 1), (x, y), "a move is relative");
     assert_eq!(
         position(&app, &path, 2),
         other,
         "the selection did not move"
     );
     assert_eq!(selected(&app), vec![item(2)]);
-    assert_eq!(newest(&app).outcome, LogOutcome::Ok(None));
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -185,7 +176,8 @@ fn a_finished_move_tool_is_one_row_with_its_input() {
     assert_eq!(newest(&app).seq, started, "the drop adds no second row");
     let (x, y) = position(&app, &path, 1);
     replay(&mut app, started);
-    assert_eq!(position(&app, &path, 1), (x + 2.54, y));
+    assert_eq!(position(&app, &path, 1), (x, y), "a move is relative");
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -197,7 +189,7 @@ fn a_cancelled_move_tool_has_nothing_to_replay() {
     app.cancel_move_pick();
     let before = position(&app, &path, 1);
     replay(&mut app, started);
-    assert!(failure(&newest(&app)).contains("never finished"));
+    assert_not_replayable(&app);
     assert_eq!(position(&app, &path, 1), before);
 }
 
@@ -215,7 +207,8 @@ fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
     replay(&mut app, seq);
 
     let sheet = app.document_state.engines[&path].document();
-    assert_eq!(sheet.symbols.len(), parts + 1, "one new copy");
+    assert_eq!(sheet.symbols.len(), parts, "Duplicate is off the safe list");
+    assert_not_replayable(&app);
     assert_eq!(selected(&app), vec![item(2)]);
     assert!(app.interaction_state.clipboard.is_none());
     assert_eq!(
@@ -258,7 +251,9 @@ fn a_properties_edit_is_one_row_per_field_run_and_replays_its_value() {
 
     replay(&mut app, row.seq);
 
-    assert_eq!(is_dnp(&app), Some(false), "the last value set");
+    // A symbol flag has no pre-image to check it against.
+    assert_eq!(is_dnp(&app), Some(true), "not run");
+    assert_not_replayable(&app);
     assert_eq!(selected(&app), vec![item(2)]);
 }
 
@@ -288,8 +283,8 @@ fn a_union_replays_with_a_new_id() {
     replay(&mut app, row.seq);
 
     let unions = &app.document_state.engines[&path].document().unions;
-    assert_eq!(unions.len(), 1);
-    assert_ne!(unions[0].uuid, id, "a replay makes its own union");
+    assert!(unions.is_empty(), "Create Union is off the safe list");
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -307,7 +302,7 @@ fn replay_onto_a_sheet_behind_a_running_tool_is_refused() {
 
     replay(&mut app, seq);
 
-    assert!(failure(&newest(&app)).contains("tool is in progress"));
+    assert_not_replayable(&app);
     assert_eq!(position(&app, &first, 1), moved);
     assert_eq!(app.active_tab_path(), Some(second));
     assert!(app.interaction_state.wire_drawing, "the tool is untouched");
@@ -326,7 +321,12 @@ fn a_symbol_editor_delete_replays_on_its_pin_not_the_one_selected() {
 
     replay(&mut app, seq);
 
-    assert_eq!(pins(&app, &path), ["2"], "pin 1, the recorded target, went");
+    assert_eq!(
+        pins(&app, &path),
+        ["1", "2"],
+        "editor rows are off the list"
+    );
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -339,7 +339,7 @@ fn a_symbol_editor_replay_is_refused_when_its_pin_is_gone() {
     replay(&mut app, seq);
 
     assert_eq!(pins(&app, &path), ["2"], "nothing else was deleted");
-    assert!(failure(&newest(&app)).contains("Pin 1"));
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -369,7 +369,8 @@ fn a_board_move_replays_its_offset_while_another_part_is_selected() {
 
     replay(&mut app, row.seq);
 
-    assert_eq!(footprint_x(&app, &path, 1), 14.0, "by the offset again");
+    assert_eq!(footprint_x(&app, &path, 1), 12.0, "a move is relative");
+    assert_not_replayable(&app);
     assert_eq!(footprint_x(&app, &path, 2), 30.0);
     let still = app.interaction_state.pcb_selection.selection();
     assert!(still.contains(pcb_geom::ItemRef::Footprint(uuid::Uuid::from_u128(2))));
@@ -391,7 +392,7 @@ fn a_targeted_row_with_no_recorded_targets_is_refused() {
     select(&mut app, &[2]);
     replay(&mut app, seq);
     assert!(has(&app, &path, 2), "the current selection is not taken");
-    assert!(failure(&newest(&app)).contains("recorded no targets"));
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -408,11 +409,8 @@ fn a_footprint_delete_replays_on_its_pad_not_the_one_selected() {
 
     replay(&mut app, seq);
 
-    assert_eq!(
-        pads(&app, &path),
-        before[1..],
-        "the recorded pad went, not the selected one"
-    );
+    assert_eq!(pads(&app, &path), before, "editor rows are off the list");
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -432,7 +430,8 @@ fn a_pad_drag_is_one_row_and_replays_its_offset() {
     replay(&mut app, row.seq);
 
     let now = pads(&app, &path);
-    assert!((now[0].1.0 - (x + 5.08)).abs() < 1e-6, "{now:?}");
+    assert!((now[0].1.0 - (x + 2.54)).abs() < 1e-6, "{now:?}");
+    assert_not_replayable(&app);
     assert_eq!(now[1], start[1], "the pad selected now stayed");
     let editor = &app.document_state.footprint_editors[&path];
     assert_eq!(
@@ -472,7 +471,8 @@ fn a_symbol_properties_edit_replays_its_value() {
 
     replay(&mut app, row.seq);
 
-    assert_eq!(length(&app), wanted);
+    assert_eq!(length(&app), before, "editor rows are off the list");
+    assert_not_replayable(&app);
 }
 
 #[test]
@@ -504,7 +504,7 @@ fn a_cancelled_dialog_leaves_no_row_waiting_for_a_later_edit() {
 
     replay(&mut app, started);
 
-    assert!(failure(&newest(&app)).contains("never finished"));
+    assert_not_replayable(&app);
     assert_eq!(
         app.document_state.engines[&path].document().unions.len(),
         unions
@@ -532,7 +532,7 @@ fn a_duplicate_is_refused_while_a_project_sheet_is_not_open() {
 
     replay(&mut app, seq);
 
-    assert!(failure(&newest(&app)).contains("is not open"));
+    assert_not_replayable(&app);
     assert_eq!(
         app.document_state.engines[&path].document().symbols.len(),
         parts
@@ -579,10 +579,12 @@ fn a_footprint_swap_replays_from_its_recorded_footprint() {
 
     replay(&mut app, row.seq);
 
-    assert_eq!(id_of(&app), "New:Part");
+    assert_ne!(id_of(&app), "New:Part", "Change Footprint is off the list");
+    assert_not_replayable(&app);
 }
 
-/// `cycle_selection_mode` has no target and needs no document: it runs again.
+/// DECISIONS 2026-11-22, "refuses unless proven safe": a command with no
+/// target has nothing to prove unchanged, so it is refused too.
 #[test]
 fn a_command_with_no_target_runs_again_as_it_is() {
     let (mut app, _boot) = Signex::new();
@@ -600,11 +602,11 @@ fn a_command_with_no_target_runs_again_as_it_is() {
 
     let _ = app.handle_command_log_message(CommandLogMsg::ReplayRequested(seq));
 
-    assert_ne!(app.ui_state.selection_mode, mode, "the command ran");
+    assert_eq!(app.ui_state.selection_mode, mode, "the command did not run");
+    assert_not_replayable(&app);
     let log = &app.ui_state.command_log.log;
     assert_eq!(log.rows().count(), 2, "the replay is a new row");
     let again = log.rows().next_back().expect("the new row");
     assert_eq!(again.command, "cycle_selection_mode");
     assert_eq!(again.source, LogSource::Gui { window: None });
-    assert_eq!(again.outcome, LogOutcome::Ok(None));
 }
