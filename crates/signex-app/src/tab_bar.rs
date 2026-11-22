@@ -374,7 +374,7 @@ mod tests {
             strip_width: 1200.0,
             overflow_open: false,
         };
-        let strip = super::view(&[], 0, None, &none, &marks, &tokens);
+        let strip = super::view(&[], 0, None, &none, true, &marks, &tokens);
         assert_eq!(strip.size().height, fixed);
     }
 
