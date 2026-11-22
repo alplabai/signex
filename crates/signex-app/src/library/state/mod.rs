@@ -298,6 +298,8 @@ pub struct EditRowModalState {
     /// parameter without an entry (or with a unit that takes no prefix)
     /// has none.
     pub param_prefix: HashMap<String, signex_types::quantity::SiPrefix>,
+    /// The parameter whose unit menu is open, if any.
+    pub unit_menu_open: Option<String>,
     /// Live edit buffer for the comma-separated tags row (Stage 18).
     /// Persisted to `parameters["tags"]` as `ParamValue::Text` on Save.
     /// Seeded from the existing `parameters["tags"]` value at modal open.
@@ -382,6 +384,7 @@ impl EditRowModalState {
             draft,
             param_buf,
             param_prefix,
+            unit_menu_open: None,
             tags_buf,
             error: None,
             note: None,

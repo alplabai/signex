@@ -138,6 +138,15 @@ define_ids! {
     LIBRARY_EDIT_ROW_ADD_SLOT_UNIT = "library-edit-row-add-slot-unit";
     LIBRARY_EDIT_ROW_SLOT_PROBLEM = "library-edit-row-slot-problem";
     LIBRARY_EDIT_ROW_UNIT_KEPT = "library-edit-row-unit-kept";
+    // Unit menu captions (mockup row 139)
+    LIBRARY_UNIT_NAME_NONE = "library-unit-name-none";
+    LIBRARY_UNIT_NAME_OHM = "library-unit-name-ohm";
+    LIBRARY_UNIT_NAME_FARAD = "library-unit-name-farad";
+    LIBRARY_UNIT_NAME_HENRY = "library-unit-name-henry";
+    LIBRARY_UNIT_NAME_VOLT = "library-unit-name-volt";
+    LIBRARY_UNIT_NAME_AMPERE = "library-unit-name-ampere";
+    LIBRARY_UNIT_NAME_WATT = "library-unit-name-watt";
+    LIBRARY_UNIT_NAME_HERTZ = "library-unit-name-hertz";
     // Delete Component (mockup row 137)
     LIBRARY_DELETE_ROW_TITLE = "library-delete-row-title";
     LIBRARY_DELETE_ROW_INTRO_TITLE = "library-delete-row-intro-title";
