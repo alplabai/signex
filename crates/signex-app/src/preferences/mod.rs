@@ -56,7 +56,7 @@ use schematic_display::{DisplayPage, content_schematic_display};
 // at their original module-local visibility so the shell here and every
 // section submodule keep resolving them through `use super::*`.
 pub(in crate::preferences) use widgets::{
-    danger_button_style, h_sep, secondary_button_style, text_muted, text_primary, text_warning,
+    danger_button_style, text_muted, text_primary, text_warning,
 };
 
 // ─── Navigation Items ─────────────────────────────────────────

@@ -304,7 +304,7 @@ pub(super) fn section_list<'a>(
         for section in sections {
             group = group.push(entry(project.id, *section, selected, facts, i18n, tokens));
         }
-        groups = groups.push(group);
+        groups = groups.push(iced::Widget::boxed(group));
     }
     container(column![header(project, tokens), groups])
         .width(Length::Fixed(LIST_W))

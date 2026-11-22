@@ -67,17 +67,6 @@ pub(super) fn danger_button_style(theme: &Theme, status: button::Status) -> butt
     }
 }
 
-pub(super) fn h_sep<'a>() -> Element<'a, PrefMsg> {
-    container(Space::new())
-        .width(Length::Fill)
-        .height(1)
-        .style(move |theme: &Theme| container::Style {
-            background: Some(Background::Color(rule_color(theme))),
-            ..container::Style::default()
-        })
-        .boxed()
-}
-
 /// `a` moved `t` of the way to `b`, channel by channel.
 fn toward(a: iced::Color, b: iced::Color, t: f32) -> iced::Color {
     iced::Color::from_rgb(
@@ -111,27 +100,6 @@ pub(super) fn rule_color(theme: &Theme) -> iced::Color {
 /// How far the hint ink and the hairline sit from the text toward the page.
 const MUTED_TOWARD_PAGE: f32 = 0.45;
 const RULE_TOWARD_PAGE: f32 = 0.88;
-
-/// Neutral secondary button (Import / Export / Edit / Cancel / Clear) —
-/// theme-derived so it reads on both light and dark palettes.
-pub(super) fn secondary_button_style(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.palette();
-    let bg = match status {
-        button::Status::Hovered | button::Status::Pressed => palette.background.strong.color,
-        _ => palette.background.weak.color,
-    };
-    button::Style {
-        background: Some(Background::Color(bg)),
-        text_color: palette.background.base.text,
-        border: Border {
-            width: 1.0,
-            color: palette.background.strong.color,
-            radius: 3.0.into(),
-            ..Border::default()
-        },
-        ..button::Style::default()
-    }
-}
 
 #[cfg(test)]
 mod tests {

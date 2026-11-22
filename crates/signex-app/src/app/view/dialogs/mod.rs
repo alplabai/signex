@@ -47,8 +47,8 @@ mod version_control;
 mod workspace_layouts;
 pub(crate) use header::DIALOG_HEADER_H;
 pub(crate) use rule_editor::{
-    RuleEditor, changed_cell_count, changed_rule_count, matrix_pane, one_rule_line, rule_editor,
-    section_heading, severity_pane, shipped_rules,
+    RuleEditor, changed_cell_count, changed_rule_count, matrix_pane, one_rule_line, section_heading,
+    severity_pane, shipped_rules,
 };
 pub(crate) use title_bar::DIALOG_TITLE_BAR_H;
 mod widgets;
