@@ -296,7 +296,7 @@ fn each_card_opens_over_its_segment() {
         grid_extra: false,
     };
     let bar = anchor_bar(&board);
-    let left = |kind| popover_left(kind, &bar, &i18n);
+    let left = |kind| popover_left(kind, kit::card_width(kind), &bar, &i18n);
     assert_eq!(left(BoardPopoverKind::Grid), super::super::grid_readout_x());
     assert!(left(BoardPopoverKind::Layer) > left(BoardPopoverKind::Grid));
     assert!(left(BoardPopoverKind::Unrouted) < left(BoardPopoverKind::Drc));
@@ -316,10 +316,79 @@ fn each_card_opens_over_its_segment() {
         BoardPopoverKind::Drc,
         BoardPopoverKind::Selection,
     ] {
-        let x = popover_left(kind, &narrow, &i18n);
+        let x = popover_left(kind, kit::card_width(kind), &narrow, &i18n);
         assert!(x >= 0.0, "{kind:?}");
         assert!(x + kit::card_width(kind) <= 400.0, "{kind:?}");
     }
+}
+
+/// Mockup row 164: the Selection card's right edge is 8 px inside the
+/// Selected counter as the real bar lays it out, with the view angle shown.
+#[test]
+fn the_selection_card_ends_8px_inside_its_laid_out_counter() {
+    use super::super::{Readout, SurfaceReadout, ViewAngleReadout, clusters};
+    let i18n = I18n::en_us();
+    let tokens = theme_tokens(ThemeId::GraphiteLight);
+    let board = BoardReadout {
+        connections: Some(ConnectionTally {
+            routed: 17,
+            total: 17,
+            unrouted: 0,
+        }),
+        drc: DrcTally::NotRun,
+        selected: 2,
+        open: None,
+        grid_extra: false,
+    };
+    let angle = ViewAngleReadout {
+        caption: signex_i18n::t!(i18n, signex_i18n::ids::PCB_STATUS_VIEW_ANGLE),
+        value: "0°".into(),
+        tooltip: signex_i18n::t!(i18n, signex_i18n::ids::PCB_STATUS_VIEW_ANGLE_TIP),
+        placeholder: signex_i18n::t!(i18n, signex_i18n::ids::PCB_STATUS_VIEW_ANGLE_PLACEHOLDER),
+        entry: None,
+    };
+    let readout = Readout {
+        x: 0.0,
+        y: 40.0,
+        grid_visible: true,
+        snap_enabled: true,
+        zoom: 400.0,
+        unit: signex_types::coord::Unit::Mm,
+        tool: "Select".into(),
+        grid_size_mm: 0.05,
+        selection: None,
+        pending_git_commits: 0,
+        board_import: None,
+        activity: None,
+        surface: SurfaceReadout {
+            view_angle: Some(angle.clone()),
+            board: Some(board.clone()),
+            ..SurfaceReadout::default()
+        },
+    };
+    let window = 1440.0;
+    let texts = crate::layout_probe::lay_out_texts(
+        clusters::view(&readout, &tokens, &i18n),
+        iced::Size::new(window, 28.0),
+    );
+    let at = texts
+        .iter()
+        .position(|t| t.text == "Selected")
+        .expect("the Selected counter");
+    let badge = texts[at + 1].bounds.center_x();
+    let badge_width = kit::badge_width(&kit::count_text(&i18n, 2).to_string());
+    let counter_right = badge + badge_width / 2.0 + kit::SEGMENT_PAD;
+
+    let bar = AnchorBar {
+        zoom: 400.0,
+        view_angle: Some(&angle),
+        window_width: window,
+        ..anchor_bar(&board)
+    };
+    let width = kit::card_width(BoardPopoverKind::Selection);
+    let card_right = popover_left(BoardPopoverKind::Selection, width, &bar, &i18n) + width;
+    let gap = counter_right - card_right;
+    assert!((gap - 8.0 * kit::PX).abs() <= 1.0, "gap {gap}");
 }
 
 #[test]

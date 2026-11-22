@@ -621,6 +621,48 @@ fn the_layer_dropdown_lists_the_sets_and_a_pick_shows_the_set() {
     assert!(app.interaction_state.pcb_layer_set_menu.is_none());
 }
 
+/// Mockup row 6: the layers and the layer sets are one card, groups on the
+/// left and LAYER SETS on the right, their first rows on one line.
+#[test]
+fn the_layer_dropdown_is_one_two_column_card() {
+    let (mut app, _path, main) = app_with_board();
+    open_dropdown(&mut app, main);
+    let card = app.board_popover_card(main).expect("the dropdown");
+    let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(1600.0, 900.0));
+    let at = |label| crate::layout_probe::find(&texts, label).bounds;
+    let (copper, sets) = (at("Copper"), at("LAYER SETS"));
+    let (layer, all) = (at("Top Layer"), at("All Layers"));
+    assert!(
+        sets.x > layer.x + layer.width,
+        "the sets are right of the layers"
+    );
+    assert!(
+        (copper.center_y() - sets.center_y()).abs() <= 2.0,
+        "headings share a line"
+    );
+    assert!(
+        (layer.center_y() - all.center_y()).abs() <= 2.0,
+        "first rows share a line"
+    );
+    let span = all.x + all.width - copper.x;
+    assert!(
+        span <= crate::status_bar::LAYER_DROPDOWN_WIDTH,
+        "inside the one card: {span}"
+    );
+}
+
+/// A narrow window keeps the whole two-column card inside it.
+#[test]
+fn the_two_column_dropdown_stays_inside_a_narrow_window() {
+    let (mut app, _path, main) = app_with_board();
+    app.ui_state.window_size = (640.0, 900.0);
+    open_dropdown(&mut app, main);
+    let card = app.board_popover_card(main).expect("the dropdown");
+    let texts = crate::layout_probe::lay_out_texts(card, iced::Size::new(640.0, 900.0));
+    let sets = crate::layout_probe::find(&texts, "Mechanical Layers").bounds;
+    assert!(sets.x + sets.width <= 640.0, "{sets:?}");
+}
+
 /// Save current as set... reaches the naming card, above the status bar.
 #[test]
 fn save_from_the_layer_dropdown_opens_the_naming_card() {

@@ -29,7 +29,9 @@ pub(crate) use counters::grid_value as board_grid_value;
 pub(super) use counters::{board_counters, board_grid_readout, layer_chevron, layer_swatch};
 pub(crate) use grid_popover::custom_pitch;
 pub(crate) use kit::popover_view;
-pub(crate) use layer_dropdown::{LayerDropdownGroup, group_layers};
+pub(crate) use layer_dropdown::{
+    LAYER_DROPDOWN_WIDTH, LayerDropdownGroup, group_layers, two_column_card,
+};
 
 /// A board counter of the status bar; each opens a popover.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -232,6 +234,14 @@ impl BoardPopoverModel {
             Self::Unrouted(_) => BoardPopoverKind::Unrouted,
             Self::Drc(_) => BoardPopoverKind::Drc,
             Self::Selection(_) => BoardPopoverKind::Selection,
+        }
+    }
+
+    /// How wide this popover's card is drawn.
+    pub fn card_width(&self) -> f32 {
+        match self {
+            Self::LayerDropdown(_) => LAYER_DROPDOWN_WIDTH,
+            _ => kit::card_width(self.kind()),
         }
     }
 }

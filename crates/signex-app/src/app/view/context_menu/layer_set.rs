@@ -234,11 +234,10 @@ impl Signex {
         )
     }
 
-    /// The layer sets as the status bar's layer dropdown lists them: the
-    /// menu's own rows, each sent through the dropdown so it first opens the
-    /// layer set menu for `window`.
+    /// The layer sets column of the status bar's layer dropdown: the menu's
+    /// own rows without a card, each sent through the dropdown so it first
+    /// opens the layer set menu for `window`.
     pub(crate) fn layer_dropdown_sets(&self, window: iced::window::Id) -> Element<'_, Message> {
-        let panel_ctx = &self.document_state.panel_ctx;
         let view = self.pcb_layer_view_of_window(self.overlay_owner(window));
         let entries = layer_set_entries(
             &self.ui_state.i18n,
@@ -246,8 +245,7 @@ impl Signex {
             view.layer_set().map(|set| &set.id),
             self.ui_state.effective_theme_id(),
         );
-        super::placement::menu_card(entries, &panel_ctx.tokens, &panel_ctx.ui_font_name)
-            .element
+        signex_widgets::active_bar_dropdown::rows(entries, &self.document_state.panel_ctx.tokens)
             .map(|message| match message {
                 Message::Pcb(PcbMsg::LayerSetMenu(event)) => through_layer_dropdown(event),
                 other => other,

@@ -1,22 +1,26 @@
 //! The layer dropdown of the status bar's Layer pill, under the Dropdown
-//! layer switcher: the visible layers by group, each with its swatch, the
-//! active one checked. A row makes that layer active and closes the list.
+//! layer switcher (mockup row 6): one card, the visible layers by group on
+//! the left, each with its swatch and the active one checked, the layer sets
+//! on the right. A layer row makes that layer active and closes the list.
 
-use iced::widget::{Column, Widget, container, scrollable};
+use iced::widget::{Column, Widget, container, row, scrollable};
 use iced::{Element, Length};
 use signex_i18n::{I18n, MessageId, ids, t};
 use signex_types::pcb_layer::{PcbLayer, TechnicalLayer};
 use signex_types::theme::ThemeTokens;
+use signex_widgets::active_bar_dropdown::MenuMetrics;
 use signex_widgets::text;
 
 use super::super::graphite::{SP, TS};
 use super::counters::layer_swatch;
-use super::kit::{PX, caption, card, card_width, check, list_row};
-use super::{BoardPopoverEvent, BoardPopoverKind, LayerChoice};
+use super::kit::{PX, caption, card, check, list_row};
+use super::{BoardPopoverEvent, LayerChoice};
 use crate::styles::ti;
 
 /// Lines (headings and rows) the list shows before it scrolls.
 const LIST_LINES: usize = 12;
+/// The two-column card, in the mock's px.
+pub(crate) const LAYER_DROPDOWN_WIDTH: f32 = 440.0 * PX;
 
 /// A heading of the dropdown, in the order they are listed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,7 +116,23 @@ pub(crate) fn group_layers(rows: Vec<LayerChoice>) -> Vec<LayerDropdownGroup> {
         .collect()
 }
 
-pub(super) fn view<'a>(
+/// The one card: `layers` (from [`layer_column`]) left, `sets` right.
+pub(crate) fn two_column_card<'a, M: 'a>(
+    layers: Element<'a, M>,
+    sets: Element<'a, M>,
+    tokens: &ThemeTokens,
+) -> Element<'a, M> {
+    let columns = row![
+        container(layers).width(Length::Fill),
+        container(sets).width(Length::Fill),
+    ]
+    .spacing(SP.s)
+    .width(Length::Fill);
+    card(LAYER_DROPDOWN_WIDTH, vec![columns.boxed()], tokens)
+}
+
+/// The left column: the layers under their group headings.
+pub(super) fn layer_column<'a>(
     groups: &[LayerDropdownGroup],
     tokens: &ThemeTokens,
     i18n: &I18n,
@@ -120,8 +140,11 @@ pub(super) fn view<'a>(
     let mut lines: Vec<Element<'a, BoardPopoverEvent>> = Vec::new();
     for group in groups {
         lines.push(
+            // The sets column's header height, so the two lists start level.
             container(caption(t!(i18n, group.group.title()), tokens))
-                .padding([SP.xs, 6.0 * PX])
+                .padding([0.0, 6.0 * PX])
+                .height(MenuMetrics::GRAPHITE.header_row_height())
+                .align_y(iced::alignment::Vertical::Center)
                 .boxed(),
         );
         lines.extend(group.rows.iter().map(|row| layer_row(row, tokens)));
@@ -131,11 +154,10 @@ pub(super) fn view<'a>(
     } else {
         Length::Shrink
     };
-    let list = scrollable(Column::with_children(lines).width(Length::Fill))
+    scrollable(Column::with_children(lines).width(Length::Fill))
         .height(height)
         .direction(crate::styles::thin_vertical())
-        .boxed();
-    card(card_width(BoardPopoverKind::Layer), vec![list], tokens)
+        .boxed()
 }
 
 fn layer_row<'a>(row: &LayerChoice, tokens: &ThemeTokens) -> Element<'a, BoardPopoverEvent> {
