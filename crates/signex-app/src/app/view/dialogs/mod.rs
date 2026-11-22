@@ -32,6 +32,8 @@ pub(crate) mod grid_properties;
 mod header;
 mod netlist_incomplete;
 pub(crate) mod new_project;
+mod preview_frame;
+pub(crate) use preview_frame::preview_frame;
 mod project;
 mod quit_confirm;
 /// `pub(crate)`: the window sizing and the Enter key read its `content`.

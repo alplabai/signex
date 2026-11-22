@@ -32,7 +32,20 @@ impl Signex {
                 _ => (None, None, None, None, None),
             };
         let sheet_path = self.document_state.active_path.clone();
+        let run_net = match (item, sheet_path.as_deref()) {
+            (Some(run), Some(sheet))
+                if matches!(
+                    run.kind,
+                    signex_types::schematic::SelectedKind::Wire
+                        | signex_types::schematic::SelectedKind::Bus
+                ) =>
+            {
+                self.run_net_of(sheet, run.uuid)
+            }
+            _ => None,
+        };
         let placed = &mut self.document_state.panel_ctx.placed;
+        placed.run_net = run_net;
         if placed.draft.as_ref().is_some_and(|d| Some(d.item) != item) {
             placed.draft = None;
         }

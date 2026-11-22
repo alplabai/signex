@@ -199,12 +199,14 @@ fn new_sheets_card<'a>(
         }
     };
     let project_id = project.id;
-    let defaults = container(customize::schematic(state, i18n, tokens).map(move |msg| {
-        Message::Project(ProjectMsg::Tab(ProjectTabMsg::SetupEdited {
-            project_id,
-            msg,
-        }))
-    }))
+    let defaults = container(
+        customize::schematic_fields(state, i18n, tokens).map(move |msg| {
+            Message::Project(ProjectMsg::Tab(ProjectTabMsg::SetupEdited {
+                project_id,
+                msg,
+            }))
+        }),
+    )
     .width(Length::FillPortion(1));
     let preview = container(preview::view(&state.setup.sheet, canvas, i18n, tokens))
         .width(Length::FillPortion(1));

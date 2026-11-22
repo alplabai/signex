@@ -153,7 +153,6 @@ define_ids! {
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK_DEFAULT = "dialog-new-project-sch-title-block-default";
     DIALOG_NEW_PROJECT_SCH_TITLE_BLOCK_NONE = "dialog-new-project-sch-title-block-none";
     DIALOG_NEW_PROJECT_SCH_DESIGNATORS = "dialog-new-project-sch-designators";
-    DIALOG_NEW_PROJECT_SHEET_LANDSCAPE = "dialog-new-project-sheet-landscape";
     DIALOG_NEW_PROJECT_PREVIEW_HEADING = "dialog-new-project-preview-heading";
     DIALOG_NEW_PROJECT_PREVIEW_LAYERS = "dialog-new-project-preview-layers";
     DIALOG_NEW_PROJECT_PREVIEW_BOARD = "dialog-new-project-preview-board";

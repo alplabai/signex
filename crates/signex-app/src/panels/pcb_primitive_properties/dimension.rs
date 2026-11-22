@@ -159,6 +159,11 @@ fn properties<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Option<Element<'a, P
             any_layer_row(look, common, &f.layers, f.layer.as_ref()),
         ),
     );
+    s.push(
+        common,
+        ids::PCB_PRIM_LAYER,
+        caption(look, look.t(ids::PCB_PRIM_DIM_LAYER_NOTE)),
+    );
     s.finish()
 }
 
@@ -182,4 +187,38 @@ fn precision<'a>(look: Look<'a>, f: &'a DimensionFacts) -> Element<'a, PanelMsg>
         })
         .collect();
     segments(cells)
+}
+
+#[cfg(test)]
+mod tests {
+    use pcb_geom::ItemRef;
+    use uuid::Uuid;
+
+    use super::*;
+    use crate::layout_probe::lay_out_texts;
+    use crate::panels::pcb_primitive_properties::drawing::fixture;
+
+    /// Mockup row 101, decision of 2026-11-21: the Layer row says a
+    /// dimension may sit on any layer and is only a drawing on copper.
+    #[test]
+    fn the_layer_row_carries_the_drawing_only_note() {
+        let (app, _boot) = crate::app::Signex::new();
+        let ctx = app.document_state.panel_ctx.clone();
+        let f = DimensionFacts {
+            common: fixture::common(vec![ItemRef::Via(Uuid::from_u128(1))]),
+            start: (Some(0.0), Some(0.0)),
+            end: (Some(62.0), Some(0.0)),
+            offset: Some(-4.0),
+            line_width: Some(0.1),
+            text_height: Some(1.0),
+            precision: Some(2),
+            value: Some("62.00 mm".into()),
+            layer: None,
+            layers: Vec::new(),
+        };
+        let section = properties(Look::of(&ctx), &f).expect("the section");
+        let note = t!(ctx.i18n, ids::PCB_PRIM_DIM_LAYER_NOTE).into_string();
+        let texts = lay_out_texts(section, iced::Size::new(300.0, 1200.0));
+        assert!(texts.iter().any(|t| t.text == note), "{texts:?}");
+    }
 }

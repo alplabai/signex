@@ -3,6 +3,7 @@
 
 use crate::fixture::Fixture;
 use crate::render::{self, Crop};
+use crate::surfaces::pointer::{PointerStep, draw_after};
 use signex_app::app::Signex;
 
 /// A functional check run after the capture. It may send messages through
@@ -26,6 +27,9 @@ pub enum WindowSel {
     Detached,
     /// A rectangle of the main window.
     MainCrop(Crop),
+    /// The main window after these pointer steps, drawn from the widget
+    /// state they left, so an open menu or pick list shows.
+    MainPointer(&'static [PointerStep]),
 }
 
 pub struct Surface {
@@ -64,5 +68,6 @@ pub fn capture(
             ))
         }
         WindowSel::MainCrop(rect) => Ok(render::crop(&render::draw_main(r, app), main, rect)),
+        WindowSel::MainPointer(steps) => Ok((draw_after(r, app, steps)?, main)),
     }
 }

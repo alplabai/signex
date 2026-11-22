@@ -196,9 +196,12 @@ rules-preset-pill-changed = Changed
 rules-preset-pill-removed = Removed
 rules-preset-from-to = { $from } → { $to }
 
-# Text view (#2530): the problem banner and the undo note.
+# Text view (#2530): the problem banner, the undo note and the bar's label
+# and tag, which stand in for the domain tabs.
 rules-text-problem-at = Line { $line }, column { $column }:
 rules-text-undo-note = Edits apply as one undo step.
+rules-text-all-domains = All domains
+rules-text-view-tag = Text view
 
 # Constraint grid (#2530): the domain tabs. Signal integrity arrives with
 # the simulation band.

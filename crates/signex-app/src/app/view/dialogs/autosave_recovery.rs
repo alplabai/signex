@@ -16,7 +16,7 @@ use signex_types::theme::ThemeTokens;
 use signex_widgets::{Label, text};
 
 use super::graphite_list::{
-    LIST_TILE_ROW_H, accent_pill, kind_code, kind_tile, list_box, list_row,
+    LIST_TILE_ROW_H, TILE_W, accent_pill, kind_code, kind_tile, list_box, list_row,
 };
 use crate::autosave::{AutosaveMsg, RecoveryChoice, RecoveryOffer, describe_age};
 use crate::styles::{
@@ -49,6 +49,32 @@ pub(super) fn clock_time(i18n: &I18n, checked_at: SystemTime, age_secs: u64) -> 
     }
 }
 
+/// Advance of a mono glyph, in ems.
+const MONO_ADVANCE_EM: f32 = 0.6;
+/// What a version row spends beside its caption: the body and row padding,
+/// the tile, the two cell gaps and the "newer" pill.
+const VERSION_ROW_INSET: f32 =
+    2.0 * SP.l + 2.0 * SP.m + TILE_W + 2.0 * SP.m + 6.0 * SP.xs + 4.0 * TS.caption;
+
+/// Mono caption characters a version row holds in a card `card_w` wide.
+pub(super) fn saved_caption_chars(card_w: f32) -> usize {
+    ((card_w - VERSION_ROW_INSET).max(0.0) / (TS.caption * MONO_ADVANCE_EM)).floor() as usize
+}
+
+/// `path` in at most `max_chars`, its middle elided: the root and the file
+/// name stay readable.
+pub(super) fn elided_path(path: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = path.chars().collect();
+    if chars.len() <= max_chars {
+        return path.to_string();
+    }
+    let max_chars = max_chars.max(1);
+    let tail = max_chars * 2 / 3;
+    let head: String = chars[..max_chars - tail - 1].iter().collect();
+    let tail: String = chars[chars.len() - tail..].iter().collect();
+    format!("{head}…{tail}")
+}
+
 /// The recovery copy is the newer version: it gets the "newer" pill.
 fn copy_is_newer(offer: &RecoveryOffer) -> bool {
     !offer.older_than_file
@@ -77,10 +103,11 @@ fn version_row<'a>(
         .font(medium())
         .color(crate::styles::ti(tokens.text));
     let mut cells: Vec<Element<'a, Message>> = tile.into_iter().collect();
+    // Clipped so a caption can never run under the pill.
     cells.push(
-        column![name, caption]
-            .spacing(SP.xs / 2.0)
+        container(column![name, caption].spacing(SP.xs / 2.0))
             .width(Length::Fill)
+            .clip(true)
             .boxed(),
     );
     if newer {
@@ -183,24 +210,7 @@ impl Signex {
             false,
             tokens,
         );
-        let saved_caption = match (library, offer.saved_age_secs) {
-            (Some(library), _) => caption(UserText::new(library), false, tokens),
-            (None, Some(age)) => caption(
-                t!(
-                    i18n,
-                    ids::DIALOG_RECOVERY_SAVED_TIME,
-                    "path" => offer.path.display().to_string(),
-                    "time" => clock_time(i18n, offer.checked_at, age)
-                ),
-                true,
-                tokens,
-            ),
-            (None, None) => caption(
-                UserText::new(offer.path.display().to_string()),
-                true,
-                tokens,
-            ),
-        };
+        let saved_caption = self.recovery_saved_caption(offer, library);
         let newer = copy_is_newer(offer);
         list_box(
             vec![
@@ -223,6 +233,41 @@ impl Signex {
             ],
             tokens,
         )
+    }
+
+    /// The saved version's caption: the library of a Component Preview row,
+    /// else the path, its middle elided so the file name and time stay.
+    fn recovery_saved_caption<'a>(
+        &self,
+        offer: &RecoveryOffer,
+        library: Option<String>,
+    ) -> Element<'a, Message> {
+        let i18n = self.ui_state.i18n.as_ref();
+        let tokens = &self.document_state.panel_ctx.tokens;
+        if let Some(library) = library {
+            return caption(UserText::new(library), false, tokens);
+        }
+        let card_w = super::widgets::modal_card_width(
+            self.ui_state.window_size,
+            super::sizes::AUTOSAVE_RECOVERY.0,
+        );
+        let room = saved_caption_chars(card_w);
+        let path = offer.path.display().to_string();
+        match offer.saved_age_secs {
+            Some(age) => {
+                let time = clock_time(i18n, offer.checked_at, age);
+                // The " · " between the path and the time.
+                let path_room = room.saturating_sub(time.chars().count() + 3);
+                let line = t!(
+                    i18n,
+                    ids::DIALOG_RECOVERY_SAVED_TIME,
+                    "path" => elided_path(&path, path_room),
+                    "time" => time
+                );
+                caption(line, true, tokens)
+            }
+            None => caption(UserText::new(elided_path(&path, room)), true, tokens),
+        }
     }
 
     /// The name the prompt shows and, for a Component Preview row (which has

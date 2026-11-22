@@ -60,6 +60,7 @@ define_ids! {
     PANELS_LIST_REGION_BOTTOM = "panels-list-region-bottom";
     PANELS_LIST_REGION_FLOATING = "panels-list-region-floating";
     PANELS_LIST_REGION_WINDOW = "panels-list-region-window";
+    PANELS_LIST_FOOT = "panels-list-foot";
     PANELS_NET_CLASSES_SECTION = "panels-net-classes-section";
     PANELS_NET_CLASSES_NAME = "panels-net-classes-name";
     PANELS_NET_CLASSES_COLOR = "panels-net-classes-color";
@@ -86,6 +87,7 @@ define_ids! {
     PANELS_NET_INSPECTOR_COLUMN_PIN_SHEET = "panels-net-inspector-column-pin-sheet";
     PANELS_NET_INSPECTOR_UNCONNECTED = "panels-net-inspector-unconnected";
     PANELS_NET_INSPECTOR_MORE_PINS = "panels-net-inspector-more-pins";
+    PANELS_NET_INSPECTOR_MORE_MEMBERS = "panels-net-inspector-more-members";
     PANELS_NET_INSPECTOR_PARTS_SUMMARY = "panels-net-inspector-parts-summary";
     PANELS_NET_INSPECTOR_FOOTER_HINT = "panels-net-inspector-footer-hint";
     PANELS_NET_INSPECTOR_NO_PROJECT_TITLE = "panels-net-inspector-no-project-title";

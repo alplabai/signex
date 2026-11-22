@@ -94,6 +94,8 @@ define_ids! {
     PROPERTIES_WIRE_WIDTH_MEDIUM = "properties-wire-width-medium";
     PROPERTIES_WIRE_WIDTH_LARGE = "properties-wire-width-large";
     PROPERTIES_WIRE_COLOR = "properties-wire-color";
+    PROPERTIES_WIRE_NET_LINE = "properties-wire-net-line";
+    PROPERTIES_NET_GO_TO_LABEL = "properties-net-go-to-label";
     PROPERTIES_COLOR_DEFAULT = "properties-color-default";
     PROPERTIES_COLOR_PRESETS = "properties-color-presets";
     PROPERTIES_COLOR_CUSTOM = "properties-color-custom";
@@ -331,6 +333,8 @@ define_ids! {
     PROPERTIES_ILLUSTRATION_ORIGIN = "properties-illustration-origin";
     PROPERTIES_ILLUSTRATION_PAPER_WIDTH = "properties-illustration-paper-width";
     PROPERTIES_ILLUSTRATION_PAPER_HEIGHT = "properties-illustration-paper-height";
+    PROPERTIES_ILLUSTRATION_ZONES = "properties-illustration-zones";
+    PROPERTIES_ILLUSTRATION_TITLE_BLOCK = "properties-illustration-title-block";
     PROPERTIES_PARAMETERS_FILTER = "properties-parameters-filter";
     PROPERTIES_PARAMETERS_GROUP_TITLE_BLOCK = "properties-parameters-group-title-block";
     PROPERTIES_PARAMETERS_GROUP_SHEET_VARIABLES = "properties-parameters-group-sheet-variables";

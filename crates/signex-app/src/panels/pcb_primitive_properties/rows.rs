@@ -225,6 +225,35 @@ pub(super) fn value_box<'a>(look: Look<'a>, value: impl Into<Label<'a>>) -> Elem
     .boxed()
 }
 
+/// The ink of a value the panel only reports.
+pub(super) fn sunken_ink(look: Look<'_>) -> Color {
+    ti(look.tokens().text_secondary)
+}
+
+/// `content` on the sunken fill with no frame, so it cannot be taken for a
+/// field (mockup rows 96 and 97).
+pub(super) fn sunken_box<'a>(content: Element<'a, PanelMsg>) -> Element<'a, PanelMsg> {
+    container(content)
+        .padding([SP.xs, SP.s])
+        .width(Length::Fill)
+        .style(form_look::read_only_value)
+        .boxed()
+}
+
+/// A value the panel only reports, sunken; a long one wraps.
+pub(super) fn sunken_value<'a>(
+    look: Look<'a>,
+    value: impl Into<Label<'a>>,
+) -> Element<'a, PanelMsg> {
+    sunken_box(
+        text(value)
+            .size(TS.body)
+            .color(sunken_ink(look))
+            .wrapping(iced::widget::text::Wrapping::Word)
+            .boxed(),
+    )
+}
+
 /// A length in mm, "N/A" when `None`.
 pub(super) fn mm_or_na(look: Look<'_>, value: Option<f64>) -> Localized {
     match value {
@@ -397,10 +426,11 @@ pub(super) fn with_tip<'a>(
 ) -> Element<'a, PanelMsg> {
     tooltip(
         content,
-        container(text(look.t(tip)).size(TS.body)).padding([SP.xs, SP.s]),
+        container(text(look.t(tip)).size(TS.body))
+            .padding([SP.xs, SP.s])
+            .style(crate::styles::context_menu(look.tokens())),
         iced::widget::tooltip::Position::Bottom,
     )
-    .style(crate::styles::context_menu(look.tokens()))
     .boxed()
 }
 

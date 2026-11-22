@@ -52,10 +52,19 @@ impl Signex {
         // snug, with two characters of room to type into.
         let canvas_font_name = document.panel_ctx.canvas_font_name.as_str();
         let canvas_family = signex_types::font::nonblank_family(canvas_font_name);
-        let approx_w =
-            (signex_types::font::estimate_text_width_px(&edit_state.text, font_px, canvas_family)
-                + 2.0 * font_px * signex_types::font::ESTIMATE_FALLBACK_ADVANCE_EM)
-                .max(60.0);
+        // An empty editor shows its placeholder, so it is sized for that.
+        let shown = if edit_state.text.is_empty() {
+            crate::app::handlers::canvas::editor_placeholder(edit_state.kind)
+                .map_or(String::new(), |id| {
+                    self.ui_state.i18n.message_plain(id, &[])
+                })
+        } else {
+            edit_state.text.clone()
+        };
+        let approx_w = editor_width(
+            signex_types::font::estimate_text_width_px(&shown, font_px, canvas_family),
+            font_px,
+        );
         let justify = drawn_justify(engine.document(), edit_state);
         let left = editor_left(anchor_x - SP.xs, approx_w, justify) - FOCUS_RING;
         // Sit the input's baseline on the label text.
@@ -85,8 +94,15 @@ impl Signex {
         ];
         if self.ui_state.text_edit_opens <= TEXT_EDIT_HINT_USES {
             let hint_h = TS.caption * crate::styles::LINE_HEIGHT + 2.0 * SP.xs;
+            let hint = self
+                .ui_state
+                .i18n
+                .message_plain(signex_i18n::ids::OVERLAY_TEXT_EDIT_HINT, &[]);
+            let hint_w = signex_types::font::estimate_text_width_px(&hint, TS.caption, None)
+                + 2.0 * SP.m
+                + 2.0;
             layers.push(positioned(
-                left,
+                hint_left(left, hint_w, self.canvas_bounds()),
                 top - hint_h - SP.xs,
                 key_hint(tokens, &self.ui_state.i18n),
             ));
@@ -139,12 +155,29 @@ fn editor_left(anchor_x: f32, width: f32, justify: HAlign) -> f32 {
     }
 }
 
+/// Width of the editor for text `text_w` wide: snug, with two characters of
+/// room to type into.
+fn editor_width(text_w: f32, font_px: f32) -> f32 {
+    text_w + 2.0 * font_px * signex_types::font::ESTIMATE_FALLBACK_ADVANCE_EM
+}
+
+/// Window x of the key hint: over the editor, kept inside the canvas.
+fn hint_left(editor_left: f32, hint_w: f32, canvas: iced::Rectangle) -> f32 {
+    editor_left
+        .min(canvas.x + canvas.width - hint_w)
+        .max(canvas.x)
+}
+
 /// `widget` with its top-left corner at window `(x, y)`, clamped on screen.
+/// Each layer fills the window: a stack limits its later layers to the size
+/// of its first, which squeezed the key hint to the editor's width.
 fn positioned<'a>(x: f32, y: f32, widget: Element<'a, Message>) -> Element<'a, Message> {
     column![
         Space::new().height(y.max(0.0)),
         row![Space::new().width(x.max(0.0)), widget],
     ]
+    .width(Length::Fill)
+    .height(Length::Fill)
     .boxed()
 }
 
@@ -228,7 +261,8 @@ fn key_hint<'a>(
             signex_i18n::ids::OVERLAY_TEXT_EDIT_HINT
         ))
         .size(TS.caption)
-        .color(ink3),
+        .color(ink3)
+        .wrapping(iced::widget::text::Wrapping::None),
     )
     .padding([SP.xs, SP.m])
     .style(move |_: &iced::Theme| container::Style {
@@ -254,6 +288,45 @@ mod tests {
         assert_eq!(editor_left(100.0, 40.0, HAlign::Left), 100.0);
         assert_eq!(editor_left(100.0, 40.0, HAlign::Center), 80.0);
         assert_eq!(editor_left(100.0, 40.0, HAlign::Right), 60.0);
+    }
+
+    /// Mockup row 65: the box follows its text instead of a fixed floor that
+    /// covered the neighbouring part.
+    #[test]
+    fn the_editor_is_as_wide_as_its_text_and_typing_room() {
+        let room = 2.0 * 10.0 * signex_types::font::ESTIMATE_FALLBACK_ADVANCE_EM;
+        assert_eq!(editor_width(12.0, 10.0), 12.0 + room);
+        assert!(editor_width(12.0, 10.0) < 60.0);
+    }
+
+    /// Mockup row 65: the one-line hint stays inside the canvas.
+    #[test]
+    fn the_hint_stays_inside_the_canvas() {
+        let canvas =
+            iced::Rectangle::new(iced::Point::new(100.0, 0.0), iced::Size::new(500.0, 400.0));
+        assert_eq!(hint_left(200.0, 150.0, canvas), 200.0);
+        assert_eq!(hint_left(550.0, 150.0, canvas), 450.0);
+        assert_eq!(hint_left(50.0, 150.0, canvas), 100.0);
+    }
+
+    /// The hint layer fills the stack, so its width is not the editor's.
+    #[test]
+    fn the_hint_is_laid_out_on_one_line() {
+        let (app, _boot) = crate::app::Signex::new();
+        let tokens = &app.document_state.panel_ctx.tokens;
+        let en = signex_i18n::I18n::en_us();
+        let layers = iced::widget::Stack::with_children(vec![
+            positioned(0.0, 0.0, Space::new().width(20.0).height(20.0).boxed()),
+            positioned(0.0, 40.0, key_hint(tokens, &en)),
+        ]);
+        let texts =
+            crate::layout_probe::lay_out_texts(layers.boxed(), iced::Size::new(800.0, 200.0));
+        let hint = texts
+            .iter()
+            .find(|t| t.text.starts_with("Enter"))
+            .expect("the hint is drawn");
+        assert!(hint.bounds.width > 100.0, "{:?}", hint.bounds);
+        assert!(hint.bounds.height < 2.0 * TS.caption * crate::styles::LINE_HEIGHT);
     }
 
     /// Tab between fields is not wired, so the hint names only the two

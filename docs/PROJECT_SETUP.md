@@ -128,7 +128,9 @@ not stored per sheet, so a project value would do nothing.
 Project Options has a **Project setup** section with the dialog's own profile
 cards, PCB rules and schematic defaults, filled in from the
 project. An edit is a project edit like the other sections: it marks the
-`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it.
+`.snxprj` dirty, is written by Save, and Ctrl+Z undoes it. The section's page
+header holds **Save as profile...**, Your profiles is one line under the
+cards, and the PCB rules and Schematic fields sit in two titled cards.
 
 - Only the part an edit changes is stored: a board pick stores
   `project_defaults.pcb`, a sheet pick `project_defaults.sheet`, a designator

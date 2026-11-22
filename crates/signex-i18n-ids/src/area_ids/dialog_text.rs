@@ -180,6 +180,8 @@ define_ids! {
     DIALOG_MOVE_SELECTION_MOVE = "dialog-move-selection-move";
     DIALOG_MOVE_SELECTION_HELP = "dialog-move-selection-help";
     DIALOG_MOVE_SELECTION_HELP_OFF_GRID = "dialog-move-selection-help-off-grid";
+    DIALOG_MOVE_SELECTION_PREVIEW = "dialog-move-selection-preview";
+    DIALOG_MOVE_SELECTION_PREVIEW_MORE = "dialog-move-selection-preview-more";
     DIALOG_NET_COLOR_COUNT = "dialog-net-color-count";
     DIALOG_NET_COLOR_FILTER = "dialog-net-color-filter";
     DIALOG_NET_COLOR_CLEAR_ALL = "dialog-net-color-clear-all";

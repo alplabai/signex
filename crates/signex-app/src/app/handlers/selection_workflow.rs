@@ -247,11 +247,11 @@ impl Signex {
                         .active_canvas_mut()
                         .clear_overlay_cache();
                     self.update_selection_info();
-                    // The Pins rows read their nets from the project net index.
-                    // A cold index is built now, and the rows refresh when it
-                    // lands (`refresh_pin_rows`).
-                    if hit.is_some_and(|h| h.kind == signex_types::schematic::SelectedKind::Symbol)
-                    {
+                    // The Pins rows and a wire's Net Name read the project net
+                    // index. A cold index is built now, and the rows refresh
+                    // when it lands (`refresh_pin_rows`).
+                    use signex_types::schematic::SelectedKind as K;
+                    if hit.is_some_and(|h| matches!(h.kind, K::Symbol | K::Wire | K::Bus)) {
                         return self.warm_net_index_for_pin_rows();
                     }
                 }

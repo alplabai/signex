@@ -129,9 +129,33 @@ pub fn label_anchor(rotation_deg: f64, h: signex_types::schematic::HAlign) -> Me
     }
 }
 
+/// The (row, column) of the grid cell that marks `dir`: the place on the
+/// text where the anchor sits, as [`label_anchor`] words it.
+fn anchor_cell(dir: LabelDir) -> (usize, usize) {
+    match dir {
+        LabelDir::Right => (2, 0),
+        LabelDir::Up => (2, 1),
+        LabelDir::Left => (2, 2),
+        LabelDir::Down => (0, 1),
+    }
+}
+
+/// The direction a press on cell (`row`, `column`) picks. A label reads in
+/// four directions: the left column anchors the text at its left, the right
+/// column at its right, top and bottom middle turn it, and the centre keeps
+/// `current`.
+fn cell_direction(row: usize, column: usize, current: LabelDir) -> LabelDir {
+    match (row, column) {
+        (_, 0) => LabelDir::Right,
+        (_, 2) => LabelDir::Left,
+        (0, 1) => LabelDir::Down,
+        (2, 1) => LabelDir::Up,
+        _ => current,
+    }
+}
+
 /// The 3x3 justification picker of a selected label, with SVG arrow icons.
-/// A label reads in four directions, so the nine cells map onto them
-/// (corners follow their edge; the centre re-sends the current one).
+/// The one lit cell is the anchor the word beside the grid names.
 pub fn justification_grid(
     id: uuid::Uuid,
     rotation_deg: f64,
@@ -208,66 +232,90 @@ pub fn justification_grid(
         }
     };
 
-    // A label has only four anchor directions, so the nine cells map onto
-    // them (corners follow their edge; centre re-sends the current one).
-    let hl = |dir: LabelDir| current_dir == dir;
+    let lit = anchor_cell(current_dir);
+    let icons = [
+        [
+            crate::icons::icon_justify_tl(theme),
+            crate::icons::icon_justify_t(theme),
+            crate::icons::icon_justify_tr(theme),
+        ],
+        [
+            crate::icons::icon_justify_l(theme),
+            crate::icons::icon_justify_c(theme),
+            crate::icons::icon_justify_r(theme),
+        ],
+        [
+            crate::icons::icon_justify_bl(theme),
+            crate::icons::icon_justify_b(theme),
+            crate::icons::icon_justify_br(theme),
+        ],
+    ];
+    let mut grid = Column::<Element<'static, PanelMsg>>::new().spacing(SP.xs);
+    for (r, line) in icons.into_iter().enumerate() {
+        let mut cells = iced::widget::Row::<Element<'static, PanelMsg>>::new().spacing(SP.xs);
+        for (c, icon) in line.into_iter().enumerate() {
+            let picks = to_msg(cell_direction(r, c, current_dir));
+            cells = cells.push(cell(icon, (r, c) == lit, picks));
+        }
+        grid = grid.push(cells.boxed());
+    }
+    grid.boxed()
+}
 
-    iced::widget::column![
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_tl(theme),
-                hl(LabelDir::Up),
-                to_msg(LabelDir::Up)
-            ),
-            cell(
-                crate::icons::icon_justify_t(theme),
-                hl(LabelDir::Up),
-                to_msg(LabelDir::Up)
-            ),
-            cell(
-                crate::icons::icon_justify_tr(theme),
-                hl(LabelDir::Up),
-                to_msg(LabelDir::Up)
-            ),
-        ]
-        .spacing(SP.xs),
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_l(theme),
-                hl(LabelDir::Left),
-                to_msg(LabelDir::Left)
-            ),
-            cell(
-                crate::icons::icon_justify_c(theme),
-                false,
-                to_msg(current_dir)
-            ),
-            cell(
-                crate::icons::icon_justify_r(theme),
-                hl(LabelDir::Right),
-                to_msg(LabelDir::Right)
-            ),
-        ]
-        .spacing(SP.xs),
-        iced::widget::row![
-            cell(
-                crate::icons::icon_justify_bl(theme),
-                hl(LabelDir::Down),
-                to_msg(LabelDir::Down)
-            ),
-            cell(
-                crate::icons::icon_justify_b(theme),
-                hl(LabelDir::Down),
-                to_msg(LabelDir::Down)
-            ),
-            cell(
-                crate::icons::icon_justify_br(theme),
-                hl(LabelDir::Down),
-                to_msg(LabelDir::Down)
-            ),
-        ]
-        .spacing(SP.xs),
-    ]
-    .spacing(SP.xs)
-    .boxed()
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use signex_types::schematic::HAlign;
+
+    const DIRECTIONS: [LabelDir; 4] = [
+        LabelDir::Right,
+        LabelDir::Up,
+        LabelDir::Left,
+        LabelDir::Down,
+    ];
+
+    /// Mockup row 44: a label running right is anchored at its bottom left,
+    /// and that is the cell lit beside the word.
+    #[test]
+    fn the_lit_cell_is_the_anchor_the_word_names() {
+        assert_eq!(
+            label_anchor(0.0, HAlign::Left),
+            ids::PROPERTIES_ANCHOR_BOTTOM_LEFT
+        );
+        assert_eq!(anchor_cell(label_direction(0.0, HAlign::Left)), (2, 0));
+        assert_eq!(
+            label_anchor(0.0, HAlign::Right),
+            ids::PROPERTIES_ANCHOR_BOTTOM_RIGHT
+        );
+        assert_eq!(anchor_cell(label_direction(0.0, HAlign::Right)), (2, 2));
+        assert_eq!(
+            label_anchor(90.0, HAlign::Left),
+            ids::PROPERTIES_ANCHOR_BOTTOM
+        );
+        assert_eq!(anchor_cell(label_direction(90.0, HAlign::Left)), (2, 1));
+        assert_eq!(
+            label_anchor(270.0, HAlign::Left),
+            ids::PROPERTIES_ANCHOR_TOP
+        );
+        assert_eq!(anchor_cell(label_direction(270.0, HAlign::Left)), (0, 1));
+    }
+
+    /// Pressing the lit cell of any direction keeps that direction, so a
+    /// press never lights a different cell than the one pressed.
+    #[test]
+    fn a_press_on_an_anchor_cell_picks_that_anchor() {
+        for dir in DIRECTIONS {
+            let (row, column) = anchor_cell(dir);
+            for current in DIRECTIONS {
+                assert!(cell_direction(row, column, current) == dir);
+            }
+        }
+    }
+
+    #[test]
+    fn the_centre_keeps_the_current_direction() {
+        for current in DIRECTIONS {
+            assert!(cell_direction(1, 1, current) == current);
+        }
+    }
 }

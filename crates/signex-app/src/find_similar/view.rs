@@ -110,10 +110,11 @@ fn value_cell<'a>(value: &str, tokens: &ThemeTokens, i18n: &I18n) -> Element<'a,
                 .size(TS.body)
                 .font(mono())
                 .color(ink),
-            container(text(UserText::new(full)).size(TS.body).font(mono())).padding([SP.xs, SP.s]),
+            container(text(UserText::new(full)).size(TS.body).font(mono()))
+                .padding([SP.xs, SP.s])
+                .style(styles::context_menu(tokens)),
             tooltip::Position::Top,
         )
-        .style(styles::context_menu(tokens))
         .boxed(),
     }
 }

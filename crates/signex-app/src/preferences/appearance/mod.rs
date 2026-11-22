@@ -466,6 +466,21 @@ fn remember_geometry_row<'a>(v: PrefsView<'a>) -> Element<'a, PrefMsg> {
 mod tests {
     use super::*;
 
+    /// Mockup row 144: the Selected option help states both looks and that
+    /// Graphite Light is unchanged (decided 2026-11-21).
+    #[test]
+    fn the_selected_option_help_states_both_looks() {
+        let help = I18n::en_us().message_plain(ids::PREFERENCES_SELECTED_SEGMENT_HELP, &[]);
+        for needle in [
+            "Graphite Dark",
+            "Neutral: fill #3D4047, text #FFFFFF, with the chip shadow",
+            "Accent: fill #C2552D, text #FFFFFF, no shadow",
+            "Graphite Light is unchanged",
+        ] {
+            assert!(help.contains(needle), "{needle:?} not in {help:?}");
+        }
+    }
+
     /// The grid style names read as the `Display` names the pickers showed.
     #[test]
     fn grid_style_names_keep_their_english() {

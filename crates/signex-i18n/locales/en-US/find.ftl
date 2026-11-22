@@ -103,6 +103,9 @@ paste-array-axis-x = X
 paste-array-axis-y = Y
 paste-array-count-up = Count up label numbers
 paste-array-preview-caption = Preview · copy 1 is the original
+# Tooltips of the preview's expand button.
+paste-array-preview-expand = Expand preview
+paste-array-preview-collapse = Collapse preview
 # Beside the last drawn copy; $count is how many copies are not drawn.
 paste-array-preview-more = +{ $count } more
 # Spacing callout on the preview; $value is the length with its unit.

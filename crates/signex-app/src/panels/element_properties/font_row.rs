@@ -127,10 +127,11 @@ fn text_style_buttons<'a>(i18n: &signex_i18n::I18n) -> Element<'a, PanelMsg> {
             });
             signex_widgets::tooltip(
                 face,
-                container(text(t!(i18n, tip)).size(ts.caption)).padding([sp.xs, sp.s]),
+                container(text(t!(i18n, tip)).size(ts.caption))
+                    .padding([sp.xs, sp.s])
+                    .style(crate::panels::form_look::value_tip),
                 iced::widget::tooltip::Position::Bottom,
             )
-            .style(crate::panels::form_look::value_tip)
             .boxed()
         };
     let bold = iced::Font {

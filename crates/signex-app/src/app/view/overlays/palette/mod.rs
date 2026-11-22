@@ -2,7 +2,7 @@
 //! the typed characters highlighted, key caps for the binding, and a hint
 //! footer. The card itself and where it sits are in `dropdown.rs`.
 
-use iced::widget::{Row, Space, column, container, scrollable};
+use iced::widget::{Row, Space, container, scrollable};
 use iced::{Alignment, Background, Border, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, Localized, ids, shortcut_ids, t};
 use signex_types::theme::ThemeTokens;
@@ -10,12 +10,13 @@ use signex_widgets::{button, raw, rich_text, span, text};
 
 use crate::app::command_palette::{CommandAction, CommandEntry, CommandSource};
 use crate::keymap::metadata_for;
-use crate::styles::{self, Radii, Spacing, TypeScale, ti, tokens};
+use crate::styles::{self, Radii, Spacing, TypeScale, chrome_px, ti, tokens};
 
 const TS: TypeScale = TypeScale::DEFAULT;
 const SP: Spacing = Spacing::DEFAULT;
 
 mod dropdown;
+mod tile;
 
 fn mono() -> iced::Font {
     crate::fonts::iced_font_for_family(crate::fonts::CHROME_MONO_FONT)
@@ -197,6 +198,12 @@ fn caps_row<'a, M: 'a>(theme_tokens: &ThemeTokens, label: &str) -> Element<'a, M
 /// Characters of a result label that fit one row of the 640 px card beside the
 /// key caps; longer labels end in an ellipsis.
 const LABEL_BUDGET: usize = 58;
+/// The label keeps at least this many characters beside a long context.
+const LABEL_MIN_BUDGET: usize = 26;
+/// Characters of a row's right-aligned context.
+const CONTEXT_BUDGET: usize = 32;
+/// Height of a result row (34 px at the 12 px base, mockup row 9).
+const ROW_H: f32 = chrome_px(34.0 * 11.0 / 12.0);
 
 /// `text` cut to `budget` characters, ending in an ellipsis when it was cut.
 fn ellipsize(text: &str, budget: usize) -> String {
@@ -225,7 +232,87 @@ fn glyph_cap<'a, M: 'a>(theme_tokens: &ThemeTokens, key: &str) -> Element<'a, M>
     cap(theme_tokens, raw(key.to_string()))
 }
 
-/// One result row.
+/// The text a row's label cell draws: the label, then a component's value
+/// (mockup row 9: "D3 · ESD5Z5.0").
+pub(super) fn row_label_text(entry: &CommandEntry) -> String {
+    if entry.value.is_empty() {
+        entry.label.clone()
+    } else {
+        format!("{} \u{b7} {}", entry.label, entry.value)
+    }
+}
+
+/// The right-aligned context of a row: a command's category, else the row's
+/// own detail (terminal count, sheet, project). A command's detail is its
+/// binding, drawn as key caps instead.
+pub(super) fn row_context_text(i18n: &I18n, entry: &CommandEntry) -> Option<String> {
+    let context = path_subtitle(i18n, entry).or_else(|| {
+        (entry.source != CommandSource::Command && !entry.detail.is_empty())
+            .then(|| entry.detail.clone())
+    })?;
+    Some(ellipsize(&context, CONTEXT_BUDGET))
+}
+
+/// How many characters of the label fit beside `context_chars` of context.
+fn label_budget(context_chars: usize) -> usize {
+    LABEL_BUDGET
+        .saturating_sub(context_chars)
+        .max(LABEL_MIN_BUDGET)
+}
+
+/// The label cell: the row's text with the typed characters highlighted,
+/// clipped so it never runs under the context.
+fn row_label<'a, M: Clone + 'a>(
+    i18n: &I18n,
+    theme_tokens: &ThemeTokens,
+    shown: &str,
+    query: &str,
+) -> Element<'a, M> {
+    let (ink, accent) = (
+        ti(theme_tokens.text),
+        tokens::resolve(theme_tokens).accent_text,
+    );
+    let spans: Vec<_> = label_runs_in(i18n, shown, query)
+        .into_iter()
+        .map(|(run, hit)| {
+            // raw: runs of the row's label, already rendered, split at the matches.
+            let s = span::<()>(raw(run)).color(if hit { accent } else { ink });
+            if hit { s.font(bold()) } else { s }
+        })
+        .collect();
+    container(
+        rich_text::<(), M, Theme>(spans)
+            .size(TS.label)
+            .wrapping(iced::widget::text::Wrapping::None)
+            .boxed(),
+    )
+    .width(Length::Fill)
+    .clip(true)
+    .boxed()
+}
+
+/// The context cell, in the quietest ink.
+fn row_context<'a, M: 'a>(
+    theme_tokens: &ThemeTokens,
+    entry: &CommandEntry,
+    context: String,
+) -> Element<'a, M> {
+    let label: signex_widgets::Label<'a> = if entry.source == CommandSource::Command {
+        signex_i18n::UserText::new(context).into()
+    } else {
+        // raw: the detail is design data or worded by the palette index in
+        // English (a net's terminal count, #2061).
+        raw(context)
+    };
+    text(label)
+        .size(TS.caption)
+        .color(tokens::resolve(theme_tokens).ink4)
+        .wrapping(iced::widget::text::Wrapping::None)
+        .boxed()
+}
+
+/// One result row, on one line (mockup row 9): kind tile, label, context, and
+/// the key caps of a bound command.
 pub(super) fn result_row<'a, M: Clone + 'a>(
     i18n: &I18n,
     theme_tokens: &ThemeTokens,
@@ -235,55 +322,30 @@ pub(super) fn result_row<'a, M: Clone + 'a>(
     on_press: M,
 ) -> Element<'a, M> {
     let r = tokens::resolve(theme_tokens);
-    let (ink, accent) = (ti(theme_tokens.text), r.accent_text);
-    let shown_label = ellipsize(&entry.label, LABEL_BUDGET);
-    let spans: Vec<_> = label_runs_in(i18n, &shown_label, query)
-        .into_iter()
-        .map(|(run, hit)| {
-            // raw: runs of the row's label, already rendered, split at the matches.
-            let s = span::<()>(raw(run)).color(if hit { accent } else { ink });
-            if hit { s.font(bold()) } else { s }
-        })
-        .collect();
-    let mut label_col: iced::widget::Column<Element<'a, M>> =
-        column![].spacing(SP.xs).width(Length::Fill);
-    label_col = label_col.push(
-        rich_text::<(), M, Theme>(spans)
-            .size(TS.label)
-            .wrapping(iced::widget::text::Wrapping::None)
-            .boxed(),
-    );
-    let is_command = entry.source == CommandSource::Command;
-    if let Some(path) = path_subtitle(i18n, entry) {
-        label_col = label_col.push(
-            text(signex_i18n::UserText::new(path))
-                .size(TS.caption)
-                .color(r.ink3)
-                .boxed(),
-        );
-    } else if !is_command && !entry.detail.is_empty() {
-        label_col = label_col.push(
-            // raw: the detail is design data or worded by the palette index in
-            // English (a net's terminal count, #2061).
-            text(raw(entry.detail.clone()))
-                .size(TS.caption)
-                .font(mono())
-                .color(r.ink3)
-                .boxed(),
-        );
+    let ink = ti(theme_tokens.text);
+    let context = row_context_text(i18n, entry);
+    let budget = label_budget(context.as_ref().map_or(0, |c| c.chars().count()));
+    let shown = ellipsize(&row_label_text(entry), budget);
+    let mut line: Row<Element<'a, M>> = Row::new()
+        .spacing(SP.l)
+        .height(Length::Fill)
+        .align_y(Alignment::Center);
+    line = line.push(tile::kind_tile(theme_tokens, entry.source));
+    line = line.push(row_label(i18n, theme_tokens, &shown, query));
+    if let Some(context) = context {
+        line = line.push(row_context(theme_tokens, entry, context));
     }
-    let mut line: Row<Element<'a, M>> = Row::new().spacing(SP.l).align_y(Alignment::Center);
-    line = line.push(label_col.boxed());
-    if is_command && !entry.detail.is_empty() {
+    if entry.source == CommandSource::Command && !entry.detail.is_empty() {
         line = line.push(caps_row(theme_tokens, &entry.detail));
     }
     let (active_fill, hover_fill) = (
-        r.sunken,
+        r.accent_soft,
         styles::tokens::overlay(theme_tokens, styles::tokens::Overlay::Hover),
     );
     button(line)
         .width(Length::Fill)
-        .padding([SP.m, SP.l])
+        .height(Length::Fixed(ROW_H))
+        .padding([0.0, SP.l])
         .on_press(on_press)
         .style(move |_: &Theme, status: button::Status| {
             let fill = match status {
@@ -309,6 +371,12 @@ fn bold() -> iced::Font {
         weight: iced::font::Weight::Semibold,
         ..crate::fonts::iced_font_for_family(crate::fonts::DEFAULT_UI_FONT)
     }
+}
+
+/// The footer's fill: the chrome colour (mockup row 9), so its sunken key caps
+/// read as caps.
+fn footer_fill(theme_tokens: &ThemeTokens) -> iced::Color {
+    ti(theme_tokens.toolbar_bg)
 }
 
 /// Hint footer: navigation caps, the Run cap and what Enter will run.
@@ -337,12 +405,12 @@ pub(super) fn hint_footer<'a, M: 'a>(
                 .boxed(),
         );
     }
-    let rule = r.line_soft;
+    let (rule, fill) = (r.line_soft, footer_fill(theme_tokens));
     container(line)
         .padding([SP.m, SP.l])
         .width(Length::Fill)
         .style(move |_: &Theme| container::Style {
-            background: Some(Background::Color(r.sunken)),
+            background: Some(Background::Color(fill)),
             border: Border::default().top(iced::border::Side::default().width(1.0).color(rule)),
             ..container::Style::default()
         })
@@ -388,6 +456,67 @@ mod tests {
         assert!(mask[9..].iter().all(|m| *m));
         // Under en-US a plain `i` still matches and highlights `İ`.
         assert!(match_mask("İstanbul", "istanbul").iter().all(|m| *m));
+    }
+
+    fn row(source: CommandSource, label: &str, value: &str, detail: &str) -> CommandEntry {
+        CommandEntry {
+            source,
+            label: label.into(),
+            value: value.into(),
+            detail: detail.into(),
+            action: CommandAction::OpenFile(std::path::PathBuf::new()),
+        }
+    }
+
+    /// Mockup row 9: a component row reads designator and value on the left,
+    /// its sheet on the right, and the query highlights inside the value.
+    #[test]
+    fn a_component_row_has_its_value_left_and_its_sheet_right() {
+        let i18n = I18n::en_us();
+        let entry = row(CommandSource::Symbol, "D3", "VBUS clamp", "usb-c.snxsch");
+        let shown = row_label_text(&entry);
+        assert_eq!(shown, "D3 \u{b7} VBUS clamp");
+        assert_eq!(
+            row_context_text(&i18n, &entry).as_deref(),
+            Some("usb-c.snxsch")
+        );
+        let hits: String = label_runs(&shown, "vbu")
+            .into_iter()
+            .filter(|(_, hit)| *hit)
+            .map(|(run, _)| run)
+            .collect();
+        assert_eq!(hits, "VBU");
+    }
+
+    /// A command's detail is its binding: key caps, never context text.
+    #[test]
+    fn a_command_binding_is_not_context() {
+        let i18n = I18n::en_us();
+        let entry = row(CommandSource::Command, "Save", "", "Ctrl+S");
+        assert_eq!(row_context_text(&i18n, &entry), None);
+    }
+
+    /// A long context is cut and leaves the label its minimum.
+    #[test]
+    fn a_long_context_is_cut_and_the_label_keeps_room() {
+        let i18n = I18n::en_us();
+        let long = "x".repeat(CONTEXT_BUDGET * 2);
+        let entry = row(CommandSource::File, "a.snxsch", "", &long);
+        let context = row_context_text(&i18n, &entry).unwrap();
+        assert_eq!(context.chars().count(), CONTEXT_BUDGET);
+        assert!(context.ends_with('\u{2026}'));
+        assert_eq!(label_budget(0), LABEL_BUDGET);
+        assert_eq!(label_budget(LABEL_BUDGET), LABEL_MIN_BUDGET);
+    }
+
+    /// Mockup row 9: the footer's key caps stand out from it in both themes.
+    #[test]
+    fn the_footer_fill_differs_from_its_key_caps() {
+        use signex_types::theme::{ThemeId, theme_tokens};
+        for id in ThemeId::BUILTINS {
+            let t = theme_tokens(*id);
+            assert_ne!(footer_fill(&t), tokens::resolve(&t).sunken, "{id:?}");
+        }
     }
 
     #[test]

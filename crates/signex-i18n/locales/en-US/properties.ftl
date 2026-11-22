@@ -46,6 +46,10 @@ properties-position = Position
 properties-size = Size
 properties-name = Name
 properties-net-name = Net Name
+# The muted line beside a selected wire's title. $net is the net's name.
+properties-wire-net-line = net { $net }
+# Button beside a wire's read-only Net Name: goes to what names the net.
+properties-net-go-to-label = Go to Label
 properties-port-name = Port Name
 properties-sheet-name = Sheet Name
 properties-text = Text
@@ -478,6 +482,9 @@ properties-illustration-origin = Origin
 # Callouts of the Sheet drawing. $size is the paper edge in millimetres.
 properties-illustration-paper-width = W { $size } mm
 properties-illustration-paper-height = H { $size } mm
+# $down and $across are the sheet's zone counts.
+properties-illustration-zones = Zones { $down } × { $across }
+properties-illustration-title-block = Title Block
 properties-parameters-filter = Filter parameters
 properties-parameters-group-title-block = Title block
 properties-parameters-group-sheet-variables = Sheet variables

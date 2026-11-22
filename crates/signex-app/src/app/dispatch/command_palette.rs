@@ -367,6 +367,7 @@ mod tests {
         palette.results = vec![crate::app::command_palette::CommandEntry {
             source: crate::app::command_palette::CommandSource::Command,
             label: "Open Panel: ERC".into(),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::Panel(crate::panels::PanelKind::Erc),
         }];
@@ -454,6 +455,7 @@ mod tests {
         palette.results = vec![CommandEntry {
             source: CommandSource::Command,
             label: "Place Wire".into(),
+            value: String::new(),
             detail: String::new(),
             action: CommandAction::Command(crate::keymap::AppCommandId::new("place_wire").unwrap()),
         }];

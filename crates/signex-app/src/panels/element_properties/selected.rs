@@ -69,6 +69,16 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
                 let line = match selected_kind {
                     _ if is_power_port => get("Value"),
                     Some(SelectedKind::Label) => get("Text"),
+                    Some(SelectedKind::ChildSheet) => ctx
+                        .selected_child_sheet
+                        .as_ref()
+                        .map_or_else(String::new, |sheet| sheet.name.clone()),
+                    Some(SelectedKind::Wire) => run_net_line(ctx),
+                    Some(SelectedKind::Bus) => ctx
+                        .placed
+                        .run_net
+                        .as_ref()
+                        .map_or_else(String::new, |net| net.name.clone()),
                     _ => String::new(),
                 };
                 titled_header(ctx, title, line, primary)
@@ -196,9 +206,20 @@ pub(in crate::panels) fn view_selected_element_properties<'a>(
     scrollable(col).width(Length::Fill).boxed()
 }
 
+/// The muted header line of a wire (mockup row 43): `net /SPI_CLK`, empty
+/// until the project's net index has answered.
+fn run_net_line(ctx: &PanelContext) -> String {
+    ctx.placed.run_net.as_ref().map_or_else(String::new, |net| {
+        ctx.i18n.message_plain(
+            ids::PROPERTIES_WIRE_NET_LINE,
+            &[("net", net.name.as_str().into())],
+        )
+    })
+}
+
 /// The header title of the kinds that name themselves from the catalog: a
-/// wire, a bus, a label or port, a power port and a text note. `None` keeps
-/// the shared header (a part, a drawing, a sheet symbol, …).
+/// wire, a bus, a label or port, a power port, a text note and a sheet
+/// symbol. `None` keeps the shared header (a part, a drawing, …).
 fn kind_title(
     elem_type: &str,
     kind: Option<SelectedKind>,
@@ -211,6 +232,7 @@ fn kind_title(
         SelectedKind::Wire => Some(ids::PROPERTIES_KIND_WIRE),
         SelectedKind::Bus => Some(ids::PROPERTIES_KIND_BUS),
         SelectedKind::TextNote => Some(ids::PROPERTIES_KIND_TEXT_NOTE),
+        SelectedKind::ChildSheet => Some(ids::PROPERTIES_SHEET_SYMBOL_TITLE),
         // The engine names a label by its type (`Global Label`, …).
         SelectedKind::Label => Some(match elem_type {
             "Global Label" => ids::PROPERTIES_KIND_GLOBAL_PORT,
@@ -603,6 +625,22 @@ mod tests {
         for want in ["Lefty", "Topsy"] {
             assert!(texts.iter().any(|t| t == want), "lacks {want}");
         }
+    }
+
+    /// Mockup row 46: a sheet symbol's header is the catalog's Sheet Symbol,
+    /// not the engine's type word.
+    #[test]
+    fn a_sheet_symbol_header_reads_sheet_symbol() {
+        use signex_types::schematic::SelectedKind;
+        let texts = shown_texts(
+            SelectedKind::ChildSheet,
+            vec![("Type".to_string(), "Hierarchical Sheet".to_string())],
+        );
+        assert!(texts.iter().any(|t| t == "Sheet Symbol"), "{texts:?}");
+        assert!(
+            !texts.iter().any(|t| t == "Hierarchical Sheet"),
+            "{texts:?}"
+        );
     }
 
     /// The Width grid marks exactly the wire's preset, in the 2 x 2 order.

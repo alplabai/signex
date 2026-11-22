@@ -2,11 +2,11 @@
 //! "git" pill when the project has version control on, and a sliders button
 //! that opens the project's options.
 
-use iced::widget::{container, svg};
+use iced::widget::{container, mouse_area, svg};
 use iced::{Background, Border, Color, Element, Length, Theme, Widget as _};
 use signex_i18n::{I18n, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::tree_view::TreeIcon;
+use signex_widgets::tree_view::{TreeIcon, TreeMsg};
 use signex_widgets::{button, text};
 
 use super::super::graphite::hint_tooltip;
@@ -28,6 +28,8 @@ const ICON_GLYPH: f32 = 14.0;
 const PILL_HEIGHT: f32 = 16.0;
 /// Space left and right of the pill's text.
 const PILL_PAD_X: f32 = 6.0;
+/// Side of the unsaved-changes dot.
+const DIRTY_DOT: f32 = TS.caption / 2.0;
 
 fn count_sheets(sheets: &[SheetInfo]) -> usize {
     sheets.iter().map(|s| 1 + count_sheets(&s.children)).sum()
@@ -101,8 +103,25 @@ pub(super) fn icon_button<'a>(
     .boxed()
 }
 
+/// The unsaved-changes dot after the project's name. The tree has no project
+/// row to carry it when the groups sit directly under the card.
+fn dirty_dot<'a>(colour: Color) -> Element<'a, PanelMsg> {
+    container(iced::widget::Space::new().boxed())
+        .width(DIRTY_DOT)
+        .height(DIRTY_DOT)
+        .style(move |_: &Theme| container::Style {
+            background: Some(Background::Color(colour)),
+            border: Border {
+                radius: (DIRTY_DOT / 2.0).into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .boxed()
+}
+
 /// The project card; the sliders button opens Project Options… for this
-/// project.
+/// project, and a right-click opens the project's menu (mockup row 20).
 pub(super) fn project_card<'a>(
     project: &'a ProjectPanelInfo,
     ctx: &'a PanelContext,
@@ -150,8 +169,11 @@ pub(super) fn project_card<'a>(
         .spacing(SP.l)
         .align_y(iced::Alignment::Center)
         .push(tile.boxed())
-        .push(titles.boxed())
-        .push(iced::widget::space::horizontal().boxed());
+        .push(titles.boxed());
+    if project.is_dirty {
+        head = head.push(dirty_dot(tint));
+    }
+    head = head.push(iced::widget::space::horizontal().boxed());
     if project.version_control {
         let pill = container(
             text(t!(i18n, ids::PANELS_PROJECTS_GIT))
@@ -179,5 +201,8 @@ pub(super) fn project_card<'a>(
         tokens,
         iced::widget::tooltip::Position::Bottom,
     );
-    head.push(options).boxed()
+    let project_row = vec![project.id.to_string()];
+    mouse_area(head.push(options).boxed())
+        .on_right_press(PanelMsg::Tree(TreeMsg::ContextMenu(project_row)))
+        .boxed()
 }

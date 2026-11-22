@@ -51,7 +51,8 @@ fn refusal_logged(app: &Signex) -> bool {
 fn a_snap_reach_outside_its_range_is_refused_with_its_text_kept() {
     use signex_app::library::editor::footprint::SnapOptions;
     type Msg = fn(String) -> PanelMsg;
-    let fields: [(Msg, &str, fn(&SnapOptions) -> f64); 2] = [
+    type Stored = fn(&SnapOptions) -> f64;
+    let fields: [(Msg, &str, Stored); 2] = [
         (
             PanelMsg::FpEditorSetSnapDistance,
             SnapOptions::DISTANCE_BUFFER,

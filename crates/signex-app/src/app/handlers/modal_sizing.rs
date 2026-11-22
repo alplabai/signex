@@ -466,11 +466,13 @@ impl Signex {
                 .and_then(|path| self.library.library_browsers.get(path))
                 .and_then(|b| b.delete_confirm.as_ref())
                 .map(|d| {
-                    use crate::library::edit_row_modal::delete_intro_texts;
+                    use crate::library::edit_row_modal::{DELETE_CAPTION_GAP, delete_intro_texts};
                     let i18n = &self.ui_state.i18n;
                     let (title, text) = delete_intro_texts(i18n, &d.internal_pn, &d.table);
                     let (ref_title, ref_text) = delete_intro_texts(i18n, "x", "t");
                     fixed.height
+                        + DELETE_CAPTION_GAP
+                        + caption_line()
                         + library_intro_growth(
                             modal,
                             fixed.width,

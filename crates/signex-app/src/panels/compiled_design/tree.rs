@@ -204,10 +204,11 @@ fn sheet_row<'a>(
     let body: Element<'a, PanelMsg> = match tip {
         Some(tip) => signex_widgets::tooltip(
             button,
-            container(text(tip).size(TS.caption)).padding([SP.xs, SP.s]),
+            container(text(tip).size(TS.caption))
+                .padding([SP.xs, SP.s])
+                .style(crate::styles::context_menu(tokens)),
             signex_widgets::tooltip::Position::Bottom,
         )
-        .style(crate::styles::context_menu(tokens))
         .boxed(),
         None => button.boxed(),
     };

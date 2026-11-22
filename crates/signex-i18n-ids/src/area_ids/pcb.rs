@@ -131,6 +131,13 @@ define_ids! {
     PCB_3D_MODEL_UNREAD = "pcb-3d-model-unread";
     PCB_3D_MODEL_UNREAD_MORE = "pcb-3d-model-unread-more";
     PCB_3D_DISMISS = "pcb-3d-dismiss";
+    PCB_3D_LEGEND_TITLE = "pcb-3d-legend-title";
+    PCB_3D_LEGEND_SILK = "pcb-3d-legend-silk";
+    PCB_3D_LEGEND_MASK = "pcb-3d-legend-mask";
+    PCB_3D_LEGEND_COPPER = "pcb-3d-legend-copper";
+    PCB_3D_LEGEND_LAMINATE = "pcb-3d-legend-laminate";
+    PCB_3D_LEGEND_FINISH = "pcb-3d-legend-finish";
+    PCB_3D_LEGEND_MASK_OVER_COPPER = "pcb-3d-legend-mask-over-copper";
     PCB_BAR_ROUTE_TOOLTIP = "pcb-bar-route-tooltip";
     PCB_TOOL_HINT_ROUTE = "pcb-tool-hint-route";
     PCB_ROUTE_BLOCKED = "pcb-route-blocked";

@@ -386,6 +386,100 @@ fn the_card_options_button_opens_the_clicked_projects_options_tab() {
     assert_eq!(opened, [other], "the clicked project's tab");
 }
 
+/// Mockup row 19: with one project its groups sit directly under the card,
+/// with no row repeating the project's name, and a row still routes by its
+/// full key.
+#[test]
+fn one_projects_groups_sit_directly_under_its_card() {
+    let (mut app, _boot) = crate::app::Signex::new();
+    add_project(&mut app, "solo");
+    app.refresh_panel_ctx();
+    let ctx = app.document_state.panel_ctx.clone();
+    let shown = texts(&ctx);
+    let names = shown.iter().filter(|t| t.as_str() == "solo").count();
+    assert_eq!(names, 1, "the card alone names the project: {shown:#?}");
+    let (rows, root) = under_card(super::super::graphite::decorate_tree(&regroup(
+        &ctx.project_tree,
+        &ctx.projects_view,
+    )));
+    assert_eq!(root.as_deref(), Some(ctx.project_tree[0].key.as_str()));
+    assert_eq!(rows[0].key, SCHEMATICS);
+    assert!(rows[0].badge.is_some(), "the group keeps its count");
+    let key = vec![SCHEMATICS.to_string(), "solo.snxsch".to_string()];
+    let sent = route_under(root.as_deref(), TreeMsg::Select(key));
+    let want = vec![
+        ctx.project_tree[0].key.clone(),
+        SOURCE.to_string(),
+        "solo.snxsch".to_string(),
+    ];
+    assert!(matches!(sent, PanelMsg::Tree(TreeMsg::Select(k)) if k == want));
+}
+
+/// With several projects each keeps its row: it says whose groups follow.
+#[test]
+fn several_projects_keep_their_rows() {
+    let (mut app, _boot) = crate::app::Signex::new();
+    add_project(&mut app, "A");
+    add_project(&mut app, "B");
+    app.refresh_panel_ctx();
+    let ctx = app.document_state.panel_ctx.clone();
+    let (rows, root) = under_card(ctx.project_tree.clone());
+    assert_eq!(rows.len(), 2);
+    assert_eq!(root, None);
+    let key = [rows[0].key.clone()];
+    assert_eq!(key_under_card(&key, None), Some(&key[..]));
+}
+
+/// The project's own key names no drawn row once its card stands in for it.
+#[test]
+fn a_selected_project_key_highlights_no_row_under_the_card() {
+    let root = ["p".to_string()];
+    assert_eq!(key_under_card(&root, Some("p")), None);
+    let file = ["p".to_string(), SCHEMATICS.to_string(), "a".to_string()];
+    assert_eq!(key_under_card(&file, Some("p")), Some(&file[1..]));
+}
+
+/// The project menu (mockup row 20) stays reachable with no project row: a
+/// right-click on the card opens it for that project.
+#[test]
+fn a_right_click_on_the_card_opens_the_project_menu() {
+    use iced::mouse::{Button, Event};
+    let (mut app, _boot) = crate::app::Signex::new();
+    let id = add_project(&mut app, "A");
+    app.refresh_panel_ctx();
+    let ctx = app.document_state.panel_ctx.clone();
+    let sent = crate::layout_probe::messages_for_events(
+        view(&ctx),
+        WINDOW,
+        iced::Point::new(24.0, 24.0),
+        &[iced::Event::Mouse(Event::ButtonPressed(Button::Right))],
+    );
+    let want = vec![id.to_string()];
+    assert!(
+        sent.iter()
+            .any(|m| matches!(m, PanelMsg::Tree(TreeMsg::ContextMenu(k)) if *k == want)),
+        "{sent:?}"
+    );
+}
+
+/// Collapse All folds the view-only groups and Expand All opens them.
+#[test]
+fn expand_and_collapse_all_reach_the_groups() {
+    let ctx = context("en-US");
+    let mut state = ProjectsView::default();
+    state.set_groups_collapsed(&ctx.project_tree, true);
+    let group = |roots: Vec<TreeNode>| {
+        roots[0]
+            .children
+            .iter()
+            .find(|g| g.key == SCHEMATICS)
+            .map(|g| g.expanded)
+    };
+    assert_eq!(group(regroup(&ctx.project_tree, &state)), Some(false));
+    state.set_groups_collapsed(&ctx.project_tree, false);
+    assert_eq!(group(regroup(&ctx.project_tree, &state)), Some(true));
+}
+
 /// A context with no project open and two recent projects.
 fn empty_context() -> PanelContext {
     let mut ctx = context("en-US");

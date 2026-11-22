@@ -13,7 +13,8 @@ use super::Readout;
 use super::graphite::{
     BAR_GAP, BAR_PADDING, CLUSTER_GAP, PANELS_ICON, SP, TS, UNIT_COLUMN, X_COLUMN, Y_COLUMN,
     cursor_texts, grid_text, layer_label, layer_pill, mono_button, mono_message, mono_text,
-    panels_button, rule, selection_pill, snap_label, snap_pill, view_angle, zoom_text,
+    no_cursor_texts, panels_button, rule, selection_pill, snap_label, snap_pill, view_angle,
+    zoom_text,
 };
 use crate::app::StatusBarRequest;
 use crate::styles::tokens::resolve;
@@ -58,6 +59,9 @@ pub(super) enum Segment {
 /// The segments `r` shows, left to right.
 pub(super) fn segments(r: &Readout<'_>) -> Vec<Segment> {
     use Segment as S;
+    if r.surface.no_document {
+        return no_document_segments(r);
+    }
     let mut out = vec![S::Cursor, S::Rule, S::GridSnap, S::Rule];
     if r.surface.active_layer.is_some() {
         out.push(S::LayerPill);
@@ -85,6 +89,22 @@ pub(super) fn segments(r: &Readout<'_>) -> Vec<Segment> {
         out.push(S::Rule);
     }
     out.extend([S::Zoom, S::Panels]);
+    out
+}
+
+/// The bar with no document in view (mockup row 2): the empty cursor columns
+/// and Panels. Work still running keeps its segment, so a save stays visible
+/// and an import can still be cancelled.
+fn no_document_segments(r: &Readout<'_>) -> Vec<Segment> {
+    use Segment as S;
+    let mut out = vec![S::Cursor];
+    if r.pending_git_commits > 0 {
+        out.push(S::Saving);
+    }
+    if r.board_import.is_some() {
+        out.push(S::Import);
+    }
+    out.extend([S::Spacer, S::Panels]);
     out
 }
 
@@ -161,7 +181,11 @@ fn cursor_cluster<'a>(
     i18n: &I18n,
 ) -> Element<'a, StatusBarRequest> {
     let muted = resolve(tokens).ink3;
-    let (x, y) = cursor_texts(i18n, r.unit, r.x, r.y);
+    let (x, y) = if r.surface.no_document {
+        no_cursor_texts(i18n)
+    } else {
+        cursor_texts(i18n, r.unit, r.x, r.y)
+    };
     row![
         mono_message(x, muted)
             .width(X_COLUMN)
@@ -402,6 +426,7 @@ mod tests {
             }),
             opens_grid_popover: false,
             board: Some(BoardReadout::default()),
+            no_document: false,
         }
     }
 
@@ -490,6 +515,37 @@ mod tests {
             ]
         );
         assert_eq!(shown.first(), Some(&S::Cursor));
+    }
+
+    /// Mockup row 2: with no document the bar holds the cursor and Panels;
+    /// grid, snap, tool and zoom describe a document, so they leave.
+    #[test]
+    fn with_no_document_the_bar_holds_the_cursor_and_panels() {
+        let surface = SurfaceReadout {
+            no_document: true,
+            ..SurfaceReadout::default()
+        };
+        let r = readout(None, surface);
+        assert_eq!(segments(&r), [S::Cursor, S::Spacer, S::Panels]);
+        let (x, y) = no_cursor_texts(&I18n::en_us());
+        assert!(x.into_string().contains('—'));
+        assert!(y.into_string().contains('—'));
+    }
+
+    /// Running work stays on the no-document bar: an import keeps its cancel.
+    #[test]
+    fn with_no_document_running_work_keeps_its_segments() {
+        let surface = SurfaceReadout {
+            no_document: true,
+            ..SurfaceReadout::default()
+        };
+        let mut r = readout(None, surface);
+        r.pending_git_commits = 1;
+        r.board_import = Some("board.zip");
+        assert_eq!(
+            segments(&r),
+            [S::Cursor, S::Saving, S::Import, S::Spacer, S::Panels]
+        );
     }
 
     /// The running import keeps its cancel segment.

@@ -14,6 +14,29 @@ define_ids! {
     PROJECT_SECTION_VERSION_CONTROL = "project-section-version-control";
     PROJECT_SECTION_SCHEMATIC_DEFAULTS = "project-section-schematic-defaults";
     PROJECT_SECTION_SETUP = "project-section-setup";
+    PROJECT_SECTION_GROUP_PROJECT = "project-section-group-project";
+    PROJECT_SECTION_GROUP_RULES = "project-section-group-rules";
+    PROJECT_SECTION_GROUP_TRACKING = "project-section-group-tracking";
+    // General (mockup row 29)
+    PROJECT_GENERAL_HELP = "project-general-help";
+    PROJECT_GENERAL_NAME = "project-general-name";
+    PROJECT_GENERAL_RENAME = "project-general-rename";
+    PROJECT_GENERAL_DESCRIPTION = "project-general-description";
+    PROJECT_GENERAL_DESIGNATOR_STANDARD = "project-general-designator-standard";
+    PROJECT_GENERAL_LIBRARY_DESIGNATOR = "project-general-library-designator";
+    PROJECT_GENERAL_DESIGNATOR_HINT = "project-general-designator-hint";
+    PROJECT_GENERAL_DESIGNATOR_NEWER = "project-general-designator-newer";
+    PROJECT_GENERAL_FILES = "project-general-files";
+    PROJECT_GENERAL_DIRECTORY = "project-general-directory";
+    PROJECT_GENERAL_ROOT_SCHEMATIC = "project-general-root-schematic";
+    PROJECT_GENERAL_PCB_FILE = "project-general-pcb-file";
+    PROJECT_GENERAL_LIBRARIES = "project-general-libraries";
+    PROJECT_GENERAL_SHOW_IN_LIBRARIES = "project-general-show-in-libraries";
+    // Project setup (mockup row 37)
+    PROJECT_SETUP_HELP = "project-setup-help";
+    PROJECT_SETUP_PCB_RULES = "project-setup-pcb-rules";
+    PROJECT_SETUP_SCHEMATIC = "project-setup-schematic";
+    PROJECT_SETUP_YOUR_PROFILES = "project-setup-your-profiles";
     PROJECT_MOVE_UP = "project-move-up";
     PROJECT_MOVE_DOWN = "project-move-down";
     // Parameters (mockup row 30)

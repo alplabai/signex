@@ -142,6 +142,57 @@ fn clicking_a_row_selects_its_section() {
     );
 }
 
+/// Each group's heading sits above its first row and below the group before.
+#[test]
+fn the_group_headings_lead_their_groups() {
+    let (app, id) = app();
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(id), WINDOW);
+    let y = |label: &str| crate::layout_probe::find(&texts, label).bounds.y;
+    let order = [
+        "PROJECT",
+        "Parameters",
+        "RULES & DEFAULTS",
+        "ERC and annotation",
+        "TRACKING",
+        "Version control",
+    ];
+    for pair in order.windows(2) {
+        assert!(y(pair[0]) < y(pair[1]), "{} above {}", pair[0], pair[1]);
+    }
+}
+
+/// The General page has its help line and a titled Files card.
+#[test]
+fn the_general_page_has_its_help_and_files_title() {
+    let (app, id) = app();
+    let texts = crate::layout_probe::lay_out_texts(app.view_project_tab(id), WINDOW);
+    let help = "The project's name, description and the designator standard new parts follow.";
+    let _ = crate::layout_probe::find(&texts, help);
+    let files = crate::layout_probe::find(&texts, "Files").bounds.y;
+    let directory = crate::layout_probe::find(&texts, "Directory").bounds.y;
+    assert!(files < directory, "the title heads the card");
+}
+
+#[test]
+fn show_in_libraries_opens_the_libraries_section() {
+    let (mut app, id) = app();
+    let messages = clicking(&app, id, "Show in Libraries");
+    assert!(messages.iter().any(|m| matches!(
+        m,
+        Message::Project(ProjectMsg::Tab(ProjectTabMsg::SectionSelected {
+            project_id,
+            section: ProjectSection::Libraries,
+        })) if *project_id == id
+    )));
+    for message in messages {
+        let _ = app.update(message);
+    }
+    assert_eq!(
+        app.document_state.project_tabs[&id].section,
+        ProjectSection::Libraries
+    );
+}
+
 #[test]
 fn explore_publishes_its_project() {
     let (app, id) = app();

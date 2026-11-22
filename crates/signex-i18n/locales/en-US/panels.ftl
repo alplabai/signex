@@ -585,6 +585,8 @@ panels-list-region-bottom = bottom
 panels-list-region-floating = floating
 # A panel detached into a window of its own.
 panels-list-region-window = window
+# Foot of the panel list: where the tool documents went.
+panels-list-foot = Rules and the other tool documents open as tabs, from their menus or the command palette.
 panels-erc-running = Running…
 panels-erc-no-findings-left = No findings left since the last run
 panels-erc-empty-hint = Run ERC to populate project-wide diagnostics
@@ -777,7 +779,14 @@ panels-net-inspector-column-pin-sheet = Sheet
 # Net cell of a pin on no net.
 panels-net-inspector-unconnected = — unconnected
 # The row under a long expanded list; clicking it lists the rest. $count is a whole number.
-panels-net-inspector-more-pins = + { $count } more pins
+panels-net-inspector-more-pins =
+    { $count ->
+        [one] + { $count } more pin
+       *[other] + { $count } more pins
+    }
+# The same row under an expanded net, whose list holds labels, ports and
+# sheet entries as well as pins. $count is a whole number.
+panels-net-inspector-more-members = + { $count } more
 # Footer in By Component mode. Whole numbers.
 panels-net-inspector-parts-summary =
     { $shown } of { $total ->

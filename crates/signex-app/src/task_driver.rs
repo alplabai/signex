@@ -245,10 +245,12 @@ impl Effects {
     fn clipboard(&mut self, action: iced_runtime::clipboard::Action) {
         use iced_runtime::clipboard::Action as Clip;
         match action {
-            Clip::Read { kind, channel } => {
+            Clip::Read { kind, channel, .. } => {
                 channel.send(self.read(kind)).ignore(UNANSWERED);
             }
-            Clip::Write { content, channel } => {
+            Clip::Write {
+                content, channel, ..
+            } => {
                 self.clipboard = Some(content);
                 channel.send(Ok(())).ignore(UNANSWERED);
             }

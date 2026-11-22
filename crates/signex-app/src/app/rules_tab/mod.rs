@@ -28,6 +28,8 @@ mod matrix_preview_tests;
 mod matrix_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod text_bar_tests;
 
 pub(crate) use analysis::RulesAnalysis;
 pub(crate) use commands::{rules_add, rules_enable, rules_remove, rules_set};

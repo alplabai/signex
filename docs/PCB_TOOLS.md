@@ -610,7 +610,8 @@ The Dimension panel (#2523) shows the illustration (the two points, the
 extension lines, the Offset and the value), the measured Value on a card
 under it, then Start and End (X and Y on one row each), Offset, and under
 Style: Line Width, Text Height, Precision and Layer (every board layer,
-copper included).
+copper included; a caption under the row says a dimension on copper is a
+drawing only).
 Precision is a 0 to 6 segmented control, so a precision outside that range
 cannot be entered from the panel. Each edit is one undo step. There is no
 Type row: angular, radial, diameter, leader, baseline and centre-mark

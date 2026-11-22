@@ -210,7 +210,7 @@ pub use pcb_layers::{LayersPanelMsg, LayersPanelUi, LayersTab, PcbLayersPanel};
 pub use pcb_nets::PcbNetsSummary;
 pub use pcb_primitive_properties::{PcbPrimitiveFacts, PcbPrimitiveMsg};
 pub use placed_edit::{
-    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel,
+    NoteDraft, NoteLayout, PlacedDraft, PlacedEditMsg, PlacedField, PlacedPanel, RunNet,
 };
 pub use pre_placement::{
     PlacementPosition, PositionField, PrePlacementData, PrePlacementKind, PrePlacementPositionMsg,
@@ -348,9 +348,12 @@ impl PanelKind {
 
     /// Whether this panel requires a PCB document to be open. Net Classes
     /// edits the project's table, so it needs a project, not a board (#2416,
-    /// #2417).
+    /// #2417). The panel list also offers Layers on a footprint tab.
     pub fn needs_pcb(self) -> bool {
-        matches!(self, PanelKind::Drc | PanelKind::LayerStack)
+        matches!(
+            self,
+            PanelKind::Drc | PanelKind::LayerStack | PanelKind::Layers | PanelKind::PcbNets
+        )
     }
 
     /// The Library panel kind an alias row opens it in (alias rows kept by

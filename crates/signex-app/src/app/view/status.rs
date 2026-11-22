@@ -49,11 +49,28 @@ impl Signex {
                 view_angle: self.status_view_angle(window_id),
                 opens_grid_popover: self.status_sheet_tab(window_id).is_some(),
                 board: self.status_board(window_id),
+                no_document: self.status_shows_no_document(window_id),
             },
             &self.ui_state.i18n,
         );
         bar.map(move |req| Signex::status_bar_message(window_id, symbol.as_deref(), req))
             .boxed()
+    }
+
+    /// Whether `window` is on the project hint: a project is open and the
+    /// window shows no tab and no canvas content (mockup row 2).
+    fn status_shows_no_document(&self, window: iced::window::Id) -> bool {
+        let document = &self.document_state;
+        document.active_project.is_some()
+            && document
+                .tab_shown_in_window(window, &self.ui_state)
+                .is_none()
+            && self.pcb_for_window(window).is_none()
+            && self
+                .interaction_state
+                .canvas_for_window(window)
+                .active_snapshot()
+                .is_none()
     }
 
     /// The layer pill of `window`: the active layer's caption and name, and
@@ -182,6 +199,59 @@ mod tests {
 
     fn right_click(window: iced::window::Id) -> Message {
         Signex::status_bar_message(window, None, StatusBarRequest::GridReadoutRightClicked)
+    }
+
+    /// Mockup row 2: a project with no document in view drops the grid, snap,
+    /// tool and zoom; opening a tab brings them back.
+    #[test]
+    fn the_project_hint_bar_shows_no_document_state() {
+        let (mut app, window) = app_with_window();
+        assert!(
+            !app.status_shows_no_document(window),
+            "the Start screen keeps its bar"
+        );
+        app.document_state.active_project = Some(app.document_state.mint_project_id());
+        assert!(app.status_shows_no_document(window));
+        let shown = crate::layout_probe::lay_out_texts(
+            app.view_status_bar(window),
+            iced::Size::new(1200.0, 40.0),
+        );
+        assert!(shown.iter().any(|t| t.text.contains("Panels")));
+        for gone in ["Grid", "Snap", "%"] {
+            assert!(!shown.iter().any(|t| t.text.contains(gone)), "{gone}");
+        }
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "a.snxsch".into(),
+            path: "a.snxsch".into(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::Schematic,
+        });
+        app.document_state.active_tab = 0;
+        assert!(!app.status_shows_no_document(window));
+    }
+
+    /// Mockup row 63: on a footprint tab the status bar reads the step the
+    /// grid picker marks as active.
+    #[test]
+    fn a_footprint_tab_reads_the_step_its_picker_marks() {
+        let (mut app, window) = app_with_window();
+        let path = std::path::PathBuf::from("f.snxfpt");
+        app.document_state.tabs.push(crate::app::TabInfo {
+            title: "f".into(),
+            path: path.clone(),
+            cached_document: None,
+            project_id: None,
+            kind: crate::app::TabKind::FootprintEditor(path.clone()),
+        });
+        app.document_state.active_tab = app.document_state.tabs.len() - 1;
+        let file =
+            signex_library::FootprintFile::from_footprint(signex_library::Footprint::empty("f"));
+        let mut editor = crate::app::FootprintDocument::new(path.clone(), file);
+        editor.state.snap_options.grid_step_mm = 0.5;
+        app.document_state.footprint_editors.insert(path, editor);
+        assert_ne!(app.ui_state.grid_size_mm, 0.5);
+        assert_eq!(app.status_grid(window).size_mm, 0.5);
     }
 
     /// A right-click on the Grid read-out opens the popover over the window

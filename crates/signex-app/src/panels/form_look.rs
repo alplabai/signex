@@ -134,6 +134,23 @@ pub(crate) fn text_input_style(theme: &Theme, status: text_input::Status) -> tex
     }
 }
 
+/// [`text_input_style`] for a value that reads inline in a list: no fill or
+/// outline until the box is hovered or focused.
+pub(crate) fn inline_value_input_style(
+    theme: &Theme,
+    status: text_input::Status,
+) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if !matches!(
+        status,
+        text_input::Status::Hovered | text_input::Status::Focused { .. }
+    ) {
+        style.background = Background::Color(Color::TRANSPARENT);
+        style.border.color = Color::TRANSPARENT;
+    }
+    style
+}
+
 /// [`text_input_style`] with the outline in `error` while the box holds text
 /// it refuses (#2767).
 pub(crate) fn refusable_input_style(
@@ -146,6 +163,18 @@ pub(crate) fn refusable_input_style(
         }
         style
     }
+}
+
+/// [`text_input_style`] that greys while the field takes no input: the sunken
+/// fill with faint ink (mockup row 111).
+pub(crate) fn greyable_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if matches!(status, text_input::Status::Disabled) {
+        let l = FormLook::of(theme);
+        style.background = Background::Color(l.sunken);
+        style.value = l.ink4;
+    }
+    style
 }
 
 /// `checkbox` style for a form toggle.

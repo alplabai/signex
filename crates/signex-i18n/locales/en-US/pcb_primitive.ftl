@@ -428,3 +428,5 @@ pcb-prim-dim-style = Style
 pcb-prim-dim-precision-step = { $decimals }
 # $layer is the layer's name, $height the text height in mm.
 pcb-prim-dim-drawing-note = { $layer } · text { $height }
+# The caption under a dimension's Layer row.
+pcb-prim-dim-layer-note = Any board layer, copper included. On copper a dimension is a drawing only: no copper, DRC or Gerber.

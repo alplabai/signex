@@ -28,7 +28,7 @@ const PAD_RING_STEPS: usize = 5;
 const MASK_OVER_COPPER_LIFT: f32 = 0.16;
 
 /// The colour of `mask` where copper raises it.
-pub(super) fn mask_over_copper(mask: [f32; 4]) -> [f32; 4] {
+pub fn mask_over_copper(mask: [f32; 4]) -> [f32; 4] {
     let lift = |c: f32| c + (1.0 - c) * MASK_OVER_COPPER_LIFT;
     [lift(mask[0]), lift(mask[1]), lift(mask[2]), mask[3]]
 }

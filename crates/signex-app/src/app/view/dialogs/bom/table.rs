@@ -64,14 +64,16 @@ fn is_mono(c: &BomColumn) -> bool {
 }
 
 /// Default on-screen width of a column, in px, until the user resizes it.
+/// The default column set fits beside the sidebar of the 1000 px dialog, so
+/// Qty is in view on opening (mockup row 112).
 pub(in crate::app) fn default_column_width(c: &BomColumn) -> f32 {
     match c {
-        BomColumn::Name => 140.0,
-        BomColumn::Description => 220.0,
-        BomColumn::Designator | BomColumn::Reference => 128.0,
+        BomColumn::Name => 120.0,
+        BomColumn::Description => 130.0,
+        BomColumn::Designator | BomColumn::Reference => 110.0,
         BomColumn::Value => 74.0,
         BomColumn::Footprint => 118.0,
-        BomColumn::LibRef => 160.0,
+        BomColumn::LibRef => 110.0,
         BomColumn::Qty => 44.0,
         BomColumn::Custom(_) => 120.0,
         BomColumn::UnitPrice | BomColumn::ExtendedPrice => 74.0,

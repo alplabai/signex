@@ -73,6 +73,9 @@ impl Signex {
                 PasteArrayMsg::StepChanged(text) => state.step = text,
                 PasteArrayMsg::CountUpToggled(on) => state.set_count_up(on, preferred_step),
                 PasteArrayMsg::PreviewHovered(hover) => state.hover.update(hover),
+                PasteArrayMsg::PreviewExpandToggled => {
+                    state.preview_expanded = !state.preview_expanded;
+                }
                 PasteArrayMsg::DesignatorsChosen(mode) => {
                     state.designators = mode;
                     if mode.reads_project() {

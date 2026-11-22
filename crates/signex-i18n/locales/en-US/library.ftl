@@ -488,6 +488,8 @@ library-delete-row-title = Delete Component?
 library-delete-row-intro-title = Delete { $pn }?
 # Intro text; $pn is the row's part number, $table its table.
 library-delete-row-intro = Delete row { $pn } from { $table }? This cannot be undone from the UI.
+# Caption under the intro text.
+library-delete-row-caption = Placed parts keep their embedded copy.
 
 ## Place Component picker (mockup row 129)
 # Dialog title of the picker when it places a part.

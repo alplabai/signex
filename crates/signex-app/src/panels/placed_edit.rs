@@ -151,11 +151,22 @@ impl PartialEq for NoteDraft {
 /// and its stored text.
 pub type SelectedNote<'a> = (&'a Path, SelectedItem, &'a str);
 
+/// The net a selected wire or bus is on, as the project's net index names it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RunNet {
+    pub name: String,
+    /// The label or power port that names the net; `None` for a net with an
+    /// automatic name.
+    pub named_by: Option<signex_net::NetAnchor>,
+}
+
 /// What the Properties rows of the single selected object read.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PlacedPanel {
     /// The object the rows edit, when it has an editable position.
     pub item: Option<SelectedItem>,
+    /// The net of a selected wire or bus, once the net index has answered.
+    pub run_net: Option<RunNet>,
     /// Its geometry in stored mm.
     pub geometry: Option<signex_engine::PlacedGeometry>,
     /// The end of a selected wire or bus, in stored mm.

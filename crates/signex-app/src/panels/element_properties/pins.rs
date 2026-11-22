@@ -381,10 +381,10 @@ fn pins_table<'a>(ctx: &PanelContext, primary: Color, border_c: Color) -> Elemen
         table = table.push(if pin.hidden {
             signex_widgets::tooltip(
                 line,
-                text(signex_i18n::UserText::new(hidden_tip.clone())).size(TS.body),
+                container(text(signex_i18n::UserText::new(hidden_tip.clone())).size(TS.body))
+                    .style(crate::styles::context_menu(&ctx.tokens)),
                 iced::widget::tooltip::Position::Bottom,
             )
-            .style(crate::styles::context_menu(&ctx.tokens))
             .boxed()
         } else {
             line
