@@ -270,8 +270,12 @@ fn graphite_footer<'a>(v: &PrefsView<'a>) -> Element<'a, PrefMsg> {
             .boxed(),
         FooterNote::Nothing => Space::new().boxed(),
     };
+    // A pitch label holding refused text stays open: Save refuses it, and
+    // the plain Close of a clean dialog would drop it.
     let ok_msg = if v.dirty {
         PrefMsg::SaveAndClose
+    } else if v.pages_view.snap_label_refused(v.draft_fast_grids, v.i18n) {
+        PrefMsg::Save
     } else {
         PrefMsg::Close
     };

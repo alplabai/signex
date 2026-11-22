@@ -306,7 +306,8 @@ impl Signex {
     }
 
     /// Rename the picked union as the name is typed; the engine keeps the
-    /// keystrokes of one union as one undo step. A blank name is not sent.
+    /// keystrokes of one union as one undo step and refuses a locked union.
+    /// A blank name is not sent.
     fn rename_picked_union(&mut self, name: String) {
         let Some((sheet, id)) = self.ui_state.unions.picked.clone() else {
             return;

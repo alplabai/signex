@@ -4,11 +4,170 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use signex_types::schematic::check_format;
+use signex_types::schematic::{
+    ChildSheet, FillType, Point, SchematicSheet, SelectedItem, SelectedKind, check_format,
+};
+use uuid::Uuid;
 
 use super::state::CompiledResult;
 use super::{DESIGNATOR_PRESETS, NET_PRESETS};
-use crate::app::Signex;
+use crate::app::{Signex, TabInfo, TabKind};
+use crate::panels::compiled_design::RepeatField;
+
+const SYMBOL: Uuid = Uuid::from_u128(0xC151);
+const OTHER: Uuid = Uuid::from_u128(0xC152);
+
+fn sheet_symbol(uuid: Uuid, designator: &str, file: &str) -> ChildSheet {
+    ChildSheet {
+        uuid,
+        name: designator.to_string(),
+        filename: file.to_string(),
+        position: Point::new(20.0, 20.0),
+        size: (40.64, 43.18),
+        stroke_width: 0.0,
+        fill: FillType::None,
+        stroke_color: None,
+        fill_color: None,
+        fields_autoplaced: false,
+        pins: Vec::new(),
+        instances: Vec::new(),
+    }
+}
+
+/// An app editing one sheet that places `SYMBOL` as `designator`, and `OTHER`
+/// as `second` when given, with `SYMBOL` selected.
+fn app_editing(designator: &str, second: Option<&str>) -> Signex {
+    let path = PathBuf::from("repeat_edit.snxsch");
+    let mut sheet = SchematicSheet {
+        paper_size: "A4".to_string(),
+        ..Default::default()
+    };
+    sheet
+        .child_sheets
+        .push(sheet_symbol(SYMBOL, designator, "child.snxsch"));
+    if let Some(second) = second {
+        sheet
+            .child_sheets
+            .push(sheet_symbol(OTHER, second, "other.snxsch"));
+    }
+    let engine = signex_engine::Engine::new(sheet).expect("engine");
+    let (mut app, _task) = Signex::new();
+    app.document_state.engines.insert(path.clone(), engine);
+    app.document_state.tabs.push(TabInfo {
+        title: "repeat_edit".to_string(),
+        path: path.clone(),
+        cached_document: None,
+        project_id: None,
+        kind: TabKind::Schematic,
+    });
+    app.document_state.active_tab = 0;
+    app.document_state.active_path = Some(path);
+    app.interaction_state.active_canvas_mut().selected =
+        vec![SelectedItem::new(SYMBOL, SelectedKind::ChildSheet)];
+    app
+}
+
+fn designator(app: &Signex) -> String {
+    app.edited_sheet_symbol(SYMBOL)
+        .expect("the sheet symbol")
+        .name
+        .clone()
+}
+
+fn type_designator(app: &mut Signex, text: &str) {
+    app.document_state.panel_ctx.child_sheet_name_buf = Some((SYMBOL, text.to_string()));
+    app.commit_child_sheet_name(SYMBOL);
+}
+
+fn undo(app: &mut Signex) {
+    let engine = app.document_state.edit_engine_mut().expect("the engine");
+    engine.undo().expect("undo");
+}
+
+#[test]
+fn off_restores_the_designator_a_typed_repeat_replaced() {
+    let mut app = app_editing("buck_channel", None);
+    type_designator(&mut app, "Repeat(CH, 1, 6)");
+
+    app.toggle_repeat(SYMBOL, false);
+
+    assert_eq!(designator(&app), "buck_channel");
+}
+
+#[test]
+fn a_second_off_after_undo_restores_the_plain_designator() {
+    let mut app = app_editing("buck_channel", None);
+    app.toggle_repeat(SYMBOL, true);
+    app.toggle_repeat(SYMBOL, false);
+    undo(&mut app);
+    assert_eq!(designator(&app), "Repeat(CH, 1, 4)");
+
+    app.toggle_repeat(SYMBOL, false);
+
+    assert_eq!(designator(&app), "buck_channel");
+}
+
+#[test]
+fn off_on_a_sheet_opened_repeated_takes_the_file_stem() {
+    let mut app = app_editing("Repeat(CH, 1, 4)", None);
+
+    app.toggle_repeat(SYMBOL, false);
+
+    assert_eq!(designator(&app), "child");
+}
+
+#[test]
+fn a_clashing_to_is_refused_with_the_text_kept_and_marked() {
+    let mut app = app_editing("Repeat(CH, 1, 4)", Some("Repeat(CH, 1, 6)"));
+    app.type_repeat_field(SYMBOL, RepeatField::To, "6".to_string());
+
+    app.submit_repeat_fields(SYMBOL);
+
+    assert_eq!(designator(&app), "Repeat(CH, 1, 4)");
+    assert!(app.document_state.error_notice.is_some());
+    let rows = app.compiled_design_view().sheet_symbol.expect("the rows");
+    assert_eq!(rows.to_text, "6");
+    assert!(rows.is_to_refused);
+    assert!(!rows.is_from_refused, "From was not typed");
+}
+
+#[test]
+fn typing_again_clears_the_refused_mark() {
+    let mut app = app_editing("Repeat(CH, 1, 4)", None);
+    app.type_repeat_field(SYMBOL, RepeatField::From, "9".to_string());
+    app.submit_repeat_fields(SYMBOL);
+    let rows = app.compiled_design_view().sheet_symbol.expect("the rows");
+    assert!(rows.is_from_refused);
+
+    app.type_repeat_field(SYMBOL, RepeatField::From, "2".to_string());
+
+    let rows = app.compiled_design_view().sheet_symbol.expect("the rows");
+    assert!(!rows.is_from_refused);
+}
+
+#[test]
+fn a_bad_channel_name_does_not_mark_the_range() {
+    let mut app = app_editing("Repeat(CH, 1, 4)", None);
+    app.type_repeat_field(SYMBOL, RepeatField::Channel, String::new());
+    app.type_repeat_field(SYMBOL, RepeatField::To, "6".to_string());
+
+    app.submit_repeat_fields(SYMBOL);
+
+    let rows = app.compiled_design_view().sheet_symbol.expect("the rows");
+    assert_eq!(designator(&app), "Repeat(CH, 1, 4)");
+    assert!(!rows.is_to_refused);
+}
+
+#[test]
+fn a_written_range_clears_the_typed_text() {
+    let mut app = app_editing("Repeat(CH, 1, 4)", None);
+    app.type_repeat_field(SYMBOL, RepeatField::To, "6".to_string());
+
+    app.submit_repeat_fields(SYMBOL);
+
+    assert_eq!(designator(&app), "Repeat(CH, 1, 6)");
+    assert!(app.ui_state.compiled_design.repeat_draft.is_none());
+}
 
 #[test]
 fn every_preset_is_a_valid_custom_format() {

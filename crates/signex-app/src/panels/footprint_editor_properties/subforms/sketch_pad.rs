@@ -118,7 +118,7 @@ pub(super) fn view<'a>(
         parts.extend(side_rows(fp, pad, side, palette, tokens, i18n));
         // The copper rows sit under the first side shown.
         if index == 0 {
-            parts.extend(copper_rows(pad, tokens, i18n));
+            parts.extend(copper_rows(fp, pad, tokens, i18n));
         }
     }
     if pad.has_drill {
@@ -150,22 +150,26 @@ pub(super) fn view<'a>(
 
 /// Corner radius and thermal relief, under the pad's first side.
 fn copper_rows<'a>(
+    fp: &FootprintEditorPanelContext,
     pad: &'a SketchPadAttrSummary,
     tokens: &ThemeTokens,
     i18n: &I18n,
 ) -> Vec<Element<'a, PanelMsg>> {
     let id = pad.id;
+    let corner = Shown::corner_radius(
+        fp.numeric_buffers
+            .get(&sketch_pad_field_buffer_key(id, pad_field::CORNER_RADIUS)),
+        pad.corner_radius_pct
+            .map(|v| format!("{v:.0}"))
+            .unwrap_or_default(),
+    );
     vec![
-        field_row(
+        refusable_row(
             t!(i18n, ids::EDITORS_PAD_CORNER_RADIUS),
-            example_input(
-                "25",
-                pad.corner_radius_pct
-                    .map(|v| format!("{v:.0}"))
-                    .unwrap_or_default(),
-                move |value| PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value },
-            ),
+            corner,
+            move |value| PanelMsg::FpEditorSetSketchPadCornerRadiusPct { id, value },
             tokens,
+            i18n,
         ),
         field_row(
             UserText::new(String::new()),

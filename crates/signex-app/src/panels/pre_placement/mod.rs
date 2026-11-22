@@ -322,6 +322,7 @@ fn properties<'a>(
     if is_shape(pp.kind) {
         let (width, fill, kind) = (pp.shape_width_mm, pp.shape_fill, pp.kind);
         let numeric_draft = ctx.numeric_draft.as_ref();
+        let error = crate::styles::ti(ctx.tokens.error);
         let show_fill = !matches!(kind, PrePlacementKind::Line | PrePlacementKind::Arc);
         return ctx
             .collapsible(
@@ -336,6 +337,7 @@ fn properties<'a>(
                         super::NumericFieldKey::ShapeWidth,
                         numeric_draft,
                         palette.muted,
+                        error,
                     ));
                     if show_fill {
                         c = c.push(shape_fill_row(fill, palette.muted, palette.border, i18n));

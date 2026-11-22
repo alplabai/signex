@@ -263,6 +263,7 @@ define_ids! {
     EDITORS_FP_PAD_INVALID_NUMBER = "editors-fp-pad-invalid-number";
     EDITORS_FP_PAD_INVALID_POSITIVE = "editors-fp-pad-invalid-positive";
     EDITORS_FP_PAD_INVALID_NO_COPPER = "editors-fp-pad-invalid-no-copper";
+    EDITORS_FP_PAD_INVALID_CORNER_RADIUS = "editors-fp-pad-invalid-corner-radius";
     EDITORS_FP_PAD_CALLOUT_TITLE = "editors-fp-pad-callout-title";
     EDITORS_FP_PAD_CALLOUT_SIZE_X = "editors-fp-pad-callout-size-x";
     EDITORS_FP_PAD_CALLOUT_SIZE_Y = "editors-fp-pad-callout-size-y";

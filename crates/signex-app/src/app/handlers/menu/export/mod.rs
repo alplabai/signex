@@ -14,6 +14,7 @@ mod current_page_tests;
 mod erc_report;
 mod loose_bom;
 mod omitted;
+pub(crate) mod page_list;
 mod page_setup;
 mod pdf_netlist;
 pub(crate) mod placements;

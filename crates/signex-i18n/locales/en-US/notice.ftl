@@ -241,7 +241,7 @@ notice-bom-issues = Wrote { $path } with { $summary }.{ $issues }
 notice-bom-issues-more =
     Wrote { $path } with { $summary }.{ $issues }
     { "..." } and { $more } more
-notice-export-page-invalid = Specific page must be a positive page number (1, 2, 3, ...).
+notice-export-page-invalid = Pages must be page numbers or ranges from 1 up, such as 1-2, 4.
 notice-export-no-files = Select at least one file in the Settings tab before exporting.
 notice-bom-no-sheet = Cannot build BOM: no active schematic.
 # $path is the source document.

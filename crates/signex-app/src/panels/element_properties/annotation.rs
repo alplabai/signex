@@ -12,7 +12,7 @@ use signex_widgets::dropdown_style::GraphiteDropdown as _;
 use signex_widgets::{Label, button, checkbox, text, text_input};
 
 use super::super::{PROPERTY_LABEL_COLUMN, PanelContext, PanelMsg, form_look};
-use crate::app::sch_tables::{AnnotationEdit, Axis};
+use crate::app::sch_tables::{AnnotationEdit, Axis, table_padding_holds, table_text_size_holds};
 use crate::choice::Choice;
 use crate::styles::tokens::resolve;
 use crate::styles::{Spacing, TypeScale, ti};
@@ -54,6 +54,16 @@ impl AnnotationField {
             Self::TableTextSize => AnnotationEdit::TableTextSize(number()?),
             Self::TableCellPadding => AnnotationEdit::TableCellPadding(number()?),
         })
+    }
+
+    /// Whether a table style box holds text the table refuses (#2792).
+    fn refuses(self, text: &str) -> bool {
+        let number = signex_types::numeric::parse_finite_f64(text).ok();
+        match self {
+            Self::TableTextSize => !number.is_some_and(table_text_size_holds),
+            Self::TableCellPadding => !number.is_some_and(table_padding_holds),
+            Self::BezierPoint(..) | Self::DimensionPoint(..) | Self::OverrideText => false,
+        }
     }
 }
 
@@ -217,16 +227,21 @@ impl<'a> Rows<'a> {
 
     /// A box showing `value` or its draft; typing applies once it parses.
     pub fn input(&self, field: AnnotationField, value: String) -> Element<'a, PanelMsg> {
-        let shown = match &self.ctx.annotation.draft {
-            Some((id, f, draft)) if *id == self.id && *f == field => draft.clone(),
-            _ => value,
+        let draft = match &self.ctx.annotation.draft {
+            Some((id, f, draft)) if *id == self.id && *f == field => Some(draft.clone()),
+            _ => None,
         };
+        let error = draft
+            .as_deref()
+            .filter(|typed| field.refuses(typed))
+            .map(|_| ti(self.ctx.tokens.error));
+        let shown = draft.unwrap_or(value);
         text_input(signex_i18n::UserText::new(String::new()), shown)
             .size(TS.body)
             .padding([SP.xs, SP.s])
             .on_input(move |s| msg(AnnotationPanelMsg::FieldTyped(field, s)))
             .on_submit(msg(AnnotationPanelMsg::FieldSubmitted(field)))
-            .style(form_look::text_input_style)
+            .style(form_look::refusable_input_style(error))
             .width(Length::Fill)
             .boxed()
     }

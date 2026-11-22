@@ -244,6 +244,12 @@ impl PcbSelectionState {
         }
     }
 
+    /// Hold exactly `selection`, with no view filter: Replay's recorded
+    /// targets, and the selection it puts back afterwards.
+    pub fn put_selection(&mut self, selection: Selection) {
+        self.selection = selection;
+    }
+
     /// Select All (#2361): every footprint, track, via and drawn area the view
     /// lets be picked. A pad comes with its footprint and is selected alone only
     /// when its footprint's body cannot be picked. Whether the selection

@@ -218,8 +218,15 @@ impl Signex {
         args: CommandArgs,
         window: Option<iced::window::Id>,
     ) -> (CommandOutcome, Task<Message>) {
-        let operands = crate::app::handlers::command_log::operands_of(&args);
-        self.logged_command(command, operands, window, |app| {
+        let mut operands = crate::app::handlers::command_log::operands_of(&args);
+        let targets = self.command_targets(command, args.has_operands(), window);
+        if let Some(targets) = &targets {
+            operands.insert(
+                crate::app::core::command_log::RECORDED_TARGETS.to_string(),
+                targets.to_operand(),
+            );
+        }
+        self.logged_command_on(command, operands, targets, window, |app| {
             app.dispatch_command_unlogged(command, args, window)
         })
     }

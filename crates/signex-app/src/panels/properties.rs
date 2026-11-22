@@ -61,7 +61,7 @@ impl DrawingFieldId {
     /// Whether the box shows `text` as invalid: not a value it can store and
     /// not the start of one (empty, a lone `-`).
     pub fn refuses(self, text: &str) -> bool {
-        !matches!(text.trim(), "" | "-") && !self.reads(text)
+        crate::numeric_field::text_refused(text, self.reads(text))
     }
 }
 

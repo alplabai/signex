@@ -70,21 +70,24 @@ fn custom_size_row<'a>(ctx: &'a PanelContext) -> Element<'a, PanelMsg> {
     let i18n = &ctx.i18n;
     let hover = &ctx.document_options.hover;
     let (w, h) = paper_dimensions(&ctx.paper_size);
-    let shown = |edge: PaperEdge, value: f32| {
+    let typed = |edge: PaperEdge| {
         ctx.title_block_sheet
             .as_deref()
             .and_then(|sheet| ctx.drafts.paper_edge_text(sheet, edge))
-            .unwrap_or_else(|| format!("{value:.1}"))
     };
     let field = |edge: PaperEdge, axis, value: f32| {
+        let draft = typed(edge);
+        let refused = draft.as_deref().is_some_and(|text| {
+            crate::numeric_field::text_refused(text, crate::panels::typed_mm(text).is_some())
+        });
         axis_field(
             t!(i18n, axis),
-            shown(edge, value),
+            draft.unwrap_or_else(|| format!("{value:.1}")),
             Some(t!(i18n, ids::PROPERTIES_UNIT_MM).into()),
             &ctx.tokens,
             move |s| PanelMsg::CustomPaperEdgeTyping(edge, s),
             PanelMsg::CommitCustomPaperEdge(edge),
-            false,
+            refused,
         )
     };
     let width = hover_row(

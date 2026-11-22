@@ -3,6 +3,7 @@
 use iced::Task;
 use signex_output::{PageRange, PageSize, PdfOptions, PreviewOptions};
 
+use super::page_list::parse_page_list;
 use super::raster_job::PreviewRasterJob;
 use crate::app::state::RasterSource;
 
@@ -200,10 +201,18 @@ impl Signex {
 
     pub(crate) fn handle_print_preview_set_page_range_specific(&mut self) -> Task<Message> {
         if let Some(preview) = self.document_state.preview.as_mut() {
-            preview.pdf_options.page_range = PageRange::Specific(vec![1]);
             if preview.specific_page_input.trim().is_empty() {
                 preview.specific_page_input = "1".to_string();
             }
+            // The preview shows what the box names, as Export prints it. Text
+            // the box refuses stays there, marked; Export refuses it.
+            let pages = parse_page_list(&preview.specific_page_input).unwrap_or_else(|| {
+                match &preview.pdf_options.page_range {
+                    PageRange::Specific(kept) => kept.clone(),
+                    _ => vec![1],
+                }
+            });
+            preview.pdf_options.page_range = PageRange::Specific(pages);
         }
         self.rerasterize_print_preview()
     }
@@ -212,14 +221,15 @@ impl Signex {
         &mut self,
         value: String,
     ) -> Task<Message> {
-        let parsed_page = value.trim().parse::<usize>().ok();
+        let pages = parse_page_list(&value);
+        let reads = pages.is_some();
         if let Some(preview) = self.document_state.preview.as_mut() {
             preview.specific_page_input = value;
-            if let Some(page) = parsed_page.filter(|p| *p > 0) {
-                preview.pdf_options.page_range = PageRange::Specific(vec![page]);
+            if let Some(pages) = pages {
+                preview.pdf_options.page_range = PageRange::Specific(pages);
             }
         }
-        if parsed_page.map(|p| p > 0).unwrap_or(false) {
+        if reads {
             self.rerasterize_print_preview()
         } else {
             Task::none()
@@ -256,15 +266,11 @@ impl Signex {
                 // The watermark and the PDF layers only while switched on.
                 let mut options = preview.output_options();
                 if matches!(options.page_range, PageRange::Specific(_)) {
-                    let parsed = preview.specific_page_input.trim().parse::<usize>().ok();
-                    let page = match parsed {
-                        Some(p) if p > 0 => p,
-                        _ => {
-                            self.refuse_export(signex_i18n::ids::NOTICE_EXPORT_PAGE_INVALID);
-                            return Some(Task::none());
-                        }
+                    let Some(pages) = parse_page_list(&preview.specific_page_input) else {
+                        self.refuse_export(signex_i18n::ids::NOTICE_EXPORT_PAGE_INVALID);
+                        return Some(Task::none());
                     };
-                    options.page_range = PageRange::Specific(vec![page]);
+                    options.page_range = PageRange::Specific(pages);
                 }
                 if preview.selected_files.is_empty() {
                     self.refuse_export(signex_i18n::ids::NOTICE_EXPORT_NO_FILES);

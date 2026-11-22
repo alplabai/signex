@@ -190,20 +190,25 @@ impl Signex {
     }
 
     /// Write the active sheet's custom width/height draft as one undoable
-    /// `SetPaperSize`. Text that is not a number keeps the current edge.
+    /// `SetPaperSize`. Refused text changes nothing and stays in the box
+    /// (#2792); an empty box or a lone `-` shows the stored edge again.
     pub(crate) fn commit_custom_paper_edge(&mut self, edge: crate::panels::PaperEdge) {
         let Some(sheet) = self.document_state.active_path.clone() else {
             return;
         };
-        let Some(draft) = self.document_state.drafts.take_paper_edge(&sheet, edge) else {
+        let Some(text) = self.document_state.drafts.paper_edge_text(&sheet, edge) else {
             return;
         };
-        let (w, h) = crate::panels::paper_dimensions(&self.document_state.panel_ctx.paper_size);
-        let current = match edge {
-            crate::panels::PaperEdge::Width => w,
-            crate::panels::PaperEdge::Height => h,
+        // `parse_field_f64` reports a `nan` / `inf` to Messages.
+        let typed =
+            crate::numeric_field::parse_field_f64(&text).and(crate::panels::typed_mm(&text));
+        if crate::numeric_field::text_refused(&text, typed.is_some()) {
+            return;
+        }
+        let _ = self.document_state.drafts.take_paper_edge(&sheet, edge);
+        let Some(mm) = typed else {
+            return;
         };
-        let mm = f64::from(crate::panels::typed_mm(&draft.text, current));
         let (width, height) = match edge {
             crate::panels::PaperEdge::Width => (Some(mm), None),
             crate::panels::PaperEdge::Height => (None, Some(mm)),
@@ -439,8 +444,10 @@ impl Signex {
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementShapeWidth(w) => {
-                if let Some(pp) = &mut self.document_state.panel_ctx.pre_placement {
-                    pp.shape_width_mm = (*w).max(0.0);
+                if crate::panels::NumericFieldKey::ShapeWidth.accepts(*w)
+                    && let Some(pp) = &mut self.document_state.panel_ctx.pre_placement
+                {
+                    pp.shape_width_mm = *w;
                 }
             }
             crate::panels::PanelMsg::SetPrePlacementWireWidth(preset) => {
@@ -499,16 +506,19 @@ impl Signex {
                     crate::panels::WireColorPicker::Closed;
             }
             crate::panels::PanelMsg::NumericFieldTyped(key, text) => {
-                // Text that is mid-edit (`-`, `1.`, empty) or refused leaves
-                // the stored value alone; the draft keeps what was typed.
-                if let Some(value) = crate::numeric_field::parse_field_f64(text) {
+                // Text that is mid-edit (`-`, `1.`, empty) or that the field
+                // refuses leaves the stored value alone; the draft keeps
+                // what was typed.
+                if let Some(value) =
+                    crate::numeric_field::parse_field_f64(text).filter(|v| key.accepts(*v))
+                {
                     follow = self.update(Message::Dock(crate::dock::DockMessage::Panel(
                         key.committing(value),
                     )));
                 }
                 // The draft is bound after the commit, to the value the
-                // model holds now: a clamped setter (pin length `max(0.1)`,
-                // arc angle wrap) must not read as an outside change.
+                // model holds now: a setter's arc angle wrap must not read
+                // as an outside change.
                 self.document_state.panel_ctx.numeric_draft =
                     self.numeric_field_state(*key).map(|(owner, applied)| {
                         crate::panels::NumericDraft {
@@ -520,13 +530,14 @@ impl Signex {
                     });
             }
             crate::panels::PanelMsg::NumericFieldSubmitted(key) => {
-                let owns_draft = self
+                // Refused text stays in the box, marked, to be fixed.
+                let ends_draft = self
                     .document_state
                     .panel_ctx
                     .numeric_draft
                     .as_ref()
-                    .is_some_and(|d| d.key == *key);
-                if owns_draft {
+                    .is_some_and(|d| d.key == *key && !key.refuses(&d.text));
+                if ends_draft {
                     self.document_state.panel_ctx.numeric_draft = None;
                 }
             }

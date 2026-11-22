@@ -6,7 +6,7 @@
 //!
 //!   * the field was emptied      — "clear this value"
 //!   * the text is not a number   — "I am mid-edit / I mistyped"
-//!   * the number is out of range — "I meant a value near the limit"
+//!   * the number is out of range — a value the field cannot store
 //!
 //! That single `None` was then written straight over whatever was
 //! stored, so a pad at 25 % corner radius edited to `60` lost the 25.
@@ -16,14 +16,14 @@
 //! clearing it drops the key from the saved `.snxfpt` outright — the
 //! value no longer survives a shape switch and back.
 //!
-//! These helpers keep the three intentions apart and report the two the
-//! user did not ask for.
+//! These helpers keep the three intentions apart. Only an emptied field
+//! writes; the other two are refused and reported (#2792).
 
-/// Bounds of the pad corner-radius percentage field. The radius is a
-/// fraction of the pad's short side, so 50 % is a fully rounded end and
-/// nothing above it is expressible.
-pub(super) const CORNER_RADIUS_PCT_MIN: f64 = 0.0;
-pub(super) const CORNER_RADIUS_PCT_MAX: f64 = 50.0;
+use crate::library::editor::footprint::pad_field::CORNER_RADIUS_PCT;
+
+/// Bounds of the pad corner-radius percentage field.
+pub(super) const CORNER_RADIUS_PCT_MIN: f64 = *CORNER_RADIUS_PCT.start();
+pub(super) const CORNER_RADIUS_PCT_MAX: f64 = *CORNER_RADIUS_PCT.end();
 
 /// What the user's text actually asked for.
 pub(super) enum OptionalNumberEdit {
@@ -31,9 +31,9 @@ pub(super) enum OptionalNumberEdit {
     Cleared,
     /// A usable, finite number.
     Accepted(f64),
-    /// A finite number outside the field's range, pulled to the nearest
-    /// bound. The user's intent is kept rather than erased.
-    Clamped { stored: f64, typed: f64 },
+    /// A finite number outside the field's range. Refused: the stored value
+    /// stays and the box keeps the text.
+    OutOfRange { typed: f64 },
     /// Not a number at all — `1,5` from a comma-decimal keyboard,
     /// `1.5mm` with the unit spelled out, a lone `-`, or `inf`. The
     /// stored value has to survive it.
@@ -56,14 +56,11 @@ pub(super) fn fp_parse_optional_number(value: &str) -> OptionalNumberEdit {
 }
 
 /// Read a range-limited optional-number field (`corner_radius_pct`).
-/// Out-of-range clamps to the nearest bound instead of clearing.
+/// Out of range is refused, neither clamped nor cleared.
 pub(super) fn fp_parse_optional_number_in(value: &str, min: f64, max: f64) -> OptionalNumberEdit {
     match fp_parse_optional_number(value) {
         OptionalNumberEdit::Accepted(typed) if !(min..=max).contains(&typed) => {
-            OptionalNumberEdit::Clamped {
-                stored: typed.clamp(min, max),
-                typed,
-            }
+            OptionalNumberEdit::OutOfRange { typed }
         }
         other => other,
     }
@@ -72,15 +69,13 @@ pub(super) fn fp_parse_optional_number_in(value: &str, min: f64, max: f64) -> Op
 /// Resolve a parsed edit into what to store, reporting anything the
 /// user asked for and did not get.
 ///
-/// `None` means **do not write**: the text is not a number, so the
-/// caller must leave the stored value alone. `Some(slot)` is the new
-/// contents of the `Option<f64>`.
+/// `None` means **do not write**: the text is refused, so the caller must
+/// leave the stored value alone. `Some(slot)` is the new contents of the
+/// `Option<f64>`.
 ///
-/// Levels follow the two outcomes: a clamp is a degraded path that
-/// still stored something (`warn!`), a refused edit withheld the user's
-/// change outright (`error!`). Neither may be `debug!` — the default
-/// filter is `LevelFilter::Info` (`crate::diagnostics`), so a `debug!`
-/// record never reaches the Messages panel.
+/// A refusal is logged at `error!`, never `debug!`: the default filter is
+/// `LevelFilter::Info` (`crate::diagnostics`), so a `debug!` record never
+/// reaches the Messages panel.
 pub(super) fn fp_resolve_optional_number(
     field: &'static str,
     value: &str,
@@ -89,15 +84,14 @@ pub(super) fn fp_resolve_optional_number(
     match edit {
         OptionalNumberEdit::Cleared => Some(None),
         OptionalNumberEdit::Accepted(number) => Some(Some(number)),
-        OptionalNumberEdit::Clamped { stored, typed } => {
-            tracing::warn!(
+        OptionalNumberEdit::OutOfRange { typed } => {
+            tracing::error!(
                 target: "signex::footprint_pad",
                 field = field,
                 typed = typed,
-                stored = stored,
-                "pad field is outside its allowed range; the nearest allowed value was stored"
+                "pad field is outside its allowed range; the edit was refused and the stored value kept"
             );
-            Some(Some(stored))
+            None
         }
         OptionalNumberEdit::Unreadable => {
             tracing::error!(
@@ -133,18 +127,26 @@ mod tests {
     }
 
     // #599 — `60` used to erase the stored 25 and drop the key from the
-    // saved `.snxfpt`. It must land on the nearest expressible value.
+    // saved `.snxfpt`. #2792: it is refused, so the 25 stays.
     #[test]
     fn out_of_range_number_clamps_instead_of_clearing() {
         let edit = fp_parse_optional_number_in("60", CORNER_RADIUS_PCT_MIN, CORNER_RADIUS_PCT_MAX);
         assert!(matches!(
             edit,
-            OptionalNumberEdit::Clamped {
-                stored: 50.0,
-                typed: 60.0
-            }
+            OptionalNumberEdit::OutOfRange { typed: 60.0 }
         ));
-        assert_eq!(resolve("Corner radius %", "60", edit), Some(Some(50.0)));
+        assert_eq!(resolve("Corner radius %", "60", edit), None);
+    }
+
+    #[test]
+    fn both_ends_of_the_range_are_stored() {
+        for (text, want) in [("0", 0.0), ("50", 50.0)] {
+            let edit =
+                fp_parse_optional_number_in(text, CORNER_RADIUS_PCT_MIN, CORNER_RADIUS_PCT_MAX);
+            assert_eq!(resolve("Corner radius %", text, edit), Some(Some(want)));
+        }
+        let below = fp_parse_optional_number_in("-1", CORNER_RADIUS_PCT_MIN, CORNER_RADIUS_PCT_MAX);
+        assert_eq!(resolve("Corner radius %", "-1", below), None);
     }
 
     // #599 — the comma-decimal keyboard case. Refusing the write is the

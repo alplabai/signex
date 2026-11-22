@@ -7,7 +7,7 @@ use std::path::Path;
 use signex_types::schematic::{ChannelRepeat, SelectedKind, check_format, repeated_entry_name};
 
 use super::repeat_edit::default_repeat;
-use super::state::CompiledResult;
+use super::state::{CompiledResult, RepeatDraft};
 use crate::app::Signex;
 use crate::panels::compiled_design::{
     ChannelStripView, ChannelTabView, CompiledDesignView, CompiledNetRow, CompiledPanelView,
@@ -117,6 +117,8 @@ impl Signex {
             channel_text: field(RepeatField::Channel, shown.channel.clone()),
             from_text: field(RepeatField::From, shown.from.to_string()),
             to_text: field(RepeatField::To, shown.to.to_string()),
+            is_from_refused: is_range_field_refused(draft, RepeatField::From),
+            is_to_refused: is_range_field_refused(draft, RepeatField::To),
             naming: self.channel_naming(),
             menu,
             entries: cs
@@ -200,6 +202,18 @@ impl Signex {
         rows.dedup_by(|a, b| a.0 == b.0);
         rows
     }
+}
+
+/// Did Enter refuse the From or To text in `field`? A bad channel name is
+/// not the range's fault, so it marks neither.
+fn is_range_field_refused(draft: Option<&RepeatDraft>, field: RepeatField) -> bool {
+    draft.is_some_and(|d| {
+        let channel_reads = d
+            .fields
+            .get(&RepeatField::Channel)
+            .is_none_or(|name| ChannelRepeat::parse(&format!("Repeat({name}, 1, 1)")).is_some());
+        d.refused && channel_reads && d.fields.contains_key(&field)
+    })
 }
 
 /// The tree rows the search keeps; channels of a folded repeated row are

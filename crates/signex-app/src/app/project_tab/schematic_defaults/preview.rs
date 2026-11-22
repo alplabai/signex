@@ -3,8 +3,6 @@
 //! beside its item. A pure `canvas::Program`: nothing on the drawing is
 //! editable and it has no handles.
 
-use std::collections::HashMap;
-
 use iced::advanced::text::Alignment as TextAlign;
 use iced::alignment::Vertical;
 use iced::widget::canvas::{self, Frame, LineDash, Path, Stroke};
@@ -16,7 +14,7 @@ use signex_types::schematic::{FillType, SchematicDefaults};
 use signex_types::theme::{CanvasColors, ThemeTokens};
 
 use super::super::table::TS;
-use super::{clamp_note, shown_number};
+use super::shown_number;
 use crate::styles::{HAIRLINE, ti, tokens as ink};
 
 /// Height of the preview (about 210 px), in `body` units.
@@ -55,8 +53,6 @@ pub(in crate::app::project_tab) enum LabelLook {
     Set,
     /// The field is empty: the built-in value, grey italic.
     BuiltIn,
-    /// The typed number was clamped: the value used and the typed one.
-    Clamped,
 }
 
 /// The words beside one item of the drawing.
@@ -84,7 +80,6 @@ pub(super) struct PreviewInk {
     net_label: Color,
     label: Color,
     built_in: Color,
-    clamped: Color,
 }
 
 impl PreviewInk {
@@ -103,7 +98,6 @@ impl PreviewInk {
             net_label: ti(canvas.net_label),
             label: ti(tokens.text_secondary),
             built_in: ink::resolve(tokens).ink4,
-            clamped: ti(tokens.warning),
         }
     }
 }
@@ -133,10 +127,9 @@ fn item_words(field: SchematicDefaultField) -> MessageId {
 }
 
 /// One label per numeric field: the value in effect, grey while the field
-/// is empty, the used and typed numbers when the typed one was clamped.
+/// is empty. A refused draft changes nothing, so it does not show here.
 pub(in crate::app::project_tab) fn value_labels(
     overrides: &SchematicDefaultOverrides,
-    drafts: Option<&HashMap<SchematicDefaultField, String>>,
     i18n: &I18n,
 ) -> Vec<ValueLabel> {
     let resolved = overrides.resolve();
@@ -145,21 +138,6 @@ pub(in crate::app::project_tab) fn value_labels(
         .map(|field| {
             let value = shown_number(field.resolved(&resolved));
             let words = t!(i18n, item_words(field), "value" => value).into_string();
-            let draft = drafts.and_then(|drafts| drafts.get(&field));
-            if clamp_note(field, draft).is_some() {
-                let typed = draft.map_or("", |text| text.trim()).to_string();
-                return ValueLabel {
-                    field,
-                    words: t!(
-                        i18n,
-                        ids::PROJECT_DEFAULTS_PREVIEW_CLAMPED,
-                        "label" => words,
-                        "typed" => typed,
-                    )
-                    .into_string(),
-                    look: LabelLook::Clamped,
-                };
-            }
             let look = if overrides.get(field).is_some() {
                 LabelLook::Set
             } else {
@@ -445,7 +423,6 @@ impl Preview {
                         ..self.label_font
                     },
                 ),
-                LabelLook::Clamped => (self.ink.clamped, self.label_font),
             };
             pen.words(label.words.clone(), at, LABEL_PX, color, font, align);
         }

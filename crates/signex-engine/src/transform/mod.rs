@@ -8,6 +8,19 @@ use crate::command::MirrorAxis;
 use super::Engine;
 
 impl Engine {
+    /// Whether `item` is on this sheet. A symbol's reference or value field
+    /// is there while its symbol is.
+    pub fn holds_selected_item(&self, item: &SelectedItem) -> bool {
+        match item.kind {
+            SelectedKind::SymbolRefField | SelectedKind::SymbolValField => self
+                .document
+                .symbols
+                .iter()
+                .any(|symbol| symbol.uuid == item.uuid),
+            _ => self.contains_selected_item(item),
+        }
+    }
+
     pub(crate) fn contains_selected_item(&self, item: &SelectedItem) -> bool {
         if let Some(found) = self.contains_selected_sheet_item(item) {
             return found;

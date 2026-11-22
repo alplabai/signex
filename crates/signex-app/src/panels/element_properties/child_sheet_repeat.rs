@@ -233,6 +233,7 @@ fn field<'a>(
     view: &SheetSymbolRepeatView,
     which: RepeatField,
     value: &str,
+    refused_ink: Option<iced::Color>,
 ) -> Element<'a, PanelMsg> {
     let id = view.sheet_symbol;
     text_input(UserText::new(String::new()), value.to_string())
@@ -249,7 +250,7 @@ fn field<'a>(
         .on_submit(msg(CompiledDesignMsg::RepeatFieldSubmitted {
             sheet_symbol: id,
         }))
-        .style(super::super::form_look::text_input_style)
+        .style(super::super::form_look::refusable_input_style(refused_ink))
         .boxed()
 }
 
@@ -281,18 +282,29 @@ pub(super) fn sections<'a>(
     ))
     .size(TS.caption)
     .color(resolve(&ctx.tokens).ink3);
+    let error = ti(ctx.tokens.error);
     let repeat_rows = column![
         form_row(
             ctx,
             t!(i18n, ids::PROPERTIES_SHEET_SYMBOL_CHANNEL_NAME),
-            field(view, RepeatField::Channel, &view.channel_text),
+            field(view, RepeatField::Channel, &view.channel_text, None),
         ),
         form_row(
             ctx,
             t!(i18n, ids::PROPERTIES_SHEET_SYMBOL_FROM_TO),
             row![
-                field(view, RepeatField::From, &view.from_text),
-                field(view, RepeatField::To, &view.to_text),
+                field(
+                    view,
+                    RepeatField::From,
+                    &view.from_text,
+                    view.is_from_refused.then_some(error),
+                ),
+                field(
+                    view,
+                    RepeatField::To,
+                    &view.to_text,
+                    view.is_to_refused.then_some(error),
+                ),
             ]
             .spacing(SP.s)
             .boxed(),

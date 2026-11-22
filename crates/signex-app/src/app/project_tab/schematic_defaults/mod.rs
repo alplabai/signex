@@ -12,6 +12,7 @@ mod view;
 pub(super) use preview::{LabelLook, value_labels};
 pub(super) use view::view;
 
+use signex_types::numeric::{FiniteParseError, parse_finite_f64};
 use signex_types::project::{SchematicDefaultField, SchematicDefaultOverrides};
 
 /// What a field's typed text does to its stored default.
@@ -19,11 +20,10 @@ use signex_types::project::{SchematicDefaultField, SchematicDefaultOverrides};
 pub(super) enum DefaultInput {
     /// Empty text: clear the override, the built-in value applies.
     Clear,
-    /// A number above zero, clamped into the field's range.
+    /// A number inside the field's range.
     Set(f64),
-    /// Mid-edit, not a number, not above zero, or outside the range of a
-    /// field that refuses it: keep the draft text and change nothing (the
-    /// house rule in `numeric_field`).
+    /// Mid-edit, not a number, or outside the field's range: keep the draft
+    /// text and change nothing (the house rule in `numeric_field`).
     Keep,
 }
 
@@ -33,50 +33,24 @@ pub(super) fn parse_override(field: SchematicDefaultField, text: &str) -> Defaul
         return DefaultInput::Clear;
     }
     match crate::numeric_field::parse_field_f64(text) {
-        Some(v) if v > 0.0 && (field.range().contains(&v) || !field.refuses_out_of_range()) => {
-            DefaultInput::Set(field.clamped(v))
-        }
+        Some(v) if field.range().contains(&v) => DefaultInput::Set(v),
         _ => DefaultInput::Keep,
     }
 }
 
-/// A typed number that was clamped: the field's range and the value stored
-/// instead. The view words it.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) struct ClampNote {
-    pub min: f64,
-    pub max: f64,
-    pub used: f64,
-}
-
-/// The note under a field whose typed number was clamped. `None` when the
-/// typed text is in range, empty or not a usable number.
-pub(super) fn clamp_note(
-    field: SchematicDefaultField,
-    draft: Option<&String>,
-) -> Option<ClampNote> {
-    let typed = crate::numeric_field::parse_field_f64(draft?)?;
-    let DefaultInput::Set(used) = parse_override(field, draft?) else {
-        return None;
-    };
-    let range = field.range();
-    (typed != used).then_some(ClampNote {
-        min: *range.start(),
-        max: *range.end(),
-        used,
-    })
-}
-
-/// The range a typed number was refused for, on a field that refuses rather
-/// than clamps. `None` when the text is in range, empty or not a number.
+/// The range a typed number was refused for. `None` when the text is in
+/// range, empty or not a number. Silent: the view asks it every frame.
 pub(super) fn refused_range(
     field: SchematicDefaultField,
     draft: Option<&String>,
 ) -> Option<(f64, f64)> {
-    let typed = crate::numeric_field::parse_field_f64(draft?)?;
     let range = field.range();
-    (field.refuses_out_of_range() && typed.is_finite() && !range.contains(&typed))
-        .then_some((*range.start(), *range.end()))
+    let outside = match parse_finite_f64(draft?) {
+        Ok(typed) => !range.contains(&typed),
+        Err(FiniteParseError::NonFinite(_)) => true,
+        Err(FiniteParseError::NotANumber(_)) => false,
+    };
+    outside.then_some((*range.start(), *range.end()))
 }
 
 /// How a numeric field box looks.
@@ -86,8 +60,8 @@ pub(super) enum FieldState {
     BuiltIn,
     /// A stored override: accent border and a reset button.
     Edited,
-    /// The typed text is not a usable number, or it was clamped: err
-    /// border, err-soft fill and a warning icon, plus the reset button.
+    /// The typed text is refused: err border, err-soft fill and a warning
+    /// icon, plus the reset button.
     Invalid,
 }
 
@@ -98,11 +72,10 @@ pub(super) fn field_state(
     stored: Option<f64>,
 ) -> FieldState {
     let typed = draft.filter(|text| !text.trim().is_empty());
-    if let Some(text) = typed {
-        let unusable = parse_override(field, text) == DefaultInput::Keep;
-        if unusable || clamp_note(field, Some(text)).is_some() {
-            return FieldState::Invalid;
-        }
+    if let Some(text) = typed
+        && parse_override(field, text) == DefaultInput::Keep
+    {
+        return FieldState::Invalid;
     }
     if stored.is_some() {
         FieldState::Edited

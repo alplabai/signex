@@ -21,6 +21,19 @@ pub(super) fn finite_or_refuse(value: f64, what: &str) -> bool {
     false
 }
 
+/// [`finite_or_refuse`], then the field's own rule (#2792): a value it cannot
+/// store is reported and the edit dropped, never pulled to a bound.
+fn storable_or_refuse(key: crate::panels::NumericFieldKey, value: f64, what: &str) -> bool {
+    if !finite_or_refuse(value, what) {
+        return false;
+    }
+    let accepted = key.accepts(value);
+    if !accepted {
+        crate::diagnostics::log_warning(format!("{what} edit refused: {value} is out of range"));
+    }
+    accepted
+}
+
 impl Signex {
     /// Resolve the active `.snxsym` tab → its containing `.snxlib`,
     /// run `mutator` on the library's display settings, then clear
@@ -380,15 +393,11 @@ impl Signex {
     }
 
     pub(super) fn sym_editor_set_pin_length(&mut self, pin_idx: usize, value: f64) -> bool {
-        if !finite_or_refuse(value, "Pin length") {
+        let key = crate::panels::NumericFieldKey::PinLength(pin_idx);
+        if !storable_or_refuse(key, value, "Pin length") {
             return true;
         }
-        // Clamp to a sane minimum so a user dragging through 0
-        // doesn't produce a degenerate stub. 0.1 mm matches the
-        // smallest grid step Altium allows for pins.
-        self.sym_editor_mutate_pin(pin_idx, Some("pin_length"), |pin| {
-            pin.length = value.max(0.1)
-        })
+        self.sym_editor_mutate_pin(pin_idx, Some("pin_length"), |pin| pin.length = value)
     }
 
     pub(super) fn sym_editor_set_graphic_field(
@@ -397,7 +406,8 @@ impl Signex {
         field: crate::panels::GraphicFieldId,
         value: f64,
     ) -> bool {
-        if !finite_or_refuse(value, "Graphic field") {
+        let key = crate::panels::NumericFieldKey::Graphic { idx, field };
+        if !storable_or_refuse(key, value, "Graphic field") {
             return true;
         }
         self.sym_editor_mutate_graphic(idx, Some(("graphic_field", field as u128)), |g| {

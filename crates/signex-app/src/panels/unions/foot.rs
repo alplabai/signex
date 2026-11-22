@@ -65,7 +65,7 @@ fn members<'a>(ctx: &'a PanelContext, foot: &'a UnionFoot) -> Element<'a, PanelM
     let r = resolve(tokens);
     let name = row![
         text_input(UserText::new(String::new()), &foot.name)
-            .on_input(|s| um(UnionsMsg::RenameEdited(s)))
+            .on_input_maybe((!foot.locked).then_some(|s: String| um(UnionsMsg::RenameEdited(s))))
             .size(TS.body)
             .width(Length::Fill),
         text(t!(ctx.i18n, ids::UNIONS_FOOT_MEMBERS, "count" => foot.members as i64))

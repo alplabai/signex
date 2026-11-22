@@ -196,8 +196,8 @@ define_ids! {
     PROJECT_DEFAULTS_FILL_OUTLINE = "project-defaults-fill-outline";
     PROJECT_DEFAULTS_FILL_BACKGROUND = "project-defaults-fill-background";
     PROJECT_DEFAULTS_RESET = "project-defaults-reset";
-    PROJECT_DEFAULTS_CLAMPED = "project-defaults-clamped";
     PROJECT_DEFAULTS_REFUSED = "project-defaults-refused";
+    PROJECT_DEFAULTS_REFUSED_PT = "project-defaults-refused-pt";
     PROJECT_DEFAULTS_CAPTION = "project-defaults-caption";
     PROJECT_DEFAULTS_PREVIEW = "project-defaults-preview";
     PROJECT_DEFAULTS_PREVIEW_CAPTION = "project-defaults-preview-caption";
@@ -207,5 +207,4 @@ define_ids! {
     PROJECT_DEFAULTS_PREVIEW_STROKE = "project-defaults-preview-stroke";
     PROJECT_DEFAULTS_PREVIEW_TEXT = "project-defaults-preview-text";
     PROJECT_DEFAULTS_PREVIEW_JUNCTION = "project-defaults-preview-junction";
-    PROJECT_DEFAULTS_PREVIEW_CLAMPED = "project-defaults-preview-clamped";
 }
