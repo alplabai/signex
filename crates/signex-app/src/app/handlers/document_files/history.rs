@@ -65,7 +65,10 @@ impl Signex {
             return Task::none();
         }
         // Rewriting a file that is being renamed or deleted would recreate it.
-        if let Err(refusal) = self.refuse_while_path_op(&full_path, "restored") {
+        if let Err(refusal) = self
+            .refuse_while_path_op(&full_path, "restored")
+            .and_then(|()| self.refuse_during_branch_switch(&full_path))
+        {
             self.report_restore_failure(refusal.to_string());
             return Task::none();
         }
@@ -209,6 +212,7 @@ impl Signex {
     /// the write would race the restore's rewrite and re-read, and the
     /// loser's bytes would be installed or committed as the other's.
     pub(crate) fn refuse_save_while_restoring(&self, path: &std::path::Path) -> anyhow::Result<()> {
+        self.refuse_during_branch_switch(path)?;
         if !self.document_state.pending_restores.contains(path) {
             return Ok(());
         }

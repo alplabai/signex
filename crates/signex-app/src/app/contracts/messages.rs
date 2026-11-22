@@ -373,6 +373,12 @@ pub enum UiMsg {
         path: std::path::PathBuf,
         result: Result<crate::panels::history::HistoryLoad, String>,
     },
+    /// A History panel repository job finished. `window` as for
+    /// [`UiMsg::HistoryLoaded`]; branch and tag writes report on `None`.
+    HistoryRepo {
+        window: Option<iced::window::Id>,
+        event: crate::panels::history::HistoryRepoEvent,
+    },
     /// Switch the active colour theme and persist the preference.
     ThemeChanged(ThemeId),
     /// Switch the UI language at runtime and persist it.

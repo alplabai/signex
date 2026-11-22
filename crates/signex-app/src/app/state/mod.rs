@@ -660,6 +660,9 @@ pub struct DocumentState {
     /// path. A second restore click for the same document is ignored until
     /// the first completes; closing the project or all documents cancels it.
     pub pending_restores: crate::app::document_read::InFlightReads,
+    /// The repository a History branch switch is checking out. Saves and
+    /// restores of its files are refused until the switch reports back.
+    pub branch_switch: Option<PathBuf>,
     /// #859 — renames and deletes whose disk work runs on a worker. Saves,
     /// opens, restores and second moves of an overlapping path are refused
     /// until the completion message drops the entry.

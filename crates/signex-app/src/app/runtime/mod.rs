@@ -10,6 +10,7 @@ mod footprint_card;
 mod footprint_ctx;
 mod footprint_summaries;
 mod history;
+mod history_repo;
 mod label_class_pick;
 pub(super) mod navigator_ctx;
 pub(in crate::app) mod net_class_styles;

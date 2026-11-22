@@ -494,6 +494,11 @@ pub fn title_actions(kind: PanelKind, ctx: &PanelContext) -> Vec<TitleAction> {
                 != compiled_design::CompiledStatus::NoProject)
                 .then(|| compiled_design::msg(crate::app::CompiledDesignMsg::CompileRequested)),
         }],
+        PanelKind::History if ctx.history.active_path.is_some() => vec![TitleAction {
+            icon: crate::icons::icon_chrome_refresh(tid),
+            tip: t!(ctx.i18n, ids::PANELS_HISTORY_REFRESH),
+            on_press: Some(PanelMsg::History(history::HistoryPanelMsg::RefreshPressed)),
+        }],
         PanelKind::Annotations if ctx.annotations.status == annotations::ListStatus::Ready => {
             vec![TitleAction {
                 icon: crate::icons::icon_chrome_refresh(tid),

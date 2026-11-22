@@ -39,6 +39,10 @@ pub mod pricing;
 pub mod pricing_refresh;
 pub mod primitive;
 pub mod range_filter;
+#[cfg(feature = "local-git")]
+pub mod repo_branches;
+#[cfg(feature = "local-git")]
+pub mod repo_graph;
 pub mod search;
 #[cfg(feature = "search-tantivy")]
 pub mod search_index;
