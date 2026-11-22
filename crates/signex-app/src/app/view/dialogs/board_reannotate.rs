@@ -197,7 +197,7 @@ fn order_card<'a>(
 
 /// A radio mark: an accent ring with a dot when picked, a hairline ring
 /// otherwise.
-fn radio_mark<'a>(on: bool, tokens: &ThemeTokens) -> Element<'a, Message> {
+pub(super) fn radio_mark<'a>(on: bool, tokens: &ThemeTokens) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
     let accent = tokens::accent(tokens);
     let edge = if on { accent } else { r.line_strong };

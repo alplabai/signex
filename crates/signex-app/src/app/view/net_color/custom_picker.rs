@@ -1,9 +1,9 @@
 //! The custom net colour picker card (#72): 48 quick-pick swatches in 8
 //! columns, an Old / New preview, an editable Hex field and R / G / B
-//! fields, then Cancel / Use Color.
+//! fields each with a gradient to drag along, then Cancel / Use Color.
 
-use iced::widget::{Space, Widget, column, container, row, stack};
-use iced::{Alignment, Color, Element, Length, Theme};
+use iced::widget::{Space, Widget, column, container, row, slider, stack};
+use iced::{Alignment, Background, Border, Color, Element, Length, Radians, Theme, gradient};
 use signex_i18n::{MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::{text, text_input};
@@ -27,6 +27,9 @@ const QUICK_PICK_COLUMNS: usize = 8;
 /// A quick-pick swatch.
 const QUICK_W: f32 = chrome_px(24.0 * 11.0 / 12.0);
 const QUICK_H: f32 = chrome_px(20.0 * 11.0 / 12.0);
+/// Height of a channel gradient and radius of its knob, from the type scale.
+const GRADIENT_H: f32 = TS.caption * 0.4;
+const KNOB_RADIUS: f32 = TS.caption * 0.5;
 
 /// The 48 quick-pick colours, row by row in 8 columns: bright hues, pinks
 /// and purples, greens and teals, dark variants, night hues, pastels, muted
@@ -252,9 +255,10 @@ impl Signex {
         preview.boxed()
     }
 
-    /// One R / G / B field: the letter, then the 0-255 value.
+    /// One R / G / B field: the letter, the 0-255 value and its gradient.
     fn channel_row(&self, label: MessageId, value: f32, chan: Channel) -> Element<'_, Message> {
         let i18n = &self.ui_state.i18n;
+        let tokens = &self.document_state.panel_ctx.tokens;
         let v255 = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
         let input = text_input(t!(i18n, ids::PLACEHOLDER_COLOR_CHANNEL), v255.to_string())
             .style(crate::panels::form_look::text_input_style)
@@ -262,12 +266,14 @@ impl Signex {
             .padding([SP.s, SP.m])
             .width(Length::Fixed(5.0 * TS.body))
             .on_input(move |s| net_message(NetColorMsg::CustomChannel(chan, s)));
-        field_row(
-            i18n,
-            label,
-            input.boxed(),
-            &self.document_state.panel_ctx.tokens,
-        )
+        let field = row![
+            input,
+            channel_gradient(self.ui_state.net_color_custom.draft, v255, chan, tokens),
+        ]
+        .spacing(SP.m)
+        .align_y(Alignment::Center)
+        .width(Length::Fill);
+        field_row(i18n, label, field.boxed(), tokens)
     }
 
     /// Where the in-window net-colour picker card sits: centred under the
@@ -280,6 +286,90 @@ impl Signex {
             + 80.0;
         (x, y)
     }
+}
+
+/// The draft with `chan` at its lowest and at its highest: the two ends of
+/// that channel's gradient, opaque.
+fn channel_ends(draft: Color, chan: Channel) -> (Color, Color) {
+    let with = |v: f32| match chan {
+        Channel::R => Color {
+            r: v,
+            a: 1.0,
+            ..draft
+        },
+        Channel::G => Color {
+            g: v,
+            a: 1.0,
+            ..draft
+        },
+        Channel::B => Color {
+            b: v,
+            a: 1.0,
+            ..draft
+        },
+    };
+    (with(0.0), with(1.0))
+}
+
+/// What dragging a gradient to `value` sends: the same edit as typing it.
+fn channel_dragged(chan: Channel, value: u8) -> Message {
+    net_message(NetColorMsg::CustomChannel(chan, value.to_string()))
+}
+
+/// The slim gradient beside a channel field, a drag target over the draft
+/// only: nothing is applied until Use Color.
+fn channel_gradient<'a>(
+    draft: Color,
+    value: u8,
+    chan: Channel,
+    tokens: &ThemeTokens,
+) -> Element<'a, Message> {
+    let (from, to) = channel_ends(draft, chan);
+    // Angle a quarter turn runs the gradient from the left edge to the right.
+    let band = Background::Gradient(
+        gradient::Linear::new(Radians(std::f32::consts::FRAC_PI_2))
+            .add_stop(0.0, from)
+            .add_stop(1.0, to)
+            .into(),
+    );
+    let track = container(Space::new())
+        .width(Length::Fill)
+        .height(Length::Fixed(GRADIENT_H))
+        .style(move |_: &Theme| container::Style {
+            background: Some(band),
+            border: Border {
+                radius: (GRADIENT_H / 2.0).into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        });
+    let lane = container(track)
+        .width(Length::Fill)
+        .height(Length::Fixed(2.0 * KNOB_RADIUS))
+        .align_y(iced::alignment::Vertical::Center);
+    let r = resolve(tokens);
+    let (knob, ring) = (r.raised, r.line_strong);
+    let drag = slider(0..=u8::MAX, value, move |v| channel_dragged(chan, v))
+        .height(2.0 * KNOB_RADIUS)
+        .style(move |_: &Theme, _| slider::Style {
+            rail: slider::Rail {
+                backgrounds: (
+                    Background::Color(Color::TRANSPARENT),
+                    Background::Color(Color::TRANSPARENT),
+                ),
+                width: GRADIENT_H,
+                border: Border::default(),
+            },
+            handle: slider::Handle {
+                shape: slider::HandleShape::Circle {
+                    radius: KNOB_RADIUS,
+                },
+                background: Background::Color(knob),
+                border_width: crate::styles::HAIRLINE,
+                border_color: ring,
+            },
+        });
+    stack![lane, drag].width(Length::Fill).boxed()
 }
 
 /// A group caption over a column.
@@ -359,4 +449,33 @@ fn tagged<'a>(
             .align_y(iced::alignment::Vertical::Bottom),
     ]
     .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mockup row 72: a gradient runs its own channel from 0 to 255 and
+    /// keeps the other two channels of the draft.
+    #[test]
+    fn a_channel_gradient_spans_only_its_channel() {
+        let draft = Color::from_rgb(0.1, 0.5, 0.9);
+        let (from, to) = channel_ends(draft, Channel::G);
+        assert_eq!((from.r, from.g, from.b), (draft.r, 0.0, draft.b));
+        assert_eq!((to.r, to.g, to.b), (draft.r, 1.0, draft.b));
+    }
+
+    /// A drag is the same edit of the draft as typing the value.
+    #[test]
+    fn dragging_a_gradient_edits_the_draft_only() {
+        let (mut app, _task) = Signex::new();
+        let Message::NetColor(drag) = channel_dragged(Channel::B, 128) else {
+            panic!("a drag is a net colour message");
+        };
+        let _ = app.dispatch_net_color_message(drag);
+        let custom = &app.ui_state.net_color_custom;
+        assert_eq!(custom.draft.b, 128.0 / 255.0);
+        assert!(custom.hex.is_none());
+        assert!(!app.document_state.has_dirty_documents());
+    }
 }

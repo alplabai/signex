@@ -38,6 +38,7 @@ pub use sheet_identity::other_sheet_symbol_using_file;
 pub mod pcb;
 mod sheet_placement;
 mod sheet_sync;
+mod sheet_sync_entries;
 #[cfg(test)]
 mod sheet_sync_tests;
 mod transform;
@@ -178,6 +179,9 @@ pub use sheet_sync::{
     SheetSyncDirection, SheetSyncPreview, entry_changes_from_sheet, port_changes_from_symbol,
     port_sync_commands, sheet_symbol_from_sheet, sheet_symbol_spot, sync_from_sheet_command,
     unused_sheet_symbol_name,
+};
+pub use sheet_sync_entries::{
+    SheetEntryChange, SheetSyncEntry, sheet_ports_after_sync, symbol_entries_after_sync,
 };
 use signex_history::{DEFAULT_UNDO_DEPTH, History};
 use signex_types::corner::DragWiringMode;

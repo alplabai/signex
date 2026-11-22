@@ -11,16 +11,56 @@ sheet-sync-title = Synchronize Sheet Entries and Ports
 # Under the title. $symbol is the sheet symbol's name, $file its sheet file.
 sheet-sync-subtitle = { $symbol } · { $file }
 
-sheet-sync-intro = Choose which side wins and check the changes, then Apply. Apply is one undo step. A sheet that is not open is changed in memory and stays unsaved until you save it.
+# Under the change table.
+sheet-sync-intro = Apply is one undo step. A sheet that is not open is changed in memory and stays unsaved until you save it.
 
-# The two directions of the sync.
+# Heading over the two direction cards.
+sheet-sync-which-side = Which side wins
+
+# The two directions of the sync, each with what it moves where. $symbol is
+# the sheet symbol's name, $file its sheet file.
 sheet-sync-to-symbol = Sheet to sheet symbol
 sheet-sync-to-sheet = Sheet symbol to sheet
+sheet-sync-to-symbol-line = Ports on { $file } become entries on { $symbol }.
+sheet-sync-to-sheet-line = Entries on { $symbol } become ports on { $file }.
 
-# Headings of the change lists; $count is how many names each holds.
-sheet-sync-added = Added ({ $count })
-sheet-sync-removed = Removed ({ $count })
-sheet-sync-renamed = Renamed ({ $count })
+# The drawing. $name is the sheet symbol or the sheet file it shows.
+sheet-sync-preview = Preview
+sheet-sync-preview-after-caption = { $name } after Apply
+sheet-sync-preview-before-caption = { $name } as it is now
+sheet-sync-preview-after = After
+sheet-sync-preview-before = Before
+sheet-sync-preview-expand = Expand preview
+sheet-sync-preview-collapse = Shrink preview
+# Over a renamed entry: its current name.
+sheet-sync-preview-was = was { $name }
+# The legend's note on the entry shapes.
+sheet-sync-legend-shapes = Input points in, Output points out, Bidirectional and Tri-state point both ways, Passive is square
+
+# The change table. $name is the sheet symbol or the sheet file it changes.
+sheet-sync-changes-to = Changes to { $name }
+sheet-sync-change-count = { $count ->
+    [one] 1 change
+   *[other] { $count } changes
+}
+sheet-sync-column-change = Change
+sheet-sync-column-entry = Entry
+sheet-sync-column-io = I/O type
+
+# The I/O type of an entry or port.
+sheet-sync-io-input = Input
+sheet-sync-io-output = Output
+sheet-sync-io-bidirectional = Bidirectional
+sheet-sync-io-tri-state = Tri-state
+sheet-sync-io-passive = Passive
+
+# Apply with how many changes it makes.
+sheet-sync-apply-count = Apply { $count }
+
+# The Change pill of a row, and the legend's names.
+sheet-sync-added = Added
+sheet-sync-removed = Removed
+sheet-sync-renamed = Renamed
 
 # One renamed entry or port: its old name, then its new one.
 sheet-sync-rename-row = { $from } → { $to }

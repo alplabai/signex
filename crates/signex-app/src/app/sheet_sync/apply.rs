@@ -16,8 +16,8 @@ use iced::Task;
 use signex_engine::{SheetSyncDirection, SheetSyncPreview};
 use signex_types::schematic::{ChildSheet, SchematicSheet};
 
-use super::open::{LABEL, previews_of};
-use super::{SheetSyncMsg, SheetSyncProblem};
+use super::open::{LABEL, entries_of, previews_of};
+use super::{SheetSyncMsg, SheetSyncPreviews, SheetSyncProblem};
 use crate::app::mutation_gateway::MutationOutcome;
 use crate::app::sheet_write::{SheetWrite, SheetWriteRefusal, disk_changed};
 use crate::app::{Message, Signex, UndoGroupKind};
@@ -48,9 +48,7 @@ impl Signex {
         };
         let now = previews_of(&symbol, &child);
         if shown.as_ref() != Some(&now) {
-            if let Some(state) = self.ui_state.sheet_sync.as_mut() {
-                state.previews = Some(now);
-            }
+            self.show_current_preview(&symbol, &child, now);
             return self.refuse_sheet_sync(SheetSyncProblem::Changed);
         }
         match direction {
@@ -112,10 +110,26 @@ impl Signex {
         };
         let now = previews_of(&symbol, &child);
         if shown.as_ref() != Some(&now) {
+            self.show_current_preview(&symbol, &child, now);
             return self.refuse_sheet_sync(SheetSyncProblem::Changed);
         }
         self.write_sync_to_sheet(&symbol, &now.to_sheet);
         Task::none()
+    }
+
+    /// The dialog now shows `now`, the changes the live sheets call for, so
+    /// the next Apply can match it.
+    fn show_current_preview(
+        &mut self,
+        symbol: &ChildSheet,
+        child: &SchematicSheet,
+        now: SheetSyncPreviews,
+    ) {
+        let entries = entries_of(symbol, child, &now);
+        if let Some(state) = self.ui_state.sheet_sync.as_mut() {
+            state.previews = Some(now);
+            state.entries = Some(entries);
+        }
     }
 
     /// Whether the dialog's parent sheet is still open. When it was closed,

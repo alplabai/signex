@@ -257,6 +257,74 @@ fn cancel_closes_the_dialog_without_a_change() {
     assert_eq!(parent_pins(&rig.app), ["GONE"]);
 }
 
+/// Mockup row 79: choosing a direction and using the drawing change no
+/// sheet and open no undo step; the drawing follows the direction.
+#[test]
+fn the_preview_controls_change_nothing_until_apply() {
+    let mut rig = rig(
+        vec![pin("GONE", "passive", 2.54, true)],
+        vec![hierarchical("SDA", "input", 10.0)],
+    );
+    send(&mut rig.app, SheetSyncMsg::Requested);
+    let names = |app: &Signex| -> Vec<String> {
+        let state = app.ui_state.sheet_sync.as_ref().expect("dialog open");
+        state
+            .entries()
+            .expect("entries known")
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect()
+    };
+    assert_eq!(names(&rig.app), ["GONE", "SDA"]);
+    for msg in [
+        SheetSyncMsg::PreviewModePicked(super::SheetSyncPreviewMode::Before),
+        SheetSyncMsg::PreviewExpandToggled,
+        SheetSyncMsg::DirectionPicked(SheetSyncDirection::SymbolToSheet),
+    ] {
+        send(&mut rig.app, msg);
+    }
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog open");
+    assert_eq!(state.preview_mode, super::SheetSyncPreviewMode::Before);
+    assert!(state.preview_expanded);
+    assert_eq!(
+        names(&rig.app),
+        ["SDA", "GONE"],
+        "the ports, then the new one"
+    );
+    assert_eq!(parent_pins(&rig.app), ["GONE"]);
+    assert!(!rig.app.document_state.has_dirty_documents());
+    assert_eq!(
+        std::fs::read_to_string(&rig.child).expect("child file"),
+        rig.child_text
+    );
+}
+
+/// When the sheets changed before the file re-check came back, the dialog
+/// takes the current changes, as its message says, so Apply can go on.
+#[test]
+fn a_changed_sheet_at_the_disk_check_refreshes_the_preview() {
+    let mut rig = rig(
+        vec![pin("NEW", "output", 2.54, false)],
+        vec![hierarchical("OLD", "output", 10.0)],
+    );
+    send(&mut rig.app, SheetSyncMsg::Requested);
+    let state = rig.app.ui_state.sheet_sync.as_mut().expect("dialog open");
+    let current = state.previews.clone();
+    state.previews = Some(super::SheetSyncPreviews::default());
+    state.checking = true;
+    let generation = state.generation;
+    send(
+        &mut rig.app,
+        SheetSyncMsg::DiskChecked {
+            generation,
+            result: Ok(Vec::new()),
+        },
+    );
+    let state = rig.app.ui_state.sheet_sync.as_ref().expect("dialog stays");
+    assert_eq!(state.problem, Some(super::SheetSyncProblem::Changed));
+    assert_eq!(state.previews, current);
+}
+
 #[test]
 fn symbol_to_sheet_changes_the_closed_child_in_memory_only() {
     let mut rig = rig(

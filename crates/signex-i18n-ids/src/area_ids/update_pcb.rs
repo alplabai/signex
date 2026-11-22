@@ -65,6 +65,7 @@ define_ids! {
     BACK_ANNOTATE_SHOW_ROW = "back-annotate-show-row";
     BACK_ANNOTATE_DUPLICATE_ON_SHEET = "back-annotate-duplicate-on-sheet";
     BACK_ANNOTATE_DUPLICATE_EXISTS = "back-annotate-duplicate-exists";
+    BACK_ANNOTATE_DUPLICATE_CONTESTED = "back-annotate-duplicate-contested";
     PCB_REANNOTATE_ORDER_COLUMNS_HINT = "pcb-reannotate-order-columns-hint";
     PCB_REANNOTATE_ORDER_ROWS_HINT = "pcb-reannotate-order-rows-hint";
     PCB_REANNOTATE_PREVIEW = "pcb-reannotate-preview";

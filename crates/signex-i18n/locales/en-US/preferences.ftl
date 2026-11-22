@@ -306,6 +306,9 @@ preferences-page-language = Language
 # Footer note on the Language page: when a chosen language takes effect.
 preferences-language-footer-note = The language changes when you press Apply or OK; no restart
 
+# Footer note on the Rule Profiles page (mockup row 148).
+preferences-rule-profiles-footer-note = Rule profiles save to their files at once.
+
 # Second line of the preferences-file banner. $path is the file; $error says
 # what is wrong with it, in English.
 preferences-file-where = { $path }: { $error }

@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use signex_engine::{SheetSyncDirection, SheetSyncPreview};
+use signex_engine::{SheetSyncDirection, SheetSyncEntry, SheetSyncPreview};
 use signex_types::schematic::SchematicSheet;
 use uuid::Uuid;
 
@@ -26,6 +26,23 @@ pub struct ChildRead {
 pub struct SheetSyncPreviews {
     pub to_symbol: SheetSyncPreview,
     pub to_sheet: SheetSyncPreview,
+}
+
+/// The written side of each direction, entry by entry, for the drawing and
+/// the change table. Kept apart from [`SheetSyncPreviews`], which alone
+/// decides whether Apply still matches what was shown.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SheetSyncEntries {
+    pub to_symbol: Vec<SheetSyncEntry>,
+    pub to_sheet: Vec<SheetSyncEntry>,
+}
+
+/// Which state the dialog's drawing shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SheetSyncPreviewMode {
+    #[default]
+    After,
+    Before,
 }
 
 /// Why the dialog shows no preview, or Apply changed nothing.
@@ -72,6 +89,10 @@ pub struct SheetSyncState {
     pub read: Option<Arc<ChildRead>>,
     /// `None` until the child sheet is known.
     pub previews: Option<SheetSyncPreviews>,
+    /// `None` until the child sheet is known, like `previews`.
+    pub entries: Option<SheetSyncEntries>,
+    pub preview_mode: SheetSyncPreviewMode,
+    pub preview_expanded: bool,
     /// Apply is re-checking the closed child sheet's file.
     pub checking: bool,
     pub problem: Option<SheetSyncProblem>,
@@ -83,6 +104,14 @@ impl SheetSyncState {
         self.previews.as_ref().map(|previews| match self.direction {
             SheetSyncDirection::SheetToSymbol => &previews.to_symbol,
             SheetSyncDirection::SymbolToSheet => &previews.to_sheet,
+        })
+    }
+
+    /// The written side of the chosen direction, once known.
+    pub fn entries(&self) -> Option<&[SheetSyncEntry]> {
+        self.entries.as_ref().map(|entries| match self.direction {
+            SheetSyncDirection::SheetToSymbol => entries.to_symbol.as_slice(),
+            SheetSyncDirection::SymbolToSheet => entries.to_sheet.as_slice(),
         })
     }
 
