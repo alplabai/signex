@@ -614,6 +614,14 @@ library-create-options-refused-tip = Choose another location, or turn off versio
 library-create-options-exists = A library already exists in this folder: { $file }.
 # Tooltip of the disabled Create Library button while that refusal shows.
 library-create-options-exists-tip = A library already exists in this folder. Choose another location first.
+# Refusal banner when the chosen file name cannot be used on every system.
+# $file is the file name.
+library-create-options-bad-name = { $file } cannot be a library file name. It must end in .snxlib, must not use \ / : * ? " < > | or end in a dot or space, and must not be a name Windows reserves, such as CON.
+# Refusal banner when the project already holds this library, not yet created.
+# $file is its file name.
+library-create-options-pending = { $file } is already waiting to be created. Save the project to create it, or choose another location.
+# Tooltip of the disabled Create Library button while either refusal shows.
+library-create-options-path-tip = Choose another location first.
 # Refusal banner action: open the library already at the chosen path.
 library-create-options-open-existing = Open existing library
 

@@ -87,6 +87,29 @@ fn a_power_port_with_no_stored_body_is_not_reported() {
     assert!(of(&run(&sheet(vec![port])), RuleKind::PartWithoutLibraryBody).is_empty());
 }
 
+/// The BOM and the netlist list a non-power `#` part, so a `#` designator
+/// must not hide its missing body.
+#[test]
+fn a_hash_designated_part_with_no_body_is_reported() {
+    let symbol = part("#U1", 1);
+    let id = symbol.uuid;
+    let found = of(&run(&sheet(vec![symbol])), RuleKind::PartWithoutLibraryBody);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].message.contains("#U1"), "{}", found[0].message);
+    assert_eq!(found[0].primary.map(|p| p.uuid), Some(id));
+}
+
+#[test]
+fn a_power_or_flag_marker_with_no_body_is_not_reported() {
+    for reference in ["#PWR01", "#FLG01"] {
+        let found = of(
+            &run(&sheet(vec![part(reference, 1)])),
+            RuleKind::PartWithoutLibraryBody,
+        );
+        assert!(found.is_empty(), "{reference}: {found:?}");
+    }
+}
+
 #[test]
 fn the_part_checks_that_need_no_body_still_run() {
     let duplicates = run(&sheet(vec![part("R1", 1), part("R1", 1)]));

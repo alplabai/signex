@@ -115,6 +115,10 @@ impl Signex {
         self.document_state.panel_ctx.pcb_drc = self.pcb_drc_panel();
         // The undocked windows' selections follow the new geometry too (#2240).
         self.refresh_undocked_pcb_highlights(path);
+        // So do the panels of a window showing this board (net table, Layer
+        // Stack): each keeps its own context. No-op inside a window's swap,
+        // where the branch above already refreshed that window's context.
+        self.refresh_window_panel_ctxs(None);
     }
 
     /// Give each undocked window, and the unfocused tile pane (#2249), that

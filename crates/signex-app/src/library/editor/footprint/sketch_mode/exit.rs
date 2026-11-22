@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use signex_library::Footprint;
+use signex_sketch::SketchError;
 use signex_types::pcb_sketch::BakedBoard;
 use signex_types::sketch::baked_kinds::BakedKind;
 use signex_types::sketch::board_attr::SketchBoardItems;
@@ -39,6 +40,16 @@ pub struct SketchExit {
     /// by the board session from the open project; the inside-corner check
     /// reads it. Always `None` on a footprint.
     pub router_tool_diameter: Option<f64>,
+    /// Why the last Bake found the sketch unsolvable. Footprint host only.
+    solve_refusal: Option<SolveRefusal>,
+}
+
+/// A solver's refusal, for the sketch generation it was found on: an edit
+/// moves the generation, and the reason no longer applies.
+#[derive(Debug, Clone)]
+struct SolveRefusal {
+    reason: String,
+    generation: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +77,21 @@ impl BakePreview {
                 .filter_map(|&kind| footprint_count(fp, kind).map(|n| (kind, n)))
                 .collect(),
         )
+    }
+
+    /// The preview of the footprint `editor` edits: why it does not bake
+    /// while the refusal Bake found still applies, else its counts.
+    pub fn of_footprint_editor(editor: &FootprintDocument) -> Self {
+        let state = &editor.state;
+        match &state.sketch_exit.solve_refusal {
+            Some(refusal)
+                if state.last_solve.is_none()
+                    && refusal.generation == state.sketch_solve.generation() =>
+            {
+                Self::Refused(refusal.reason.clone())
+            }
+            _ => Self::of_footprint(editor.primitive()),
+        }
     }
 }
 
@@ -132,6 +158,52 @@ fn show_open_profile(editor: &mut FootprintDocument) -> bool {
     true
 }
 
+/// A sketch with no solve is solved now (a footprint can open unsolved, or
+/// its display solve may not have landed). One that cannot be solved stops
+/// the bake: open the preview, which says why. `false` when it solves or has
+/// nothing to solve. Nothing is baked here, so the document stays as it was.
+fn show_unsolvable(editor: &mut FootprintDocument) -> bool {
+    if editor.state.last_solve.is_some() {
+        return false;
+    }
+    let Some(sketch) = editor
+        .primitive()
+        .sketch
+        .as_ref()
+        .filter(|sketch| !sketch.entities.is_empty())
+    else {
+        return false;
+    };
+    let solved = signex_sketch::parameter::resolve(&sketch.parameters)
+        .map_err(SketchError::Expr)
+        .and_then(|params| {
+            editor
+                .state
+                .sketch_solver
+                .solve_deferring_redundancy(sketch, &params)
+                .map_err(SketchError::SolveFailed)
+        });
+    let state = &mut editor.state;
+    match solved {
+        Ok(out) => {
+            state
+                .sketch_solve
+                .set_redundancy_owed(out.redundancy_pending);
+            state.last_solve = Some(out);
+            false
+        }
+        Err(error) => {
+            state.sketch_exit.solve_refusal = Some(SolveRefusal {
+                reason: error.to_string(),
+                generation: state.sketch_solve.generation(),
+            });
+            state.sketch_exit.preview = true;
+            editor.canvas_cache.clear();
+            true
+        }
+    }
+}
+
 /// Apply one exit message to a footprint in sketch mode.
 pub fn apply(editor: &mut FootprintDocument, msg: &FootprintEditorMsg) -> ExitOutcome {
     match msg {
@@ -143,7 +215,11 @@ pub fn apply(editor: &mut FootprintDocument, msg: &FootprintEditorMsg) -> ExitOu
             ExitOutcome::Stay
         }
         FootprintEditorMsg::SketchBakeRequested => {
-            if show_open_profile(editor) {
+            // Both run: an unsolvable sketch can have an open profile too,
+            // and the card names each.
+            let unsolvable = show_unsolvable(editor);
+            let open = show_open_profile(editor);
+            if unsolvable || open {
                 ExitOutcome::Stay
             } else {
                 ExitOutcome::Leave

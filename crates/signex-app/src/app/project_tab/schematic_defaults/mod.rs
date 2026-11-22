@@ -67,6 +67,18 @@ pub(super) fn clamp_note(
     })
 }
 
+/// The range a typed number was refused for, on a field that refuses rather
+/// than clamps. `None` when the text is in range, empty or not a number.
+pub(super) fn refused_range(
+    field: SchematicDefaultField,
+    draft: Option<&String>,
+) -> Option<(f64, f64)> {
+    let typed = crate::numeric_field::parse_field_f64(draft?)?;
+    let range = field.range();
+    (field.refuses_out_of_range() && typed.is_finite() && !range.contains(&typed))
+        .then_some((*range.start(), *range.end()))
+}
+
 /// How a numeric field box looks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum FieldState {

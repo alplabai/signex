@@ -21,3 +21,6 @@ sketch-bake-drawn = The canvas draws the result in its layer colours, the sketch
 sketch-bake-close-gap = Close gap
 sketch-bake-gap-closes = Gap { $gap } mm, closes under the { $tolerance } mm heal tolerance
 sketch-bake-gap-too-wide = Gap { $gap } mm is wider than the { $tolerance } mm heal tolerance
+# An open profile Close gap cannot be offered on: an end nothing pairs, or a
+# sketch with no solve. $x and $y are millimetres.
+sketch-bake-open-end = Open profile at ({ $x }, { $y }) mm

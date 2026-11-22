@@ -13,4 +13,5 @@ define_ids! {
     SKETCH_BAKE_CLOSE_GAP = "sketch-bake-close-gap";
     SKETCH_BAKE_GAP_CLOSES = "sketch-bake-gap-closes";
     SKETCH_BAKE_GAP_TOO_WIDE = "sketch-bake-gap-too-wide";
+    SKETCH_BAKE_OPEN_END = "sketch-bake-open-end";
 }

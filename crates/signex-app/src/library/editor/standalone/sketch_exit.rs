@@ -16,9 +16,10 @@ use signex_widgets::{text, theme_ext};
 use crate::app::FootprintDocument;
 use crate::library::editor::footprint::sketch_mode::{BakePreview, SketchExit};
 use crate::library::editor::footprint::state::CheckStatus;
-use crate::library::editor::footprint::state::board_checks::GapOffer;
+use crate::library::editor::footprint::state::board_checks::{GapOffer, open_end_text};
 use crate::library::messages::{FootprintEditorMsg, LibraryMessage, PrimitiveEdit};
 use crate::styles::{DialogButtonKind, dialog_button};
+use signex_bake::open_ends::OpenEnd;
 use signex_sketch::id::SketchEntityId;
 
 const TS: crate::styles::TypeScale = crate::styles::TypeScale::DEFAULT;
@@ -280,6 +281,25 @@ impl<M> GapLine<M> {
             close: offer.closes().then(|| close(offer.keep, offer.merge)),
         }
     }
+
+    /// The line for an open end. A paired end of a solved sketch is a gap
+    /// with its offer; Close gap needs a solve, so any other end only says
+    /// where the profile is open.
+    pub fn of_open_end(
+        end: &OpenEnd,
+        solved: bool,
+        i18n: &I18n,
+        close: impl FnOnce(SketchEntityId, SketchEntityId) -> M,
+    ) -> Option<Self> {
+        use signex_i18n::RenderTranslatable as _;
+        if let Some(offer) = GapOffer::of(end).filter(|_| solved) {
+            return Some(Self::of(&offer, i18n, close));
+        }
+        Some(Self {
+            text: open_end_text(end)?.localized(i18n),
+            close: None,
+        })
+    }
 }
 
 /// The bake preview card: a count per target of the host, or why the
@@ -406,7 +426,7 @@ pub fn footprint_overlay<'a>(
     };
     let mut stack = column![].spacing(SP.m);
     if exit_state.preview {
-        let preview = BakePreview::of_footprint(editor.primitive());
+        let preview = BakePreview::of_footprint_editor(editor);
         // A footprint bakes on every solve: what the last bake left out is
         // in the sketch warnings, with refused tool clicks and solver notes;
         // they name no entity.
@@ -426,11 +446,16 @@ pub fn footprint_overlay<'a>(
             // An open profile: why its shape is missing, and Close gap.
             gap: editor
                 .state
-                .gap_offer(editor.primitive().sketch.as_ref())
-                .map(|offer| {
-                    GapLine::of(&offer, i18n, |keep, merge| {
-                        fp(FootprintEditorMsg::SketchCloseGapRequested { keep, merge })
-                    })
+                .first_open_end(editor.primitive().sketch.as_ref())
+                .and_then(|end| {
+                    GapLine::of_open_end(
+                        &end,
+                        editor.state.last_solve.is_some(),
+                        i18n,
+                        |keep, merge| {
+                            fp(FootprintEditorMsg::SketchCloseGapRequested { keep, merge })
+                        },
+                    )
                 }),
         };
         stack = stack.push(preview_card(&preview, issues, tokens, i18n));

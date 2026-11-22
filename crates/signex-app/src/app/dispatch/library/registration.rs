@@ -28,6 +28,7 @@ impl Signex {
             use_lfs: false,
             refusal: None,
             existing_library: false,
+            path_refused: false,
         });
         Task::none()
     }
@@ -42,11 +43,11 @@ impl Signex {
 
     /// New Library dialog — toggle the "Enable version control" switch.
     /// Clears a version-control refusal, which only applies with it on; a
-    /// library already at the path stays refused either way.
+    /// refusal of the path itself stays either way.
     pub(super) fn handle_library_create_options_toggle_git(&mut self) -> Task<Message> {
         if let Some(state) = self.library.create_options.as_mut() {
             state.enable_git = !state.enable_git;
-            if !state.existing_library {
+            if !state.existing_library && !state.path_refused {
                 state.refusal = None;
             }
             // LFS is meaningless without git — keep the two
@@ -64,7 +65,7 @@ impl Signex {
     pub(super) fn handle_library_create_options_confirm(&mut self) -> Task<Message> {
         // Refuse before anything is registered or written, and keep the modal
         // open with the reason so the user can pick another place.
-        if self.refuse_existing_library() {
+        if self.refuse_existing_library() || self.refuse_unusable_library_path() {
             return Task::none();
         }
         if let Some(state) = self.library.create_options.as_mut()
@@ -97,16 +98,70 @@ impl Signex {
         if !state.lib_path.exists() {
             return false;
         }
-        let file = state.lib_path.file_name().map_or_else(
-            || state.lib_path.display().to_string(),
-            |name| name.to_string_lossy().into_owned(),
-        );
         state.refusal = Some(i18n.message_plain(
             signex_i18n::ids::LIBRARY_CREATE_OPTIONS_EXISTS,
-            &[("file", signex_i18n::Arg::from(file))],
+            &[(
+                "file",
+                signex_i18n::Arg::from(shown_file_name(&state.lib_path)),
+            )],
         ));
         state.existing_library = true;
         true
+    }
+
+    /// Mark the open New Library dialog refused when its path can never be
+    /// registered: a file name that is not portable, or a library the
+    /// project already waits to create. Returns `true` when it was.
+    fn refuse_unusable_library_path(&mut self) -> bool {
+        let Some(state) = self.library.create_options.as_ref() else {
+            return false;
+        };
+        let id = if crate::library::commands::validate_new_library_name(&state.lib_path).is_err() {
+            signex_i18n::ids::LIBRARY_CREATE_OPTIONS_BAD_NAME
+        } else if self.library_waits_to_be_created(&state.project_path, &state.lib_path) {
+            signex_i18n::ids::LIBRARY_CREATE_OPTIONS_PENDING
+        } else {
+            return false;
+        };
+        let i18n = &self.ui_state.i18n;
+        let Some(state) = self.library.create_options.as_mut() else {
+            return false;
+        };
+        state.refusal = Some(i18n.message_plain(
+            id,
+            &[(
+                "file",
+                signex_i18n::Arg::from(shown_file_name(&state.lib_path)),
+            )],
+        ));
+        state.path_refused = true;
+        true
+    }
+
+    /// Whether the project at `project_path` already holds a pending library
+    /// at `lib_path`. Compared the way the project's volume does (probed on
+    /// load, #694), so `Parts.snxlib` and `parts.snxlib` are one library
+    /// where it ignores case; two entries would share a tree key (#855).
+    fn library_waits_to_be_created(
+        &self,
+        project_path: &std::path::Path,
+        lib_path: &std::path::Path,
+    ) -> bool {
+        use crate::app::state::scope::path_key_with;
+        let Some(loaded) = self
+            .document_state
+            .projects
+            .iter()
+            .find(|p| p.path == project_path)
+        else {
+            return false;
+        };
+        let fold = loaded.case_fold;
+        let key = path_key_with(lib_path, fold);
+        loaded
+            .pending_libraries
+            .values()
+            .any(|spec| path_key_with(&spec.lib_path, fold) == key)
     }
 
     /// New Library dialog — "Open existing library" on the refusal banner:
@@ -241,6 +296,15 @@ impl Signex {
         enable_git: bool,
         use_lfs: bool,
     ) -> Task<Message> {
+        // The dialog refuses this first; kept for a project state that moved
+        // since its Create press.
+        if self.library_waits_to_be_created(&project_path, &lib_path) {
+            crate::diagnostics::log_warning(format!(
+                "Library {} is already waiting to be created; save the project to create it.",
+                lib_path.display()
+            ));
+            return Task::none();
+        }
         let Some(loaded) = self
             .document_state
             .projects
@@ -254,26 +318,6 @@ impl Signex {
             );
             return Task::none();
         };
-
-        // Two pending entries for one path would share a tree key, so the
-        // tree could expand or select the wrong row (#855).
-        // Compared the way the project's volume does (probed on load, #694),
-        // so `Parts.snxlib` and `parts.snxlib` are one library where it
-        // ignores case.
-        use crate::app::state::scope::path_key_with;
-        let fold = loaded.case_fold;
-        let key = path_key_with(&lib_path, fold);
-        if loaded
-            .pending_libraries
-            .values()
-            .any(|spec| path_key_with(&spec.lib_path, fold) == key)
-        {
-            crate::diagnostics::log_warning(format!(
-                "Library {} is already waiting to be created; save the project to create it.",
-                lib_path.display()
-            ));
-            return Task::none();
-        }
 
         match crate::library::commands::register_pending_library(
             lib_path.clone(),
@@ -564,6 +608,14 @@ impl Signex {
         self.document_state.mark_document_dirty(&project_path);
         self.refresh_panel_ctx();
     }
+}
+
+/// `path`'s file name as a refusal shows it.
+fn shown_file_name(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    )
 }
 
 /// Create `path`'s parent directory and write `text` atomically, refusing an existing `path`. Runs on a

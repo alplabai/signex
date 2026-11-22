@@ -85,7 +85,9 @@ Error instead of guessing them: the part has no pins in the run, no pin or net
 rule sees it, and the netlist leaves it out of every net. `units_not_placed`
 skips it too. The checks that read only the part's own fields still run:
 duplicate designator, unannotated, footprint, value, MPN and outside the sheet.
-Power ports are exempt, since they draw a built-in body.
+Power ports are exempt, since they draw a built-in body, and so are the `#PWR`
+and `#FLG` markers. Any other `#` designator is reported: the BOM and the
+netlist list such a symbol as a part, so the prefix must not hide a missing body.
 
 ### What the net rules skip
 
