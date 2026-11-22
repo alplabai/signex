@@ -329,6 +329,7 @@ impl Signex {
             self.interaction_state.active_canvas_mut().pending_net_color = None;
             self.ui_state.reorder_picker = None;
             self.ui_state.move_pick = None;
+            self.ui_state.command_replay.drop_pending_move();
             self.interaction_state
                 .active_canvas_mut()
                 .clear_overlay_cache();

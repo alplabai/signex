@@ -26,8 +26,14 @@ The model is `app::core::command_log` (UI-free); the app records rows in
   the log: only the request's `args` and `client` are read.
 - A request whose reply waits for its reads is logged at once as waiting and
   takes its outcome when the reply is sent.
-- **Not logged:** pointer gestures that are not catalog commands (a drag, a
-  click on the canvas), panel interactions, and the panel's own actions.
+- **A finished operation** is one row. A tool or dialog a command started
+  (Move, Change Footprint, a union) gives its input to that command's row when
+  it finishes; started and cancelled, the row has nothing to replay. A move, a
+  Properties edit or a union edit made without a command gets a row of its
+  own, named after the catalog command it matches. Keystrokes in one field
+  within two seconds share one row, which keeps the last value.
+- **Not logged:** other pointer gestures (a click on the canvas, a placement
+  click), other panel interactions, and the panel's own actions.
 
 Each row keeps the time with milliseconds, the source, the catalog id and its
 label in the UI language, the operands as given (name to value), the outcome,
@@ -35,7 +41,9 @@ how long the synchronous part of the dispatch took, the document it acted on
 (its `document` operand, else the window's document) and that document's
 project file. A GUI command has no operands; one that acts on the selection
 records its targets (kind and stable id) as the `recorded_targets` argument,
-shown in the detail pane and the saved log and left out of the CLI line.
+and a finished edit records what it took (offset, angle, values) as
+`recorded_input`. Both show in the detail pane and the saved log and are left
+out of the CLI line.
 
 ## Sources
 
@@ -65,8 +73,8 @@ A successful `undo` marks the newest row of the same document that the catalog
 calls undoable (`CommandFlags::undoable`), did not fail and is not undone yet;
 a successful `redo` clears the mark of the row of that document undone last.
 Undone rows stay in the log, struck through, so the log is a record and not
-the undo stack. A step made without a command (a drag) is not in the log, so
-the row marked is the newest logged undoable command of that document.
+the undo stack. A step that has no row (a placement click) is not in the log,
+so the row marked is the newest logged undoable command of that document.
 
 ## Filters
 
@@ -97,19 +105,37 @@ panel says what it will list.
   fails the same way until its cause is fixed. By the kind of row:
   - **Operands:** runs through the command's operand handler
     (`CommandArgs::parse_operands`, then `run_operands`), as the CLI does.
-  - **Recorded targets** (delete, cut, copy, rotate, mirror, flip, drawing
-    order): runs on exactly those items, in their document, in the window or
-    tab that shows it, then puts the person's selection back. A sheet behind
-    the one in view is brought forward for the run and left again, which ends
-    a placement in progress on the sheet in view.
-  - **Refused, nothing changes** (a new failed row and a Messages line): a
-    target is gone (the reason names it; Replay never runs on the survivors),
-    its document is not open, the row recorded no targets (a command run in a
-    footprint or symbol editor), or the command keeps working on the selection
-    after it starts (Move, Duplicate, Properties, a dialog on the selection).
+  - **Recorded targets** (delete, cut, copy, duplicate, rotate, mirror, flip,
+    drawing order): the command's own handler runs on exactly those items, in
+    their document, in the window or tab that shows it, then the person's
+    selection comes back. Duplicate leaves the clipboard as it was.
+  - **Recorded edit** (Move and drags with their offset, Properties values,
+    unions, board tools and dialogs): the same engine or board commands run
+    again on the same items. A board move repeats its offset from where the
+    footprints are now. A new union gets a new id.
+  - **Footprint and symbol editors:** the recorded messages run on the recorded
+    pads or pins of that editor document, with the person's selection and tool
+    put back. Pads and pins are named by index and number: an index holding
+    another number counts as gone. A symbol selection is dropped if the replay
+    changed the pin or graphic count its indices rely on.
   - **No target** (place wire, a view command): runs again as it is, with the
     current selection held aside. Select All and Unselect All run as they are:
     the selection is what they change.
+  - **Refused, nothing changes** (a new failed row and a Messages line): a
+    target is gone (the reason names it; Replay never runs on the survivors);
+    its document is not open; a tool is in progress and the run would need a
+    tab switch or would act on the tool; or the row has nothing repeatable:
+    - a tool started and cancelled;
+    - a step of a tool in progress (Remove Last Vertex, Undo Last Segment);
+    - a pick at the pointer (Select Node, Toggle Selection);
+    - Find Similar, whose result is a selection made in its dialog;
+    - Save as Reuse Block, which writes a named file.
+  - **Not built yet** (refused or not recorded): a dialog or tool that made new
+    objects from its own values (Place Reuse Block, Via Stitching, Teardrops,
+    Keepout or Board Shape from Selection when they add items); an editor
+    command on a sketch or silk selection; editor Properties panel edits other
+    than pin number and name; footprint editor pad drags; multi-document
+    grouped board edits.
 - **Copy as CLI** copies the row as a `signex-cli run` line (the Usage of
   `docs/CLI.md`): `signex-cli run <project file> <command-id> --arg
   name=value ...`. Each value is the text `--arg` takes (a point as `x,y`),

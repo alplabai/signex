@@ -22,9 +22,21 @@ impl Signex {
         commands: Vec<BoardCommand>,
         checked: Option<CheckedStep<'_>>,
     ) -> Result<Vec<BoardPatch>, BoardEditError> {
-        let patches = self.document_state.execute_board(path, commands, checked)?;
-        if !patches.is_empty() {
+        let recorded = self.board_edit_to_record(&commands);
+        let patches = match self.document_state.execute_board(path, commands, checked) {
+            Ok(patches) => patches,
+            Err(error) => {
+                self.ui_state.command_replay.forget_board_marks();
+                return Err(error);
+            }
+        };
+        if patches.is_empty() {
+            self.ui_state.command_replay.forget_board_marks();
+        } else {
             self.after_board_change(path);
+            if let Some(commands) = recorded {
+                self.note_board_edit(path, commands);
+            }
         }
         Ok(patches)
     }

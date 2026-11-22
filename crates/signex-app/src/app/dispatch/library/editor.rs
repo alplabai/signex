@@ -262,6 +262,7 @@ impl Signex {
         }
 
         // Symbol-only mutations.
+        let replay_probe = self.probe_symbol_edit(&path, &msg);
         if let Some(editor) = self.document_state.symbol_editors.get_mut(&path) {
             crate::library::editor::symbol::updates::apply_symbol_primitive_edit(editor, msg);
             // v0.20 — primitive editor edits (designator/size/etc, and
@@ -271,6 +272,7 @@ impl Signex {
             // `FootprintEditorPanelContext` and TAB-pause-driven UI
             // changes (Pad form vs no Pad form) silently miss.
             self.refresh_panel_ctx();
+            self.finish_editor_edit(&path, replay_probe);
             return Task::none();
         }
 
@@ -348,6 +350,7 @@ impl Signex {
         };
 
         // Footprint-only mutations.
+        let replay_probe = self.probe_footprint_edit(&path, &msg);
         if let Some(editor) = self.document_state.footprint_editors.get_mut(&path) {
             let move_by_was_open = editor.state.move_by_modal.is_some();
             apply_footprint_primitive_edit(editor, msg);
@@ -363,6 +366,7 @@ impl Signex {
             // A solve run in `update` owes the redundancy pass (#1685).
             let redundancy = dispatch_redundancy(editor, &path).map(Message::Library);
             self.refresh_panel_ctx();
+            self.finish_editor_edit(&path, replay_probe);
             return Task::batch([solve, redundancy, focus]);
         }
 

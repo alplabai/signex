@@ -19,6 +19,10 @@ pub const MAX_ROWS: usize = 5000;
 /// The client name the CLI gives on the agent socket (`docs/CLI.md`).
 pub const CLI_CLIENT: &str = "signex-cli";
 
+/// The argument a GUI row shows a finished operation's input under: its
+/// offset, angle or values. A record like [`RECORDED_TARGETS`], not an operand.
+pub const RECORDED_INPUT: &str = "recorded_input";
+
 /// The argument a GUI row shows its targets under. It is a record, not an
 /// operand: the CLI line and an operand run leave it out.
 pub const RECORDED_TARGETS: &str = "recorded_targets";
@@ -199,7 +203,9 @@ impl LogRow {
         let is_gui = matches!(self.source, LogSource::Gui { .. });
         self.operands
             .iter()
-            .filter(|(name, _)| !(is_gui && name.as_str() == RECORDED_TARGETS))
+            .filter(|(name, _)| {
+                !(is_gui && matches!(name.as_str(), RECORDED_TARGETS | RECORDED_INPUT))
+            })
             .map(|(name, value)| (name.as_str(), operand_text(value)))
             .collect()
     }
@@ -529,6 +535,20 @@ impl CommandLog {
             .max_by_key(|row| (row.undone_at, row.seq));
         if let Some(row) = latest {
             Arc::make_mut(row).undone_at = None;
+        }
+    }
+
+    /// Show `value` under the recorded argument `name` of row `seq`.
+    pub fn set_recorded(&mut self, seq: u64, name: &str, value: Value) {
+        if let Some(row) = self.rows.iter_mut().find(|row| row.seq == seq) {
+            Arc::make_mut(row).operands.insert(name.to_string(), value);
+        }
+    }
+
+    /// Row `seq` acted on `document`.
+    pub fn set_document(&mut self, seq: u64, document: Option<PathBuf>) {
+        if let Some(row) = self.rows.iter_mut().find(|row| row.seq == seq) {
+            Arc::make_mut(row).document = document;
         }
     }
 

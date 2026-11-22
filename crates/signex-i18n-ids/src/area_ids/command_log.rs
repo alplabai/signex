@@ -56,7 +56,11 @@ define_ids! {
     COMMAND_LOG_JUMP_TO_OBJECT = "command-log-jump-to-object";
     COMMAND_LOG_REPLAY_FAILED_HINT = "command-log-replay-failed-hint";
     COMMAND_LOG_REPLAY_NO_TARGETS = "command-log-replay-no-targets";
-    COMMAND_LOG_REPLAY_LIVE_SELECTION = "command-log-replay-live-selection";
+    COMMAND_LOG_REPLAY_NOT_FINISHED = "command-log-replay-not-finished";
+    COMMAND_LOG_REPLAY_NOTHING_TO_REPEAT = "command-log-replay-nothing-to-repeat";
+    COMMAND_LOG_REPLAY_MADE_OBJECTS = "command-log-replay-made-objects";
+    COMMAND_LOG_REPLAY_TOOL_ACTIVE = "command-log-replay-tool-active";
+    COMMAND_LOG_REPLAY_NO_CHANGE = "command-log-replay-no-change";
     COMMAND_LOG_REPLAY_TARGET_GONE = "command-log-replay-target-gone";
     COMMAND_LOG_REPLAY_DOCUMENT_CLOSED = "command-log-replay-document-closed";
     COMMAND_LOG_REPLAY_DOCUMENT_BUSY = "command-log-replay-document-busy";

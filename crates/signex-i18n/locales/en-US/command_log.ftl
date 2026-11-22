@@ -54,7 +54,11 @@ command-log-jump-to-object = Jump to object
 command-log-replay-failed-hint = Replay runs it again with the same arguments; it fails the same way until the cause is fixed.
 command-log-replay-no-targets = Not replayed: this row recorded no targets, and Replay never acts on the current selection.
 # $command is the command's label.
-command-log-replay-live-selection = Not replayed: { $command } keeps working on the selection after it starts, so it cannot run on recorded targets.
+command-log-replay-not-finished = Not replayed: { $command } was started but never finished, so it recorded nothing to repeat.
+command-log-replay-nothing-to-repeat = Not replayed: { $command } has nothing to repeat: it is a step of a tool in progress, a pick at the pointer, or a named save.
+command-log-replay-made-objects = Not replayed: { $command } made new objects from values only its tool held.
+command-log-replay-tool-active = Not replayed: a tool is in progress, and running this on { $document } would disturb it. Finish or cancel the tool first.
+command-log-replay-no-change = The replayed command changed nothing.
 # $missing lists each missing item's kind and id.
 command-log-replay-target-gone = Not replayed: { $count } recorded targets are no longer in { $document }: { $missing }
 command-log-replay-document-closed = Not replayed: { $document } is not open.
