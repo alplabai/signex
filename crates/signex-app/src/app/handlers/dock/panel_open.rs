@@ -30,6 +30,11 @@ impl Signex {
             self.pick_library_panel_kind(alias_kind);
             return self.show_panel(PanelKind::Library);
         }
+        // On a board, Net Classes is a mode of the PCB panel (mockup row 106).
+        if kind == PanelKind::NetClasses && self.has_active_pcb() {
+            self.document_state.panel_ctx.pcb_panel.mode = crate::panels::PcbPanelMode::NetClasses;
+            return self.show_panel(PanelKind::PcbNets);
+        }
         if let Some(window_id) = self.detached_panel_window(kind) {
             // The panel is a window of its own. Docking a second copy
             // would render the same panel twice on two screens.

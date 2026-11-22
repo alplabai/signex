@@ -735,6 +735,8 @@ pub enum PanelMsg {
     CompiledDesign(crate::app::CompiledDesignMsg),
     /// The Unions panel (mockup row 158).
     Unions(crate::app::unions::UnionsMsg),
+    /// The PCB panel (mockup row 106).
+    PcbPanel(super::PcbPanelMsg),
     /// The Object List panel (#1259).
     ObjectList(super::ObjectListMsg),
     /// The Command Log panel (#2458).
