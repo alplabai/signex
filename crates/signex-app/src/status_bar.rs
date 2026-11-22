@@ -26,8 +26,8 @@ pub use board::{
 };
 pub use graphite::{
     POPUP_GAP, POPUP_PADDING, POPUP_RIGHT_MARGIN, POPUP_WIDTH, check_ink, grid_readout_x,
-    panel_list_height, panels_button, popup, popup_caption_height, popup_caption_padding,
-    popup_row, popup_row_height,
+    panel_list_foot_height, panel_list_height, panels_button, popup, popup_caption_height,
+    popup_caption_padding, popup_row, popup_row_height,
 };
 pub use grid_popover::{GridPopoverEvent, GridSnapPopover, GridSnapSettings};
 pub(crate) use grid_popover::{HOTSPOTS_COMMAND, view as grid_popover_view};
@@ -71,6 +71,9 @@ pub(crate) struct SurfaceReadout {
     /// pill and the Grid read-out open popovers, and the Selected counter
     /// stands in for the selection summary.
     pub board: Option<BoardReadout>,
+    /// A project is open and this window shows no document (mockup row 2):
+    /// the bar keeps the cursor columns, empty, and Panels.
+    pub no_document: bool,
 }
 
 /// The board's active layer pill: a caption, the name and the colour the
