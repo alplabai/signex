@@ -823,6 +823,8 @@ impl Engine {
             | Command::SetSymbolFlag { .. }
             | Command::SetWireWidth { .. }
             | Command::SetWireColor { .. }
+            | Command::SetBusWidth { .. }
+            | Command::SetBusColor { .. }
             | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolLibId { .. }

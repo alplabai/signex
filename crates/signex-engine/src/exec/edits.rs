@@ -361,6 +361,10 @@ impl Engine {
                 self.set_wire_width(before, wire_id, width_mm)
             }
             Command::SetWireColor { wire_id, color } => self.set_wire_color(before, wire_id, color),
+            Command::SetBusWidth { bus_id, width_mm } => {
+                self.set_bus_width(before, bus_id, width_mm)
+            }
+            Command::SetBusColor { bus_id, color } => self.set_bus_color(before, bus_id, color),
             Command::SetSymbolBodyStyle {
                 symbol_id,
                 body_style,

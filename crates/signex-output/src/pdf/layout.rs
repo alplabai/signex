@@ -339,6 +339,7 @@ mod tests {
             uuid: uuid::Uuid::nil(),
             start: Point::new(10.0, 5.0),
             end: Point::new(230.0, 120.0),
+            ..Default::default()
         });
         assert_eq!(schematic_bbox(&sheet), (10.0, 5.0, 230.0, 120.0));
     }

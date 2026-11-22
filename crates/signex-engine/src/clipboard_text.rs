@@ -210,6 +210,7 @@ mod tests {
             uuid: Uuid::now_v7(),
             start: at(5.0, 10.0),
             end: at(15.0, 10.0),
+            ..Default::default()
         });
         sheet.junctions.push(
             serde_json::from_str(&format!(

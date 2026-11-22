@@ -10,6 +10,7 @@ fn bus_sheet(labels: &[Option<&str>]) -> SchematicSheet {
         uuid: Uuid::now_v7(),
         start: pt(0.0, 0.0),
         end: pt(0.0, 40.0),
+        ..Default::default()
     });
     sheet
         .labels

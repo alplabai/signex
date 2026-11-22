@@ -227,6 +227,7 @@ fn every_uuid_kind_is_repaired() {
         uuid: id(9),
         start: origin,
         end: Point::new(5.0, 0.0),
+        ..Default::default()
     }];
     sheet.bus_entries = vec![BusEntry {
         uuid: id(9),

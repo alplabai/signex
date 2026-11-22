@@ -487,6 +487,28 @@ impl Signex {
                     true,
                 );
             }
+            crate::panels::PanelMsg::EditBusWidth(bus_id, preset) => {
+                self.apply_engine_command(
+                    signex_engine::Command::SetBusWidth {
+                        bus_id: *bus_id,
+                        width_mm: preset.stroke_mm(),
+                    },
+                    true,
+                    true,
+                );
+            }
+            crate::panels::PanelMsg::EditBusColor(bus_id, color) => {
+                self.document_state.panel_ctx.wire_color_picker =
+                    crate::panels::WireColorPicker::Closed;
+                self.apply_engine_command(
+                    signex_engine::Command::SetBusColor {
+                        bus_id: *bus_id,
+                        color: *color,
+                    },
+                    true,
+                    true,
+                );
+            }
             crate::panels::PanelMsg::ToggleWireColorPicker => {
                 use crate::panels::WireColorPicker as Picker;
                 let ctx = &mut self.document_state.panel_ctx;

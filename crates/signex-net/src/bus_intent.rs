@@ -351,6 +351,7 @@ mod tests {
             uuid: Uuid::now_v7(),
             start: pt(a.0, a.1),
             end: pt(b.0, b.1),
+            ..Default::default()
         }
     }
 

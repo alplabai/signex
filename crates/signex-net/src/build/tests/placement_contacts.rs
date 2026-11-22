@@ -139,6 +139,7 @@ fn bus(a: Point, b: Point) -> signex_types::schematic::Bus {
         uuid: Uuid::now_v7(),
         start: a,
         end: b,
+        ..Default::default()
     }
 }
 

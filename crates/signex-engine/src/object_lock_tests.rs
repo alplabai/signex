@@ -629,6 +629,7 @@ fn bus_with_a_locked_wire_on_an_entry() -> (Engine, SelectedItem) {
         uuid: bus,
         start: Point::new(0.0, 0.0),
         end: Point::new(0.0, 50.0),
+        ..Default::default()
     });
     sheet.bus_entries.push(BusEntry {
         uuid: Uuid::now_v7(),

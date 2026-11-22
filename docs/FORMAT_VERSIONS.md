@@ -16,7 +16,9 @@ format declares only its own table row below.
   any Schematic Refinement content (a harness object, a union, a Bezier,
   dimension or table drawing, a Net Parameters directive, or a Blanket or
   Differential Pair using a field added with them), which writes
-  `snxsch/1.3` (`docs/architecture/snxsch-refinement-objects.md`). A board
+  `snxsch/1.3` (`docs/architecture/snxsch-refinement-objects.md`), or a bus
+  with its own width or colour, which writes `snxsch/1.4`
+  (`docs/architecture/snxsch-wire-color.md`). A board
   stays `snxpcb/1.4`, byte for byte, writes `snxpcb/1.5` when a layer has a
   colour of its own and `snxpcb/1.6` when it has rooms (#2457), so a build
   that reads only the lower token opens it read-only.
@@ -37,7 +39,7 @@ format declares only its own table row below.
 
 | File | Writes | Reads | Newer minor | No token |
 |---|---|---|---|---|
-| `.snxsch` | `snxsch/1.1`, `1.2` with a No-ERC rule list, `1.3` with Schematic Refinement content | `snxsch/1`, `1.1`, `1.2`, `1.3` | opens read-only | refused |
+| `.snxsch` | `snxsch/1.1`, `1.2` with a No-ERC rule list, `1.3` with Schematic Refinement content, `1.4` with a bus's own width or colour | `snxsch/1`, `1.1`, `1.2`, `1.3`, `1.4` | opens read-only | refused |
 | `.snxpcb` | `snxpcb/1.4`; `1.5` with layer colours; `1.6` with rooms | `snxpcb/1` to `snxpcb/1.6` | opens read-only | refused |
 | `.snxpcb`, board sketch targets | `snxpcb/1.7` while the board sketch carries a slot, pour, mechanical drawing or component anchor (decision 2, 2026-11-20), or a reference dimension, pattern link, pattern mirror or pad override (decisions 5, 9, 10), rooms or not; else the token above, byte for byte | adds `snxpcb/1.7` | opens read-only | refused |
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
@@ -58,6 +60,11 @@ unknown key, as `fab_outputs`. No `.snxpcb` content is added for it.
 opens a 1.3 sheet read-only and refuses its saves. A build older than the
 new drawing kinds and directive fields may refuse to parse the sheet instead
 (an unknown drawing or directive `type`); either way nothing is dropped.
+
+**`snxsch/1.4` and older builds.** A build that reads up to `snxsch/1.3`
+drops unknown keys of a typed `buses` row on save, so it opens a 1.4 sheet
+read-only and refuses its saves. A sheet with no styled bus keeps its lower
+token, byte for byte.
 
 **`.snxprj` stays `snxprj/1`.** The Schematic Refinement project settings
 (`schematic_design`: channel naming, harness definitions, differential pair

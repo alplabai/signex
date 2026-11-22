@@ -78,6 +78,8 @@ mod body_style_tests;
 #[cfg(test)]
 mod bus_entry_tests;
 #[cfg(test)]
+mod bus_style_tests;
+#[cfg(test)]
 mod directive_tests;
 #[cfg(test)]
 mod drawing_placement_tests;
@@ -158,8 +160,8 @@ pub use pcb_token::{
 };
 pub use sch_rows::{SchComponentRow, SchJunctionRow, SchLabelRow, SchWireRow};
 pub use sch_token::{
-    SNXSCH_FORMAT_NO_ERC_RULES, SNXSCH_FORMAT_REFINEMENT, SNXSCH_FORMAT_V1, SNXSCH_VERSION,
-    snxsch_token,
+    SNXSCH_FORMAT_BUS_STYLE, SNXSCH_FORMAT_NO_ERC_RULES, SNXSCH_FORMAT_REFINEMENT,
+    SNXSCH_FORMAT_V1, SNXSCH_VERSION, snxsch_token,
 };
 pub use text_size_repair::MAX_TEXT_SIZE_MM;
 pub use tsv::{parse_tsv_block, write_tsv_block};

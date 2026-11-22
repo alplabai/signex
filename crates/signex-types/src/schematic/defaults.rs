@@ -97,11 +97,17 @@ impl SchematicDefaults {
         Self::resolve(own_mm, fallback)
     }
 
-    /// The width a bus draws and exports at. A bus stores no width of its own
-    /// and has no net class, so it is the project default, else the built-in.
+    /// The width of a bus with none of its own: the project default, else the
+    /// built-in. A bus has no net class.
     #[must_use]
     pub fn bus_mm(&self) -> f64 {
         Self::resolve(self.bus_width_mm, SCHEMATIC_RENDER_BUS_STROKE_MM)
+    }
+
+    /// The width a bus storing `own_mm` draws and exports at.
+    #[must_use]
+    pub fn bus_line_mm(&self, own_mm: f64) -> f64 {
+        Self::resolve(own_mm, self.bus_mm())
     }
 
     /// The width a symbol graphic or pin stored as `width_mm` draws at.

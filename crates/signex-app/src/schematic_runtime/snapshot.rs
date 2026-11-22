@@ -54,16 +54,17 @@ pub fn build_renderer_snapshot(
             continue;
         }
 
+        let base_color = bus
+            .color
+            .as_ref()
+            .map(to_iced)
+            .unwrap_or_else(|| to_iced(&colors.bus));
         wires.push(WireInput {
             id: renderer_id(bus.uuid),
             p0: [bus.start.x as f32, bus.start.y as f32],
             p1: [bus.end.x as f32, bus.end.y as f32],
-            width_mm: overrides.defaults.bus_mm() as f32,
-            explicit_color: Some(to_rgba(focus_color(
-                to_iced(&colors.bus),
-                focus_set,
-                bus.uuid,
-            ))),
+            width_mm: overrides.defaults.bus_line_mm(bus.stroke_width) as f32,
+            explicit_color: Some(to_rgba(focus_color(base_color, focus_set, bus.uuid))),
         });
     }
 

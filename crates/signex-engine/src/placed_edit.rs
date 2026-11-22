@@ -317,6 +317,7 @@ mod tests {
             uuid: uuid::Uuid::now_v7(),
             start: Point::new(0.0, 0.0),
             end: Point::new(10.0, 0.0),
+            ..Default::default()
         };
         let item = SelectedItem::new(bus.uuid, SelectedKind::Bus);
         let mut engine = Engine::new(SchematicSheet {

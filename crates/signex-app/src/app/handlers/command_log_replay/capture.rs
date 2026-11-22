@@ -90,6 +90,8 @@ fn is_property_edit(command: &Command) -> bool {
             | Command::SetSymbolFlag { .. }
             | Command::SetWireWidth { .. }
             | Command::SetWireColor { .. }
+            | Command::SetBusWidth { .. }
+            | Command::SetBusColor { .. }
             | Command::SetSymbolBodyStyle { .. }
             | Command::UpdateSymbolTextSize { .. }
             | Command::UpdateSymbolFootprint { .. }
