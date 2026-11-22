@@ -3,12 +3,12 @@
 //! the total. Presets, Import and Export are greyed with their reason.
 
 use iced::widget::{pick_list, row};
-use iced::{Alignment, Element, Widget as _};
+use iced::{Alignment, Element, Length, Widget as _};
 use signex_i18n::{MessageId, UserText, ids, t};
 use signex_types::pcb_stack::StackLayerKind;
 use signex_widgets::doc_tab_shell::Toolbar;
 use signex_widgets::dropdown_style::GraphiteDropdown as _;
-use signex_widgets::{ToggleSwitchStyle, button, segmented, text, toggle_switch};
+use signex_widgets::{ToggleSwitchStyle, button, segmented, text, text_input, toggle_switch};
 
 use super::{
     KindChoice, LayerStackFacts, LayerStackMsg, SP, StackUnit, TS, form_look, kind_label, msg,
@@ -24,6 +24,9 @@ const ADDABLE: [StackLayerKind; 3] = [
     StackLayerKind::Plane,
     StackLayerKind::Dielectric,
 ];
+
+/// The stackup name field's width, in body-text ems.
+const NAME_EMS: f32 = 12.0;
 
 pub(super) fn view<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Toolbar<'a, PanelMsg> {
     let board = facts.board.clone();
@@ -84,20 +87,49 @@ pub(super) fn view<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Too
         .push_end(total(ctx, facts))
 }
 
-/// The stackup's label and the board it belongs to.
+/// The stackup's label and its name, typed in place and applied with Enter.
+/// Without a name the field shows the board's file name as its placeholder.
 fn stackup_name<'a>(ctx: &'a PanelContext, facts: &'a LayerStackFacts) -> Element<'a, PanelMsg> {
     let stem = facts
         .board
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_default();
+    let shown = facts
+        .name_draft
+        .clone()
+        .or_else(|| facts.stack.name.clone())
+        .unwrap_or_default();
+    let mut input = text_input(UserText::new(stem), shown)
+        .size(TS.dense)
+        .padding(SP.xs)
+        .style(form_look::text_input_style)
+        .width(Length::Fixed(TS.body * NAME_EMS));
+    if !facts.read_only {
+        let board = facts.board.clone();
+        let submitted = msg(LayerStackMsg::StackupNameSubmitted {
+            board: board.clone(),
+        });
+        input = input
+            .on_input(move |text| {
+                msg(LayerStackMsg::StackupNameTyped {
+                    board: board.clone(),
+                    text,
+                })
+            })
+            .on_submit(submitted);
+    }
+    let field = hint_tooltip(
+        input.boxed(),
+        t!(ctx.i18n, ids::PCB_STACK_NAME_TIP),
+        &ctx.tokens,
+        iced::widget::tooltip::Position::Bottom,
+    );
     row![
         text(t!(ctx.i18n, ids::PCB_STACK_STACKUP))
             .size(TS.dense)
             .color(resolve(&ctx.tokens).ink3),
-        text(UserText::new(stem))
-            .size(TS.dense)
-            .color(ti(ctx.tokens.text)),
+        field,
     ]
     .spacing(SP.xs)
     .align_y(Alignment::Center)

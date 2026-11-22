@@ -83,7 +83,10 @@ pub(super) fn set_layer_stack(app: &mut Signex, args: &CommandArgs) -> Ran {
         return refused("`set_layer_stack` needs the operand `stack`");
     };
     let stack = serde_json::from_str::<LayerStack>(raw).or_else(|_| {
-        serde_json::from_str::<Vec<StackLayer>>(raw).map(|layers| LayerStack { layers })
+        serde_json::from_str::<Vec<StackLayer>>(raw).map(|layers| LayerStack {
+            layers,
+            ..LayerStack::default()
+        })
     });
     let stack = match stack {
         Ok(stack) => stack,

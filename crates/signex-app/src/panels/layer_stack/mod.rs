@@ -155,6 +155,15 @@ pub enum LayerStackMsg {
         board: PathBuf,
         up: bool,
     },
+    /// Text typed into the toolbar's stackup name.
+    StackupNameTyped {
+        board: PathBuf,
+        text: String,
+    },
+    /// Enter in the stackup name: its draft is applied.
+    StackupNameSubmitted {
+        board: PathBuf,
+    },
     /// The unit lengths are shown and typed in.
     UnitPicked {
         board: PathBuf,
@@ -208,6 +217,8 @@ pub struct LayerStackFacts {
     pub selected: Option<usize>,
     /// Text typed into a cell and not applied yet.
     pub drafts: BTreeMap<(usize, StackField), String>,
+    /// Text typed into the stackup name and not applied yet.
+    pub name_draft: Option<String>,
     pub unit: StackUnit,
     pub sub_tab: StackSubTab,
     pub drill_pairs: Vec<DrillPairRow>,

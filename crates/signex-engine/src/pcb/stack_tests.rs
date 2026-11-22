@@ -70,6 +70,70 @@ fn set(board: &mut PcbBoard, stack: LayerStack) -> Result<crate::pcb::Applied, B
     .apply(board)
 }
 
+fn set_name(b: &mut PcbBoard, name: Option<&str>) -> crate::pcb::Applied {
+    BoardCommand::SetStackupName {
+        name: name.map(str::to_string),
+    }
+    .apply(b)
+    .unwrap()
+}
+
+/// Decision 2026-11-22 (mockup row 105): naming the stackup is one exact
+/// undo step that changes nothing else.
+#[test]
+fn a_stackup_name_is_one_undo_step_and_leaves_the_copper_alone() {
+    let mut b = board(2, "TopCopper");
+    let before = snapshot(&b);
+    let (layers, thickness) = (b.layers.clone(), b.thickness);
+    let applied = set_name(&mut b, Some("  sensor-node 4L "));
+    assert_eq!(applied.patch.kind, BoardPatchKind::LayerStackChanged);
+    let stored = b.stackup.as_ref().unwrap();
+    assert_eq!(stored.name.as_deref(), Some("sensor-node 4L"), "trimmed");
+    assert_eq!(
+        stored.layers,
+        LayerStack::derived(&layers, thickness).layers,
+        "the rows are the ones the board showed"
+    );
+    assert_eq!(b.layers, layers);
+    assert_eq!(b.thickness, thickness);
+    let after = snapshot(&b);
+    let redo = applied.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), before, "undo is exact");
+    redo.inverse.apply(&mut b).unwrap();
+    assert_eq!(snapshot(&b), after, "redo is exact");
+}
+
+/// A whole-stack edit (the manager, `set_layer_stack`) cannot change the name.
+#[test]
+fn a_stack_edit_keeps_the_stackup_name() {
+    let mut b = board(2, "TopCopper");
+    set_name(&mut b, Some("4L"));
+    let mut stack = LayerStack::derived(&b.layers, b.thickness);
+    assert_eq!(stack.name, None);
+    add_inner_below(&mut stack, 0);
+    set(&mut b, stack).unwrap();
+    assert_eq!(b.stackup.as_ref().unwrap().name.as_deref(), Some("4L"));
+}
+
+/// A name taken off a stack nobody edited leaves no stored stack, so the
+/// file goes back to what it was; an edited stack stays stored.
+#[test]
+fn clearing_the_name_of_an_unedited_stack_stores_no_stack() {
+    let mut b = board(2, "TopCopper");
+    set_name(&mut b, Some("4L"));
+    set_name(&mut b, Some("   "));
+    assert!(b.stackup.is_none());
+
+    let mut stack = LayerStack::derived(&b.layers, b.thickness);
+    add_inner_below(&mut stack, 0);
+    set(&mut b, stack).unwrap();
+    set_name(&mut b, Some("4L"));
+    set_name(&mut b, None);
+    let stored = b.stackup.as_ref().expect("the edited rows stay");
+    assert_eq!(stored.name, None);
+    assert_eq!(stored.copper_count(), 3);
+}
+
 #[test]
 fn two_new_inner_layers_join_the_layer_list_and_the_total() {
     let mut b = board(2, "TopCopper");

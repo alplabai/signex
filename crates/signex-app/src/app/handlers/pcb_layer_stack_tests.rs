@@ -452,6 +452,58 @@ fn an_undocked_windows_net_table_and_stack_follow_an_edit_and_its_undo() {
     assert_eq!(stack(&app).stack.layers[row].thickness_mm, was);
 }
 
+fn type_stackup_name(app: &mut Signex, path: &Path, text: &str) {
+    send(
+        app,
+        LayerStackMsg::StackupNameTyped {
+            board: path.to_path_buf(),
+            text: text.into(),
+        },
+    );
+}
+
+fn submit_stackup_name(app: &mut Signex, path: &Path) {
+    send(
+        app,
+        LayerStackMsg::StackupNameSubmitted {
+            board: path.to_path_buf(),
+        },
+    );
+}
+
+/// Decision 2026-11-22 (mockup row 105): the toolbar's name keeps a draft
+/// until Enter, is one undo step, reaches the file, and an unchanged Enter
+/// is no step.
+#[test]
+fn the_toolbar_stackup_name_is_one_undo_step_and_reaches_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut app, path) = app_with(dir.path(), false);
+
+    type_stackup_name(&mut app, &path, "  sensor-node 4L ");
+    assert_eq!(facts(&app).name_draft.as_deref(), Some("  sensor-node 4L "));
+    assert!(
+        board_of(&app, &path).stackup.is_none(),
+        "a draft is no edit"
+    );
+
+    submit_stackup_name(&mut app, &path);
+    let shown = facts(&app);
+    assert_eq!(shown.name_draft, None);
+    assert_eq!(shown.stack.name.as_deref(), Some("sensor-node 4L"));
+    let text = signex_types::format::SnxPcb::new(board_of(&app, &path).clone())
+        .write_string()
+        .unwrap();
+    assert!(text.contains("stack_name = \"sensor-node 4L\""), "{text}");
+
+    type_stackup_name(&mut app, &path, "sensor-node 4L");
+    submit_stackup_name(&mut app, &path);
+    assert!(app.step_board_history(&path, true));
+    assert!(
+        board_of(&app, &path).stackup.is_none(),
+        "one undo takes the name back: the same name again made no step"
+    );
+}
+
 #[test]
 fn a_thickness_edit_keeps_the_layer_tab_order() {
     let dir = tempfile::tempdir().unwrap();

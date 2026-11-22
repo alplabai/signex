@@ -207,6 +207,10 @@ pub enum BoardCommand {
     /// copper row moved inward, and a copper layer left out with items or a
     /// keepout on it. The inverse is a [`BoardCommand::RestoreLayerStack`].
     SetLayerStack { stack: Box<LayerStack> },
+    /// Name the stackup (mockup row 105), trimmed; `None` or blank takes the
+    /// name away. Rows, layers and thickness stay. The inverse is a
+    /// [`BoardCommand::RestoreLayerStack`].
+    SetStackupName { name: Option<String> },
     /// Put back the stack, layer list, thickness and copper names a stack
     /// edit replaced; the inverse of [`BoardCommand::SetLayerStack`] and of
     /// itself. Nothing is checked: the values were on the board before.
@@ -406,6 +410,7 @@ impl BoardCommand {
             Self::RemoveSetup => remove_setup(board),
             Self::SetBoardOptions { options: new } => options::set(board, *new),
             Self::SetLayerStack { stack: new } => stack::set(board, *new),
+            Self::SetStackupName { name } => stack::set_name(board, name),
             Self::RestoreLayerStack(snapshot) => stack::restore(board, *snapshot),
             Self::SetItemsLocked { items: locks } => lock::set_locked(board, locks),
             Self::AddGraphics { graphics } => graphics::add(board, graphics),

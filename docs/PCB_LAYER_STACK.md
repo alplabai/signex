@@ -12,6 +12,16 @@ the manager has no rows and shows `LayerStack::derived`: overlay, paste and
 mask on each face, its copper layers with FR-4 between them, sized so the
 total is the board thickness. The first edit stores the stack.
 
+The stackup has an optional name (mockup row 105, #2833), the `stack_name` key
+of `[stackup]`. A named board writes `snxpcb/1.8`; without a name the key is
+absent and the file keeps its lower token, byte for byte
+(`docs/FORMAT_VERSIONS.md`). `BoardCommand::SetStackupName` is the only edit
+of the name, one undo step that trims it and takes a blank as no name; a
+`SetLayerStack` keeps it. Naming a board with no stored stack stores the
+derived one, and removing the name of a stack equal to the derived one stores
+none again. The toolbar field keeps a draft until Enter and shows the board's
+file name as its placeholder.
+
 Copper is named by place: the first copper row is `TopCopper`, the last
 `BottomCopper`, the rest `Inner1Copper`, `Inner2Copper`, ... in order. A
 copper row names the board layer it was (`layer`), or none for a new one.

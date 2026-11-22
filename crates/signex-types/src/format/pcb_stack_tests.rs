@@ -130,6 +130,62 @@ fn a_malformed_layer_sizes_cell_is_a_load_error() {
     assert!(SnxPcb::parse(&broken).is_err());
 }
 
+/// Decision 2026-11-22 (mockup row 105): the name is saved under its token.
+#[test]
+fn a_named_stackup_round_trips_under_its_token() {
+    let mut named = board();
+    named.stackup.as_mut().unwrap().name = Some("sensor-node 4L".into());
+    let (text, back) = round_trip(&named);
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_STACKUP_NAME}\"")),
+        "{text}"
+    );
+    assert!(text.contains("stack_name = \"sensor-node 4L\""), "{text}");
+    assert_eq!(back.stackup, named.stackup);
+    assert!(back.unknown.stackup.is_empty(), "the key is not foreign");
+    let parsed = SnxPcb::parse(&text).unwrap();
+    assert!(!parsed.is_from_newer_minor(), "it opens for editing");
+    assert_eq!(parsed.write_string().unwrap(), text, "stable on a resave");
+}
+
+/// Decision 2026-11-22: no name, no key and no higher token; a name taken
+/// away gives the same bytes back.
+#[test]
+fn a_board_without_a_stackup_name_keeps_its_token_and_bytes() {
+    let plain = board();
+    let (text, back) = round_trip(&plain);
+    assert!(
+        text.starts_with(&format!("format = \"{SNXPCB_FORMAT_V1}\"")),
+        "{text}"
+    );
+    assert!(!text.contains("stack_name"), "{text}");
+    assert_eq!(SnxPcb::new(back).write_string().unwrap(), text);
+
+    let mut renamed = plain;
+    renamed.stackup.as_mut().unwrap().name = Some("4L".into());
+    renamed.stackup.as_mut().unwrap().name = None;
+    assert_eq!(SnxPcb::new(renamed).write_string().unwrap(), text);
+}
+
+/// A name on a file without rows is kept, on the stack the board derives; a
+/// blank one is no name.
+#[test]
+fn a_name_without_rows_names_the_derived_stack() {
+    let base = SnxPcb::new(empty_board()).write_string().unwrap();
+    let text = format!("{base}\n[stackup]\nstack_name = \"Named\"\n");
+    let read = SnxPcb::parse(&text).unwrap().board;
+    let stack = read.stackup.as_ref().expect("the name is kept");
+    assert_eq!(stack.name.as_deref(), Some("Named"));
+    assert_eq!(
+        stack.layers,
+        LayerStack::derived(&read.layers, read.thickness).layers
+    );
+    assert!(read.unknown.stackup.is_empty());
+
+    let blank = format!("{base}\n[stackup]\nstack_name = \"  \"\n");
+    assert!(SnxPcb::parse(&blank).unwrap().board.stackup.is_none());
+}
+
 #[test]
 fn a_size_that_does_not_save_is_refused_before_writing() {
     let mut board = board();

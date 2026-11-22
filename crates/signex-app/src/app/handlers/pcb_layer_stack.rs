@@ -16,7 +16,7 @@ use signex_engine::pcb::via_types::{ViaTypeDef, via_types};
 use signex_i18n::{I18n, ids, t};
 use signex_types::format::parse_pcb_layer;
 use signex_types::pcb::{PcbBoard, ViaType};
-use signex_types::pcb_stack::LayerStack;
+use signex_types::pcb_stack::{LayerStack, clean_stack_name};
 
 use crate::app::state::pcb_edit::CheckedStep;
 use crate::app::{Signex, TabKind};
@@ -33,6 +33,8 @@ pub struct LayerStackPanel {
     pub board: Option<PathBuf>,
     pub selected: Option<usize>,
     pub drafts: BTreeMap<(usize, StackField), String>,
+    /// The stackup name as typed, until Enter.
+    pub name_draft: Option<String>,
     pub unit: StackUnit,
     pub sub_tab: StackSubTab,
 }
@@ -107,6 +109,20 @@ impl Signex {
                     self.interaction_state.pcb_layer_stack.selected = Some(moved);
                 }
             }
+            M::StackupNameTyped { board, text } => {
+                let panel = &mut self.interaction_state.pcb_layer_stack;
+                panel.follow(board);
+                panel.name_draft = Some(text.clone());
+            }
+            M::StackupNameSubmitted { board } => {
+                let panel = &mut self.interaction_state.pcb_layer_stack;
+                let typed = (panel.board.as_deref() == Some(board.as_path()))
+                    .then(|| panel.name_draft.take())
+                    .flatten();
+                if let Some(text) = typed {
+                    self.submit_stackup_name(board, &text);
+                }
+            }
             M::UnitPicked { board, unit } => {
                 let panel = &mut self.interaction_state.pcb_layer_stack;
                 panel.follow(board);
@@ -164,6 +180,24 @@ impl Signex {
                 let why = t!(self.ui_state.i18n, ids::PCB_STACK_NOT_A_NUMBER, "text" => text);
                 self.refuse_stack_edit(why.into_string());
             }
+        }
+    }
+
+    /// Enter in the stackup name: one undo step, none when it is unchanged.
+    fn submit_stackup_name(&mut self, board: &Path, text: &str) {
+        let name = clean_stack_name(text);
+        let current = self
+            .document_state
+            .pcb_board(board)
+            .and_then(|b| b.stackup.as_ref())
+            .and_then(|stack| stack.name.clone());
+        if name == current {
+            return;
+        }
+        let label = t!(self.ui_state.i18n, ids::PCB_STACK_EDIT).into_string();
+        let command = BoardCommand::SetStackupName { name };
+        if let Err(why) = self.run_board_step(board, vec![command], &label) {
+            self.refuse_stack_edit(why);
         }
     }
 
@@ -266,6 +300,7 @@ impl Signex {
             } else {
                 BTreeMap::new()
             },
+            name_draft: panel.name_draft.clone().filter(|_| ours),
             unit: panel.unit,
             sub_tab: if ours {
                 panel.sub_tab
