@@ -274,7 +274,7 @@ fn load_sheet_with(
         // of these very bytes: a run that parks the copy compares saves to it.
         Ok(mut parsed) => {
             parsed.sheet.unknown.source_hash =
-                Some(crate::persist::ContentHash::of(text.as_bytes()).to_raw());
+                Some(Box::new(crate::persist::ContentHash::of(text.as_bytes()).to_raw()));
             Ok(Some(parsed.sheet))
         }
         Err(e) => Err(format!("could not be parsed ({e})")),

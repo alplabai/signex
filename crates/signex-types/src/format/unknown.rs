@@ -106,7 +106,7 @@ pub struct SheetUnknown {
     /// app's sheet reader. Never written. A run that keeps the copy as an
     /// unsaved document takes it as the save's disk baseline (#2760).
     #[serde(skip)]
-    pub source_hash: Option<[u8; 32]>,
+    pub source_hash: Option<Box<[u8; 32]>>,
 }
 
 impl SheetUnknown {

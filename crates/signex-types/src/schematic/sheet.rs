@@ -840,7 +840,7 @@ impl SchematicSheet {
     /// Take the fingerprint of the file bytes this copy was read from, so
     /// undo snapshots never carry it (#2760).
     pub fn take_source_hash(&mut self) -> Option<[u8; 32]> {
-        self.unknown.source_hash.take()
+        self.unknown.source_hash.take().map(|hash| *hash)
     }
 
     /// The typed paper size and orientation stored in `paper_size`.

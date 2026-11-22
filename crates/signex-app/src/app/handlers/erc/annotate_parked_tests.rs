@@ -72,7 +72,8 @@ fn every_parked_sheet_records_the_bytes_the_run_read() {
     let carried = app.document_state.engines[&child]
         .document()
         .unknown
-        .source_hash;
+        .source_hash
+        .clone();
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(baseline, Some(read));
     assert_eq!(carried, None, "undo snapshots do not carry the fingerprint");
