@@ -117,11 +117,21 @@ pub(crate) fn blanket_edited(
         BlanketEdit::Pour(value) => *pour = *value,
         BlanketEdit::IncludeEdgeNets(on) => *include_edge_nets = *on,
         BlanketEdit::Outline(field, text) => {
-            let value = text.trim().parse::<f64>().ok().filter(|v| v.is_finite())?;
-            outline_edited(start, end, *field, value, page)?;
+            let value = outline_value(*field, text)?;
+            outline_edited(start, end, *field, value, page);
         }
     }
     Some(out)
+}
+
+/// What an Outline box can store of typed `text`: a corner is any finite
+/// number, a side is above zero.
+pub(crate) fn outline_value(field: OutlineField, text: &str) -> Option<f64> {
+    let value = text.trim().parse::<f64>().ok().filter(|v| v.is_finite())?;
+    match field {
+        OutlineField::X | OutlineField::Y => Some(value),
+        OutlineField::Width | OutlineField::Height => (value > 0.0).then_some(value),
+    }
 }
 
 /// Move the region `start`..`end` to a typed corner, or size it from
@@ -132,7 +142,7 @@ fn outline_edited(
     field: OutlineField,
     value: f64,
     (origin, paper_height): (PageOrigin, f64),
-) -> Option<()> {
+) {
     let sign = |d: f64| if d < 0.0 { -1.0 } else { 1.0 };
     match field {
         OutlineField::X => {
@@ -145,11 +155,9 @@ fn outline_edited(
             start.y += shift;
             end.y += shift;
         }
-        OutlineField::Width if value > 0.0 => end.x = start.x + sign(end.x - start.x) * value,
-        OutlineField::Height if value > 0.0 => end.y = start.y + sign(end.y - start.y) * value,
-        OutlineField::Width | OutlineField::Height => return None,
+        OutlineField::Width => end.x = start.x + sign(end.x - start.x) * value,
+        OutlineField::Height => end.y = start.y + sign(end.y - start.y) * value,
     }
-    Some(())
 }
 
 /// `directive` (a Net Parameters directive) with `edit` applied; `None`

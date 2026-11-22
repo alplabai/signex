@@ -341,6 +341,55 @@ fn a_locked_union_keeps_its_members_until_unlocked() {
     ));
 }
 
+fn update(name: &str, tags: &[&str], locked: bool) -> Command {
+    Command::UpdateUnion {
+        uuid: id(100),
+        name: name.into(),
+        tags: tags.iter().map(|t| (*t).to_string()).collect(),
+        locked,
+    }
+}
+
+#[test]
+fn a_locked_union_refuses_a_new_name_or_tags_until_unlocked() {
+    let mut engine = locked(&[1]);
+    let before = written(&engine);
+    for refused in [
+        update("Renamed", &[], true),
+        update("Input filter", &["emc"], true),
+        update("Renamed", &[], false),
+    ] {
+        assert!(matches!(
+            refusal(engine.execute(refused)),
+            UnionRefusal::Locked { .. }
+        ));
+    }
+    assert_eq!(written(&engine), before, "the refusals changed nothing");
+    engine.execute(update("Input filter", &[], false)).unwrap();
+    engine.execute(update("Renamed", &[], false)).unwrap();
+    assert_eq!(engine.document().unions[0].name, "Renamed");
+}
+
+#[test]
+fn a_locked_union_saved_with_untidy_tags_can_still_be_unlocked() {
+    let mut s = sheet();
+    s.unions.push(SchUnion {
+        locked: true,
+        ..union(100, "Input filter", &[1])
+    });
+    let mut engine = Engine::new(s).unwrap();
+    let tags = engine.document().unions[0].tags.clone();
+    engine
+        .execute(Command::UpdateUnion {
+            uuid: id(100),
+            name: "Input filter".into(),
+            tags,
+            locked: false,
+        })
+        .unwrap();
+    assert!(!engine.document().unions[0].locked);
+}
+
 #[test]
 fn a_click_on_a_member_selects_the_whole_union() {
     let engine = created(&[1, 11]);

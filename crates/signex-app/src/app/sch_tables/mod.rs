@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use iced::Task;
 
-pub(crate) use annotation_edit::apply_annotation_edit;
+pub(crate) use annotation_edit::{apply_annotation_edit, table_padding_holds, table_text_size_holds};
 pub use annotation_edit::{AnnotationEdit, Axis, TableSourceKind};
 pub(crate) use rows::{designators, source_is_missing};
 #[cfg(test)]

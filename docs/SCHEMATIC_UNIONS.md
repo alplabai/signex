@@ -54,8 +54,8 @@ is drawn in the accent colour and becomes the panel's picked union.
 A locked union freezes its members the way the object lock does: they cannot
 be moved, turned, mirrored, edited or deleted until the union is unlocked. A
 selection that holds them skips them and says why ("union Input filter is
-locked ..."). A locked union also refuses Add / Remove Selection and Break
-Union; unlocking is the way out.
+locked ..."). A locked union also refuses a rename, a retag, Add / Remove
+Selection and Break Union; unlocking is the way out.
 
 ## Hiding
 

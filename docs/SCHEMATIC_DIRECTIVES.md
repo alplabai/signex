@@ -144,7 +144,10 @@ and `Command::UpdateDirective`, patch `DocumentPatch::DIRECTIVES` (part of
 delete work on a selected directive like on any other item
 (`SelectedKind::Directive`). Consecutive updates of one directive share one
 undo step, like typing a field; a command, a pick, a segment or a checkbox
-is a step of its own. A rule value that is not a finite number is refused.
+is a step of its own. A rule value or track width must be blank or a finite
+number of zero or more, and a blanket's width and height above zero. Anything
+else is refused: the sheet does not change, and the box keeps the text and
+shows it is invalid.
 
 | Surface | Net Blanket | Compile Mask | Differential Pair | Net Parameters |
 |---|---|---|---|---|

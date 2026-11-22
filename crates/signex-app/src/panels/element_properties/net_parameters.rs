@@ -169,6 +169,7 @@ fn rule_list<'a>(
             panel.shown(DraftField::Rule(rule), value),
             typed(rule),
             width,
+            panel.refused_ink(DraftField::Rule(rule), ctx),
         )
     };
     let head = iced::widget::row![
