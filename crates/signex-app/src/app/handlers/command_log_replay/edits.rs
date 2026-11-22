@@ -95,14 +95,19 @@ impl Signex {
         if !missing.is_empty() {
             return Some(targets_gone(document, &missing));
         }
-        if let ReplayInput::Sheet {
-            commands,
-            pre_images,
-            ..
-        } = input
-            && let Some(engine) = self.document_state.engines.get(document)
-            && rebase::is_stale(engine.document(), commands, pre_images)
-        {
+        let is_stale = match input {
+            ReplayInput::Sheet {
+                commands,
+                pre_images,
+                ..
+            } => (self.document_state.engines.get(document))
+                .is_some_and(|e| rebase::is_stale(e.document(), commands, pre_images)),
+            ReplayInput::Board { guard, .. } => {
+                (self.document_state.pcb_board(document)).is_none_or(|board| !guard.holds(board))
+            }
+            _ => false,
+        };
+        if is_stale {
             return Some(
                 Translatable::new(ids::COMMAND_LOG_REPLAY_STATE_CHANGED)
                     .arg("command", row.label.clone())
