@@ -1,20 +1,25 @@
 //! The change table of the sync dialog (mockup row 79): one row per change
-//! with its Change pill, the entry and its I/O type.
+//! with its Change pill, the entry and its I/O type. On Symbol to Sheet each
+//! removal has its own tick (#2831).
 
-use iced::widget::{Column, column, container, row};
+use iced::widget::{Column, Row, Space, column, container};
 use iced::{Alignment, Border, Element, Length, Theme, Widget as _};
 use signex_engine::{SheetEntryChange, SheetSyncEntry};
 use signex_i18n::{I18n, Localized, MessageId, UserText, ids, t};
 use signex_types::theme::ThemeTokens;
-use signex_widgets::text;
+use signex_widgets::{checkbox, text};
 
 use super::{SP, TS};
 use crate::app::Message;
+use crate::app::sheet_sync::{SheetSyncMsg, SheetSyncState};
+use crate::panels::form_look::checkbox_style;
 use crate::styles::{HAIRLINE, PillTone, Radii, pill, pill_colors, ti, tokens};
 
 /// Widths of the Change and I/O type columns, in body ems (84 and 96 px).
 const CHANGE_EM: f32 = 7.0;
 const IO_EM: f32 = 8.0;
+/// Width of the Remove column, in body ems (60 px).
+const TICK_EM: f32 = 5.0;
 
 /// The rows that change something, Added first, then Removed, then Renamed.
 pub(super) fn changed_rows(entries: &[SheetSyncEntry]) -> Vec<&SheetSyncEntry> {
@@ -54,20 +59,51 @@ pub(super) fn io_name(direction: &str) -> MessageId {
     }
 }
 
-/// A row of the three columns.
+/// A row of the columns; `tick` is the Remove cell, when the table has one.
 fn line<'a>(
+    tick: Option<Element<'a, Message>>,
     change: Element<'a, Message>,
     entry: Element<'a, Message>,
     io: Element<'a, Message>,
 ) -> Element<'a, Message> {
-    row![
-        container(change).width(Length::Fixed(TS.body * CHANGE_EM)),
-        container(entry).width(Length::Fill),
-        container(io).width(Length::Fixed(TS.body * IO_EM)),
-    ]
-    .spacing(SP.s)
-    .align_y(Alignment::Center)
-    .boxed()
+    let mut cells: Row<Element<'a, Message>> = Row::new().spacing(SP.s).align_y(Alignment::Center);
+    if let Some(tick) = tick {
+        cells = cells.push(
+            container(tick)
+                .width(Length::Fixed(TS.body * TICK_EM))
+                .boxed(),
+        );
+    }
+    cells
+        .push(
+            container(change)
+                .width(Length::Fixed(TS.body * CHANGE_EM))
+                .boxed(),
+        )
+        .push(container(entry).width(Length::Fill).boxed())
+        .push(container(io).width(Length::Fixed(TS.body * IO_EM)).boxed())
+        .boxed()
+}
+
+/// The Remove cell: a tick on a removal, empty on any other change. Drawn
+/// disabled while Apply waits on the file check.
+fn removal_tick<'a>(entry: &SheetSyncEntry, state: &SheetSyncState) -> Element<'a, Message> {
+    if entry.change != SheetEntryChange::Removed {
+        return container(Space::new()).boxed();
+    }
+    let mut tick = checkbox(!state.is_left_out(entry))
+        .size(TS.body)
+        .style(checkbox_style);
+    if !state.checking {
+        let port = entry.name.clone();
+        tick = tick.on_toggle(move |ticked| {
+            Message::from(SheetSyncMsg::RemovalTicked {
+                port: port.clone(),
+                ticked,
+            })
+        });
+    }
+    container(tick).boxed()
 }
 
 fn header_cell<'a>(id: MessageId, i18n: &I18n, tokens: &ThemeTokens) -> Element<'a, Message> {
@@ -105,10 +141,18 @@ fn entry_cell<'a>(
 
 fn change_row<'a>(
     entry: &SheetSyncEntry,
+    state: &SheetSyncState,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
-    let (words, tone) = change_pill(&entry.change);
+    let (words, tone) = if state.is_left_out(entry) {
+        (ids::SHEET_SYNC_LEFT_OUT, PillTone::Neutral)
+    } else {
+        change_pill(&entry.change)
+    };
+    let tick = state
+        .shows_removal_ticks()
+        .then(|| removal_tick(entry, state));
     let ink = pill_colors(tokens, tone).1;
     let badge = container(text(t!(i18n, words)).size(TS.caption).color(ink))
         .padding([0.0, SP.m * 0.75])
@@ -118,7 +162,7 @@ fn change_row<'a>(
         .size(TS.body)
         .color(tokens::muted_text(tokens))
         .boxed();
-    container(line(badge, entry_cell(entry, i18n, tokens), io))
+    container(line(tick, badge, entry_cell(entry, i18n, tokens), io))
         .padding([SP.xs, SP.m])
         .width(Length::Fill)
         .boxed()
@@ -127,12 +171,17 @@ fn change_row<'a>(
 /// The table of `rows`: a header strip, then one row per change.
 pub(super) fn view<'a>(
     rows: &[&SheetSyncEntry],
+    state: &SheetSyncState,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, Message> {
     let r = tokens::resolve(tokens);
     let (strip, edge) = (r.sunken, r.line_soft);
+    let remove_head = state
+        .shows_removal_ticks()
+        .then(|| header_cell(ids::SHEET_SYNC_COLUMN_REMOVE, i18n, tokens));
     let header = container(line(
+        remove_head,
         header_cell(ids::SHEET_SYNC_COLUMN_CHANGE, i18n, tokens),
         header_cell(ids::SHEET_SYNC_COLUMN_ENTRY, i18n, tokens),
         header_cell(ids::SHEET_SYNC_COLUMN_IO, i18n, tokens),
@@ -145,7 +194,7 @@ pub(super) fn view<'a>(
     });
     let mut list: Column<Element<'a, Message>> = column![header.boxed()];
     for entry in rows {
-        list = list.push(change_row(entry, i18n, tokens));
+        list = list.push(change_row(entry, state, i18n, tokens));
     }
     let fill = r.field;
     container(list)

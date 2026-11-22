@@ -1,4 +1,5 @@
-//! Apply: exactly the changes the preview shows, as one undo step.
+//! Apply: the changes the preview shows, without the removals whose tick is
+//! off, as one undo step.
 //!
 //! The previews are worked out again from the live sheets first; when they
 //! differ from what the dialog shows, nothing is changed and the dialog
@@ -38,6 +39,7 @@ impl Signex {
             return Task::none();
         };
         let shown = state.previews.clone();
+        let kept = state.kept_ports.clone();
         let direction = state.direction;
         let generation = state.generation;
         let child_path = state.child_path.clone();
@@ -59,7 +61,7 @@ impl Signex {
             SheetSyncDirection::SymbolToSheet
                 if self.document_state.engines.contains_key(&child_path) =>
             {
-                self.write_sync_to_sheet(&symbol, &now.to_sheet);
+                self.write_sync_to_sheet(&symbol, &now.to_sheet.leaving_out(&kept));
                 Task::none()
             }
             SheetSyncDirection::SymbolToSheet => {
@@ -104,6 +106,7 @@ impl Signex {
             return Task::none();
         };
         let shown = state.previews.clone();
+        let kept = state.kept_ports.clone();
         let (symbol, child) = match self.sheet_sync_sides(state) {
             Ok(sides) => sides,
             Err(problem) => return self.refuse_sheet_sync(problem),
@@ -113,12 +116,13 @@ impl Signex {
             self.show_current_preview(&symbol, &child, now);
             return self.refuse_sheet_sync(SheetSyncProblem::Changed);
         }
-        self.write_sync_to_sheet(&symbol, &now.to_sheet);
+        self.write_sync_to_sheet(&symbol, &now.to_sheet.leaving_out(&kept));
         Task::none()
     }
 
     /// The dialog now shows `now`, the changes the live sheets call for, so
-    /// the next Apply can match it.
+    /// the next Apply can match it. A port left out stays left out while it
+    /// is still a removal.
     fn show_current_preview(
         &mut self,
         symbol: &ChildSheet,
@@ -127,6 +131,9 @@ impl Signex {
     ) {
         let entries = entries_of(symbol, child, &now);
         if let Some(state) = self.ui_state.sheet_sync.as_mut() {
+            state
+                .kept_ports
+                .retain(|port| now.to_sheet.removed.contains(port));
             state.previews = Some(now);
             state.entries = Some(entries);
         }

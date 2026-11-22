@@ -26,6 +26,9 @@ define_ids! {
     SHEET_SYNC_COLUMN_CHANGE = "sheet-sync-column-change";
     SHEET_SYNC_COLUMN_ENTRY = "sheet-sync-column-entry";
     SHEET_SYNC_COLUMN_IO = "sheet-sync-column-io";
+    SHEET_SYNC_COLUMN_REMOVE = "sheet-sync-column-remove";
+    SHEET_SYNC_LEFT_OUT = "sheet-sync-left-out";
+    SHEET_SYNC_REMOVAL_WARNING = "sheet-sync-removal-warning";
     SHEET_SYNC_IO_INPUT = "sheet-sync-io-input";
     SHEET_SYNC_IO_OUTPUT = "sheet-sync-io-output";
     SHEET_SYNC_IO_BIDIRECTIONAL = "sheet-sync-io-bidirectional";

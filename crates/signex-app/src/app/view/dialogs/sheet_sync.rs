@@ -21,8 +21,8 @@ use crate::app::sheet_sync::{
 };
 use crate::app::{Message, Signex};
 use crate::styles::{
-    DialogButtonKind, HAIRLINE, PillTone, Radii, Spacing, TypeScale, dialog_button, pill_colors,
-    ti, tokens,
+    DialogButtonKind, DialogIcon, HAIRLINE, PillTone, Radii, Spacing, TypeScale, dialog_button,
+    pill_colors, ti, tokens,
 };
 
 const TS: TypeScale = TypeScale::DEFAULT;
@@ -115,10 +115,26 @@ fn footer<'a>(
     )
 }
 
-/// How many changes Apply makes in the chosen direction.
+/// How many changes Apply makes in the chosen direction: a removal left out
+/// is not one.
 fn change_count(state: &SheetSyncState) -> usize {
-    state.preview().map_or(0, |preview| {
+    state.applied_preview().map_or(0, |preview| {
         preview.added.len() + preview.removed.len() + preview.renamed.len()
+    })
+}
+
+/// The warning naming the ports Apply removes from the sheet, if any
+/// (#2831).
+fn removal_warning(state: &SheetSyncState, i18n: &I18n) -> Option<Localized> {
+    let ports = state.ports_to_remove();
+    (!ports.is_empty()).then(|| {
+        t!(
+            i18n,
+            ids::SHEET_SYNC_REMOVAL_WARNING,
+            "count" => ports.len(),
+            "file" => state.child_filename.as_str(),
+            "ports" => ports.join(", ")
+        )
     })
 }
 
@@ -150,8 +166,8 @@ fn body<'a>(
 ) -> Element<'a, Message> {
     let mut col: Column<Element<'a, Message>> = Column::new().spacing(SP.l).width(Length::Fill);
     col = col.push(direction_section(state, i18n, tokens));
-    if let Some(entries) = state.entries() {
-        col = col.push(preview_section(state, entries, width, i18n, tokens));
+    if let Some(entries) = state.drawn_entries() {
+        col = col.push(preview_section(state, &entries, width, i18n, tokens));
     }
     let status = match (state.preview(), &state.problem) {
         (None, Some(problem)) => Some(problem_text(problem, i18n)),
@@ -162,7 +178,14 @@ fn body<'a>(
     if let Some(line) = status {
         col = col.push(text(line).size(TS.body).color(ti(tokens.text)).boxed());
     }
-    if let Some(entries) = state.entries().filter(|_| change_count(state) > 0) {
+    if let Some(warning) = removal_warning(state, i18n) {
+        let warning: Element<'a, Message> =
+            super::graphite::callout(DialogIcon::Warn, warning, tokens);
+        col = col.push(warning);
+    }
+    // Listed while every change is left out, so a tick can be set back.
+    let has_changes = state.preview().is_some_and(|preview| !preview.is_empty());
+    if let Some(entries) = state.entries().filter(|_| has_changes) {
         col = col.push(changes_section(state, entries, i18n, tokens));
     }
     if state.preview().is_some()
@@ -445,12 +468,12 @@ fn changes_section<'a>(
             tokens
         ),
         Space::new().width(Length::Fill),
-        text(t!(i18n, ids::SHEET_SYNC_CHANGE_COUNT, "count" => rows.len()))
+        text(t!(i18n, ids::SHEET_SYNC_CHANGE_COUNT, "count" => change_count(state)))
             .size(TS.caption)
             .color(tokens::resolve(tokens).ink4),
     ]
     .align_y(Alignment::Center);
-    column![heading, table::view(&rows, i18n, tokens)]
+    column![heading, table::view(&rows, state, i18n, tokens)]
         .spacing(SP.s)
         .boxed()
 }
@@ -515,6 +538,7 @@ mod tests {
                 to_symbol: vec![entry.clone()],
                 to_sheet: vec![entry],
             }),
+            kept_ports: std::collections::BTreeSet::new(),
             preview_mode: SheetSyncPreviewMode::default(),
             preview_expanded: false,
             checking: false,
@@ -531,6 +555,83 @@ mod tests {
         none.previews = Some(SheetSyncPreviews::default());
         let words = apply_words(&none, I18n::en_us_ref()).into_string();
         assert_eq!(words, "Apply");
+    }
+
+    /// `state` on Symbol to Sheet removing GONE1 and GONE2.
+    fn removing() -> SheetSyncState {
+        let removed = |name: &str| SheetSyncEntry {
+            name: name.to_string(),
+            direction: "output",
+            change: SheetEntryChange::Removed,
+        };
+        let mut s = state();
+        s.direction = SheetSyncDirection::SymbolToSheet;
+        s.previews = Some(SheetSyncPreviews {
+            to_symbol: SheetSyncPreview::default(),
+            to_sheet: SheetSyncPreview {
+                removed: vec!["GONE1".to_string(), "GONE2".to_string()],
+                ..SheetSyncPreview::default()
+            },
+        });
+        s.entries = Some(SheetSyncEntries {
+            to_symbol: Vec::new(),
+            to_sheet: vec![removed("GONE1"), removed("GONE2")],
+        });
+        s
+    }
+
+    /// #2831, mockup row 79: the warning names the ports Apply removes, a
+    /// removal left out leaves it and the count, and the drawing keeps it.
+    #[test]
+    fn the_warning_names_the_ports_apply_removes() {
+        let en = I18n::en_us_ref();
+        let mut s = removing();
+        let words = removal_warning(&s, en).expect("a warning").into_string();
+        assert!(
+            words.contains("GONE1") && words.contains("GONE2"),
+            "{words}"
+        );
+        assert!(words.contains("power.snxsch"), "{words}");
+        assert_eq!(change_count(&s), 2);
+
+        s.set_removal_ticked("GONE1", false);
+        let words = removal_warning(&s, en).expect("a warning").into_string();
+        assert!(
+            !words.contains("GONE1") && words.contains("GONE2"),
+            "{words}"
+        );
+        assert_eq!(change_count(&s), 1);
+        let drawn = s.drawn_entries().expect("entries");
+        assert_eq!(drawn[0].change, SheetEntryChange::Kept);
+        assert_eq!(drawn[1].change, SheetEntryChange::Removed);
+
+        s.set_removal_ticked("GONE2", false);
+        assert!(removal_warning(&s, en).is_none(), "nothing is removed");
+        assert_eq!(apply_words(&s, en).into_string(), "Apply");
+    }
+
+    /// The other direction never warns: its removals have no ticks.
+    #[test]
+    fn sheet_to_symbol_has_no_removal_warning_or_ticks() {
+        let mut s = removing();
+        s.direction = SheetSyncDirection::SheetToSymbol;
+        assert!(removal_warning(&s, I18n::en_us_ref()).is_none());
+        assert!(!s.shows_removal_ticks());
+    }
+
+    /// The dialog builds with its ticks on, off and disabled.
+    #[test]
+    fn the_removal_rows_build_in_every_tick_state() {
+        let (mut app, _task) = Signex::new();
+        for (left_out, checking) in [(false, false), (true, false), (true, true)] {
+            let mut s = removing();
+            if left_out {
+                s.set_removal_ticked("GONE1", false);
+            }
+            s.checking = checking;
+            app.ui_state.sheet_sync = Some(Box::new(s));
+            let _ = app.view_sheet_sync_dialog();
+        }
     }
 
     /// The written side names the drawing and the table.
