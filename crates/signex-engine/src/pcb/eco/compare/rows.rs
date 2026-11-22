@@ -15,7 +15,12 @@ use crate::pcb::eco::change::{EcoChange, EcoChangeList, EcoKey, EcoRow};
 /// The report of `eco` and `back`, read from the same board and design,
 /// with the default directions.
 pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
-    let mut rows: Vec<(CompareRow, bool)> = eco.rows.iter().map(eco_row).collect();
+    let mut rows: Vec<(CompareRow, bool)> = eco
+        .rows
+        .iter()
+        .filter(|row| !only_locks_pad(row, eco))
+        .map(eco_row)
+        .collect();
     for back_row in &back.rows {
         let paired = rows
             .iter_mut()
@@ -38,6 +43,14 @@ pub fn compare(eco: &EcoChangeList, back: &BackChangeList) -> CompareReport {
     }
     report.sync_ticks();
     report
+}
+
+/// A pad row whose net stays exactly as it is and only gains its lock: not
+/// a difference between board and schematic (mockup row 162). One that
+/// another row needs stays, or that row could never be applied.
+fn only_locks_pad(row: &EcoRow, eco: &EcoChangeList) -> bool {
+    matches!(&row.change, EcoChange::PadNet { from, to, .. } if from == to)
+        && !eco.rows.iter().any(|other| other.needs.contains(&row.key))
 }
 
 /// Destructive and board-originated rows, and rows Update PCB starts

@@ -1,7 +1,7 @@
 //! The DRC panel's rule groups and violation rows (#88): a group heading
 //! "HV_08 (3)" with its Rule link, then two-line rows (the detail; the
 //! layer, position and object count) whose Show / Waive / Unwaive show on
-//! hover or selection. Waive opens the waiver form ERC uses too (AV-13).
+//! hover or selection, and on the row whose waiver form is open.
 
 use signex_i18n::{ids, t};
 use signex_types::violation::Severity;
@@ -10,7 +10,7 @@ use super::drc_results::{DrcPanelMsg, drc_msg, rule_label};
 use super::validation_kit::{
     FindingRow, GroupHeader, finding_row, group_header, link, link_ink, row_action, severity_badge,
 };
-use super::waiver_form::{WaiverFormEvents, WaiverFormView, waiver_form};
+use super::waiver_form::{ReasonFormEvents, ReasonFormView, reason_form};
 use super::*;
 use crate::styles::{PillTone, Spacing, TypeScale};
 
@@ -97,7 +97,14 @@ fn place<'a>(ctx: &'a PanelContext, item: &DrcRow, selected: bool) -> Element<'a
     text(words).size(TS.caption).color(detail).boxed()
 }
 
-/// One violation row with its actions while hovered or selected.
+/// The row is the selected one, or its waiver form is open (mockup row 88:
+/// the open row stays tinted and keeps Show and Waive above the form).
+fn is_open_row(drc: &DrcPanel, key: &str) -> bool {
+    drc.view.selected.as_deref() == Some(key)
+        || drc.waive_draft.as_ref().is_some_and(|d| d.key == key)
+}
+
+/// One violation row with its actions while hovered, selected or waived.
 fn violation<'a>(
     ctx: &'a PanelContext,
     drc: &'a DrcPanel,
@@ -105,7 +112,7 @@ fn violation<'a>(
 ) -> Element<'a, PanelMsg> {
     let i18n = &*ctx.i18n;
     let tokens = &ctx.tokens;
-    let selected = drc.view.selected.as_deref() == Some(item.key.as_str());
+    let selected = is_open_row(drc, &item.key);
     let hovered = drc.view.hovered.as_deref() == Some(item.key.as_str());
     let (_, detail_ink) = super::erc_panel::erc_row_text(tokens, selected);
     let (_, detail, _) = super::drc::row_text(i18n, item);
@@ -152,7 +159,8 @@ fn violation<'a>(
     )
 }
 
-/// The shared waiver form under the row being waived, if it is this one.
+/// The Reason form under the row being waived, if it is this one. Waive
+/// waits for the git identity, which names the waiver's author.
 fn waive_form<'a>(
     ctx: &'a PanelContext,
     drc: &'a DrcPanel,
@@ -161,17 +169,15 @@ fn waive_form<'a>(
     let draft = drc.waive_draft.as_ref().filter(|d| d.key == item.key)?;
     let error = draft
         .blank
-        .then(|| t!(ctx.i18n, ids::PANELS_WAIVER_NEEDS_BOTH).into());
-    let form = waiver_form(
-        WaiverFormView {
+        .then(|| t!(ctx.i18n, ids::PANELS_WAIVER_NEEDS_REASON).into());
+    let form = reason_form(
+        ReasonFormView {
             reason: &draft.reason,
-            author: &draft.author,
             error,
         },
-        WaiverFormEvents {
+        ReasonFormEvents {
             reason: |action| drc_msg(DrcPanelMsg::ReasonActed(action)),
-            author: |author| drc_msg(DrcPanelMsg::AuthorEdited(author)),
-            confirm: drc_msg(DrcPanelMsg::WaiveConfirmed),
+            confirm: (!draft.awaits_identity).then(|| drc_msg(DrcPanelMsg::WaiveConfirmed)),
             cancel: drc_msg(DrcPanelMsg::WaiveCancelled),
         },
         &ctx.i18n,

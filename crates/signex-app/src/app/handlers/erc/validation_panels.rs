@@ -90,14 +90,11 @@ impl Signex {
         {
             draft.author.clone_from(&author);
         }
-        if let Some(draft) = self
-            .interaction_state
-            .pcb_drc
-            .waive_draft
-            .as_mut()
-            .filter(|d| d.author.trim().is_empty())
-        {
-            draft.author = author;
+        if let Some(draft) = self.interaction_state.pcb_drc.waive_draft.as_mut() {
+            draft.awaits_identity = false;
+            if draft.author.trim().is_empty() {
+                draft.author = author;
+            }
         }
         self.refresh_panel_ctx();
     }
