@@ -165,6 +165,18 @@ pub(crate) fn refusable_input_style(
     }
 }
 
+/// [`text_input_style`] that greys while the field takes no input: the sunken
+/// fill with faint ink (mockup row 111).
+pub(crate) fn greyable_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let mut style = text_input_style(theme, status);
+    if matches!(status, text_input::Status::Disabled) {
+        let l = FormLook::of(theme);
+        style.background = Background::Color(l.sunken);
+        style.value = l.ink4;
+    }
+    style
+}
+
 /// `checkbox` style for a form toggle.
 pub(crate) fn checkbox_style(theme: &Theme, status: checkbox::Status) -> checkbox::Style {
     let base = checkbox::primary(theme, status);

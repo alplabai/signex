@@ -135,6 +135,19 @@ fn numeric_columns_are_right_aligned_and_mono() {
     }
 }
 
+/// Mockup row 112: at the dialog's 1000 px the default columns, Qty last,
+/// are all in view beside the sidebar, with no sideways scroll.
+#[test]
+fn the_default_columns_fit_beside_the_sidebar() {
+    use super::{GUTTER_W, HANDLE_W, default_column_width};
+    let columns = signex_output::BomOptions::default().columns;
+    assert_eq!(columns.last(), Some(&BomColumn::Qty));
+    let cells: f32 = columns.iter().map(default_column_width).sum();
+    let handles = (columns.len() - 1) as f32 * HANDLE_W;
+    let room = 1000.0 - super::super::SIDEBAR_W - crate::styles::HAIRLINE;
+    assert!(GUTTER_W + cells + handles <= room);
+}
+
 /// Mockup row 112 and docs/DECISIONS.md (2026-11-19), on both Graphite
 /// themes: a flagged line takes the soft warning (or error) tint and its gutter the flag colour; a selected
 /// line takes the neutral selection fill, never the warning amber; a clean

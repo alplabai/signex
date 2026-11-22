@@ -3,6 +3,7 @@
 
 pub(super) mod kit;
 mod print;
+mod print_art;
 mod print_plan;
 mod reports;
 mod reports_table;
