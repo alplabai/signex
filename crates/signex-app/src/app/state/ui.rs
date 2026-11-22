@@ -236,6 +236,8 @@ pub struct UiState {
     /// The locale in force: its catalog bundle and the Language list. Shared
     /// with the menus; replaced by `Signex::set_language` (#2055).
     pub i18n: std::sync::Arc<signex_i18n::I18n>,
+    /// The Project tab previews' open label, held handle and larger window.
+    pub project_preview: crate::app::project_tab::ProjectPreviewUi,
     /// The Preferences language draft, dirty pages and page view state.
     /// Boxed: a pointer of the size budget (#2412).
     pub preferences_pages: Box<crate::preferences::PreferencesPagesState>,
