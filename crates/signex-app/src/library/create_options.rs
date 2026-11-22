@@ -4,7 +4,7 @@
 
 use iced::font::Weight;
 use iced::widget::{Space, column, container, row};
-use iced::{Border, Element, Font, Length, Theme, Widget};
+use iced::{Border, Color, Element, Font, Length, Theme, Widget};
 use signex_i18n::{I18n, Localized, ids, t};
 use signex_types::theme::ThemeTokens;
 use signex_widgets::enable_section::dependents_veil;
@@ -46,6 +46,7 @@ pub fn view<'a>(
 
     let git = option_card(
         state.enable_git,
+        true,
         t!(i18n, ids::LIBRARY_CREATE_OPTIONS_GIT),
         t!(i18n, ids::LIBRARY_CREATE_OPTIONS_GIT_HELP),
         LibraryMessage::LibraryCreateOptionsToggleGit,
@@ -53,13 +54,15 @@ pub fn view<'a>(
     );
     let lfs = option_card(
         state.use_lfs,
+        state.enable_git,
         t!(i18n, ids::LIBRARY_CREATE_OPTIONS_LFS),
         t!(i18n, ids::LIBRARY_CREATE_OPTIONS_LFS_HELP),
         LibraryMessage::LibraryCreateOptionsToggleLfs,
         tokens,
     );
     // Disable-when-off: LFS stays visible, greyed and inert, until Git is
-    // on (the handler clears it when Git turns off).
+    // on (the handler clears it when Git turns off). The veil dims the
+    // card's quads; text draws above it, so the card greys its own words.
     let lfs = match dependents_veil(ti(tokens.paper), state.enable_git) {
         Some(veil) => Inert::new(lfs, veil).boxed(),
         None => lfs,
@@ -133,18 +136,30 @@ fn title_font() -> Font {
     }
 }
 
+/// The title and help inks of an option card; a card that is not live has
+/// both in the faintest ink.
+fn option_inks(is_live: bool, tokens: &ThemeTokens) -> (Color, Color) {
+    let r = resolve(tokens);
+    if is_live {
+        (ti(tokens.text), r.ink3)
+    } else {
+        (r.ink4, r.ink4)
+    }
+}
+
 /// An option card: a hairline-bordered card holding a switch, a title and
 /// a help caption. A press anywhere on the card sends `on_toggle`, as the
 /// switch does.
 fn option_card<'a>(
     is_on: bool,
+    is_live: bool,
     title: Localized,
     help: Localized,
     on_toggle: LibraryMessage,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
     let r = resolve(tokens);
-    let ink = ti(tokens.text);
+    let (ink, help_ink) = option_inks(is_live, tokens);
     let line = ti(tokens.border);
     let switch = toggle_switch(
         is_on,
@@ -153,7 +168,7 @@ fn option_card<'a>(
     );
     let words = column![
         text(title).size(TS.body).font(title_font()).color(ink),
-        text(help).size(TS.caption).color(r.ink3),
+        text(help).size(TS.caption).color(help_ink),
     ]
     .spacing(SP.xs)
     .width(Length::Fill);
@@ -237,6 +252,22 @@ mod tests {
             refusal: refusal.map(str::to_owned),
             existing_library: false,
             path_refused: false,
+        }
+    }
+
+    /// Mockup row 133: while Git is off the LFS card's title and help are
+    /// in the faintest ink, in both themes; a live card keeps its inks.
+    #[test]
+    fn a_card_that_is_not_live_greys_its_words() {
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let r = resolve(&tokens);
+            assert_eq!(option_inks(false, &tokens), (r.ink4, r.ink4), "{id:?}");
+            assert_eq!(
+                option_inks(true, &tokens),
+                (ti(tokens.text), r.ink3),
+                "{id:?}"
+            );
         }
     }
 

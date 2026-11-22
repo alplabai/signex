@@ -142,6 +142,7 @@ define_ids! {
     LIBRARY_DELETE_ROW_TITLE = "library-delete-row-title";
     LIBRARY_DELETE_ROW_INTRO_TITLE = "library-delete-row-intro-title";
     LIBRARY_DELETE_ROW_INTRO = "library-delete-row-intro";
+    LIBRARY_DELETE_ROW_CAPTION = "library-delete-row-caption";
     LIBRARY_PICKER_TITLE_PLACE = "library-picker-title-place";
     LIBRARY_PICKER_TITLE_CHANGE = "library-picker-title-change";
     LIBRARY_PICKER_TITLE_DATASHEET = "library-picker-title-datasheet";

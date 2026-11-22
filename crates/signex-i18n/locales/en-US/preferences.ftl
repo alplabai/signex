@@ -414,7 +414,7 @@ preferences-layer-switcher-help = Strip: layer tabs under the board. Dropdown: t
 preferences-selected-segment-label = Selected option
 preferences-selected-segment-neutral = Neutral
 preferences-selected-segment-accent = Accent
-preferences-selected-segment-help = Applies to the dark theme.
+preferences-selected-segment-help = How the selected option of a segmented control looks in Graphite Dark. Neutral: fill #3D4047, text #FFFFFF, with the chip shadow. Accent: fill #C2552D, text #FFFFFF, no shadow. Graphite Light is unchanged under both.
 preferences-appearance-trackpad-pan-short-help = A two-finger trackpad scroll pans instead of zooming. Pinch and Ctrl/Cmd + scroll still zoom. Only used when Mouse wheel is Zoom.
 preferences-appearance-remember-geometry-short-help = Reopen the main window at the size and position it had when you last closed it.
 
