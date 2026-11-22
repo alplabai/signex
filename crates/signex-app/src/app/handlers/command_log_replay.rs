@@ -374,14 +374,6 @@ impl Signex {
             .collect()
     }
 
-    fn board_revision(&self, document: &Path) -> u64 {
-        self.document_state
-            .pcb_revisions
-            .get(document)
-            .copied()
-            .unwrap_or(0)
-    }
-
     fn still_on_sheet(&self, document: &Path, items: Vec<SelectedItem>) -> Vec<SelectedItem> {
         let Some(engine) = self.document_state.engines.get(document) else {
             return Vec::new();
