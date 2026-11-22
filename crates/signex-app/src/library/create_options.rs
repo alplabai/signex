@@ -67,7 +67,7 @@ pub fn view<'a>(
 
     let mut body = column![git, row![Space::new().width(LFS_INDENT), lfs]].spacing(CARD_GAP);
     if let Some(reason) = &state.refusal {
-        body = body.push(refusal_banner(reason, i18n, tokens));
+        body = body.push(refusal_banner(reason, state.existing_library, i18n, tokens));
     }
 
     let refused = state.refusal.is_some();
@@ -78,10 +78,14 @@ pub fn view<'a>(
         tokens,
     );
     let create = if refused {
+        let tip = if state.existing_library {
+            ids::LIBRARY_CREATE_OPTIONS_EXISTS_TIP
+        } else {
+            ids::LIBRARY_CREATE_OPTIONS_REFUSED_TIP
+        };
         tooltip(
             create,
-            container(text(t!(i18n, ids::LIBRARY_CREATE_OPTIONS_REFUSED_TIP)).size(TS.body))
-                .padding([SP.xs, SP.s]),
+            container(text(t!(i18n, tip)).size(TS.body)).padding([SP.xs, SP.s]),
             tooltip::Position::Top,
         )
         .style(crate::styles::context_menu(tokens))
@@ -173,25 +177,30 @@ fn option_card<'a>(
     .boxed()
 }
 
-/// The refusal as an error banner, with the way out: choose another
-/// location (the save-as picker again).
+/// The refusal as an error banner, with the ways out: choose another
+/// location (the save-as picker again) and, when a library is already
+/// there, open it.
 fn refusal_banner<'a>(
     reason: &str,
+    existing_library: bool,
     i18n: &I18n,
     tokens: &ThemeTokens,
 ) -> Element<'a, LibraryMessage> {
-    // raw: the library guard words its own refusal, in English.
+    // raw: the reason is already worded, by the handler or the library guard.
     let body = text(raw(reason.to_owned())).size(TS.body).boxed();
-    notice_banner(
-        PillTone::Err,
-        body,
-        vec![small_btn(
-            t!(i18n, ids::LIBRARY_CREATE_OPTIONS_RELOCATE),
-            LibraryMessage::LibraryCreateOptionsRelocateRequested,
-            tokens,
-        )],
+    let mut actions = vec![small_btn(
+        t!(i18n, ids::LIBRARY_CREATE_OPTIONS_RELOCATE),
+        LibraryMessage::LibraryCreateOptionsRelocateRequested,
         tokens,
-    )
+    )];
+    if existing_library {
+        actions.push(small_btn(
+            t!(i18n, ids::LIBRARY_CREATE_OPTIONS_OPEN_EXISTING),
+            LibraryMessage::LibraryCreateOptionsOpenExistingRequested,
+            tokens,
+        ));
+    }
+    notice_banner(PillTone::Err, body, actions, tokens)
 }
 
 /// A small bordered action inside a banner (the mock's `btn sm`).
@@ -224,6 +233,21 @@ mod tests {
             enable_git,
             use_lfs: false,
             refusal: refusal.map(str::to_owned),
+            existing_library: false,
+        }
+    }
+
+    /// The banner for a library already at the path builds, in both themes.
+    #[test]
+    fn the_view_builds_with_a_library_already_at_the_path() {
+        let i18n = I18n::en_us();
+        let refused = LibraryCreateOptionsState {
+            existing_library: true,
+            ..state(false, Some("A library already exists"))
+        };
+        for id in [ThemeId::GraphiteLight, ThemeId::GraphiteDark] {
+            let tokens = signex_types::theme::theme_tokens(id);
+            let _ = view(&refused, &tokens, &i18n, false);
         }
     }
 

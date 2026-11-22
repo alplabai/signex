@@ -609,6 +609,13 @@ library-create-options-lfs-help = Tracks *.step, *.stp, *.wrl, *.iges via Git LF
 library-create-options-relocate = Choose another location…
 # Tooltip of the disabled Create Library button while a refusal shows.
 library-create-options-refused-tip = Choose another location, or turn off version control.
+# Refusal banner when the chosen path already holds a library. $file is its
+# file name.
+library-create-options-exists = A library already exists in this folder: { $file }.
+# Tooltip of the disabled Create Library button while that refusal shows.
+library-create-options-exists-tip = A library already exists in this folder. Choose another location first.
+# Refusal banner action: open the library already at the chosen path.
+library-create-options-open-existing = Open existing library
 
 ## Library Updates (mockup row 135)
 # Message over the drift table. $count is how many placed components differ

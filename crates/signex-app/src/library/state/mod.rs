@@ -1015,11 +1015,14 @@ pub struct LibraryCreateOptionsState {
     /// Only meaningful when `enable_git` is also true; the modal
     /// greys it out otherwise.
     pub use_lfs: bool,
-    /// Why the last Create press was refused (the library folder is the
-    /// root of a repository with history, so it cannot get its own). The
-    /// modal stays open and shows it; cleared when version control is
-    /// toggled.
+    /// Why the last Create press was refused: a library is already at the
+    /// path, or its folder is the root of a repository with history. The
+    /// modal stays open and shows it; toggling version control clears only
+    /// the repository refusal.
     pub refusal: Option<String>,
+    /// The refusal is a library already at the path: it survives the
+    /// version-control toggle and the banner offers to open that library.
+    pub existing_library: bool,
 }
 
 mod browser_preview;

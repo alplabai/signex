@@ -194,6 +194,9 @@ define_ids! {
     LIBRARY_CREATE_OPTIONS_LFS_HELP = "library-create-options-lfs-help";
     LIBRARY_CREATE_OPTIONS_RELOCATE = "library-create-options-relocate";
     LIBRARY_CREATE_OPTIONS_REFUSED_TIP = "library-create-options-refused-tip";
+    LIBRARY_CREATE_OPTIONS_EXISTS = "library-create-options-exists";
+    LIBRARY_CREATE_OPTIONS_EXISTS_TIP = "library-create-options-exists-tip";
+    LIBRARY_CREATE_OPTIONS_OPEN_EXISTING = "library-create-options-open-existing";
     // Library Updates (mockup row 135)
     LIBRARY_UPDATES_SUMMARY = "library-updates-summary";
     LIBRARY_UPDATES_COUNT_MAJOR = "library-updates-count-major";

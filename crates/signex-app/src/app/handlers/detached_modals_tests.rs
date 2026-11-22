@@ -142,6 +142,7 @@ fn open(app: &mut Signex, modal: ModalId) {
                 enable_git: false,
                 use_lfs: false,
                 refusal: None,
+                existing_library: false,
             })
         }
         ModalId::LibraryCloseConfirm => {

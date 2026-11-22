@@ -27,6 +27,7 @@ impl Signex {
             enable_git: false,
             use_lfs: false,
             refusal: None,
+            existing_library: false,
         });
         Task::none()
     }
@@ -40,11 +41,14 @@ impl Signex {
     }
 
     /// New Library dialog — toggle the "Enable version control" switch.
-    /// Clears a refusal: it only applies with version control on.
+    /// Clears a version-control refusal, which only applies with it on; a
+    /// library already at the path stays refused either way.
     pub(super) fn handle_library_create_options_toggle_git(&mut self) -> Task<Message> {
         if let Some(state) = self.library.create_options.as_mut() {
             state.enable_git = !state.enable_git;
-            state.refusal = None;
+            if !state.existing_library {
+                state.refusal = None;
+            }
             // LFS is meaningless without git — keep the two
             // toggles consistent so the user doesn't end up
             // with LFS-on-no-git which the adapter would
@@ -60,6 +64,9 @@ impl Signex {
     pub(super) fn handle_library_create_options_confirm(&mut self) -> Task<Message> {
         // Refuse before anything is registered or written, and keep the modal
         // open with the reason so the user can pick another place.
+        if self.refuse_existing_library() {
+            return Task::none();
+        }
         if let Some(state) = self.library.create_options.as_mut()
             && state.enable_git
             && let Some(reason) =
@@ -77,6 +84,37 @@ impl Signex {
             )
         } else {
             Task::none()
+        }
+    }
+
+    /// Mark the open New Library dialog refused when its path is already
+    /// taken (mockup row 133). Returns `true` when it was.
+    fn refuse_existing_library(&mut self) -> bool {
+        let i18n = &self.ui_state.i18n;
+        let Some(state) = self.library.create_options.as_mut() else {
+            return false;
+        };
+        if !state.lib_path.exists() {
+            return false;
+        }
+        let file = state.lib_path.file_name().map_or_else(
+            || state.lib_path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        state.refusal = Some(i18n.message_plain(
+            signex_i18n::ids::LIBRARY_CREATE_OPTIONS_EXISTS,
+            &[("file", signex_i18n::Arg::from(file))],
+        ));
+        state.existing_library = true;
+        true
+    }
+
+    /// New Library dialog — "Open existing library" on the refusal banner:
+    /// close the dialog and open the library at the path. Nothing is written.
+    pub(super) fn handle_library_create_options_open_existing(&mut self) -> Task<Message> {
+        match self.library.create_options.take() {
+            Some(state) => self.handle_open_library_at(state.lib_path),
+            None => Task::none(),
         }
     }
 

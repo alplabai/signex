@@ -86,6 +86,9 @@ pub enum LibraryMessage {
     /// banner. Closes the dialog and reopens the New Library save-as
     /// picker for the same project; nothing is written.
     LibraryCreateOptionsRelocateRequested,
+    /// New Library dialog — "Open existing library" on the banner shown when
+    /// a library is already at the path. Closes the dialog and opens it.
+    LibraryCreateOptionsOpenExistingRequested,
     /// F34 — Save-As dialog confirmed for a new symbol library file
     /// (`.snxsym`). Writes an empty `SymbolFile` to the picked path,
     /// refreshes the cached library file enumeration so the project
