@@ -38,7 +38,7 @@ fn line(n: u128) -> SchDrawing {
     }
 }
 
-/// An app showing `sheet` as its only tab, on the Altium keymap.
+/// An app showing `sheet` as its only tab, on the Signex Standard keymap.
 pub(super) fn app_with(sheet: SchematicSheet) -> Signex {
     let path = std::path::PathBuf::from("/w/row-effects.snxsch");
     let (mut app, _task) = Signex::new();
@@ -46,8 +46,8 @@ pub(super) fn app_with(sheet: SchematicSheet) -> Signex {
     app.ui_state.grid_size_mm = 1.0;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app.document_state.engines.insert(
         path.clone(),

@@ -91,7 +91,7 @@ pub struct UiState {
     pub save_profile_dialog: Option<crate::app::state::rule_profile_ui::SaveProfileDialog>,
     /// Profile file writes waiting their turn (#1608).
     pub profile_writes: crate::app::state::rule_profile_ui::ProfileWriteQueue,
-    /// Loaded keyboard-shortcut profiles (bundled Altium / Classic
+    /// Loaded keyboard-shortcut profiles (bundled Signex Standard / Classic
     /// built-ins plus any user profile in the OS config dir). Drives
     /// shortcut dispatch and the Help ▸ Keyboard Shortcuts reference.
     pub keymap_profiles: crate::keymap::ShortcutProfileSet,

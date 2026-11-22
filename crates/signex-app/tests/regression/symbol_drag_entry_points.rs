@@ -303,7 +303,7 @@ fn the_move_selection_dialog_commits_what_the_ghost_shows() {
             "5".to_string(),
         )));
         let _ = app.update(Message::MoveSelection(MoveSelectionMsg::DyChanged(
-            "-10".to_string(),
+            "10".to_string(),
         )));
         let _ = app.update(Message::MoveSelection(MoveSelectionMsg::Apply));
         (5.0, -10.0)

@@ -1,12 +1,27 @@
 //! The TOML shape of a shortcut file and its conversion to and from profiles.
 
-use super::{ProfileLoadError, ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet};
+use super::{
+    BuiltInProfile, ProfileLoadError, ShortcutProfile, ShortcutProfileKind, ShortcutProfileSet,
+};
 use crate::keymap::{
     AppCommandId, Platform, ShortcutBinding, ShortcutBindingAction, ShortcutContext,
     ShortcutTrigger,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+/// The id files saved before #2759 hold for the Signex Standard profile.
+/// Read only: nothing writes it back.
+pub(in crate::keymap) const RENAMED_PROFILE_ID: &str = "altium";
+
+/// A profile id as read from a file, under its current name.
+fn current_profile_id(id: String) -> String {
+    if id == RENAMED_PROFILE_ID {
+        BuiltInProfile::SignexStandard.id().to_string()
+    } else {
+        id
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TomlShortcutProfile {
@@ -89,7 +104,7 @@ impl TomlShortcutConfig {
         for profile in self.keyboard_shortcuts.profiles {
             set.insert_custom_profile(profile.into_profile()?)?;
         }
-        let wanted = self.keyboard_shortcuts.active_profile;
+        let wanted = current_profile_id(self.keyboard_shortcuts.active_profile);
         match set.set_active_profile(wanted.clone()) {
             Ok(()) => Ok(None),
             Err(ProfileLoadError::UnknownActiveProfile(_)) => Ok(Some(wanted)),
@@ -170,12 +185,12 @@ impl TomlKeyboardShortcuts {
             .flat_map(TomlKeymapSection::into_bindings)
             .collect::<Result<Vec<_>, _>>()?;
         Ok(ShortcutProfile {
-            id: self.profile_id,
+            id: current_profile_id(self.profile_id),
             name: self.profile_name,
             kind: self.profile_kind,
             schema_version: self.schema_version,
             description: self.description,
-            base_profile: self.base_profile,
+            base_profile: self.base_profile.map(current_profile_id),
             bindings,
         })
     }

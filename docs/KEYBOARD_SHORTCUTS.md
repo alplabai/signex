@@ -7,7 +7,7 @@ ids to application messages. The shortcut profile files do not serialize Rust
 ## Files
 
 - Built-in profiles live in
-  `crates/signex-app/assets/keyboard-shortcuts/altium.toml` and
+  `crates/signex-app/assets/keyboard-shortcuts/signex_standard.toml` and
   `crates/signex-app/assets/keyboard-shortcuts/classic.toml`.
 - User profiles persist to the OS config directory at
   `<config_dir>/signex/keyboard_shortcuts.toml`.
@@ -34,7 +34,7 @@ schema_version = 1
 profile_id = "my-profile"
 profile_name = "My Profile"
 profile_kind = "custom"
-base_profile = "altium"
+base_profile = "signex_standard"
 
 [[keyboard_shortcuts.sections]]
 context = "global"
@@ -129,12 +129,12 @@ macOS); Classic keeps `Ctrl+G` physical. Windows and Linux
 resolve every row exactly as before (`Mod` is Ctrl there), so the resolved
 golden `builtin_profiles_resolved.golden.tsv` does not change. Chords whose ⌘
 twin is a macOS system shortcut stay on the physical Control key (⌃ on macOS):
-`Ctrl+Q`, `Ctrl+W` (Altium Place Wire), `Ctrl+H`, `Ctrl+M`, `Ctrl+Space`,
+`Ctrl+Q`, `Ctrl+W` (Signex Standard Place Wire), `Ctrl+H`, `Ctrl+M`, `Ctrl+Space`,
 `Ctrl+Tab`, `Ctrl+G` (Classic), `Ctrl+F5`, `Ctrl+Y` (redo), `Ctrl+F4`,
 `Ctrl+PageDown` and `Ctrl+Home`. Redo keeps its plain `Ctrl+Shift+Z` (the
 profile has exactly one raw owner of that chord, and Windows and Linux are
 unchanged) and gains the Mac chord from a `platform = "macos"` section:
-`Mod+Shift+Z` (⇧⌘Z), so ⌃⇧Z also still redoes on macOS. The Altium profile's
+`Mod+Shift+Z` (⇧⌘Z), so ⌃⇧Z also still redoes on macOS. The Signex Standard profile's
 macOS section also has `Mod+Alt+F` (Replace, ⌥⌘F), `Mod+W` (Close Document,
 ⌘W) and `Alt+I` (⌥I, add vertex while drawing, else Copy Attributes): a Mac
 keyboard has no Insert key, so ⌥I is that command's menu hint on macOS. It
@@ -276,20 +276,20 @@ While a wire or bus is drawn, `switch_segment_posture` flips the corner
 (horizontal first or vertical first; in a 45° mode, diagonal first or last) and
 `cycle_wire_bus_graphic_mode` steps the corner mode: 90°, 45° start, 45° end,
 any angle (#2372). The choice holds for later segments, and the status bar names
-it. The Classic profile binds them to `/` and `Shift+Space`. In the Altium
+it. The Classic profile binds them to `/` and `Shift+Space`. In the Signex Standard
 profile `Space` and `Shift+Space` stay bound to `rotate_counterclockwise` and
 `rotate_clockwise`; while a wire or bus run is open (its first point placed),
 the rotate handler bends the run instead: `rotate_counterclockwise` flips the
 corner and `rotate_clockwise` steps the corner mode. Outside a run they rotate
 as usual. Neither adds an undo step; only a committed segment does.
 
-`copy_attributes_or_add_vertex` (Altium profile: `Insert`) fixes a vertex at the
+`copy_attributes_or_add_vertex` (Signex Standard profile: `Insert`) fixes a vertex at the
 cursor while a wire, bus, line or polyline is drawn, as a click there would, and
 the run goes on; mid rectangle, circle or arc it says so in Messages and does
 nothing. With any other tool it copies attributes, also while Measure, a sheet
 symbol or a directive region has its first point placed (#1669).
 
-`cycle_wiring_mode` (Altium profile: `Ctrl+Space`) steps how the wires that
+`cycle_wiring_mode` (Signex Standard profile: `Ctrl+Space`) steps how the wires that
 follow a moved part bend in a drag and in click-click move: Auto (the corner
 the rubber band picks), horizontal first, vertical first, and straight (no
 corner, any slope). Press it during the move and the ghost changes at once; the
@@ -310,7 +310,7 @@ repeat while the key is held (`docs/DECISIONS.md`, "Held keys", 2026-11-19).
 The footprint editor canvas handles its own `X` (flip the pad's layer) outside
 the keymap; that one still repeats (#2545).
 
-`Alt+Click` is reserved in `altium.toml` for `highlight_related_net_objects`. The
+`Alt+Click` is reserved in `signex_standard.toml` for `highlight_related_net_objects`. The
 command is wired (it highlights the selected net and selects its members), but the
 Alt+Click gesture itself is not dispatched yet; when it is, an Alt-press that turns
 into a drag and an Alt+Click will need telling apart. Some Linux window managers take Alt+drag to

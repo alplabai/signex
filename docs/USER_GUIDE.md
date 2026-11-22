@@ -268,12 +268,12 @@ To come back later use **File ▸ Open…** or **File ▸ Open Recent**.
 
   In a board's own window the counters and popovers are that board's.
 
-**View ▸ Cycle Grid Size** steps the grid of the schematic. In the Altium
+**View ▸ Cycle Grid Size** steps the grid of the schematic. In the Signex Standard
 profile `G` (forward) acts only in the footprint editor, while `Shift+G` steps
 the grid backward on a schematic too. In the Classic profile `N` / `Shift+N`
 cycle it on a schematic. The menu item runs `next_grid`, so it works on a
 schematic and a PCB in either profile. **View ▸ Zoom In** and **Zoom Out**
-zoom about the centre of the view. `PageUp` / `PageDown` (Altium profile) or
+zoom about the centre of the view. `PageUp` / `PageDown` (Signex Standard profile) or
 `F1` / `F2` (Classic profile) and the scroll wheel zoom about the pointer.
 
 **Fast grids.** The Fast grid 1 and Fast grid 2 commands snap to two grids
@@ -917,7 +917,7 @@ multi-sheet columns and the parameter-matching checkboxes).
 
 ### Find and Replace
 
-**Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Altium
+**Edit ▸ Find** (`Ctrl+F`) and **Find and Replace** (`Ctrl+H` in the Signex Standard
 profile) search the text of labels, text notes, designators and values. The
 **Find / Replace** switch in the dialog's header changes between the two in
 place. The pill inside the Find field counts the matches. The three toggles
@@ -1306,7 +1306,7 @@ Drawn / Checked / Approved row.
 
 This is sections 3 to 11 as one run, from an empty window to a saved sheet and
 a PDF. Each step names the section with the detail. The shortcuts are those of
-the default Altium profile; the menu path always works.
+the default Signex Standard profile; the menu path always works.
 
 1. **Create the project.** Choose **File ▸ New Project**, name it in the
    save dialog, and keep the `.snxprj` ending (section 3). Signex creates a
@@ -1807,7 +1807,7 @@ More detail: [FABRICATION_OUTPUTS.md](FABRICATION_OUTPUTS.md) and
 
 ## 13. Keyboard shortcuts
 
-Signex ships two shortcut profiles, **Altium** and **Classic**. Altium is
+Signex ships two shortcut profiles, **Signex Standard** and **Classic**. Signex Standard is
 the default. Change the profile, or edit any binding, in **Tools ▸
 Preferences…** (`Ctrl+,`) under the keyboard shortcuts page.
 
@@ -1815,7 +1815,7 @@ A binding written with spaces, such as `P W`, is a sequence: press `P`, release
 it, then press `W`. A binding written with `+`, such as `Ctrl+S`, is pressed
 together.
 
-Shortcuts used in this guide, in the default Altium profile:
+Shortcuts used in this guide, in the default Signex Standard profile:
 
 | Action | Shortcut |
 |---|---|

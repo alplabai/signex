@@ -245,8 +245,8 @@ fn all_held_rig(reference: &str) -> Rig {
     rig.app
         .ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     rig.app.ui_state.active_keymap = rig.app.ui_state.keymap_profiles.compile_active().into();
     rig.app.interaction_state.active_canvas_mut().selected = vec![rig.wire];
     rig

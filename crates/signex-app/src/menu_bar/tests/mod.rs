@@ -54,7 +54,7 @@ pub(super) fn sheet_of(symbols: Vec<Symbol>) -> SchematicSheet {
 /// A named way to build an app in one state.
 pub(super) type Fixture = (&'static str, fn() -> Signex);
 
-/// A fresh app on the Altium keymap with the first-run tour closed.
+/// A fresh app on the Signex Standard keymap with the first-run tour closed.
 pub(super) fn bare_app() -> Signex {
     let (mut app, _task) = Signex::new();
     app.ui_state.first_run_tour_open = false;
@@ -62,8 +62,8 @@ pub(super) fn bare_app() -> Signex {
     app.ui_state.visible_grid_mm = 1.0;
     app.ui_state
         .keymap_profiles
-        .set_active_profile("altium")
-        .expect("altium profile");
+        .set_active_profile("signex_standard")
+        .expect("signex_standard profile");
     app.ui_state.active_keymap = app.ui_state.keymap_profiles.compile_active().into();
     app
 }
