@@ -504,6 +504,9 @@ impl Signex {
         captured: Option<ReplayCaptured>,
         ran: bool,
     ) {
+        if let Some(ReplayCaptured(ReplayInput::Board { guard, .. })) = &captured {
+            self.keep_board_operand_guard(seq, guard);
+        }
         let scope = replay_scope(command.as_str());
         if let Some(targets) = targets {
             self.ui_state.command_log.log.keep_targets(seq, targets);

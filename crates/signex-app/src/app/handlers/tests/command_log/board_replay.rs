@@ -3,11 +3,174 @@
 
 use std::path::{Path, PathBuf};
 
-use signex_engine::pcb::{BoardCommand, BoardItem};
-use signex_types::pcb::Segment;
+use std::time::Duration;
 
+use signex_engine::pcb::{BoardCommand, BoardItem};
+use signex_types::pcb::{PadShape, PcbBoard, Segment};
+use signex_types::pcb_stack::LayerStack;
+
+use super::super::operands_of;
 use super::fixtures::*;
 use crate::app::Signex;
+use crate::app::command::CommandArgs;
+use crate::keymap::AppCommandId;
+use crate::panels::command_log::{LogOutcome, LogSource};
+
+/// Four copper layers and a track on Inner 1.
+fn four_layer_board() -> PcbBoard {
+    serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(1),
+        "thickness": 1.6,
+        "layers": [
+            {"id": 0, "name": "TopCopper", "layer_type": "signal"},
+            {"id": 1, "name": "Inner1Copper", "layer_type": "signal"},
+            {"id": 2, "name": "Inner2Copper", "layer_type": "signal"},
+            {"id": 31, "name": "BottomCopper", "layer_type": "signal"},
+        ],
+        "segments": [{
+            "uuid": uuid::Uuid::from_u128(FIRST), "start": {"x": 0.0, "y": 0.0},
+            "end": {"x": 5.0, "y": 0.0}, "width": 0.25, "layer": "Inner1Copper"
+        }],
+    }))
+    .expect("a board")
+}
+
+fn app_with_four_layers(dir: &Path) -> (Signex, PathBuf) {
+    let mut app =
+        crate::app::handlers::menu::export::tests::app_workspace(&dir.to_string_lossy(), &[]);
+    let path = dir.join("board.snxpcb");
+    app.open_pcb_tab(path.clone(), "board".into(), four_layer_board());
+    (app, path)
+}
+
+/// The operands of `set_layer_stack` with the two inner copper rows swapped.
+fn swapped_stack_args(app: &Signex, path: &Path) -> CommandArgs {
+    let board = app.document_state.pcb_board(path).expect("the board");
+    let mut stack = LayerStack::derived(&board.layers, 1.6);
+    let copper: Vec<usize> = (stack.layers.iter().enumerate())
+        .filter(|(_, row)| row.kind.is_copper())
+        .map(|(at, _)| at)
+        .collect();
+    stack.layers.swap(copper[1], copper[2]);
+    let document = format!("document={}", path.display());
+    let rows = format!("stack={}", serde_json::to_string(&stack).expect("json"));
+    let command = AppCommandId::new("set_layer_stack").expect("an id");
+    CommandArgs::parse_operands(&command, &[document.as_str(), rows.as_str()]).expect("operands")
+}
+
+/// Run `id` from `args` as a logged command: its row's number.
+fn run_logged(app: &mut Signex, id: &str, args: &CommandArgs) -> u64 {
+    let command = AppCommandId::new(id).expect("an id");
+    let _ = app.logged_command(&command, operands_of(args), None, |app| {
+        app.run_operands(&command, args)
+    });
+    let row = newest(app);
+    assert!(!row.outcome.is_failed(), "{:?}", row.outcome);
+    row.seq
+}
+
+fn stack_of(app: &Signex, path: &Path) -> Option<LayerStack> {
+    (app.document_state.pcb_board(path))
+        .expect("the board")
+        .stackup
+        .clone()
+}
+
+/// The re-review's case: a rerun would swap the copper back under rows that
+/// stay swapped.
+#[test]
+fn a_layer_stack_replay_on_its_own_result_changes_nothing() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_four_layers(dir.path());
+    let args = swapped_stack_args(&app, &path);
+    let seq = run_logged(&mut app, "set_layer_stack", &args);
+    assert_eq!(track(&app, &path, FIRST).layer, "Inner2Copper");
+    let stack = stack_of(&app, &path);
+
+    replay(&mut app, seq);
+
+    assert_eq!(track(&app, &path, FIRST).layer, "Inner2Copper");
+    assert_eq!(stack_of(&app, &path), stack);
+    assert!(failure(&newest(&app)).contains("changed after"));
+}
+
+#[test]
+fn a_layer_stack_replays_once_after_an_undo_and_not_twice() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_four_layers(dir.path());
+    let args = swapped_stack_args(&app, &path);
+    let seq = run_logged(&mut app, "set_layer_stack", &args);
+    assert!(app.step_board_history(&path, true));
+    assert_eq!(track(&app, &path, FIRST).layer, "Inner1Copper");
+
+    replay(&mut app, seq);
+
+    assert_eq!(track(&app, &path, FIRST).layer, "Inner2Copper");
+    let replayed = newest(&app);
+    assert!(!replayed.outcome.is_failed(), "{:?}", replayed.outcome);
+
+    replay(&mut app, replayed.seq);
+
+    assert_eq!(track(&app, &path, FIRST).layer, "Inner2Copper");
+    assert!(failure(&newest(&app)).contains("changed after"));
+}
+
+fn pad_shape_of(app: &Signex, path: &Path) -> PadShape {
+    let board = app.document_state.pcb_board(path).expect("the board");
+    board.footprints[0].pads[0].shape
+}
+
+fn pad_shape_args(path: &Path, shape: &str) -> CommandArgs {
+    let command = AppCommandId::new("set_pad_shape").expect("an id");
+    let document = format!("document={}", path.display());
+    let ids = format!("ids={}", uuid::Uuid::from_u128(101));
+    let shape = format!("shape={shape}");
+    CommandArgs::parse_operands(&command, &[document.as_str(), ids.as_str(), shape.as_str()])
+        .expect("operands")
+}
+
+#[test]
+fn a_value_operand_is_harmless_on_its_result_and_refused_once_changed() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_tracks(dir.path());
+    let seq = run_logged(&mut app, "set_pad_shape", &pad_shape_args(&path, "circle"));
+
+    replay(&mut app, seq);
+    assert_eq!(pad_shape_of(&app, &path), PadShape::Circle);
+
+    run_logged(&mut app, "set_pad_shape", &pad_shape_args(&path, "oval"));
+    replay(&mut app, seq);
+
+    assert_eq!(pad_shape_of(&app, &path), PadShape::Oval, "the later edit");
+    assert!(failure(&newest(&app)).contains("changed after"));
+}
+
+/// An agent's row records no board state; its refusal must not turn into a
+/// failed row that then runs.
+#[test]
+fn an_operand_row_with_no_recorded_state_stays_refused() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_four_layers(dir.path());
+    let args = swapped_stack_args(&app, &path);
+    let seq = app
+        .record_command(
+            "set_layer_stack",
+            operands_of(&args),
+            LogOutcome::Ok(None),
+            Duration::ZERO,
+            LogSource::Gui { window: None },
+            Some(path.clone()),
+        )
+        .expect("logged");
+
+    replay(&mut app, seq);
+    let refused = newest(&app);
+    assert!(failure(&refused).contains("changed after"));
+    replay(&mut app, refused.seq);
+
+    assert_eq!(track(&app, &path, FIRST).layer, "Inner1Copper");
+    assert!(failure(&newest(&app)).contains("changed after"));
+}
 
 const FIRST: u128 = 11;
 const SECOND: u128 = 12;

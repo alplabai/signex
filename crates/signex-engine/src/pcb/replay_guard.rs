@@ -17,6 +17,7 @@ use signex_types::property::PcbProperty;
 use signex_types::sketch::board_attr::SketchBoardItems;
 use uuid::Uuid;
 
+use super::board_sketch::items::owned_item_ids;
 use super::command::BoardCommand;
 use super::items::{self, BoardItem, BoardItemId};
 
@@ -97,7 +98,7 @@ impl BoardReplayGuard {
             is_uncheckable: false,
         };
         for command in commands {
-            let Some(targets) = targets_of(command) else {
+            let Some(targets) = targets_of(board, command) else {
                 guard.is_uncheckable = true;
                 continue;
             };
@@ -112,6 +113,14 @@ impl BoardReplayGuard {
             }
         }
         guard
+    }
+
+    /// A guard for an edit whose targets were never read: it never holds.
+    pub fn uncheckable() -> Self {
+        Self {
+            targets: Vec::new(),
+            is_uncheckable: true,
+        }
     }
 
     /// Read the same targets once the commands have run.
@@ -134,20 +143,39 @@ impl BoardReplayGuard {
         self
     }
 
-    /// Whether every target on `board` is still as the edit found or left it.
+    /// Whether every target on `board` is still as the edit found or left
+    /// it. A target whose command does something again when run on its own
+    /// result (a layer stack, a property insert or removal) counts only as
+    /// found.
     pub fn holds(&self, board: &PcbBoard) -> bool {
         !self.is_uncheckable
             && self.targets.iter().all(|guarded| {
                 let live = read(board, guarded.target);
-                live == guarded.before || live == guarded.after
+                live == guarded.before
+                    || (!guarded.target.repeats_on_its_result() && live == guarded.after)
             })
+    }
+
+    /// Whether every target on `board` is exactly as the edit found it.
+    pub fn holds_as_found(&self, board: &PcbBoard) -> bool {
+        !self.is_uncheckable
+            && (self.targets.iter()).all(|guarded| read(board, guarded.target) == guarded.before)
+    }
+}
+
+impl Target {
+    /// Whether its command changes it again when run on what it left: a
+    /// stack's rows name the layer each was, so a rerun renames the copper
+    /// back; a property insert or removal shifts the list again.
+    fn repeats_on_its_result(self) -> bool {
+        matches!(self, Self::Stack | Self::Properties(_))
     }
 }
 
 /// What `command` writes. Empty for a command that carries no recorded state
 /// and acts on what is there; `None` for one that cannot be checked: an
 /// inverse, or one that adds objects.
-fn targets_of(command: &BoardCommand) -> Option<Vec<Target>> {
+fn targets_of(board: &PcbBoard, command: &BoardCommand) -> Option<Vec<Target>> {
     use BoardCommand as C;
     Some(match command {
         C::Flip { .. }
@@ -177,7 +205,11 @@ fn targets_of(command: &BoardCommand) -> Option<Vec<Target>> {
         C::SetNets(edit) => net_targets(edit),
         C::SetBoardOutline { .. } => vec![Target::Outline],
         C::SetBoardSketch { outline, .. } => sketch_targets(outline.is_some()),
-        C::SetBoardSketchBake { outline, items, .. } => bake_targets(outline.is_some(), items),
+        C::SetBoardSketchBake {
+            sketch,
+            outline,
+            items,
+        } => bake_targets(board, sketch.as_deref(), outline.is_some(), items),
         C::SetGridSize { .. } => vec![Target::Grid],
         C::SetBoardOptions { .. } => vec![Target::Options],
         C::SetBoardPanel { .. } => vec![Target::Panel],
@@ -219,16 +251,24 @@ fn sketch_targets(writes_outline: bool) -> Vec<Target> {
     targets
 }
 
-/// The sketch, and the zones, drawings and footprints its bake writes.
-fn bake_targets(writes_outline: bool, items: &SketchBoardItems) -> Vec<Target> {
+/// The sketch, the zones, drawings and footprints its bake writes, and the
+/// owned zones and drawings it takes off the board.
+fn bake_targets(
+    board: &PcbBoard,
+    sketch: Option<&BoardSketch>,
+    writes_outline: bool,
+    items: &SketchBoardItems,
+) -> Vec<Target> {
     let zones = (items.zones.iter()).map(|z| Target::Item(BoardItemId::Zone(z.uuid)));
     let graphics = (items.graphics.iter()).map(|g| Target::Item(BoardItemId::Graphic(g.uuid)));
     let anchors = (items.anchors.iter()).map(|a| Target::Place(a.footprint));
+    let owned = owned_item_ids(board, sketch).into_iter().map(Target::Item);
     sketch_targets(writes_outline)
         .into_iter()
         .chain(zones)
         .chain(graphics)
         .chain(anchors)
+        .chain(owned)
         .collect()
 }
 

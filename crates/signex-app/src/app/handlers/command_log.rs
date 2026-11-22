@@ -431,6 +431,9 @@ impl Signex {
         if !row.has_given_operands() {
             return self.replay_without_operands(&row, &command);
         }
+        if self.refuse_stale_board_operands(&row) {
+            return Task::none();
+        }
         let texts = row.operand_texts();
         let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
         match CommandArgs::parse_operands(&command, &refs) {

@@ -114,6 +114,17 @@ clipped.
   fails the same way until its cause is fixed. By the kind of row:
   - **Operands:** runs through the command's operand handler
     (`CommandArgs::parse_operands`, then `run_operands`), as the CLI does.
+    A row that edited a board keeps the targets it wrote, and is refused with
+    nothing run once one has changed. A command that sets a value (lock, via
+    span, layer sizes, pad shape, drawing or text field, panel, layer colour,
+    origin, DRC waiver, DXF outline) may run on the board as it found or left
+    it. Set Layer Stack and Swap Pins or Gates would do something else on
+    their own result, so they run only on the board as they found it. A
+    command that works from the board as it is (Via Stitching, Teardrops,
+    Gloss, Tune, Arrange, Repour, Update PCB, new drawings, DXF drawings,
+    Reuse Block) runs again. A row of a value or stack command that recorded
+    no board state (an agent's, or one that finished after its reads) is
+    refused, since nothing can show its target is unchanged.
   - **Recorded targets** (delete, cut, copy, duplicate, rotate, mirror, flip,
     drawing order, Via Stitching, Teardrops, Gloss, Keepout and Board Shape
     from Selection, Tune, lock, Swap Pins and Gates): the command's own handler
@@ -135,7 +146,8 @@ clipped.
     other ones; a list that changed length or was edited at the same element
     is refused, as the sheet has moved on. A board edit keeps each target it
     wrote as it stood before and after, and runs only while every target is
-    still one of the two; fields are not merged, and one changed target
+    still one of the two (a layer stack or a property insert or removal only
+    as it stood before); fields are not merged, and one changed target
     refuses the whole row before anything runs. A row holding an inverse or a
     command that adds objects cannot be checked and is refused.
   - **Footprint and symbol editors:** the recorded messages or Properties

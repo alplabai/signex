@@ -162,6 +162,12 @@ fn carry_changes(before: &Value, after: &Value, live: &mut Value) -> Option<()> 
             }
             match target.get_mut(key) {
                 Some(slot) => carry_changes(old, value, slot)?,
+                // A list left out of the file is an empty one.
+                None if old.is_array() || value.is_array() => {
+                    let mut emptied = Value::Array(Vec::new());
+                    carry_list(old, value, &mut emptied)?;
+                    target.insert(key.clone(), emptied);
+                }
                 None => {
                     target.insert(key.clone(), value.clone());
                 }
@@ -328,6 +334,17 @@ mod tests {
             table(&[&["x", "y"]]),
         );
         assert_eq!(now, Some(table(&[&["x", "y"]])));
+    }
+
+    /// `links` is left out of the JSON while empty.
+    #[test]
+    fn a_list_cleared_since_the_edit_is_not_filled_again() {
+        let now = replayed(
+            table_linking(&["a.snxsch"]),
+            table_linking(&["b.snxsch"]),
+            table_linking(&[]),
+        );
+        assert!(now.is_none());
     }
 
     #[test]
