@@ -5,34 +5,12 @@
 //! project stores no rules", which makes the store action undoable too.
 //! The steps live in the shared snapshot [`History`] (depth capped).
 
-use signex_types::project::ProjectRules;
+use signex_history::History;
 
-use crate::app::History;
+pub use crate::app::core::rule_state::RuleState;
 
 /// Depth cap of the undo and redo stacks; a few hundred bytes a step.
 const HISTORY_DEPTH: usize = signex_history::DEFAULT_UNDO_DEPTH;
-
-/// What one rule-history step restores: the project's stored rule set and
-/// its router tool diameter, which a fab tier or profile preset sets in
-/// the same step as its rules.
-#[derive(Debug, Clone, PartialEq)]
-pub struct RuleState {
-    pub rules: Option<ProjectRules>,
-    pub router_tool_diameter: Option<f64>,
-}
-
-/// Test-only: production records a full [`RuleState`]; a rule set alone
-/// would make its undo clear the project's router tool.
-#[cfg(test)]
-impl From<Option<ProjectRules>> for RuleState {
-    /// A rule set alone, with no router tool.
-    fn from(rules: Option<ProjectRules>) -> Self {
-        Self {
-            rules,
-            router_tool_diameter: None,
-        }
-    }
-}
 
 /// One project's rule-edit history.
 ///
@@ -159,7 +137,10 @@ mod order_tests {
         assert!(history.steps_before_general(true, 1), "then the rule step");
         history.undo(state()).expect("a step");
         assert!(!history.steps_before_general(true, 1), "none left");
-        assert!(!history.steps_before_general(false, 0), "General redo first");
+        assert!(
+            !history.steps_before_general(false, 0),
+            "General redo first"
+        );
         assert!(history.steps_before_general(false, 1), "then the rule step");
         history.redo(state()).expect("a step");
         assert!(!history.steps_before_general(false, 1), "none left");
