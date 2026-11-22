@@ -2,7 +2,7 @@
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::canvas::{self, Frame, LineCap, LineDash, LineJoin, Path};
-use iced::{Color, Font, Pixels, Point, font};
+use iced::{Color, Font, Pixels, Point, Vector, font};
 
 use super::geometry::{Baseline, Fit, Head, LabelPlacement, callout_geometry, leader_label};
 use super::illustration::Part;
@@ -31,7 +31,9 @@ pub(super) fn label_placement(label: &TextLabel, fit: &Fit) -> LabelPlacement {
 }
 
 impl Painter<'_> {
-    pub fn part(&self, frame: &mut Frame, part: &Part, is_highlighted: bool) {
+    /// Draws `part`, its label moved by `label_shift` (a leader's line follows
+    /// its label; the dimension line of a callout stays on the object).
+    pub fn part(&self, frame: &mut Frame, part: &Part, is_highlighted: bool, label_shift: Vector) {
         match &part.primitive {
             Primitive::Band { points, width, cap } => {
                 self.band(frame, part, points, *width, *cap, is_highlighted);
@@ -50,12 +52,14 @@ impl Painter<'_> {
                     frame.fill(&head_path(head), color);
                 }
                 if let (Some(text), Some(placement)) = (&callout.label, geometry.label) {
+                    let placement = placement.shifted(label_shift);
                     self.text(frame, text.as_str(), placement, TextRole::Caption, color);
                 }
             }
             Primitive::Leader(leader) => {
                 let color = self.annotation_color(part, is_highlighted);
-                let (at, end) = (self.fit.point(leader.at), self.fit.point(leader.label_at));
+                let at = self.fit.point(leader.at);
+                let end = self.fit.point(leader.label_at) + label_shift;
                 frame.fill(&Path::circle(at, self.metrics.leader_dot()), color);
                 frame.stroke(&Path::line(at, end), self.line(color, Weight::Thin, None));
                 let placement = leader_label(end, leader.anchor, &self.metrics);
@@ -69,7 +73,7 @@ impl Painter<'_> {
             }
             Primitive::Label(label) => {
                 let color = self.annotation_color(part, is_highlighted);
-                let placement = label_placement(label, &self.fit);
+                let placement = label_placement(label, &self.fit).shifted(label_shift);
                 self.text(frame, label.text.as_str(), placement, label.role, color);
             }
             shape => {

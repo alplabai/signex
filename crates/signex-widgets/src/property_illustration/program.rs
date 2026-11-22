@@ -4,6 +4,7 @@ use iced::widget::canvas::{self, Canvas};
 use iced::{Element, Length, Rectangle, Renderer, Theme, Widget, mouse};
 use signex_types::theme::ThemeTokens;
 
+use super::callout_layout::label_shifts;
 use super::draw::Painter;
 use super::geometry::Fit;
 use super::hover::{IllustrationHover, IllustrationMsg};
@@ -45,8 +46,19 @@ impl canvas::Program<IllustrationMsg> for IllustrationProgram {
             metrics: self.metrics,
             palette: &self.palette,
         };
-        for part in self.illustration.visible_parts() {
-            painter.part(&mut frame, part, self.hover.is_part_highlighted(part));
+        let shifts = label_shifts(
+            self.illustration.visible_parts(),
+            &painter.fit,
+            &self.metrics,
+            bounds.size(),
+        );
+        for (part, shift) in self.illustration.visible_parts().zip(shifts) {
+            painter.part(
+                &mut frame,
+                part,
+                self.hover.is_part_highlighted(part),
+                shift,
+            );
         }
         vec![frame.into_geometry()]
     }

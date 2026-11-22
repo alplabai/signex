@@ -18,6 +18,7 @@
 //! drawing a row. Hovering a field highlights every part linked to it; the
 //! drawing itself does not follow the pointer.
 
+mod callout_layout;
 mod draw;
 mod field;
 mod geometry;
