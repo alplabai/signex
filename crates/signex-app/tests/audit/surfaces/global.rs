@@ -1,14 +1,15 @@
 //! Mockup group `global` (rows m1-m18).
 
-use super::{checks, states_drawn};
+use super::{checks, helpers_f, states_drawn};
 use crate::fixture::{self, Fixture};
 use crate::render::{self, Crop};
 use crate::settle_support;
 use crate::surface::{Check, Surface, WindowSel};
-use signex_app::app::{ContextMenuMsg, FileMsg, Message, OverlayMsg, Signex, UiMsg, WindowMsg};
+use signex_app::app::{
+    ContextMenuMsg, EditMsg, FileMsg, Message, OverlayMsg, Signex, UiMsg, WindowMsg,
+};
 use signex_app::autosave::sidecar;
 use signex_app::dock::{DockMessage, PanelPosition};
-use signex_app::keymap::AppCommandId;
 use signex_app::menu_bar::MenuMessage;
 use signex_app::recent_projects::RecentProjects;
 use signex_app::start_screen::{self, StartScreenMsg};
@@ -150,12 +151,7 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m11",
             title: "Error notice card",
-            // A real refusal: the sample project has no board to cross probe to.
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                command(app, "select_all")?;
-                command(app, "cross_probe")
-            },
+            open: open_save_failed,
             window: WindowSel::Auto,
             checks: ERROR_NOTICE,
         },
@@ -235,11 +231,28 @@ pub fn rows() -> Vec<Surface> {
     ]
 }
 
-/// Run catalog command `id` the way its menu row does.
-fn command(app: &mut Signex, id: &str) -> Result<(), String> {
-    let id = AppCommandId::new(id).map_err(|e| format!("command {id}: {e}"))?;
-    settle_support::settle(app, Message::Menu(MenuMessage::Command(id)));
-    Ok(())
+/// A real failed Save: the sheet's folder refuses the write, so the card
+/// carries the path and the OS error. The folder is writable again after.
+fn open_save_failed(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+    fixture::open_sample(app, r, fx);
+    helpers_f::click(app, 88.9, 101.6);
+    let _ = app.update(Message::Edit(EditMsg::RotateSelectedClockwise));
+    let folder = fx.sample.parent().ok_or("the sample has no folder")?;
+    let writable = std::fs::metadata(folder)
+        .map_err(|e| format!("read folder: {e}"))?
+        .permissions();
+    let mut refused = writable.clone();
+    refused.set_readonly(true);
+    std::fs::set_permissions(folder, refused).map_err(|e| format!("lock folder: {e}"))?;
+    let saved = helpers_f::unlogged(|| helpers_f::settle(app, Message::File(FileMsg::Save)));
+    std::fs::set_permissions(folder, writable).map_err(|e| format!("unlock folder: {e}"))?;
+    saved?;
+    let has_system = app
+        .document_state
+        .error_notice
+        .as_ref()
+        .is_some_and(|notice| notice.system.is_some());
+    flag(has_system, "Save reported no path and OS error")
 }
 
 /// The sample sheet with the pointer dwelled on U1 past the 700 ms delay.

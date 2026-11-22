@@ -45,6 +45,16 @@ pub fn settle(app: &mut Signex, message: Message) -> Result<(), String> {
     Ok(())
 }
 
+/// Run `steps` with logging off. The log ring outlives each row's app, so
+/// what a row's set-up logs would show in the Messages panel of later rows.
+pub fn unlogged<T>(steps: impl FnOnce() -> T) -> T {
+    let level = log::max_level();
+    log::set_max_level(log::LevelFilter::Off);
+    let out = steps();
+    log::set_max_level(level);
+    out
+}
+
 /// Run catalog command `id` as its menu row does.
 pub fn command(app: &mut Signex, id: &str) -> Result<(), String> {
     let id = AppCommandId::new(id)?;

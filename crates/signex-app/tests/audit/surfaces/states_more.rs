@@ -5,6 +5,7 @@
 use super::canvas_pick::pick_in;
 use super::helpers_d::{self, reached};
 use super::helpers_f as h;
+use super::pointer::PointerStep;
 use super::states;
 use super::states_drawn::rename_to_vbus;
 use super::view_click::{click_view_stepped, view_offers};
@@ -13,13 +14,14 @@ use crate::render::{self, Crop};
 use crate::settle_support;
 use crate::surface::{OpenFn, Surface, WindowSel};
 use iced::mouse::Button;
-use signex_app::active_bar::{ActiveBarAction, ActiveBarMenu, ActiveBarMsg};
+use signex_app::active_bar::ActiveBarAction;
 use signex_app::app::unions::{UnionPopoverMsg, UnionsMsg};
 use signex_app::app::{
     EditMsg, Message, PcbMsg, PreferencesMsg, PrintPreviewMsg, ProjectMsg, RulesTabMsg, Signex,
     StatusBarRequest, TablesMsg, UiMsg,
 };
 use signex_app::dock::{DockMessage, DockTabAction, PanelPosition};
+use signex_app::layer_strip_prefs::LayerSwitcher;
 use signex_app::panels::{DrcPanelMsg, PanelKind, PanelMsg};
 use signex_app::preferences::{PrefMsg, PrefNav};
 use signex_app::status_bar::BoardCounter;
@@ -72,6 +74,9 @@ pub fn rows() -> Vec<Surface> {
         }),
         row("m6-layer-list", "Status bar: layer list", |app, r, fx| {
             fixture::open_board(app, r, fx);
+            // The list belongs to the Dropdown switcher; under Strip the
+            // pill opens the Active layer popover.
+            app.ui_state.layer_switcher = LayerSwitcher::Dropdown;
             let window = app.ui_state.main_window_id;
             let _ = app.update(Message::Ui(UiMsg::StatusBar(
                 StatusBarRequest::BoardCounterClicked {
@@ -168,15 +173,17 @@ pub fn rows() -> Vec<Surface> {
             h::show_sheet(app, r);
             Ok(())
         }),
-        row("m157-placing", "Dimension being placed", |app, r, fx| {
-            fixture::open_sample(app, r, fx);
-            h::arm(app, ActiveBarAction::PlaceLinearDimension);
-            h::click(app, 63.5, 132.08);
-            let _ = app.update(Message::ActiveBar(ActiveBarMsg::ToggleMenu(
-                ActiveBarMenu::Shapes,
-            )));
-            Ok(())
-        }),
+        // First point clicked; the pointer on the canvas draws the dimension
+        // to it, with its value tag and the hint for the second click.
+        Surface {
+            window: WindowSel::MainPointer(&[PointerStep::HoverAt(760, 420)]),
+            ..row("m157-placing", "Dimension being placed", |app, r, fx| {
+                fixture::open_sample(app, r, fx);
+                h::arm(app, ActiveBarAction::PlaceLinearDimension);
+                h::click(app, 63.5, 132.08);
+                Ok(())
+            })
+        },
         row("m158-popover", "Create Union popover", |app, r, fx| {
             fixture::open_sample(app, r, fx);
             h::select_parts(app, &["C1", "U1", "C2"])?;

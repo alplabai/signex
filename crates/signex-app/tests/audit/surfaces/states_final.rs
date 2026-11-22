@@ -12,7 +12,7 @@ use crate::settle_support;
 use crate::surface::{OpenFn, Surface, WindowSel};
 use signex_app::app::{
     ContextMenuMsg, ContextSubmenu, EditMsg, FileMsg, Message, NetNavMsg, PreferencesMsg, Signex,
-    UiMsg,
+    Tool, UiMsg,
 };
 use signex_app::dock::DockMessage;
 use signex_app::library::LibraryMessage;
@@ -20,6 +20,11 @@ use signex_app::library::messages::BrowserEditMsg;
 use signex_app::panels::{PanelKind, PanelMsg, ProjectsMsg};
 use signex_app::preferences::{PrefMsg, PrefNav, ProfilesMsg};
 use signex_app::rule_profiles::{ListedProfile, ProfileKind, ProfileListing};
+use signex_app::toolbar::ToolMessage;
+use signex_app::workspace_layouts::{
+    BuiltinLayout, LayoutId, ManageLayoutsMsg, SaveLayoutMsg, WorkspaceLayoutMsg,
+    WorkspaceLayoutsStore,
+};
 use signex_erc::project_rules::profile::builtin_profile;
 use signex_types::format::SnxPcb;
 use signex_types::pcb::SymbolLink;
@@ -76,14 +81,16 @@ fn pointer_rows() -> Vec<Surface> {
         surface(
             "m166-menu",
             "View > Window > Layouts open",
-            open_sheet,
-            // The View menu is taller than 900 px. Window follows 36 rows
-            // and 4 separators; Layouts follows 3 rows and a separator.
+            open_layouts_menu,
+            // The View menu is taller than 900 px. Window follows 34 rows
+            // and 4 separators. Its submenu opens upward from that row, so
+            // Layouts is at y 1009. A point outside every open menu closes
+            // them all.
             WindowSel::MainPointerTall(
                 &[
                     PointerStep::Click("View"),
-                    PointerStep::HoverAt(260, 1093),
-                    PointerStep::HoverAt(480, 1186),
+                    PointerStep::HoverAt(260, 1037),
+                    PointerStep::HoverAt(560, 1009),
                 ],
                 1400,
             ),
@@ -111,13 +118,13 @@ fn chrome_rows() -> Vec<Surface> {
         }),
         surface(
             "m6-tool",
-            "Status bar: board tool hint",
+            "Status bar: tool and live hint",
             |app, r, fx| {
-                fixture::open_board(app, r, fx);
-                helpers_d::command(app, "place_board_via")?;
+                fixture::open_sample(app, r, fx);
+                let _ = app.update(Message::Tool(ToolMessage::SelectTool(Tool::Wire)));
                 reached(
-                    app.interaction_state.pcb_tool.is_some(),
-                    "place_board_via armed no tool",
+                    app.interaction_state.current_tool == Tool::Wire,
+                    "the Wire tool did not arm",
                 )
             },
             WindowSel::MainCrop(STATUS_BAR),
@@ -208,6 +215,55 @@ fn preference_rows() -> Vec<Surface> {
 
 fn open_sheet(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
     fixture::open_sample(app, r, fx);
+    Ok(())
+}
+
+/// Keeps the layouts this row saves out of `prefs.json`.
+struct NoLayoutWrites;
+
+impl WorkspaceLayoutsStore for NoLayoutWrites {
+    fn write(&self, _: &serde_json::Value) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+/// The sample with two saved layouts and an edited Schematic built-in on
+/// screen, so the submenu has its check mark, Your Layouts and Reset rows.
+fn open_layouts_menu(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+    fixture::open_sample(app, r, fx);
+    let layouts = &mut app.ui_state.workspace_layouts;
+    layouts.layouts = Default::default();
+    layouts.store = Arc::new(NoLayoutWrites);
+    h::unlogged(|| save_layouts(app))?;
+    let layouts = &app.ui_state.workspace_layouts.layouts;
+    reached(
+        layouts.user().len() == 2 && layouts.resettable() == Some(BuiltinLayout::Schematic),
+        "the layouts were not saved and the built-in not edited",
+    )
+}
+
+/// Save two layouts, then store the arrangement as the Schematic built-in's
+/// edit and apply it, through the Save and Manage dialogs.
+fn save_layouts(app: &mut Signex) -> Result<(), String> {
+    for name in ["Bring-up bench", "Dual monitor review"] {
+        for msg in [
+            SaveLayoutMsg::Requested,
+            SaveLayoutMsg::NameEdited(name.into()),
+            SaveLayoutMsg::Confirmed,
+        ] {
+            h::settle(app, msg.into())?;
+        }
+    }
+    let schematic = LayoutId::Builtin(BuiltinLayout::Schematic);
+    for msg in [
+        ManageLayoutsMsg::Requested,
+        ManageLayoutsMsg::RowSelected(schematic),
+        ManageLayoutsMsg::UpdateFromCurrentRequested,
+        ManageLayoutsMsg::ApplyRequested,
+        ManageLayoutsMsg::Closed,
+    ] {
+        h::settle(app, WorkspaceLayoutMsg::Manage(msg).into())?;
+    }
     Ok(())
 }
 

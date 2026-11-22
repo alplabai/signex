@@ -488,14 +488,14 @@ fn open_pad_geometry(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> 
     )
 }
 
-/// The Net Inspector pulled out of its dock into its own window.
+/// The board's Nets panel pulled out of its dock into its own window.
 fn open_detached_panel(
     app: &mut Signex,
     r: &mut iced::Renderer,
     fx: &Fixture,
 ) -> Result<(), String> {
-    fixture::open_sample(app, r, fx);
-    helpers_c::show_panel(app, PanelKind::NetInspector)?;
+    fixture::open_board(app, r, fx);
+    helpers_c::show_panel(app, PanelKind::PcbNets)?;
     let (position, index) = [
         PanelPosition::Left,
         PanelPosition::Right,
@@ -507,10 +507,10 @@ fn open_detached_panel(
             .dock
             .panel_kinds(position)
             .iter()
-            .position(|k| *k == PanelKind::NetInspector)
+            .position(|k| *k == PanelKind::PcbNets)
             .map(|index| (position, index))
     })
-    .ok_or("the Net Inspector is not docked")?;
+    .ok_or("the PCB Nets panel is not docked")?;
     let _ = app.update(Message::Dock(DockMessage::UndockPanel(position, index)));
     reached(
         !app.document_state.dock.floating.is_empty(),
