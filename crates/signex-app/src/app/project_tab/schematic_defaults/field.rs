@@ -12,7 +12,9 @@ use signex_widgets::{text, text_input};
 
 use super::super::look::{Glyph, glyph, icon_button, mono_font};
 use super::super::table::{SP, TS};
-use super::{FieldState, built_in_value, clamp_note, field_state, shown_number, shown_text};
+use super::{
+    FieldState, built_in_value, clamp_note, field_state, refused_range, shown_number, shown_text,
+};
 use crate::app::Message;
 use crate::app::project_tab::ProjectTabMsg;
 use crate::app::project_tab::general::tab_message;
@@ -109,6 +111,17 @@ pub(super) fn numeric_field<'a>(
             .size(TS.caption)
             .color(ti(tokens.warning))
             .boxed()
+    });
+    let note = note.or_else(|| {
+        refused_range(field, draft).map(|(min, max)| {
+            let words = t!(
+                i18n,
+                ids::PROJECT_DEFAULTS_REFUSED,
+                "min" => shown_number(min),
+                "max" => shown_number(max),
+            );
+            text(words).size(TS.caption).color(ti(tokens.error)).boxed()
+        })
     });
     (line.boxed(), note)
 }

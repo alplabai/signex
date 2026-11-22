@@ -17,12 +17,24 @@ type Placed<'a> = (&'a ErcSymbol, &'a str);
 /// The parts on this sheet, each as its placed units. A symbol placed more
 /// than once (a reused sheet) counts once per designator (#829).
 fn parts(ctx: &ErcContext) -> Vec<Vec<Placed<'_>>> {
+    parts_named(ctx, |designator| !designator.starts_with('#'))
+}
+
+/// A power port or flag by its designator prefix. These two are the only `#`
+/// markers the app places; any other `#` designator can be a real part, which
+/// the BOM and the netlist list.
+fn is_power_marker(designator: &str) -> bool {
+    designator.starts_with("#PWR") || designator.starts_with("#FLG")
+}
+
+/// The non-power parts whose trimmed designator passes `keep`.
+fn parts_named(ctx: &ErcContext, keep: impl Fn(&str) -> bool) -> Vec<Vec<Placed<'_>>> {
     let mut eligible: Vec<Placed> = ctx
         .symbols
         .iter()
         .filter(|s| !s.is_power)
         .flat_map(|s| s.placement_designators().into_iter().map(move |d| (s, d)))
-        .filter(|(_, d)| !d.trim().starts_with('#'))
+        .filter(|(_, d)| keep(d.trim()))
         .collect();
     // By uuid, so the unit a part is reported at does not depend on document
     // order.
@@ -88,9 +100,10 @@ fn part_finding(kind: RuleKind, (first, designator): Placed, message: String) ->
 
 /// One finding per part with a unit whose library body is missing, at the
 /// lowest such unit. Units can pin different body versions, so a sibling
-/// that has its body does not clear the part.
+/// that has its body does not clear the part. Only power markers are exempt,
+/// so a `#` designator cannot hide a real part from this rule.
 pub(crate) fn part_without_library_body(ctx: &ErcContext, out: &mut Vec<Diagnostic>) {
-    for part in parts(ctx) {
+    for part in parts_named(ctx, |designator| !is_power_marker(designator)) {
         let missing = part
             .iter()
             .filter(|(s, _)| !s.has_library_body())

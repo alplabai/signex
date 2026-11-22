@@ -179,6 +179,129 @@ fn an_open_profile_stops_the_bake_and_shows_its_ends() {
     assert!(!editor.is_dirty());
 }
 
+/// #2782: the open-profile check does not depend on a solve.
+#[test]
+fn an_open_profile_stops_the_bake_with_no_solve() {
+    let (mut sketch, points) = open_sketch(&[(0.0, 0.0), (5.0, 0.0), (5.0, 5.0)]);
+    sketch
+        .parameters
+        .0
+        .insert("broken".to_string(), "1 +".to_string());
+    let mut footprint = Footprint::empty("open-unsolved");
+    footprint.sketch = Some(sketch);
+    let mut editor = editor_on(footprint);
+    send(&mut editor, M::SetMode(EditorMode::Sketch));
+    assert!(editor.state.last_solve.is_none(), "it cannot be solved");
+    editor.mark_saved();
+
+    send(&mut editor, M::SketchBakeRequested);
+
+    assert_eq!(editor.state.mode, EditorMode::Sketch);
+    assert!(editor.state.sketch_exit.preview);
+    let shown = [
+        editor.state.selected_sketch,
+        editor.state.selected_sketch_secondary,
+    ];
+    assert!(shown.contains(&Some(points[0])), "{shown:?}");
+    assert!(shown.contains(&Some(points[2])), "{shown:?}");
+    assert!(!editor.is_dirty());
+}
+
+/// #2782: a sketch that cannot be solved stays in sketch mode, the preview
+/// says why, and an edit retires the reason.
+#[test]
+fn a_sketch_that_cannot_be_solved_stops_the_bake_and_says_why() {
+    use crate::library::editor::footprint::sketch_mode::BakePreview;
+    let (mut sketch, _) = open_sketch(&[(0.0, 0.0), (5.0, 0.0)]);
+    // Close the profile: only the solve can stop this bake.
+    let closing: Vec<Entity> = {
+        let plane = sketch.planes[0].id;
+        let ends: Vec<SketchEntityId> = sketch
+            .entities
+            .iter()
+            .filter(|e| matches!(e.kind, EntityKind::Point { .. }))
+            .map(|e| e.id)
+            .collect();
+        let kind = EntityKind::Line {
+            start: ends[1],
+            end: ends[0],
+        };
+        let mut line = Entity::new(SketchEntityId::new(), plane, kind);
+        line.courtyard = Some(CourtyardAttr {});
+        vec![line]
+    };
+    sketch.entities.extend(closing);
+    sketch
+        .parameters
+        .0
+        .insert("broken".to_string(), "1 +".to_string());
+    let mut footprint = Footprint::empty("unsolvable");
+    footprint.sketch = Some(sketch);
+    let mut editor = editor_on(footprint);
+    send(&mut editor, M::SetMode(EditorMode::Sketch));
+    assert!(editor.state.last_solve.is_none(), "it cannot be solved");
+    editor.mark_saved();
+
+    send(&mut editor, M::SketchBakeRequested);
+
+    assert_eq!(editor.state.mode, EditorMode::Sketch);
+    assert!(editor.state.sketch_exit.preview);
+    assert!(
+        matches!(
+            BakePreview::of_footprint_editor(&editor),
+            BakePreview::Refused(ref reason) if reason.contains("expression error")
+        ),
+        "{:?}",
+        BakePreview::of_footprint_editor(&editor)
+    );
+    assert!(!editor.is_dirty());
+
+    editor.state.sketch_solve.supersede();
+    assert!(
+        matches!(
+            BakePreview::of_footprint_editor(&editor),
+            BakePreview::Counts(_)
+        ),
+        "a newer sketch is not the one refused"
+    );
+}
+
+/// #2782: the preview can describe a lone open end, which has no gap.
+#[test]
+fn a_lone_open_end_is_described() {
+    use crate::library::editor::footprint::state::board_checks::{GapOffer, open_end_text};
+    use signex_i18n::RenderTranslatable as _;
+    // A spur off the middle point makes three open ends: one has no partner.
+    let (mut sketch, points) = open_sketch(&[(0.0, 0.0), (5.0, 0.0), (5.0, 5.0)]);
+    let plane = sketch.planes[0].id;
+    let spur = SketchEntityId::new();
+    sketch.entities.push(Entity::new(
+        spur,
+        plane,
+        EntityKind::Point { x: 7.0, y: 1.0 },
+    ));
+    let kind = EntityKind::Line {
+        start: points[1],
+        end: spur,
+    };
+    let mut line = Entity::new(SketchEntityId::new(), plane, kind);
+    line.courtyard = Some(CourtyardAttr {});
+    sketch.entities.push(line);
+    let params = resolve(&sketch.parameters).expect("no parameters");
+    let solve = Solver::default().solve(&sketch, &params).expect("solves");
+    let ends =
+        signex_bake::open_ends::open_ends(&sketch, &solve, signex_bake::open_ends::bakes_a_profile);
+    let lone = ends.last().expect("an open end");
+    assert_eq!(lone.ends.len(), 1, "{ends:?}");
+    assert_eq!(GapOffer::of(lone), None, "no gap to offer");
+    let text = open_end_text(lone)
+        .expect("a place")
+        .render_en_us()
+        .replace(['\u{2068}', '\u{2069}'], "");
+    assert!(text.starts_with("Open profile at ("), "{text}");
+    assert!(text.ends_with(") mm"), "{text}");
+}
+
 #[test]
 fn a_refused_constraint_records_nothing_and_keeps_redo() {
     let (sketch, points) = open_sketch(&[(0.0, 0.0), (3.0, 1.0)]);

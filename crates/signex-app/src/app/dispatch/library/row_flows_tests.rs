@@ -129,8 +129,75 @@ fn dialog_on_existing() -> (tempfile::TempDir, PathBuf, Signex) {
         use_lfs: false,
         refusal: None,
         existing_library: false,
+        path_refused: false,
     });
     (dir, lib, app)
+}
+
+/// A project and a New Library dialog on `file` beside it, nothing on disk.
+fn dialog_on_new(file: &str) -> (tempfile::TempDir, PathBuf, Signex) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let mut app = crate::app::handlers::menu::export::tests::app_workspace(
+        &dir.path().to_string_lossy(),
+        &[],
+    );
+    app.ui_state.first_run_tour_open = false;
+    app.ui_state.main_window_id = Some(iced::window::Id::unique());
+    app.library.pending_mounts.clear();
+    let lib = dir.path().join(file);
+    app.library.create_options = Some(LibraryCreateOptionsState {
+        project_path: app.document_state.projects[0].path.clone(),
+        lib_path: lib.clone(),
+        enable_git: false,
+        use_lfs: false,
+        refusal: None,
+        existing_library: false,
+        path_refused: false,
+    });
+    (dir, lib, app)
+}
+
+/// #2778: a name that cannot be registered is refused in the open dialog,
+/// stays refused across the version-control toggle, and registers nothing.
+#[test]
+fn a_non_portable_library_name_is_refused_in_the_dialog() {
+    let (_dir, _lib, mut app) = dialog_on_new("bad?name.snxlib");
+    run(&mut app, LibraryMessage::LibraryCreateOptionsConfirm);
+
+    let reason = |app: &Signex| {
+        let state = app.library.create_options.as_ref().expect("still open");
+        assert!(state.path_refused);
+        state.refusal.clone().expect("refused")
+    };
+    assert!(reason(&app).contains("bad?name.snxlib"), "{}", reason(&app));
+    assert!(app.document_state.projects[0].pending_libraries.is_empty());
+
+    run(&mut app, LibraryMessage::LibraryCreateOptionsToggleGit);
+    assert!(
+        reason(&app).contains("bad?name.snxlib"),
+        "the toggle keeps it"
+    );
+}
+
+/// #2778: a path the project already waits to create is refused in the open
+/// dialog, with no second entry.
+#[test]
+fn a_path_already_pending_is_refused_in_the_dialog() {
+    let (_dir, lib, mut app) = dialog_on_new("parts.snxlib");
+    let (id, spec) = crate::library::commands::register_pending_library(lib.clone(), false, false)
+        .expect("a usable path");
+    app.document_state.projects[0]
+        .pending_libraries
+        .insert(id, spec);
+
+    run(&mut app, LibraryMessage::LibraryCreateOptionsConfirm);
+
+    let state = app.library.create_options.as_ref().expect("still open");
+    let reason = state.refusal.as_deref().expect("refused");
+    assert!(reason.contains("parts.snxlib"), "{reason}");
+    assert!(reason.contains("waiting to be created"), "{reason}");
+    assert!(state.path_refused);
+    assert_eq!(app.document_state.projects[0].pending_libraries.len(), 1);
 }
 
 #[test]
