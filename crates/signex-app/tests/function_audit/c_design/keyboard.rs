@@ -31,7 +31,7 @@ fn custom_row(prefs: &mut Prefs) -> KeymapEditorRow {
         .app
         .ui_state
         .preferences_keymap_editor
-        .rows()
+        .rows_in(signex_i18n::I18n::en_us_ref())
         .into_iter()
         .find(is_recordable)
         .expect("a recordable row")
@@ -42,7 +42,7 @@ fn row_at(prefs: &Prefs, slot: BindingSlot) -> KeymapEditorRow {
         .app
         .ui_state
         .preferences_keymap_editor
-        .rows()
+        .rows_in(signex_i18n::I18n::en_us_ref())
         .into_iter()
         .find(|row| row.slot == slot)
         .expect("the row")
@@ -65,7 +65,7 @@ fn record(prefs: &mut Prefs, stroke: &KeyStroke) {
 }
 
 fn stroke() -> KeyStroke {
-    KeyStroke::parse("Ctrl+Alt+K").expect("a keystroke")
+    "Ctrl+Alt+K".parse::<KeyStroke>().expect("a keystroke")
 }
 
 fn trigger_of(row: &KeymapEditorRow) -> ShortcutTrigger {
@@ -320,7 +320,7 @@ fn binding_a_key_another_command_uses_raises_a_conflict_and_show_filters_to_it()
         .app
         .ui_state
         .preferences_keymap_editor
-        .rows()
+        .rows_in(signex_i18n::I18n::en_us_ref())
         .into_iter()
         .find(|other| {
             is_recordable(other)
