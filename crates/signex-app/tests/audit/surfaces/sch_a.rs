@@ -227,6 +227,8 @@ pub fn rows() -> Vec<Surface> {
                 fixture::open_sample(app, r, fx);
                 fixture::mount_stock(app, fx)?;
                 fixture::select_panel(app, PanelKind::Components)?;
+                // The menu opens at the pointer: on a row of the dock.
+                app.interaction_state.last_mouse_pos = (180.0, 320.0);
                 let key = helpers_c::first_stock_row(app, fx)?;
                 helpers_c::drive(
                     app,

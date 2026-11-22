@@ -37,6 +37,9 @@ needs a software Vulkan driver (lavapipe) or the run skips.
 A further state of a row is an entry in `surfaces/states.rs` with the id
 `<row>-<state>`, written as `<row>-<state>-<theme>.png`. Run them all with
 `AUDIT_ONLY=states`. Its `open` fails when the state was not reached.
+`surfaces/states_drawn.rs` holds more of them (`AUDIT_ONLY=states_drawn`).
+A message whose type the crate does not export is reached with
+`view_click::click_view`, which clicks the widget that sends it.
 
 `render.rs`, `fixture.rs` and `surface.rs` are shared with
 `graphite_screens.rs`, which renders a fixed list of these rows by name.

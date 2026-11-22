@@ -1,13 +1,11 @@
 //! Mockup group `global` (rows m1-m18).
 
-use super::checks;
+use super::{checks, states_drawn};
 use crate::fixture::{self, Fixture};
 use crate::render::{self, Crop};
 use crate::settle_support;
 use crate::surface::{Check, Surface, WindowSel};
-use signex_app::app::{
-    CommandPaletteMsg, ContextMenuMsg, FileMsg, Message, OverlayMsg, Signex, UiMsg, WindowMsg,
-};
+use signex_app::app::{ContextMenuMsg, FileMsg, Message, OverlayMsg, Signex, UiMsg, WindowMsg};
 use signex_app::autosave::sidecar;
 use signex_app::dock::{DockMessage, PanelPosition};
 use signex_app::keymap::AppCommandId;
@@ -75,6 +73,8 @@ pub fn rows() -> Vec<Surface> {
             // (DockMessage::TabContextMenuRequested) is the other state.
             open: |app, r, fx| {
                 fixture::open_sample(app, r, fx);
+                // The menu opens at the pointer: on the active tab.
+                app.interaction_state.last_mouse_pos = (420.0, 64.0);
                 let tab = app.document_state.active_tab;
                 let _ = app.update(Message::ContextMenu(ContextMenuMsg::ShowTab(tab)));
                 Ok(())
@@ -132,11 +132,7 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m9",
             title: "Command palette",
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                let _ = app.update(Message::CommandPalette(CommandPaletteMsg::Open));
-                Ok(())
-            },
+            open: states_drawn::open_palette_vbus,
             window: WindowSel::Auto,
             checks: PALETTE,
         },
@@ -221,10 +217,7 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m17",
             title: "Passive Network Calculator",
-            open: |app, _, _| {
-                settle_support::settle(app, Message::Menu(MenuMessage::OpenPassiveCalculator));
-                Ok(())
-            },
+            open: states_drawn::open_calculator_result,
             window: WindowSel::Auto,
             checks: CALCULATOR,
         },

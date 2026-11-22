@@ -6,6 +6,7 @@
 
 use super::checks;
 use super::helpers_d::{self, board_click, command};
+use super::states;
 use crate::fixture::{self, Fixture};
 use crate::render::{self, Crop};
 use crate::settle_support;
@@ -13,7 +14,6 @@ use crate::surface::{Check, Surface, WindowSel};
 use signex_app::app::{
     LayerTabMenuMsg, LayerTabSubmenu, Message, PcbBarMenu, PcbBarMsg, PcbMsg, Signex,
 };
-use signex_app::menu_bar::MenuMessage;
 use signex_app::panels::PanelKind;
 use signex_types::pcb_layer::{CopperLayer, PcbLayer};
 
@@ -103,15 +103,8 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m103",
             title: "Layers panel (+ view options)",
-            // The panel as it opens; its View Options tab is the mockup's
-            // focus and another state.
-            open: |app, r, fx| {
-                fixture::open_board(app, r, fx);
-                settle_support::settle(app, Message::Menu(MenuMessage::OpenLayersPanel));
-                fixture::select_panel(app, PanelKind::Layers)?;
-                let _ = render::draw_main(r, app);
-                Ok(())
-            },
+            // The row draws the View Options tab.
+            open: states::open_view_options,
             window: WindowSel::Auto,
             checks: LAYERS,
         },

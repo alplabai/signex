@@ -57,12 +57,7 @@ fn sch_rows() -> Vec<Surface> {
             // The repeated sheet symbol selected: Properties shows its Repeat
             // section. Other states: the Naming menu open
             // (CompiledDesignMsg::NamingMenuToggled), the compiled channels.
-            open: |app, r, fx| {
-                h::open_multichannel(app, r, fx)?;
-                h::select_one(app, REPEATED_SHEET, SelectedKind::ChildSheet);
-                // One message refreshes the panel from the selection.
-                h::settle(app, CompiledDesignMsg::FindChanged(String::new()).into())
-            },
+            open: super::states::open_repeated_selected,
             window: WindowSel::Auto,
             checks: MULTI_CHANNEL,
         },

@@ -1,7 +1,6 @@
 //! Mockup group `annot-valid` (rows m75-m92).
 //!
-//! Every row is mapped. m90 (Rules tab: clearance matrix) records why it
-//! cannot be opened from outside the crate.
+//! Every row is mapped.
 
 use super::checks;
 use super::helpers_d::{self, command, reached};
@@ -29,11 +28,7 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m75",
             title: "Annotate Schematics",
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                settle_support::settle(app, Message::Annotate(AnnotateMsg::OpenDialog));
-                Ok(())
-            },
+            open: states::open_annotate_hierarchy,
             window: WindowSel::Auto,
             checks: ANNOTATE,
         },
@@ -64,15 +59,7 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m78",
             title: "Number Schematic Sheets",
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                helpers_d::sample_project(app, fx);
-                command(app, "number_schematic_sheets")?;
-                reached(
-                    app.ui_state.sheet_numbering.is_some(),
-                    "number_schematic_sheets opened no dialog on the sample project",
-                )
-            },
+            open: states::open_numbering_clash,
             window: WindowSel::Auto,
             checks: NUMBERING,
         },
@@ -205,13 +192,7 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m88",
             title: "DRC results",
-            open: |app, r, fx| {
-                fixture::open_board(app, r, fx);
-                command(app, "run_drc")?;
-                fixture::select_panel(app, PanelKind::Drc)?;
-                let _ = render::draw_main(r, app);
-                Ok(())
-            },
+            open: states::open_drc_findings,
             window: WindowSel::Auto,
             checks: DRC_PANEL,
         },
@@ -237,32 +218,17 @@ pub fn rows() -> Vec<Surface> {
         Surface {
             id: "m90",
             title: "Rules tab: clearance matrix",
-            open: |_, _, _| {
-                Err("open path unknown: RulesTabMsg::ClearanceViewPicked needs \
-                     rules_tab::ClearanceView::Matrix, which signex_app does not re-export; \
-                     only the Rules tab toolbar button builds it"
-                    .into())
-            },
+            // `ClearanceView` is not exported: the toolbar chip is clicked.
+            open: super::states_drawn::open_clearance_matrix,
             window: WindowSel::Auto,
             checks: &[],
         },
         Surface {
             id: "m91",
             title: "Rules tab: presets / text view",
-            // The text view. The Presets side panel needs
-            // `PanelPicked { panel: Some(RulesPanel::Presets) }`, and
-            // `RulesPanel` is not exported either.
-            open: |app, r, fx| {
-                let project = open_rules(app, r, fx)?;
-                settle_support::settle(
-                    app,
-                    Message::Project(ProjectMsg::Rules(RulesTabMsg::TextViewToggled {
-                        project_id: project,
-                        on: true,
-                    })),
-                );
-                Ok(())
-            },
+            // The text view with a syntax error. The Presets side panel is
+            // `m91-presets`.
+            open: states::open_rules_error,
             window: WindowSel::Auto,
             checks: RULES_TEXT,
         },

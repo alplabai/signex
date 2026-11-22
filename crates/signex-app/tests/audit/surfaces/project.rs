@@ -1,12 +1,13 @@
 //! Mockup group `project` (rows m19-m39).
 
+use super::states;
 use crate::fixture::{self, Fixture};
 use crate::render::{self, Crop};
 use crate::settle_support;
 use crate::surface::{Check, Surface, WindowSel};
 use signex_app::app::{
     ContextMenuMsg, ContextSubmenu, DocumentSetupMsg, EditMsg, EnableVersionControlMsg, ExportMsg,
-    Message, NewProjectMsg, OverlayMsg, ProjectCloseChoice, ProjectId, ProjectMsg, ProjectSection,
+    Message, NewProjectMsg, ProjectCloseChoice, ProjectId, ProjectMsg, ProjectSection,
     ProjectTabMsg, ProjectTreeAction, RemoveMsg, RenameMsg, SetupKind, Signex, Tool,
 };
 use signex_app::canvas::CanvasEvent;
@@ -31,14 +32,6 @@ const TREE_MENU: Crop = Crop {
     w: 760,
     h: 760,
 };
-/// The right dock, where the History panel sits.
-const RIGHT_DOCK: Crop = Crop {
-    x: 880,
-    y: 0,
-    w: 560,
-    h: 900,
-};
-
 pub fn rows() -> Vec<Surface> {
     let mut rows = dialogs();
     rows.extend(project_tab());
@@ -135,14 +128,8 @@ fn dialogs() -> Vec<Surface> {
         Surface {
             id: "m24",
             title: "Remove from project",
-            // The mock's sample is a child sheet placed by one sheet symbol;
-            // the sample project has only its root sheet, so that one is used.
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                let leaf = sheet_key(app)?;
-                tree_action(app, ProjectTreeAction::OpenRemoveDialog(leaf));
-                Ok(())
-            },
+            // A child sheet placed by one sheet symbol, as the row draws.
+            open: states::open_remove_child,
             window: WindowSel::Auto,
             checks: REMOVE,
         },
@@ -217,25 +204,11 @@ fn dialogs() -> Vec<Surface> {
         Surface {
             id: "m39",
             title: "History panel",
-            // A repository is started first so the panel lists the first
-            // commit; the branch switcher and the merge dialog are other
-            // states. The commit needs a git identity where the audit runs.
-            open: |app, r, fx| {
-                fixture::open_sample(app, r, fx);
-                open_enable_version_control(app)?;
-                settle_support::settle(
-                    app,
-                    Message::EnableVersionControl(EnableVersionControlMsg::Confirm),
-                );
-                settle_support::settle(
-                    app,
-                    Message::Overlay(OverlayMsg::OpenPanel(PanelKind::History)),
-                );
-                fixture::select_panel(app, PanelKind::History)?;
-                let _ = render::draw_main(r, app);
-                Ok(())
-            },
-            window: WindowSel::MainCrop(RIGHT_DOCK),
+            // A repository with a commit, so the panel lists it. The branch
+            // switcher and the merge dialog are other states.
+            open: states::open_history_commits,
+            // The History tab docks at the bottom, so a side crop misses it.
+            window: WindowSel::Main,
             checks: HISTORY,
         },
     ]
@@ -310,8 +283,8 @@ fn project_tab() -> Vec<Surface> {
         Surface {
             id: "m33",
             title: "Project tab: Libraries",
-            // The sample project mounts no library, so the table is empty.
-            open: |app, r, fx| open_section(app, r, fx, ProjectSection::Libraries),
+            // One mounted library of each kind, as the row draws.
+            open: states::open_libraries,
             window: WindowSel::Main,
             checks: LIBRARIES,
         },
@@ -326,11 +299,11 @@ fn project_tab() -> Vec<Surface> {
         Surface {
             id: "m35",
             title: "Project tab: Version Control",
-            // Main state: a folder with no repository. The other state is
-            // the folder after Enable Version Control.
-            open: |app, r, fx| open_section(app, r, fx, ProjectSection::VersionControl),
+            // The repository state the row draws; `m35-none` is the folder
+            // with none, and keeps the Enable Version Control check.
+            open: states::open_repository,
             window: WindowSel::Main,
-            checks: VERSION_CONTROL,
+            checks: VERSION_CONTROL_SHOWN,
         },
         Surface {
             id: "m36",
@@ -578,7 +551,12 @@ const LIBRARIES: &[Check] = &[("the Libraries section is shown", libraries_shown
 
 const ERC: &[Check] = &[("the ERC section is shown", erc_shown)];
 
-const VERSION_CONTROL: &[Check] = &[
+const VERSION_CONTROL_SHOWN: &[Check] = &[(
+    "the Version control section is shown",
+    version_control_shown,
+)];
+
+pub(super) const VERSION_CONTROL: &[Check] = &[
     (
         "the Version control section is shown",
         version_control_shown,

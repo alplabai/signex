@@ -289,7 +289,8 @@ pub fn rows() -> Vec<Surface> {
                     Message::NetColor(NetColorMsg::CustomOpenedFor("+3V3".into())),
                 )
             },
-            window: WindowSel::Auto,
+            // The palette has its own window; the picker draws on the main one.
+            window: WindowSel::Main,
             checks: NET_CUSTOM,
         },
         Surface {

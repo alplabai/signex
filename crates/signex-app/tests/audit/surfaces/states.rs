@@ -9,7 +9,7 @@ use super::helpers_d::{self, command, reached};
 use super::helpers_f as h;
 use super::{annot_valid, project};
 use crate::fixture::{self, Fixture};
-use crate::render::{self, Crop};
+use crate::render;
 use crate::settle_support;
 use crate::surface::{OpenFn, Surface, WindowSel};
 use iced::widget::text_editor::{Action, Edit};
@@ -32,14 +32,6 @@ use signex_widgets::passive_calculator::CalculatorMessage;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use uuid::Uuid;
-
-/// The right dock, where the History panel sits.
-const RIGHT_DOCK: Crop = Crop {
-    x: 880,
-    y: 0,
-    w: 560,
-    h: 900,
-};
 
 fn row(id: &'static str, title: &'static str, open: OpenFn) -> Surface {
     Surface {
@@ -145,11 +137,7 @@ fn schematic_rows() -> Vec<Surface> {
         row(
             "m151-selected",
             "Repeated sheet symbol selected",
-            |app, r, fx| {
-                h::open_multichannel(app, r, fx)?;
-                // A real click, so the selection reaches Properties.
-                click_pick(app, (127.0, 95.25), SelectedKind::ChildSheet)
-            },
+            open_repeated_selected,
         ),
     ]
 }
@@ -168,55 +156,25 @@ fn project_rows() -> Vec<Surface> {
             "Project tab: mounted libraries",
             open_libraries,
         ),
-        row("m35-repository", "Project tab: repository", |app, r, fx| {
-            commit_sample(fx)?;
-            fixture::open_sample(app, r, fx);
-            let project = app
-                .document_state
-                .projects
-                .first_mut()
-                .ok_or("the sample project is not loaded")?;
-            project.data.enable_git = true;
-            project::show_section(app, r, ProjectSection::VersionControl)
-        }),
+        row("m35-repository", "Project tab: repository", open_repository),
         Surface {
             id: "m39-commits",
             title: "History panel with a commit",
-            open: |app, r, fx| {
-                commit_sample(fx)?;
-                fixture::open_sample(app, r, fx);
-                settle_support::settle(
-                    app,
-                    Message::Overlay(OverlayMsg::OpenPanel(PanelKind::History)),
-                );
-                fixture::select_panel(app, PanelKind::History)?;
-                let _ = render::draw_main(r, app);
-                Ok(())
-            },
-            window: WindowSel::MainCrop(RIGHT_DOCK),
+            open: open_history_commits,
+            // The History tab docks at the bottom, so a side crop misses it.
+            window: WindowSel::Main,
             checks: project::HISTORY,
         },
-        row("m75-project", "Annotate on a hierarchy", |app, r, fx| {
-            open_hierarchy(app, r, fx)?;
-            settle_support::settle(app, Message::Annotate(AnnotateMsg::OpenDialog));
-            reached(app.ui_state.annotate_dialog_open, "Annotate did not open")
-        }),
-        row("m78-clash", "Number Sheets with a clash", |app, r, fx| {
-            open_hierarchy(app, r, fx)?;
-            command(app, "number_schematic_sheets")?;
-            reached(
-                app.ui_state.sheet_numbering.is_some(),
-                "number_schematic_sheets opened no dialog",
-            )?;
-            settle_support::settle(
-                app,
-                Message::from(SheetNumberingMsg::NumberEdited {
-                    row: 1,
-                    text: "1".into(),
-                }),
-            );
-            Ok(())
-        }),
+        row(
+            "m75-project",
+            "Annotate on a hierarchy",
+            open_annotate_hierarchy,
+        ),
+        row(
+            "m78-clash",
+            "Number Sheets with a clash",
+            open_numbering_clash,
+        ),
         row(
             "m117-net-lengths",
             "Board Reports: Net Lengths",
@@ -247,40 +205,132 @@ fn validation_rows() -> Vec<Surface> {
         }),
         row("m85-waive", "ERC: stale, waive form open", open_erc_waive),
         row("m88-findings", "DRC panel with findings", open_drc_findings),
-        row("m91-error", "Rules text with an error", |app, r, fx| {
-            let project = annot_valid::open_rules(app, r, fx)?;
-            settle_support::settle(
-                app,
-                Message::Project(ProjectMsg::Rules(RulesTabMsg::TextViewToggled {
-                    project_id: project,
-                    on: true,
-                })),
-            );
-            let text = app
-                .document_state
-                .project_tabs
-                .get_mut(&project)
-                .and_then(|tab| tab.rules.text.as_mut())
-                .ok_or("the Rules tab shows no text view")?;
-            let broken = Arc::new("rule \"clearance\" {\n    min_clearance = \n".to_string());
-            text.perform(Action::Edit(Edit::Paste(broken)));
-            reached(text.edited, "the rule text was not typed in")
-        }),
+        row("m91-error", "Rules text with an error", open_rules_error),
         row(
             "m103-view-options",
             "Layers panel: View Options",
-            |app, r, fx| {
-                fixture::open_board(app, r, fx);
-                settle_support::settle(app, Message::Menu(MenuMessage::OpenLayersPanel));
-                fixture::select_panel(app, PanelKind::Layers)?;
-                let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::LayersPanel(
-                    LayersPanelMsg::TabPicked(LayersTab::ViewOptions),
-                ))));
-                let _ = render::draw_main(r, app);
-                Ok(())
-            },
+            open_view_options,
         ),
     ]
+}
+
+/// The repeated sheet symbol picked with a real click, so the selection
+/// reaches Properties.
+pub(super) fn open_repeated_selected(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    h::open_multichannel(app, r, fx)?;
+    click_pick(app, (127.0, 95.25), SelectedKind::ChildSheet)
+}
+
+/// The Version Control section over a folder with a repository.
+pub(super) fn open_repository(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    commit_sample(fx)?;
+    fixture::open_sample(app, r, fx);
+    let project = app
+        .document_state
+        .projects
+        .first_mut()
+        .ok_or("the sample project is not loaded")?;
+    project.data.enable_git = true;
+    project::show_section(app, r, ProjectSection::VersionControl)
+}
+
+/// The History panel listing a commit of the sample's repository.
+pub(super) fn open_history_commits(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    commit_sample(fx)?;
+    fixture::open_sample(app, r, fx);
+    settle_support::settle(
+        app,
+        Message::Overlay(OverlayMsg::OpenPanel(PanelKind::History)),
+    );
+    fixture::select_panel(app, PanelKind::History)?;
+    let _ = render::draw_main(r, app);
+    Ok(())
+}
+
+/// Annotate over a hierarchy with parts left to number.
+pub(super) fn open_annotate_hierarchy(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    open_hierarchy(app, r, fx)?;
+    settle_support::settle(app, Message::Annotate(AnnotateMsg::OpenDialog));
+    reached(app.ui_state.annotate_dialog_open, "Annotate did not open")
+}
+
+/// Number Schematic Sheets with two sheets given the same number.
+pub(super) fn open_numbering_clash(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    open_hierarchy(app, r, fx)?;
+    command(app, "number_schematic_sheets")?;
+    reached(
+        app.ui_state.sheet_numbering.is_some(),
+        "number_schematic_sheets opened no dialog",
+    )?;
+    settle_support::settle(
+        app,
+        Message::from(SheetNumberingMsg::NumberEdited {
+            row: 1,
+            text: "1".into(),
+        }),
+    );
+    Ok(())
+}
+
+/// The Rules text view holding a rule that does not parse.
+pub(super) fn open_rules_error(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    let project = annot_valid::open_rules(app, r, fx)?;
+    settle_support::settle(
+        app,
+        Message::Project(ProjectMsg::Rules(RulesTabMsg::TextViewToggled {
+            project_id: project,
+            on: true,
+        })),
+    );
+    let text = app
+        .document_state
+        .project_tabs
+        .get_mut(&project)
+        .and_then(|tab| tab.rules.text.as_mut())
+        .ok_or("the Rules tab shows no text view")?;
+    let broken = Arc::new("rule \"clearance\" {\n    min_clearance = \n".to_string());
+    text.perform(Action::Edit(Edit::Paste(broken)));
+    reached(text.edited, "the rule text was not typed in")
+}
+
+/// The Layers panel on its View Options tab.
+pub(super) fn open_view_options(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
+    fixture::open_board(app, r, fx);
+    settle_support::settle(app, Message::Menu(MenuMessage::OpenLayersPanel));
+    fixture::select_panel(app, PanelKind::Layers)?;
+    let _ = app.update(Message::Dock(DockMessage::Panel(PanelMsg::LayersPanel(
+        LayersPanelMsg::TabPicked(LayersTab::ViewOptions),
+    ))));
+    let _ = render::draw_main(r, app);
+    Ok(())
 }
 
 /// Rewrite the sample sheet copy before it is opened, so the open, the
@@ -385,7 +435,11 @@ fn open_parameter_edits(
 }
 
 /// The Remove dialog on a child sheet its parent places once.
-fn open_remove_child(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+pub(super) fn open_remove_child(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
     let dir = h::new_dir(fx, "child-sheet")?;
     let child = dir.join("linear-regulator.snxsch");
     h::copy_sample_sheet(fx, &child)?;
@@ -413,7 +467,11 @@ fn open_remove_child(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> 
 }
 
 /// One library of each kind; the in-project one is not on disk.
-fn open_libraries(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+pub(super) fn open_libraries(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
     fixture::open_sample(app, r, fx);
     let entry = |path: PathBuf, kind| LibraryEntry {
         path,
@@ -560,7 +618,11 @@ fn open_erc_waive(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Res
 }
 
 /// The primitives board with a VCC track 0.1 mm from its GND track.
-fn open_drc_findings(app: &mut Signex, r: &mut iced::Renderer, fx: &Fixture) -> Result<(), String> {
+pub(super) fn open_drc_findings(
+    app: &mut Signex,
+    r: &mut iced::Renderer,
+    fx: &Fixture,
+) -> Result<(), String> {
     let mut board = helpers_d::primitives_board()?;
     board.nets.push(
         serde_json::from_value(serde_json::json!({"number": 2, "name": "VCC"}))
