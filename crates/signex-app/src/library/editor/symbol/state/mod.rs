@@ -115,6 +115,8 @@ pub enum GraphicHandle {
     /// handle id (see `graphic_handles`'s cast, which is `debug_assert`-
     /// guarded against ever needing to saturate).
     PolygonVertex(u32),
+    /// Bezier point — `0=start, 1=C1, 2=C2, 3=end`.
+    BezierPoint(u8),
 }
 
 /// Map a [`GraphicHandle`] to the mouse cursor that should be shown

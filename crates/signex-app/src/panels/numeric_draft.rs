@@ -157,11 +157,19 @@ fn graphic_scalar(g: &GraphicSummary, field: GraphicFieldId) -> Option<f64> {
         (K::Rectangle { to, .. } | K::Line { to, .. }, F::ToY) => Some(to[1]),
         (K::Rectangle { from, to }, F::Width) => Some(rect_extent(from[0], to[0])),
         (K::Rectangle { from, to }, F::Height) => Some(rect_extent(from[1], to[1])),
-        (K::Circle { center, .. } | K::Arc { center, .. }, F::CenterX) => Some(center[0]),
-        (K::Circle { center, .. } | K::Arc { center, .. }, F::CenterY) => Some(center[1]),
-        (K::Circle { radius, .. } | K::Arc { radius, .. }, F::Radius) => Some(*radius),
-        (K::Arc { start_deg, .. }, F::StartDeg) => Some(*start_deg),
-        (K::Arc { end_deg, .. }, F::EndDeg) => Some(*end_deg),
+        (K::Circle { center, .. } | K::Arc { center, .. } | K::Pie { center, .. }, F::CenterX) => {
+            Some(center[0])
+        }
+        (K::Circle { center, .. } | K::Arc { center, .. } | K::Pie { center, .. }, F::CenterY) => {
+            Some(center[1])
+        }
+        (K::Circle { radius, .. } | K::Arc { radius, .. } | K::Pie { radius, .. }, F::Radius) => {
+            Some(*radius)
+        }
+        (K::Arc { start_deg, .. } | K::Pie { start_deg, .. }, F::StartDeg) => Some(*start_deg),
+        (K::Arc { end_deg, .. } | K::Pie { end_deg, .. }, F::EndDeg) => Some(*end_deg),
+        (K::Bezier { points }, F::BezierX(i)) => points.get(usize::from(i)).map(|p| p[0]),
+        (K::Bezier { points }, F::BezierY(i)) => points.get(usize::from(i)).map(|p| p[1]),
         (K::Text { position, .. }, F::PositionX) => Some(position[0]),
         (K::Text { position, .. }, F::PositionY) => Some(position[1]),
         (K::Text { size, .. }, F::TextSize) => Some(*size),

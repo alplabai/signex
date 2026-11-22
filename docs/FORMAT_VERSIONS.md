@@ -10,7 +10,7 @@ format declares only its own table row below.
 
 - **Save** writes the format's current token. The exceptions are `.snxsym`,
   `.snxfpt`, `.snxsch` and `.snxpcb`: each writes the lowest token the content needs. A
-  symbol file without polygons or De Morgan bodies stays `snxsym/v1`; a
+  symbol file without polygons, De Morgan bodies, Beziers or pies stays `snxsym/v1`; a
   schematic stays `snxsch/1.1`, byte for byte, unless a No-ERC directive
   names the rules it silences, which writes `snxsch/1.2` (#1699), or it holds
   any Schematic Refinement content (a harness object, a union, a Bezier,
@@ -49,7 +49,7 @@ format declares only its own table row below.
 | `.snxprj` | `snxprj/1` | `snxprj/1` | refused | read as `snxprj/1` |
 | `.snxlib` | `snxlib/2` | `snxlib/2` | refused | refused |
 | `.snxfpt` | `snxfpt/1.1`, `1.2` with sketch links (reference dimensions, pattern sources and mirrors, per-instance pad overrides), or `1.3` with generated features (silkscreen outline, pad clearance, pin 1 marker, assembly outline; mockup row 124, #2834) or a pattern numbering sweep other than row by row (mockup row 126), whatever else it holds | `snxfpt/1`, `1.1`, `1.2`, `1.3` | refused | refused |
-| `.snxsym` | `snxsym/v1`, `v2` or `v3` by content | `snxsym/v1`, `v2`, `v3` | refused | refused |
+| `.snxsym` | `snxsym/v1`, `v2` or `v3` by content; `v4` while any graphic is a Bezier or Pie Chart (#2838), whatever else it holds | `snxsym/v1`, `v2`, `v3`, `v4` | refused | refused |
 | `.snxsim` | `snxsim/v1` | `snxsim/v1` | refused | refused |
 
 `.snxrules` profiles carry a numeric `schema` key instead of a token

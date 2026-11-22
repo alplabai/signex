@@ -139,7 +139,9 @@ pub(super) fn selection_anchor(
                     SymbolGraphicKind::Rectangle { from, .. }
                     | SymbolGraphicKind::Line { from, .. } => (from[0], from[1]),
                     SymbolGraphicKind::Circle { center, .. }
-                    | SymbolGraphicKind::Arc { center, .. } => (center[0], center[1]),
+                    | SymbolGraphicKind::Arc { center, .. }
+                    | SymbolGraphicKind::Pie { center, .. } => (center[0], center[1]),
+                    SymbolGraphicKind::Bezier { points } => (points[0][0], points[0][1]),
                     SymbolGraphicKind::Text { position, .. } => (position[0], position[1]),
                     SymbolGraphicKind::Polygon { vertices } => {
                         let c = state::polygon_centroid(vertices);

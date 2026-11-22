@@ -178,6 +178,7 @@ define_ids! {
     EDITORS_SYMPROPS_ARC = "editors-symprops-arc";
     EDITORS_SYMPROPS_TEXT = "editors-symprops-text";
     EDITORS_SYMPROPS_POLYGON = "editors-symprops-polygon";
+    EDITORS_SYMPROPS_PIE = "editors-symprops-pie";
     EDITORS_SYMPROPS_SECTION_GEOMETRY = "editors-symprops-section-geometry";
     EDITORS_SYMPROPS_SECTION_STYLE = "editors-symprops-section-style";
     EDITORS_SYMPROPS_START_X_Y = "editors-symprops-start-x-y";

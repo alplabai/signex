@@ -714,6 +714,7 @@ editors-symprops-circle = Circle
 editors-symprops-arc = Arc
 editors-symprops-text = Text
 editors-symprops-polygon = Polygon
+editors-symprops-pie = Pie Chart
 editors-symprops-section-geometry = Geometry
 editors-symprops-section-style = Style
 editors-symprops-start-x-y = Start X / Y

@@ -226,5 +226,17 @@ fn graphic_kind_to_summary(
         SymbolGraphicKind::Polygon { vertices } => GraphicKindSummary::Polygon {
             vertex_count: vertices.len(),
         },
+        SymbolGraphicKind::Bezier { points } => GraphicKindSummary::Bezier { points: *points },
+        SymbolGraphicKind::Pie {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        } => GraphicKindSummary::Pie {
+            center: *center,
+            radius: *radius,
+            start_deg: *start_deg,
+            end_deg: *end_deg,
+        },
     }
 }

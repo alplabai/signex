@@ -176,9 +176,17 @@ fn snap_graphic_to_grid(kind: &mut SymbolGraphicKind, step: f64) {
             to[0] = snap_value_to_grid(to[0], step);
             to[1] = snap_value_to_grid(to[1], step);
         }
-        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+        SymbolGraphicKind::Circle { center, .. }
+        | SymbolGraphicKind::Arc { center, .. }
+        | SymbolGraphicKind::Pie { center, .. } => {
             center[0] = snap_value_to_grid(center[0], step);
             center[1] = snap_value_to_grid(center[1], step);
+        }
+        SymbolGraphicKind::Bezier { points } => {
+            for p in points.iter_mut() {
+                p[0] = snap_value_to_grid(p[0], step);
+                p[1] = snap_value_to_grid(p[1], step);
+            }
         }
         SymbolGraphicKind::Text { position, .. } => {
             position[0] = snap_value_to_grid(position[0], step);
@@ -334,6 +342,14 @@ fn graphic_fully_inside_box(
             Some((gx0, gy0, gx1, gy1)) => gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax,
             None => false,
         },
+        SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::Pie { .. } => {
+            match polygon_bbox(&kind.flattened_outline()) {
+                Some((gx0, gy0, gx1, gy1)) => {
+                    gx0 >= xmin && gx1 <= xmax && gy0 >= ymin && gy1 <= ymax
+                }
+                None => false,
+            }
+        }
     }
 }
 
@@ -367,6 +383,14 @@ fn graphic_intersects_box(
             Some((gx0, gy0, gx1, gy1)) => gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin,
             None => false,
         },
+        SymbolGraphicKind::Bezier { .. } | SymbolGraphicKind::Pie { .. } => {
+            match polygon_bbox(&kind.flattened_outline()) {
+                Some((gx0, gy0, gx1, gy1)) => {
+                    gx0 <= xmax && gx1 >= xmin && gy0 <= ymax && gy1 >= ymin
+                }
+                None => false,
+            }
+        }
     }
 }
 

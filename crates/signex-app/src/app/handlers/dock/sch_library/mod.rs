@@ -866,17 +866,33 @@ fn apply_graphic_field(
             to[1] = rect_end_for_extent(from[1], to[1], value)
         }
         (
-            SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. },
+            SymbolGraphicKind::Circle { center, .. }
+            | SymbolGraphicKind::Arc { center, .. }
+            | SymbolGraphicKind::Pie { center, .. },
             GraphicFieldId::CenterX,
         ) => center[0] = value,
         (
-            SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. },
+            SymbolGraphicKind::Circle { center, .. }
+            | SymbolGraphicKind::Arc { center, .. }
+            | SymbolGraphicKind::Pie { center, .. },
             GraphicFieldId::CenterY,
         ) => center[1] = value,
         (
-            SymbolGraphicKind::Circle { radius, .. } | SymbolGraphicKind::Arc { radius, .. },
+            SymbolGraphicKind::Circle { radius, .. }
+            | SymbolGraphicKind::Arc { radius, .. }
+            | SymbolGraphicKind::Pie { radius, .. },
             GraphicFieldId::Radius,
         ) => *radius = value,
+        (SymbolGraphicKind::Bezier { points }, GraphicFieldId::BezierX(i)) => {
+            if let Some(p) = points.get_mut(usize::from(i)) {
+                p[0] = value;
+            }
+        }
+        (SymbolGraphicKind::Bezier { points }, GraphicFieldId::BezierY(i)) => {
+            if let Some(p) = points.get_mut(usize::from(i)) {
+                p[1] = value;
+            }
+        }
         // Reduce each endpoint into `[0, 360)` on write. The Properties
         // `text_input` accepts any `f64` including negatives, and the CCW-
         // wraparound render/hit-test `rem_euclid` both endpoints anyway, so
@@ -890,12 +906,14 @@ fn apply_graphic_field(
         // it can't tell apart from a Properties edit. NOT
         // `normalize_arc_endpoints_deg`: its swap would collapse the visible
         // 270° to the 90° complement, the same round-trip loss in reverse.
-        (SymbolGraphicKind::Arc { start_deg, .. }, GraphicFieldId::StartDeg) => {
-            *start_deg = value.rem_euclid(360.0)
-        }
-        (SymbolGraphicKind::Arc { end_deg, .. }, GraphicFieldId::EndDeg) => {
-            *end_deg = value.rem_euclid(360.0)
-        }
+        (
+            SymbolGraphicKind::Arc { start_deg, .. } | SymbolGraphicKind::Pie { start_deg, .. },
+            GraphicFieldId::StartDeg,
+        ) => *start_deg = value.rem_euclid(360.0),
+        (
+            SymbolGraphicKind::Arc { end_deg, .. } | SymbolGraphicKind::Pie { end_deg, .. },
+            GraphicFieldId::EndDeg,
+        ) => *end_deg = value.rem_euclid(360.0),
         (SymbolGraphicKind::Text { position, .. }, GraphicFieldId::PositionX) => {
             position[0] = value
         }
@@ -912,6 +930,53 @@ mod arc_field_edit_tests {
     use super::apply_graphic_field;
     use crate::panels::GraphicFieldId;
     use signex_library::{SymbolGraphic, SymbolGraphicKind};
+
+    fn curve(kind: SymbolGraphicKind) -> SymbolGraphic {
+        SymbolGraphic {
+            kind,
+            stroke_width: 0.15,
+            fill: None,
+            part_number: 1,
+            body_style: 1,
+        }
+    }
+
+    /// #2838: a pie's Properties angles persist in `[0, 360)`, like an arc's.
+    #[test]
+    fn a_pie_angle_field_is_reduced_into_one_turn() {
+        let mut g = curve(SymbolGraphicKind::Pie {
+            center: [0.0, 0.0],
+            radius: 2.54,
+            start_deg: 0.0,
+            end_deg: 90.0,
+        });
+        apply_graphic_field(&mut g, GraphicFieldId::EndDeg, -60.0);
+        apply_graphic_field(&mut g, GraphicFieldId::Radius, 5.08);
+        let SymbolGraphicKind::Pie {
+            radius, end_deg, ..
+        } = g.kind
+        else {
+            panic!("expected a Pie");
+        };
+        assert_eq!(end_deg, 300.0);
+        assert_eq!(radius, 5.08);
+    }
+
+    /// #2838: each Bezier point row writes only its own point.
+    #[test]
+    fn a_bezier_point_field_writes_its_own_point() {
+        let mut g = curve(SymbolGraphicKind::Bezier {
+            points: [[0.0, 0.0], [1.0, 1.0], [2.0, 1.0], [3.0, 0.0]],
+        });
+        apply_graphic_field(&mut g, GraphicFieldId::BezierX(2), 9.0);
+        apply_graphic_field(&mut g, GraphicFieldId::BezierY(2), 8.0);
+        assert_eq!(
+            g.kind,
+            SymbolGraphicKind::Bezier {
+                points: [[0.0, 0.0], [1.0, 1.0], [9.0, 8.0], [3.0, 0.0]],
+            }
+        );
+    }
 
     // Regression: a Properties-panel arc-degree edit must persist endpoints
     // already reduced into [0, 360). A raw negative endpoint reaching disk

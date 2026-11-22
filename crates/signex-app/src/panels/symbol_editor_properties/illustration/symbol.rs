@@ -74,6 +74,7 @@ fn shape_points(shape: &PartShape, out: &mut Vec<[f64; 2]>) {
             ]);
         }
         PartShape::Polygon { vertices, .. } => out.extend(vertices.iter().copied()),
+        PartShape::Outline { points, .. } => out.extend(points.iter().copied()),
     }
 }
 
@@ -141,6 +142,22 @@ fn shape_part(shape: &PartShape, fit: &Fit) -> Option<Part> {
                 Primitive::Polyline {
                     points: vertices.iter().map(|v| fit.point(*v)).collect(),
                     is_closed: true,
+                },
+                body_style(*filled),
+            )
+        }
+        PartShape::Outline {
+            points,
+            is_closed,
+            filled,
+        } => {
+            if points.len() < 2 {
+                return None;
+            }
+            Part::new(
+                Primitive::Polyline {
+                    points: points.iter().map(|v| fit.point(*v)).collect(),
+                    is_closed: *is_closed,
                 },
                 body_style(*filled),
             )

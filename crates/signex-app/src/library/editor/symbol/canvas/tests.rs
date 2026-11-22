@@ -1074,3 +1074,6 @@ fn a_one_pin_power_input_symbol_follows_the_power_port_rule() {
     let (_, snap) = snapshot_of(&Rig::new(symbol));
     assert_eq!(snap.pin_texts.len(), 4, "both pins keep number and name");
 }
+
+#[path = "curve_gesture_tests.rs"]
+mod curve_gesture;

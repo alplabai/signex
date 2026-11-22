@@ -106,7 +106,24 @@ fn rotate_graphic_90(
                 pivot,
             );
         }
+        SymbolGraphicKind::Bezier { points } => {
+            for p in points.iter_mut() {
+                *p = rotate_graphic_point_90(
+                    *p,
+                    geometry_center,
+                    clockwise,
+                    RotationSpace::World,
+                    pivot,
+                );
+            }
+        }
         SymbolGraphicKind::Arc {
+            center,
+            start_deg,
+            end_deg,
+            ..
+        }
+        | SymbolGraphicKind::Pie {
             center,
             start_deg,
             end_deg,
@@ -159,9 +176,12 @@ fn graphic_geometry_center(kind: &SymbolGraphicKind) -> [f64; 2] {
         SymbolGraphicKind::Rectangle { from, to } | SymbolGraphicKind::Line { from, to } => {
             [(from[0] + to[0]) * 0.5, (from[1] + to[1]) * 0.5]
         }
-        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => *center,
+        SymbolGraphicKind::Circle { center, .. }
+        | SymbolGraphicKind::Arc { center, .. }
+        | SymbolGraphicKind::Pie { center, .. } => *center,
         SymbolGraphicKind::Text { position, .. } => *position,
         SymbolGraphicKind::Polygon { vertices } => super::polygon_centroid(vertices),
+        SymbolGraphicKind::Bezier { points } => super::polygon_centroid(points),
     }
 }
 
@@ -284,9 +304,19 @@ pub(super) fn translate_graphic_to(sym: &mut Symbol, idx: usize, x: f64, y: f64)
             to[0] += dx;
             to[1] += dy;
         }
-        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+        SymbolGraphicKind::Circle { center, .. }
+        | SymbolGraphicKind::Arc { center, .. }
+        | SymbolGraphicKind::Pie { center, .. } => {
             center[0] = x;
             center[1] = y;
+        }
+        // Anchor is the start point, as in `selection_anchor`.
+        SymbolGraphicKind::Bezier { points } => {
+            let (dx, dy) = (x - points[0][0], y - points[0][1]);
+            for p in points.iter_mut() {
+                p[0] += dx;
+                p[1] += dy;
+            }
         }
         SymbolGraphicKind::Text { position, .. } => {
             position[0] = x;
@@ -321,9 +351,17 @@ pub fn translate_graphic_by(kind: &mut SymbolGraphicKind, dx: f64, dy: f64) {
             to[0] += dx;
             to[1] += dy;
         }
-        SymbolGraphicKind::Circle { center, .. } | SymbolGraphicKind::Arc { center, .. } => {
+        SymbolGraphicKind::Circle { center, .. }
+        | SymbolGraphicKind::Arc { center, .. }
+        | SymbolGraphicKind::Pie { center, .. } => {
             center[0] += dx;
             center[1] += dy;
+        }
+        SymbolGraphicKind::Bezier { points } => {
+            for p in points.iter_mut() {
+                p[0] += dx;
+                p[1] += dy;
+            }
         }
         SymbolGraphicKind::Text { position, .. } => {
             position[0] += dx;

@@ -292,5 +292,25 @@ fn to_graphic(graphic: &SymbolGraphic) -> Graphic {
                 fill,
             }
         }
+        SymbolGraphicKind::Bezier { points } => Graphic::Bezier {
+            points: points.iter().map(|p| Point::new(p[0], p[1])).collect(),
+            width,
+            fill: FillType::None,
+        },
+        // The ring is closed implicitly; repeat its first point so the
+        // polyline draws the closing edge, as `Polygon` does above.
+        SymbolGraphicKind::Pie { .. } => {
+            let ring = graphic.kind.flattened_outline();
+            let closing = ring.first().copied();
+            Graphic::Polyline {
+                points: ring
+                    .into_iter()
+                    .chain(closing)
+                    .map(|p| Point::new(p[0], p[1]))
+                    .collect(),
+                width,
+                fill,
+            }
+        }
     }
 }

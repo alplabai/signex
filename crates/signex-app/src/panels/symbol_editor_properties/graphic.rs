@@ -16,6 +16,13 @@ use crate::library::editor::symbol::rect_extent;
 
 const GEOMETRY: &str = "symprops.geometry";
 const STYLE: &str = "symprops.style";
+/// A Bezier's four point rows, named as on the schematic's Bezier.
+const BEZIER_ROWS: [(MessageId, &str); 4] = [
+    (ids::PROPERTIES_BEZIER_START, field::G_START),
+    (ids::PROPERTIES_BEZIER_CONTROL_1, field::G_CONTROL_1),
+    (ids::PROPERTIES_BEZIER_CONTROL_2, field::G_CONTROL_2),
+    (ids::PROPERTIES_BEZIER_END, field::G_END),
+];
 
 pub(super) fn view<'a>(
     sym: &'a SymbolEditorPanelContext,
@@ -57,6 +64,8 @@ fn kind_title(kind: &GraphicKindSummary) -> MessageId {
         GraphicKindSummary::Arc { .. } => ids::EDITORS_SYMPROPS_ARC,
         GraphicKindSummary::Text { .. } => ids::EDITORS_SYMPROPS_TEXT,
         GraphicKindSummary::Polygon { .. } => ids::EDITORS_SYMPROPS_POLYGON,
+        GraphicKindSummary::Bezier { .. } => ids::PROPERTIES_BEZIER_TITLE,
+        GraphicKindSummary::Pie { .. } => ids::EDITORS_SYMPROPS_PIE,
     }
 }
 
@@ -124,7 +133,20 @@ fn geometry_rows<'a>(g: &GraphicSummary, form: &Form<'_>) -> Vec<Element<'a, Pan
                 field::G_RADIUS,
             ),
         ],
+        GraphicKindSummary::Bezier { points } => (0u8..)
+            .zip(points)
+            .zip(BEZIER_ROWS)
+            .map(|((i, p), (label, id))| {
+                pair(label, (F::BezierX(i), p[0]), (F::BezierY(i), p[1]), id)
+            })
+            .collect(),
         GraphicKindSummary::Arc {
+            center,
+            radius,
+            start_deg,
+            end_deg,
+        }
+        | GraphicKindSummary::Pie {
             center,
             radius,
             start_deg,
@@ -212,6 +234,7 @@ fn style_rows<'a>(
         GraphicKindSummary::Rectangle { .. }
             | GraphicKindSummary::Circle { .. }
             | GraphicKindSummary::Polygon { .. }
+            | GraphicKindSummary::Pie { .. }
     );
     if closed {
         rows.push(form.linked(
