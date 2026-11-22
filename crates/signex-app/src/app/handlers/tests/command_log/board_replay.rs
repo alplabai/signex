@@ -368,6 +368,68 @@ fn refused_on_a_board_once_changed(id: &str) {
     assert_eq!(revision(&app), before, "{id}");
 }
 
+fn footprint_places(app: &Signex, path: &Path) -> Vec<(f64, f64)> {
+    let board = app.document_state.pcb_board(path).expect("the board");
+    (board.footprints.iter())
+        .map(|fp| (fp.position.x, fp.position.y))
+        .collect()
+}
+
+/// The review's case: a second copy would stack exactly on the first.
+#[test]
+fn a_board_duplicate_replay_onto_its_own_copy_is_refused() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_tracks(dir.path());
+    select_part(&mut app);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    let before = footprint_places(&app, &path);
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
+    assert_eq!(footprint_places(&app, &path), before, "nothing was placed");
+}
+
+/// The stack removes Inner 2; a via given a size there since keeps it.
+#[test]
+fn a_layer_stack_replay_says_so_when_it_would_drop_layer_sizes() {
+    let dir = tempfile::tempdir().expect("a folder");
+    let (mut app, path) = app_with_four_layers(dir.path());
+    let board = app.document_state.pcb_board(&path).expect("the board");
+    let mut stack = LayerStack::derived(&board.layers, 1.6);
+    let copper: Vec<usize> = (stack.layers.iter().enumerate())
+        .filter(|(_, row)| row.kind.is_copper())
+        .map(|(at, _)| at)
+        .collect();
+    stack.layers.remove(copper[2]);
+    let rows = format!("stack={}", serde_json::to_string(&stack).expect("json"));
+    let seq = logged(&mut app, &path, "set_layer_stack", &[&rows]);
+    assert!(app.step_board_history(&path, true));
+    let via = serde_json::from_value(serde_json::json!({
+        "uuid": uuid::Uuid::from_u128(77), "position": {"x": 1.0, "y": 1.0},
+        "diameter": 0.6, "drill": 0.2, "layers": ["TopCopper", "BottomCopper"],
+        "layer_sizes": {"mode": "full", "layers": [
+            {"layer": "TopCopper", "size": 0.6},
+            {"layer": "Inner1Copper", "size": 0.55},
+            {"layer": "Inner2Copper", "size": 0.5},
+            {"layer": "BottomCopper", "size": 0.6},
+        ]}
+    }))
+    .expect("a via");
+    let add = BoardCommand::AddItems {
+        items: vec![BoardItem::Via(via)],
+    };
+    app.execute_board_commands(&path, vec![add], None)
+        .expect("the via lands");
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("still have sizes"));
+    let board = app.document_state.pcb_board(&path).expect("the board");
+    assert!(board.vias[0].layer_sizes.is_some(), "the sizes stay");
+}
+
 #[test]
 fn a_board_delete_replays_on_its_part_after_an_undo() {
     let dir = tempfile::tempdir().expect("a folder");
@@ -406,12 +468,20 @@ fn a_board_duplicate_replays_as_one_more_copy() {
     select_part(&mut app);
     run(&mut app, "duplicate");
     let seq = newest(&app).seq;
+    let with_copy = footprint_places(&app, &path);
+    // The copy lands at a fixed offset: its place must be free to replay.
+    assert!(app.step_board_history(&path, true));
     let copies = footprints_on(&app, &path);
 
     replay(&mut app, seq);
 
     assert_eq!(footprints_on(&app, &path), copies + 1);
     assert!(!newest(&app).outcome.is_failed());
+    assert_eq!(
+        footprint_places(&app, &path),
+        with_copy,
+        "the copy is back at the same place"
+    );
 }
 
 #[test]

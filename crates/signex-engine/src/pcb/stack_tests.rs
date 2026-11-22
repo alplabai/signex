@@ -293,6 +293,31 @@ fn removing_an_inner_layer_drops_its_full_sizes_and_undo_puts_them_back() {
     assert_eq!(snapshot(&b), after, "redo is exact");
 }
 
+/// #2840: a replay must not delete sizes edited since on a layer it removes.
+#[test]
+fn a_stack_replay_is_refused_while_an_item_holds_sizes_on_a_layer_it_removes() {
+    let mut b = board(4, "TopCopper");
+    let mut stack = LayerStack::derived(&b.layers, b.thickness);
+    stack.layers.remove(copper_row(&stack, 1));
+    let command = BoardCommand::SetLayerStack {
+        stack: Box::new(stack),
+    };
+    let guard = crate::pcb::BoardReplayGuard::before(&b, &[command]);
+    assert!(!guard.drops_layer_sizes(&b));
+    assert!(guard.holds_as_found(&b));
+
+    b.vias.push(full_via(&[
+        "TopCopper",
+        "Inner1Copper",
+        "Inner2Copper",
+        "BottomCopper",
+    ]));
+
+    assert!(guard.drops_layer_sizes(&b));
+    assert!(!guard.holds_as_found(&b));
+    assert!(!guard.holds(&b));
+}
+
 #[test]
 fn a_full_list_left_with_no_entry_becomes_one_size() {
     let mut b = board(3, "TopCopper");

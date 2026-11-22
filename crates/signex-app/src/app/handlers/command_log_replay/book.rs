@@ -438,6 +438,12 @@ impl ReplayBook {
         self.inputs.get(&seq).cloned()
     }
 
+    /// Whether row `seq` holds a recorded input.
+    #[cfg(test)]
+    pub(in crate::app::handlers) fn has_input(&self, seq: u64) -> bool {
+        self.input_of(seq).is_some()
+    }
+
     /// Keep `input` for row `seq`, dropping rows older than `oldest`.
     pub(super) fn keep(&mut self, seq: u64, input: Arc<ReplayInput>, oldest: Option<u64>) {
         if let Some(oldest) = oldest {

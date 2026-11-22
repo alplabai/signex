@@ -120,17 +120,17 @@ clipped.
 
   | Command | Proof |
   |---|---|
-  | `edit_object_properties` | Only a recorded edit of whole objects by id. On a sheet, a drawing, directive or harness connector writes only the fields it changed: it runs when another field changed since and keeps that change, inside a list's elements too, and refuses only if the same field holds a third value. On a board, each written item or value against its guard. |
-  | `move_selection` | A recorded offset on recorded ids, on a sheet or board. Each target must be where the move found it or left it, so a replay cannot pull it from a later position. A sheet move also guards a fingerprint of the wires, buses, bus entries and junctions it reads; a board move refuses if the offset would now carry a track it did not write. |
+  | `edit_object_properties` | Only a recorded edit of whole objects by id. On a sheet, a drawing, directive or harness connector writes only the fields it changed: it runs when another field changed since and keeps that change, inside a list's elements too, and refuses only if the same field holds a third value. An edit that writes a value derived from other fields runs only on the object as it found or left it: a Rect's size or place, an Arc's geometry, a dimension's direction or an override taken from the measured text, a table's source or a bound table's rows, a directive's outline, a connector's rotation, a mirrored Bezier handle, and any edit that changes more than one field. On a board, each written item or value against its guard. |
+  | `move_selection` | A recorded offset on recorded ids, on a sheet or board. Each target must be where the move found it or left it, so a replay cannot pull it from a later position. A sheet move also guards a fingerprint of everything that makes a net: wires, buses and entries, junctions, labels, no-connects, symbols and their library pins, sheet symbols with their entries, No-ERC markers and harnesses. A board move refuses if the offset would now carry a track it did not write. |
   | `delete_selection` | Recorded ids on a sheet or board, each exactly as the command found it, so an item edited since is not removed. A target already gone is named in the refusal. |
-  | `duplicate` | Recorded source ids on a sheet or board, each exactly as found. Copies take new ids; the clipboard is kept. |
+  | `duplicate` | Recorded source ids on a sheet or board, each exactly as found. Copies take new ids; the clipboard is kept. The copy lands at a fixed offset, so the row is refused while an object of the same kind already stands there. |
   | `lock_board_items`, `unlock_board_items` | Tracks and vias by uuid, an absolute flag. Every id must be one the row wrote, since an item already at the value records nothing. |
   | `set_pad_shape` | Pads by uuid, absolute pad-local shape. The whole pad is guarded, and every id must be one the row wrote. |
   | `panelize_board` | Writes the constant default panel; the board's panel is guarded. The outline only validates. |
   | `remove_board_panel` | Writes no panel; the panel is guarded. |
   | `set_board_panel` | One stored setting; the whole panel is guarded. |
   | `set_layer_color`, `reset_layer_colors` | A colour keyed by its layer token; all board options are guarded. |
-  | `set_layer_stack` | The whole stack. Its rows name the layer each was, so a rerun on its own result would rename copper: it runs only on the stack, layers and thickness it found. |
+  | `set_layer_stack` | The whole stack. Its rows name the layer each was, so a rerun on its own result would rename copper: it runs only on the stack, layers and thickness it found, and is refused while a via or pad holds a per-layer size on a layer it removes. |
 
   Off the list until a guard proves them: every other relative or selection
   command (rotate, mirror, flip, cut, `move_object`, `move_selection_xy`,

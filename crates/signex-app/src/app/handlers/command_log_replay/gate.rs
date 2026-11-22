@@ -6,17 +6,22 @@ use std::path::Path;
 use std::sync::Arc;
 
 use pcb_geom::ItemRef;
-use signex_engine::pcb::{BoardItemId, BoardReplayGuard};
+use signex_engine::pcb::placement::grid_step_mm;
+use signex_engine::pcb::{BoardClipboard, BoardItemId, BoardReplayGuard};
 use signex_i18n::{Translatable, ids};
+use signex_types::pcb::Point;
 use uuid::Uuid;
 
 use super::book::ReplayInput;
 use super::rebase;
 use super::run::document_name;
 use super::safe_list::{ReplayProof, replay_proof};
-use super::sheet_guard::{SheetTargetGuard, TargetGuard};
+use super::selection::board_selection;
+use super::sheet_guard::{SheetTargetGuard, TargetGuard, copy_would_stack};
 use crate::app::Signex;
 use crate::app::core::command_log::RecordedTargets;
+use crate::app::handlers::clipboard_workflows::DEFAULT_PASTE_OFFSET_MM;
+use crate::app::handlers::pcb_placement::deletable_items;
 use crate::keymap::AppCommandId;
 use crate::panels::command_log::LogRow;
 
@@ -114,6 +119,38 @@ impl Signex {
             TargetGuard::Board(guard) => (self.document_state.pcb_board(document))
                 .is_some_and(|board| guard.holds_as_found(board)),
         })
+    }
+
+    /// Whether a Duplicate of `targets` would land on an object of the same
+    /// kind already at its fixed offset. What cannot be read refuses.
+    pub(super) fn duplicate_lands_on_a_copy(
+        &self,
+        targets: &RecordedTargets,
+        document: &Path,
+    ) -> bool {
+        match targets {
+            RecordedTargets::Sheet(items) => (self.document_state.engines.get(document))
+                .is_none_or(|engine| {
+                    copy_would_stack(engine.document(), items, DEFAULT_PASTE_OFFSET_MM)
+                }),
+            RecordedTargets::Board(items) => {
+                let Some(board) = self.document_state.pcb_board(document) else {
+                    return true;
+                };
+                let named = deletable_items(&board_selection(items));
+                let Ok(Some(copy)) = BoardClipboard::copy(board, &named, grid_step_mm(board))
+                else {
+                    return true;
+                };
+                let origin = copy.origin();
+                let shifted = Point::new(
+                    origin.x + DEFAULT_PASTE_OFFSET_MM,
+                    origin.y + DEFAULT_PASTE_OFFSET_MM,
+                );
+                let at = self.board_grid_point(board, copy.grid_use(), shifted);
+                copy.lands_on_a_copy(board, at)
+            }
+        }
     }
 
     /// Refuse the Replay of `row` unless it is proven safe. `true` when
@@ -217,6 +254,13 @@ impl Signex {
             }
         }
         let board = (row.document.as_deref()).and_then(|path| self.document_state.pcb_board(path));
+        if board.is_some_and(|board| guard.drops_layer_sizes(board)) {
+            let document =
+                (row.document.as_deref()).map_or_else(|| row.label.clone(), document_name);
+            return Some(
+                said(ids::COMMAND_LOG_REPLAY_DROPS_LAYER_SIZES, row).arg("document", document),
+            );
+        }
         let holds = board.is_some_and(|board| match proof {
             ReplayProof::BoardAsFound => guard.holds_as_found(board),
             _ => guard.holds(board),

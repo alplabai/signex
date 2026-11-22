@@ -88,6 +88,8 @@ pub struct BoardReplayGuard {
     targets: Vec<GuardedTarget>,
     /// A command in the edit has no target that can be checked.
     is_uncheckable: bool,
+    /// The copper layers a stack edit in it takes off the board.
+    removes_layers: Vec<String>,
 }
 
 impl BoardReplayGuard {
@@ -96,8 +98,14 @@ impl BoardReplayGuard {
         let mut guard = Self {
             targets: Vec::new(),
             is_uncheckable: false,
+            removes_layers: Vec::new(),
         };
         for command in commands {
+            if let BoardCommand::SetLayerStack { stack } = command {
+                guard
+                    .removes_layers
+                    .extend(super::stack::removed_copper(board, stack));
+            }
             let Some(targets) = targets_of(board, command) else {
                 guard.is_uncheckable = true;
                 continue;
@@ -131,6 +139,7 @@ impl BoardReplayGuard {
         Self {
             targets,
             is_uncheckable: false,
+            removes_layers: Vec::new(),
         }
     }
 
@@ -139,6 +148,7 @@ impl BoardReplayGuard {
         Self {
             targets: Vec::new(),
             is_uncheckable: true,
+            removes_layers: Vec::new(),
         }
     }
 
@@ -153,6 +163,7 @@ impl BoardReplayGuard {
     /// keeps its first `before` and its last `after`.
     pub fn merged(mut self, later: Self) -> Self {
         self.is_uncheckable |= later.is_uncheckable;
+        self.removes_layers.extend(later.removes_layers);
         for next in later.targets {
             match self.targets.iter_mut().find(|t| t.target == next.target) {
                 Some(guarded) => guarded.after = next.after,
@@ -168,6 +179,7 @@ impl BoardReplayGuard {
     /// found.
     pub fn holds(&self, board: &PcbBoard) -> bool {
         !self.is_uncheckable
+            && !self.drops_layer_sizes(board)
             && self.targets.iter().all(|guarded| {
                 let live = read(board, guarded.target);
                 live == guarded.before
@@ -178,7 +190,14 @@ impl BoardReplayGuard {
     /// Whether every target on `board` is exactly as the edit found it.
     pub fn holds_as_found(&self, board: &PcbBoard) -> bool {
         !self.is_uncheckable
+            && !self.drops_layer_sizes(board)
             && (self.targets.iter()).all(|guarded| read(board, guarded.target) == guarded.before)
+    }
+
+    /// Whether running the edit again would delete a per-layer size: a stack
+    /// edit drops the sizes on the layers it removes.
+    pub fn drops_layer_sizes(&self, board: &PcbBoard) -> bool {
+        !self.removes_layers.is_empty() && super::stack::holds_sizes_on(board, &self.removes_layers)
     }
 
     /// Whether every command of the edit has a target that can be checked.

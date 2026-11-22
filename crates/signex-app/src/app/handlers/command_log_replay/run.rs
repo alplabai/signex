@@ -156,6 +156,14 @@ impl Signex {
             self.refuse_replay(row, numbers_unread(document));
             return Task::none();
         }
+        // The offset is fixed: a second copy would stack on the first.
+        if command.as_str() == "duplicate" && self.duplicate_lands_on_a_copy(targets, document) {
+            let reason = Translatable::new(ids::COMMAND_LOG_REPLAY_COPY_IN_PLACE)
+                .arg("command", row.label.clone())
+                .arg("document", document_name(document));
+            self.refuse_replay(row, reason);
+            return Task::none();
+        }
         self.ui_state.command_replay.replaying = true;
         let task = match shown {
             Shown::Window(window) => self.replay_in_window(command, targets, document, window),

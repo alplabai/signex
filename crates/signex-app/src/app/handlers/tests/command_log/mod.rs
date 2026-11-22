@@ -207,7 +207,10 @@ fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
     select(&mut app, &[1]);
     run(&mut app, "duplicate");
     let seq = newest(&app).seq;
+    // The copy lands at a fixed offset: its place must be free to replay.
+    undo(&mut app, &path);
     let parts = app.document_state.engines[&path].document().symbols.len();
+    let (x, y) = position(&app, &path, 1);
     app.interaction_state.clipboard = None;
     app.interaction_state.clipboard_text = Some("kept".to_string());
     select(&mut app, &[2]);
@@ -216,12 +219,41 @@ fn a_duplicate_replays_on_its_target_and_keeps_the_clipboard() {
 
     let sheet = app.document_state.engines[&path].document();
     assert_eq!(sheet.symbols.len(), parts + 1, "one new copy");
+    let offset = crate::app::handlers::clipboard_workflows::DEFAULT_PASTE_OFFSET_MM;
+    assert!(
+        sheet.symbols.iter().any(|s| {
+            (s.position.x - (x + offset)).abs() < 1e-6 && (s.position.y - (y + offset)).abs() < 1e-6
+        }),
+        "the copy is at the offset"
+    );
     assert_eq!(selected(&app), vec![item(2)]);
     assert!(app.interaction_state.clipboard.is_none());
     assert_eq!(
         app.interaction_state.clipboard_text.as_deref(),
         Some("kept")
     );
+}
+
+/// The review's case: a second copy would stack exactly on the first, add a
+/// BOM line and join its pins.
+#[test]
+fn a_duplicate_replay_onto_its_own_copy_is_refused() {
+    let (mut app, path) = app_with_parts();
+    select(&mut app, &[1]);
+    run(&mut app, "duplicate");
+    let seq = newest(&app).seq;
+    let places = |app: &Signex| -> Vec<(f64, f64)> {
+        let sheet = app.document_state.engines[&path].document();
+        (sheet.symbols.iter())
+            .map(|s| (s.position.x, s.position.y))
+            .collect()
+    };
+    let before = places(&app);
+
+    replay(&mut app, seq);
+
+    assert!(failure(&newest(&app)).contains("already holds a copy"));
+    assert_eq!(places(&app), before, "nothing was placed");
 }
 
 #[test]
@@ -337,7 +369,7 @@ fn a_symbol_editor_delete_replay_is_refused() {
 }
 
 #[test]
-fn a_symbol_editor_replay_is_refused_when_its_pin_is_gone() {
+fn a_symbol_editor_delete_replayed_over_its_own_result_is_refused() {
     let (mut app, path) = app_with_symbol();
     pick_pin(&mut app, &path, 0);
     symbol_edit(&mut app, &path, SymbolEditorMsg::DeleteSelected);
@@ -506,6 +538,10 @@ fn a_cancelled_dialog_leaves_no_row_waiting_for_a_later_edit() {
     );
     assert!(created);
     assert_ne!(newest(&app).seq, started, "the later edit has its own row");
+    assert!(
+        !app.ui_state.command_replay.has_input(started),
+        "the cancelled row took no input"
+    );
     let unions = app.document_state.engines[&path].document().unions.len();
 
     replay(&mut app, started);

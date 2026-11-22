@@ -1,14 +1,17 @@
 //! Replay of a command that carries a whole object or a whole pin list, onto
 //! a sheet that has moved on. A replaced object takes only the fields the
 //! recorded edit changed; a list changed on both sides that cannot be merged
-//! and a Sheet Entries sync whose list no longer fits are refused. Rules:
-//! `docs/COMMAND_LOG.md`, "Replay".
+//! and a Sheet Entries sync whose list no longer fits are refused. An edit
+//! that wrote a value derived from the object's other fields runs only on the
+//! object as it found or left it. Rules: `docs/COMMAND_LOG.md`, "Replay".
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use signex_engine::{Command, SheetPort, SymbolEntryRenames};
-use signex_types::schematic::{ChildSheet, SchematicSheet, normalize_port_name};
+use signex_types::schematic::{
+    ChildSheet, SchDirective, SchDrawing, SchematicSheet, normalize_port_name,
+};
 
 /// The object `command` replaces, as it stands on `sheet`, in the same form.
 fn image_on(sheet: &SchematicSheet, command: &Command) -> Option<Command> {
@@ -98,14 +101,14 @@ fn rebase_one(
             Command::UpdateSchDrawing { drawing: was },
             Command::UpdateSchDrawing { drawing: now },
         ) => Some(Command::UpdateSchDrawing {
-            drawing: with_changes(was, drawing, &now)?,
+            drawing: with_field_changes(was, drawing, &now, |key| drawing_stores(was, key))?,
         }),
         (
             Command::UpdateDirective { directive },
             Command::UpdateDirective { directive: was },
             Command::UpdateDirective { directive: now },
         ) => Some(Command::UpdateDirective {
-            directive: with_changes(was, directive, &now)?,
+            directive: with_field_changes::<SchDirective>(was, directive, &now, directive_stores)?,
         }),
         (
             Command::UpdateHarnessConnector { uuid, connector },
@@ -113,10 +116,115 @@ fn rebase_one(
             Command::UpdateHarnessConnector { connector: now, .. },
         ) => Some(Command::UpdateHarnessConnector {
             uuid: *uuid,
-            connector: with_changes(was, connector, &now)?,
+            connector: with_field_changes(was, connector, &now, connector_stores)?,
         }),
         _ => None,
     }
+}
+
+/// Whether a drawing's field `key` holds a value typed on its own. The rest
+/// are derived from other fields: a Rect's corners and an Arc's three points
+/// (rebuilt from each other), a dimension's direction and offset, an override
+/// first taken from the measured text, a table's source and a bound table's
+/// rows (built from the design).
+fn drawing_stores(drawing: &SchDrawing, key: &str) -> bool {
+    match drawing {
+        SchDrawing::Line { .. } => {
+            matches!(key, "start" | "end" | "width" | "stroke_color" | "locked")
+        }
+        SchDrawing::Rect { .. } | SchDrawing::Polyline { .. } => {
+            matches!(key, "width" | "fill" | "stroke_color" | "locked")
+        }
+        SchDrawing::Circle { .. } => matches!(
+            key,
+            "center" | "radius" | "width" | "fill" | "stroke_color" | "locked"
+        ),
+        SchDrawing::Arc { .. } => matches!(key, "width" | "stroke_color" | "locked"),
+        SchDrawing::Bezier(_) => matches!(
+            key,
+            "start"
+                | "c1"
+                | "c2"
+                | "end"
+                | "width"
+                | "stroke_color"
+                | "line_style"
+                | "ends"
+                | "locked"
+        ),
+        SchDrawing::Dimension(d) => {
+            matches!(
+                key,
+                "from"
+                    | "to"
+                    | "units"
+                    | "precision"
+                    | "arrows"
+                    | "width"
+                    | "stroke_color"
+                    | "locked"
+            ) || (key == "override_text" && d.override_text.is_some())
+        }
+        SchDrawing::Table(t) => {
+            matches!(key, "refresh" | "style" | "locked" | "columns")
+                || (key == "rows" && !t.source.is_bound())
+        }
+    }
+}
+
+/// A directive's outline corners are rebuilt from each other.
+fn directive_stores(key: &str) -> bool {
+    matches!(
+        key,
+        "net_class"
+            | "diff_pair_class"
+            | "erc_exclusions"
+            | "track_width"
+            | "pour"
+            | "include_edge_nets"
+            | "rules"
+            | "show_on_flag"
+    )
+}
+
+fn connector_stores(key: &str) -> bool {
+    matches!(
+        key,
+        "harness_type" | "position" | "width" | "entry_pitch" | "entries" | "locked"
+    )
+}
+
+/// The one field `before` and `after` differ in, when it is one that
+/// `is_stored` names.
+fn writes_one_stored_field<T: Serialize>(
+    before: &T,
+    after: &T,
+    is_stored: impl Fn(&str) -> bool,
+) -> bool {
+    let (Ok(Value::Object(was)), Ok(Value::Object(now))) =
+        (serde_json::to_value(before), serde_json::to_value(after))
+    else {
+        return false;
+    };
+    let mut changed = (was.keys().chain(now.keys())).filter(|key| was.get(*key) != now.get(*key));
+    let Some(first) = changed.next() else {
+        return false;
+    };
+    is_stored(first) && changed.all(|key| key == first)
+}
+
+/// [`with_changes`], except that an edit writing anything but one stored
+/// field runs only on the object as it found or left it.
+fn with_field_changes<T: Serialize + DeserializeOwned + PartialEq>(
+    before: &T,
+    after: &T,
+    live: &T,
+    is_stored: impl Fn(&str) -> bool,
+) -> Option<T> {
+    if !writes_one_stored_field(before, after, is_stored) && live != before && live != after {
+        return None;
+    }
+    with_changes(before, after, live)
 }
 
 /// `live` with the fields that differ between `before` and `after`. `None`
@@ -265,7 +373,10 @@ pub(super) fn is_stale(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signex_types::schematic::{FillType, Point, SchDrawing, SchTable, SheetPin};
+    use crate::app::sch_tables::{AnnotationEdit, apply_annotation_edit};
+    use signex_types::schematic::{
+        DimensionDirection, FillType, Point, SchDimension, SchDrawing, SchTable, SheetPin,
+    };
     use uuid::Uuid;
 
     const ID: Uuid = Uuid::from_u128(0x50);
@@ -322,6 +433,83 @@ mod tests {
         let mut table = SchTable::new_typed(ID, Point::new(0.0, 0.0));
         table.links = links.iter().map(|link| (*link).to_string()).collect();
         SchDrawing::Table(table)
+    }
+
+    fn dimension(to_x: f64) -> SchDrawing {
+        SchDrawing::Dimension(SchDimension::new(
+            ID,
+            Point::new(0.0, 0.0),
+            Point::new(to_x, 0.0),
+            -5.0,
+            DimensionDirection::Horizontal,
+        ))
+    }
+
+    fn edited(drawing: &SchDrawing, edit: AnnotationEdit) -> SchDrawing {
+        apply_annotation_edit(drawing, &edit).expect("the edit applies")
+    }
+
+    /// The review's case: the override holds the text measured at 10 mm.
+    #[test]
+    fn an_override_from_the_measured_text_is_refused_once_the_points_moved() {
+        let was = dimension(10.0);
+        let edit = edited(&was, AnnotationEdit::OverrideEnabled(true));
+
+        assert!(replayed(was.clone(), edit.clone(), dimension(20.0)).is_none());
+        assert_eq!(replayed(was.clone(), edit.clone(), was), Some(edit));
+    }
+
+    /// The offset was derived from the old points.
+    #[test]
+    fn a_direction_edit_is_refused_once_the_points_moved() {
+        let was = dimension(10.0);
+        let edit = edited(
+            &was,
+            AnnotationEdit::Direction(DimensionDirection::Vertical),
+        );
+
+        assert!(replayed(was, edit, dimension(20.0)).is_none());
+    }
+
+    /// A Rect's width is stored as a corner derived from the other one.
+    #[test]
+    fn a_rect_corner_edit_is_refused_once_the_other_corner_moved() {
+        let was = rect(20.0, FillType::None);
+        let edit = rect(30.0, FillType::None);
+        let SchDrawing::Rect {
+            uuid,
+            end,
+            width,
+            fill,
+            stroke_color,
+            locked,
+            ..
+        } = was.clone()
+        else {
+            panic!("a rect");
+        };
+        let moved = SchDrawing::Rect {
+            uuid,
+            start: Point::new(5.0, 0.0),
+            end,
+            width,
+            fill,
+            stroke_color,
+            locked,
+        };
+
+        assert!(replayed(was, edit, moved).is_none());
+    }
+
+    /// A stored field beside a moved point still merges.
+    #[test]
+    fn a_stored_dimension_field_keeps_a_later_move_of_its_points() {
+        let was = dimension(10.0);
+        let edit = edited(&was, AnnotationEdit::Precision(3));
+        let live = dimension(20.0);
+        let wanted = edited(&live, AnnotationEdit::Precision(3));
+
+        assert_eq!(replayed(was, edit, live), Some(wanted));
     }
 
     /// A table whose first column reads `title` and is `shown` or not.
