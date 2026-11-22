@@ -3,7 +3,7 @@
 
 use pcb_geom::PickKind;
 use signex_app::app::{Message, PcbMsg, PcbViewMsg, Signex, StatusBarRequest, UiMsg};
-use signex_app::panels::{BoardField, BoardTab, ComponentSide, PanelKind, PcbBoardMsg};
+use signex_app::panels::{BoardField, BoardTab, ComponentSide, PcbBoardMsg};
 use signex_app::pcb_canvas::SnapScope;
 use signex_app::status_bar::{BoardCounter, BoardPopoverEvent};
 use signex_engine::pcb::placement::grid_step_mm;

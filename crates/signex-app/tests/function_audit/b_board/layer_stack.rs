@@ -1,7 +1,7 @@
 //! Row m105: the Layer Stack manager. A typed cell keeps a draft until
 //! Enter; Enter, a Type pick, Add, Remove and Move are one undo step each.
 
-use signex_app::panels::{LayerStackFacts, LayerStackMsg, PanelKind, PanelMsg, StackField};
+use signex_app::panels::{LayerStackFacts, LayerStackMsg, PanelMsg, StackField};
 use signex_types::pcb_stack::StackLayerKind;
 
 use super::support::{Bench, four_layers, open};

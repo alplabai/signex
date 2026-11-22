@@ -7,7 +7,7 @@ use signex_app::app::{
     PcbMsg, PcbViewMsg,
 };
 use signex_app::layer_strip_prefs::LayerNameStyle;
-use signex_app::panels::{LayersPanelMsg, LayersTab, PanelKind, PanelMsg};
+use signex_app::panels::{LayersPanelMsg, LayersTab, PanelMsg};
 use signex_renderer::pcb::{BoardObject, BuiltinLayerSet, LayerKind, LayerSetId};
 use signex_types::pcb_layer::{CopperLayer, PcbLayer, TechnicalLayer};
 
